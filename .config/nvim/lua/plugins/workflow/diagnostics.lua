@@ -43,13 +43,13 @@ register({
 	},
 })
 
-return {
-	{
-		"folke/trouble.nvim",
-		dependencies = { "nvim-tree/nvim-web-devicons" },
-		cmd = { "TroubleToggle", "Trouble", "TodoTrouble", "TroubleClose" },
-		config = function()
-			require("trouble").setup()
-		end,
-	},
-}
+register({
+	name = "trouble.nvim",
+	src = "https://github.com/folke/trouble.nvim.git",
+	dependencies = { "nvim-web-devicons" },
+	commands = { "Trouble" },
+	module = "trouble",
+	opts = {},
+})
+
+return {}

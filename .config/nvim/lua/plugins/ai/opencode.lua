@@ -162,6 +162,23 @@ return {
 				return nil
 			end
 
+			local function save_opencode_terminal_state()
+				local nvim_session = session.get_current()
+				if nvim_session == nil then
+					return
+				end
+
+				local metadata = session.get_metadata(nvim_session)
+				local terminal = current_opencode_terminal()
+				local is_open = terminal ~= nil and terminal:valid()
+				if metadata.opencode_terminal_open == is_open then
+					return
+				end
+
+				metadata.opencode_terminal_open = is_open
+				session.set_metadata(metadata, nvim_session)
+			end
+
 			local function open_opencode_terminal()
 				local terminal = current_opencode_terminal()
 				if terminal ~= nil then
@@ -231,7 +248,8 @@ return {
 						return
 					end
 
-					if saved_session_id() == nil then
+					local metadata = session.get_metadata(session.get_current())
+					if saved_session_id() == nil or metadata.opencode_terminal_open ~= true then
 						return
 					end
 
@@ -245,6 +263,7 @@ return {
 			vim.api.nvim_create_autocmd("User", {
 				pattern = "SessionSavePre",
 				callback = function()
+					save_opencode_terminal_state()
 					if opened_fresh_opencode then
 						capture_fresh_session_id(vim.fn.getcwd())
 					end

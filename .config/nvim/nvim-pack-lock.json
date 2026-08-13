@@ -10,8 +10,7 @@
     },
     "barbar.nvim": {
       "rev": "d9c1f0f5ae6a1c333f620cfa81fbb0200fcb19cf",
-      "src": "https://github.com/fbosch/barbar.nvim.git",
-      "version": "'d9c1f0f5ae6a1c333f620cfa81fbb0200fcb19cf'"
+      "src": "https://github.com/fbosch/barbar.nvim.git"
     },
     "beacon.nvim": {
       "rev": "098ff96c33874339d5e61656f3050dbd587d6bd5",
@@ -56,8 +55,7 @@
     },
     "fzy-lua-native": {
       "rev": "9d720745d5c2fb563c0d86c17d77612a3519c506",
-      "src": "https://github.com/romgrk/fzy-lua-native.git",
-      "version": "'9d720745d5c2fb563c0d86c17d77612a3519c506'"
+      "src": "https://github.com/romgrk/fzy-lua-native.git"
     },
     "git-conflict.nvim": {
       "rev": "a1badcd070d176172940eb55d9d59029dad1c5a6",
@@ -110,8 +108,7 @@
     },
     "lualine.nvim": {
       "rev": "221ce6b2d999187044529f49da6554a92f740a96",
-      "src": "https://github.com/nvim-lualine/lualine.nvim.git",
-      "version": "'221ce6b2d999187044529f49da6554a92f740a96'"
+      "src": "https://github.com/nvim-lualine/lualine.nvim.git"
     },
     "matchparen.nvim": {
       "rev": "75398158ea5a4cee4f0cbbeefdbf8fb1c3343e28",
@@ -202,8 +199,7 @@
     },
     "nvim-web-devicons": {
       "rev": "2ae6958df7ced50baac5035cec0c15799eedfbf7",
-      "src": "https://github.com/nvim-tree/nvim-web-devicons.git",
-      "version": "'2ae6958df7ced50baac5035cec0c15799eedfbf7'"
+      "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
     "opencode.nvim": {
       "rev": "41622312d5d8fb074699c1d5d96f089286191376",
@@ -229,8 +225,7 @@
     },
     "tiny-devicons-auto-colors.nvim": {
       "rev": "3b0c0174f4ed9120b6bea00d77e179ed5c46dcfb",
-      "src": "https://github.com/rachartier/tiny-devicons-auto-colors.nvim.git",
-      "version": "'3b0c0174f4ed9120b6bea00d77e179ed5c46dcfb'"
+      "src": "https://github.com/rachartier/tiny-devicons-auto-colors.nvim.git"
     },
     "todo-comments.nvim": {
       "rev": "31e3c38ce9b29781e4422fc0322eb0a21f4e8668",
@@ -251,8 +246,7 @@
     },
     "trouble.nvim": {
       "rev": "bd67efe408d4816e25e8491cc5ad4088e708a69a",
-      "src": "https://github.com/folke/trouble.nvim.git",
-      "version": "'bd67efe408d4816e25e8491cc5ad4088e708a69a'"
+      "src": "https://github.com/folke/trouble.nvim.git"
     },
     "ts-comments.nvim": {
       "rev": "a59d6092213447450191122c9346f309161504cb",
@@ -281,8 +275,7 @@
     },
     "wilder.nvim": {
       "rev": "679f348dc90d80ff9ba0e7c470c40a4d038dcecf",
-      "src": "https://github.com/gelguy/wilder.nvim.git",
-      "version": "'679f348dc90d80ff9ba0e7c470c40a4d038dcecf'"
+      "src": "https://github.com/gelguy/wilder.nvim.git"
     },
     "zenbones.nvim": {
       "rev": "8304d8df9b823ff11e103afa62f38c39f534abe6",

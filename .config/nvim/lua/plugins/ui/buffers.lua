@@ -44,9 +44,11 @@ local function buffer_index_keys()
 	local t = {}
 	for i = 1, 9 do
 		t[#t + 1] = {
-			mode = { "n" },
 			"<A-" .. i .. ">",
-			"<cmd>BufferGoto " .. i .. "<cr>",
+			function()
+				vim.cmd("BufferGoto " .. i)
+			end,
+			mode = { "n" },
 			desc = "go to buffer " .. i,
 			silent = true,
 		}
@@ -54,148 +56,166 @@ local function buffer_index_keys()
 	return t
 end
 
-return {
-	{
-		"fbosch/barbar.nvim",
-		dependencies = { "nvim-tree/nvim-web-devicons" },
-		lazy = true,
-		init = function()
-			vim.g.barbar_auto_setup = false
+vim.g.barbar_auto_setup = false
 
-			local group = vim.api.nvim_create_augroup("LoadBarbarOnSecondBuffer", { clear = true })
-			vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
-				group = group,
-				callback = function()
-					local buffers = 0
-					for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-						if
-							vim.bo[buffer].buflisted
-							and vim.bo[buffer].buftype == ""
-							and vim.api.nvim_buf_get_name(buffer) ~= ""
-						then
-							buffers = buffers + 1
-						end
-					end
-
-					if buffers < 2 then
-						return
-					end
-
-					vim.api.nvim_del_augroup_by_id(group)
-					require("lazy").load({ plugins = { "barbar.nvim" } })
-				end,
-			})
-		end,
-		keys = vim.list_extend(buffer_index_keys(), {
-			{
-				mode = { "n" },
-				"<leader>x",
-				close_all_but_visible_and_terminals,
-				desc = "close all but currentl active buffer or pinned buffers",
-				silent = true,
-			},
-			{
-				mode = { "n" },
-				"<leader>P",
-				"<cmd>BufferPin<cr>",
-				desc = "pin current buffer",
-				silent = true,
-			},
-			{
-				mode = { "n" },
-				"<C-h>",
-				"<cmd>BufferPrevious<cr>",
-				desc = "previous buffer",
-				silent = true,
-			},
-			{
-				mode = { "n" },
-				"<C-l>",
-				"<cmd>BufferNext<cr>",
-				desc = "next buffer",
-				silent = true,
-			},
-			{
-				mode = { "n" },
-				"<C-A-h>",
-				"<cmd>BufferMovePrevious<cr>",
-				desc = "move buffer left",
-				silent = true,
-			},
-			{
-				mode = { "n" },
-				"<C-A-l>",
-				"<cmd>BufferMoveNext<cr>",
-				desc = "move buffer right",
-				silent = true,
-			},
-		}),
-		config = function()
-			local terminal = require("utils.terminal")
-			local is_rich = terminal.is_terminal_emulator()
-			local vim_enter_autocmds = {}
-			for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
-				if autocmd.id ~= nil then
-					vim_enter_autocmds[autocmd.id] = true
-				end
+require("config.pack.registry").register({
+	name = "barbar.nvim",
+	src = "https://github.com/fbosch/barbar.nvim.git",
+	dependencies = { "nvim-web-devicons" },
+	commands = {
+		"BufferCloseAllButVisible",
+		"BufferGoto",
+		"BufferMoveNext",
+		"BufferMovePrevious",
+		"BufferNext",
+		"BufferPin",
+		"BufferPrevious",
+	},
+	keys = vim.list_extend(buffer_index_keys(), {
+		{
+			"<leader>x",
+			close_all_but_visible_and_terminals,
+			mode = { "n" },
+			desc = "close all but currentl active buffer or pinned buffers",
+			silent = true,
+		},
+		{
+			"<leader>P",
+			function()
+				vim.cmd("BufferPin")
+			end,
+			mode = { "n" },
+			desc = "pin current buffer",
+			silent = true,
+		},
+		{
+			"<C-h>",
+			function()
+				vim.cmd("BufferPrevious")
+			end,
+			mode = { "n" },
+			desc = "previous buffer",
+			silent = true,
+		},
+		{
+			"<C-l>",
+			function()
+				vim.cmd("BufferNext")
+			end,
+			mode = { "n" },
+			desc = "next buffer",
+			silent = true,
+		},
+		{
+			"<C-A-h>",
+			function()
+				vim.cmd("BufferMovePrevious")
+			end,
+			mode = { "n" },
+			desc = "move buffer left",
+			silent = true,
+		},
+		{
+			"<C-A-l>",
+			function()
+				vim.cmd("BufferMoveNext")
+			end,
+			mode = { "n" },
+			desc = "move buffer right",
+			silent = true,
+		},
+	}),
+	setup = function()
+		local terminal = require("utils.terminal")
+		local is_rich = terminal.is_terminal_emulator()
+		local vim_enter_autocmds = {}
+		for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
+			if autocmd.id ~= nil then
+				vim_enter_autocmds[autocmd.id] = true
 			end
+		end
 
-			require("barbar").setup({
-				animation = false,
-				auto_hide = true,
-				maximum_padding = 5,
-				tabpages = true,
-				highlight_inactive_file_icons = true,
-				highlight_alternate = true,
-				sidebar_filetypes = {
-					NvimTree = true,
+		require("barbar").setup({
+			animation = false,
+			auto_hide = true,
+			maximum_padding = 5,
+			tabpages = true,
+			highlight_inactive_file_icons = true,
+			highlight_alternate = true,
+			sidebar_filetypes = {
+				NvimTree = true,
+			},
+			exclude_name = {
+				"startup-log.txt",
+			},
+			exclude_ft = {
+				"opencode",
+				"opencode_terminal",
+			},
+			icons = {
+				filetype = {
+					custom_colors = false,
+					enabled = is_rich,
 				},
-				exclude_name = {
-					"startup-log.txt",
+				pinned = {
+					button = is_rich and "󰐃" or "[P]",
+					filename = true,
 				},
-				exclude_ft = {
-					"opencode",
-					"opencode_terminal",
-				},
-				icons = {
-					filetype = {
-						custom_colors = false,
-						enabled = is_rich,
+				separator = { left = is_rich and "▎" or "|", right = "" },
+				separator_at_end = false,
+				diagnostics = {
+					[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
+					[vim.diagnostic.severity.WARN] = { enabled = true, icon = " ", custom_color = true },
+					[vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼 ", custom_color = true },
+					[vim.diagnostic.severity.HINT] = { enabled = true, icon = " ", custom_color = true },
+					gitsigns = {
+						added = { enabled = true, icon = is_rich and "" or "+" },
+						changed = { enabled = true, icon = "~" },
+						deleted = { enabled = true, icon = is_rich and "" or "-" },
 					},
-					pinned = {
-						button = is_rich and "󰐃" or "[P]",
-						filename = true,
-					},
-					separator = { left = is_rich and "▎" or "|", right = "" },
-					separator_at_end = false,
-					diagnostics = {
-						[vim.diagnostic.severity.ERROR] = { enabled = true, icon = " ", custom_color = true },
-						[vim.diagnostic.severity.WARN] = { enabled = true, icon = " ", custom_color = true },
-						[vim.diagnostic.severity.INFO] = { enabled = true, icon = "󰋼 ", custom_color = true },
-						[vim.diagnostic.severity.HINT] = { enabled = true, icon = " ", custom_color = true },
-						gitsigns = {
-							added = { enabled = true, icon = is_rich and "" or "+" },
-							changed = { enabled = true, icon = "~" },
-							deleted = { enabled = true, icon = is_rich and "" or "-" },
-						},
-					},
 				},
-			})
-			setup_barbar_highlights()
+			},
+		})
+		setup_barbar_highlights()
 
-			if vim.v.vim_did_enter == 0 then
+		if vim.v.vim_did_enter == 0 then
+			return
+		end
+
+		-- Barbar defers its setup to VimEnter, which has already occurred here.
+		for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
+			if autocmd.id ~= nil and vim_enter_autocmds[autocmd.id] == nil and autocmd.callback then
+				vim.api.nvim_del_autocmd(autocmd.id)
+				autocmd.callback()
+				require("barbar.ui.render").update()
 				return
 			end
+		end
+	end,
+})
 
-			-- Barbar defers its setup to VimEnter, which has already occurred here.
-			for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
-				if autocmd.id ~= nil and vim_enter_autocmds[autocmd.id] == nil and autocmd.callback then
-					vim.api.nvim_del_autocmd(autocmd.id)
-					autocmd.callback()
-					require("barbar.ui.render").update()
-					return
-				end
+local group = vim.api.nvim_create_augroup("LoadBarbarOnSecondBuffer", { clear = true })
+vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
+	group = group,
+	callback = function()
+		local buffers = 0
+		for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+			if
+				vim.bo[buffer].buflisted
+				and vim.bo[buffer].buftype == ""
+				and vim.api.nvim_buf_get_name(buffer) ~= ""
+			then
+				buffers = buffers + 1
 			end
-		end,
-	},
-}
+		end
+
+		if buffers < 2 then
+			return
+		end
+
+		vim.api.nvim_del_augroup_by_id(group)
+		require("config.pack.loader").activate("barbar.nvim", { source = "second-buffer" })
+	end,
+})
+
+return {}

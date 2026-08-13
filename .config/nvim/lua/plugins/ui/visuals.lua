@@ -104,16 +104,16 @@ register({
 			})
 		end,
 	},
-})
-
-return {
 	{
-		"nvim-tree/nvim-web-devicons",
-		dependencies = {
-			"rachartier/tiny-devicons-auto-colors.nvim",
-		},
-		event = "VeryLazy",
-		config = function()
+		name = "tiny-devicons-auto-colors.nvim",
+		src = "https://github.com/rachartier/tiny-devicons-auto-colors.nvim.git",
+		root = false,
+	},
+	{
+		name = "nvim-web-devicons",
+		src = "https://github.com/nvim-tree/nvim-web-devicons.git",
+		dependencies = { "tiny-devicons-auto-colors.nvim" },
+		setup = function()
 			local colors = require("config.colors")
 			require("nvim-web-devicons").setup({
 				override_by_filename = {
@@ -178,6 +178,9 @@ return {
 			})
 		end,
 	},
+})
+
+return {
 	{
 		"folke/snacks.nvim",
 		event = "VeryLazy",

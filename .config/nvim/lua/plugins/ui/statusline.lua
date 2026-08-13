@@ -1,10 +1,8 @@
-return {
-	"nvim-lualine/lualine.nvim",
-	dependencies = {
-		"nvim-tree/nvim-web-devicons",
-	},
-	event = "VeryLazy",
-	config = function()
+require("config.pack.registry").register({
+	name = "lualine.nvim",
+	src = "https://github.com/nvim-lualine/lualine.nvim.git",
+	dependencies = { "nvim-web-devicons" },
+	setup = function()
 		local git = require("utils.git")
 		require("utils.usage.opencode")
 
@@ -55,9 +53,8 @@ return {
 				cond = function()
 					return git.is_git_repo()
 						and (
-							is_valid_status(vim.b.gitsigns_blame_line) or is_valid_status(
-								vim.b.last_gitsigns_blame_line
-							)
+							is_valid_status(vim.b.gitsigns_blame_line)
+							or is_valid_status(vim.b.last_gitsigns_blame_line)
 						)
 				end,
 			},
@@ -103,4 +100,6 @@ return {
 			},
 		})
 	end,
-}
+})
+
+return {}
