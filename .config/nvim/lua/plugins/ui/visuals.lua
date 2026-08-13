@@ -168,12 +168,10 @@ register({
 				colors.cyan,
 			}, colors.highlight_args)
 
-			local platform = require("utils.platform")
 			require("tiny-devicons-auto-colors").setup({
 				colors = colorValues,
 				cache = {
-					enabled = not platform.is_wsl(),
-					path = "/tmp/tiny-devicons-auto-colors-cache.json",
+					enabled = false,
 				},
 			})
 		end,

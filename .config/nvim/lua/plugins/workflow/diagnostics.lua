@@ -52,4 +52,26 @@ register({
 	opts = {},
 })
 
+require("utils").set_usrcmd("TodoTrouble", function(args)
+	local loader = require("config.pack.loader")
+	loader.activate("trouble.nvim", { source = "TodoTrouble" })
+	loader.activate("todo-comments.nvim", { source = "TodoTrouble" })
+
+	local command = "Trouble todo" .. (args.args ~= "" and " " .. args.args or "")
+	if require("todo-comments.config").loaded then
+		vim.cmd(command)
+		return
+	end
+
+	vim.api.nvim_create_autocmd("VimEnter", {
+		once = true,
+		callback = function()
+			vim.defer_fn(function()
+				assert(require("todo-comments.config").loaded, "Todo Comments setup did not complete")
+				vim.cmd(command)
+			end, 0)
+		end,
+	})
+end, { nargs = "*" })
+
 return {}

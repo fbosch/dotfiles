@@ -403,6 +403,10 @@ The Notify/Recorder/Fidget subcluster is also complete. Notify is dependency-onl
 
 The Gitsigns/Git Conflict subcluster is complete. Conditional event triggers now use their event buffer, remain retryable until a buffer enters a Git repository, and are cleared together after success or terminal failure. Gitsigns explicitly attaches the triggering buffer; Git Conflict refreshes from the triggering buffer through its public command, independent of the editor cwd. Key-first actions wait for attachment or conflict detection rather than running against incomplete asynchronous state. Non-repository dormancy, later-repository activation, hunk selection, conflict resolution, Diffview, and Gitlineage all passed focused checks. Native ownership increased from 51 to 53 while the catalog remained 68.
 
+The final shared UI closure is complete. Tiny Devicons and Fzy are dependency-only; Devicons configures Tiny after its own icon overrides, with Tiny's unsafe shared cache disabled. Lualine loads after startup without pulling dormant Opencode or Gitsigns integrations forward. Trouble preserves direct, Todo, and help-buffer command entry points. Wilder explicitly starts the first consumed command-line session. Barbar activates once for a second listed file or explicit command/key use and verifies its late `VimEnter` bootstrap. Native ownership increased from 53 to 60 while the catalog remained 68.
+
+The Phase 7 startup checkpoint passed: 21 recorded launches after three warmups measured 42.22 ms mean, 41.50 ms median, 2.04 ms standard deviation, and a 39.49-48.45 ms range. This is 4.68 ms faster than the Phase 5 mean, with no measured startup regression.
+
 **Rollback:** Revert each subcluster as one unit.
 
 ## Phase 8: Migrate Sessions, AI, Terminals, And Remaining Workflows

@@ -183,14 +183,26 @@ require("config.pack.registry").register({
 		end
 
 		-- Barbar defers its setup to VimEnter, which has already occurred here.
+		local bootstrap_autocmds = {}
 		for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
-			if autocmd.id ~= nil and vim_enter_autocmds[autocmd.id] == nil and autocmd.callback then
-				vim.api.nvim_del_autocmd(autocmd.id)
-				autocmd.callback()
-				require("barbar.ui.render").update()
-				return
+			local info = autocmd.callback and debug.getinfo(autocmd.callback, "S") or nil
+			if
+				autocmd.id ~= nil
+				and vim_enter_autocmds[autocmd.id] == nil
+				and info ~= nil
+				and info.source:find("/barbar.nvim/lua/barbar.lua", 1, true) ~= nil
+			then
+				table.insert(bootstrap_autocmds, autocmd)
 			end
 		end
+		assert(#bootstrap_autocmds == 1, "expected one Barbar VimEnter bootstrap callback")
+
+		local bootstrap = bootstrap_autocmds[1]
+		vim.api.nvim_del_autocmd(bootstrap.id)
+		bootstrap.callback()
+		assert(vim.fn.exists(":BufferNext") == 2, "Barbar commands were not initialized")
+		assert(vim.o.showtabline == 2, "Barbar tabline was not initialized")
+		require("barbar.ui.render").update()
 	end,
 })
 
