@@ -100,6 +100,11 @@ export interface WindowProps extends VariantProps<typeof windowVariants> {
    */
   className?: string;
   /**
+   * Scroll behavior for the window content area
+   * @default 'auto'
+   */
+  contentOverflow?: "auto" | "hidden";
+  /**
    * Callback when close button is clicked
    */
   onClose?: () => void;
@@ -123,6 +128,7 @@ export const Window: React.FC<WindowProps> = ({
   state = "active",
   shadow = true,
   className,
+  contentOverflow = "auto",
   onClose,
   onMaximize,
   onMinimize,
@@ -216,7 +222,10 @@ export const Window: React.FC<WindowProps> = ({
 
       {/* Window content */}
       <div
-        className="w-full overflow-auto bg-transparent"
+        className={cn(
+          "w-full bg-transparent",
+          contentOverflow === "hidden" ? "overflow-hidden" : "overflow-auto",
+        )}
         style={{
           height: showTitlebar ? `calc(100% - ${titlebarHeight}px)` : "100%",
         }}

@@ -18,24 +18,39 @@ export interface SystemUpdateStep {
   duration?: string;
 }
 
+export interface SystemUpdateInput {
+  name: string;
+  currentRevision: string;
+  newRevision: string;
+  selected?: boolean;
+}
+
 export interface SystemUpdateDialogProps {
   isOpen?: boolean;
   description?: string;
   progress?: number | 'indeterminate' | null;
   progressIsEstimated?: boolean;
+  summaryVariant?: 'default' | 'success';
   phase?: string;
   message?: string;
   errorMessage?: string;
   elapsedTime?: string;
   steps?: SystemUpdateStep[];
+  availableUpdates?: SystemUpdateInput[];
+  updatesCheckedAt?: string;
+  onUpdateSelectionChange?: (inputName: string, selected: boolean) => void;
+  onSelectAllUpdatesChange?: (selected: boolean) => void;
   currentGeneration?: string;
   currentGenerationDate?: string;
   technicalDetails?: string[];
   technicalDetailsOpen?: boolean;
+  onCopyTechnicalDetails?: (output: string) => void;
   automaticallyCheckForUpdates?: boolean;
   onAutomaticallyCheckForUpdatesChange?: (checked: boolean) => void;
   primaryActionLabel?: string;
   onPrimaryAction?: () => void;
+  secondaryActionLabel?: string;
+  onSecondaryAction?: () => void;
   onCancel?: () => void;
   onClose?: () => void;
 }
@@ -45,19 +60,27 @@ export const SystemUpdateDialog = ({
   description,
   progress = 0,
   progressIsEstimated = false,
+  summaryVariant = 'default',
   phase = 'Preparing update...',
   message,
   errorMessage,
   elapsedTime,
   steps = [],
+  availableUpdates = [],
+  updatesCheckedAt,
+  onUpdateSelectionChange,
+  onSelectAllUpdatesChange,
   currentGeneration,
   currentGenerationDate,
   technicalDetails = [],
-  technicalDetailsOpen = false,
+  technicalDetailsOpen,
+  onCopyTechnicalDetails,
   automaticallyCheckForUpdates = true,
   onAutomaticallyCheckForUpdatesChange,
   primaryActionLabel,
   onPrimaryAction,
+  secondaryActionLabel,
+  onSecondaryAction,
   onCancel,
   onClose,
 }: SystemUpdateDialogProps) => {
@@ -65,9 +88,16 @@ export const SystemUpdateDialog = ({
   const elapsedTimeId = useId();
   const normalizedProgress =
     typeof progress === 'number' ? Math.min(100, Math.max(0, progress)) : progress;
-  const hasWorkflowDetails = steps.length > 0 || technicalDetails.length > 0;
+  const hasWorkflowDetails =
+    steps.length > 0 || availableUpdates.length > 0 || technicalDetails.length > 0;
+  const hasFailure = Boolean(errorMessage) || steps.some((step) => step.status === 'failed');
+  const showTechnicalDetails = technicalDetailsOpen ?? hasFailure;
+  const selectedUpdateCount = availableUpdates.filter((update) => update.selected ?? true).length;
+  const allUpdatesSelected = selectedUpdateCount === availableUpdates.length;
+  const someUpdatesSelected = selectedUpdateCount > 0 && allUpdatesSelected === false;
   const showProgressSummary = normalizedProgress !== null || steps.length === 0 || Boolean(message);
-  let windowHeight = '360px';
+  let windowHeight = '320px';
+  if (summaryVariant === 'success') windowHeight = '360px';
   if (hasWorkflowDetails) windowHeight = 'min(640px, calc(100vh - 32px))';
   if (hasWorkflowDetails && errorMessage) windowHeight = 'min(680px, calc(100vh - 32px))';
 
@@ -87,9 +117,15 @@ export const SystemUpdateDialog = ({
         width="min(782px, calc(100vw - 32px))"
         height={windowHeight}
         className="rounded-xl"
+        contentOverflow={summaryVariant === 'success' ? 'hidden' : 'auto'}
       >
         <div className="flex h-full flex-col text-foreground-primary">
-          <div className="min-h-0 flex-1 overflow-y-auto px-7 pb-4 pt-7">
+          <div
+            className={cn(
+              'min-h-0 flex-1 px-7 pb-4 pt-7',
+              summaryVariant === 'success' ? 'overflow-hidden pb-6' : 'overflow-y-auto'
+            )}
+          >
             <header className="relative flex items-start gap-5 pr-10">
               <img
                 src="/icons/nixos-snowflake.svg"
@@ -130,9 +166,36 @@ export const SystemUpdateDialog = ({
             </header>
 
             {showProgressSummary && (
-              <section className="mt-6" aria-label="Update progress">
-                <div className="mb-2 flex items-end justify-between gap-4">
-                  <p className="text-lg font-semibold">{phase}</p>
+              <section
+                className={cn(
+                  'mt-6',
+                  summaryVariant === 'success' &&
+                    'mb-5 flex min-h-28 flex-col items-center justify-center rounded-xl border border-white/[0.08] bg-background-primary/20 px-6 py-5 text-center'
+                )}
+                aria-label="Update progress"
+              >
+                {summaryVariant === 'success' && (
+                  <span
+                    className="mb-3 grid size-10 place-items-center rounded-full border-2 border-state-success bg-state-success/10 font-fluent text-base text-state-success"
+                    aria-hidden="true"
+                  >
+                    {'\uE73E'}
+                  </span>
+                )}
+                <div
+                  className={cn(
+                    'mb-2 flex items-end justify-between gap-4',
+                    summaryVariant === 'success' && 'mb-0 justify-center'
+                  )}
+                >
+                  <p
+                    className={cn(
+                      'text-lg font-semibold',
+                      summaryVariant === 'success' && 'text-xl'
+                    )}
+                  >
+                    {phase}
+                  </p>
                   {typeof normalizedProgress === 'number' && (
                     <p className="shrink-0 text-lg tabular-nums text-foreground-secondary">
                       {progressIsEstimated ? '~' : ''}
@@ -150,7 +213,12 @@ export const SystemUpdateDialog = ({
                   />
                 )}
                 {(message || elapsedTime) && (
-                  <div className="mt-2 flex flex-wrap justify-between gap-2 text-sm text-foreground-secondary">
+                  <div
+                    className={cn(
+                      'mt-2 flex flex-wrap justify-between gap-2 text-sm text-foreground-secondary',
+                      summaryVariant === 'success' && 'justify-center'
+                    )}
+                  >
                     {message && <p>{message}</p>}
                     {elapsedTime && (
                       <p id={elapsedTimeId} className="ml-auto tabular-nums">
@@ -159,6 +227,58 @@ export const SystemUpdateDialog = ({
                     )}
                   </div>
                 )}
+              </section>
+            )}
+
+            {availableUpdates.length > 0 && (
+              <section className="mt-2" aria-label={`${availableUpdates.length} updates available`}>
+                {updatesCheckedAt && (
+                  <p className="mb-3 px-1 text-xs text-foreground-tertiary">
+                    Checked {updatesCheckedAt}
+                  </p>
+                )}
+                <div className="overflow-hidden rounded-lg border border-white/10 bg-background-primary/25">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3 border-b border-white/10 bg-white/[0.03] px-4 text-sm font-semibold text-foreground-primary hover:bg-white/[0.06]">
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-accent-primary"
+                      checked={allUpdatesSelected}
+                      ref={(input) => {
+                        if (input) input.indeterminate = someUpdatesSelected;
+                      }}
+                      onChange={(event) => onSelectAllUpdatesChange?.(event.currentTarget.checked)}
+                    />
+                    Select all inputs
+                    <span className="ml-auto text-xs font-normal tabular-nums text-foreground-tertiary">
+                      {selectedUpdateCount} of {availableUpdates.length} selected
+                    </span>
+                  </label>
+                  <ul>
+                    {availableUpdates.map((update, index) => (
+                      <li
+                        key={update.name}
+                        className={cn(
+                          'flex min-h-12 items-center gap-3 px-4 py-2',
+                          index > 0 && 'border-t border-white/[0.06]'
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          className="size-4 shrink-0 accent-accent-primary"
+                          checked={update.selected ?? true}
+                          aria-label={`Update ${update.name}`}
+                          onChange={(event) =>
+                            onUpdateSelectionChange?.(update.name, event.currentTarget.checked)
+                          }
+                        />
+                        <span className="min-w-0 flex-1 text-sm font-semibold">{update.name}</span>
+                        <span className="shrink-0 text-sm tabular-nums text-foreground-secondary">
+                          {update.currentRevision} → {update.newRevision}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </section>
             )}
 
@@ -233,20 +353,40 @@ export const SystemUpdateDialog = ({
             {technicalDetails.length > 0 && (
               <details
                 className="group mt-5 border-t border-white/10 pt-2"
-                open={technicalDetailsOpen}
+                open={showTechnicalDetails}
               >
                 <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md px-2 text-sm font-semibold text-foreground-secondary transition-colors duration-150 hover:bg-white/[0.04] hover:text-foreground-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/30">
                   Technical details
                   <span
-                    className="font-fluent text-xs transition-transform duration-150 group-open:rotate-180"
+                    className="ml-auto font-fluent text-xs transition-transform duration-150 group-open:rotate-180"
                     aria-hidden="true"
                   >
                     {'\uE70D'}
                   </span>
                 </summary>
-                <pre className="mt-2 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg border border-white/15 bg-background-primary/30 px-5 py-4 font-mono text-sm leading-relaxed text-foreground-secondary">
-                  {technicalDetails.join('\n')}
-                </pre>
+                <div className="relative mt-2">
+                  {onCopyTechnicalDetails && (
+                    <Button
+                      variant="transparent"
+                      size="sm"
+                      className="absolute right-2 top-2 z-10 border border-white/15 bg-background-secondary/90 shadow-sm backdrop-blur-sm"
+                      onClick={() => onCopyTechnicalDetails(technicalDetails.join('\n'))}
+                    >
+                      <span className="font-fluent" aria-hidden="true">
+                        {'\uE8C8'}
+                      </span>
+                      Copy output
+                    </Button>
+                  )}
+                  <pre
+                    className={cn(
+                      'max-h-36 overflow-auto whitespace-pre-wrap rounded-lg border border-white/15 bg-background-primary/30 px-5 pb-4 font-mono text-sm leading-relaxed text-foreground-secondary',
+                      onCopyTechnicalDetails ? 'pt-14' : 'pt-4'
+                    )}
+                  >
+                    {technicalDetails.join('\n')}
+                  </pre>
+                </div>
               </details>
             )}
           </div>
@@ -267,6 +407,11 @@ export const SystemUpdateDialog = ({
               {onCancel && (
                 <Button variant="transparent" className="min-w-28" onClick={onCancel}>
                   Cancel
+                </Button>
+              )}
+              {secondaryActionLabel && onSecondaryAction && (
+                <Button variant="default" className="min-w-28" onClick={onSecondaryAction}>
+                  {secondaryActionLabel}
                 </Button>
               )}
               {primaryActionLabel && onPrimaryAction && (

@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, within } from 'storybook/test';
 import { Desktop } from '../Desktop';
 import { SystemUpdateDialog } from './SystemUpdateDialog';
@@ -12,6 +13,7 @@ const meta: Meta<typeof SystemUpdateDialog> = {
   args: {
     currentGeneration: '182',
     currentGenerationDate: '2026-08-10',
+    onCopyTechnicalDetails: fn(),
   },
   decorators: [
     (Story: React.ComponentType) => (
@@ -69,6 +71,104 @@ export const CheckingForUpdates: Story = {
   },
 };
 
+export const CachedUpdatesAvailable: Story = {
+  args: {
+    isOpen: true,
+    progress: null,
+    phase: '3 updates available',
+    updatesCheckedAt: '8 minutes ago',
+    availableUpdates: [
+      {
+        name: 'nixpkgs',
+        currentRevision: 'a1b2c3d',
+        newRevision: 'e4f5a6b',
+      },
+      {
+        name: 'home-manager',
+        currentRevision: '18d9f21',
+        newRevision: '72ac880',
+      },
+      {
+        name: 'ags',
+        currentRevision: '31f490c',
+        newRevision: '8b54e12',
+      },
+    ],
+    onUpdateSelectionChange: fn(),
+    onSelectAllUpdatesChange: fn(),
+    automaticallyCheckForUpdates: true,
+    onAutomaticallyCheckForUpdatesChange: fn(),
+    secondaryActionLabel: 'Check again',
+    onSecondaryAction: fn(),
+    primaryActionLabel: 'Update selected inputs',
+    onPrimaryAction: fn(),
+    onCancel: fn(),
+    onClose: fn(),
+  },
+  render: (args) => {
+    const [updates, setUpdates] = useState(args.availableUpdates ?? []);
+
+    return (
+      <SystemUpdateDialog
+        {...args}
+        availableUpdates={updates}
+        onUpdateSelectionChange={(inputName, selected) => {
+          setUpdates((current) =>
+            current.map((update) => (update.name === inputName ? { ...update, selected } : update))
+          );
+          args.onUpdateSelectionChange?.(inputName, selected);
+        }}
+        onSelectAllUpdatesChange={(selected) => {
+          setUpdates((current) => current.map((update) => ({ ...update, selected })));
+          args.onSelectAllUpdatesChange?.(selected);
+        }}
+      />
+    );
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+    const nixpkgs = canvas.getByRole('checkbox', { name: 'Update nixpkgs' });
+    const selectAll = canvas.getByRole('checkbox', { name: /Select all inputs/ });
+
+    await expect(canvas.getByText('nixpkgs')).toBeVisible();
+    await expect(canvas.getByText('a1b2c3d → e4f5a6b')).toBeVisible();
+    await expect(nixpkgs).toBeChecked();
+    await expect(selectAll).toBeChecked();
+    await userEvent.click(nixpkgs);
+    await expect(nixpkgs).not.toBeChecked();
+    await expect(args.onUpdateSelectionChange).toHaveBeenCalledWith('nixpkgs', false);
+    await userEvent.click(selectAll);
+    await expect(nixpkgs).toBeChecked();
+    await expect(args.onSelectAllUpdatesChange).toHaveBeenCalledWith(true);
+    await userEvent.click(canvas.getByRole('button', { name: 'Check again' }));
+    await expect(args.onSecondaryAction).toHaveBeenCalledOnce();
+  },
+};
+
+export const NoUpdatesAvailable: Story = {
+  args: {
+    isOpen: true,
+    progress: null,
+    summaryVariant: 'success',
+    phase: 'No updates available',
+    message: 'Checked just now.',
+    automaticallyCheckForUpdates: true,
+    onAutomaticallyCheckForUpdatesChange: fn(),
+    secondaryActionLabel: 'Check again',
+    onSecondaryAction: fn(),
+    onCancel: fn(),
+    onClose: fn(),
+  },
+  play: async ({ args, canvasElement }) => {
+    const canvas = within(canvasElement);
+
+    await expect(canvas.getByText('No updates available')).toBeVisible();
+    await expect(canvas.getByText('Checked just now.')).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Check again' }));
+    await expect(args.onSecondaryAction).toHaveBeenCalledOnce();
+  },
+};
+
 export const CheckFailed: Story = {
   args: {
     isOpen: true,
@@ -109,7 +209,6 @@ export const RebuildingSystem: Story = {
       'these 42 derivations will be built:',
       'activating the configuration...',
     ],
-    technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     onCancel: fn(),
@@ -149,7 +248,6 @@ export const LockfileUpdateFailed: Story = {
       'error: unable to download the requested revision',
       'the system rebuild was not started',
     ],
-    technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
@@ -220,7 +318,6 @@ export const RebuildFailed: Story = {
       'restored /etc/nixos/flake.lock to its pre-update state',
       'the active generation may require verification',
     ],
-    technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
@@ -258,7 +355,6 @@ export const ActivatingConfiguration: Story = {
       'activating the configuration...',
       'reloading user units...',
     ],
-    technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     onClose: fn(),
@@ -287,7 +383,6 @@ export const ActivationFailed: Story = {
       'error: failed to restart user service example.service',
       'verify the active generation and affected services before retrying',
     ],
-    technicalDetailsOpen: true,
     automaticallyCheckForUpdates: true,
     onAutomaticallyCheckForUpdatesChange: fn(),
     primaryActionLabel: 'Retry',
