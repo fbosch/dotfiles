@@ -50,12 +50,6 @@ register({
 		end,
 	},
 	{
-		name = "ts-comments.nvim",
-		src = "https://github.com/folke/ts-comments.nvim.git",
-		module = "ts-comments",
-		opts = {},
-	},
-	{
 		name = "nvim-autopairs",
 		src = "https://github.com/windwp/nvim-autopairs.git",
 		events = { "InsertEnter" },
