@@ -147,5 +147,3 @@ require("config.pack.registry").register({
 		require("lsp-file-operations").setup()
 	end,
 })
-
-return {}

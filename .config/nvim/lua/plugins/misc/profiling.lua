@@ -6,5 +6,3 @@ require("config.pack.registry").register({
 		vim.g.startuptime_tries = 10
 	end,
 })
-
-return {}

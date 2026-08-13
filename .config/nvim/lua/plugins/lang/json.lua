@@ -4,5 +4,3 @@ require("config.pack.registry").register({
 	filetypes = { "json", "yaml" },
 	events = { "BufWritePost" },
 })
-
-return {}

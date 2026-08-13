@@ -82,5 +82,3 @@ register({
 		end,
 	},
 })
-
-return {}

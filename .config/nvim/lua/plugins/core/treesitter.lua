@@ -185,5 +185,3 @@ register({
 		},
 	},
 })
-
-return {}

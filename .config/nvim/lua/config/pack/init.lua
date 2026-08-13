@@ -9,7 +9,7 @@ assert(vim.tbl_contains(vim.opt.packpath:get(), site), "native package site is m
 
 require("config.pack.discovery").load()
 require("config.pack.build").register()
-vim.pack.add(require("config.pack.specs").get(), {
+vim.pack.add(require("config.pack.registry").pack_specs(), {
 	confirm = true,
 	load = function() end,
 })

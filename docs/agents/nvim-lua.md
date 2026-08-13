@@ -31,7 +31,7 @@ return M
 
 ## Plugin Structure (`vim.pack`)
 
-- Files in `.config/nvim/lua/plugins/{category}/` register native package declarations and return `{}`
+- Files in `.config/nvim/lua/plugins/{category}/` are registration-only modules.
 - Categories: `ai/`, `core/`, `lang/`, `misc/`, `ui/`, `workflow/`
 
 Example spec:
@@ -45,6 +45,4 @@ register({
   events = { "BufEnter" },
   opts = {},
 })
-
-return {}
 ```

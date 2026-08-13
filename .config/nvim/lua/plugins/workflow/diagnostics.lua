@@ -73,5 +73,3 @@ require("utils").set_usrcmd("TodoTrouble", function(args)
 		end,
 	})
 end, { nargs = "*" })
-
-return {}

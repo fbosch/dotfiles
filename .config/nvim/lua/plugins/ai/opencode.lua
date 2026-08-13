@@ -707,5 +707,3 @@ register({
 		end,
 	},
 })
-
-return {}

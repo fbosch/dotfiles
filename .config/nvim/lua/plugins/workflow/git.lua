@@ -388,5 +388,3 @@ register({
 		end,
 	},
 })
-
-return {}

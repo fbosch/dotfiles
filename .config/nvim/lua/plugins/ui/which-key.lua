@@ -39,5 +39,3 @@ require("config.pack.registry").register({
 		})
 	end,
 })
-
-return {}

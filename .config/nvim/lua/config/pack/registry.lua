@@ -157,4 +157,22 @@ function M.all()
 	return plugins
 end
 
+function M.pack_specs()
+	local specs = {}
+
+	for name, plugin in pairs(plugins) do
+		table.insert(specs, {
+			name = name,
+			src = plugin.src,
+			version = plugin.version,
+		})
+	end
+
+	table.sort(specs, function(left, right)
+		return left.name < right.name
+	end)
+
+	return specs
+end
+
 return M

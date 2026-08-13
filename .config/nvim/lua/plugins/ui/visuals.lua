@@ -210,5 +210,3 @@ register({
 		end,
 	},
 })
-
-return {}

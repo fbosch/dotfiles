@@ -9,5 +9,3 @@ register({
 		require("helpview").actions.attach(event.buf)
 	end,
 })
-
-return {}

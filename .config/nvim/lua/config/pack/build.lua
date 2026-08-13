@@ -34,7 +34,7 @@ function M.register()
 			local name = event.data.spec.name
 			local code = builds[name]
 			if code ~= nil then
-				-- Build in a clean child so the shadow copy never joins Lazy's runtimepath.
+				-- Load updated package code in isolation instead of mutating the active editor.
 				run_build(name, code)
 			end
 		end,

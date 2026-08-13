@@ -230,5 +230,3 @@ vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
 		require("config.pack.loader").activate("barbar.nvim", { source = "second-buffer" })
 	end,
 })
-
-return {}

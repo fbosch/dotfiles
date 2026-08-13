@@ -31,5 +31,3 @@ register({
 		end,
 	},
 })
-
-return {}

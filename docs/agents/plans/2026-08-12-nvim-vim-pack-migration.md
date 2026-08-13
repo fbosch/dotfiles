@@ -1,6 +1,6 @@
-# Neovim `vim.pack` Migration Plan
+# Neovim `vim.pack` Migration Record
 
-This plan moves `.config/nvim` from Lazy.nvim to Neovim's built-in `vim.pack` API while preserving package-level lazy-loading behavior. The migration is incremental: Lazy.nvim and `vim.pack` coexist until native ownership covers every active plugin.
+This historical record documents the completed migration from Lazy.nvim to Neovim's built-in `vim.pack` API. It preserves phase decisions, measurements, and rollback context; use `.config/nvim/docs/agents/plugins.md` for current operational guidance.
 
 ## Terminology And Scope
 

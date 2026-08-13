@@ -92,5 +92,3 @@ register({
 		end,
 	},
 })
-
-return {}
