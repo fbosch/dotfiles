@@ -247,10 +247,6 @@
       "rev": "a59d6092213447450191122c9346f309161504cb",
       "src": "https://github.com/folke/ts-comments.nvim.git"
     },
-    "tsc.nvim": {
-      "rev": "e083bcf1e54bc3af7df92b33235efb334e8c782c",
-      "src": "https://github.com/dmmulroy/tsc.nvim.git"
-    },
     "vim-abolish": {
       "rev": "dcbfe065297d31823561ba787f51056c147aa682",
       "src": "https://github.com/tpope/vim-abolish.git"

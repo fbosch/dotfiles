@@ -41,7 +41,7 @@ Write Lua config as small declarative modules with guarded imperative edges. Kee
 - Prefer double quotes unless the string contains double quotes.
 - Keep module-level caches explicit, bounded, and justified by host behavior.
 - Do not add compatibility layers unless persisted state, shipped behavior, external consumers, or the user requires it.
-- Do not edit generated or state files such as `lazy-lock.json`.
+- Do not edit generated or state files such as `nvim-pack-lock.json`.
 
 ## Cross-Layer Landmines
 

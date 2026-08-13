@@ -9,8 +9,6 @@ This plan moves `.config/nvim` from Lazy.nvim to Neovim's built-in `vim.pack` AP
 - The minimum supported editor version is Neovim 0.12.4.
 - The current package-level lazy-loading behavior is preserved rather than replaced with eager startup loading.
 - Incline, Typr, Volt, and the redundant `tweekmonster/startuptime.vim` remain removed. `dstein64/vim-startuptime` is retained as a native, command-loaded migration diagnostic.
-- `lazy-lock.json` is generated state. Do not hand-edit or transform it.
-- Freeze plugin updates while both managers coexist, so the two lockfiles do not diverge.
 
 Official references:
 
@@ -471,14 +469,11 @@ Delete or update:
 
 Generated-state handling:
 
-- Do not manually edit `lazy-lock.json`.
-- Keep the lockfile and old Lazy data directory for the agreed rollback window.
-- Remove them only in a separate, explicitly approved cleanup.
 - Use `vim.pack.del()` for native package deletion rather than deleting native package directories directly.
 
 **Acceptance:** `:Lazy` does not exist, `package.loaded.lazy` is `nil`, and no Lazy module resolves through `runtimepath`.
 
-**Progress:** Phase 10 is complete. The Lazy bootstrap and import aggregator were removed, while `lazy-lock.json` and the existing Lazy data directory remain untouched as rollback artifacts. Native bootstrap now owns built-in runtime-plugin disabling, and the repository keybind extractor reads callback-key metadata from the native registry. Normal and isolated-XDG startup both discovered, registered, and installed the 68-entry native catalog with `:Lazy` absent, `package.loaded.lazy == nil`, and no `lua/lazy/init.lua` runtime file; the local trigger layer continues to control which packages enter `runtimepath`. Neovim health, Lua quality, Stow dry-run, and the five-tool keybind validator passed.
+**Progress:** Phase 10 is complete. The Lazy bootstrap and import aggregator were removed. Native bootstrap now owns built-in runtime-plugin disabling, and the repository keybind extractor reads callback-key metadata from the native registry. Normal and isolated-XDG startup both discovered, registered, and installed the 68-entry native catalog with `:Lazy` absent, `package.loaded.lazy == nil`, and no `lua/lazy/init.lua` runtime file; the local trigger layer continues to control which packages enter `runtimepath`. The obsolete Lazy lockfile and data directory were removed after native acceptance. Neovim health, Lua quality, Stow dry-run, and the five-tool keybind validator passed.
 
 ## Validation Gates
 
@@ -536,8 +531,7 @@ Check that Lazy is fully removed only after Phase 10:
 ```bash
 rg -n \
   'lazy\.nvim|require\(["'"'"']lazy["'"'"']\)|VeryLazy|:Lazy|config\.lazy|/lazy/lazy\.nvim' \
-  .config/nvim \
-  --glob '!lazy-lock.json'
+  .config/nvim
 ```
 
 ```vim
