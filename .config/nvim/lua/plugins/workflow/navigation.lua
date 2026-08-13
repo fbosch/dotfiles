@@ -31,32 +31,10 @@ register({
 			})
 		end,
 	},
-})
-
-return {
 	{
-		url = "https://codeberg.org/andyg/leap.nvim",
-		event = "VeryLazy",
-		keys = {
-			{ "s", mode = { "n", "x", "o" }, desc = "Leap forward to" },
-			{ "S", mode = { "n", "x", "o" }, desc = "Leap backward to" },
-			{ "gs", mode = { "n", "x", "o" }, desc = "Leap from windows" },
-		},
-		config = function(_, opts)
-			vim.schedule(function()
-				local leap = require("leap")
-				for k, v in pairs(opts) do
-					leap.opts[k] = v
-				end
-				-- leap.add_default_mappings(true)
-			end)
-		end,
-	},
-	{
-		"dmtrKovalenko/fff.nvim",
-		build = function()
-			require("fff.download").download_or_build_binary()
-		end,
+		name = "fff.nvim",
+		src = "https://github.com/dmtrKovalenko/fff.nvim.git",
+		module = "fff",
 		keys = {
 			{
 				"<C-p>",
@@ -148,5 +126,26 @@ return {
 				show_scores = false,
 			},
 		},
+	},
+})
+
+return {
+	{
+		url = "https://codeberg.org/andyg/leap.nvim",
+		event = "VeryLazy",
+		keys = {
+			{ "s", mode = { "n", "x", "o" }, desc = "Leap forward to" },
+			{ "S", mode = { "n", "x", "o" }, desc = "Leap backward to" },
+			{ "gs", mode = { "n", "x", "o" }, desc = "Leap from windows" },
+		},
+		config = function(_, opts)
+			vim.schedule(function()
+				local leap = require("leap")
+				for k, v in pairs(opts) do
+					leap.opts[k] = v
+				end
+				-- leap.add_default_mappings(true)
+			end)
+		end,
 	},
 }

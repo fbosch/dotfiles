@@ -49,8 +49,7 @@
     },
     "fff.nvim": {
       "rev": "d4c416c2fcf24eeda40a540a898da12824aed18f",
-      "src": "https://github.com/dmtrKovalenko/fff.nvim.git",
-      "version": "'d4c416c2fcf24eeda40a540a898da12824aed18f'"
+      "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
       "rev": "6f793b2bcd2d35e201c09520f698bb763220908a",

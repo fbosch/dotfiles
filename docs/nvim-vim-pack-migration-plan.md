@@ -314,7 +314,7 @@ Requirements:
 
 **Acceptance:** Exactly one Treesitter and Plenary copy is active. Parsers resolve, Checkmate works in the initial Markdown todo buffer, Neotest actions work, and Git workflows work within a repository.
 
-**Outcome:** Complete. Treesitter and Plenary are synchronous native startup roots; Plenary remains startup-loaded because the Phase 6 `nvim-lsp-file-operations` consumer requires it without a Lazy dependency declaration. Ordered dependencies cover Neotest, Todo Comments, Coverage, Diffview, and Gitlineage. First-file Treesitter/Hlargs/Autotag/Checkmate behavior, Treesj command and key activation, Todo post-start setup, Coverage command and key activation, Neotest setup and key actions, retryable Diffview conditions, and Gitlineage visual history all pass with one native runtime copy.
+**Outcome:** Complete. Treesitter is a synchronous native startup root; Plenary is dependency-only and loads before each native consumer. Ordered dependencies cover Neotest, Todo Comments, Coverage, Diffview, Gitlineage, and the Phase 6 file-operations integration. First-file Treesitter/Hlargs/Autotag/Checkmate behavior, Treesj command and key activation, Todo post-start setup, Coverage command and key activation, Neotest setup and key actions, retryable Diffview conditions, and Gitlineage visual history all pass with one native runtime copy.
 
 **Rollback:** Revert this complete cluster because its dependency edges cross the named plugins.
 
@@ -347,6 +347,10 @@ LuaSnip
 `nvim-lsp-file-operations` must load before both LSP capability setup and NvimTree file operations.
 
 **Acceptance:** Completion works on the first insert, snippets expand, LSP clients attach once with Blink capabilities, Lua workspace completion works, Saga works on first attachment, and NvimTree rename and move operations notify language servers.
+
+**Outcome:** Complete. LuaSnip is dependency-only; Blink retains `InsertEnter` activation and also loads before LSP capability construction. File operations load before LSP setup but subscribe only after NvimTree setup. LazyDev and Saga configure before servers are enabled; LazyDev uses explicit Lua workspace resolution, the documented Blink provider, and a hybrid discovery bridge for dormant native opt packages while Lazy remains loaded. NvimTree retains command and callback-key activation without pulling the optional devicons closure forward. Native ownership increased from 38 to 45 while the catalog remained 68.
+
+FFF subsequently moved from Phase 8 to native callback-key ownership, increasing the native total to 46. Its Lazy checkout had advanced without the required Rust backend binary, causing the first picker import to fail and later attempts to report a previous-load loop. The native copy retained the locked revision, had a valid `libfff_nvim.so`, and passed direct picker-module loading plus first `<C-p>` open/close behavior. Future native installs and updates use the isolated `PackChanged` build hook.
 
 **Rollback:** Revert the complete cluster. Mixed ownership of LSP capability providers is unsafe.
 

@@ -23,7 +23,7 @@ require("config.pack.registry").register({
 		name = "blink.cmp",
 		src = "https://github.com/saghen/blink.cmp.git",
 		version = vim.version.range("1.*"),
-		dependencies = { "LuaSnip" },
+		dependencies = { "LuaSnip", "lazydev.nvim" },
 		events = { "InsertEnter" },
 		opts = {
 			enabled = completion_enabled,
@@ -66,12 +66,17 @@ require("config.pack.registry").register({
 				preset = "luasnip",
 			},
 			sources = {
-				default = { "lsp", "snippets", "path", "buffer" },
+				default = { "lazydev", "lsp", "snippets", "path", "buffer" },
 				per_filetype = {
 					tex = { "omni" },
 					plaintex = { "omni" },
 				},
 				providers = {
+					lazydev = {
+						name = "LazyDev",
+						module = "lazydev.integrations.blink",
+						score_offset = 100,
+					},
 					lsp = { max_items = 10 },
 					snippets = { max_items = 5 },
 					path = { max_items = 10 },

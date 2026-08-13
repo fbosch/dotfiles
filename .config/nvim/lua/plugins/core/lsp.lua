@@ -200,12 +200,67 @@ require("config.pack.registry").register({
 		name = "lazydev.nvim",
 		src = "https://github.com/folke/lazydev.nvim.git",
 		root = false,
-		module = "lazydev",
-		opts = {
-			integrations = {
-				lspconfig = false,
-			},
-		},
+		setup = function()
+			local pkg = require("lazydev.pkg")
+			local registry = require("config.pack.registry")
+			local lazy_unloaded = pkg.lazy_unloaded
+			local lazy_plugin_path = pkg.get_plugin_path
+			local find_roots = pkg.find_roots
+
+			-- LazyDev otherwise ignores native opt packages while Lazy remains loaded.
+			pkg.get_unloaded = function(modname)
+				local paths = lazy_unloaded(modname)
+				local seen = {}
+				for _, path in ipairs(paths) do
+					seen[path] = true
+				end
+				local active = {}
+				for _, path in ipairs(vim.api.nvim_list_runtime_paths()) do
+					active[vim.fs.normalize(path)] = true
+				end
+				for _, path in ipairs(pkg.pack_unloaded()) do
+					local native_owned = registry.get(vim.fs.basename(path)) ~= nil
+					if native_owned and seen[path] == nil and active[path] == nil then
+						table.insert(paths, path)
+						seen[path] = true
+					end
+				end
+				return paths
+			end
+
+			pkg.get_plugin_path = function(name)
+				local path = lazy_plugin_path(name)
+				if path ~= nil then
+					return path
+				end
+				if registry.get(name) == nil then
+					return
+				end
+				for _, native_path in ipairs(pkg.pack_unloaded()) do
+					if vim.fs.basename(native_path) == name then
+						return native_path
+					end
+				end
+			end
+
+			pkg.find_roots = function(modname)
+				local roots = {}
+				local seen = {}
+				for _, root in ipairs(find_roots(modname)) do
+					if seen[root] == nil then
+						table.insert(roots, root)
+						seen[root] = true
+					end
+				end
+				return roots
+			end
+
+			require("lazydev").setup({
+				integrations = {
+					lspconfig = false,
+				},
+			})
+		end,
 	},
 	{
 		name = "lspsaga.nvim",
