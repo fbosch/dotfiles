@@ -401,7 +401,7 @@ Special handling:
 
 The Notify/Recorder/Fidget subcluster is also complete. Notify is dependency-only; Recorder and Fidget activate after startup on `PackReady`. Recorder therefore installs its intended bare-`q` mapping before the first recording, while Fidget owns `vim.notify` and retains `on_open` delegation to Notify. Native ownership increased from 48 to 51 while the catalog remained 68.
 
-The Gitsigns/Git Conflict subcluster is complete. Conditional event triggers now remain retryable until a buffer enters a Git repository. Gitsigns attaches loaded named buffers during setup; Git Conflict replays only its newly installed `BufReadPost` handler for the triggering buffer so an initial conflicted file is detected. Non-repository dormancy, later-repository activation, hunk selection, conflict resolution, Diffview, and Gitlineage all passed focused checks. Native ownership increased from 51 to 53 while the catalog remained 68.
+The Gitsigns/Git Conflict subcluster is complete. Conditional event triggers now use their event buffer, remain retryable until a buffer enters a Git repository, and are cleared together after success or terminal failure. Gitsigns explicitly attaches the triggering buffer; Git Conflict refreshes from the triggering buffer through its public command, independent of the editor cwd. Key-first actions wait for attachment or conflict detection rather than running against incomplete asynchronous state. Non-repository dormancy, later-repository activation, hunk selection, conflict resolution, Diffview, and Gitlineage all passed focused checks. Native ownership increased from 51 to 53 while the catalog remained 68.
 
 **Rollback:** Revert each subcluster as one unit.
 

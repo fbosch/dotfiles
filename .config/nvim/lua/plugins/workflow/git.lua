@@ -3,6 +3,13 @@ local function is_git_repo(context)
 	return require("utils.git").is_git_repo(bufnr)
 end
 
+local function is_git_conflict_repo(context)
+	local bufnr = type(context) == "table" and context.buf or vim.api.nvim_get_current_buf()
+	local bufpath = vim.api.nvim_buf_get_name(bufnr)
+	local path = bufpath ~= "" and bufpath or vim.fn.getcwd()
+	return vim.fs.root(path, { ".git" }) ~= nil
+end
+
 local register = require("config.pack.registry").register
 
 local gitsigns_options = {
@@ -71,7 +78,15 @@ local function with_git_conflict(action)
 			end
 
 			finished = true
-			action(conflict)
+			vim.schedule(function()
+				if vim.api.nvim_buf_is_valid(bufnr) == false then
+					return
+				end
+
+				vim.api.nvim_buf_call(bufnr, function()
+					action(conflict)
+				end)
+			end)
 			return true
 		end,
 	})
@@ -155,7 +170,7 @@ register({
 	{
 		name = "git-conflict.nvim",
 		src = "https://github.com/akinsho/git-conflict.nvim.git",
-		condition = is_git_repo,
+		condition = is_git_conflict_repo,
 		events = { "BufReadPost" },
 		keys = {
 			{
@@ -249,10 +264,10 @@ register({
 			})
 
 			local refresh_group = vim.api.nvim_create_augroup("NativeGitConflictRefresh", { clear = true })
-			vim.api.nvim_create_autocmd({ "BufEnter", "BufReadPost", "BufWritePost", "FocusGained" }, {
+			vim.api.nvim_create_autocmd({ "BufReadPost", "BufWritePost", "FocusGained" }, {
 				group = refresh_group,
 				callback = function(event)
-					if is_git_repo(event) then
+					if is_git_conflict_repo(event) then
 						refresh_git_conflicts(event.buf)
 					end
 				end,
