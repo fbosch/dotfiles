@@ -5,7 +5,7 @@ require("config.keymaps.editing")
 
 -- Defer plugin keymaps loading to avoid loading heavy utils at startup
 vim.api.nvim_create_autocmd("User", {
-	pattern = "VeryLazy",
+	pattern = "PackReady",
 	callback = function()
 		require("config.keymaps.plugins")
 	end,

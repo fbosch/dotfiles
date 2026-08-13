@@ -45,7 +45,7 @@ export default {
           hover: colors.border.hover.value,
         },
         waybar: {
-          bg: 'rgba(44, 44, 44, 0.7)',
+          bg: `${colors.background.secondary.value}b3`,
         },
       },
       fontFamily: {

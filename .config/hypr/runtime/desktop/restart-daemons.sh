@@ -100,7 +100,7 @@ wait_for_gaming_watchdog_shutdown() {
 hyprctl reload
 systemctl --user restart vicinae.service
 
-pkill waybar 2>/dev/null || true
+pkill -f '(^|/)waybar( |$)' 2>/dev/null || true
 pkill swaync 2>/dev/null || true
 pkill hyprpaper 2>/dev/null || true
 pkill hypridle 2>/dev/null || true

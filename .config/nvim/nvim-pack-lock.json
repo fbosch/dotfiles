@@ -87,8 +87,7 @@
     },
     "leap.nvim": {
       "rev": "0d0549b13428855c063468a6935c18e933599a18",
-      "src": "https://codeberg.org/andyg/leap.nvim",
-      "version": "'0d0549b13428855c063468a6935c18e933599a18'"
+      "src": "https://codeberg.org/andyg/leap.nvim"
     },
     "live-command.nvim": {
       "rev": "fc8c36d7e5b96945fbc52af7029facc317a47377",
@@ -112,8 +111,7 @@
     },
     "matchparen.nvim": {
       "rev": "75398158ea5a4cee4f0cbbeefdbf8fb1c3343e28",
-      "src": "https://github.com/monkoose/matchparen.nvim.git",
-      "version": "'75398158ea5a4cee4f0cbbeefdbf8fb1c3343e28'"
+      "src": "https://github.com/monkoose/matchparen.nvim.git"
     },
     "mini.ai": {
       "rev": "d73c36349aa7b0bab5f77ad71701a1d42211a1df",
@@ -231,8 +229,7 @@
     },
     "transparent.nvim": {
       "rev": "e00ca1cf09caef575edf8da7e5a8b9193893b4c7",
-      "src": "https://github.com/xiyaowong/transparent.nvim.git",
-      "version": "'e00ca1cf09caef575edf8da7e5a8b9193893b4c7'"
+      "src": "https://github.com/xiyaowong/transparent.nvim.git"
     },
     "treesj": {
       "rev": "79aedb401bbdc7e4202f7881eab5f6feb2105b0a",
@@ -264,8 +261,7 @@
     },
     "vim-unimpaired": {
       "rev": "db65482581a28e4ccf355be297f1864a4e66985c",
-      "src": "https://github.com/tpope/vim-unimpaired.git",
-      "version": "'db65482581a28e4ccf355be297f1864a4e66985c'"
+      "src": "https://github.com/tpope/vim-unimpaired.git"
     },
     "which-key.nvim": {
       "rev": "3aab2147e74890957785941f0c1ad87d0a44c15a",
@@ -277,8 +273,7 @@
     },
     "zenbones.nvim": {
       "rev": "8304d8df9b823ff11e103afa62f38c39f534abe6",
-      "src": "https://github.com/mcchrish/zenbones.nvim.git",
-      "version": "'8304d8df9b823ff11e103afa62f38c39f534abe6'"
+      "src": "https://github.com/mcchrish/zenbones.nvim.git"
     }
   }
 }

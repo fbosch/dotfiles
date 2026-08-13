@@ -72,9 +72,18 @@ register({
 		events = { "InsertEnter" },
 		setup = require("config.abbr").autofix_typos,
 	},
+	{
+		name = "vim-unimpaired",
+		src = "https://github.com/tpope/vim-unimpaired.git",
+		startup = true,
+	},
+	{
+		name = "matchparen.nvim",
+		src = "https://github.com/monkoose/matchparen.nvim.git",
+		events = { "InsertEnter" },
+		module = "matchparen",
+		opts = {},
+	},
 })
 
-return {
-	{ "tpope/vim-unimpaired", keys = { "]", "[" } },
-	{ "monkoose/matchparen.nvim", event = { "InsertEnter" }, opts = {} },
-}
+return {}

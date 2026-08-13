@@ -49,10 +49,7 @@ vim.g.loaded_nvim_net_plugin = true
 
 -- Setup lazy.nvim
 require("lazy").setup({
-	spec = {
-		{ import = "plugins.ui.colorscheme" },
-		{ import = "plugins" },
-	},
+	spec = {},
 	change_detection = { notify = false },
 	ui = { border = "rounded" },
 	concurrency = 32,

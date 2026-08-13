@@ -1,10 +1,16 @@
 #!/usr/bin/env dash
 
-set -eu
+set -u
 
 # Rebuild compositor-bound desktop UI workers. It leaves minimized state, PiP,
 # gaming watchdog, Gamescope clipboard sync, and night light running because
 # they retain independent state or do not need the rebuilt desktop UI.
+
+waybar_process_pattern='(^|/)waybar( |$)'
+
+has_live_waybar() {
+  pgrep -f "$waybar_process_pattern" >/dev/null 2>&1
+}
 
 wait_for_shutdown() {
   name="$1"
@@ -13,22 +19,7 @@ wait_for_shutdown() {
   while "$@" >/dev/null 2>&1; do
     if [ "$attempts" -ge 100 ]; then
       printf 'reset-desktop: %s did not stop\n' "$name" >&2
-      exit 1
-    fi
-
-    attempts=$((attempts + 1))
-    sleep 0.05
-  done
-}
-
-wait_for_start() {
-  name="$1"
-  shift
-  attempts=0
-  while ! "$@" >/dev/null 2>&1; do
-    if [ "$attempts" -ge 100 ]; then
-      printf 'reset-desktop: %s did not start\n' "$name" >&2
-      exit 1
+      return 1
     fi
 
     attempts=$((attempts + 1))
@@ -50,12 +41,30 @@ has_live_named_process() {
   return 1
 }
 
+start_waybar_monitor() {
+  attempts=0
+  while ! has_live_waybar; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'reset-desktop: waybar did not start; monitor not launched\n' >&2
+      return 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+
+  # Reset must restore the bar, not rely on a concurrently launched monitor to do it.
+  pkill -SIGUSR1 -f "$waybar_process_pattern" 2>/dev/null || true
+  sleep 0.2
+  uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
+}
+
 wait_for_shutdowns() {
   wait_for_shutdown "AGS" pgrep -x gjs &
   ags_pid=$!
   wait_for_shutdown "Foot server" pgrep -f "foot --server" &
   foot_pid=$!
-  wait_for_shutdown "waybar" pgrep -x waybar &
+  wait_for_shutdown "waybar" has_live_waybar &
   waybar_pid=$!
   # A zombie cannot own a background layer and must not block recovery.
   wait_for_shutdown "hyprpaper" has_live_named_process hyprpaper &
@@ -81,7 +90,7 @@ wait_for_shutdowns() {
   [ "$status" -eq 0 ]
 }
 
-pkill waybar 2>/dev/null || true
+pkill -f "$waybar_process_pattern" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
 pkill -f "waybar-monitor.sh" 2>/dev/null || true
@@ -94,17 +103,17 @@ pkill -f "custom-layout-drag-resize.sh daemon" 2>/dev/null || true
 pkill -f custom-layout-drag-resize-daemon.lua 2>/dev/null || true
 pkill -f hyprpaper 2>/dev/null || true
 
-wait_for_shutdowns
+if ! wait_for_shutdowns; then
+  printf 'reset-desktop: continuing after incomplete shutdown\n' >&2
+fi
 
-hyprctl reload
+if ! hyprctl reload; then
+  printf 'reset-desktop: Hyprland reload failed; continuing\n' >&2
+fi
 
 uwsm-app -s s -- waybar &
-waybar_launcher_pid=$!
-wait "$waybar_launcher_pid"
-wait_for_start "waybar" pgrep -x waybar
-
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
+start_waybar_monitor &
 uwsm-app -s b -- foot --server &
 swaync-client -R &
 swaync-client -rs &
@@ -119,5 +128,9 @@ sleep 1
 ~/.config/hypr/runtime/profiles/profilectl.sh reconcile || true
 
 HYPR_ICON=""
-ICON=$(~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "$HYPR_ICON" 64 "#58e1ff")
-notify-send -a "Hyprland" -h string:x-canonical-private-synchronous:hyprland-reset "Desktop Reset" -i "$ICON"
+ICON=$(~/.config/hypr/runtime/desktop/nerd-icon-gen.sh "$HYPR_ICON" 64 "#58e1ff" || true)
+if [ -n "$ICON" ]; then
+  notify-send -a "Hyprland" -h string:x-canonical-private-synchronous:hyprland-reset "Desktop Reset" -i "$ICON" || true
+else
+  notify-send -a "Hyprland" -h string:x-canonical-private-synchronous:hyprland-reset "Desktop Reset" || true
+fi

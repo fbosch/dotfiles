@@ -9,6 +9,7 @@
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
 
 control_socket="$(hypr_instance_socket_path waybar-monitor.sock)"
+waybar_process_pattern='(^|/)waybar( |$)'
 
 printf 'release\n' | nc -U "$control_socket" >/dev/null 2>&1 || true
 
@@ -28,5 +29,5 @@ if should_waybar_stay_visible "$distance_from_bottom" 60; then
     exit 0
 else
     # Cursor is away from waybar and both menus are closed - toggle it (hide)
-    printf 'hide\n' | nc -U "$control_socket" >/dev/null 2>&1 || pkill -SIGUSR2 waybar
+    printf 'hide\n' | nc -U "$control_socket" >/dev/null 2>&1 || pkill -SIGUSR2 -f "$waybar_process_pattern"
 fi

@@ -16,5 +16,5 @@ Autocmds:
 Keymaps:
 
 - Base maps are loaded from `config.keymaps.*`.
-- Plugin maps load on `VeryLazy` to avoid heavy startup.
+- Plugin maps load on `PackReady` to avoid heavy startup.
 - Use `utils.set_keymap` for consistency.

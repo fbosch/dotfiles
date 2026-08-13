@@ -127,25 +127,25 @@ register({
 			},
 		},
 	},
-})
-
-return {
 	{
-		url = "https://codeberg.org/andyg/leap.nvim",
-		event = "VeryLazy",
-		keys = {
-			{ "s", mode = { "n", "x", "o" }, desc = "Leap forward to" },
-			{ "S", mode = { "n", "x", "o" }, desc = "Leap backward to" },
-			{ "gs", mode = { "n", "x", "o" }, desc = "Leap from windows" },
-		},
-		config = function(_, opts)
-			vim.schedule(function()
-				local leap = require("leap")
-				for k, v in pairs(opts) do
-					leap.opts[k] = v
-				end
-				-- leap.add_default_mappings(true)
-			end)
+		name = "leap.nvim",
+		src = "https://codeberg.org/andyg/leap.nvim",
+		startup = true,
+		setup = function()
+			vim.keymap.set({ "n", "x", "o" }, "s", "<Plug>(leap-forward)", {
+				desc = "Leap forward to",
+				silent = true,
+			})
+			vim.keymap.set({ "n", "x", "o" }, "S", "<Plug>(leap-backward)", {
+				desc = "Leap backward to",
+				silent = true,
+			})
+			vim.keymap.set({ "n", "x", "o" }, "gs", "<Plug>(leap-from-window)", {
+				desc = "Leap from windows",
+				silent = true,
+			})
 		end,
 	},
-}
+})
+
+return {}

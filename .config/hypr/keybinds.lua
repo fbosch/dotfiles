@@ -19,6 +19,7 @@ local window_switcher = require("actions.window-switcher")
 
 local main_mod = "SUPER"
 local waybar_control_socket = command.arg(hypr_ipc.instance_socket_path("waybar-monitor.sock"))
+local waybar_process_pattern = command.arg("(^|/)waybar( |$)")
 local active_is_not_passthrough_exempt = window_state.active_is_not_tagged(window_tags.passthrough_exempt)
 
 local function main(key)
@@ -43,7 +44,10 @@ end
 bind.register(
 	"SUPER_L",
 	-- Keep the Waybar toggle out of the gaming workspace.
-	"printf 'hold\\n' | nc -U " .. waybar_control_socket .. " >/dev/null 2>&1 || pkill -SIGUSR1 waybar",
+	"printf 'hold\\n' | nc -U "
+		.. waybar_control_socket
+		.. " >/dev/null 2>&1 || pkill -SIGUSR1 -f "
+		.. waybar_process_pattern,
 	{ long_press = true, predicate = window_state.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
 )
 bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })

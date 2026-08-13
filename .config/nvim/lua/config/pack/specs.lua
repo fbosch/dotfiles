@@ -1,31 +1,8 @@
 local M = {}
 
 function M.get()
-	local lazy_config = require("lazy.core.config")
 	local native_plugins = require("config.pack.registry").all()
-	local lock_path = vim.fs.joinpath(vim.fn.stdpath("config"), "lazy-lock.json")
-	local lock = vim.json.decode(table.concat(vim.fn.readfile(lock_path), "\n"))
 	local specs = {}
-
-	local function add_lazy_plugins(plugins)
-		for name, plugin in pairs(plugins) do
-			if name ~= "lazy.nvim" then
-				local locked = assert(lock[name], "missing Lazy lock entry for " .. name)
-				assert(type(plugin.url) == "string", "missing resolved source URL for " .. name)
-				assert(type(locked.commit) == "string", "missing locked revision for " .. name)
-
-				table.insert(specs, {
-					name = name,
-					src = plugin.url,
-					version = locked.commit,
-				})
-			end
-		end
-	end
-
-	add_lazy_plugins(lazy_config.plugins)
-	-- Runtime conditions control activation, not which repositories belong to the install catalog.
-	add_lazy_plugins(lazy_config.spec.disabled)
 
 	for name, plugin in pairs(native_plugins) do
 		table.insert(specs, {

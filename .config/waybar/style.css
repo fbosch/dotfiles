@@ -3,7 +3,7 @@
  * 
  * Spacing scale: 0.5rem, 0.75rem, 1rem
  * Font sizes: 0.75rem (xs), 0.8rem (sm), 0.9rem (base), 1.1rem (lg)
- * State colors: #73bc6f (idle), #dea721 (warning), #e35245 (critical)
+ * State colors: #7aca6c (idle), #c69761 (warning), #d86659 (critical)
  * Border dividers: 1px solid rgba(255, 255, 255, 0.1)
  * Transitions: 150ms (fast), 500ms (slow)
  */
@@ -11,13 +11,13 @@
 * {
   font-family: "SF Pro Text", "Segoe Fluent Icons", sans-serif;
   font-size: 0.85rem;
-  color: #fff;
+  color: #ffffff;
 }
 
 #waybar {
   all: unset;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  background-color: rgba(44, 44, 44, 0.85);
+  background-color: rgba(36, 36, 36, 0.85);
   border-radius: 8px;
   padding: 0 0.35rem;
   box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
@@ -91,7 +91,7 @@
 }
 
 #custom-mullvad.connected {
-  color: #73bc6f;
+  color: #7aca6c;
 }
 
 #custom-mullvad.disconnected {
@@ -99,41 +99,41 @@
 }
 
 #custom-mullvad.connecting {
-  color: #dea721;
+  color: #c69761;
 }
 
 #custom-mullvad.error {
-  color: #dea721;
+  color: #c69761;
 }
 
 /* CPU states */
 #cpu.idle {
-  color: #73bc6f;
+  color: #7aca6c;
 }
 
 #cpu.normal {
-  color: #fff;
+  color: #ffffff;
 }
 
 #cpu.warning {
-  color: #dea721;
+  color: #c69761;
   opacity: 1;
 }
 
 #cpu.critical {
-  color: #e35245;
+  color: #d86659;
   opacity: 1;
 }
 
 #custom-cpu_temp.warning,
 #custom-gpu_temp.warning {
-  color: #dea721;
+  color: #c69761;
   opacity: 1;
 }
 
 #custom-cpu_temp.critical,
 #custom-gpu_temp.critical {
-  color: #e35245;
+  color: #d86659;
   opacity: 1;
 }
 

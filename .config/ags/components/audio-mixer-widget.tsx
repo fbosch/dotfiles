@@ -1256,7 +1256,7 @@ function showAudioMixer(): void {
   isVisible = true;
 
   try {
-    GLib.spawn_command_line_async("pkill -SIGUSR1 waybar");
+    GLib.spawn_command_line_async("pkill -SIGUSR1 -f '(^|/)waybar( |$)'");
   } catch (e) {
     console.error("Failed to show waybar:", e);
   }

@@ -21,6 +21,7 @@ local slow_interval_ms = 1000
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
 local control_socket_path = hypr_ipc.instance_socket_path("waybar-monitor.sock")
+local waybar_process_pattern = "(^|/)waybar( |$)"
 local pip_control_socket = "nc -U "
 	.. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock"))
 	.. " >/dev/null 2>&1"
@@ -171,14 +172,14 @@ end
 
 local function show_waybar()
 	command.ok("printf 'waybar-show\\n' | " .. pip_control_socket)
-	if command.ok("pkill -SIGUSR1 waybar >/dev/null 2>&1") then
+	if command.ok("pkill -SIGUSR1 -f " .. command.arg(waybar_process_pattern) .. " >/dev/null 2>&1") then
 		waybar_visible = true
 	end
 end
 
 local function hide_waybar()
 	command.ok("printf 'waybar-hide\\n' | " .. pip_control_socket)
-	if command.ok("pkill -SIGUSR2 waybar >/dev/null 2>&1") then
+	if command.ok("pkill -SIGUSR2 -f " .. command.arg(waybar_process_pattern) .. " >/dev/null 2>&1") then
 		waybar_visible = false
 	end
 end

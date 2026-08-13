@@ -94,12 +94,15 @@ assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
 # a zombie; it must be ignored. Parallel waits keep reset below three seconds;
 # serial waits would take at least six seconds.
 # shellcheck disable=SC2016
-printf '%s\n' '#!/bin/sh' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then printf "4242\n"; fi' '/bin/sleep 1' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then exit 0; fi' 'if [ "$1" = "-x" ] && [ "$2" = "waybar" ] && [ -e "$WAYBAR_STARTED_FILE" ]; then exit 0; fi' 'exit 1' > "$bin_dir/pgrep"
+printf '%s\n' '#!/bin/sh' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then printf "4242\n"; fi' "$real_sleep 1" 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-x" ] && [ "$2" = "hyprpaper" ]; then exit 0; fi' 'if [ "$1" = "-f" ] && [ -e "$WAYBAR_STARTED_FILE" ]; then exit 0; fi' 'exit 1' > "$bin_dir/pgrep"
 # shellcheck disable=SC2016
 printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'printf "Z\n"' 'exit 0' > "$bin_dir/ps"
 
 reset_log="$test_dir/reset.log"
 rm -f "$waybar_started_file"
+# A compositor reload failure must not prevent the desktop workers from starting.
+# shellcheck disable=SC2016
+printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'exit 1' > "$bin_dir/hyprctl"
 SECONDS=0
 FIXTURE_LOG="$reset_log" "$repo_root/runtime/desktop/reset-desktop.sh"
 if (( SECONDS > 2 )); then
@@ -111,11 +114,9 @@ wait_for_log_count "$reset_log" swaync-client 2
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
 assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
-assert_contains "$reset_log" 'pgrep -x waybar'
-if [ "$(grep -Fxc 'pgrep -x waybar' "$reset_log")" -ne 2 ]; then
-  printf 'reset-desktop did not wait for replacement waybar\n' >&2
-  exit 1
-fi
+assert_contains "$reset_log" 'pgrep -f (^|/)waybar( |$)'
+assert_contains "$reset_log" 'hyprctl reload'
+assert_contains "$reset_log" 'pkill -SIGUSR1 -f (^|/)waybar( |$)'
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
 assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
