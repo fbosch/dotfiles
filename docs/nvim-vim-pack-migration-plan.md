@@ -269,16 +269,13 @@ Completed vertical slices:
 - `nvim-ts-autotag`
 - `indent-blankline.nvim`
 - `ccc.nvim`
-
-Pending candidates:
-
 - `leap.nvim`
 
 Each slice must remove the Lazy declaration, add the native declaration, preserve configuration and triggers, validate first use, and confirm that only one copy is active.
 
 **Progress:** The twenty-five completed slices above are native-owned. `nvim-toggler`, `nvim-surround`, `eyeliner.nvim`, `beacon.nvim`, `ts-comments.nvim`, and `nvim-scrollbar` use the default post-start lifecycle. `nvim-spider` is native-owned on `BufEnter`; focused validation confirmed camelCase subword movement and preserved Ex-command mappings in normal, operator-pending, and visual modes. `live-command.nvim` is native-owned on `CmdlineEnter`. `FTerm.nvim` is command-loaded; its normal and terminal mappings invoke those commands without generic key replay. `tint.nvim` retains `BufWinEnter` activation and relies on its own before/after-`VimEnter` initialization for existing windows. `local-highlight.nvim` retains `CursorMoved` activation and uses the trigger context to attach the first buffer before future buffers use its own `BufRead` autocmd. `nvim-autopairs` retains `InsertEnter` activation and attaches the current buffer before the first inserted character. `vim-repeat` retains `BufEnter` activation with no setup; its autoload API initializes on the first consumer call. `vim-abolish` retains `InsertEnter` activation and installs typo abbreviations before the first inserted text. `which-key.nvim` preserves both scheduled `PackReady` setup and immediate `<leader>wk` activation. `nvim-jqx` retains JSON/YAML and `BufWritePost` activation. `treewalker.nvim` retains command and callback-key activation without depending on the `nvim-treesitter` plugin. `conform.nvim` retains its filetype activation and installs save handlers before the first subsequent save. `nvim-ts-autotag` retains `BufReadPre`/`BufNewFile` activation and now depends on native startup Treesitter. `indent-blankline.nvim` retains early buffer activation and refreshes visible buffers during setup. `ccc.nvim` retains filetype, command, and callback-key activation and explicitly attaches the first triggering buffer. Together with the restored command-loaded `dstein64/vim-startuptime` diagnostic and the completed Phase 5 closure, the current native-owned total is thirty-eight.
 
-`leap.nvim` remains pending. Its Lazy declaration uses placeholder mappings, while Leap now warns that manager-level key lazy-loading can cause problems. Migrating it requires an explicit mapping design or generic key replay support; it must not be moved using the current callback-key contract without preserving its normal, visual, and operator-pending behavior.
+Leap completed native ownership in Phase 9 without manager-level key proxies. Native startup installs explicit directional mappings for `s`, `S`, and `gs` in normal, visual, and operator-pending modes, while Leap retains its own internal module laziness.
 
 **Acceptance:** Every migrated plugin remains inactive until its original trigger and continues to work on first use.
 
@@ -452,6 +449,8 @@ Changes:
 - Keep Lazy's bootstrap and installation unchanged but dormant for one release window.
 
 **Acceptance:** No application plugin path comes from `stdpath("data") .. "/lazy"`. Every plugin has a single native activation declaration. Normal and headless startup pass. Compare startup timing with Phase 0.
+
+**Progress:** Phase 9 is complete. Native discovery now loads colocated declarations independently of Lazy, and the installation catalog is projected solely from the 68-entry native registry. Lazy remains bootstrapped with an empty application graph for rollback; its own runtime path is present, but no application plugin path comes from its data directory. Leap, Matchparen, Transparent, Vim Unimpaired, and Zenbones completed native ownership. Matchparen preserves first ordinary Insert semantics without leaking them into Replace mode, and Transparent depends on Zenbones so Zenwritten is active before Transparent's runtime script is sourced. All five locked revisions remained unchanged. The final startup checkpoint measured 42.96 ms mean, 43.08 ms median, 0.97 ms standard deviation, and a 41.18-44.81 ms range across 21 successful launches. This is 0.74 ms above Phase 7's mean and remains well below the historical Phase 0 median; the Phase 0 comparison remains cross-platform because it was recorded on macOS and Phase 9 on Linux.
 
 **Rollback:** Restore the last hybrid ownership commit while the Lazy installation remains present.
 
