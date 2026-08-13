@@ -117,7 +117,7 @@ Pending Phase 3 capabilities:
 - Generic event and filetype replay under a recursion guard.
 - Generic key replay that preserves mode, count, register, operator, and visual selection context.
 - An `init` phase for plugins that require globals before runtime scripts are sourced.
-- The `fff.nvim` build-hook pilot, including clear install/update failure behavior.
+- A real FFF fresh install/update build event, including clear failure behavior.
 
 ## Dependency Boundaries
 
@@ -230,7 +230,7 @@ Changes:
 
 Add condition handling, dependency ordering, priority ordering, generic event/FileType replay with recursion guards, generic key replay, early `init`, and richer lifecycle errors in this phase. The `fff.nvim` build hook exists, but its install/update behavior remains a pending pilot.
 
-**Progress:** Numb validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`. Phase 5 added validated dependency ordering, synchronous startup roots, retryable command/key conditions, graph validation, and lifecycle-aware terminal failures. These focused paths do not establish priority, generic event/filetype/key replay, or early `init` semantics; the FFF build pilot also remains pending.
+**Progress:** Numb validates first-command-line event loading, Helpview validates first-buffer filetype loading through targeted attachment, and MiniAI validates scheduled post-`VimEnter` loading through `User PackReady`. Phase 5 added validated dependency ordering, synchronous startup roots, retryable command/key conditions, graph validation, and lifecycle-aware terminal failures. FFF validates native callback-key ownership and the existing native binary; only a real install/update build event remains pending. These focused paths do not establish priority, generic event/filetype/key replay, or early `init` semantics.
 
 **Acceptance:** Every pilot works on its first trigger in a fresh process. Repeated triggers do not create duplicate mappings, setup calls, or autocmds. Lazy continues managing all unmigrated plugins.
 
@@ -409,7 +409,6 @@ Cluster candidates:
 mini.sessions
 snacks.nvim
 opencode.nvim
-fff.nvim
 ```
 
 Requirements:
@@ -419,11 +418,11 @@ Requirements:
 - Snacks activates before opencode requires `snacks.terminal`.
 - Opencode's early environment and session autocmds remain boot-time behavior, while its main setup stays key-triggered.
 - FTerm remains command-loaded from its completed Phase 4 slice.
-- fff remains key-triggered and has its built binary.
+- FFF retains the key-triggered native behavior validated after Phase 6.
 - Conform retains the first-save behavior validated in Phase 4.
 - Nvim JQX retains the first JSON/YAML behavior validated in Phase 4.
 
-**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, and fff works on first use. FTerm, Conform, and Nvim JQX retain the first-use behavior validated in Phase 4.
+**Acceptance:** Sessions restore and save once, Opencode lifecycle behavior works, and FFF retains its validated first-use behavior. FTerm, Conform, and Nvim JQX retain the first-use behavior validated in Phase 4.
 
 **Rollback:** Revert lifecycle integration slices individually unless they share a hard dependency such as Snacks and Opencode.
 
