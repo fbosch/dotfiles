@@ -237,9 +237,9 @@ function M.fetch_data_async()
 
 	cache.fetching = true
 
-	local stdout = vim.loop.new_pipe(false)
+	local stdout = vim.uv.new_pipe(false)
 	local handle
-	handle = vim.loop.spawn("curl", {
+	handle = vim.uv.spawn("curl", {
 		args = {
 			"-sSL",
 			"-H",

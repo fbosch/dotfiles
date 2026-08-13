@@ -31,7 +31,7 @@ local function close_all_but_visible_and_terminals()
 	for _, win in ipairs(vim.api.nvim_list_wins()) do
 		if win ~= current_win then
 			local buf = vim.api.nvim_win_get_buf(win)
-			local buftype = vim.api.nvim_buf_get_option(buf, "buftype")
+			local buftype = vim.api.nvim_get_option_value("buftype", { buf = buf })
 			if buftype ~= "terminal" then
 				vim.api.nvim_win_close(win, false)
 			end

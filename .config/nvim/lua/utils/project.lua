@@ -99,7 +99,8 @@ end
 
 function M.get_project_root()
 	local root_bare = vim.fs.root(vim.fn.getcwd(), { ".bare" }) -- support for worktrees
-	local root_other = vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" })
+	local root_other =
+		vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" })
 
 	return root_other or root_bare
 end
@@ -112,7 +113,7 @@ function M.find_file_in_project_root(pattern)
 
 	for _, fname in ipairs(pattern) do
 		local candidate = root .. "/" .. fname
-		if vim.loop.fs_stat(candidate) then
+		if vim.uv.fs_stat(candidate) then
 			return candidate
 		end
 	end

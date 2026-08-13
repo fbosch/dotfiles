@@ -54,7 +54,7 @@ require("config.pack.registry").register({
 			{
 				"<space>tW",
 				function()
-					local pkg_dir = upfind(vim.fn.expand("%:p:h"), "package.json") or vim.loop.cwd()
+					local pkg_dir = upfind(vim.fn.expand("%:p:h"), "package.json") or vim.uv.cwd()
 					require("neotest").watch.toggle(pkg_dir) -- watch entire package
 				end,
 				desc = "Watch entire package",

@@ -106,7 +106,8 @@ function flake_update_interactive --description 'Interactively update Nix flake 
         return 0
     end
 
-    __flake_update_rebuild "$flake_path"
+    gum style --foreground 4 "Starting system rebuild..."
+    __flake_update_rebuild_command "$flake_path"
     set -l rebuild_status $status
 
     if test $rebuild_status -eq 0
@@ -126,63 +127,6 @@ function flake_update_interactive --description 'Interactively update Nix flake 
         __flake_update_notify critical "NixOS Update Failed" "The system update encountered an error. Check the terminal output for details."
     end
     return 1
-end
-
-function __flake_update_rebuild --argument-names flake_path
-    if not isatty stdout; or test "$TERM" = dumb
-        __flake_update_rebuild_command "$flake_path"
-        return $status
-    end
-
-    if not command -q nh
-        sudo -v
-        or return
-    end
-
-    set -l rebuild_log (mktemp)
-    __flake_update_rebuild_command "$flake_path" >"$rebuild_log" 2>&1 &
-    set -l rebuild_pid $last_pid
-    set -l started_at (date +%s)
-    set -l frame 0
-    set -l columns (tput cols 2>/dev/null)
-    if test -z "$columns"
-        set columns 80
-    end
-
-    gum style --align center --width "$columns" --foreground 6 --bold ""
-    gum style --align center --width "$columns" --bold "Preparing NixOS configuration"
-    printf "\n"
-
-    while kill -0 "$rebuild_pid" 2>/dev/null
-        set -l now (date +%s)
-        set -l elapsed_seconds (math "$now - $started_at")
-        set -l elapsed_minutes (math "floor($elapsed_seconds / 60)")
-        set -l elapsed_remainder (math "$elapsed_seconds % 60")
-        set -l elapsed "$elapsed_minutes"m" "$elapsed_remainder"s elapsed"
-        set -l position (math "$frame % 30")
-        set -l leading (string repeat -n "$position" "─")
-        set -l trailing (string repeat -n (math "29 - $position") "─")
-        set -l progress "[$leading●$trailing]"
-
-        if test $frame -gt 0
-            printf "\033[2A"
-        end
-        gum style --align center --width "$columns" --foreground 6 "$progress"
-        gum style --align center --width "$columns" --dim "Building and activating... $elapsed"
-
-        set frame (math "$frame + 1")
-        sleep 0.12
-    end
-
-    wait "$rebuild_pid"
-    set -l rebuild_status $status
-    printf "\033[2A\r\033[2K\n\r\033[2K"
-
-    if test $rebuild_status -ne 0
-        string collect <"$rebuild_log" >&2
-    end
-    rm -f "$rebuild_log"
-    return $rebuild_status
 end
 
 function __flake_update_rebuild_command --argument-names flake_path

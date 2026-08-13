@@ -164,9 +164,9 @@ function M.fetch_data_async()
 
 	cache.fetching = true
 
-	local stdout = vim.loop.new_pipe(false)
+	local stdout = vim.uv.new_pipe(false)
 	local handle
-	handle = vim.loop.spawn("opencode", {
+	handle = vim.uv.spawn("opencode", {
 		args = { "stats", "--days", tostring(days), "--models" },
 		stdio = { nil, stdout, nil },
 	}, function()

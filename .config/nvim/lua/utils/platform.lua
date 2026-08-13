@@ -1,6 +1,6 @@
 local M = {}
 local fn = require("utils.fn")
-local sysname = vim.loop.os_uname().sysname
+local sysname = vim.uv.os_uname().sysname
 
 function M.is_windows()
 	return sysname == "Windows_NT" or sysname == "Windows"
@@ -17,7 +17,7 @@ end
 function M.is_nixos()
 	if not M.is_linux() then
 		return false
-	 end
+	end
 	local f = io.open("/etc/os-release", "r")
 	if not f then
 		return false
