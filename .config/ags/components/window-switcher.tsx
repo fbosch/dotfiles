@@ -1407,14 +1407,14 @@ function applyStaticCSS() {
   
   window.window-switcher button.app-button.selected {
     background-color: ${tokens.colors.background.tertiary.value}b3;
-    border-color: ${tokens.colors.accent.active.value};
+    border-color: ${tokens.colors.accent.primary.value};
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2),
-                0 0 0 1px ${tokens.colors.accent.active.value}33 inset;
+                0 0 0 1px ${tokens.colors.accent.primary.value}33 inset;
   }
   
   window.window-switcher button.app-button.selected:hover {
     background-color: ${tokens.colors.background.tertiary.value}cc;
-    border-color: ${tokens.colors.accent.active.value};
+    border-color: ${tokens.colors.accent.primary.value};
   }
   
   window.window-switcher box.icon-container {

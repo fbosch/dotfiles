@@ -43,7 +43,7 @@ const switcherVariants = cva(
 const appIconVariants = cva('flex flex-col items-center gap-2 p-3 rounded-xl', {
   variants: {
     selected: {
-      true: 'bg-background-tertiary/60 border-2 border-accent-active',
+      true: 'bg-background-tertiary/60 border-2 border-accent-primary',
       false: 'border-2 border-transparent',
     },
     animated: {
@@ -60,7 +60,7 @@ const appIconVariants = cva('flex flex-col items-center gap-2 p-3 rounded-xl', {
 const appPreviewVariants = cva('flex flex-col items-center gap-3 p-3 rounded-xl overflow-hidden', {
   variants: {
     selected: {
-      true: 'bg-background-tertiary/60 border-2 border-accent-active',
+      true: 'bg-background-tertiary/60 border-2 border-accent-primary',
       false: 'border-2 border-transparent opacity-70',
     },
     animated: {

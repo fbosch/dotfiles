@@ -106,7 +106,7 @@ function applyCss(rounding: number): void {
 
       window.pip-snap-preview box.pip-snap-preview-target {
         background-color: ${tokens.colors.accent.primary.value}29;
-        border: ${previewBorderWidth}px solid ${tokens.colors.accent.active.value};
+        border: ${previewBorderWidth}px solid ${tokens.colors.accent.primary.value};
         border-radius: ${rounding + previewBorderWidth}px;
         box-shadow: 0 0 20px ${tokens.colors.accent.primary.value}57;
       }
