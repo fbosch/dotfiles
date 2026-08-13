@@ -81,8 +81,15 @@ register({
 		name = "matchparen.nvim",
 		src = "https://github.com/monkoose/matchparen.nvim.git",
 		events = { "InsertEnter" },
-		module = "matchparen",
-		opts = {},
+		setup = function(context)
+			require("matchparen").setup({})
+			-- The activating InsertEnter predates the plugin's own autocmd.
+			if vim.v.insertmode ~= "i" then
+				return
+			end
+			require("matchparen.options").opts.in_insert = true
+			require("matchparen.highlight").update(context.buf)
+		end,
 	},
 })
 

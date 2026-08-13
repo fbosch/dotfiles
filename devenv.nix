@@ -211,6 +211,8 @@ in
       done
     '';
 
+    "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
+
     "test:lua".exec = ''
       set -euo pipefail
       timeout --foreground 15s busted --lua=luajit ${hyprTests}

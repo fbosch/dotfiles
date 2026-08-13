@@ -463,7 +463,8 @@
 }
 
 .floating-notifications {
-  margin-bottom: 8px;
+  padding-right: 4px;
+  padding-bottom: 8px;
 }
 
 .floating-notifications .notification {
@@ -471,7 +472,7 @@
 }
 
 .floating-notifications .notification-background {
-  margin-right: 20px;
+  margin-right: 0;
 }
 
 .close-button:active {
