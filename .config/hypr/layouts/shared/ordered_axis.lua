@@ -27,6 +27,27 @@ local function desired_index(center, ratios, start, span)
 	return #ratios
 end
 
+function M.nearest_slot_index(position, ratios, start, span)
+	if not position or not start or not span then
+		return nil
+	end
+
+	local slot_start = start
+	local nearest_index = nil
+	local nearest_distance = math.huge
+	for index = 1, #ratios do
+		local slot_span = span * ratios[index]
+		local distance = math.abs(position - (slot_start + slot_span / 2))
+		if distance < nearest_distance then
+			nearest_index = index
+			nearest_distance = distance
+		end
+		slot_start = slot_start + slot_span
+	end
+
+	return nearest_index
+end
+
 function M.move_active(state, key, targets, active_index, save_state, delta)
 	if order_state.move_active(state, key, targets, active_index, delta) then
 		save_state()
@@ -112,6 +133,25 @@ function M.recalculate_ordered(opts)
 		order_state.sync(state, key, source_targets, opts.insert_after_id, true)
 	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	local targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	local placement_target = nil
+	local placement_intent = nil
+	for index = 1, #targets do
+		local intent = order_state.consume_placement_intent(targets[index], opts.layout_name, key, role, axis)
+		if intent then
+			placement_target = targets[index]
+			placement_intent = intent
+			break
+		end
+	end
+
+	if placement_target then
+		local target_index = M.nearest_slot_index(placement_intent.position, opts.ratios, opts.start, opts.span)
+		if order_state.move_target_to_index(state, key, placement_target, target_index) then
+			state.manual_change_by_key[key] = nil
+			needs_state_save = true
+			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+		end
+	end
 
 	local transfer_target = nil
 	local transfer_intent = nil

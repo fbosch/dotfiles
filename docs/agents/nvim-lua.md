@@ -29,22 +29,22 @@ return M
   - Defaults: `noremap = true, silent = true`
 - User commands: use `require("utils").set_usrcmd()` (not `vim.api.nvim_create_user_command()`)
 
-## Plugin Structure (Lazy.nvim)
+## Plugin Structure (`vim.pack`)
 
-- Files in `.config/nvim/lua/plugins/{category}/` return table(s) with plugin specs
+- Files in `.config/nvim/lua/plugins/{category}/` register native package declarations and return `{}`
 - Categories: `ai/`, `core/`, `lang/`, `misc/`, `ui/`, `workflow/`
 
 Example spec:
 
 ```lua
-return {
-  {
-    "author/plugin-name",
-    dependencies = { "other/plugin" },
-    event = "VeryLazy", -- or cmd, keys, ft, etc.
-    config = function()
-      require("plugin-name").setup({ ... })
-    end,
-  },
-}
+local register = require("config.pack.registry").register
+
+register({
+  name = "plugin-name",
+  src = "https://github.com/author/plugin-name.git",
+  events = { "BufEnter" },
+  opts = {},
+})
+
+return {}
 ```

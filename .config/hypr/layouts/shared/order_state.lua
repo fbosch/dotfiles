@@ -2,6 +2,8 @@ local M = {}
 local pending_transfer_by_id = {}
 local pending_transfer_by_destination = {}
 local pending_transfer_destination_id = {}
+local pending_placement_by_id = {}
+local placement_intent_timeout = 2000
 
 local function transfer_destination(monitor_role, axis)
 	local by_axis = pending_transfer_by_destination[monitor_role]
@@ -312,6 +314,45 @@ end
 
 function M.transfer_intent_for_window(window)
 	return pending_transfer_by_id[M.window_id(window)]
+end
+
+function M.record_placement_intent(window, intent)
+	local id = M.window_id(window)
+	if not id then
+		return false
+	end
+
+	pending_placement_by_id[id] = intent
+	if hl and hl.timer then
+		hl.timer(function()
+			if pending_placement_by_id[id] == intent then
+				pending_placement_by_id[id] = nil
+			end
+		end, { timeout = placement_intent_timeout, type = "oneshot" })
+	end
+
+	return true
+end
+
+function M.consume_placement_intent(target, layout_name, workspace_key, monitor_role, axis)
+	local id = M.target_id(target)
+	local intent = id and pending_placement_by_id[id] or nil
+	if
+		intent
+		and intent.layout_name == layout_name
+		and intent.workspace_key == workspace_key
+		and intent.monitor_role == monitor_role
+		and intent.axis == axis
+	then
+		pending_placement_by_id[id] = nil
+		return intent
+	end
+
+	return nil
+end
+
+function M.placement_intent_for_window(window)
+	return pending_placement_by_id[M.window_id(window)]
 end
 
 function M.identities_safe(targets)

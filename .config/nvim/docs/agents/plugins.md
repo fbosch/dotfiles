@@ -1,6 +1,6 @@
 # Plugin Layout
 
-Lazy.nvim setup lives in `lua/config/lazy.lua`.
+Native package lifecycle code lives in `lua/config/pack/`.
 
 Plugin categories:
 
@@ -11,9 +11,9 @@ Plugin categories:
 - `ui/`
 - `workflow/`
 
-Plugins are aggregated via `lua/plugins/init.lua` and further composed by category.
+`config.pack.discovery` loads each category before `vim.pack` installs and activates the registry.
 
-Built-in plugins disabled in `config.lazy` include netrw, tar/zip, tutor, matchit, matchparen, and others.
+Built-in plugins disabled in `config.builtins` include netrw, tar/zip, tutor, matchit, matchparen, and others.
 
 Native-owned declarations track an upstream branch or semver range. `nvim-pack-lock.json` records the installed revision. Review updates with:
 

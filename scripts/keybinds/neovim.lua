@@ -38,10 +38,7 @@ for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	end
 end
 
-local lazy_ok, lazy = pcall(require, "lazy")
-if lazy_ok then
-	pcall(lazy.load, { plugins = { "which-key.nvim" } })
-end
+pcall(require("config.pack.loader").activate, "which-key.nvim", { source = "keybind-validator" })
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id and not existing_vimenter[autocmd.id] and autocmd.callback then
 		pcall(autocmd.callback, { event = "VimEnter", id = autocmd.id, match = "" })
@@ -72,42 +69,20 @@ for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
 	end
 end
 
-local config_ok, lazy_config = pcall(require, "lazy.core.config")
-local plugin_ok, plugin = pcall(require, "lazy.core.plugin")
-local keys_ok, keys = pcall(require, "lazy.core.handler.keys")
-if config_ok and plugin_ok and keys_ok then
-	for name, spec in pairs(lazy_config.plugins) do
-		local values_ok, values = pcall(plugin.values, spec, "keys", true)
-		if values_ok then
-			local resolved_ok, resolved = pcall(keys.resolve, values)
-			if resolved_ok then
-				for _, key in pairs(resolved) do
-					if key.lhs then
-						local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
-						local filetypes = type(key.ft) == "table" and key.ft or { key.ft or false }
-						for _, mode in ipairs(key_modes) do
-							for _, filetype in ipairs(filetypes) do
-								add({
-									source = "lazy-spec",
-									owner = name,
-									mode = mode,
-									lhs = key.lhs,
-									context = filetype and "filetype:" .. filetype or "global",
-									desc = key.desc,
-								})
-							end
-						end
-					end
-				end
-			else
-				table.insert(limitations, "could not resolve lazy key specs for " .. name)
-			end
-		else
-			table.insert(limitations, "could not evaluate lazy key specs for " .. name)
+for name, spec in pairs(require("config.pack.registry").all()) do
+	for _, key in ipairs(spec.keys or {}) do
+		local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
+		for _, mode in ipairs(key_modes) do
+			add({
+				source = "native-spec",
+				owner = name,
+				mode = mode,
+				lhs = key[1],
+				context = "global",
+				desc = key.desc,
+			})
 		end
 	end
-else
-	table.insert(limitations, "lazy.nvim key metadata is unavailable")
 end
 
 local wk_ok, wk_config = pcall(require, "which-key.config")

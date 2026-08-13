@@ -121,7 +121,9 @@ bind.register(main("E"), programs.file_manager)
 -- Window state
 bind.register(main("W"), async.runtime_lua("windows/killactive-selective.lua"))
 bind.register(main("CTRL + C"), "~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh")
-bind.register(main("V"), hl.dsp.window.float(), {
+bind.register(main("V"), function()
+	return window_custom_layout.toggle_float(window_state)
+end, {
 	predicate = active_is_not_passthrough_exempt,
 })
 bind.register(main("P"), hl.dsp.window.pseudo(), {

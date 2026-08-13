@@ -3,7 +3,6 @@ assert(type(vim.pack) == "table" and type(vim.pack.add) == "function", "vim.pack
 
 local site = vim.fs.joinpath(vim.fn.stdpath("data"), "site")
 if not vim.tbl_contains(vim.opt.packpath:get(), site) then
-	-- Lazy resets packpath; vim.pack requires the standard data site afterward.
 	vim.opt.packpath:append(site)
 end
 assert(vim.tbl_contains(vim.opt.packpath:get(), site), "native package site is missing from packpath")

@@ -18,6 +18,8 @@ local show_delay_ms = 200
 local hide_delay_ms = 300
 local fast_interval_ms = 80
 local slow_interval_ms = 1000
+local startup_attempts = 100
+local startup_interval_s = 0.05
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
 local control_socket_path = hypr_ipc.instance_socket_path("waybar-monitor.sock")
@@ -149,6 +151,20 @@ local function current_waybar_visibility()
 	return false
 end
 
+local function waybar_layer_is_ready()
+	for _, monitor_layers in pairs(json.object(request("j/layers"))) do
+		for _, level in pairs(monitor_layers.levels or {}) do
+			for _, layer in ipairs(level) do
+				if layer.namespace == "waybar" then
+					return true
+				end
+			end
+		end
+	end
+
+	return false
+end
+
 local function taskbar_visible()
 	local component = ags_ipc.request("taskbar-visibility", '{"action":"visible-component"}')
 	if component ~= "" and component ~= "none" and not component:match("^error:") then
@@ -221,22 +237,30 @@ local function cleanup_control_socket()
 end
 
 local function run()
-	refresh_monitors()
-	waybar_visible = current_waybar_visibility()
-	command.ok("printf 'waybar-" .. (waybar_visible and "show" or "hide") .. "\\n' | " .. pip_control_socket)
-
 	control_server = assert(unix())
 	assert(control_server:bind(control_socket_path))
 	assert(control_server:listen())
 	owns_control_socket = true
 	control_server:settimeout(0)
 
+	for _ = 1, startup_attempts do
+		if waybar_layer_is_ready() then
+			refresh_monitors()
+			show_waybar()
+			break
+		end
+
+		socket.sleep(startup_interval_s)
+	end
+
 	while true do
 		local x, y = request("cursorpos"):match("^%s*([^,]+),%s*(.+)%s*$")
-		local monitor = x and y and monitor_at(tonumber(x), tonumber(y))
+		local cursor_x = tonumber(x)
+		local cursor_y = tonumber(y)
+		local monitor = cursor_x and cursor_y and monitor_at(cursor_x, cursor_y)
 		local interval = 300
 		if monitor then
-			local distance = monitor.height - (tonumber(y) - monitor.y)
+			local distance = monitor.height - (cursor_y - monitor.y)
 			local now = now_ms()
 			if waybar_visible == false then
 				if distance <= show_threshold then

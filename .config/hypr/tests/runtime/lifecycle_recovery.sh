@@ -102,9 +102,6 @@ printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' '
 
 reset_log="$test_dir/reset.log"
 rm -f "$waybar_started_file"
-# A compositor reload failure must not prevent the desktop workers from starting.
-# shellcheck disable=SC2016
-printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' 'if [ "$1" = "-j" ] && [ "$2" = "layers" ] && [ -e "$WAYBAR_STARTED_FILE" ]; then printf "{\"monitor\":{\"levels\":{\"2\":[{\"namespace\":\"waybar\"}]}}}\n"; fi' 'if [ "$1" = "reload" ]; then exit 1; fi' 'exit 0' > "$bin_dir/hyprctl"
 SECONDS=0
 FIXTURE_LOG="$reset_log" "$repo_root/runtime/desktop/reset-desktop.sh"
 if (( SECONDS > 2 )); then
@@ -118,7 +115,6 @@ assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
 assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
 assert_contains "$reset_log" 'pgrep -f (^|/)waybar( |$)'
 assert_contains "$reset_log" 'hyprctl reload'
-assert_contains "$reset_log" 'hyprctl -j layers'
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
 assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'

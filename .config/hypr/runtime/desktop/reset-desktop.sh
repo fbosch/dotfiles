@@ -12,10 +12,6 @@ has_live_waybar() {
   pgrep -f "$waybar_process_pattern" >/dev/null 2>&1
 }
 
-has_waybar_layer() {
-  hyprctl -j layers 2>/dev/null | jq -e '.. | objects | select(.namespace == "waybar")' >/dev/null 2>&1
-}
-
 wait_for_shutdown() {
   name="$1"
   shift
@@ -43,38 +39,6 @@ has_live_named_process() {
   done
 
   return 1
-}
-
-start_waybar_monitor() {
-  attempts=0
-  while ! has_waybar_layer; do
-    if [ "$attempts" -ge 100 ]; then
-      printf 'reset-desktop: waybar layer did not become ready; monitor not launched\n' >&2
-      return 1
-    fi
-
-    attempts=$((attempts + 1))
-    sleep 0.05
-  done
-
-  uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
-
-  attempts=0
-  while ! printf 'ping\n' | nc -w 1 -U "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/waybar-monitor.sock" >/dev/null 2>&1; do
-    if [ "$attempts" -ge 100 ]; then
-      printf 'reset-desktop: waybar monitor did not become ready\n' >&2
-      return 1
-    fi
-
-    attempts=$((attempts + 1))
-    sleep 0.05
-  done
-
-  # SUPER+SHIFT+R's release handler hides Waybar after 500 ms; restore after it.
-  sleep 0.6
-
-  # Hold the restored bar open until the next normal Super-key release.
-  printf 'hold\n' | nc -w 1 -U "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/waybar-monitor.sock" >/dev/null 2>&1 || true
 }
 
 wait_for_shutdowns() {
@@ -131,7 +95,7 @@ fi
 
 uwsm-app -s s -- waybar &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-start_waybar_monitor &
+uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
 uwsm-app -s b -- foot --server &
 swaync-client -R &
 swaync-client -rs &

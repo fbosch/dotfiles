@@ -12,8 +12,9 @@ Core modules:
 - `config.keymaps`: base keymaps + deferred plugin keymaps
 - `config.autocmd`: filetype rules, spell, UI behaviors
 - `config.abbr`: filetype abbreviations and typo fixes
-- `config.lazy`: Lazy.nvim bootstrap
+- `config.builtins`: disabled built-in runtime plugins
+- `config.pack`: native package discovery, installation, and activation
 
 Plugin loading:
 
-- `lua/plugins/init.lua` imports plugin categories
+- `config.pack.discovery` loads declarations from each `lua/plugins/` category

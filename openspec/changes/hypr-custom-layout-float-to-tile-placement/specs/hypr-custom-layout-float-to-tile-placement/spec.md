@@ -23,6 +23,7 @@ the state change. `lua:ultrawide_master` SHALL use the horizontal center and
 The system SHALL evaluate the slot centers produced after the window joins the
 tiled layout and place the window into the slot whose center has the smallest
 absolute distance from the captured coordinate. If two slot centers are equally
+distant, the system SHALL select the earlier slot: leftmost on the ultrawide
 layout and topmost on the portrait layout.
 
 #### Scenario: Coordinate selects a non-default ultrawide column
