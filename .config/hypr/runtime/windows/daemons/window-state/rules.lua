@@ -58,8 +58,20 @@ function M.load_selectors(path)
 	for _, selector in ipairs(selectors) do
 		if type(selector) == "table" and type(selector.matcher) == "string" and type(selector.pattern) == "string" then
 			local field = M.matcher_client_field(selector.matcher)
-			if field then
-				normalized[#normalized + 1] = selector
+			local exclude = selector.exclude
+			local valid_exclude = exclude == nil
+				or (
+					type(exclude) == "table"
+					and type(exclude.matcher) == "string"
+					and type(exclude.pattern) == "string"
+					and M.matcher_client_field(exclude.matcher) ~= nil
+				)
+			if field and valid_exclude then
+				normalized[#normalized + 1] = {
+					matcher = selector.matcher,
+					pattern = selector.pattern,
+					exclude = exclude,
+				}
 				matchers[#matchers + 1] = {
 					matcher = selector.matcher,
 					pattern = selector.pattern,
@@ -164,7 +176,12 @@ local function sorted_cache_keys(cache)
 	return keys
 end
 
-local function render_rules(cache, selectors_path)
+local function render_rules(cache, selectors_path, selectors)
+	local selectors_by_identity = {}
+	for _, selector in ipairs(selectors or {}) do
+		selectors_by_identity[cache_key(selector.matcher, selector.pattern, "")] = selector
+	end
+
 	local lines = {
 		"-- Auto-generated Lua window state persistence rules",
 		"-- Selectors: " .. selectors_path,
@@ -176,6 +193,7 @@ local function render_rules(cache, selectors_path)
 	for _, key in ipairs(sorted_cache_keys(cache)) do
 		local entry = cache[key]
 		local lua_match_key = M.matcher_lua_key(entry.matcher)
+		local selector = selectors_by_identity[cache_key(entry.matcher, entry.pattern, "")]
 		if lua_match_key then
 			local comment = entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
 			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
@@ -186,6 +204,16 @@ local function render_rules(cache, selectors_path)
 			lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
 			lines[#lines + 1] = "    match = {"
 			lines[#lines + 1] = "      " .. lua_match_key .. " = " .. json.encode(rule_pattern(entry.pattern)) .. ","
+			if selector and selector.exclude then
+				local exclude_match_key = M.matcher_lua_key(selector.exclude.matcher)
+				if exclude_match_key then
+					lines[#lines + 1] = "      "
+						.. exclude_match_key
+						.. " = "
+						.. json.encode("negative:" .. rule_pattern(selector.exclude.pattern))
+						.. ","
+				end
+			end
 			lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
 			lines[#lines + 1] = "    },"
 			lines[#lines + 1] = "    effects = {"
@@ -207,7 +235,7 @@ local function render_rules(cache, selectors_path)
 end
 
 function M.write_rules_file(opts)
-	local next_content = render_rules(opts.cache, opts.selectors_lua_file)
+	local next_content = render_rules(opts.cache, opts.selectors_lua_file, opts.selectors)
 
 	local existing = read_file(opts.rules_lua_file)
 	if existing == next_content then

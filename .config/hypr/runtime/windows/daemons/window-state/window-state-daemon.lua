@@ -148,7 +148,11 @@ local function matched_selector(client)
 	for _, selector in ipairs(selector_state.selectors) do
 		local field = state_rules.matcher_client_field(selector.matcher)
 		if field and field_matches(client[field], selector.pattern) then
-			return selector
+			local exclude = selector.exclude
+			local exclude_field = exclude and state_rules.matcher_client_field(exclude.matcher)
+			if not exclude_field or not field_matches(client[exclude_field], exclude.pattern) then
+				return selector
+			end
 		end
 	end
 
@@ -234,6 +238,7 @@ end
 local function write_lua_rules_cache_file()
 	return state_rules.write_rules_file({
 		cache = rules_cache,
+		selectors = selector_state.selectors,
 		config_dir = config_dir,
 		selectors_lua_file = selectors_lua_file,
 		rules_lua_file = rules_lua_file,

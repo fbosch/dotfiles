@@ -464,7 +464,7 @@
 
 .floating-notifications {
   padding-right: 4px;
-  padding-bottom: 8px;
+  padding-bottom: 0;
 }
 
 .floating-notifications .notification {
