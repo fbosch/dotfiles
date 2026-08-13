@@ -302,6 +302,10 @@ Phase 6 moved LuaSnip, Blink, LSPConfig, LazyDev, LSP file operations, Lspsaga, 
 
 FFF moved to native callback-key ownership after its Lazy checkout advanced without the required Rust backend binary. The initial picker import failed in `fff.fuzzy`; Lua's failed-load sentinel then made later attempts report a previous-load loop. The native copy retained revision `d4c416c2fcf24eeda40a540a898da12824aed18f`, included a working `libfff_nvim.so`, and passed direct picker loading plus first `<C-p>` open/close behavior. Native ownership increased to 46; future binaries are maintained by the isolated native build hook.
 
+Phase 7 began with Bufresize and Smart Splits as one native dependency slice. Fresh-process checks covered first command and callback-key activation, all four resize commands and mappings, Bufresize's registration and resize autocmds, and explicit post-resize registration. The locked Smart Splits revision had removed its prior resize-mode hook, so supported command wrappers now refresh Bufresize after each resize. Native ownership increased to 48 while the catalog remained 68. Proportional terminal resize behavior remains a manual UI check because headless Neovim has no attached UI dimensions for Bufresize to record.
+
+Notify, Recorder, and Fidget followed as one native dependency slice. Recorder now activates on `PackReady` so its intended bare-`q` mapping owns the complete first recording rather than loading after Neovim has already selected a native register. Fresh-process checks covered the first recording from start through stop, Fidget's scheduled post-start activation and global `vim.notify` ownership, suppression of Saga's empty-information message, and `on_open` delegation to Notify. Native ownership increased to 51 while the catalog remained 68.
+
 ## Post-Pilot Performance Checkpoint
 
 After migrating live-rename, Numb, Helpview, and MiniAI, and restoring `dstein64/vim-startuptime`, the repeated warm-start measurement used the original command, three warmups, and 21 recorded launches:

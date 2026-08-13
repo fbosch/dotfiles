@@ -389,13 +389,17 @@ Special handling:
 
 - Replace Barbar's direct `require("lazy").load()` with local setup-once activation when a second listed file buffer appears.
 - Preserve the first command-line behavior for Wilder.
-- Preserve the first `RecordingEnter` behavior for Recorder.
+- Install Recorder's bare-`q` interface before the first recording so it owns the complete macro lifecycle.
 - Preserve Fidget notification routing.
 - Preserve Git-repository conditions and first-buffer Gitsigns attachment.
 - Revalidate the Phase 5 Diffview and Gitlineage migrations with the remaining Git plugins.
 - Ensure Lualine tolerates integrations that remain lazily unloaded.
 
 **Acceptance:** Wilder works on the first command-line interaction, Recorder works for the first macro, Barbar activates once on the second listed file, Git plugins remain inactive outside repositories, and Trouble/Lualine retain their integrations.
+
+**Progress:** The Bufresize/Smart Splits subcluster is complete. Bufresize is dependency-only and initializes before Smart Splits; the four resize commands and callback keys retain first-use activation. The locked Smart Splits revision no longer implements resize-mode hooks, so supported command wrappers refresh Bufresize after each resize instead. Native ownership increased from 46 to 48 while the catalog remained 68.
+
+The Notify/Recorder/Fidget subcluster is also complete. Notify is dependency-only; Recorder and Fidget activate after startup on `PackReady`. Recorder therefore installs its intended bare-`q` mapping before the first recording, while Fidget owns `vim.notify` and retains `on_open` delegation to Notify. Native ownership increased from 48 to 51 while the catalog remained 68.
 
 **Rollback:** Revert each subcluster as one unit.
 

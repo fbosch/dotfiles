@@ -24,8 +24,7 @@
     },
     "bufresize.nvim": {
       "rev": "3b19527ab936d6910484dcc20fb59bdb12322d8b",
-      "src": "https://github.com/kwkarlwang/bufresize.nvim.git",
-      "version": "'3b19527ab936d6910484dcc20fb59bdb12322d8b'"
+      "src": "https://github.com/kwkarlwang/bufresize.nvim.git"
     },
     "ccc.nvim": {
       "rev": "9d1a256e006decc574789dfc7d628ca11644d4c2",
@@ -53,8 +52,7 @@
     },
     "fidget.nvim": {
       "rev": "6f793b2bcd2d35e201c09520f698bb763220908a",
-      "src": "https://github.com/j-hui/fidget.nvim.git",
-      "version": "'6f793b2bcd2d35e201c09520f698bb763220908a'"
+      "src": "https://github.com/j-hui/fidget.nvim.git"
     },
     "fzy-lua-native": {
       "rev": "9d720745d5c2fb563c0d86c17d77612a3519c506",
@@ -169,13 +167,11 @@
     },
     "nvim-notify": {
       "rev": "8701bece920b38ea289b457f902e2ad184131a5d",
-      "src": "https://github.com/rcarriga/nvim-notify.git",
-      "version": "'8701bece920b38ea289b457f902e2ad184131a5d'"
+      "src": "https://github.com/rcarriga/nvim-notify.git"
     },
     "nvim-recorder": {
       "rev": "0ef1a24293323b3db2f56edca196f662b6551b1b",
-      "src": "https://github.com/chrisgrieser/nvim-recorder.git",
-      "version": "'0ef1a24293323b3db2f56edca196f662b6551b1b'"
+      "src": "https://github.com/chrisgrieser/nvim-recorder.git"
     },
     "nvim-scrollbar": {
       "rev": "f8e87b96cd6362ef8579be456afee3b38fd7e2a8",
@@ -222,8 +218,7 @@
     },
     "smart-splits.nvim": {
       "rev": "0fe3bbd99d48458ad188c4c262c31049fa9b018c",
-      "src": "https://github.com/mrjones2014/smart-splits.nvim.git",
-      "version": "'0fe3bbd99d48458ad188c4c262c31049fa9b018c'"
+      "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
       "rev": "882c996cf28183f4d63640de0b4c02ec886d01f2",
