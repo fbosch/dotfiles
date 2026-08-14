@@ -6,7 +6,6 @@ import { totalSegments, type VolumePresentation } from "./model";
 
 export class VolumeIndicatorView {
 	#win: Astal.Window | null = null;
-	#shadowWrapper: Gtk.Box | null = null;
 	#progressSegments: Gtk.Box[] = [];
 	#iconLabel: Gtk.Label | null = null;
 	#volumeLabel: Gtk.Label | null = null;
@@ -48,9 +47,6 @@ export class VolumeIndicatorView {
 					halign={Gtk.Align.CENTER}
 					valign={Gtk.Align.CENTER}
 					class="shadow-wrapper"
-					$={(self: Gtk.Box) => {
-						this.#shadowWrapper = self;
-					}}
 				>
 					<box
 						orientation={Gtk.Orientation.HORIZONTAL}
@@ -137,7 +133,6 @@ export class VolumeIndicatorView {
 	dispose(): void {
 		this.#win?.destroy();
 		this.#win = null;
-		this.#shadowWrapper = null;
 		this.#progressSegments = [];
 		this.#iconLabel = null;
 		this.#volumeLabel = null;
