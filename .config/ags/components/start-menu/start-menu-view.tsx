@@ -1,13 +1,16 @@
 import app from "ags/gtk4/app";
+import { createRoot } from "ags";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
-import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import type { ProfileState } from "../../services/profile-state";
+import type {
+	ProfileSelection,
+	ProfileState,
+} from "../../services/profile-state";
 import { getPointerMonitor } from "../../services/pointer-monitor";
 import { bindGamingOpacity } from "../../services/gaming-opacity";
 import { defaultMenuItems, type MenuItem } from "./menu-model";
-import { ProfileControls, runProfileSelection } from "./profile-controls";
+import { ProfileControls } from "./profile-controls";
 import {
 	createRecentItemsMenu,
 	type RecentItemsMenuModel,
@@ -27,6 +30,7 @@ interface StartMenuViewActions {
 	getModel: () => StartMenuViewModel;
 	getRecentItems: () => RecentItemsMenuModel;
 	onMenuAction: (itemId: string) => void;
+	onProfileSelect: (selection: ProfileSelection) => void;
 	onHide: () => void;
 	onRecentOpenRequest: () => void;
 	onRecentCloseRequest: () => void;
@@ -46,13 +50,16 @@ export class StartMenuView {
 	#menuBox: Gtk.Box | null = null;
 	#recentItemsHost: Gtk.Box | null = null;
 	#recentItemsRendered = false;
+	#windowDispose: (() => void) | null = null;
+	#menuRenderDispose: (() => void) | null = null;
+	#recentRenderDispose: (() => void) | null = null;
 	#menuItemButtons = new Map<string, Gtk.Button>();
 	#recentItemButtons: Gtk.Button[] = [];
 	#profileControls: ProfileControls;
 
 	constructor(private readonly actions: StartMenuViewActions) {
 		this.#profileControls = new ProfileControls({
-			onSelect: runProfileSelection,
+			onSelect: actions.onProfileSelect,
 			onButtonCreated: (id, button) => this.#menuItemButtons.set(id, button),
 		});
 	}
@@ -67,7 +74,9 @@ export class StartMenuView {
 
 	create(): void {
 		if (this.#win) return;
-		this.#win = (
+		createRoot((dispose) => {
+			this.#windowDispose = dispose;
+			this.#win = (
 			<window
 				name="start-menu"
 				namespace="ags-start-menu"
@@ -112,7 +121,8 @@ export class StartMenuView {
 					/>
 				</box>
 			</window>
-		) as Astal.Window;
+			) as Astal.Window;
+		});
 	}
 
 	show(): void {
@@ -130,11 +140,6 @@ export class StartMenuView {
 			button.remove_css_class("focused");
 			button.get_style_context().remove_class("focused");
 		}
-		try {
-			GLib.spawn_command_line_async("pkill -SIGUSR1 -f '(^|/)waybar( |$)'");
-		} catch (error) {
-			console.error("Failed to show waybar:", error);
-		}
 	}
 
 	hide(): void {
@@ -145,19 +150,24 @@ export class StartMenuView {
 	render(): void {
 		if (!this.#menuBox) return;
 		this.actions.onRecentCloseNow();
+		this.#menuRenderDispose?.();
+		this.#menuRenderDispose = null;
 		clearChildren(this.#menuBox);
 		this.#menuItemButtons.clear();
 		this.#recentItemsHost = null;
-		this.#menuBox.append(createUserProfile());
-		this.#menuBox.append(createDivider());
-		for (const item of defaultMenuItems) {
-			if (item.id.startsWith("divider")) this.#menuBox.append(createDivider());
-			else if (item.id === "profile-controls")
-				this.#menuBox.append(
-					this.#profileControls.create(this.actions.getModel().profileState),
-				);
-			else this.#menuBox.append(this.#createMenuItem(item));
-		}
+		createRoot((dispose) => {
+			this.#menuRenderDispose = dispose;
+			this.#menuBox?.append(createUserProfile());
+			this.#menuBox?.append(createDivider());
+			for (const item of defaultMenuItems) {
+				if (item.id.startsWith("divider")) this.#menuBox?.append(createDivider());
+				else if (item.id === "profile-controls")
+					this.#menuBox?.append(
+						this.#profileControls.create(this.actions.getModel().profileState),
+					);
+				else this.#menuBox?.append(this.#createMenuItem(item));
+			}
+		});
 	}
 
 	updateProfile(state: ProfileState | null): void {
@@ -166,16 +176,22 @@ export class StartMenuView {
 
 	renderRecentItems(): void {
 		if (!this.#recentItemsHost) return;
+		this.#recentRenderDispose?.();
+		this.#recentRenderDispose = null;
 		this.#recentItemButtons.length = 0;
 		clearChildren(this.#recentItemsHost);
-		this.#recentItemsHost.append(
-			createRecentItemsMenu(this.actions.getRecentItems(), {
-				onApplicationActivated: ({ id }) => this.actions.onRecentApplication(id),
-				onDocumentActivated: ({ id }) => this.actions.onRecentDocument(id),
-				onClearRecentItems: this.actions.onClearRecentItems,
-				onButtonCreated: (button) => this.#recentItemButtons.push(button),
-			}),
-		);
+		createRoot((dispose) => {
+			this.#recentRenderDispose = dispose;
+			this.#recentItemsHost?.append(
+				createRecentItemsMenu(this.actions.getRecentItems(), {
+					onApplicationActivated: ({ id }) =>
+						this.actions.onRecentApplication(id),
+					onDocumentActivated: ({ id }) => this.actions.onRecentDocument(id),
+					onClearRecentItems: this.actions.onClearRecentItems,
+					onButtonCreated: (button) => this.#recentItemButtons.push(button),
+				}),
+			);
+		});
 		this.#positionRecentItems();
 		this.#recentItemsHost.set_visible(true);
 		this.#recentItemsRendered = true;
@@ -183,10 +199,27 @@ export class StartMenuView {
 	}
 
 	concealRecentItems(): void {
+		this.#recentRenderDispose?.();
+		this.#recentRenderDispose = null;
 		this.#recentItemsRendered = false;
 		this.#recentItemsHost?.set_visible(false);
 		this.#recentItemButtons.length = 0;
 		this.#menuItemButtons.get("recent-items")?.remove_css_class("submenu-open");
+	}
+
+	dispose(): void {
+		this.#recentRenderDispose?.();
+		this.#menuRenderDispose?.();
+		this.#windowDispose?.();
+		this.#recentRenderDispose = null;
+		this.#menuRenderDispose = null;
+		this.#windowDispose = null;
+		this.#win = null;
+		this.#menuBox = null;
+		this.#recentItemsHost = null;
+		this.#menuItemButtons.clear();
+		this.#recentItemButtons.length = 0;
+		this.#recentItemsRendered = false;
 	}
 
 	#createMenuItem(item: MenuItem): Gtk.Widget {

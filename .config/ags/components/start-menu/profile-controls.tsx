@@ -1,4 +1,3 @@
-import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import {
 	hasAutomaticGamingClaim,
@@ -173,19 +172,6 @@ export class ProfileControls {
 				</overlay>
 			</button>
 		) as Gtk.Button;
-	}
-}
-
-export function runProfileSelection(selection: ProfileSelection): void {
-	const profilectl = `${GLib.get_home_dir()}/.config/hypr/runtime/profiles/profilectl.sh`;
-	const command =
-		selection === "auto"
-			? `${profilectl} clear-manual`
-			: `${profilectl} set-manual ${selection}`;
-	try {
-		GLib.spawn_command_line_async(command);
-	} catch (error) {
-		console.error("Failed to update profile:", error);
 	}
 }
 

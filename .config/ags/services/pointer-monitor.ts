@@ -1,8 +1,5 @@
 import Gdk from "gi://Gdk?version=4.0";
-
-type PointerDevice = Gdk.Device & {
-  get_position(): [unknown, number, number];
-};
+import { queryHyprlandJson } from "./hyprland-ipc";
 
 export type PointerMonitor = {
   monitor: Gdk.Monitor;
@@ -12,11 +9,18 @@ export type PointerMonitor = {
 
 export function getPointerMonitor(): PointerMonitor | null {
   const display = Gdk.Display.get_default();
-  const pointer = display?.get_default_seat()?.get_pointer() as PointerDevice | null;
-  if (!display || !pointer) return null;
+  const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
+    component: "pointer-monitor",
+    metric: "cursorPosition",
+  });
+  if (
+    !display ||
+    typeof position?.x !== "number" ||
+    typeof position.y !== "number"
+  )
+    return null;
 
-  // GTK4 removed Display.get_monitor_at_point(); locate the pointer in its monitor model.
-  const [, x, y] = pointer.get_position();
+  const { x, y } = position;
   const monitors = display.get_monitors();
   for (let index = 0; index < monitors.get_n_items(); index += 1) {
     const monitor = monitors.get_item(index) as Gdk.Monitor | null;

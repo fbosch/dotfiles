@@ -8,6 +8,7 @@ import { perf } from "../../services/performance-monitor";
 import {
 	getProfileState,
 	subscribeProfileState,
+	type ProfileSelection,
 	type ProfileState,
 } from "../../services/profile-state";
 import {
@@ -57,6 +58,7 @@ export class StartMenuController {
 		}),
 		getRecentItems: () => this.#recentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
+		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),
 		onRecentOpenRequest: () =>
 			this.#actor?.send({ type: "RECENT_OPEN_REQUEST" }),
@@ -117,6 +119,7 @@ export class StartMenuController {
 		this.#actorSubscription = null;
 		this.#actor?.stop();
 		this.#actor = null;
+		this.#view.dispose();
 	}
 
 	isVisible(): boolean {
@@ -133,6 +136,7 @@ export class StartMenuController {
 			if (this.#view.isCreated) this.#view.render();
 			else this.#view.create();
 			this.#view.show();
+			this.#showWaybar();
 			this.actor.send({ type: "SHOW" });
 		} catch (cause) {
 			ok = false;
@@ -221,6 +225,27 @@ export class StartMenuController {
 			this.#profileState = state;
 			this.#view.updateProfile(state);
 		});
+	}
+
+	#selectProfile(selection: ProfileSelection): void {
+		const profilectl = `${GLib.get_home_dir()}/.config/hypr/runtime/profiles/profilectl.sh`;
+		const command =
+			selection === "auto"
+				? `${profilectl} clear-manual`
+				: `${profilectl} set-manual ${selection}`;
+		try {
+			GLib.spawn_command_line_async(command);
+		} catch (error) {
+			console.error("Failed to update profile:", error);
+		}
+	}
+
+	#showWaybar(): void {
+		try {
+			GLib.spawn_command_line_async("pkill -SIGUSR1 -f '(^|/)waybar( |$)'");
+		} catch (error) {
+			console.error("Failed to show waybar:", error);
+		}
 	}
 
 	#generateAvatar(): void {
