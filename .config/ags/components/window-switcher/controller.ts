@@ -31,7 +31,7 @@ export class WindowSwitcherController {
 	#repository = new WindowRepository();
 	#previews = new PreviewCache(() => {
 		if (this.isVisible() && this.#displayMode === DisplayMode.PREVIEWS)
-			this.#view.render(this.session, this.#displayMode);
+			this.#view.refreshPreviews(this.session.windows);
 	});
 	#view = new WindowSwitcherView(this.#previews, {
 		onSelect: (index) => this.select(index),

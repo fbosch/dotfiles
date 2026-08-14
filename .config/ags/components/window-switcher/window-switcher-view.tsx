@@ -26,6 +26,14 @@ const buttonPadding = 8;
 
 type Session = { windows: WindowInfo[]; currentIndex: number };
 type ViewOptions = { onSelect: (index: number) => void; onCommit: () => void };
+type PreviewWidgets = {
+	path: string | null;
+	mtime: number;
+	header: Gtk.Box;
+	body: Gtk.Box;
+	title: Gtk.Label;
+	picture: Gtk.Picture | null;
+};
 
 export class WindowSwitcherView {
 	#window: Astal.Window | null = null;
@@ -35,7 +43,7 @@ export class WindowSwitcherView {
 	#iconTheme: Gtk.IconTheme | null = null;
 	#previousAddresses: string[] = [];
 	#previousMode: DisplayMode | null = null;
-	#previousMtimes = new Map<string, number>();
+	#previewWidgets = new Map<string, PreviewWidgets>();
 	#windowDispose: (() => void) | null = null;
 	#renderDispose: (() => void) | null = null;
 
@@ -123,7 +131,7 @@ export class WindowSwitcherView {
 
 		try {
 			const addresses = session.windows.map((window) => window.address);
-			const rebuild = this.#shouldRebuild(session.windows, addresses, mode);
+			const rebuild = this.#shouldRebuild(addresses, mode);
 			if (rebuild) this.#rebuild(session, mode, addresses);
 			else this.#updateSelection(session);
 			this.#selectedLabel.set_label(
@@ -141,6 +149,36 @@ export class WindowSwitcherView {
 	reset(): void {
 		this.#previousAddresses = [];
 		this.#buttons.clear();
+		this.#previewWidgets.clear();
+	}
+
+	refreshPreviews(windows: WindowInfo[]): void {
+		if (this.#previousMode !== DisplayMode.PREVIEWS) return;
+		for (const window of windows) {
+			const widgets = this.#previewWidgets.get(window.address);
+			if (!widgets) continue;
+			const path = this.previews.getPath(window);
+			const info = this.previews.getInfo(path);
+			if (widgets.path === path && widgets.mtime === info.mtime) continue;
+
+			widgets.path = path;
+			widgets.mtime = info.mtime;
+			widgets.header.set_size_request(info.width, -1);
+			widgets.body.set_size_request(info.width, info.height);
+			widgets.title.set_label(
+				truncateWindowTitle(window.title, info.width - 52),
+			);
+			if (info.texture) {
+				if (widgets.picture) widgets.picture.set_paintable(info.texture);
+				else {
+					widgets.picture = createPreviewPicture(info.texture);
+					widgets.body.append(widgets.picture);
+				}
+			} else if (widgets.picture) {
+				widgets.body.remove(widgets.picture);
+				widgets.picture = null;
+			}
+		}
 	}
 
 	dispose(): void {
@@ -154,12 +192,11 @@ export class WindowSwitcherView {
 		this.#iconTheme = null;
 		this.#previousAddresses = [];
 		this.#previousMode = null;
-		this.#previousMtimes.clear();
+		this.#previewWidgets.clear();
 		this.#buttons.clear();
 	}
 
 	#shouldRebuild(
-		windows: WindowInfo[],
 		addresses: string[],
 		mode: DisplayMode,
 	): boolean {
@@ -168,12 +205,7 @@ export class WindowSwitcherView {
 			this.#previousAddresses.some(
 				(address, index) => address !== addresses[index],
 			);
-		if (listChanged || this.#previousMode !== mode) return true;
-		if (mode === DisplayMode.ICONS) return false;
-		const mtimes = this.#previewMtimes(windows);
-		for (const [address, mtime] of mtimes)
-			if (this.#previousMtimes.get(address) !== mtime) return true;
-		return false;
+		return listChanged || this.#previousMode !== mode;
 	}
 
 	#rebuild(session: Session, mode: DisplayMode, addresses: string[]): void {
@@ -185,6 +217,7 @@ export class WindowSwitcherView {
 			child = this.#container.get_first_child();
 		}
 		this.#buttons.clear();
+		this.#previewWidgets.clear();
 		const widths = session.windows.map((window) =>
 			this.#buttonWidth(window, mode),
 		);
@@ -212,10 +245,6 @@ export class WindowSwitcherView {
 		});
 		this.#previousAddresses = addresses;
 		this.#previousMode = mode;
-		this.#previousMtimes =
-			mode === DisplayMode.PREVIEWS
-				? this.#previewMtimes(session.windows)
-				: new Map();
 	}
 
 	#appendRow(windows: WindowInfo[], session: Session, mode: DisplayMode): void {
@@ -284,6 +313,8 @@ export class WindowSwitcherView {
 	): JSX.Element {
 		const path = this.previews.getPath(window);
 		const info = this.previews.getInfo(path);
+		let header: Gtk.Box | null = null;
+		let title: Gtk.Label | null = null;
 		const image = icon ? (
 			icon.kind === "theme" ? (
 				<image
@@ -315,7 +346,7 @@ export class WindowSwitcherView {
 					orientation={Gtk.Orientation.VERTICAL}
 					spacing={0}
 					class="window-preview"
-					css={`max-width: ${info.width}px;`}
+					widthRequest={info.width}
 				>
 					<box
 						orientation={Gtk.Orientation.HORIZONTAL}
@@ -323,6 +354,9 @@ export class WindowSwitcherView {
 						class="preview-header"
 						halign={Gtk.Align.FILL}
 						widthRequest={info.width}
+						$={(self: Gtk.Box) => {
+							header = self;
+						}}
 					>
 						{image}
 						<label
@@ -330,14 +364,32 @@ export class WindowSwitcherView {
 							xalign={0}
 							class="preview-header-title"
 							wrap={false}
+							$={(self: Gtk.Label) => {
+								title = self;
+							}}
 						/>
 					</box>
 					<box
 						class="preview-body"
 						halign={Gtk.Align.CENTER}
 						valign={Gtk.Align.CENTER}
-						css={`min-width: ${info.width}px; min-height: ${info.height}px; max-width: ${info.width}px; max-height: ${info.height}px;`}
-						$={(self: Gtk.Box) => this.#appendPreview(self, path)}
+						widthRequest={info.width}
+						heightRequest={info.height}
+						$={(body: Gtk.Box) => {
+							const picture = info.texture
+								? createPreviewPicture(info.texture)
+								: null;
+							if (picture) body.append(picture);
+							if (header && title)
+								this.#previewWidgets.set(window.address, {
+									path,
+									mtime: info.mtime,
+									header,
+									body,
+									title,
+									picture,
+								});
+						}}
 					/>
 				</box>
 			</box>
@@ -391,33 +443,11 @@ export class WindowSwitcherView {
 		);
 	}
 
-	#appendPreview(container: Gtk.Box, path: string | null): void {
-		if (!path) return;
-		const texture = this.previews.getInfo(path).texture;
-		if (!texture) return;
-		const picture = Gtk.Picture.new_for_paintable(texture);
-		picture.set_halign(Gtk.Align.FILL);
-		picture.set_valign(Gtk.Align.FILL);
-		picture.set_can_shrink(false);
-		picture.set_content_fit(Gtk.ContentFit.FILL);
-		picture.add_css_class("preview-image");
-		container.append(picture);
-	}
-
 	#buttonWidth(window: WindowInfo, mode: DisplayMode): number {
 		if (mode === DisplayMode.ICONS)
 			return ICON_SIZE + buttonPadding * 2 + 4 + 12;
 		const info = this.previews.getInfo(this.previews.getPath(window));
 		return info.width + buttonPadding * 2 + 4 + 48;
-	}
-
-	#previewMtimes(windows: WindowInfo[]): Map<string, number> {
-		const mtimes = new Map<string, number>();
-		for (const window of windows) {
-			const mtime = this.previews.getMtime(this.previews.getPath(window));
-			if (mtime !== null) mtimes.set(window.address, mtime);
-		}
-		return mtimes;
 	}
 
 	#updateSelection(session: Session): void {
@@ -431,6 +461,16 @@ export class WindowSwitcherView {
 				button.remove_css_class("selected");
 		});
 	}
+}
+
+function createPreviewPicture(texture: Gdk.Texture): Gtk.Picture {
+	const picture = Gtk.Picture.new_for_paintable(texture);
+	picture.set_halign(Gtk.Align.FILL);
+	picture.set_valign(Gtk.Align.FILL);
+	picture.set_can_shrink(false);
+	picture.set_content_fit(Gtk.ContentFit.FILL);
+	picture.add_css_class("preview-image");
+	return picture;
 }
 
 function getMonitorWidth(): number {

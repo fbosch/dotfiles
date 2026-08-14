@@ -163,6 +163,46 @@ test("Window Switcher view renders and updates both display modes", () => {
 	});
 });
 
+test("Window Switcher refreshes previews without rebuilding buttons", () => {
+	createRoot((dispose) => {
+		let mtime = 1;
+		let width = 120;
+		const previews = {
+			getPath: (window: WindowInfo) => `/preview/${window.address}.jpg`,
+			getInfo: () => ({ mtime, width, height: 90 }),
+		} as unknown as PreviewCache;
+		const view = new WindowSwitcherView(previews, {
+			onSelect: () => {},
+			onCommit: () => {},
+		});
+		const window = view.create();
+		view.render({ windows, currentIndex: 0 }, DisplayMode.PREVIEWS);
+		const before = collectButtons(window);
+		const previewBody = findWidgetWithClass(window, "preview-body");
+		assert(
+			previewBody?.widthRequest === 120,
+			"initial preview width failed",
+		);
+
+		mtime = 2;
+		width = 180;
+		view.refreshPreviews(windows);
+		const after = collectButtons(window);
+
+		assert(before.length === after.length, "preview refresh changed button count");
+		assert(
+			before.every((button, index) => button === after[index]),
+			"preview refresh rebuilt a button",
+		);
+		assert(
+			previewBody.widthRequest === 180,
+			"preview width was not updated",
+		);
+		view.dispose();
+		dispose();
+	});
+});
+
 test("Window Switcher modifier watcher owns and removes its timer", async () => {
 	const releases: string[] = [];
 	let screenshots = 0;
@@ -263,4 +303,15 @@ function collectButtons(widget: Gtk.Widget): Gtk.Button[] {
 		child = child.get_next_sibling();
 	}
 	return buttons;
+}
+
+function findWidgetWithClass(widget: Gtk.Widget, className: string): Gtk.Widget | null {
+	if (widget.has_css_class(className)) return widget;
+	let child = widget.get_first_child();
+	while (child) {
+		const match = findWidgetWithClass(child, className);
+		if (match) return match;
+		child = child.get_next_sibling();
+	}
+	return null;
 }
