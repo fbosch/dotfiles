@@ -20,6 +20,7 @@ Rules:
   - Never use module/feature scope when a ticket/reference number is present.
   - Only use module/feature scope when no ticket/reference number exists at all.
 - `subject`: imperative mood, lowercase, no trailing period, specific and substantive.
+- A subject ending mid-thought or with a dangling connector/preposition is invalid. Rewrite it as a complete phrase before responding.
 - If only lock/generated files are staged, output exactly:
   {"type":"chore","scope":"deps","subject":"update lock file"}
 - Keep final formatted message `type(scope): subject` within 50 chars whenever possible, but ticket inclusion in `scope` takes priority.

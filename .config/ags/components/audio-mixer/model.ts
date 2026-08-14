@@ -60,6 +60,28 @@ export function emptySnapshot(
 	return { status, message, rows: emptyRows() };
 }
 
+export function audioPresentationKey(
+	snapshot: AudioSnapshot,
+	tab: AudioMixerTab,
+): string {
+	return JSON.stringify({
+		status: snapshot.status,
+		message: snapshot.message,
+		rows: snapshot.rows[tab].map(
+			({ id, name, icon, iconRef, kind, volume, muted, isDefault }) => ({
+				id,
+				name,
+				icon,
+				iconRef,
+				kind,
+				volume,
+				muted,
+				isDefault,
+			}),
+		),
+	});
+}
+
 export function clamp(value: number, max = maxVolume): number {
 	return Math.max(0, Math.min(max, Math.round(value)));
 }

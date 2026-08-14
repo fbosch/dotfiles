@@ -6,10 +6,12 @@ import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { setImageFile } from "../../services/app-icons";
 import { bindGamingOpacity } from "../../services/gaming-opacity";
+import { perf } from "../../services/performance-monitor";
 import { getPointerMonitor } from "../../services/pointer-monitor";
 import { createButton, setButtonVariant } from "../button";
 import { createAudioMeter } from "./audio-meter";
 import {
+	audioPresentationKey,
 	clamp,
 	tabs,
 	volumeLevelIcon,
@@ -107,8 +109,11 @@ export class AudioMixerView {
 		this.#win?.set_visible(false);
 	}
 	setSnapshot(snapshot: AudioSnapshot): void {
+		const changed =
+			audioPresentationKey(this.#snapshot, this.#activeTab) !==
+			audioPresentationKey(snapshot, this.#activeTab);
 		this.#snapshot = snapshot;
-		this.render();
+		if (changed) this.render();
 	}
 	setTab(tab: AudioMixerTab): void {
 		this.#activeTab = tab;
@@ -292,28 +297,42 @@ export class AudioMixerView {
 	}
 	render(): void {
 		if (!this.#rows) return;
-		this.#clearFocusSource();
-		this.#disposeMeters();
-		this.#clear(this.#rows);
-		this.#rowCards = [];
-		const rows = this.#activeRows();
-		if (!rows.length) {
-			this.#focusedRow = 0;
-			this.#rows.append(this.#empty());
-			return;
-		}
-		this.#focusedRow = Math.max(0, Math.min(this.#focusedRow, rows.length - 1));
-		rows.forEach((row, index) => {
-			const card = this.#row(row, index);
-			this.#rowCards.push(card);
-			this.#rows?.append(card);
-		});
-		if (this.actions.isVisible())
-			this.#focusSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-				this.#focusSource = 0;
-				this.#focus(this.#focusedRow);
-				return GLib.SOURCE_REMOVE;
+		const mark = perf.start("audio-mixer-widget", "renderRows");
+		let ok = true;
+		let error: string | undefined;
+		try {
+			this.#clearFocusSource();
+			this.#disposeMeters();
+			this.#clear(this.#rows);
+			this.#rowCards = [];
+			const rows = this.#activeRows();
+			if (!rows.length) {
+				this.#focusedRow = 0;
+				this.#rows.append(this.#empty());
+				return;
+			}
+			this.#focusedRow = Math.max(
+				0,
+				Math.min(this.#focusedRow, rows.length - 1),
+			);
+			rows.forEach((row, index) => {
+				const card = this.#row(row, index);
+				this.#rowCards.push(card);
+				this.#rows?.append(card);
 			});
+			if (this.actions.isVisible())
+				this.#focusSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+					this.#focusSource = 0;
+					this.#focus(this.#focusedRow);
+					return GLib.SOURCE_REMOVE;
+				});
+		} catch (cause) {
+			ok = false;
+			error = String(cause);
+			throw cause;
+		} finally {
+			mark.end(ok, error);
+		}
 	}
 	#clear(box: Gtk.Box): void {
 		let child = box.get_first_child();

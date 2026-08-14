@@ -11,25 +11,6 @@ const FILE_SUMMARY_MAX_FILES = 8;
 const MAX_COMMIT_MESSAGE_LENGTH = 50;
 const WORK_ITEM_PATTERNS = [/\bAB#(\d+)\b/iu, /\b#(\d+)\b/u, /(?:^|[\/_-])(\d{4,})(?=$|[\/_-])/u, /\b(\d{4,})\b/u];
 const WORK_ITEM_SCOPE_PATTERN = /^AB#\d+$/u;
-const SUBJECT_FILLER_WORDS = new Set([
-  "a",
-  "an",
-  "the",
-  "for",
-  "of",
-  "to",
-  "current",
-  "existing",
-  "staged",
-]);
-const SUBJECT_COMPRESSION_RULES: ReadonlyArray<readonly [string, string]> = [
-  ["commit message", "message"],
-  ["commit messages", "messages"],
-  ["debug timings", "timings"],
-  [" by file and hunk", " by file/hunk"],
-  [" by file and hunks", " by file/hunks"],
-];
-
 const COMMIT_TYPES = [
   "feat",
   "fix",
@@ -309,43 +290,6 @@ function cleanSubject(value: string): string {
   return trimmed;
 }
 
-function shortenSubject(subject: string, maxChars: number): string {
-  if (subject.length <= maxChars) {
-    return subject;
-  }
-
-  let shortened = subject;
-  for (const [from, to] of SUBJECT_COMPRESSION_RULES) {
-    if (shortened.length <= maxChars) {
-      break;
-    }
-
-    shortened = shortened.replaceAll(from, to);
-  }
-
-  if (shortened.length > maxChars) {
-    const words = shortened.split(/\s+/u);
-    const compactWords = words.filter((word) => SUBJECT_FILLER_WORDS.has(word) === false);
-    const compact = compactWords.join(" ").trim();
-    if (compact.length > 0) {
-      shortened = compact;
-    }
-  }
-
-  if (shortened.length > maxChars) {
-    shortened = shortened.replaceAll(" and ", " & ");
-  }
-
-  if (shortened.length <= maxChars) {
-    return cleanSubject(shortened);
-  }
-
-  const slice = shortened.slice(0, maxChars + 1);
-  const boundary = slice.lastIndexOf(" ");
-  const truncated = boundary > 0 ? slice.slice(0, boundary) : shortened.slice(0, maxChars);
-  return cleanSubject(truncated.replace(/[\s/&:-]+$/u, ""));
-}
-
 function diagnoseCommitFields(type: string, scope: string, subject: string): string | null {
   if (toCommitType(type.trim().toLowerCase()) === null) {
     return `invalid type "${type.trim()}" (valid: ${COMMIT_TYPES.join(", ")})`;
@@ -370,13 +314,7 @@ function normalizeCommit(type: string, scope: string, subject: string): Generate
     return null;
   }
 
-  const rawSubject = cleanSubject(subject.trim().toLowerCase());
-  const maxSubjectChars = MAX_COMMIT_MESSAGE_LENGTH - `${normalizedType}(${normalizedScope}): `.length;
-  if (maxSubjectChars <= 0) {
-    return null;
-  }
-
-  const normalizedSubject = shortenSubject(rawSubject, maxSubjectChars);
+  const normalizedSubject = cleanSubject(subject.trim().toLowerCase());
   if (normalizedSubject.length === 0) {
     return null;
   }
