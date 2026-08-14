@@ -11,8 +11,8 @@ import { getPointerMonitor } from "../../services/pointer-monitor";
 import { createButton, setButtonVariant } from "../button";
 import { createAudioMeter } from "./audio-meter";
 import {
-	audioPresentationKey,
 	clamp,
+	reconcileAudioSnapshot,
 	tabs,
 	volumeLevelIcon,
 	type AudioBackend,
@@ -109,10 +109,15 @@ export class AudioMixerView {
 		this.#win?.set_visible(false);
 	}
 	setSnapshot(snapshot: AudioSnapshot): void {
+		const reconciled = reconcileAudioSnapshot(
+			this.#snapshot,
+			snapshot,
+			this.#activeTab,
+		);
 		const changed =
-			audioPresentationKey(this.#snapshot, this.#activeTab) !==
-			audioPresentationKey(snapshot, this.#activeTab);
-		this.#snapshot = snapshot;
+			reconciled.rows[this.#activeTab] !==
+			this.#snapshot.rows[this.#activeTab];
+		this.#snapshot = reconciled;
 		if (changed) this.render();
 	}
 	setTab(tab: AudioMixerTab): void {

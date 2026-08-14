@@ -23,7 +23,8 @@ export function createAudioBackend(
 ): AudioBackend {
 	let modules: { AstalWp: any } | null = null;
 	let audio: any | null = null;
-	let signalIds: number[] = [];
+	let signalConnections: Array<{ target: any; id: number }> = [];
+	const nodeConnections = new Map<any, number[]>();
 	let refreshSource = 0;
 	let loadVersion = 0;
 	let pendingDefault: { tab: "output" | "input"; object: any } | null = null;
@@ -115,6 +116,11 @@ export function createAudioBackend(
 						sameAudioObject(value, microphone),
 					),
 				);
+			reconcileNodeSignals([
+				...rows.playback,
+				...rows.output,
+				...rows.input,
+			]);
 			return { status: "ready", message: "", rows };
 		} catch (cause) {
 			ok = false;
@@ -152,10 +158,46 @@ export function createAudioBackend(
 			"device-removed",
 		])
 			try {
-				if (target?.connect) signalIds.push(target.connect(signal, refresh));
+				if (target?.connect)
+					signalConnections.push({
+						target,
+						id: target.connect(signal, refresh),
+					});
 			} catch {
 				/* GIR signal availability varies. */
 			}
+	}
+	function reconcileNodeSignals(rows: AudioRow[]): void {
+		const current = new Set(rows.map((row) => row.object).filter(Boolean));
+		for (const [target, ids] of nodeConnections) {
+			if (current.has(target)) continue;
+			for (const id of ids) disconnect(target, id);
+			nodeConnections.delete(target);
+		}
+		for (const target of current) {
+			if (nodeConnections.has(target) || typeof target.connect !== "function")
+				continue;
+			const ids: number[] = [];
+			for (const signal of [
+				"notify::volume",
+				"notify::mute",
+				"notify::description",
+				"notify::name",
+			])
+				try {
+					ids.push(target.connect(signal, refresh));
+				} catch {
+					// Generated GIR properties vary between AstalWp node types.
+				}
+			nodeConnections.set(target, ids);
+		}
+	}
+	function disconnect(target: any, id: number): void {
+		try {
+			target.disconnect(id);
+		} catch {
+			// The backend may already have released the GObject.
+		}
 	}
 	async function load(): Promise<void> {
 		const version = ++loadVersion;
@@ -192,21 +234,20 @@ export function createAudioBackend(
 				GLib.source_remove(refreshSource);
 				refreshSource = 0;
 			}
-			for (const id of signalIds)
-				try {
-					audio?.disconnect(id);
-				} catch {
-					/* Backend may already be torn down. */
-				}
-			signalIds = [];
+			for (const { target, id } of signalConnections) disconnect(target, id);
+			signalConnections = [];
+			for (const [target, ids] of nodeConnections)
+				for (const id of ids) disconnect(target, id);
+			nodeConnections.clear();
 			audio = null;
 			pendingDefault = null;
 		},
 		setVolume: (value, volume) => {
 			value.volume = clamp(volume);
 			const backendVolume = value.volume / 100;
-			value.object?.set_volume?.(backendVolume);
-			value.object.volume = backendVolume;
+			if (typeof value.object?.set_volume === "function")
+				value.object.set_volume(backendVolume);
+			else value.object.volume = backendVolume;
 		},
 		toggleMute: (value) => {
 			const muted = !(

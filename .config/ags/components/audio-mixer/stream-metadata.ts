@@ -14,7 +14,8 @@ interface HyprlandClient {
 	initialTitle?: string;
 	pid?: number;
 }
-const ttlMs = 2000;
+const dynamicCacheTtlMs = 2000;
+const inspectionCacheTtlMs = 30 * 1000;
 let iconTheme: Gtk.IconTheme | null = null;
 let hyprClients: { timestampMs: number; clients: HyprlandClient[] } | null =
 	null;
@@ -24,13 +25,18 @@ let wpctlStatus: {
 } | null = null;
 const inspections = new Map<
 	number,
-	{ timestampMs: number; properties: Record<string, string> } | null
+	{ timestampMs: number; properties: Record<string, string> | null }
 >();
 const now = () => GLib.get_monotonic_time() / 1000;
 
 function inspect(id: number): Record<string, string> | null {
 	const cached = inspections.get(id);
-	if (cached && now() - cached.timestampMs < ttlMs) return cached.properties;
+	const nowMs = now();
+	if (cached && nowMs - cached.timestampMs < inspectionCacheTtlMs)
+		return cached.properties;
+	for (const [cachedId, entry] of inspections)
+		if (nowMs - entry.timestampMs >= inspectionCacheTtlMs)
+			inspections.delete(cachedId);
 	const mark = perf.start("audio-mixer-widget", "wpctlInspect");
 	let ok = true;
 	let error: string | undefined;
@@ -42,12 +48,12 @@ function inspect(id: number): Record<string, string> | null {
 			const match = line.match(/^\s*\*?\s*([a-zA-Z0-9_.-]+)\s*=\s*"(.*)"\s*$/);
 			if (match) properties[match[1]] = match[2];
 		}
-		inspections.set(id, { timestampMs: now(), properties });
+		inspections.set(id, { timestampMs: nowMs, properties });
 		return properties;
 	} catch (cause) {
 		ok = false;
 		error = String(cause);
-		inspections.set(id, null);
+		inspections.set(id, { timestampMs: nowMs, properties: null });
 		return null;
 	} finally {
 		mark.end(ok, error);
@@ -55,7 +61,7 @@ function inspect(id: number): Record<string, string> | null {
 }
 
 function streams(): Array<{ id: number; name: string }> {
-	if (wpctlStatus && now() - wpctlStatus.timestampMs < ttlMs)
+	if (wpctlStatus && now() - wpctlStatus.timestampMs < dynamicCacheTtlMs)
 		return wpctlStatus.streams;
 	const mark = perf.start("audio-mixer-widget", "wpctlStatus");
 	let ok = true;
@@ -131,7 +137,7 @@ function processId(object: any): number | undefined {
 }
 
 function clients(): HyprlandClient[] {
-	if (hyprClients && now() - hyprClients.timestampMs < ttlMs)
+	if (hyprClients && now() - hyprClients.timestampMs < dynamicCacheTtlMs)
 		return hyprClients.clients;
 	const socket = queryHyprlandJson<HyprlandClient[]>("j/clients", {
 		component: "audio-mixer-widget",

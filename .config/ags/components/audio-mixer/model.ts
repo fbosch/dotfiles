@@ -60,7 +60,7 @@ export function emptySnapshot(
 	return { status, message, rows: emptyRows() };
 }
 
-export function audioPresentationKey(
+function audioPresentationKey(
 	snapshot: AudioSnapshot,
 	tab: AudioMixerTab,
 ): string {
@@ -80,6 +80,36 @@ export function audioPresentationKey(
 			}),
 		),
 	});
+}
+
+function haveSameAudioObjects(
+	current: AudioRow[],
+	next: AudioRow[],
+): boolean {
+	return (
+		current.length === next.length &&
+		current.every(
+			(row, index) => row.id === next[index]?.id && row.object === next[index]?.object,
+		)
+	);
+}
+
+export function reconcileAudioSnapshot(
+	current: AudioSnapshot,
+	next: AudioSnapshot,
+	tab: AudioMixerTab,
+): AudioSnapshot {
+	const currentRows = current.rows[tab];
+	const nextRows = next.rows[tab];
+	if (
+		audioPresentationKey(current, tab) !== audioPresentationKey(next, tab) ||
+		haveSameAudioObjects(currentRows, nextRows) === false
+	)
+		return next;
+	return {
+		...next,
+		rows: { ...next.rows, [tab]: currentRows },
+	};
 }
 
 export function clamp(value: number, max = maxVolume): number {
