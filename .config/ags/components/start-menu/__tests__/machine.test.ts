@@ -17,6 +17,7 @@ describe("startMenuMachine", () => {
     expect(actor.getSnapshot().matches("hidden")).toBe(true);
     actor.send({ type: "SHOW" });
     expect(actor.getSnapshot().matches({ visible: "recentClosed" })).toBe(true);
+    expect(actor.getSnapshot().hasTag("menu-visible")).toBe(true);
     actor.send({ type: "HIDE" });
     expect(actor.getSnapshot().matches("hidden")).toBe(true);
 
@@ -30,6 +31,7 @@ describe("startMenuMachine", () => {
     actor.send({ type: "RECENT_OPEN_NOW" });
 
     expect(actor.getSnapshot().matches({ visible: "recentOpen" })).toBe(true);
+    expect(actor.getSnapshot().hasTag("recent-items-visible")).toBe(true);
     actor.stop();
   });
 
@@ -79,6 +81,7 @@ describe("startMenuMachine", () => {
 
     actor.send({ type: "RECENT_CLOSE_REQUEST" });
     expect(actor.getSnapshot().matches({ visible: "recentClosing" })).toBe(true);
+    expect(actor.getSnapshot().hasTag("recent-items-visible")).toBe(true);
     actor.send({ type: "RECENT_OPEN_REQUEST" });
 
     expect(actor.getSnapshot().matches({ visible: "recentOpen" })).toBe(true);

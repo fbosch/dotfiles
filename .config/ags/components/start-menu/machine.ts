@@ -11,6 +11,7 @@ type StartMenuEvent =
 export const startMenuMachine = setup({
   types: {
     events: {} as StartMenuEvent,
+    tags: {} as "menu-visible" | "recent-items-visible",
   },
   delays: {
     recentOpenDelay: 300,
@@ -26,6 +27,7 @@ export const startMenuMachine = setup({
       },
     },
     visible: {
+      tags: ["menu-visible"],
       initial: "recentClosed",
       on: {
         HIDE: "hidden",
@@ -48,12 +50,14 @@ export const startMenuMachine = setup({
           },
         },
         recentOpen: {
+          tags: ["recent-items-visible"],
           on: {
             RECENT_CLOSE_REQUEST: "recentClosing",
             RECENT_CLOSE_NOW: "recentClosed",
           },
         },
         recentClosing: {
+          tags: ["recent-items-visible"],
           after: {
             recentCloseDelay: "recentClosed",
           },

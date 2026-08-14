@@ -313,15 +313,11 @@ function hideRecentItemsMenu(): void {
 }
 
 function menuIsVisible(): boolean {
-  return startMenuActor?.getSnapshot().matches("visible") === true;
+  return startMenuActor?.getSnapshot().hasTag("menu-visible") === true;
 }
 
 function recentItemsAreVisible(): boolean {
-  const snapshot = startMenuActor?.getSnapshot();
-  return (
-    snapshot?.matches({ visible: "recentOpen" }) === true ||
-    snapshot?.matches({ visible: "recentClosing" }) === true
-  );
+  return startMenuActor?.getSnapshot().hasTag("recent-items-visible") === true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1777,9 +1773,7 @@ function initStartMenu() {
   if (startMenuActor === null) {
     startMenuActor = createActor(startMenuMachine);
     startMenuSubscription = startMenuActor.subscribe((snapshot) => {
-      const shouldRenderRecentItems =
-        snapshot.matches({ visible: "recentOpen" }) ||
-        snapshot.matches({ visible: "recentClosing" });
+      const shouldRenderRecentItems = snapshot.hasTag("recent-items-visible");
       if (shouldRenderRecentItems && recentItemsRendered === false) {
         renderRecentItemsMenu();
         return;
