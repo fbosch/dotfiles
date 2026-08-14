@@ -141,6 +141,7 @@ export class WindowSwitcherController {
 			this.#displayMode === DisplayMode.ICONS
 				? DisplayMode.PREVIEWS
 				: DisplayMode.ICONS;
+		applyStaticCss(this.#displayMode);
 		this.#rebuildIfVisible();
 	}
 
@@ -210,7 +211,6 @@ export class WindowSwitcherController {
 			`[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
 		);
 		this.actor.send({ type: "ACTIVATE", windows, index, triggerModifier });
-		applyStaticCss(this.#displayMode);
 		this.#view.render(this.session, this.#displayMode);
 		this.#view.show();
 		this.#modifiers.start();
