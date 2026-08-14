@@ -167,9 +167,17 @@ test("Window Switcher refreshes previews without rebuilding buttons", () => {
 	createRoot((dispose) => {
 		let mtime = 1;
 		let width = 120;
+		let pathQueries = 0;
+		let infoQueries = 0;
 		const previews = {
-			getPath: (window: WindowInfo) => `/preview/${window.address}.jpg`,
-			getInfo: () => ({ mtime, width, height: 90 }),
+			getPath: (window: WindowInfo) => {
+				pathQueries += 1;
+				return `/preview/${window.address}.jpg`;
+			},
+			getInfo: () => {
+				infoQueries += 1;
+				return { mtime, width, height: 90 };
+			},
 		} as unknown as PreviewCache;
 		const view = new WindowSwitcherView(previews, {
 			onSelect: () => {},
@@ -179,6 +187,8 @@ test("Window Switcher refreshes previews without rebuilding buttons", () => {
 		view.render({ windows, currentIndex: 0 }, DisplayMode.PREVIEWS);
 		const before = collectButtons(window);
 		const previewBody = findWidgetWithClass(window, "preview-body");
+		assert(pathQueries === windows.length, "preview path was queried repeatedly");
+		assert(infoQueries === windows.length, "preview info was queried repeatedly");
 		assert(
 			previewBody?.widthRequest === 120,
 			"initial preview width failed",

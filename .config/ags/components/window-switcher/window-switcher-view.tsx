@@ -17,15 +17,17 @@ import {
 	windowSwitcherDebugPath,
 } from "./diagnostics";
 import type { WindowInfo } from "./machine";
-import { PreviewCache } from "./preview-cache";
+import { PreviewCache, type PreviewInfo } from "./preview-cache";
 import { DisplayMode, ICON_SIZE } from "./styles";
 import { splitWindowRows, truncateWindowTitle } from "./view-policy";
 
 const buttonSpacing = 8;
 const buttonPadding = 8;
+const iconButtonWidth = ICON_SIZE + buttonPadding * 2 + 4 + 12;
 
 type Session = { windows: WindowInfo[]; currentIndex: number };
 type ViewOptions = { onSelect: (index: number) => void; onCommit: () => void };
+type ResolvedPreview = { path: string | null; info: PreviewInfo };
 type PreviewWidgets = {
 	path: string | null;
 	mtime: number;
@@ -218,9 +220,13 @@ export class WindowSwitcherView {
 		}
 		this.#buttons.clear();
 		this.#previewWidgets.clear();
-		const widths = session.windows.map((window) =>
-			this.#buttonWidth(window, mode),
-		);
+		const previews = new Map<string, ResolvedPreview>();
+		const widths = session.windows.map((window) => {
+			if (mode === DisplayMode.ICONS) return iconButtonWidth;
+			const preview = this.#resolvePreview(window);
+			previews.set(window.address, preview);
+			return preview.info.width + buttonPadding * 2 + 4 + 48;
+		});
 		const monitorWidth = getMonitorWidth();
 		const maxWidth = Math.floor(monitorWidth * 0.75);
 		const totalWidth =
@@ -241,13 +247,18 @@ export class WindowSwitcherView {
 		debugLog(`Using ${rows.length > 1 ? "multi" : "single"}-row layout`);
 		createRoot((dispose) => {
 			this.#renderDispose = dispose;
-			for (const row of rows) this.#appendRow(row, session, mode);
+			for (const row of rows) this.#appendRow(row, session, mode, previews);
 		});
 		this.#previousAddresses = addresses;
 		this.#previousMode = mode;
 	}
 
-	#appendRow(windows: WindowInfo[], session: Session, mode: DisplayMode): void {
+	#appendRow(
+		windows: WindowInfo[],
+		session: Session,
+		mode: DisplayMode,
+		previews: ReadonlyMap<string, ResolvedPreview>,
+	): void {
 		const row = new Gtk.Box({
 			orientation: Gtk.Orientation.HORIZONTAL,
 			spacing: buttonSpacing,
@@ -261,6 +272,7 @@ export class WindowSwitcherView {
 				index === session.currentIndex,
 				index,
 				mode,
+				previews.get(window.address),
 			);
 			row.append(button);
 			this.#buttons.set(window.address, button);
@@ -273,6 +285,7 @@ export class WindowSwitcherView {
 		selected: boolean,
 		index: number,
 		mode: DisplayMode,
+		preview: ResolvedPreview | undefined,
 	): Gtk.Button {
 		const mark = perf.start("window-switcher", "createAppButton");
 		let ok = true;
@@ -281,10 +294,11 @@ export class WindowSwitcherView {
 		try {
 			const icon = getIconForWindow(window, this.#iconTheme);
 			const fallback = getFallbackLetter(window);
-			const content =
-				mode === DisplayMode.PREVIEWS
-					? this.#previewContent(window, icon, fallback)
-					: this.#iconContent(icon, fallback);
+			let content: JSX.Element;
+			if (mode === DisplayMode.PREVIEWS) {
+				if (!preview) throw new Error(`Missing preview for ${window.address}`);
+				content = this.#previewContent(window, icon, fallback, preview);
+			} else content = this.#iconContent(icon, fallback);
 			return (
 				<button
 					canFocus={false}
@@ -310,9 +324,9 @@ export class WindowSwitcherView {
 		window: WindowInfo,
 		icon: ReturnType<typeof getIconForWindow>,
 		fallback: string,
+		preview: ResolvedPreview,
 	): JSX.Element {
-		const path = this.previews.getPath(window);
-		const info = this.previews.getInfo(path);
+		const { path, info } = preview;
 		let header: Gtk.Box | null = null;
 		let title: Gtk.Label | null = null;
 		const image = icon ? (
@@ -443,11 +457,9 @@ export class WindowSwitcherView {
 		);
 	}
 
-	#buttonWidth(window: WindowInfo, mode: DisplayMode): number {
-		if (mode === DisplayMode.ICONS)
-			return ICON_SIZE + buttonPadding * 2 + 4 + 12;
-		const info = this.previews.getInfo(this.previews.getPath(window));
-		return info.width + buttonPadding * 2 + 4 + 48;
+	#resolvePreview(window: WindowInfo): ResolvedPreview {
+		const path = this.previews.getPath(window);
+		return { path, info: this.previews.getInfo(path) };
 	}
 
 	#updateSelection(session: Session): void {
