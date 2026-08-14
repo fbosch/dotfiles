@@ -14,7 +14,7 @@ The bundled entrypoint imports these components from `components/`:
 - `window-switcher/` for Alt-Tab style window switching and session state.
 - `desktop-clock.tsx` for the desktop clock surface.
 - `calendar-widget.tsx` for the taskbar calendar.
-- `audio-mixer-widget.tsx` for audio controls.
+- `audio-mixer/` for audio controls and backend integration.
 - `pip-snap-preview.tsx` for picture-in-picture snap previews.
 
 `start-menu/recent-items-menu.tsx` is owned by the Start Menu feature.

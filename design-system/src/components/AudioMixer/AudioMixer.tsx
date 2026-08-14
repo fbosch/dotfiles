@@ -292,7 +292,7 @@ export const AudioMixer: React.FC<AudioMixerProps> = ({
       className={cn(panelVariants({ animated: !disableAnimations }), className)}
       aria-label="Audio mixer"
     >
-      <div className="p-3 pb-1.5 pt-2">
+      <div className="p-3">
         {currentItems.length === 0 ? (
           <div className="flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-dashed border-white/[0.12] bg-background-primary/30 p-8 text-center">
             <span className="font-fluent text-3xl text-foreground-tertiary/60" aria-hidden="true">
