@@ -71,7 +71,7 @@ import "gi://Astal?version=4.0";
 import app from "ags/gtk4/app";
 
 import "./components/confirm-dialog.tsx";
-import "./components/keyboard-switcher.tsx";
+import "./components/keyboard-switcher/index.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/start-menu/index.tsx";
 import "./components/window-switcher/index.tsx";

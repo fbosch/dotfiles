@@ -8,7 +8,7 @@ dependencies out of the login path while retaining one GTK process.
 Shell components (in `components/`):
 
 - `components/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
-- `components/keyboard-switcher.tsx` - Keyboard layout switcher overlay
+- `components/keyboard-switcher/` - Keyboard layout switcher overlay
 - `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
 - `components/start-menu/index.tsx` - System start menu with update badges
 - `components/start-menu/recent-items-menu.tsx` - Display-only Recent Items submenu

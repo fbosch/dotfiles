@@ -9,7 +9,7 @@ The bundled entrypoint imports these components from `components/`:
 
 - `confirm-dialog.tsx` for shutdown, restart, suspend, and exit confirmations.
 - `volume-indicator.tsx` for volume overlays.
-- `keyboard-switcher.tsx` for layout switch feedback.
+- `keyboard-switcher/` for layout switch feedback.
 - `start-menu/index.tsx` for the launcher surface.
 - `window-switcher/` for Alt-Tab style window switching and session state.
 - `desktop-clock.tsx` for the desktop clock surface.
