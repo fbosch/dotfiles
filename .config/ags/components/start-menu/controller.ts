@@ -34,7 +34,8 @@ import { startMenuMachine } from "./machine";
 import type { RecentItemsMenuModel } from "./recent-items-menu";
 import { StartMenuView } from "./start-menu-view";
 import { applyStartMenuStyles } from "./styles";
-import { UpdatesCache, type UpdatesSnapshot } from "./updates-cache";
+import { UpdatesCache } from "./updates-cache";
+import type { UpdatesSnapshot } from "./updates-policy";
 
 type StartMenuActor = ActorRefFrom<typeof startMenuMachine>;
 

@@ -1,4 +1,5 @@
 import GLib from "gi://GLib?version=2.0";
+import { parseXdgUserDir, systemSettingsCommand } from "./command-policy";
 
 const homeDir = GLib.get_home_dir();
 
@@ -14,7 +15,7 @@ export function createMenuCommands(): Record<string, string> {
 	const updatesCommand = `${homeDir}/.config/ags/scripts/flake-update-terminal.sh`;
 	return {
 		"system-updates": updatesCommand,
-		"system-settings": systemSettingsCommand(),
+		"system-settings": systemSettingsCommand(getTerminal(), `${homeDir}/nixos`),
 		"lock-screen": "hyprlock",
 		applications: "com.github.tchx84.Flatseal",
 		documents: `nemo --existing-window "${getXdgUserDir("XDG_DOCUMENTS_DIR", `${homeDir}/Documents`)}"`,
@@ -32,24 +33,6 @@ export function createMenuCommands(): Record<string, string> {
 export function runMenuCommand(command: string): void {
 	// Commands can contain pipes and compound shell syntax.
 	GLib.spawn_command_line_async(`sh -c '${command}'`);
-}
-
-function systemSettingsCommand(): string {
-	const terminal = getTerminal();
-	const nixosPath = `${homeDir}/nixos`;
-	switch (terminal) {
-		case "foot":
-		case "kitty":
-			return `${terminal} sh -c "cd ${nixosPath} && nvim"`;
-		case "alacritty":
-			return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
-		case "wezterm":
-			return `${terminal} start --cwd ${nixosPath} -- nvim`;
-		case "gnome-terminal":
-			return `${terminal} --working-directory=${nixosPath} -- nvim`;
-		default:
-			return `${terminal} -e sh -c "cd ${nixosPath} && nvim"`;
-	}
 }
 
 function getTerminal(): string {
@@ -75,8 +58,7 @@ function getXdgUserDir(key: string, fallback: string): string {
 		const [success, contents] = GLib.file_get_contents(path);
 		if (!success || !contents) return fallback;
 		const text = new TextDecoder("utf-8").decode(contents);
-		const match = text.match(new RegExp(`^${key}=\"?(.+?)\"?$`, "m"));
-		return match ? match[1].replace(/\$HOME/g, homeDir) : fallback;
+		return parseXdgUserDir(text, key, homeDir) ?? fallback;
 	} catch (error) {
 		console.error(`Failed to read ${key} from XDG user dirs:`, error);
 		return fallback;

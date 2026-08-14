@@ -19,7 +19,7 @@ import { createUserProfile } from "./user-profile";
 import {
 	formatTimeSince,
 	type UpdatesSnapshot,
-} from "./updates-cache";
+} from "./updates-policy";
 
 interface StartMenuViewModel {
 	profileState: ProfileState | null;
@@ -326,7 +326,9 @@ export class StartMenuView {
 			-1,
 		);
 		const workAreaWidth =
-			this.#win.get_width() || this.#win.get_gdkmonitor().get_geometry().width;
+			this.#win.get_width() ||
+			this.#win.get_gdkmonitor()?.get_geometry().width ||
+			Number.MAX_SAFE_INTEGER;
 		const triggerWidth = Math.ceil(bounds.get_width());
 		const triggerRight = Math.ceil(bounds.get_x()) + triggerWidth;
 		const opensRight =
