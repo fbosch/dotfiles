@@ -17,6 +17,8 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 ## Commands
 
 - `ags types`
+- `pnpm test` - run pure AGS service tests.
+- `pnpm test:coverage` - write LCOV coverage to `/tmp/ags-coverage`.
 - `bash scripts/benchmark/run-benchmarks.sh calendar-widget` - benchmark only the Calendar Widget slice.
 - `bash scripts/benchmark/run-benchmarks.sh window-switcher` - benchmark only the Window Switcher slice.
 - `bash scripts/benchmark/run-benchmarks.sh components` - benchmark bundled non-calendar component toggles.

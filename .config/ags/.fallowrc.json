@@ -1,6 +1,6 @@
 {
 	"entry": ["config-bundled.tsx"],
-	"ignorePatterns": [],
+	"ignorePatterns": ["**/__tests__/**"],
 	"ignoreDependencies": ["ags"],
 	"ignoreExports": [],
 	"rules": {

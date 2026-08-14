@@ -12,6 +12,8 @@
     "bundle": "ags bundle config-bundled.tsx \"${XDG_RUNTIME_DIR:-/tmp}/ags-bundled.js\"",
     "inspect": "ags inspect",
     "list": "ags list",
+    "test": "bun test",
+    "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-dir /tmp/ags-coverage",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
     "quality": "fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
