@@ -1,17 +1,14 @@
+import { createUtilityManager, type UtilityDefinition } from "./utility-registry";
 import type { ComponentModule } from "./component-host";
-import {
-  createUtilityManager,
-  type UtilityDefinition,
-} from "./utility-registry";
 
-export type UtilityId = "about-this-pc" | "force-quit";
+type UtilityId = "about-this-pc" | "force-quit";
 
 declare global {
   var AboutThisPC: ComponentModule;
   var ForceQuit: ComponentModule;
 }
 
-const utilityDefinitions: Record<UtilityId, UtilityDefinition> = {
+const utilities: Record<UtilityId, UtilityDefinition> = {
   "about-this-pc": {
     load: () => import("../components/about-this-pc.tsx"),
     component: () => globalThis.AboutThisPC,
@@ -22,20 +19,11 @@ const utilityDefinitions: Record<UtilityId, UtilityDefinition> = {
   },
 };
 
-const utilityManager = createUtilityManager(utilityDefinitions);
+const utilityManager = createUtilityManager(utilities);
 
 export function openUtility(id: UtilityId): void {
   void utilityManager.openUtility(id);
 }
 
-export function handleUtilityRequest(
-  component: string,
-  argv: string[],
-  res: (response: string) => void,
-): boolean {
-  return utilityManager.handleRequest(component, argv, res);
-}
-
-export function visibleUtilityComponent(): string | null {
-  return utilityManager.visibleComponent();
-}
+export const handleUtilityRequest = utilityManager.handleRequest;
+export const visibleUtilityComponent = utilityManager.visibleComponent;

@@ -73,7 +73,7 @@ import app from "ags/gtk4/app";
 import "./components/confirm-dialog.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/volume-indicator.tsx";
-import "./components/start-menu.tsx";
+import "./components/start-menu/index.tsx";
 import "./components/window-switcher.tsx";
 
 app.start({

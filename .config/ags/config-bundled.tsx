@@ -21,7 +21,7 @@ declare global {
 import "./components/confirm-dialog.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/keyboard-switcher.tsx";
-import "./components/start-menu.tsx";
+import "./components/start-menu/index.tsx";
 import "./components/window-switcher.tsx";
 import "./components/desktop-clock.tsx";
 import "./components/calendar-widget.tsx";

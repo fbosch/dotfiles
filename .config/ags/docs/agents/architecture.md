@@ -10,8 +10,8 @@ Shell components (in `components/`):
 - `components/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
 - `components/keyboard-switcher.tsx` - Keyboard layout switcher overlay
 - `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
-- `components/start-menu.tsx` - System start menu with update badges
-- `components/recent-items-menu.tsx` - Display-only Recent Items submenu
+- `components/start-menu/index.tsx` - System start menu with update badges
+- `components/start-menu/recent-items-menu.tsx` - Display-only Recent Items submenu
 - `components/window-switcher.tsx` - Alt+Tab window switcher with previews
 
 Lazy utility components (in `components/`):
@@ -49,6 +49,7 @@ File structure:
 ```
 .config/ags/
 ├── components/                 # GTK surfaces and shared widgets
+│   └── start-menu/             # Start Menu vertical feature slice
 ├── services/                   # Runtime state, integrations, and lazy loading
 ├── config-bundled.tsx          # Main bundled entry point
 └── start-daemons.sh            # Boot script (runs config-bundled.tsx)

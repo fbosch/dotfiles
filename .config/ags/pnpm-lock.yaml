@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      xstate:
+        specifier: 5.32.5
+        version: 5.32.5
     devDependencies:
       fallow:
         specifier: 3.14.0
@@ -201,6 +205,9 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  xstate@5.32.5:
+    resolution: {integrity: sha512-ULazi1oe6wGrXl0Frb6otSlkm5HLifbbVTkMk5kkSKqz4TkxJaVpnl6jOJwKeid3ORPxYyZQgNLUSYX9q65SIA==}
+
 snapshots:
 
   '@fallow-cli/darwin-arm64@3.14.0':
@@ -333,3 +340,5 @@ snapshots:
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
     optional: true
+
+  xstate@5.32.5: {}

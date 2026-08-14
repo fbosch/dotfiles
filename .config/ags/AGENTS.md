@@ -8,6 +8,12 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
   `start-daemons.sh` at login. Keep task-oriented system windows as lazy
   modules behind `services/utility-manager.ts`; do not import them from the
   entry point or make shell components depend on their globals.
+- Keep growing features as vertical slices under `components/<feature>/`.
+  Colocate feature-local state machines, controllers, child surfaces, policies,
+  and tests; reserve `services/` for integrations shared across features.
+- Use XState v5 for temporal component orchestration, not as a universal store.
+  Keep GTK/Gio/GLib resources outside machine context and clean them up through
+  a feature-local controller.
 - Keep styling inline through AGS CSS APIs (`app.start({ css: ... })` / `app.apply_css()`), not external theme files.
 - For AGS surfaces that mirror `design-system/src/components/`, match the component source as the visual contract; do not depend on Storybook stories at runtime.
 - Compose surfaces from existing atomic components when their semantics and interaction model fit. Prefer expanding shared primitives for recurring behavior over duplicating GTK construction and styling; use native widgets for distinct custom controls.
@@ -17,10 +23,10 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 ## Commands
 
 - `ags types`
-- `pnpm test` - run pure AGS service tests.
+- `pnpm test` - run pure AGS feature and service logic tests.
 - `pnpm test:coverage` - write LCOV coverage to `/tmp/ags-coverage`.
 - `pnpm test:coverage:istanbul` - convert LCOV to Istanbul JSON for Fallow.
-- `pnpm health:coverage` - report Fallow health with pure-service coverage.
+- `pnpm health:coverage` - report Fallow health with pure-logic coverage.
 - `bash scripts/benchmark/run-benchmarks.sh calendar-widget` - benchmark only the Calendar Widget slice.
 - `bash scripts/benchmark/run-benchmarks.sh window-switcher` - benchmark only the Window Switcher slice.
 - `bash scripts/benchmark/run-benchmarks.sh components` - benchmark bundled non-calendar component toggles.
@@ -33,6 +39,8 @@ Benchmark target can also be set with `BENCH_TARGET`; positional target wins. Ke
 
 - [AGS guide (upstream docs)](docs/guide/TOC.md)
 - [Architecture and components](docs/agents/architecture.md)
+- [Feature organization](docs/agents/feature-organization.md)
+- [State machines](docs/agents/state-machines.md)
 - [Commands and setup](docs/agents/commands-setup.md)
 - [TSX/JSX conventions](docs/agents/tsx-jsx.md)
 - [Styling and design system](docs/agents/styling.md)

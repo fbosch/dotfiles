@@ -10,14 +10,15 @@ The bundled entrypoint imports these components from `components/`:
 - `confirm-dialog.tsx` for shutdown, restart, suspend, and exit confirmations.
 - `volume-indicator.tsx` for volume overlays.
 - `keyboard-switcher.tsx` for layout switch feedback.
-- `start-menu.tsx` for the launcher surface.
+- `start-menu/index.tsx` for the launcher surface.
 - `window-switcher.tsx` for Alt-Tab style window switching.
 - `desktop-clock.tsx` for the desktop clock surface.
 - `calendar-widget.tsx` for the taskbar calendar.
 - `audio-mixer-widget.tsx` for audio controls.
 - `pip-snap-preview.tsx` for picture-in-picture snap previews.
 
-`recent-items-menu.tsx` and `button.ts` support other components but are not registered as request targets.
+`start-menu/recent-items-menu.tsx` is owned by the Start Menu feature.
+`button.ts` supports multiple components and is not registered as a request target.
 
 ## Lazy Utility Components
 
@@ -32,6 +33,8 @@ Start Menu opens utilities through `UtilityManager`, not their runtime globals.
 ## Layout
 
 - `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
+- `components/<feature>/` contains vertical feature slices once a component
+  needs local policies, child surfaces, state machines, controllers, or tests.
 - `services/utility-manager.ts` owns lazy utility-module loading and request routing.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `components/` is the canonical component source.

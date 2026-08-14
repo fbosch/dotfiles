@@ -5,35 +5,38 @@ import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import tokens from "../../../design-system/tokens.json";
+import { createActor, type ActorRefFrom } from "xstate";
+import tokens from "../../../../design-system/tokens.json";
 import {
   createRecentItemsMenu,
   type RecentItemsMenuModel,
 } from "./recent-items-menu";
-import { getFallbackLetter } from "../services/app-icons";
-import { bindGamingOpacity } from "../services/gaming-opacity";
-import { perf } from "../services/performance-monitor";
+import { getFallbackLetter } from "../../services/app-icons";
+import { bindGamingOpacity } from "../../services/gaming-opacity";
+import { perf } from "../../services/performance-monitor";
 import {
   getProfileState,
   hasAutomaticGamingClaim,
   subscribeProfileState,
   type ProfileSelection,
   type ProfileState,
-} from "../services/profile-state";
+} from "../../services/profile-state";
 import {
   clearRecentApplicationFocusHistory,
   getRecentApplications,
   launchRecentApplication,
   startRecentApplicationFocusHistory,
-} from "../services/recent-applications";
+} from "../../services/recent-applications";
 import {
   clearRecentDocuments,
   getRecentDocuments,
   openRecentDocument,
-} from "../services/recent-documents";
-import type { RecentDocument } from "../services/recent-documents";
-import { parseComponentRequest } from "../services/request";
-import { openUtility } from "../services/utility-manager";
+} from "../../services/recent-documents";
+import type { RecentDocument } from "../../services/recent-documents";
+import { parseComponentRequest } from "../../services/request";
+import { openUtility } from "../../services/utility-manager";
+import { dispatchStartMenuAction } from "./actions";
+import { startMenuMachine } from "./machine";
 
 // Configuration
 const ENABLE_ANIMATIONS = false; // Set to false for better performance on slower systems
@@ -172,7 +175,6 @@ const defaultMenuItems: MenuItem[] = [
 // Current state
 let win: Astal.Window | null = null;
 let menuBox: Gtk.Box | null = null;
-let isVisible: boolean = false;
 let flakeUpdatesCount: number = 0;
 let flakeUpdatesData: FlakeUpdatesData | null = null;
 let flatpakUpdatesCount: number = 0;
@@ -183,16 +185,15 @@ const menuItemButtons: Map<string, Gtk.Button> = new Map();
 let profileControlsBox: Gtk.Box | null = null;
 const profileConditionBadges = new Map<string, Gtk.Box>();
 let recentItemsHost: Gtk.Box | null = null;
-let recentItemsVisible = false;
 let recentDocuments: RecentDocument[] = [];
 
 const updateCacheMaxAgeMs = 24 * 60 * 60 * 1000;
-const recentItemsOpenDelayMs = 300;
-const recentItemsCloseDelayMs = 200;
 const recentItemsGap = 8;
 const recentItemButtons: Gtk.Button[] = [];
-let recentItemsOpenTimer: number | null = null;
-let recentItemsCloseTimer: number | null = null;
+let startMenuActor: ActorRefFrom<typeof startMenuMachine> | null = null;
+let startMenuSubscription: { unsubscribe: () => void } | null = null;
+let stopRecentApplicationFocusHistory: (() => void) | null = null;
+let recentItemsRendered = false;
 
 function recentItemsModel(): RecentItemsMenuModel {
   const display = Gdk.Display.get_default();
@@ -223,55 +224,16 @@ function clearChildren(container: Gtk.Box): void {
   }
 }
 
-function clearRecentItemsOpenTimer(): void {
-  if (recentItemsOpenTimer === null) return;
-  GLib.source_remove(recentItemsOpenTimer);
-  recentItemsOpenTimer = null;
-}
-
-function clearRecentItemsCloseTimer(): void {
-  if (recentItemsCloseTimer === null) return;
-  GLib.source_remove(recentItemsCloseTimer);
-  recentItemsCloseTimer = null;
-}
-
-function clearRecentItemsTimers(): void {
-  clearRecentItemsOpenTimer();
-  clearRecentItemsCloseTimer();
-}
-
 function scheduleRecentItemsOpen(): void {
-  clearRecentItemsCloseTimer();
-  if (recentItemsVisible || recentItemsOpenTimer !== null) return;
-
-  recentItemsOpenTimer = GLib.timeout_add(
-    GLib.PRIORITY_DEFAULT,
-    recentItemsOpenDelayMs,
-    () => {
-      recentItemsOpenTimer = null;
-      showRecentItemsMenu();
-      return GLib.SOURCE_REMOVE;
-    },
-  );
+  startMenuActor?.send({ type: "RECENT_OPEN_REQUEST" });
 }
 
 function scheduleRecentItemsClose(): void {
-  clearRecentItemsOpenTimer();
-  clearRecentItemsCloseTimer();
-  recentItemsCloseTimer = GLib.timeout_add(
-    GLib.PRIORITY_DEFAULT,
-    recentItemsCloseDelayMs,
-    () => {
-      recentItemsCloseTimer = null;
-      hideRecentItemsMenu();
-      return GLib.SOURCE_REMOVE;
-    },
-  );
+  startMenuActor?.send({ type: "RECENT_CLOSE_REQUEST" });
 }
 
-function hideRecentItemsMenu(): void {
-  clearRecentItemsTimers();
-  recentItemsVisible = false;
+function concealRecentItemsMenu(): void {
+  recentItemsRendered = false;
   recentItemsHost?.set_visible(false);
   recentItemButtons.length = 0;
   menuItemButtons.get("recent-items")?.remove_css_class("submenu-open");
@@ -313,10 +275,9 @@ function positionRecentItemsMenu(): void {
   recentItemsHost.set_margin_end(triggerWidth + recentItemsGap);
 }
 
-function showRecentItemsMenu(): void {
+function renderRecentItemsMenu(): void {
   if (!recentItemsHost) return;
 
-  clearRecentItemsTimers();
   recentItemButtons.length = 0;
   clearChildren(recentItemsHost);
   recentItemsHost.append(
@@ -332,15 +293,35 @@ function showRecentItemsMenu(): void {
       onClearRecentItems: () => {
         clearRecentApplicationFocusHistory();
         if (clearRecentDocuments()) recentDocuments = [];
-        showRecentItemsMenu();
+        renderRecentItemsMenu();
       },
       onButtonCreated: (button) => recentItemButtons.push(button),
     }),
   );
   positionRecentItemsMenu();
   recentItemsHost.set_visible(true);
-  recentItemsVisible = true;
+  recentItemsRendered = true;
   menuItemButtons.get("recent-items")?.add_css_class("submenu-open");
+}
+
+function showRecentItemsMenu(): void {
+  startMenuActor?.send({ type: "RECENT_OPEN_NOW" });
+}
+
+function hideRecentItemsMenu(): void {
+  startMenuActor?.send({ type: "RECENT_CLOSE_NOW" });
+}
+
+function menuIsVisible(): boolean {
+  return startMenuActor?.getSnapshot().matches("visible") === true;
+}
+
+function recentItemsAreVisible(): boolean {
+  const snapshot = startMenuActor?.getSnapshot();
+  return (
+    snapshot?.matches({ visible: "recentOpen" }) === true ||
+    snapshot?.matches({ visible: "recentClosing" }) === true
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -704,6 +685,26 @@ function startCacheMonitor() {
   }
 }
 
+function teardownStartMenu(): void {
+  unsubscribeProfileState?.();
+  unsubscribeProfileState = null;
+
+  cacheDirMonitor?.cancel();
+  cacheDirMonitor = null;
+  if (cacheRefreshTimer !== null) {
+    GLib.source_remove(cacheRefreshTimer);
+    cacheRefreshTimer = null;
+  }
+
+  stopRecentApplicationFocusHistory?.();
+  stopRecentApplicationFocusHistory = null;
+
+  startMenuSubscription?.unsubscribe();
+  startMenuSubscription = null;
+  startMenuActor?.stop();
+  startMenuActor = null;
+}
+
 function refreshCacheData(updateVisibleMenu = true) {
   const flakeCacheData = readFlakeUpdatesCache();
   const flatpakCacheData = readFlatpakUpdatesCache();
@@ -719,10 +720,9 @@ function refreshCacheData(updateVisibleMenu = true) {
 }
 
 function hideMenu() {
-  hideRecentItemsMenu();
+  startMenuActor?.send({ type: "HIDE" });
   if (win) {
     win.set_visible(false);
-    isVisible = false;
     // Clear any focused elements
     const focused = win.get_focus();
     if (focused) {
@@ -767,7 +767,7 @@ function showMenu() {
     if (win) {
       setTriggerMonitor();
       win.set_visible(true);
-      isVisible = true;
+      startMenuActor?.send({ type: "SHOW" });
       // Clear any existing focus to ensure clean state
       const currentFocus = win.get_focus();
       if (currentFocus) {
@@ -963,7 +963,7 @@ function createMenuItem(item: MenuItem): Gtk.Widget {
         $={(self: Gtk.Box) => {
           recentItemsHost = self;
           const motion = new Gtk.EventControllerMotion();
-          motion.connect("enter", clearRecentItemsCloseTimer);
+          motion.connect("enter", scheduleRecentItemsOpen);
           motion.connect("leave", scheduleRecentItemsClose);
           self.add_controller(motion);
         }}
@@ -1199,42 +1199,23 @@ function createUserProfile(): Gtk.Box {
 }
 
 function executeMenuCommand(itemId: string) {
-  if (itemId === "recent-items") {
-    showRecentItemsMenu();
-    return;
-  }
-
-  if (itemId === "force-quit") {
-    // Dismiss the menu before opening a competing exclusive surface.
-    hideMenu();
-    openUtility("force-quit");
-    return;
-  }
-
-  if (itemId === "about-this-pc") {
-    hideMenu();
-    openUtility("about-this-pc");
-    return;
-  }
-
-  const command = menuCommands[itemId];
-  if (!command) {
-    console.error(`No command found for ${itemId}`);
-    hideMenu();
-    return;
-  }
-
-  const hidesBeforeDispatch = sessionActionIds.has(itemId);
-  if (hidesBeforeDispatch) hideMenu();
-
-  try {
-    // Use sh -c to properly handle complex commands with pipes and arguments
-    GLib.spawn_command_line_async(`sh -c '${command}'`);
-  } catch (e) {
-    console.error(`Failed to execute command for ${itemId}:`, e);
-  }
-
-  if (hidesBeforeDispatch === false) hideMenu();
+  dispatchStartMenuAction(itemId, {
+    commands: menuCommands,
+    sessionActionIds,
+    hideMenu,
+    showRecentItemsMenu,
+    openUtility,
+    runCommand(command) {
+      // Use sh -c to properly handle complex commands with pipes and arguments.
+      GLib.spawn_command_line_async(`sh -c '${command}'`);
+    },
+    reportMissingCommand(id) {
+      console.error(`No command found for ${id}`);
+    },
+    reportCommandError(id, error) {
+      console.error(`Failed to execute command for ${id}:`, error);
+    },
+  });
 }
 
 function updateMenuItems() {
@@ -1289,7 +1270,7 @@ function handleKeyboardNavigation(keyval: number): boolean {
   );
 
   if (
-    recentItemsVisible &&
+    recentItemsAreVisible() &&
     (keyval === Gdk.KEY_Escape || keyval === Gdk.KEY_Left)
   ) {
     hideRecentItemsMenu();
@@ -1297,7 +1278,7 @@ function handleKeyboardNavigation(keyval: number): boolean {
     return true;
   }
 
-  if (recentItemsVisible && recentItemIndex >= 0) {
+  if (recentItemsAreVisible() && recentItemIndex >= 0) {
     if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_Tab) {
       const nextIndex = (recentItemIndex + 1) % recentItemButtons.length;
       recentItemButtons[nextIndex]?.grab_focus();
@@ -1366,7 +1347,7 @@ function handleKeyboardNavigation(keyval: number): boolean {
 
 // Handle clicks outside the menu to close it
 function handleOutsideClick(x: number, y: number): void {
-  if (!isVisible || !win) return;
+  if (!menuIsVisible() || !win) return;
 
   const target = win.pick(x, y, Gtk.PickFlags.DEFAULT);
   if (
@@ -1376,7 +1357,7 @@ function handleOutsideClick(x: number, y: number): void {
     return;
   }
   if (
-    recentItemsVisible &&
+    recentItemsAreVisible() &&
     recentItemsHost &&
     (target === recentItemsHost ||
       target?.is_ancestor(recentItemsHost) === true)
@@ -1793,8 +1774,26 @@ function applyStaticCSS() {
 
 // Functions for bundled mode (using global namespace pattern)
 function initStartMenu() {
+  if (startMenuActor === null) {
+    startMenuActor = createActor(startMenuMachine);
+    startMenuSubscription = startMenuActor.subscribe((snapshot) => {
+      const shouldRenderRecentItems =
+        snapshot.matches({ visible: "recentOpen" }) ||
+        snapshot.matches({ visible: "recentClosing" });
+      if (shouldRenderRecentItems && recentItemsRendered === false) {
+        renderRecentItemsMenu();
+        return;
+      }
+      if (shouldRenderRecentItems === false && recentItemsRendered) {
+        concealRecentItemsMenu();
+      }
+    });
+    startMenuActor.start();
+    app.connect("shutdown", teardownStartMenu);
+  }
+
   applyStaticCSS();
-  startRecentApplicationFocusHistory();
+  stopRecentApplicationFocusHistory ??= startRecentApplicationFocusHistory();
   // Generate circular avatar from .face file
   const scriptPath = `${GLib.get_home_dir()}/.config/ags/scripts/generate-circular-avatar.sh`;
   if (GLib.file_test(scriptPath, GLib.FileTest.EXISTS)) {
@@ -1827,7 +1826,7 @@ function handleStartMenuRequest(
     if (!data) return;
 
     if (data.action === "is-visible") {
-      res(isVisible ? "true" : "false");
+      res(menuIsVisible() ? "true" : "false");
       return;
     }
 
@@ -1845,7 +1844,7 @@ function handleStartMenuRequest(
       }
 
       if (data.action === "toggle") {
-        if (isVisible) {
+        if (menuIsVisible()) {
           hideMenu();
           res("hidden");
         } else {
@@ -1856,7 +1855,7 @@ function handleStartMenuRequest(
       }
 
       if (data.action === "refresh") {
-        const reopenRecentItems = recentItemsVisible;
+        const reopenRecentItems = recentItemsAreVisible();
         refreshCacheData(false);
         recentDocuments = getRecentDocuments();
         if (menuBox) updateMenuItems();
