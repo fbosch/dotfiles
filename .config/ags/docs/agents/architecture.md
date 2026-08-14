@@ -9,7 +9,7 @@ Shell components (in `components/`):
 
 - `components/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
 - `components/keyboard-switcher/` - Keyboard layout switcher overlay
-- `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
+- `components/volume-indicator/` - Volume change indicator with automatic monitoring
 - `components/start-menu/index.tsx` - System start menu with update badges
 - `components/start-menu/recent-items-menu.tsx` - Display-only Recent Items submenu
 - `components/window-switcher/` - Alt+Tab window switcher with previews and session state

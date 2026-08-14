@@ -19,7 +19,7 @@ declare global {
 }
 
 import "./components/confirm-dialog.tsx";
-import "./components/volume-indicator.tsx";
+import "./components/volume-indicator/index.tsx";
 import "./components/keyboard-switcher/index.tsx";
 import "./components/start-menu/index.tsx";
 import "./components/window-switcher/index.tsx";

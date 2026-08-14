@@ -25,6 +25,11 @@ describe("keyboard switcher model", () => {
 	});
 
 	test("supports geometry for every configured layout", () => {
+		expect(layoutGeometry("sm", 2)).toEqual({
+			innerWidth: 148,
+			containerWidth: 156,
+			offsets: [0, 78],
+		});
 		expect(layoutGeometry("sm", 3)).toEqual({
 			innerWidth: 222,
 			containerWidth: 230,
