@@ -213,6 +213,34 @@ test("Window Switcher refreshes previews without rebuilding buttons", () => {
 	});
 });
 
+test("Window Switcher reorders existing buttons with current click indices", () => {
+	createRoot((dispose) => {
+		const selections: number[] = [];
+		const previews = new PreviewCache(() => {});
+		const view = new WindowSwitcherView(previews, {
+			onSelect: (index) => selections.push(index),
+			onCommit: () => {},
+		});
+		const window = view.create();
+		view.render({ windows, currentIndex: 0 }, DisplayMode.ICONS);
+		const before = collectButtons(window);
+		const reordered = [windows[2], windows[0], windows[1]];
+
+		view.render({ windows: reordered, currentIndex: 0 }, DisplayMode.ICONS);
+		const after = collectButtons(window);
+
+		assert(
+			before.every((button) => after.includes(button)),
+			"recency reorder rebuilt a button",
+		);
+		for (const button of after) button.emit("clicked");
+		assert(selections.join(",") === "0,1,2", "reordered click indices were stale");
+		view.dispose();
+		previews.dispose();
+		dispose();
+	});
+});
+
 test("Window Switcher modifier watcher owns and removes its timer", async () => {
 	const releases: string[] = [];
 	let screenshots = 0;

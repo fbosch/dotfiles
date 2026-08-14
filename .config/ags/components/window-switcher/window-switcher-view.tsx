@@ -42,6 +42,7 @@ export class WindowSwitcherView {
 	#container: Gtk.Box | null = null;
 	#selectedLabel: Gtk.Label | null = null;
 	#buttons = new Map<string, Gtk.Button>();
+	#indices = new Map<string, number>();
 	#iconTheme: Gtk.IconTheme | null = null;
 	#previousAddresses: string[] = [];
 	#previousMode: DisplayMode | null = null;
@@ -133,8 +134,17 @@ export class WindowSwitcherView {
 
 		try {
 			const addresses = session.windows.map((window) => window.address);
-			const rebuild = this.#shouldRebuild(addresses, mode);
-			if (rebuild) this.#rebuild(session, mode, addresses);
+			this.#indices.clear();
+			session.windows.forEach((window, index) =>
+				this.#indices.set(window.address, index),
+			);
+			if (
+				this.#previousMode !== mode ||
+				this.#hasSameWindowSet(addresses) === false
+			)
+				this.#rebuild(session, mode, addresses);
+			else if (this.#hasSameWindowOrder(addresses) === false)
+				this.#reorder(session, mode, addresses);
 			else this.#updateSelection(session);
 			this.#selectedLabel.set_label(
 				session.windows[session.currentIndex]?.title ?? "",
@@ -151,6 +161,7 @@ export class WindowSwitcherView {
 	reset(): void {
 		this.#previousAddresses = [];
 		this.#buttons.clear();
+		this.#indices.clear();
 		this.#previewWidgets.clear();
 	}
 
@@ -196,28 +207,25 @@ export class WindowSwitcherView {
 		this.#previousMode = null;
 		this.#previewWidgets.clear();
 		this.#buttons.clear();
+		this.#indices.clear();
 	}
 
-	#shouldRebuild(
-		addresses: string[],
-		mode: DisplayMode,
-	): boolean {
-		const listChanged =
-			this.#previousAddresses.length !== addresses.length ||
-			this.#previousAddresses.some(
-				(address, index) => address !== addresses[index],
-			);
-		return listChanged || this.#previousMode !== mode;
+	#hasSameWindowSet(addresses: string[]): boolean {
+		if (this.#previousAddresses.length !== addresses.length) return false;
+		const previous = new Set(this.#previousAddresses);
+		return addresses.every((address) => previous.has(address));
+	}
+
+	#hasSameWindowOrder(addresses: string[]): boolean {
+		return this.#previousAddresses.every(
+			(address, index) => address === addresses[index],
+		);
 	}
 
 	#rebuild(session: Session, mode: DisplayMode, addresses: string[]): void {
 		this.#renderDispose?.();
 		this.#renderDispose = null;
-		let child = this.#container?.get_first_child() ?? null;
-		while (child && this.#container) {
-			this.#container.remove(child);
-			child = this.#container.get_first_child();
-		}
+		this.#clearContainer();
 		this.#buttons.clear();
 		this.#previewWidgets.clear();
 		const previews = new Map<string, ResolvedPreview>();
@@ -227,11 +235,42 @@ export class WindowSwitcherView {
 			previews.set(window.address, preview);
 			return preview.info.width + buttonPadding * 2 + 4 + 48;
 		});
+		const rows = this.#layoutRows(session.windows, widths);
+		createRoot((dispose) => {
+			this.#renderDispose = dispose;
+			for (const row of rows) this.#appendRow(row, session, mode, previews);
+		});
+		this.#previousAddresses = addresses;
+		this.#previousMode = mode;
+	}
+
+	#reorder(session: Session, mode: DisplayMode, addresses: string[]): void {
+		const widths = session.windows.map((window) => {
+			if (mode === DisplayMode.ICONS) return iconButtonWidth;
+			const widgets = this.#previewWidgets.get(window.address);
+			if (!widgets) throw new Error(`Missing preview widgets for ${window.address}`);
+			widgets.title.set_label(
+				truncateWindowTitle(window.title, widgets.body.widthRequest - 52),
+			);
+			return widgets.body.widthRequest + buttonPadding * 2 + 4 + 48;
+		});
+		const rows = this.#layoutRows(session.windows, widths);
+		for (const button of this.#buttons.values()) {
+			const parent = button.get_parent();
+			if (parent instanceof Gtk.Box) parent.remove(button);
+		}
+		this.#clearContainer();
+		for (const windows of rows) this.#appendExistingRow(windows);
+		this.#previousAddresses = addresses;
+		this.#updateSelection(session);
+	}
+
+	#layoutRows(windows: WindowInfo[], widths: number[]): WindowInfo[][] {
 		const monitorWidth = getMonitorWidth();
 		const maxWidth = Math.floor(monitorWidth * 0.75);
 		const totalWidth =
 			widths.reduce((sum, width) => sum + width, 0) +
-			(session.windows.length - 1) * buttonSpacing;
+			(windows.length - 1) * buttonSpacing;
 		debugWriteFile(
 			windowSwitcherDebugPath,
 			`[Window Switcher Debug - ${new Date().toISOString()}]\nMonitor: ${monitorWidth}px\nMax width (75% of monitor): ${maxWidth}px\nButton widths: [${widths.join(", ")}]\nTotal width needed: ${totalWidth}px\nWill wrap: ${totalWidth > maxWidth}\n`,
@@ -242,15 +281,18 @@ export class WindowSwitcherView {
 		);
 		const rows =
 			totalWidth > maxWidth
-				? splitWindowRows(session.windows, widths, maxWidth)
-				: [session.windows];
+				? splitWindowRows(windows, widths, maxWidth)
+				: [windows];
 		debugLog(`Using ${rows.length > 1 ? "multi" : "single"}-row layout`);
-		createRoot((dispose) => {
-			this.#renderDispose = dispose;
-			for (const row of rows) this.#appendRow(row, session, mode, previews);
-		});
-		this.#previousAddresses = addresses;
-		this.#previousMode = mode;
+		return rows;
+	}
+
+	#clearContainer(): void {
+		let child = this.#container?.get_first_child() ?? null;
+		while (child && this.#container) {
+			this.#container.remove(child);
+			child = this.#container.get_first_child();
+		}
 	}
 
 	#appendRow(
@@ -270,7 +312,6 @@ export class WindowSwitcherView {
 			const button = this.#createButton(
 				window,
 				index === session.currentIndex,
-				index,
 				mode,
 				previews.get(window.address),
 			);
@@ -280,10 +321,24 @@ export class WindowSwitcherView {
 		this.#container?.append(row);
 	}
 
+	#appendExistingRow(windows: WindowInfo[]): void {
+		const row = new Gtk.Box({
+			orientation: Gtk.Orientation.HORIZONTAL,
+			spacing: buttonSpacing,
+			halign: Gtk.Align.CENTER,
+		});
+		row.add_css_class("apps-row");
+		for (const window of windows) {
+			const button = this.#buttons.get(window.address);
+			if (!button) throw new Error(`Missing button for ${window.address}`);
+			row.append(button);
+		}
+		this.#container?.append(row);
+	}
+
 	#createButton(
 		window: WindowInfo,
 		selected: boolean,
-		index: number,
 		mode: DisplayMode,
 		preview: ResolvedPreview | undefined,
 	): Gtk.Button {
@@ -304,6 +359,8 @@ export class WindowSwitcherView {
 					canFocus={false}
 					class={`app-button ${selected ? "selected" : ""}`}
 					onClicked={() => {
+						const index = this.#indices.get(window.address);
+						if (index === undefined) return;
 						this.options.onSelect(index);
 						this.options.onCommit();
 					}}
