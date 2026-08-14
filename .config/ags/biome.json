@@ -31,22 +31,6 @@
   },
   "overrides": [
     {
-      "includes": ["components/start-menu/index.tsx"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noExcessiveLinesPerFile": {
-              "level": "error",
-              "options": {
-                "maxLines": 1900,
-                "skipBlankLines": true
-              }
-            }
-          }
-        }
-      }
-    },
-    {
       "includes": ["components/audio-mixer-widget.tsx"],
       "linter": {
         "rules": {
