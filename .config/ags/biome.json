@@ -47,22 +47,6 @@
       }
     },
     {
-      "includes": ["components/window-switcher/index.tsx"],
-      "linter": {
-        "rules": {
-          "style": {
-            "noExcessiveLinesPerFile": {
-              "level": "error",
-              "options": {
-                "maxLines": 1700,
-                "skipBlankLines": true
-              }
-            }
-          }
-        }
-      }
-    },
-    {
       "includes": ["components/audio-mixer-widget.tsx"],
       "linter": {
         "rules": {
