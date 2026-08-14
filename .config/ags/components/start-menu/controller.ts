@@ -21,7 +21,6 @@ import {
 	clearRecentDocuments,
 	getRecentDocuments,
 	openRecentDocument,
-	type RecentDocument,
 } from "../../services/recent-documents";
 import { openUtility } from "../../services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
@@ -48,7 +47,6 @@ export class StartMenuController {
 	#unsubscribeProfile: (() => void) | null = null;
 	#stopRecentFocusHistory: (() => void) | null = null;
 	#profileState: ProfileState | null = getProfileState();
-	#recentDocuments: RecentDocument[] = [];
 	#updates: UpdatesSnapshot = emptyUpdates;
 	#cache = new UpdatesCache();
 	#commands = createMenuCommands();
@@ -77,7 +75,7 @@ export class StartMenuController {
 		},
 		onClearRecentItems: () => {
 			clearRecentApplicationFocusHistory();
-			if (clearRecentDocuments()) this.#recentDocuments = [];
+			clearRecentDocuments();
 			this.#view.renderRecentItems();
 		},
 		isMenuVisible: () => this.isVisible(),
@@ -132,10 +130,9 @@ export class StartMenuController {
 		let ok = true;
 		let error: string | undefined;
 		try {
-			this.#refreshCacheData(false);
-			this.#recentDocuments = getRecentDocuments();
-			if (this.#view.isCreated) this.#view.render();
-			else this.#view.create();
+			const updatesChanged = this.#refreshCacheData(false);
+			if (this.#view.isCreated === false) this.#view.create();
+			else if (updatesChanged) this.#view.updateUpdates(this.#updates);
 			this.#view.show();
 			this.#showWaybar();
 			this.actor.send({ type: "SHOW" });
@@ -163,11 +160,8 @@ export class StartMenuController {
 	}
 
 	refresh(): void {
-		const reopenRecentItems = this.#recentItemsAreVisible();
-		this.#refreshCacheData(false);
-		this.#recentDocuments = getRecentDocuments();
-		if (this.#view.isCreated) this.#view.render();
-		if (reopenRecentItems) this.#actor?.send({ type: "RECENT_OPEN_NOW" });
+		this.#refreshCacheData();
+		if (this.#recentItemsAreVisible()) this.#view.renderRecentItems();
 	}
 
 	get actor(): StartMenuActor {
@@ -182,6 +176,7 @@ export class StartMenuController {
 	#recentItemsModel(): RecentItemsMenuModel {
 		const display = Gdk.Display.get_default();
 		const iconTheme = display ? Gtk.IconTheme.get_for_display(display) : null;
+		const recentDocuments = getRecentDocuments();
 		return {
 			applications: getRecentApplications(8, iconTheme).map((application) => ({
 				id: application.desktopId,
@@ -189,7 +184,7 @@ export class StartMenuController {
 				icon: application.icon,
 				fallbackLetter: getFallbackLetter({ class: application.name }),
 			})),
-			documents: this.#recentDocuments.map((document) => ({
+			documents: recentDocuments.map((document) => ({
 				id: document.uri,
 				label: document.name,
 				detail: document.detail,
@@ -214,9 +209,13 @@ export class StartMenuController {
 		});
 	}
 
-	#refreshCacheData(updateVisibleMenu = true): void {
-		this.#updates = this.#cache.load();
-		if (updateVisibleMenu && this.#view.isCreated) this.#view.render();
+	#refreshCacheData(updateVisibleMenu = true): boolean {
+		const updates = this.#cache.load();
+		const changed = JSON.stringify(updates) !== JSON.stringify(this.#updates);
+		this.#updates = updates;
+		if (changed && updateVisibleMenu && this.#view.isCreated)
+			this.#view.updateUpdates(updates);
+		return changed;
 	}
 
 	#startProfileSubscription(): void {

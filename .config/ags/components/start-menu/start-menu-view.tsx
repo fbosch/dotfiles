@@ -53,6 +53,9 @@ export class StartMenuView {
 	#windowDispose: (() => void) | null = null;
 	#menuRenderDispose: (() => void) | null = null;
 	#recentRenderDispose: (() => void) | null = null;
+	#updatesRenderDispose: (() => void) | null = null;
+	#updatesBadgeHost: Gtk.Box | null = null;
+	#updatesButton: Gtk.Button | null = null;
 	#menuItemButtons = new Map<string, Gtk.Button>();
 	#recentItemButtons: Gtk.Button[] = [];
 	#profileControls: ProfileControls;
@@ -150,11 +153,15 @@ export class StartMenuView {
 	render(): void {
 		if (!this.#menuBox) return;
 		this.actions.onRecentCloseNow();
+		this.#updatesRenderDispose?.();
+		this.#updatesRenderDispose = null;
 		this.#menuRenderDispose?.();
 		this.#menuRenderDispose = null;
 		clearChildren(this.#menuBox);
 		this.#menuItemButtons.clear();
 		this.#recentItemsHost = null;
+		this.#updatesBadgeHost = null;
+		this.#updatesButton = null;
 		createRoot((dispose) => {
 			this.#menuRenderDispose = dispose;
 			this.#menuBox?.append(createUserProfile());
@@ -168,10 +175,33 @@ export class StartMenuView {
 				else this.#menuBox?.append(this.#createMenuItem(item));
 			}
 		});
+		this.updateUpdates(this.actions.getModel().updates);
 	}
 
 	updateProfile(state: ProfileState | null): void {
 		this.#profileControls.update(state);
+	}
+
+	updateUpdates(updates: UpdatesSnapshot): void {
+		if (!this.#updatesBadgeHost || !this.#updatesButton) return;
+		this.#updatesRenderDispose?.();
+		this.#updatesRenderDispose = null;
+		clearChildren(this.#updatesBadgeHost);
+		const tooltip = updatesTooltip(updates);
+		this.#updatesButton.set_tooltip_text(tooltip || null);
+		const { flake, flatpak } = updates;
+		const badges: Gtk.Widget[] = [];
+		createRoot((dispose) => {
+			this.#updatesRenderDispose = dispose;
+			if (flake && flake.count > 0)
+				badges.push(
+					updateBadge("\uE843", flake.count, "updates-badge-nix-icon") as Gtk.Widget,
+				);
+			if (flatpak && flatpak.count > 0)
+				badges.push(updateBadge("\uF1B2", flatpak.count) as Gtk.Widget);
+			for (const badge of badges) this.#updatesBadgeHost?.append(badge);
+		});
+		this.#updatesBadgeHost.set_visible(badges.length > 0);
 	}
 
 	renderRecentItems(): void {
@@ -209,22 +239,24 @@ export class StartMenuView {
 
 	dispose(): void {
 		this.#recentRenderDispose?.();
+		this.#updatesRenderDispose?.();
 		this.#menuRenderDispose?.();
 		this.#windowDispose?.();
 		this.#recentRenderDispose = null;
+		this.#updatesRenderDispose = null;
 		this.#menuRenderDispose = null;
 		this.#windowDispose = null;
 		this.#win = null;
 		this.#menuBox = null;
 		this.#recentItemsHost = null;
+		this.#updatesBadgeHost = null;
+		this.#updatesButton = null;
 		this.#menuItemButtons.clear();
 		this.#recentItemButtons.length = 0;
 		this.#recentItemsRendered = false;
 	}
 
 	#createMenuItem(item: MenuItem): Gtk.Widget {
-		const badges =
-			item.id === "system-updates" ? this.#createUpdateBadges() : null;
 		const button = (
 			<button
 				canFocus={true}
@@ -240,8 +272,7 @@ export class StartMenuView {
 						self.add_controller(motion);
 					}
 					if (item.id === "system-updates") {
-						const tooltip = updatesTooltip(this.actions.getModel().updates);
-						if (tooltip) self.set_tooltip_text(tooltip);
+						this.#updatesButton = self;
 					}
 				}}
 			>
@@ -258,7 +289,19 @@ export class StartMenuView {
 						hexpand={true}
 						class="menu-item-label"
 					/>
-					{badges}
+					{item.id === "system-updates" ? (
+						<box
+							orientation={Gtk.Orientation.HORIZONTAL}
+							spacing={4}
+							halign={Gtk.Align.END}
+							valign={Gtk.Align.CENTER}
+							visible={false}
+							class="updates-badges"
+							$={(host: Gtk.Box) => {
+								this.#updatesBadgeHost = host;
+							}}
+						/>
+					) : null}
 					{item.id === "recent-items" ? (
 						<label label={"\uE76C"} class="menu-item-chevron" />
 					) : null}
@@ -286,27 +329,6 @@ export class StartMenuView {
 				/>
 			</overlay>
 		) as Gtk.Overlay;
-	}
-
-	#createUpdateBadges(): JSX.Element | null {
-		const { flake, flatpak } = this.actions.getModel().updates;
-		const badges: JSX.Element[] = [];
-		if (flake && flake.count > 0)
-			badges.push(updateBadge("\uE843", flake.count, "updates-badge-nix-icon"));
-		if (flatpak && flatpak.count > 0)
-			badges.push(updateBadge("\uF1B2", flatpak.count));
-		if (badges.length === 0) return null;
-		return (
-			<box
-				orientation={Gtk.Orientation.HORIZONTAL}
-				spacing={4}
-				halign={Gtk.Align.END}
-				valign={Gtk.Align.CENTER}
-				class="updates-badges"
-			>
-				{badges}
-			</box>
-		);
 	}
 
 	#positionRecentItems(): void {

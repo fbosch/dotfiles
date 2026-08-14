@@ -124,6 +124,15 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 	view.create();
 	assert(view.isCreated, "view was not created");
 	view.updateProfile(profileState);
+	view.updateUpdates({ flake: null, flatpak: null });
+	view.updateUpdates({
+		flake: null,
+		flatpak: {
+			count: 2,
+			updates: [],
+			timestamp: new Date().toISOString(),
+		},
+	});
 	view.renderRecentItems();
 	assert(view.recentItemsRendered, "recent items were not rendered");
 	view.concealRecentItems();
