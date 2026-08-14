@@ -14,6 +14,10 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 - Use XState v5 for temporal component orchestration, not as a universal store.
   Keep GTK/Gio/GLib resources outside machine context and clean them up through
   a feature-local controller.
+- Treat component request payloads as untrusted input. Define a reusable
+  `ts-pattern` runtime pattern, derive its closed request union with `P.infer`,
+  and dispatch with `match(...).exhaustive()` instead of switching on optional
+  string actions with a catch-all default.
 - Keep styling inline through AGS CSS APIs (`app.start({ css: ... })` / `app.apply_css()`), not external theme files.
 - For AGS surfaces that mirror `design-system/src/components/`, match the component source as the visual contract; do not depend on Storybook stories at runtime.
 - Compose surfaces from existing atomic components when their semantics and interaction model fit. Prefer expanding shared primitives for recurring behavior over duplicating GTK construction and styling; use native widgets for distinct custom controls.

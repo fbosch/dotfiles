@@ -41,7 +41,7 @@ export class WindowSwitcherController {
 		isVisible: () => this.isVisible(),
 		getTriggerModifier: () => this.session.triggerModifier,
 		onRelease: (source) => this.#commitFromModifierRelease(source),
-		onScreenshot: () => this.takeScreenshot(),
+		onScreenshot: () => this.#takeScreenshot(),
 	});
 
 	init(): void {

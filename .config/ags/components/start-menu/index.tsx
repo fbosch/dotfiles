@@ -21,6 +21,7 @@ import {
   type ProfileSelection,
   type ProfileState,
 } from "../../services/profile-state";
+import { getPointerMonitor } from "../../services/pointer-monitor";
 import {
   clearRecentApplicationFocusHistory,
   getRecentApplications,
@@ -731,16 +732,8 @@ function setTriggerMonitor(): void {
   if (!win) return;
 
   try {
-    const display = Gdk.Display.get_default();
-    const seat = display?.get_default_seat();
-    const pointer = seat?.get_pointer() as unknown as {
-      get_position?: () => [unknown, number, number];
-    } | null;
-    if (!display || !pointer?.get_position) return;
-
-    const [, x, y] = pointer.get_position();
-    const monitor = display.get_monitor_at_point(x, y);
-    if (monitor) win.set_gdkmonitor(monitor);
+    const pointerMonitor = getPointerMonitor();
+    if (pointerMonitor) win.set_gdkmonitor(pointerMonitor.monitor);
   } catch (e) {
     console.error("Failed to resolve Start Menu trigger monitor:", e);
   }

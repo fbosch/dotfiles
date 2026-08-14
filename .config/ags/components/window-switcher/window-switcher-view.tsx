@@ -8,6 +8,7 @@ import {
 	setImageFile,
 } from "../../services/app-icons";
 import { perf } from "../../services/performance-monitor";
+import { getPointerMonitor } from "../../services/pointer-monitor";
 import {
 	debugLog,
 	debugWriteFile,
@@ -435,18 +436,12 @@ function splitRows(
 
 function getMonitorWidth(): number {
 	try {
-		const display = Gdk.Display.get_default();
-		const seat = display?.get_default_seat();
-		const pointer = seat?.get_pointer() as unknown as {
-			get_position?: () => [unknown, number, number];
-		} | null;
-		if (!display || !pointer?.get_position) return 1920;
-		const [, x, y] = pointer.get_position();
-		const monitor = display.get_monitor_at_point(x, y);
-		if (!monitor) {
-			debugWriteFile(monitorDebugPath, `No monitor at point ${x},${y}\n`);
+		const pointerMonitor = getPointerMonitor();
+		if (!pointerMonitor) {
+			debugWriteFile(monitorDebugPath, "No monitor at pointer\n");
 			return 1920;
 		}
+		const { monitor, x, y } = pointerMonitor;
 		const geometry = monitor.get_geometry();
 		debugWriteFile(
 			monitorDebugPath,

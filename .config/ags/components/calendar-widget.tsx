@@ -4,13 +4,26 @@ import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { isMatching, match, P } from "ts-pattern";
 import tokens from "../../../design-system/tokens.json";
 import { bindGamingOpacity } from "../services/gaming-opacity";
 import { perf } from "../services/performance-monitor";
+import { getPointerMonitor } from "../services/pointer-monitor";
 import { parseComponentRequest } from "../services/request";
 
 type WeekStart = 0 | 1;
 type BackendStatus = "ready" | "loading" | "unavailable" | "error";
+
+const calendarRequestPattern = P.union(
+  { action: "show" },
+  { action: "hide" },
+  { action: "toggle" },
+  { action: "is-visible" },
+  { action: "next-month" },
+  { action: "prev-month" },
+  { action: "today" },
+  { action: "select-date", date: P.optional(P.string) },
+);
 
 interface CalendarEventPreview {
   id: string;
@@ -995,17 +1008,9 @@ function setTriggerMonitor(): void {
   if (!win) return;
 
   try {
-    const display = Gdk.Display.get_default();
-    const seat = display?.get_default_seat();
-    const pointer = seat?.get_pointer() as unknown as {
-      get_position?: () => [unknown, number, number];
-    } | null;
-    if (!display || !pointer?.get_position) return;
-
-    const [, x, y] = pointer.get_position();
-    const monitor = display.get_monitor_at_point(x, y);
-    if (monitor) {
-      win.set_gdkmonitor(monitor);
+    const pointerMonitor = getPointerMonitor();
+    if (pointerMonitor) {
+      win.set_gdkmonitor(pointerMonitor.monitor);
     }
   } catch (e) {
     console.error("Failed to resolve calendar trigger monitor:", e);
@@ -1326,42 +1331,46 @@ function handleCalendarWidgetRequest(argv: string[], res: (response: string) => 
     );
     if (!data) return;
 
-    switch (data.action) {
-      case "show":
-        showCalendar();
-        res("shown");
-        return;
-      case "hide":
-        hideCalendar();
-        res("hidden");
-        return;
-      case "toggle":
-        toggleCalendar();
-        res(isVisible ? "shown" : "hidden");
-        return;
-      case "is-visible":
-        res(isVisible ? "true" : "false");
-        return;
-      case "next-month":
-        nextMonth();
-        res("ok");
-        return;
-      case "prev-month":
-        previousMonth();
-        res("ok");
-        return;
-      case "today":
-        goToday();
-        res("ok");
-        return;
-      case "select-date":
-        selectDate(data.date);
-        res("ok");
-        return;
-      default:
-        res("unknown action");
-        return;
+    const request: unknown = data;
+    if (isMatching(calendarRequestPattern, request) === false) {
+      res("unknown action");
+      return;
     }
+
+    const response = match(request)
+      .returnType<string>()
+      .with({ action: "show" }, () => {
+        showCalendar();
+        return "shown";
+      })
+      .with({ action: "hide" }, () => {
+        hideCalendar();
+        return "hidden";
+      })
+      .with({ action: "toggle" }, () => {
+        toggleCalendar();
+        return isVisible ? "shown" : "hidden";
+      })
+      .with({ action: "is-visible" }, () => (isVisible ? "true" : "false"))
+      .with({ action: "next-month" }, () => {
+        nextMonth();
+        return "ok";
+      })
+      .with({ action: "prev-month" }, () => {
+        previousMonth();
+        return "ok";
+      })
+      .with({ action: "today" }, () => {
+        goToday();
+        return "ok";
+      })
+      .with({ action: "select-date" }, ({ date }) => {
+        selectDate(date);
+        return "ok";
+      })
+      .exhaustive();
+
+    res(response);
   } catch (e) {
     ok = false;
     error = String(e);
