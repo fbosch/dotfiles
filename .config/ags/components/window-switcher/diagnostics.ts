@@ -23,5 +23,5 @@ export function debugWriteFile(path: string, contents: string): void {
 }
 
 export function writeBindDiagnostic(message: string): void {
-	GLib.file_set_contents(bindDiagnosticPath, `[WS-AGS-7f42] ${message}\n`);
+	debugWriteFile(bindDiagnosticPath, `[WS-AGS-7f42] ${message}\n`);
 }
