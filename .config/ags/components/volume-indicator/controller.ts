@@ -55,10 +55,6 @@ export class VolumeIndicatorController {
 			this.#subscription = this.#actor.subscribe((snapshot) => {
 				if (this.#suppressViewSync) return;
 				try {
-					if (snapshot.matches("hiding")) {
-						this.#view.beginHide();
-						return;
-					}
 					if (snapshot.matches("hidden")) this.#view.hide();
 				} catch (error) {
 					console.error("Failed to update Volume Indicator view:", error);
@@ -121,7 +117,7 @@ export class VolumeIndicatorController {
 		if (!this.#actor || this.#actor.getSnapshot().matches("visible") === false)
 			return;
 		this.#sendWithoutViewSync({ type: "HIDE" });
-		this.#view.beginHide();
+		this.#view.hide();
 	}
 
 	isVisible(): boolean {

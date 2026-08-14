@@ -9,7 +9,6 @@ export const volumeIndicatorMachine = setup({
 	},
 	delays: {
 		displayDuration: 1500,
-		fadeOutDuration: 60,
 	},
 }).createMachine({
 	id: "volume-indicator",
@@ -18,18 +17,10 @@ export const volumeIndicatorMachine = setup({
 		hidden: { on: { SHOW: "visible" } },
 		visible: {
 			tags: ["indicator-visible"],
-			after: { displayDuration: "hiding" },
+			after: { displayDuration: "hidden" },
 			on: {
 				SHOW: { target: "visible", reenter: true },
-				HIDE: "hiding",
-				FAIL: "hidden",
-			},
-		},
-		hiding: {
-			tags: ["indicator-visible"],
-			after: { fadeOutDuration: "hidden" },
-			on: {
-				SHOW: "visible",
+				HIDE: "hidden",
 				FAIL: "hidden",
 			},
 		},

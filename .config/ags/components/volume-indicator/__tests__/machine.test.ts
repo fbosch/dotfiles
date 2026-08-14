@@ -11,13 +11,11 @@ function createTestActor() {
 }
 
 describe("volumeIndicatorMachine", () => {
-	test("shows, fades, and hides automatically", () => {
+	test("shows and hides automatically", () => {
 		const { actor, clock } = createTestActor();
 		actor.send({ type: "SHOW" });
 		expect(actor.getSnapshot().matches("visible")).toBe(true);
 		clock.increment(1500);
-		expect(actor.getSnapshot().matches("hiding")).toBe(true);
-		clock.increment(60);
 		expect(actor.getSnapshot().matches("hidden")).toBe(true);
 		actor.stop();
 	});
@@ -30,17 +28,17 @@ describe("volumeIndicatorMachine", () => {
 		clock.increment(1);
 		expect(actor.getSnapshot().matches("visible")).toBe(true);
 		clock.increment(1499);
-		expect(actor.getSnapshot().matches("hiding")).toBe(true);
+		expect(actor.getSnapshot().matches("hidden")).toBe(true);
 		actor.stop();
 	});
 
-	test("show during fade cancels the pending hide", () => {
+	test("explicit hide unmaps immediately", () => {
 		const { actor, clock } = createTestActor();
 		actor.send({ type: "SHOW" });
 		actor.send({ type: "HIDE" });
-		actor.send({ type: "SHOW" });
-		clock.increment(60);
-		expect(actor.getSnapshot().matches("visible")).toBe(true);
+		expect(actor.getSnapshot().matches("hidden")).toBe(true);
+		clock.increment(1500);
+		expect(actor.getSnapshot().matches("hidden")).toBe(true);
 		actor.stop();
 	});
 });

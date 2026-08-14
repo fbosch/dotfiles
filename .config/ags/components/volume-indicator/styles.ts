@@ -21,17 +21,6 @@ window.volume-indicator {
 }
 window.volume-indicator box.shadow-wrapper {
   padding: 40px;
-  opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 150ms cubic-bezier(0.4, 0, 0.2, 1), transform 150ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-window.volume-indicator box.shadow-wrapper.visible {
-  opacity: 1;
-  transform: scale(1);
-}
-window.volume-indicator box.shadow-wrapper.hiding {
-  opacity: 0;
-  transition: opacity 50ms cubic-bezier(0.4, 0, 1, 1);
 }
 window.volume-indicator box.indicator-container {
   background-color: ${tokens.colors.background.tertiary.value}cc;

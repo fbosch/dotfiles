@@ -42,7 +42,6 @@ test("Volume Indicator handles its complete request lifecycle", async () => {
 		createView: () =>
 			({
 				show() {},
-				beginHide() {},
 				hide() {},
 				dispose() {},
 				setPresentation(next: VolumePresentation) {
@@ -99,9 +98,6 @@ test("Volume Indicator controller drives delayed view transitions", () => {
 				show() {
 					transitions.push("show");
 				},
-				beginHide() {
-					transitions.push("begin-hide");
-				},
 				hide() {
 					transitions.push("hide");
 				},
@@ -118,9 +114,8 @@ test("Volume Indicator controller drives delayed view transitions", () => {
 	transitions.length = 0;
 	controller.show();
 	clock.increment(1500);
-	clock.increment(60);
 	assert(
-		transitions.join(",") === "show,begin-hide,hide",
+		transitions.join(",") === "show,hide",
 		`unexpected delayed lifecycle: ${transitions.join(",")}`,
 	);
 	controller.teardown();
@@ -159,7 +154,6 @@ test("Volume Indicator coalesces burst refresh continuations", async () => {
 		createView: () =>
 			({
 				show() {},
-				beginHide() {},
 				hide() {},
 				dispose() {},
 				setPresentation(presentation: VolumePresentation) {
@@ -236,7 +230,6 @@ test("Volume Indicator rejects results from a previous lifecycle", async () => {
 		createView: () =>
 			({
 				show() {},
-				beginHide() {},
 				hide() {},
 				dispose() {},
 				setPresentation(presentation: VolumePresentation) {
@@ -282,7 +275,6 @@ test("Volume Indicator view creates, renders, hides, and disposes", async () => 
 		label: "50%",
 		filledSegments: 8,
 	});
-	view.beginHide();
 	view.hide();
 	view.dispose();
 	assert(view.isCreated === false, "volume indicator view was not disposed");

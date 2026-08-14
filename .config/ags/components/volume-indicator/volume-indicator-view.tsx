@@ -1,6 +1,5 @@
 import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
-import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { bindGamingOpacity } from "../../services/gaming-opacity";
 import { totalSegments, type VolumePresentation } from "./model";
@@ -12,7 +11,6 @@ export class VolumeIndicatorView {
 	#iconLabel: Gtk.Label | null = null;
 	#volumeLabel: Gtk.Label | null = null;
 	#presentation: VolumePresentation | null = null;
-	#fadeSource = 0;
 
 	get isCreated(): boolean {
 		return this.#win !== null;
@@ -96,27 +94,11 @@ export class VolumeIndicatorView {
 
 	show(): void {
 		this.create();
-		this.#cancelFadeSource();
 		this.#win?.set_visible(true);
-		this.#shadowWrapper?.remove_css_class("hiding");
-		this.#fadeSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-			this.#fadeSource = 0;
-			this.#shadowWrapper?.add_css_class("visible");
-			return GLib.SOURCE_REMOVE;
-		});
-	}
-
-	beginHide(): void {
-		this.#cancelFadeSource();
-		this.#shadowWrapper?.remove_css_class("visible");
-		this.#shadowWrapper?.add_css_class("hiding");
 	}
 
 	hide(): void {
-		this.#cancelFadeSource();
 		this.#win?.set_visible(false);
-		this.#shadowWrapper?.remove_css_class("visible");
-		this.#shadowWrapper?.remove_css_class("hiding");
 	}
 
 	setPresentation(next: VolumePresentation): void {
@@ -153,7 +135,6 @@ export class VolumeIndicatorView {
 	}
 
 	dispose(): void {
-		this.#cancelFadeSource();
 		this.#win?.destroy();
 		this.#win = null;
 		this.#shadowWrapper = null;
@@ -173,9 +154,4 @@ export class VolumeIndicatorView {
 		else widget.remove_css_class(className);
 	}
 
-	#cancelFadeSource(): void {
-		if (this.#fadeSource === 0) return;
-		GLib.source_remove(this.#fadeSource);
-		this.#fadeSource = 0;
-	}
 }
