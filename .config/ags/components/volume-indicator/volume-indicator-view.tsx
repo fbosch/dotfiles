@@ -84,8 +84,6 @@ export class VolumeIndicatorView {
 						<label
 							label="0%"
 							class="volume-label"
-							halign={Gtk.Align.END}
-							xalign={1}
 							$={(self: Gtk.Label) => {
 								this.#volumeLabel = self;
 							}}

@@ -8,7 +8,10 @@ const minimumReadIntervalMs = 30;
 
 export class VolumeSource {
 	readonly #run: VolumeCommand;
+	readonly #useAstalWp: boolean;
 	#latest: VolumeInfo = { volume: 0, muted: false };
+	#audioPromise: Promise<any> | null = null;
+	#astalWpUnavailable = false;
 	#pending: Promise<VolumeInfo> | null = null;
 	#scheduled:
 		| {
@@ -24,6 +27,7 @@ export class VolumeSource {
 
 	constructor(run?: VolumeCommand) {
 		this.#run = run ?? ((cancellable) => this.#runWpctl(cancellable));
+		this.#useAstalWp = run === undefined;
 	}
 
 	init(): void {
@@ -32,6 +36,12 @@ export class VolumeSource {
 
 	read(): Promise<VolumeInfo> {
 		if (this.#disposed) return Promise.resolve(this.#latest);
+		if (this.#useAstalWp && this.#astalWpUnavailable === false)
+			return this.#readAstalWp();
+		return this.#readWpctl();
+	}
+
+	#readWpctl(): Promise<VolumeInfo> {
 		if (this.#pending) return this.#pending;
 		if (this.#scheduled) return this.#scheduled.promise;
 		const elapsed = Date.now() - this.#lastReadStartedAt;
@@ -58,6 +68,37 @@ export class VolumeSource {
 			},
 		);
 		return promise;
+	}
+
+	async #readAstalWp(): Promise<VolumeInfo> {
+		try {
+			this.#audioPromise ??= import("gi://AstalWp").then(({ default: AstalWp }) =>
+				AstalWp.get_default(),
+			);
+			const audio = await this.#audioPromise;
+			if (this.#disposed) return this.#latest;
+			const speaker =
+				audio?.get_default_speaker?.() ?? audio?.default_speaker ?? null;
+			if (!speaker) throw new Error("AstalWP default speaker unavailable");
+			const rawVolume = Number(
+				speaker.get_volume?.() ?? speaker.volume ?? 0,
+			);
+			this.#latest = {
+				volume: Math.round(rawVolume <= 1.5 ? rawVolume * 100 : rawVolume),
+				muted: Boolean(
+					speaker.get_mute?.() ??
+						speaker.get_muted?.() ??
+						speaker.mute ??
+						speaker.muted ??
+						false,
+				),
+			};
+			return this.#latest;
+		} catch (error) {
+			this.#astalWpUnavailable = true;
+			console.error("AstalWP volume source unavailable, using wpctl:", error);
+			return this.#readWpctl();
+		}
 	}
 
 	dispose(): void {
