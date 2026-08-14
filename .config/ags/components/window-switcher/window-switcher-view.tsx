@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import { createRoot } from "ags";
 import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
@@ -18,6 +19,7 @@ import {
 import type { WindowInfo } from "./machine";
 import { PreviewCache } from "./preview-cache";
 import { DisplayMode, ICON_SIZE } from "./styles";
+import { splitWindowRows, truncateWindowTitle } from "./view-policy";
 
 const buttonSpacing = 8;
 const buttonPadding = 8;
@@ -34,6 +36,8 @@ export class WindowSwitcherView {
 	#previousAddresses: string[] = [];
 	#previousMode: DisplayMode | null = null;
 	#previousMtimes = new Map<string, number>();
+	#windowDispose: (() => void) | null = null;
+	#renderDispose: (() => void) | null = null;
 
 	constructor(
 		private readonly previews: PreviewCache,
@@ -41,9 +45,12 @@ export class WindowSwitcherView {
 	) {}
 
 	create(): Astal.Window {
+		if (this.#window) return this.#window;
 		const display = Gdk.Display.get_default();
 		if (display) this.#iconTheme = Gtk.IconTheme.get_for_display(display);
-		this.#window = (
+		createRoot((dispose) => {
+			this.#windowDispose = dispose;
+			this.#window = (
 			<window
 				name="window-switcher"
 				namespace="ags-window-switcher"
@@ -92,7 +99,9 @@ export class WindowSwitcherView {
 					</box>
 				</box>
 			</window>
-		) as Astal.Window;
+			) as Astal.Window;
+		});
+		if (!this.#window) throw new Error("Failed to create Window Switcher view");
 		return this.#window;
 	}
 
@@ -134,6 +143,21 @@ export class WindowSwitcherView {
 		this.#buttons.clear();
 	}
 
+	dispose(): void {
+		this.#renderDispose?.();
+		this.#windowDispose?.();
+		this.#renderDispose = null;
+		this.#windowDispose = null;
+		this.#window = null;
+		this.#container = null;
+		this.#selectedLabel = null;
+		this.#iconTheme = null;
+		this.#previousAddresses = [];
+		this.#previousMode = null;
+		this.#previousMtimes.clear();
+		this.#buttons.clear();
+	}
+
 	#shouldRebuild(
 		windows: WindowInfo[],
 		addresses: string[],
@@ -153,6 +177,8 @@ export class WindowSwitcherView {
 	}
 
 	#rebuild(session: Session, mode: DisplayMode, addresses: string[]): void {
+		this.#renderDispose?.();
+		this.#renderDispose = null;
 		let child = this.#container?.get_first_child() ?? null;
 		while (child && this.#container) {
 			this.#container.remove(child);
@@ -177,10 +203,13 @@ export class WindowSwitcherView {
 		);
 		const rows =
 			totalWidth > maxWidth
-				? splitRows(session.windows, widths, maxWidth)
+				? splitWindowRows(session.windows, widths, maxWidth)
 				: [session.windows];
 		debugLog(`Using ${rows.length > 1 ? "multi" : "single"}-row layout`);
-		for (const row of rows) this.#appendRow(row, session, mode);
+		createRoot((dispose) => {
+			this.#renderDispose = dispose;
+			for (const row of rows) this.#appendRow(row, session, mode);
+		});
 		this.#previousAddresses = addresses;
 		this.#previousMode = mode;
 		this.#previousMtimes =
@@ -297,7 +326,7 @@ export class WindowSwitcherView {
 					>
 						{image}
 						<label
-							label={truncateTitle(window.title, info.width - 52)}
+							label={truncateWindowTitle(window.title, info.width - 52)}
 							xalign={0}
 							class="preview-header-title"
 							wrap={false}
@@ -402,36 +431,6 @@ export class WindowSwitcherView {
 				button.remove_css_class("selected");
 		});
 	}
-}
-
-function truncateTitle(title: string, availableWidth: number): string {
-	const maxChars = Math.floor((availableWidth - 12) / 6);
-	if (maxChars <= 0) return "…";
-	return title.length <= maxChars ? title : `${title.substring(0, maxChars)}…`;
-}
-
-function splitRows(
-	windows: WindowInfo[],
-	widths: number[],
-	maxWidth: number,
-): WindowInfo[][] {
-	const rows: WindowInfo[][] = [];
-	let row: WindowInfo[] = [];
-	let rowWidth = 0;
-	windows.forEach((window, index) => {
-		const width = widths[index];
-		const nextWidth = rowWidth > 0 ? width + buttonSpacing : width;
-		if (rowWidth + nextWidth <= maxWidth) {
-			row.push(window);
-			rowWidth += nextWidth;
-			return;
-		}
-		if (row.length > 0) rows.push(row);
-		row = [window];
-		rowWidth = width;
-	});
-	if (row.length > 0) rows.push(row);
-	return rows;
 }
 
 function getMonitorWidth(): number {

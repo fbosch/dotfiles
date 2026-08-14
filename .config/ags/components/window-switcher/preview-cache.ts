@@ -4,10 +4,10 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { perf } from "../../services/performance-monitor";
 import type { WindowInfo } from "./machine";
-
-const previewHeight = 180;
-const previewMaxWidth = 320;
-const previewMinWidth = 30;
+import {
+	fallbackPreviewDimensions,
+	scaledPreviewDimensions,
+} from "./preview-policy";
 const previewCacheDirectory = GLib.file_test("/dev/shm", GLib.FileTest.IS_DIR)
 	? "/dev/shm/hypr-window-captures"
 	: `${GLib.get_tmp_dir()}/hypr-window-captures`;
@@ -72,10 +72,9 @@ export class PreviewCache {
 	getInfo(path: string | null): PreviewInfo {
     const mark = perf.start("window-switcher", "getPreviewInfo");
     if (!path)
-      return finishPreviewInfo(mark, {
+		return finishPreviewInfo(mark, {
 				mtime: 0,
-				width: previewMinWidth,
-				height: previewHeight,
+				...fallbackPreviewDimensions,
 			});
 
 		try {
@@ -94,8 +93,7 @@ export class PreviewCache {
 			if (!success || !contents)
         return finishPreviewInfo(mark, {
 					mtime,
-					width: previewMinWidth,
-					height: previewHeight,
+					...fallbackPreviewDimensions,
 				});
 
 			const stream = Gio.MemoryInputStream.new_from_bytes(
@@ -105,11 +103,10 @@ export class PreviewCache {
 			if (!pixbuf)
         return finishPreviewInfo(mark, {
 					mtime,
-					width: previewMinWidth,
-					height: previewHeight,
+					...fallbackPreviewDimensions,
 				});
 
-			const dimensions = scaledDimensions(
+			const dimensions = scaledPreviewDimensions(
 				pixbuf.get_width(),
 				pixbuf.get_height(),
 			);
@@ -129,7 +126,7 @@ export class PreviewCache {
 		} catch (error) {
 			console.error("Failed to get preview info:", error);
 			mark.end(false, String(error));
-			return { mtime: 0, width: previewMinWidth, height: previewHeight };
+			return { mtime: 0, ...fallbackPreviewDimensions };
 		}
 	}
 
@@ -162,18 +159,4 @@ function finishPreviewInfo(
 function previewMtime(info: Gio.FileInfo): number {
 	const modified = info.get_modification_time();
 	return modified.tv_sec * 1_000_000 + modified.tv_usec;
-}
-
-function scaledDimensions(
-	imageWidth: number,
-	imageHeight: number,
-): Pick<PreviewInfo, "width" | "height"> {
-	const aspectRatio = imageWidth / imageHeight;
-	let height = previewHeight;
-	let width = Math.round(height * aspectRatio);
-	if (width > previewMaxWidth) {
-		width = previewMaxWidth;
-		height = Math.round(width / aspectRatio);
-	}
-	return { width: Math.max(previewMinWidth, width), height };
 }

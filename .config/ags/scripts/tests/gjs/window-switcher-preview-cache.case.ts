@@ -17,19 +17,27 @@ test("Window Switcher decodes and caches preview textures", () => {
   fixture.fill(0x336699ff);
   fixture.savev(fixturePath, "jpeg", [], []);
 
-  try {
-    const cache = new PreviewCache(() => {});
-    const decoded = cache.getInfo(fixturePath);
+	try {
+		const cache = new PreviewCache(() => {});
+		const fallback = cache.getInfo(null);
+		assert(fallback.width === 30 && fallback.height === 180, "fallback dimensions changed");
+		const decoded = cache.getInfo(fixturePath);
     assert(decoded.texture !== undefined, "decoded preview has no texture");
     assert(
       decoded.width > 0 && decoded.height > 0,
       "decoded preview has invalid dimensions",
     );
 
-    const cached = cache.getInfo(fixturePath);
+		const cached = cache.getInfo(fixturePath);
     assert(cached.texture !== undefined, "cached preview has no texture");
-    assert(cached === decoded, "second preview read did not use the cache");
-  } finally {
+		assert(cached === decoded, "second preview read did not use the cache");
+		assert(cache.getMtime(fixturePath) !== null, "preview mtime was unavailable");
+		assert(cache.getMtime(null) === null, "null preview had an mtime");
+		cache.startMonitoring();
+		cache.startMonitoring();
+		cache.dispose();
+		cache.dispose();
+	} finally {
     GLib.unlink(fixturePath);
   }
 });

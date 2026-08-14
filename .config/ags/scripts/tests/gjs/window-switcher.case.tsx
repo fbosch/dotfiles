@@ -1,0 +1,266 @@
+import { createRoot } from "ags";
+import GLib from "gi://GLib?version=2.0";
+import Gtk from "gi://Gtk?version=4.0";
+import type { WindowSwitcherController } from "../../../components/window-switcher/controller";
+import { WindowSwitcherController as RealWindowSwitcherController } from "../../../components/window-switcher/controller";
+import type { WindowInfo } from "../../../components/window-switcher/machine";
+import {
+	ModifierController,
+	modifierMaskFor,
+} from "../../../components/window-switcher/modifier-controller";
+import { PreviewCache } from "../../../components/window-switcher/preview-cache";
+import { createRequestHandler } from "../../../components/window-switcher/request-handler";
+import { DisplayMode } from "../../../components/window-switcher/styles";
+import {
+	SortMode,
+	WindowRepository,
+} from "../../../components/window-switcher/window-repository";
+import { WindowSwitcherView } from "../../../components/window-switcher/window-switcher-view";
+import { assert, test } from "./harness";
+
+const windows: WindowInfo[] = [
+	{ address: "0x1", class: "One", title: "Window One", workspace: "1" },
+	{ address: "0x2", class: "Two", title: "Window Two", workspace: "2" },
+	{ address: "0x3", class: "Three", title: "Window Three", workspace: "3" },
+];
+
+test("Window Switcher dispatches every request action", async () => {
+	const calls: string[] = [];
+	let displayMode = DisplayMode.PREVIEWS;
+	let sortMode = SortMode.RECENCY;
+	let visible = false;
+	const controller = {
+		show: async () => calls.push("show"),
+		next: async (modifier?: string) => calls.push(`next:${modifier ?? "ALT"}`),
+		prev: async (modifier?: string) => calls.push(`prev:${modifier ?? "ALT"}`),
+		commit: () => calls.push("commit"),
+		hide: () => calls.push("hide"),
+		setMode: (mode?: string) => `mode:${mode}`,
+		toggleMode: () => {
+			displayMode =
+				displayMode === DisplayMode.PREVIEWS
+					? DisplayMode.ICONS
+					: DisplayMode.PREVIEWS;
+		},
+		setSortMode: async (mode?: string) => {
+			sortMode = mode === "alphabetical" ? SortMode.ALPHABETICAL : SortMode.RECENCY;
+			return `sort:${mode}`;
+		},
+		get displayMode() {
+			return displayMode;
+		},
+		get sortMode() {
+			return sortMode;
+		},
+		isVisible: () => visible,
+	} as unknown as WindowSwitcherController;
+	const handleRequest = createRequestHandler(controller);
+
+	assert((await request(handleRequest, [])) === "ready", "empty request failed");
+	assert(
+		(await request(handleRequest, ["not-json"])).startsWith("error:"),
+		"invalid JSON did not fail",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "missing" })])) ===
+			"unknown action",
+		"unknown action failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "show" })])) === "shown",
+		"show failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "next", triggerModifier: "SUPER" })])) ===
+			"cycled next",
+		"next failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "prev" })])) ===
+			"cycled prev",
+		"previous failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "commit" })])) ===
+			"committed",
+		"commit failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "hide" })])) === "hidden",
+		"hide failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "set-mode", mode: "icons" })])) ===
+			"mode:icons",
+		"set mode failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "toggle-mode" })])) ===
+			"mode toggled to ICONS",
+		"toggle mode failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "set-sort-mode", mode: "alphabetical" })])) ===
+			"sort:alphabetical",
+		"set sort mode failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "get-sort-mode" })])) ===
+			"current sort mode: ALPHABETICAL",
+		"get sort mode failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "get-mode" })])) ===
+			"current mode: ICONS",
+		"get mode failed",
+	);
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "get-visibility" })])) ===
+			"hidden",
+		"hidden visibility failed",
+	);
+	visible = true;
+	assert(
+		(await request(handleRequest, [JSON.stringify({ action: "get-visibility" })])) ===
+			"visible",
+		"visible visibility failed",
+	);
+	assert(calls.includes("next:SUPER"), "next modifier was not forwarded");
+	const failingHandler = createRequestHandler({
+		show: async () => {
+			throw new Error("query failed");
+		},
+	} as unknown as WindowSwitcherController);
+	assert(
+		(await request(failingHandler, [JSON.stringify({ action: "show" })])) ===
+			"error: Error: query failed",
+		"async request failure was not reported",
+	);
+});
+
+test("Window Switcher view renders and updates both display modes", () => {
+	createRoot((dispose) => {
+		const calls: string[] = [];
+		const previews = new PreviewCache(() => {});
+		const view = new WindowSwitcherView(previews, {
+			onSelect: (index) => calls.push(`select:${index}`),
+			onCommit: () => calls.push("commit"),
+		});
+		const window = view.create();
+		view.render({ windows, currentIndex: 0 }, DisplayMode.ICONS);
+		view.render({ windows, currentIndex: 1 }, DisplayMode.ICONS);
+		for (const button of collectButtons(window)) button.emit("clicked");
+		view.render({ windows, currentIndex: 2 }, DisplayMode.PREVIEWS);
+		view.reset();
+		view.render({ windows: windows.slice(0, 2), currentIndex: 0 }, DisplayMode.ICONS);
+		view.show();
+		view.hide();
+		previews.dispose();
+		assert(calls.includes("select:0"), "button selection was not emitted");
+		assert(calls.includes("commit"), "button commit was not emitted");
+		view.dispose();
+		dispose();
+	});
+});
+
+test("Window Switcher modifier watcher owns and removes its timer", async () => {
+	const releases: string[] = [];
+	let screenshots = 0;
+	let visible = false;
+	const controller = new ModifierController({
+		isVisible: () => visible,
+		getTriggerModifier: () => "ALT",
+		onRelease: (source) => releases.push(source),
+		onScreenshot: () => {
+			screenshots += 1;
+		},
+	});
+	const widget = new Gtk.Box();
+	controller.attach(widget);
+	const keyController = widget.observe_controllers().get_item(0) as Gtk.EventControllerKey;
+	keyController.emit("key-released", 65513, 0, 0);
+	keyController.emit("key-released", 65377, 0, 0);
+	controller.start();
+	await delay(40);
+	visible = true;
+	controller.start();
+	await delay(40);
+	controller.stop();
+	controller.stop();
+	assert(releases.includes("watch"), "released modifier was not detected");
+	assert(releases.includes("key"), "released modifier key was not detected");
+	assert(screenshots === 1, "screenshot key was not detected");
+	for (const modifier of ["SUPER", "ALT", "CTRL", "CONTROL", "SHIFT", "other"])
+		modifierMaskFor(modifier);
+});
+
+test("Window repository reads, caches, sorts, and updates focus history", async () => {
+	const repository = new WindowRepository();
+	const alphabetical = await repository.getWindows(SortMode.ALPHABETICAL);
+	const cached = await repository.getWindows(SortMode.ALPHABETICAL);
+	assert(cached === alphabetical, "window cache was not reused");
+	const active = await repository.getActiveAddress();
+	const cachedActive = await repository.getActiveAddress();
+	assert(cachedActive === active, "active window cache was not reused");
+	if (alphabetical[0]) repository.updateFocusHistory(alphabetical[0].address);
+	repository.updateFocusHistory("");
+	const recent = await repository.getWindows(SortMode.RECENCY);
+	assert(Array.isArray(recent), "recency query did not return windows");
+});
+
+test("Window Switcher controller completes a real lifecycle", async () => {
+	let disposeRoot = () => {};
+	const controller = new RealWindowSwitcherController();
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		assert(controller.setMode("missing").startsWith("invalid"), "invalid mode passed");
+		assert(controller.setMode("icons") === "mode set to ICONS", "mode failed");
+		controller.toggleMode();
+		assert(
+			(await controller.setSortMode("missing")).startsWith("invalid"),
+			"invalid sort mode passed",
+		);
+		await controller.show();
+		await controller.setSortMode("alphabetical");
+		controller.hide();
+		await controller.next("ALT");
+		controller.hide();
+		await controller.prev("ALT");
+		controller.hide();
+		controller.commit();
+		controller.select(0);
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+function request(
+	handler: (argv: string[], respond: (response: string) => void) => void,
+	argv: string[],
+): Promise<string> {
+	return new Promise((resolve) => handler(argv, resolve));
+}
+
+function delay(milliseconds: number): Promise<void> {
+	return new Promise((resolve) => {
+		GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
+			resolve();
+			return GLib.SOURCE_REMOVE;
+		});
+	});
+}
+
+function collectButtons(widget: Gtk.Widget): Gtk.Button[] {
+	const buttons: Gtk.Button[] = [];
+	if (widget instanceof Gtk.Button) buttons.push(widget);
+	let child = widget.get_first_child();
+	while (child) {
+		buttons.push(...collectButtons(child));
+		child = child.get_next_sibling();
+	}
+	return buttons;
+}

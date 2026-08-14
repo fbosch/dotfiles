@@ -3,24 +3,17 @@ import { execAsync } from "ags/process";
 import { queryHyprlandJson } from "../../services/hyprland-ipc";
 import { debugLog } from "./diagnostics";
 import type { WindowInfo } from "./machine";
+import {
+	buildWindowList,
+	type HyprlandClient,
+	updateFocusHistory,
+} from "./window-policy";
 
 export enum SortMode {
 	ALPHABETICAL = "ALPHABETICAL",
 	RECENCY = "RECENCY",
 }
 
-type HyprlandClient = {
-	address: string;
-	stableId?: string;
-	class: string;
-	initialClass?: string;
-	title: string;
-	initialTitle?: string;
-	focused?: boolean;
-	workspace: { id: number; name: string };
-	at?: [number, number];
-	size?: [number, number];
-};
 type WindowCache = {
 	timestampMs: number;
 	windows: WindowInfo[];
@@ -55,20 +48,7 @@ export class WindowRepository {
 			const focused = clients.find((client) => client.focused);
 			if (focused?.address)
 				this.#activeCache = { timestampMs: nowMs, address: focused.address };
-			const windows = clients
-				.filter((client) => {
-					const workspaceName = client.workspace.name || "";
-					return (
-						workspaceName === "special:minimized" ||
-						workspaceName.startsWith("special:") === false
-					);
-				})
-				.map(toWindowInfo);
-			windows.sort(
-				sortMode === SortMode.RECENCY
-					? this.#compareByRecency.bind(this)
-					: compareAlphabetically,
-			);
+			const windows = buildWindowList(clients, sortMode, this.#focusHistory);
 			this.#windowCache = {
 				timestampMs: nowMs,
 				windows,
@@ -103,47 +83,11 @@ export class WindowRepository {
 
 	updateFocusHistory(address: string): void {
 		if (!address) return;
-		const index = this.#focusHistory.indexOf(address);
-		if (index !== -1) this.#focusHistory.splice(index, 1);
-		this.#focusHistory.unshift(address);
-		if (this.#focusHistory.length > 50)
-			this.#focusHistory = this.#focusHistory.slice(0, 50);
+		this.#focusHistory = updateFocusHistory(this.#focusHistory, address);
 		this.#focusVersion += 1;
 		debugLog(
 			`Focus history updated: [${this.#focusHistory.slice(0, 5).join(", ")}...]`,
 		);
 	}
 
-	#compareByRecency(a: WindowInfo, b: WindowInfo): number {
-		const aIndex = this.#focusHistory.indexOf(a.address);
-		const bIndex = this.#focusHistory.indexOf(b.address);
-		if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-		if (aIndex !== -1) return -1;
-		if (bIndex !== -1) return 1;
-		return compareAlphabetically(a, b);
-	}
-}
-
-function toWindowInfo(client: HyprlandClient): WindowInfo {
-	return {
-		address: client.address,
-		stableId: client.stableId,
-		class: client.class || "",
-		initialClass: client.initialClass || undefined,
-		title: client.title || "",
-		initialTitle: client.initialTitle || undefined,
-		workspace: client.workspace.name || client.workspace.id.toString(),
-		size: client.size
-			? { width: client.size[0], height: client.size[1] }
-			: undefined,
-		position: client.at ? { x: client.at[0], y: client.at[1] } : undefined,
-	};
-}
-
-function compareAlphabetically(a: WindowInfo, b: WindowInfo): number {
-	return a.class !== b.class
-		? a.class.localeCompare(b.class)
-		: a.title !== b.title
-			? a.title.localeCompare(b.title)
-			: a.address.localeCompare(b.address);
 }

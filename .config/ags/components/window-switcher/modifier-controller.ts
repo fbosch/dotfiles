@@ -1,6 +1,7 @@
 import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { isTriggerModifierKey, normalizeModifier } from "./modifier-policy";
 
 type ModifierControllerOptions = {
 	isVisible: () => boolean;
@@ -48,13 +49,12 @@ export class ModifierController {
 }
 
 export function modifierMaskFor(name: string): Gdk.ModifierType {
-	switch (name.toUpperCase()) {
+	switch (normalizeModifier(name)) {
 		case "SUPER":
 			return Gdk.ModifierType.SUPER_MASK;
 		case "ALT":
 			return Gdk.ModifierType.ALT_MASK;
 		case "CTRL":
-		case "CONTROL":
 			return Gdk.ModifierType.CONTROL_MASK;
 		case "SHIFT":
 			return Gdk.ModifierType.SHIFT_MASK;
@@ -70,20 +70,4 @@ function isModifierPressed(name: string): boolean {
 	return keyboard
 		? (keyboard.get_modifier_state() & modifierMaskFor(name)) !== 0
 		: false;
-}
-
-function isTriggerModifierKey(name: string, keyval: number): boolean {
-	switch (name.toUpperCase()) {
-		case "SUPER":
-			return keyval === 65515 || keyval === 65516;
-		case "ALT":
-			return keyval === 65513 || keyval === 65514;
-		case "CTRL":
-		case "CONTROL":
-			return keyval === 65507 || keyval === 65508;
-		case "SHIFT":
-			return keyval === 65505 || keyval === 65506;
-		default:
-			return keyval === 65513 || keyval === 65514;
-	}
 }

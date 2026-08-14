@@ -65,6 +65,7 @@ export class WindowSwitcherController {
 		this.#previews.dispose();
 		this.#actor?.stop();
 		this.#actor = null;
+		this.#view.dispose();
 	}
 
 	isVisible(): boolean {
