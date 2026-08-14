@@ -1,6 +1,7 @@
 # AGS Configuration
 
-Bundled AGS configuration for Hyprland desktop UI. One `ags-bundled` process owns the shell surfaces and routes requests to component handlers.
+Bundled AGS configuration for Hyprland desktop UI. One `ags-bundled` process
+owns shell surfaces and lazy task-oriented utility modules.
 
 ## Components
 
@@ -10,8 +11,6 @@ The bundled entrypoint imports these components from `components/`:
 - `volume-indicator.tsx` for volume overlays.
 - `keyboard-switcher.tsx` for layout switch feedback.
 - `start-menu.tsx` for the launcher surface.
-- `force-quit.tsx` for selecting and terminating a window.
-- `about-this-pc.tsx` for system information.
 - `window-switcher.tsx` for Alt-Tab style window switching.
 - `desktop-clock.tsx` for the desktop clock surface.
 - `calendar-widget.tsx` for the taskbar calendar.
@@ -20,9 +19,20 @@ The bundled entrypoint imports these components from `components/`:
 
 `recent-items-menu.tsx` and `button.ts` support other components but are not registered as request targets.
 
+## Lazy Utility Components
+
+`services/utility-manager.ts` imports these task-oriented windows only on
+their first request:
+
+- `force-quit.tsx` for selecting and terminating a window.
+- `about-this-pc.tsx` for system information.
+
+Start Menu opens utilities through `UtilityManager`, not their runtime globals.
+
 ## Layout
 
-- `config-bundled.tsx` imports every component, registers handlers, and starts AGS with `instanceName: "ags-bundled"`.
+- `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
+- `services/utility-manager.ts` owns lazy utility-module loading and request routing.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.
@@ -45,10 +55,11 @@ Use component-specific request formats from the component source or agent docs. 
 
 ## Validation
 
-For runtime checks, restart the bundled process and confirm Vicinae/Hyprland callers can still reach the affected surface:
+For runtime checks, restart the bundled process and confirm Hyprland callers
+can still reach shell surfaces. Utilities remain unloaded until requested:
 
 ```bash
-pkill -f "ags run.*config-bundled"
+ags quit --instance ags-bundled
 ~/.config/ags/start-daemons.sh
 ags list
 ```

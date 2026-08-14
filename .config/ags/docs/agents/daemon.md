@@ -2,15 +2,18 @@
 
 ## Overview
 
-AGS runs as a single bundled process started at boot. All components are loaded into one process with shared resources for instant UI display and efficient usage.
+AGS runs as a single bundled process started at boot. Shell components are
+initialized at startup for immediate desktop interaction. Task-oriented system
+windows load on demand through the utility manager.
 
 ## Boot process
 
 1. Hyprland starts and runs `~/.config/ags/start-daemons.sh`
 2. Script waits for Hyprland to be ready
 3. Launches `ags run config-bundled.tsx`
-4. Components initialize in a single process
-5. Windows are pre-created (hidden) for instant display
+4. Shell components initialize in one process
+5. `services/utility-manager.ts` imports a utility component when it is first
+   requested
 
 ## Startup script (`start-daemons.sh`)
 
@@ -39,9 +42,11 @@ WAIT_FOR_HYPRLAND=true
 HYPRLAND_TIMEOUT=4
 ```
 
-## Communication pattern
+## Communication Pattern
 
-Components communicate via the `globalThis` namespace.
+Components communicate via the `globalThis` namespace inside the bundled
+process. Shell components do not call utility globals: they request stable
+utility IDs through `services/utility-manager.ts`.
 
 Component side (TypeScript in `lib/` files):
 

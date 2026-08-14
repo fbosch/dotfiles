@@ -33,6 +33,7 @@ import {
 } from "../services/recent-documents";
 import type { RecentDocument } from "../services/recent-documents";
 import { parseComponentRequest } from "../services/request";
+import { openUtility } from "../services/utility-manager";
 
 // Configuration
 const ENABLE_ANIMATIONS = false; // Set to false for better performance on slower systems
@@ -1206,13 +1207,13 @@ function executeMenuCommand(itemId: string) {
   if (itemId === "force-quit") {
     // Dismiss the menu before opening a competing exclusive surface.
     hideMenu();
-    globalThis.ForceQuit?.show?.();
+    openUtility("force-quit");
     return;
   }
 
   if (itemId === "about-this-pc") {
     hideMenu();
-    globalThis.AboutThisPC?.show?.();
+    openUtility("about-this-pc");
     return;
   }
 

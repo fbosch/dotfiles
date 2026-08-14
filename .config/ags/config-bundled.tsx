@@ -1,37 +1,16 @@
 #!/usr/bin/env -S ags run
-/**
- * Bundled AGS Configuration
- * 
- * This file bundles all AGS daemon components into a single process:
- * - confirm-dialog
- * - volume-change-indicator  
- * - keyboard-layout-switcher
- * - start-menu
- * - window-switcher
- * - calendar-widget
- * - audio-mixer-widget
- * 
- * Each component maintains its own isolated scope while sharing a single
- * app.start() entry point and unified request handler.
- */
 
-import app from "ags/gtk4/app";
-
-// Type definitions for global namespace components
-interface ComponentModule {
-  init: () => void;
-  handleRequest: (argv: string[], res: (response: any) => void) => void;
-  instanceName: string;
-  show?: () => void;
-}
+import "ags/gtk4/app";
+import {
+  startComponentHost,
+  type ComponentModule,
+} from "./services/component-host";
 
 declare global {
   var ConfirmDialog: ComponentModule;
   var VolumeIndicator: ComponentModule;
   var KeyboardSwitcher: ComponentModule;
   var StartMenu: ComponentModule;
-  var ForceQuit: ComponentModule;
-  var AboutThisPC: ComponentModule;
   var WindowSwitcher: ComponentModule;
   var DesktopClock: ComponentModule;
   var CalendarWidget: ComponentModule;
@@ -39,232 +18,32 @@ declare global {
   var PipSnapPreview: ComponentModule;
 }
 
-// Load components using global namespace pattern (no ES6 exports)
 import "./components/confirm-dialog.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/start-menu.tsx";
-import "./components/force-quit.tsx";
-import "./components/about-this-pc.tsx";
 import "./components/window-switcher.tsx";
 import "./components/desktop-clock.tsx";
 import "./components/calendar-widget.tsx";
 import "./components/audio-mixer-widget.tsx";
 import "./components/pip-snap-preview.tsx";
 
-// Component registry for request routing
-type ComponentHandler = (argv: string[], res: (response: string) => void) => void;
-
-interface ComponentRegistry {
-  [key: string]: ComponentHandler;
-}
-
-const components: ComponentRegistry = {};
-const taskbarVisibilityComponents = [
-  "start-menu",
-  "force-quit",
-  "about-this-pc",
-  "calendar-widget",
-  "audio-mixer-widget",
-];
-
-// Register components
-function registerComponent(name: string, handler: ComponentHandler) {
-  components[name] = handler;
-}
-
-function requestComponent(component: string, payload: unknown): string {
-  const handler = components[component];
-  if (!handler) return "";
-
-  let response = "";
-  handler([JSON.stringify(payload)], (value: string) => {
-    response = String(value);
-  });
-  return response;
-}
-
-function handleTaskbarVisibilityRequest(argv: string[], res: (response: string) => void) {
-  const request = argv.join(" ");
-  if (!request || request.trim() === "") {
-    res("none");
-    return;
-  }
-
-  let data: { action?: string };
-  try {
-    data = JSON.parse(request);
-  } catch {
-    res("error: invalid JSON");
-    return;
-  }
-
-  if (data.action !== "visible-component") {
-    res("unknown action");
-    return;
-  }
-
-  for (const component of taskbarVisibilityComponents) {
-    if (requestComponent(component, { action: "is-visible" }) === "true") {
-      res(component);
-      return;
-    }
-  }
-
-  res("none");
-}
-
-// Unified request handler that routes to appropriate component
-function handleRequest(argv: string[], res: (response: any) => void) {
-  try {
-    // First arg should be component name
-    const [component, ...rest] = argv;
-    
-    // Handle empty/malformed requests
-    if (!component || component.trim() === "") {
-      res("ready");
-      return;
-    }
-    
-    // Route to component handler
-    if (component === "taskbar-visibility") {
-      handleTaskbarVisibilityRequest(rest, res);
-    } else if (components[component]) {
-      components[component](rest, res);
-    } else {
-      // Try parsing as JSON (backwards compatibility)
-      try {
-        const data = JSON.parse(argv.join(" "));
-        
-        // Infer component from action prefix if present
-        // e.g., {"action": "confirm-dialog:show", ...}
-        if (data.action && data.action.includes(":")) {
-          const [comp, action] = data.action.split(":");
-          if (components[comp]) {
-            components[comp]([JSON.stringify({ ...data, action })], res);
-            return;
-          }
-        }
-        
-        res("error: component not specified");
-      } catch {
-        res(`error: unknown component "${component}"`);
-      }
-    }
-  } catch (e) {
-    console.error("Error in bundled request handler:", e);
-    res("error: " + e);
-  }
-}
-
-// Main entry point
-app.start({
-  main() {
-    console.log("[Bundled AGS] Initializing all components...");
-    
-    // Initialize confirm-dialog
-    try {
-      globalThis.ConfirmDialog.init();
-      registerComponent(globalThis.ConfirmDialog.instanceName, globalThis.ConfirmDialog.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.ConfirmDialog.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize confirm-dialog:`, e);
-    }
-    
-    // Initialize volume-indicator
-    try {
-      globalThis.VolumeIndicator.init();
-      registerComponent(globalThis.VolumeIndicator.instanceName, globalThis.VolumeIndicator.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.VolumeIndicator.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize volume-indicator:`, e);
-    }
-    
-    // Initialize keyboard-switcher
-    try {
-      globalThis.KeyboardSwitcher.init();
-      registerComponent(globalThis.KeyboardSwitcher.instanceName, globalThis.KeyboardSwitcher.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.KeyboardSwitcher.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize keyboard-switcher:`, e);
-    }
-    
-    // Initialize start-menu
-    try {
-      globalThis.StartMenu.init();
-      registerComponent(globalThis.StartMenu.instanceName, globalThis.StartMenu.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.StartMenu.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize start-menu:`, e);
-    }
-    
-    // Initialize window-switcher
-    try {
-      globalThis.WindowSwitcher.init();
-      registerComponent(globalThis.WindowSwitcher.instanceName, globalThis.WindowSwitcher.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.WindowSwitcher.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize window-switcher:`, e);
-    }
-
-    // Initialize force-quit
-    try {
-      globalThis.ForceQuit.init();
-      registerComponent(globalThis.ForceQuit.instanceName, globalThis.ForceQuit.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.ForceQuit.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize force-quit:`, e);
-    }
-
-    // Initialize about-this-pc
-    try {
-      globalThis.AboutThisPC.init();
-      registerComponent(globalThis.AboutThisPC.instanceName, globalThis.AboutThisPC.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.AboutThisPC.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize about-this-pc:`, e);
-    }
-    
-    // Initialize desktop-clock
-    try {
-      globalThis.DesktopClock.init();
-      registerComponent(globalThis.DesktopClock.instanceName, globalThis.DesktopClock.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.DesktopClock.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize desktop-clock:`, e);
-    }
-
-    // Initialize calendar-widget
-    try {
-      globalThis.CalendarWidget.init();
-      registerComponent(globalThis.CalendarWidget.instanceName, globalThis.CalendarWidget.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.CalendarWidget.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize calendar-widget:`, e);
-    }
-
-    // Initialize audio-mixer-widget
-    try {
-      globalThis.AudioMixerWidget.init();
-      registerComponent(globalThis.AudioMixerWidget.instanceName, globalThis.AudioMixerWidget.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.AudioMixerWidget.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize audio-mixer-widget:`, e);
-    }
-
-    try {
-      globalThis.PipSnapPreview.init();
-      registerComponent(globalThis.PipSnapPreview.instanceName, globalThis.PipSnapPreview.handleRequest);
-      console.log(`[Bundled AGS] ✓ ${globalThis.PipSnapPreview.instanceName} initialized`);
-    } catch (e) {
-      console.error(`[Bundled AGS] ✗ Failed to initialize pip-snap-preview:`, e);
-    }
-    
-    console.log("[Bundled AGS] All components initialized");
-    return null;
-  },
-  
+startComponentHost({
   instanceName: "ags-bundled",
-  
-  requestHandler: handleRequest,
+  components: [
+    () => globalThis.ConfirmDialog,
+    () => globalThis.VolumeIndicator,
+    () => globalThis.KeyboardSwitcher,
+    () => globalThis.StartMenu,
+    () => globalThis.WindowSwitcher,
+    () => globalThis.DesktopClock,
+    () => globalThis.CalendarWidget,
+    () => globalThis.AudioMixerWidget,
+    () => globalThis.PipSnapPreview,
+  ],
+  taskbarVisibilityComponents: [
+    "start-menu",
+    "calendar-widget",
+    "audio-mixer-widget",
+  ],
 });

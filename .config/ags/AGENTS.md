@@ -1,10 +1,13 @@
 # AGENTS
 
-AGS (Aylur's GTK Shell) configuration for Hyprland UI, using bundled mode.
+AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 
 ## Essentials
 
-- Bundled mode only; keep entrypoint wiring consistent with `config-bundled.tsx` and `start-daemons.sh`.
+- Keep all GTK surfaces in `config-bundled.tsx` (`ags-bundled`), started by
+  `start-daemons.sh` at login. Keep task-oriented system windows as lazy
+  modules behind `services/utility-manager.ts`; do not import them from the
+  entry point or make shell components depend on their globals.
 - Keep styling inline through AGS CSS APIs (`app.start({ css: ... })` / `app.apply_css()`), not external theme files.
 - For AGS surfaces that mirror `design-system/src/components/`, match the component source as the visual contract; do not depend on Storybook stories at runtime.
 - Compose surfaces from existing atomic components when their semantics and interaction model fit. Prefer expanding shared primitives for recurring behavior over duplicating GTK construction and styling; use native widgets for distinct custom controls.

@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
 # AGS Daemons Starter Script
-# Starts AGS in bundled mode for improved performance and resource usage
-# Can be run at boot or manually to restart daemons
+# Starts AGS with shell surfaces at login and utility modules on demand.
 
 # ============================================================================
 # Configuration
@@ -13,11 +12,9 @@ RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}"
 LOG_FILE="$RUNTIME_DIR/ags-daemons.log"
 PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 
-# Bundled mode settings
-# Using global namespace pattern to bundle all 6 components
-# Reduces memory usage by ~72% (375MB -> 104MB)
-BUNDLED_CONFIG="config-bundled.tsx"  # Bundled configuration entry point
-BUNDLED_INSTANCE="ags-bundled"       # Bundled daemon instance name
+# Bundled shell settings
+BUNDLED_CONFIG="config-bundled.tsx"
+BUNDLED_INSTANCE="ags-bundled"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
 # EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,
@@ -83,7 +80,7 @@ wait_for_hyprland() {
 
 main() {
     log "════════════════════════════════════════"
-    log "${GREEN}AGS Bundled Daemons Startup${NC}"
+    log "${GREEN}AGS Bundled Startup${NC}"
     log "════════════════════════════════════════"
     
     # Wait for Hyprland to be ready (listen for first event)
@@ -93,8 +90,8 @@ main() {
         log "${YELLOW}⚠${NC} Failed to initialize profile state"
     fi
     
-    # Start bundled AGS process with all components
-    log "${BLUE}🚀${NC} Starting bundled AGS daemons..."
+    # Start the AGS process. Utility modules remain unloaded until requested.
+    log "${BLUE}🚀${NC} Starting bundled AGS..."
     
     local bundled_config="$AGS_CONFIG_DIR/$BUNDLED_CONFIG"
     
@@ -110,7 +107,7 @@ main() {
         return 0
     fi
     
-    # Start bundled daemons (AGS can run TypeScript directly)
+    # AGS can run TypeScript directly.
     log "${BLUE}→${NC} Launching bundled process: $BUNDLED_CONFIG"
     if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
         export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
@@ -127,9 +124,8 @@ main() {
     if is_bundled_running; then
         log "${GREEN}✓${NC} Bundled daemon started successfully: $BUNDLED_INSTANCE"
         log "${BLUE}ℹ${NC} Bundled PID: $pid"
-        log "${GREEN}✓${NC} All 7 components initialized (confirm-dialog, volume-indicator, keyboard-switcher, start-menu, window-switcher, desktop-clock, calendar-widget)"
+        log "${GREEN}✓${NC} Shell components initialized; utility modules remain lazy"
         log "════════════════════════════════════════"
-        log "${GREEN}✓${NC} Memory usage: ~104 MB (vs ~375 MB for separate processes)"
         return 0
     else
         log "${RED}✗${NC} Failed to start bundled daemon: $BUNDLED_INSTANCE"

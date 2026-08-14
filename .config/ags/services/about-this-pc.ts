@@ -135,41 +135,88 @@ function processorInfo(): Pick<
 	return { processor: usableValue(model), processorClock };
 }
 
-function graphicsInfo(): string | undefined {
+const hardwareProbeTimeoutMs = 3_000;
+
+async function subprocessOutput(
+	argv: string[],
+	parentCancellable: Gio.Cancellable | null,
+): Promise<string | undefined> {
+	let process: Gio.Subprocess;
+	try {
+		process = Gio.Subprocess.new(
+			argv,
+			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+		);
+	} catch (error) {
+		console.error(`Failed to start ${argv[0]}:`, error);
+		return undefined;
+	}
+
+	const cancellable = new Gio.Cancellable();
+	const cancellationId = parentCancellable?.connect(() => {
+		cancellable.cancel();
+		process.force_exit();
+	});
+	if (parentCancellable?.is_cancelled()) {
+		cancellable.cancel();
+		process.force_exit();
+	}
+	let timeoutId: number | null = null;
+	timeoutId = GLib.timeout_add(
+		GLib.PRIORITY_DEFAULT,
+		hardwareProbeTimeoutMs,
+		() => {
+			timeoutId = null;
+			cancellable.cancel();
+			process.force_exit();
+			return GLib.SOURCE_REMOVE;
+		},
+	);
+
+	try {
+		const [stdout] = await process.communicate_utf8_async(null, cancellable);
+		return process.get_successful() && stdout ? stdout : undefined;
+	} catch {
+		return undefined;
+	} finally {
+		if (timeoutId !== null) GLib.source_remove(timeoutId);
+		if (cancellationId !== undefined) {
+			parentCancellable?.disconnect(cancellationId);
+		}
+	}
+}
+
+async function graphicsInfo(
+	cancellable: Gio.Cancellable | null,
+): Promise<string | undefined> {
 	const executable = GLib.find_program_in_path("lspci");
 	if (!executable) return undefined;
 
-	try {
-		const process = Gio.Subprocess.new(
-			[executable, "-mm", "-d", "::03xx"],
-			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
-		);
-		const [, stdout] = process.communicate_utf8(null, null);
-		if (process.get_successful() === false || !stdout) return undefined;
+	const stdout = await subprocessOutput(
+		[executable, "-mm", "-d", "::03xx"],
+		cancellable,
+	);
+	if (!stdout) return undefined;
 
-		const devices = new Set<string>();
-		for (const line of stdout.trim().split("\n")) {
-			const values = Array.from(line.matchAll(/"([^"]*)"/g), (match) =>
-				match[1].trim(),
-			);
-			if (values.length < 3) continue;
-			const vendor = values[1]
-				.replace(/^NVIDIA Corporation$/, "NVIDIA")
-				.replace(/^Intel Corporation$/, "Intel")
-				.replace(/^Advanced Micro Devices, Inc\. \[AMD\/ATI\]$/, "AMD");
-			const bracketedName = values[2].match(/\[([^\]]+)\]$/)?.[1];
-			const name = bracketedName ?? values[2];
-			devices.add(
-				name.toLowerCase().includes(vendor.toLowerCase())
-					? name
-					: `${vendor} ${name}`,
-			);
-		}
-		return usableValue(Array.from(devices).join(", "));
-	} catch (error) {
-		console.error("Failed to read graphics information:", error);
-		return undefined;
+	const devices = new Set<string>();
+	for (const line of stdout.trim().split("\n")) {
+		const values = Array.from(line.matchAll(/"([^"]*)"/g), (match) =>
+			match[1].trim(),
+		);
+		if (values.length < 3) continue;
+		const vendor = values[1]
+			.replace(/^NVIDIA Corporation$/, "NVIDIA")
+			.replace(/^Intel Corporation$/, "Intel")
+			.replace(/^Advanced Micro Devices, Inc\. \[AMD\/ATI\]$/, "AMD");
+		const bracketedName = values[2].match(/\[([^\]]+)\]$/)?.[1];
+		const name = bracketedName ?? values[2];
+		devices.add(
+			name.toLowerCase().includes(vendor.toLowerCase())
+				? name
+				: `${vendor} ${name}`,
+		);
 	}
+	return usableValue(Array.from(devices).join(", "));
 }
 
 function memoryInfo(): string | undefined {
@@ -181,27 +228,24 @@ function memoryInfo(): string | undefined {
 	return `${(kilobytes / 1024 ** 2).toFixed(1).replace(/\.0$/, "")} GB`;
 }
 
-function memoryClockInfo(): string | undefined {
+async function memoryClockInfo(
+	cancellable: Gio.Cancellable | null,
+): Promise<string | undefined> {
 	const executable = GLib.find_program_in_path("dmidecode");
 	if (!executable) return undefined;
 
-	try {
-		const process = Gio.Subprocess.new(
-			[executable, "--type", "memory"],
-			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
-		);
-		const [, stdout] = process.communicate_utf8(null, null);
-		if (process.get_successful() === false || !stdout) return undefined;
+	const stdout = await subprocessOutput(
+		[executable, "--type", "memory"],
+		cancellable,
+	);
+	if (!stdout) return undefined;
 
-		const speeds = Array.from(
-			stdout.matchAll(/^\s*Configured Memory Speed:\s*(\d+)\s*MT\/s$/gim),
-			(match) => Number.parseInt(match[1], 10),
-		).filter((speed) => Number.isFinite(speed) && speed > 0);
-		if (speeds.length === 0) return undefined;
-		return `${Math.max(...speeds)} MT/s`;
-	} catch {
-		return undefined;
-	}
+	const speeds = Array.from(
+		stdout.matchAll(/^\s*Configured Memory Speed:\s*(\d+)\s*MT\/s$/gim),
+		(match) => Number.parseInt(match[1], 10),
+	).filter((speed) => Number.isFinite(speed) && speed > 0);
+	if (speeds.length === 0) return undefined;
+	return `${Math.max(...speeds)} MT/s`;
 }
 
 function formatUptime(): string | undefined {
@@ -273,7 +317,9 @@ function nixosGeneration(): string | undefined {
 	}
 }
 
-export function getAboutThisPCInfo(): AboutThisPCInfo {
+export async function getAboutThisPCInfo(
+	cancellable: Gio.Cancellable | null,
+): Promise<AboutThisPCInfo> {
 	const osRelease = parseKeyValueFile("/etc/os-release");
 	const productName = usableValue(
 		readTextFile("/sys/class/dmi/id/product_name"),
@@ -291,6 +337,10 @@ export function getAboutThisPCInfo(): AboutThisPCInfo {
 		GLib.getenv("XDG_CURRENT_DESKTOP")?.split(":").find(Boolean),
 	);
 	const kernelRelease = usableValue(readTextFile("/proc/sys/kernel/osrelease"));
+	const [graphics, memoryClock] = await Promise.all([
+		graphicsInfo(cancellable),
+		memoryClockInfo(cancellable),
+	]);
 
 	return {
 		deviceName: productName ?? GLib.get_host_name(),
@@ -298,9 +348,9 @@ export function getAboutThisPCInfo(): AboutThisPCInfo {
 		deviceImagePath: configuredImagePath(),
 		deviceIcon: deviceIcon(),
 		...processorInfo(),
-		graphics: graphicsInfo(),
+		graphics,
 		memory: memoryInfo(),
-		memoryClock: memoryClockInfo(),
+		memoryClock,
 		desktop,
 		operatingSystem: usableValue(operatingSystem),
 		operatingSystemIcon:

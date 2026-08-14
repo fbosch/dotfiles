@@ -1,8 +1,11 @@
 # Architecture and Components
 
-AGS runs in bundled mode for performance. Components are imported by `config-bundled.tsx` and run in a single GTK process, while services own shared state and runtime integrations.
+AGS runs in bundled mode for performance. Shell components load from
+`config-bundled.tsx` at startup. Task-oriented system windows are separate
+modules loaded by `services/utility-manager.ts` on first use, keeping their
+dependencies out of the login path while retaining one GTK process.
 
-Components (in `components/`):
+Shell components (in `components/`):
 
 - `components/confirm-dialog.tsx` - Confirmation dialog for high-impact operations
 - `components/keyboard-switcher.tsx` - Keyboard layout switcher overlay
@@ -10,6 +13,11 @@ Components (in `components/`):
 - `components/start-menu.tsx` - System start menu with update badges
 - `components/recent-items-menu.tsx` - Display-only Recent Items submenu
 - `components/window-switcher.tsx` - Alt+Tab window switcher with previews
+
+Lazy utility components (in `components/`):
+
+- `components/about-this-pc.tsx` - On-demand system information window
+- `components/force-quit.tsx` - On-demand application termination window
 
 Services (in `services/`):
 
@@ -21,22 +29,27 @@ Services (in `services/`):
 
 Entry points:
 
-- `config-bundled.tsx` - Main bundled configuration (imports all components)
+- `config-bundled.tsx` - Main bundled configuration
+- `services/utility-manager.ts` - Lazy utility loader and request router
 - `start-daemons.sh` - Boot script to start AGS in bundled mode
 
 Bundled mode details:
 
-- Each component window has its own namespace
-- CSS is applied during module loading
-- Components export to `globalThis` for communication
-- Single GTK process hosts all windows
+- `ags-bundled` starts at login and hosts all windows.
+- Shell components initialize at startup; About This PC and Force Quit load on
+  their first request through `UtilityManager`.
+- The bundled registry routes utility IPC requests through `UtilityManager`
+  without loading a utility for an `is-visible` query.
+- Shell components open utilities through `UtilityManager`, not direct
+  `globalThis` references.
+- Each component window has its own namespace and applies CSS through AGS APIs.
 
 File structure:
 
 ```
 .config/ags/
 ├── components/                 # GTK surfaces and shared widgets
-├── services/                   # Runtime state and integrations
-├── config-bundled.tsx          # Main entry point (imports components/)
+├── services/                   # Runtime state, integrations, and lazy loading
+├── config-bundled.tsx          # Main bundled entry point
 └── start-daemons.sh            # Boot script (runs config-bundled.tsx)
 ```

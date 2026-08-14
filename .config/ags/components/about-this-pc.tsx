@@ -26,6 +26,7 @@ let statusLabel: Gtk.Label | null = null;
 let moreInfoButton: Gtk.Button | null = null;
 let artworkTexture: { path: string; texture: Gdk.Texture } | null = null;
 let infoRenderDispose: (() => void) | null = null;
+let infoCancellable: Gio.Cancellable | null = null;
 
 function clearChildren(container: Gtk.Box): void {
 	let child = container.get_first_child();
@@ -179,12 +180,27 @@ function showAboutThisPC(): void {
 	}
 	destroyAboutThisPC();
 	createWindow();
-	renderInfo(getAboutThisPCInfo());
 	win?.present();
 	win?.set_focus(moreInfoButton);
+	statusLabel?.set_label("Loading system information...");
+	statusLabel?.set_visible(true);
+
+	const cancellable = new Gio.Cancellable();
+	infoCancellable = cancellable;
+	void getAboutThisPCInfo(cancellable).then((info) => {
+		if (infoCancellable !== cancellable || cancellable.is_cancelled()) return;
+		renderInfo(info);
+	}).catch((error) => {
+		if (infoCancellable !== cancellable || cancellable.is_cancelled()) return;
+		console.error("Failed to load system information:", error);
+		statusLabel?.set_label("System information is unavailable.");
+		statusLabel?.set_visible(true);
+	});
 }
 
 function destroyAboutThisPC(): void {
+	infoCancellable?.cancel();
+	infoCancellable = null;
 	disposeInfoRender();
 	const currentWindow = win;
 	win = null;
