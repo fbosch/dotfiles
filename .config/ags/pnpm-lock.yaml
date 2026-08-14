@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      ts-pattern:
+        specifier: ^5.9.0
+        version: 5.9.0
       xstate:
         specifier: 5.32.5
         version: 5.32.5
@@ -195,6 +198,9 @@ packages:
     engines: {node: '>=22'}
     hasBin: true
 
+  ts-pattern@5.9.0:
+    resolution: {integrity: sha512-6s5V71mX8qBUmlgbrfL33xDUwO0fq48rxAu2LBE11WBeGdpCPOsXksQbZJHvHwhrd3QjUusd3mAOM5Gg0mFBLg==}
+
   typescript@5.9.3:
     resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
     engines: {node: '>=14.17'}
@@ -314,6 +320,8 @@ snapshots:
       '@fallow-cli/win32-arm64-msvc': 3.14.0
       '@fallow-cli/win32-x64-msvc': 3.14.0
       fallow-type-aware: 3.14.0
+
+  ts-pattern@5.9.0: {}
 
   typescript@5.9.3: {}
 

@@ -87,6 +87,18 @@ describe("windowSwitcherMachine", () => {
     actor.stop();
   });
 
+  test("hides when a refresh no longer has multiple candidates", () => {
+    const actor = createTestActor();
+    actor.send({ type: "ACTIVATE", windows, index: 2, triggerModifier: "ALT" });
+
+    actor.send({ type: "REFRESH", windows: windows.slice(0, 1) });
+
+    expect(actor.getSnapshot().matches("hidden")).toBe(true);
+    expect(actor.getSnapshot().context.windows).toEqual(windows.slice(0, 1));
+    expect(actor.getSnapshot().context.currentIndex).toBe(0);
+    actor.stop();
+  });
+
   test.each(["COMMIT", "HIDE"] as const)("returns to hidden on %s", (type) => {
     const actor = createTestActor();
     actor.send({ type: "ACTIVATE", windows, index: 1, triggerModifier: "ALT" });

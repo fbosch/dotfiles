@@ -5,6 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import { match } from "ts-pattern";
 import { createActor, type ActorRefFrom } from "xstate";
 import tokens from "../../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
@@ -17,6 +18,7 @@ import {
   getInitialSelection,
   resolveCommitTarget,
 } from "./session-policy";
+import { parseWindowSwitcherRequest, type WindowSwitcherRequest } from "./request";
 
 /**
  * Performance Optimizations:
@@ -1521,6 +1523,10 @@ async function handleSetSortMode(mode: string | undefined): Promise<string> {
   if (switcherIsVisible()) {
     const windows = await getWindows();
     getSwitcherActor().send({ type: "REFRESH", windows });
+    if (switcherIsVisible() === false) {
+      enterIdleState();
+      return `sort mode set to ${normalizedMode}`;
+    }
     previousWindowAddresses = [];
     windowButtons.clear();
     updateSwitcher();
@@ -1580,6 +1586,49 @@ function initWindowSwitcher() {
   createWindow();
 }
 
+function dispatchWindowSwitcherRequest(
+  request: WindowSwitcherRequest,
+): string | Promise<string> {
+  return match(request)
+    .returnType<string | Promise<string>>()
+    .with({ action: "show" }, () => handleShowAction().then(() => "shown"))
+    .with({ action: "next" }, ({ triggerModifier }) => {
+      writeBindDiagnostic(`request next modifier=${triggerModifier ?? "ALT"}`);
+      return onNext(triggerModifier).then(() => "cycled next");
+    })
+    .with({ action: "prev" }, ({ triggerModifier }) =>
+      onPrev(triggerModifier).then(() => "cycled prev"),
+    )
+    .with({ action: "commit" }, () => {
+      onCommit();
+      return "committed";
+    })
+    .with({ action: "hide" }, () => {
+      onHide();
+      return "hidden";
+    })
+    .with({ action: "set-mode" }, ({ mode }) => {
+      const response = handleSetMode(mode);
+      applyStaticCSS();
+      return response;
+    })
+    .with({ action: "toggle-mode" }, () => {
+      handleToggleMode();
+      return `mode toggled to ${displayMode}`;
+    })
+    .with({ action: "set-sort-mode" }, ({ mode }) => handleSetSortMode(mode))
+    .with(
+      { action: "get-sort-mode" },
+      () => `current sort mode: ${sortMode}`,
+    )
+    .with({ action: "get-mode" }, () => `current mode: ${displayMode}`)
+    .with(
+      { action: "get-visibility" },
+      () => (switcherIsVisible() ? "visible" : "hidden"),
+    )
+    .exhaustive();
+}
+
 function handleWindowSwitcherRequest(argv: string[], res: (response: string) => void) {
   const mark = perf.start("window-switcher", "handleRequest");
   let ok = true;
@@ -1593,115 +1642,30 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
       return;
     }
 
-    const data = JSON.parse(request);
-    const action = data.action;
-
-    if (action === "show") {
-      asyncHandled = true;
-      handleShowAction()
-        .then(() => {
-          res("shown");
-          mark.end(ok, error);
-        })
-        .catch((e) => {
-          ok = false;
-          error = String(e);
-          res(`error: ${e}`);
-          mark.end(ok, error);
-        });
+    const parsedRequest = parseWindowSwitcherRequest(JSON.parse(request));
+    if (parsedRequest === null) {
+      res("unknown action");
       return;
     }
 
-    if (action === "next") {
-      writeBindDiagnostic(`request next modifier=${data.triggerModifier ?? "ALT"}`);
-      asyncHandled = true;
-      onNext(data.triggerModifier)
-        .then(() => {
-          res("cycled next");
-          mark.end(ok, error);
-        })
-        .catch((e) => {
-          ok = false;
-          error = String(e);
-          res(`error: ${e}`);
-          mark.end(ok, error);
-        });
-      return;
-    }
-
-    if (action === "prev") {
-      asyncHandled = true;
-      onPrev(data.triggerModifier)
-        .then(() => {
-          res("cycled prev");
-          mark.end(ok, error);
-        })
-        .catch((e) => {
-          ok = false;
-          error = String(e);
-          res(`error: ${e}`);
-          mark.end(ok, error);
-        });
-      return;
-    }
-
-    if (action === "commit") {
-      onCommit();
-      res("committed");
-      return;
-    }
-
-    if (action === "hide") {
-      onHide();
-      res("hidden");
-      return;
-    }
-
-    if (action === "set-mode") {
-      const response = handleSetMode(data.mode);
-      applyStaticCSS();
+    const response = dispatchWindowSwitcherRequest(parsedRequest);
+    if (typeof response === "string") {
       res(response);
       return;
     }
 
-    if (action === "toggle-mode") {
-      handleToggleMode();
-      res(`mode toggled to ${displayMode}`);
-      return;
-    }
-
-    if (action === "set-sort-mode") {
-      asyncHandled = true;
-      handleSetSortMode(data.mode)
-        .then((response) => {
-          res(response);
-          mark.end(ok, error);
-        })
-        .catch((e) => {
-          ok = false;
-          error = String(e);
-          res(`error: ${e}`);
-          mark.end(ok, error);
-        });
-      return;
-    }
-
-    if (action === "get-sort-mode") {
-      res(`current sort mode: ${sortMode}`);
-      return;
-    }
-
-    if (action === "get-mode") {
-      res(`current mode: ${displayMode}`);
-      return;
-    }
-
-    if (action === "get-visibility") {
-      res(switcherIsVisible() ? "visible" : "hidden");
-      return;
-    }
-
-    res("unknown action");
+    asyncHandled = true;
+    response
+      .then((message) => {
+        res(message);
+        mark.end(ok, error);
+      })
+      .catch((e) => {
+        ok = false;
+        error = String(e);
+        res(`error: ${e}`);
+        mark.end(ok, error);
+      });
   } catch (e) {
     ok = false;
     error = String(e);

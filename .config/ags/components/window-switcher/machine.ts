@@ -49,6 +49,10 @@ export const windowSwitcherMachine = setup({
       assertEvent(event, "ACTIVATE");
       return event.windows.length > 1;
     },
+    refreshHasMultipleWindows: ({ event }) => {
+      assertEvent(event, "REFRESH");
+      return event.windows.length > 1;
+    },
   },
   actions: {
     activateSession: assign(({ event }) => {
@@ -110,7 +114,16 @@ export const windowSwitcherMachine = setup({
         },
         CYCLE: { actions: "cycleSelection" },
         SELECT: { actions: "selectWindow" },
-        REFRESH: { actions: "refreshWindows" },
+        REFRESH: [
+          {
+            guard: "refreshHasMultipleWindows",
+            actions: "refreshWindows",
+          },
+          {
+            target: "hidden",
+            actions: "refreshWindows",
+          },
+        ],
         COMMIT: "hidden",
         HIDE: "hidden",
       },
