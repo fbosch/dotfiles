@@ -14,6 +14,8 @@
     "list": "ags list",
     "test": "bun test",
     "test:coverage": "bun test --coverage --coverage-reporter=lcov --coverage-dir /tmp/ags-coverage",
+    "test:coverage:istanbul": "pnpm test:coverage && bun run scripts/lcov-to-istanbul.ts /tmp/ags-coverage/lcov.info /tmp/ags-coverage/coverage-final.json",
+    "health:coverage": "pnpm test:coverage:istanbul && fallow health --coverage /tmp/ags-coverage/coverage-final.json --report-only",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
     "quality": "fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
@@ -26,6 +28,7 @@
   "author": "",
   "license": "UNLICENSED",
   "devDependencies": {
-    "fallow": "3.14.0"
+    "fallow": "3.14.0",
+    "typescript": "7.0.2"
   }
 }
