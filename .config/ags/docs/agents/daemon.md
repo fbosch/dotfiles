@@ -74,7 +74,7 @@ import "./components/confirm-dialog.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/start-menu/index.tsx";
-import "./components/window-switcher.tsx";
+import "./components/window-switcher/index.tsx";
 
 app.start({
   instanceName: "ags-bundled",

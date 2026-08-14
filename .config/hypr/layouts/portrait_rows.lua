@@ -137,6 +137,8 @@ function M.recalculate(ctx)
 		return
 	end
 
+	order_state.observe_floating_active(state, key, targets)
+
 	local area = ctx.area
 
 	if count == 1 then

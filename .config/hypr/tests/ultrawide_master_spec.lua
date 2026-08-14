@@ -6,6 +6,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local registered_layout = nil
 local workspace_counter = 0
 local cursor_position = nil
+local active_window = nil
 
 _G.hl = {
 	layout = {
@@ -15,6 +16,9 @@ _G.hl = {
 	},
 	get_cursor_pos = function()
 		return cursor_position
+	end,
+	get_active_window = function()
+		return active_window
 	end,
 }
 
@@ -112,6 +116,7 @@ local function load_layout()
 	registered_layout = nil
 	workspace_counter = 0
 	cursor_position = nil
+	active_window = nil
 	_G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 	package.loaded["layouts.ultrawide_master"] = nil
 	package.loaded["layouts.portrait_rows"] = nil
@@ -365,6 +370,26 @@ run("dragging active column right of layout moves it rightmost", function()
 
 	assert_box(right.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
 	assert_box(left.placed, { x = 680, y = 20, w = 330, h = 500 }, "dragged target")
+end)
+
+run("title-bar drag reorders a tiled column at the release cursor", function()
+	local left = set_geometry(make_target(1), 10, 670)
+	local right = set_geometry(make_target(2, true), 680, 330)
+	local ctx = make_context({ left, right }, "title-bar-drag")
+	registered_layout.layout.recalculate(ctx)
+
+	active_window = right.window
+	right.window.floating = true
+	registered_layout.layout.recalculate(make_context({ left }, "title-bar-drag"))
+
+	right.window.floating = false
+	set_geometry(right, 10, 330)
+	cursor_position = { x = 100, y = 30 }
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = nil
+
+	assert_box(right.placed, { x = 10, y = 20, w = 670, h = 500 }, "dragged target")
+	assert_box(left.placed, { x = 680, y = 20, w = 330, h = 500 }, "existing target")
 end)
 
 run("spawned active window does not reorder existing columns", function()

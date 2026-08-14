@@ -53,6 +53,7 @@ function M.new()
 		position_by_scope = {},
 		scope_by_id = {},
 		seen_ids = {},
+		tiled_drag_by_key = {},
 	}
 end
 
@@ -353,6 +354,44 @@ end
 
 function M.placement_intent_for_window(window)
 	return pending_placement_by_id[M.window_id(window)]
+end
+
+function M.observe_floating_active(state, key, targets)
+	local active = hl and hl.get_active_window and hl.get_active_window() or nil
+	if not active or active.floating ~= true or M.placement_intent_for_window(active) then
+		return
+	end
+
+	local id = M.window_id(active)
+	local order = key and state.order_by_key[key] or nil
+	if not id or not order or not M.index_of(order, id) then
+		return
+	end
+
+	for index = 1, #targets do
+		if M.target_id(targets[index]) == id then
+			return
+		end
+	end
+
+	state.tiled_drag_by_key[key] = id
+end
+
+function M.consume_tiled_drag(state, key, targets)
+	local id = key and state.tiled_drag_by_key[key] or nil
+	if not id then
+		return nil
+	end
+
+	for index = 1, #targets do
+		local target = targets[index]
+		if M.target_id(target) == id then
+			state.tiled_drag_by_key[key] = nil
+			return target
+		end
+	end
+
+	return nil
 end
 
 function M.identities_safe(targets)

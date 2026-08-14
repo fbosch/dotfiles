@@ -11,7 +11,7 @@ The bundled entrypoint imports these components from `components/`:
 - `volume-indicator.tsx` for volume overlays.
 - `keyboard-switcher.tsx` for layout switch feedback.
 - `start-menu/index.tsx` for the launcher surface.
-- `window-switcher.tsx` for Alt-Tab style window switching.
+- `window-switcher/` for Alt-Tab style window switching and session state.
 - `desktop-clock.tsx` for the desktop clock surface.
 - `calendar-widget.tsx` for the taskbar calendar.
 - `audio-mixer-widget.tsx` for audio controls.

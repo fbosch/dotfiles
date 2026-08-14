@@ -170,6 +170,9 @@ function M.recalculate(ctx)
 		return
 	end
 
+	local key = workspace_key(targets)
+	order_state.observe_floating_active(state, key, targets)
+
 	local area = ctx.area
 	if count == 1 then
 		local role = role_for_targets(targets)
@@ -193,7 +196,6 @@ function M.recalculate(ctx)
 	local y = area.y
 	local width = area.w
 	local height = area.h
-	local key = workspace_key(targets)
 	local role = role_for_targets(targets)
 	local ratios = role == monitor_role.portrait and row_ratios_for_workspace(key, count)
 		or ratios_for_workspace(key, count)

@@ -5,6 +5,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local registered_layout = nil
 local cursor_position = nil
+local active_window = nil
 
 _G.hl = {
 	layout = {
@@ -14,6 +15,9 @@ _G.hl = {
 	},
 	get_cursor_pos = function()
 		return cursor_position
+	end,
+	get_active_window = function()
+		return active_window
 	end,
 }
 
@@ -127,6 +131,7 @@ end
 local function load_layout()
 	registered_layout = nil
 	cursor_position = nil
+	active_window = nil
 	_G.__PORTRAIT_ROWS_DISABLE_STATE = true
 	package.loaded["layouts.portrait_rows"] = nil
 	package.loaded["layouts.shared.ordered_axis"] = nil
@@ -162,6 +167,26 @@ run("two windows use one-third top and two-thirds bottom", function()
 
 	assert_box(top.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
 	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 200 }, "bottom target")
+end)
+
+run("title-bar drag reorders a tiled row at the release cursor", function()
+	local top = set_geometry(make_workspace_target(1, "title-bar-drag"), 20, 100)
+	local bottom = set_geometry(make_workspace_target(2, "title-bar-drag", true), 120, 200)
+	local ctx = make_context({ top, bottom })
+	registered_layout.layout.recalculate(ctx)
+
+	active_window = bottom.window
+	bottom.window.floating = true
+	registered_layout.layout.recalculate(make_context({ top }))
+
+	bottom.window.floating = false
+	set_geometry(bottom, 20, 200)
+	cursor_position = { x = 20, y = 30 }
+	registered_layout.layout.recalculate(ctx)
+	cursor_position = nil
+
+	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "dragged target")
+	assert_box(top.placed, { x = 10, y = 120, w = 120, h = 200 }, "existing target")
 end)
 
 run("three windows use equal vertical thirds", function()

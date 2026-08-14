@@ -134,6 +134,16 @@ function M.recalculate_ordered(opts)
 		order_state.sync(state, key, source_targets, opts.insert_after_id, true)
 	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	local targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+	local tiled_drag_target = order_state.consume_tiled_drag(state, key, targets)
+	if tiled_drag_target then
+		local position = order_state.cursor_position(axis) or order_state.position(tiled_drag_target, axis)
+		local target_index = M.nearest_slot_index(position, opts.ratios, opts.start, opts.span)
+		if order_state.move_target_to_visible_index(state, key, tiled_drag_target, targets, target_index) then
+			state.manual_change_by_key[key] = nil
+			needs_state_save = true
+			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
+		end
+	end
 	local placement_target = nil
 	local placement_intent = nil
 	for index = 1, #targets do

@@ -12,7 +12,7 @@ Shell components (in `components/`):
 - `components/volume-indicator.tsx` - Volume change indicator with automatic monitoring
 - `components/start-menu/index.tsx` - System start menu with update badges
 - `components/start-menu/recent-items-menu.tsx` - Display-only Recent Items submenu
-- `components/window-switcher.tsx` - Alt+Tab window switcher with previews
+- `components/window-switcher/` - Alt+Tab window switcher with previews and session state
 
 Lazy utility components (in `components/`):
 

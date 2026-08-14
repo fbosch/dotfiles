@@ -5,12 +5,18 @@ import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import tokens from "../../../design-system/tokens.json";
+import { createActor, type ActorRefFrom } from "xstate";
+import tokens from "../../../../design-system/tokens.json";
 import { execAsync } from "ags/process";
-import { getFallbackLetter, getIconForWindow, setImageFile } from "../services/app-icons";
-import { queryHyprlandJson } from "../services/hyprland-ipc";
-import { perf } from "../services/performance-monitor";
-import { getProfileState, subscribeProfileState } from "../services/profile-state";
+import { getFallbackLetter, getIconForWindow, setImageFile } from "../../services/app-icons";
+import { queryHyprlandJson } from "../../services/hyprland-ipc";
+import { perf } from "../../services/performance-monitor";
+import { getProfileState, subscribeProfileState } from "../../services/profile-state";
+import { windowSwitcherMachine, type WindowInfo } from "./machine";
+import {
+  getInitialSelection,
+  resolveCommitTarget,
+} from "./session-policy";
 
 /**
  * Performance Optimizations:
@@ -29,12 +35,6 @@ import { getProfileState, subscribeProfileState } from "../services/profile-stat
  * - ACTIVE + trigger modifier release -> IDLE (commits and hides)
  * - ACTIVE + hide -> IDLE (just hides)
  */
-
-// State machine
-enum SwitcherState {
-  IDLE = "IDLE",
-  ACTIVE = "ACTIVE",
-}
 
 // Display mode
 enum DisplayMode {
@@ -63,25 +63,6 @@ interface HyprlandClient {
   };
   at?: [number, number];
   size?: [number, number];
-}
-
-// Window info for display
-interface WindowInfo {
-  address: string;
-  stableId?: string;
-  class: string;
-  initialClass?: string;
-  title: string;
-  initialTitle?: string;
-  workspace: string;
-  size?: {
-    width: number;
-    height: number;
-  };
-  position?: {
-    x: number;
-    y: number;
-  };
 }
 
 // Configuration
@@ -126,23 +107,37 @@ function writeBindDiagnostic(message: string): void {
   );
 }
 
-// State
-let state: SwitcherState = SwitcherState.IDLE;
+type WindowSwitcherActor = ActorRefFrom<typeof windowSwitcherMachine>;
+
+let windowSwitcherActor: WindowSwitcherActor | null = null;
 
 let displayMode: DisplayMode = DisplayMode.PREVIEWS;
 let sortMode: SortMode = SortMode.RECENCY; // Default to recency like Windows 11
 let unsubscribeProfileState: (() => void) | null = null;
+let shutdownSignalConnected = false;
 
 let win: Astal.Window | null = null;
 let containerBox: Gtk.Box | null = null;
 let appsRowBox: Gtk.Box | null = null; // Reference to apps-row for wrapping
 let selectedNameLabel: Gtk.Label | null = null;
-let isVisible = false; // Derived from state, kept for GTK
 let windowButtons: Map<string, Gtk.Button> = new Map();
-let currentWindows: WindowInfo[] = [];
-let currentIndex = 0;
-let activeTriggerModifier = "ALT";
 let triggerModifierWatchId: number | null = null;
+
+function getSwitcherActor(): WindowSwitcherActor {
+  if (windowSwitcherActor === null) {
+    throw new Error("Window Switcher actor has not been initialized");
+  }
+
+  return windowSwitcherActor;
+}
+
+function switcherIsVisible(): boolean {
+  return windowSwitcherActor?.getSnapshot().hasTag("switcher-visible") === true;
+}
+
+function getSession() {
+  return getSwitcherActor().getSnapshot().context;
+}
 
 // Icon theme reference (initialized in createWindow)
 let iconTheme: Gtk.IconTheme | null = null;
@@ -282,7 +277,7 @@ function ensurePreviewCacheMonitor() {
       }
     }
 
-    if (state === SwitcherState.ACTIVE && displayMode === DisplayMode.PREVIEWS) {
+    if (switcherIsVisible() && displayMode === DisplayMode.PREVIEWS) {
       updateSwitcher();
     }
   });
@@ -758,7 +753,7 @@ function createAppButton(
         canFocus={false}
         class={`app-button ${isSelected ? "selected" : ""}`}
         onClicked={() => {
-          currentIndex = index;
+          getSwitcherActor().send({ type: "SELECT", index });
           commitSwitch();
         }}
       >
@@ -800,6 +795,7 @@ function getPreviewMtime(previewPath: string | null): number | null {
 // Update the switcher display with new data
 function updateSwitcher() {
   if (!containerBox || !selectedNameLabel) return;
+  const { windows: currentWindows, currentIndex } = getSession();
   const mark = perf.start("window-switcher", "updateSwitcher");
   let ok = true;
   let error: string | undefined;
@@ -1027,7 +1023,7 @@ function isModifierPressed(name: string): boolean {
 }
 
 function isTriggerModifierKey(keyval: number): boolean {
-  const normalized = activeTriggerModifier.toUpperCase();
+  const normalized = getSession().triggerModifier.toUpperCase();
   if (normalized === "SUPER") return keyval === 65515 || keyval === 65516;
   if (normalized === "ALT") return keyval === 65513 || keyval === 65514;
   if (normalized === "CTRL" || normalized === "CONTROL") return keyval === 65507 || keyval === 65508;
@@ -1046,14 +1042,15 @@ function stopTriggerModifierWatch() {
 function startTriggerModifierWatch() {
   stopTriggerModifierWatch();
   triggerModifierWatchId = GLib.timeout_add(GLib.PRIORITY_HIGH, 25, () => {
-    if (state !== SwitcherState.ACTIVE) {
+    if (switcherIsVisible() === false) {
       triggerModifierWatchId = null;
       return GLib.SOURCE_REMOVE;
     }
 
-    if (!isModifierPressed(activeTriggerModifier)) {
-      writeBindDiagnostic(`watch released modifier=${activeTriggerModifier}`);
-      debugLog(`${activeTriggerModifier} released, committing switch`);
+    const { triggerModifier } = getSession();
+    if (!isModifierPressed(triggerModifier)) {
+      writeBindDiagnostic(`watch released modifier=${triggerModifier}`);
+      debugLog(`${triggerModifier} released, committing switch`);
       triggerModifierWatchId = null;
       onCommit();
       return GLib.SOURCE_REMOVE;
@@ -1071,11 +1068,12 @@ function enterActiveState(windows: WindowInfo[], index: number, triggerModifier 
   debugLog(
     `[State] IDLE -> ACTIVE (${windows.length} windows, index ${index})`,
   );
-  state = SwitcherState.ACTIVE;
-  currentWindows = windows;
-  currentIndex = index;
-  isVisible = true;
-  activeTriggerModifier = triggerModifier;
+  getSwitcherActor().send({
+    type: "ACTIVATE",
+    windows,
+    index,
+    triggerModifier,
+  });
 
   if (win) {
     applyStaticCSS();
@@ -1087,11 +1085,10 @@ function enterActiveState(windows: WindowInfo[], index: number, triggerModifier 
 }
 
 // Transition to IDLE state
-function enterIdleState() {
-  debugLog(`[State] ${state} -> IDLE`);
+function enterIdleState(event: "COMMIT" | "HIDE" = "HIDE") {
+  debugLog(`[State] ${switcherIsVisible() ? "ACTIVE" : "IDLE"} -> IDLE`);
   stopTriggerModifierWatch();
-  state = SwitcherState.IDLE;
-  isVisible = false;
+  getSwitcherActor().send({ type: event });
 
   if (win) {
     win.set_visible(false);
@@ -1105,7 +1102,7 @@ function enterIdleState() {
 
 // Handle next window event
 async function onNext(triggerModifier = "ALT") {
-  if (state === SwitcherState.IDLE) {
+  if (switcherIsVisible() === false) {
     // Fetch windows and initialize
     const windows = await getWindows();
 
@@ -1118,39 +1115,21 @@ async function onNext(triggerModifier = "ALT") {
       updateFocusHistory(activeAddress);
     }
 
-    let index: number;
-    
-    if (sortMode === SortMode.RECENCY) {
-      // In recency mode, start at index 1 (second most recent window)
-      // This gives Windows-like Alt+Tab behavior
-      index = 1;
-    } else {
-      // In alphabetical mode, find current window and cycle to next
-      index = windows.findIndex((w) => w.address === activeAddress);
-      
-      // If current window not found, start from first
-      if (index === -1) {
-        index = 0;
-      }
-      
-      // Cycle to next
-      index = (index + 1) % windows.length;
-    }
-
+    const index = getInitialSelection(windows, activeAddress, sortMode, "next");
     enterActiveState(windows, index, triggerModifier);
-  } else if (state === SwitcherState.ACTIVE) {
-    // Cycle within current session
-    if (currentWindows.length === 0) return;
-    if (currentWindows.length === 1) return;
-
-    currentIndex = (currentIndex + 1) % currentWindows.length;
-    updateSwitcher();
+    return;
   }
+
+  const { windows } = getSession();
+  if (windows.length <= 1) return;
+
+  getSwitcherActor().send({ type: "CYCLE", direction: "next" });
+  updateSwitcher();
 }
 
 // Handle previous window event
 async function onPrev(triggerModifier = "ALT") {
-  if (state === SwitcherState.IDLE) {
+  if (switcherIsVisible() === false) {
     // Fetch windows and initialize
     const windows = await getWindows();
 
@@ -1163,58 +1142,36 @@ async function onPrev(triggerModifier = "ALT") {
       updateFocusHistory(activeAddress);
     }
 
-    let index: number;
-    
-    if (sortMode === SortMode.RECENCY) {
-      // In recency mode, Shift+Tab should go to second most recent (same as Tab)
-      // This matches Windows behavior where first Shift+Tab goes to same place as Tab
-      index = 1;
-    } else {
-      // In alphabetical mode, find current window and cycle to previous
-      index = windows.findIndex((w) => w.address === activeAddress);
-      
-      // If current window not found, start from last
-      if (index === -1) {
-        index = windows.length - 1;
-      }
-      
-      // Cycle to previous
-      index = (index - 1 + windows.length) % windows.length;
-    }
-
+    const index = getInitialSelection(windows, activeAddress, sortMode, "previous");
     enterActiveState(windows, index, triggerModifier);
-  } else if (state === SwitcherState.ACTIVE) {
-    // Cycle within current session
-    if (currentWindows.length === 0) return;
-    if (currentWindows.length === 1) return;
-
-    currentIndex =
-      (currentIndex - 1 + currentWindows.length) % currentWindows.length;
-    updateSwitcher();
+    return;
   }
+
+  const { windows } = getSession();
+  if (windows.length <= 1) return;
+
+  getSwitcherActor().send({ type: "CYCLE", direction: "previous" });
+  updateSwitcher();
 }
 
 // Handle commit and hide
 function onCommit() {
-  if (state !== SwitcherState.ACTIVE) {
-    enterIdleState();
+  if (switcherIsVisible() === false) {
+    enterIdleState("COMMIT");
     return;
   }
 
-  if (currentWindows.length === 0) {
-    enterIdleState();
+  const { windows, currentIndex } = getSession();
+  const target = resolveCommitTarget(windows, currentIndex);
+  if (target === null) {
+    enterIdleState("COMMIT");
     return;
   }
-
-  const targetWindow = currentWindows[currentIndex];
-  if (!targetWindow) {
-    enterIdleState();
-    return;
-  }
+  const targetWindow = windows[currentIndex];
 
   try {
-    if (targetWindow.workspace === "special:minimized") {
-      restoreMinimizedAndFocus(targetWindow.address);
+    if (target.restoreMinimized) {
+      restoreMinimizedAndFocus(target.address);
     } else {
       focusAndCenterWindow(targetWindow);
     }
@@ -1225,7 +1182,7 @@ function onCommit() {
     console.error("Error focusing window:", e);
   }
 
-  enterIdleState();
+  enterIdleState("COMMIT");
 }
 
 // Handle hide without commit
@@ -1234,8 +1191,8 @@ function onHide() {
 }
 
 function onTriggerModifierRelease() {
-  if (state !== SwitcherState.ACTIVE) return;
-  debugLog(`${activeTriggerModifier} key released, committing switch`);
+  if (switcherIsVisible() === false) return;
+  debugLog(`${getSession().triggerModifier} key released, committing switch`);
   onCommit();
 }
 
@@ -1561,10 +1518,9 @@ async function handleSetSortMode(mode: string | undefined): Promise<string> {
     normalizedMode === "ALPHABETICAL" ? SortMode.ALPHABETICAL : SortMode.RECENCY;
   
   // If active, refresh window list with new sort order
-  if (state === SwitcherState.ACTIVE) {
+  if (switcherIsVisible()) {
     const windows = await getWindows();
-    currentWindows = windows;
-    currentIndex = 0; // Reset to first window with new sort
+    getSwitcherActor().send({ type: "REFRESH", windows });
     previousWindowAddresses = [];
     windowButtons.clear();
     updateSwitcher();
@@ -1574,7 +1530,7 @@ async function handleSetSortMode(mode: string | undefined): Promise<string> {
 }
 
 function rebuildUIIfActive() {
-  if (state === SwitcherState.ACTIVE) {
+  if (switcherIsVisible()) {
     // Force rebuild by clearing previous addresses
     previousWindowAddresses = [];
     windowButtons.clear();
@@ -1599,12 +1555,27 @@ function startProfileStateSubscription() {
   unsubscribeProfileState = subscribeProfileState(() => syncProfilePresentation());
 }
 
+function teardownWindowSwitcher() {
+  stopTriggerModifierWatch();
+  unsubscribeProfileState?.();
+  unsubscribeProfileState = null;
+  previewCacheMonitor?.cancel();
+  previewCacheMonitor = null;
+  windowSwitcherActor?.stop();
+  windowSwitcherActor = null;
+}
+
 // Functions for bundled mode (using global namespace pattern)
 function initWindowSwitcher() {
   // Window-switcher needs to be created immediately for Alt monitoring to work
   // This is the only component that can't be lazy-loaded due to its Alt key event handling
+  windowSwitcherActor ??= createActor(windowSwitcherMachine).start();
   syncProfilePresentation();
   startProfileStateSubscription();
+  if (shutdownSignalConnected === false) {
+    shutdownSignalConnected = true;
+    app.connect("shutdown", teardownWindowSwitcher);
+  }
   applyStaticCSS();
   createWindow();
 }
@@ -1726,7 +1697,7 @@ function handleWindowSwitcherRequest(argv: string[], res: (response: string) => 
     }
 
     if (action === "get-visibility") {
-      res(isVisible ? "visible" : "hidden");
+      res(switcherIsVisible() ? "visible" : "hidden");
       return;
     }
 

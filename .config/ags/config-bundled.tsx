@@ -22,7 +22,7 @@ import "./components/confirm-dialog.tsx";
 import "./components/volume-indicator.tsx";
 import "./components/keyboard-switcher.tsx";
 import "./components/start-menu/index.tsx";
-import "./components/window-switcher.tsx";
+import "./components/window-switcher/index.tsx";
 import "./components/desktop-clock.tsx";
 import "./components/calendar-widget.tsx";
 import "./components/audio-mixer-widget.tsx";
