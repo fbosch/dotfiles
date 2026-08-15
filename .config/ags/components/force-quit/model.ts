@@ -3,6 +3,7 @@ import type { IconRef, IconWindowInfo } from "../../services/app-icons";
 export interface ForceQuitWindow extends IconWindowInfo {
 	address: string;
 	pid: number;
+	processStartTime?: number;
 }
 
 export interface ForceQuitApplication {
@@ -59,8 +60,9 @@ function isProtectedIdentity(value: string): boolean {
 
 export function isProtectedWindow(
 	window: ForceQuitWindow,
-	processMetadata: string[],
+	processMetadata: string[] | null,
 ): boolean {
+	if (processMetadata === null) return true;
 	const identities = [window.class, window.initialClass].filter(
 		(value): value is string => Boolean(value),
 	);
@@ -116,10 +118,19 @@ export function revalidatedWindows(
 	);
 	if (!current) return [];
 	const originalWindows = new Map(
-		application.windows.map((window) => [window.address, window.pid]),
+		application.windows.map((window) => [window.address, window]),
 	);
 	return current.windows.filter(
-		(window) => originalWindows.get(window.address) === window.pid,
+		(window) => {
+			const original = originalWindows.get(window.address);
+			if (!original || original.pid !== window.pid) return false;
+			if (
+				typeof original.processStartTime === "number" &&
+				original.processStartTime !== window.processStartTime
+			)
+				return false;
+			return true;
+		},
 	);
 }
 

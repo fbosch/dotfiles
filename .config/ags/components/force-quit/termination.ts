@@ -1,9 +1,13 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { dispatchHyprland } from "../../services/hyprland-ipc";
-import { getForceQuitApplications } from "./application-repository";
+import {
+	getForceQuitApplications,
+	readProcessStartTime,
+} from "./application-repository";
 import {
 	type ForceQuitApplication,
+	type ForceQuitWindow,
 	revalidatedWindows,
 } from "./model";
 
@@ -13,12 +17,21 @@ export interface ForceQuitOperation {
 	cancel(): void;
 }
 
+export interface ForceQuitTerminationDependencies {
+	getApplications(): ForceQuitApplication[] | null;
+	dispatch(expression: string): void;
+	signal(windows: ForceQuitWindow[]): void;
+	schedule(delayMs: number, callback: () => void): number;
+	cancelSource(source: number): void;
+}
+
 const gracefulCloseMs = 1_500;
 const forcedTerminationSettleMs = 250;
 
 export function forceQuitApplication(
 	application: ForceQuitApplication,
 	onComplete: (result: ForceQuitResult) => void,
+	dependencies: ForceQuitTerminationDependencies = defaultDependencies,
 ): ForceQuitOperation {
 	let source = 0;
 	let completed = false;
@@ -32,12 +45,12 @@ export function forceQuitApplication(
 		cancel() {
 			if (completed) return;
 			completed = true;
-			if (source !== 0) GLib.source_remove(source);
+			if (source !== 0) dependencies.cancelSource(source);
 			source = 0;
 		},
 	};
 
-	const currentApplications = getForceQuitApplications();
+	const currentApplications = dependencies.getApplications();
 	if (!currentApplications) {
 		finish("unavailable");
 		return operation;
@@ -48,40 +61,57 @@ export function forceQuitApplication(
 		return operation;
 	}
 	for (const window of currentWindows)
-		dispatchHyprland(
+		dependencies.dispatch(
 			`hl.dsp.window.close({ window = "address:${window.address}" })`,
-			{ component: "force-quit", metric: "gracefulClose" },
 		);
 
-	source = GLib.timeout_add(GLib.PRIORITY_DEFAULT, gracefulCloseMs, () => {
+	source = dependencies.schedule(gracefulCloseMs, () => {
 		source = 0;
-		if (completed) return GLib.SOURCE_REMOVE;
-		const applications = getForceQuitApplications();
+		if (completed) return;
+		const applications = dependencies.getApplications();
 		if (!applications) {
 			finish("unavailable");
-			return GLib.SOURCE_REMOVE;
+			return;
 		}
 		const survivors = revalidatedWindows(application, applications);
 		if (survivors.length === 0) {
 			finish("resolved");
-			return GLib.SOURCE_REMOVE;
+			return;
 		}
-		for (const pid of new Set(survivors.map((window) => window.pid))) {
+		dependencies.signal(survivors);
+		source = dependencies.schedule(forcedTerminationSettleMs, () =>
+			finish("terminated"),
+		);
+	});
+	return operation;
+}
+
+const defaultDependencies: ForceQuitTerminationDependencies = {
+	getApplications: () => getForceQuitApplications(),
+	dispatch: (expression) =>
+		dispatchHyprland(expression, {
+			component: "force-quit",
+			metric: "gracefulClose",
+		}),
+	signal: (windows) => {
+		const byPid = new Map(windows.map((window) => [window.pid, window]));
+		for (const [pid, window] of byPid) {
+			if (
+			typeof window.processStartTime !== "number" ||
+			readProcessStartTime(pid) !== window.processStartTime
+			)
+			continue;
 			try {
 				Gio.Subprocess.new(["kill", "-KILL", pid.toString()], Gio.SubprocessFlags.NONE);
 			} catch (error) {
 				console.error(`Failed to terminate process ${pid}:`, error);
 			}
 		}
-		source = GLib.timeout_add(
-			GLib.PRIORITY_DEFAULT,
-			forcedTerminationSettleMs,
-			() => {
-				finish("terminated");
-				return GLib.SOURCE_REMOVE;
-			},
-		);
-		return GLib.SOURCE_REMOVE;
-	});
-	return operation;
-}
+	},
+	schedule: (delayMs, callback) =>
+		GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
+			callback();
+			return GLib.SOURCE_REMOVE;
+		}),
+	cancelSource: (source) => GLib.source_remove(source),
+};

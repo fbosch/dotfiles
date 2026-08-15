@@ -20,7 +20,12 @@ interface ApplicationGroup extends Omit<ForceQuitApplication, "pids"> {
 	pids: Set<number>;
 }
 
-function readProcessMetadata(pid: number): string[] {
+interface ProcessMetadata {
+	identities: string[];
+	startTime: number;
+}
+
+function readProcessMetadata(pid: number): ProcessMetadata | null {
 	const values: string[] = [];
 	for (const filename of ["comm", "cmdline"]) {
 		try {
@@ -35,7 +40,24 @@ function readProcessMetadata(pid: number): string[] {
 			// Processes can exit while the client snapshot is being grouped.
 		}
 	}
-	return values;
+	const startTime = readProcessStartTime(pid);
+	if (values.length === 0 || startTime === null) return null;
+	return { identities: values, startTime };
+}
+
+export function readProcessStartTime(pid: number): number | null {
+	try {
+		const [success, contents] = GLib.file_get_contents(`/proc/${pid}/stat`);
+		if (!success || !contents) return null;
+		const stat = new TextDecoder().decode(contents).trim();
+		const processNameEnd = stat.lastIndexOf(")");
+		if (processNameEnd === -1) return null;
+		const fields = stat.slice(processNameEnd + 2).split(" ");
+		const startTime = Number.parseInt(fields[19], 10);
+		return Number.isSafeInteger(startTime) && startTime >= 0 ? startTime : null;
+	} catch {
+		return null;
+	}
 }
 
 export function getForceQuitApplications(
@@ -47,13 +69,22 @@ export function getForceQuitApplications(
 	});
 	if (!Array.isArray(response)) return null;
 
-	const groups = new Map<string, ApplicationGroup>();
+	const windows: Array<{ window: ForceQuitWindow; metadata: ProcessMetadata | null }> = [];
+	const protectedPids = new Set<number>();
 	for (const value of response) {
 		const window = parseForceQuitWindow(value);
 		if (!window) continue;
 		const metadata = readProcessMetadata(window.pid);
-		if (isProtectedWindow(window, metadata)) continue;
-		window.processExecutable = metadata.map(processIdentity).find(Boolean);
+		windows.push({ window, metadata });
+		if (isProtectedWindow(window, metadata?.identities ?? null))
+			protectedPids.add(window.pid);
+	}
+
+	const groups = new Map<string, ApplicationGroup>();
+	for (const { window, metadata } of windows) {
+		if (protectedPids.has(window.pid) || !metadata) continue;
+		window.processExecutable = metadata.identities.map(processIdentity).find(Boolean);
+		window.processStartTime = metadata.startTime;
 		addWindow(groups, window, iconTheme);
 	}
 

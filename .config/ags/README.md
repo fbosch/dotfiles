@@ -26,7 +26,7 @@ The bundled entrypoint imports these components from `components/`:
 their first request:
 
 - `force-quit/` for selecting and terminating an application.
-- `about-this-pc.tsx` for system information.
+- `about-this-pc/` for system information.
 
 Start Menu opens utilities through `UtilityManager`, not their runtime globals.
 

@@ -42,6 +42,7 @@ export class ForceQuitController {
 	#metricRefreshSource = 0;
 	#shutdownSignalId = 0;
 	#visible = false;
+	#operationGeneration = 0;
 
 	constructor(options: ForceQuitControllerOptions = {}) {
 		this.#view = options.view ?? new ForceQuitView();
@@ -79,10 +80,12 @@ export class ForceQuitController {
 	}
 
 	hide(): void {
+		this.#cancelOperation();
 		this.#destroyView();
 	}
 
 	destroy(): void {
+		this.#cancelOperation();
 		this.#destroyView();
 	}
 
@@ -91,9 +94,7 @@ export class ForceQuitController {
 	}
 
 	teardown(): void {
-		this.#operation?.cancel();
-		this.#operation = null;
-		this.#terminationPending = false;
+		this.#cancelOperation();
 		this.#destroyView();
 		if (this.#shutdownSignalId !== 0) {
 			app.disconnect(this.#shutdownSignalId);
@@ -121,7 +122,9 @@ export class ForceQuitController {
 		}
 		this.#terminationPending = true;
 		this.#render();
+		const generation = ++this.#operationGeneration;
 		const operation = this.#terminate(selected, () => {
+			if (generation !== this.#operationGeneration) return;
 			this.#terminationPending = false;
 			this.#operation = null;
 			this.#selectedApplicationId = null;
@@ -203,6 +206,7 @@ export class ForceQuitController {
 	}
 
 	#handleUnmapped(): void {
+		this.#cancelOperation();
 		this.#visible = false;
 		this.#clearMetricRefresh();
 		this.#metricsSampler.clear();
@@ -214,5 +218,12 @@ export class ForceQuitController {
 		this.#metricsSampler.clear();
 		this.#selectedApplicationId = null;
 		this.#view.destroy();
+	}
+
+	#cancelOperation(): void {
+		this.#operationGeneration += 1;
+		this.#operation?.cancel();
+		this.#operation = null;
+		this.#terminationPending = false;
 	}
 }

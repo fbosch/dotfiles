@@ -16,7 +16,7 @@ Shell components (in `components/`):
 
 Lazy utility components (in `components/`):
 
-- `components/about-this-pc.tsx` - On-demand system information window
+- `components/about-this-pc/` - On-demand system information feature slice
 - `components/force-quit/` - On-demand application termination feature slice
 
 Services (in `services/`):

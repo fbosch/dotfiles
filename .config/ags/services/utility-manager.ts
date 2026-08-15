@@ -9,9 +9,9 @@ declare global {
 }
 
 const utilities: Record<UtilityId, UtilityDefinition> = {
-  "about-this-pc": {
-    load: () => import("../components/about-this-pc.tsx"),
-    component: () => globalThis.AboutThisPC,
+	"about-this-pc": {
+		load: () => import("../components/about-this-pc/index"),
+		component: () => globalThis.AboutThisPC,
 	},
 	"force-quit": {
 		load: () => import("../components/force-quit/index"),

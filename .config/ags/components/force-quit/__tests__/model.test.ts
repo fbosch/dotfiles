@@ -55,6 +55,7 @@ describe("Force Quit model", () => {
 			isProtectedWindow(ordinary, ["/usr/lib/xdg-desktop-portal-hyprland"]),
 		).toBe(true);
 		expect(isProtectedWindow(ordinary, ["/usr/bin/example"])).toBe(false);
+		expect(isProtectedWindow(ordinary, null)).toBe(true);
 	});
 
 	test("revalidates both address and PID before termination", () => {
@@ -70,6 +71,13 @@ describe("Force Quit model", () => {
 			expect.objectContaining({ address: "0x2", pid: 20 }),
 		]);
 		expect(revalidatedWindows(selected, [])).toEqual([]);
+		const originalWithStartTime = application("timed", [
+			{ address: "0x3", pid: 30 },
+		]);
+		originalWithStartTime.windows[0].processStartTime = 100;
+		const reused = application("timed", [{ address: "0x3", pid: 30 }]);
+		reused.windows[0].processStartTime = 101;
+		expect(revalidatedWindows(originalWithStartTime, [reused])).toEqual([]);
 	});
 
 	test("detects PID and window topology changes", () => {
