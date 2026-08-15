@@ -1,9 +1,9 @@
-import { tool, type Plugin } from "@opencode-ai/plugin"
+import { tool, type Plugin, type ToolResult } from "@opencode-ai/plugin"
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { basename, join } from "node:path"
 
 type Mode = "auto" | "browser" | "window" | "region" | "monitor" | "full"
 type Format = "png" | "jpeg"
@@ -679,7 +679,7 @@ function formatWindow(window: WindowInfo): string {
   return `${window.className || window.initialClass || "unknown"} - ${window.title || "untitled"}`
 }
 
-function formatResult(result: CaptureResult, hint: string, fallback: string[]): string {
+async function formatResult(result: CaptureResult, hint: string, fallback: string[]): Promise<ToolResult> {
   const lines = [`Captured screenshot: ${result.path}`, `Method: ${result.method}`]
   if (result.target !== undefined) lines.push(`Target: ${result.target}`)
   if (result.geometry !== undefined) lines.push(`Geometry: ${formatGeometry(result.geometry)}`)
@@ -687,7 +687,12 @@ function formatResult(result: CaptureResult, hint: string, fallback: string[]): 
   if (hint !== "") lines.push(`Hint: ${hint}`)
   const fallbacks = [...fallback, ...(result.fallback ?? [])]
   if (fallbacks.length > 0) lines.push(`Fallbacks: ${fallbacks.join(" | ")}`)
-  return lines.join("\n")
+  const mime = result.path.endsWith(".jpg") ? "image/jpeg" : "image/png"
+  const data = await readFile(result.path, "base64")
+  return {
+    output: lines.join("\n"),
+    attachments: [{ type: "file", mime, filename: basename(result.path), url: `data:${mime};base64,${data}` }],
+  }
 }
 
 async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | null; clients: WindowInfo[]; monitors: Monitor[]; layers: Layer[] }> {
@@ -706,7 +711,7 @@ async function gatherContext(cwd: string): Promise<{ activeWindow: WindowInfo | 
   }
 }
 
-async function captureByMode(args: { mode: Mode; hint: string; format: Format; fullPage: boolean; region?: Geometry }, cwd: string): Promise<string> {
+async function captureByMode(args: { mode: Mode; hint: string; format: Format; fullPage: boolean; region?: Geometry }, cwd: string): Promise<ToolResult> {
   if (args.region !== undefined) {
     const result = await captureRegion(args.region, "explicit coordinates", args.format, cwd)
     return typeof result === "string" ? `ERROR: ${result}` : formatResult(result, args.hint, [])

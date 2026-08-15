@@ -12,11 +12,11 @@ const utilities: Record<UtilityId, UtilityDefinition> = {
   "about-this-pc": {
     load: () => import("../components/about-this-pc.tsx"),
     component: () => globalThis.AboutThisPC,
-  },
-  "force-quit": {
-    load: () => import("../components/force-quit.tsx"),
-    component: () => globalThis.ForceQuit,
-  },
+	},
+	"force-quit": {
+		load: () => import("../components/force-quit/index"),
+		component: () => globalThis.ForceQuit,
+	},
 };
 
 const utilityManager = createUtilityManager(utilities);

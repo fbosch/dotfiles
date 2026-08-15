@@ -25,7 +25,7 @@ The bundled entrypoint imports these components from `components/`:
 `services/utility-manager.ts` imports these task-oriented windows only on
 their first request:
 
-- `force-quit.tsx` for selecting and terminating a window.
+- `force-quit/` for selecting and terminating an application.
 - `about-this-pc.tsx` for system information.
 
 Start Menu opens utilities through `UtilityManager`, not their runtime globals.

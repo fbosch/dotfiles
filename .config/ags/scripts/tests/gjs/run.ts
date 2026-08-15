@@ -4,6 +4,7 @@ import "./audio-mixer.case";
 import "./calendar.case";
 import "./keyboard-switcher.case";
 import "./volume-indicator.case";
+import "./force-quit.case";
 import "./window-switcher.case";
 import "./window-switcher-preview-cache.case";
 import { runSuite } from "./harness";
