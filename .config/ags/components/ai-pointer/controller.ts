@@ -148,8 +148,8 @@ export class AiPointerController {
 		const directory = this.#directory;
 		const stroke = this.#stroke;
 		this.#stopStrokeSampler();
-		this.#view.endStroke();
 		if (!stroke || !directory) {
+			this.#view.endStroke();
 			this.#failureMessage = "The drawing path is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return;
@@ -157,13 +157,25 @@ export class AiPointerController {
 		this.#stroke = appendStrokePoint(stroke, endPosition, true);
 		const geometry = selectionFromStroke(this.#stroke);
 		if (!geometry) {
+			this.#view.endStroke();
 			this.cancel();
 			return;
 		}
+		const runId = this.#runId;
+		void this.#view.finishStroke().then((hidden) => {
+			if (runId !== this.#runId) return;
+			if (hidden === false) {
+				this.#failureMessage = "The drawing overlay could not be removed safely.";
+				this.#actor?.send({ type: "FAIL" });
+				return;
+			}
+			this.#captureGeometry(directory, geometry, runId);
+		});
+	}
 
+	#captureGeometry(directory: string, geometry: SelectionGeometry, runId: number): void {
 		const cancellable = new Gio.Cancellable();
 		this.#cancellable = cancellable;
-		const runId = this.#runId;
 		void this.#captureRegion(directory, geometry, cancellable, (process) => {
 			if (runId === this.#runId) this.#process = process;
 		}).then((result) => {

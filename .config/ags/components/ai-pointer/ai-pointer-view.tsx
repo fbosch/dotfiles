@@ -126,6 +126,10 @@ export class AiPointerView {
 		this.#strokeOverlay.hide();
 	}
 
+	finishStroke(): Promise<boolean> {
+		return this.#strokeOverlay.hideBeforeCapture();
+	}
+
 	showError(message: string): void {
 		this.#preview?.set_paintable(null);
 		this.#geometry?.set_label("");

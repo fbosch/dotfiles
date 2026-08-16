@@ -33,9 +33,9 @@ Alternative considered: add a permanent input overlay. Rejected because it would
 
 ### Render one click-through surface per monitor
 
-AGS creates a temporary full-monitor overlay for each current GDK monitor. Each drawing area receives the same global polyline and translates it by that monitor's global logical origin. Cairo clipping limits each surface to its monitor automatically. The surfaces accept no pointer input and use the existing `ags-ai-pointer` no-screen-share namespace policy.
+AGS creates a temporary full-monitor overlay for each current GDK monitor. Each drawing area receives the same global polyline and translates it by that monitor's global logical origin. Cairo clipping limits each surface to its monitor automatically. The surfaces accept no pointer input and use a dedicated `ags-ai-pointer-drawing` namespace with no animation and no screen sharing.
 
-The controller owns the stroke and sampling source. The view owns windows, drawing areas, and Cairo rendering. Release hides the overlays before `grim` runs so the captured image cannot include the trail.
+The controller owns the stroke and sampling source. The view owns windows, drawing areas, and Cairo rendering. Release awaits GTK unmapping, synchronizes the display, and allows two compositor frames before `grim` runs so the captured image cannot include the trail. The separate review panel retains its namespace-specific `popin` style.
 
 Alternative considered: one desktop-sized window. Rejected because layer-shell surfaces are output-scoped and a single surface does not represent arbitrary multi-monitor layouts.
 
@@ -58,7 +58,7 @@ Hyprland continues to send closed `start` and `finish` requests with global coor
 - [Synchronous cursor IPC stalls a frame] -> Sample only during activation, use the direct Unix socket helper, keep the cadence bounded, and stop immediately on every terminal path.
 - [Very fast motion falls between samples] -> Keep authoritative endpoints, use a short cadence, and add capture padding; exact freehand shape reproduction is not required.
 - [Monitor layout changes during drawing] -> Snapshot monitor surfaces at activation and derive capture geometry from global compositor coordinates; cancellation and the next activation rebuild the surfaces.
-- [The trail appears in the screenshot] -> Hide and flush drawing surfaces before starting `grim` capture.
+- [The trail appears in the screenshot] -> Disable compositor animation for the drawing namespace, await unmapping, synchronize the display, and delay capture by two frames.
 - [A stroke has huge or degenerate bounds] -> Require two-dimensional extent and reuse the existing maximum pixel-area limit before capture.
 
 ## Migration Plan

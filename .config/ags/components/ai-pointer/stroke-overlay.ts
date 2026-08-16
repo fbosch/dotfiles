@@ -3,6 +3,7 @@ import app from "ags/gtk4/app";
 import Cairo from "cairo";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
+import GLib from "gi://GLib?version=2.0";
 import tokens from "../../../../design-system/tokens.json";
 import type { PointerPosition } from "./selection";
 
@@ -16,6 +17,8 @@ const allEdges =
 	Astal.WindowAnchor.BOTTOM |
 	Astal.WindowAnchor.LEFT |
 	Astal.WindowAnchor.RIGHT;
+const unmapTimeoutMs = 250;
+const compositorFrameDelayMs = 34;
 
 export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
@@ -50,6 +53,24 @@ export class StrokeOverlay {
 		this.#points = [];
 	}
 
+	async hideBeforeCapture(): Promise<boolean> {
+		const surfaces = this.#surfaces;
+		this.#surfaces = [];
+		this.#points = [];
+		const unmapped = await Promise.all(
+			surfaces.map(({ window }) => this.#waitForUnmap(window)),
+		);
+		Gdk.Display.get_default()?.sync();
+		await new Promise<void>((resolve) => {
+			GLib.timeout_add(GLib.PRIORITY_DEFAULT, compositorFrameDelayMs, () => {
+				resolve();
+				return GLib.SOURCE_REMOVE;
+			});
+		});
+		for (const { window } of surfaces) window.destroy();
+		return unmapped.every(Boolean);
+	}
+
 	#createSurface(
 		monitor: Gdk.Monitor,
 		index: number,
@@ -78,7 +99,7 @@ export class StrokeOverlay {
 		const window = new Astal.Window({
 			application: app,
 			name: `ai-pointer-stroke-${index}`,
-			namespace: "ags-ai-pointer",
+			namespace: "ags-ai-pointer-drawing",
 			visible: false,
 		});
 		window.add_css_class("ai-pointer");
@@ -103,5 +124,29 @@ export class StrokeOverlay {
 		window.add_controller(keyController);
 
 		return { window, drawing };
+	}
+
+	#waitForUnmap(window: Astal.Window): Promise<boolean> {
+		return new Promise((resolve) => {
+			let signalId = 0;
+			let timeoutId = 0;
+			const finish = (unmapped: boolean) => {
+				if (signalId !== 0) window.disconnect(signalId);
+				if (timeoutId !== 0) GLib.source_remove(timeoutId);
+				signalId = 0;
+				timeoutId = 0;
+				resolve(unmapped);
+			};
+			signalId = window.connect("notify::mapped", () => {
+				if (window.get_mapped() === false) finish(true);
+			});
+			timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, unmapTimeoutMs, () => {
+				timeoutId = 0;
+				finish(window.get_mapped() === false);
+				return GLib.SOURCE_REMOVE;
+			});
+			window.set_visible(false);
+			if (window.get_mapped() === false) finish(true);
+		});
 	}
 }

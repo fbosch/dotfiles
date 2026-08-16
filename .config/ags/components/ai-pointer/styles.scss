@@ -5,6 +5,7 @@
   background-color: transparent;
   border: none;
 
+  /* stylelint-disable-next-line nesting-selector-no-missing-scoping-root -- The surface mixin supplies the window selector. */
   &.ai-pointer-stroke {
     padding: 0;
 

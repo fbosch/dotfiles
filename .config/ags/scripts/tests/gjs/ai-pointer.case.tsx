@@ -52,7 +52,7 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 		{ x: 100, y: 100 },
 	]);
 	await settleMainLoop();
-	overlay.hide();
+	assert(await overlay.hideBeforeCapture(), "AI Pointer stroke overlay did not unmap");
 });
 
 test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
@@ -64,6 +64,9 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		},
 		updateStroke() {},
 		endStroke() {},
+		finishStroke() {
+			return Promise.resolve(true);
+		},
 		showCapture() {
 			return true;
 		},
