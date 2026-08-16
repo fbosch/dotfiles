@@ -205,8 +205,10 @@ def main():
             pss = values.get("pss_kb", {})
             print(
                 f"- {process} pid={values.get('pid')}: "
-                f"rss avg {rss.get('avg')} peak {rss.get('peak')} delta {rss.get('delta')}; "
-                f"pss avg {pss.get('avg')} peak {pss.get('peak')} delta {pss.get('delta')}"
+                f"rss before {rss.get('before')} avg {rss.get('avg')} "
+                f"peak {rss.get('peak')} after {rss.get('after')} delta {rss.get('delta')}; "
+                f"pss before {pss.get('before')} avg {pss.get('avg')} "
+                f"peak {pss.get('peak')} after {pss.get('after')} delta {pss.get('delta')}"
             )
     component_memory = extras.get("component_memory_delta_kb")
     if component_memory and any(

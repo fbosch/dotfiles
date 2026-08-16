@@ -151,24 +151,6 @@ function read_combined_pss_kb() {
   printf "%s" "$((launcher_pss + gjs_pss))"
 }
 
-function read_scope_rss_kb() {
-  local scope="$1"
-  case "$scope" in
-    launcher) read_rss_kb "$AGS_PID" ;;
-    gjs) read_rss_kb "$GJS_PID" ;;
-    combined) read_combined_rss_kb ;;
-  esac
-}
-
-function read_scope_pss_kb() {
-  local scope="$1"
-  case "$scope" in
-    launcher) read_pss_kb "$AGS_PID" ;;
-    gjs) read_pss_kb "$GJS_PID" ;;
-    combined) read_combined_pss_kb ;;
-  esac
-}
-
 function scope_pid() {
   local scope="$1"
   case "$scope" in
@@ -179,14 +161,54 @@ function scope_pid() {
 }
 
 function assert_process_identity() {
+  local current_gjs_pids=()
   if [[ "$(process_identity "$AGS_PID")" != "$AGS_IDENTITY" ]]; then
     printf "AGS launcher changed during benchmark (expected %s)\n" "$AGS_IDENTITY" >&2
+    exit 1
+  fi
+  mapfile -t current_gjs_pids < <(pgrep -P "$AGS_PID" -x gjs || true)
+  if [[ "${#current_gjs_pids[@]}" -ne 1 || "${current_gjs_pids[0]:-}" != "$GJS_PID" ]]; then
+    printf "AGS launcher GJS child changed during benchmark (expected PID %s)\n" "$GJS_PID" >&2
     exit 1
   fi
   if [[ "$(process_identity "$GJS_PID")" != "$GJS_IDENTITY" ]]; then
     printf "GJS process changed during benchmark (expected %s)\n" "$GJS_IDENTITY" >&2
     exit 1
   fi
+}
+
+function capture_memory_sample() {
+  assert_process_identity
+  SAMPLE_LAUNCHER_RSS="$(read_rss_kb "$AGS_PID")"
+  SAMPLE_GJS_RSS="$(read_rss_kb "$GJS_PID")"
+  SAMPLE_LAUNCHER_PSS="$(read_pss_kb "$AGS_PID")"
+  SAMPLE_GJS_PSS="$(read_pss_kb "$GJS_PID")"
+  SAMPLE_COMBINED_RSS=""
+  SAMPLE_COMBINED_PSS=""
+  if is_number "$SAMPLE_LAUNCHER_RSS" && is_number "$SAMPLE_GJS_RSS"; then
+    SAMPLE_COMBINED_RSS="$((SAMPLE_LAUNCHER_RSS + SAMPLE_GJS_RSS))"
+  fi
+  if is_number "$SAMPLE_LAUNCHER_PSS" && is_number "$SAMPLE_GJS_PSS"; then
+    SAMPLE_COMBINED_PSS="$((SAMPLE_LAUNCHER_PSS + SAMPLE_GJS_PSS))"
+  fi
+}
+
+function sample_scope_rss_kb() {
+  local scope="$1"
+  case "$scope" in
+    launcher) printf "%s" "$SAMPLE_LAUNCHER_RSS" ;;
+    gjs) printf "%s" "$SAMPLE_GJS_RSS" ;;
+    combined) printf "%s" "$SAMPLE_COMBINED_RSS" ;;
+  esac
+}
+
+function sample_scope_pss_kb() {
+  local scope="$1"
+  case "$scope" in
+    launcher) printf "%s" "$SAMPLE_LAUNCHER_PSS" ;;
+    gjs) printf "%s" "$SAMPLE_GJS_PSS" ;;
+    combined) printf "%s" "$SAMPLE_COMBINED_PSS" ;;
+  esac
 }
 
 function is_number() {
@@ -232,6 +254,18 @@ STARTED_INSTANCE=0
 AGS_PID=""
 GJS_PID=""
 
+function cleanup() {
+  local status=$?
+  trap - EXIT
+  rm -f "$PERF_FLAG"
+  if [[ "$STARTED_INSTANCE" == "1" ]]; then
+    ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
+  fi
+  exit "$status"
+}
+
+trap cleanup EXIT
+
 if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_running; then
   ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
   sleep 1
@@ -267,15 +301,16 @@ if [[ -z "$AGS_PID" || ! -r "/proc/${AGS_PID}/status" ]]; then
   AGS_PID="$(pgrep -f "ags.*${INSTANCE}" | head -n 1 || true)"
 fi
 
+GJS_PIDS=()
 if [[ -n "$AGS_PID" ]]; then
-  GJS_PID="$(pgrep -P "$AGS_PID" -x gjs || true)"
-  GJS_PID="${GJS_PID%%$'\n'*}"
+  mapfile -t GJS_PIDS < <(pgrep -P "$AGS_PID" -x gjs || true)
 fi
 
-if [[ -z "$GJS_PID" || ! -r "/proc/${GJS_PID}/status" ]]; then
+if [[ "${#GJS_PIDS[@]}" -ne 1 || ! -r "/proc/${GJS_PIDS[0]:-}/status" ]]; then
   printf "Failed to resolve GJS child for AGS launcher PID %s\n" "${AGS_PID:-unknown}" >&2
   exit 1
 fi
+GJS_PID="${GJS_PIDS[0]}"
 
 AGS_IDENTITY="$(process_identity "$AGS_PID")"
 GJS_IDENTITY="$(process_identity "$GJS_PID")"
@@ -534,19 +569,19 @@ for scope in "${MEMORY_SCOPES[@]}"; do
 done
 
 if target_enabled "memory"; then
-  assert_process_identity
   printf -- "%s\n" "- memory process tree over ${BENCH_MEM_CYCLES} cycles"
+  capture_memory_sample
   for scope in "${MEMORY_SCOPES[@]}"; do
-    memory_before_rss[$scope]="$(read_scope_rss_kb "$scope")"
-    memory_before_pss[$scope]="$(read_scope_pss_kb "$scope")"
+    memory_before_rss[$scope]="$(sample_scope_rss_kb "$scope")"
+    memory_before_pss[$scope]="$(sample_scope_pss_kb "$scope")"
   done
 
   for _ in $(seq 1 "$BENCH_MEM_CYCLES"); do
     request '{"action":"next"}'
     request '{"action":"hide"}'
-    assert_process_identity
+    capture_memory_sample
     for scope in "${MEMORY_SCOPES[@]}"; do
-      sample_rss="$(read_scope_rss_kb "$scope")"
+      sample_rss="$(sample_scope_rss_kb "$scope")"
       if is_number "$sample_rss"; then
         memory_sum_rss[$scope]="$((memory_sum_rss[$scope] + sample_rss))"
         memory_samples_rss[$scope]="$((memory_samples_rss[$scope] + 1))"
@@ -554,7 +589,7 @@ if target_enabled "memory"; then
           memory_peak_rss[$scope]="$sample_rss"
         fi
       fi
-      sample_pss="$(read_scope_pss_kb "$scope")"
+      sample_pss="$(sample_scope_pss_kb "$scope")"
       if is_number "$sample_pss"; then
         memory_sum_pss[$scope]="$((memory_sum_pss[$scope] + sample_pss))"
         memory_samples_pss[$scope]="$((memory_samples_pss[$scope] + 1))"
@@ -565,10 +600,10 @@ if target_enabled "memory"; then
     done
   done
 
-  assert_process_identity
+  capture_memory_sample
   for scope in "${MEMORY_SCOPES[@]}"; do
-    memory_after_rss[$scope]="$(read_scope_rss_kb "$scope")"
-    memory_after_pss[$scope]="$(read_scope_pss_kb "$scope")"
+    memory_after_rss[$scope]="$(sample_scope_rss_kb "$scope")"
+    memory_after_pss[$scope]="$(sample_scope_pss_kb "$scope")"
     if is_number "${memory_before_rss[$scope]}" && is_number "${memory_after_rss[$scope]}"; then
       memory_delta_rss[$scope]="$((memory_after_rss[$scope] - memory_before_rss[$scope]))"
     fi
@@ -581,10 +616,10 @@ if target_enabled "memory"; then
     if [[ "${memory_samples_pss[$scope]}" -gt 0 ]]; then
       memory_avg_pss[$scope]="$((memory_sum_pss[$scope] / memory_samples_pss[$scope]))"
     fi
-    printf "  %s pid=%s rss avg=%sKB peak=%sKB delta=%sKB pss avg=%sKB peak=%sKB delta=%sKB\n" \
+    printf "  %s pid=%s rss before=%sKB avg=%sKB peak=%sKB after=%sKB delta=%sKB pss before=%sKB avg=%sKB peak=%sKB after=%sKB delta=%sKB\n" \
       "$scope" "$(scope_pid "$scope")" \
-      "${memory_avg_rss[$scope]}" "${memory_peak_rss[$scope]}" "${memory_delta_rss[$scope]}" \
-      "${memory_avg_pss[$scope]}" "${memory_peak_pss[$scope]}" "${memory_delta_pss[$scope]}"
+      "${memory_before_rss[$scope]}" "${memory_avg_rss[$scope]}" "${memory_peak_rss[$scope]}" "${memory_after_rss[$scope]}" "${memory_delta_rss[$scope]}" \
+      "${memory_before_pss[$scope]}" "${memory_avg_pss[$scope]}" "${memory_peak_pss[$scope]}" "${memory_after_pss[$scope]}" "${memory_delta_pss[$scope]}"
   done
 
   before_rss_kb="${memory_before_rss[combined]}"
@@ -702,11 +737,5 @@ cat > "$EXTRAS_OUT" <<EOF
 EOF
 
 python3 "${SCRIPT_DIR}/analyze-results.py" --input "$PERF_LOG" --output "$SUMMARY_OUT" --baseline "$BASELINE_PATH" --extras "$EXTRAS_OUT"
-
-rm -f "$PERF_FLAG"
-
-if [[ "$STARTED_INSTANCE" == "1" ]]; then
-  ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
-fi
 
 printf "Results: %s\n" "$SUMMARY_OUT"
