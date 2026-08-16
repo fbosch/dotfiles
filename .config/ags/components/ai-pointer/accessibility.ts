@@ -16,12 +16,7 @@ Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
 
 const lookupTimeoutMs = 900;
 const maximumHelperOutputBytes = 32_768;
-const helperRelativePath = [
-	"ags",
-	"components",
-	"ai-pointer",
-	"accessibility-helper.js",
-];
+const helperExecutableName = "ags-ai-pointer-accessibility-helper";
 
 interface ActiveClient {
 	address?: unknown;
@@ -106,16 +101,9 @@ async function queryHelper(
 	parentCancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
 ): Promise<AccessibleCandidate[] | null> {
-	const configHome =
-		GLib.getenv("XDG_CONFIG_HOME") ?? GLib.build_filenamev([GLib.get_home_dir(), ".config"]);
-	const helperPath = GLib.build_filenamev([configHome, ...helperRelativePath]);
-
-	let gjsExecutable: string;
-	try {
-		gjsExecutable = GLib.file_read_link("/proc/self/exe");
-	} catch {
-		return null;
-	}
+	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
+	if (!runtimeDirectory) return null;
+	const helperExecutable = GLib.build_filenamev([runtimeDirectory, helperExecutableName]);
 	const input: AccessibleHelperInput = {
 		coordinateSpace: accessibilityCoordinateSpace,
 		pid: client.pid,
@@ -133,7 +121,7 @@ async function queryHelper(
 	let process: Gio.Subprocess;
 	try {
 		process = Gio.Subprocess.new(
-			[gjsExecutable, "-m", helperPath, JSON.stringify(input)],
+			[helperExecutable, JSON.stringify(input)],
 			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
 		);
 	} catch {

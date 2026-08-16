@@ -16,7 +16,7 @@ The AI Pointer SHALL query accessibility data only after an explicit completed g
 - **THEN** the system does not inspect accessibility trees or retain accessible objects
 
 ### Requirement: High-confidence automatic snapping
-The AI Pointer SHALL replace stroke-derived capture geometry only when one visible, showing, non-sensitive accessible candidate has an eligible semantic role, a high-confidence geometric match, and is not ambiguous with another candidate. The candidate and final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
+The AI Pointer SHALL replace stroke-derived capture geometry only when one visible, showing, non-sensitive accessible target has an eligible semantic role and a high-confidence geometric match. A target MAY be one candidate or a repeatedly hit common ancestor of multiple related candidates. The candidate and final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
 
 #### Scenario: One control clearly matches the gesture
 - **WHEN** one candidate contains the selection center, is substantially covered by the gesture, has compatible area, and exceeds the confidence and ambiguity thresholds
@@ -25,6 +25,18 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when one visib
 #### Scenario: Candidates are ambiguous
 - **WHEN** multiple geometrically distinct candidates have similar confidence
 - **THEN** the system captures the original stroke-derived geometry
+
+#### Scenario: Gesture covers related targets
+- **WHEN** several sampled points resolve through one bounded common ancestor whose geometry confidently matches the gesture
+- **THEN** the system captures padded geometry around that common ancestor
+
+#### Scenario: Gesture covers part of one bounded target
+- **WHEN** the selection is mostly inside one repeatedly hit target that is no more than three times the selection area
+- **THEN** the system may expand capture to that target's padded geometry
+
+#### Scenario: Gesture is inside a larger named common ancestor
+- **WHEN** at least seven of nine sampled points resolve through one named section or article no more than twelve times the selection area
+- **THEN** the system may expand capture to that ancestor while unnamed and full-page containers remain ineligible
 
 #### Scenario: Candidate is a generic container or crosses the client edge
 - **WHEN** a candidate has an unknown or generic container role, or its candidate or padded bounds leave the active client

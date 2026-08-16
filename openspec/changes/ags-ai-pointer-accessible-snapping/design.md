@@ -6,7 +6,7 @@ AT-SPI is available through GObject Introspection after the configured NixOS reb
 
 ### Isolate AT-SPI from the AGS GTK process
 
-A short-lived GJS helper imports `Atspi-2.0`, applies a short per-call timeout, inspects only the matching process, and emits bounded versioned JSON. AGS launches it asynchronously using its own GJS executable, incrementally caps stdout, and enforces an outer timeout with `Gio.Cancellable` and process termination. This prevents an unresponsive provider from blocking the shell UI. Exact protocol and coordinate-space fields make independently deployed helper/controller versions fail safely.
+A short-lived TypeScript GJS helper imports `Atspi-2.0`, applies a short per-call timeout, inspects only the matching process, and emits bounded versioned JSON. AGS bundles the feature-local helper atomically into `XDG_RUNTIME_DIR` during startup, launches it asynchronously, incrementally caps stdout, and enforces an outer timeout with `Gio.Cancellable` and process termination. This prevents an unresponsive provider from blocking the shell UI without committing generated JavaScript. Exact protocol and coordinate-space fields make independently deployed helper/controller versions fail safely.
 
 ### Reconcile window-local and compositor-global coordinates
 
@@ -14,7 +14,7 @@ The controller first validates the active Hyprland client's identity, PID, origi
 
 ### Snap only above a conservative confidence boundary
 
-Pure policy requires an allowlisted semantic role, strong candidate coverage, compatible area, center agreement, and a clear score margin over geometrically distinct alternatives. Candidate bounds receive small capture padding and pass the existing pixel, integer, and active-client containment validation. Generic containers, sensitive ancestry, and every unavailable, invalid, ambiguous, stale, or timed-out path fall back to the original stroke rectangle.
+The helper samples a bounded 3×3 interior grid and counts how many hit paths contain each candidate. Pure policy requires an allowlisted semantic role, compatible area, center agreement, and a clear score margin over geometrically distinct alternatives. Repeated hit paths let a bounded common ancestor outrank separate children, while a mostly contained partial selection may expand to a target no more than three times its area. A named section or article reached by at least seven points may expand up to twelve times the selection area, covering controls such as media players whose accessibility tree exposes only the larger semantic container. Candidate bounds receive small capture padding and pass the existing pixel, integer, and active-client containment validation. Unnamed oversized containers, sensitive ancestry, and every unavailable, invalid, ambiguous, stale, or timed-out path fall back to the original stroke rectangle.
 
 ### Keep accessibility metadata local
 

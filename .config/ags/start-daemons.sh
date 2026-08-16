@@ -16,6 +16,7 @@ PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
 BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
+AI_POINTER_HELPER_CONFIG="components/ai-pointer/accessibility-helper.ts"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
 # EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,
@@ -132,6 +133,9 @@ main() {
     local bundled_config="$AGS_CONFIG_DIR/$BUNDLED_CONFIG"
     local bundled_executable="$RUNTIME_DIR/ags-bundled-executable"
     local bundled_candidate="$bundled_executable.$$"
+    local ai_pointer_helper="$RUNTIME_DIR/ags-ai-pointer-accessibility-helper"
+    local ai_pointer_helper_candidate="$ai_pointer_helper.$$"
+    local ai_pointer_helper_config="$AGS_CONFIG_DIR/$AI_POINTER_HELPER_CONFIG"
     local pid_identity
 
     exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
@@ -147,6 +151,11 @@ main() {
         log "${RED}✗${NC} Bundled config not found: $bundled_config"
         return 1
     fi
+    if [[ ! -f "$ai_pointer_helper_config" ]]; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} AI Pointer helper not found: $ai_pointer_helper_config"
+        return 1
+    fi
     
     # Check if already running
     if is_bundled_running; then
@@ -160,17 +169,25 @@ main() {
     if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
         export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
     fi
+    if ! (cd "$AGS_CONFIG_DIR" && ags bundle --gtk 4 "$AI_POINTER_HELPER_CONFIG" "$ai_pointer_helper_candidate"); then
+        rm -f "$ai_pointer_helper_candidate"
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} Failed to build AI Pointer accessibility helper"
+        return 1
+    fi
     if command -v ags-bundle-runtime >/dev/null 2>&1; then
         if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$BUNDLED_CONFIG" "$bundled_candidate"); then
-            rm -f "$bundled_candidate"
+            rm -f "$bundled_candidate" "$ai_pointer_helper_candidate"
             release_start_lock "$startup_lock_fd"
             log "${RED}✗${NC} Failed to build bundled AGS executable"
             return 1
         fi
         mv -f "$bundled_candidate" "$bundled_executable"
+        mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
         (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
     else
         # compatibility: remove after ags-bundle-runtime is deployed on every host.
+        mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
         (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
     fi
     local pid=$!

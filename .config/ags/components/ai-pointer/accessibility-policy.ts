@@ -1,9 +1,10 @@
 import { type SelectionGeometry, validatedSelectionGeometry } from "./selection";
 
 const snapPadding = 12;
-const minimumCandidateCoverage = 0.85;
+const minimumCandidateCoverage = 0.65;
 const minimumAreaRatio = 0.12;
-const maximumAreaRatio = 2;
+const maximumAreaRatio = 3;
+const maximumNamedAncestorAreaRatio = 12;
 const minimumConfidence = 0.68;
 const minimumConfidenceMargin = 0.06;
 const maximumCandidates = 24;
@@ -12,6 +13,7 @@ const maximumNameLength = 160;
 export const accessibilityProtocolVersion = 1;
 export const accessibilityCoordinateSpace = "window";
 const eligibleRoles = new Set([
+	"article",
 	"check box",
 	"combo box",
 	"entry",
@@ -25,15 +27,18 @@ const eligibleRoles = new Set([
 	"paragraph",
 	"push button",
 	"radio button",
+	"section",
 	"slider",
 	"spin button",
 	"table cell",
 	"text",
 	"toggle button",
 ]);
+const commonAncestorRoles = new Set(["article", "section"]);
 
 export interface AccessibleCandidate {
 	geometry: SelectionGeometry;
+	hitCount?: number;
 	name?: string;
 	role: string;
 }
@@ -87,7 +92,20 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 			(typeof value.name !== "string" || isSafeMetadata(value.name, maximumNameLength) === false)
 		)
 			continue;
-		candidates.push({ geometry, role: value.role, name: value.name });
+		if (
+			value.hitCount !== undefined &&
+			(typeof value.hitCount !== "number" ||
+				Number.isSafeInteger(value.hitCount) === false ||
+				value.hitCount < 1 ||
+				value.hitCount > 9)
+		)
+			continue;
+		candidates.push({
+			geometry,
+			hitCount: value.hitCount,
+			role: value.role,
+			name: value.name,
+		});
 	}
 	return candidates;
 }
@@ -156,23 +174,37 @@ function rankCandidate(
 	const candidateArea = geometry.width * geometry.height;
 	const candidateCoverage = intersectionArea / candidateArea;
 	const areaRatio = candidateArea / selectionArea;
+	const selectionCoverage = intersectionArea / selectionArea;
+	const namedCommonAncestor =
+		areaRatio <= maximumNamedAncestorAreaRatio &&
+		selectionCoverage >= 0.9 &&
+		(candidate.hitCount ?? 1) >= 7 &&
+		Boolean(candidate.name) &&
+		commonAncestorRoles.has(candidate.role.trim().toLowerCase());
+	const boundedPartialTarget =
+		areaRatio > 1 &&
+		(areaRatio <= maximumAreaRatio || namedCommonAncestor) &&
+		selectionCoverage >= 0.75 &&
+		containsCenter(geometry, selection);
 	if (
-		candidateCoverage < minimumCandidateCoverage ||
+		(candidateCoverage < minimumCandidateCoverage && boundedPartialTarget === false) ||
 		areaRatio < minimumAreaRatio ||
-		areaRatio > maximumAreaRatio
+		(areaRatio > maximumAreaRatio && namedCommonAncestor === false)
 	)
 		return null;
 
 	const centerAgreement =
 		containsCenter(geometry, selection) || containsCenter(selection, geometry) ? 1 : 0;
 	if (centerAgreement === 0) return null;
-	const selectionCoverage = intersectionArea / selectionArea;
 	const sizeSimilarity = Math.min(areaRatio, 1 / areaRatio);
-	const confidence =
+	const repeatedHitBonus = Math.min(Math.max((candidate.hitCount ?? 1) - 1, 0) / 8, 1) * 0.3;
+	const confidence = Math.min(1,
 		candidateCoverage * 0.4 +
 		sizeSimilarity * 0.25 +
 		centerAgreement * 0.2 +
-		Math.min(selectionCoverage, 1) * 0.15;
+		Math.min(selectionCoverage, 1) * 0.15 +
+		repeatedHitBonus,
+	);
 
 	return { candidate: { ...candidate, geometry }, confidence };
 }
@@ -182,7 +214,12 @@ function deduplicateCandidates(candidates: AccessibleCandidate[]): AccessibleCan
 	for (const candidate of candidates) {
 		const key = geometryKey(candidate.geometry);
 		const existing = candidatesByGeometry.get(key);
-		if (!existing || (!existing.name && candidate.name)) candidatesByGeometry.set(key, candidate);
+		if (
+			!existing ||
+			(candidate.hitCount ?? 1) > (existing.hitCount ?? 1) ||
+			((candidate.hitCount ?? 1) === (existing.hitCount ?? 1) && !existing.name && candidate.name)
+		)
+			candidatesByGeometry.set(key, candidate);
 	}
 	return [...candidatesByGeometry.values()];
 }
