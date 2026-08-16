@@ -20,16 +20,13 @@ const allEdges =
 	Astal.WindowAnchor.RIGHT;
 const unmapTimeoutMs = 250;
 const compositorFrameDelayMs = 34;
-const selectionPreviewDurationMs = 220;
 const selectionPreviewRadius = 14;
+const selectionPreviewGlow = 20;
 const curveTension = 0.14;
 
 export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
 	#stroke: PointerStroke | null = null;
-	#selection: SelectionGeometry | null = null;
-	#previewTimeoutId = 0;
-	#resolvePreview: (() => void) | null = null;
 
 	show(stroke: PointerStroke, onCancel: () => void): boolean {
 		this.hide();
@@ -40,11 +37,31 @@ export class StrokeOverlay {
 		for (let index = 0; index < monitors.get_n_items(); index += 1) {
 			const monitor = monitors.get_item(index) as Gdk.Monitor | null;
 			if (!monitor) continue;
-			this.#surfaces.push(this.#createSurface(monitor, index, onCancel));
+			this.#surfaces.push(
+				this.#createSurface(monitor, index, onCancel, true, "ags-ai-pointer-drawing"),
+			);
 		}
 		if (this.#surfaces.length === 0) return false;
 
 		this.update(stroke);
+		for (const surface of this.#surfaces) surface.window.set_visible(true);
+		return true;
+	}
+
+	showSelection(selection: SelectionGeometry): boolean {
+		this.hide();
+		const display = Gdk.Display.get_default();
+		if (!display) return false;
+
+		const monitors = display.get_monitors();
+		for (let index = 0; index < monitors.get_n_items(); index += 1) {
+			const monitor = monitors.get_item(index) as Gdk.Monitor | null;
+			if (!monitor) continue;
+			const surface = this.#createSelectionSurface(monitor, index, selection);
+			if (surface) this.#surfaces.push(surface);
+		}
+		if (this.#surfaces.length === 0) return false;
+
 		for (const surface of this.#surfaces) surface.window.set_visible(true);
 		return true;
 	}
@@ -55,46 +72,15 @@ export class StrokeOverlay {
 	}
 
 	hide(): void {
-		this.#finishPreviewWait();
 		for (const surface of this.#surfaces) surface.window.destroy();
 		this.#surfaces = [];
 		this.#stroke = null;
-		this.#selection = null;
 	}
 
-	async previewBeforeCapture(selection: SelectionGeometry): Promise<boolean> {
-		if (this.#surfaces.length === 0) return false;
-		this.#stroke = null;
-		this.#selection = selection;
-		for (const surface of this.#surfaces) surface.drawing.queue_draw();
-		await new Promise<void>((resolve) => {
-			this.#resolvePreview = resolve;
-			this.#previewTimeoutId = GLib.timeout_add(
-				GLib.PRIORITY_DEFAULT,
-				selectionPreviewDurationMs,
-				() => {
-					this.#previewTimeoutId = 0;
-					this.#finishPreviewWait();
-					return GLib.SOURCE_REMOVE;
-				},
-			);
-		});
-		return this.#hideBeforeCapture();
-	}
-
-	#finishPreviewWait(): void {
-		if (this.#previewTimeoutId !== 0) GLib.source_remove(this.#previewTimeoutId);
-		this.#previewTimeoutId = 0;
-		const resolve = this.#resolvePreview;
-		this.#resolvePreview = null;
-		resolve?.();
-	}
-
-	async #hideBeforeCapture(): Promise<boolean> {
+	async hideBeforeCapture(): Promise<boolean> {
 		const surfaces = this.#surfaces;
 		this.#surfaces = [];
 		this.#stroke = null;
-		this.#selection = null;
 		const unmapped = await Promise.all(
 			surfaces.map(({ window }) => this.#waitForUnmap(window)),
 		);
@@ -113,16 +99,13 @@ export class StrokeOverlay {
 		monitor: Gdk.Monitor,
 		index: number,
 		onCancel: () => void,
+		captureKeyboard: boolean,
+		namespace: string,
 	): StrokeSurface {
 		const geometry = monitor.get_geometry();
 		const drawing = new Gtk.DrawingArea({ hexpand: true, vexpand: true });
 		drawing.add_css_class("ai-pointer-stroke-canvas");
-		drawing.set_draw_func((_area, cr: any, width, height) => {
-			const selection = this.#selection;
-			if (selection) {
-				this.#drawSelectionPreview(cr, geometry.x, geometry.y, selection);
-				return;
-			}
+		drawing.set_draw_func((_area, cr: any) => {
 			const stroke = this.#stroke;
 			if (!stroke || stroke.points.length < 2) return;
 			const color = new Gdk.RGBA();
@@ -150,24 +133,97 @@ export class StrokeOverlay {
 			cr.fill();
 		});
 
+		const window = this.#createWindow(monitor, index, drawing, namespace, captureKeyboard);
+		window.set_anchor(allEdges);
+		if (captureKeyboard) this.#addCancelController(window, onCancel);
+
+		return { window, drawing };
+	}
+
+	#createSelectionSurface(
+		monitor: Gdk.Monitor,
+		index: number,
+		selection: SelectionGeometry,
+	): StrokeSurface | null {
+		const monitorGeometry = monitor.get_geometry();
+		const x = Math.max(selection.x, monitorGeometry.x);
+		const y = Math.max(selection.y, monitorGeometry.y);
+		const right = Math.min(
+			selection.x + selection.width,
+			monitorGeometry.x + monitorGeometry.width,
+		);
+		const bottom = Math.min(
+			selection.y + selection.height,
+			monitorGeometry.y + monitorGeometry.height,
+		);
+		if (right <= x || bottom <= y) return null;
+
+		const outerX = Math.max(monitorGeometry.x, x - selectionPreviewGlow);
+		const outerY = Math.max(monitorGeometry.y, y - selectionPreviewGlow);
+		const outerRight = Math.min(
+			monitorGeometry.x + monitorGeometry.width,
+			right + selectionPreviewGlow,
+		);
+		const outerBottom = Math.min(
+			monitorGeometry.y + monitorGeometry.height,
+			bottom + selectionPreviewGlow,
+		);
+		const drawing = new Gtk.DrawingArea({
+			widthRequest: outerRight - outerX,
+			heightRequest: outerBottom - outerY,
+		});
+		drawing.add_css_class("ai-pointer-stroke-canvas");
+		drawing.set_draw_func((_area, cr: any) => {
+			this.#drawSelectionPreview(cr, outerX, outerY, {
+				x,
+				y,
+				width: right - x,
+				height: bottom - y,
+			});
+		});
+		const window = this.#createWindow(
+			monitor,
+			index,
+			drawing,
+			"ags-ai-pointer-selection-preview",
+			false,
+		);
+		window.set_anchor(Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT);
+		window.set_margin_left(outerX - monitorGeometry.x);
+		window.set_margin_top(outerY - monitorGeometry.y);
+		return { window, drawing };
+	}
+
+	#createWindow(
+		monitor: Gdk.Monitor,
+		index: number,
+		drawing: Gtk.DrawingArea,
+		namespace: string,
+		captureKeyboard: boolean,
+	): Astal.Window {
 		const window = new Astal.Window({
 			application: app,
-			name: `ai-pointer-stroke-${index}`,
-			namespace: "ags-ai-pointer-drawing",
+			name: `ai-pointer-${namespace}-${index}`,
+			namespace,
 			visible: false,
 		});
 		window.add_css_class("ai-pointer");
 		window.add_css_class("ai-pointer-stroke");
-		window.set_anchor(allEdges);
 		window.set_layer(Astal.Layer.OVERLAY);
 		window.set_exclusivity(Astal.Exclusivity.IGNORE);
-		window.set_keymode(index === 0 ? Astal.Keymode.EXCLUSIVE : Astal.Keymode.NONE);
+		window.set_keymode(
+			captureKeyboard && index === 0 ? Astal.Keymode.EXCLUSIVE : Astal.Keymode.NONE,
+		);
 		window.set_gdkmonitor(monitor);
 		window.set_child(drawing);
 		window.connect("realize", () => {
 			const region = new Cairo.Region();
 			window.get_surface()?.set_input_region(region);
 		});
+		return window;
+	}
+
+	#addCancelController(window: Astal.Window, onCancel: () => void): void {
 		const keyController = new Gtk.EventControllerKey();
 		keyController.connect("key-pressed", (_controller, keyval: number) => {
 			if (keyval !== Gdk.KEY_Escape) return false;
@@ -175,8 +231,6 @@ export class StrokeOverlay {
 			return true;
 		});
 		window.add_controller(keyController);
-
-		return { window, drawing };
 	}
 
 	#drawSelectionPreview(

@@ -23,6 +23,7 @@ local main_mod = "SUPER"
 local waybar_control_socket = command.arg(hypr_ipc.instance_socket_path("waybar-monitor.sock"))
 local waybar_process_pattern = command.arg("(^|/)waybar( |$)")
 local active_is_not_passthrough_exempt = window_state.active_is_not_tagged(window_tags.passthrough_exempt)
+local waybar_hold_allowed = window_state.active_workspace_is_not(gaming.workspace)
 
 local function main(key)
 	return main_mod .. " + " .. key
@@ -42,6 +43,23 @@ local function focus_gaming_workspace()
 	return window_workspace.focus_gaming_workspace(window_state)
 end
 
+local function release_super()
+	if ai_pointer.consume_super_chord() then
+		hl.dispatch(hl.dsp.exec_cmd("printf 'release\\n' | nc -U " .. waybar_control_socket .. " >/dev/null 2>&1"))
+		return bind.consume()
+	end
+
+	return window_switcher.release_super()
+end
+
+local function release_super_right()
+	if ai_pointer.consume_super_chord() then
+		return bind.consume()
+	end
+
+	return window_switcher.commit()
+end
+
 -- Window switching
 bind.register(
 	"SUPER_L",
@@ -50,10 +68,16 @@ bind.register(
 		.. waybar_control_socket
 		.. " >/dev/null 2>&1 || pkill -SIGUSR1 -f "
 		.. waybar_process_pattern,
-	{ long_press = true, predicate = window_state.active_workspace_is_not(gaming.workspace), on_false = bind.consume }
+	{
+		long_press = true,
+		predicate = function()
+			return ai_pointer.has_super_chord() == false and waybar_hold_allowed()
+		end,
+		on_false = bind.consume,
+	}
 )
-bind.register("SUPER_L", window_switcher.release_super, { ignore_mods = true, release = true })
-bind.register("SUPER_R", window_switcher.commit, { release = true })
+bind.register("SUPER_L", release_super, { ignore_mods = true, release = true })
+bind.register("SUPER_R", release_super_right, { release = true })
 bind.register(main("TAB"), window_switcher.action("next", main_mod))
 bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 

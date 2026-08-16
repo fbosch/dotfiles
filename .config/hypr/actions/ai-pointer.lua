@@ -1,6 +1,7 @@
 local ags = require("lib.ags")
 
 local M = {}
+local super_chord_used = false
 
 local function cursor_position()
 	if not hl.get_cursor_pos then
@@ -18,6 +19,7 @@ end
 function M.start()
 	local position = cursor_position()
 	if position then
+		super_chord_used = true
 		ags.request("ai-pointer", { action = "start", x = position.x, y = position.y })
 	end
 end
@@ -27,6 +29,16 @@ function M.finish()
 	if position then
 		ags.request("ai-pointer", { action = "finish", x = position.x, y = position.y })
 	end
+end
+
+function M.has_super_chord()
+	return super_chord_used
+end
+
+function M.consume_super_chord()
+	local used = super_chord_used
+	super_chord_used = false
+	return used
 end
 
 return M

@@ -110,6 +110,7 @@ export class AiPointerView {
 		this.#status?.set_label(
 			"Review the selected image. AI requests are not enabled in this slice.",
 		);
+		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return false;
 		this.#show();
 		return true;
 	}
@@ -126,8 +127,8 @@ export class AiPointerView {
 		this.#strokeOverlay.hide();
 	}
 
-	finishStroke(selection: SelectionGeometry): Promise<boolean> {
-		return this.#strokeOverlay.previewBeforeCapture(selection);
+	finishStroke(): Promise<boolean> {
+		return this.#strokeOverlay.hideBeforeCapture();
 	}
 
 	showError(message: string): void {

@@ -162,7 +162,7 @@ export class AiPointerController {
 			return;
 		}
 		const runId = this.#runId;
-		void this.#view.finishStroke(geometry).then((hidden) => {
+		void this.#view.finishStroke().then((hidden) => {
 			if (runId !== this.#runId) return;
 			if (hidden === false) {
 				this.#failureMessage = "The drawing overlay could not be removed safely.";

@@ -19,7 +19,7 @@
 
 ## 4. Validation
 
-- [ ] 4.1 Run targeted pure AI Pointer tests and native GJS lifecycle tests.
-- [ ] 4.2 Run AGS bundle, scoped formatting/linting, and `hyprctl configerrors`.
-- [ ] 4.3 Strictly validate the OpenSpec change and verify AI Commit remains unchanged.
+- [x] 4.1 Run targeted pure AI Pointer tests and native GJS lifecycle tests.
+- [x] 4.2 Run AGS bundle, scoped formatting/linting, and `hyprctl configerrors`.
+- [x] 4.3 Strictly validate the OpenSpec change and verify AI Commit remains unchanged.
 - [ ] 4.4 Manually verify square/circle drawing, cross-monitor trails, capture accuracy, preview, and Escape/discard cleanup.

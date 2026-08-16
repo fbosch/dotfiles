@@ -46,11 +46,11 @@ The AI Pointer SHALL derive one capture rectangle from the minimum and maximum g
 - **THEN** the system cancels or fails safely without retaining or submitting a capture
 
 ### Requirement: Reviewed local result
-The AI Pointer SHALL show only drawing feedback while the gesture is active. After release, it SHALL replace the trail with a brief rounded preview of the padded capture rectangle, remove that preview before capture, and show the validated captured image in the existing local preview. Stroke coordinates MUST remain local and MUST NOT be included in a provider payload in this change.
+The AI Pointer SHALL show only drawing feedback while the gesture is active. After release, it SHALL remove the trail before capture. When the validated captured image appears in the existing local preview popup, a rounded overlay of the same capture geometry SHALL remain visible on the desktop until that popup closes. Stroke coordinates MUST remain local and MUST NOT be included in a provider payload in this change.
 
 #### Scenario: Drawing completes with valid bounds
 - **WHEN** the user releases a stroke with a valid padded capture rectangle
-- **THEN** the trail disappears and a rounded translucent preview marks the selected area before capture begins
+- **THEN** the trail disappears before capture and a rounded translucent overlay marks the captured area while the capture preview popup is visible
 
 #### Scenario: Capture succeeds
 - **WHEN** the padded stroke bounds produce a valid image

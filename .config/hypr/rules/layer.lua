@@ -28,6 +28,11 @@ hl.layer_rule({
 	no_screen_share = true,
 })
 hl.layer_rule({
+	match = { namespace = "ags-ai-pointer-selection-preview" },
+	animation = "popin 98%",
+	no_screen_share = true,
+})
+hl.layer_rule({
 	match = { namespace = "ags-ai-pointer" },
 	blur = true,
 	animation = "popin 95%",

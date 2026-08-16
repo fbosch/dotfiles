@@ -47,10 +47,13 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	stroke = appendStrokePoint(stroke, { x: 100, y: 100 }, true);
 	overlay.update(stroke);
 	await settleMainLoop();
+	assert(await overlay.hideBeforeCapture(), "AI Pointer stroke overlay did not unmap");
 	assert(
-		await overlay.previewBeforeCapture({ x: 0, y: 0, width: 120, height: 120 }),
-		"AI Pointer stroke overlay did not preview and unmap",
+		overlay.showSelection({ x: 0, y: 0, width: 120, height: 120 }),
+		"AI Pointer selection preview was unavailable",
 	);
+	await settleMainLoop();
+	overlay.hide();
 });
 
 test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
