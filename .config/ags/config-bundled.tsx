@@ -17,6 +17,7 @@ declare global {
 	var CalendarWidget: ComponentModule;
 	var AudioMixerWidget: ComponentModule;
 	var PipSnapPreview: ComponentModule;
+	var AiPointer: ComponentModule;
 }
 
 import "@/components/confirm-dialog/index.tsx";
@@ -28,6 +29,7 @@ import "@/components/desktop-clock";
 import "@/components/calendar/index.tsx";
 import "@/components/audio-mixer/index.tsx";
 import "@/components/pip-snap-preview.tsx";
+import "@/components/ai-pointer/index.tsx";
 
 startComponentHost({
 	instanceName: "ags-bundled",
@@ -42,6 +44,7 @@ startComponentHost({
 		() => globalThis.CalendarWidget,
 		() => globalThis.AudioMixerWidget,
 		() => globalThis.PipSnapPreview,
+		() => globalThis.AiPointer,
 	],
 	taskbarVisibilityComponents: [
 		"start-menu",

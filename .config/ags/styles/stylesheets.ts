@@ -1,4 +1,5 @@
 import aboutThisPcCss from "../components/about-this-pc/styles.scss";
+import aiPointerCss from "../components/ai-pointer/styles.scss";
 import audioMixerCss from "../components/audio-mixer/styles.scss";
 import calendarCss from "../components/calendar/styles.scss";
 import confirmDialogCss from "../components/confirm-dialog/styles.scss";
@@ -22,6 +23,7 @@ export const componentStylesheets: Stylesheet[] = [
 	{ name: "button", css: buttonCss },
 	{ name: "gaming-opacity", css: gamingOpacityCss },
 	{ name: "about-this-pc", css: aboutThisPcCss },
+	{ name: "ai-pointer", css: aiPointerCss },
 	{ name: "audio-mixer", css: audioMixerCss },
 	{ name: "calendar", css: calendarCss },
 	{ name: "confirm-dialog", css: confirmDialogCss },

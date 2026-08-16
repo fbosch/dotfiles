@@ -23,6 +23,13 @@ hl.layer_rule({ match = { namespace = "ags-calendar-widget" }, blur = true, no_a
 hl.layer_rule({ match = { namespace = "ags-audio-mixer-widget" }, blur = true, no_anim = true, ignore_alpha = 0.3 })
 hl.layer_rule({ match = { namespace = "ags-desktop-clock" }, blur = true, ignore_alpha = 0.3, no_anim = true })
 hl.layer_rule({
+	match = { namespace = "ags-ai-pointer" },
+	blur = true,
+	animation = "popin 95%",
+	ignore_alpha = 0.3,
+	no_screen_share = true,
+})
+hl.layer_rule({
 	match = { namespace = "hyprshutdown" },
 	blur = true,
 	ignore_alpha = 0.2,

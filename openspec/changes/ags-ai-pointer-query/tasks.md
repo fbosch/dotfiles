@@ -1,3 +1,11 @@
+## 0. Selection And Consent Slice
+
+- [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super+A` binding, and private no-screen-share layer surface.
+- [x] 0.2 Implement one-run XState selection, private runtime capture storage, validated global geometry, direct `slurp`/`grim` subprocesses, and controlled Escape/shutdown cleanup.
+- [x] 0.3 Add a local capture preview and disabled Ask control so no image can leave the machine in this slice.
+- [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS preview-surface lifecycle check.
+- [ ] 0.5 Manually verify drag selection, screenshot accuracy, preview, and Escape cleanup after `slurp` is available to the AGS process on `PATH`.
+
 ## 1. Runtime Prerequisites
 
 - [ ] 1.1 Add `pkgs.slurp` to `/home/fbb/nixos/modules/desktop/hyprland.nix`, rebuild the target host, and verify `slurp` is directly available on `PATH`.

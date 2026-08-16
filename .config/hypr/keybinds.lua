@@ -1,5 +1,6 @@
 local programs = require("programs")
 local async = require("lib.async")
+local ags = require("lib.ags")
 local bind = require("lib.bind")
 local command = require("lib.command")
 local window_tags = require("lib.window_tags")
@@ -59,6 +60,7 @@ bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 -- Launchers
 bind.register(main("SPACE"), programs.menu)
 bind.register(main("R"), programs.menu)
+bind.register(main("A"), hl.dsp.exec_cmd(ags.request_command("ai-pointer", { action = "start" })))
 
 -- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
