@@ -42,6 +42,26 @@ const eligibleRoles = new Set([
 	"toggle button",
 ]);
 const commonAncestorRoles = new Set(["article", "section"]);
+const collectionRoles = new Set([
+	"check box",
+	"combo box",
+	"entry",
+	"icon",
+	"image",
+	"link",
+	"list item",
+	"menu item",
+	"page tab",
+	"push button",
+	"radio button",
+	"slider",
+	"spin button",
+	"table cell",
+	"toggle button",
+]);
+const maximumCollectionTargets = 8;
+const minimumCollectionDensity = 0.15;
+const maximumCollectionOverlap = 0.5;
 const directTargetPriority = new Map([
 	["link", 0],
 	["image", 1],
@@ -56,19 +76,28 @@ export interface AccessibleCandidate {
 	url?: string;
 }
 
-export interface AccessibilityMetadata {
+export interface AccessibilityTargetMetadata {
 	centerHit?: boolean;
 	confidence: number;
 	hitCount?: number;
 	name?: string;
-	program?: {
-		class?: string;
-		pid: number;
-		title?: string;
-	};
 	role: string;
-	targetGeometry?: SelectionGeometry;
+	targetGeometry: SelectionGeometry;
 	url?: string;
+}
+
+export interface ProgramMetadata {
+	class?: string;
+	coverage?: number;
+	geometry: SelectionGeometry;
+	pid: number;
+	title?: string;
+}
+
+export interface AccessibilityMetadata extends Omit<AccessibilityTargetMetadata, "targetGeometry"> {
+	program?: ProgramMetadata;
+	targetGeometry?: SelectionGeometry;
+	targets?: AccessibilityTargetMetadata[];
 }
 
 export interface AccessibilityResolution {
@@ -167,13 +196,6 @@ export function chooseAccessibleSnap(
 				(directTargetPriority.get(right.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) ||
 			left.geometry.width * left.geometry.height - right.geometry.width * right.geometry.height,
 		);
-	for (const candidate of directTargets) {
-		if (containsSelectionCenter(candidate.geometry, selection, strokeCapturePadding) === false)
-			continue;
-		const resolution = resolutionFromCandidate(candidate, 1, clientGeometry);
-		if (resolution) return resolution;
-	}
-
 	const ranked = deduplicateCandidates(candidates)
 		.map((candidate) => rankCandidate(selection, candidate, clientGeometry))
 		.filter((candidate): candidate is RankedCandidate => candidate !== null)
@@ -183,13 +205,107 @@ export function chooseAccessibleSnap(
 			(left.candidate.name ?? "").localeCompare(right.candidate.name ?? "")
 		);
 	const best = ranked[0];
-	if (!best || best.confidence < minimumConfidence) return null;
 	const alternative = ranked.find(
-		(candidate) => geometryKey(candidate.candidate.geometry) !== geometryKey(best.candidate.geometry),
+		(candidate) => best && geometryKey(candidate.candidate.geometry) !== geometryKey(best.candidate.geometry),
 	);
-	if (alternative && best.confidence - alternative.confidence < minimumConfidenceMargin) return null;
+	const bestIsClear = Boolean(
+		best &&
+		best.confidence >= minimumConfidence &&
+		(!alternative || best.confidence - alternative.confidence >= minimumConfidenceMargin),
+	);
+	if (
+		directTargets.length === 0 &&
+		bestIsClear &&
+		best &&
+		(best.candidate.hitCount ?? 1) >= 7 &&
+		commonAncestorRoles.has(best.candidate.role.trim().toLowerCase())
+	) {
+		const resolution = resolutionFromCandidate(best.candidate, best.confidence, clientGeometry);
+		if (resolution) return resolution;
+	}
+
+	const collection = resolutionFromCollection(selection, ranked, clientGeometry);
+	if (collection) return collection;
+
+	for (const candidate of directTargets) {
+		if (containsSelectionCenter(candidate.geometry, selection, strokeCapturePadding) === false)
+			continue;
+		const resolution = resolutionFromCandidate(candidate, 1, clientGeometry);
+		if (resolution) return resolution;
+	}
+
+	if (!best || bestIsClear === false) return null;
 
 	return resolutionFromCandidate(best.candidate, best.confidence, clientGeometry);
+}
+
+function resolutionFromCollection(
+	selection: SelectionGeometry,
+	ranked: RankedCandidate[],
+	clientGeometry: SelectionGeometry,
+): AccessibilityResolution | null {
+	const selected: RankedCandidate[] = [];
+	for (const rankedCandidate of ranked) {
+		if (rankedCandidate.confidence < minimumConfidence) continue;
+		const { candidate } = rankedCandidate;
+		if (
+			collectionRoles.has(candidate.role.trim().toLowerCase()) === false ||
+			containsSelectionCenter(selection, candidate.geometry) === false
+		)
+			continue;
+		const candidateArea = candidate.geometry.width * candidate.geometry.height;
+		const overlapsSelected = selected.some(({ candidate: existing }) => {
+			const existingArea = existing.geometry.width * existing.geometry.height;
+			return (
+				intersection(candidate.geometry, existing.geometry) /
+				Math.min(candidateArea, existingArea)
+			) >= maximumCollectionOverlap;
+		});
+		if (overlapsSelected) continue;
+		selected.push(rankedCandidate);
+		if (selected.length >= maximumCollectionTargets) break;
+	}
+	if (selected.length < 2) return null;
+
+	const left = Math.min(...selected.map(({ candidate }) => candidate.geometry.x));
+	const top = Math.min(...selected.map(({ candidate }) => candidate.geometry.y));
+	const right = Math.max(...selected.map(({ candidate }) => candidate.geometry.x + candidate.geometry.width));
+	const bottom = Math.max(...selected.map(({ candidate }) => candidate.geometry.y + candidate.geometry.height));
+	const targetGeometry = validatedSelectionGeometry(left, top, right - left, bottom - top);
+	if (!targetGeometry || containsGeometry(clientGeometry, targetGeometry) === false) return null;
+	const targetArea = targetGeometry.width * targetGeometry.height;
+	const memberArea = selected.reduce(
+		(total, { candidate }) => total + candidate.geometry.width * candidate.geometry.height,
+		0,
+	);
+	if (
+		memberArea / targetArea < minimumCollectionDensity ||
+		targetArea / (selection.width * selection.height) > maximumAreaRatio
+	)
+		return null;
+	const geometry = paddedSelectionGeometry(targetGeometry, snapPadding);
+	if (!geometry || containsGeometry(clientGeometry, geometry) === false) return null;
+	const targets = selected.map(({ candidate, confidence }) => ({
+		centerHit: candidate.centerHit,
+		confidence,
+		hitCount: candidate.hitCount ?? 1,
+		name: candidate.name,
+		role: candidate.role,
+		targetGeometry: candidate.geometry,
+		url: candidate.url,
+	}));
+	return {
+		geometry,
+		metadata: {
+			centerHit: targets.some(({ centerHit }) => centerHit),
+			confidence: Math.min(...targets.map(({ confidence }) => confidence)),
+			hitCount: targets.reduce((total, { hitCount }) => total + (hitCount ?? 1), 0),
+			name: `${targets.length} accessible targets`,
+			role: "collection",
+			targetGeometry,
+			targets,
+		},
+	};
 }
 
 function resolutionFromCandidate(

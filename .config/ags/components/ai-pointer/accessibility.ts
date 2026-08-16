@@ -6,6 +6,7 @@ import {
 	accessibilityProtocolVersion,
 	type AccessibilityResolution,
 	type AccessibleCandidate,
+	type ProgramMetadata,
 	chooseAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "./accessibility-policy";
@@ -16,6 +17,7 @@ import {
 	validatedSelectionGeometry,
 } from "./selection";
 import { strokeBrushRadius, type PointerStroke } from "./stroke";
+import { chooseProgramsForSelection, type ProgramWindow } from "./program-policy";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -28,12 +30,14 @@ interface ActiveClient {
 	address?: unknown;
 	at?: unknown;
 	class?: unknown;
+	focusHistoryID?: unknown;
 	hidden?: unknown;
 	mapped?: unknown;
 	pid?: unknown;
 	size?: unknown;
 	stableId?: unknown;
 	title?: unknown;
+	visible?: unknown;
 }
 
 interface AccessibleHelperInput {
@@ -80,6 +84,7 @@ export async function resolveAccessibleSelection(
 			...resolution.metadata,
 			program: {
 				class: freshClient.class,
+				geometry: freshClient.geometry,
 				pid: freshClient.pid,
 				title: freshClient.title,
 			},
@@ -87,40 +92,90 @@ export async function resolveAccessibleSelection(
 	};
 }
 
+export function programsForSelection(selection: SelectionGeometry): ProgramMetadata[] {
+	const active = queryHyprlandJson<ActiveClient>("j/activewindow", {
+		component: "ai-pointer",
+		metric: "programAtSelection",
+	});
+	const activeClient = validatedClient(active);
+	const clients = queryHyprlandJson<ActiveClient[]>("j/clients", {
+		component: "ai-pointer",
+		metric: "programsAtSelection",
+	});
+	const windows = new Map<string, ProgramWindow>();
+	for (const client of clients ?? []) {
+		if (client.visible === false) continue;
+		const validated = validatedClient(client);
+		if (!validated) continue;
+		windows.set(validated.address, programWindow(validated, client.focusHistoryID));
+	}
+	if (activeClient && !windows.has(activeClient.address))
+		windows.set(activeClient.address, programWindow(activeClient, 0));
+	return chooseProgramsForSelection(selection, [...windows.values()], activeClient?.address);
+}
+
 function activeClientForSelection(selection: SelectionGeometry): ValidatedClient | null {
 	const active = queryHyprlandJson<ActiveClient>("j/activewindow", {
 		component: "ai-pointer",
 		metric: "accessibleActiveWindow",
 	});
+	const client = validatedClient(active);
+	return client && containsSelectionCenter(client.geometry, selection) ? client : null;
+}
+
+function validatedClient(client: ActiveClient | null): ValidatedClient | null {
 	if (
-		!active ||
-		active.mapped === false ||
-		active.hidden === true ||
-		typeof active.address !== "string" ||
-		active.address.length === 0 ||
-		Array.isArray(active.at) === false ||
-		Array.isArray(active.size) === false ||
-		active.at.length !== 2 ||
-		active.size.length !== 2 ||
-		typeof active.pid !== "number" ||
-		Number.isSafeInteger(active.pid) === false ||
-		active.pid <= 0
+		!client ||
+		client.mapped === false ||
+		client.hidden === true ||
+		typeof client.address !== "string" ||
+		client.address.length === 0 ||
+		Array.isArray(client.at) === false ||
+		Array.isArray(client.size) === false ||
+		client.at.length !== 2 ||
+		client.size.length !== 2 ||
+		typeof client.pid !== "number" ||
+		Number.isSafeInteger(client.pid) === false ||
+		client.pid <= 0
 	)
 		return null;
 	const geometry = validatedSelectionGeometry(
-		active.at[0],
-		active.at[1],
-		active.size[0],
-		active.size[1],
+		client.at[0],
+		client.at[1],
+		client.size[0],
+		client.size[1],
 	);
-	if (!geometry || containsSelectionCenter(geometry, selection) === false) return null;
+	if (!geometry) return null;
 	return {
-		address: active.address,
-		class: boundedClientText(active.class, 80),
+		address: client.address,
+		class: boundedClientText(client.class, 80),
 		geometry,
-		pid: active.pid,
-		stableId: typeof active.stableId === "string" ? active.stableId : undefined,
-		title: boundedClientText(active.title, 160),
+		pid: client.pid,
+		stableId: typeof client.stableId === "string" ? client.stableId : undefined,
+		title: boundedClientText(client.title, 160),
+	};
+}
+
+function programMetadata(client: ValidatedClient): ProgramMetadata {
+	return {
+		class: client.class,
+		geometry: client.geometry,
+		pid: client.pid,
+		title: client.title,
+	};
+}
+
+function programWindow(client: ValidatedClient, focusHistoryId: unknown): ProgramWindow {
+	return {
+		address: client.address,
+		class: client.class,
+		focusHistoryId:
+			typeof focusHistoryId === "number" && Number.isSafeInteger(focusHistoryId)
+				? focusHistoryId
+				: Number.MAX_SAFE_INTEGER,
+		geometry: client.geometry,
+		pid: client.pid,
+		title: client.title,
 	};
 }
 

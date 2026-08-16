@@ -139,6 +139,31 @@ describe("accessible selection snapping", () => {
 		expect(result?.geometry).toEqual({ x: 38, y: 68, width: 474, height: 184 });
 	});
 
+	test("expands to a bounded collection of distinct targets", () => {
+		const result = chooseAccessibleSnap(
+			{ x: 100, y: 100, width: 300, height: 100 },
+			[
+				{
+					geometry: { x: 110, y: 110, width: 120, height: 80 },
+					hitCount: 3,
+					name: "Previous",
+					role: "push button",
+				},
+				{
+					geometry: { x: 270, y: 110, width: 120, height: 80 },
+					hitCount: 3,
+					name: "Next",
+					role: "push button",
+				},
+			],
+			{ x: 0, y: 0, width: 600, height: 400 },
+		);
+
+		expect(result?.geometry).toEqual({ x: 98, y: 98, width: 304, height: 104 });
+		expect(result?.metadata.role).toBe("collection");
+		expect(result?.metadata.targets?.map(({ name }) => name).sort()).toEqual(["Next", "Previous"]);
+	});
+
 	test("expands to a named common ancestor larger than the partial gesture", () => {
 		const result = chooseAccessibleSnap(
 			{ x: 700, y: 400, width: 500, height: 350 },

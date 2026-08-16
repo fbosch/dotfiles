@@ -87,8 +87,15 @@ export async function recognizeCapture(
 		const output = await readBoundedOcrOutput(process, cancellable);
 		if (timedOut) return { kind: "unavailable", reason: "timeout" };
 		if (cancellable.is_cancelled()) return { kind: "cancelled" };
-		if (output.kind === "read-failed")
+		if (output.kind === "read-failed") {
+			process.force_exit();
+			try {
+				await process.wait_async(null);
+			} catch {
+				// The process may already have exited after the stream failure.
+			}
 			return { kind: "unavailable", reason: "read-failed" };
+		}
 		if (output.kind === "invalid-output")
 			return { kind: "unavailable", reason: "invalid-output" };
 		if (output.kind === "truncated") return output;

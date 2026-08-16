@@ -86,7 +86,12 @@ test("AI Pointer view presents a capture and disposes", async () => {
 				confidence: 0.9,
 				hitCount: 7,
 				name: "Submit",
-				program: { class: "org.example.App", pid: 123, title: "Example" },
+				program: {
+					class: "org.example.App",
+					geometry: { x: 0, y: 0, width: 100, height: 100 },
+					pid: 123,
+					title: "Example",
+				},
 				role: "push button",
 				targetGeometry: { x: 12, y: 22, width: 16, height: 12 },
 				url: "https://example.com/action",
@@ -148,6 +153,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
+		resolveProgram: () => null,
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
@@ -197,6 +203,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
+		resolveProgram: () => null,
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;
@@ -224,6 +231,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 test("AI Pointer captures and presents a confident accessible snap", async () => {
 	let captured = "";
 	let presentedTarget = "";
+	let presentedProgram = "";
 	let ocrInput = "";
 	const ocrStates: string[] = [];
 	const view = {
@@ -236,8 +244,9 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture(_capture, accessibility) {
+		showCapture(_capture, accessibility, program) {
 			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
+			presentedProgram = `${program?.class}:${program?.pid}`;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -255,6 +264,12 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		resolveAccessibility: async () => ({
 			geometry: { x: 100, y: 200, width: 120, height: 60 },
 			metadata: { confidence: 0.9, name: "Submit", role: "push button" },
+		}),
+		resolveProgram: () => ({
+			class: "org.wezfurlong.wezterm",
+			geometry: { x: 0, y: 0, width: 500, height: 400 },
+			pid: 123,
+			title: "Terminal",
 		}),
 		recognizeOcr: async (input) => {
 			ocrInput = `${input.path}:${input.pixelWidth}x${input.pixelHeight}`;
@@ -275,6 +290,10 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		await settleMainLoop();
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(presentedTarget === "push button:Submit", "accessible metadata was not presented");
+		assert(
+			presentedProgram === "org.wezfurlong.wezterm:123",
+			"coordinate-matched program metadata was not presented",
+		);
 		assert(
 			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
 			"OCR did not reuse the presented capture",
@@ -318,6 +337,7 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 					metadata: { confidence: 0.9, role: "push button" },
 				});
 			}),
+		resolveProgram: () => null,
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;

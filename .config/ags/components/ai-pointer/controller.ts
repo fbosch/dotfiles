@@ -3,10 +3,11 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { queryHyprlandJson } from "@/services/hyprland-ipc";
-import { resolveAccessibleSelection } from "./accessibility";
+import { programsForSelection, resolveAccessibleSelection } from "./accessibility";
 import type {
 	AccessibilityMetadata,
 	AccessibilityResolution,
+	ProgramMetadata,
 } from "./accessibility-policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { aiPointerMachine } from "./machine";
@@ -35,6 +36,7 @@ interface AiPointerControllerOptions {
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
 	readPointer?(): PointerPosition | null;
+	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
 		cancellable: Gio.Cancellable,
@@ -55,6 +57,7 @@ export class AiPointerController {
 	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
 	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
+	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
 	#actor: AiPointerActor | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
@@ -64,6 +67,7 @@ export class AiPointerController {
 	#ocrProcess: Gio.Subprocess | null = null;
 	#capture: Capture | null = null;
 	#accessibilityMetadata: AccessibilityMetadata | null = null;
+	#programMetadata: ProgramMetadata[] = [];
 	#directory: string | null = null;
 	#pendingFinish: PointerPosition | null = null;
 	#pendingFinishId = 0;
@@ -76,6 +80,7 @@ export class AiPointerController {
 		this.#captureRegion = options.capture ?? captureRegion;
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
 		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
+		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
 		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
 		this.#readPointer = options.readPointer ?? (() => {
 			const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
@@ -99,7 +104,11 @@ export class AiPointerController {
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
 				if (snapshot.matches("preview") && this.#capture) {
-					const preview = this.#view.showCapture(this.#capture, this.#accessibilityMetadata);
+					const preview = this.#view.showCapture(
+						this.#capture,
+						this.#accessibilityMetadata,
+						this.#programMetadata,
+					);
 					if (!preview) {
 						this.#failureMessage = "The captured image could not be previewed.";
 						deleteCapture(this.#capture.path);
@@ -135,6 +144,7 @@ export class AiPointerController {
 		this.#directory = directory;
 		this.#stroke = createPointerStroke(startPosition);
 		this.#accessibilityMetadata = null;
+		this.#programMetadata = [];
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
 		if (this.#view.beginStroke(this.#stroke, () => this.#sampleStroke()) === false) {
@@ -236,6 +246,7 @@ export class AiPointerController {
 		if (runId !== this.#runId || cancellable.is_cancelled()) return;
 
 		this.#accessibilityMetadata = resolution?.metadata ?? null;
+		this.#programMetadata = this.#resolvePrograms(resolution?.geometry ?? strokeGeometry);
 		let result: Awaited<ReturnType<typeof captureRegion>>;
 		try {
 			result = await this.#captureRegion(
@@ -282,6 +293,7 @@ export class AiPointerController {
 		this.#directory = null;
 		this.#stroke = null;
 		this.#accessibilityMetadata = null;
+		this.#programMetadata = [];
 		this.#view.endStroke();
 		this.#clearPendingFinish();
 		if (this.#capture) deleteCapture(this.#capture.path);

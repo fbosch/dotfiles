@@ -16,7 +16,7 @@ The AI Pointer SHALL query accessibility data only after an explicit completed g
 - **THEN** the system does not inspect accessibility trees or retain accessible objects
 
 ### Requirement: Fuzzy bounded automatic snapping
-The AI Pointer SHALL replace stroke-derived capture geometry only when one visible, showing, non-sensitive accessible target has an eligible semantic role and the combined padded overlap, center affinity, relative size, and repeated-hit evidence distinguish it from alternatives. A target MAY be one candidate or a repeatedly hit common ancestor of multiple related candidates. The candidate and final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
+The AI Pointer SHALL replace stroke-derived capture geometry only when visible, showing, non-sensitive accessible targets have eligible semantic roles and the combined padded overlap, center affinity, relative size, and repeated-hit evidence distinguish them from alternatives. A result MAY be one candidate, a repeatedly hit common ancestor, or a bounded collection of distinct candidates. Every candidate and the final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
 
 #### Scenario: One control fuzzily matches the gesture
 - **WHEN** one candidate overlaps the capture-padding tolerance, has compatible area, and its combined geometric score exceeds the confidence and ambiguity thresholds
@@ -33,6 +33,14 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when one visib
 #### Scenario: Gesture covers related targets
 - **WHEN** several sampled points resolve through one bounded common ancestor whose geometry confidently matches the gesture
 - **THEN** the system captures padded geometry around that common ancestor
+
+#### Scenario: Gesture intentionally covers multiple distinct targets
+- **WHEN** two to eight strong non-overlapping semantic candidates have centers inside the selection, no clear common ancestor supersedes them, their combined area occupies at least fifteen percent of their bounded union, and that union is no more than five times the selection area
+- **THEN** the system captures the padded union and returns local per-target role, name, URL, geometry, hit-count, and confidence metadata as a collection
+
+#### Scenario: Candidate collection is sparse or overlapping
+- **WHEN** possible members substantially overlap, leave a large unexplained gap, exceed the collection limit, or include only one strong distinct target
+- **THEN** the system does not manufacture a collection and continues with the ordinary single-target or fallback policy
 
 #### Scenario: Gesture covers part of one bounded target
 - **WHEN** the padded selection substantially overlaps one target that is no more than five times the selection area
@@ -78,11 +86,15 @@ The AI Pointer SHALL treat AT-SPI window coordinates as application-local and tr
 - **THEN** the system treats the result as stale and captures the original stroke-derived geometry
 
 ### Requirement: Local privacy-minimized metadata
-The AI Pointer MAY show the selected candidate's bounded accessible name, role, geometry, center-hit status, hit count, confidence, optional HTTP or HTTPS Hyperlink URL, and bounded active-program class, title, and process ID in the local preview. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. URLs from non-link roles, non-web schemes, values containing whitespace or control characters, and oversized values SHALL be discarded. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
+The AI Pointer MAY show each selected candidate's bounded accessible name, role, geometry, center-hit status, hit count, confidence, optional HTTP or HTTPS Hyperlink URL, and coordinate-matched program class, title, process ID, and geometry in the local preview. Program identity SHALL come from the mapped visible Hyprland client containing the selection center and SHALL NOT depend on AT-SPI availability. Collection metadata SHALL remain bounded to the selected collection members. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. URLs from non-link roles, non-web schemes, values containing whitespace or control characters, and oversized values SHALL be discarded. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
 
 #### Scenario: Capture snaps successfully
 - **WHEN** the local preview is shown
 - **THEN** it identifies the bounded local program and accessible target, shows the geometric and scoring evidence used for the match, and states that the metadata remains local
+
+#### Scenario: Matched program exposes no accessibility tree
+- **WHEN** the selection center lies inside a mapped visible Hyprland client but AT-SPI returns no reliable element
+- **THEN** the preview still identifies the bounded program class, title, process ID, and geometry while reporting stroke-geometry fallback for the element
 
 #### Scenario: Selected link exposes a web URL
 - **WHEN** the winning link candidate provides one bounded valid HTTP or HTTPS Hyperlink URI

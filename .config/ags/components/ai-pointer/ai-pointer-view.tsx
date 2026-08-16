@@ -8,7 +8,7 @@ import Pango from "gi://Pango?version=1.0";
 import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
-import type { AccessibilityMetadata } from "./accessibility-policy";
+import type { AccessibilityMetadata, ProgramMetadata } from "./accessibility-policy";
 import type { Capture } from "./capture";
 import type { OcrResult } from "./ocr";
 import type { PointerStroke } from "./stroke";
@@ -127,6 +127,7 @@ export class AiPointerView {
 	showCapture(
 		capture: Capture,
 		accessibility: AccessibilityMetadata | null = null,
+		program: ProgramMetadata | null = accessibility?.program ?? null,
 	): CapturePreview | null {
 		let texture: Gdk.Texture;
 		try {
@@ -138,27 +139,15 @@ export class AiPointerView {
 		this.#geometry?.set_label(
 			`${capture.geometry.width} × ${capture.geometry.height} at ${capture.geometry.x}, ${capture.geometry.y}`,
 		);
-		const target = accessibility
-			? `${accessibility.role}${accessibility.name ? `: ${accessibility.name}` : ""}`
-			: null;
-		const programIdentity = accessibility?.program?.class ?? "Unknown application";
+		const target = this.#formatTarget(accessibility);
+		const programIdentity = program?.class ?? "Unknown application";
 		this.#program?.set_label(
-			accessibility?.program
-				? `${programIdentity} · PID ${accessibility.program.pid}${accessibility.program.title ? `\n${accessibility.program.title}` : ""}`
+			program
+				? `${programIdentity} · PID ${program.pid}${program.title ? `\n${program.title}` : ""}\n${program.geometry.width} × ${program.geometry.height} at ${program.geometry.x}, ${program.geometry.y}`
 				: "No matched program metadata",
 		);
-		this.#target?.set_label(
-			accessibility
-				? `${target}${accessibility.targetGeometry
-					? `\n${accessibility.targetGeometry.width} × ${accessibility.targetGeometry.height} at ${accessibility.targetGeometry.x}, ${accessibility.targetGeometry.y}`
-					: ""}${accessibility.url ? `\n${accessibility.url}` : ""}`
-				: "No reliable accessible element",
-		);
-		this.#evidence?.set_label(
-			accessibility
-				? `${Math.round(accessibility.confidence * 100)}% confidence · ${accessibility.centerHit ? "center hit" : "fuzzy hit"} · ${accessibility.hitCount ?? 1} sample${(accessibility.hitCount ?? 1) === 1 ? "" : "s"}`
-				: "Stroke geometry fallback",
-		);
+		this.#target?.set_label(target ?? "No reliable accessible element");
+		this.#evidence?.set_label(this.#formatEvidence(accessibility));
 		this.#status?.set_label(
 			target
 				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
@@ -308,5 +297,29 @@ export class AiPointerView {
 		box.append(title);
 		box.append(scroll);
 		return box;
+	}
+
+	#formatTarget(accessibility: AccessibilityMetadata | null): string | null {
+		if (!accessibility) return null;
+		if (accessibility.targets && accessibility.targets.length > 1)
+			return `${accessibility.targets.length} matched elements\n${accessibility.targets
+				.map(({ name, role, targetGeometry, url }, index) =>
+					`${index + 1}. ${role}${name ? `: ${name}` : ""} · ${targetGeometry.width} × ${targetGeometry.height} at ${targetGeometry.x}, ${targetGeometry.y}${url ? `\n   ${url}` : ""}`,
+				)
+				.join("\n")}`;
+		let target = `${accessibility.role}${accessibility.name ? `: ${accessibility.name}` : ""}`;
+		if (accessibility.targetGeometry)
+			target += `\n${accessibility.targetGeometry.width} × ${accessibility.targetGeometry.height} at ${accessibility.targetGeometry.x}, ${accessibility.targetGeometry.y}`;
+		if (accessibility.url) target += `\n${accessibility.url}`;
+		return target;
+	}
+
+	#formatEvidence(accessibility: AccessibilityMetadata | null): string {
+		if (!accessibility) return "Stroke geometry fallback";
+		const hitCount = accessibility.hitCount ?? 1;
+		let matchKind = "fuzzy hit";
+		if (accessibility.targets && accessibility.targets.length > 1) matchKind = "collection";
+		else if (accessibility.centerHit) matchKind = "center hit";
+		return `${Math.round(accessibility.confidence * 100)}% confidence · ${matchKind} · ${hitCount} sample${hitCount === 1 ? "" : "s"}`;
 	}
 }
