@@ -323,12 +323,13 @@ describe("accessibility helper protocol", () => {
 		};
 		expect(
 			parseAccessibilityHelperOutput(
-				JSON.stringify({ protocolVersion: 2, coordinateSpace: "window", candidates: [candidate] }),
+				JSON.stringify({ protocolVersion: 3, coordinateSpace: "window", candidates: [candidate] }),
 			),
 		).toEqual([candidate]);
 		for (const response of [
-			{ protocolVersion: 1, coordinateSpace: "window", candidates: [] },
-			{ protocolVersion: 2, coordinateSpace: "screen", candidates: [] },
+			{ protocolVersion: 2, coordinateSpace: "window", candidates: [] },
+			{ protocolVersion: 4, coordinateSpace: "window", candidates: [] },
+			{ protocolVersion: 3, coordinateSpace: "screen", candidates: [] },
 			{ coordinateSpace: "window", candidates: [] },
 		])
 			expect(parseAccessibilityHelperOutput(JSON.stringify(response))).toBeNull();
@@ -338,7 +339,7 @@ describe("accessibility helper protocol", () => {
 		expect(
 			parseAccessibilityHelperOutput(
 				JSON.stringify({
-					protocolVersion: 2,
+					protocolVersion: 3,
 					coordinateSpace: "window",
 					candidates: [
 						{
@@ -350,5 +351,27 @@ describe("accessibility helper protocol", () => {
 				}),
 			),
 		).toEqual([]);
+	});
+
+	test("accepts only bounded web URLs", () => {
+		const candidate = {
+			geometry: { x: 10, y: 20, width: 100, height: 40 },
+			role: "link",
+		};
+		expect(
+			parseAccessibilityHelperOutput(JSON.stringify({
+				protocolVersion: 3,
+				coordinateSpace: "window",
+				candidates: [{ ...candidate, url: "https://example.com/item?id=1" }],
+			})),
+		).toEqual([{ ...candidate, url: "https://example.com/item?id=1" }]);
+		for (const url of ["javascript:alert(1)", "file:///etc/passwd", "https://example.com/unsafe value"])
+			expect(
+				parseAccessibilityHelperOutput(JSON.stringify({
+					protocolVersion: 3,
+					coordinateSpace: "window",
+					candidates: [{ ...candidate, url }],
+				})),
+			).toEqual([]);
 	});
 });

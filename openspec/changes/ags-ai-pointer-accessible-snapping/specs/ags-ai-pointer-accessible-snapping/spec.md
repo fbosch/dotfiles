@@ -78,11 +78,15 @@ The AI Pointer SHALL treat AT-SPI window coordinates as application-local and tr
 - **THEN** the system treats the result as stale and captures the original stroke-derived geometry
 
 ### Requirement: Local privacy-minimized metadata
-The AI Pointer MAY show the selected candidate's bounded accessible name and role in the local preview. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
+The AI Pointer MAY show the selected candidate's bounded accessible name, role, geometry, center-hit status, hit count, confidence, optional HTTP or HTTPS Hyperlink URL, and bounded active-program class, title, and process ID in the local preview. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. URLs from non-link roles, non-web schemes, values containing whitespace or control characters, and oversized values SHALL be discarded. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
 
 #### Scenario: Capture snaps successfully
 - **WHEN** the local preview is shown
-- **THEN** it identifies the local accessible role and optional bounded name and states that the metadata remains local
+- **THEN** it identifies the bounded local program and accessible target, shows the geometric and scoring evidence used for the match, and states that the metadata remains local
+
+#### Scenario: Selected link exposes a web URL
+- **WHEN** the winning link candidate provides one bounded valid HTTP or HTTPS Hyperlink URI
+- **THEN** the local preview may show that URL without persisting, logging, or adding it to an AI-facing payload
 
 #### Scenario: Capture is discarded
 - **WHEN** the user closes the preview

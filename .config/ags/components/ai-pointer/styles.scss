@@ -13,7 +13,7 @@
   }
 
   box.ai-pointer-panel {
-    min-width: 360px;
+    min-width: 720px;
     padding: 16px;
     color: var(--ags-color-foreground-primary);
     background-color: var(--ags-color-background-secondary);
@@ -44,6 +44,27 @@
     background-color: var(--ags-color-background-primary);
     border: 1px solid var(--ags-color-accent-primary);
     border-radius: 8px;
+  }
+
+  box.ai-pointer-metadata {
+    min-width: 220px;
+    padding: 12px;
+    background-color: var(--ags-color-background-primary);
+    border: 1px solid var(--ags-color-border-default);
+    border-radius: 8px;
+  }
+
+  label.ai-pointer-metadata-title {
+    color: var(--ags-color-accent-primary);
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  label.ai-pointer-metadata-value {
+    color: var(--ags-color-foreground-secondary);
+    font-family: monospace;
+    font-size: 11px;
   }
 
   label.ai-pointer-geometry,

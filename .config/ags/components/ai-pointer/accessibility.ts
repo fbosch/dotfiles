@@ -27,11 +27,13 @@ const helperExecutableName = "ags-ai-pointer-accessibility-helper";
 interface ActiveClient {
 	address?: unknown;
 	at?: unknown;
+	class?: unknown;
 	hidden?: unknown;
 	mapped?: unknown;
 	pid?: unknown;
 	size?: unknown;
 	stableId?: unknown;
+	title?: unknown;
 }
 
 interface AccessibleHelperInput {
@@ -49,9 +51,11 @@ interface AccessibleHelperInput {
 
 interface ValidatedClient {
 	address: string;
+	class?: string;
 	geometry: SelectionGeometry;
 	pid: number;
 	stableId?: string;
+	title?: string;
 }
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
@@ -68,7 +72,19 @@ export async function resolveAccessibleSelection(
 	if (!candidates || cancellable.is_cancelled()) return null;
 	const freshClient = activeClientForSelection(selection);
 	if (!freshClient || sameClient(client, freshClient) === false) return null;
-	return chooseAccessibleSnap(selection, candidates, freshClient.geometry);
+	const resolution = chooseAccessibleSnap(selection, candidates, freshClient.geometry);
+	if (!resolution) return null;
+	return {
+		...resolution,
+		metadata: {
+			...resolution.metadata,
+			program: {
+				class: freshClient.class,
+				pid: freshClient.pid,
+				title: freshClient.title,
+			},
+		},
+	};
 }
 
 function activeClientForSelection(selection: SelectionGeometry): ValidatedClient | null {
@@ -100,10 +116,21 @@ function activeClientForSelection(selection: SelectionGeometry): ValidatedClient
 	if (!geometry || containsSelectionCenter(geometry, selection) === false) return null;
 	return {
 		address: active.address,
+		class: boundedClientText(active.class, 80),
 		geometry,
 		pid: active.pid,
 		stableId: typeof active.stableId === "string" ? active.stableId : undefined,
+		title: boundedClientText(active.title, 160),
 	};
+}
+
+function boundedClientText(value: unknown, maximumLength: number): string | undefined {
+	if (typeof value !== "string") return undefined;
+	return value
+		.slice(0, maximumLength)
+		.replace(/[\u0000-\u001f\u007f]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim() || undefined;
 }
 
 async function queryHelper(

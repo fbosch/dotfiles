@@ -19,7 +19,7 @@ function settleMainLoop(): Promise<void> {
 test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
 	assert(shell !== null, "shell fixture is unavailable");
-	const expected = '{"protocolVersion":2,"coordinateSpace":"window","candidates":[]}';
+	const expected = '{"protocolVersion":3,"coordinateSpace":"window","candidates":[]}';
 	const valid = Gio.Subprocess.new(
 		[shell, "-c", "printf '%s' \"$1\"", "fixture", expected],
 		Gio.SubprocessFlags.STDOUT_PIPE,
@@ -47,10 +47,22 @@ test("AI Pointer view presents a capture and disposes", async () => {
 		GLib.get_current_dir(),
 	);
 	assert(
-		view.showCapture({
-			path: capturePath,
-			geometry: { x: 10, y: 20, width: 20, height: 20 },
-		}),
+		view.showCapture(
+			{
+				path: capturePath,
+				geometry: { x: 10, y: 20, width: 20, height: 20 },
+			},
+			{
+				centerHit: true,
+				confidence: 0.9,
+				hitCount: 7,
+				name: "Submit",
+				program: { class: "org.example.App", pid: 123, title: "Example" },
+				role: "push button",
+				targetGeometry: { x: 12, y: 22, width: 16, height: 12 },
+				url: "https://example.com/action",
+			},
+		),
 		"AI Pointer capture preview was rejected",
 	);
 	await settleMainLoop();

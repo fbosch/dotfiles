@@ -16,7 +16,8 @@ const minimumConfidenceMargin = 0.03;
 const maximumCandidates = 24;
 const maximumRoleLength = 80;
 const maximumNameLength = 160;
-export const accessibilityProtocolVersion = 2;
+const maximumUrlLength = 512;
+export const accessibilityProtocolVersion = 3;
 export const accessibilityCoordinateSpace = "window";
 const eligibleRoles = new Set([
 	"article",
@@ -52,12 +53,22 @@ export interface AccessibleCandidate {
 	hitCount?: number;
 	name?: string;
 	role: string;
+	url?: string;
 }
 
 export interface AccessibilityMetadata {
+	centerHit?: boolean;
 	confidence: number;
+	hitCount?: number;
 	name?: string;
+	program?: {
+		class?: string;
+		pid: number;
+		title?: string;
+	};
 	role: string;
+	targetGeometry?: SelectionGeometry;
+	url?: string;
 }
 
 export interface AccessibilityResolution {
@@ -104,6 +115,13 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 		)
 			continue;
 		if (
+			value.url !== undefined &&
+			(typeof value.url !== "string" ||
+				value.role.trim().toLowerCase() !== "link" ||
+				isSafeUrl(value.url) === false)
+		)
+			continue;
+		if (
 			value.centerHit !== undefined &&
 			typeof value.centerHit !== "boolean"
 		)
@@ -122,6 +140,7 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 			hitCount: value.hitCount,
 			role: value.role,
 			name: value.name,
+			url: value.url,
 		});
 	}
 	return candidates;
@@ -190,9 +209,13 @@ function resolutionFromCandidate(
 	return {
 		geometry,
 		metadata: {
+			centerHit: candidate.centerHit,
 			confidence,
+			hitCount: candidate.hitCount ?? 1,
 			name: candidate.name,
 			role: candidate.role,
+			targetGeometry: candidateGeometry,
+			url: candidate.url,
 		},
 	};
 }
@@ -318,6 +341,14 @@ function containsGeometry(container: SelectionGeometry, target: SelectionGeometr
 
 function isSafeMetadata(value: string, maximumLength: number): boolean {
 	return value.length > 0 && value.length <= maximumLength && /[\u0000-\u001f\u007f]/.test(value) === false;
+}
+
+function isSafeUrl(value: string): boolean {
+	return (
+		value.length <= maximumUrlLength &&
+		/[\u0000-\u0020\u007f]/.test(value) === false &&
+		/^https?:\/\//i.test(value)
+	);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -20,6 +20,9 @@ export class AiPointerView {
 	#window: Astal.Window | null = null;
 	#preview: Gtk.Picture | null = null;
 	#geometry: Gtk.Label | null = null;
+	#program: Gtk.Label | null = null;
+	#target: Gtk.Label | null = null;
+	#evidence: Gtk.Label | null = null;
 	#status: Gtk.Label | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -59,7 +62,20 @@ export class AiPointerView {
 							<box class="ai-pointer-signal" />
 							<label label="SELECTED REGION" class="ai-pointer-title" halign={Gtk.Align.START} />
 						</box>
-						{this.#createPreview()}
+						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={12} class="ai-pointer-review">
+							{this.#createPreview()}
+							<box orientation={Gtk.Orientation.VERTICAL} spacing={10} class="ai-pointer-metadata">
+								{this.#createMetadataField("PROGRAM", (label) => {
+									this.#program = label;
+								})}
+								{this.#createMetadataField("ACCESSIBLE ELEMENT", (label) => {
+									this.#target = label;
+								})}
+								{this.#createMetadataField("MATCH EVIDENCE", (label) => {
+									this.#evidence = label;
+								})}
+							</box>
+						</box>
 						<label
 							label=""
 							class="ai-pointer-geometry"
@@ -111,6 +127,24 @@ export class AiPointerView {
 		const target = accessibility
 			? `${accessibility.role}${accessibility.name ? `: ${accessibility.name}` : ""}`
 			: null;
+		const programIdentity = accessibility?.program?.class ?? "Unknown application";
+		this.#program?.set_label(
+			accessibility?.program
+				? `${programIdentity} · PID ${accessibility.program.pid}${accessibility.program.title ? `\n${accessibility.program.title}` : ""}`
+				: "No matched program metadata",
+		);
+		this.#target?.set_label(
+			accessibility
+				? `${target}${accessibility.targetGeometry
+					? `\n${accessibility.targetGeometry.width} × ${accessibility.targetGeometry.height} at ${accessibility.targetGeometry.x}, ${accessibility.targetGeometry.y}`
+					: ""}${accessibility.url ? `\n${accessibility.url}` : ""}`
+				: "No reliable accessible element",
+		);
+		this.#evidence?.set_label(
+			accessibility
+				? `${Math.round(accessibility.confidence * 100)}% confidence · ${accessibility.centerHit ? "center hit" : "fuzzy hit"} · ${accessibility.hitCount ?? 1} sample${(accessibility.hitCount ?? 1) === 1 ? "" : "s"}`
+				: "Stroke geometry fallback",
+		);
 		this.#status?.set_label(
 			target
 				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
@@ -155,6 +189,9 @@ export class AiPointerView {
 		this.#window = null;
 		this.#preview = null;
 		this.#geometry = null;
+		this.#program = null;
+		this.#target = null;
+		this.#evidence = null;
 		this.#status = null;
 		this.#handlers = null;
 	}
@@ -179,5 +216,22 @@ export class AiPointerView {
 		preview.add_css_class("ai-pointer-preview");
 		this.#preview = preview;
 		return preview;
+	}
+
+	#createMetadataField(heading: string, assign: (label: Gtk.Label) => void): Gtk.Box {
+		const value = new Gtk.Label({
+			halign: Gtk.Align.START,
+			selectable: true,
+			wrap: true,
+			xalign: 0,
+		});
+		value.add_css_class("ai-pointer-metadata-value");
+		assign(value);
+		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
+		const title = new Gtk.Label({ halign: Gtk.Align.START, label: heading, xalign: 0 });
+		title.add_css_class("ai-pointer-metadata-title");
+		box.append(title);
+		box.append(value);
+		return box;
 	}
 }

@@ -7,9 +7,10 @@ const maximumAncestorDepth = 10;
 const maximumCandidates = 24;
 const maximumHitCount = 24;
 const maximumBrushRadius = 128;
+const maximumUrlLength = 512;
 const strokeSampleAnchors = 5;
 const callTimeoutMs = 100;
-const protocolVersion = 2;
+const protocolVersion = 3;
 const coordinateSpace = "window";
 const excludedRoles = new Set([
 	"application",
@@ -50,6 +51,7 @@ interface Candidate {
 	hitCount: number;
 	name?: string;
 	role: string;
+	url?: string;
 }
 
 interface HitPoint {
@@ -304,6 +306,26 @@ function boundedName(accessible: Atspi.Accessible): string | undefined {
 	}
 }
 
+function boundedUrl(accessible: Atspi.Accessible, role: string): string | undefined {
+	if (role !== "link") return undefined;
+	try {
+		const hyperlink = accessible.get_hyperlink();
+		if (!hyperlink || hyperlink.is_valid() === false || hyperlink.get_n_anchors() < 1)
+			return undefined;
+		const url = hyperlink.get_uri(0).trim();
+		if (
+			url.length === 0 ||
+			url.length > maximumUrlLength ||
+			/[\u0000-\u0020\u007f]/.test(url) ||
+			/^https?:\/\//i.test(url) === false
+		)
+			return undefined;
+		return url;
+	} catch {
+		return undefined;
+	}
+}
+
 function insideWindow(geometry: Geometry, input: HelperInput): boolean {
 	return (
 		geometry.x >= 0 &&
@@ -369,6 +391,7 @@ function collectCandidates(window: Atspi.Accessible, input: HelperInput): Candid
 				hitCount: 1,
 				role: item.role,
 				name: boundedName(item.accessible),
+				url: boundedUrl(item.accessible, item.role),
 			});
 		}
 	}

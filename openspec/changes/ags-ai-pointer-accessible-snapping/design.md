@@ -18,7 +18,7 @@ The helper samples the center first, then the remaining points in a bounded 3×3
 
 ### Keep accessibility metadata local
 
-The helper reads only role, bounded name, state, process ID, parent relationships, and component bounds. It never calls Text, EditableText, Value, or description APIs. The controller keeps copied metadata separate from `Capture`, so future request code cannot accidentally inherit it from the image contract.
+The helper reads only role, bounded name, state, process ID, parent relationships, component bounds, and the first valid Hyperlink URI for link-role candidates. It never calls Text, EditableText, Value, or description APIs. Link URIs are optional, limited to 512 characters, and restricted to whitespace-free HTTP or HTTPS values before crossing the versioned helper boundary. For local targeting diagnostics, the controller combines the winning candidate's bounded role, name, optional URL, bounds, center-hit flag, hit count, and confidence with bounded Hyprland class, title, and process ID. The preview renders this evidence beside the image. The controller keeps copied metadata separate from `Capture`, so future request code cannot accidentally inherit it from the image contract.
 
 ## Risks / Trade-offs
 
