@@ -10,7 +10,8 @@ import type {
 } from "./accessibility-policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { aiPointerMachine } from "./machine";
-import { AiPointerView } from "./ai-pointer-view";
+import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
+import { recognizeCapture, type OcrResult } from "./ocr";
 import {
 	type PointerPosition,
 	type SelectionGeometry,
@@ -34,6 +35,11 @@ interface AiPointerControllerOptions {
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
 	readPointer?(): PointerPosition | null;
+	recognizeOcr?(
+		input: { path: string; pixelHeight: number; pixelWidth: number },
+		cancellable: Gio.Cancellable,
+		onProcess: (process: Gio.Subprocess | null) => void,
+	): Promise<OcrResult>;
 	resolveAccessibility?(
 		geometry: SelectionGeometry,
 		stroke: PointerStroke,
@@ -47,12 +53,15 @@ export class AiPointerController {
 	readonly #captureRegion: NonNullable<AiPointerControllerOptions["capture"]>;
 	readonly #prepareDirectory: NonNullable<AiPointerControllerOptions["prepareDirectory"]>;
 	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
+	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	#actor: AiPointerActor | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
 	#cancellable: Gio.Cancellable | null = null;
 	#process: Gio.Subprocess | null = null;
+	#ocrCancellable: Gio.Cancellable | null = null;
+	#ocrProcess: Gio.Subprocess | null = null;
 	#capture: Capture | null = null;
 	#accessibilityMetadata: AccessibilityMetadata | null = null;
 	#directory: string | null = null;
@@ -67,6 +76,7 @@ export class AiPointerController {
 		this.#captureRegion = options.capture ?? captureRegion;
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
 		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
+		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
 		this.#readPointer = options.readPointer ?? (() => {
 			const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
 				component: "ai-pointer",
@@ -89,12 +99,15 @@ export class AiPointerController {
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
 				if (snapshot.matches("preview") && this.#capture) {
-					if (this.#view.showCapture(this.#capture, this.#accessibilityMetadata) === false) {
+					const preview = this.#view.showCapture(this.#capture, this.#accessibilityMetadata);
+					if (!preview) {
 						this.#failureMessage = "The captured image could not be previewed.";
 						deleteCapture(this.#capture.path);
 						this.#capture = null;
 						this.#actor?.send({ type: "FAIL" });
+						return;
 					}
+					this.#startOcr(this.#capture, preview);
 					return;
 				}
 				if (snapshot.matches("failed")) {
@@ -261,6 +274,7 @@ export class AiPointerController {
 
 	cancel(): void {
 		this.#runId += 1;
+		this.#stopOcr();
 		this.#cancellable?.cancel();
 		this.#cancellable = null;
 		this.#process?.force_exit();
@@ -292,6 +306,37 @@ export class AiPointerController {
 		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
 		this.#pendingFinishId = 0;
 		this.#pendingFinish = null;
+	}
+
+	#startOcr(capture: Capture, preview: CapturePreview): void {
+		this.#stopOcr();
+		const runId = this.#runId;
+		const cancellable = new Gio.Cancellable();
+		this.#ocrCancellable = cancellable;
+		this.#view.setOcrState({ kind: "pending" });
+		void this.#recognizeOcr(
+			{ path: capture.path, ...preview },
+			cancellable,
+			(process) => {
+				if (runId === this.#runId) this.#ocrProcess = process;
+			},
+		).then((result) => {
+			if (runId !== this.#runId || cancellable.is_cancelled() || result.kind === "cancelled")
+				return;
+			this.#view.setOcrState(result);
+		}).finally(() => {
+			if (runId !== this.#runId) return;
+			this.#ocrCancellable = null;
+			this.#ocrProcess = null;
+		});
+	}
+
+	#stopOcr(): void {
+		this.#ocrCancellable?.cancel();
+		this.#ocrCancellable = null;
+		this.#ocrProcess?.force_exit();
+		this.#ocrProcess = null;
+		this.#view.clearOcr();
 	}
 
 	#sampleStroke(): void {

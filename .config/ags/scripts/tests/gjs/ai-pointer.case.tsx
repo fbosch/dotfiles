@@ -106,8 +106,10 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 			return Promise.resolve(true);
 		},
 		showCapture() {
-			return true;
+			return { pixelHeight: 20, pixelWidth: 20 };
 		},
+		setOcrState() {},
+		clearOcr() {},
 		showError() {},
 		hide() {},
 		dispose() {},
@@ -117,6 +119,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
+		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
@@ -152,8 +155,10 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 			});
 		},
 		showCapture() {
-			return true;
+			return { pixelHeight: 20, pixelWidth: 20 };
 		},
+		setOcrState() {},
+		clearOcr() {},
 		showError() {},
 		hide() {},
 		dispose() {},
@@ -163,6 +168,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
+		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;
 			return {
@@ -201,8 +207,10 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		},
 		showCapture(_capture, accessibility) {
 			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
-			return true;
+			return { pixelHeight: 20, pixelWidth: 20 };
 		},
+		setOcrState() {},
+		clearOcr() {},
 		showError() {},
 		hide() {},
 		dispose() {},
@@ -215,6 +223,7 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 			geometry: { x: 100, y: 200, width: 120, height: 60 },
 			metadata: { confidence: 0.9, name: "Submit", role: "push button" },
 		}),
+		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
@@ -249,8 +258,10 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 			return Promise.resolve(true);
 		},
 		showCapture() {
-			return true;
+			return { pixelHeight: 20, pixelWidth: 20 };
 		},
+		setOcrState() {},
+		clearOcr() {},
 		showError() {},
 		hide() {},
 		dispose() {},
@@ -266,6 +277,7 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 					metadata: { confidence: 0.9, role: "push button" },
 				});
 			}),
+		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;
 			return {

@@ -4,17 +4,26 @@ import { createRoot } from "ags";
 import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
+import Pango from "gi://Pango?version=1.0";
 import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { AccessibilityMetadata } from "./accessibility-policy";
 import type { Capture } from "./capture";
+import type { OcrResult } from "./ocr";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
 
 export interface AiPointerViewHandlers {
 	onCancel(): void;
 }
+
+export interface CapturePreview {
+	pixelHeight: number;
+	pixelWidth: number;
+}
+
+export type OcrViewState = Exclude<OcrResult, { kind: "cancelled" }> | { kind: "pending" };
 
 export class AiPointerView {
 	#window: Astal.Window | null = null;
@@ -23,6 +32,7 @@ export class AiPointerView {
 	#program: Gtk.Label | null = null;
 	#target: Gtk.Label | null = null;
 	#evidence: Gtk.Label | null = null;
+	#ocr: Gtk.Label | null = null;
 	#status: Gtk.Label | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -74,6 +84,7 @@ export class AiPointerView {
 								{this.#createMetadataField("MATCH EVIDENCE", (label) => {
 									this.#evidence = label;
 								})}
+								{this.#createOcrField()}
 							</box>
 						</box>
 						<label
@@ -113,13 +124,16 @@ export class AiPointerView {
 		});
 	}
 
-	showCapture(capture: Capture, accessibility: AccessibilityMetadata | null = null): boolean {
+	showCapture(
+		capture: Capture,
+		accessibility: AccessibilityMetadata | null = null,
+	): CapturePreview | null {
+		let texture: Gdk.Texture;
 		try {
-			this.#preview?.set_paintable(
-				Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path)),
-			);
+			texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path));
+			this.#preview?.set_paintable(texture);
 		} catch {
-			return false;
+			return null;
 		}
 		this.#geometry?.set_label(
 			`${capture.geometry.width} × ${capture.geometry.height} at ${capture.geometry.x}, ${capture.geometry.y}`,
@@ -150,9 +164,39 @@ export class AiPointerView {
 				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
 				: "No reliable accessible target was found; using the drawn region. AI requests remain disabled.",
 		);
-		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return false;
+		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return null;
 		this.#show();
-		return true;
+		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
+	}
+
+	setOcrState(state: OcrViewState): void {
+		if (!this.#ocr) return;
+		if (state.kind === "pending") {
+			this.#ocr.set_label("Reading text locally...");
+			return;
+		}
+		if (state.kind === "text") {
+			this.#ocr.set_label(state.text);
+			return;
+		}
+		if (state.kind === "truncated") {
+			this.#ocr.set_label(`OCR output truncated at 64 KiB.\n\n${state.text}`);
+			return;
+		}
+		if (state.kind === "no-text") {
+			this.#ocr.set_label("No text detected.");
+			return;
+		}
+		const messages: Record<string, string> = {
+			"executable-missing": "OCR unavailable: Tesseract is not installed.",
+			"image-too-large": "OCR unavailable: image exceeds the 6 MP limit.",
+			timeout: "OCR unavailable: extraction exceeded 10 seconds.",
+		};
+		this.#ocr.set_label(messages[state.reason] ?? "OCR unavailable for this image.");
+	}
+
+	clearOcr(): void {
+		this.#ocr?.set_label("");
 	}
 
 	beginStroke(stroke: PointerStroke, onFrame: () => void): boolean {
@@ -172,6 +216,7 @@ export class AiPointerView {
 	}
 
 	showError(message: string): void {
+		this.clearOcr();
 		this.#preview?.set_paintable(null);
 		this.#geometry?.set_label("");
 		this.#status?.set_label(message);
@@ -179,6 +224,7 @@ export class AiPointerView {
 	}
 
 	hide(): void {
+		this.clearOcr();
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
 	}
@@ -192,6 +238,7 @@ export class AiPointerView {
 		this.#program = null;
 		this.#target = null;
 		this.#evidence = null;
+		this.#ocr = null;
 		this.#status = null;
 		this.#handlers = null;
 	}
@@ -232,6 +279,34 @@ export class AiPointerView {
 		title.add_css_class("ai-pointer-metadata-title");
 		box.append(title);
 		box.append(value);
+		return box;
+	}
+
+	#createOcrField(): Gtk.Box {
+		const value = new Gtk.Label({
+			halign: Gtk.Align.FILL,
+			selectable: true,
+			valign: Gtk.Align.START,
+			wrap: true,
+			xalign: 0,
+		});
+		value.set_wrap_mode(Pango.WrapMode.CHAR);
+		value.add_css_class("ai-pointer-metadata-value");
+		this.#ocr = value;
+		const scroll = new Gtk.ScrolledWindow({
+			hscrollbarPolicy: Gtk.PolicyType.NEVER,
+			vscrollbarPolicy: Gtk.PolicyType.AUTOMATIC,
+		});
+		scroll.add_css_class("ai-pointer-ocr-scroll");
+		scroll.set_min_content_height(96);
+		scroll.set_max_content_height(160);
+		scroll.set_propagate_natural_height(true);
+		scroll.set_child(value);
+		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
+		const title = new Gtk.Label({ halign: Gtk.Align.START, label: "LOCAL OCR", xalign: 0 });
+		title.add_css_class("ai-pointer-metadata-title");
+		box.append(title);
+		box.append(scroll);
 		return box;
 	}
 }
