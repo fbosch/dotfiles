@@ -5,6 +5,12 @@
   background-color: transparent;
   border: none;
 
+  &.ai-pointer-stroke {
+    padding: 0;
+
+    .ai-pointer-stroke-canvas { background-color: transparent; }
+  }
+
   box.ai-pointer-panel {
     min-width: 360px;
     padding: 16px;

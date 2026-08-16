@@ -75,10 +75,7 @@ export async function captureRegion(
 	}
 	if (capture.success === false) {
 		deleteCapture(path);
-		return {
-			kind: "failed",
-			message: `The screenshot process exited unsuccessfully: ${capture.error ?? "unknown error"}`,
-		};
+		return { kind: "failed", message: "The screenshot process exited unsuccessfully." };
 	}
 	if (isValidCapture(path) === false) {
 		deleteCapture(path);

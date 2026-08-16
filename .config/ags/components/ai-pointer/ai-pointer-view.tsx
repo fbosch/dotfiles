@@ -8,6 +8,8 @@ import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { Capture } from "./capture";
+import type { PointerPosition } from "./selection";
+import { StrokeOverlay } from "./stroke-overlay";
 
 export interface AiPointerViewHandlers {
 	onCancel(): void;
@@ -19,17 +21,10 @@ export class AiPointerView {
 	#geometry: Gtk.Label | null = null;
 	#status: Gtk.Label | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
+	readonly #strokeOverlay = new StrokeOverlay();
 
 	get isCreated(): boolean {
 		return this.#window !== null;
-	}
-
-	get isVisible(): boolean {
-		return this.#window?.get_visible() === true;
-	}
-
-	get isMapped(): boolean {
-		return this.#window?.get_mapped() === true;
 	}
 
 	create(handlers: AiPointerViewHandlers): void {
@@ -106,8 +101,7 @@ export class AiPointerView {
 			this.#preview?.set_paintable(
 				Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path)),
 			);
-		} catch (error) {
-			console.error("[DEBUG-ai-pointer-preview]", error);
+		} catch {
 			return false;
 		}
 		this.#geometry?.set_label(
@@ -120,6 +114,18 @@ export class AiPointerView {
 		return true;
 	}
 
+	beginStroke(points: PointerPosition[]): boolean {
+		return this.#strokeOverlay.show(points, () => this.#handlers?.onCancel());
+	}
+
+	updateStroke(points: PointerPosition[]): void {
+		this.#strokeOverlay.update(points);
+	}
+
+	endStroke(): void {
+		this.#strokeOverlay.hide();
+	}
+
 	showError(message: string): void {
 		this.#preview?.set_paintable(null);
 		this.#geometry?.set_label("");
@@ -129,9 +135,11 @@ export class AiPointerView {
 
 	hide(): void {
 		this.#window?.set_visible(false);
+		this.#strokeOverlay.hide();
 	}
 
 	dispose(): void {
+		this.#strokeOverlay.hide();
 		this.#window?.destroy();
 		this.#window = null;
 		this.#preview = null;
@@ -148,7 +156,6 @@ export class AiPointerView {
 			// A placement lookup must not prevent the reviewed capture from appearing.
 		}
 		this.#window?.set_visible(true);
-		console.error("[DEBUG-ai-pointer-visible]", this.#window?.get_visible());
 	}
 
 	#createPreview(): Gtk.Picture {

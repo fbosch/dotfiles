@@ -2,14 +2,22 @@ import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
+import { queryHyprlandJson } from "@/services/hyprland-ipc";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { aiPointerMachine } from "./machine";
 import { AiPointerView } from "./ai-pointer-view";
 import {
-	selectionFromPoints,
 	type PointerPosition,
 	type SelectionGeometry,
 } from "./selection";
+import {
+	appendStrokePoint,
+	createPointerStroke,
+	type PointerStroke,
+	selectionFromStroke,
+} from "./stroke";
+
+const strokeSampleIntervalMs = 16;
 
 type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
 
@@ -22,12 +30,14 @@ interface AiPointerControllerOptions {
 		onProcess: (process: Gio.Subprocess | null) => void,
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
+	readPointer?(): PointerPosition | null;
 }
 
 export class AiPointerController {
 	readonly #view: AiPointerView;
 	readonly #captureRegion: NonNullable<AiPointerControllerOptions["capture"]>;
 	readonly #prepareDirectory: NonNullable<AiPointerControllerOptions["prepareDirectory"]>;
+	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
 	#actor: AiPointerActor | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
@@ -35,17 +45,31 @@ export class AiPointerController {
 	#process: Gio.Subprocess | null = null;
 	#capture: Capture | null = null;
 	#directory: string | null = null;
-	#startPosition: PointerPosition | null = null;
 	#pendingFinish: PointerPosition | null = null;
 	#pendingFinishId = 0;
+	#strokeSampleId = 0;
+	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
-	#debugLastOutcome = "initialized";
 	#runId = 0;
 
 	constructor(options: AiPointerControllerOptions = {}) {
 		this.#view = options.view ?? new AiPointerView();
 		this.#captureRegion = options.capture ?? captureRegion;
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
+		this.#readPointer = options.readPointer ?? (() => {
+			const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
+				component: "ai-pointer",
+				metric: "strokeCursorPosition",
+			});
+			if (
+				typeof position?.x !== "number" ||
+				typeof position.y !== "number" ||
+				Number.isSafeInteger(position.x) === false ||
+				Number.isSafeInteger(position.y) === false
+			)
+				return null;
+			return { x: position.x, y: position.y };
+		});
 	}
 
 	init(): void {
@@ -53,7 +77,6 @@ export class AiPointerController {
 			this.#view.create({ onCancel: () => this.cancel() });
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
-				console.error("[DEBUG-ai-pointer-state]", snapshot.value);
 				if (snapshot.matches("preview") && this.#capture) {
 					if (this.#view.showCapture(this.#capture) === false) {
 						this.#failureMessage = "The captured image could not be previewed.";
@@ -86,9 +109,15 @@ export class AiPointerController {
 			return true;
 		}
 		this.#directory = directory;
-		this.#startPosition = startPosition;
+		this.#stroke = createPointerStroke(startPosition);
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
+		if (this.#view.beginStroke(this.#stroke.points) === false) {
+			this.#failureMessage = "The drawing overlay is unavailable.";
+			this.#actor?.send({ type: "FAIL" });
+			return true;
+		}
+		this.#startStrokeSampler();
 		if (this.#pendingFinish) {
 			const endPosition = this.#pendingFinish;
 			this.#clearPendingFinish();
@@ -114,28 +143,19 @@ export class AiPointerController {
 		return true;
 	}
 
-	debugStatus(): string {
-		return JSON.stringify({
-			state: this.#actor?.getSnapshot().value ?? "uninitialized",
-			failure: this.#failureMessage,
-			lastOutcome: this.#debugLastOutcome,
-			capture: this.#capture?.path ?? null,
-			processActive: this.#process !== null,
-			visible: this.#view.isVisible,
-			mapped: this.#view.isMapped,
-		});
-	}
-
 	#captureAt(endPosition: PointerPosition): void {
 		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
-		const startPosition = this.#startPosition;
 		const directory = this.#directory;
-		if (!startPosition || !directory) {
-			this.#failureMessage = "The selection start point is unavailable.";
+		const stroke = this.#stroke;
+		this.#stopStrokeSampler();
+		this.#view.endStroke();
+		if (!stroke || !directory) {
+			this.#failureMessage = "The drawing path is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
-		const geometry = selectionFromPoints(startPosition, endPosition);
+		this.#stroke = appendStrokePoint(stroke, endPosition, true);
+		const geometry = selectionFromStroke(this.#stroke);
 		if (!geometry) {
 			this.cancel();
 			return;
@@ -154,43 +174,39 @@ export class AiPointerController {
 			this.#cancellable = null;
 			this.#process = null;
 			if (cancellable.is_cancelled()) {
-				this.#debugLastOutcome = "cancellable-cancelled";
 				this.#actor?.send({ type: "CANCEL" });
 				return;
 			}
 			if (result.kind === "cancelled") {
-				this.#debugLastOutcome = "capture-result-cancelled";
 				this.#actor?.send({ type: "CANCEL" });
 				return;
 			}
 			if (result.kind === "failed") {
-				this.#debugLastOutcome = `capture-result-failed:${result.message}`;
 				this.#failureMessage = result.message;
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
 			this.#capture = result.capture;
-			this.#debugLastOutcome = "captured";
 			this.#actor?.send({ type: "CAPTURED" });
 		}).catch(() => {
 			if (runId !== this.#runId) return;
 			this.#cancellable = null;
 			this.#process = null;
 			this.#failureMessage = "The selected region could not be captured.";
-			this.#debugLastOutcome = "capture-promise-rejected";
 			this.#actor?.send({ type: "FAIL" });
 		});
 	}
 
 	cancel(): void {
-		this.#debugLastOutcome = "controller-cancelled";
 		this.#runId += 1;
 		this.#cancellable?.cancel();
 		this.#cancellable = null;
 		this.#process?.force_exit();
 		this.#process = null;
 		this.#directory = null;
-		this.#startPosition = null;
+		this.#stroke = null;
+		this.#stopStrokeSampler();
+		this.#view.endStroke();
 		this.#clearPendingFinish();
 		if (this.#capture) deleteCapture(this.#capture.path);
 		this.#capture = null;
@@ -214,5 +230,30 @@ export class AiPointerController {
 		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
 		this.#pendingFinishId = 0;
 		this.#pendingFinish = null;
+	}
+
+	#startStrokeSampler(): void {
+		this.#stopStrokeSampler();
+		this.#strokeSampleId = GLib.timeout_add(
+			GLib.PRIORITY_DEFAULT,
+			strokeSampleIntervalMs,
+			() => {
+				if (this.#actor?.getSnapshot().matches("selecting") === false) {
+					this.#strokeSampleId = 0;
+					return GLib.SOURCE_REMOVE;
+				}
+				const point = this.#readPointer();
+				if (point && this.#stroke) {
+					this.#stroke = appendStrokePoint(this.#stroke, point);
+					this.#view.updateStroke(this.#stroke.points);
+				}
+				return GLib.SOURCE_CONTINUE;
+			},
+		);
+	}
+
+	#stopStrokeSampler(): void {
+		if (this.#strokeSampleId !== 0) GLib.source_remove(this.#strokeSampleId);
+		this.#strokeSampleId = 0;
 	}
 }

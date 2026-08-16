@@ -1,6 +1,7 @@
 import GLib from "gi://GLib?version=2.0";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
+import { StrokeOverlay } from "@/components/ai-pointer/stroke-overlay";
 import { assert, test } from "./harness";
 
 function settleMainLoop(): Promise<void> {
@@ -12,7 +13,7 @@ function settleMainLoop(): Promise<void> {
 	});
 }
 
-test("AI Pointer view presents an unavailable state and disposes", async () => {
+test("AI Pointer view presents a capture and disposes", async () => {
 	const view = new AiPointerView();
 	view.create({ onCancel() {} });
 	const capturePath = GLib.canonicalize_filename(
@@ -33,10 +34,36 @@ test("AI Pointer view presents an unavailable state and disposes", async () => {
 	assert(view.isCreated === false, "AI Pointer view was not disposed");
 });
 
+test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
+	const overlay = new StrokeOverlay();
+	assert(
+		overlay.show(
+			[
+				{ x: 10, y: 10 },
+				{ x: 80, y: 80 },
+			],
+			() => {},
+		),
+		"AI Pointer stroke overlay was unavailable",
+	);
+	await settleMainLoop();
+	overlay.update([
+		{ x: 10, y: 10 },
+		{ x: 100, y: 100 },
+	]);
+	await settleMainLoop();
+	overlay.hide();
+});
+
 test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
 	let captured = "";
 	const view = {
 		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
 		showCapture() {
 			return true;
 		},
@@ -47,6 +74,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
@@ -60,7 +88,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
-		assert(captured === "10,20 20x20", "release-first geometry was not captured");
+		assert(captured === "-2,8 44x44", "release-first geometry was not captured");
 	} finally {
 		controller.teardown();
 	}
