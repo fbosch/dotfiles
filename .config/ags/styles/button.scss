@@ -32,6 +32,11 @@ button.ags-button {
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(0 0 0 / 10%);
     }
 
+    &:active {
+      color: var(--ags-color-accent-active-text);
+      background-color: var(--ags-color-accent-active);
+    }
+
     &:focus {
       outline: 2px solid var(--ags-color-accent-primary);
       outline-offset: 2px;
@@ -48,6 +53,11 @@ button.ags-button {
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(0 0 0 / 10%);
     }
 
+    &:active {
+      color: var(--ags-color-state-warning-active-text);
+      background-color: var(--ags-color-state-warning-active);
+    }
+
     &:focus {
       outline: 2px solid var(--ags-color-state-warning);
       outline-offset: 2px;
@@ -55,13 +65,18 @@ button.ags-button {
   }
 
   &.button-variant-danger {
-    color: var(--ags-color-foreground-primary);
+    color: var(--ags-color-state-error-text);
     background-color: var(--ags-color-state-error);
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 2px rgb(0 0 0 / 5%);
 
     &:hover {
       background-color: var(--ags-color-state-error-hover);
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(0 0 0 / 10%);
+    }
+
+    &:active {
+      color: var(--ags-color-state-error-active-text);
+      background-color: var(--ags-color-state-error-active);
     }
 
     &:focus {
@@ -78,6 +93,11 @@ button.ags-button {
     &:hover {
       background-color: var(--ags-color-state-purple-hover);
       box-shadow: inset 0 1px 0 rgb(255 255 255 / 12%), 0 1px 3px rgb(0 0 0 / 10%);
+    }
+
+    &:active {
+      color: var(--ags-color-state-purple-active-text);
+      background-color: var(--ags-color-state-purple-active);
     }
 
     &:focus {
