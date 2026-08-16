@@ -15,6 +15,7 @@ PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 # Bundled shell settings
 BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
+BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
 # EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,
@@ -44,6 +45,41 @@ log() {
 # Check if bundled instance is running
 is_bundled_running() {
     ags list 2>/dev/null | grep -q "$BUNDLED_INSTANCE"
+}
+
+process_identity() {
+    local pid="$1"
+    awk -v pid="$pid" '{print pid ":" $22; exit}' "/proc/${pid}/stat" 2>/dev/null || true
+}
+
+stop_owned_process() {
+    local pid="$1"
+    local identity="$2"
+    if [[ -z "$identity" ]]; then
+        wait "$pid" 2>/dev/null || true
+        return
+    fi
+    if [[ "$(process_identity "$pid")" != "$identity" ]]; then
+        return
+    fi
+    kill "$pid" 2>/dev/null || true
+    for _ in $(seq 1 20); do
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null || true
+            return
+        fi
+        sleep 0.1
+    done
+    if [[ "$(process_identity "$pid")" == "$identity" ]]; then
+        kill -KILL "$pid" 2>/dev/null || true
+    fi
+    wait "$pid" 2>/dev/null || true
+}
+
+release_start_lock() {
+    local fd="$1"
+    flock -u "$fd" 2>/dev/null || true
+    exec {fd}>&-
 }
 
 # Wait for Hyprland to be ready by listening for first event
@@ -94,15 +130,27 @@ main() {
     log "${BLUE}🚀${NC} Starting bundled AGS..."
     
     local bundled_config="$AGS_CONFIG_DIR/$BUNDLED_CONFIG"
+    local bundled_executable="$RUNTIME_DIR/ags-bundled-executable"
+    local bundled_candidate="$bundled_executable.$$"
+    local pid_identity
+
+    exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
+    if ! flock -w 10 "$startup_lock_fd"; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} Timed out waiting for bundled AGS startup lock"
+        return 1
+    fi
     
     # Check if bundled config exists
     if [[ ! -f "$bundled_config" ]]; then
+        release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Bundled config not found: $bundled_config"
         return 1
     fi
     
     # Check if already running
     if is_bundled_running; then
+        release_start_lock "$startup_lock_fd"
         log "${YELLOW}⚠${NC} Bundled daemon already running: $BUNDLED_INSTANCE"
         return 0
     fi
@@ -112,8 +160,21 @@ main() {
     if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
         export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
     fi
-    (cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
+    if command -v ags-bundle-runtime >/dev/null 2>&1; then
+        if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$BUNDLED_CONFIG" "$bundled_candidate"); then
+            rm -f "$bundled_candidate"
+            release_start_lock "$startup_lock_fd"
+            log "${RED}✗${NC} Failed to build bundled AGS executable"
+            return 1
+        fi
+        mv -f "$bundled_candidate" "$bundled_executable"
+        (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
+    else
+        # compatibility: remove after ags-bundle-runtime is deployed on every host.
+        (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
+    fi
     local pid=$!
+    pid_identity="$(process_identity "$pid")"
     
     # Wait for initialization
     sleep 2.0
@@ -122,12 +183,15 @@ main() {
     log "${BLUE}ℹ${NC} Verifying bundled daemon..."
     
     if is_bundled_running; then
+        release_start_lock "$startup_lock_fd"
         log "${GREEN}✓${NC} Bundled daemon started successfully: $BUNDLED_INSTANCE"
         log "${BLUE}ℹ${NC} Bundled PID: $pid"
         log "${GREEN}✓${NC} Shell components initialized; utility modules remain lazy"
         log "════════════════════════════════════════"
         return 0
     else
+        stop_owned_process "$pid" "$pid_identity"
+        release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Failed to start bundled daemon: $BUNDLED_INSTANCE"
         log "════════════════════════════════════════"
         return 1

@@ -33,6 +33,7 @@ Start Menu opens utilities through `UtilityManager`, not their runtime globals.
 ## Layout
 
 - `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
+- `start-daemons.sh` builds a runtime bundle and executes it through the Nix-provided `ags-bundle-runtime` environment.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
 - `services/utility-manager.ts` owns lazy utility-module loading and request routing.

@@ -13,6 +13,8 @@ PERF_LOG="$RUNTIME_DIR/ags-performance.jsonl"
 SUMMARY_OUT="$RUNTIME_DIR/ags-benchmark-summary.json"
 EXTRAS_OUT="$RUNTIME_DIR/ags-benchmark-extras.json"
 RUN_LOG="$RUNTIME_DIR/ags-benchmark-run.log"
+BUNDLED_EXECUTABLE="$RUNTIME_DIR/ags-bundled-executable"
+BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
 BASELINE_PATH="${AGS_DIR}/benchmarks/baseline.json"
 SYSTEM_GI_TYPELIB_PATH="/run/current-system/sw/lib/girepository-1.0"
 
@@ -26,6 +28,7 @@ BENCH_COMPONENT_CYCLES="${BENCH_COMPONENT_CYCLES:-25}"
 BENCH_AUDIO_MIXER_SLEEP="${BENCH_AUDIO_MIXER_SLEEP:-0}"
 BENCH_CALENDAR_CYCLES="${BENCH_CALENDAR_CYCLES:-12}"
 BENCH_CALENDAR_REFRESH_WAIT="${BENCH_CALENDAR_REFRESH_WAIT:-0.25}"
+BENCH_LAUNCHER_PID="${BENCH_LAUNCHER_PID:-}"
 BENCH_TARGET="${1:-${BENCH_TARGET:-all}}"
 
 function target_enabled() {
@@ -211,6 +214,34 @@ function sample_scope_pss_kb() {
   esac
 }
 
+function stop_owned_process() {
+  local pid="$1"
+  local identity="$2"
+  if [[ -z "$identity" ]]; then
+    wait "$pid" 2>/dev/null || true
+    return
+  fi
+  for _ in $(seq 1 10); do
+    if [[ "$(process_identity "$pid")" != "$identity" ]]; then
+      wait "$pid" 2>/dev/null || true
+      return
+    fi
+    sleep 0.1
+  done
+  kill "$pid" 2>/dev/null || true
+  for _ in $(seq 1 20); do
+    if [[ "$(process_identity "$pid")" != "$identity" ]]; then
+      wait "$pid" 2>/dev/null || true
+      return
+    fi
+    sleep 0.1
+  done
+  if [[ "$(process_identity "$pid")" == "$identity" ]]; then
+    kill -KILL "$pid" 2>/dev/null || true
+  fi
+  wait "$pid" 2>/dev/null || true
+}
+
 function is_number() {
   [[ "$1" =~ ^-?[0-9]+$ ]]
 }
@@ -251,7 +282,9 @@ EOF
 }
 
 STARTED_INSTANCE=0
-AGS_PID=""
+STARTED_IDENTITY=""
+START_LOCK_FD=""
+AGS_PID="$BENCH_LAUNCHER_PID"
 GJS_PID=""
 
 function cleanup() {
@@ -260,6 +293,7 @@ function cleanup() {
   rm -f "$PERF_FLAG"
   if [[ "$STARTED_INSTANCE" == "1" ]]; then
     ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
+    stop_owned_process "$AGS_PID" "$STARTED_IDENTITY"
   fi
   exit "$status"
 }
@@ -272,12 +306,37 @@ if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_runnin
 fi
 
 if ! is_running; then
+  exec {START_LOCK_FD}>"$BUNDLED_START_LOCK"
+  if ! flock -w 10 "$START_LOCK_FD"; then
+    printf "Timed out waiting for bundled AGS startup lock\n" >&2
+    exit 1
+  fi
+fi
+
+if ! is_running; then
   if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
     export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
   fi
-  (cd "$AGS_DIR" && exec ags run config-bundled.tsx) >"$RUN_LOG" 2>&1 &
+  if command -v ags-bundle-runtime >/dev/null 2>&1; then
+    bundled_candidate="$BUNDLED_EXECUTABLE.$$"
+    if ! (cd "$AGS_DIR" && ags bundle config-bundled.tsx "$bundled_candidate") >"$RUN_LOG" 2>&1; then
+      rm -f "$bundled_candidate"
+      printf "Failed to build bundled AGS executable\n" >&2
+      exit 1
+    fi
+    mv -f "$bundled_candidate" "$BUNDLED_EXECUTABLE"
+    ags-bundle-runtime "$BUNDLED_EXECUTABLE" >>"$RUN_LOG" 2>&1 &
+  else
+    # compatibility: remove after ags-bundle-runtime is deployed on every host.
+    (cd "$AGS_DIR" && exec ags run config-bundled.tsx) >"$RUN_LOG" 2>&1 &
+  fi
   AGS_PID="$!"
+  STARTED_IDENTITY="$(process_identity "$AGS_PID")"
   STARTED_INSTANCE=1
+fi
+
+if [[ -z "$AGS_PID" ]]; then
+  AGS_PID="$(pgrep -f "$BUNDLED_EXECUTABLE" | head -n 1 || true)"
 fi
 
 if [[ -z "$AGS_PID" ]]; then
@@ -291,6 +350,21 @@ fi
 if ! wait_for_instance; then
   printf "Failed to start %s\n" "$INSTANCE" >&2
   exit 1
+fi
+
+if [[ -n "$START_LOCK_FD" ]]; then
+  flock -u "$START_LOCK_FD"
+  exec {START_LOCK_FD}>&-
+  START_LOCK_FD=""
+fi
+
+if [[ -n "$BENCH_LAUNCHER_PID" && ! -r "/proc/${BENCH_LAUNCHER_PID}/status" ]]; then
+  printf "Configured benchmark launcher PID is not running: %s\n" "$BENCH_LAUNCHER_PID" >&2
+  exit 1
+fi
+
+if [[ -z "$AGS_PID" || ! -r "/proc/${AGS_PID}/status" ]]; then
+  AGS_PID="$(pgrep -f "$BUNDLED_EXECUTABLE" | head -n 1 || true)"
 fi
 
 if [[ -z "$AGS_PID" || ! -r "/proc/${AGS_PID}/status" ]]; then
