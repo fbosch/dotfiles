@@ -33,7 +33,7 @@ Alternative considered: add a permanent input overlay. Rejected because it would
 
 ### Render one click-through surface per monitor
 
-AGS creates a temporary full-monitor overlay for each current GDK monitor. Each drawing area receives the same global polyline and translates it by that monitor's global logical origin. Cairo clipping limits each surface to its monitor automatically. The surfaces accept no pointer input and use a dedicated `ags-ai-pointer-drawing` namespace with no animation and no screen sharing.
+AGS creates a temporary full-monitor overlay for each current GDK monitor. Each drawing area receives the same global polyline and translates it by that monitor's global logical origin. Cairo clipping limits each surface to its monitor automatically. A bounded Catmull-Rom curve smooths only the rendered trail; raw points remain authoritative for capture extrema. Multiple widths of the same accent blue form a saturated rounded core, two low-alpha shoulders, and a restrained cursor halo without blurring the desktop. Release replaces the trail with a brief rounded selection preview using the same 16% accent fill, 2 px border, and restrained shadow hierarchy as PiP snap preview. The surfaces accept no pointer input and use a dedicated `ags-ai-pointer-drawing` namespace with no animation and no screen sharing.
 
 The controller owns the stroke and sampling source. The view owns windows, drawing areas, and Cairo rendering. Release awaits GTK unmapping, synchronizes the display, and allows two compositor frames before `grim` runs so the captured image cannot include the trail. The separate review panel retains its namespace-specific `popin` style.
 

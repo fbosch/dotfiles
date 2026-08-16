@@ -2,6 +2,7 @@ import GLib from "gi://GLib?version=2.0";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
 import { StrokeOverlay } from "@/components/ai-pointer/stroke-overlay";
+import { appendStrokePoint, createPointerStroke } from "@/components/ai-pointer/stroke";
 import { assert, test } from "./harness";
 
 function settleMainLoop(): Promise<void> {
@@ -36,23 +37,20 @@ test("AI Pointer view presents a capture and disposes", async () => {
 
 test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	const overlay = new StrokeOverlay();
+	let stroke = createPointerStroke({ x: 10, y: 10 });
+	stroke = appendStrokePoint(stroke, { x: 80, y: 80 }, true);
 	assert(
-		overlay.show(
-			[
-				{ x: 10, y: 10 },
-				{ x: 80, y: 80 },
-			],
-			() => {},
-		),
+		overlay.show(stroke, () => {}),
 		"AI Pointer stroke overlay was unavailable",
 	);
 	await settleMainLoop();
-	overlay.update([
-		{ x: 10, y: 10 },
-		{ x: 100, y: 100 },
-	]);
+	stroke = appendStrokePoint(stroke, { x: 100, y: 100 }, true);
+	overlay.update(stroke);
 	await settleMainLoop();
-	assert(await overlay.hideBeforeCapture(), "AI Pointer stroke overlay did not unmap");
+	assert(
+		await overlay.previewBeforeCapture({ x: 0, y: 0, width: 120, height: 120 }),
+		"AI Pointer stroke overlay did not preview and unmap",
+	);
 });
 
 test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
@@ -91,7 +89,56 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
-		assert(captured === "-2,8 44x44", "release-first geometry was not captured");
+		assert(captured === "-14,-4 68x68", "release-first geometry was not captured");
+	} finally {
+		controller.teardown();
+	}
+});
+
+test("AI Pointer waits for the drawing overlay before capture", async () => {
+	let captured = false;
+	let confirmHidden: ((hidden: boolean) => void) | null = null;
+	const view = {
+		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
+		finishStroke() {
+			return new Promise<boolean>((resolve) => {
+				confirmHidden = resolve;
+			});
+		},
+		showCapture() {
+			return true;
+		},
+		showError() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
+		capture: async (_directory, geometry) => {
+			captured = true;
+			return {
+				kind: "captured",
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+			};
+		},
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
+		await settleMainLoop();
+		assert(captured === false, "capture started while the drawing was still mapped");
+		assert(confirmHidden !== null, "drawing teardown was not requested");
+		confirmHidden(true);
+		await settleMainLoop();
+		assert(captured, "capture did not start after the drawing was removed");
 	} finally {
 		controller.teardown();
 	}

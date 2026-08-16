@@ -27,7 +27,7 @@ The AI Pointer SHALL render the active stroke on temporary click-through overlay
 - **THEN** all stroke surfaces are hidden and retained stroke coordinates are discarded
 
 ### Requirement: Capture bounds derive from the complete stroke
-The AI Pointer SHALL derive one capture rectangle from the minimum and maximum global coordinates reached by the stroke, add bounded padding, and validate the result against the existing capture limits. It MUST NOT reinterpret the gesture as an endpoint rectangle or semantic UI target in this change.
+The AI Pointer SHALL derive one capture rectangle from the minimum and maximum global coordinates reached by the stroke, add bounded padding, and validate the result against the existing capture limits. A stroke with meaningful travel in only one axis SHALL receive a bounded minimum extent in the other axis. It MUST NOT reinterpret the gesture as an endpoint rectangle or semantic UI target in this change.
 
 #### Scenario: User draws around content
 - **WHEN** the completed stroke has valid two-dimensional bounds within the capture limit
@@ -37,12 +37,20 @@ The AI Pointer SHALL derive one capture rectangle from the minimum and maximum g
 - **WHEN** a circular stroke ends near its activation coordinate
 - **THEN** the system uses the extrema reached throughout the stroke rather than producing a near-empty endpoint rectangle
 
+#### Scenario: User draws a straight line
+- **WHEN** a completed horizontal or vertical stroke has meaningful travel in one axis
+- **THEN** the system captures a padded minimum-width strip around the complete stroke
+
 #### Scenario: Stroke is too small or too large
 - **WHEN** the completed stroke lacks minimum two-dimensional extent or exceeds the configured capture limit
 - **THEN** the system cancels or fails safely without retaining or submitting a capture
 
 ### Requirement: Reviewed local result
-The AI Pointer SHALL remove drawing feedback before capture and show the validated captured image in the existing local preview. Stroke coordinates MUST remain local and MUST NOT be included in a provider payload in this change.
+The AI Pointer SHALL show only drawing feedback while the gesture is active. After release, it SHALL replace the trail with a brief rounded preview of the padded capture rectangle, remove that preview before capture, and show the validated captured image in the existing local preview. Stroke coordinates MUST remain local and MUST NOT be included in a provider payload in this change.
+
+#### Scenario: Drawing completes with valid bounds
+- **WHEN** the user releases a stroke with a valid padded capture rectangle
+- **THEN** the trail disappears and a rounded translucent preview marks the selected area before capture begins
 
 #### Scenario: Capture succeeds
 - **WHEN** the padded stroke bounds produce a valid image

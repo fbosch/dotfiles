@@ -17,7 +17,7 @@ import {
 	selectionFromStroke,
 } from "./stroke";
 
-const strokeSampleIntervalMs = 16;
+const strokeSampleIntervalMs = 10;
 
 type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
 
@@ -112,7 +112,7 @@ export class AiPointerController {
 		this.#stroke = createPointerStroke(startPosition);
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
-		if (this.#view.beginStroke(this.#stroke.points) === false) {
+		if (this.#view.beginStroke(this.#stroke) === false) {
 			this.#failureMessage = "The drawing overlay is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return true;
@@ -162,7 +162,7 @@ export class AiPointerController {
 			return;
 		}
 		const runId = this.#runId;
-		void this.#view.finishStroke().then((hidden) => {
+		void this.#view.finishStroke(geometry).then((hidden) => {
 			if (runId !== this.#runId) return;
 			if (hidden === false) {
 				this.#failureMessage = "The drawing overlay could not be removed safely.";
@@ -170,6 +170,10 @@ export class AiPointerController {
 				return;
 			}
 			this.#captureGeometry(directory, geometry, runId);
+		}).catch(() => {
+			if (runId !== this.#runId) return;
+			this.#failureMessage = "The drawing overlay could not be removed safely.";
+			this.#actor?.send({ type: "FAIL" });
 		});
 	}
 
@@ -257,7 +261,7 @@ export class AiPointerController {
 				const point = this.#readPointer();
 				if (point && this.#stroke) {
 					this.#stroke = appendStrokePoint(this.#stroke, point);
-					this.#view.updateStroke(this.#stroke.points);
+					this.#view.updateStroke(this.#stroke);
 				}
 				return GLib.SOURCE_CONTINUE;
 			},

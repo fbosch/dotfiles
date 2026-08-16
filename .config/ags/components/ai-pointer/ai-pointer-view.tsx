@@ -8,7 +8,7 @@ import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { Capture } from "./capture";
-import type { PointerPosition } from "./selection";
+import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
 
 export interface AiPointerViewHandlers {
@@ -114,20 +114,20 @@ export class AiPointerView {
 		return true;
 	}
 
-	beginStroke(points: PointerPosition[]): boolean {
-		return this.#strokeOverlay.show(points, () => this.#handlers?.onCancel());
+	beginStroke(stroke: PointerStroke): boolean {
+		return this.#strokeOverlay.show(stroke, () => this.#handlers?.onCancel());
 	}
 
-	updateStroke(points: PointerPosition[]): void {
-		this.#strokeOverlay.update(points);
+	updateStroke(stroke: PointerStroke): void {
+		this.#strokeOverlay.update(stroke);
 	}
 
 	endStroke(): void {
 		this.#strokeOverlay.hide();
 	}
 
-	finishStroke(): Promise<boolean> {
-		return this.#strokeOverlay.hideBeforeCapture();
+	finishStroke(selection: SelectionGeometry): Promise<boolean> {
+		return this.#strokeOverlay.previewBeforeCapture(selection);
 	}
 
 	showError(message: string): void {

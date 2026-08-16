@@ -4,10 +4,10 @@ import {
 	validatedSelectionGeometry,
 } from "./selection";
 
-export const maximumStrokePoints = 256;
-export const minimumStrokePointDistance = 3;
+export const maximumStrokePoints = 1_024;
+export const minimumStrokePointDistance = 2;
 export const minimumStrokeSpan = 8;
-export const strokeCapturePadding = 12;
+export const strokeCapturePadding = 24;
 
 export interface PointerStroke {
 	points: PointerPosition[];
@@ -58,12 +58,16 @@ export function appendStrokePoint(
 export function selectionFromStroke(stroke: PointerStroke): SelectionGeometry | null {
 	const strokeWidth = stroke.maxX - stroke.minX;
 	const strokeHeight = stroke.maxY - stroke.minY;
-	if (strokeWidth < minimumStrokeSpan || strokeHeight < minimumStrokeSpan) return null;
+	if (Math.max(strokeWidth, strokeHeight) < minimumStrokeSpan) return null;
+	const width = Math.max(strokeWidth, minimumStrokeSpan);
+	const height = Math.max(strokeHeight, minimumStrokeSpan);
+	const x = stroke.minX - Math.floor((width - strokeWidth) / 2);
+	const y = stroke.minY - Math.floor((height - strokeHeight) / 2);
 
 	return validatedSelectionGeometry(
-		stroke.minX - strokeCapturePadding,
-		stroke.minY - strokeCapturePadding,
-		strokeWidth + strokeCapturePadding * 2,
-		strokeHeight + strokeCapturePadding * 2,
+		x - strokeCapturePadding,
+		y - strokeCapturePadding,
+		width + strokeCapturePadding * 2,
+		height + strokeCapturePadding * 2,
 	);
 }
