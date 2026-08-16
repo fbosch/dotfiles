@@ -1,0 +1,94 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("about-this-pc") {
+  padding: 0;
+  background-color: transparent;
+  border: none;
+
+  box.about-container {
+    min-width: 420px;
+    min-height: 560px;
+    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
+    border: 1px solid var(--ags-color-border-hover);
+    border-radius: 12px;
+  }
+
+  overlay.about-titlebar { min-height: 36px; }
+
+  button.about-close {
+    min-width: 32px;
+    min-height: 32px;
+    margin: 3px 4px 0 0;
+    padding: 0;
+
+    label {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 12px;
+    }
+  }
+
+  box.about-content { padding: 0 32px 28px; }
+  box.about-artwork { min-height: 144px; }
+
+  box.about-artwork picture {
+    min-width: 320px;
+    min-height: 144px;
+  }
+
+  label.about-device-icon {
+    min-width: 320px;
+    min-height: 144px;
+    color: var(--ags-color-foreground-secondary);
+    font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+    font-size: 72px;
+  }
+
+  label.about-device-name {
+    margin-top: 12px;
+    color: var(--ags-color-foreground-primary);
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  label.about-manufacturer {
+    margin-top: 2px;
+    color: var(--ags-color-foreground-tertiary);
+    font-size: 14px;
+  }
+
+  box.about-details { margin: 24px 12px 0; }
+  box.about-detail-row { min-height: 23px; }
+
+  label.about-detail-label {
+    min-width: 68px;
+    margin-right: 16px;
+    color: var(--ags-color-foreground-primary);
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  label.about-detail-icon {
+    color: var(--ags-color-foreground-secondary);
+    font-family: "Symbols Nerd Font", monospace;
+    font-size: 14px;
+  }
+
+  label.about-detail-value {
+    color: var(--ags-color-foreground-secondary);
+    font-size: 14px;
+  }
+
+  label.about-status {
+    margin-top: 8px;
+    color: var(--ags-color-state-error);
+    font-size: 13px;
+  }
+
+  box.about-actions { padding-top: 20px; }
+
+  button.about-more-info {
+    min-height: 32px;
+    padding: 4px 12px;
+    font-weight: 600;
+  }
+}

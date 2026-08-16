@@ -1,0 +1,11 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("pip-snap-preview") {
+  background-color: transparent;
+
+  box.pip-snap-preview-target {
+    background-color: color-mix(in srgb, var(--ags-color-accent-primary) 16%, transparent);
+    border: 2px solid var(--ags-color-accent-primary);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--ags-color-accent-primary) 34%, transparent);
+  }
+}

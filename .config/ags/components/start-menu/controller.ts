@@ -32,7 +32,6 @@ import {
 import { startMenuMachine } from "./machine";
 import type { RecentItemsMenuModel } from "./recent-items-menu";
 import { StartMenuView } from "./start-menu-view";
-import { applyStartMenuStyles } from "./styles";
 import { UpdatesCache } from "./updates-cache";
 import type { UpdatesSnapshot } from "./updates-policy";
 
@@ -100,7 +99,6 @@ export class StartMenuController {
 			this.#shutdownConnected = true;
 			app.connect("shutdown", () => this.teardown());
 		}
-		applyStartMenuStyles();
 		this.#stopRecentFocusHistory ??= startRecentApplicationFocusHistory();
 		this.#generateAvatar();
 		this.#cache.start(() => this.#refreshCacheData());

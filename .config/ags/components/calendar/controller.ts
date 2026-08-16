@@ -18,7 +18,6 @@ import {
 	type CalendarBackendSnapshot,
 	type CalendarModel,
 } from "./model";
-import { applyCalendarStyles } from "./styles";
 
 interface CalendarControllerDependencies {
 	createBackend?(options: CalendarBackendOptions): CalendarBackend;
@@ -81,7 +80,6 @@ export class CalendarController {
 			app.connect("shutdown", () => this.teardown());
 		}
 		this.#backend.init();
-		applyCalendarStyles();
 	}
 
 	show(): void {

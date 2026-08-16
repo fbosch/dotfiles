@@ -1,0 +1,135 @@
+@use "../../styles/surface" as ags;
+
+/* stylelint-disable declaration-block-single-line-max-declarations */
+
+@include ags.surface("start-menu") {
+  padding: 0;
+  background-color: transparent;
+  border: none;
+
+  box.start-menu-container,
+  box.recent-items-menu {
+    padding: 8px;
+    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 85%, transparent);
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: 8px;
+    box-shadow: 0 16px 40px rgb(0 0 0 / 28%), 0 4px 12px rgb(0 0 0 / 14%);
+  }
+
+  box.start-menu-container { min-width: 270px; margin-bottom: 54px; margin-left: 5px; }
+  box.user-profile { padding: 8px 10px; }
+
+  box.user-avatar-image,
+  box.user-avatar-image image { min-width: 32px; min-height: 32px; }
+  box.user-avatar-image image { -gtk-icon-size: 32px; }
+
+  label.user-name {
+    color: var(--ags-color-foreground-primary);
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  box.profile-row { margin: 12px 0; }
+  box.profile-actions { padding: 4px; background-color: color-mix(in srgb, var(--ags-color-background-primary) 50%, transparent); border-radius: 999px; }
+
+  button.profile-toggle {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    color: var(--ags-color-foreground-secondary);
+    background-color: transparent;
+    border: none;
+    border-radius: 999px;
+    &:hover { color: var(--ags-color-foreground-primary); background-color: rgb(255 255 255 / 10%); }
+    &.profile-active { color: var(--ags-color-foreground-primary); background-color: var(--ags-color-accent-primary); }
+  }
+
+  label.profile-toggle-icon { color: inherit; font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif; font-size: 16px; }
+
+  label.profile-gaming-icon,
+  label.profile-auto-badge-icon { font-family: "Symbols Nerd Font", sans-serif; }
+  box.profile-auto-badge { min-width: 14px; min-height: 14px; padding: 0; background-color: var(--ags-color-state-success); border: 2px solid var(--ags-color-accent-primary); border-radius: 999px; }
+  label.profile-auto-badge-icon { padding: 0; color: var(--ags-color-state-success-text); font-size: 9px; }
+
+  box.profile-labels {
+    padding: 0 4px;
+    label { color: var(--ags-color-foreground-primary); font-family: var(--ags-font-primary), system-ui, sans-serif; font-size: 12px; font-weight: 500; }
+  }
+
+  button.menu-item {
+    min-height: 36px;
+    padding: 0 10px;
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 14px;
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    &:hover { background-color: rgb(255 255 255 / 10%); }
+    &.submenu-open { color: var(--ags-color-foreground-primary); background-color: var(--ags-color-accent-primary); }
+    &:focus { outline: 2px solid rgb(255 255 255 / 30%); outline-offset: 2px; }
+    &:active { transform: scale(0.98); }
+  }
+
+  button.menu-variant-default,
+  button.menu-variant-warning,
+  button.menu-variant-danger,
+  button.menu-variant-purple { color: var(--ags-color-foreground-primary); }
+
+  button.menu-variant-default:hover,
+  button.menu-variant-default:focus { background-color: color-mix(in srgb, var(--ags-color-foreground-primary) 10%, transparent); }
+
+  button.menu-variant-warning:hover,
+  button.menu-variant-warning:focus { color: var(--ags-color-state-warning); background-color: color-mix(in srgb, var(--ags-color-state-warning) 10%, transparent); }
+
+  button.menu-variant-danger:hover,
+  button.menu-variant-danger:focus { color: var(--ags-color-state-error); background-color: color-mix(in srgb, var(--ags-color-state-error) 10%, transparent); }
+
+  button.menu-variant-purple:hover,
+  button.menu-variant-purple:focus { color: var(--ags-color-state-purple); background-color: color-mix(in srgb, var(--ags-color-state-purple) 10%, transparent); }
+
+  label.menu-item-icon { min-width: 16px; font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif; font-size: 12px; }
+  label.menu-item-chevron { font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif; font-size: 10px; }
+  label.menu-item-label { color: inherit; font-family: var(--ags-font-primary), system-ui, sans-serif; font-size: 14px; }
+
+  box.updates-badge { min-width: 18px; min-height: 18px; padding: 2px 6px; color: var(--ags-color-foreground-primary); background-color: var(--ags-color-accent-primary); border-radius: 999px; }
+
+  label.updates-badge-icon,
+  label.updates-badge-count { color: inherit; font-size: 12px; font-weight: 700; }
+  label.updates-badge-icon { font-family: var(--ags-font-symbols), sans-serif; }
+  label.updates-badge-count { font-family: var(--ags-font-primary), system-ui, sans-serif; }
+  label.updates-badge-nix-icon { transform: translate(0, -0.5px); }
+
+  separator.menu-divider,
+  box.recent-items-divider { min-height: 1px; margin: 6px 0; background-color: rgb(255 255 255 / 10%); }
+  box.recent-items-menu { min-width: 320px; }
+  label.recent-items-heading { padding: 6px 10px 4px; color: var(--ags-color-foreground-secondary); font-family: var(--ags-font-primary), system-ui, sans-serif; font-size: 12px; font-weight: 600; }
+
+  button.recent-item,
+  button.recent-items-clear {
+    min-height: 36px;
+    padding: 0 10px;
+    color: var(--ags-color-foreground-primary);
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+    &:hover { background-color: rgb(255 255 255 / 10%); }
+    &:focus { outline: 2px solid rgb(255 255 255 / 30%); outline-offset: -2px; }
+    &:active { background-color: rgb(255 255 255 / 16%); }
+    &:disabled { opacity: 0.72; }
+  }
+
+  image.recent-item-icon,
+  box.recent-item-fallback { min-width: 18px; min-height: 18px; }
+
+  box.recent-item-fallback {
+    background-color: rgb(255 255 255 / 10%);
+    border-radius: 4px;
+    label { color: var(--ags-color-foreground-primary); font-size: 11px; font-weight: 600; }
+  }
+  label.recent-item-label { color: var(--ags-color-foreground-primary); font-size: 14px; }
+  label.recent-item-detail { color: var(--ags-color-foreground-tertiary); font-size: 11px; }
+  label.recent-items-empty { padding: 16px 10px; color: var(--ags-color-foreground-tertiary); font-size: 14px; }
+  label.recent-items-clear-icon { font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif; font-size: 12px; }
+}

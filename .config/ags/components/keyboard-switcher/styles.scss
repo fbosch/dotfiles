@@ -1,0 +1,99 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("keyboard-layout-switcher") {
+  background-color: transparent;
+  border: none;
+
+  box.shadow-wrapper {
+    padding: 24px;
+    opacity: 0;
+    transition: opacity 100ms cubic-bezier(0.4, 0, 0.2, 1);
+
+    &.visible { opacity: 1; }
+
+    &.hiding {
+      opacity: 0;
+      transition: opacity 50ms cubic-bezier(0.4, 0, 1, 1);
+    }
+  }
+
+  box.keyboard-switcher-container {
+    background-color: color-mix(in srgb, var(--ags-color-background-tertiary) 80%, transparent);
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: 9999px;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 20%);
+  }
+
+  box.pill-background {
+    background-color: var(--ags-color-accent-primary);
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: 9999px;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 20%);
+    transform: translateX(0);
+    transition: transform 300ms cubic-bezier(0.4, 0, 0.1, 1);
+  }
+
+  box.badges-container {
+    margin: 0;
+    padding: 0;
+  }
+
+  label.layout-badge {
+    color: var(--ags-color-foreground-tertiary);
+    font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
+    font-weight: 700;
+    background-color: transparent;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    transition: color 200ms ease;
+
+    &.active { color: var(--ags-color-foreground-primary); }
+  }
+
+  /* stylelint-disable nesting-selector-no-missing-scoping-root -- The surface mixin supplies the parent selector. */
+  &.size-sm {
+    box.keyboard-switcher-container { padding: 4px; }
+
+    box.pill-background {
+      min-width: 74px;
+      min-height: 28px;
+    }
+
+    label.layout-badge {
+      min-width: 56px;
+      padding: 6px 8px;
+      font-size: 14px;
+    }
+  }
+
+  &.size-md {
+    box.keyboard-switcher-container { padding: 6px; }
+
+    box.pill-background {
+      min-width: 106px;
+      min-height: 34px;
+    }
+
+    label.layout-badge {
+      min-width: 64px;
+      padding: 8px 20px;
+      font-size: 16px;
+    }
+  }
+
+  &.size-lg {
+    box.keyboard-switcher-container { padding: 8px; }
+
+    box.pill-background {
+      min-width: 130px;
+      min-height: 44px;
+    }
+
+    label.layout-badge {
+      min-width: 80px;
+      padding: 12px 24px;
+      font-size: 18px;
+    }
+  }
+  /* stylelint-enable nesting-selector-no-missing-scoping-root */
+}

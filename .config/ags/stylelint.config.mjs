@@ -17,6 +17,8 @@ export default {
 					"label",
 					"overlay",
 					"picture",
+					"scrolledwindow",
+					"separator",
 					"window",
 				],
 			},

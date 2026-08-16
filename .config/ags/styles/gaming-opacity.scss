@@ -1,0 +1,18 @@
+window.start-menu.gaming-opaque box.start-menu-container,
+window.start-menu.gaming-opaque box.recent-items-menu,
+window.calendar-widget.gaming-opaque box.calendar-container,
+window.audio-mixer-widget.gaming-opaque box.audio-mixer-container,
+window.force-quit.gaming-opaque box.force-quit-container,
+window.about-this-pc.gaming-opaque box.about-container,
+window.confirm-dialog.gaming-opaque box.dialog-box {
+  background-color: var(--ags-color-background-secondary);
+}
+
+window.keyboard-layout-switcher.gaming-opaque box.keyboard-switcher-container,
+window.volume-indicator.gaming-opaque box.indicator-container {
+  background-color: var(--ags-color-background-tertiary);
+}
+
+window.desktop-clock.gaming-opaque box.clock-container {
+  background-color: rgb(0 0 0);
+}

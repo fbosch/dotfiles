@@ -15,7 +15,7 @@ import {
 	resolveCommitTarget,
 	type SwitchDirection,
 } from "./session-policy";
-import { applyStaticCss, DisplayMode } from "./styles";
+import { DisplayMode } from "./styles";
 import { focusWindow, restoreMinimizedAndFocus } from "./window-actions";
 import { WindowRepository, SortMode } from "./window-repository";
 import { WindowSwitcherView } from "./window-switcher-view";
@@ -65,7 +65,6 @@ export class WindowSwitcherController {
 		);
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		applyStaticCss(this.#displayMode);
 		this.#modifiers.attach(this.#view.create());
 	}
 
@@ -150,7 +149,6 @@ export class WindowSwitcherController {
 			return "invalid mode, use 'icons' or 'previews'";
 		this.#displayMode =
 			normalized === "ICONS" ? DisplayMode.ICONS : DisplayMode.PREVIEWS;
-		applyStaticCss(this.#displayMode);
 		this.#rebuildIfVisible();
 		return `mode set to ${normalized}`;
 	}
@@ -160,7 +158,6 @@ export class WindowSwitcherController {
 			this.#displayMode === DisplayMode.ICONS
 				? DisplayMode.PREVIEWS
 				: DisplayMode.ICONS;
-		applyStaticCss(this.#displayMode);
 		this.#rebuildIfVisible();
 	}
 
@@ -268,7 +265,6 @@ export class WindowSwitcherController {
 				: DisplayMode.PREVIEWS;
 		if (next === this.#displayMode) return;
 		this.#displayMode = next;
-		applyStaticCss(this.#displayMode);
 		this.#rebuildIfVisible();
 	}
 	#commitFromModifierRelease(source: "key" | "watch"): void {

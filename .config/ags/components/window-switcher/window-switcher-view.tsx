@@ -128,6 +128,8 @@ export class WindowSwitcherView {
 
 	render(session: Session, mode: DisplayMode): void {
 		if (!this.#container || !this.#selectedLabel) return;
+		this.#window?.remove_css_class(mode === DisplayMode.ICONS ? "mode-previews" : "mode-icons");
+		this.#window?.add_css_class(mode === DisplayMode.ICONS ? "mode-icons" : "mode-previews");
 		const mark = perf.start("window-switcher", "updateSwitcher");
 		let ok = true;
 		let error: string | undefined;

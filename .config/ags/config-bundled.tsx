@@ -24,7 +24,7 @@ import "./components/volume-indicator/index.tsx";
 import "./components/keyboard-switcher/index.tsx";
 import "./components/start-menu/index.tsx";
 import "./components/window-switcher/index.tsx";
-import "./components/desktop-clock.tsx";
+import "./components/desktop-clock";
 import "./components/calendar/index.tsx";
 import "./components/audio-mixer/index.tsx";
 import "./components/pip-snap-preview.tsx";

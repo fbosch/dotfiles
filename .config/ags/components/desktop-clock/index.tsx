@@ -1,11 +1,9 @@
 import { Astal } from "ags/gtk4";
-import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Gdk from "gi://Gdk?version=4.0";
-import tokens from "../../../design-system/tokens.json";
-import { bindGamingOpacity } from "../services/gaming-opacity";
-import { perf } from "../services/performance-monitor";
+import { bindGamingOpacity } from "../../services/gaming-opacity";
+import { perf } from "../../services/performance-monitor";
 
 // Clock configuration
 interface ClockConfig {
@@ -199,43 +197,6 @@ function stopClockUpdates() {
   }
 }
 
-// Apply CSS styling
-function applyCSS() {
-  app.apply_css(
-    `
-    window.desktop-clock {
-      background-color: transparent;
-      border: none;
-    }
-    
-    window.desktop-clock box.clock-container {
-      padding: 16px 24px;
-      background-color: rgba(0, 0, 0, 0.35);
-      border: none;
-      border-radius: 16px;
-    }
-    
-    window.desktop-clock label.time-label {
-      font-family: "SF Pro Rounded", "SF Pro Display", system-ui, sans-serif;
-      font-size: 80px;
-      font-weight: 700;
-      color: ${tokens.colors.foreground.primary.value}f2;
-      text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.2);
-      min-width: 190px;
-    }
-    
-    window.desktop-clock label.date-label {
-      font-family: "SF Pro Display", system-ui, sans-serif;
-      font-size: 16px;
-      font-weight: 500;
-      color: ${tokens.colors.foreground.secondary.value}b3;
-      margin-top: 8px;
-    }
-  `,
-    false,
-  );
-}
-
 // Create the clock window
 function createWindow() {
   if (win) {
@@ -338,7 +299,6 @@ function updateConfig(newConfig: Partial<ClockConfig>) {
 
 // Functions for bundled mode (using global namespace pattern)
 function initDesktopClock() {
-  applyCSS();
   createWindow();
 }
 

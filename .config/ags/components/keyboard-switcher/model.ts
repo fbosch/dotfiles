@@ -6,7 +6,7 @@ export interface LayoutSwitchConfig {
 	size?: KeyboardSwitcherSize;
 }
 
-export interface SizeConfig {
+interface SizeConfig {
 	containerPadding: string;
 	badgePaddingX: string;
 	badgePaddingY: string;
@@ -24,7 +24,7 @@ export interface CalculatedDimensions {
 	gap: number;
 }
 
-export const sizeConfigs: Record<KeyboardSwitcherSize, SizeConfig> = {
+const sizeConfigs: Record<KeyboardSwitcherSize, SizeConfig> = {
 	sm: {
 		containerPadding: "4px",
 		badgePaddingX: "8px",

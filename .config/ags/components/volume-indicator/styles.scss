@@ -1,0 +1,55 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("volume-indicator") {
+  background-color: transparent;
+  border: none;
+
+  box.shadow-wrapper { padding: 40px; }
+
+  box.indicator-container {
+    padding: 6px 12px;
+    background-color: color-mix(in srgb, var(--ags-color-background-tertiary) 80%, transparent);
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: 9999px;
+    box-shadow: 0 4px 16px rgb(0 0 0 / 30%);
+  }
+
+  box.icon-container {
+    min-width: 20px;
+    min-height: 20px;
+    margin-right: 12px;
+  }
+
+  label.speaker-icon {
+    color: var(--ags-color-foreground-primary);
+    font-family: "Segoe Fluent Icons", sans-serif;
+    font-size: 20px;
+
+    &.muted { color: var(--ags-color-foreground-tertiary); }
+  }
+
+  box.progress-container {
+    min-height: 8px;
+    margin-right: 12px;
+  }
+
+  box.progress-square {
+    min-width: 8px;
+    min-height: 8px;
+    border-radius: 2px;
+    transition: background-color 150ms ease;
+
+    &.filled { background-color: var(--ags-color-foreground-primary); }
+    &.empty { background-color: color-mix(in srgb, var(--ags-color-foreground-primary) 20%, transparent); }
+  }
+
+  label.volume-label {
+    min-width: 42px;
+    color: var(--ags-color-foreground-primary);
+    font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+
+    &.muted { color: var(--ags-color-foreground-tertiary); }
+  }
+}

@@ -12,7 +12,7 @@ The bundled entrypoint imports these components from `components/`:
 - `keyboard-switcher/` for layout switch feedback.
 - `start-menu/index.tsx` for the launcher surface.
 - `window-switcher/` for Alt-Tab style window switching and session state.
-- `desktop-clock.tsx` for the desktop clock surface.
+- `desktop-clock/` for the desktop clock surface.
 - `calendar/` for the taskbar calendar.
 - `audio-mixer/` for audio controls and backend integration.
 - `pip-snap-preview.tsx` for picture-in-picture snap previews.

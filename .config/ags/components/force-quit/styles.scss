@@ -1,0 +1,104 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("force-quit") {
+  padding: 0;
+  background-color: transparent;
+  border: none;
+
+  box.force-quit-container {
+    min-width: 420px;
+    min-height: 500px;
+    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
+    border: 1px solid var(--ags-color-border-hover);
+    border-radius: 12px;
+  }
+
+  overlay.force-quit-titlebar { min-height: 36px; }
+  box.force-quit-body { padding: 0 20px 20px; }
+
+  label.force-quit-title {
+    color: var(--ags-color-foreground-primary);
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  button.force-quit-close {
+    min-width: 32px;
+    min-height: 32px;
+    margin: 3px 4px 0 0;
+    padding: 0;
+
+    label {
+      font-family: "Segoe Fluent Icons", "Segoe UI Symbol", sans-serif;
+      font-size: 12px;
+    }
+  }
+
+  label.force-quit-status {
+    margin: 16px;
+    color: var(--ags-color-foreground-tertiary);
+    font-size: 14px;
+  }
+
+  scrolledwindow.force-quit-list {
+    background-color: rgb(0 0 0 / 12%);
+    border: 1px solid rgb(255 255 255 / 20%);
+    border-radius: 8px;
+  }
+
+  box.force-quit-list-content { padding: 4px; }
+
+  button.force-quit-row {
+    min-height: 36px;
+    padding: 0 8px;
+    color: var(--ags-color-foreground-primary);
+    background-color: transparent;
+    border: none;
+    border-radius: 6px;
+
+    &:hover,
+    &:focus { background-color: rgb(255 255 255 / 10%); }
+
+    &.selected {
+      color: var(--ags-color-accent-text);
+      background-color: var(--ags-color-accent-primary);
+
+      label.force-quit-metrics { color: rgb(255 255 255 / 80%); }
+    }
+  }
+
+  image.force-quit-icon,
+  box.force-quit-icon-fallback {
+    min-width: 24px;
+    min-height: 24px;
+  }
+
+  box.force-quit-icon-fallback {
+    background-color: rgb(255 255 255 / 10%);
+    border-radius: 4px;
+
+    label {
+      min-width: 24px;
+      min-height: 24px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+  }
+
+  label.force-quit-name {
+    color: inherit;
+    font-size: 14px;
+    font-weight: 500;
+  }
+
+  label.force-quit-metrics {
+    color: var(--ags-color-foreground-tertiary);
+    font-size: 13px;
+  }
+
+  button.force-quit-action {
+    min-height: 32px;
+    padding: 4px 12px;
+    font-weight: 600;
+  }
+}

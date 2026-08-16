@@ -7,7 +7,6 @@ import {
 	type KeyboardSwitcherEvent,
 } from "./machine";
 import type { LayoutSwitchConfig } from "./model";
-import { applyKeyboardSwitcherStyles } from "./styles";
 
 type KeyboardSwitcherActor = ActorRefFrom<typeof keyboardSwitcherMachine>;
 
@@ -63,7 +62,6 @@ export class KeyboardSwitcherController {
 		}
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		applyKeyboardSwitcherStyles();
 	}
 
 	teardown(): void {

@@ -10,7 +10,6 @@ import {
 	shouldPlayVolumeSound,
 	type VolumePresentation,
 } from "./model";
-import { applyVolumeIndicatorStyles } from "./styles";
 import { VolumeIndicatorView } from "./volume-indicator-view";
 import { VolumeSource } from "./volume-source";
 import { playVolumeSound } from "./volume-sound";
@@ -66,7 +65,6 @@ export class VolumeIndicatorController {
 		}
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		applyVolumeIndicatorStyles();
 	}
 
 	teardown(): void {

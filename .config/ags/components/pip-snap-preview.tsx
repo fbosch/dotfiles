@@ -2,7 +2,6 @@ import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
-import tokens from "../../../design-system/tokens.json";
 
 type PreviewRequest = {
   action?: string;
@@ -100,15 +99,8 @@ function applyCss(rounding: number): void {
   appliedRounding = rounding;
   app.apply_css(
     `
-      window.pip-snap-preview {
-        background-color: transparent;
-      }
-
       window.pip-snap-preview box.pip-snap-preview-target {
-        background-color: ${tokens.colors.accent.primary.value}29;
-        border: ${previewBorderWidth}px solid ${tokens.colors.accent.primary.value};
         border-radius: ${rounding + previewBorderWidth}px;
-        box-shadow: 0 0 20px ${tokens.colors.accent.primary.value}57;
       }
     `,
     false,
