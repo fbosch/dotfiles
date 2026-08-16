@@ -19,8 +19,9 @@
     "test:coverage:istanbul": "pnpm test:coverage && bun run scripts/lcov-to-istanbul.ts /tmp/ags-coverage/lcov.info /tmp/ags-coverage/coverage-final.json",
     "health:coverage": "pnpm test:coverage:istanbul && fallow health --coverage /tmp/ags-coverage/coverage-final.json --report-only",
     "lint:lines": "biome lint .",
+    "lint:styles": "stylelint \"{components,styles}/**/*.scss\"",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
-    "quality": "pnpm lint:lines && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
+    "quality": "pnpm lint:lines && pnpm lint:styles && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
   "keywords": [
     "ags",
@@ -33,6 +34,9 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
     "fallow": "3.14.0",
+    "postcss": "8.5.26",
+    "stylelint": "17.14.1",
+    "stylelint-config-standard-scss": "17.0.0",
     "typescript": "5.9.3"
   },
   "dependencies": {

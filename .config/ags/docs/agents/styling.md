@@ -2,23 +2,20 @@
 
 ## CSS loading
 
-Inline CSS only:
+Keep static feature styling in a colocated `styles.scss` file. Scope the file
+once with the shared surface mixin and register it in `styles/stylesheets.ts`:
 
-```tsx
-app.start({
-  css: `
-    /* Your CSS here */
-  `,
-  main() { /* ... */ }
-});
+```scss
+@use "../../styles/surface" as ags;
+
+@include ags.surface("example-widget") {
+  .content { color: var(--ags-color-foreground-primary); }
+}
 ```
 
-Runtime CSS:
-
-```tsx
-app.apply_css("window { background: red; }")
-app.reset_css()
-```
+`component-host.ts` loads the composed stylesheet through `app.start({ css })`.
+Use `app.apply_css()` only for values computed from live data that cannot be
+represented by state classes or native widget properties.
 
 ## GTK CSS specifics
 

@@ -1,5 +1,5 @@
 {
-	"entry": ["config-bundled.tsx"],
+	"entry": ["config-bundled.tsx", "styles/stylelint-surface-scope.mjs"],
 	"ignorePatterns": ["**/__tests__/**"],
 	"ignoreDependencies": ["ags"],
 	"ignoreExports": [],

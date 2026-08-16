@@ -8,7 +8,6 @@ import {
 	type AudioMixerTab,
 	type AudioSnapshot,
 } from "./model";
-import { applyAudioMixerStyles } from "./styles";
 
 export interface AudioMixerControllerOptions {
 	createBackend?: (
@@ -63,7 +62,6 @@ export class AudioMixerController {
 		this.#initialized = true;
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		applyAudioMixerStyles();
 		this.#view.create();
 		this.#backend.init();
 	}

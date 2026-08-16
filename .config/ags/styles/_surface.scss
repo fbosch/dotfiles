@@ -1,0 +1,5 @@
+@mixin surface($class) {
+  window.#{$class} {
+    @content;
+  }
+}

@@ -5,6 +5,7 @@ import {
 	startComponentHost,
 	type ComponentModule,
 } from "./services/component-host";
+import { bundledCss } from "./styles/stylesheets";
 
 declare global {
 	var ConfirmDialog: ComponentModule;
@@ -30,6 +31,7 @@ import "./components/pip-snap-preview.tsx";
 
 startComponentHost({
 	instanceName: "ags-bundled",
+	css: bundledCss,
 	components: [
 		() => globalThis.ConfirmDialog,
 		() => globalThis.VolumeIndicator,

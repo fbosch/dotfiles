@@ -1,0 +1,208 @@
+@use "../../styles/surface" as ags;
+
+@include ags.surface("audio-mixer-widget") {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+
+  box.audio-mixer-container {
+    min-width: 500px;
+    margin-right: 4px;
+    margin-bottom: 53px;
+    padding: 0;
+    color: var(--ags-color-foreground-primary);
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
+    border: 1px solid rgb(255 255 255 / 15%);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgb(0 0 0 / 24%), 0 2px 8px rgb(0 0 0 / 12%);
+  }
+
+  box.audio-mixer-footer {
+    padding: 12px;
+    border-top: 1px solid rgb(255 255 255 / 10%);
+  }
+
+  box.audio-mixer-tabs {
+    padding: 4px;
+    background-color: color-mix(in srgb, var(--ags-color-background-primary) 50%, transparent);
+    border-radius: 8px;
+  }
+
+  button.audio-mixer-tab {
+    min-height: 30px;
+    padding: 0 8px;
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 16px;
+  }
+
+  label.audio-mixer-icon-label {
+    color: inherit;
+    font-family: "Segoe Fluent Icons", sans-serif;
+    font-size: 16px;
+  }
+
+  label.audio-mixer-tab-label {
+    color: inherit;
+    font-family: "SF Pro Text", "Segoe Fluent Icons", system-ui, sans-serif;
+    font-size: 12px;
+  }
+
+  box.audio-mixer-body {
+    min-height: 70px;
+    padding: 12px;
+  }
+
+  box.audio-mixer-row {
+    margin-bottom: 2px;
+    padding: 8px 10px;
+    background-color: color-mix(in srgb, var(--ags-color-background-primary) 45%, transparent);
+    border: 1px solid rgb(255 255 255 / 8%);
+    border-radius: 8px;
+
+    &:hover {
+      background-color: rgb(42 42 42 / 62%);
+      border-color: rgb(255 255 255 / 16%);
+    }
+
+    &.muted {
+      opacity: 0.72;
+    }
+
+    &.focused {
+      background-color: color-mix(in srgb, var(--ags-color-background-primary) 62%, transparent);
+      border-color: color-mix(in srgb, var(--ags-color-accent-primary) 65%, transparent);
+    }
+  }
+
+  box.audio-mixer-row-icon {
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+    background-color: rgb(255 255 255 / 6%);
+    border-radius: 8px;
+
+    &.default {
+      color: var(--ags-color-accent-text);
+      background-color: color-mix(in srgb, var(--ags-color-accent-primary) 25%, transparent);
+    }
+
+    &.muted {
+      color: var(--ags-color-state-error);
+      background-color: color-mix(in srgb, var(--ags-color-state-error) 12%, transparent);
+    }
+
+    label.audio-mixer-icon-label {
+      font-size: 17px;
+    }
+  }
+
+  image.audio-mixer-app-icon {
+    -gtk-icon-size: 24px;
+  }
+
+  label.audio-mixer-row-title {
+    color: var(--ags-color-foreground-primary);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  label.audio-mixer-badge {
+    padding: 2px 8px;
+    color: var(--ags-color-foreground-primary);
+    font-size: 11px;
+    background-color: color-mix(in srgb, var(--ags-color-accent-primary) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ags-color-accent-primary) 40%, transparent);
+    border-radius: 999px;
+
+    &.muted {
+      color: var(--ags-color-state-error);
+      background-color: color-mix(in srgb, var(--ags-color-state-error) 10%, transparent);
+      border-color: color-mix(in srgb, var(--ags-color-state-error) 30%, transparent);
+    }
+  }
+
+  box.audio-mixer-meter-wrapper {
+    margin-top: 2px;
+  }
+
+  label.audio-mixer-volume-label {
+    color: var(--ags-color-foreground-tertiary);
+    font-size: 13px;
+  }
+
+  box.audio-mixer-meter {
+    min-height: 8px;
+  }
+
+  box.audio-mixer-meter-segment {
+    min-height: 8px;
+    border-radius: 2px;
+
+    &.filled {
+      background-color: var(--ags-color-accent-primary);
+    }
+
+    &.empty {
+      background-color: rgb(255 255 255 / 8%);
+    }
+  }
+
+  button.audio-mixer-action {
+    min-height: 24px;
+    padding: 0 8px;
+    color: var(--ags-color-foreground-secondary);
+    font-family: var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 11px;
+    background-color: rgb(255 255 255 / 6%);
+    border: 1px solid rgb(255 255 255 / 10%);
+    border-radius: 6px;
+
+    &.icon {
+      min-width: 28px;
+      min-height: 28px;
+      padding: 0;
+      font-size: 15px;
+
+      label {
+        font-family: "Segoe Fluent Icons", sans-serif;
+        font-size: 15px;
+      }
+    }
+
+    &.default-icon.active {
+      color: var(--ags-color-accent-text);
+      background-color: var(--ags-color-accent-primary);
+      border-color: color-mix(in srgb, var(--ags-color-accent-primary) 55%, transparent);
+    }
+
+    &:hover,
+    &:focus {
+      color: var(--ags-color-foreground-primary);
+      background-color: rgb(255 255 255 / 10%);
+    }
+  }
+
+  box.audio-mixer-empty {
+    min-height: 180px;
+    padding: 0;
+    background-color: color-mix(in srgb, var(--ags-color-background-primary) 30%, transparent);
+    border: 1px dashed rgb(255 255 255 / 12%);
+    border-radius: 8px;
+
+    label.audio-mixer-icon-label {
+      color: rgb(153 153 153 / 60%);
+      font-size: 32px;
+    }
+  }
+
+  box.audio-mixer-empty-content {
+    padding: 36px;
+  }
+
+  label.audio-mixer-empty-label {
+    color: var(--ags-color-foreground-secondary);
+    font-size: 14px;
+    font-weight: 500;
+  }
+}

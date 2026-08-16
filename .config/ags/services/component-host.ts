@@ -15,6 +15,7 @@ interface ComponentHostOptions {
   instanceName: string;
   components: Array<() => ComponentModule>;
   taskbarVisibilityComponents: string[];
+  css?: string;
 }
 
 type ComponentHandler = ComponentModule["handleRequest"];
@@ -23,6 +24,7 @@ export function startComponentHost({
   instanceName,
   components: componentFactories,
   taskbarVisibilityComponents,
+  css,
 }: ComponentHostOptions): void {
   const components = new Map<string, ComponentHandler>();
 
@@ -136,6 +138,7 @@ export function startComponentHost({
   }
 
   app.start({
+    css,
     main() {
       console.log(`[${instanceName}] Initializing components...`);
       for (const componentFactory of componentFactories) {
