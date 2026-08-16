@@ -21,14 +21,23 @@ import { WindowRepository, SortMode } from "./window-repository";
 import { WindowSwitcherView } from "./window-switcher-view";
 
 type WindowSwitcherActor = ActorRefFrom<typeof windowSwitcherMachine>;
+type WindowRepositoryPort = Pick<
+	WindowRepository,
+	"getWindows" | "getActiveAddress" | "updateFocusHistory"
+>;
+
+interface WindowSwitcherControllerOptions {
+	repository?: WindowRepositoryPort;
+}
 
 export class WindowSwitcherController {
 	#actor: WindowSwitcherActor | null = null;
 	#displayMode = DisplayMode.PREVIEWS;
 	#sortMode = SortMode.RECENCY;
 	#unsubscribeProfile: (() => void) | null = null;
-	#shutdownConnected = false;
-	#repository = new WindowRepository();
+	#shutdownSignalId = 0;
+	#requestGeneration = 0;
+	readonly #repository: WindowRepositoryPort;
 	#previews = new PreviewCache(() => {
 		if (this.isVisible() && this.#displayMode === DisplayMode.PREVIEWS)
 			this.#view.refreshPreviews(this.session.windows);
@@ -44,21 +53,24 @@ export class WindowSwitcherController {
 		onScreenshot: () => this.#takeScreenshot(),
 	});
 
+	constructor(options: WindowSwitcherControllerOptions = {}) {
+		this.#repository = options.repository ?? new WindowRepository();
+	}
+
 	init(): void {
 		this.#actor ??= createActor(windowSwitcherMachine).start();
 		this.#syncProfilePresentation();
 		this.#unsubscribeProfile ??= subscribeProfileState(() =>
 			this.#syncProfilePresentation(),
 		);
-		if (this.#shutdownConnected === false) {
-			this.#shutdownConnected = true;
-			app.connect("shutdown", () => this.teardown());
-		}
+		if (this.#shutdownSignalId === 0)
+			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
 		applyStaticCss(this.#displayMode);
 		this.#modifiers.attach(this.#view.create());
 	}
 
 	teardown(): void {
+		this.#requestGeneration += 1;
 		this.#modifiers.stop();
 		this.#unsubscribeProfile?.();
 		this.#unsubscribeProfile = null;
@@ -66,6 +78,10 @@ export class WindowSwitcherController {
 		this.#actor?.stop();
 		this.#actor = null;
 		this.#view.dispose();
+		if (this.#shutdownSignalId !== 0) {
+			app.disconnect(this.#shutdownSignalId);
+			this.#shutdownSignalId = 0;
+		}
 	}
 
 	isVisible(): boolean {
@@ -79,10 +95,13 @@ export class WindowSwitcherController {
 	}
 
 	async show(): Promise<void> {
+		const generation = ++this.#requestGeneration;
 		this.#previews.startMonitoring();
 		const windows = await this.#repository.getWindows(this.#sortMode);
+		if (generation !== this.#requestGeneration) return;
 		if (windows.length <= 1) return;
 		const activeAddress = await this.#repository.getActiveAddress();
+		if (generation !== this.#requestGeneration) return;
 		this.#activate(
 			windows,
 			Math.max(
@@ -151,10 +170,17 @@ export class WindowSwitcherController {
 			return "invalid sort mode, use 'alphabetical' or 'recency'";
 		this.#sortMode =
 			normalized === "ALPHABETICAL" ? SortMode.ALPHABETICAL : SortMode.RECENCY;
+		const generation = ++this.#requestGeneration;
 		if (this.isVisible()) {
+			const windows = await this.#repository.getWindows(this.#sortMode);
+			if (
+				generation !== this.#requestGeneration ||
+				this.isVisible() === false
+			)
+				return `sort mode set to ${normalized}`;
 			this.actor.send({
 				type: "REFRESH",
-				windows: await this.#repository.getWindows(this.#sortMode),
+				windows,
 			});
 			if (this.isVisible() === false) this.#hide("HIDE");
 			else {
@@ -166,6 +192,7 @@ export class WindowSwitcherController {
 	}
 
 	select(index: number): void {
+		this.#requestGeneration += 1;
 		this.actor.send({ type: "SELECT", index });
 	}
 
@@ -184,13 +211,17 @@ export class WindowSwitcherController {
 	): Promise<void> {
 		if (this.isVisible()) {
 			if (this.session.windows.length <= 1) return;
+			this.#requestGeneration += 1;
 			this.actor.send({ type: "CYCLE", direction });
 			this.#view.render(this.session, this.#displayMode);
 			return;
 		}
+		const generation = ++this.#requestGeneration;
 		const windows = await this.#repository.getWindows(this.#sortMode);
+		if (generation !== this.#requestGeneration) return;
 		if (windows.length <= 1) return;
 		const activeAddress = await this.#repository.getActiveAddress();
+		if (generation !== this.#requestGeneration) return;
 		if (activeAddress) this.#repository.updateFocusHistory(activeAddress);
 		this.#activate(
 			windows,
@@ -217,6 +248,7 @@ export class WindowSwitcherController {
 	}
 
 	#hide(event: "COMMIT" | "HIDE"): void {
+		this.#requestGeneration += 1;
 		debugLog(`[State] ${this.isVisible() ? "ACTIVE" : "IDLE"} -> IDLE`);
 		this.#modifiers.stop();
 		this.actor.send({ type: event });

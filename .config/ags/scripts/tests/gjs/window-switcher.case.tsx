@@ -316,6 +316,201 @@ test("Window Switcher controller completes a real lifecycle", async () => {
 	}
 });
 
+test("Window Switcher ignores a hidden lifecycle and activates the latest show", async () => {
+	const firstWindows = deferred<WindowInfo[]>();
+	const secondWindows = deferred<WindowInfo[]>();
+	let query = 0;
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: () => (query++ === 0 ? firstWindows.promise : secondWindows.promise),
+			getActiveAddress: async () => windows[1].address,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		const staleShow = controller.show();
+		controller.hide();
+		firstWindows.resolve(windows);
+		await staleShow;
+		assert(controller.isVisible() === false, "hidden show result became visible");
+
+		const latestShow = controller.show();
+		const latestWindows = windows.slice().reverse();
+		secondWindows.resolve(latestWindows);
+		await latestShow;
+		assert(controller.isVisible(), "latest show did not become visible");
+		assert(
+			controller.session.windows === latestWindows,
+			"latest show did not own the session",
+		);
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+test("Window Switcher ignores active-window results after teardown", async () => {
+	const activeAddress = deferred<string | null>();
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: async () => windows,
+			getActiveAddress: () => activeAddress.promise,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		const pendingShow = controller.show();
+		await Promise.resolve();
+		controller.teardown();
+		activeAddress.resolve(windows[0].address);
+		await pendingShow;
+		assert(controller.isVisible() === false, "teardown result became visible");
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+test("Window Switcher ignores an older overlapping sort refresh", async () => {
+	const olderRefresh = deferred<WindowInfo[]>();
+	const latestRefresh = deferred<WindowInfo[]>();
+	let query = 0;
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: () => {
+				query += 1;
+				if (query === 1) return Promise.resolve(windows);
+				return query === 2 ? olderRefresh.promise : latestRefresh.promise;
+			},
+			getActiveAddress: async () => windows[0].address,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		await controller.show();
+		const olderRequest = controller.setSortMode("alphabetical");
+		const latestRequest = controller.setSortMode("recency");
+		const latestWindows = [windows[1], windows[2], windows[0]];
+
+		latestRefresh.resolve(latestWindows);
+		await latestRequest;
+		olderRefresh.resolve(windows.slice().reverse());
+		await olderRequest;
+
+		assert(
+			controller.session.windows === latestWindows,
+			"older sort refresh replaced the latest result",
+		);
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+test("Window Switcher preserves a newer cycle over a pending sort refresh", async () => {
+	const refresh = deferred<WindowInfo[]>();
+	let query = 0;
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: () => (query++ === 0 ? Promise.resolve(windows) : refresh.promise),
+			getActiveAddress: async () => windows[0].address,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		await controller.show();
+		const pendingRefresh = controller.setSortMode("alphabetical");
+		await controller.next();
+		refresh.resolve(windows.slice().reverse());
+		await pendingRefresh;
+
+		assert(controller.session.windows === windows, "stale refresh replaced windows");
+		assert(controller.session.currentIndex === 1, "stale refresh reset selection");
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+test("Window Switcher preserves a newer selection over a pending sort refresh", async () => {
+	const refresh = deferred<WindowInfo[]>();
+	let query = 0;
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: () => (query++ === 0 ? Promise.resolve(windows) : refresh.promise),
+			getActiveAddress: async () => windows[0].address,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		await controller.show();
+		const pendingRefresh = controller.setSortMode("alphabetical");
+		controller.select(2);
+		refresh.resolve(windows.slice().reverse());
+		await pendingRefresh;
+
+		assert(controller.session.windows === windows, "stale refresh replaced windows");
+		assert(controller.session.currentIndex === 2, "stale refresh reset selection");
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
+test("Window Switcher ignores a hidden cycle after cancellation", async () => {
+	const activeAddress = deferred<string | null>();
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: async () => windows,
+			getActiveAddress: () => activeAddress.promise,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		const pendingCycle = controller.next();
+		await Promise.resolve();
+		controller.hide();
+		activeAddress.resolve(windows[0].address);
+		await pendingCycle;
+
+		assert(controller.isVisible() === false, "cancelled cycle became visible");
+		assert(controller.session.windows.length === 0, "cancelled cycle created a session");
+	} finally {
+		controller.teardown();
+		disposeRoot();
+	}
+});
+
 function request(
 	handler: (argv: string[], respond: (response: string) => void) => void,
 	argv: string[],
@@ -330,6 +525,17 @@ function delay(milliseconds: number): Promise<void> {
 			return GLib.SOURCE_REMOVE;
 		});
 	});
+}
+
+function deferred<T>(): {
+	promise: Promise<T>;
+	resolve: (value: T) => void;
+} {
+	let resolve = (_value: T) => {};
+	const promise = new Promise<T>((promiseResolve) => {
+		resolve = promiseResolve;
+	});
+	return { promise, resolve };
 }
 
 function collectButtons(widget: Gtk.Widget): Gtk.Button[] {

@@ -31,7 +31,7 @@ export function applyStaticCss(displayMode: DisplayMode): void {
 		`
     window.window-switcher { background-color: transparent; border: none; }
     window.window-switcher box.switcher-container {
-      background-color: ${background}; backdrop-filter: ${backdrop}; -webkit-backdrop-filter: ${backdrop};
+      background-color: ${background}; backdrop-filter: ${backdrop};
       border: ${border}; border-radius: 18px; padding: 24px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
     }
@@ -55,15 +55,15 @@ export function applyStaticCss(displayMode: DisplayMode): void {
     }
     window.window-switcher label.app-name {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif; font-size: 14px;
-      color: ${tokens.colors.foreground.primary.value}; max-width: 600px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+      color: ${tokens.colors.foreground.primary.value}; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
     }
     window.window-switcher box.window-preview {
       background-color: ${previewBackground}; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px;
-      overflow: hidden; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
     }
     window.window-switcher box.preview-header {
       background-color: ${previewHeaderBackground}; border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 8px 8px 0 0; padding: 8px 12px; box-sizing: border-box;
+      border-radius: 8px 8px 0 0; padding: 8px 12px;
     }
     window.window-switcher image.preview-header-icon { min-width: 20px; min-height: 20px; }
     window.window-switcher box.preview-header-icon-fallback { min-width: 20px; min-height: 20px; border-radius: 4px; background-color: ${tokens.colors.accent.primary.value}; }
@@ -72,10 +72,10 @@ export function applyStaticCss(displayMode: DisplayMode): void {
     }
     window.window-switcher label.preview-header-title {
       font-family: "${tokens.typography.fontFamily.primary.value}", system-ui, sans-serif; font-size: 13px; font-weight: 500;
-      color: ${tokens.colors.foreground.primary.value}; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+      color: ${tokens.colors.foreground.primary.value};
     }
-    window.window-switcher box.preview-body { background: ${previewBodyBackground}; overflow: hidden; }
-    window.window-switcher picture.preview-image { min-width: 100%; min-height: 100%; border-radius: 0 0 8px 8px; }
+    window.window-switcher box.preview-body { background: ${previewBodyBackground}; }
+    window.window-switcher picture.preview-image { border-radius: 0 0 8px 8px; }
   `,
 		false,
 	);

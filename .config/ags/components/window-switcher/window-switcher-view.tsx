@@ -418,6 +418,7 @@ export class WindowSwitcherView {
 					spacing={0}
 					class="window-preview"
 					widthRequest={info.width}
+					overflow={Gtk.Overflow.HIDDEN}
 				>
 					<box
 						orientation={Gtk.Orientation.HORIZONTAL}
@@ -446,6 +447,7 @@ export class WindowSwitcherView {
 						valign={Gtk.Align.CENTER}
 						widthRequest={info.width}
 						heightRequest={info.height}
+						overflow={Gtk.Overflow.HIDDEN}
 						$={(body: Gtk.Box) => {
 							const picture = info.texture
 								? createPreviewPicture(info.texture)
