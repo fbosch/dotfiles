@@ -27,6 +27,7 @@ export function createAudioBackend(
 	const nodeConnections = new Map<any, number[]>();
 	let refreshSource = 0;
 	let loadVersion = 0;
+	let active = false;
 	let pendingDefault: { tab: "output" | "input"; object: any } | null = null;
 	const loadModules = async () =>
 		(modules ??= { AstalWp: (await import("gi://AstalWp")).default });
@@ -131,7 +132,7 @@ export function createAudioBackend(
 		}
 	}
 	function refresh(): void {
-		if (refreshSource) return;
+		if (active === false || refreshSource) return;
 		refreshSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
 			refreshSource = 0;
 			try {
@@ -218,7 +219,7 @@ export function createAudioBackend(
 				return;
 			}
 			connect(audio);
-			applySnapshot(snapshot());
+			if (active) applySnapshot(snapshot());
 		} catch (cause) {
 			if (version !== loadVersion) return;
 			console.error("AstalWP audio backend unavailable:", cause);
@@ -227,8 +228,15 @@ export function createAudioBackend(
 	}
 	return {
 		init: () => void load(),
+		setActive: (value) => {
+			active = value;
+			if (active || refreshSource === 0) return;
+			GLib.source_remove(refreshSource);
+			refreshSource = 0;
+		},
 		refresh: () => (audio ? refresh() : void load()),
 		stop: () => {
+			active = false;
 			loadVersion += 1;
 			if (refreshSource) {
 				GLib.source_remove(refreshSource);

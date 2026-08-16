@@ -1,5 +1,6 @@
 import { AudioMixerController } from "../../../components/audio-mixer/controller";
 import { AudioMixerView } from "../../../components/audio-mixer/audio-mixer-view";
+import GLib from "gi://GLib?version=2.0";
 import {
 	emptySnapshot,
 	type AudioBackend,
@@ -10,6 +11,7 @@ import { assert, test } from "./harness";
 function fakeBackend(): AudioBackend {
 	return {
 		init() {},
+		setActive() {},
 		refresh() {},
 		stop() {},
 		setVolume() {},
@@ -70,6 +72,10 @@ test("Audio Mixer handles its complete request lifecycle", () => {
 			"toggle request failed",
 		);
 		assert(
+			request(handle, [JSON.stringify({ action: "toggle" })]) === "shown",
+			"rapid toggle request was ignored",
+		);
+		assert(
 			request(handle, [JSON.stringify({ action: "hide" })]) === "hidden",
 			"hide request failed",
 		);
@@ -117,3 +123,95 @@ test("Audio Mixer view creates, renders, switches tabs, hides, and disposes", ()
 	view.dispose();
 	assert(view.isCreated === false, "view was not disposed");
 });
+
+test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
+	let creates = 0;
+	let shows = 0;
+	let signals = 0;
+	const view = {
+		create: () => {
+			creates += 1;
+		},
+		show: () => {
+			shows += 1;
+		},
+		hide() {},
+		setSnapshot() {},
+		setTab() {},
+		dispose() {},
+	} as unknown as AudioMixerView;
+	const controller = new AudioMixerController({
+		createBackend: () => fakeBackend(),
+		createView: () => view,
+		signalWaybar: () => {
+			signals += 1;
+		},
+	});
+	controller.init();
+	try {
+		assert(creates === 1, "view was not prepared during initialization");
+		controller.show();
+		assert(shows === 1, "prepared view was not shown");
+		assert(signals === 0, "Waybar signaling blocked the show request");
+		await flushIdle();
+		assert(signals === 1, "deferred Waybar signal did not run");
+
+		controller.hide();
+		controller.show();
+		controller.hide();
+		await flushIdle();
+		assert(signals === 1, "hide did not cancel deferred Waybar signaling");
+
+		controller.show();
+		controller.teardown();
+		await flushIdle();
+		assert(signals === 1, "teardown did not cancel deferred Waybar signaling");
+	} finally {
+		controller.teardown();
+	}
+});
+
+test("Audio Mixer scopes backend refresh work to its visible lifecycle", () => {
+	const events: string[] = [];
+	const backend: AudioBackend = {
+		init: () => events.push("init"),
+		setActive: (active) => events.push(`active:${active}`),
+		refresh: () => events.push("refresh"),
+		stop: () => events.push("stop"),
+		setVolume() {},
+		toggleMute() {},
+		setDefault() {},
+	};
+	const view = {
+		create() {},
+		show() {},
+		hide() {},
+		setSnapshot() {},
+		setTab() {},
+		dispose() {},
+	} as unknown as AudioMixerView;
+	const controller = new AudioMixerController({
+		createBackend: () => backend,
+		createView: () => view,
+		signalWaybar: () => {},
+	});
+
+	controller.init();
+	controller.show();
+	controller.hide();
+	controller.teardown();
+
+	assert(
+		events.join(",") === "init,active:true,refresh,active:false,stop",
+		"backend work did not follow visibility",
+	);
+});
+
+function flushIdle(): Promise<void> {
+	return new Promise((resolve) => {
+		GLib.idle_add(GLib.PRIORITY_LOW, () => {
+			resolve();
+			return GLib.SOURCE_REMOVE;
+		});
+	});
+}

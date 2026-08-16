@@ -18,18 +18,26 @@ export interface AudioMixerControllerOptions {
 		actions: AudioMixerViewActions,
 		snapshot: AudioSnapshot,
 	) => AudioMixerView;
+	signalWaybar?: () => void;
 }
 
 export class AudioMixerController {
 	#visible = false;
-	#lastToggleAtMs = 0;
 	#initialized = false;
-	#shutdownConnected = false;
+	#shutdownSignalId = 0;
+	#waybarSource = 0;
 	#snapshot = emptySnapshot("Audio backend unavailable", "unavailable");
 	#backend: AudioBackend;
 	#view: AudioMixerView;
+	readonly #signalWaybar: () => void;
 
 	constructor(options: AudioMixerControllerOptions = {}) {
+		this.#signalWaybar =
+			options.signalWaybar ??
+			(() =>
+				GLib.spawn_command_line_async(
+					"pkill -SIGUSR1 -f '(^|/)waybar( |$)'",
+				));
 		const createBackend = options.createBackend ?? createAudioBackend;
 		this.#backend = createBackend((snapshot) => {
 			this.#snapshot = snapshot;
@@ -53,11 +61,10 @@ export class AudioMixerController {
 	init(): void {
 		if (this.#initialized) return;
 		this.#initialized = true;
-		if (this.#shutdownConnected === false) {
-			this.#shutdownConnected = true;
-			app.connect("shutdown", () => this.teardown());
-		}
+		if (this.#shutdownSignalId === 0)
+			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
 		applyAudioMixerStyles();
+		this.#view.create();
 		this.#backend.init();
 	}
 
@@ -65,8 +72,13 @@ export class AudioMixerController {
 		if (this.#initialized === false) return;
 		this.#initialized = false;
 		this.#visible = false;
+		this.#cancelWaybarSignal();
 		this.#backend.stop();
 		this.#view.dispose();
+		if (this.#shutdownSignalId !== 0) {
+			app.disconnect(this.#shutdownSignalId);
+			this.#shutdownSignalId = 0;
+		}
 	}
 
 	isVisible(): boolean {
@@ -75,22 +87,17 @@ export class AudioMixerController {
 	show(): void {
 		this.#view.show();
 		this.#visible = true;
+		this.#backend.setActive(true);
 		this.#backend.refresh();
-		try {
-			GLib.spawn_command_line_async("pkill -SIGUSR1 -f '(^|/)waybar( |$)'");
-		} catch (cause) {
-			console.error("Failed to show waybar:", cause);
-		}
+		this.#scheduleWaybarSignal();
 	}
 	hide(): void {
+		this.#cancelWaybarSignal();
+		this.#backend.setActive(false);
 		this.#view.hide();
 		this.#visible = false;
 	}
 	toggle(): string {
-		const now = GLib.get_monotonic_time() / 1000;
-		if (now - this.#lastToggleAtMs < 300)
-			return this.#visible ? "shown" : "hidden";
-		this.#lastToggleAtMs = now;
 		if (this.#visible) this.hide();
 		else this.show();
 		return this.#visible ? "shown" : "hidden";
@@ -105,5 +112,25 @@ export class AudioMixerController {
 			endpoint.isDefault = endpoint.id === row.id;
 		this.#backend.setDefault(row);
 		this.#view.setSnapshot(this.#snapshot);
+	}
+
+	#scheduleWaybarSignal(): void {
+		if (this.#waybarSource !== 0) return;
+		this.#waybarSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+			this.#waybarSource = 0;
+			if (this.#visible === false) return GLib.SOURCE_REMOVE;
+			try {
+				this.#signalWaybar();
+			} catch (cause) {
+				console.error("Failed to show waybar:", cause);
+			}
+			return GLib.SOURCE_REMOVE;
+		});
+	}
+
+	#cancelWaybarSignal(): void {
+		if (this.#waybarSource === 0) return;
+		GLib.source_remove(this.#waybarSource);
+		this.#waybarSource = 0;
 	}
 }

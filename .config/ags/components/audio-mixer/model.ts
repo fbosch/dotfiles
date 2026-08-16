@@ -25,6 +25,7 @@ export interface AudioSnapshot {
 
 export interface AudioBackend {
 	init(): void;
+	setActive(active: boolean): void;
 	refresh(): void;
 	stop(): void;
 	setVolume(row: AudioRow, volume: number): void;
