@@ -1,4 +1,10 @@
-import { type SelectionGeometry, validatedSelectionGeometry } from "./selection";
+import {
+	containsSelectionCenter,
+	paddedSelectionGeometry,
+	type SelectionGeometry,
+	validatedSelectionGeometry,
+} from "./selection";
+import { strokeCapturePadding } from "./stroke";
 
 const snapPadding = 12;
 const minimumCandidateCoverage = 0.65;
@@ -133,15 +139,18 @@ export function chooseAccessibleSnap(
 ): AccessibilityResolution | null {
 	const directTargets = candidates
 		.filter((candidate) =>
-			candidate.centerHit === true && directTargetPriority.has(candidate.role.trim().toLowerCase()),
+			candidate.centerHit !== undefined &&
+			directTargetPriority.has(candidate.role.trim().toLowerCase()),
 		)
 		.sort((left, right) =>
+			Number(right.centerHit) - Number(left.centerHit) ||
 			(directTargetPriority.get(left.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) -
 				(directTargetPriority.get(right.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) ||
 			left.geometry.width * left.geometry.height - right.geometry.width * right.geometry.height,
 		);
 	for (const candidate of directTargets) {
-		if (containsCenter(candidate.geometry, selection) === false) continue;
+		if (containsSelectionCenter(candidate.geometry, selection, strokeCapturePadding) === false)
+			continue;
 		const resolution = resolutionFromCandidate(candidate, 1, clientGeometry);
 		if (resolution) return resolution;
 	}
@@ -176,13 +185,7 @@ function resolutionFromCandidate(
 		candidate.geometry.height,
 	);
 	if (!candidateGeometry || containsGeometry(clientGeometry, candidateGeometry) === false) return null;
-	const { x, y, width, height } = candidateGeometry;
-	const geometry = validatedSelectionGeometry(
-		x - snapPadding,
-		y - snapPadding,
-		width + snapPadding * 2,
-		height + snapPadding * 2,
-	);
+	const geometry = paddedSelectionGeometry(candidateGeometry, snapPadding);
 	if (!geometry || containsGeometry(clientGeometry, geometry) === false) return null;
 	return {
 		geometry,
@@ -225,7 +228,7 @@ function rankCandidate(
 		areaRatio > 1 &&
 		(areaRatio <= maximumAreaRatio || namedCommonAncestor) &&
 		selectionCoverage >= 0.75 &&
-		containsCenter(geometry, selection);
+		containsSelectionCenter(geometry, selection, strokeCapturePadding);
 	if (
 		(candidateCoverage < minimumCandidateCoverage && boundedPartialTarget === false) ||
 		areaRatio < minimumAreaRatio ||
@@ -234,7 +237,10 @@ function rankCandidate(
 		return null;
 
 	const centerAgreement =
-		containsCenter(geometry, selection) || containsCenter(selection, geometry) ? 1 : 0;
+		containsSelectionCenter(geometry, selection, strokeCapturePadding) ||
+		containsSelectionCenter(selection, geometry)
+			? 1
+			: 0;
 	if (centerAgreement === 0) return null;
 	const sizeSimilarity = Math.min(areaRatio, 1 / areaRatio);
 	const repeatedHitBonus = Math.min(Math.max((candidate.hitCount ?? 1) - 1, 0) / 8, 1) * 0.3;
@@ -278,17 +284,6 @@ function intersection(left: SelectionGeometry, right: SelectionGeometry): number
 		Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y),
 	);
 	return width * height;
-}
-
-function containsCenter(container: SelectionGeometry, target: SelectionGeometry): boolean {
-	const centerX = target.x + target.width / 2;
-	const centerY = target.y + target.height / 2;
-	return (
-		centerX >= container.x &&
-		centerX < container.x + container.width &&
-		centerY >= container.y &&
-		centerY < container.y + container.height
-	);
 }
 
 function containsGeometry(container: SelectionGeometry, target: SelectionGeometry): boolean {

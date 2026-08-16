@@ -32,6 +32,33 @@ export function validatedSelectionGeometry(
 	return { x, y, width, height };
 }
 
+export function paddedSelectionGeometry(
+	geometry: SelectionGeometry,
+	padding: number,
+): SelectionGeometry | null {
+	return validatedSelectionGeometry(
+		geometry.x - padding,
+		geometry.y - padding,
+		geometry.width + padding * 2,
+		geometry.height + padding * 2,
+	);
+}
+
+export function containsSelectionCenter(
+	container: SelectionGeometry,
+	selection: SelectionGeometry,
+	tolerance = 0,
+): boolean {
+	const centerX = selection.x + selection.width / 2;
+	const centerY = selection.y + selection.height / 2;
+	return (
+		centerX >= container.x - tolerance &&
+		centerX < container.x + container.width + tolerance &&
+		centerY >= container.y - tolerance &&
+		centerY < container.y + container.height + tolerance
+	);
+}
+
 export function selectionFromPoints(
 	start: PointerPosition,
 	end: PointerPosition,

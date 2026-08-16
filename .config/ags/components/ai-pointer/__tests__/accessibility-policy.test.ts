@@ -174,6 +174,38 @@ describe("accessible selection snapping", () => {
 		expect(result?.geometry).toEqual({ x: 88, y: 88, width: 924, height: 624 });
 	});
 
+	test("uses capture padding when the gesture center is near a direct target", () => {
+		const result = chooseAccessibleSnap(
+			selection,
+			[
+				{
+					centerHit: false,
+					geometry: { x: 220, y: 120, width: 40, height: 60 },
+					role: "link",
+				},
+			],
+			client,
+		);
+
+		expect(result?.geometry).toEqual({ x: 208, y: 108, width: 64, height: 84 });
+	});
+
+	test("rejects a direct target beyond capture padding", () => {
+		expect(
+			chooseAccessibleSnap(
+				selection,
+				[
+					{
+						centerHit: false,
+						geometry: { x: 225, y: 120, width: 40, height: 60 },
+						role: "link",
+					},
+				],
+				client,
+			),
+		).toBeNull();
+	});
+
 	test("prefers an enclosing link over its directly hit image", () => {
 		const result = chooseAccessibleSnap(
 			{ x: 400, y: 300, width: 80, height: 60 },

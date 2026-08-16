@@ -1,6 +1,7 @@
 import {
 	type PointerPosition,
 	type SelectionGeometry,
+	paddedSelectionGeometry,
 	validatedSelectionGeometry,
 } from "./selection";
 
@@ -64,10 +65,6 @@ export function selectionFromStroke(stroke: PointerStroke): SelectionGeometry | 
 	const x = stroke.minX - Math.floor((width - strokeWidth) / 2);
 	const y = stroke.minY - Math.floor((height - strokeHeight) / 2);
 
-	return validatedSelectionGeometry(
-		x - strokeCapturePadding,
-		y - strokeCapturePadding,
-		width + strokeCapturePadding * 2,
-		height + strokeCapturePadding * 2,
-	);
+	const geometry = validatedSelectionGeometry(x, y, width, height);
+	return geometry ? paddedSelectionGeometry(geometry, strokeCapturePadding) : null;
 }

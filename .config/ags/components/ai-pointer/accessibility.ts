@@ -9,7 +9,11 @@ import {
 	chooseAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "./accessibility-policy";
-import { type SelectionGeometry, validatedSelectionGeometry } from "./selection";
+import {
+	containsSelectionCenter,
+	type SelectionGeometry,
+	validatedSelectionGeometry,
+} from "./selection";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -208,17 +212,6 @@ export async function readBoundedHelperOutput(
 	} catch {
 		return null;
 	}
-}
-
-function containsSelectionCenter(client: SelectionGeometry, selection: SelectionGeometry): boolean {
-	const centerX = selection.x + selection.width / 2;
-	const centerY = selection.y + selection.height / 2;
-	return (
-		centerX >= client.x &&
-		centerX < client.x + client.width &&
-		centerY >= client.y &&
-		centerY < client.y + client.height
-	);
 }
 
 function sameClient(left: ValidatedClient, right: ValidatedClient): boolean {
