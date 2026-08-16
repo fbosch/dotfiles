@@ -10,7 +10,7 @@ export const minimumStrokePointDistance = 2;
 export const minimumStrokeSpan = 8;
 export const strokeBrushRadius = 32;
 export const strokeCapturePadding = strokeBrushRadius;
-const displayPointSpacing = 18;
+const displayPointSpacing = 28;
 const maximumDisplayStrokePoints = 4_096;
 
 export interface PointerStroke {

@@ -4,6 +4,8 @@ import Cairo from "cairo";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
+import GObject from "gi://GObject?version=2.0";
+import Graphene from "gi://Graphene?version=1.0";
 import tokens from "../../../../design-system/tokens.json";
 import type { SelectionGeometry } from "./selection";
 import {
@@ -18,9 +20,22 @@ import {
 
 interface StrokeSurface {
 	window: Astal.Window;
-	drawing: Gtk.DrawingArea;
+	drawing: Gtk.Widget;
 	bounds: SelectionGeometry;
 }
+
+type SnapshotRenderer = (snapshot: Gtk.Snapshot, width: number, height: number) => void;
+
+const StrokeCanvas = GObject.registerClass(
+	{ GTypeName: "AgsAiPointerStrokeCanvas" },
+	class extends Gtk.Widget {
+		renderer: SnapshotRenderer | null = null;
+
+		vfunc_snapshot(snapshot: Gtk.Snapshot): void {
+			this.renderer?.(snapshot, this.get_width(), this.get_height());
+		}
+	},
+);
 
 const allEdges =
 	Astal.WindowAnchor.TOP |
@@ -32,15 +47,16 @@ const strokeFadeOutMs = 250;
 const compositorFrameDelayMs = 34;
 const selectionPreviewRadius = 14;
 const selectionPreviewGlow = 20;
-const trailFadeBands = 48;
+const trailFadeBands = 96;
 const trailLifetimeMs = 1_400;
+const trailGlowRadius = 14;
 
 export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
 	#stroke: PointerStroke | null = null;
 	#displaySegments: CubicStrokeSegment[] = [];
 	#segmentCreatedAtMs: number[] = [];
-	#frameDrawing: Gtk.DrawingArea | null = null;
+	#frameDrawing: Gtk.Widget | null = null;
 	#frameCallbackId = 0;
 
 	show(stroke: PointerStroke, onCancel: () => void, onFrame: () => void): boolean {
@@ -92,6 +108,7 @@ export class StrokeOverlay {
 		);
 		const segments = subdivideStrokeSegments(
 			bsplineStrokeSegments(resampledStrokePoints(stroke.points)),
+			3,
 		);
 		const now = GLib.get_monotonic_time() / 1_000;
 		this.#displaySegments = segments;
@@ -146,54 +163,11 @@ export class StrokeOverlay {
 		namespace: string,
 	): StrokeSurface {
 		const geometry = monitor.get_geometry();
-		const drawing = new Gtk.DrawingArea({ hexpand: true, vexpand: true });
+		const drawing = new StrokeCanvas({ hexpand: true, vexpand: true });
 		drawing.add_css_class("ai-pointer-stroke-canvas");
-		drawing.set_draw_func((_area, cr: any) => {
-			const segments = this.#displaySegments;
-			if (segments.length === 0) return;
-			const color = new Gdk.RGBA();
-			color.parse(tokens.colors.accent.primary.value);
-			cr.setAntialias(Cairo.Antialias.BEST);
-			cr.setLineJoin(Cairo.LineJoin.ROUND);
-			const brushDiameter = strokeBrushRadius * 2;
-			const endpoint = segments.at(-1)?.end;
-			if (!endpoint) return;
-			const now = GLib.get_monotonic_time() / 1_000;
-			for (const [width, alpha] of [
-				[brushDiameter, 0.05],
-				[brushDiameter * 0.6, 0.12],
-				[brushDiameter * 0.3, 0.55],
-				[brushDiameter * 0.15, 0.96],
-			] as const) {
-				const bandCount = Math.min(trailFadeBands, segments.length);
-				cr.setLineCap(Cairo.LineCap.BUTT);
-				cr.setLineWidth(width);
-				for (let band = 0; band < bandCount; band += 1) {
-					const progress = (band + 0.5) / bandCount;
-					const smoothProgress = progress * progress * (3 - 2 * progress);
-					const fade = 0.05 + Math.pow(smoothProgress, 1.15) * 0.95;
-					const taperedWidth = width * (0.25 + smoothProgress * 0.75);
-					const start = Math.floor((band * segments.length) / bandCount);
-					const end = Math.floor(((band + 1) * segments.length) / bandCount);
-					const createdAt = this.#segmentCreatedAtMs[Math.max(start, end - 1)] ?? now;
-					const timeFade = temporalTrailFade(now - createdAt, trailLifetimeMs);
-					if (timeFade === 0) continue;
-					cr.setSourceRGBA(color.red, color.green, color.blue, alpha * fade * timeFade);
-					cr.setLineWidth(taperedWidth);
-					this.#tracePath(cr, segments, start, end, geometry.x, geometry.y);
-					cr.stroke();
-				}
-				cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
-				cr.arc(
-					endpoint.x - geometry.x,
-					endpoint.y - geometry.y,
-					width / 2,
-					0,
-					Math.PI * 2,
-				);
-				cr.fill();
-			}
-		});
+		drawing.renderer = (snapshot, width, height) => {
+			this.#snapshotStroke(snapshot, width, height, geometry.x, geometry.y);
+		};
 
 		const window = this.#createWindow(monitor, index, drawing, namespace, captureKeyboard);
 		window.set_anchor(allEdges);
@@ -209,6 +183,97 @@ export class StrokeOverlay {
 				height: geometry.height,
 			},
 		};
+	}
+
+	#snapshotStroke(
+		snapshot: Gtk.Snapshot,
+		width: number,
+		height: number,
+		originX: number,
+		originY: number,
+	): void {
+		const segments = this.#displaySegments;
+		if (segments.length === 0 || width <= 0 || height <= 0) return;
+		const color = new Gdk.RGBA();
+		color.parse(tokens.colors.accent.primary.value);
+		const bounds = new Graphene.Rect().init(0, 0, width, height);
+		const brushDiameter = strokeBrushRadius * 2;
+
+		snapshot.push_blur(trailGlowRadius);
+		const glow = snapshot.append_cairo(bounds);
+		try {
+			this.#drawTrailLayer(
+				glow,
+				segments,
+				color,
+				brushDiameter * 0.42,
+				0.3,
+				originX,
+				originY,
+			);
+		} finally {
+			glow.$dispose();
+		}
+		snapshot.pop();
+
+		const core = snapshot.append_cairo(bounds);
+		try {
+			this.#drawTrailLayer(
+				core,
+				segments,
+				color,
+				brushDiameter * 0.3,
+				0.55,
+				originX,
+				originY,
+			);
+			this.#drawTrailLayer(
+				core,
+				segments,
+				color,
+				brushDiameter * 0.15,
+				0.96,
+				originX,
+				originY,
+			);
+		} finally {
+			core.$dispose();
+		}
+	}
+
+	#drawTrailLayer(
+		cr: any,
+		segments: CubicStrokeSegment[],
+		color: Gdk.RGBA,
+		width: number,
+		alpha: number,
+		originX: number,
+		originY: number,
+	): void {
+		const endpoint = segments.at(-1)?.end;
+		if (!endpoint) return;
+		const now = GLib.get_monotonic_time() / 1_000;
+		const bandCount = Math.min(trailFadeBands, segments.length);
+		cr.setAntialias(Cairo.Antialias.BEST);
+		cr.setLineCap(Cairo.LineCap.BUTT);
+		cr.setLineJoin(Cairo.LineJoin.ROUND);
+		for (let band = 0; band < bandCount; band += 1) {
+			const progress = (band + 0.5) / bandCount;
+			const smoothProgress = progress * progress * (3 - 2 * progress);
+			const distanceFade = 0.05 + Math.pow(smoothProgress, 1.15) * 0.95;
+			const start = Math.floor((band * segments.length) / bandCount);
+			const end = Math.floor(((band + 1) * segments.length) / bandCount);
+			const createdAt = this.#segmentCreatedAtMs[Math.max(start, end - 1)] ?? now;
+			const timeFade = temporalTrailFade(now - createdAt, trailLifetimeMs);
+			if (timeFade === 0) continue;
+			cr.setSourceRGBA(color.red, color.green, color.blue, alpha * distanceFade * timeFade);
+			cr.setLineWidth(width * (0.25 + smoothProgress * 0.75));
+			this.#tracePath(cr, segments, start, end, originX, originY);
+			cr.stroke();
+		}
+		cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
+		cr.arc(endpoint.x - originX, endpoint.y - originY, width / 2, 0, Math.PI * 2);
+		cr.fill();
 	}
 
 	#createSelectionSurface(
