@@ -139,7 +139,7 @@ export function chooseAccessibleSnap(
 ): AccessibilityResolution | null {
 	const directTargets = candidates
 		.filter((candidate) =>
-			candidate.centerHit !== undefined &&
+			candidate.centerHit === true &&
 			directTargetPriority.has(candidate.role.trim().toLowerCase()),
 		)
 		.sort((left, right) =>
@@ -270,10 +270,21 @@ function deduplicateCandidates(candidates: AccessibleCandidate[]): AccessibleCan
 	for (const candidate of candidates) {
 		const key = geometryKey(candidate.geometry);
 		const existing = candidatesByGeometry.get(key);
+		const candidateRole = candidate.role.trim().toLowerCase();
+		const existingRole = existing?.role.trim().toLowerCase();
+		const candidateRolePriority = eligibleRoles.has(candidateRole)
+			? (directTargetPriority.get(candidateRole) ?? 2)
+			: 3;
+		const existingRolePriority = existingRole && eligibleRoles.has(existingRole)
+			? (directTargetPriority.get(existingRole) ?? 2)
+			: 3;
 		if (
 			!existing ||
-			(candidate.hitCount ?? 1) > (existing.hitCount ?? 1) ||
-			((candidate.hitCount ?? 1) === (existing.hitCount ?? 1) && !existing.name && candidate.name)
+			candidateRolePriority < existingRolePriority ||
+			(candidateRolePriority === existingRolePriority &&
+				((candidate.hitCount ?? 1) > (existing.hitCount ?? 1) ||
+					((candidate.hitCount ?? 1) === (existing.hitCount ?? 1) &&
+						!existing.name && candidate.name)))
 		)
 			candidatesByGeometry.set(key, candidate);
 	}

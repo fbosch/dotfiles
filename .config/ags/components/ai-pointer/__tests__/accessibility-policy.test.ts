@@ -190,6 +190,74 @@ describe("accessible selection snapping", () => {
 		expect(result?.geometry).toEqual({ x: 208, y: 108, width: 64, height: 84 });
 	});
 
+	test("prefers actual center evidence over a nearby direct target", () => {
+		const result = chooseAccessibleSnap(
+			selection,
+			[
+				{
+					centerHit: false,
+					geometry: { x: 220, y: 120, width: 40, height: 60 },
+					name: "Nearby link",
+					role: "link",
+				},
+				{
+					centerHit: true,
+					geometry: { x: 120, y: 110, width: 160, height: 80 },
+					name: "Submit",
+					role: "push button",
+				},
+			],
+			client,
+		);
+
+		expect(result?.metadata.role).toBe("push button");
+		expect(result?.geometry).toEqual({ x: 108, y: 98, width: 184, height: 104 });
+	});
+
+	test("preserves stroke geometry when nearby direct targets are ambiguous", () => {
+		expect(
+			chooseAccessibleSnap(
+				selection,
+				[
+					{
+						centerHit: false,
+						geometry: { x: 220, y: 120, width: 40, height: 60 },
+						role: "link",
+					},
+					{
+						centerHit: false,
+						geometry: { x: 219, y: 119, width: 42, height: 62 },
+						role: "link",
+					},
+				],
+				client,
+			),
+		).toBeNull();
+	});
+
+	test("prefers an eligible control over a same-geometry label", () => {
+		for (const candidates of [
+			[
+				{
+					geometry: { x: 120, y: 110, width: 160, height: 80 },
+					hitCount: 9,
+					name: "Submit",
+					role: "label",
+				},
+				{
+					geometry: { x: 120, y: 110, width: 160, height: 80 },
+					hitCount: 9,
+					name: "Submit",
+					role: "push button",
+				},
+			],
+		].flatMap((candidates) => [candidates, [...candidates].reverse()])) {
+			const result = chooseAccessibleSnap(selection, candidates, client);
+			expect(result?.metadata.role).toBe("push button");
+			expect(result?.geometry).toEqual({ x: 108, y: 98, width: 184, height: 104 });
+		}
+	});
+
 	test("fuzzily ranks a regular target near the gesture center", () => {
 		const result = chooseAccessibleSnap(
 			selection,
