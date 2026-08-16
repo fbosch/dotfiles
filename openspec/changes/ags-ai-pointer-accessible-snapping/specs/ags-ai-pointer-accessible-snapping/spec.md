@@ -35,7 +35,7 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when one visib
 - **THEN** capture continues with the original stroke-derived geometry
 
 ### Requirement: Wayland coordinate reconciliation
-The AI Pointer SHALL treat AT-SPI window coordinates as application-local and translate them using the matching Hyprland client's global origin. The matching AT-SPI top-level SHALL be the one uniquely active or focused dimension-compatible top-level for the matched process. Approximate dimensions alone MUST NOT select among multiple top-levels. It MUST NOT treat GTK Wayland screen coordinates as compositor-global facts.
+The AI Pointer SHALL treat AT-SPI window coordinates as application-local and translate them using the matching Hyprland client's global origin. It SHALL prefer a uniquely active or focused dimension-compatible top-level for the matched process. When sandboxing proxies the accessibility connection under another PID, it MAY use the one uniquely active or focused dimension-compatible top-level across registered applications. Approximate dimensions alone MUST NOT select among multiple top-levels. It MUST NOT treat GTK Wayland screen coordinates as compositor-global facts.
 
 #### Scenario: Accessible bounds match the active Hyprland client
 - **WHEN** the AT-SPI top-level window dimensions agree with the active client within the bounded tolerance

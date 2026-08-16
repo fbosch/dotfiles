@@ -99,30 +99,36 @@ function intersects(left, right) {
 	);
 }
 
-function matchingApplication(desktop, pid) {
+function matchingWindow(desktop, input) {
 	let childCount;
 	try {
 		childCount = desktop.get_child_count();
 	} catch {
 		return null;
 	}
+	const exactMatches = [];
+	const activeMatches = [];
 	for (let index = 0; index < Math.min(Math.max(childCount, 0), maximumApplications); index += 1) {
 		try {
 			const application = desktop.get_child_at_index(index);
-			if (application?.get_process_id() === pid) return application;
+			if (!application) continue;
+			const matches = matchingApplicationWindows(application, input);
+			activeMatches.push(...matches);
+			if (application.get_process_id() === input.pid) exactMatches.push(...matches);
 		} catch {
 			// Applications can disappear between registry calls.
 		}
 	}
-	return null;
+	if (exactMatches.length > 0) return exactMatches.length === 1 ? exactMatches[0] : null;
+	return activeMatches.length === 1 ? activeMatches[0] : null;
 }
 
-function matchingWindow(application, input) {
+function matchingApplicationWindows(application, input) {
 	let childCount;
 	try {
 		childCount = application.get_child_count();
 	} catch {
-		return null;
+		return [];
 	}
 	const tolerance = Math.max(32, Math.round(Math.max(input.windowWidth, input.windowHeight) * 0.05));
 	const matches = [];
@@ -142,7 +148,7 @@ function matchingWindow(application, input) {
 			// A volatile top-level is not a usable coordinate reference.
 		}
 	}
-	return matches.length === 1 ? matches[0] : null;
+	return matches;
 }
 
 function hitPoints(selection, windowWidth, windowHeight) {
@@ -247,8 +253,7 @@ try {
 		if (initialized) {
 			Atspi.set_timeout(callTimeoutMs, 0);
 			const desktop = Atspi.get_desktop(0);
-			const application = matchingApplication(desktop, input.pid);
-			const window = application ? matchingWindow(application, input) : null;
+			const window = matchingWindow(desktop, input);
 			if (window) candidates = collectCandidates(window, input);
 		}
 	}

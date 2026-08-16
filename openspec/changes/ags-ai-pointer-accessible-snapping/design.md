@@ -10,7 +10,7 @@ A short-lived GJS helper imports `Atspi-2.0`, applies a short per-call timeout, 
 
 ### Reconcile window-local and compositor-global coordinates
 
-The controller first validates the active Hyprland client's identity, PID, origin, size, and relationship to the stroke rectangle. The helper uses `Atspi.CoordType.WINDOW`, requires one uniquely active or focused dimension-compatible top-level, and returns window-local candidates wholly inside that window. AGS revalidates the active client after lookup, adds the compositor-owned global origin, and requires final padded bounds to remain inside the client.
+The controller first validates the active Hyprland client's identity, PID, origin, size, and relationship to the stroke rectangle. The helper uses `Atspi.CoordType.WINDOW` and prefers one uniquely active or focused dimension-compatible top-level under the matching process. Flatpak and other accessibility proxies can own the AT-SPI connection under a different PID, so an exact-PID miss falls back only when one active/focused dimension-compatible top-level exists across all registered applications. The helper returns window-local candidates wholly inside that window. AGS revalidates the active client after lookup, adds the compositor-owned global origin, and requires final padded bounds to remain inside the client.
 
 ### Snap only above a conservative confidence boundary
 
