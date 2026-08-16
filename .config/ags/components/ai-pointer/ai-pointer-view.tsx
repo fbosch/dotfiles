@@ -7,6 +7,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
+import type { AccessibilityMetadata } from "./accessibility-policy";
 import type { Capture } from "./capture";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
@@ -96,7 +97,7 @@ export class AiPointerView {
 		});
 	}
 
-	showCapture(capture: Capture): boolean {
+	showCapture(capture: Capture, accessibility: AccessibilityMetadata | null = null): boolean {
 		try {
 			this.#preview?.set_paintable(
 				Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path)),
@@ -107,8 +108,13 @@ export class AiPointerView {
 		this.#geometry?.set_label(
 			`${capture.geometry.width} × ${capture.geometry.height} at ${capture.geometry.x}, ${capture.geometry.y}`,
 		);
+		const target = accessibility
+			? `${accessibility.role}${accessibility.name ? `: ${accessibility.name}` : ""}`
+			: null;
 		this.#status?.set_label(
-			"Review the selected image. AI requests are not enabled in this slice.",
+			target
+				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
+				: "No reliable accessible target was found; using the drawn region. AI requests remain disabled.",
 		);
 		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return false;
 		this.#show();
