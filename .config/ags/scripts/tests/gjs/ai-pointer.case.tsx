@@ -19,7 +19,7 @@ function settleMainLoop(): Promise<void> {
 test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
 	assert(shell !== null, "shell fixture is unavailable");
-	const expected = '{"protocolVersion":1,"coordinateSpace":"window","candidates":[]}';
+	const expected = '{"protocolVersion":2,"coordinateSpace":"window","candidates":[]}';
 	const valid = Gio.Subprocess.new(
 		[shell, "-c", "printf '%s' \"$1\"", "fixture", expected],
 		Gio.SubprocessFlags.STDOUT_PIPE,
@@ -118,7 +118,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
-		assert(captured === "-14,-4 68x68", "release-first geometry was not captured");
+		assert(captured === "-22,-12 84x84", "release-first geometry was not captured");
 	} finally {
 		controller.teardown();
 	}

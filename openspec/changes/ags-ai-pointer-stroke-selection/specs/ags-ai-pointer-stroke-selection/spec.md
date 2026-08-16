@@ -16,7 +16,7 @@ The AI Pointer SHALL collect pointer coordinates only after explicit activation 
 - **THEN** the system does not sample or retain pointer coordinates
 
 ### Requirement: Visible multi-monitor drawing feedback
-The AI Pointer SHALL render the active stroke on temporary click-through overlay surfaces using global desktop coordinates. The feedback SHALL follow the stroke across monitor boundaries and SHALL be removed on release, cancellation, failure, or shutdown.
+The AI Pointer SHALL render the active stroke on temporary click-through overlay surfaces using global desktop coordinates. Rendering SHALL use bounded spatial resampling and smooth curve construction without changing authoritative capture points, SHALL update from the drawing monitor's frame clock, and SHALL preserve the exact live endpoint. Trail opacity SHALL fade independently by both path age and distance from the live endpoint. The feedback SHALL follow the stroke across monitor boundaries and SHALL fade out on release while being removed immediately on cancellation, failure, or shutdown.
 
 #### Scenario: Stroke crosses monitors
 - **WHEN** the user draws across two configured monitors

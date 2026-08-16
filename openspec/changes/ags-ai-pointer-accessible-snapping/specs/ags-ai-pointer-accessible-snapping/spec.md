@@ -15,12 +15,16 @@ The AI Pointer SHALL query accessibility data only after an explicit completed g
 - **WHEN** no AI Pointer run is resolving a completed gesture
 - **THEN** the system does not inspect accessibility trees or retain accessible objects
 
-### Requirement: High-confidence automatic snapping
-The AI Pointer SHALL replace stroke-derived capture geometry only when one visible, showing, non-sensitive accessible target has an eligible semantic role and a high-confidence geometric match. A target MAY be one candidate or a repeatedly hit common ancestor of multiple related candidates. The candidate and final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
+### Requirement: Fuzzy bounded automatic snapping
+The AI Pointer SHALL replace stroke-derived capture geometry only when one visible, showing, non-sensitive accessible target has an eligible semantic role and the combined padded overlap, center affinity, relative size, and repeated-hit evidence distinguish it from alternatives. A target MAY be one candidate or a repeatedly hit common ancestor of multiple related candidates. The candidate and final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
 
-#### Scenario: One control clearly matches the gesture
-- **WHEN** one candidate contains the selection center, is substantially covered by the gesture, has compatible area, and exceeds the confidence and ambiguity thresholds
+#### Scenario: One control fuzzily matches the gesture
+- **WHEN** one candidate overlaps the capture-padding tolerance, has compatible area, and its combined geometric score exceeds the confidence and ambiguity thresholds
 - **THEN** the system captures bounded padded geometry around that accessible candidate
+
+#### Scenario: Painted brush crosses a target
+- **WHEN** a bounded centerline or brush-edge sample resolves through an eligible accessible target even though the region grid misses it
+- **THEN** that hit contributes to the same bounded fuzzy ranking policy
 
 #### Scenario: Candidates are ambiguous
 - **WHEN** multiple geometrically distinct candidates have similar confidence
@@ -31,8 +35,12 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when one visib
 - **THEN** the system captures padded geometry around that common ancestor
 
 #### Scenario: Gesture covers part of one bounded target
-- **WHEN** the selection is mostly inside one repeatedly hit target that is no more than three times the selection area
+- **WHEN** the padded selection substantially overlaps one target that is no more than five times the selection area
 - **THEN** the system may expand capture to that target's padded geometry
+
+#### Scenario: Gesture center is near a direct target
+- **WHEN** the helper reports a link or image and the gesture center is no farther than the capture padding outside its bounds
+- **THEN** the system may treat it as a direct target while preferring an actual center hit
 
 #### Scenario: Gesture is inside a larger named common ancestor
 - **WHEN** at least seven of nine sampled points resolve through one named section or article no more than twelve times the selection area

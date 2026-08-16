@@ -1,12 +1,15 @@
 import Atspi from "gi://Atspi?version=2.0";
+import { maximumStrokePoints, representativeStrokePoints } from "./stroke";
 
 const maximumApplications = 32;
 const maximumWindows = 32;
 const maximumAncestorDepth = 10;
 const maximumCandidates = 24;
-const maximumHitCount = 9;
+const maximumHitCount = 24;
+const maximumBrushRadius = 128;
+const strokeSampleAnchors = 5;
 const callTimeoutMs = 100;
-const protocolVersion = 1;
+const protocolVersion = 2;
 const coordinateSpace = "window";
 const excludedRoles = new Set([
 	"application",
@@ -30,6 +33,15 @@ interface HelperInput {
 	windowWidth: number;
 	windowHeight: number;
 	selection: Geometry;
+	stroke: {
+		points: GeometryPoint[];
+		radius: number;
+	};
+}
+
+interface GeometryPoint {
+	x: number;
+	y: number;
 }
 
 interface Candidate {
@@ -59,7 +71,7 @@ function parseInput(): HelperInput | null {
 	if (ARGV.length !== 1) return null;
 	try {
 		const input: unknown = JSON.parse(ARGV[0]);
-		if (!isRecord(input) || !isRecord(input.selection)) return null;
+		if (!isRecord(input) || !isRecord(input.selection) || !isRecord(input.stroke)) return null;
 		if (
 			input.protocolVersion !== protocolVersion ||
 			input.coordinateSpace !== coordinateSpace ||
@@ -77,6 +89,21 @@ function parseInput(): HelperInput | null {
 			input.selection.height <= 0
 		)
 			return null;
+		if (
+			Array.isArray(input.stroke.points) === false ||
+			input.stroke.points.length < 2 ||
+			input.stroke.points.length > maximumStrokePoints ||
+			validInteger(input.stroke.radius) === false ||
+			input.stroke.radius <= 0 ||
+			input.stroke.radius > maximumBrushRadius ||
+			input.stroke.points.some(
+				(point) =>
+					!isRecord(point) ||
+					validInteger(point.x) === false ||
+					validInteger(point.y) === false,
+			)
+		)
+			return null;
 		return {
 			protocolVersion,
 			coordinateSpace,
@@ -88,6 +115,13 @@ function parseInput(): HelperInput | null {
 				y: input.selection.y,
 				width: input.selection.width,
 				height: input.selection.height,
+			},
+			stroke: {
+				points: input.stroke.points.map((point) => ({
+					x: (point as { x: number }).x,
+					y: (point as { y: number }).y,
+				})),
+				radius: input.stroke.radius,
 			},
 		};
 	} catch {
@@ -206,7 +240,8 @@ function matchingApplicationWindows(
 	return matches;
 }
 
-function hitPoints(selection: Geometry, windowWidth: number, windowHeight: number): HitPoint[] {
+function hitPoints(input: HelperInput): HitPoint[] {
+	const { selection, stroke, windowWidth, windowHeight } = input;
 	const fractions = [
 		[0.5, 0.5],
 		[0.2, 0.2],
@@ -218,13 +253,40 @@ function hitPoints(selection: Geometry, windowWidth: number, windowHeight: numbe
 		[0.5, 0.8],
 		[0.8, 0.8],
 	] as const;
-	return fractions
+	const points = fractions
 		.map(([xFraction, yFraction], index) => ({
 			centerHit: index === 0,
 			x: Math.round(selection.x + selection.width * xFraction),
 			y: Math.round(selection.y + selection.height * yFraction),
-		}))
-		.filter((point) => point.x >= 0 && point.x < windowWidth && point.y >= 0 && point.y < windowHeight);
+		}));
+	const anchors = representativeStrokePoints(stroke.points, strokeSampleAnchors);
+	for (let index = 0; index < anchors.length; index += 1) {
+		const point = anchors[index];
+		const previous = anchors[Math.max(0, index - 1)];
+		const next = anchors[Math.min(anchors.length - 1, index + 1)];
+		const tangentX = next.x - previous.x;
+		const tangentY = next.y - previous.y;
+		const tangentLength = Math.hypot(tangentX, tangentY);
+		points.push({ centerHit: false, x: Math.round(point.x), y: Math.round(point.y) });
+		if (tangentLength === 0) continue;
+		const normalX = (-tangentY / tangentLength) * stroke.radius;
+		const normalY = (tangentX / tangentLength) * stroke.radius;
+		points.push(
+			{ centerHit: false, x: Math.round(point.x + normalX), y: Math.round(point.y + normalY) },
+			{ centerHit: false, x: Math.round(point.x - normalX), y: Math.round(point.y - normalY) },
+		);
+	}
+
+	const uniquePoints = new Map<string, HitPoint>();
+	for (const point of points) {
+		if (point.x < 0 || point.x >= windowWidth || point.y < 0 || point.y >= windowHeight)
+			continue;
+		const key = `${point.x},${point.y}`;
+		const existing = uniquePoints.get(key);
+		if (existing) existing.centerHit ||= point.centerHit;
+		else uniquePoints.set(key, point);
+	}
+	return [...uniquePoints.values()];
 }
 
 function boundedName(accessible: Atspi.Accessible): string | undefined {
@@ -269,7 +331,7 @@ function collectCandidates(window: Atspi.Accessible, input: HelperInput): Candid
 	}
 	if (!component) return [];
 
-	for (const point of hitPoints(input.selection, input.windowWidth, input.windowHeight)) {
+	for (const point of hitPoints(input)) {
 		let accessible: Atspi.Accessible | null;
 		try {
 			accessible = component.get_accessible_at_point(point.x, point.y, Atspi.CoordType.WINDOW);

@@ -36,6 +36,7 @@ interface AiPointerControllerOptions {
 	readPointer?(): PointerPosition | null;
 	resolveAccessibility?(
 		geometry: SelectionGeometry,
+		stroke: PointerStroke,
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
 	): Promise<AccessibilityResolution | null>;
@@ -164,7 +165,8 @@ export class AiPointerController {
 			return;
 		}
 		this.#stroke = appendStrokePoint(stroke, endPosition, true);
-		const geometry = selectionFromStroke(this.#stroke);
+		const completedStroke = this.#stroke;
+		const geometry = selectionFromStroke(completedStroke);
 		if (!geometry) {
 			this.#view.endStroke();
 			this.cancel();
@@ -178,7 +180,7 @@ export class AiPointerController {
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
-			this.#captureGeometry(directory, geometry, runId);
+			this.#captureGeometry(directory, geometry, completedStroke, runId);
 		}).catch(() => {
 			if (runId !== this.#runId) return;
 			this.#failureMessage = "The drawing overlay could not be removed safely.";
@@ -186,15 +188,21 @@ export class AiPointerController {
 		});
 	}
 
-	#captureGeometry(directory: string, geometry: SelectionGeometry, runId: number): void {
+	#captureGeometry(
+		directory: string,
+		geometry: SelectionGeometry,
+		stroke: PointerStroke,
+		runId: number,
+	): void {
 		const cancellable = new Gio.Cancellable();
 		this.#cancellable = cancellable;
-		void this.#resolveAndCapture(directory, geometry, runId, cancellable);
+		void this.#resolveAndCapture(directory, geometry, stroke, runId, cancellable);
 	}
 
 	async #resolveAndCapture(
 		directory: string,
 		strokeGeometry: SelectionGeometry,
+		stroke: PointerStroke,
 		runId: number,
 		cancellable: Gio.Cancellable,
 	): Promise<void> {
@@ -205,6 +213,7 @@ export class AiPointerController {
 		try {
 			resolution = await this.#resolveAccessibility(
 				strokeGeometry,
+				stroke,
 				cancellable,
 				observeProcess,
 			);

@@ -11,9 +11,11 @@ import {
 } from "./accessibility-policy";
 import {
 	containsSelectionCenter,
+	type PointerPosition,
 	type SelectionGeometry,
 	validatedSelectionGeometry,
 } from "./selection";
+import { strokeBrushRadius, type PointerStroke } from "./stroke";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -37,6 +39,10 @@ interface AccessibleHelperInput {
 	pid: number;
 	protocolVersion: typeof accessibilityProtocolVersion;
 	selection: SelectionGeometry;
+	stroke: {
+		points: PointerPosition[];
+		radius: number;
+	};
 	windowHeight: number;
 	windowWidth: number;
 }
@@ -52,12 +58,13 @@ type ProcessObserver = (process: Gio.Subprocess | null) => void;
 
 export async function resolveAccessibleSelection(
 	selection: SelectionGeometry,
+	stroke: PointerStroke,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
 ): Promise<AccessibilityResolution | null> {
 	const client = activeClientForSelection(selection);
 	if (!client) return null;
-	const candidates = await queryHelper(client, selection, cancellable, onProcess);
+	const candidates = await queryHelper(client, selection, stroke, cancellable, onProcess);
 	if (!candidates || cancellable.is_cancelled()) return null;
 	const freshClient = activeClientForSelection(selection);
 	if (!freshClient || sameClient(client, freshClient) === false) return null;
@@ -102,6 +109,7 @@ function activeClientForSelection(selection: SelectionGeometry): ValidatedClient
 async function queryHelper(
 	client: ValidatedClient,
 	selection: SelectionGeometry,
+	stroke: PointerStroke,
 	parentCancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
 ): Promise<AccessibleCandidate[] | null> {
@@ -117,6 +125,13 @@ async function queryHelper(
 			y: selection.y - client.geometry.y,
 			width: selection.width,
 			height: selection.height,
+		},
+		stroke: {
+			points: stroke.points.map((point) => ({
+				x: point.x - client.geometry.x,
+				y: point.y - client.geometry.y,
+			})),
+			radius: strokeBrushRadius,
 		},
 		windowHeight: client.geometry.height,
 		windowWidth: client.geometry.width,

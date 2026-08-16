@@ -24,7 +24,7 @@ hl.layer_rule({ match = { namespace = "ags-audio-mixer-widget" }, blur = true, n
 hl.layer_rule({ match = { namespace = "ags-desktop-clock" }, blur = true, ignore_alpha = 0.3, no_anim = true })
 hl.layer_rule({
 	match = { namespace = "ags-ai-pointer-drawing" },
-	no_anim = true,
+	animation = "fade",
 	no_screen_share = true,
 })
 hl.layer_rule({

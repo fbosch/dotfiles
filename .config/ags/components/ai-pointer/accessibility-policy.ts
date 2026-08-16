@@ -7,16 +7,16 @@ import {
 import { strokeCapturePadding } from "./stroke";
 
 const snapPadding = 12;
-const minimumCandidateCoverage = 0.65;
-const minimumAreaRatio = 0.12;
-const maximumAreaRatio = 3;
+const minimumCandidateCoverage = 0.3;
+const minimumAreaRatio = 0.05;
+const maximumAreaRatio = 5;
 const maximumNamedAncestorAreaRatio = 12;
-const minimumConfidence = 0.68;
-const minimumConfidenceMargin = 0.06;
+const minimumConfidence = 0.5;
+const minimumConfidenceMargin = 0.03;
 const maximumCandidates = 24;
 const maximumRoleLength = 80;
 const maximumNameLength = 160;
-export const accessibilityProtocolVersion = 1;
+export const accessibilityProtocolVersion = 2;
 export const accessibilityCoordinateSpace = "window";
 const eligibleRoles = new Set([
 	"article",
@@ -113,7 +113,7 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 			(typeof value.hitCount !== "number" ||
 				Number.isSafeInteger(value.hitCount) === false ||
 				value.hitCount < 1 ||
-				value.hitCount > 9)
+				value.hitCount > 24)
 		)
 			continue;
 		candidates.push({
@@ -211,44 +211,54 @@ function rankCandidate(
 	);
 	if (!geometry || containsGeometry(clientGeometry, geometry) === false) return null;
 
+	const fuzzySelection = paddedSelectionGeometry(selection, strokeCapturePadding);
+	if (!fuzzySelection) return null;
 	const intersectionArea = intersection(selection, geometry);
-	if (intersectionArea <= 0) return null;
+	const fuzzyIntersectionArea = intersection(fuzzySelection, geometry);
+	if (fuzzyIntersectionArea <= 0) return null;
 	const selectionArea = selection.width * selection.height;
+	const fuzzySelectionArea = fuzzySelection.width * fuzzySelection.height;
 	const candidateArea = geometry.width * geometry.height;
 	const candidateCoverage = intersectionArea / candidateArea;
+	const fuzzyCandidateCoverage = fuzzyIntersectionArea / candidateArea;
 	const areaRatio = candidateArea / selectionArea;
 	const selectionCoverage = intersectionArea / selectionArea;
+	const fuzzySelectionCoverage = fuzzyIntersectionArea / fuzzySelectionArea;
 	const namedCommonAncestor =
 		areaRatio <= maximumNamedAncestorAreaRatio &&
-		selectionCoverage >= 0.9 &&
+		selectionCoverage >= 0.7 &&
 		(candidate.hitCount ?? 1) >= 7 &&
 		Boolean(candidate.name) &&
 		commonAncestorRoles.has(candidate.role.trim().toLowerCase());
+	const centerAffinity =
+		containsSelectionCenter(geometry, selection) || containsSelectionCenter(selection, geometry)
+			? 1
+			: containsSelectionCenter(geometry, selection, strokeCapturePadding)
+				? 0.8
+				: 0.5;
 	const boundedPartialTarget =
 		areaRatio > 1 &&
 		(areaRatio <= maximumAreaRatio || namedCommonAncestor) &&
-		selectionCoverage >= 0.75 &&
-		containsSelectionCenter(geometry, selection, strokeCapturePadding);
+		fuzzySelectionCoverage >= 0.35 &&
+		centerAffinity >= 0.8;
+	const effectiveCandidateCoverage = Math.max(
+		candidateCoverage,
+		fuzzyCandidateCoverage * 0.75,
+	);
 	if (
-		(candidateCoverage < minimumCandidateCoverage && boundedPartialTarget === false) ||
+		(effectiveCandidateCoverage < minimumCandidateCoverage && boundedPartialTarget === false) ||
 		areaRatio < minimumAreaRatio ||
 		(areaRatio > maximumAreaRatio && namedCommonAncestor === false)
 	)
 		return null;
 
-	const centerAgreement =
-		containsSelectionCenter(geometry, selection, strokeCapturePadding) ||
-		containsSelectionCenter(selection, geometry)
-			? 1
-			: 0;
-	if (centerAgreement === 0) return null;
 	const sizeSimilarity = Math.min(areaRatio, 1 / areaRatio);
 	const repeatedHitBonus = Math.min(Math.max((candidate.hitCount ?? 1) - 1, 0) / 8, 1) * 0.3;
 	const confidence = Math.min(1,
-		candidateCoverage * 0.4 +
+		effectiveCandidateCoverage * 0.4 +
 		sizeSimilarity * 0.25 +
-		centerAgreement * 0.2 +
-		Math.min(selectionCoverage, 1) * 0.15 +
+		centerAffinity * 0.2 +
+		Math.max(selectionCoverage, fuzzySelectionCoverage * 0.5) * 0.15 +
 		repeatedHitBonus,
 	);
 

@@ -5,8 +5,16 @@ import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import tokens from "../../../../design-system/tokens.json";
-import type { PointerPosition, SelectionGeometry } from "./selection";
-import type { PointerStroke } from "./stroke";
+import type { SelectionGeometry } from "./selection";
+import {
+	bsplineStrokeSegments,
+	type CubicStrokeSegment,
+	type PointerStroke,
+	resampledStrokePoints,
+	strokeBrushRadius,
+	subdivideStrokeSegments,
+	temporalTrailFade,
+} from "./stroke";
 
 interface StrokeSurface {
 	window: Astal.Window;
@@ -20,13 +28,18 @@ const allEdges =
 	Astal.WindowAnchor.LEFT |
 	Astal.WindowAnchor.RIGHT;
 const unmapTimeoutMs = 250;
+const strokeFadeOutMs = 250;
 const compositorFrameDelayMs = 34;
 const selectionPreviewRadius = 14;
 const selectionPreviewGlow = 20;
+const trailFadeBands = 48;
+const trailLifetimeMs = 1_400;
 
 export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
 	#stroke: PointerStroke | null = null;
+	#displaySegments: CubicStrokeSegment[] = [];
+	#segmentCreatedAtMs: number[] = [];
 	#frameDrawing: Gtk.DrawingArea | null = null;
 	#frameCallbackId = 0;
 
@@ -71,6 +84,20 @@ export class StrokeOverlay {
 
 	update(stroke: PointerStroke): void {
 		this.#stroke = stroke;
+		const previousCreatedAt = new Map(
+			this.#displaySegments.map((segment, index) => [
+				this.#segmentKey(segment),
+				this.#segmentCreatedAtMs[index],
+			]),
+		);
+		const segments = subdivideStrokeSegments(
+			bsplineStrokeSegments(resampledStrokePoints(stroke.points)),
+		);
+		const now = GLib.get_monotonic_time() / 1_000;
+		this.#displaySegments = segments;
+		this.#segmentCreatedAtMs = segments.map(
+			(segment) => previousCreatedAt.get(this.#segmentKey(segment)) ?? now,
+		);
 		for (const surface of this.#surfaces) surface.drawing.queue_draw();
 	}
 
@@ -79,6 +106,8 @@ export class StrokeOverlay {
 		for (const surface of this.#surfaces) surface.window.destroy();
 		this.#surfaces = [];
 		this.#stroke = null;
+		this.#displaySegments = [];
+		this.#segmentCreatedAtMs = [];
 	}
 
 	async hideBeforeCapture(): Promise<boolean> {
@@ -86,9 +115,18 @@ export class StrokeOverlay {
 		const surfaces = this.#surfaces;
 		this.#surfaces = [];
 		this.#stroke = null;
-		const unmapped = await Promise.all(
-			surfaces.map(({ window }) => this.#waitForUnmap(window)),
-		);
+		this.#displaySegments = [];
+		this.#segmentCreatedAtMs = [];
+		// Hyprland retains the layer snapshot during its exit animation; capture only after it fades.
+		const [unmapped] = await Promise.all([
+			Promise.all(surfaces.map(({ window }) => this.#waitForUnmap(window))),
+			new Promise<void>((resolve) => {
+				GLib.timeout_add(GLib.PRIORITY_DEFAULT, strokeFadeOutMs, () => {
+					resolve();
+					return GLib.SOURCE_REMOVE;
+				});
+			}),
+		]);
 		Gdk.Display.get_default()?.sync();
 		await new Promise<void>((resolve) => {
 			GLib.timeout_add(GLib.PRIORITY_DEFAULT, compositorFrameDelayMs, () => {
@@ -111,31 +149,50 @@ export class StrokeOverlay {
 		const drawing = new Gtk.DrawingArea({ hexpand: true, vexpand: true });
 		drawing.add_css_class("ai-pointer-stroke-canvas");
 		drawing.set_draw_func((_area, cr: any) => {
-			const points = this.#stroke?.points;
-			if (!points || points.length < 2) return;
+			const segments = this.#displaySegments;
+			if (segments.length === 0) return;
 			const color = new Gdk.RGBA();
 			color.parse(tokens.colors.accent.primary.value);
-			cr.setLineCap(Cairo.LineCap.ROUND);
+			cr.setAntialias(Cairo.Antialias.BEST);
 			cr.setLineJoin(Cairo.LineJoin.ROUND);
-			for (const [width, alpha] of [
-				[51.75, 0.05],
-				[31.05, 0.12],
-				[15.525, 0.55],
-				[7.7625, 0.96],
-			] as const) {
-				cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
-				cr.setLineWidth(width);
-				this.#tracePath(cr, points, geometry.x, geometry.y);
-				cr.stroke();
-			}
-			const endpoint = points.at(-1);
+			const brushDiameter = strokeBrushRadius * 2;
+			const endpoint = segments.at(-1)?.end;
 			if (!endpoint) return;
-			cr.setSourceRGBA(color.red, color.green, color.blue, 0.06);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 45, 0, Math.PI * 2);
-			cr.fill();
-			cr.setSourceRGBA(color.red, color.green, color.blue, 0.14);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 24.75, 0, Math.PI * 2);
-			cr.fill();
+			const now = GLib.get_monotonic_time() / 1_000;
+			for (const [width, alpha] of [
+				[brushDiameter, 0.05],
+				[brushDiameter * 0.6, 0.12],
+				[brushDiameter * 0.3, 0.55],
+				[brushDiameter * 0.15, 0.96],
+			] as const) {
+				const bandCount = Math.min(trailFadeBands, segments.length);
+				cr.setLineCap(Cairo.LineCap.BUTT);
+				cr.setLineWidth(width);
+				for (let band = 0; band < bandCount; band += 1) {
+					const progress = (band + 0.5) / bandCount;
+					const smoothProgress = progress * progress * (3 - 2 * progress);
+					const fade = 0.05 + Math.pow(smoothProgress, 1.15) * 0.95;
+					const taperedWidth = width * (0.25 + smoothProgress * 0.75);
+					const start = Math.floor((band * segments.length) / bandCount);
+					const end = Math.floor(((band + 1) * segments.length) / bandCount);
+					const createdAt = this.#segmentCreatedAtMs[Math.max(start, end - 1)] ?? now;
+					const timeFade = temporalTrailFade(now - createdAt, trailLifetimeMs);
+					if (timeFade === 0) continue;
+					cr.setSourceRGBA(color.red, color.green, color.blue, alpha * fade * timeFade);
+					cr.setLineWidth(taperedWidth);
+					this.#tracePath(cr, segments, start, end, geometry.x, geometry.y);
+					cr.stroke();
+				}
+				cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
+				cr.arc(
+					endpoint.x - geometry.x,
+					endpoint.y - geometry.y,
+					width / 2,
+					0,
+					Math.PI * 2,
+				);
+				cr.fill();
+			}
 		});
 
 		const window = this.#createWindow(monitor, index, drawing, namespace, captureKeyboard);
@@ -321,35 +378,30 @@ export class StrokeOverlay {
 
 	#tracePath(
 		cr: any,
-		points: PointerPosition[],
+		segments: CubicStrokeSegment[],
+		start: number,
+		end: number,
 		originX: number,
 		originY: number,
 	): void {
-		if (points.length === 0) return;
-		cr.moveTo(points[0].x - originX, points[0].y - originY);
-		if (points.length < 3) {
-			const endpoint = points.at(-1);
-			if (endpoint) cr.lineTo(endpoint.x - originX, endpoint.y - originY);
-			return;
-		}
-
-		let start = points[0];
-		for (let index = 1; index < points.length; index += 1) {
-			const control = points[index];
-			const next = points[index + 1];
-			const end = next
-				? { x: (control.x + next.x) / 2, y: (control.y + next.y) / 2 }
-				: control;
+		const first = segments[start];
+		if (!first) return;
+		cr.moveTo(first.start.x - originX, first.start.y - originY);
+		for (let index = start; index < end; index += 1) {
+			const segment = segments[index];
 			cr.curveTo(
-				start.x + ((control.x - start.x) * 2) / 3 - originX,
-				start.y + ((control.y - start.y) * 2) / 3 - originY,
-				end.x + ((control.x - end.x) * 2) / 3 - originX,
-				end.y + ((control.y - end.y) * 2) / 3 - originY,
-				end.x - originX,
-				end.y - originY,
+				segment.control1.x - originX,
+				segment.control1.y - originY,
+				segment.control2.x - originX,
+				segment.control2.y - originY,
+				segment.end.x - originX,
+				segment.end.y - originY,
 			);
-			start = end;
 		}
+	}
+
+	#segmentKey(segment: CubicStrokeSegment): string {
+		return `${segment.start.x.toFixed(2)},${segment.start.y.toFixed(2)}:${segment.end.x.toFixed(2)},${segment.end.y.toFixed(2)}`;
 	}
 
 	#waitForUnmap(window: Astal.Window): Promise<boolean> {

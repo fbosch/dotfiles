@@ -190,14 +190,29 @@ describe("accessible selection snapping", () => {
 		expect(result?.geometry).toEqual({ x: 208, y: 108, width: 64, height: 84 });
 	});
 
-	test("rejects a direct target beyond capture padding", () => {
+	test("fuzzily ranks a regular target near the gesture center", () => {
+		const result = chooseAccessibleSnap(
+			selection,
+			[
+				{
+					geometry: { x: 220, y: 120, width: 40, height: 60 },
+					role: "push button",
+				},
+			],
+			client,
+		);
+
+		expect(result?.geometry).toEqual({ x: 208, y: 108, width: 64, height: 84 });
+	});
+
+	test("rejects a direct target beyond the fuzzy capture boundary", () => {
 		expect(
 			chooseAccessibleSnap(
 				selection,
 				[
 					{
 						centerHit: false,
-						geometry: { x: 225, y: 120, width: 40, height: 60 },
+						geometry: { x: 325, y: 120, width: 40, height: 60 },
 						role: "link",
 					},
 				],
@@ -240,12 +255,12 @@ describe("accessibility helper protocol", () => {
 		};
 		expect(
 			parseAccessibilityHelperOutput(
-				JSON.stringify({ protocolVersion: 1, coordinateSpace: "window", candidates: [candidate] }),
+				JSON.stringify({ protocolVersion: 2, coordinateSpace: "window", candidates: [candidate] }),
 			),
 		).toEqual([candidate]);
 		for (const response of [
-			{ protocolVersion: 2, coordinateSpace: "window", candidates: [] },
-			{ protocolVersion: 1, coordinateSpace: "screen", candidates: [] },
+			{ protocolVersion: 1, coordinateSpace: "window", candidates: [] },
+			{ protocolVersion: 2, coordinateSpace: "screen", candidates: [] },
 			{ coordinateSpace: "window", candidates: [] },
 		])
 			expect(parseAccessibilityHelperOutput(JSON.stringify(response))).toBeNull();
@@ -255,7 +270,7 @@ describe("accessibility helper protocol", () => {
 		expect(
 			parseAccessibilityHelperOutput(
 				JSON.stringify({
-					protocolVersion: 1,
+					protocolVersion: 2,
 					coordinateSpace: "window",
 					candidates: [
 						{
