@@ -1,11 +1,10 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { grimGeometry, parseSelectionGeometry, type SelectionGeometry } from "./selection";
+import { grimGeometry, type SelectionGeometry } from "./selection";
 
 const captureDirectoryName = "ai-pointer";
 const capturePrefix = "capture-";
 const maximumCaptureBytes = 20 * 1024 * 1024;
-const selectionTimeoutMs = 60_000;
 const captureTimeoutMs = 10_000;
 const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
@@ -45,27 +44,14 @@ export function deleteCapture(path: string): void {
 	}
 }
 
-export async function captureSelection(
+export async function captureRegion(
 	directory: string,
+	geometry: SelectionGeometry,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
 ): Promise<CaptureResult> {
-	const slurp = GLib.find_program_in_path("slurp");
-	if (!slurp) return { kind: "failed", message: "slurp is unavailable." };
 	const grim = GLib.find_program_in_path("grim");
 	if (!grim) return { kind: "failed", message: "grim is unavailable." };
-
-	const selection = await runCommand(
-		[slurp, "-f", "%x,%y %wx%h"],
-		cancellable,
-		selectionTimeoutMs,
-		onProcess,
-	);
-	if (cancellable.is_cancelled()) return { kind: "cancelled" };
-	if (!selection || selection.success === false) return { kind: "cancelled" };
-
-	const geometry = parseSelectionGeometry(selection.stdout);
-	if (!geometry) return { kind: "failed", message: "The selected region is invalid." };
 
 	const path = GLib.build_filenamev([
 		directory,

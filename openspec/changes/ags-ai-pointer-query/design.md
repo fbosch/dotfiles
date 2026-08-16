@@ -2,7 +2,7 @@
 
 See `proposal.md` for motivation and the two capability specs for behavior. AGS currently has a synchronous Hyprland IPC client, a cursor-monitor helper, bundled component routing, and XState controllers for temporal UI behavior. It has no AI request client or drag-selection component. OpenCode SDK use currently exists in AI Commit, but that workflow is intentionally not an integration point for this change.
 
-Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapshots through its IPC query socket. Its existing `grimblast area` wrapper internally runs `slurp`, but it returns a captured path rather than the selected geometry and optional client label needed to derive application context. `slurp` is present in Grimblast's closure but is not directly on `PATH`.
+Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapshots through its IPC query socket. Its existing `grimblast area` wrapper owns selection internally and returns only a captured path, so AGS needs to derive direct press/release geometry before calling `grim`.
 
 ## Goals / Non-Goals
 
@@ -64,15 +64,17 @@ AGS first requests cooperative helper termination and gives it a short grace per
 
 Alternative considered: terminate Bun immediately on Escape. Rejected because it can orphan an active OpenCode request, session, or SDK-owned server.
 
-### Direct slurp selection preserves selection geometry and client identity
+### Direct Hyprland press/release selection preserves global geometry
 
-The coordinated NixOS change adds `pkgs.slurp` to `modules/desktop/hyprland.nix`. AGS queries visible Hyprland clients before selection and presents their global rectangles to `slurp` with optional stable-ID labels. It invokes `slurp` with a format that returns canonical global geometry and the optional label.
+Hyprland binds `Super + middle-button` press and release to Lua callbacks. Each callback reads the compositor cursor position synchronously at the input event, rounds it to a global pixel coordinate, and sends it to AGS in a separate request. AGS derives the canonical global selection rectangle. If process scheduling delivers release before press, AGS holds the release coordinate briefly until the matching start request arrives. This retains direct-drag interaction without trying to transfer the initiating pointer event to a process started after the bind.
 
-A selection with a valid label is an exact-window candidate only after the client is re-resolved in a fresh snapshot and its stable identity still matches. A freeform drag has no claimed compositor target; it is a region selection.
+A selection is an exact-window candidate only when exactly one client in a fresh snapshot has identical global geometry. Any other drag has no claimed compositor target; it is a region selection.
 
-After selection, AGS validates signed global X/Y origins, positive dimensions, maximum pixel area, one optional label, and no trailing output. It calls `grim` with the validated geometry and captures PNG directly into private runtime storage.
+After release, AGS validates signed global X/Y origins, positive dimensions, and maximum pixel area. It calls `grim` with the validated geometry and captures PNG directly into private runtime storage.
 
-Alternative considered: use `grimblast save area`. Rejected because it owns `slurp` internally and does not expose the selected geometry/label needed for contextual matching.
+Alternative considered: use `slurp`. Rejected because a Hyprland binding consumes the activating mouse press before `slurp` starts, requiring a second drag interaction.
+
+Alternative considered: use `grimblast save area`. Rejected because it owns selection internally and does not expose the geometry needed for contextual matching.
 
 Alternative considered: build a GTK drag overlay. Rejected because multi-monitor global coordinate conversion, overlay input, and compositor integration would duplicate mature Wayland selection behavior without a concrete need.
 
@@ -117,17 +119,15 @@ Alternative considered: render rich model markdown. Rejected because markup and 
 - [An external server has stale configuration or a different version] -> Require compatibility and policy checks before content submission; otherwise use an owned server or fail safely.
 - [The selected image contains prompt injection] -> Use an answer-only agent with deny-all tools, fixed trusted execution context, literal rendering, and no action path.
 - [Capture files survive a crash] -> Restrict files to private runtime storage and remove stale feature-owned files at component initialization; uncontrolled process termination cannot provide a deletion guarantee.
-- [The NixOS prerequisite is not deployed] -> Preflight `slurp` and return a concise unavailable state before opening the workflow.
 - [Image capture or response is large] -> Enforce protocol, image, pixel, prompt, output, and timeout limits before expensive work.
 
 ## Migration Plan
 
-1. Add `pkgs.slurp` to the NixOS desktop package set and rebuild the target host so it is directly available on `PATH`.
-2. Add the pinned libexec SDK dependency and protocol/runtime tests with no AGS or Hyprland wiring.
-3. Add and verify the no-tool `desktop-pointer` agent and compatible image-capable model behavior.
-4. Add the AGS feature slice, private capture lifecycle, and request subprocess integration behind direct AGS requests.
-5. Validate selection, capture preview, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
-6. Register the bundled component, styles, layer rule, and binding.
-7. Roll back by removing the binding first, then unregistering the AGS feature. The request runtime and hidden agent are inert without callers.
+1. Add the pinned libexec SDK dependency and protocol/runtime tests with no AGS or Hyprland wiring.
+2. Add and verify the no-tool `desktop-pointer` agent and compatible image-capable model behavior.
+3. Add the AGS feature slice, private capture lifecycle, and request subprocess integration behind direct AGS requests.
+4. Validate selection, capture preview, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
+5. Register the bundled component, styles, layer rule, and binding.
+6. Roll back by removing the binding first, then unregistering the AGS feature. The request runtime and hidden agent are inert without callers.
 
 No AI Commit migration or rollback step is required because that workflow is not changed.

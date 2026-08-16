@@ -5,13 +5,21 @@ export interface SelectionGeometry {
 	height: number;
 }
 
+export interface PointerPosition {
+	x: number;
+	y: number;
+}
+
 export const maximumSelectionPixels = 32_000_000;
 
-export function parseSelectionGeometry(output: string): SelectionGeometry | null {
-	const match = output.match(/^(-?\d+),(-?\d+) (\d+)x(\d+)\n?$/);
-	if (!match) return null;
-
-	const [x, y, width, height] = match.slice(1).map(Number);
+export function selectionFromPoints(
+	start: PointerPosition,
+	end: PointerPosition,
+): SelectionGeometry | null {
+	const x = Math.min(start.x, end.x);
+	const y = Math.min(start.y, end.y);
+	const width = Math.abs(end.x - start.x);
+	const height = Math.abs(end.y - start.y);
 	if (
 		Number.isSafeInteger(x) === false ||
 		Number.isSafeInteger(y) === false ||

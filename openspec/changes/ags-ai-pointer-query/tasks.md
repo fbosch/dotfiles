@@ -1,18 +1,17 @@
 ## 0. Selection And Consent Slice
 
-- [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super+A` binding, and private no-screen-share layer surface.
-- [x] 0.2 Implement one-run XState selection, private runtime capture storage, validated global geometry, direct `slurp`/`grim` subprocesses, and controlled Escape/shutdown cleanup.
+- [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super + middle-click` binding, and private no-screen-share layer surface.
+- [x] 0.2 Implement one-run XState selection, private runtime capture storage, validated global geometry from Hyprland bind-callback press/release coordinates, direct `grim` capture, and controlled Escape/shutdown cleanup.
 - [x] 0.3 Add a local capture preview and disabled Ask control so no image can leave the machine in this slice.
 - [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS preview-surface lifecycle check.
-- [ ] 0.5 Manually verify drag selection, screenshot accuracy, preview, and Escape cleanup after `slurp` is available to the AGS process on `PATH`.
+- [ ] 0.5 Manually verify direct middle-button drag selection, screenshot accuracy, preview, and Escape cleanup.
 
 ## 1. Runtime Prerequisites
 
-- [ ] 1.1 Add `pkgs.slurp` to `/home/fbb/nixos/modules/desktop/hyprland.nix`, rebuild the target host, and verify `slurp` is directly available on `PATH`.
-- [ ] 1.2 Add an exact `@opencode-ai/sdk` `1.18.18` dependency to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
-- [ ] 1.3 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
-- [ ] 1.4 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, concise answer-only instructions, and no action or tool-use path.
-- [ ] 1.5 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
+- [ ] 1.1 Add an exact `@opencode-ai/sdk` `1.18.18` dependency to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
+- [ ] 1.2 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
+- [ ] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, concise answer-only instructions, and no action or tool-use path.
+- [ ] 1.4 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
 
 ## 2. OpenCode Request Protocol
 
@@ -43,15 +42,14 @@
 ## 5. AI Pointer Selection And Context Model
 
 - [ ] 5.1 Add pure feature-local types and policies for global selection geometry, exact window resolution, geometric client/layer candidates, privacy filtering, and context prompt formatting.
-- [ ] 5.2 Query visible Hyprland clients before selection and format labelled client rectangles for direct `slurp` selection.
-- [ ] 5.3 Invoke `slurp` asynchronously with a format that returns signed global geometry and an optional client label; distinguish user cancellation from invalid selector output.
-- [ ] 5.4 Validate selector output for one record, signed origins, positive dimensions, maximum capture area, and an optional single label.
+- [ ] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks, then derive one global selection rectangle from their AGS payloads.
+- [ ] 5.3 Validate direct-drag geometry for signed origins, positive dimensions, and the maximum capture area; treat an empty drag as cancellation.
+- [ ] 5.4 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
 - [ ] 5.5 Capture the exact selected geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
-- [ ] 5.6 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
-- [ ] 5.7 Revalidate labelled whole-window selections and classify them as exact only when identity still matches the fresh client snapshot.
-- [ ] 5.8 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
-- [ ] 5.9 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
-- [ ] 5.10 Add pure tests for negative monitor origins, stale labels, overlapping windows, layer intersections, no candidates, active-window mismatch, privacy filtering, and deterministic ranking.
+- [ ] 5.6 Revalidate exact whole-window selections only when one fresh client geometry exactly matches the selected rectangle.
+- [ ] 5.7 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
+- [ ] 5.8 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
+- [ ] 5.9 Add pure tests for negative monitor origins, stale exact-geometry matches, overlapping windows, layer intersections, no candidates, active-window mismatch, privacy filtering, and deterministic ranking.
 
 ## 6. AGS AI Pointer Workflow
 
@@ -59,7 +57,7 @@
 - [ ] 6.2 Model idle, selection, composition, requesting, answered, failed, and cancellation transitions; ensure repeated activation while active does not start a second selector.
 - [ ] 6.3 Give every activation an immutable run ID and keep run-owned GTK, GLib, subprocess, cancellable, capture, and cleanup resources outside machine context.
 - [ ] 6.4 Create a feature-private `$XDG_RUNTIME_DIR/ai-pointer` directory, use unpredictable capture names, remove stale feature-owned files at initialization, and never fall back to `/tmp`, screenshots, or clipboard storage.
-- [ ] 6.5 Integrate direct `slurp` and `grim` subprocesses with cooperative cancellation, bounded hard-kill fallback, and cleanup for every controlled terminal path.
+- [ ] 6.5 Integrate direct `grim` capture with cooperative cancellation, bounded hard-kill fallback, and cleanup for every controlled terminal path.
 - [ ] 6.6 Invoke the Bun request CLI through a JSON stdin/stdout subprocess contract and ignore completion events that do not match the active run ID.
 - [ ] 6.7 On lock detection, cancel/hide active work and prevent answer presentation over the lock screen.
 - [ ] 6.8 Add machine and GJS integration tests for Escape in every state, stale completion rejection, private capture cleanup, malformed selector output, partial capture failure, helper timeout, and lock cancellation.
@@ -77,7 +75,7 @@
 
 - [ ] 8.1 Register the AI Pointer component in `.config/ags/config-bundled.tsx` with strict component request parsing.
 - [ ] 8.2 Add a static Hyprland layer rule for the AI Pointer namespace with `no_screen_share` and the established shell-surface presentation behavior.
-- [ ] 8.3 Add the provisional `Super+A` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
+- [ ] 8.3 Add the provisional `Super + middle-click` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
 - [ ] 8.4 Preflight selection, capture, Bun, helper, agent, compatible OpenCode server, and image-capable model availability so missing dependencies return a concise failure without blocking Hyprland.
 - [ ] 8.5 Verify a partially deployed helper, agent, AGS component, or keybind fails safely and cannot leave a selector or capture active.
 

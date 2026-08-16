@@ -27,10 +27,10 @@ The AI Pointer SHALL let the user drag a region in Hyprland global coordinates, 
 - **THEN** the system returns to idle without retaining or submitting a capture
 
 ### Requirement: Exact and inferred compositor context
-The AI Pointer SHALL attach bounded Hyprland context for the selection geometry, monitor, workspace, active-window relationship, intersecting client candidates, and intersecting layer candidates. It SHALL classify a labelled whole-window selection as exact only after revalidating that client. It SHALL classify freeform rectangle matches as geometric inference and MUST NOT present inferred candidates as compositor hit-test or z-order facts.
+The AI Pointer SHALL attach bounded Hyprland context for the selection geometry, monitor, workspace, active-window relationship, intersecting client candidates, and intersecting layer candidates. It SHALL classify a selection as exact only when one fresh client snapshot has exactly matching global geometry. It SHALL classify other rectangle matches as geometric inference and MUST NOT present inferred candidates as compositor hit-test or z-order facts.
 
 #### Scenario: Whole-window selection remains valid
-- **WHEN** the user selects a labelled client rectangle and that client still matches the post-selection compositor snapshot
+- **WHEN** the user selects a region whose geometry uniquely and exactly matches one client in the post-selection compositor snapshot
 - **THEN** the request identifies one exact selected window
 
 #### Scenario: Freeform selection crosses applications

@@ -20,9 +20,16 @@ export function createRequestHandler(controller: AiPointerController) {
 		respond(
 			match(aiPointerRequest)
 				.returnType<string>()
-				.with({ action: "start" }, () =>
-					controller.start() ? "selecting" : "busy",
+				.with({ action: "start" }, ({ x, y }) =>
+					controller.start({ x, y }) ? "selecting" : "busy",
 				)
+				.with({ action: "finish" }, ({ x, y }) =>
+					controller.finish({ x, y }) ? "capturing" : "idle",
+				)
+				.with({ action: "cancel" }, () => {
+					controller.cancel();
+					return "cancelled";
+				})
 				.exhaustive(),
 		);
 	};

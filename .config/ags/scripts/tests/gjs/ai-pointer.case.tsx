@@ -1,4 +1,5 @@
 import GLib from "gi://GLib?version=2.0";
+import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
 import { assert, test } from "./harness";
 
@@ -14,10 +15,53 @@ function settleMainLoop(): Promise<void> {
 test("AI Pointer view presents an unavailable state and disposes", async () => {
 	const view = new AiPointerView();
 	view.create({ onCancel() {} });
-	view.showError("slurp is unavailable.");
+	const capturePath = GLib.canonicalize_filename(
+		"../../../components/ai-pointer/__tests__/capture.svg",
+		GLib.get_current_dir(),
+	);
+	assert(
+		view.showCapture({
+			path: capturePath,
+			geometry: { x: 10, y: 20, width: 20, height: 20 },
+		}),
+		"AI Pointer capture preview was rejected",
+	);
 	await settleMainLoop();
 	assert(view.isCreated, "AI Pointer view was not created");
 	view.hide();
 	view.dispose();
 	assert(view.isCreated === false, "AI Pointer view was not disposed");
+});
+
+test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
+	let captured = "";
+	const view = {
+		create() {},
+		showCapture() {
+			return true;
+		},
+		showError() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		capture: async (_directory, geometry) => {
+			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
+			return {
+				kind: "captured",
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+			};
+		},
+	});
+	controller.init();
+	try {
+		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		await settleMainLoop();
+		assert(captured === "10,20 20x20", "release-first geometry was not captured");
+	} finally {
+		controller.teardown();
+	}
 });

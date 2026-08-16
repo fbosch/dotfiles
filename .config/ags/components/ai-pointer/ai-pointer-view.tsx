@@ -51,7 +51,10 @@ export class AiPointerView {
 					}}
 				>
 					<box orientation={Gtk.Orientation.VERTICAL} spacing={12} class="ai-pointer-panel">
-						<label label="AI Pointer" class="ai-pointer-title" halign={Gtk.Align.START} />
+						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} class="ai-pointer-heading">
+							<box class="ai-pointer-signal" />
+							<label label="SELECTED REGION" class="ai-pointer-title" halign={Gtk.Align.START} />
+						</box>
 						{this.#createPreview()}
 						<label
 							label=""
@@ -95,7 +98,8 @@ export class AiPointerView {
 			this.#preview?.set_paintable(
 				Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path)),
 			);
-		} catch {
+		} catch (error) {
+			console.error("[DEBUG-ai-pointer-preview]", error);
 			return false;
 		}
 		this.#geometry?.set_label(
@@ -129,9 +133,14 @@ export class AiPointerView {
 	}
 
 	#show(): void {
-		const monitor = getPointerMonitor();
-		if (monitor) this.#window?.set_gdkmonitor(monitor.monitor);
+		try {
+			const monitor = getPointerMonitor();
+			if (monitor) this.#window?.set_gdkmonitor(monitor.monitor);
+		} catch {
+			// A placement lookup must not prevent the reviewed capture from appearing.
+		}
 		this.#window?.set_visible(true);
+		console.error("[DEBUG-ai-pointer-visible]", this.#window?.get_visible());
 	}
 
 	#createPreview(): Gtk.Picture {

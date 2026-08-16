@@ -1,6 +1,5 @@
 local programs = require("programs")
 local async = require("lib.async")
-local ags = require("lib.ags")
 local bind = require("lib.bind")
 local command = require("lib.command")
 local window_tags = require("lib.window_tags")
@@ -16,6 +15,7 @@ local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local keyboard_layout = require("actions.keyboard-layout")
 local picture_in_picture = require("actions.picture-in-picture")
+local ai_pointer = require("actions.ai-pointer")
 local pip = require("lib.picture_in_picture")
 local window_switcher = require("actions.window-switcher")
 
@@ -60,7 +60,8 @@ bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 -- Launchers
 bind.register(main("SPACE"), programs.menu)
 bind.register(main("R"), programs.menu)
-bind.register(main("A"), hl.dsp.exec_cmd(ags.request_command("ai-pointer", { action = "start" })))
+bind.register(main("mouse:274"), ai_pointer.start)
+bind.register(main("mouse:274"), ai_pointer.finish, { release = true })
 
 -- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
