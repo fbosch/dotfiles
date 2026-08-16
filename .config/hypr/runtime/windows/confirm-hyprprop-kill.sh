@@ -17,8 +17,6 @@ if [[ -z "$window_json" ]]; then
 fi
 
 pid="$(jq -r '.pid // empty' <<<"$window_json" 2>/dev/null)"
-title="$(jq -r '.title // ""' <<<"$window_json" 2>/dev/null)"
-class="$(jq -r '.class // .initialClass // "Unknown"' <<<"$window_json" 2>/dev/null)"
 
 if [[ "$pid" =~ ^[0-9]+$ ]] && [[ "$pid" -gt 0 ]]; then
   :
@@ -29,14 +27,9 @@ else
   exit 1
 fi
 
-display_name="$class"
-if [[ -n "$title" ]]; then
-  display_name="$class ($title)"
-fi
-
 payload="$(jq -nc \
-  --arg message "Kill process: $display_name [PID: $pid]?" \
-  --arg command "$HOME/.config/hypr/runtime/windows/kill-pid-with-fallback.sh $pid" \
+  --arg message "Kill selected process [PID: $pid]?" \
+  --argjson pid "$pid" \
   '{
     action: "show",
     config: {
@@ -45,7 +38,7 @@ payload="$(jq -nc \
       message: $message,
       confirmLabel: "Kill",
       cancelLabel: "Cancel",
-      confirmCommand: $command,
+      operation: { type: "kill-process", pid: $pid },
       variant: "danger"
     }
   }')"

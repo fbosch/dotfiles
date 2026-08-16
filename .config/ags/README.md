@@ -7,7 +7,7 @@ owns shell surfaces and lazy task-oriented utility modules.
 
 The bundled entrypoint imports these components from `components/`:
 
-- `confirm-dialog.tsx` for shutdown, restart, suspend, and exit confirmations.
+- `confirm-dialog/` for shutdown, restart, suspend, exit, and window confirmations.
 - `volume-indicator/` for volume overlays.
 - `keyboard-switcher/` for layout switch feedback.
 - `start-menu/index.tsx` for the launcher surface.

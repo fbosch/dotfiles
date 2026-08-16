@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import "./confirm-dialog.case";
 import "./start-menu.case";
 import "./audio-mixer.case";
 import "./calendar.case";

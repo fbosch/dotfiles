@@ -29,25 +29,25 @@ local function close_window(address, force)
 	hypr_ipc.request("dispatch hl.dsp.window." .. dispatcher .. "(" .. target .. ")")
 end
 
-local function confirm_payload(address, title)
+local function confirm_payload(address)
 	return {
 		action = "show",
 		config = {
 			icon = "!",
 			title = "Close game window",
-			message = "Close protected game window: " .. (title ~= "" and title or "game window") .. "?",
+			message = "Close protected game window?",
 			confirmLabel = "Close",
 			cancelLabel = "Cancel",
-			confirmCommand = "luajit " .. config_dir .. "/runtime/windows/killactive-selective.lua --confirmed-address " .. address,
+			operation = { type = "close-window", address = address },
 			variant = "warning",
 		},
 	}
 end
 
 local function show_confirm_dialog(payload)
-	return command.output(
-		command.line("ags", "request", "-i", "ags-bundled", "confirm-dialog", json.encode(payload)) .. " 2>/dev/null"
-	):gsub("%s+$", "") == "shown"
+	return command
+		.output(command.line("ags", "request", "-i", "ags-bundled", "confirm-dialog", json.encode(payload)) .. " 2>/dev/null")
+		:gsub("%s+$", "") == "shown"
 end
 
 local function request_confirm_close(address, title)
@@ -56,7 +56,7 @@ local function request_confirm_close(address, title)
 		return
 	end
 
-	local payload = confirm_payload(address, title)
+	local payload = confirm_payload(address)
 	if show_confirm_dialog(payload) then
 		return
 	end

@@ -4,7 +4,6 @@
 local ags = require("lib.ags")
 local command = require("lib.command")
 local notify = require("lib.notify")
-local paths = require("lib.paths")
 
 local M = {}
 
@@ -20,16 +19,16 @@ local function notify_failed(body)
 	notify.send({ summary = "hyprprop kill", body = body })
 end
 
-local function confirm_payload(pid, display_name)
+local function confirm_payload(pid)
 	return {
 		action = "show",
 		config = {
 			icon = "󱂥",
 			title = "Force close window",
-			message = "Kill process: " .. display_name .. " [PID: " .. pid .. "]?",
+			message = "Kill selected process [PID: " .. pid .. "]?",
 			confirmLabel = "Kill",
 			cancelLabel = "Cancel",
-			confirmCommand = paths.runtime_script("windows/kill-pid-with-fallback.sh") .. " " .. pid,
+			operation = { type = "kill-process", pid = tonumber(pid) },
 			variant = "danger",
 		},
 	}
@@ -47,14 +46,7 @@ function M.confirm_hyprprop_kill()
 		return
 	end
 
-	local title = field(".title // \"\"")
-	local app_class = field(".class // .initialClass // \"Unknown\"")
-	local display_name = app_class
-	if title ~= "" then
-		display_name = app_class .. " (" .. title .. ")"
-	end
-
-	ags.request("confirm-dialog", confirm_payload(pid, display_name))
+	ags.request("confirm-dialog", confirm_payload(pid))
 end
 
 return M

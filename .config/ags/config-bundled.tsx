@@ -18,7 +18,7 @@ declare global {
 	var PipSnapPreview: ComponentModule;
 }
 
-import "./components/confirm-dialog.tsx";
+import "./components/confirm-dialog/index.tsx";
 import "./components/volume-indicator/index.tsx";
 import "./components/keyboard-switcher/index.tsx";
 import "./components/start-menu/index.tsx";

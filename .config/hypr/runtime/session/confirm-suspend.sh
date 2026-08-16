@@ -11,9 +11,9 @@ ags request -i ags-bundled confirm-dialog '{
     "message": "This will suspend your system to RAM",
     "confirmLabel": "Suspend",
     "cancelLabel": "Cancel",
-    "confirmCommand": "systemctl suspend",
+    "operation": { "type": "suspend" },
     "variant": "suspend",
-    "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
+    "playWarningSound": true,
     "showDelay": 180
   }
 }'

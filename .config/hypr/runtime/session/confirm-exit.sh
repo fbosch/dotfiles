@@ -11,9 +11,9 @@ ags request -i ags-bundled confirm-dialog '{
     "message": "This will end your Wayland session",
     "confirmLabel": "Exit",
     "cancelLabel": "Cancel",
-    "confirmCommand": "/home/fbb/.config/hypr/runtime/session/exit-session.sh",
+    "operation": { "type": "exit-session" },
     "variant": "danger",
-    "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
+    "playWarningSound": true,
     "showDelay": 180
   }
 }'

@@ -11,9 +11,9 @@ ags request -i ags-bundled confirm-dialog '{
     "message": "This will reboot your system",
     "confirmLabel": "Restart",
     "cancelLabel": "Cancel",
-    "confirmCommand": "/home/fbb/.config/hypr/runtime/session/hyprshutdown-session.sh -t \"Restarting...\" --post-cmd \"systemctl reboot\"",
+    "operation": { "type": "restart" },
     "variant": "warning",
-    "audioFile": "/home/fbb/.config/hypr/assets/warn.ogg",
+    "playWarningSound": true,
     "showDelay": 180
   }
 }'
