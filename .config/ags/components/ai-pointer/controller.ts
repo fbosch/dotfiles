@@ -22,8 +22,6 @@ import {
 	selectionFromStroke,
 } from "./stroke";
 
-const strokeSampleIntervalMs = 10;
-
 type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
 
 interface AiPointerControllerOptions {
@@ -59,7 +57,6 @@ export class AiPointerController {
 	#directory: string | null = null;
 	#pendingFinish: PointerPosition | null = null;
 	#pendingFinishId = 0;
-	#strokeSampleId = 0;
 	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
 	#runId = 0;
@@ -126,12 +123,11 @@ export class AiPointerController {
 		this.#accessibilityMetadata = null;
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
-		if (this.#view.beginStroke(this.#stroke) === false) {
+		if (this.#view.beginStroke(this.#stroke, () => this.#sampleStroke()) === false) {
 			this.#failureMessage = "The drawing overlay is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return true;
 		}
-		this.#startStrokeSampler();
 		if (this.#pendingFinish) {
 			const endPosition = this.#pendingFinish;
 			this.#clearPendingFinish();
@@ -161,7 +157,6 @@ export class AiPointerController {
 		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
 		const directory = this.#directory;
 		const stroke = this.#stroke;
-		this.#stopStrokeSampler();
 		if (!stroke || !directory) {
 			this.#view.endStroke();
 			this.#failureMessage = "The drawing path is unavailable.";
@@ -264,7 +259,6 @@ export class AiPointerController {
 		this.#directory = null;
 		this.#stroke = null;
 		this.#accessibilityMetadata = null;
-		this.#stopStrokeSampler();
 		this.#view.endStroke();
 		this.#clearPendingFinish();
 		if (this.#capture) deleteCapture(this.#capture.path);
@@ -291,28 +285,11 @@ export class AiPointerController {
 		this.#pendingFinish = null;
 	}
 
-	#startStrokeSampler(): void {
-		this.#stopStrokeSampler();
-		this.#strokeSampleId = GLib.timeout_add(
-			GLib.PRIORITY_DEFAULT,
-			strokeSampleIntervalMs,
-			() => {
-				if (this.#actor?.getSnapshot().matches("selecting") === false) {
-					this.#strokeSampleId = 0;
-					return GLib.SOURCE_REMOVE;
-				}
-				const point = this.#readPointer();
-				if (point && this.#stroke) {
-					this.#stroke = appendStrokePoint(this.#stroke, point);
-					this.#view.updateStroke(this.#stroke);
-				}
-				return GLib.SOURCE_CONTINUE;
-			},
-		);
-	}
-
-	#stopStrokeSampler(): void {
-		if (this.#strokeSampleId !== 0) GLib.source_remove(this.#strokeSampleId);
-		this.#strokeSampleId = 0;
+	#sampleStroke(): void {
+		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
+		const point = this.#readPointer();
+		if (!point || !this.#stroke) return;
+		this.#stroke = appendStrokePoint(this.#stroke, point);
+		this.#view.updateStroke(this.#stroke);
 	}
 }

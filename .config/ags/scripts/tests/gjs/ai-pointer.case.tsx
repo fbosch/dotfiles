@@ -65,7 +65,7 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	let stroke = createPointerStroke({ x: 10, y: 10 });
 	stroke = appendStrokePoint(stroke, { x: 80, y: 80 }, true);
 	assert(
-		overlay.show(stroke, () => {}),
+		overlay.show(stroke, () => {}, () => {}),
 		"AI Pointer stroke overlay was unavailable",
 	);
 	await settleMainLoop();

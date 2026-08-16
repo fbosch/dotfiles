@@ -121,8 +121,8 @@ export class AiPointerView {
 		return true;
 	}
 
-	beginStroke(stroke: PointerStroke): boolean {
-		return this.#strokeOverlay.show(stroke, () => this.#handlers?.onCancel());
+	beginStroke(stroke: PointerStroke, onFrame: () => void): boolean {
+		return this.#strokeOverlay.show(stroke, () => this.#handlers?.onCancel(), onFrame);
 	}
 
 	updateStroke(stroke: PointerStroke): void {

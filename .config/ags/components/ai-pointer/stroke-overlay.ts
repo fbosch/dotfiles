@@ -5,12 +5,13 @@ import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import tokens from "../../../../design-system/tokens.json";
-import type { SelectionGeometry } from "./selection";
+import type { PointerPosition, SelectionGeometry } from "./selection";
 import type { PointerStroke } from "./stroke";
 
 interface StrokeSurface {
 	window: Astal.Window;
 	drawing: Gtk.DrawingArea;
+	bounds: SelectionGeometry;
 }
 
 const allEdges =
@@ -22,13 +23,14 @@ const unmapTimeoutMs = 250;
 const compositorFrameDelayMs = 34;
 const selectionPreviewRadius = 14;
 const selectionPreviewGlow = 20;
-const curveTension = 0.14;
 
 export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
 	#stroke: PointerStroke | null = null;
+	#frameDrawing: Gtk.DrawingArea | null = null;
+	#frameCallbackId = 0;
 
-	show(stroke: PointerStroke, onCancel: () => void): boolean {
+	show(stroke: PointerStroke, onCancel: () => void, onFrame: () => void): boolean {
 		this.hide();
 		const display = Gdk.Display.get_default();
 		if (!display) return false;
@@ -45,6 +47,7 @@ export class StrokeOverlay {
 
 		this.update(stroke);
 		for (const surface of this.#surfaces) surface.window.set_visible(true);
+		this.#startFrameCallback(stroke.points[0], onFrame);
 		return true;
 	}
 
@@ -72,12 +75,14 @@ export class StrokeOverlay {
 	}
 
 	hide(): void {
+		this.#stopFrameCallback();
 		for (const surface of this.#surfaces) surface.window.destroy();
 		this.#surfaces = [];
 		this.#stroke = null;
 	}
 
 	async hideBeforeCapture(): Promise<boolean> {
+		this.#stopFrameCallback();
 		const surfaces = this.#surfaces;
 		this.#surfaces = [];
 		this.#stroke = null;
@@ -106,30 +111,30 @@ export class StrokeOverlay {
 		const drawing = new Gtk.DrawingArea({ hexpand: true, vexpand: true });
 		drawing.add_css_class("ai-pointer-stroke-canvas");
 		drawing.set_draw_func((_area, cr: any) => {
-			const stroke = this.#stroke;
-			if (!stroke || stroke.points.length < 2) return;
+			const points = this.#stroke?.points;
+			if (!points || points.length < 2) return;
 			const color = new Gdk.RGBA();
 			color.parse(tokens.colors.accent.primary.value);
 			cr.setLineCap(Cairo.LineCap.ROUND);
 			cr.setLineJoin(Cairo.LineJoin.ROUND);
 			for (const [width, alpha] of [
-				[34.5, 0.05],
-				[20.7, 0.12],
-				[10.35, 0.55],
-				[5.175, 0.96],
+				[51.75, 0.05],
+				[31.05, 0.12],
+				[15.525, 0.55],
+				[7.7625, 0.96],
 			] as const) {
 				cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
 				cr.setLineWidth(width);
-				this.#tracePath(cr, geometry.x, geometry.y);
+				this.#tracePath(cr, points, geometry.x, geometry.y);
 				cr.stroke();
 			}
-			const endpoint = stroke.points.at(-1);
+			const endpoint = points.at(-1);
 			if (!endpoint) return;
 			cr.setSourceRGBA(color.red, color.green, color.blue, 0.06);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 30, 0, Math.PI * 2);
+			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 45, 0, Math.PI * 2);
 			cr.fill();
 			cr.setSourceRGBA(color.red, color.green, color.blue, 0.14);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 16.5, 0, Math.PI * 2);
+			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 24.75, 0, Math.PI * 2);
 			cr.fill();
 		});
 
@@ -137,7 +142,16 @@ export class StrokeOverlay {
 		window.set_anchor(allEdges);
 		if (captureKeyboard) this.#addCancelController(window, onCancel);
 
-		return { window, drawing };
+		return {
+			window,
+			drawing,
+			bounds: {
+				x: geometry.x,
+				y: geometry.y,
+				width: geometry.width,
+				height: geometry.height,
+			},
+		};
 	}
 
 	#createSelectionSurface(
@@ -191,7 +205,40 @@ export class StrokeOverlay {
 		window.set_anchor(Astal.WindowAnchor.TOP | Astal.WindowAnchor.LEFT);
 		window.set_margin_left(outerX - monitorGeometry.x);
 		window.set_margin_top(outerY - monitorGeometry.y);
-		return { window, drawing };
+		return {
+			window,
+			drawing,
+			bounds: {
+				x: monitorGeometry.x,
+				y: monitorGeometry.y,
+				width: monitorGeometry.width,
+				height: monitorGeometry.height,
+			},
+		};
+	}
+
+	#startFrameCallback(point: PointerPosition, onFrame: () => void): void {
+		const surface = this.#surfaces.find(
+			({ bounds }) =>
+				point.x >= bounds.x &&
+				point.x < bounds.x + bounds.width &&
+				point.y >= bounds.y &&
+				point.y < bounds.y + bounds.height,
+		) ?? this.#surfaces[0];
+		if (!surface) return;
+
+		this.#frameDrawing = surface.drawing;
+		this.#frameCallbackId = surface.drawing.add_tick_callback(() => {
+			onFrame();
+			return this.#frameCallbackId !== 0;
+		});
+	}
+
+	#stopFrameCallback(): void {
+		if (this.#frameCallbackId !== 0)
+			this.#frameDrawing?.remove_tick_callback(this.#frameCallbackId);
+		this.#frameCallbackId = 0;
+		this.#frameDrawing = null;
 	}
 
 	#createWindow(
@@ -272,9 +319,13 @@ export class StrokeOverlay {
 		cr.closePath();
 	}
 
-	#tracePath(cr: any, originX: number, originY: number): void {
-		const points = this.#stroke?.points;
-		if (!points || points.length === 0) return;
+	#tracePath(
+		cr: any,
+		points: PointerPosition[],
+		originX: number,
+		originY: number,
+	): void {
+		if (points.length === 0) return;
 		cr.moveTo(points[0].x - originX, points[0].y - originY);
 		if (points.length < 3) {
 			const endpoint = points.at(-1);
@@ -282,19 +333,22 @@ export class StrokeOverlay {
 			return;
 		}
 
-		for (let index = 0; index < points.length - 1; index += 1) {
-			const previous = points[Math.max(0, index - 1)];
-			const current = points[index];
+		let start = points[0];
+		for (let index = 1; index < points.length; index += 1) {
+			const control = points[index];
 			const next = points[index + 1];
-			const following = points[Math.min(points.length - 1, index + 2)];
+			const end = next
+				? { x: (control.x + next.x) / 2, y: (control.y + next.y) / 2 }
+				: control;
 			cr.curveTo(
-				current.x + (next.x - previous.x) * curveTension - originX,
-				current.y + (next.y - previous.y) * curveTension - originY,
-				next.x - (following.x - current.x) * curveTension - originX,
-				next.y - (following.y - current.y) * curveTension - originY,
-				next.x - originX,
-				next.y - originY,
+				start.x + ((control.x - start.x) * 2) / 3 - originX,
+				start.y + ((control.y - start.y) * 2) / 3 - originY,
+				end.x + ((control.x - end.x) * 2) / 3 - originX,
+				end.y + ((control.y - end.y) * 2) / 3 - originY,
+				end.x - originX,
+				end.y - originY,
 			);
+			start = end;
 		}
 	}
 
