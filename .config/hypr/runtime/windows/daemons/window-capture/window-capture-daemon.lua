@@ -476,8 +476,7 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 	end
 
 	if event_type == "windowupdate" then
-		capture_active_window_preview()
-		capture_visible_workspace_previews(true)
+		capture_window_preview_by_address(event_payload or "")
 		return
 	end
 
@@ -496,7 +495,7 @@ local function event_type_for(line)
 	elseif line:match("^workspacev2") then
 		return "workspace"
 	elseif line:match("^openwindow") then
-		return "windowupdate"
+		return "windowupdate", line:match("^[^>,]+>>([^,]+)") or line:match("^[^,]+,([^,]+)") or ""
 	elseif line:match("^windowtitlev2") then
 		return "windowtitle", line:match("^[^>,]+>>([^,]+)") or line:match("^[^,]+,([^,]+)") or ""
 	elseif

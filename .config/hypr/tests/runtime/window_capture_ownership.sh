@@ -81,7 +81,7 @@ cat > "$bin_dir/hyprctl" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
   *'activewindow -j') printf '{}\n' ;;
-  *'clients -j') printf '%s\n' '[{"address":"0xfixture","mapped":true,"size":[100,100],"workspace":{"id":1}}]' ;;
+  *'clients -j') printf '%s\n' '[{"address":"0xfixture","mapped":true,"size":[100,100],"workspace":{"id":1}},{"address":"0xoffscreen","stableId":"offscreen-id","mapped":true,"size":[100,100],"workspace":{"id":10}}]' ;;
   *'monitors -j') printf '%s\n' '[{"activeWorkspace":{"id":1}}]' ;;
   *) exit 1 ;;
 esac
@@ -94,6 +94,15 @@ sleep 0.4
 printf 'fixture-image\n' > "$output"
 SH
 chmod +x "$bin_dir/hyprctl" "$bin_dir/grim"
+
+HOME="$home_dir" \
+  PATH="$bin_dir:$original_path" \
+  XDG_RUNTIME_DIR="$runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE=fixture \
+  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
+  luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" \
+  handle-event 'openwindow>>0xoffscreen,10,fixture,Offscreen'
+test -s "$capture_dir/offscreen-id.jpg"
 
 wait_for_file() {
   local file="$1" description="$2"
