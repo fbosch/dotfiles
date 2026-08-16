@@ -51,8 +51,8 @@ function validateContrast(bgColor, textColor, label, minRatio = WCAG_AA_NORMAL) 
   return { passes: true, contrast };
 }
 
-// Test semantic state colors
-console.log('\n📊 Semantic State Colors (Buttons & Tags)');
+// Test semantic color ramps
+console.log('\n📊 Semantic Color Ramps (Buttons & Tags)');
 console.log('-'.repeat(80));
 
 const results = {
@@ -61,15 +61,75 @@ const results = {
     tokens.colors.state['success-text'].value,
     'Success (Leaf)'
   ),
+  successHover: validateContrast(
+    tokens.colors.state['success-hover'].value,
+    tokens.colors.state['success-text'].value,
+    'Success Hover (Leaf)'
+  ),
+  successActive: validateContrast(
+    tokens.colors.state['success-active'].value,
+    tokens.colors.state['success-active-text'].value,
+    'Success Active (Leaf)'
+  ),
   warning: validateContrast(
     tokens.colors.state.warning.value,
     tokens.colors.state['warning-text'].value,
     'Warning (Wood)'
   ),
+  warningHover: validateContrast(
+    tokens.colors.state['warning-hover'].value,
+    tokens.colors.state['warning-text'].value,
+    'Warning Hover (Wood)'
+  ),
+  warningActive: validateContrast(
+    tokens.colors.state['warning-active'].value,
+    tokens.colors.state['warning-active-text'].value,
+    'Warning Active (Wood)'
+  ),
   error: validateContrast(
     tokens.colors.state.error.value,
     tokens.colors.state['error-text'].value,
     'Error (Rose)'
+  ),
+  errorHover: validateContrast(
+    tokens.colors.state['error-hover'].value,
+    tokens.colors.state['error-text'].value,
+    'Error Hover (Rose)'
+  ),
+  errorActive: validateContrast(
+    tokens.colors.state['error-active'].value,
+    tokens.colors.state['error-active-text'].value,
+    'Error Active (Rose)'
+  ),
+  info: validateContrast(
+    tokens.colors.state.info.value,
+    tokens.colors.state['info-text'].value,
+    'Info (Sky)'
+  ),
+  infoHover: validateContrast(
+    tokens.colors.state['info-hover'].value,
+    tokens.colors.state['info-text'].value,
+    'Info Hover (Sky)'
+  ),
+  infoActive: validateContrast(
+    tokens.colors.state['info-active'].value,
+    tokens.colors.state['info-active-text'].value,
+    'Info Active (Sky)'
+  ),
+  purple: validateContrast(
+    tokens.colors.state.purple.value,
+    tokens.colors.state['purple-text'].value,
+    'Purple (Blossom)'
+  ),
+  purpleHover: validateContrast(
+    tokens.colors.state['purple-hover'].value,
+    tokens.colors.state['purple-text'].value,
+    'Purple Hover (Blossom)'
+  ),
+  purpleActive: validateContrast(
+    tokens.colors.state['purple-active'].value,
+    tokens.colors.state['purple-active-text'].value,
+    'Purple Active (Blossom)'
   ),
 };
 
@@ -82,13 +142,18 @@ const primary = validateContrast(
   tokens.colors.accent.text.value,
   'Primary Button'
 );
+const active = validateContrast(
+  tokens.colors.accent.active.value,
+  tokens.colors.accent['active-text'].value,
+  'Active Blue Surface'
+);
 
 // Summary
 console.log(`\n\n${'='.repeat(80)}`);
 console.log('📋 Summary');
 console.log('='.repeat(80));
 
-const allPassed = Object.values(results).every((r) => r.passes) && primary.passes;
+const allPassed = Object.values(results).every((r) => r.passes) && primary.passes && active.passes;
 
 if (allPassed) {
   console.log('\n✅ All colors meet WCAG AA standards (4.5:1)!');

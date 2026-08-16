@@ -70,8 +70,8 @@
     }
 
     &.focused {
-      background-color: color-mix(in srgb, var(--ags-color-background-primary) 62%, transparent);
-      border-color: color-mix(in srgb, var(--ags-color-accent-primary) 65%, transparent);
+      background-color: color-mix(in srgb, var(--ags-color-accent-active) 72%, var(--ags-color-background-primary));
+      border-color: var(--ags-color-accent-hover);
     }
   }
 
@@ -83,8 +83,8 @@
     border-radius: 8px;
 
     &.default {
-      color: var(--ags-color-accent-text);
-      background-color: color-mix(in srgb, var(--ags-color-accent-primary) 25%, transparent);
+      color: var(--ags-color-accent-hover);
+      background-color: color-mix(in srgb, var(--ags-color-accent-active) 72%, transparent);
     }
 
     &.muted {
@@ -109,10 +109,10 @@
 
   label.audio-mixer-badge {
     padding: 2px 8px;
-    color: var(--ags-color-foreground-primary);
+    color: var(--ags-color-accent-hover);
     font-size: 11px;
-    background-color: color-mix(in srgb, var(--ags-color-accent-primary) 20%, transparent);
-    border: 1px solid color-mix(in srgb, var(--ags-color-accent-primary) 40%, transparent);
+    background-color: color-mix(in srgb, var(--ags-color-accent-active) 58%, transparent);
+    border: 1px solid color-mix(in srgb, var(--ags-color-accent-primary) 70%, transparent);
     border-radius: 999px;
 
     &.muted {
@@ -171,9 +171,9 @@
     }
 
     &.default-icon.active {
-      color: var(--ags-color-accent-text);
-      background-color: var(--ags-color-accent-primary);
-      border-color: color-mix(in srgb, var(--ags-color-accent-primary) 55%, transparent);
+      color: var(--ags-color-accent-active-text);
+      background-color: var(--ags-color-accent-active);
+      border-color: var(--ags-color-accent-hover);
     }
 
     &:hover,

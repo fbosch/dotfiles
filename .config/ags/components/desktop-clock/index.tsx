@@ -42,7 +42,9 @@ let lastDateString: string = "";
 
 function getClockUpdateDelay(): number {
   const now = new Date();
-  return Math.max(1, 1000 - now.getMilliseconds());
+  if (config.showSeconds) return 1000 - now.getMilliseconds();
+
+  return 60_000 - now.getSeconds() * 1000 - now.getMilliseconds();
 }
 
 function scheduleClockUpdate() {

@@ -4,8 +4,8 @@ Hierarchical palette:
 
 - Background layers: `primary` → `secondary` → `tertiary` (#191919 → #242424 → #2a2a2a)
 - Foreground tiers: `primary` → `secondary` → `tertiary` (#ffffff → #bbbdc7 → #8c8e96)
-- Accent: Zenwritten sky (#6baedb) with bright-sky hover and water active states
-- Semantic states: leaf success, wood warning, rose error, sky info, blossom secondary action
+- Accent: Zenwritten ANSI blue (#6099c0), bright blue hover (#61abda), and dark blue selected surfaces (#324757)
+- Semantic states reuse the Zenwritten ANSI color families for their base and hover values, with contrast-safe active variants
 
 Token pattern:
 
@@ -15,11 +15,11 @@ Token pattern:
 
 State palette:
 
-- success: #7aca6c
-- warning: #c69761
-- error: #d86659
-- info: #6baedb
-- purple: #b671a1
+- success: #819b69 → #8bae68 → #6b8556
+- warning: #b77e64 → #d68c67 → #9c6a51
+- error: #de6e7c → #e8838f → #b85763
+- info: #6099c0 → #61abda → #324757
+- purple: #b279a7 → #cf86c1 → #8d5b83
 
 Purple rationale:
 
@@ -43,15 +43,27 @@ export default {
           tertiary: "#8c8e96",
         },
         accent: {
-          primary: "#6baedb",
-          hover: "#7bbefb",
-          active: "#5b64db",
+          primary: "#6099c0",
+          hover: "#61abda",
+          active: "#324757",
+          "active-text": "#ffffff",
         },
         state: {
-          success: "#7aca6c",
-          warning: "#c69761",
-          error: "#d86659",
-          info: "#6baedb",
+          success: "#819b69",
+          "success-hover": "#8bae68",
+          "success-active": "#6b8556",
+          warning: "#b77e64",
+          "warning-hover": "#d68c67",
+          "warning-active": "#9c6a51",
+          error: "#de6e7c",
+          "error-hover": "#e8838f",
+          "error-active": "#b85763",
+          info: "#6099c0",
+          "info-hover": "#61abda",
+          "info-active": "#324757",
+          purple: "#b279a7",
+          "purple-hover": "#cf86c1",
+          "purple-active": "#8d5b83",
         },
       },
       fontFamily: {

@@ -208,7 +208,7 @@ const AudioRow: React.FC<{
 }> = ({ item, maxVolume, onVolumeChange, onMuteToggle, onDefaultChange, showDefaultAction }) => (
   <article
     className={cn(
-      'rounded-lg border border-white/[0.08] bg-background-primary/45 px-2.5 py-2 shadow-sm transition-colors duration-150 hover:border-white/[0.16] hover:bg-background-primary/[0.62] focus-within:border-accent-primary/65 focus-within:bg-background-primary/[0.62]',
+      'rounded-lg border border-white/[0.08] bg-background-primary/45 px-2.5 py-2 shadow-sm transition-colors duration-150 hover:border-white/[0.16] hover:bg-background-primary/[0.62] focus-within:border-accent-hover focus-within:bg-accent-active/70',
       item.muted && 'opacity-70'
     )}
   >
@@ -216,7 +216,7 @@ const AudioRow: React.FC<{
       <div
         className={cn(
           'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-white/[0.06] text-foreground-primary',
-          item.isDefault && 'bg-accent-primary/25 text-accent-text',
+          item.isDefault && 'bg-accent-active text-accent-hover',
           item.muted && 'bg-state-error/10 text-state-error'
         )}
       >
@@ -250,7 +250,8 @@ const AudioRow: React.FC<{
                   size="sm"
                   className={cn(
                     'h-7 min-h-7 w-7 min-w-7 rounded-md border border-white/10 bg-white/[0.06] p-0 font-fluent text-[15px] text-foreground-secondary hover:bg-white/10 hover:text-foreground-primary',
-                    item.isDefault && 'border-accent-primary/55 text-white'
+                    item.isDefault &&
+                      'border-accent-hover bg-accent-active text-accent-active-text hover:bg-accent-active'
                   )}
                   onClick={() => onDefaultChange(item.id)}
                   aria-label={
