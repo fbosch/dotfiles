@@ -1,4 +1,4 @@
-import type { IconRef } from "../../services/app-icons";
+import type { IconRef } from "@/services/app-icons";
 
 export type AudioMixerTab = "playback" | "output" | "input";
 export type BackendStatus = "loading" | "ready" | "unavailable" | "error";

@@ -1,7 +1,7 @@
 import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import Gtk from "gi://Gtk?version=4.0";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { totalSegments, type VolumePresentation } from "./model";
 
 export class VolumeIndicatorView {

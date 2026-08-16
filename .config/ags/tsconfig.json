@@ -5,6 +5,9 @@
     "allowImportingTsExtensions": true,
     "module": "ES2022",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@/*": ["./*"]
+    },
     "lib": ["ESNext"],
     "noEmit": true,
     "skipLibCheck": true,

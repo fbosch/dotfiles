@@ -2,7 +2,7 @@ import Gdk from "gi://Gdk?version=4.0";
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { perf } from "../../services/performance-monitor";
+import { perf } from "@/services/performance-monitor";
 import type { WindowInfo } from "./machine";
 import {
 	fallbackPreviewDimensions,

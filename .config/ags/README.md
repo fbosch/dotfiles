@@ -45,7 +45,7 @@ Start Menu opens utilities through `UtilityManager`, not their runtime globals.
 Start the bundled process manually:
 
 ```bash
-ags run ~/.config/ags/config-bundled.tsx
+cd ~/.config/ags && ags run config-bundled.tsx
 ```
 
 Regenerate AGS typings after AGS updates:

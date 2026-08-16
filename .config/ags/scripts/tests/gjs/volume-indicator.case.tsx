@@ -1,10 +1,10 @@
 import GLib from "gi://GLib?version=2.0";
 import { SimulatedClock } from "xstate";
-import { VolumeIndicatorController } from "../../../components/volume-indicator/controller";
-import type { VolumePresentation } from "../../../components/volume-indicator/model";
-import { createRequestHandler } from "../../../components/volume-indicator/request-handler";
-import { VolumeIndicatorView } from "../../../components/volume-indicator/volume-indicator-view";
-import { VolumeSource } from "../../../components/volume-indicator/volume-source";
+import { VolumeIndicatorController } from "@/components/volume-indicator/controller";
+import type { VolumePresentation } from "@/components/volume-indicator/model";
+import { createRequestHandler } from "@/components/volume-indicator/request-handler";
+import { VolumeIndicatorView } from "@/components/volume-indicator/volume-indicator-view";
+import { VolumeSource } from "@/components/volume-indicator/volume-source";
 import { assert, test } from "./harness";
 
 function request(

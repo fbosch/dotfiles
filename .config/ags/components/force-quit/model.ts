@@ -1,4 +1,4 @@
-import type { IconRef, IconWindowInfo } from "../../services/app-icons";
+import type { IconRef, IconWindowInfo } from "@/services/app-icons";
 
 export interface ForceQuitWindow extends IconWindowInfo {
 	address: string;

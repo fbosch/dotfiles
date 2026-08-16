@@ -1,6 +1,6 @@
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { PreviewCache } from "../../../components/window-switcher/preview-cache";
+import { PreviewCache } from "@/components/window-switcher/preview-cache";
 import { assert, test } from "./harness";
 
 test("Window Switcher decodes and caches preview textures", () => {

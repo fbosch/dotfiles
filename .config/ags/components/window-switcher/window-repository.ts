@@ -1,6 +1,6 @@
 import GLib from "gi://GLib?version=2.0";
 import { execAsync } from "ags/process";
-import { queryHyprlandJson } from "../../services/hyprland-ipc";
+import { queryHyprlandJson } from "@/services/hyprland-ipc";
 import { debugLog } from "./diagnostics";
 import type { WindowInfo } from "./machine";
 import {

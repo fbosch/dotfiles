@@ -19,6 +19,7 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
   and dispatch with `match(...).exhaustive()` instead of switching on optional
   string actions with a catch-all default.
 - Keep static feature styles in colocated `styles.scss` files, scoped through the shared surface mixin and loaded through the bundled stylesheet manifest. Reserve runtime CSS providers for values computed from live data.
+- Use `@/*` for TypeScript module imports across AGS feature, service, and test boundaries. Keep same-feature sibling imports relative; SCSS and design-token resource imports remain relative because they bypass TypeScript alias resolution.
 - Let Hyprland layer rules own optional entry and exit animations for layer surfaces; do not duplicate them with GTK CSS transitions or delayed visibility states.
 - For AGS surfaces that mirror `design-system/src/components/`, match the component source as the visual contract; do not depend on Storybook stories at runtime.
 - Compose surfaces from existing atomic components when their semantics and interaction model fit. Prefer expanding shared primitives for recurring behavior over duplicating GTK construction and styling; use native widgets for distinct custom controls.

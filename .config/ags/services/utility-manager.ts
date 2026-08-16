@@ -10,11 +10,11 @@ declare global {
 
 const utilities: Record<UtilityId, UtilityDefinition> = {
 	"about-this-pc": {
-		load: () => import("../components/about-this-pc/index"),
+		load: () => import("@/components/about-this-pc/index"),
 		component: () => globalThis.AboutThisPC,
 	},
 	"force-quit": {
-		load: () => import("../components/force-quit/index"),
+		load: () => import("@/components/force-quit/index"),
 		component: () => globalThis.ForceQuit,
 	},
 };

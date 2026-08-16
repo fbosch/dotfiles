@@ -1,6 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { perf } from "../../services/performance-monitor";
+import { perf } from "@/services/performance-monitor";
 import {
 	asArray,
 	buildRangeQuery,

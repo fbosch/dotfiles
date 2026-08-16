@@ -1,4 +1,4 @@
-import { type ComponentModule } from "../../services/component-host";
+import { type ComponentModule } from "@/services/component-host";
 import { ForceQuitController } from "./controller";
 import { createRequestHandler } from "./request-handler";
 

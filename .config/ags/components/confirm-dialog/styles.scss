@@ -1,4 +1,5 @@
 @use "../../styles/surface" as ags;
+@use "../../styles/utility-window" as utility;
 
 @include ags.surface("confirm-dialog") {
   padding: 40px;
@@ -6,11 +7,10 @@
   border: none;
 
   box.dialog-box {
+    @include utility.panel;
+
     min-width: 280px;
     padding: 16px;
-    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
-    border: 1px solid var(--ags-color-border-hover);
-    border-radius: 12px;
     box-shadow: 0 8px 32px rgb(0 0 0 / 20%), 0 2px 8px rgb(0 0 0 / 10%);
   }
 

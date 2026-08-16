@@ -1,6 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { dispatchHyprland, queryHyprlandJson } from "../../services/hyprland-ipc";
+import { dispatchHyprland, queryHyprlandJson } from "@/services/hyprland-ipc";
 import { usableValue } from "./model";
 
 const moreInfoWindowClass = "about_this_pc_more_info";

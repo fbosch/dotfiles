@@ -145,7 +145,7 @@ if ! is_running; then
   if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
     export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
   fi
-  ags run "${AGS_DIR}/config-bundled.tsx" >"$RUN_LOG" 2>&1 &
+  (cd "$AGS_DIR" && exec ags run config-bundled.tsx) >"$RUN_LOG" 2>&1 &
   AGS_PID="$!"
   STARTED_INSTANCE=1
 fi

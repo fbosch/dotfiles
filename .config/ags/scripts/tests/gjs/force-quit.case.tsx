@@ -1,18 +1,18 @@
-import { ForceQuitController } from "../../../components/force-quit/controller";
-import type { ForceQuitView } from "../../../components/force-quit/force-quit-view";
-import { ForceQuitMetricsSampler } from "../../../components/force-quit/metrics";
+import { ForceQuitController } from "@/components/force-quit/controller";
+import type { ForceQuitView } from "@/components/force-quit/force-quit-view";
+import { ForceQuitMetricsSampler } from "@/components/force-quit/metrics";
 import type {
 	ForceQuitApplication,
 	ForceQuitMetrics,
-} from "../../../components/force-quit/model";
-import { createRequestHandler } from "../../../components/force-quit/request-handler";
+} from "@/components/force-quit/model";
+import { createRequestHandler } from "@/components/force-quit/request-handler";
 import {
 	forceQuitApplication,
 	type ForceQuitOperation,
 	type ForceQuitTerminationDependencies,
-} from "../../../components/force-quit/termination";
+} from "@/components/force-quit/termination";
 import { assert, test } from "./harness";
-import type { ComponentModule } from "../../../services/component-host";
+import type { ComponentModule } from "@/services/component-host";
 
 const applications: ForceQuitApplication[] = [
 	{
@@ -186,7 +186,7 @@ test("Force Quit termination revalidates, signals, and cancels safely", () => {
 });
 
 test("Force Quit registers through its lazy feature entry", async () => {
-	await import("../../../components/force-quit/index");
+	await import("@/components/force-quit/index");
 	const component = (
 		globalThis as typeof globalThis & { ForceQuit: ComponentModule }
 	).ForceQuit;

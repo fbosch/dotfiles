@@ -1,21 +1,21 @@
 import { createRoot } from "ags";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import type { WindowSwitcherController } from "../../../components/window-switcher/controller";
-import { WindowSwitcherController as RealWindowSwitcherController } from "../../../components/window-switcher/controller";
-import type { WindowInfo } from "../../../components/window-switcher/machine";
+import type { WindowSwitcherController } from "@/components/window-switcher/controller";
+import { WindowSwitcherController as RealWindowSwitcherController } from "@/components/window-switcher/controller";
+import type { WindowInfo } from "@/components/window-switcher/machine";
 import {
 	ModifierController,
 	modifierMaskFor,
-} from "../../../components/window-switcher/modifier-controller";
-import { PreviewCache } from "../../../components/window-switcher/preview-cache";
-import { createRequestHandler } from "../../../components/window-switcher/request-handler";
-import { DisplayMode } from "../../../components/window-switcher/styles";
+} from "@/components/window-switcher/modifier-controller";
+import { PreviewCache } from "@/components/window-switcher/preview-cache";
+import { createRequestHandler } from "@/components/window-switcher/request-handler";
+import { DisplayMode } from "@/components/window-switcher/styles";
 import {
 	SortMode,
 	WindowRepository,
-} from "../../../components/window-switcher/window-repository";
-import { WindowSwitcherView } from "../../../components/window-switcher/window-switcher-view";
+} from "@/components/window-switcher/window-repository";
+import { WindowSwitcherView } from "@/components/window-switcher/window-switcher-view";
 import { assert, test } from "./harness";
 
 const windows: WindowInfo[] = [

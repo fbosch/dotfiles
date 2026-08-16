@@ -3,26 +3,26 @@ import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { createActor, type ActorRefFrom } from "xstate";
-import { getFallbackLetter } from "../../services/app-icons";
-import { perf } from "../../services/performance-monitor";
+import { getFallbackLetter } from "@/services/app-icons";
+import { perf } from "@/services/performance-monitor";
 import {
 	getProfileState,
 	subscribeProfileState,
 	type ProfileSelection,
 	type ProfileState,
-} from "../../services/profile-state";
+} from "@/services/profile-state";
 import {
 	clearRecentApplicationFocusHistory,
 	getRecentApplications,
 	launchRecentApplication,
 	startRecentApplicationFocusHistory,
-} from "../../services/recent-applications";
+} from "@/services/recent-applications";
 import {
 	clearRecentDocuments,
 	getRecentDocuments,
 	openRecentDocument,
-} from "../../services/recent-documents";
-import { openUtility } from "../../services/utility-manager";
+} from "@/services/recent-documents";
+import { openUtility } from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,

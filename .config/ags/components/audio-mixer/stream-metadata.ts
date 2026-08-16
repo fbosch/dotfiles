@@ -2,9 +2,9 @@ import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { resolveAppIcon, type IconRef } from "../../services/app-icons";
-import { queryHyprlandJson } from "../../services/hyprland-ipc";
-import { perf } from "../../services/performance-monitor";
+import { resolveAppIcon, type IconRef } from "@/services/app-icons";
+import { queryHyprlandJson } from "@/services/hyprland-ipc";
+import { perf } from "@/services/performance-monitor";
 import { displayName, getNumber, getText } from "./model";
 
 interface HyprlandClient {

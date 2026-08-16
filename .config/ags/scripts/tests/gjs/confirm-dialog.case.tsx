@@ -1,16 +1,16 @@
 import GLib from "gi://GLib?version=2.0";
 import { SimulatedClock } from "xstate";
-import { ConfirmDialogController } from "../../../components/confirm-dialog/controller";
+import { ConfirmDialogController } from "@/components/confirm-dialog/controller";
 import {
 	ConfirmDialogView,
 	type ConfirmDialogViewHandlers,
-} from "../../../components/confirm-dialog/confirm-dialog-view";
-import { executeConfirmOperation } from "../../../components/confirm-dialog/operation-executor";
+} from "@/components/confirm-dialog/confirm-dialog-view";
+import { executeConfirmOperation } from "@/components/confirm-dialog/operation-executor";
 import type {
 	ConfirmConfig,
 	ConfirmOperation,
-} from "../../../components/confirm-dialog/request";
-import { createRequestHandler } from "../../../components/confirm-dialog/request-handler";
+} from "@/components/confirm-dialog/request";
+import { createRequestHandler } from "@/components/confirm-dialog/request-handler";
 import { assert, test } from "./harness";
 
 const config: ConfirmConfig = {

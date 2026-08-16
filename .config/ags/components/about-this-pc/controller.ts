@@ -1,6 +1,6 @@
 import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
-import { dispatchHyprland } from "../../services/hyprland-ipc";
+import { dispatchHyprland } from "@/services/hyprland-ipc";
 import { AboutThisPCView } from "./about-this-pc-view";
 import type { AboutThisPCInfo } from "./model";
 import { launchAboutMoreInfo } from "./more-info";

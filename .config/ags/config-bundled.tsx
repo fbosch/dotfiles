@@ -4,8 +4,8 @@ import "ags/gtk4/app";
 import {
 	startComponentHost,
 	type ComponentModule,
-} from "./services/component-host";
-import { bundledCss } from "./styles/stylesheets";
+} from "@/services/component-host";
+import { bundledCss } from "@/styles/stylesheets";
 
 declare global {
 	var ConfirmDialog: ComponentModule;
@@ -19,15 +19,15 @@ declare global {
 	var PipSnapPreview: ComponentModule;
 }
 
-import "./components/confirm-dialog/index.tsx";
-import "./components/volume-indicator/index.tsx";
-import "./components/keyboard-switcher/index.tsx";
-import "./components/start-menu/index.tsx";
-import "./components/window-switcher/index.tsx";
-import "./components/desktop-clock";
-import "./components/calendar/index.tsx";
-import "./components/audio-mixer/index.tsx";
-import "./components/pip-snap-preview.tsx";
+import "@/components/confirm-dialog/index.tsx";
+import "@/components/volume-indicator/index.tsx";
+import "@/components/keyboard-switcher/index.tsx";
+import "@/components/start-menu/index.tsx";
+import "@/components/window-switcher/index.tsx";
+import "@/components/desktop-clock";
+import "@/components/calendar/index.tsx";
+import "@/components/audio-mixer/index.tsx";
+import "@/components/pip-snap-preview.tsx";
 
 startComponentHost({
 	instanceName: "ags-bundled",

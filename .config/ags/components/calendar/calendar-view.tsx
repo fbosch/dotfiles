@@ -2,9 +2,9 @@ import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
-import { perf } from "../../services/performance-monitor";
-import { getPointerMonitor } from "../../services/pointer-monitor";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
+import { perf } from "@/services/performance-monitor";
+import { getPointerMonitor } from "@/services/pointer-monitor";
 import {
 	buildCalendarDays,
 	eventTooltip,

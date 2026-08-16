@@ -1,8 +1,8 @@
 // biome-ignore-all lint/a11y/noLabelWithoutControl: GTK labels are text widgets, not HTML form labels.
 // biome-ignore-all lint/a11y/useButtonType: Gtk.Button does not expose an HTML button type.
 import Gtk from "gi://Gtk?version=4.0";
-import type { IconRef } from "../../services/app-icons";
-import { setImageFile } from "../../services/app-icons";
+import type { IconRef } from "@/services/app-icons";
+import { setImageFile } from "@/services/app-icons";
 
 export interface RecentItemsMenuItem {
 	id: string;

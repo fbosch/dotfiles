@@ -112,7 +112,7 @@ main() {
     if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
         export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
     fi
-    ags run "$bundled_config" &
+    (cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
     local pid=$!
     
     # Wait for initialization

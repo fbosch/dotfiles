@@ -1,11 +1,11 @@
-import { AudioMixerController } from "../../../components/audio-mixer/controller";
-import { AudioMixerView } from "../../../components/audio-mixer/audio-mixer-view";
+import { AudioMixerController } from "@/components/audio-mixer/controller";
+import { AudioMixerView } from "@/components/audio-mixer/audio-mixer-view";
 import GLib from "gi://GLib?version=2.0";
 import {
 	emptySnapshot,
 	type AudioBackend,
-} from "../../../components/audio-mixer/model";
-import { createRequestHandler } from "../../../components/audio-mixer/request-handler";
+} from "@/components/audio-mixer/model";
+import { createRequestHandler } from "@/components/audio-mixer/request-handler";
 import { assert, test } from "./harness";
 
 function fakeBackend(): AudioBackend {

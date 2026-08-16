@@ -1,8 +1,8 @@
 import GLib from "gi://GLib?version=2.0";
 import { SimulatedClock } from "xstate";
-import { KeyboardSwitcherController } from "../../../components/keyboard-switcher/controller";
-import { KeyboardSwitcherView } from "../../../components/keyboard-switcher/keyboard-switcher-view";
-import { createRequestHandler } from "../../../components/keyboard-switcher/request-handler";
+import { KeyboardSwitcherController } from "@/components/keyboard-switcher/controller";
+import { KeyboardSwitcherView } from "@/components/keyboard-switcher/keyboard-switcher-view";
+import { createRequestHandler } from "@/components/keyboard-switcher/request-handler";
 import { assert, test } from "./harness";
 
 function request(

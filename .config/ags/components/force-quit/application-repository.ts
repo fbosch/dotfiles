@@ -4,8 +4,8 @@ import {
 	getFallbackLetter,
 	getIconForWindow,
 	resolveDesktopApplication,
-} from "../../services/app-icons";
-import { queryHyprlandJson } from "../../services/hyprland-ipc";
+} from "@/services/app-icons";
+import { queryHyprlandJson } from "@/services/hyprland-ipc";
 import {
 	fallbackApplicationName,
 	type ForceQuitApplication,

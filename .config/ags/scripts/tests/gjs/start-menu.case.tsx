@@ -1,13 +1,13 @@
 import { createRoot } from "ags";
 import Gtk from "gi://Gtk?version=4.0";
-import type { ProfileState } from "../../../services/profile-state";
-import { StartMenuController } from "../../../components/start-menu/controller";
-import { ProfileControls } from "../../../components/start-menu/profile-controls";
-import { createRecentItemsMenu } from "../../../components/start-menu/recent-items-menu";
-import { createRequestHandler } from "../../../components/start-menu/request-handler";
-import { StartMenuView } from "../../../components/start-menu/start-menu-view";
-import { UpdatesCache } from "../../../components/start-menu/updates-cache";
-import { createUserProfile } from "../../../components/start-menu/user-profile";
+import type { ProfileState } from "@/services/profile-state";
+import { StartMenuController } from "@/components/start-menu/controller";
+import { ProfileControls } from "@/components/start-menu/profile-controls";
+import { createRecentItemsMenu } from "@/components/start-menu/recent-items-menu";
+import { createRequestHandler } from "@/components/start-menu/request-handler";
+import { StartMenuView } from "@/components/start-menu/start-menu-view";
+import { UpdatesCache } from "@/components/start-menu/updates-cache";
+import { createUserProfile } from "@/components/start-menu/user-profile";
 import { assert, test } from "./harness";
 
 const profileState: ProfileState = {

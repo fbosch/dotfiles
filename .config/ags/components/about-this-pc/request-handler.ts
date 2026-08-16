@@ -1,5 +1,5 @@
 import { isMatching, match } from "ts-pattern";
-import { parseComponentRequest } from "../../services/request";
+import { parseComponentRequest } from "@/services/request";
 import type { AboutThisPCController } from "./controller";
 import { aboutThisPCRequestPattern, type AboutThisPCRequest } from "./request";
 

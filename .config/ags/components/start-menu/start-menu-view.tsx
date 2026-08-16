@@ -6,9 +6,9 @@ import Gtk from "gi://Gtk?version=4.0";
 import type {
 	ProfileSelection,
 	ProfileState,
-} from "../../services/profile-state";
-import { getPointerMonitor } from "../../services/pointer-monitor";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
+} from "@/services/profile-state";
+import { getPointerMonitor } from "@/services/pointer-monitor";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { defaultMenuItems, type MenuItem } from "./menu-model";
 import { ProfileControls } from "./profile-controls";
 import {

@@ -1,11 +1,11 @@
 import type {
 	CalendarBackend,
 	CalendarBackendOptions,
-} from "../../../components/calendar/calendar-backend";
-import { CalendarController } from "../../../components/calendar/controller";
-import { CalendarView } from "../../../components/calendar/calendar-view";
-import { initialCalendarModel } from "../../../components/calendar/model";
-import { createRequestHandler } from "../../../components/calendar/request-handler";
+} from "@/components/calendar/calendar-backend";
+import { CalendarController } from "@/components/calendar/controller";
+import { CalendarView } from "@/components/calendar/calendar-view";
+import { initialCalendarModel } from "@/components/calendar/model";
+import { createRequestHandler } from "@/components/calendar/request-handler";
 import { assert, test } from "./harness";
 
 function request(

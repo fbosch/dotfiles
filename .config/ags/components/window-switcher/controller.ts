@@ -5,7 +5,7 @@ import { createActor, type ActorRefFrom } from "xstate";
 import {
 	getProfileState,
 	subscribeProfileState,
-} from "../../services/profile-state";
+} from "@/services/profile-state";
 import { debugLog, writeBindDiagnostic } from "./diagnostics";
 import { windowSwitcherMachine, type WindowInfo } from "./machine";
 import { ModifierController, modifierMaskFor } from "./modifier-controller";

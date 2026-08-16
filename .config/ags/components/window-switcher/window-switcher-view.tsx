@@ -7,9 +7,9 @@ import {
 	getFallbackLetter,
 	getIconForWindow,
 	setImageFile,
-} from "../../services/app-icons";
-import { perf } from "../../services/performance-monitor";
-import { getPointerMonitor } from "../../services/pointer-monitor";
+} from "@/services/app-icons";
+import { perf } from "@/services/performance-monitor";
+import { getPointerMonitor } from "@/services/pointer-monitor";
 import {
 	debugLog,
 	debugWriteFile,

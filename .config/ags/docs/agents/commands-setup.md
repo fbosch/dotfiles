@@ -9,7 +9,7 @@
 Manual start:
 
 ```bash
-ags run ~/.config/ags/config-bundled.tsx
+cd ~/.config/ags && ags run config-bundled.tsx
 ```
 
 ## IPC communication

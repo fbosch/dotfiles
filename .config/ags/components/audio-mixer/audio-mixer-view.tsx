@@ -4,11 +4,11 @@ import { Astal } from "ags/gtk4";
 import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { setImageFile } from "../../services/app-icons";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
-import { perf } from "../../services/performance-monitor";
-import { getPointerMonitor } from "../../services/pointer-monitor";
-import { createButton, setButtonVariant } from "../button";
+import { setImageFile } from "@/services/app-icons";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
+import { perf } from "@/services/performance-monitor";
+import { getPointerMonitor } from "@/services/pointer-monitor";
+import { createButton, setButtonVariant } from "@/components/button";
 import { createAudioMeter } from "./audio-meter";
 import {
 	clamp,

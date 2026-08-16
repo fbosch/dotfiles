@@ -1,6 +1,6 @@
 import { isMatching, match } from "ts-pattern";
-import { perf } from "../../services/performance-monitor";
-import { parseComponentRequest } from "../../services/request";
+import { perf } from "@/services/performance-monitor";
+import { parseComponentRequest } from "@/services/request";
 import type { CalendarController } from "./controller";
 import {
 	calendarRequestPattern,

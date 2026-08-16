@@ -1,6 +1,6 @@
 import app from "ags/gtk4/app";
 import { createActor, type ActorRefFrom, type Clock } from "xstate";
-import { perf } from "../../services/performance-monitor";
+import { perf } from "@/services/performance-monitor";
 import { KeyboardSwitcherView } from "./keyboard-switcher-view";
 import {
 	keyboardSwitcherMachine,

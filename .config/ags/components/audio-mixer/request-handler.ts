@@ -1,6 +1,6 @@
 import { match } from "ts-pattern";
-import { perf } from "../../services/performance-monitor";
-import { parseComponentRequest } from "../../services/request";
+import { perf } from "@/services/performance-monitor";
+import { parseComponentRequest } from "@/services/request";
 import type { AudioMixerController } from "./controller";
 import { parseAudioMixerRequest, type AudioMixerRequest } from "./request";
 

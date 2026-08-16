@@ -3,7 +3,7 @@ import {
 	hasAutomaticGamingClaim,
 	type ProfileSelection,
 	type ProfileState,
-} from "../../services/profile-state";
+} from "@/services/profile-state";
 
 interface ProfileControlsActions {
 	onSelect: (selection: ProfileSelection) => void;

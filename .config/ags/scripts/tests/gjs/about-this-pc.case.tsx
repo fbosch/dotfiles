@@ -1,15 +1,15 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { AboutThisPCController } from "../../../components/about-this-pc/controller";
-import type { AboutThisPCView } from "../../../components/about-this-pc/about-this-pc-view";
-import type { AboutThisPCInfo } from "../../../components/about-this-pc/model";
+import { AboutThisPCController } from "@/components/about-this-pc/controller";
+import type { AboutThisPCView } from "@/components/about-this-pc/about-this-pc-view";
+import type { AboutThisPCInfo } from "@/components/about-this-pc/model";
 import {
 	launchAboutMoreInfo,
 	type MoreInfoDependencies,
-} from "../../../components/about-this-pc/more-info";
-import { createRequestHandler } from "../../../components/about-this-pc/request-handler";
-import { runHardwareProbe } from "../../../components/about-this-pc/system-info";
-import type { ComponentModule } from "../../../services/component-host";
+} from "@/components/about-this-pc/more-info";
+import { createRequestHandler } from "@/components/about-this-pc/request-handler";
+import { runHardwareProbe } from "@/components/about-this-pc/system-info";
+import type { ComponentModule } from "@/services/component-host";
 import { assert, test } from "./harness";
 
 const info: AboutThisPCInfo = {
@@ -181,7 +181,7 @@ test("About This PC More Info keeps configured text in argv", () => {
 });
 
 test("About This PC registers through its lazy feature entry", async () => {
-	await import("../../../components/about-this-pc/index");
+	await import("@/components/about-this-pc/index");
 	const component = (
 		globalThis as typeof globalThis & { AboutThisPC: ComponentModule }
 	).AboutThisPC;

@@ -3,12 +3,12 @@ import app from "ags/gtk4/app";
 import { createRoot } from "ags";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
 import {
 	configureButton,
 	setButtonVariant,
 	type ButtonVariant,
-} from "../button";
+} from "@/components/button";
 import type { ConfirmConfig } from "./request";
 
 export interface ConfirmDialogViewHandlers {

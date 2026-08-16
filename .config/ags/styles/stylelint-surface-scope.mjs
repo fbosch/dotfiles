@@ -3,7 +3,7 @@ import stylelint from "stylelint";
 const ruleName = "ags/feature-surface-scope";
 const messages = stylelint.utils.ruleMessages(ruleName, {
 	structure:
-		'Feature styles must contain only @use "../../styles/surface" as ags and one @include ags.surface("feature-class") block',
+		'Feature styles must use "../../styles/surface" as ags and contain one top-level @include ags.surface("feature-class") block',
 	unsafeInclude: "Feature styles cannot include mixins outside the surface block",
 });
 
@@ -17,17 +17,17 @@ const rule = (enabled) => (root, result) => {
 	const uses = nodes.filter(
 		(node) => node.type === "atrule" && node.name === "use",
 	);
-	const includes = nodes.filter(
+	const topLevelIncludes = nodes.filter(
 		(node) => node.type === "atrule" && node.name === "include",
 	);
-	const surface = includes[0];
+	const surface = topLevelIncludes.find((node) =>
+		surfaceInclude.test(node.params),
+	);
 	const surfaceNodes = surface?.nodes?.filter((node) => node.type !== "comment");
 	const validStructure =
-		nodes.length === 2 &&
-		uses.length === 1 &&
-		uses[0].params === surfaceUse &&
-		includes.length === 1 &&
-		surfaceInclude.test(surface?.params ?? "") &&
+		uses.some((node) => node.params === surfaceUse) &&
+		topLevelIncludes.length === 1 &&
+		nodes.every((node) => node.name === "use" || node === surface) &&
 		Array.isArray(surfaceNodes) &&
 		surfaceNodes.length > 0;
 
@@ -39,8 +39,8 @@ const rule = (enabled) => (root, result) => {
 			message: messages.structure,
 		});
 
-	root.walkAtRules((atRule) => {
-		if (atRule === uses[0] || atRule === surface) return;
+	topLevelIncludes.forEach((atRule) => {
+		if (atRule === surface) return;
 		stylelint.utils.report({
 			ruleName,
 			result,

@@ -5,9 +5,9 @@ import { createRoot } from "ags";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import app from "ags/gtk4/app";
-import { type IconRef, setImageFile } from "../../services/app-icons";
-import { bindGamingOpacity } from "../../services/gaming-opacity";
-import { configureButton } from "../button";
+import { type IconRef, setImageFile } from "@/services/app-icons";
+import { bindGamingOpacity } from "@/services/gaming-opacity";
+import { configureButton } from "@/components/button";
 import {
 	type ForceQuitApplication,
 	type ForceQuitMetrics,

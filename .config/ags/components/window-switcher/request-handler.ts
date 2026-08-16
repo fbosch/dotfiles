@@ -1,5 +1,5 @@
 import { match } from "ts-pattern";
-import { perf } from "../../services/performance-monitor";
+import { perf } from "@/services/performance-monitor";
 import { writeBindDiagnostic } from "./diagnostics";
 import type { WindowSwitcherController } from "./controller";
 import {

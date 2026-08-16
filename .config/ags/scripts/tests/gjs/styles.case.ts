@@ -1,13 +1,13 @@
 import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
-import { AudioMixerView } from "../../../components/audio-mixer/audio-mixer-view";
-import { emptySnapshot, type AudioBackend } from "../../../components/audio-mixer/model";
+import { AudioMixerView } from "@/components/audio-mixer/audio-mixer-view";
+import { emptySnapshot, type AudioBackend } from "@/components/audio-mixer/model";
 import {
 	componentStylesheets,
 	type Stylesheet,
-} from "../../../styles/stylesheets";
-import { themeCss } from "../../../styles/theme-css";
+} from "@/styles/stylesheets";
+import { themeCss } from "@/styles/theme-css";
 import { assert, test } from "./harness";
 
 test("AGS theme variables parse as GTK CSS", async () => {
