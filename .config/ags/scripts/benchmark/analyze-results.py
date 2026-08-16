@@ -194,6 +194,20 @@ def main():
         rss = calendar.get("memory_rss_kb", {})
         pss = calendar.get("memory_pss_kb", {})
         print(f"- memory delta: rss {rss.get('delta')}KB pss {pss.get('delta')}KB")
+    memory_processes = extras.get("memory_processes", {})
+    if any(
+        values.get("rss_kb", {}).get("avg") is not None
+        for values in memory_processes.values()
+    ):
+        print("Memory by process (kb):")
+        for process, values in memory_processes.items():
+            rss = values.get("rss_kb", {})
+            pss = values.get("pss_kb", {})
+            print(
+                f"- {process} pid={values.get('pid')}: "
+                f"rss avg {rss.get('avg')} peak {rss.get('peak')} delta {rss.get('delta')}; "
+                f"pss avg {pss.get('avg')} peak {pss.get('peak')} delta {pss.get('delta')}"
+            )
     component_memory = extras.get("component_memory_delta_kb")
     if component_memory and any(
         values.get("rss") is not None or values.get("pss") is not None
