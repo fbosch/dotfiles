@@ -3,6 +3,10 @@ import GLib from "gi://GLib?version=2.0";
 import { readBoundedHelperOutput } from "@/components/ai-pointer/accessibility";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
+import {
+	maximumOcrOutputBytes,
+	readBoundedOcrOutput,
+} from "@/components/ai-pointer/ocr";
 import { StrokeOverlay } from "@/components/ai-pointer/stroke-overlay";
 import { appendStrokePoint, createPointerStroke } from "@/components/ai-pointer/stroke";
 import { assert, test } from "./harness";
@@ -36,6 +40,31 @@ test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	assert(
 		(await readBoundedHelperOutput(oversized, new Gio.Cancellable())) === null,
 		"oversized helper output was retained",
+	);
+});
+
+test("AI Pointer bounds local OCR output while streaming", async () => {
+	const shell = GLib.find_program_in_path("sh");
+	assert(shell !== null, "shell fixture is unavailable");
+	const valid = Gio.Subprocess.new(
+		[shell, "-c", "printf 'recognized text'"],
+		Gio.SubprocessFlags.STDOUT_PIPE,
+	);
+	const validOutput = await readBoundedOcrOutput(valid, new Gio.Cancellable());
+	assert(
+		validOutput.kind === "complete" && validOutput.text === "recognized text",
+		"bounded OCR output was not read",
+	);
+
+	const oversized = Gio.Subprocess.new(
+		[shell, "-c", `printf '%*s' ${maximumOcrOutputBytes + 1} '' | tr ' ' x`],
+		Gio.SubprocessFlags.STDOUT_PIPE,
+	);
+	const oversizedOutput = await readBoundedOcrOutput(oversized, new Gio.Cancellable());
+	assert(
+		oversizedOutput.kind === "truncated" &&
+			oversizedOutput.text.length === maximumOcrOutputBytes,
+		"oversized OCR output was not truncated during streaming",
 	);
 });
 
@@ -195,6 +224,8 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 test("AI Pointer captures and presents a confident accessible snap", async () => {
 	let captured = "";
 	let presentedTarget = "";
+	let ocrInput = "";
+	const ocrStates: string[] = [];
 	const view = {
 		create() {},
 		beginStroke() {
@@ -209,7 +240,9 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
-		setOcrState() {},
+		setOcrState(state) {
+			ocrStates.push(state.kind);
+		},
 		clearOcr() {},
 		showError() {},
 		hide() {},
@@ -223,7 +256,10 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 			geometry: { x: 100, y: 200, width: 120, height: 60 },
 			metadata: { confidence: 0.9, name: "Submit", role: "push button" },
 		}),
-		recognizeOcr: async () => ({ kind: "no-text" }),
+		recognizeOcr: async (input) => {
+			ocrInput = `${input.path}:${input.pixelWidth}x${input.pixelHeight}`;
+			return { kind: "text", text: "Local text" };
+		},
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
@@ -239,6 +275,11 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		await settleMainLoop();
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(presentedTarget === "push button:Submit", "accessible metadata was not presented");
+		assert(
+			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
+			"OCR did not reuse the presented capture",
+		);
+		assert(ocrStates.join(",") === "pending,text", "OCR states were not presented");
 	} finally {
 		controller.teardown();
 	}
