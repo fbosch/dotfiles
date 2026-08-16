@@ -25,6 +25,14 @@ export const aiPointerRequestPattern = P.union(
 			return Object.keys(value).every((key) => key === "action");
 		}),
 	),
+	P.intersection(
+		{ action: "status" },
+		P.when((value) => {
+			if (typeof value !== "object" || value === null || Array.isArray(value))
+				return false;
+			return Object.keys(value).every((key) => key === "action");
+		}),
+	),
 );
 
 export type AiPointerRequest = P.infer<typeof aiPointerRequestPattern>;

@@ -39,6 +39,7 @@ export class AiPointerController {
 	#pendingFinish: PointerPosition | null = null;
 	#pendingFinishId = 0;
 	#failureMessage = "";
+	#debugLastOutcome = "initialized";
 	#runId = 0;
 
 	constructor(options: AiPointerControllerOptions = {}) {
@@ -113,6 +114,18 @@ export class AiPointerController {
 		return true;
 	}
 
+	debugStatus(): string {
+		return JSON.stringify({
+			state: this.#actor?.getSnapshot().value ?? "uninitialized",
+			failure: this.#failureMessage,
+			lastOutcome: this.#debugLastOutcome,
+			capture: this.#capture?.path ?? null,
+			processActive: this.#process !== null,
+			visible: this.#view.isVisible,
+			mapped: this.#view.isMapped,
+		});
+	}
+
 	#captureAt(endPosition: PointerPosition): void {
 		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
 		const startPosition = this.#startPosition;
@@ -141,30 +154,36 @@ export class AiPointerController {
 			this.#cancellable = null;
 			this.#process = null;
 			if (cancellable.is_cancelled()) {
+				this.#debugLastOutcome = "cancellable-cancelled";
 				this.#actor?.send({ type: "CANCEL" });
 				return;
 			}
 			if (result.kind === "cancelled") {
+				this.#debugLastOutcome = "capture-result-cancelled";
 				this.#actor?.send({ type: "CANCEL" });
 				return;
 			}
 			if (result.kind === "failed") {
+				this.#debugLastOutcome = `capture-result-failed:${result.message}`;
 				this.#failureMessage = result.message;
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
 			this.#capture = result.capture;
+			this.#debugLastOutcome = "captured";
 			this.#actor?.send({ type: "CAPTURED" });
 		}).catch(() => {
 			if (runId !== this.#runId) return;
 			this.#cancellable = null;
 			this.#process = null;
 			this.#failureMessage = "The selected region could not be captured.";
+			this.#debugLastOutcome = "capture-promise-rejected";
 			this.#actor?.send({ type: "FAIL" });
 		});
 	}
 
 	cancel(): void {
+		this.#debugLastOutcome = "controller-cancelled";
 		this.#runId += 1;
 		this.#cancellable?.cancel();
 		this.#cancellable = null;

@@ -24,6 +24,14 @@ export class AiPointerView {
 		return this.#window !== null;
 	}
 
+	get isVisible(): boolean {
+		return this.#window?.get_visible() === true;
+	}
+
+	get isMapped(): boolean {
+		return this.#window?.get_mapped() === true;
+	}
+
 	create(handlers: AiPointerViewHandlers): void {
 		if (this.#window) return;
 		this.#handlers = handlers;

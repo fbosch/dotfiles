@@ -30,6 +30,7 @@ export function createRequestHandler(controller: AiPointerController) {
 					controller.cancel();
 					return "cancelled";
 				})
+				.with({ action: "status" }, () => controller.debugStatus())
 				.exhaustive(),
 		);
 	};

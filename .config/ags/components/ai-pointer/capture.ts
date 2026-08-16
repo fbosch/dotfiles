@@ -2,6 +2,8 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { grimGeometry, type SelectionGeometry } from "./selection";
 
+Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
+
 const captureDirectoryName = "ai-pointer";
 const capturePrefix = "capture-";
 const maximumCaptureBytes = 20 * 1024 * 1024;
@@ -38,7 +40,7 @@ export function prepareCaptureDirectory(): string | null {
 export function deleteCapture(path: string): void {
 	if (isFeatureCapture(path) === false) return;
 	try {
-		GLib.unlink(path);
+		Gio.File.new_for_path(path).delete(null);
 	} catch {
 		// Controlled cleanup is best effort after a failed or cancelled capture.
 	}
@@ -67,9 +69,20 @@ export async function captureRegion(
 		deleteCapture(path);
 		return { kind: "cancelled" };
 	}
-	if (!capture || capture.success === false || isValidCapture(path) === false) {
+	if (!capture) {
 		deleteCapture(path);
-		return { kind: "failed", message: "The selected region could not be captured." };
+		return { kind: "failed", message: "The screenshot process did not complete." };
+	}
+	if (capture.success === false) {
+		deleteCapture(path);
+		return {
+			kind: "failed",
+			message: `The screenshot process exited unsuccessfully: ${capture.error ?? "unknown error"}`,
+		};
+	}
+	if (isValidCapture(path) === false) {
+		deleteCapture(path);
+		return { kind: "failed", message: "The screenshot failed PNG validation." };
 	}
 
 	return { kind: "captured", capture: { path, geometry } };
@@ -80,12 +93,12 @@ async function runCommand(
 	cancellable: Gio.Cancellable,
 	timeoutMs: number,
 	onProcess: ProcessObserver,
-): Promise<{ success: boolean; stdout: string } | null> {
+): Promise<{ success: boolean; error?: string } | null> {
 	let process: Gio.Subprocess;
 	try {
 		process = Gio.Subprocess.new(
 			argv,
-			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
+			Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_PIPE,
 		);
 	} catch {
 		return null;
@@ -100,13 +113,23 @@ async function runCommand(
 		return GLib.SOURCE_REMOVE;
 	});
 	try {
-		const [stdout] = await process.communicate_utf8_async(null, cancellable);
-		return { success: process.get_successful(), stdout: stdout ?? "" };
-	} catch {
-		return null;
+		await process.wait_async(cancellable);
+		const errorBytes = process.get_stderr_pipe()?.read_bytes(4_096, null);
+		const error = errorBytes ? new TextDecoder().decode(errorBytes.get_data()).trim() : "";
+		return { success: process.get_successful(), error: error || undefined };
+	} catch (error) {
+		return { success: false, error: String(error) };
 	} finally {
-		if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		cancellable.disconnect(cancellationId);
+		try {
+			if (timeoutId !== 0) GLib.source_remove(timeoutId);
+		} catch {
+			// The source may already have removed itself after a timeout.
+		}
+		try {
+			cancellable.disconnect(cancellationId);
+		} catch {
+			// Cancellation may disconnect its handlers while unwinding.
+		}
 		onProcess(null);
 	}
 }
