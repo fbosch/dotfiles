@@ -10,7 +10,9 @@ import tokens from "../../../../design-system/tokens.json";
 import type { SelectionGeometry } from "./selection";
 import {
 	bsplineStrokeSegments,
+	closedBsplineStrokeSegments,
 	type CubicStrokeSegment,
+	isClosedStroke,
 	type PointerStroke,
 	resampledStrokePoints,
 	strokeBrushRadius,
@@ -47,7 +49,7 @@ const strokeFadeOutMs = 250;
 const compositorFrameDelayMs = 34;
 const selectionPreviewRadius = 14;
 const selectionPreviewGlow = 20;
-const trailFadeBands = 96;
+const trailFadeBands = 48;
 const trailLifetimeMs = 1_400;
 const trailGlowRadius = 14;
 
@@ -55,6 +57,7 @@ export class StrokeOverlay {
 	#surfaces: StrokeSurface[] = [];
 	#stroke: PointerStroke | null = null;
 	#displaySegments: CubicStrokeSegment[] = [];
+	#closedStroke = false;
 	#segmentCreatedAtMs: number[] = [];
 	#frameDrawing: Gtk.Widget | null = null;
 	#frameCallbackId = 0;
@@ -106,9 +109,13 @@ export class StrokeOverlay {
 				this.#segmentCreatedAtMs[index],
 			]),
 		);
+		const displayPoints = resampledStrokePoints(stroke.points);
+		this.#closedStroke = isClosedStroke(displayPoints);
 		const segments = subdivideStrokeSegments(
-			bsplineStrokeSegments(resampledStrokePoints(stroke.points)),
-			3,
+			this.#closedStroke
+				? closedBsplineStrokeSegments(displayPoints)
+				: bsplineStrokeSegments(displayPoints),
+			2,
 		);
 		const now = GLib.get_monotonic_time() / 1_000;
 		this.#displaySegments = segments;
@@ -125,6 +132,7 @@ export class StrokeOverlay {
 		this.#stroke = null;
 		this.#displaySegments = [];
 		this.#segmentCreatedAtMs = [];
+		this.#closedStroke = false;
 	}
 
 	async hideBeforeCapture(): Promise<boolean> {
@@ -196,7 +204,8 @@ export class StrokeOverlay {
 		if (segments.length === 0 || width <= 0 || height <= 0) return;
 		const color = new Gdk.RGBA();
 		color.parse(tokens.colors.accent.primary.value);
-		const bounds = new Graphene.Rect().init(0, 0, width, height);
+		const bounds = this.#strokeRenderBounds(segments, width, height, originX, originY);
+		if (!bounds) return;
 		const brushDiameter = strokeBrushRadius * 2;
 
 		snapshot.push_blur(trailGlowRadius);
@@ -241,6 +250,34 @@ export class StrokeOverlay {
 		}
 	}
 
+	#strokeRenderBounds(
+		segments: CubicStrokeSegment[],
+		width: number,
+		height: number,
+		originX: number,
+		originY: number,
+	): Graphene.Rect | null {
+		const points = segments.flatMap(({ start, control1, control2, end }) => [
+			start,
+			control1,
+			control2,
+			end,
+		]);
+		const padding = strokeBrushRadius + trailGlowRadius;
+		const left = Math.max(0, Math.min(...points.map(({ x }) => x)) - originX - padding);
+		const top = Math.max(0, Math.min(...points.map(({ y }) => y)) - originY - padding);
+		const right = Math.min(
+			width,
+			Math.max(...points.map(({ x }) => x)) - originX + padding,
+		);
+		const bottom = Math.min(
+			height,
+			Math.max(...points.map(({ y }) => y)) - originY + padding,
+		);
+		if (right <= left || bottom <= top) return null;
+		return new Graphene.Rect().init(left, top, right - left, bottom - top);
+	}
+
 	#drawTrailLayer(
 		cr: any,
 		segments: CubicStrokeSegment[],
@@ -271,9 +308,11 @@ export class StrokeOverlay {
 			this.#tracePath(cr, segments, start, end, originX, originY);
 			cr.stroke();
 		}
-		cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
-		cr.arc(endpoint.x - originX, endpoint.y - originY, width / 2, 0, Math.PI * 2);
-		cr.fill();
+		if (this.#closedStroke === false) {
+			cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
+			cr.arc(endpoint.x - originX, endpoint.y - originY, width / 2, 0, Math.PI * 2);
+			cr.fill();
+		}
 	}
 
 	#createSelectionSurface(

@@ -10,7 +10,7 @@ export const minimumStrokePointDistance = 2;
 export const minimumStrokeSpan = 8;
 export const strokeBrushRadius = 32;
 export const strokeCapturePadding = strokeBrushRadius;
-const displayPointSpacing = 28;
+const displayPointSpacing = 18;
 const maximumDisplayStrokePoints = 4_096;
 
 export interface PointerStroke {
@@ -156,6 +156,38 @@ export function bsplineStrokeSegments(points: PointerPosition[]): CubicStrokeSeg
 	const segments: CubicStrokeSegment[] = [];
 	for (let index = 0; index < controls.length - 3; index += 1) {
 		const [p0, p1, p2, p3] = controls.slice(index, index + 4);
+		segments.push({
+			start: weightedPoint(p0, 1, p1, 4, p2, 1),
+			control1: weightedPoint(p1, 4, p2, 2),
+			control2: weightedPoint(p1, 2, p2, 4),
+			end: weightedPoint(p1, 1, p2, 4, p3, 1),
+		});
+	}
+	return segments;
+}
+
+export function isClosedStroke(points: PointerPosition[]): boolean {
+	if (points.length < 4) return false;
+	const first = points[0];
+	const last = points.at(-1)!;
+	const width = Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x));
+	const height = Math.max(...points.map(({ y }) => y)) - Math.min(...points.map(({ y }) => y));
+	return (
+		Math.max(width, height) >= strokeBrushRadius * 2 &&
+		Math.hypot(last.x - first.x, last.y - first.y) <= strokeBrushRadius * 1.5
+	);
+}
+
+export function closedBsplineStrokeSegments(points: PointerPosition[]): CubicStrokeSegment[] {
+	if (points.length < 4) return [];
+	const controls = points.slice(0, -1);
+	if (controls.length < 3) return [];
+	const segments: CubicStrokeSegment[] = [];
+	for (let index = 0; index < controls.length; index += 1) {
+		const p0 = controls[(index - 1 + controls.length) % controls.length];
+		const p1 = controls[index];
+		const p2 = controls[(index + 1) % controls.length];
+		const p3 = controls[(index + 2) % controls.length];
 		segments.push({
 			start: weightedPoint(p0, 1, p1, 4, p2, 1),
 			control1: weightedPoint(p1, 4, p2, 2),

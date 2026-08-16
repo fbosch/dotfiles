@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
 	appendStrokePoint,
 	bsplineStrokeSegments,
+	closedBsplineStrokeSegments,
 	createPointerStroke,
+	isClosedStroke,
 	maximumStrokePoints,
 	representativeStrokePoints,
 	resampledStrokePoints,
@@ -132,6 +134,36 @@ describe("pointer stroke", () => {
 		expect(
 			Math.max(...segments.slice(2, -2).map(({ end }) => Math.abs(end.y))),
 		).toBeLessThan(1);
+	});
+
+	test("closes a loop with continuous geometry and tangent", () => {
+		const points = [
+			{ x: 0, y: 50 },
+			{ x: 15, y: 15 },
+			{ x: 50, y: 0 },
+			{ x: 85, y: 15 },
+			{ x: 100, y: 50 },
+			{ x: 85, y: 85 },
+			{ x: 50, y: 100 },
+			{ x: 15, y: 85 },
+			{ x: 2, y: 52 },
+		];
+		expect(isClosedStroke(points)).toBeTrue();
+		const segments = closedBsplineStrokeSegments(points);
+		const first = segments[0];
+		const last = segments.at(-1)!;
+
+		expect(last.end).toEqual(first.start);
+		expect(last.end.x - last.control2.x).toBeCloseTo(first.control1.x - first.start.x);
+		expect(last.end.y - last.control2.y).toBeCloseTo(first.control1.y - first.start.y);
+	});
+
+	test("keeps an open arc on the clamped endpoint path", () => {
+		expect(isClosedStroke([
+			{ x: 0, y: 50 },
+			{ x: 50, y: 0 },
+			{ x: 100, y: 50 },
+		])).toBeFalse();
 	});
 
 	test("subdivides a curve without changing endpoints or continuity", () => {
