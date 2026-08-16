@@ -35,8 +35,13 @@ const eligibleRoles = new Set([
 	"toggle button",
 ]);
 const commonAncestorRoles = new Set(["article", "section"]);
+const directTargetPriority = new Map([
+	["link", 0],
+	["image", 1],
+]);
 
 export interface AccessibleCandidate {
+	centerHit?: boolean;
 	geometry: SelectionGeometry;
 	hitCount?: number;
 	name?: string;
@@ -93,6 +98,11 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 		)
 			continue;
 		if (
+			value.centerHit !== undefined &&
+			typeof value.centerHit !== "boolean"
+		)
+			continue;
+		if (
 			value.hitCount !== undefined &&
 			(typeof value.hitCount !== "number" ||
 				Number.isSafeInteger(value.hitCount) === false ||
@@ -101,6 +111,7 @@ export function parseAccessibilityHelperOutput(output: string): AccessibleCandid
 		)
 			continue;
 		candidates.push({
+			centerHit: value.centerHit,
 			geometry,
 			hitCount: value.hitCount,
 			role: value.role,
@@ -120,6 +131,21 @@ export function chooseAccessibleSnap(
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
 ): AccessibilityResolution | null {
+	const directTargets = candidates
+		.filter((candidate) =>
+			candidate.centerHit === true && directTargetPriority.has(candidate.role.trim().toLowerCase()),
+		)
+		.sort((left, right) =>
+			(directTargetPriority.get(left.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) -
+				(directTargetPriority.get(right.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) ||
+			left.geometry.width * left.geometry.height - right.geometry.width * right.geometry.height,
+		);
+	for (const candidate of directTargets) {
+		if (containsCenter(candidate.geometry, selection) === false) continue;
+		const resolution = resolutionFromCandidate(candidate, 1, clientGeometry);
+		if (resolution) return resolution;
+	}
+
 	const ranked = deduplicateCandidates(candidates)
 		.map((candidate) => rankCandidate(selection, candidate, clientGeometry))
 		.filter((candidate): candidate is RankedCandidate => candidate !== null)
@@ -135,7 +161,22 @@ export function chooseAccessibleSnap(
 	);
 	if (alternative && best.confidence - alternative.confidence < minimumConfidenceMargin) return null;
 
-	const { x, y, width, height } = best.candidate.geometry;
+	return resolutionFromCandidate(best.candidate, best.confidence, clientGeometry);
+}
+
+function resolutionFromCandidate(
+	candidate: AccessibleCandidate,
+	confidence: number,
+	clientGeometry: SelectionGeometry,
+): AccessibilityResolution | null {
+	const candidateGeometry = validatedSelectionGeometry(
+		candidate.geometry.x,
+		candidate.geometry.y,
+		candidate.geometry.width,
+		candidate.geometry.height,
+	);
+	if (!candidateGeometry || containsGeometry(clientGeometry, candidateGeometry) === false) return null;
+	const { x, y, width, height } = candidateGeometry;
 	const geometry = validatedSelectionGeometry(
 		x - snapPadding,
 		y - snapPadding,
@@ -143,13 +184,12 @@ export function chooseAccessibleSnap(
 		height + snapPadding * 2,
 	);
 	if (!geometry || containsGeometry(clientGeometry, geometry) === false) return null;
-
 	return {
 		geometry,
 		metadata: {
-			confidence: best.confidence,
-			name: best.candidate.name,
-			role: best.candidate.role,
+			confidence,
+			name: candidate.name,
+			role: candidate.role,
 		},
 	};
 }

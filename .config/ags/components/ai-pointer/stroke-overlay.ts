@@ -113,10 +113,10 @@ export class StrokeOverlay {
 			cr.setLineCap(Cairo.LineCap.ROUND);
 			cr.setLineJoin(Cairo.LineJoin.ROUND);
 			for (const [width, alpha] of [
-				[23, 0.05],
-				[13.8, 0.12],
-				[6.9, 0.55],
-				[3.45, 0.96],
+				[34.5, 0.05],
+				[20.7, 0.12],
+				[10.35, 0.55],
+				[5.175, 0.96],
 			] as const) {
 				cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
 				cr.setLineWidth(width);
@@ -126,10 +126,10 @@ export class StrokeOverlay {
 			const endpoint = stroke.points.at(-1);
 			if (!endpoint) return;
 			cr.setSourceRGBA(color.red, color.green, color.blue, 0.06);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 20, 0, Math.PI * 2);
+			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 30, 0, Math.PI * 2);
 			cr.fill();
 			cr.setSourceRGBA(color.red, color.green, color.blue, 0.14);
-			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 11, 0, Math.PI * 2);
+			cr.arc(endpoint.x - geometry.x, endpoint.y - geometry.y, 16.5, 0, Math.PI * 2);
 			cr.fill();
 		});
 

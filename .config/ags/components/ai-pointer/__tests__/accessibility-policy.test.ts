@@ -155,6 +155,48 @@ describe("accessible selection snapping", () => {
 
 		expect(result?.geometry).toEqual({ x: 12, y: 64, width: 1_581, height: 900 });
 	});
+
+	test("selects an entire image when the gesture center is inside it", () => {
+		const result = chooseAccessibleSnap(
+			{ x: 400, y: 300, width: 80, height: 60 },
+			[
+				{
+					centerHit: true,
+					geometry: { x: 100, y: 100, width: 900, height: 600 },
+					hitCount: 9,
+					name: "Product photo",
+					role: "image",
+				},
+			],
+			{ x: 0, y: 0, width: 1_200, height: 900 },
+		);
+
+		expect(result?.geometry).toEqual({ x: 88, y: 88, width: 924, height: 624 });
+	});
+
+	test("prefers an enclosing link over its directly hit image", () => {
+		const result = chooseAccessibleSnap(
+			{ x: 400, y: 300, width: 80, height: 60 },
+			[
+				{
+					centerHit: true,
+					geometry: { x: 80, y: 80, width: 960, height: 660 },
+					hitCount: 9,
+					role: "link",
+				},
+				{
+					centerHit: true,
+					geometry: { x: 100, y: 100, width: 900, height: 600 },
+					hitCount: 9,
+					role: "image",
+				},
+			],
+			{ x: 0, y: 0, width: 1_200, height: 900 },
+		);
+
+		expect(result?.metadata.role).toBe("link");
+		expect(result?.geometry).toEqual({ x: 68, y: 68, width: 984, height: 684 });
+	});
 });
 
 describe("accessibility helper protocol", () => {

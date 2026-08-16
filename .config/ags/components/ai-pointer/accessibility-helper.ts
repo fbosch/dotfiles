@@ -33,10 +33,17 @@ interface HelperInput {
 }
 
 interface Candidate {
+	centerHit: boolean;
 	geometry: Geometry;
 	hitCount: number;
 	name?: string;
 	role: string;
+}
+
+interface HitPoint {
+	centerHit: boolean;
+	x: number;
+	y: number;
 }
 
 interface AccessiblePathItem {
@@ -199,17 +206,24 @@ function matchingApplicationWindows(
 	return matches;
 }
 
-function hitPoints(selection: Geometry, windowWidth: number, windowHeight: number): Geometry[] {
-	const fractions = [0.2, 0.5, 0.8];
+function hitPoints(selection: Geometry, windowWidth: number, windowHeight: number): HitPoint[] {
+	const fractions = [
+		[0.5, 0.5],
+		[0.2, 0.2],
+		[0.5, 0.2],
+		[0.8, 0.2],
+		[0.2, 0.5],
+		[0.8, 0.5],
+		[0.2, 0.8],
+		[0.5, 0.8],
+		[0.8, 0.8],
+	] as const;
 	return fractions
-		.flatMap((yFraction) =>
-			fractions.map((xFraction) => ({
-				x: Math.round(selection.x + selection.width * xFraction),
-				y: Math.round(selection.y + selection.height * yFraction),
-				width: 1,
-				height: 1,
-			})),
-		)
+		.map(([xFraction, yFraction], index) => ({
+			centerHit: index === 0,
+			x: Math.round(selection.x + selection.width * xFraction),
+			y: Math.round(selection.y + selection.height * yFraction),
+		}))
 		.filter((point) => point.x >= 0 && point.x < windowWidth && point.y >= 0 && point.y < windowHeight);
 }
 
@@ -282,11 +296,13 @@ function collectCandidates(window: Atspi.Accessible, input: HelperInput): Candid
 			if (!item.role || excludedRoles.has(item.role)) continue;
 			const existing = candidates.get(key);
 			if (existing) {
+				existing.centerHit ||= point.centerHit;
 				existing.hitCount = Math.min(existing.hitCount + 1, maximumHitCount);
 				continue;
 			}
 			if (candidates.size >= maximumCandidates) continue;
 			candidates.set(key, {
+				centerHit: point.centerHit,
 				geometry,
 				hitCount: 1,
 				role: item.role,

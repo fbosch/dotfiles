@@ -38,6 +38,14 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when one visib
 - **WHEN** at least seven of nine sampled points resolve through one named section or article no more than twelve times the selection area
 - **THEN** the system may expand capture to that ancestor while unnamed and full-page containers remain ineligible
 
+#### Scenario: Gesture center is inside an image
+- **WHEN** the center sample resolves through an accessible image
+- **THEN** the system selects the complete image regardless of area ratio, subject to client and capture bounds
+
+#### Scenario: Image is inside a link
+- **WHEN** the center sample resolves through an image and an enclosing accessible link
+- **THEN** the system selects the complete link container rather than the nested image
+
 #### Scenario: Candidate is a generic container or crosses the client edge
 - **WHEN** a candidate has an unknown or generic container role, or its candidate or padded bounds leave the active client
 - **THEN** the system captures the original stroke-derived geometry
