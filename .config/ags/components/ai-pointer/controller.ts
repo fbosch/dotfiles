@@ -86,6 +86,7 @@ export class AiPointerController {
 	#pendingFinishId = 0;
 	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
+	#finishing = false;
 	#runId = 0;
 	#workflowMark: ReturnType<typeof perf.start> | null = null;
 
@@ -122,12 +123,17 @@ export class AiPointerController {
 					const previewMark = perf.isEnabled()
 						? perf.start("ai-pointer", aiPointerPerformanceMetrics.previewPresentation)
 						: null;
-					const preview = this.#view.showCapture(
-						this.#capture,
-						this.#accessibilityMetadata,
-						this.#programMetadata,
-						this.#accessibilityDiagnostics,
-					);
+					let preview: CapturePreview | null = null;
+					try {
+						preview = this.#view.showCapture(
+							this.#capture,
+							this.#accessibilityMetadata,
+							this.#programMetadata,
+							this.#accessibilityDiagnostics,
+						);
+					} catch {
+						previewMark?.end(false, "failed");
+					}
 					previewMark?.end(preview !== null, preview ? undefined : "failed");
 					if (!preview) {
 						this.#finishWorkflow(false, "preview-failed");
@@ -167,6 +173,7 @@ export class AiPointerController {
 		this.#accessibilityMetadata = null;
 		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
+		this.#finishing = false;
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
 		if (this.#view.beginStroke(this.#stroke, () => this.#sampleStroke()) === false) {
@@ -183,7 +190,7 @@ export class AiPointerController {
 	}
 
 	finish(endPosition: PointerPosition): boolean {
-		if (this.#actor?.getSnapshot().matches("selecting")) {
+		if (this.#actor?.getSnapshot().matches("selecting") && this.#finishing === false) {
 			this.#captureAt(endPosition);
 			return true;
 		}
@@ -221,6 +228,7 @@ export class AiPointerController {
 			return;
 		}
 		const runId = this.#runId;
+		this.#finishing = true;
 		this.#workflowMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
 			: null;
@@ -231,6 +239,7 @@ export class AiPointerController {
 			overlayMark?.end(hidden, hidden ? undefined : "failed");
 			if (runId !== this.#runId) return;
 			if (hidden === false) {
+				this.#finishing = false;
 				this.#finishWorkflow(false, "overlay-failed");
 				this.#failureMessage = "The drawing overlay could not be removed safely.";
 				this.#actor?.send({ type: "FAIL" });
@@ -240,6 +249,7 @@ export class AiPointerController {
 		}).catch(() => {
 			overlayMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
+			this.#finishing = false;
 			this.#finishWorkflow(false, "overlay-failed");
 			this.#failureMessage = "The drawing overlay could not be removed safely.";
 			this.#actor?.send({ type: "FAIL" });
@@ -284,7 +294,10 @@ export class AiPointerController {
 				},
 				mode,
 			);
-			accessibilityMark?.end();
+			accessibilityMark?.end(
+				runId === this.#runId && cancellable.is_cancelled() === false,
+				runId === this.#runId && cancellable.is_cancelled() === false ? undefined : "cancelled",
+			);
 		} catch {
 			accessibilityMark?.end(false, "failed");
 			// Accessibility is advisory; stroke geometry remains the safe fallback.
@@ -312,6 +325,7 @@ export class AiPointerController {
 			captureMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
 			this.#finishWorkflow(false, "capture-failed");
+			this.#finishing = false;
 			this.#cancellable = null;
 			this.#process = null;
 			this.#failureMessage = "The selected region could not be captured.";
@@ -327,16 +341,19 @@ export class AiPointerController {
 		this.#process = null;
 		if (cancellable.is_cancelled() || result.kind === "cancelled") {
 			this.#finishWorkflow(false, "cancelled");
+			this.#finishing = false;
 			this.#actor?.send({ type: "CANCEL" });
 			return;
 		}
 		if (result.kind === "failed") {
 			this.#finishWorkflow(false, "capture-failed");
+			this.#finishing = false;
 			this.#failureMessage = result.message;
 			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
 		this.#capture = result.capture;
+		this.#finishing = false;
 		this.#actor?.send({ type: "CAPTURED" });
 	}
 
@@ -353,6 +370,7 @@ export class AiPointerController {
 		this.#accessibilityMetadata = null;
 		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
+		this.#finishing = false;
 		this.#view.endStroke();
 		this.#clearPendingFinish();
 		if (this.#capture) deleteCapture(this.#capture.path);
@@ -396,15 +414,22 @@ export class AiPointerController {
 				if (runId === this.#runId) this.#ocrProcess = process;
 			},
 		).then((result) => {
-			ocrMark?.end(result.kind !== "cancelled", result.kind === "cancelled" ? "cancelled" : undefined);
+			const succeeded = result.kind === "no-text" || result.kind === "text" || result.kind === "truncated";
+			ocrMark?.end(succeeded, succeeded ? undefined : result.kind);
 			workflowMark?.end(
-				result.kind !== "cancelled",
-				result.kind === "cancelled" ? "cancelled" : undefined,
+				succeeded,
+				succeeded ? undefined : result.kind,
 			);
 			if (this.#workflowMark === workflowMark) this.#workflowMark = null;
 			if (runId !== this.#runId || cancellable.is_cancelled() || result.kind === "cancelled")
 				return;
 			this.#view.setOcrState(result);
+		}).catch(() => {
+			ocrMark?.end(false, "failed");
+			workflowMark?.end(false, "failed");
+			if (this.#workflowMark === workflowMark) this.#workflowMark = null;
+			if (runId === this.#runId && cancellable.is_cancelled() === false)
+				this.#view.setOcrState({ kind: "unavailable", reason: "process-failed" });
 		}).finally(() => {
 			ocrMark?.end(false, "failed");
 			workflowMark?.end(false, "failed");

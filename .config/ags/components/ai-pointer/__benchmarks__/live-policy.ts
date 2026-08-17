@@ -34,6 +34,19 @@ export function normalizeLivePerformanceRecord(value: unknown): LivePerformanceR
 	};
 }
 
+export function recordsForSuccessfulWorkflows(
+	records: LivePerformanceRecord[],
+	maximumWorkflows = Number.POSITIVE_INFINITY,
+): LivePerformanceRecord[] {
+	const workflows = records.filter(
+		(record) => record.name === aiPointerPerformanceMetrics.workflowCompletion && record.ok,
+	).slice(0, maximumWorkflows);
+	return records.filter((record) => workflows.some((workflow) =>
+		record.start_ms >= workflow.start_ms &&
+		record.start_ms <= workflow.start_ms + workflow.duration_ms
+	));
+}
+
 function isFiniteNonNegativeNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0;
 }

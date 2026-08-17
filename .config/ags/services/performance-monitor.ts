@@ -67,8 +67,8 @@ class PerfMark {
     private readonly component: string,
     private readonly name: string,
   ) {
-    this.start = nowMs();
     this.rssBefore = getRssKb();
+    this.start = nowMs();
   }
 
   end(ok = true, error?: string): void {

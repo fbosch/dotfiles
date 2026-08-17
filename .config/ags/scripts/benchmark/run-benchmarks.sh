@@ -300,11 +300,14 @@ STARTED_IDENTITY=""
 START_LOCK_FD=""
 AGS_PID="$BENCH_LAUNCHER_PID"
 GJS_PID=""
+PERF_FLAG_OWNED=0
 
 function cleanup() {
   local status=$?
   trap - EXIT
-  rm -f "$PERF_FLAG"
+  if [[ "$PERF_FLAG_OWNED" == "1" ]]; then
+    rm -f "$PERF_FLAG"
+  fi
   if [[ "$STARTED_INSTANCE" == "1" ]]; then
     ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
     stop_owned_process "$AGS_PID" "$STARTED_IDENTITY"
@@ -313,6 +316,13 @@ function cleanup() {
 }
 
 trap cleanup EXIT
+
+if ! (set -o noclobber; : > "$PERF_FLAG") 2>/dev/null; then
+  printf "Another AGS benchmark is active or left a stale benchmark lock: %s\n" "$PERF_FLAG" >&2
+  exit 1
+fi
+PERF_FLAG_OWNED=1
+rm -f "$PERF_LOG"
 
 if { [[ "$BENCH_COLD" == "1" ]] || [[ "$BENCH_RESTART" == "1" ]]; } && is_running; then
   ags quit -i "$INSTANCE" >/dev/null 2>&1 || true
@@ -406,9 +416,6 @@ if [[ -z "$AGS_IDENTITY" || -z "$GJS_IDENTITY" ]]; then
   printf "Failed to capture stable AGS process identities\n" >&2
   exit 1
 fi
-
-rm -f "$PERF_LOG"
-touch "$PERF_FLAG"
 
 printf "AGS benchmark: %s target=%s\n" "$INSTANCE" "$BENCH_TARGET"
 

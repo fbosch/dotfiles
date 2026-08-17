@@ -288,6 +288,104 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 	}
 });
 
+test("AI Pointer rejects a second finish while overlay teardown is pending", async () => {
+	let captures = 0;
+	let confirmHidden: ((hidden: boolean) => void) | null = null;
+	const view = {
+		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
+		finishStroke() {
+			return new Promise<boolean>((resolve) => {
+				confirmHidden = resolve;
+			});
+		},
+		showCapture() {
+			return { pixelHeight: 20, pixelWidth: 20 };
+		},
+		setOcrState() {},
+		clearOcr() {},
+		showError() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
+		resolveAccessibility: async () => null,
+		resolvePrograms: () => [],
+		recognizeOcr: async () => ({ kind: "no-text" }),
+		capture: async () => {
+			captures += 1;
+			return { kind: "cancelled" };
+		},
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		assert(controller.finish({ x: 30, y: 40 }), "first finish request was rejected");
+		assert(controller.finish({ x: 31, y: 41 }) === false, "second finish request was accepted");
+		assert(confirmHidden !== null, "drawing teardown was not requested");
+		confirmHidden(true);
+		await settleMainLoop();
+		assert(captures === 1, "duplicate finish started multiple captures");
+	} finally {
+		controller.teardown();
+	}
+});
+
+test("AI Pointer converts an unexpected OCR rejection into a bounded failure", async () => {
+	const ocrStates: string[] = [];
+	const view = {
+		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
+		finishStroke() {
+			return Promise.resolve(true);
+		},
+		showCapture() {
+			return { pixelHeight: 20, pixelWidth: 20 };
+		},
+		setOcrState(state) {
+			ocrStates.push(state.kind);
+		},
+		clearOcr() {},
+		showError() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
+		resolveAccessibility: async () => null,
+		resolvePrograms: () => [],
+		recognizeOcr: async () => {
+			throw new Error("fixture failure");
+		},
+		capture: async (_directory, geometry) => ({
+			kind: "captured",
+			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+		}),
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
+		await settleMainLoop();
+		assert(ocrStates.join(",") === "pending,unavailable", "OCR rejection escaped the workflow");
+	} finally {
+		controller.teardown();
+	}
+});
+
 test("AI Pointer captures and presents a confident accessible snap", async () => {
 	let captured = "";
 	let presentedTarget = "";
