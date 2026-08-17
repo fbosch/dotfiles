@@ -37,6 +37,25 @@ const accessibleDragCandidates = [
 const inaccessibleDragCandidates = [
 	{ geometry: { x: 420, y: 320, width: 200, height: 80 }, role: "panel" },
 ];
+const maximumClickCandidates = Array.from({ length: 24 }, (_, index) => ({
+	centerHit: true,
+	geometry: {
+		height: 20 + index * 2,
+		width: 40 + index * 4,
+		x: 500 - Math.floor((40 + index * 4) / 2),
+		y: 400 - Math.floor((20 + index * 2) / 2),
+	},
+	role: index === 0 ? "push button" : index % 2 === 0 ? "link" : "text",
+}));
+const maximumDragCandidates = Array.from({ length: 24 }, (_, index) => ({
+	geometry: {
+		height: 50,
+		width: 80,
+		x: 410 + (index % 6) * 30,
+		y: 310 + Math.floor(index / 6) * 18,
+	},
+	role: "text",
+}));
 let sink: unknown;
 
 const scenarios = {
@@ -45,12 +64,16 @@ const scenarios = {
 	"click-fallback-geometry": () => clickFallbackGeometry(clickPoint, monitor),
 	"click-inaccessible-policy": () =>
 		evaluateAccessibleClick(clickPoint, inaccessibleClickCandidates, client, monitor),
+	"click-maximum-candidates-policy": () =>
+		evaluateAccessibleClick(clickPoint, maximumClickCandidates, client, monitor),
 	"click-target-geometry": () =>
 		clickTargetGeometry(clickPoint, accessibleClickCandidates[0].geometry, monitor),
 	"drag-accessible-policy": () =>
 		evaluateAccessibleSnap(dragSelection, accessibleDragCandidates, client),
 	"drag-inaccessible-policy": () =>
 		evaluateAccessibleSnap(dragSelection, inaccessibleDragCandidates, client),
+	"drag-maximum-candidates-policy": () =>
+		evaluateAccessibleSnap(dragSelection, maximumDragCandidates, client),
 };
 
 const rssBeforeKb = Math.round(process.memoryUsage().rss / 1_024);

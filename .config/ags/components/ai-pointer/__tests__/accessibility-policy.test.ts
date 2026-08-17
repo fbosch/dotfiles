@@ -43,9 +43,48 @@ describe("accessible click targeting", () => {
 		expect(evaluation.resolution).toBeNull();
 		expect(evaluation.diagnostics[0].reason).toBe("not at click");
 	});
+
+	test("bounds diagnostics for the maximum click candidate set", () => {
+		const candidates = Array.from({ length: 24 }, (_, index) => ({
+			centerHit: true,
+			geometry: {
+				height: 20 + index * 2,
+				width: 40 + index * 4,
+				x: 200 - Math.floor((40 + index * 4) / 2),
+				y: 150 - Math.floor((20 + index * 2) / 2),
+			},
+			role: index === 0 ? "push button" : index % 2 === 0 ? "link" : "text",
+		}));
+		const evaluation = evaluateAccessibleClick(
+			{ x: 200, y: 150 },
+			candidates,
+			client,
+			client,
+		);
+
+		expect(evaluation.resolution?.metadata.role).toBe("push button");
+		expect(evaluation.diagnostics).toHaveLength(12);
+		expect(evaluation.diagnostics[0].selected).toBe(true);
+	});
 });
 
 describe("accessible selection snapping", () => {
+	test("bounds diagnostics for the maximum drag candidate set", () => {
+		const candidates = Array.from({ length: 24 }, (_, index) => ({
+			geometry: {
+				height: 50,
+				width: 80,
+				x: 110 + (index % 6) * 30,
+				y: 110 + Math.floor(index / 6) * 18,
+			},
+			role: "text",
+		}));
+		const evaluation = evaluateAccessibleSnap(selection, candidates, client);
+
+		expect(evaluation.diagnostics).toHaveLength(12);
+		expect(evaluation.diagnostics.every(({ reason }) => reason === "eligible")).toBe(true);
+	});
+
 	test("snaps to one confident candidate with bounded padding", () => {
 		const result = chooseAccessibleSnap(selection, [
 				{

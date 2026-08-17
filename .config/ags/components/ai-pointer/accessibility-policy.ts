@@ -197,6 +197,11 @@ interface RankedCandidate {
 	confidence: number;
 }
 
+interface CandidateAnalysis {
+	candidate: AccessibleCandidate;
+	ranked: RankedCandidate | null;
+}
+
 export function chooseAccessibleSnap(
 	selection: SelectionGeometry,
 	candidates: AccessibleCandidate[],
@@ -210,9 +215,26 @@ export function evaluateAccessibleSnap(
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
 ): AccessibilityEvaluation {
-	const resolution = chooseAccessibleSnapInternal(selection, candidates, clientGeometry);
+	const analyzed = deduplicateCandidates(candidates).map((candidate) => ({
+		candidate,
+		ranked: rankCandidate(selection, candidate, clientGeometry),
+	}));
+	const ranked = analyzed
+		.map(({ ranked: candidate }) => candidate)
+		.filter((candidate): candidate is RankedCandidate => candidate !== null)
+		.sort((left, right) =>
+			right.confidence - left.confidence ||
+			left.candidate.role.localeCompare(right.candidate.role) ||
+			(left.candidate.name ?? "").localeCompare(right.candidate.name ?? "")
+		);
+	const resolution = chooseAccessibleSnapInternal(
+		selection,
+		candidates,
+		clientGeometry,
+		ranked,
+	);
 	return {
-		diagnostics: diagnoseCandidates(selection, candidates, clientGeometry, resolution),
+		diagnostics: diagnoseCandidates(selection, analyzed, clientGeometry, resolution),
 		resolution,
 	};
 }
@@ -221,6 +243,7 @@ function chooseAccessibleSnapInternal(
 	selection: SelectionGeometry,
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
+	ranked: RankedCandidate[],
 ): AccessibilityResolution | null {
 	const directTargets = candidates
 		.filter((candidate) =>
@@ -233,14 +256,6 @@ function chooseAccessibleSnapInternal(
 				(directTargetPriority.get(right.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) ||
 			directTargetFit(selection, right) - directTargetFit(selection, left) ||
 			left.geometry.width * left.geometry.height - right.geometry.width * right.geometry.height,
-		);
-	const ranked = deduplicateCandidates(candidates)
-		.map((candidate) => rankCandidate(selection, candidate, clientGeometry))
-		.filter((candidate): candidate is RankedCandidate => candidate !== null)
-		.sort((left, right) =>
-			right.confidence - left.confidence ||
-			left.candidate.role.localeCompare(right.candidate.role) ||
-			(left.candidate.name ?? "").localeCompare(right.candidate.name ?? "")
 		);
 	const best = ranked[0];
 	const alternative = ranked.find(
@@ -280,7 +295,7 @@ function chooseAccessibleSnapInternal(
 
 function diagnoseCandidates(
 	selection: SelectionGeometry,
-	candidates: AccessibleCandidate[],
+	analyzed: CandidateAnalysis[],
 	clientGeometry: SelectionGeometry,
 	resolution: AccessibilityResolution | null,
 ): AccessibilityCandidateDiagnostic[] {
@@ -290,9 +305,8 @@ function diagnoseCandidates(
 				? [geometryKey(resolution.metadata.targetGeometry)]
 				: []),
 	);
-	return deduplicateCandidates(candidates)
-		.map((candidate) => {
-			const ranked = rankCandidate(selection, candidate, clientGeometry);
+	return analyzed
+		.map(({ candidate, ranked }) => {
 			return {
 				centerHit: candidate.centerHit === true,
 				confidence: ranked?.confidence,
