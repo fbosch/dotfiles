@@ -44,19 +44,10 @@ local function focus_gaming_workspace()
 end
 
 local function release_super()
-	if ai_pointer.consume_super_chord() then
-		hl.dispatch(hl.dsp.exec_cmd("printf 'release\\n' | nc -U " .. waybar_control_socket .. " >/dev/null 2>&1"))
-		return bind.consume()
-	end
-
 	return window_switcher.release_super()
 end
 
 local function release_super_right()
-	if ai_pointer.consume_super_chord() then
-		return bind.consume()
-	end
-
 	return window_switcher.commit()
 end
 
@@ -84,8 +75,8 @@ bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 -- Launchers
 bind.register(main("SPACE"), programs.menu)
 bind.register(main("R"), programs.menu)
-bind.register(main("mouse:274"), ai_pointer.start)
-bind.register(main("mouse:274"), ai_pointer.finish, { release = true })
+bind.register("ALT + mouse:274", ai_pointer.start)
+bind.register("ALT + mouse:274", ai_pointer.finish, { release = true })
 
 -- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
