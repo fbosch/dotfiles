@@ -4,10 +4,11 @@ import { queryHyprlandJson } from "@/services/hyprland-ipc";
 import {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
+	type AccessibilityCandidateDiagnostic,
 	type AccessibilityResolution,
 	type AccessibleCandidate,
 	type ProgramMetadata,
-	chooseAccessibleSnap,
+	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "./accessibility-policy";
 import {
@@ -69,6 +70,7 @@ export async function resolveAccessibleSelection(
 	stroke: PointerStroke,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
+	onDiagnostics: (diagnostics: AccessibilityCandidateDiagnostic[]) => void = () => {},
 ): Promise<AccessibilityResolution | null> {
 	const client = activeClientForSelection(selection);
 	if (!client) return null;
@@ -76,7 +78,9 @@ export async function resolveAccessibleSelection(
 	if (!candidates || cancellable.is_cancelled()) return null;
 	const freshClient = activeClientForSelection(selection);
 	if (!freshClient || sameClient(client, freshClient) === false) return null;
-	const resolution = chooseAccessibleSnap(selection, candidates, freshClient.geometry);
+	const evaluation = evaluateAccessibleSnap(selection, candidates, freshClient.geometry);
+	onDiagnostics(evaluation.diagnostics);
+	const { resolution } = evaluation;
 	if (!resolution) return null;
 	return {
 		...resolution,

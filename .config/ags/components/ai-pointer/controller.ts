@@ -5,6 +5,7 @@ import { createActor, type ActorRefFrom } from "xstate";
 import { queryHyprlandJson } from "@/services/hyprland-ipc";
 import { programsForSelection, resolveAccessibleSelection } from "./accessibility";
 import type {
+	AccessibilityCandidateDiagnostic,
 	AccessibilityMetadata,
 	AccessibilityResolution,
 	ProgramMetadata,
@@ -47,6 +48,7 @@ interface AiPointerControllerOptions {
 		stroke: PointerStroke,
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
+		onDiagnostics?: (diagnostics: AccessibilityCandidateDiagnostic[]) => void,
 	): Promise<AccessibilityResolution | null>;
 }
 
@@ -67,6 +69,7 @@ export class AiPointerController {
 	#ocrProcess: Gio.Subprocess | null = null;
 	#capture: Capture | null = null;
 	#accessibilityMetadata: AccessibilityMetadata | null = null;
+	#accessibilityDiagnostics: AccessibilityCandidateDiagnostic[] = [];
 	#programMetadata: ProgramMetadata[] = [];
 	#directory: string | null = null;
 	#pendingFinish: PointerPosition | null = null;
@@ -108,6 +111,7 @@ export class AiPointerController {
 						this.#capture,
 						this.#accessibilityMetadata,
 						this.#programMetadata,
+						this.#accessibilityDiagnostics,
 					);
 					if (!preview) {
 						this.#failureMessage = "The captured image could not be previewed.";
@@ -144,6 +148,7 @@ export class AiPointerController {
 		this.#directory = directory;
 		this.#stroke = createPointerStroke(startPosition);
 		this.#accessibilityMetadata = null;
+		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
@@ -239,6 +244,9 @@ export class AiPointerController {
 				stroke,
 				cancellable,
 				observeProcess,
+				(diagnostics) => {
+					if (runId === this.#runId) this.#accessibilityDiagnostics = diagnostics;
+				},
 			);
 		} catch {
 			// Accessibility is advisory; stroke geometry remains the safe fallback.
@@ -293,6 +301,7 @@ export class AiPointerController {
 		this.#directory = null;
 		this.#stroke = null;
 		this.#accessibilityMetadata = null;
+		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
 		this.#view.endStroke();
 		this.#clearPendingFinish();

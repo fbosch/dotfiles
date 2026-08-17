@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
 	chooseAccessibleSnap,
+	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "../accessibility-policy";
 
@@ -281,6 +282,32 @@ describe("accessible selection snapping", () => {
 			expect(result?.metadata.role).toBe("push button");
 			expect(result?.geometry).toEqual({ x: 108, y: 98, width: 184, height: 104 });
 		}
+	});
+
+	test("reports selected and rejected candidates for local diagnostics", () => {
+		const evaluation = evaluateAccessibleSnap(selection, [
+			{
+				geometry: { x: 120, y: 110, width: 160, height: 80 },
+				name: "Submit",
+				role: "push button",
+			},
+			{
+				geometry: { x: 180, y: 140, width: 40, height: 20 },
+				name: "Label",
+				role: "label",
+			},
+		], client);
+
+		expect(evaluation.diagnostics[0]).toMatchObject({
+			name: "Submit",
+			reason: "eligible",
+			selected: true,
+		});
+		expect(evaluation.diagnostics[1]).toMatchObject({
+			name: "Label",
+			reason: "ineligible role",
+			selected: false,
+		});
 	});
 
 	test("fuzzily ranks a regular target near the gesture center", () => {

@@ -232,6 +232,7 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 	let captured = "";
 	let presentedTarget = "";
 	let presentedProgram = "";
+	let presentedDiagnostics = 0;
 	let ocrInput = "";
 	const ocrStates: string[] = [];
 	const view = {
@@ -244,9 +245,10 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture(_capture, accessibility, programs) {
+		showCapture(_capture, accessibility, programs, diagnostics) {
 			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
 			presentedProgram = `${programs[0]?.class}:${programs[0]?.pid}`;
+			presentedDiagnostics = diagnostics.length;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -261,10 +263,24 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
-		resolveAccessibility: async () => ({
-			geometry: { x: 100, y: 200, width: 120, height: 60 },
-			metadata: { confidence: 0.9, name: "Submit", role: "push button" },
-		}),
+		resolveAccessibility: async (_geometry, _stroke, _cancellable, _onProcess, onDiagnostics) => {
+			onDiagnostics?.([
+				{
+					centerHit: true,
+					confidence: 0.9,
+					geometry: { x: 100, y: 200, width: 120, height: 60 },
+					hitCount: 7,
+					name: "Submit",
+					reason: "eligible",
+					role: "push button",
+					selected: true,
+				},
+			]);
+			return {
+				geometry: { x: 100, y: 200, width: 120, height: 60 },
+				metadata: { confidence: 0.9, name: "Submit", role: "push button" },
+			};
+		},
 		resolvePrograms: () => [
 			{
 				class: "org.wezfurlong.wezterm",
@@ -296,6 +312,7 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 			presentedProgram === "org.wezfurlong.wezterm:123",
 			"coordinate-matched program metadata was not presented",
 		);
+		assert(presentedDiagnostics === 1, "candidate diagnostics were not presented");
 		assert(
 			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
 			"OCR did not reuse the presented capture",

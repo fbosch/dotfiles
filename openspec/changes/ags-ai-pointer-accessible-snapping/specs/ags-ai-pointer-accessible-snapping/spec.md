@@ -104,6 +104,10 @@ The AI Pointer MAY show each selected candidate's bounded accessible name, role,
 - **WHEN** multiple mapped visible clients each cover at least five percent of the final capture and are not fully occluded within the selected region by a higher-ranked client
 - **THEN** the preview lists up to eight programs ordered by active-client precedence, focus history, and capture coverage
 
+#### Scenario: Local candidate diagnostics are enabled
+- **WHEN** accessibility lookup returns candidates whether or not one is selected
+- **THEN** the preview may show up to twelve bounded deduplicated candidates with selected status, role, name, geometry, center and hit evidence, score, and a stable rejection reason without adding diagnostics to capture or AI-facing metadata
+
 #### Scenario: Selected link exposes a web URL
 - **WHEN** the winning link candidate provides one bounded valid HTTP or HTTPS Hyperlink URI
 - **THEN** the local preview may show that URL without persisting, logging, or adding it to an AI-facing payload

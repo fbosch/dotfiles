@@ -8,7 +8,11 @@ import Pango from "gi://Pango?version=1.0";
 import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
-import type { AccessibilityMetadata, ProgramMetadata } from "./accessibility-policy";
+import type {
+	AccessibilityCandidateDiagnostic,
+	AccessibilityMetadata,
+	ProgramMetadata,
+} from "./accessibility-policy";
 import type { Capture } from "./capture";
 import type { OcrResult } from "./ocr";
 import type { PointerStroke } from "./stroke";
@@ -32,6 +36,7 @@ export class AiPointerView {
 	#program: Gtk.Label | null = null;
 	#target: Gtk.Label | null = null;
 	#evidence: Gtk.Label | null = null;
+	#diagnostics: Gtk.Label | null = null;
 	#ocr: Gtk.Label | null = null;
 	#status: Gtk.Label | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
@@ -84,6 +89,7 @@ export class AiPointerView {
 								{this.#createMetadataField("MATCH EVIDENCE", (label) => {
 									this.#evidence = label;
 								})}
+								{this.#createDiagnosticsField()}
 								{this.#createOcrField()}
 							</box>
 						</box>
@@ -128,6 +134,7 @@ export class AiPointerView {
 		capture: Capture,
 		accessibility: AccessibilityMetadata | null = null,
 		programs: ProgramMetadata[] = accessibility?.program ? [accessibility.program] : [],
+		diagnostics: AccessibilityCandidateDiagnostic[] = [],
 	): CapturePreview | null {
 		let texture: Gdk.Texture;
 		try {
@@ -143,6 +150,7 @@ export class AiPointerView {
 		this.#program?.set_label(this.#formatPrograms(programs));
 		this.#target?.set_label(target ?? "No reliable accessible element");
 		this.#evidence?.set_label(this.#formatEvidence(accessibility));
+		this.#diagnostics?.set_label(this.#formatDiagnostics(diagnostics));
 		this.#status?.set_label(
 			target
 				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
@@ -222,6 +230,7 @@ export class AiPointerView {
 		this.#program = null;
 		this.#target = null;
 		this.#evidence = null;
+		this.#diagnostics = null;
 		this.#ocr = null;
 		this.#status = null;
 		this.#handlers = null;
@@ -294,6 +303,37 @@ export class AiPointerView {
 		return box;
 	}
 
+	#createDiagnosticsField(): Gtk.Box {
+		const value = new Gtk.Label({
+			halign: Gtk.Align.FILL,
+			selectable: true,
+			valign: Gtk.Align.START,
+			wrap: true,
+			xalign: 0,
+		});
+		value.set_wrap_mode(Pango.WrapMode.CHAR);
+		value.add_css_class("ai-pointer-metadata-value");
+		this.#diagnostics = value;
+		const scroll = new Gtk.ScrolledWindow({
+			hscrollbarPolicy: Gtk.PolicyType.NEVER,
+			vscrollbarPolicy: Gtk.PolicyType.AUTOMATIC,
+		});
+		scroll.set_min_content_height(96);
+		scroll.set_max_content_height(180);
+		scroll.set_propagate_natural_height(true);
+		scroll.set_child(value);
+		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
+		const title = new Gtk.Label({
+			halign: Gtk.Align.START,
+			label: "CANDIDATE DIAGNOSTICS",
+			xalign: 0,
+		});
+		title.add_css_class("ai-pointer-metadata-title");
+		box.append(title);
+		box.append(scroll);
+		return box;
+	}
+
 	#formatTarget(accessibility: AccessibilityMetadata | null): string | null {
 		if (!accessibility) return null;
 		if (accessibility.targets && accessibility.targets.length > 1)
@@ -327,6 +367,18 @@ export class AiPointerView {
 					? ""
 					: ` · ${Math.round(program.coverage * 100)}% of capture`;
 				return `${index + 1}. ${identity} · PID ${program.pid}${coverage}${program.title ? `\n   ${program.title}` : ""}\n   ${program.geometry.width} × ${program.geometry.height} at ${program.geometry.x}, ${program.geometry.y}`;
+			})
+			.join("\n");
+	}
+
+	#formatDiagnostics(diagnostics: AccessibilityCandidateDiagnostic[]): string {
+		if (diagnostics.length === 0) return "No AT-SPI candidates returned.";
+		return diagnostics
+			.map((candidate, index) => {
+				const confidence = candidate.confidence === undefined
+					? "unscored"
+					: `${Math.round(candidate.confidence * 100)}%`;
+				return `${index + 1}. ${candidate.selected ? "[selected] " : ""}${candidate.role}${candidate.name ? `: ${candidate.name}` : ""}\n   ${candidate.geometry.width} × ${candidate.geometry.height} at ${candidate.geometry.x}, ${candidate.geometry.y} · ${confidence} · ${candidate.centerHit ? "center" : "fuzzy"} · ${candidate.hitCount} hit${candidate.hitCount === 1 ? "" : "s"} · ${candidate.reason}`;
 			})
 			.join("\n");
 	}

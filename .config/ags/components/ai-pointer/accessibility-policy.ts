@@ -62,6 +62,7 @@ const collectionRoles = new Set([
 const maximumCollectionTargets = 8;
 const minimumCollectionDensity = 0.15;
 const maximumCollectionOverlap = 0.5;
+const maximumDiagnostics = 12;
 const directTargetPriority = new Map([
 	["link", 0],
 	["image", 1],
@@ -103,6 +104,22 @@ export interface AccessibilityMetadata extends Omit<AccessibilityTargetMetadata,
 export interface AccessibilityResolution {
 	geometry: SelectionGeometry;
 	metadata: AccessibilityMetadata;
+}
+
+export interface AccessibilityCandidateDiagnostic {
+	centerHit: boolean;
+	confidence?: number;
+	geometry: SelectionGeometry;
+	hitCount: number;
+	name?: string;
+	reason: string;
+	role: string;
+	selected: boolean;
+}
+
+export interface AccessibilityEvaluation {
+	diagnostics: AccessibilityCandidateDiagnostic[];
+	resolution: AccessibilityResolution | null;
 }
 
 export function parseAccessibilityHelperOutput(output: string): AccessibleCandidate[] | null {
@@ -185,6 +202,26 @@ export function chooseAccessibleSnap(
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
 ): AccessibilityResolution | null {
+	return evaluateAccessibleSnap(selection, candidates, clientGeometry).resolution;
+}
+
+export function evaluateAccessibleSnap(
+	selection: SelectionGeometry,
+	candidates: AccessibleCandidate[],
+	clientGeometry: SelectionGeometry,
+): AccessibilityEvaluation {
+	const resolution = chooseAccessibleSnapInternal(selection, candidates, clientGeometry);
+	return {
+		diagnostics: diagnoseCandidates(selection, candidates, clientGeometry, resolution),
+		resolution,
+	};
+}
+
+function chooseAccessibleSnapInternal(
+	selection: SelectionGeometry,
+	candidates: AccessibleCandidate[],
+	clientGeometry: SelectionGeometry,
+): AccessibilityResolution | null {
 	const directTargets = candidates
 		.filter((candidate) =>
 			candidate.centerHit === true &&
@@ -239,6 +276,72 @@ export function chooseAccessibleSnap(
 	if (!best || bestIsClear === false) return null;
 
 	return resolutionFromCandidate(best.candidate, best.confidence, clientGeometry);
+}
+
+function diagnoseCandidates(
+	selection: SelectionGeometry,
+	candidates: AccessibleCandidate[],
+	clientGeometry: SelectionGeometry,
+	resolution: AccessibilityResolution | null,
+): AccessibilityCandidateDiagnostic[] {
+	const selectedGeometries = new Set(
+		resolution?.metadata.targets?.map(({ targetGeometry }) => geometryKey(targetGeometry)) ??
+			(resolution?.metadata.targetGeometry
+				? [geometryKey(resolution.metadata.targetGeometry)]
+				: []),
+	);
+	return deduplicateCandidates(candidates)
+		.map((candidate) => {
+			const ranked = rankCandidate(selection, candidate, clientGeometry);
+			return {
+				centerHit: candidate.centerHit === true,
+				confidence: ranked?.confidence,
+				geometry: candidate.geometry,
+				hitCount: candidate.hitCount ?? 1,
+				name: candidate.name,
+				reason: ranked ? "eligible" : candidateRejectionReason(selection, candidate, clientGeometry),
+				role: candidate.role,
+				selected: selectedGeometries.has(geometryKey(candidate.geometry)),
+			};
+		})
+		.sort((left, right) =>
+			Number(right.selected) - Number(left.selected) ||
+			(right.confidence ?? -1) - (left.confidence ?? -1) ||
+			right.hitCount - left.hitCount,
+		)
+		.slice(0, maximumDiagnostics);
+}
+
+function candidateRejectionReason(
+	selection: SelectionGeometry,
+	candidate: AccessibleCandidate,
+	clientGeometry: SelectionGeometry,
+): string {
+	if (eligibleRoles.has(candidate.role.trim().toLowerCase()) === false) return "ineligible role";
+	const geometry = validatedSelectionGeometry(
+		candidate.geometry.x,
+		candidate.geometry.y,
+		candidate.geometry.width,
+		candidate.geometry.height,
+	);
+	if (!geometry) return "invalid geometry";
+	if (containsGeometry(clientGeometry, geometry) === false) return "outside client";
+	const fuzzySelection = paddedSelectionGeometry(selection, strokeCapturePadding);
+	if (!fuzzySelection || intersection(fuzzySelection, geometry) <= 0) return "outside brush";
+	const selectionArea = selection.width * selection.height;
+	const candidateArea = geometry.width * geometry.height;
+	const intersectionArea = intersection(selection, geometry);
+	const areaRatio = candidateArea / selectionArea;
+	if (areaRatio < minimumAreaRatio) return "too small";
+	const selectionCoverage = intersectionArea / selectionArea;
+	const namedCommonAncestor =
+		areaRatio <= maximumNamedAncestorAreaRatio &&
+		selectionCoverage >= 0.7 &&
+		(candidate.hitCount ?? 1) >= 7 &&
+		Boolean(candidate.name) &&
+		commonAncestorRoles.has(candidate.role.trim().toLowerCase());
+	if (areaRatio > maximumAreaRatio && namedCommonAncestor === false) return "too large";
+	return "weak overlap";
 }
 
 function directTargetFit(
