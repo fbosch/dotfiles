@@ -194,20 +194,32 @@ function matchingWindow(desktop: Atspi.Accessible, input: HelperInput): Atspi.Ac
 	} catch {
 		return null;
 	}
-	const exactMatches: Atspi.Accessible[] = [];
-	const activeMatches: Atspi.Accessible[] = [];
+	const applications: Array<{ accessible: Atspi.Accessible; exactPid: boolean }> = [];
 	for (let index = 0; index < Math.min(Math.max(childCount, 0), maximumApplications); index += 1) {
 		try {
 			const application = desktop.get_child_at_index(index);
 			if (!application) continue;
-			const matches = matchingApplicationWindows(application, input);
-			activeMatches.push(...matches);
-			if (application.get_process_id() === input.pid) exactMatches.push(...matches);
+			let exactPid = false;
+			try {
+				exactPid = application.get_process_id() === input.pid;
+			} catch {
+				// PID-less applications remain eligible for the conservative fallback.
+			}
+			applications.push({
+				accessible: application,
+				exactPid,
+			});
 		} catch {
 			// Applications can disappear between registry calls.
 		}
 	}
+	const exactMatches = applications
+		.filter(({ exactPid }) => exactPid)
+		.flatMap(({ accessible }) => matchingApplicationWindows(accessible, input));
 	if (exactMatches.length > 0) return exactMatches.length === 1 ? exactMatches[0] : null;
+	const activeMatches = applications.flatMap(({ accessible }) =>
+		matchingApplicationWindows(accessible, input)
+	);
 	return activeMatches.length === 1 ? activeMatches[0] : null;
 }
 

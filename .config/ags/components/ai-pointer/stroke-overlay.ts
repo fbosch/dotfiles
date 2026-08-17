@@ -45,7 +45,6 @@ const allEdges =
 	Astal.WindowAnchor.LEFT |
 	Astal.WindowAnchor.RIGHT;
 const unmapTimeoutMs = 250;
-const strokeFadeOutMs = 250;
 const compositorFrameDelayMs = 34;
 const selectionPreviewRadius = 14;
 const selectionPreviewGlow = 20;
@@ -142,16 +141,9 @@ export class StrokeOverlay {
 		this.#stroke = null;
 		this.#displaySegments = [];
 		this.#segmentCreatedAtMs = [];
-		// Hyprland retains the layer snapshot during its exit animation; capture only after it fades.
-		const [unmapped] = await Promise.all([
-			Promise.all(surfaces.map(({ window }) => this.#waitForUnmap(window))),
-			new Promise<void>((resolve) => {
-				GLib.timeout_add(GLib.PRIORITY_DEFAULT, strokeFadeOutMs, () => {
-					resolve();
-					return GLib.SOURCE_REMOVE;
-				});
-			}),
-		]);
+		const unmapped = await Promise.all(
+			surfaces.map(({ window }) => this.#waitForUnmap(window)),
+		);
 		Gdk.Display.get_default()?.sync();
 		await new Promise<void>((resolve) => {
 			GLib.timeout_add(GLib.PRIORITY_DEFAULT, compositorFrameDelayMs, () => {

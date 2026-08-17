@@ -23,7 +23,7 @@ Wayland does not provide a global pointer-motion stream to a layer surface mappe
 
 ### Sample the compositor cursor only during an active gesture
 
-The controller starts one GTK frame-clock callback on the overlay surface containing the activation point and removes it before capture, cancellation, or teardown. Each tick reads `j/cursorpos` through the existing direct Hyprland IPC helper. The press and release callbacks remain authoritative endpoints, so process scheduling cannot omit either edge of the gesture.
+The controller starts one GTK frame-clock callback on the overlay surface containing the activation point and removes it before capture, cancellation, or teardown. Each tick reads `j/cursorpos` through the existing direct Hyprland IPC helper. The press and release callbacks remain authoritative endpoints, so process scheduling cannot omit either edge of the gesture. On release, the drawing layer unmaps without a compositor exit animation; capture waits for unmap confirmation, display synchronization, and a bounded compositor-frame delay rather than retaining the drawing for a fixed fade interval.
 
 Sampling is limited to the held-button interval and follows that monitor's presentation cadence. Retained drawing points are distance-filtered and capped. The stroke model tracks extrema separately, so history compaction cannot shrink the eventual capture bounds.
 
