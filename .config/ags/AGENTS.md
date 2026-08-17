@@ -44,6 +44,8 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 
 Benchmark target can also be set with `BENCH_TARGET`; positional target wins. Keep targeted runs focused when investigating one bundled component.
 
+Feature-specific benchmark drivers belong in `components/<feature>/__benchmarks__/`. Service-wide drivers belong in `services/__benchmarks__/`; keep only reusable orchestration and analysis under `scripts/benchmark/`.
+
 ## References
 
 - [AGS guide (upstream docs)](docs/guide/TOC.md)

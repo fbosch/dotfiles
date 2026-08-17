@@ -1,13 +1,25 @@
-import { evaluateAccessibleSnap } from "../../components/ai-pointer/accessibility-policy";
-import { evaluateAccessibleClick } from "../../components/ai-pointer/click-policy";
+import { evaluateAccessibleSnap } from "../accessibility-policy";
+import { evaluateAccessibleClick } from "../click-policy";
 import {
 	clickFallbackGeometry,
 	clickTargetGeometry,
-} from "../../components/ai-pointer/selection";
-import { benchmarkStatistics } from "./ai-pointer-stats";
+} from "../selection";
+import { benchmarkEnvironmentInteger, benchmarkStatistics } from "./stats";
 
-const samples = environmentInteger("AI_POINTER_BENCH_SAMPLES", 30, 5, 200);
-const batchSize = environmentInteger("AI_POINTER_POLICY_BATCH", 5_000, 100, 100_000);
+const samples = benchmarkEnvironmentInteger(
+	"AI_POINTER_BENCH_SAMPLES",
+	process.env.AI_POINTER_BENCH_SAMPLES,
+	30,
+	5,
+	200,
+);
+const batchSize = benchmarkEnvironmentInteger(
+	"AI_POINTER_POLICY_BATCH",
+	process.env.AI_POINTER_POLICY_BATCH,
+	5_000,
+	100,
+	100_000,
+);
 const monitor = { x: 0, y: 0, width: 2_560, height: 1_440 };
 const client = { x: 100, y: 100, width: 1_200, height: 900 };
 const clickPoint = { x: 500, y: 400 };
@@ -74,20 +86,6 @@ console.log(JSON.stringify({
 	unit: "milliseconds per operation",
 	unavailableMetrics: ["cpuTime", "allocations"],
 }, null, 2));
-
-function environmentInteger(
-	name: string,
-	fallback: number,
-	minimum: number,
-	maximum: number,
-): number {
-	const value = process.env[name];
-	if (value === undefined) return fallback;
-	const parsed = Number(value);
-	if (Number.isSafeInteger(parsed) === false || parsed < minimum || parsed > maximum)
-		throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`);
-	return parsed;
-}
 
 function consume(value: unknown): void {
 	sink = value;

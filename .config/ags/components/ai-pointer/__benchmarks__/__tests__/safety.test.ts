@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { assertInertBenchmarkDependencies } from "../ai-pointer-safety";
+import { assertInertBenchmarkDependencies } from "../safety";
 
 const dependencies = {
 	capture: true,

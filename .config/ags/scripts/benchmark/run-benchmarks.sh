@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Computed repository paths are linted independently by the benchmark globs.
+# shellcheck disable=SC1091
 
 set -euo pipefail
 
@@ -255,6 +257,8 @@ function json_number_or_null() {
   fi
 }
 
+# Populated by the sourced process-memory benchmark before serialization.
+# shellcheck disable=SC2154
 function memory_scope_json() {
   local scope="$1"
   local pid_json="$2"
@@ -280,6 +284,16 @@ function memory_scope_json() {
     }
 EOF
 }
+
+source "$SCRIPT_DIR/lib/component-memory.sh"
+source "$AGS_DIR/components/audio-mixer/__benchmarks__/toggle-memory.sh"
+source "$AGS_DIR/components/calendar/__benchmarks__/calendar-widget.sh"
+source "$AGS_DIR/components/desktop-clock/__benchmarks__/toggle-memory.sh"
+source "$AGS_DIR/components/keyboard-switcher/__benchmarks__/toggle-memory.sh"
+source "$AGS_DIR/components/start-menu/__benchmarks__/toggle-memory.sh"
+source "$AGS_DIR/components/volume-indicator/__benchmarks__/toggle-memory.sh"
+source "$AGS_DIR/components/window-switcher/__benchmarks__/window-switcher.sh"
+source "$SCRIPT_DIR/bundled-memory.sh"
 
 STARTED_INSTANCE=0
 STARTED_IDENTITY=""
@@ -434,281 +448,21 @@ avg_pss_kb=""
 pss_peak_kb=""
 delta_pss_kb=""
 
-if target_enabled "calendar-widget"; then
-calendar_enabled=true
-printf -- "%s\n" "- calendar-widget baseline (${BENCH_CALENDAR_CYCLES} nav cycles)"
-calendar_before_rss_kb="$(read_combined_rss_kb)"
-calendar_before_pss_kb="$(read_combined_pss_kb)"
-request_calendar '{"action":"hide"}'
-calendar_cold_show_ms="$(timed_calendar_request '{"action":"show"}')"
-sleep "$BENCH_CALENDAR_REFRESH_WAIT"
-request_calendar '{"action":"hide"}'
-calendar_warm_show_ms="$(timed_calendar_request '{"action":"show"}')"
-sleep "$BENCH_CALENDAR_REFRESH_WAIT"
-
-calendar_next_total_ms=0
-calendar_prev_total_ms=0
-for _ in $(seq 1 "$BENCH_CALENDAR_CYCLES"); do
-  nav_ms="$(timed_calendar_request '{"action":"next-month"}')"
-  calendar_next_total_ms="$((calendar_next_total_ms + nav_ms))"
-  sleep "$BENCH_CYCLE_SLEEP"
-done
-for _ in $(seq 1 "$BENCH_CALENDAR_CYCLES"); do
-  nav_ms="$(timed_calendar_request '{"action":"prev-month"}')"
-  calendar_prev_total_ms="$((calendar_prev_total_ms + nav_ms))"
-  sleep "$BENCH_CYCLE_SLEEP"
-done
-calendar_today_ms="$(timed_calendar_request '{"action":"today"}')"
-sleep "$BENCH_CALENDAR_REFRESH_WAIT"
-request_calendar '{"action":"hide"}'
-calendar_after_rss_kb="$(read_combined_rss_kb)"
-calendar_after_pss_kb="$(read_combined_pss_kb)"
-calendar_delta_rss_kb=""
-calendar_delta_pss_kb=""
-if is_number "$calendar_before_rss_kb" && is_number "$calendar_after_rss_kb"; then
-  calendar_delta_rss_kb="$((calendar_after_rss_kb - calendar_before_rss_kb))"
-fi
-if is_number "$calendar_before_pss_kb" && is_number "$calendar_after_pss_kb"; then
-  calendar_delta_pss_kb="$((calendar_after_pss_kb - calendar_before_pss_kb))"
-fi
-calendar_next_avg_ms="$((calendar_next_total_ms / BENCH_CALENDAR_CYCLES))"
-calendar_prev_avg_ms="$((calendar_prev_total_ms / BENCH_CALENDAR_CYCLES))"
-printf "  cold_show=%sms warm_show=%sms next_avg=%sms prev_avg=%sms today=%sms rss_delta=%sKB pss_delta=%sKB\n" \
-  "$calendar_cold_show_ms" \
-  "$calendar_warm_show_ms" \
-  "$calendar_next_avg_ms" \
-  "$calendar_prev_avg_ms" \
-  "$calendar_today_ms" \
-  "${calendar_delta_rss_kb:-}" \
-  "${calendar_delta_pss_kb:-}"
-else
-  printf -- "%s\n" "- calendar-widget: skipped"
-fi
-
-if target_enabled "window-switcher"; then
-for _ in $(seq 1 "$BENCH_WARMUP_COUNT"); do
-  request '{"action":"get-mode"}'
-done
-
-printf -- "%s" "- warm show latency: "
-start_ns="$(now_ns)"
-request '{"action":"next"}'
-end_ns="$(now_ns)"
-request '{"action":"hide"}'
-latency_ms="$(ms_from_ns "$((end_ns - start_ns))")"
-printf "%sms\n" "$latency_ms"
-
-printf -- "%s" "- cycle ${BENCH_CYCLE_COUNT} iterations: "
-start_ns="$(now_ns)"
-for _ in $(seq 1 "$BENCH_CYCLE_COUNT"); do
-  request '{"action":"next"}'
-  sleep "$BENCH_CYCLE_SLEEP"
-done
-end_ns="$(now_ns)"
-request '{"action":"hide"}'
-total_ms="$(ms_from_ns "$((end_ns - start_ns))")"
-avg_ms="$((total_ms / BENCH_CYCLE_COUNT))"
-printf "%sms avg\n" "$avg_ms"
-else
-  printf -- "%s\n" "- window-switcher: skipped"
-fi
+run_calendar_widget_benchmark
+run_window_switcher_benchmark
 
 if target_enabled "components"; then
-printf -- "%s\n" "- start-menu toggle (${BENCH_COMPONENT_CYCLES} cycles)"
-sm_before_rss_kb="$(read_combined_rss_kb)"
-sm_before_pss_kb="$(read_combined_pss_kb)"
-for _ in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
-  ags request -i "$INSTANCE" "start-menu" '{"action":"show"}' >/dev/null
-  ags request -i "$INSTANCE" "start-menu" '{"action":"hide"}' >/dev/null
-done
-sm_after_rss_kb="$(read_combined_rss_kb)"
-sm_after_pss_kb="$(read_combined_pss_kb)"
-sm_delta_rss_kb=""
-sm_delta_pss_kb=""
-if is_number "$sm_before_rss_kb" && is_number "$sm_after_rss_kb"; then
-  sm_delta_rss_kb="$((sm_after_rss_kb - sm_before_rss_kb))"
-fi
-if is_number "$sm_before_pss_kb" && is_number "$sm_after_pss_kb"; then
-  sm_delta_pss_kb="$((sm_after_pss_kb - sm_before_pss_kb))"
-fi
-
-printf -- "%s\n" "- volume-indicator show (${BENCH_COMPONENT_CYCLES} cycles)"
-vi_before_rss_kb="$(read_combined_rss_kb)"
-vi_before_pss_kb="$(read_combined_pss_kb)"
-for _ in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
-  ags request -i "$INSTANCE" "volume-indicator" '{"action":"show"}' >/dev/null
-  ags request -i "$INSTANCE" "volume-indicator" '{"action":"hide"}' >/dev/null
-done
-vi_after_rss_kb="$(read_combined_rss_kb)"
-vi_after_pss_kb="$(read_combined_pss_kb)"
-vi_delta_rss_kb=""
-vi_delta_pss_kb=""
-if is_number "$vi_before_rss_kb" && is_number "$vi_after_rss_kb"; then
-  vi_delta_rss_kb="$((vi_after_rss_kb - vi_before_rss_kb))"
-fi
-if is_number "$vi_before_pss_kb" && is_number "$vi_after_pss_kb"; then
-  vi_delta_pss_kb="$((vi_after_pss_kb - vi_before_pss_kb))"
-fi
-
-printf -- "%s\n" "- keyboard-switcher show (${BENCH_COMPONENT_CYCLES} cycles)"
-ks_before_rss_kb="$(read_combined_rss_kb)"
-ks_before_pss_kb="$(read_combined_pss_kb)"
-for i in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
-  active="EN"
-  if [[ "$((i % 2))" -eq 0 ]]; then
-    active="DA"
-  fi
-  ags request -i "$INSTANCE" "keyboard-switcher" "{\"action\":\"show\",\"config\":{\"layouts\":[\"EN\",\"DA\"],\"activeLayout\":\"${active}\",\"size\":\"sm\"}}" >/dev/null
-  ags request -i "$INSTANCE" "keyboard-switcher" '{"action":"hide"}' >/dev/null
-done
-ks_after_rss_kb="$(read_combined_rss_kb)"
-ks_after_pss_kb="$(read_combined_pss_kb)"
-ks_delta_rss_kb=""
-ks_delta_pss_kb=""
-if is_number "$ks_before_rss_kb" && is_number "$ks_after_rss_kb"; then
-  ks_delta_rss_kb="$((ks_after_rss_kb - ks_before_rss_kb))"
-fi
-if is_number "$ks_before_pss_kb" && is_number "$ks_after_pss_kb"; then
-  ks_delta_pss_kb="$((ks_after_pss_kb - ks_before_pss_kb))"
-fi
-
-printf -- "%s\n" "- desktop-clock show (${BENCH_COMPONENT_CYCLES} cycles)"
-dc_before_rss_kb="$(read_combined_rss_kb)"
-dc_before_pss_kb="$(read_combined_pss_kb)"
-for i in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
-  show_date="false"
-  if [[ "$((i % 2))" -eq 0 ]]; then
-    show_date="true"
-  fi
-  ags request -i "$INSTANCE" "desktop-clock" "{\"action\":\"config\",\"config\":{\"showDate\":${show_date}}}" >/dev/null
-  ags request -i "$INSTANCE" "desktop-clock" '{"action":"show"}' >/dev/null
-  ags request -i "$INSTANCE" "desktop-clock" '{"action":"hide"}' >/dev/null
-done
-dc_after_rss_kb="$(read_combined_rss_kb)"
-dc_after_pss_kb="$(read_combined_pss_kb)"
-dc_delta_rss_kb=""
-dc_delta_pss_kb=""
-if is_number "$dc_before_rss_kb" && is_number "$dc_after_rss_kb"; then
-  dc_delta_rss_kb="$((dc_after_rss_kb - dc_before_rss_kb))"
-fi
-if is_number "$dc_before_pss_kb" && is_number "$dc_after_pss_kb"; then
-  dc_delta_pss_kb="$((dc_after_pss_kb - dc_before_pss_kb))"
-fi
+  run_start_menu_benchmark
+  run_volume_indicator_benchmark
+  run_keyboard_switcher_benchmark
+  run_desktop_clock_benchmark
 else
   printf -- "%s\n" "- bundled components: skipped"
 fi
 
-if target_enabled "audio-mixer"; then
-printf -- "%s\n" "- audio-mixer toggle (${BENCH_COMPONENT_CYCLES} cycles)"
-am_before_rss_kb="$(read_combined_rss_kb)"
-am_before_pss_kb="$(read_combined_pss_kb)"
-for _ in $(seq 1 "$BENCH_COMPONENT_CYCLES"); do
-  ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"show"}' >/dev/null
-  ags request -i "$INSTANCE" "audio-mixer-widget" '{"action":"hide"}' >/dev/null
-  sleep "$BENCH_AUDIO_MIXER_SLEEP"
-done
-am_after_rss_kb="$(read_combined_rss_kb)"
-am_after_pss_kb="$(read_combined_pss_kb)"
-am_delta_rss_kb=""
-am_delta_pss_kb=""
-if is_number "$am_before_rss_kb" && is_number "$am_after_rss_kb"; then
-  am_delta_rss_kb="$((am_after_rss_kb - am_before_rss_kb))"
-fi
-if is_number "$am_before_pss_kb" && is_number "$am_after_pss_kb"; then
-  am_delta_pss_kb="$((am_after_pss_kb - am_before_pss_kb))"
-fi
-else
-  printf -- "%s\n" "- audio-mixer: skipped"
-fi
+run_audio_mixer_benchmark
 
-MEMORY_SCOPES=(launcher gjs combined)
-declare -A memory_before_rss memory_after_rss memory_delta_rss memory_sum_rss memory_peak_rss memory_samples_rss memory_avg_rss
-declare -A memory_before_pss memory_after_pss memory_delta_pss memory_sum_pss memory_peak_pss memory_samples_pss memory_avg_pss
-
-for scope in "${MEMORY_SCOPES[@]}"; do
-  memory_before_rss[$scope]=""
-  memory_after_rss[$scope]=""
-  memory_delta_rss[$scope]=""
-  memory_sum_rss[$scope]=0
-  memory_peak_rss[$scope]=""
-  memory_samples_rss[$scope]=0
-  memory_avg_rss[$scope]=""
-  memory_before_pss[$scope]=""
-  memory_after_pss[$scope]=""
-  memory_delta_pss[$scope]=""
-  memory_sum_pss[$scope]=0
-  memory_peak_pss[$scope]=""
-  memory_samples_pss[$scope]=0
-  memory_avg_pss[$scope]=""
-done
-
-if target_enabled "memory"; then
-  printf -- "%s\n" "- memory process tree over ${BENCH_MEM_CYCLES} cycles"
-  capture_memory_sample
-  for scope in "${MEMORY_SCOPES[@]}"; do
-    memory_before_rss[$scope]="$(sample_scope_rss_kb "$scope")"
-    memory_before_pss[$scope]="$(sample_scope_pss_kb "$scope")"
-  done
-
-  for _ in $(seq 1 "$BENCH_MEM_CYCLES"); do
-    request '{"action":"next"}'
-    request '{"action":"hide"}'
-    capture_memory_sample
-    for scope in "${MEMORY_SCOPES[@]}"; do
-      sample_rss="$(sample_scope_rss_kb "$scope")"
-      if is_number "$sample_rss"; then
-        memory_sum_rss[$scope]="$((memory_sum_rss[$scope] + sample_rss))"
-        memory_samples_rss[$scope]="$((memory_samples_rss[$scope] + 1))"
-        if ! is_number "${memory_peak_rss[$scope]}" || [[ "$sample_rss" -gt "${memory_peak_rss[$scope]}" ]]; then
-          memory_peak_rss[$scope]="$sample_rss"
-        fi
-      fi
-      sample_pss="$(sample_scope_pss_kb "$scope")"
-      if is_number "$sample_pss"; then
-        memory_sum_pss[$scope]="$((memory_sum_pss[$scope] + sample_pss))"
-        memory_samples_pss[$scope]="$((memory_samples_pss[$scope] + 1))"
-        if ! is_number "${memory_peak_pss[$scope]}" || [[ "$sample_pss" -gt "${memory_peak_pss[$scope]}" ]]; then
-          memory_peak_pss[$scope]="$sample_pss"
-        fi
-      fi
-    done
-  done
-
-  capture_memory_sample
-  for scope in "${MEMORY_SCOPES[@]}"; do
-    memory_after_rss[$scope]="$(sample_scope_rss_kb "$scope")"
-    memory_after_pss[$scope]="$(sample_scope_pss_kb "$scope")"
-    if is_number "${memory_before_rss[$scope]}" && is_number "${memory_after_rss[$scope]}"; then
-      memory_delta_rss[$scope]="$((memory_after_rss[$scope] - memory_before_rss[$scope]))"
-    fi
-    if is_number "${memory_before_pss[$scope]}" && is_number "${memory_after_pss[$scope]}"; then
-      memory_delta_pss[$scope]="$((memory_after_pss[$scope] - memory_before_pss[$scope]))"
-    fi
-    if [[ "${memory_samples_rss[$scope]}" -gt 0 ]]; then
-      memory_avg_rss[$scope]="$((memory_sum_rss[$scope] / memory_samples_rss[$scope]))"
-    fi
-    if [[ "${memory_samples_pss[$scope]}" -gt 0 ]]; then
-      memory_avg_pss[$scope]="$((memory_sum_pss[$scope] / memory_samples_pss[$scope]))"
-    fi
-    printf "  %s pid=%s rss before=%sKB avg=%sKB peak=%sKB after=%sKB delta=%sKB pss before=%sKB avg=%sKB peak=%sKB after=%sKB delta=%sKB\n" \
-      "$scope" "$(scope_pid "$scope")" \
-      "${memory_before_rss[$scope]}" "${memory_avg_rss[$scope]}" "${memory_peak_rss[$scope]}" "${memory_after_rss[$scope]}" "${memory_delta_rss[$scope]}" \
-      "${memory_before_pss[$scope]}" "${memory_avg_pss[$scope]}" "${memory_peak_pss[$scope]}" "${memory_after_pss[$scope]}" "${memory_delta_pss[$scope]}"
-  done
-
-  before_rss_kb="${memory_before_rss[combined]}"
-  after_rss_kb="${memory_after_rss[combined]}"
-  delta_rss_kb="${memory_delta_rss[combined]}"
-  avg_rss_kb="${memory_avg_rss[combined]}"
-  rss_peak_kb="${memory_peak_rss[combined]}"
-  before_pss_kb="${memory_before_pss[combined]}"
-  after_pss_kb="${memory_after_pss[combined]}"
-  delta_pss_kb="${memory_delta_pss[combined]}"
-  avg_pss_kb="${memory_avg_pss[combined]}"
-  pss_peak_kb="${memory_peak_pss[combined]}"
-else
-  printf -- "%s\n" "- memory: skipped"
-fi
+run_bundled_memory_benchmark
 
 before_rss_json="$(json_number_or_null "$before_rss_kb")"
 after_rss_json="$(json_number_or_null "$after_rss_kb")"

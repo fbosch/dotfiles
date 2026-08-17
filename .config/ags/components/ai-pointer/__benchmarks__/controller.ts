@@ -1,13 +1,25 @@
 import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
-import type { AccessibilityLookupMode } from "@/components/ai-pointer/accessibility";
-import { AiPointerController } from "@/components/ai-pointer/controller";
-import type { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
-import { assertInertBenchmarkDependencies } from "./ai-pointer-safety";
-import { benchmarkStatistics } from "./ai-pointer-stats";
+import type { AccessibilityLookupMode } from "../accessibility";
+import { AiPointerController } from "../controller";
+import type { AiPointerView } from "../ai-pointer-view";
+import { assertInertBenchmarkDependencies } from "./safety";
+import { benchmarkEnvironmentInteger, benchmarkStatistics } from "./stats";
 
-const samples = environmentInteger("AI_POINTER_BENCH_SAMPLES", 20, 5, 200);
-const batchSize = environmentInteger("AI_POINTER_CONTROLLER_BATCH", 10, 1, 1_000);
+const samples = benchmarkEnvironmentInteger(
+	"AI_POINTER_BENCH_SAMPLES",
+	GLib.getenv("AI_POINTER_BENCH_SAMPLES"),
+	20,
+	5,
+	200,
+);
+const batchSize = benchmarkEnvironmentInteger(
+	"AI_POINTER_CONTROLLER_BATCH",
+	GLib.getenv("AI_POINTER_CONTROLLER_BATCH"),
+	10,
+	1,
+	1_000,
+);
 const clickFallback = { x: 372, y: 272, width: 256, height: 256 };
 const dragTarget = { x: 408, y: 308, width: 224, height: 104 };
 
@@ -141,20 +153,6 @@ function settleMainLoop(): Promise<void> {
 
 function nowMs(): number {
 	return GLib.get_monotonic_time() / 1_000;
-}
-
-function environmentInteger(
-	name: string,
-	fallback: number,
-	minimum: number,
-	maximum: number,
-): number {
-	const value = GLib.getenv(name);
-	if (value === null) return fallback;
-	const parsed = Number(value);
-	if (Number.isSafeInteger(parsed) === false || parsed < minimum || parsed > maximum)
-		throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`);
-	return parsed;
 }
 
 function readRssKb(): number | null {

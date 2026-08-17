@@ -6,6 +6,8 @@ let
     "scripts/*.sh"
     ".config/ags/*.sh"
     ".config/ags/scripts/*.sh"
+    ".config/ags/scripts/benchmark/**/*.sh"
+    ".config/ags/components/**/__benchmarks__/*.sh"
     ".config/hypr/runtime/**/*.sh"
     ".config/hypr/legacy/scripts/*.sh"
     ".config/vicinae/extensions/*.sh"

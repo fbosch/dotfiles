@@ -7,6 +7,20 @@ export interface BenchmarkStatistics {
 	p95Ms: number;
 }
 
+export function benchmarkEnvironmentInteger(
+	name: string,
+	value: string | null | undefined,
+	fallback: number,
+	minimum: number,
+	maximum: number,
+): number {
+	if (value === null || value === undefined) return fallback;
+	const parsed = Number(value);
+	if (Number.isSafeInteger(parsed) === false || parsed < minimum || parsed > maximum)
+		throw new Error(`${name} must be an integer from ${minimum} to ${maximum}`);
+	return parsed;
+}
+
 export function benchmarkStatistics(values: number[]): BenchmarkStatistics {
 	if (values.length === 0) throw new Error("Benchmark samples are required");
 	const sorted = [...values].sort((left, right) => left - right);
