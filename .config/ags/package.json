@@ -21,6 +21,7 @@
     "lint:lines": "biome lint .",
     "lint:styles": "stylelint \"{components,styles}/**/*.scss\"",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
+    "benchmark:ai-pointer": "bun run scripts/benchmark/ai-pointer-policy.ts && ags run --gtk 4 scripts/benchmark/ai-pointer-controller.ts",
     "quality": "pnpm lint:lines && pnpm lint:styles && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
   "keywords": [
