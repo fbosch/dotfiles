@@ -12,6 +12,7 @@
 
 - [x] 3.1 Resolve accessibility after drawing teardown and before capture, preserving stroke geometry on every lookup failure.
 - [x] 3.2 Show copied role/name metadata locally and clear it on cancellation and teardown.
+- [x] 3.3 Resolve click-only gestures through exact point targeting with a monitor-clamped 256 by 256 fallback and bounded target context.
 
 ## 4. Validation
 

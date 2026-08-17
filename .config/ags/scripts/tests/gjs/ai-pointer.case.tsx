@@ -174,6 +174,66 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 	}
 });
 
+test("AI Pointer uses a bounded fallback for a click without an accessible target", async () => {
+	let captured = "";
+	let lookupMode = "";
+	const view = {
+		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
+		finishStroke() {
+			return Promise.resolve(true);
+		},
+		showCapture() {
+			return { pixelHeight: 20, pixelWidth: 20 };
+		},
+		setOcrState() {},
+		clearOcr() {},
+		showError() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
+		resolveClickGeometry: () => ({ x: 72, y: 72, width: 256, height: 256 }),
+		resolveAccessibility: async (
+			_geometry,
+			_stroke,
+			_cancellable,
+			_onProcess,
+			_onDiagnostics,
+			mode,
+		) => {
+			lookupMode = mode ?? "";
+			return null;
+		},
+		resolvePrograms: () => [],
+		recognizeOcr: async () => ({ kind: "no-text" }),
+		capture: async (_directory, geometry) => {
+			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
+			return {
+				kind: "captured",
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+			};
+		},
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 200, y: 200 }), "click start was rejected");
+		assert(controller.finish({ x: 200, y: 200 }), "click finish was rejected");
+		await settleMainLoop();
+		assert(lookupMode === "click", "click did not use point accessibility policy");
+		assert(captured === "72,72 256x256", "click fallback geometry was not captured");
+	} finally {
+		controller.teardown();
+	}
+});
+
 test("AI Pointer waits for the drawing overlay before capture", async () => {
 	let captured = false;
 	let confirmHidden: ((hidden: boolean) => void) | null = null;

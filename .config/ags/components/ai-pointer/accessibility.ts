@@ -11,8 +11,11 @@ import {
 	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "./accessibility-policy";
+import { evaluateAccessibleClick } from "./click-policy";
 import {
 	containsSelectionCenter,
+	clickFallbackGeometry,
+	containsPoint,
 	type PointerPosition,
 	type SelectionGeometry,
 	validatedSelectionGeometry,
@@ -41,6 +44,14 @@ interface ActiveClient {
 	visible?: unknown;
 }
 
+interface HyprlandMonitor {
+	disabled?: unknown;
+	height?: unknown;
+	width?: unknown;
+	x?: unknown;
+	y?: unknown;
+}
+
 interface AccessibleHelperInput {
 	coordinateSpace: typeof accessibilityCoordinateSpace;
 	pid: number;
@@ -64,6 +75,7 @@ interface ValidatedClient {
 }
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
+export type AccessibilityLookupMode = "click" | "stroke";
 
 export async function resolveAccessibleSelection(
 	selection: SelectionGeometry,
@@ -71,14 +83,24 @@ export async function resolveAccessibleSelection(
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
 	onDiagnostics: (diagnostics: AccessibilityCandidateDiagnostic[]) => void = () => {},
+	mode: AccessibilityLookupMode = "stroke",
 ): Promise<AccessibilityResolution | null> {
-	const client = activeClientForSelection(selection);
+	const clickPoint = mode === "click" ? stroke.points.at(-1) : undefined;
+	const lookupSelection = clickPoint
+		? validatedSelectionGeometry(clickPoint.x, clickPoint.y, 1, 1)
+		: selection;
+	if (!lookupSelection) return null;
+	const client = activeClientForSelection(lookupSelection);
 	if (!client) return null;
-	const candidates = await queryHelper(client, selection, stroke, cancellable, onProcess);
+	const candidates = await queryHelper(client, lookupSelection, stroke, cancellable, onProcess);
 	if (!candidates || cancellable.is_cancelled()) return null;
-	const freshClient = activeClientForSelection(selection);
+	const freshClient = activeClientForSelection(lookupSelection);
 	if (!freshClient || sameClient(client, freshClient) === false) return null;
-	const evaluation = evaluateAccessibleSnap(selection, candidates, freshClient.geometry);
+	const monitor = clickPoint ? monitorGeometryForPoint(clickPoint) : null;
+	if (clickPoint && !monitor) return null;
+	const evaluation = clickPoint
+		? evaluateAccessibleClick(clickPoint, candidates, freshClient.geometry, monitor)
+		: evaluateAccessibleSnap(selection, candidates, freshClient.geometry);
 	onDiagnostics(evaluation.diagnostics);
 	const { resolution } = evaluation;
 	if (!resolution) return null;
@@ -94,6 +116,11 @@ export async function resolveAccessibleSelection(
 			},
 		},
 	};
+}
+
+export function clickFallbackForPoint(point: PointerPosition): SelectionGeometry | null {
+	const monitor = monitorGeometryForPoint(point);
+	return monitor ? clickFallbackGeometry(point, monitor) : null;
 }
 
 export function programsForSelection(selection: SelectionGeometry): ProgramMetadata[] {
@@ -125,6 +152,31 @@ function activeClientForSelection(selection: SelectionGeometry): ValidatedClient
 	});
 	const client = validatedClient(active);
 	return client && containsSelectionCenter(client.geometry, selection) ? client : null;
+}
+
+function monitorGeometryForPoint(point: PointerPosition): SelectionGeometry | null {
+	const monitors = queryHyprlandJson<HyprlandMonitor[]>("j/monitors", {
+		component: "ai-pointer",
+		metric: "monitorAtClick",
+	});
+	for (const monitor of monitors ?? []) {
+		if (
+			monitor.disabled === true ||
+			typeof monitor.x !== "number" ||
+			typeof monitor.y !== "number" ||
+			typeof monitor.width !== "number" ||
+			typeof monitor.height !== "number"
+		)
+			continue;
+		const geometry = validatedSelectionGeometry(
+			monitor.x,
+			monitor.y,
+			monitor.width,
+			monitor.height,
+		);
+		if (geometry && containsPoint(geometry, point)) return geometry;
+	}
+	return null;
 }
 
 function validatedClient(client: ActiveClient | null): ValidatedClient | null {

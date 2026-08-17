@@ -74,6 +74,21 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **WHEN** the bus, application tree, helper, coordinates, process identity, or timeout cannot produce a validated candidate
 - **THEN** capture continues with the original stroke-derived geometry
 
+### Requirement: Focused click capture
+The AI Pointer SHALL interpret a completed gesture below the minimum stroke span as a click. It SHALL first attempt one bounded point accessibility lookup. An eligible center-hit target containing the click MAY replace fallback geometry, with actionable controls and links preferred over images and textual content and smaller targets preferred within each tier. Selected target capture SHALL include 24 pixels of context, SHALL be capped to 384 by 384 pixels around the click, and SHALL remain within the clicked monitor. When no reliable target is available, the system SHALL capture a 256 by 256 pixel region centered on the click and clamped to the clicked monitor.
+
+#### Scenario: Click resolves an actionable target
+- **WHEN** one eligible actionable target contains the click and is reported as a center hit
+- **THEN** the system captures its padded, capped, monitor-clamped geometry and shows its local metadata
+
+#### Scenario: Click has no reliable accessible target
+- **WHEN** accessibility is absent, unavailable, inconsistent, or returns no eligible center-hit candidate containing the click
+- **THEN** the system captures the monitor-clamped 256 by 256 pixel fallback centered on the click
+
+#### Scenario: Click is near a monitor edge
+- **WHEN** either target or fallback capture would cross the clicked monitor boundary
+- **THEN** the system shifts or crops the capture to remain wholly inside that monitor
+
 ### Requirement: Wayland coordinate reconciliation
 The AI Pointer SHALL treat AT-SPI window coordinates as application-local and translate them using the matching Hyprland client's global origin. It SHALL prefer a uniquely active or focused dimension-compatible top-level for the matched process. When sandboxing proxies the accessibility connection under another PID, it MAY use the one uniquely active or focused dimension-compatible top-level across registered applications. Approximate dimensions alone MUST NOT select among multiple top-levels. It MUST NOT treat GTK Wayland screen coordinates as compositor-global facts.
 

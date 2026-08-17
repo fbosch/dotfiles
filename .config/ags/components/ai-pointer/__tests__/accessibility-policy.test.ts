@@ -4,9 +4,46 @@ import {
 	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
 } from "../accessibility-policy";
+import { evaluateAccessibleClick } from "../click-policy";
 
 const selection = { x: 100, y: 100, width: 200, height: 100 };
 const client = { x: 0, y: 0, width: 1_000, height: 800 };
+
+describe("accessible click targeting", () => {
+	test("prefers the smallest actionable element at the exact point", () => {
+		const evaluation = evaluateAccessibleClick({ x: 200, y: 150 }, [
+			{
+				centerHit: true,
+				geometry: { x: 190, y: 145, width: 20, height: 10 },
+				name: "Button label",
+				role: "text",
+			},
+			{
+				centerHit: true,
+				geometry: { x: 150, y: 120, width: 100, height: 60 },
+				name: "Submit",
+				role: "push button",
+			},
+		], client, client);
+
+		expect(evaluation.resolution?.geometry).toEqual({ x: 126, y: 96, width: 148, height: 108 });
+		expect(evaluation.resolution?.metadata.name).toBe("Submit");
+		expect(evaluation.diagnostics[0]).toMatchObject({ name: "Submit", selected: true });
+	});
+
+	test("rejects nearby candidates that do not contain the click", () => {
+		const evaluation = evaluateAccessibleClick({ x: 200, y: 150 }, [
+			{
+				centerHit: false,
+				geometry: { x: 205, y: 145, width: 20, height: 20 },
+				role: "push button",
+			},
+		], client, client);
+
+		expect(evaluation.resolution).toBeNull();
+		expect(evaluation.diagnostics[0].reason).toBe("not at click");
+	});
+});
 
 describe("accessible selection snapping", () => {
 	test("snaps to one confident candidate with bounded padding", () => {

@@ -11,6 +11,9 @@ export interface PointerPosition {
 }
 
 export const maximumSelectionPixels = 32_000_000;
+export const clickFallbackSize = 256;
+export const clickTargetMaximumSize = 384;
+export const clickTargetPadding = 24;
 
 export function validatedSelectionGeometry(
 	x: number,
@@ -68,6 +71,58 @@ export function selectionFromPoints(
 	const width = Math.abs(end.x - start.x);
 	const height = Math.abs(end.y - start.y);
 	return validatedSelectionGeometry(x, y, width, height);
+}
+
+export function clickFallbackGeometry(
+	point: PointerPosition,
+	monitor: SelectionGeometry,
+): SelectionGeometry | null {
+	return boundedGeometryAroundPoint(
+		point,
+		{
+			x: point.x - clickFallbackSize / 2,
+			y: point.y - clickFallbackSize / 2,
+			width: clickFallbackSize,
+			height: clickFallbackSize,
+		},
+		monitor,
+		clickFallbackSize,
+	);
+}
+
+export function clickTargetGeometry(
+	point: PointerPosition,
+	target: SelectionGeometry,
+	monitor: SelectionGeometry,
+): SelectionGeometry | null {
+	const padded = paddedSelectionGeometry(target, clickTargetPadding);
+	if (!padded) return null;
+	return boundedGeometryAroundPoint(point, padded, monitor, clickTargetMaximumSize);
+}
+
+function boundedGeometryAroundPoint(
+	point: PointerPosition,
+	desired: SelectionGeometry,
+	bounds: SelectionGeometry,
+	maximumSize: number,
+): SelectionGeometry | null {
+	if (containsPoint(bounds, point) === false) return null;
+	const width = Math.min(desired.width, maximumSize, bounds.width);
+	const height = Math.min(desired.height, maximumSize, bounds.height);
+	const desiredX = desired.width > width ? point.x - Math.floor(width / 2) : desired.x;
+	const desiredY = desired.height > height ? point.y - Math.floor(height / 2) : desired.y;
+	const x = Math.min(Math.max(desiredX, bounds.x), bounds.x + bounds.width - width);
+	const y = Math.min(Math.max(desiredY, bounds.y), bounds.y + bounds.height - height);
+	return validatedSelectionGeometry(x, y, width, height);
+}
+
+export function containsPoint(geometry: SelectionGeometry, point: PointerPosition): boolean {
+	return (
+		point.x >= geometry.x &&
+		point.x < geometry.x + geometry.width &&
+		point.y >= geometry.y &&
+		point.y < geometry.y + geometry.height
+	);
 }
 
 export function grimGeometry({ x, y, width, height }: SelectionGeometry): string {

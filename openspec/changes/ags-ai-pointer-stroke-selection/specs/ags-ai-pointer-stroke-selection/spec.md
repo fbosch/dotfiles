@@ -41,9 +41,13 @@ The AI Pointer SHALL derive one capture rectangle from the minimum and maximum g
 - **WHEN** a completed horizontal or vertical stroke has meaningful travel in one axis
 - **THEN** the system captures a padded minimum-width strip around the complete stroke
 
-#### Scenario: Stroke is too small or too large
-- **WHEN** the completed stroke lacks minimum two-dimensional extent or exceeds the configured capture limit
-- **THEN** the system cancels or fails safely without retaining or submitting a capture
+#### Scenario: Stroke exceeds capture limits
+- **WHEN** the completed stroke exceeds the configured capture limit
+- **THEN** the system fails safely without retaining or submitting a capture
+
+#### Scenario: Gesture is below the drawing threshold
+- **WHEN** the completed gesture lacks minimum stroke extent
+- **THEN** the system delegates it to the focused click-capture policy rather than manufacturing stroke geometry
 
 ### Requirement: Reviewed local result
 The AI Pointer SHALL show only drawing feedback while the gesture is active. After release, it SHALL remove the trail before capture. When the validated captured image appears in the existing local preview popup, a rounded overlay of the same capture geometry SHALL remain visible on the desktop until that popup closes. Stroke coordinates MUST remain local and MUST NOT be included in a provider payload in this change.

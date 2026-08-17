@@ -3,7 +3,12 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { queryHyprlandJson } from "@/services/hyprland-ipc";
-import { programsForSelection, resolveAccessibleSelection } from "./accessibility";
+import {
+	type AccessibilityLookupMode,
+	clickFallbackForPoint,
+	programsForSelection,
+	resolveAccessibleSelection,
+} from "./accessibility";
 import type {
 	AccessibilityCandidateDiagnostic,
 	AccessibilityMetadata,
@@ -37,6 +42,7 @@ interface AiPointerControllerOptions {
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
 	readPointer?(): PointerPosition | null;
+	resolveClickGeometry?(point: PointerPosition): SelectionGeometry | null;
 	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
@@ -49,6 +55,7 @@ interface AiPointerControllerOptions {
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
 		onDiagnostics?: (diagnostics: AccessibilityCandidateDiagnostic[]) => void,
+		mode?: AccessibilityLookupMode,
 	): Promise<AccessibilityResolution | null>;
 }
 
@@ -58,6 +65,7 @@ export class AiPointerController {
 	readonly #prepareDirectory: NonNullable<AiPointerControllerOptions["prepareDirectory"]>;
 	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
 	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
+	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
 	#actor: AiPointerActor | null = null;
@@ -83,6 +91,7 @@ export class AiPointerController {
 		this.#captureRegion = options.capture ?? captureRegion;
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
 		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
+		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
 		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
 		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
 		this.#readPointer = options.readPointer ?? (() => {
@@ -194,10 +203,13 @@ export class AiPointerController {
 		}
 		this.#stroke = appendStrokePoint(stroke, endPosition, true);
 		const completedStroke = this.#stroke;
-		const geometry = selectionFromStroke(completedStroke);
+		const strokeGeometry = selectionFromStroke(completedStroke);
+		const mode: AccessibilityLookupMode = strokeGeometry ? "stroke" : "click";
+		const geometry = strokeGeometry ?? this.#resolveClickGeometry(endPosition);
 		if (!geometry) {
 			this.#view.endStroke();
-			this.cancel();
+			this.#failureMessage = "The clicked monitor could not be resolved.";
+			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
 		const runId = this.#runId;
@@ -208,7 +220,7 @@ export class AiPointerController {
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
-			this.#captureGeometry(directory, geometry, completedStroke, runId);
+			this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 		}).catch(() => {
 			if (runId !== this.#runId) return;
 			this.#failureMessage = "The drawing overlay could not be removed safely.";
@@ -221,10 +233,11 @@ export class AiPointerController {
 		geometry: SelectionGeometry,
 		stroke: PointerStroke,
 		runId: number,
+		mode: AccessibilityLookupMode,
 	): void {
 		const cancellable = new Gio.Cancellable();
 		this.#cancellable = cancellable;
-		void this.#resolveAndCapture(directory, geometry, stroke, runId, cancellable);
+		void this.#resolveAndCapture(directory, geometry, stroke, runId, cancellable, mode);
 	}
 
 	async #resolveAndCapture(
@@ -233,6 +246,7 @@ export class AiPointerController {
 		stroke: PointerStroke,
 		runId: number,
 		cancellable: Gio.Cancellable,
+		mode: AccessibilityLookupMode,
 	): Promise<void> {
 		const observeProcess = (process: Gio.Subprocess | null) => {
 			if (runId === this.#runId) this.#process = process;
@@ -247,6 +261,7 @@ export class AiPointerController {
 				(diagnostics) => {
 					if (runId === this.#runId) this.#accessibilityDiagnostics = diagnostics;
 				},
+				mode,
 			);
 		} catch {
 			// Accessibility is advisory; stroke geometry remains the safe fallback.

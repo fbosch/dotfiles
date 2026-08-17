@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { grimGeometry, maximumSelectionPixels, selectionFromPoints } from "../selection";
+import {
+	clickFallbackGeometry,
+	clickTargetGeometry,
+	grimGeometry,
+	maximumSelectionPixels,
+	selectionFromPoints,
+} from "../selection";
 
 describe("selectionFromPoints", () => {
 	test("derives a region from signed global points", () => {
@@ -20,5 +26,41 @@ describe("selectionFromPoints", () => {
 		expect(grimGeometry({ x: -10, y: 20, width: 30, height: 40 })).toBe(
 			"-10,20 30x40",
 		);
+	});
+});
+
+describe("click capture geometry", () => {
+	const monitor = { x: -1920, y: 0, width: 1920, height: 1080 };
+
+	test("centers a 256 pixel fallback and clamps it to monitor edges", () => {
+		expect(clickFallbackGeometry({ x: -1000, y: 500 }, monitor)).toEqual({
+			x: -1128,
+			y: 372,
+			width: 256,
+			height: 256,
+		});
+		expect(clickFallbackGeometry({ x: -1910, y: 10 }, monitor)).toEqual({
+			x: -1920,
+			y: 0,
+			width: 256,
+			height: 256,
+		});
+	});
+
+	test("pads small targets and caps large targets around the click", () => {
+		expect(
+			clickTargetGeometry(
+				{ x: -1000, y: 500 },
+				{ x: -1020, y: 490, width: 40, height: 20 },
+				monitor,
+			),
+		).toEqual({ x: -1044, y: 466, width: 88, height: 68 });
+		expect(
+			clickTargetGeometry(
+				{ x: -1000, y: 500 },
+				monitor,
+				monitor,
+			),
+		).toEqual({ x: -1192, y: 308, width: 384, height: 384 });
 	});
 });
