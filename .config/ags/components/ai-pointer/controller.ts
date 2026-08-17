@@ -3,6 +3,7 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { queryHyprlandJson } from "@/services/hyprland-ipc";
+import { perf } from "@/services/performance-monitor";
 import {
 	type AccessibilityLookupMode,
 	clickFallbackForPoint,
@@ -19,6 +20,7 @@ import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } f
 import { aiPointerMachine } from "./machine";
 import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
 import { recognizeCapture, type OcrResult } from "./ocr";
+import { aiPointerPerformanceMetrics } from "./performance-metrics";
 import {
 	type PointerPosition,
 	type SelectionGeometry,
@@ -85,6 +87,7 @@ export class AiPointerController {
 	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
 	#runId = 0;
+	#workflowMark: ReturnType<typeof perf.start> | null = null;
 
 	constructor(options: AiPointerControllerOptions = {}) {
 		this.#view = options.view ?? new AiPointerView();
@@ -116,13 +119,18 @@ export class AiPointerController {
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
 				if (snapshot.matches("preview") && this.#capture) {
+					const previewMark = perf.isEnabled()
+						? perf.start("ai-pointer", aiPointerPerformanceMetrics.previewPresentation)
+						: null;
 					const preview = this.#view.showCapture(
 						this.#capture,
 						this.#accessibilityMetadata,
 						this.#programMetadata,
 						this.#accessibilityDiagnostics,
 					);
+					previewMark?.end(preview !== null, preview ? undefined : "failed");
 					if (!preview) {
+						this.#finishWorkflow(false, "preview-failed");
 						this.#failureMessage = "The captured image could not be previewed.";
 						deleteCapture(this.#capture.path);
 						this.#capture = null;
@@ -213,16 +221,26 @@ export class AiPointerController {
 			return;
 		}
 		const runId = this.#runId;
+		this.#workflowMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
+			: null;
+		const overlayMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.overlayTeardown)
+			: null;
 		void this.#view.finishStroke().then((hidden) => {
+			overlayMark?.end(hidden, hidden ? undefined : "failed");
 			if (runId !== this.#runId) return;
 			if (hidden === false) {
+				this.#finishWorkflow(false, "overlay-failed");
 				this.#failureMessage = "The drawing overlay could not be removed safely.";
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
 			this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 		}).catch(() => {
+			overlayMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
+			this.#finishWorkflow(false, "overlay-failed");
 			this.#failureMessage = "The drawing overlay could not be removed safely.";
 			this.#actor?.send({ type: "FAIL" });
 		});
@@ -252,6 +270,9 @@ export class AiPointerController {
 			if (runId === this.#runId) this.#process = process;
 		};
 		let resolution: AccessibilityResolution | null = null;
+		const accessibilityMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityLookup)
+			: null;
 		try {
 			resolution = await this.#resolveAccessibility(
 				strokeGeometry,
@@ -263,7 +284,9 @@ export class AiPointerController {
 				},
 				mode,
 			);
+			accessibilityMark?.end();
 		} catch {
+			accessibilityMark?.end(false, "failed");
 			// Accessibility is advisory; stroke geometry remains the safe fallback.
 		}
 		if (runId !== this.#runId || cancellable.is_cancelled()) return;
@@ -271,6 +294,9 @@ export class AiPointerController {
 		this.#accessibilityMetadata = resolution?.metadata ?? null;
 		this.#programMetadata = this.#resolvePrograms(resolution?.geometry ?? strokeGeometry);
 		let result: Awaited<ReturnType<typeof captureRegion>>;
+		const captureMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.capture)
+			: null;
 		try {
 			result = await this.#captureRegion(
 				directory,
@@ -278,8 +304,14 @@ export class AiPointerController {
 				cancellable,
 				observeProcess,
 			);
+			captureMark?.end(
+				result.kind === "captured",
+				result.kind === "captured" ? undefined : result.kind,
+			);
 		} catch {
+			captureMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
+			this.#finishWorkflow(false, "capture-failed");
 			this.#cancellable = null;
 			this.#process = null;
 			this.#failureMessage = "The selected region could not be captured.";
@@ -294,10 +326,12 @@ export class AiPointerController {
 		this.#cancellable = null;
 		this.#process = null;
 		if (cancellable.is_cancelled() || result.kind === "cancelled") {
+			this.#finishWorkflow(false, "cancelled");
 			this.#actor?.send({ type: "CANCEL" });
 			return;
 		}
 		if (result.kind === "failed") {
+			this.#finishWorkflow(false, "capture-failed");
 			this.#failureMessage = result.message;
 			this.#actor?.send({ type: "FAIL" });
 			return;
@@ -308,6 +342,7 @@ export class AiPointerController {
 
 	cancel(): void {
 		this.#runId += 1;
+		this.#finishWorkflow(false, "cancelled");
 		this.#stopOcr();
 		this.#cancellable?.cancel();
 		this.#cancellable = null;
@@ -350,6 +385,10 @@ export class AiPointerController {
 		const cancellable = new Gio.Cancellable();
 		this.#ocrCancellable = cancellable;
 		this.#view.setOcrState({ kind: "pending" });
+		const ocrMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.ocrCompletion)
+			: null;
+		const workflowMark = this.#workflowMark;
 		void this.#recognizeOcr(
 			{ path: capture.path, ...preview },
 			cancellable,
@@ -357,10 +396,19 @@ export class AiPointerController {
 				if (runId === this.#runId) this.#ocrProcess = process;
 			},
 		).then((result) => {
+			ocrMark?.end(result.kind !== "cancelled", result.kind === "cancelled" ? "cancelled" : undefined);
+			workflowMark?.end(
+				result.kind !== "cancelled",
+				result.kind === "cancelled" ? "cancelled" : undefined,
+			);
+			if (this.#workflowMark === workflowMark) this.#workflowMark = null;
 			if (runId !== this.#runId || cancellable.is_cancelled() || result.kind === "cancelled")
 				return;
 			this.#view.setOcrState(result);
 		}).finally(() => {
+			ocrMark?.end(false, "failed");
+			workflowMark?.end(false, "failed");
+			if (this.#workflowMark === workflowMark) this.#workflowMark = null;
 			if (runId !== this.#runId) return;
 			this.#ocrCancellable = null;
 			this.#ocrProcess = null;
@@ -373,6 +421,11 @@ export class AiPointerController {
 		this.#ocrProcess?.force_exit();
 		this.#ocrProcess = null;
 		this.#view.clearOcr();
+	}
+
+	#finishWorkflow(ok: boolean, reason?: string): void {
+		this.#workflowMark?.end(ok, reason);
+		this.#workflowMark = null;
 	}
 
 	#sampleStroke(): void {

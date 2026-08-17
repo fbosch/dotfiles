@@ -40,6 +40,7 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 - `bash scripts/benchmark/run-benchmarks.sh components` - benchmark bundled non-calendar component toggles.
 - `bash scripts/benchmark/run-benchmarks.sh memory` - run only the legacy bundled memory loop.
 - `pnpm benchmark:ai-pointer` - run privacy-safe AI Pointer policy and inert controller lifecycle benchmarks without capture, OCR, AT-SPI, or Hyprland access.
+- `pnpm benchmark:ai-pointer:live` - collect bounded timing-only live AI Pointer stages from explicit manual interactions.
 - `bash scripts/benchmark/run-benchmarks.sh all` - run the full benchmark suite.
 
 Benchmark target can also be set with `BENCH_TARGET`; positional target wins. Keep targeted runs focused when investigating one bundled component.

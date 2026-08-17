@@ -1,6 +1,7 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { queryHyprlandJson } from "@/services/hyprland-ipc";
+import { perf } from "@/services/performance-monitor";
 import {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
@@ -22,6 +23,7 @@ import {
 } from "./selection";
 import { strokeBrushRadius, type PointerStroke } from "./stroke";
 import { chooseProgramsForSelection, type ProgramWindow } from "./program-policy";
+import { aiPointerPerformanceMetrics } from "./performance-metrics";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -276,12 +278,17 @@ async function queryHelper(
 	};
 
 	let process: Gio.Subprocess;
+	const spawnMark = perf.isEnabled()
+		? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityHelperSpawn)
+		: null;
 	try {
 		process = Gio.Subprocess.new(
 			[helperExecutable, JSON.stringify(input)],
 			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
 		);
+		spawnMark?.end();
 	} catch {
+		spawnMark?.end(false, "failed");
 		return null;
 	}
 
@@ -302,12 +309,16 @@ async function queryHelper(
 		return GLib.SOURCE_REMOVE;
 	});
 
+	const responseMark = perf.isEnabled()
+		? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityHelperResponse)
+		: null;
+	let responseSucceeded = false;
 	try {
 		const stdout = await readBoundedHelperOutput(process, cancellable);
 		if (!stdout || process.get_successful() === false) return null;
 		const localCandidates = parseAccessibilityHelperOutput(stdout);
 		if (!localCandidates) return null;
-		return localCandidates.map((candidate) => ({
+		const translated = localCandidates.map((candidate) => ({
 			...candidate,
 			geometry: {
 				x: candidate.geometry.x + client.geometry.x,
@@ -316,9 +327,12 @@ async function queryHelper(
 				height: candidate.geometry.height,
 			},
 		}));
+		responseSucceeded = true;
+		return translated;
 	} catch {
 		return null;
 	} finally {
+		responseMark?.end(responseSucceeded, responseSucceeded ? undefined : "failed");
 		if (timeoutId !== 0) GLib.source_remove(timeoutId);
 		try {
 			parentCancellable.disconnect(cancellationId);

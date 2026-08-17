@@ -1,5 +1,6 @@
 import { isMatching, match } from "ts-pattern";
 import { parseComponentRequest } from "@/services/request";
+import { perf } from "@/services/performance-monitor";
 import type { AiPointerController } from "./controller";
 import { aiPointerRequestPattern, type AiPointerRequest } from "./request";
 
@@ -20,9 +21,10 @@ export function createRequestHandler(controller: AiPointerController) {
 		respond(
 			match(aiPointerRequest)
 				.returnType<string>()
-				.with({ action: "start" }, ({ x, y }) =>
-					controller.start({ x, y }) ? "selecting" : "busy",
-				)
+				.with({ action: "start" }, ({ x, y }) => {
+					perf.refresh();
+					return controller.start({ x, y }) ? "selecting" : "busy";
+				})
 				.with({ action: "finish" }, ({ x, y }) =>
 					controller.finish({ x, y }) ? "capturing" : "idle",
 				)

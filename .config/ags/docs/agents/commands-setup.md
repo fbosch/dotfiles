@@ -44,6 +44,18 @@ pnpm benchmark:ai-pointer
 
 This command measures pure click and drag policy throughput, controller initialization and teardown, and inert click and drag interactions. It injects capture, accessibility, OCR, program, click-geometry, pointer, storage, and view dependencies, so it does not invoke `grim`, inspect AT-SPI, read Hyprland state, create captures, or emit selected content. RSS output is process-wide and includes runtime and JIT retention; it is not an allocation or leak measurement. Adjust bounded sample sizes with `AI_POINTER_BENCH_SAMPLES`, `AI_POINTER_POLICY_BATCH`, and `AI_POINTER_CONTROLLER_BATCH`.
 
+For live stage timings against the deployed bundle:
+
+```bash
+pnpm benchmark:ai-pointer:live
+```
+
+1. Complete the requested mix of accessible and fallback clicks and drags.
+2. Close each preview before starting the next interaction.
+3. Read the generated summary path printed when the requested runs finish.
+
+The collector uses filesystem events, defaults to eight completed runs and a 180-second timeout, and always removes its benchmark flag. Configure it with `AI_POINTER_LIVE_RUNS` and `AI_POINTER_LIVE_TIMEOUT_SECONDS`. It writes private runtime files containing allowlisted stage names, monotonic durations, success booleans, and process RSS only; geometry, paths, program metadata, accessible metadata, OCR text, diagnostic errors, and captured content are excluded.
+
 Feature-specific benchmark drivers are colocated under `components/<feature>/__benchmarks__/`. Service-wide drivers live under `services/__benchmarks__/`, while shared process orchestration and result analysis remain under `scripts/benchmark/`.
 
 ## AGS command reference

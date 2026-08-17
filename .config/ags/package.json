@@ -22,6 +22,7 @@
     "lint:styles": "stylelint \"{components,styles}/**/*.scss\"",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
     "benchmark:ai-pointer": "bun run components/ai-pointer/__benchmarks__/policy.ts && ags run --gtk 4 components/ai-pointer/__benchmarks__/controller.ts",
+    "benchmark:ai-pointer:live": "bun run components/ai-pointer/__benchmarks__/live-collector.ts",
     "quality": "pnpm lint:lines && pnpm lint:styles && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
   "keywords": [
