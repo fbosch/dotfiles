@@ -337,6 +337,56 @@ describe("accessible selection snapping", () => {
 		expect(result?.metadata.role).toBe("link");
 		expect(result?.geometry).toEqual({ x: 68, y: 68, width: 984, height: 684 });
 	});
+
+	test("prefers the center-hit link whose bounds match the drawn row", () => {
+		const result = chooseAccessibleSnap(
+			{ x: 100, y: 100, width: 300, height: 100 },
+			[
+				{
+					centerHit: true,
+					geometry: { x: 150, y: 120, width: 90, height: 24 },
+					name: "Project name",
+					role: "link",
+				},
+				{
+					centerHit: true,
+					geometry: { x: 100, y: 100, width: 300, height: 100 },
+					name: "Project row",
+					role: "link",
+				},
+			],
+			client,
+		);
+
+		expect(result?.metadata.name).toBe("Project row");
+		expect(result?.geometry).toEqual({ x: 88, y: 88, width: 324, height: 124 });
+	});
+
+	test("prefers a repeatedly hit list item over its nested title link", () => {
+		const result = chooseAccessibleSnap(
+			{ x: 100, y: 100, width: 300, height: 100 },
+			[
+				{
+					centerHit: true,
+					geometry: { x: 150, y: 120, width: 90, height: 24 },
+					hitCount: 3,
+					name: "Project name",
+					role: "link",
+				},
+				{
+					centerHit: true,
+					geometry: { x: 100, y: 100, width: 300, height: 100 },
+					hitCount: 7,
+					name: "Project row",
+					role: "list item",
+				},
+			],
+			client,
+		);
+
+		expect(result?.metadata.role).toBe("list item");
+		expect(result?.geometry).toEqual({ x: 88, y: 88, width: 324, height: 124 });
+	});
 });
 
 describe("accessibility helper protocol", () => {

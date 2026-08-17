@@ -41,7 +41,7 @@ const eligibleRoles = new Set([
 	"text",
 	"toggle button",
 ]);
-const commonAncestorRoles = new Set(["article", "section"]);
+const commonAncestorRoles = new Set(["article", "list item", "section"]);
 const collectionRoles = new Set([
 	"check box",
 	"combo box",
@@ -194,6 +194,7 @@ export function chooseAccessibleSnap(
 			Number(right.centerHit) - Number(left.centerHit) ||
 			(directTargetPriority.get(left.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) -
 				(directTargetPriority.get(right.role.trim().toLowerCase()) ?? Number.MAX_SAFE_INTEGER) ||
+			directTargetFit(selection, right) - directTargetFit(selection, left) ||
 			left.geometry.width * left.geometry.height - right.geometry.width * right.geometry.height,
 		);
 	const ranked = deduplicateCandidates(candidates)
@@ -213,8 +214,9 @@ export function chooseAccessibleSnap(
 		best.confidence >= minimumConfidence &&
 		(!alternative || best.confidence - alternative.confidence >= minimumConfidenceMargin),
 	);
+	const bestRole = best?.candidate.role.trim().toLowerCase();
 	if (
-		directTargets.length === 0 &&
+		(directTargets.length === 0 || bestRole === "list item") &&
 		bestIsClear &&
 		best &&
 		(best.candidate.hitCount ?? 1) >= 7 &&
@@ -237,6 +239,20 @@ export function chooseAccessibleSnap(
 	if (!best || bestIsClear === false) return null;
 
 	return resolutionFromCandidate(best.candidate, best.confidence, clientGeometry);
+}
+
+function directTargetFit(
+	selection: SelectionGeometry,
+	candidate: AccessibleCandidate,
+): number {
+	const intersectionArea = intersection(selection, candidate.geometry);
+	const selectionArea = selection.width * selection.height;
+	const candidateArea = candidate.geometry.width * candidate.geometry.height;
+	const selectionCoverage = intersectionArea / selectionArea;
+	const candidateCoverage = intersectionArea / candidateArea;
+	const areaRatio = candidateArea / selectionArea;
+	const sizeSimilarity = Math.min(areaRatio, 1 / areaRatio);
+	return selectionCoverage * 0.5 + candidateCoverage * 0.25 + sizeSimilarity * 0.25;
 }
 
 function resolutionFromCollection(

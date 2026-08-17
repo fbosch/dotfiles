@@ -127,7 +127,7 @@ export class AiPointerView {
 	showCapture(
 		capture: Capture,
 		accessibility: AccessibilityMetadata | null = null,
-		program: ProgramMetadata | null = accessibility?.program ?? null,
+		programs: ProgramMetadata[] = accessibility?.program ? [accessibility.program] : [],
 	): CapturePreview | null {
 		let texture: Gdk.Texture;
 		try {
@@ -140,12 +140,7 @@ export class AiPointerView {
 			`${capture.geometry.width} × ${capture.geometry.height} at ${capture.geometry.x}, ${capture.geometry.y}`,
 		);
 		const target = this.#formatTarget(accessibility);
-		const programIdentity = program?.class ?? "Unknown application";
-		this.#program?.set_label(
-			program
-				? `${programIdentity} · PID ${program.pid}${program.title ? `\n${program.title}` : ""}\n${program.geometry.width} × ${program.geometry.height} at ${program.geometry.x}, ${program.geometry.y}`
-				: "No matched program metadata",
-		);
+		this.#program?.set_label(this.#formatPrograms(programs));
 		this.#target?.set_label(target ?? "No reliable accessible element");
 		this.#evidence?.set_label(this.#formatEvidence(accessibility));
 		this.#status?.set_label(
@@ -321,5 +316,18 @@ export class AiPointerView {
 		if (accessibility.targets && accessibility.targets.length > 1) matchKind = "collection";
 		else if (accessibility.centerHit) matchKind = "center hit";
 		return `${Math.round(accessibility.confidence * 100)}% confidence · ${matchKind} · ${hitCount} sample${hitCount === 1 ? "" : "s"}`;
+	}
+
+	#formatPrograms(programs: ProgramMetadata[]): string {
+		if (programs.length === 0) return "No matched program metadata";
+		return programs
+			.map((program, index) => {
+				const identity = program.class ?? "Unknown application";
+				const coverage = program.coverage === undefined
+					? ""
+					: ` · ${Math.round(program.coverage * 100)}% of capture`;
+				return `${index + 1}. ${identity} · PID ${program.pid}${coverage}${program.title ? `\n   ${program.title}` : ""}\n   ${program.geometry.width} × ${program.geometry.height} at ${program.geometry.x}, ${program.geometry.y}`;
+			})
+			.join("\n");
 	}
 }

@@ -62,6 +62,10 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **WHEN** the center sample resolves through an image and an enclosing accessible link
 - **THEN** the system selects the complete link container rather than the nested image
 
+#### Scenario: Drawn row contains a nested title link
+- **WHEN** multiple center-hit links are nested on the same hit path or a repeatedly hit list-item ancestor contains the title link
+- **THEN** the system prefers the link or list item whose overlap and area best match the drawn row rather than automatically selecting the smallest title bounds
+
 #### Scenario: Candidate is a generic container or crosses the client edge
 - **WHEN** a candidate has an unknown or generic container role, or its candidate or padded bounds leave the active client
 - **THEN** the system captures the original stroke-derived geometry
@@ -86,7 +90,7 @@ The AI Pointer SHALL treat AT-SPI window coordinates as application-local and tr
 - **THEN** the system treats the result as stale and captures the original stroke-derived geometry
 
 ### Requirement: Local privacy-minimized metadata
-The AI Pointer MAY show each selected candidate's bounded accessible name, role, geometry, center-hit status, hit count, confidence, optional HTTP or HTTPS Hyperlink URL, and coordinate-matched program class, title, process ID, and geometry in the local preview. Program identity SHALL come from the mapped visible Hyprland client containing the selection center and SHALL NOT depend on AT-SPI availability. Collection metadata SHALL remain bounded to the selected collection members. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. URLs from non-link roles, non-web schemes, values containing whitespace or control characters, and oversized values SHALL be discarded. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
+The AI Pointer MAY show each selected candidate's bounded accessible name, role, geometry, center-hit status, hit count, confidence, optional HTTP or HTTPS Hyperlink URL, and a bounded collection of coordinate-matched program class, title, process ID, geometry, and capture coverage in the local preview. Program identity SHALL come from mapped visible Hyprland clients with meaningful final-capture intersection and SHALL NOT depend on AT-SPI availability. The active client SHALL take precedence, and a lower-ranked client whose selected intersection is wholly covered by a higher-ranked window SHALL be omitted. Collection metadata SHALL remain bounded to the selected members. It MUST NOT query accessible text interfaces, descriptions, editable values, or password content, and MUST NOT persist, log, or add accessibility metadata to an AI-facing payload. URLs from non-link roles, non-web schemes, values containing whitespace or control characters, and oversized values SHALL be discarded. If a sampled ancestry contains a password role, no node from that ancestry SHALL contribute geometry or metadata.
 
 #### Scenario: Capture snaps successfully
 - **WHEN** the local preview is shown
@@ -95,6 +99,10 @@ The AI Pointer MAY show each selected candidate's bounded accessible name, role,
 #### Scenario: Matched program exposes no accessibility tree
 - **WHEN** the selection center lies inside a mapped visible Hyprland client but AT-SPI returns no reliable element
 - **THEN** the preview still identifies the bounded program class, title, process ID, and geometry while reporting stroke-geometry fallback for the element
+
+#### Scenario: Capture spans multiple visible programs
+- **WHEN** multiple mapped visible clients each cover at least five percent of the final capture and are not fully occluded within the selected region by a higher-ranked client
+- **THEN** the preview lists up to eight programs ordered by active-client precedence, focus history, and capture coverage
 
 #### Scenario: Selected link exposes a web URL
 - **WHEN** the winning link candidate provides one bounded valid HTTP or HTTPS Hyperlink URI

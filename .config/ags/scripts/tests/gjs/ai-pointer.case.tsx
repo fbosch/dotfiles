@@ -153,7 +153,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
-		resolveProgram: () => null,
+		resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
@@ -203,7 +203,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
-		resolveProgram: () => null,
+		resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;
@@ -244,9 +244,9 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture(_capture, accessibility, program) {
+		showCapture(_capture, accessibility, programs) {
 			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
-			presentedProgram = `${program?.class}:${program?.pid}`;
+			presentedProgram = `${programs[0]?.class}:${programs[0]?.pid}`;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -265,12 +265,14 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 			geometry: { x: 100, y: 200, width: 120, height: 60 },
 			metadata: { confidence: 0.9, name: "Submit", role: "push button" },
 		}),
-		resolveProgram: () => ({
-			class: "org.wezfurlong.wezterm",
-			geometry: { x: 0, y: 0, width: 500, height: 400 },
-			pid: 123,
-			title: "Terminal",
-		}),
+		resolvePrograms: () => [
+			{
+				class: "org.wezfurlong.wezterm",
+				geometry: { x: 0, y: 0, width: 500, height: 400 },
+				pid: 123,
+				title: "Terminal",
+			},
+		],
 		recognizeOcr: async (input) => {
 			ocrInput = `${input.path}:${input.pixelWidth}x${input.pixelHeight}`;
 			return { kind: "text", text: "Local text" };
@@ -337,7 +339,7 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 					metadata: { confidence: 0.9, role: "push button" },
 				});
 			}),
-		resolveProgram: () => null,
+		resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
 			captured = true;
