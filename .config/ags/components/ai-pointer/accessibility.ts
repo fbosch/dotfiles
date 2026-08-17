@@ -6,6 +6,7 @@ import {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
 	type AccessibilityCandidateDiagnostic,
+	type AccessibilityHelperOutput,
 	type AccessibilityResolution,
 	type AccessibleCandidate,
 	type ProgramMetadata,
@@ -23,7 +24,10 @@ import {
 } from "./selection";
 import { strokeBrushRadius, type PointerStroke } from "./stroke";
 import { chooseProgramsForSelection, type ProgramWindow } from "./program-policy";
-import { aiPointerPerformanceMetrics } from "./performance-metrics";
+import {
+	accessibilityHelperTimingMetrics,
+	aiPointerPerformanceMetrics,
+} from "./performance-metrics";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -313,12 +317,13 @@ async function queryHelper(
 		? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityHelperResponse)
 		: null;
 	let responseSucceeded = false;
+	let helperTimings: AccessibilityHelperOutput["timings"] | null = null;
 	try {
 		const stdout = await readBoundedHelperOutput(process, cancellable);
 		if (!stdout || process.get_successful() === false) return null;
-		const localCandidates = parseAccessibilityHelperOutput(stdout);
-		if (!localCandidates) return null;
-		const translated = localCandidates.map((candidate) => ({
+		const helperOutput = parseAccessibilityHelperOutput(stdout);
+		if (!helperOutput) return null;
+		const translated = helperOutput.candidates.map((candidate) => ({
 			...candidate,
 			geometry: {
 				x: candidate.geometry.x + client.geometry.x,
@@ -327,12 +332,24 @@ async function queryHelper(
 				height: candidate.geometry.height,
 			},
 		}));
+		helperTimings = helperOutput.timings;
 		responseSucceeded = true;
 		return translated;
 	} catch {
 		return null;
 	} finally {
 		responseMark?.end(responseSucceeded, responseSucceeded ? undefined : "failed");
+		if (responseSucceeded && helperTimings)
+			perf.record(
+				"ai-pointer",
+				Object.entries(helperTimings).map(([name, timing]) => ({
+					durationMs: timing.durationMs,
+					name: accessibilityHelperTimingMetrics[
+						name as keyof typeof accessibilityHelperTimingMetrics
+					],
+					startMs: timing.startMs,
+				})),
+			);
 		if (timeoutId !== 0) GLib.source_remove(timeoutId);
 		try {
 			parentCancellable.disconnect(cancellationId);

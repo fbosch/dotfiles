@@ -16,6 +16,12 @@ type PerfRecord = {
   error?: string;
 };
 
+type ExternalTiming = {
+  durationMs: number;
+  name: string;
+  startMs: number;
+};
+
 function isEnabled(): boolean {
   try {
     const flag = Gio.File.new_for_path(PERF_FLAG_PATH);
@@ -42,11 +48,15 @@ function getRssKb(): number {
 }
 
 function appendRecord(record: PerfRecord) {
+	appendRecords([record]);
+}
+
+function appendRecords(records: PerfRecord[]) {
   try {
     const file = Gio.File.new_for_path(PERF_LOG_PATH);
     const stream = file.append_to(Gio.FileCreateFlags.NONE, null);
-    const line = JSON.stringify(record) + "\n";
-    const bytes = new TextEncoder().encode(line);
+    const output = records.map((record) => JSON.stringify(record)).join("\n") + "\n";
+    const bytes = new TextEncoder().encode(output);
     stream.write_all(bytes, null);
     stream.close(null);
   } catch (e) {
@@ -104,5 +114,20 @@ export const perf = {
     }
     if (!perfEnabled) return new NoopMark();
     return new PerfMark(component, name);
+  },
+  record(component: string, timings: ExternalTiming[]): void {
+    if (!perfEnabled || timings.length === 0) return;
+    const rss = getRssKb();
+    appendRecords(
+      timings.map(({ durationMs, name, startMs }) => ({
+        component,
+        duration_ms: durationMs,
+        name,
+        start_ms: startMs,
+        rss_before_kb: rss,
+        rss_after_kb: rss,
+        ok: true,
+      })),
+    );
   },
 };

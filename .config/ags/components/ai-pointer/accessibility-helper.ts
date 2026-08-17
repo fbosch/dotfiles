@@ -1,4 +1,5 @@
 import Atspi from "gi://Atspi?version=2.0";
+import GLib from "gi://GLib?version=2.0";
 import { maximumStrokePoints, representativeStrokePoints } from "./stroke";
 
 const maximumApplications = 32;
@@ -10,7 +11,7 @@ const maximumBrushRadius = 128;
 const maximumUrlLength = 512;
 const strokeSampleAnchors = 5;
 const callTimeoutMs = 100;
-const protocolVersion = 3;
+const protocolVersion = 4;
 const coordinateSpace = "window";
 const excludedRoles = new Set([
 	"application",
@@ -63,6 +64,49 @@ interface HitPoint {
 interface AccessiblePathItem {
 	accessible: Atspi.Accessible;
 	role: string;
+}
+
+interface Timing {
+	durationMs: number;
+	startMs: number;
+}
+
+interface HelperTimings {
+	initialization: Timing;
+	applicationDiscovery: Timing;
+	windowMatching: Timing;
+	hitTesting: Timing;
+	ancestorTraversal: Timing;
+	candidateInspection: Timing;
+	serialization: Timing;
+}
+
+function nowMs(): number {
+	return GLib.get_monotonic_time() / 1000;
+}
+
+function initialTimings(): HelperTimings {
+	const startMs = nowMs();
+	const empty = (): Timing => ({ startMs, durationMs: 0 });
+	return {
+		initialization: empty(),
+		applicationDiscovery: empty(),
+		windowMatching: empty(),
+		hitTesting: empty(),
+		ancestorTraversal: empty(),
+		candidateInspection: empty(),
+		serialization: empty(),
+	};
+}
+
+function measure<T>(timing: Timing, operation: () => T): T {
+	const startMs = nowMs();
+	if (timing.durationMs === 0) timing.startMs = startMs;
+	try {
+		return operation();
+	} finally {
+		timing.durationMs += nowMs() - startMs;
+	}
 }
 
 function validInteger(value: unknown): value is number {
@@ -187,40 +231,51 @@ function intersects(left: Geometry, right: Geometry): boolean {
 	);
 }
 
-function matchingWindow(desktop: Atspi.Accessible, input: HelperInput): Atspi.Accessible | null {
-	let childCount: number;
-	try {
-		childCount = desktop.get_child_count();
-	} catch {
-		return null;
-	}
-	const applications: Array<{ accessible: Atspi.Accessible; exactPid: boolean }> = [];
-	for (let index = 0; index < Math.min(Math.max(childCount, 0), maximumApplications); index += 1) {
+function matchingWindow(
+	desktop: Atspi.Accessible,
+	input: HelperInput,
+	timings: HelperTimings,
+): Atspi.Accessible | null {
+	const applications = measure(timings.applicationDiscovery, () => {
+		let childCount: number;
 		try {
-			const application = desktop.get_child_at_index(index);
-			if (!application) continue;
-			let exactPid = false;
-			try {
-				exactPid = application.get_process_id() === input.pid;
-			} catch {
-				// PID-less applications remain eligible for the conservative fallback.
-			}
-			applications.push({
-				accessible: application,
-				exactPid,
-			});
+			childCount = desktop.get_child_count();
 		} catch {
-			// Applications can disappear between registry calls.
+			return null;
 		}
-	}
-	const exactMatches = applications
-		.filter(({ exactPid }) => exactPid)
-		.flatMap(({ accessible }) => matchingApplicationWindows(accessible, input));
-	if (exactMatches.length > 0) return exactMatches.length === 1 ? exactMatches[0] : null;
-	const activeMatches = applications.flatMap(({ accessible }) =>
-		matchingApplicationWindows(accessible, input)
-	);
-	return activeMatches.length === 1 ? activeMatches[0] : null;
+		const discovered: Array<{ accessible: Atspi.Accessible; exactPid: boolean }> = [];
+		for (
+			let index = 0;
+			index < Math.min(Math.max(childCount, 0), maximumApplications);
+			index += 1
+		) {
+			try {
+				const application = desktop.get_child_at_index(index);
+				if (!application) continue;
+				let exactPid = false;
+				try {
+					exactPid = application.get_process_id() === input.pid;
+				} catch {
+					// PID-less applications remain eligible for the conservative fallback.
+				}
+				discovered.push({ accessible: application, exactPid });
+			} catch {
+				// Applications can disappear between registry calls.
+			}
+		}
+		return discovered;
+	});
+	if (!applications) return null;
+	return measure(timings.windowMatching, () => {
+		const exactMatches = applications
+			.filter(({ exactPid }) => exactPid)
+			.flatMap(({ accessible }) => matchingApplicationWindows(accessible, input));
+		if (exactMatches.length > 0) return exactMatches.length === 1 ? exactMatches[0] : null;
+		const activeMatches = applications.flatMap(({ accessible }) =>
+			matchingApplicationWindows(accessible, input)
+		);
+		return activeMatches.length === 1 ? activeMatches[0] : null;
+	});
 }
 
 function matchingApplicationWindows(
@@ -355,7 +410,11 @@ function roleName(accessible: Atspi.Accessible): string {
 	}
 }
 
-function collectCandidates(window: Atspi.Accessible, input: HelperInput): Candidate[] {
+function collectCandidates(
+	window: Atspi.Accessible,
+	input: HelperInput,
+	timings: HelperTimings,
+): Candidate[] {
 	const candidates = new Map<string, Candidate>();
 	let component: Atspi.Component;
 	try {
@@ -368,44 +427,54 @@ function collectCandidates(window: Atspi.Accessible, input: HelperInput): Candid
 	for (const point of hitPoints(input)) {
 		let accessible: Atspi.Accessible | null;
 		try {
-			accessible = component.get_accessible_at_point(point.x, point.y, Atspi.CoordType.WINDOW);
+			accessible = measure(timings.hitTesting, () =>
+				component.get_accessible_at_point(point.x, point.y, Atspi.CoordType.WINDOW)
+			);
 		} catch {
 			continue;
 		}
 		const path: AccessiblePathItem[] = [];
-		for (let depth = 0; accessible && depth < maximumAncestorDepth; depth += 1) {
-			if (accessible === window) break;
-			path.push({ accessible, role: roleName(accessible) });
-			try {
-				accessible = accessible.get_parent();
-			} catch {
-				break;
+		measure(timings.ancestorTraversal, () => {
+			for (let depth = 0; accessible && depth < maximumAncestorDepth; depth += 1) {
+				if (accessible === window) break;
+				path.push({ accessible, role: roleName(accessible) });
+				try {
+					accessible = accessible.get_parent();
+				} catch {
+					break;
+				}
 			}
-		}
+		});
 		if (path.some((item) => item.role === "password text")) return [];
-		for (const item of path) {
-			if (visible(item.accessible) === false) continue;
-			const geometry = rectangle(item.accessible);
-			if (!geometry || insideWindow(geometry, input) === false || intersects(geometry, input.selection) === false)
-				continue;
-			const key = `${geometry.x},${geometry.y}:${geometry.width}x${geometry.height}:${item.role}`;
-			if (!item.role || excludedRoles.has(item.role)) continue;
-			const existing = candidates.get(key);
-			if (existing) {
-				existing.centerHit ||= point.centerHit;
-				existing.hitCount = Math.min(existing.hitCount + 1, maximumHitCount);
-				continue;
+		measure(timings.candidateInspection, () => {
+			for (const item of path) {
+				if (visible(item.accessible) === false) continue;
+				const geometry = rectangle(item.accessible);
+				if (
+					!geometry ||
+					insideWindow(geometry, input) === false ||
+					intersects(geometry, input.selection) === false
+				)
+					continue;
+				const key = `${geometry.x},${geometry.y}:${geometry.width}x${geometry.height}:${item.role}`;
+				if (!item.role || excludedRoles.has(item.role)) continue;
+				const existing = candidates.get(key);
+				if (existing) {
+					existing.centerHit ||= point.centerHit;
+					existing.hitCount = Math.min(existing.hitCount + 1, maximumHitCount);
+					continue;
+				}
+				if (candidates.size >= maximumCandidates) continue;
+				candidates.set(key, {
+					centerHit: point.centerHit,
+					geometry,
+					hitCount: 1,
+					role: item.role,
+					name: boundedName(item.accessible),
+					url: boundedUrl(item.accessible, item.role),
+				});
 			}
-			if (candidates.size >= maximumCandidates) continue;
-			candidates.set(key, {
-				centerHit: point.centerHit,
-				geometry,
-				hitCount: 1,
-				role: item.role,
-				name: boundedName(item.accessible),
-				url: boundedUrl(item.accessible, item.role),
-			});
-		}
+		});
 	}
 	return [...candidates.values()].sort((left, right) => right.hitCount - left.hitCount);
 }
@@ -415,17 +484,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 const input = parseInput();
+const timings = initialTimings();
 let initialized = false;
 let candidates: Candidate[] = [];
 try {
 	if (input) {
-		const result = Atspi.init();
+		const result = measure(timings.initialization, () => Atspi.init());
 		initialized = result === 0 || result === 1;
 		if (initialized) {
 			Atspi.set_timeout(callTimeoutMs, 0);
 			const desktop = Atspi.get_desktop(0);
-			const window = matchingWindow(desktop, input);
-			if (window) candidates = collectCandidates(window, input);
+			const window = matchingWindow(desktop, input, timings);
+			if (window) candidates = collectCandidates(window, input, timings);
 		}
 	}
 } catch {
@@ -434,4 +504,7 @@ try {
 	if (initialized) Atspi.exit();
 }
 
-print(JSON.stringify({ protocolVersion, coordinateSpace, candidates }));
+const serializedCandidates = measure(timings.serialization, () => JSON.stringify(candidates));
+print(
+	`{"protocolVersion":${protocolVersion},"coordinateSpace":"${coordinateSpace}","candidates":${serializedCandidates},"timings":${JSON.stringify(timings)}}`,
+);

@@ -8,6 +8,24 @@ import { evaluateAccessibleClick } from "../click-policy";
 
 const selection = { x: 100, y: 100, width: 200, height: 100 };
 const client = { x: 0, y: 0, width: 1_000, height: 800 };
+const helperTimings = {
+	initialization: { startMs: 1, durationMs: 1 },
+	applicationDiscovery: { startMs: 2, durationMs: 1 },
+	windowMatching: { startMs: 3, durationMs: 1 },
+	hitTesting: { startMs: 4, durationMs: 1 },
+	ancestorTraversal: { startMs: 5, durationMs: 1 },
+	candidateInspection: { startMs: 6, durationMs: 1 },
+	serialization: { startMs: 7, durationMs: 1 },
+};
+
+function helperOutput(candidates: unknown[]) {
+	return {
+		protocolVersion: 4,
+		coordinateSpace: "window",
+		candidates,
+		timings: helperTimings,
+	};
+}
 
 describe("accessible click targeting", () => {
 	test("prefers the smallest actionable element at the exact point", () => {
@@ -501,13 +519,13 @@ describe("accessibility helper protocol", () => {
 		};
 		expect(
 			parseAccessibilityHelperOutput(
-				JSON.stringify({ protocolVersion: 3, coordinateSpace: "window", candidates: [candidate] }),
+				JSON.stringify(helperOutput([candidate])),
 			),
-		).toEqual([candidate]);
+		).toEqual({ candidates: [candidate], timings: helperTimings });
 		for (const response of [
-			{ protocolVersion: 2, coordinateSpace: "window", candidates: [] },
-			{ protocolVersion: 4, coordinateSpace: "window", candidates: [] },
-			{ protocolVersion: 3, coordinateSpace: "screen", candidates: [] },
+			{ ...helperOutput([]), protocolVersion: 3 },
+			{ ...helperOutput([]), protocolVersion: 5 },
+			{ ...helperOutput([]), coordinateSpace: "screen" },
 			{ coordinateSpace: "window", candidates: [] },
 		])
 			expect(parseAccessibilityHelperOutput(JSON.stringify(response))).toBeNull();
@@ -516,19 +534,15 @@ describe("accessibility helper protocol", () => {
 	test("drops metadata containing control characters", () => {
 		expect(
 			parseAccessibilityHelperOutput(
-				JSON.stringify({
-					protocolVersion: 3,
-					coordinateSpace: "window",
-					candidates: [
-						{
-							geometry: { x: 10, y: 20, width: 100, height: 40 },
-							name: "secret\nvalue",
-							role: "text",
-						},
-					],
-				}),
+				JSON.stringify(helperOutput([
+					{
+						geometry: { x: 10, y: 20, width: 100, height: 40 },
+						name: "secret\nvalue",
+						role: "text",
+					},
+				])),
 			),
-		).toEqual([]);
+		).toEqual({ candidates: [], timings: helperTimings });
 	});
 
 	test("accepts only bounded web URLs", () => {
@@ -537,19 +551,29 @@ describe("accessibility helper protocol", () => {
 			role: "link",
 		};
 		expect(
-			parseAccessibilityHelperOutput(JSON.stringify({
-				protocolVersion: 3,
-				coordinateSpace: "window",
-				candidates: [{ ...candidate, url: "https://example.com/item?id=1" }],
-			})),
-		).toEqual([{ ...candidate, url: "https://example.com/item?id=1" }]);
+			parseAccessibilityHelperOutput(
+				JSON.stringify(helperOutput([{ ...candidate, url: "https://example.com/item?id=1" }])),
+			),
+		).toEqual({
+			candidates: [{ ...candidate, url: "https://example.com/item?id=1" }],
+			timings: helperTimings,
+		});
 		for (const url of ["javascript:alert(1)", "file:///etc/passwd", "https://example.com/unsafe value"])
 			expect(
-				parseAccessibilityHelperOutput(JSON.stringify({
-					protocolVersion: 3,
-					coordinateSpace: "window",
-					candidates: [{ ...candidate, url }],
-				})),
-			).toEqual([]);
+				parseAccessibilityHelperOutput(JSON.stringify(helperOutput([{ ...candidate, url }]))),
+			).toEqual({ candidates: [], timings: helperTimings });
+	});
+
+	test("rejects malformed or excessive helper timings", () => {
+		for (const timing of [
+			{ startMs: -1, durationMs: 1 },
+			{ startMs: 1, durationMs: -1 },
+			{ startMs: 1, durationMs: 901 },
+			{ startMs: Number.NaN, durationMs: 1 },
+		]) {
+			const output = helperOutput([]);
+			output.timings = { ...helperTimings, hitTesting: timing };
+			expect(parseAccessibilityHelperOutput(JSON.stringify(output))).toBeNull();
+		}
 	});
 });

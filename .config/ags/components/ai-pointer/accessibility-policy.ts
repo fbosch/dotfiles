@@ -5,6 +5,17 @@ import {
 	validatedSelectionGeometry,
 } from "./selection";
 import { strokeCapturePadding } from "./stroke";
+import type { AccessibleCandidate } from "./accessibility-helper-protocol";
+export {
+	accessibilityCoordinateSpace,
+	accessibilityProtocolVersion,
+	parseAccessibilityHelperOutput,
+} from "./accessibility-helper-protocol";
+export type {
+	AccessibilityHelperOutput,
+	AccessibilityHelperTiming,
+	AccessibleCandidate,
+} from "./accessibility-helper-protocol";
 
 const snapPadding = 12;
 const minimumCandidateCoverage = 0.3;
@@ -13,12 +24,6 @@ const maximumAreaRatio = 5;
 const maximumNamedAncestorAreaRatio = 12;
 const minimumConfidence = 0.5;
 const minimumConfidenceMargin = 0.03;
-const maximumCandidates = 24;
-const maximumRoleLength = 80;
-const maximumNameLength = 160;
-const maximumUrlLength = 512;
-export const accessibilityProtocolVersion = 3;
-export const accessibilityCoordinateSpace = "window";
 const eligibleRoles = new Set([
 	"article",
 	"check box",
@@ -68,15 +73,6 @@ const directTargetPriority = new Map([
 	["image", 1],
 ]);
 
-export interface AccessibleCandidate {
-	centerHit?: boolean;
-	geometry: SelectionGeometry;
-	hitCount?: number;
-	name?: string;
-	role: string;
-	url?: string;
-}
-
 export interface AccessibilityTargetMetadata {
 	centerHit?: boolean;
 	confidence: number;
@@ -120,76 +116,6 @@ export interface AccessibilityCandidateDiagnostic {
 export interface AccessibilityEvaluation {
 	diagnostics: AccessibilityCandidateDiagnostic[];
 	resolution: AccessibilityResolution | null;
-}
-
-export function parseAccessibilityHelperOutput(output: string): AccessibleCandidate[] | null {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(output);
-	} catch {
-		return null;
-	}
-	if (
-		!isRecord(parsed) ||
-		parsed.protocolVersion !== accessibilityProtocolVersion ||
-		parsed.coordinateSpace !== accessibilityCoordinateSpace ||
-		Array.isArray(parsed.candidates) === false
-	)
-		return null;
-
-	const candidates: AccessibleCandidate[] = [];
-	for (const value of parsed.candidates.slice(0, maximumCandidates)) {
-		if (!isRecord(value) || !isRecord(value.geometry)) continue;
-		const { x, y, width, height } = value.geometry;
-		if (
-			typeof x !== "number" ||
-			typeof y !== "number" ||
-			typeof width !== "number" ||
-			typeof height !== "number"
-		)
-			continue;
-		const geometry = validatedSelectionGeometry(x, y, width, height);
-		if (
-			!geometry ||
-			typeof value.role !== "string" ||
-			isSafeMetadata(value.role, maximumRoleLength) === false
-		)
-			continue;
-		if (
-			value.name !== undefined &&
-			(typeof value.name !== "string" || isSafeMetadata(value.name, maximumNameLength) === false)
-		)
-			continue;
-		if (
-			value.url !== undefined &&
-			(typeof value.url !== "string" ||
-				value.role.trim().toLowerCase() !== "link" ||
-				isSafeUrl(value.url) === false)
-		)
-			continue;
-		if (
-			value.centerHit !== undefined &&
-			typeof value.centerHit !== "boolean"
-		)
-			continue;
-		if (
-			value.hitCount !== undefined &&
-			(typeof value.hitCount !== "number" ||
-				Number.isSafeInteger(value.hitCount) === false ||
-				value.hitCount < 1 ||
-				value.hitCount > 24)
-		)
-			continue;
-		candidates.push({
-			centerHit: value.centerHit,
-			geometry,
-			hitCount: value.hitCount,
-			role: value.role,
-			name: value.name,
-			url: value.url,
-		});
-	}
-	return candidates;
 }
 
 interface RankedCandidate {
@@ -586,20 +512,4 @@ function containsGeometry(container: SelectionGeometry, target: SelectionGeometr
 		target.x + target.width <= container.x + container.width &&
 		target.y + target.height <= container.y + container.height
 	);
-}
-
-function isSafeMetadata(value: string, maximumLength: number): boolean {
-	return value.length > 0 && value.length <= maximumLength && /[\u0000-\u001f\u007f]/.test(value) === false;
-}
-
-function isSafeUrl(value: string): boolean {
-	return (
-		value.length <= maximumUrlLength &&
-		/[\u0000-\u0020\u007f]/.test(value) === false &&
-		/^https?:\/\//i.test(value)
-	);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
 }

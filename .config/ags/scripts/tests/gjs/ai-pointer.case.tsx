@@ -23,7 +23,20 @@ function settleMainLoop(): Promise<void> {
 test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
 	assert(shell !== null, "shell fixture is unavailable");
-	const expected = '{"protocolVersion":3,"coordinateSpace":"window","candidates":[]}';
+	const expected = JSON.stringify({
+		protocolVersion: 4,
+		coordinateSpace: "window",
+		candidates: [],
+		timings: {
+			initialization: { startMs: 1, durationMs: 1 },
+			applicationDiscovery: { startMs: 2, durationMs: 1 },
+			windowMatching: { startMs: 3, durationMs: 1 },
+			hitTesting: { startMs: 4, durationMs: 1 },
+			ancestorTraversal: { startMs: 5, durationMs: 1 },
+			candidateInspection: { startMs: 6, durationMs: 1 },
+			serialization: { startMs: 7, durationMs: 1 },
+		},
+	});
 	const valid = Gio.Subprocess.new(
 		[shell, "-c", "printf '%s' \"$1\"", "fixture", expected],
 		Gio.SubprocessFlags.STDOUT_PIPE,
