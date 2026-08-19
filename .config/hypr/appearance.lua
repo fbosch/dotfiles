@@ -36,6 +36,7 @@ hl.config({
 			size = 4,
 			special = true,
 			popups = true,
+			popups_ignorealpha = 0.5,
 			passes = 7,
 			ignore_opacity = false,
 			new_optimizations = true,
