@@ -20,6 +20,7 @@ local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
 local tiled_drag_active = false
+local quit_requested = false
 local latest_control_sequence = 0
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
@@ -311,7 +312,12 @@ handle_command = function(command)
 		return true
 	end
 
-	return command.action == "quit"
+	if command.action == "quit" then
+		quit_requested = true
+		return true
+	end
+
+	return false
 end
 
 local function start_drag()
@@ -409,6 +415,9 @@ local function run()
 			if command.action == "start" then
 				pcall(start_drag)
 				stop_drag()
+				if quit_requested then
+					break
+				end
 			elseif command.action == "stop" then
 				stop_drag()
 			end

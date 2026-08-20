@@ -218,8 +218,8 @@ hl.config({
 })
 
 -- Custom layout controls
--- Current Lua mouse binds do not become native bindm entries, so custom layout
--- right-drag resize is bridged through a bounded IPC helper.
+-- Custom tiled resize keeps geometry in its layout process while Hyprland owns
+-- the pressed-input release lifecycle for every mouse interaction.
 mouse_release.bind(main("mouse:272"), start_drag)
 mouse_release.bind(main("mouse:273"), function()
 	if picture_in_picture.start_resize(false) then
