@@ -1,6 +1,10 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { readBoundedHelperOutput } from "@/components/ai-pointer/accessibility";
+import {
+	decodeAccessibilityHelperArgument,
+	encodeAccessibilityHelperArgument,
+} from "@/components/ai-pointer/accessibility-helper-argument";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
 import {
@@ -24,7 +28,7 @@ test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
 	assert(shell !== null, "shell fixture is unavailable");
 	const expected = JSON.stringify({
-		protocolVersion: 5,
+		protocolVersion: 6,
 		coordinateSpace: "window",
 		candidates: [],
 		complete: true,
@@ -55,6 +59,14 @@ test("AI Pointer reads helper output with a streaming byte limit", async () => {
 		(await readBoundedHelperOutput(oversized, new Gio.Cancellable())) === null,
 		"oversized helper output was retained",
 	);
+});
+
+test("AI Pointer helper arguments survive the generated shell launcher", () => {
+	const input = JSON.stringify({ title: "Documentation * active tab — Zen Browser" });
+	const encoded = encodeAccessibilityHelperArgument(input);
+	assert(/^[A-Za-z0-9+/]+=*$/.test(encoded), "helper argument contains shell-splittable data");
+	assert(decodeAccessibilityHelperArgument(encoded) === input, "helper argument did not round trip");
+	assert(decodeAccessibilityHelperArgument("not base64") === null, "malformed base64 was accepted");
 });
 
 test("AI Pointer bounds local OCR output while streaming", async () => {

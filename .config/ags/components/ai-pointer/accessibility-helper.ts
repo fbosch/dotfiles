@@ -1,5 +1,6 @@
 import Atspi from "gi://Atspi?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { decodeAccessibilityHelperArgument } from "./accessibility-helper-argument";
 import {
 	accessibilityCoordinateSpace as coordinateSpace,
 	accessibilityProtocolVersion as protocolVersion,
@@ -543,7 +544,8 @@ function enqueueChildren(
 	return true;
 }
 
-const input = parseAccessibilityHelperInput(ARGV);
+const decodedInput = ARGV.length === 1 ? decodeAccessibilityHelperArgument(ARGV[0]) : null;
+const input = parseAccessibilityHelperInput(decodedInput === null ? [] : [decodedInput]);
 const timings = initialTimings();
 let initialized = false;
 let candidates: Candidate[] = [];

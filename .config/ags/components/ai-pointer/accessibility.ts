@@ -15,6 +15,7 @@ import {
 	parseAccessibilityHelperOutput,
 } from "./accessibility-policy";
 import { evaluateAccessibleClick } from "./click-policy";
+import { encodeAccessibilityHelperArgument } from "./accessibility-helper-argument";
 import {
 	containsSelectionCenter,
 	clickFallbackGeometry,
@@ -298,7 +299,7 @@ async function queryHelper(
 		: null;
 	try {
 		process = Gio.Subprocess.new(
-			[helperExecutable, JSON.stringify(input)],
+			[helperExecutable, encodeAccessibilityHelperArgument(JSON.stringify(input))],
 			Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE,
 		);
 		spawnMark?.end();

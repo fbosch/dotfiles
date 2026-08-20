@@ -20,7 +20,7 @@ const helperTimings = {
 
 function helperOutput(candidates: unknown[]) {
 	return {
-		protocolVersion: 5,
+		protocolVersion: 6,
 		coordinateSpace: "window",
 		candidates,
 		complete: true,
@@ -525,7 +525,7 @@ describe("accessibility helper protocol", () => {
 		).toEqual({ candidates: [candidate], complete: true, timings: helperTimings });
 		for (const response of [
 			{ ...helperOutput([]), protocolVersion: 4 },
-			{ ...helperOutput([]), protocolVersion: 6 },
+			{ ...helperOutput([]), protocolVersion: 5 },
 			{ ...helperOutput([]), coordinateSpace: "screen" },
 			{ ...helperOutput([]), complete: "yes" },
 			{ coordinateSpace: "window", candidates: [] },

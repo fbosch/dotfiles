@@ -3,7 +3,7 @@ import { parseAccessibilityHelperInput } from "../accessibility-helper-input";
 
 function input() {
 	return {
-		protocolVersion: 5,
+		protocolVersion: 6,
 		coordinateSpace: "window",
 		pid: 123,
 		windowWidth: 1_000,
@@ -25,7 +25,7 @@ describe("accessibility helper input", () => {
 
 	test("rejects stale protocol versions", () => {
 		expect(
-			parseAccessibilityHelperInput([JSON.stringify({ ...input(), protocolVersion: 4 })]),
+			parseAccessibilityHelperInput([JSON.stringify({ ...input(), protocolVersion: 5 })]),
 		).toBeNull();
 	});
 

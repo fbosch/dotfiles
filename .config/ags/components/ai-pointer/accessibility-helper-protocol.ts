@@ -6,7 +6,7 @@ const maximumRoleLength = 80;
 const maximumNameLength = 160;
 const maximumUrlLength = 512;
 
-export const accessibilityProtocolVersion = 5;
+export const accessibilityProtocolVersion = 6;
 export const accessibilityCoordinateSpace = "window";
 
 export interface AccessibleCandidate {
