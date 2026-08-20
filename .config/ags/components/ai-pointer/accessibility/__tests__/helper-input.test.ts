@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseAccessibilityHelperInput } from "../accessibility-helper-input";
+import { parseAccessibilityHelperInput } from "../helper-input";
 
 function input() {
 	return {

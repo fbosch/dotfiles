@@ -2,7 +2,7 @@ import Atspi from "gi://Atspi?version=2.0";
 import type {
 	AccessibilityHelperInput,
 	HelperGeometry,
-} from "./accessibility-helper-input";
+} from "./helper-input";
 
 const maximumUrlLength = 512;
 

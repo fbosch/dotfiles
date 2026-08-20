@@ -1,11 +1,11 @@
 import type {
 	AccessibilityEvaluation,
 	AccessibleCandidate,
-} from "./accessibility-policy";
+} from "./accessibility/policy";
 import {
 	accessibilityRegionRolePriority,
 	isEligibleAccessibilityRole,
-} from "./accessibility-target-roles";
+} from "./accessibility/target-roles";
 import {
 	clickTargetGeometry,
 	containsPoint,

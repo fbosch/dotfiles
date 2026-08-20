@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { chooseAccessibleSnap } from "../accessibility-policy";
-import { strokeSelectionRegion } from "../stroke";
+import { chooseAccessibleSnap } from "../policy";
+import { strokeSelectionRegion } from "../../stroke";
 
 const client = { x: 0, y: 0, width: 1_000, height: 800 };
 

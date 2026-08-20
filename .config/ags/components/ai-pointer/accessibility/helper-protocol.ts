@@ -1,5 +1,5 @@
-import { validatedSelectionGeometry, type SelectionGeometry } from "./selection";
-import { accessibilityHelperTimingMetrics } from "./performance-metrics";
+import { validatedSelectionGeometry, type SelectionGeometry } from "../selection";
+import { accessibilityHelperTimingMetrics } from "../performance-metrics";
 
 const maximumCandidates = 24;
 const maximumRoleLength = 80;

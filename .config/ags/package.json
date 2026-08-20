@@ -9,7 +9,7 @@
     "start": "ags run config-bundled.tsx",
     "dev": "ags run config-bundled.tsx",
     "types": "ags types",
-    "bundle": "ags bundle config-bundled.tsx \"${XDG_RUNTIME_DIR:-/tmp}/ags-bundled.js\" && ags bundle --gtk 4 components/ai-pointer/accessibility-helper.ts \"${XDG_RUNTIME_DIR:-/tmp}/ags-ai-pointer-accessibility-helper\"",
+    "bundle": "ags bundle config-bundled.tsx \"${XDG_RUNTIME_DIR:-/tmp}/ags-bundled.js\" && ags bundle --gtk 4 components/ai-pointer/accessibility/helper.ts \"${XDG_RUNTIME_DIR:-/tmp}/ags-ai-pointer-accessibility-helper\"",
     "inspect": "ags inspect",
     "list": "ags list",
     "test": "bun test && pnpm test:gjs",

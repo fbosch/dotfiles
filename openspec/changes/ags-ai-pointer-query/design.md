@@ -40,7 +40,9 @@ Alternative considered: reuse AI Commit's generator. Rejected because it owns co
 
 The CLI accepts one JSON request with a run ID, fixed `answer` operation, prompt text, attachment descriptors, and timeout. It returns one success or error response with the same run ID. Zod validates both input and external response boundaries. The runtime never writes progress, backend logs, or provider output to stdout.
 
-The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt.
+The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt. The backend-neutral runtime owns the complete answer-only system instructions and gives them to the adapter with each execution; the OpenCode adapter passes them through `session.prompt.system`.
+
+OpenCode 1.18.18 uses a truthy custom agent prompt instead of its model-family provider prompt, then appends OpenCode environment and configured project instructions before the request-scoped system value. The `desktop-pointer` agent therefore contains only a minimal non-empty bootstrap prompt. This suppresses the OpenCode provider prompt without making the reusable answer policy depend on an OpenCode agent file. OpenCode's remaining harness context cannot be disabled through the 1.18.18 SDK; replacing the backend removes that adapter-specific context while preserving the runtime-owned policy.
 
 The deny-all policy combines the `desktop-pointer` agent's `tools: { "*": false }` configuration with a request-time all-known-tool denial map. The implementation verifies this behavior against the pinned OpenCode version. If the runtime cannot enumerate and deny the available tools or cannot resolve the requested agent, it fails before transmitting user content.
 

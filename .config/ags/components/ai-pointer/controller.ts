@@ -15,7 +15,7 @@ import type {
 	AccessibilityMetadata,
 	AccessibilityResolution,
 	ProgramMetadata,
-} from "./accessibility-policy";
+} from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { aiPointerMachine } from "./machine";
 import { AiPointerView, type CapturePreview } from "./ai-pointer-view";

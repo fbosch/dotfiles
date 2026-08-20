@@ -16,7 +16,7 @@ PROFILECTL="$HOME/.config/hypr/runtime/profiles/profilectl.sh"
 BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
 BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
-AI_POINTER_HELPER_CONFIG="components/ai-pointer/accessibility-helper.ts"
+AI_POINTER_HELPER_CONFIG="components/ai-pointer/accessibility/helper.ts"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
 # EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,

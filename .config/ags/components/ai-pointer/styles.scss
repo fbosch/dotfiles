@@ -13,6 +13,7 @@
   }
 
   /* The monitor-sized prompt surface owns placement; only the pill has visual padding. */
+  /* stylelint-disable-next-line nesting-selector-no-missing-scoping-root -- The surface mixin supplies the window selector. */
   &.ai-pointer-prompt-surface { padding: 0; }
 
   box.ai-pointer-prompt-host { background-color: transparent; }

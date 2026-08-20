@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chooseAccessibilityWindow } from "../accessibility-window-policy";
+import { chooseAccessibilityWindow } from "../window-policy";
 
 describe("accessibility window matching", () => {
 	test("keeps a unique exact-PID window when AT-SPI focus is stale", () => {

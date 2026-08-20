@@ -3,35 +3,35 @@ import {
 	paddedSelectionGeometry,
 	type SelectionGeometry,
 	validatedSelectionGeometry,
-} from "./selection";
+} from "../selection";
 import {
 	pointInStrokeRegion,
 	strokeCapturePadding,
 	strokeRegionContainsGeometry,
 	strokeRegionGeometryCoverage,
 	type StrokeSelectionRegion,
-} from "./stroke";
+} from "../stroke";
 import {
 	accessibilityRegionRolePriority,
 	commonAncestorRoles,
 	directTargetPriority,
 	isEligibleAccessibilityRole,
-} from "./accessibility-target-roles";
+} from "./target-roles";
 import {
 	resolveStrokeRegionSelection,
 	type RankedAccessibleCandidate,
-} from "./accessibility-region-policy";
-import type { AccessibleCandidate } from "./accessibility-helper-protocol";
+} from "./region-policy";
+import type { AccessibleCandidate } from "./helper-protocol";
 export {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
 	parseAccessibilityHelperOutput,
-} from "./accessibility-helper-protocol";
+} from "./helper-protocol";
 export type {
 	AccessibilityHelperOutput,
 	AccessibilityHelperTiming,
 	AccessibleCandidate,
-} from "./accessibility-helper-protocol";
+} from "./helper-protocol";
 
 const snapPadding = 12;
 const minimumCandidateCoverage = 0.3;
@@ -123,7 +123,7 @@ export function chooseAccessibleSnap(
 	return evaluateAccessibleSnap(selection, candidates, clientGeometry, region).resolution;
 }
 
-export { isEligibleAccessibilityRole } from "./accessibility-target-roles";
+export { isEligibleAccessibilityRole } from "./target-roles";
 
 export function evaluateAccessibleSnap(
 	selection: SelectionGeometry,

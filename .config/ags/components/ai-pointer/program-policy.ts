@@ -1,4 +1,4 @@
-import type { ProgramMetadata } from "./accessibility-policy";
+import type { ProgramMetadata } from "./accessibility/policy";
 import type { SelectionGeometry } from "./selection";
 
 const maximumPrograms = 8;

@@ -1,8 +1,8 @@
 import {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
-} from "./accessibility-helper-protocol";
-import { maximumStrokePoints } from "./stroke";
+} from "./helper-protocol";
+import { maximumStrokePoints } from "../stroke";
 
 const maximumBrushRadius = 128;
 

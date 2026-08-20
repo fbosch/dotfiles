@@ -2,14 +2,14 @@ import {
 	commonAncestorRoles,
 	directTargetPriority,
 	accessibilityRegionRolePriority,
-} from "./accessibility-target-roles";
+} from "./target-roles";
 import {
 	paddedSelectionGeometry,
 	type SelectionGeometry,
 	validatedSelectionGeometry,
-} from "./selection";
-import type { AccessibleCandidate, AccessibilityResolution } from "./accessibility-policy";
-import type { StrokeSelectionRegion } from "./stroke";
+} from "../selection";
+import type { AccessibleCandidate, AccessibilityResolution } from "./policy";
+import type { StrokeSelectionRegion } from "../stroke";
 
 const snapPadding = 12;
 const minimumConfidence = 0.5;

@@ -4,7 +4,7 @@ import { readBoundedHelperOutput } from "@/components/ai-pointer/accessibility";
 import {
 	decodeAccessibilityHelperArgument,
 	encodeAccessibilityHelperArgument,
-} from "@/components/ai-pointer/accessibility-helper-argument";
+} from "@/components/ai-pointer/accessibility/helper-argument";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
 import {

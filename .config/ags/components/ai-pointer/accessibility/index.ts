@@ -13,9 +13,9 @@ import {
 	type ProgramMetadata,
 	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
-} from "./accessibility-policy";
-import { evaluateAccessibleClick } from "./click-policy";
-import { encodeAccessibilityHelperArgument } from "./accessibility-helper-argument";
+} from "./policy";
+import { evaluateAccessibleClick } from "../click-policy";
+import { encodeAccessibilityHelperArgument } from "./helper-argument";
 import {
 	containsSelectionCenter,
 	clickFallbackGeometry,
@@ -23,13 +23,13 @@ import {
 	type PointerPosition,
 	type SelectionGeometry,
 	validatedSelectionGeometry,
-} from "./selection";
-import { strokeBrushRadius, strokeSelectionRegion, type PointerStroke } from "./stroke";
-import { chooseProgramsForSelection, type ProgramWindow } from "./program-policy";
+} from "../selection";
+import { strokeBrushRadius, strokeSelectionRegion, type PointerStroke } from "../stroke";
+import { chooseProgramsForSelection, type ProgramWindow } from "../program-policy";
 import {
 	accessibilityHelperTimingMetrics,
 	aiPointerPerformanceMetrics,
-} from "./performance-metrics";
+} from "../performance-metrics";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");

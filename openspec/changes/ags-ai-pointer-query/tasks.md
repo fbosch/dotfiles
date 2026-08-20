@@ -10,7 +10,7 @@
 
 - [x] 1.1 Add an exact `@opencode-ai/sdk` `1.18.18` dependency to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
 - [x] 1.2 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
-- [x] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, concise answer-only instructions, and no action or tool-use path.
+- [x] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, a minimal provider-prompt-suppressing bootstrap, and no action or tool-use path; keep answer-only instructions runtime-owned.
 - [x] 1.4 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
 
 ## 2. OpenCode Request Protocol

@@ -1,4 +1,4 @@
-import { evaluateAccessibleSnap } from "../accessibility-policy";
+import { evaluateAccessibleSnap } from "../accessibility/policy";
 import { evaluateAccessibleClick } from "../click-policy";
 import {
 	clickFallbackGeometry,

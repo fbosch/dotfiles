@@ -1,6 +1,6 @@
 import Atspi from "gi://Atspi?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { decodeAccessibilityHelperArgument } from "./accessibility-helper-argument";
+import { decodeAccessibilityHelperArgument } from "./helper-argument";
 import {
 	boundedName,
 	boundedUrl,
@@ -9,28 +9,28 @@ import {
 	rectangle,
 	roleName,
 	visible,
-} from "./accessibility-helper-candidate";
+} from "./helper-candidate";
 import {
 	accessibilityCoordinateSpace as coordinateSpace,
 	accessibilityProtocolVersion as protocolVersion,
-} from "./accessibility-helper-protocol";
+} from "./helper-protocol";
 import {
 	parseAccessibilityHelperInput,
 	type AccessibilityHelperInput as HelperInput,
 	type HelperGeometry as Geometry,
-} from "./accessibility-helper-input";
-import { isEligibleAccessibilityRole } from "./accessibility-target-roles";
+} from "./helper-input";
+import { isEligibleAccessibilityRole } from "./target-roles";
 import {
 	chooseAccessibilityWindow,
 	type AccessibilityWindowCandidate,
-} from "./accessibility-window-policy";
+} from "./window-policy";
 import {
 	pointInStrokeRegion,
 	representativeStrokePoints,
 	strokeRegionContainsGeometry,
 	strokeSelectionRegion,
 	type StrokeSelectionRegion,
-} from "./stroke";
+} from "../stroke";
 
 const maximumApplications = 32;
 const maximumWindows = 32;

@@ -3,8 +3,8 @@ import {
 	chooseAccessibleSnap,
 	evaluateAccessibleSnap,
 	parseAccessibilityHelperOutput,
-} from "../accessibility-policy";
-import { evaluateAccessibleClick } from "../click-policy";
+} from "../policy";
+import { evaluateAccessibleClick } from "../../click-policy";
 
 const selection = { x: 100, y: 100, width: 200, height: 100 };
 const client = { x: 0, y: 0, width: 1_000, height: 800 };
