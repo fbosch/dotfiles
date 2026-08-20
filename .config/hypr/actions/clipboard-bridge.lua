@@ -1,6 +1,3 @@
--- Lua-native clipboard bridge for Lua keybinds.
--- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
-
 local command = require("lib.command")
 local window_state = require("lib.window.state")
 local gaming = require("gaming")

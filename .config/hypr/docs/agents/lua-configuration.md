@@ -1,10 +1,11 @@
 # Hyprland Lua Configuration
 
-Local reference for migrating this repo from hyprlang `.conf` files to Hyprland Lua config.
+Local reference for maintaining this repo's Hyprland Lua configuration.
 
 ## Scope
 
-- Upstream basis: Hyprland 0.55.0 Lua-first config docs and Lua config PR #13817.
+- Upstream basis: Hyprland 0.56.0 Lua-first documentation and Lua config PR
+  #13817.
 - Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
 - Generated outputs are data files under `.config/hypr/rules/generated.lua` and `.config/hypr/rules/window-state.lua`.
 
@@ -16,11 +17,12 @@ Local reference for migrating this repo from hyprlang `.conf` files to Hyprland 
 - No source-backed Lua API was found for sourcing existing hyprlang `.conf` files from Lua. Treat live Lua migration as replacing the active config graph, not mixing both parsers.
 - Under Lua config, `hyprctl keyword` is legacy-only; use Lua `eval` support where available.
 
-0.55 status:
+Current status:
 
-- Upstream now documents Lua as the primary config format.
-- Hyprlang configs still work for a few releases, but should be treated as legacy rollback material in this repo.
-- Keep generated config data in Lua tables; do not add new live hyprlang sources unless explicitly rolling back.
+- Upstream documents Lua as the primary config format.
+- Hyprlang configs remain legacy rollback material in this repo.
+- Keep generated config data in Lua tables. Do not add new live hyprlang
+  sources unless explicitly rolling back.
 
 Sources:
 
@@ -261,6 +263,7 @@ Relevant dispatcher mappings for this repo:
 | `layoutmsg, setratio 0.6` | `hl.dsp.layout("setratio 0.6")` |
 | `movewindow` | `hl.dsp.window.drag()` |
 | `resizewindow` | `hl.dsp.window.resize()` |
+| `resizewindow 1` | `hl.dsp.window.resize({ keep_aspect_ratio = true })` |
 | `movewindowpixel, 32 0` | `hl.dsp.window.move({ x = 32, y = 0, relative = true })` |
 | `resizeactive, 32 0` | `hl.dsp.window.resize({ x = 32, y = 0, relative = true })` |
 | `submap, passthru` | `hl.dsp.submap("passthru")` |
@@ -277,11 +280,17 @@ end)
 
 Keybind notes:
 
-- 0.55 documents `{ mouse = true }` for mouse binds.
-- 0.55 adds `{ auto_consuming = true }`, which passes key/mouse events to the active window if the dispatcher fails.
-- `resizewindow 1` has no confirmed Lua equivalent. `hl.dsp.window.resize()` maps the normal resize dispatcher only.
-- Pixel move/resize helpers call action APIs directly and are behavior-equivalent candidates for `movewindowpixel` and `resizeactive`, but should be live-tested before switching.
-- Workspace selector `+0` should route through Lua workspace selector resolution, but should be live-tested before switching.
+- `{ mouse = true }` marks native mouse binds and cannot be combined with
+  `release`, `repeating`, or `locked`.
+- `{ auto_consuming = true }` passes key/mouse events to the active window if
+  the dispatcher fails.
+- Native mouse dispatchers request their matching release callback. Custom
+  mouse actions must return `{ request_release = true }` for the same lifecycle.
+- Pixel move/resize helpers call action APIs directly and are
+  behavior-equivalent candidates for `movewindowpixel` and `resizeactive`, but
+  should be live-tested before switching.
+- Workspace selector `+0` should route through Lua workspace selector
+  resolution, but should be live-tested before switching.
 
 Sources:
 

@@ -1,6 +1,3 @@
--- Lua-native equivalent of scripts/confirm-hyprprop-kill.sh for Lua keybinds.
--- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
-
 local ags = require("lib.ags")
 local command = require("lib.command")
 local notify = require("lib.notify")

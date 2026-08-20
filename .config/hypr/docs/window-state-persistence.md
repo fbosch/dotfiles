@@ -180,7 +180,7 @@ precedence. The current implementation depends on these Hyprland Lua details:
 
 ## Baseline And Test Coverage
 
-The local baseline is Hyprland `0.55.0`; see `docs/agents/version.md`. Lua
+The local baseline is Hyprland `0.56.0`; see `docs/agents/version.md`. Lua
 configuration is still a release-sensitive API, so test this workflow after
 every Hyprland upgrade rather than treating the generated Lua format as stable.
 

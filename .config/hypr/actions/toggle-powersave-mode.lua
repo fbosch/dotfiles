@@ -1,5 +1,5 @@
--- Lua-native equivalent of scripts/toggle-powersave-mode.sh for Lua keybinds.
--- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
+-- In-process alternative to the shell action. The configured shell path retains
+-- cross-process locking for concurrent profile changes.
 
 local command = require("lib.command")
 local fs = require("lib.fs")

@@ -1,6 +1,3 @@
--- Lua-native equivalent of scripts/confirm-exit.sh for Lua keybinds.
--- Keep the Bash script for legacy hyprland.conf until Lua config is release-ready.
-
 local ags = require("lib.ags")
 
 local M = {}
