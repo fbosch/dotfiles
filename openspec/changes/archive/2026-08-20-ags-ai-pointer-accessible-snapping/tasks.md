@@ -10,6 +10,7 @@
 
 - [x] 2.1 Add a short-lived GJS AT-SPI helper limited to one active Hyprland client and bounded hit-test ancestry.
 - [x] 2.2 Add parent-side subprocess timeout, cancellation, strict output validation, and window-to-global translation.
+- [x] 2.3 Add a bounded point-aware descendant fallback for accessibility-enabled Chromium and Electron trees with shallow hit-testing.
 
 ## 3. Workflow Integration
 
@@ -20,4 +21,4 @@
 ## 4. Validation
 
 - [x] 4.1 Run focused pure and native GJS tests, AGS bundle/lint checks, strict OpenSpec validation, and Nix formatting/evaluation checks.
-- [ ] 4.2 After a NixOS rebuild and fresh graphical login, manually verify supported and unsupported GTK, browser, Electron, and Qt applications.
+- [x] 4.2 After a NixOS rebuild and fresh graphical login, manually verify supported and unsupported GTK, browser, Electron, and Qt applications.

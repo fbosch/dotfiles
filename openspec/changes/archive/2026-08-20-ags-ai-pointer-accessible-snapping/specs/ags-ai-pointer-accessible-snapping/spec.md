@@ -86,6 +86,14 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **WHEN** the bus, application tree, helper, coordinates, process identity, or timeout cannot produce a validated candidate
 - **THEN** capture continues with the original stroke-derived geometry
 
+#### Scenario: Electron exposes shallow point hit-testing
+- **WHEN** an accessibility-enabled Electron window returns only an ineligible root panel from direct point hit-testing
+- **THEN** the helper performs one bounded point-aware descendant traversal and accepts only visible contained candidates at the unresolved points
+
+#### Scenario: Electron renderer accessibility is disabled
+- **WHEN** an Electron application exposes a top-level frame without renderer descendants
+- **THEN** capture preserves the original gesture geometry without treating application-side unavailability as a workflow failure
+
 ### Requirement: Focused click capture
 The AI Pointer SHALL interpret a completed gesture below the minimum stroke span as a click. It SHALL first attempt one bounded point accessibility lookup. An eligible center-hit target containing the click MAY replace fallback geometry, with actionable controls and links preferred over images and textual content and smaller targets preferred within each tier. Selected target capture SHALL include 24 pixels of context, SHALL be capped to 384 by 384 pixels around the click, and SHALL remain within the clicked monitor. When no reliable target is available, the system SHALL capture a 256 by 256 pixel region centered on the click and clamped to the clicked monitor.
 
