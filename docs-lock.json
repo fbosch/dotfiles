@@ -23,10 +23,10 @@
     "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "c134ac28747a1088a78141a175f28b0e8ff3ffd2",
-      "bytes": 218633,
+      "resolvedCommit": "2e15371506b91846615f1f62bc3fc6c9236fd038",
+      "bytes": 218667,
       "fileCount": 32,
-      "manifestSha256": "f2b9e57f5930b4e929c45fb64e5fb1c1734c362d1f09efefaf3e5704aee87dc8",
+      "manifestSha256": "36470454160594c45fd0b0b4deccfa627be14b40ded0a0e0cd49e429fc3f6942",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar-docs": {
@@ -41,19 +41,19 @@
     "glance-docs": {
       "repo": "https://github.com/glanceapp/glance",
       "ref": "HEAD",
-      "resolvedCommit": "91324e8de762702e97b0ac5c8e36271d644d8642",
-      "bytes": 122650,
+      "resolvedCommit": "2956979b4e8242eaf69aa5efa1ec4926c2f003fd",
+      "bytes": 122966,
       "fileCount": 6,
-      "manifestSha256": "e7d88341a5b021a859a819329fcedd6117cbecd0c9778e318530762d806a7aad",
+      "manifestSha256": "47f0bc29f2d97f903577a7abb5de80163e97b6f612d241d0c19fb00ad72993f4",
       "rulesSha256": "292a912375f27e4d0426baae461ae7a8c300a1f84c557d8cf7421743fb8b1fde"
     },
     "herdr-docs": {
       "repo": "https://github.com/ogulcancelik/herdr.git",
       "ref": "HEAD",
-      "resolvedCommit": "51b7064ef0a02642393bab1d2eea0f4dbd8414d2",
-      "bytes": 676951,
+      "resolvedCommit": "ffc4e263168f9e81d5bbc14db4b16ca9818d684a",
+      "bytes": 693241,
       "fileCount": 60,
-      "manifestSha256": "030ee8e16c6f7f65efc089d1350b4ecba82bdd80e37734ac0164ac126b9c35e2",
+      "manifestSha256": "c817b0db3a5bf5e77d8d0ebbfba6fd19526438cbdc2e962dbd1a9a5a25c45033",
       "rulesSha256": "6c03a23386fd099bc5a3c54454281ab61c9eedaa5c656dbfeebc0ca5474f1032"
     }
   },

@@ -1,0 +1,1020 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>AI Pointer selection behaviors</title>
+  <style>
+    :root {
+      --bg: #191919;
+      --surface: #242424;
+      --surface-raised: #2a2a2a;
+      --ink: #ffffff;
+      --muted: #bbbdc7;
+      --faint: #8c8e96;
+      --line: rgba(255, 255, 255, 0.1);
+      --line-strong: rgba(255, 255, 255, 0.18);
+      --blue: #6099c0;
+      --blue-bright: #61abda;
+      --blue-deep: #324757;
+      --green: #819b69;
+      --green-bright: #8bae68;
+      --rose: #de6e7c;
+      --wood: #b77e64;
+      --purple: #b279a7;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.34);
+      font-family: "Zenbones Brainy", "SF Pro Display", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 320px;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 12% -10%, rgba(96, 153, 192, 0.16), transparent 34rem),
+        radial-gradient(circle at 92% 12%, rgba(178, 121, 167, 0.1), transparent 28rem),
+        var(--bg);
+    }
+
+    button, select, input { font: inherit; }
+
+    button, select {
+      color: var(--ink);
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.035);
+    }
+
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 2px solid var(--blue-bright);
+      outline-offset: 2px;
+    }
+
+    .shell {
+      width: min(1500px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 44px 0 64px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 26px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      margin: 0 0 11px;
+      color: var(--blue-bright);
+      font: 700 0.72rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      width: 20px;
+      height: 1px;
+      content: "";
+      background: currentColor;
+    }
+
+    h1 {
+      max-width: 870px;
+      margin: 0;
+      font-size: clamp(2.2rem, 5vw, 5rem);
+      font-weight: 600;
+      letter-spacing: -0.055em;
+      line-height: 0.94;
+    }
+
+    .intro {
+      max-width: 760px;
+      margin: 19px 0 0;
+      color: var(--muted);
+      font-size: clamp(1rem, 1.5vw, 1.2rem);
+      line-height: 1.55;
+    }
+
+    .recommendation {
+      width: 260px;
+      padding: 16px 18px;
+      border: 1px solid rgba(129, 155, 105, 0.35);
+      border-radius: 14px;
+      color: var(--muted);
+      background: rgba(129, 155, 105, 0.07);
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .recommendation strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--green-bright);
+      font: 700 0.7rem/1.3 "JetBrains Mono", monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: 292px minmax(0, 1fr);
+      min-height: 680px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: rgba(36, 36, 36, 0.86);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(18px);
+    }
+
+    .controls {
+      padding: 24px;
+      border-right: 1px solid var(--line);
+      background: rgba(25, 25, 25, 0.58);
+    }
+
+    .control-group + .control-group {
+      margin-top: 27px;
+      padding-top: 25px;
+      border-top: 1px solid var(--line);
+    }
+
+    .group-title {
+      margin: 0 0 13px;
+      color: var(--faint);
+      font: 700 0.68rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    select {
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px 36px 10px 11px;
+      border-radius: 9px;
+    }
+
+    .mode-stack {
+      display: grid;
+      gap: 7px;
+    }
+
+    .mode-button {
+      display: grid;
+      grid-template-columns: 8px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px;
+      border-radius: 9px;
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .mode-button:hover { border-color: var(--line-strong); }
+
+    .mode-button[aria-pressed="true"] {
+      border-color: rgba(96, 153, 192, 0.48);
+      color: var(--ink);
+      background: var(--blue-deep);
+    }
+
+    .mode-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--faint);
+    }
+
+    [aria-pressed="true"] .mode-dot {
+      background: var(--blue-bright);
+      box-shadow: 0 0 0 4px rgba(97, 171, 218, 0.1);
+    }
+
+    .recommended-tag {
+      color: #dce8d1;
+      font: 600 0.57rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .range-row + .range-row { margin-top: 17px; }
+
+    .range-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 9px;
+    }
+
+    output {
+      color: var(--blue-bright);
+      font: 600 0.75rem/1.3 "JetBrains Mono", monospace;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      margin: 0;
+      border-radius: 999px;
+      appearance: none;
+      background: linear-gradient(90deg, var(--blue) var(--range-fill, 50%), rgba(255,255,255,0.11) 0);
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--surface);
+      border-radius: 50%;
+      appearance: none;
+      background: var(--blue-bright);
+      box-shadow: 0 0 0 1px rgba(97,171,218,0.45);
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+      color: var(--faint);
+      font: 0.67rem/1.4 "JetBrains Mono", monospace;
+    }
+
+    .legend span { display: flex; align-items: center; gap: 7px; }
+
+    .swatch {
+      width: 16px;
+      height: 9px;
+      border: 1px solid var(--line-strong);
+      border-radius: 3px;
+    }
+
+    .swatch.selected { border-color: var(--green-bright); background: rgba(129,155,105,0.25); }
+    .swatch.region { border-color: var(--blue-bright); background: rgba(96,153,192,0.24); }
+    .swatch.stroke { height: 2px; border: 0; border-radius: 0; background: var(--blue-bright); }
+    .swatch.closure { height: 2px; border: 0; border-top: 2px dashed var(--wood); border-radius: 0; }
+
+    .stage {
+      display: grid;
+      grid-template-rows: auto minmax(430px, 1fr) auto;
+      min-width: 0;
+    }
+
+    .stage-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 23px 26px 18px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .stage-head h2 {
+      margin: 0 0 5px;
+      font-size: 1.08rem;
+      font-weight: 600;
+    }
+
+    .stage-head p {
+      max-width: 710px;
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .classification {
+      flex: 0 0 auto;
+      padding: 8px 11px;
+      border: 1px solid rgba(96, 153, 192, 0.28);
+      border-radius: 999px;
+      color: var(--blue-bright);
+      background: rgba(96, 153, 192, 0.07);
+      font: 700 0.66rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .canvas-wrap {
+      position: relative;
+      min-height: 430px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px),
+        #202020;
+      background-size: 24px 24px;
+    }
+
+    .canvas-wrap::after {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      content: "";
+      box-shadow: inset 0 0 90px rgba(0,0,0,0.24);
+    }
+
+    #main-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 430px;
+    }
+
+    .status-rail {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      border-top: 1px solid var(--line);
+    }
+
+    .status-item {
+      min-width: 0;
+      padding: 16px 20px;
+    }
+
+    .status-item + .status-item { border-left: 1px solid var(--line); }
+
+    .status-label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--faint);
+      font: 0.62rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-value {
+      display: block;
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 0.83rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .comparison-section { margin-top: 45px; }
+
+    .section-heading {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 480px);
+      align-items: end;
+      gap: 30px;
+      margin-bottom: 17px;
+    }
+
+    .section-heading h2 {
+      margin: 0;
+      font-size: clamp(1.5rem, 3vw, 2.4rem);
+      font-weight: 550;
+      letter-spacing: -0.035em;
+    }
+
+    .section-heading p {
+      margin: 0;
+      color: var(--faint);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .comparison-card {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface);
+    }
+
+    .comparison-card.recommended { border-color: rgba(129, 155, 105, 0.42); }
+
+    .mini-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 13px 10px;
+    }
+
+    .mini-title { font-size: 0.78rem; font-weight: 650; }
+    .mini-count { color: var(--faint); font: 0.62rem/1.5 "JetBrains Mono", monospace; }
+
+    .comparison-card svg {
+      display: block;
+      width: 100%;
+      aspect-ratio: 1.35;
+      border-block: 1px solid var(--line);
+      background: #202020;
+    }
+
+    .mini-note {
+      min-height: 55px;
+      margin: 0;
+      padding: 10px 13px;
+      color: var(--faint);
+      font-size: 0.72rem;
+      line-height: 1.45;
+    }
+
+    .rules {
+      display: grid;
+      grid-template-columns: 0.85fr 1.15fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .rule-card {
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(36,36,36,0.72);
+    }
+
+    .rule-card h3 { margin: 0 0 14px; font-size: 0.98rem; }
+
+    .decision-list {
+      display: grid;
+      gap: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      counter-reset: decisions;
+    }
+
+    .decision-list li {
+      display: grid;
+      grid-template-columns: 25px minmax(0, 1fr);
+      gap: 10px;
+      padding: 10px 0;
+      color: var(--muted);
+      font-size: 0.83rem;
+      line-height: 1.45;
+      counter-increment: decisions;
+    }
+
+    .decision-list li + li { border-top: 1px solid var(--line); }
+
+    .decision-list li::before {
+      display: grid;
+      width: 22px;
+      height: 22px;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--blue-bright);
+      content: counter(decisions);
+      font: 0.64rem/1 "JetBrains Mono", monospace;
+      place-items: center;
+    }
+
+    .behavior-table {
+      width: 100%;
+      border-collapse: collapse;
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.4;
+    }
+
+    .behavior-table th {
+      padding: 0 9px 9px;
+      color: var(--faint);
+      font: 0.62rem/1 "JetBrains Mono", monospace;
+      letter-spacing: 0.08em;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    .behavior-table td { padding: 10px 9px; border-top: 1px solid var(--line); }
+    .behavior-table td:first-child { color: var(--ink); }
+
+    .candidate { transition: opacity 120ms ease, fill 120ms ease, stroke 120ms ease; }
+    .candidate-label { pointer-events: none; font-family: "JetBrains Mono", monospace; }
+
+    @media (max-width: 1080px) {
+      header { grid-template-columns: 1fr; }
+      .recommendation { width: auto; max-width: 600px; }
+      .workbench { grid-template-columns: 240px minmax(0, 1fr); }
+      .comparison-grid { grid-template-columns: repeat(3, 1fr); }
+      .rules { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 760px) {
+      .shell { width: min(100% - 22px, 1500px); padding-top: 26px; }
+      .workbench { display: block; }
+      .controls { border-right: 0; border-bottom: 1px solid var(--line); }
+      .mode-stack { grid-template-columns: 1fr 1fr; }
+      .stage-head { display: grid; }
+      .classification { width: max-content; }
+      .status-rail { grid-template-columns: 1fr; }
+      .status-item + .status-item { border-top: 1px solid var(--line); border-left: 0; }
+      .section-heading { grid-template-columns: 1fr; gap: 10px; }
+      .comparison-grid { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      h1 { font-size: 2.45rem; }
+      .mode-stack, .comparison-grid { grid-template-columns: 1fr; }
+      .stage-head { padding-inline: 18px; }
+      .status-value { white-space: normal; }
+      .rules { margin-top: 24px; }
+      .rule-card { padding: 17px; overflow-x: auto; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <p class="eyebrow">AI Pointer / behavior study</p>
+        <h1>One gesture, five interpretations.</h1>
+        <p class="intro">Explore how an accessibility-aware pointer can distinguish an intentional enclosure from an open stroke without inventing a selection the user never drew.</p>
+      </div>
+      <aside class="recommendation">
+        <strong>Recommended default</strong>
+        Hybrid closes a confident loop. Every other gesture becomes a thick corridor along the actual pointer path.
+      </aside>
+    </header>
+
+    <section class="workbench" aria-labelledby="workbench-title">
+      <aside class="controls" aria-label="Visualization controls">
+        <div class="control-group">
+          <p class="group-title">Gesture</p>
+          <label for="scenario">Example path</label>
+          <select id="scenario">
+            <option value="near-loop">Near-closed loop</option>
+            <option value="open-c">Wide-gap C</option>
+            <option value="u-shape">U-shaped stroke</option>
+            <option value="line">Crossing line</option>
+            <option value="scribble">Self-intersecting scribble</option>
+          </select>
+        </div>
+
+        <div class="control-group">
+          <p class="group-title">Interpretation</p>
+          <div class="mode-stack" id="mode-buttons">
+            <button class="mode-button" type="button" data-mode="hybrid" aria-pressed="true"><span class="mode-dot"></span><span>Hybrid</span><span class="recommended-tag">default</span></button>
+            <button class="mode-button" type="button" data-mode="corridor" aria-pressed="false"><span class="mode-dot"></span><span>Corridor</span><span></span></button>
+            <button class="mode-button" type="button" data-mode="force-close" aria-pressed="false"><span class="mode-dot"></span><span>Force close</span><span></span></button>
+            <button class="mode-button" type="button" data-mode="hull" aria-pressed="false"><span class="mode-dot"></span><span>Convex hull</span><span></span></button>
+            <button class="mode-button" type="button" data-mode="bounds" aria-pressed="false"><span class="mode-dot"></span><span>Bounds</span><span></span></button>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <p class="group-title">Geometry</p>
+          <div class="range-row">
+            <div class="range-head"><label for="threshold">Closure threshold</label><output id="threshold-value" for="threshold">56 px</output></div>
+            <input id="threshold" type="range" min="24" max="120" value="56" step="4">
+          </div>
+          <div class="range-row">
+            <div class="range-head"><label for="radius">Corridor radius</label><output id="radius-value" for="radius">28 px</output></div>
+            <input id="radius" type="range" min="8" max="48" value="28" step="2">
+          </div>
+        </div>
+
+        <div class="control-group">
+          <p class="group-title">Candidate inclusion</p>
+          <label for="inclusion">Accessible bounds are selected when</label>
+          <select id="inclusion">
+            <option value="center">center is inside</option>
+            <option value="majority">at least 50% overlaps</option>
+            <option value="any">any part overlaps</option>
+          </select>
+          <div class="legend" role="group" aria-label="Diagram legend">
+            <span><i class="swatch selected"></i>selected</span>
+            <span><i class="swatch region"></i>region</span>
+            <span><i class="swatch stroke"></i>stroke</span>
+            <span><i class="swatch closure"></i>closure</span>
+          </div>
+        </div>
+      </aside>
+
+      <div class="stage">
+        <div class="stage-head">
+          <div>
+            <h2 id="workbench-title">Selection field</h2>
+            <p id="mode-description">Closes a reliable loop; otherwise follows the brush-width path.</p>
+          </div>
+          <span class="classification" id="classification">Closed loop</span>
+        </div>
+        <div class="canvas-wrap">
+          <svg id="main-canvas" viewBox="0 0 920 520" role="img" aria-labelledby="canvas-title canvas-description">
+            <title id="canvas-title">Interactive AI Pointer selection diagram</title>
+            <desc id="canvas-description">A pointer gesture, its interpreted region, and accessible elements marked as selected or rejected.</desc>
+          </svg>
+        </div>
+        <div class="status-rail" aria-live="polite">
+          <div class="status-item"><span class="status-label">Endpoint gap</span><span class="status-value" id="gap-status">—</span></div>
+          <div class="status-item"><span class="status-label">Interpretation</span><span class="status-value" id="interpretation-status">—</span></div>
+          <div class="status-item"><span class="status-label">Accessible result</span><span class="status-value" id="selection-status">—</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="comparison-section" aria-labelledby="comparison-title">
+      <div class="section-heading">
+        <h2 id="comparison-title">Same stroke, different consequences</h2>
+        <p>Each card applies a different geometric rule to the active gesture. The comparison makes accidental over-selection visible.</p>
+      </div>
+      <div class="comparison-grid" id="comparison-grid"></div>
+
+      <div class="rules">
+        <article class="rule-card">
+          <h3>Hybrid decision path</h3>
+          <ol class="decision-list">
+            <li>Reject click-sized and degenerate paths from shape analysis.</li>
+            <li>Close only when endpoint proximity and path topology make the inferred edge credible.</li>
+            <li>Use polygon containment for a closed loop; use the brush corridor for every open path.</li>
+            <li>Resolve enclosed accessible candidates, then capture their rectangular union.</li>
+          </ol>
+        </article>
+        <article class="rule-card">
+          <h3>Expected gesture semantics</h3>
+          <table class="behavior-table">
+            <thead><tr><th>Gesture</th><th>Hybrid result</th><th>Reason</th></tr></thead>
+            <tbody>
+              <tr><td>Near-circle</td><td>Filled enclosure</td><td>The endpoint gap is small and the path is simple.</td></tr>
+              <tr><td>Wide-gap C</td><td>Stroke corridor</td><td>A closing chord would invent a large boundary.</td></tr>
+              <tr><td>U stroke</td><td>Stroke corridor</td><td>The empty center remains intentionally unselected.</td></tr>
+              <tr><td>Crossing line</td><td>Stroke corridor</td><td>Only controls crossed by the gesture are candidates.</td></tr>
+              <tr><td>Scribble</td><td>Stroke corridor</td><td>Self-intersection makes polygon interior ambiguous.</td></tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const NS = "http://www.w3.org/2000/svg";
+    const modes = {
+      hybrid: { title: "Hybrid", note: "Closes only a credible loop; otherwise stays on the drawn path." },
+      corridor: { title: "Corridor", note: "Never fills an interior. Selects only what the brush traverses." },
+      "force-close": { title: "Force close", note: "Always joins the endpoints, even when the new edge is unintended." },
+      hull: { title: "Convex hull", note: "Wraps every point and fills concavities the gesture may have avoided." },
+      bounds: { title: "Bounding box", note: "Fast and predictable, but includes every element inside the rectangle." },
+    };
+
+    const targets = [
+      { id: "nav", role: "link", label: "Navigation", x: 88, y: 74, width: 134, height: 42 },
+      { id: "image", role: "image", label: "Image", x: 315, y: 105, width: 232, height: 142 },
+      { id: "save", role: "push button", label: "Save", x: 602, y: 88, width: 118, height: 48 },
+      { id: "title", role: "heading", label: "Heading", x: 244, y: 292, width: 198, height: 48 },
+      { id: "toggle", role: "toggle button", label: "Toggle", x: 548, y: 306, width: 146, height: 50 },
+      { id: "footer", role: "section", label: "Section", x: 150, y: 408, width: 510, height: 58 },
+    ];
+
+    const scenarios = {
+      "near-loop": {
+        label: "Near-closed loop",
+        points: [[242,266],[229,214],[246,162],[291,124],[354,104],[423,109],[484,136],[526,178],[538,228],[524,276],[488,317],[431,342],[364,345],[305,327],[265,298]],
+      },
+      "open-c": {
+        label: "Wide-gap C",
+        points: [[527,152],[485,118],[426,100],[357,104],[296,130],[251,173],[231,225],[239,278],[271,323],[321,351],[381,361],[446,351],[495,326]],
+      },
+      "u-shape": {
+        label: "U-shaped stroke",
+        points: [[270,128],[266,180],[268,240],[280,298],[309,337],[352,357],[404,355],[450,331],[477,291],[486,236],[486,178],[482,130]],
+      },
+      line: {
+        label: "Crossing line",
+        points: [[150,390],[235,342],[322,292],[413,244],[502,198],[594,148],[684,103]],
+      },
+      scribble: {
+        label: "Self-intersecting scribble",
+        points: [[224,306],[298,132],[459,347],[518,137],[266,256],[522,281],[341,105],[224,306]],
+      },
+    };
+
+    const state = {
+      scenario: "near-loop",
+      mode: "hybrid",
+      threshold: 56,
+      radius: 28,
+      inclusion: "center",
+    };
+
+    const svg = document.querySelector("#main-canvas");
+    const scenarioSelect = document.querySelector("#scenario");
+    const thresholdInput = document.querySelector("#threshold");
+    const radiusInput = document.querySelector("#radius");
+    const inclusionSelect = document.querySelector("#inclusion");
+    const thresholdValue = document.querySelector("#threshold-value");
+    const radiusValue = document.querySelector("#radius-value");
+    const comparisonGrid = document.querySelector("#comparison-grid");
+
+    function element(name, attributes = {}, text = "") {
+      const node = document.createElementNS(NS, name);
+      for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, String(value));
+      if (text) node.textContent = text;
+      return node;
+    }
+
+    function distance(left, right) {
+      return Math.hypot(right[0] - left[0], right[1] - left[1]);
+    }
+
+    function pointToSegmentDistance(point, start, end) {
+      const dx = end[0] - start[0];
+      const dy = end[1] - start[1];
+      if (dx === 0 && dy === 0) return distance(point, start);
+      const ratio = Math.max(0, Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / (dx * dx + dy * dy)));
+      return distance(point, [start[0] + ratio * dx, start[1] + ratio * dy]);
+    }
+
+    function pointInPolygon(point, polygon) {
+      let inside = false;
+      for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
+        const [x, y] = polygon[index];
+        const [px, py] = polygon[previous];
+        const crosses = (y > point[1]) !== (py > point[1]) && point[0] < ((px - x) * (point[1] - y)) / (py - y) + x;
+        if (crosses) inside = !inside;
+      }
+      return inside;
+    }
+
+    function segmentOrientation(a, b, c) {
+      return (b[1] - a[1]) * (c[0] - b[0]) - (b[0] - a[0]) * (c[1] - b[1]);
+    }
+
+    function segmentsIntersect(a, b, c, d) {
+      const first = segmentOrientation(a, b, c);
+      const second = segmentOrientation(a, b, d);
+      const third = segmentOrientation(c, d, a);
+      const fourth = segmentOrientation(c, d, b);
+      return first * second < 0 && third * fourth < 0;
+    }
+
+    function selfIntersects(points) {
+      for (let first = 0; first < points.length - 1; first += 1) {
+        for (let second = first + 2; second < points.length - 1; second += 1) {
+          if (first === 0 && second === points.length - 2) continue;
+          if (segmentsIntersect(points[first], points[first + 1], points[second], points[second + 1])) return true;
+        }
+      }
+      return false;
+    }
+
+    function convexHull(points) {
+      const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+      if (sorted.length <= 2) return sorted;
+      const cross = (origin, a, b) => (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0]);
+      const lower = [];
+      for (const point of sorted) {
+        while (lower.length >= 2 && cross(lower.at(-2), lower.at(-1), point) <= 0) lower.pop();
+        lower.push(point);
+      }
+      const upper = [];
+      for (const point of [...sorted].reverse()) {
+        while (upper.length >= 2 && cross(upper.at(-2), upper.at(-1), point) <= 0) upper.pop();
+        upper.push(point);
+      }
+      lower.pop();
+      upper.pop();
+      return lower.concat(upper);
+    }
+
+    function boundsFor(points, padding = 0) {
+      const xs = points.map(([x]) => x);
+      const ys = points.map(([, y]) => y);
+      const left = Math.min(...xs) - padding;
+      const top = Math.min(...ys) - padding;
+      return { x: left, y: top, width: Math.max(...xs) - Math.min(...xs) + padding * 2, height: Math.max(...ys) - Math.min(...ys) + padding * 2 };
+    }
+
+    function pathLength(points) {
+      return points.slice(1).reduce((total, point, index) => total + distance(points[index], point), 0);
+    }
+
+    function closureState(points, threshold) {
+      const gap = distance(points[0], points.at(-1));
+      const longEnough = pathLength(points) >= 180;
+      const topologySafe = selfIntersects(points) === false;
+      return { gap, closable: gap <= threshold && longEnough && topologySafe, topologySafe };
+    }
+
+    function regionFor(mode, points, threshold, radius) {
+      const closure = closureState(points, threshold);
+      if (mode === "hybrid") {
+        if (closure.closable) return { kind: "polygon", points, closure: true, label: "closed polygon" };
+        return { kind: "corridor", points, radius, closure: false, label: "open stroke corridor" };
+      }
+      if (mode === "corridor") return { kind: "corridor", points, radius, closure: false, label: "stroke corridor" };
+      if (mode === "force-close") return { kind: "polygon", points, closure: true, label: "forced polygon" };
+      if (mode === "hull") return { kind: "polygon", points: convexHull(points), closure: true, label: "convex hull" };
+      return { kind: "bounds", bounds: boundsFor(points, radius), closure: false, label: "padded bounds" };
+    }
+
+    function contains(region, point) {
+      if (region.kind === "polygon") return pointInPolygon(point, region.points);
+      if (region.kind === "bounds") {
+        const box = region.bounds;
+        return point[0] >= box.x && point[0] <= box.x + box.width && point[1] >= box.y && point[1] <= box.y + box.height;
+      }
+      return region.points.slice(1).some((end, index) => pointToSegmentDistance(point, region.points[index], end) <= region.radius);
+    }
+
+    function candidateCoverage(region, target) {
+      const grid = 9;
+      let covered = 0;
+      for (let row = 0; row < grid; row += 1) {
+        for (let column = 0; column < grid; column += 1) {
+          const point = [target.x + target.width * column / (grid - 1), target.y + target.height * row / (grid - 1)];
+          if (contains(region, point)) covered += 1;
+        }
+      }
+      return covered / (grid * grid);
+    }
+
+    function targetSelected(region, target, inclusion) {
+      if (inclusion === "center") return contains(region, [target.x + target.width / 2, target.y + target.height / 2]);
+      const coverage = candidateCoverage(region, target);
+      return inclusion === "majority" ? coverage >= 0.5 : coverage > 0;
+    }
+
+    function polylinePoints(points) {
+      return points.map(([x, y]) => `${x},${y}`).join(" ");
+    }
+
+    function renderRegion(root, region, compact) {
+      if (region.kind === "corridor") {
+        root.append(element("polyline", {
+          points: polylinePoints(region.points), fill: "none", stroke: "rgba(96,153,192,0.23)",
+          "stroke-width": region.radius * 2, "stroke-linecap": "round", "stroke-linejoin": "round",
+        }));
+      } else if (region.kind === "polygon") {
+        root.append(element("polygon", {
+          points: polylinePoints(region.points), fill: "rgba(96,153,192,0.18)", stroke: "#6099c0",
+          "stroke-width": compact ? 3 : 2, "stroke-linejoin": "round",
+        }));
+      } else {
+        root.append(element("rect", {
+          ...region.bounds, rx: 8, fill: "rgba(96,153,192,0.18)", stroke: "#6099c0", "stroke-width": compact ? 3 : 2,
+        }));
+      }
+    }
+
+    function renderTargets(root, region, compact) {
+      const selected = [];
+      for (const target of targets) {
+        const isSelected = targetSelected(region, target, state.inclusion);
+        if (isSelected) selected.push(target);
+        root.append(element("rect", {
+          x: target.x, y: target.y, width: target.width, height: target.height, rx: compact ? 8 : 10,
+          fill: isSelected ? "rgba(129,155,105,0.24)" : "rgba(255,255,255,0.035)",
+          stroke: isSelected ? "#8bae68" : "rgba(255,255,255,0.2)",
+          "stroke-width": compact ? 3 : 1.5, class: "candidate",
+        }));
+        if (!compact) {
+          root.append(element("text", { x: target.x + 12, y: target.y + 20, fill: isSelected ? "#dce8d1" : "#bbbdc7", "font-size": 13, class: "candidate-label" }, target.label));
+          root.append(element("text", { x: target.x + 12, y: target.y + 37, fill: isSelected ? "#8bae68" : "#747780", "font-size": 9, class: "candidate-label" }, target.role.toUpperCase()));
+        }
+      }
+      return selected;
+    }
+
+    function renderGesture(root, points, region, compact) {
+      root.append(element("polyline", {
+        points: polylinePoints(points), fill: "none", stroke: "#61abda", "stroke-width": compact ? 5 : 4,
+        "stroke-linecap": "round", "stroke-linejoin": "round",
+      }));
+      if (region.closure && distance(points[0], points.at(-1)) > 1) {
+        root.append(element("line", {
+          x1: points.at(-1)[0], y1: points.at(-1)[1], x2: points[0][0], y2: points[0][1],
+          stroke: "#d68c67", "stroke-width": compact ? 4 : 2.5, "stroke-dasharray": compact ? "7 6" : "8 6",
+        }));
+      }
+      if (!compact) {
+        root.append(element("circle", { cx: points[0][0], cy: points[0][1], r: 7, fill: "#191919", stroke: "#61abda", "stroke-width": 3 }));
+        root.append(element("circle", { cx: points.at(-1)[0], cy: points.at(-1)[1], r: 7, fill: "#61abda", stroke: "#191919", "stroke-width": 3 }));
+        root.append(element("text", { x: points[0][0] + 12, y: points[0][1] - 10, fill: "#8c8e96", "font-size": 10, class: "candidate-label" }, "START"));
+        root.append(element("text", { x: points.at(-1)[0] + 12, y: points.at(-1)[1] + 18, fill: "#8c8e96", "font-size": 10, class: "candidate-label" }, "END"));
+      }
+    }
+
+    function renderMain() {
+      const scenario = scenarios[state.scenario];
+      const region = regionFor(state.mode, scenario.points, state.threshold, state.radius);
+      const closure = closureState(scenario.points, state.threshold);
+      svg.replaceChildren(svg.querySelector("title"), svg.querySelector("desc"));
+
+      const frame = element("g");
+      frame.append(element("rect", { x: 54, y: 40, width: 812, height: 436, rx: 17, fill: "rgba(25,25,25,0.34)", stroke: "rgba(255,255,255,0.08)" }));
+      renderRegion(frame, region, false);
+      const selected = renderTargets(frame, region, false);
+      renderGesture(frame, scenario.points, region, false);
+      svg.append(frame);
+
+      const classification = state.mode === "hybrid"
+        ? closure.closable ? "Closed loop" : closure.topologySafe ? "Open path" : "Ambiguous path"
+        : modes[state.mode].title;
+      document.querySelector("#classification").textContent = classification;
+      document.querySelector("#mode-description").textContent = modes[state.mode].note;
+      document.querySelector("#gap-status").textContent = `${Math.round(closure.gap)} px · threshold ${state.threshold} px`;
+      document.querySelector("#interpretation-status").textContent = region.label;
+      document.querySelector("#selection-status").textContent = selected.length === 0 ? "No accessible targets" : `${selected.length} selected · ${selected.map(({ label }) => label).join(", ")}`;
+    }
+
+    function renderComparison() {
+      comparisonGrid.replaceChildren();
+      const scenario = scenarios[state.scenario];
+      for (const mode of Object.keys(modes)) {
+        const region = regionFor(mode, scenario.points, state.threshold, state.radius);
+        const selected = targets.filter((target) => targetSelected(region, target, state.inclusion));
+        const card = document.createElement("article");
+        card.className = `comparison-card${mode === "hybrid" ? " recommended" : ""}`;
+        const head = document.createElement("div");
+        head.className = "mini-head";
+        const title = document.createElement("span");
+        title.className = "mini-title";
+        title.textContent = modes[mode].title;
+        const count = document.createElement("span");
+        count.className = "mini-count";
+        count.textContent = `${selected.length} selected`;
+        head.append(title, count);
+
+        const mini = document.createElementNS(NS, "svg");
+        mini.setAttribute("viewBox", "50 45 760 430");
+        mini.setAttribute("role", "img");
+        mini.setAttribute("aria-label", `${modes[mode].title}: ${selected.length} accessible targets selected`);
+        renderRegion(mini, region, true);
+        renderTargets(mini, region, true);
+        renderGesture(mini, scenario.points, region, true);
+
+        const note = document.createElement("p");
+        note.className = "mini-note";
+        note.textContent = modes[mode].note;
+        card.append(head, mini, note);
+        comparisonGrid.append(card);
+      }
+    }
+
+    function updateRange(input) {
+      const minimum = Number(input.min);
+      const maximum = Number(input.max);
+      const fill = (Number(input.value) - minimum) / (maximum - minimum) * 100;
+      input.style.setProperty("--range-fill", `${fill}%`);
+    }
+
+    function render() {
+      thresholdValue.textContent = `${state.threshold} px`;
+      radiusValue.textContent = `${state.radius} px`;
+      updateRange(thresholdInput);
+      updateRange(radiusInput);
+      renderMain();
+      renderComparison();
+    }
+
+    scenarioSelect.addEventListener("change", () => {
+      state.scenario = scenarioSelect.value;
+      render();
+    });
+
+    document.querySelector("#mode-buttons").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-mode]");
+      if (!button) return;
+      state.mode = button.dataset.mode;
+      for (const modeButton of document.querySelectorAll("[data-mode]")) modeButton.setAttribute("aria-pressed", String(modeButton === button));
+      render();
+    });
+
+    thresholdInput.addEventListener("input", () => {
+      state.threshold = Number(thresholdInput.value);
+      render();
+    });
+
+    radiusInput.addEventListener("input", () => {
+      state.radius = Number(radiusInput.value);
+      render();
+    });
+
+    inclusionSelect.addEventListener("change", () => {
+      state.inclusion = inclusionSelect.value;
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>
