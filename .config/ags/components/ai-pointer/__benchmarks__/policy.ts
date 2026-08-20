@@ -4,6 +4,7 @@ import {
 	clickFallbackGeometry,
 	clickTargetGeometry,
 } from "../selection";
+import { strokeSelectionRegion } from "../stroke";
 import { benchmarkEnvironmentInteger, benchmarkStatistics } from "./stats";
 
 const samples = benchmarkEnvironmentInteger(
@@ -37,6 +38,24 @@ const accessibleDragCandidates = [
 const inaccessibleDragCandidates = [
 	{ geometry: { x: 420, y: 320, width: 200, height: 80 }, role: "panel" },
 ];
+const dragRegion = strokeSelectionRegion([
+	{ x: 400, y: 360 },
+	{ x: 420, y: 310 },
+	{ x: 500, y: 280 },
+	{ x: 590, y: 300 },
+	{ x: 640, y: 360 },
+	{ x: 600, y: 420 },
+	{ x: 510, y: 440 },
+	{ x: 430, y: 410 },
+	{ x: 405, y: 370 },
+]);
+const maximumRegionStroke = Array.from({ length: 1_024 }, (_, index) => {
+	const angle = (index / 1_023) * Math.PI * 2;
+	return {
+		x: Math.round(520 + Math.cos(angle) * 150),
+		y: Math.round(360 + Math.sin(angle) * 100),
+	};
+});
 const maximumClickCandidates = Array.from({ length: 24 }, (_, index) => ({
 	centerHit: true,
 	geometry: {
@@ -74,6 +93,16 @@ const scenarios = {
 		evaluateAccessibleSnap(dragSelection, inaccessibleDragCandidates, client),
 	"drag-maximum-candidates-policy": () =>
 		evaluateAccessibleSnap(dragSelection, maximumDragCandidates, client),
+	"drag-region-policy": () =>
+		evaluateAccessibleSnap(dragSelection, maximumDragCandidates, client, dragRegion),
+	"drag-maximum-region-construction": () => strokeSelectionRegion(maximumRegionStroke),
+	"drag-maximum-region-policy": () =>
+		evaluateAccessibleSnap(
+			dragSelection,
+			maximumDragCandidates,
+			client,
+			strokeSelectionRegion(maximumRegionStroke),
+		),
 };
 
 const rssBeforeKb = Math.round(process.memoryUsage().rss / 1_024);

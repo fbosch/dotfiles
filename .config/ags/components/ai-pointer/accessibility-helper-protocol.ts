@@ -6,7 +6,7 @@ const maximumRoleLength = 80;
 const maximumNameLength = 160;
 const maximumUrlLength = 512;
 
-export const accessibilityProtocolVersion = 4;
+export const accessibilityProtocolVersion = 5;
 export const accessibilityCoordinateSpace = "window";
 
 export interface AccessibleCandidate {
@@ -25,6 +25,7 @@ export interface AccessibilityHelperTiming {
 
 export interface AccessibilityHelperOutput {
 	candidates: AccessibleCandidate[];
+	complete: boolean;
 	timings: Record<keyof typeof accessibilityHelperTimingMetrics, AccessibilityHelperTiming>;
 }
 
@@ -40,15 +41,17 @@ export function parseAccessibilityHelperOutput(output: string): AccessibilityHel
 		parsed.protocolVersion !== accessibilityProtocolVersion ||
 		parsed.coordinateSpace !== accessibilityCoordinateSpace ||
 		Array.isArray(parsed.candidates) === false ||
+		typeof parsed.complete !== "boolean" ||
 		isRecord(parsed.timings) === false
 	)
 		return null;
 	const timings = parseHelperTimings(parsed.timings);
 	if (!timings) return null;
+	if (parsed.candidates.length > maximumCandidates) return null;
 
 	const candidates: AccessibleCandidate[] = [];
-	for (const value of parsed.candidates.slice(0, maximumCandidates)) {
-		if (!isRecord(value) || !isRecord(value.geometry)) continue;
+	for (const value of parsed.candidates) {
+		if (!isRecord(value) || !isRecord(value.geometry)) return null;
 		const { x, y, width, height } = value.geometry;
 		if (
 			typeof x !== "number" ||
@@ -56,27 +59,27 @@ export function parseAccessibilityHelperOutput(output: string): AccessibilityHel
 			typeof width !== "number" ||
 			typeof height !== "number"
 		)
-			continue;
+			return null;
 		const geometry = validatedSelectionGeometry(x, y, width, height);
 		if (
 			!geometry ||
 			typeof value.role !== "string" ||
 			isSafeMetadata(value.role, maximumRoleLength) === false
 		)
-			continue;
+			return null;
 		if (
 			value.name !== undefined &&
 			(typeof value.name !== "string" || isSafeMetadata(value.name, maximumNameLength) === false)
 		)
-			continue;
+			return null;
 		if (
 			value.url !== undefined &&
 			(typeof value.url !== "string" ||
 				value.role.trim().toLowerCase() !== "link" ||
 				isSafeUrl(value.url) === false)
 		)
-			continue;
-		if (value.centerHit !== undefined && typeof value.centerHit !== "boolean") continue;
+			return null;
+		if (value.centerHit !== undefined && typeof value.centerHit !== "boolean") return null;
 		if (
 			value.hitCount !== undefined &&
 			(typeof value.hitCount !== "number" ||
@@ -84,7 +87,7 @@ export function parseAccessibilityHelperOutput(output: string): AccessibilityHel
 				value.hitCount < 1 ||
 				value.hitCount > 24)
 		)
-			continue;
+			return null;
 		candidates.push({
 			centerHit: value.centerHit,
 			geometry,
@@ -94,7 +97,7 @@ export function parseAccessibilityHelperOutput(output: string): AccessibilityHel
 			url: value.url,
 		});
 	}
-	return { candidates, timings };
+	return { candidates, complete: parsed.complete, timings };
 }
 
 function parseHelperTimings(

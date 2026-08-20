@@ -4,7 +4,23 @@ import {
 	type SelectionGeometry,
 	validatedSelectionGeometry,
 } from "./selection";
-import { strokeCapturePadding } from "./stroke";
+import {
+	pointInStrokeRegion,
+	strokeCapturePadding,
+	strokeRegionContainsGeometry,
+	strokeRegionGeometryCoverage,
+	type StrokeSelectionRegion,
+} from "./stroke";
+import {
+	accessibilityRegionRolePriority,
+	commonAncestorRoles,
+	directTargetPriority,
+	isEligibleAccessibilityRole,
+} from "./accessibility-target-roles";
+import {
+	resolveStrokeRegionSelection,
+	type RankedAccessibleCandidate,
+} from "./accessibility-region-policy";
 import type { AccessibleCandidate } from "./accessibility-helper-protocol";
 export {
 	accessibilityCoordinateSpace,
@@ -24,29 +40,6 @@ const maximumAreaRatio = 5;
 const maximumNamedAncestorAreaRatio = 12;
 const minimumConfidence = 0.5;
 const minimumConfidenceMargin = 0.03;
-const eligibleRoles = new Set([
-	"article",
-	"check box",
-	"combo box",
-	"entry",
-	"heading",
-	"icon",
-	"image",
-	"link",
-	"list item",
-	"menu item",
-	"page tab",
-	"paragraph",
-	"push button",
-	"radio button",
-	"section",
-	"slider",
-	"spin button",
-	"table cell",
-	"text",
-	"toggle button",
-]);
-const commonAncestorRoles = new Set(["article", "list item", "section"]);
 const collectionRoles = new Set([
 	"check box",
 	"combo box",
@@ -68,10 +61,6 @@ const maximumCollectionTargets = 8;
 const minimumCollectionDensity = 0.15;
 const maximumCollectionOverlap = 0.5;
 const maximumDiagnostics = 12;
-const directTargetPriority = new Map([
-	["link", 0],
-	["image", 1],
-]);
 
 export interface AccessibilityTargetMetadata {
 	centerHit?: boolean;
@@ -118,10 +107,7 @@ export interface AccessibilityEvaluation {
 	resolution: AccessibilityResolution | null;
 }
 
-interface RankedCandidate {
-	candidate: AccessibleCandidate;
-	confidence: number;
-}
+type RankedCandidate = RankedAccessibleCandidate;
 
 interface CandidateAnalysis {
 	candidate: AccessibleCandidate;
@@ -132,18 +118,22 @@ export function chooseAccessibleSnap(
 	selection: SelectionGeometry,
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
+	region?: StrokeSelectionRegion,
 ): AccessibilityResolution | null {
-	return evaluateAccessibleSnap(selection, candidates, clientGeometry).resolution;
+	return evaluateAccessibleSnap(selection, candidates, clientGeometry, region).resolution;
 }
+
+export { isEligibleAccessibilityRole } from "./accessibility-target-roles";
 
 export function evaluateAccessibleSnap(
 	selection: SelectionGeometry,
 	candidates: AccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
+	region?: StrokeSelectionRegion,
 ): AccessibilityEvaluation {
 	const analyzed = deduplicateCandidates(candidates).map((candidate) => ({
 		candidate,
-		ranked: rankCandidate(selection, candidate, clientGeometry),
+		ranked: rankCandidate(selection, candidate, clientGeometry, region),
 	}));
 	const ranked = analyzed
 		.map(({ ranked: candidate }) => candidate)
@@ -153,14 +143,11 @@ export function evaluateAccessibleSnap(
 			left.candidate.role.localeCompare(right.candidate.role) ||
 			(left.candidate.name ?? "").localeCompare(right.candidate.name ?? "")
 		);
-	const resolution = chooseAccessibleSnapInternal(
-		selection,
-		candidates,
-		clientGeometry,
-		ranked,
-	);
+	const resolution = region
+		? resolveStrokeRegionSelection(selection, ranked, clientGeometry)
+		: chooseAccessibleSnapInternal(selection, candidates, clientGeometry, ranked);
 	return {
-		diagnostics: diagnoseCandidates(selection, analyzed, clientGeometry, resolution),
+		diagnostics: diagnoseCandidates(selection, analyzed, clientGeometry, resolution, region),
 		resolution,
 	};
 }
@@ -224,6 +211,7 @@ function diagnoseCandidates(
 	analyzed: CandidateAnalysis[],
 	clientGeometry: SelectionGeometry,
 	resolution: AccessibilityResolution | null,
+	region?: StrokeSelectionRegion,
 ): AccessibilityCandidateDiagnostic[] {
 	const selectedGeometries = new Set(
 		resolution?.metadata.targets?.map(({ targetGeometry }) => geometryKey(targetGeometry)) ??
@@ -239,7 +227,9 @@ function diagnoseCandidates(
 				geometry: candidate.geometry,
 				hitCount: candidate.hitCount ?? 1,
 				name: candidate.name,
-				reason: ranked ? "eligible" : candidateRejectionReason(selection, candidate, clientGeometry),
+				reason: ranked
+					? "eligible"
+					: candidateRejectionReason(selection, candidate, clientGeometry, region),
 				role: candidate.role,
 				selected: selectedGeometries.has(geometryKey(candidate.geometry)),
 			};
@@ -256,8 +246,9 @@ function candidateRejectionReason(
 	selection: SelectionGeometry,
 	candidate: AccessibleCandidate,
 	clientGeometry: SelectionGeometry,
+	region?: StrokeSelectionRegion,
 ): string {
-	if (eligibleRoles.has(candidate.role.trim().toLowerCase()) === false) return "ineligible role";
+	if (isEligibleAccessibilityRole(candidate.role) === false) return "ineligible role";
 	const geometry = validatedSelectionGeometry(
 		candidate.geometry.x,
 		candidate.geometry.y,
@@ -266,6 +257,8 @@ function candidateRejectionReason(
 	);
 	if (!geometry) return "invalid geometry";
 	if (containsGeometry(clientGeometry, geometry) === false) return "outside client";
+	if (region && strokeRegionContainsGeometry(region, geometry) === false)
+		return "outside stroke region";
 	const fuzzySelection = paddedSelectionGeometry(selection, strokeCapturePadding);
 	if (!fuzzySelection || intersection(fuzzySelection, geometry) <= 0) return "outside brush";
 	const selectionArea = selection.width * selection.height;
@@ -399,8 +392,9 @@ function rankCandidate(
 	selection: SelectionGeometry,
 	candidate: AccessibleCandidate,
 	clientGeometry: SelectionGeometry,
+	region?: StrokeSelectionRegion,
 ): RankedCandidate | null {
-	if (eligibleRoles.has(candidate.role.trim().toLowerCase()) === false) return null;
+	if (isEligibleAccessibilityRole(candidate.role) === false) return null;
 	const geometry = validatedSelectionGeometry(
 		candidate.geometry.x,
 		candidate.geometry.y,
@@ -408,6 +402,39 @@ function rankCandidate(
 		candidate.geometry.height,
 	);
 	if (!geometry || containsGeometry(clientGeometry, geometry) === false) return null;
+	if (region) {
+		const centerIncluded = pointInStrokeRegion(region, {
+			x: geometry.x + geometry.width / 2,
+			y: geometry.y + geometry.height / 2,
+		});
+		const coverage = strokeRegionGeometryCoverage(region, geometry);
+		if (centerIncluded === false && coverage < 0.5) return null;
+		const selectionArea = selection.width * selection.height;
+		const candidateArea = geometry.width * geometry.height;
+		const areaRatio = candidateArea / selectionArea;
+		const selectionCoverage = intersection(selection, geometry) / selectionArea;
+		const role = candidate.role.trim().toLowerCase();
+		const namedCommonAncestor =
+			areaRatio <= maximumNamedAncestorAreaRatio &&
+			selectionCoverage >= 0.7 &&
+			(candidate.hitCount ?? 1) >= 7 &&
+			Boolean(candidate.name) &&
+			commonAncestorRoles.has(role);
+		const directCenterTarget =
+			candidate.centerHit === true && directTargetPriority.has(role);
+		if (
+			areaRatio > maximumAreaRatio &&
+			namedCommonAncestor === false &&
+			directCenterTarget === false
+		)
+			return null;
+		const repeatedHitBonus = Math.min(Math.max((candidate.hitCount ?? 1) - 1, 0) / 8, 1) * 0.2;
+		const confidence = Math.min(
+			1,
+			(centerIncluded ? 0.6 : 0.35) + coverage * 0.3 + repeatedHitBonus,
+		);
+		return { candidate: { ...candidate, geometry }, confidence };
+	}
 
 	const fuzzySelection = paddedSelectionGeometry(selection, strokeCapturePadding);
 	if (!fuzzySelection) return null;
@@ -470,12 +497,13 @@ function deduplicateCandidates(candidates: AccessibleCandidate[]): AccessibleCan
 		const existing = candidatesByGeometry.get(key);
 		const candidateRole = candidate.role.trim().toLowerCase();
 		const existingRole = existing?.role.trim().toLowerCase();
-		const candidateRolePriority = eligibleRoles.has(candidateRole)
-			? (directTargetPriority.get(candidateRole) ?? 2)
-			: 3;
-		const existingRolePriority = existingRole && eligibleRoles.has(existingRole)
-			? (directTargetPriority.get(existingRole) ?? 2)
-			: 3;
+		const candidateRolePriority = isEligibleAccessibilityRole(candidateRole)
+			? accessibilityRegionRolePriority(candidateRole)
+			: 4;
+		const existingRolePriority = existingRole && isEligibleAccessibilityRole(existingRole)
+			? accessibilityRegionRolePriority(existingRole)
+			: 4;
+		let preferred = existing;
 		if (
 			!existing ||
 			candidateRolePriority < existingRolePriority ||
@@ -484,7 +512,26 @@ function deduplicateCandidates(candidates: AccessibleCandidate[]): AccessibleCan
 					((candidate.hitCount ?? 1) === (existing.hitCount ?? 1) &&
 						!existing.name && candidate.name)))
 		)
-			candidatesByGeometry.set(key, candidate);
+			preferred = candidate;
+		if (!preferred) continue;
+		const sameRole = candidateRole === existingRole;
+		candidatesByGeometry.set(key, {
+			...preferred,
+			centerHit: sameRole
+				? candidate.centerHit === true || existing?.centerHit === true
+				: preferred.centerHit,
+			hitCount: sameRole
+				? Math.max(candidate.hitCount ?? 1, existing?.hitCount ?? 1)
+				: preferred.hitCount,
+			name: sameRole
+				? preferred.name ?? (preferred === candidate ? existing?.name : candidate.name)
+				: preferred.name,
+			url: preferred.role.trim().toLowerCase() === "link"
+				? sameRole
+					? preferred.url ?? (preferred === candidate ? existing?.url : candidate.url)
+					: preferred.url
+				: undefined,
+		});
 	}
 	return [...candidatesByGeometry.values()];
 }

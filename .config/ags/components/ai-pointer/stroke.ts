@@ -10,8 +10,15 @@ export const minimumStrokePointDistance = 2;
 export const minimumStrokeSpan = 8;
 export const strokeBrushRadius = 32;
 export const strokeCapturePadding = strokeBrushRadius;
+export const minimumClosedStrokeSpan = strokeBrushRadius * 2;
+export const minimumStrokeClosureGap = 56;
+export const maximumStrokeClosureGap = 96;
 const displayPointSpacing = 18;
 const maximumDisplayStrokePoints = 4_096;
+const closedStrokeGapRatio = 0.15;
+const minimumClosedPathRatio = 2;
+const geometryCoverageSamples = 7;
+const polygonBoundaryEpsilon = 0.5;
 
 export interface PointerStroke {
 	points: PointerPosition[];
@@ -26,6 +33,27 @@ export interface CubicStrokeSegment {
 	control2: PointerPosition;
 	end: PointerPosition;
 	start: PointerPosition;
+}
+
+export type StrokeSelectionRegion =
+	| {
+		kind: "closed";
+		points: PointerPosition[];
+		radius: number;
+		bounds: StrokeRegionBounds;
+	}
+	| {
+		kind: "corridor";
+		points: PointerPosition[];
+		radius: number;
+		bounds: StrokeRegionBounds;
+	};
+
+interface StrokeRegionBounds {
+	bottom: number;
+	left: number;
+	right: number;
+	top: number;
 }
 
 export function createPointerStroke(point: PointerPosition): PointerStroke {
@@ -168,14 +196,251 @@ export function bsplineStrokeSegments(points: PointerPosition[]): CubicStrokeSeg
 
 export function isClosedStroke(points: PointerPosition[]): boolean {
 	if (points.length < 4) return false;
-	const first = points[0];
-	const last = points.at(-1)!;
+	const normalized = normalizedStrokePoints(points);
+	if (normalized.length < 3) return false;
+	const span = strokeSpan(normalized);
+	return (
+		span >= minimumClosedStrokeSpan &&
+		strokePathLength(normalized) >= span * minimumClosedPathRatio &&
+		pointDistance(points[0], points.at(-1)!) <= strokeClosureGap(normalized) &&
+		strokeSelfIntersects(normalized) === false
+	);
+}
+
+export function strokeSelectionRegion(
+	points: PointerPosition[],
+	radius = strokeBrushRadius,
+): StrokeSelectionRegion {
+	const regionPoints = normalizedStrokePoints(points);
+	return {
+		kind: isClosedStroke(points) ? "closed" : "corridor",
+		points: regionPoints,
+		radius,
+		bounds: strokeRegionBounds(regionPoints),
+	};
+}
+
+export function pointInStrokeRegion(
+	region: StrokeSelectionRegion,
+	point: PointerPosition,
+): boolean {
+	if (region.points.length === 0) return false;
+	const padding = region.kind === "corridor" ? region.radius : polygonBoundaryEpsilon;
+	if (
+		point.x < region.bounds.left - padding ||
+		point.x > region.bounds.right + padding ||
+		point.y < region.bounds.top - padding ||
+		point.y > region.bounds.bottom + padding
+	)
+		return false;
+	if (region.kind === "closed" && pointInPolygon(region.points, point)) return true;
+	const segmentCount = region.kind === "closed" ? region.points.length : region.points.length - 1;
+	const maximumDistance = region.kind === "closed" ? polygonBoundaryEpsilon : region.radius;
+	for (let index = 0; index < segmentCount; index += 1) {
+		const start = region.points[index];
+		const end = region.points[(index + 1) % region.points.length];
+		if (pointToSegmentDistanceSquared(point, start, end) <= maximumDistance * maximumDistance)
+			return true;
+	}
+	return region.points.length === 1 && pointDistance(point, region.points[0]) <= region.radius;
+}
+
+export function strokeRegionGeometryCoverage(
+	region: StrokeSelectionRegion,
+	geometry: SelectionGeometry,
+): number {
+	let included = 0;
+	for (let row = 0; row < geometryCoverageSamples; row += 1) {
+		for (let column = 0; column < geometryCoverageSamples; column += 1) {
+			if (
+				pointInStrokeRegion(region, {
+					x: geometry.x + (geometry.width * column) / (geometryCoverageSamples - 1),
+					y: geometry.y + (geometry.height * row) / (geometryCoverageSamples - 1),
+				})
+			)
+				included += 1;
+		}
+	}
+	return included / (geometryCoverageSamples * geometryCoverageSamples);
+}
+
+export function strokeRegionContainsGeometry(
+	region: StrokeSelectionRegion,
+	geometry: SelectionGeometry,
+): boolean {
+	return (
+		pointInStrokeRegion(region, {
+			x: geometry.x + geometry.width / 2,
+			y: geometry.y + geometry.height / 2,
+		}) || strokeRegionGeometryCoverage(region, geometry) >= 0.5
+	);
+}
+
+function strokeClosureGap(points: PointerPosition[]): number {
+	return Math.min(
+		maximumStrokeClosureGap,
+		Math.max(minimumStrokeClosureGap, strokeSpan(points) * closedStrokeGapRatio),
+	);
+}
+
+function strokeSpan(points: PointerPosition[]): number {
 	const width = Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x));
 	const height = Math.max(...points.map(({ y }) => y)) - Math.min(...points.map(({ y }) => y));
+	return Math.max(width, height);
+}
+
+function strokePathLength(points: PointerPosition[]): number {
+	let length = 0;
+	for (let index = 1; index < points.length; index += 1)
+		length += pointDistance(points[index - 1], points[index]);
+	return length;
+}
+
+function strokeSelfIntersects(points: PointerPosition[]): boolean {
+	for (let first = 0; first < points.length; first += 1) {
+		for (let second = first + 1; second < points.length; second += 1) {
+			const adjacent = second === first + 1 || (first === 0 && second === points.length - 1);
+			if (adjacent) continue;
+			if (
+				segmentsIntersect(
+					points[first],
+					points[(first + 1) % points.length],
+					points[second],
+					points[(second + 1) % points.length],
+				)
+			)
+				return true;
+		}
+	}
+	return false;
+}
+
+function segmentsIntersect(
+	firstStart: PointerPosition,
+	firstEnd: PointerPosition,
+	secondStart: PointerPosition,
+	secondEnd: PointerPosition,
+): boolean {
+	const firstOrientation = Math.sign(segmentOrientation(firstStart, firstEnd, secondStart));
+	const secondOrientation = Math.sign(segmentOrientation(firstStart, firstEnd, secondEnd));
+	const thirdOrientation = Math.sign(segmentOrientation(secondStart, secondEnd, firstStart));
+	const fourthOrientation = Math.sign(segmentOrientation(secondStart, secondEnd, firstEnd));
+	if (
+		firstOrientation !== 0 &&
+		secondOrientation !== 0 &&
+		thirdOrientation !== 0 &&
+		fourthOrientation !== 0 &&
+		firstOrientation !== secondOrientation &&
+		thirdOrientation !== fourthOrientation
+	)
+		return true;
 	return (
-		Math.max(width, height) >= strokeBrushRadius * 2 &&
-		Math.hypot(last.x - first.x, last.y - first.y) <= strokeBrushRadius * 1.5
+		(firstOrientation === 0 && pointOnSegment(secondStart, firstStart, firstEnd)) ||
+		(secondOrientation === 0 && pointOnSegment(secondEnd, firstStart, firstEnd)) ||
+		(thirdOrientation === 0 && pointOnSegment(firstStart, secondStart, secondEnd)) ||
+		(fourthOrientation === 0 && pointOnSegment(firstEnd, secondStart, secondEnd))
 	);
+}
+
+function segmentOrientation(
+	start: PointerPosition,
+	end: PointerPosition,
+	point: PointerPosition,
+): number {
+	return (
+		(end.x - start.x) * (point.y - start.y) -
+		(end.y - start.y) * (point.x - start.x)
+	);
+}
+
+function pointOnSegment(
+	point: PointerPosition,
+	start: PointerPosition,
+	end: PointerPosition,
+): boolean {
+	return (
+		point.x >= Math.min(start.x, end.x) &&
+		point.x <= Math.max(start.x, end.x) &&
+		point.y >= Math.min(start.y, end.y) &&
+		point.y <= Math.max(start.y, end.y)
+	);
+}
+
+function strokeRegionBounds(points: PointerPosition[]): StrokeRegionBounds {
+	return {
+		bottom: Math.max(...points.map(({ y }) => y)),
+		left: Math.min(...points.map(({ x }) => x)),
+		right: Math.max(...points.map(({ x }) => x)),
+		top: Math.min(...points.map(({ y }) => y)),
+	};
+}
+
+function normalizedStrokePoints(points: PointerPosition[]): PointerPosition[] {
+	const normalized: PointerPosition[] = [];
+	for (const point of points) {
+		const previous = normalized.at(-1);
+		if (!previous || previous.x !== point.x || previous.y !== point.y) normalized.push(point);
+	}
+	const first = normalized[0];
+	const last = normalized.at(-1);
+	if (
+		normalized.length > 1 &&
+		first &&
+		last &&
+		first.x === last.x &&
+		first.y === last.y
+	)
+		normalized.pop();
+	return normalized;
+}
+
+function pointInPolygon(points: PointerPosition[], point: PointerPosition): boolean {
+	let inside = false;
+	for (let index = 0, previous = points.length - 1; index < points.length; previous = index++) {
+		const currentPoint = points[index];
+		const previousPoint = points[previous];
+		if (
+			(currentPoint.y > point.y) !== (previousPoint.y > point.y) &&
+			point.x <
+				((previousPoint.x - currentPoint.x) * (point.y - currentPoint.y)) /
+					(previousPoint.y - currentPoint.y) +
+					currentPoint.x
+		)
+			inside = !inside;
+	}
+	return inside;
+}
+
+function pointToSegmentDistanceSquared(
+	point: PointerPosition,
+	start: PointerPosition,
+	end: PointerPosition,
+): number {
+	const segmentX = end.x - start.x;
+	const segmentY = end.y - start.y;
+	if (segmentX === 0 && segmentY === 0) return pointDistanceSquared(point, start);
+	const ratio = Math.max(
+		0,
+		Math.min(
+			1,
+			((point.x - start.x) * segmentX + (point.y - start.y) * segmentY) /
+				(segmentX * segmentX + segmentY * segmentY),
+		),
+	);
+	return pointDistanceSquared(point, {
+		x: start.x + ratio * segmentX,
+		y: start.y + ratio * segmentY,
+	});
+}
+
+function pointDistanceSquared(left: PointerPosition, right: PointerPosition): number {
+	const x = right.x - left.x;
+	const y = right.y - left.y;
+	return x * x + y * y;
+}
+
+function pointDistance(left: PointerPosition, right: PointerPosition): number {
+	return Math.hypot(right.x - left.x, right.y - left.y);
 }
 
 export function closedBsplineStrokeSegments(points: PointerPosition[]): CubicStrokeSegment[] {

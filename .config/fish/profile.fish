@@ -37,10 +37,8 @@ set -gx ANTHROPIC_BASE_URL http://127.0.0.1:8787
 
 set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
 
-# Lazy set GPG_TTY only when GPG is actually used (saves 5ms on startup)
-if not set -q GPG_TTY
-    set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)
-end
+# Pinentry-curses must target this shell's terminal, not an inherited TTY.
+set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)
 set -U nvm_default_version 20
 # podman docker compat
 if test "$OS_TYPE" = Darwin

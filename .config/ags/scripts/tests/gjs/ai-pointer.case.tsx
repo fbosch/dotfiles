@@ -24,9 +24,10 @@ test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
 	assert(shell !== null, "shell fixture is unavailable");
 	const expected = JSON.stringify({
-		protocolVersion: 4,
+		protocolVersion: 5,
 		coordinateSpace: "window",
 		candidates: [],
+		complete: true,
 		timings: {
 			initialization: { startMs: 1, durationMs: 1 },
 			applicationDiscovery: { startMs: 2, durationMs: 1 },

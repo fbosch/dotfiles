@@ -20,9 +20,10 @@ const helperTimings = {
 
 function helperOutput(candidates: unknown[]) {
 	return {
-		protocolVersion: 4,
+		protocolVersion: 5,
 		coordinateSpace: "window",
 		candidates,
+		complete: true,
 		timings: helperTimings,
 	};
 }
@@ -521,17 +522,21 @@ describe("accessibility helper protocol", () => {
 			parseAccessibilityHelperOutput(
 				JSON.stringify(helperOutput([candidate])),
 			),
-		).toEqual({ candidates: [candidate], timings: helperTimings });
+		).toEqual({ candidates: [candidate], complete: true, timings: helperTimings });
 		for (const response of [
-			{ ...helperOutput([]), protocolVersion: 3 },
-			{ ...helperOutput([]), protocolVersion: 5 },
+			{ ...helperOutput([]), protocolVersion: 4 },
+			{ ...helperOutput([]), protocolVersion: 6 },
 			{ ...helperOutput([]), coordinateSpace: "screen" },
+			{ ...helperOutput([]), complete: "yes" },
 			{ coordinateSpace: "window", candidates: [] },
 		])
 			expect(parseAccessibilityHelperOutput(JSON.stringify(response))).toBeNull();
+		expect(
+			parseAccessibilityHelperOutput(JSON.stringify({ ...helperOutput([]), complete: false })),
+		).toEqual({ candidates: [], complete: false, timings: helperTimings });
 	});
 
-	test("drops metadata containing control characters", () => {
+	test("rejects metadata containing control characters", () => {
 		expect(
 			parseAccessibilityHelperOutput(
 				JSON.stringify(helperOutput([
@@ -542,7 +547,7 @@ describe("accessibility helper protocol", () => {
 					},
 				])),
 			),
-		).toEqual({ candidates: [], timings: helperTimings });
+		).toBeNull();
 	});
 
 	test("accepts only bounded web URLs", () => {
@@ -555,13 +560,20 @@ describe("accessibility helper protocol", () => {
 				JSON.stringify(helperOutput([{ ...candidate, url: "https://example.com/item?id=1" }])),
 			),
 		).toEqual({
-			candidates: [{ ...candidate, url: "https://example.com/item?id=1" }],
+			candidates: [{
+				...candidate,
+				centerHit: undefined,
+				hitCount: undefined,
+				name: undefined,
+				url: "https://example.com/item?id=1",
+			}],
+			complete: true,
 			timings: helperTimings,
 		});
 		for (const url of ["javascript:alert(1)", "file:///etc/passwd", "https://example.com/unsafe value"])
 			expect(
 				parseAccessibilityHelperOutput(JSON.stringify(helperOutput([{ ...candidate, url }]))),
-			).toEqual({ candidates: [], timings: helperTimings });
+			).toBeNull();
 	});
 
 	test("rejects malformed or excessive helper timings", () => {

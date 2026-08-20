@@ -1,18 +1,41 @@
 import Atspi from "gi://Atspi?version=2.0";
 import GLib from "gi://GLib?version=2.0";
-import { maximumStrokePoints, representativeStrokePoints } from "./stroke";
+import {
+	accessibilityCoordinateSpace as coordinateSpace,
+	accessibilityProtocolVersion as protocolVersion,
+} from "./accessibility-helper-protocol";
+import {
+	parseAccessibilityHelperInput,
+	type AccessibilityHelperInput as HelperInput,
+	type HelperGeometry as Geometry,
+} from "./accessibility-helper-input";
+import { isEligibleAccessibilityRole } from "./accessibility-target-roles";
+import {
+	chooseAccessibilityWindow,
+	type AccessibilityWindowCandidate,
+} from "./accessibility-window-policy";
+import {
+	pointInStrokeRegion,
+	representativeStrokePoints,
+	strokeRegionContainsGeometry,
+	strokeSelectionRegion,
+	type StrokeSelectionRegion,
+} from "./stroke";
 
 const maximumApplications = 32;
 const maximumWindows = 32;
-const maximumAncestorDepth = 10;
+const maximumAncestorDepth = 32;
+const maximumTraversalDepth = 16;
+const maximumTraversalNodes = 512;
+const maximumChildrenPerNode = 128;
+const maximumTraversalDurationMs = 350;
 const maximumCandidates = 24;
 const maximumHitCount = 24;
-const maximumBrushRadius = 128;
 const maximumUrlLength = 512;
-const strokeSampleAnchors = 5;
+const strokeSampleAnchors = 9;
+const interiorGridDivisions = 4;
+const maximumHitPoints = 40;
 const callTimeoutMs = 100;
-const protocolVersion = 4;
-const coordinateSpace = "window";
 const excludedRoles = new Set([
 	"application",
 	"desktop frame",
@@ -20,31 +43,6 @@ const excludedRoles = new Set([
 	"password text",
 	"window",
 ]);
-
-interface Geometry {
-	x: number;
-	y: number;
-	width: number;
-	height: number;
-}
-
-interface HelperInput {
-	protocolVersion: typeof protocolVersion;
-	coordinateSpace: typeof coordinateSpace;
-	pid: number;
-	windowWidth: number;
-	windowHeight: number;
-	selection: Geometry;
-	stroke: {
-		points: GeometryPoint[];
-		radius: number;
-	};
-}
-
-interface GeometryPoint {
-	x: number;
-	y: number;
-}
 
 interface Candidate {
 	centerHit: boolean;
@@ -59,6 +57,16 @@ interface HitPoint {
 	centerHit: boolean;
 	x: number;
 	y: number;
+}
+
+interface CandidateCollection {
+	candidates: Candidate[];
+	complete: boolean;
+}
+
+interface TraversalItem {
+	accessible: Atspi.Accessible;
+	depth: number;
 }
 
 interface AccessiblePathItem {
@@ -113,80 +121,14 @@ function validInteger(value: unknown): value is number {
 	return typeof value === "number" && Number.isSafeInteger(value);
 }
 
-function parseInput(): HelperInput | null {
-	if (ARGV.length !== 1) return null;
-	try {
-		const input: unknown = JSON.parse(ARGV[0]);
-		if (!isRecord(input) || !isRecord(input.selection) || !isRecord(input.stroke)) return null;
-		if (
-			input.protocolVersion !== protocolVersion ||
-			input.coordinateSpace !== coordinateSpace ||
-			validInteger(input.pid) === false ||
-			input.pid <= 0 ||
-			validInteger(input.windowWidth) === false ||
-			validInteger(input.windowHeight) === false ||
-			input.windowWidth <= 0 ||
-			input.windowHeight <= 0 ||
-			validInteger(input.selection.x) === false ||
-			validInteger(input.selection.y) === false ||
-			validInteger(input.selection.width) === false ||
-			validInteger(input.selection.height) === false ||
-			input.selection.width <= 0 ||
-			input.selection.height <= 0
-		)
-			return null;
-		if (
-			Array.isArray(input.stroke.points) === false ||
-			input.stroke.points.length < 2 ||
-			input.stroke.points.length > maximumStrokePoints ||
-			validInteger(input.stroke.radius) === false ||
-			input.stroke.radius <= 0 ||
-			input.stroke.radius > maximumBrushRadius ||
-			input.stroke.points.some(
-				(point) =>
-					!isRecord(point) ||
-					validInteger(point.x) === false ||
-					validInteger(point.y) === false,
-			)
-		)
-			return null;
-		return {
-			protocolVersion,
-			coordinateSpace,
-			pid: input.pid,
-			windowWidth: input.windowWidth,
-			windowHeight: input.windowHeight,
-			selection: {
-				x: input.selection.x,
-				y: input.selection.y,
-				width: input.selection.width,
-				height: input.selection.height,
-			},
-			stroke: {
-				points: input.stroke.points.map((point) => ({
-					x: (point as { x: number }).x,
-					y: (point as { y: number }).y,
-				})),
-				radius: input.stroke.radius,
-			},
-		};
-	} catch {
-		return null;
-	}
-}
-
 function visible(accessible: Atspi.Accessible): boolean {
-	try {
-		const states = accessible.get_state_set();
-		return (
-			states.contains(Atspi.StateType.VISIBLE) &&
-			states.contains(Atspi.StateType.SHOWING) &&
-			states.contains(Atspi.StateType.DEFUNCT) === false &&
-			states.contains(Atspi.StateType.STALE) === false
-		);
-	} catch {
-		return false;
-	}
+	const states = accessible.get_state_set();
+	return (
+		states.contains(Atspi.StateType.VISIBLE) &&
+		states.contains(Atspi.StateType.SHOWING) &&
+		states.contains(Atspi.StateType.DEFUNCT) === false &&
+		states.contains(Atspi.StateType.STALE) === false
+	);
 }
 
 function active(accessible: Atspi.Accessible): boolean {
@@ -199,29 +141,25 @@ function active(accessible: Atspi.Accessible): boolean {
 }
 
 function rectangle(accessible: Atspi.Accessible): Geometry | null {
-	try {
-		const component = accessible.get_component_iface();
-		if (!component) return null;
-		const extents = component.get_extents(Atspi.CoordType.WINDOW);
-		const geometry = {
-			x: Math.round(extents.x),
-			y: Math.round(extents.y),
-			width: Math.round(extents.width),
-			height: Math.round(extents.height),
-		};
-		if (
-			validInteger(geometry.x) === false ||
-			validInteger(geometry.y) === false ||
-			validInteger(geometry.width) === false ||
-			validInteger(geometry.height) === false ||
-			geometry.width <= 0 ||
-			geometry.height <= 0
-		)
-			return null;
-		return geometry;
-	} catch {
+	const component = accessible.get_component_iface();
+	if (!component) return null;
+	const extents = component.get_extents(Atspi.CoordType.WINDOW);
+	const geometry = {
+		x: Math.round(extents.x),
+		y: Math.round(extents.y),
+		width: Math.round(extents.width),
+		height: Math.round(extents.height),
+	};
+	if (
+		validInteger(geometry.x) === false ||
+		validInteger(geometry.y) === false ||
+		validInteger(geometry.width) === false ||
+		validInteger(geometry.height) === false ||
+		geometry.width <= 0 ||
+		geometry.height <= 0
+	)
 		return null;
-	}
+	return geometry;
 }
 
 function intersects(left: Geometry, right: Geometry): boolean {
@@ -243,15 +181,12 @@ function matchingWindow(
 		} catch {
 			return null;
 		}
+		if (childCount < 0 || childCount > maximumApplications) return null;
 		const discovered: Array<{ accessible: Atspi.Accessible; exactPid: boolean }> = [];
-		for (
-			let index = 0;
-			index < Math.min(Math.max(childCount, 0), maximumApplications);
-			index += 1
-		) {
+		for (let index = 0; index < childCount; index += 1) {
 			try {
 				const application = desktop.get_child_at_index(index);
-				if (!application) continue;
+				if (!application) return null;
 				let exactPid = false;
 				try {
 					exactPid = application.get_process_id() === input.pid;
@@ -260,50 +195,54 @@ function matchingWindow(
 				}
 				discovered.push({ accessible: application, exactPid });
 			} catch {
-				// Applications can disappear between registry calls.
+				return null;
 			}
 		}
 		return discovered;
 	});
 	if (!applications) return null;
 	return measure(timings.windowMatching, () => {
-		const exactMatches = applications
-			.filter(({ exactPid }) => exactPid)
-			.flatMap(({ accessible }) => matchingApplicationWindows(accessible, input));
-		if (exactMatches.length > 0) return exactMatches.length === 1 ? exactMatches[0] : null;
-		const activeMatches = applications.flatMap(({ accessible }) =>
-			matchingApplicationWindows(accessible, input)
-		);
-		return activeMatches.length === 1 ? activeMatches[0] : null;
+		const candidates: AccessibilityWindowCandidate<Atspi.Accessible>[] = [];
+		for (const { accessible, exactPid } of applications) {
+			const matches = matchingApplicationWindows(accessible, input);
+			if (!matches) return null;
+			candidates.push(...matches.map((candidate) => ({ ...candidate, exactPid })));
+		}
+		return chooseAccessibilityWindow(candidates);
 	});
 }
 
 function matchingApplicationWindows(
 	application: Atspi.Accessible,
 	input: HelperInput,
-): Atspi.Accessible[] {
+): Array<{ active: boolean; titleMatch: boolean; value: Atspi.Accessible }> | null {
 	let childCount: number;
 	try {
 		childCount = application.get_child_count();
 	} catch {
-		return [];
+		return null;
 	}
+	if (childCount < 0 || childCount > maximumWindows) return null;
 	const tolerance = Math.max(32, Math.round(Math.max(input.windowWidth, input.windowHeight) * 0.05));
-	const matches: Atspi.Accessible[] = [];
-	for (let index = 0; index < Math.min(Math.max(childCount, 0), maximumWindows); index += 1) {
+	const matches: Array<{ active: boolean; titleMatch: boolean; value: Atspi.Accessible }> = [];
+	for (let index = 0; index < childCount; index += 1) {
 		try {
 			const window = application.get_child_at_index(index);
-			if (!window || visible(window) === false) continue;
+			if (!window) return null;
+			if (visible(window) === false) continue;
 			const geometry = rectangle(window);
 			if (!geometry) continue;
 			if (
 				Math.abs(geometry.width - input.windowWidth) <= tolerance &&
-				Math.abs(geometry.height - input.windowHeight) <= tolerance &&
-				active(window)
+				Math.abs(geometry.height - input.windowHeight) <= tolerance
 			)
-				matches.push(window);
+				matches.push({
+					active: active(window),
+					titleMatch: input.windowTitle !== undefined && boundedName(window) === input.windowTitle,
+					value: window,
+				});
 		} catch {
-			// A volatile top-level is not a usable coordinate reference.
+			return null;
 		}
 	}
 	return matches;
@@ -311,23 +250,14 @@ function matchingApplicationWindows(
 
 function hitPoints(input: HelperInput): HitPoint[] {
 	const { selection, stroke, windowWidth, windowHeight } = input;
-	const fractions = [
-		[0.5, 0.5],
-		[0.2, 0.2],
-		[0.5, 0.2],
-		[0.8, 0.2],
-		[0.2, 0.5],
-		[0.8, 0.5],
-		[0.2, 0.8],
-		[0.5, 0.8],
-		[0.8, 0.8],
-	] as const;
-	const points = fractions
-		.map(([xFraction, yFraction], index) => ({
-			centerHit: index === 0,
-			x: Math.round(selection.x + selection.width * xFraction),
-			y: Math.round(selection.y + selection.height * yFraction),
-		}));
+	const region = strokeSelectionRegion(stroke.points, stroke.radius);
+	const center = {
+		x: Math.round(selection.x + selection.width / 2),
+		y: Math.round(selection.y + selection.height / 2),
+	};
+	const points: HitPoint[] = pointInStrokeRegion(region, center)
+		? [{ ...center, centerHit: true }]
+		: [];
 	const anchors = representativeStrokePoints(stroke.points, strokeSampleAnchors);
 	for (let index = 0; index < anchors.length; index += 1) {
 		const point = anchors[index];
@@ -345,15 +275,31 @@ function hitPoints(input: HelperInput): HitPoint[] {
 			{ centerHit: false, x: Math.round(point.x - normalX), y: Math.round(point.y - normalY) },
 		);
 	}
+	if (region.kind === "closed") {
+		for (let row = 0; row < interiorGridDivisions; row += 1) {
+			for (let column = 0; column < interiorGridDivisions; column += 1) {
+				const point = {
+					x: Math.round(
+						selection.x + selection.width * ((column + 0.5) / interiorGridDivisions),
+					),
+					y: Math.round(
+						selection.y + selection.height * ((row + 0.5) / interiorGridDivisions),
+					),
+				};
+				if (pointInStrokeRegion(region, point)) points.push({ ...point, centerHit: false });
+			}
+		}
+	}
 
 	const uniquePoints = new Map<string, HitPoint>();
 	for (const point of points) {
 		if (point.x < 0 || point.x >= windowWidth || point.y < 0 || point.y >= windowHeight)
 			continue;
+		if (pointInStrokeRegion(region, point) === false) continue;
 		const key = `${point.x},${point.y}`;
 		const existing = uniquePoints.get(key);
 		if (existing) existing.centerHit ||= point.centerHit;
-		else uniquePoints.set(key, point);
+		else if (uniquePoints.size < maximumHitPoints) uniquePoints.set(key, point);
 	}
 	return [...uniquePoints.values()];
 }
@@ -414,15 +360,16 @@ function collectCandidates(
 	window: Atspi.Accessible,
 	input: HelperInput,
 	timings: HelperTimings,
-): Candidate[] {
+): CandidateCollection {
 	const candidates = new Map<string, Candidate>();
+	const region = strokeSelectionRegion(input.stroke.points, input.stroke.radius);
 	let component: Atspi.Component;
 	try {
 		component = window.get_component_iface();
 	} catch {
-		return [];
+		return { candidates: [], complete: false };
 	}
-	if (!component) return [];
+	if (!component) return { candidates: [], complete: false };
 
 	for (const point of hitPoints(input)) {
 		let accessible: Atspi.Accessible | null;
@@ -431,22 +378,32 @@ function collectCandidates(
 				component.get_accessible_at_point(point.x, point.y, Atspi.CoordType.WINDOW)
 			);
 		} catch {
-			continue;
+			return { candidates: [...candidates.values()], complete: false };
 		}
+		if (!accessible) continue;
 		const path: AccessiblePathItem[] = [];
+		let pathComplete = false;
 		measure(timings.ancestorTraversal, () => {
 			for (let depth = 0; accessible && depth < maximumAncestorDepth; depth += 1) {
-				if (accessible === window) break;
+				if (accessible === window) {
+					pathComplete = true;
+					break;
+				}
 				path.push({ accessible, role: roleName(accessible) });
 				try {
 					accessible = accessible.get_parent();
 				} catch {
-					break;
+					return;
 				}
 			}
 		});
-		if (path.some((item) => item.role === "password text")) return [];
-		measure(timings.candidateInspection, () => {
+		if (pathComplete === false)
+			return { candidates: [...candidates.values()], complete: false };
+		if (path.some(({ role }) => !role))
+			return { candidates: [...candidates.values()], complete: false };
+		if (path.some((item) => item.role === "password text"))
+			return { candidates: [], complete: true };
+		const complete = measure(timings.candidateInspection, () => {
 			for (const item of path) {
 				if (visible(item.accessible) === false) continue;
 				const geometry = rectangle(item.accessible);
@@ -456,55 +413,165 @@ function collectCandidates(
 					intersects(geometry, input.selection) === false
 				)
 					continue;
-				const key = `${geometry.x},${geometry.y}:${geometry.width}x${geometry.height}:${item.role}`;
-				if (!item.role || excludedRoles.has(item.role)) continue;
-				const existing = candidates.get(key);
-				if (existing) {
-					existing.centerHit ||= point.centerHit;
-					existing.hitCount = Math.min(existing.hitCount + 1, maximumHitCount);
-					continue;
-				}
-				if (candidates.size >= maximumCandidates) continue;
-				candidates.set(key, {
-					centerHit: point.centerHit,
-					geometry,
-					hitCount: 1,
-					role: item.role,
-					name: boundedName(item.accessible),
-					url: boundedUrl(item.accessible, item.role),
-				});
+				if (
+					addCandidate(candidates, item.accessible, item.role, geometry, point.centerHit, true) ===
+					false
+				)
+					return false;
 			}
+			return true;
 		});
+		if (complete === false) return { candidates: [...candidates.values()], complete: false };
 	}
-	return [...candidates.values()].sort((left, right) => right.hitCount - left.hitCount);
+	if (region.kind === "closed") {
+		const traversal = collectClosedRegionCandidates(window, input, region, candidates, timings);
+		if (traversal.blocked) return { candidates: [], complete: true };
+		if (traversal.complete === false)
+			return { candidates: [...candidates.values()], complete: false };
+	}
+	return {
+		candidates: [...candidates.values()].sort((left, right) => right.hitCount - left.hitCount),
+		complete: true,
+	};
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === "object" && value !== null;
+function addCandidate(
+	candidates: Map<string, Candidate>,
+	accessible: Atspi.Accessible,
+	role: string,
+	geometry: Geometry,
+	centerHit: boolean,
+	incrementHit: boolean,
+): boolean {
+	if (
+		!role ||
+		excludedRoles.has(role) ||
+		isEligibleAccessibilityRole(role) === false
+	)
+		return true;
+	const key = `${geometry.x},${geometry.y}:${geometry.width}x${geometry.height}:${role}`;
+	const existing = candidates.get(key);
+	if (existing) {
+		existing.centerHit ||= centerHit;
+		if (incrementHit) existing.hitCount = Math.min(existing.hitCount + 1, maximumHitCount);
+		return true;
+	}
+	if (candidates.size >= maximumCandidates) return false;
+	candidates.set(key, {
+		centerHit,
+		geometry,
+		hitCount: 1,
+		role,
+		name: boundedName(accessible),
+		url: boundedUrl(accessible, role),
+	});
+	return true;
 }
 
-const input = parseInput();
+function collectClosedRegionCandidates(
+	window: Atspi.Accessible,
+	input: HelperInput,
+	region: StrokeSelectionRegion,
+	candidates: Map<string, Candidate>,
+	timings: HelperTimings,
+): { blocked: boolean; complete: boolean } {
+	const queue: TraversalItem[] = [];
+	if (enqueueChildren(window, 1, queue) === false) return { blocked: false, complete: false };
+	const startMs = nowMs();
+	let inspected = 0;
+	while (queue.length > 0) {
+		if (
+			inspected >= maximumTraversalNodes ||
+			nowMs() - startMs > maximumTraversalDurationMs
+		)
+			return { blocked: false, complete: false };
+		const item = queue.shift()!;
+		inspected += 1;
+		if (visible(item.accessible) === false) continue;
+		const role = measure(timings.ancestorTraversal, () => roleName(item.accessible));
+		if (!role) return { blocked: false, complete: false };
+		if (role === "password text") return { blocked: true, complete: true };
+		const geometry = measure(timings.candidateInspection, () => rectangle(item.accessible));
+		if (
+			geometry &&
+			insideWindow(geometry, input) &&
+			intersects(geometry, input.selection)
+		) {
+			if (
+				strokeRegionContainsGeometry(region, geometry) &&
+				addCandidate(candidates, item.accessible, role, geometry, false, false) === false
+			)
+				return { blocked: false, complete: false };
+		}
+		if (item.depth >= maximumTraversalDepth) {
+			let childCount = 0;
+			try {
+				childCount = item.accessible.get_child_count();
+			} catch {
+				return { blocked: false, complete: false };
+			}
+			if (childCount > 0) return { blocked: false, complete: false };
+			continue;
+		}
+		if (enqueueChildren(item.accessible, item.depth + 1, queue) === false)
+			return { blocked: false, complete: false };
+	}
+	return { blocked: false, complete: true };
+}
+
+function enqueueChildren(
+	accessible: Atspi.Accessible,
+	depth: number,
+	queue: TraversalItem[],
+): boolean {
+	let childCount: number;
+	try {
+		childCount = accessible.get_child_count();
+	} catch {
+		return false;
+	}
+	if (childCount < 0 || childCount > maximumChildrenPerNode) return false;
+	for (let index = 0; index < childCount; index += 1) {
+		try {
+			const child = accessible.get_child_at_index(index);
+			if (!child) return false;
+			queue.push({ accessible: child, depth });
+		} catch {
+			return false;
+		}
+	}
+	return true;
+}
+
+const input = parseAccessibilityHelperInput(ARGV);
 const timings = initialTimings();
 let initialized = false;
 let candidates: Candidate[] = [];
+let complete = false;
 try {
 	if (input) {
 		const result = measure(timings.initialization, () => Atspi.init());
 		initialized = result === 0 || result === 1;
 		if (initialized) {
+			complete = true;
 			Atspi.set_timeout(callTimeoutMs, 0);
 			const desktop = Atspi.get_desktop(0);
 			const window = matchingWindow(desktop, input, timings);
-			if (window) candidates = collectCandidates(window, input, timings);
+			if (window) {
+				const collection = collectCandidates(window, input, timings);
+				candidates = collection.candidates;
+				complete = collection.complete;
+			}
 		}
 	}
 } catch {
 	candidates = [];
+	complete = false;
 } finally {
 	if (initialized) Atspi.exit();
 }
 
 const serializedCandidates = measure(timings.serialization, () => JSON.stringify(candidates));
 print(
-	`{"protocolVersion":${protocolVersion},"coordinateSpace":"${coordinateSpace}","candidates":${serializedCandidates},"timings":${JSON.stringify(timings)}}`,
+	`{"protocolVersion":${protocolVersion},"coordinateSpace":"${coordinateSpace}","complete":${complete},"candidates":${serializedCandidates},"timings":${JSON.stringify(timings)}}`,
 );

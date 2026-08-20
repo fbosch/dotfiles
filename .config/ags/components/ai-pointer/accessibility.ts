@@ -6,6 +6,7 @@ import {
 	accessibilityCoordinateSpace,
 	accessibilityProtocolVersion,
 	type AccessibilityCandidateDiagnostic,
+	type AccessibilityEvaluation,
 	type AccessibilityHelperOutput,
 	type AccessibilityResolution,
 	type AccessibleCandidate,
@@ -22,7 +23,7 @@ import {
 	type SelectionGeometry,
 	validatedSelectionGeometry,
 } from "./selection";
-import { strokeBrushRadius, type PointerStroke } from "./stroke";
+import { strokeBrushRadius, strokeSelectionRegion, type PointerStroke } from "./stroke";
 import { chooseProgramsForSelection, type ProgramWindow } from "./program-policy";
 import {
 	accessibilityHelperTimingMetrics,
@@ -68,6 +69,7 @@ interface AccessibleHelperInput {
 		radius: number;
 	};
 	windowHeight: number;
+	windowTitle?: string;
 	windowWidth: number;
 }
 
@@ -103,10 +105,18 @@ export async function resolveAccessibleSelection(
 	const freshClient = activeClientForSelection(lookupSelection);
 	if (!freshClient || sameClient(client, freshClient) === false) return null;
 	const monitor = clickPoint ? monitorGeometryForPoint(clickPoint) : null;
-	if (clickPoint && !monitor) return null;
-	const evaluation = clickPoint
-		? evaluateAccessibleClick(clickPoint, candidates, freshClient.geometry, monitor)
-		: evaluateAccessibleSnap(selection, candidates, freshClient.geometry);
+	let evaluation: AccessibilityEvaluation;
+	if (clickPoint) {
+		if (!monitor) return null;
+		evaluation = evaluateAccessibleClick(clickPoint, candidates, freshClient.geometry, monitor);
+	} else {
+		evaluation = evaluateAccessibleSnap(
+			selection,
+			candidates,
+			freshClient.geometry,
+			strokeSelectionRegion(stroke.points, strokeBrushRadius),
+		);
+	}
 	onDiagnostics(evaluation.diagnostics);
 	const { resolution } = evaluation;
 	if (!resolution) return null;
@@ -278,6 +288,7 @@ async function queryHelper(
 			radius: strokeBrushRadius,
 		},
 		windowHeight: client.geometry.height,
+		windowTitle: client.title,
 		windowWidth: client.geometry.width,
 	};
 
@@ -322,7 +333,7 @@ async function queryHelper(
 		const stdout = await readBoundedHelperOutput(process, cancellable);
 		if (!stdout || process.get_successful() === false) return null;
 		const helperOutput = parseAccessibilityHelperOutput(stdout);
-		if (!helperOutput) return null;
+		if (!helperOutput || helperOutput.complete === false) return null;
 		const translated = helperOutput.candidates.map((candidate) => ({
 			...candidate,
 			geometry: {

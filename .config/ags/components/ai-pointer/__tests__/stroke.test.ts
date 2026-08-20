@@ -10,6 +10,8 @@ import {
 	resampledStrokePoints,
 	selectionFromStroke,
 	strokeCapturePadding,
+	strokeRegionContainsGeometry,
+	strokeSelectionRegion,
 	subdivideStrokeSegments,
 	temporalTrailFade,
 } from "../stroke";
@@ -164,6 +166,114 @@ describe("pointer stroke", () => {
 			{ x: 50, y: 0 },
 			{ x: 100, y: 50 },
 		])).toBeFalse();
+	});
+
+	test("closes a small unfinished loop and includes its interior", () => {
+		const points = [
+			{ x: 0, y: 50 },
+			{ x: 20, y: 10 },
+			{ x: 60, y: 0 },
+			{ x: 100, y: 30 },
+			{ x: 105, y: 75 },
+			{ x: 70, y: 105 },
+			{ x: 25, y: 95 },
+			{ x: 8, y: 65 },
+		];
+		const region = strokeSelectionRegion(points);
+
+		expect(region.kind).toBe("closed");
+		expect(strokeRegionContainsGeometry(region, { x: 40, y: 40, width: 20, height: 20 })).toBeTrue();
+		expect(strokeRegionContainsGeometry(region, { x: 140, y: 40, width: 20, height: 20 })).toBeFalse();
+	});
+
+	test("keeps a U-shaped gesture as a corridor without filling its center", () => {
+		const region = strokeSelectionRegion([
+			{ x: 0, y: 0 },
+			{ x: 0, y: 100 },
+			{ x: 50, y: 140 },
+			{ x: 100, y: 100 },
+			{ x: 100, y: 0 },
+		]);
+
+		expect(region.kind).toBe("corridor");
+		expect(strokeRegionContainsGeometry(region, { x: 42, y: 104, width: 16, height: 16 })).toBeTrue();
+		expect(strokeRegionContainsGeometry(region, { x: 42, y: 42, width: 16, height: 16 })).toBeFalse();
+	});
+
+	test("keeps a self-intersecting closed gesture as a corridor", () => {
+		const region = strokeSelectionRegion([
+			{ x: 0, y: 0 },
+			{ x: 100, y: 100 },
+			{ x: 0, y: 100 },
+			{ x: 100, y: 0 },
+			{ x: 2, y: 2 },
+		]);
+
+		expect(region.kind).toBe("corridor");
+	});
+
+	test("rejects a loop whose inferred closing edge crosses the drawn path", () => {
+		const region = strokeSelectionRegion([
+			{ x: 0, y: 0 },
+			{ x: 100, y: 0 },
+			{ x: 100, y: 100 },
+			{ x: -20, y: 25 },
+			{ x: -100, y: 100 },
+			{ x: 0, y: 50 },
+		]);
+
+		expect(region.kind).toBe("corridor");
+	});
+
+	test("rejects non-adjacent endpoint contact in a figure eight", () => {
+		const region = strokeSelectionRegion([
+			{ x: 50, y: 50 },
+			{ x: 0, y: 0 },
+			{ x: 0, y: 100 },
+			{ x: 50, y: 50 },
+			{ x: 100, y: 0 },
+			{ x: 100, y: 100 },
+			{ x: 52, y: 50 },
+		]);
+
+		expect(region.kind).toBe("corridor");
+	});
+
+	test("does not extend a closed region beyond its polygon", () => {
+		const region = strokeSelectionRegion([
+			{ x: 100, y: 100 },
+			{ x: 300, y: 100 },
+			{ x: 300, y: 300 },
+			{ x: 100, y: 300 },
+			{ x: 100, y: 105 },
+		]);
+
+		expect(region.kind).toBe("closed");
+		expect(strokeRegionContainsGeometry(region, { x: 310, y: 180, width: 20, height: 40 })).toBeFalse();
+		expect(strokeRegionContainsGeometry(region, { x: 280, y: 180, width: 20, height: 40 })).toBeTrue();
+	});
+
+	test("accepts a loop ending exactly at its starting point", () => {
+		expect(isClosedStroke([
+			{ x: 0, y: 0 },
+			{ x: 100, y: 0 },
+			{ x: 100, y: 100 },
+			{ x: 0, y: 100 },
+			{ x: 0, y: 0 },
+		])).toBeTrue();
+	});
+
+	test("keeps a long sampled loop closed", () => {
+		const points = Array.from({ length: 300 }, (_, index) => {
+			const angle = (index / 299) * Math.PI * 2;
+			return {
+				x: Math.round(200 + Math.cos(angle) * 100),
+				y: Math.round(200 + Math.sin(angle) * 100),
+			};
+		});
+
+		expect(isClosedStroke(points)).toBeTrue();
+		expect(strokeSelectionRegion(points).points.length).toBeGreaterThan(256);
 	});
 
 	test("subdivides a curve without changing endpoints or continuity", () => {
