@@ -1,6 +1,3 @@
--- In-process alternative to the shell action. The configured shell path retains
--- cross-process locking for concurrent profile changes.
-
 local command = require("lib.command")
 local fs = require("lib.fs")
 local notify = require("lib.notify")

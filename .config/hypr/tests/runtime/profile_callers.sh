@@ -25,8 +25,8 @@ assert_not_contains() {
 watchdog="$repo_root/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.lua"
 watchdog_launcher="$repo_root/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh"
 gaming_toggle="$repo_root/runtime/profiles/toggle-gaming-mode.sh"
-powersave_toggle="$repo_root/runtime/profiles/toggle-powersave-mode.sh"
 powersave_action="$repo_root/actions/toggle-powersave-mode.lua"
+keybinds="$repo_root/keybinds.lua"
 test_dir="$(mktemp -d)"
 home_dir="$test_dir/home"
 bin_dir="$test_dir/bin"
@@ -55,26 +55,22 @@ assert_toggle() {
 
 assert_contains "$watchdog" 'sync-source gaming watchdog'
 assert_contains "$watchdog_launcher" 'sync-source gaming watchdog 0'
-for caller in "$gaming_toggle" "$powersave_toggle"; do
-  assert_contains "$caller" 'status --json'
-  assert_contains "$caller" 'clear-manual'
-  assert_contains "$caller" 'set-manual'
-  assert_not_contains "$caller" 'apply-source'
-  assert_not_contains "$caller" 'remove-source'
-  assert_not_contains "$caller" 'is-source-active'
-done
+assert_contains "$gaming_toggle" 'status --json'
+assert_contains "$gaming_toggle" 'clear-manual'
+assert_contains "$gaming_toggle" 'set-manual'
+assert_not_contains "$gaming_toggle" 'apply-source'
+assert_not_contains "$gaming_toggle" 'remove-source'
+assert_not_contains "$gaming_toggle" 'is-source-active'
 assert_contains "$powersave_action" 'profile_state.read'
 assert_contains "$powersave_action" 'clear-manual'
 assert_contains "$powersave_action" 'set-manual'
+assert_contains "$keybinds" 'toggle_powersave_mode.toggle_powersave_mode'
+assert_not_contains "$keybinds" 'toggle-powersave-mode.sh'
 
 : > "$test_dir/profile.log"
 auto_gaming='{"generation":1,"selection":"auto","resolved":"gaming","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
-auto_powersave='{"generation":1,"selection":"auto","resolved":"powersave","sources":{"gaming":{},"powersave":{"idle":1}}}'
 manual_gaming='{"generation":1,"selection":"gaming","resolved":"gaming","sources":{"gaming":{"watchdog":1},"powersave":{}}}'
-manual_powersave='{"generation":1,"selection":"powersave","resolved":"powersave","sources":{"gaming":{},"powersave":{"idle":1}}}'
 assert_toggle "$gaming_toggle" "$auto_gaming" 'set-manual gaming'
 assert_toggle "$gaming_toggle" "$manual_gaming" 'clear-manual'
-assert_toggle "$powersave_toggle" "$auto_powersave" 'set-manual powersave'
-assert_toggle "$powersave_toggle" "$manual_powersave" 'clear-manual'
 
 printf 'PASS profile callers use the explicit controller contract\n'
