@@ -52,6 +52,8 @@ Alternative considered: expose agent and model fields in the versioned protocol.
 
 The libexec Bun package pins `@opencode-ai/sdk` to `1.18.18`, matching the currently installed `opencode` binary. The helper is launched with `bun run --no-install`, preventing first-use package mutation or registry access.
 
+The verified 1.18.18 baseline uses the SDK's v2 client. It provides `global.health`, `app.agents`, `tool.ids`, image `FilePartInput` values accepted by `session.prompt`, request-time tool maps, `session.abort`, and `session.delete`. The configured default model, `openai/gpt-5.6-terra-fast`, reports attachment and image-input support. Before reading or transmitting attachment bytes, the runtime resolves the effective configured model and fails safely when the model is absent, inactive, or does not positively declare image-input support; the versioned protocol defines the stable failure code separately.
+
 The runtime probes only the fixed loopback endpoint already used for local OpenCode service reuse. It requires a bounded health response, validated version compatibility, and successful agent/tool-policy verification before attaching user data. If the endpoint is absent or unsuitable, it starts an SDK-owned ephemeral server. Ownership is represented explicitly so only the owned branch can close a server.
 
 External server reuse is a latency optimization, not an authentication mechanism against software running as the same local user. The runtime does not scan ports, accept remote URLs, restart an external server, or terminate one.

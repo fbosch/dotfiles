@@ -4,14 +4,14 @@
 - [x] 0.2 Implement one-run XState selection, private runtime capture storage, validated global geometry from Hyprland bind-callback press/release coordinates, direct `grim` capture, and controlled Escape/shutdown cleanup.
 - [x] 0.3 Add a local capture preview and disabled Ask control so no image can leave the machine in this slice.
 - [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS preview-surface lifecycle check.
-- [ ] 0.5 Manually verify direct middle-button drag selection, screenshot accuracy, preview, and Escape cleanup.
+- [x] 0.5 Manually verify direct middle-button drag selection, screenshot accuracy, preview, and Escape cleanup.
 
 ## 1. Runtime Prerequisites
 
-- [ ] 1.1 Add an exact `@opencode-ai/sdk` `1.18.18` dependency to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
-- [ ] 1.2 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
-- [ ] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, concise answer-only instructions, and no action or tool-use path.
-- [ ] 1.4 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
+- [x] 1.1 Add an exact `@opencode-ai/sdk` `1.18.18` dependency to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
+- [x] 1.2 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
+- [x] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, concise answer-only instructions, and no action or tool-use path.
+- [x] 1.4 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
 
 ## 2. OpenCode Request Protocol
 
