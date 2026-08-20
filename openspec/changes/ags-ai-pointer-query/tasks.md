@@ -15,11 +15,11 @@
 
 ## 2. OpenCode Request Protocol
 
-- [ ] 2.1 Create `.config/opencode/libexec/answer-request/` with a library entry point, CLI entry point, backend-neutral protocol types, attachment validation, and colocated tests.
-- [ ] 2.2 Define closed Zod schemas for protocol version 1 requests, successes, failures, error codes, attachment descriptors, limits, and tool policies.
-- [ ] 2.3 Enforce one bounded JSON request on stdin, reject invalid UTF-8, trailing input, unsupported versions, unknown fields, empty prompts, and invalid timeout ranges.
-- [ ] 2.4 Emit exactly one newline-terminated JSON result on stdout and route diagnostics to bounded, redacted stderr only.
-- [ ] 2.5 Add protocol tests for valid requests, malformed input, oversized input, unknown fields, unsupported versions, and stdout contamination.
+- [x] 2.1 Create `.config/opencode/libexec/answer-request/` with a library entry point, CLI entry point, backend-neutral protocol types, attachment validation, and colocated tests.
+- [x] 2.2 Define closed Zod schemas for protocol version 1 requests, successes, failures, error codes, attachment descriptors, limits, and tool policies.
+- [x] 2.3 Enforce one bounded JSON request on stdin, reject invalid UTF-8, trailing input, unsupported versions, unknown fields, empty prompts, and invalid timeout ranges.
+- [x] 2.4 Emit exactly one newline-terminated JSON result on stdout and route diagnostics to bounded, redacted stderr only.
+- [x] 2.5 Add protocol tests for valid requests, malformed input, oversized input, unknown fields, unsupported versions, and stdout contamination.
 
 ## 3. Attachment Integrity And Response Normalization
 

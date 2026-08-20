@@ -1,0 +1,260 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { describe, test } from "node:test";
+import { fileURLToPath } from "node:url";
+import {
+  answerFailureSchema,
+  answerRequestLimits,
+  answerRequestLimitsSchema,
+  answerSuccessSchema,
+  answerToolPolicySchema,
+  attachmentDescriptorSchema,
+  createAnswerFailure,
+  executeAnswerRequest,
+  parseAnswerRequest,
+  type AnswerRequest,
+  type AnswerSuccess,
+} from "../index.js";
+import { runAnswerRequestCli } from "../cli-runtime.js";
+
+const encoder = new TextEncoder();
+
+const validRequest = {
+  protocolVersion: 1,
+  requestId: "run-123",
+  operation: "answer",
+  prompt: "What is visible?",
+  attachments: [],
+  timeoutSeconds: 30,
+} satisfies AnswerRequest;
+
+describe("answer request protocol", () => {
+  test("accepts a valid version 1 request", () => {
+    assert.deepEqual(parseAnswerRequest(jsonBytes(validRequest)), {
+      ok: true,
+      request: validRequest,
+    });
+  });
+
+  const invalidRequests = [
+    ["malformed JSON", encoder.encode("{"), "invalid_request"],
+    ["trailing JSON", encoder.encode(`${JSON.stringify(validRequest)} {}`), "invalid_request"],
+    ["invalid UTF-8", Uint8Array.of(0xc3, 0x28), "invalid_request"],
+    [
+      "unknown fields",
+      jsonBytes({ ...validRequest, agent: "desktop-pointer" }),
+      "invalid_request",
+    ],
+    [
+      "unsupported versions",
+      jsonBytes({ ...validRequest, protocolVersion: 2 }),
+      "unsupported_version",
+    ],
+    ["empty prompts", jsonBytes({ ...validRequest, prompt: " \n " }), "invalid_request"],
+    ["short timeouts", jsonBytes({ ...validRequest, timeoutSeconds: 4 }), "invalid_request"],
+    ["long timeouts", jsonBytes({ ...validRequest, timeoutSeconds: 121 }), "invalid_request"],
+    ["lone high surrogates", jsonBytes({ ...validRequest, prompt: "\ud800" }), "invalid_request"],
+    ["lone low surrogates", jsonBytes({ ...validRequest, prompt: "\udc00" }), "invalid_request"],
+  ] as const;
+
+  for (const [name, input, expectedCode] of invalidRequests) {
+    test(`rejects ${name}`, () => {
+      const parsed = parseAnswerRequest(input);
+      assert.equal(parsed.ok, false);
+      if (parsed.ok === false) assert.equal(parsed.result.error.code, expectedCode);
+    });
+  }
+
+  test("rejects input larger than 64 KiB", () => {
+    const parsed = parseAnswerRequest(
+      new Uint8Array(answerRequestLimits.requestBytes + 1).fill(0x20),
+    );
+    assert.equal(parsed.ok, false);
+    if (parsed.ok === false) assert.equal(parsed.result.error.code, "invalid_request");
+  });
+
+  test("counts prompt limits in UTF-8 bytes", () => {
+    const exactPrompt = "é".repeat(answerRequestLimits.promptBytes / 2);
+    assert.equal(parseAnswerRequest(jsonBytes({ ...validRequest, prompt: exactPrompt })).ok, true);
+
+    const oversizedPrompt = `${exactPrompt}é`;
+    assert.equal(parseAnswerRequest(jsonBytes({ ...validRequest, prompt: oversizedPrompt })).ok, false);
+  });
+
+  test("accepts valid Unicode surrogate pairs", () => {
+    assert.equal(parseAnswerRequest(jsonBytes({ ...validRequest, prompt: "What is this? 😀" })).ok, true);
+  });
+
+  test("keeps every protocol object schema closed", () => {
+    assert.equal(
+      attachmentDescriptorSchema.safeParse({
+        path: "/capture.png",
+        mimeType: "image/png",
+        sha256: "a".repeat(64),
+        unknown: true,
+      }).success,
+      false,
+    );
+    assert.equal(
+      answerRequestLimitsSchema.safeParse({ ...answerRequestLimits, unknown: true }).success,
+      false,
+    );
+    assert.equal(
+      answerToolPolicySchema.safeParse({ mode: "deny_all", tools: {}, unknown: true }).success,
+      false,
+    );
+    assert.equal(
+      answerSuccessSchema.safeParse({
+        protocolVersion: 1,
+        requestId: "run",
+        ok: true,
+        answer: "answer",
+        truncated: false,
+        unknown: true,
+      }).success,
+      false,
+    );
+    assert.equal(
+      answerFailureSchema.safeParse({
+        protocolVersion: 1,
+        requestId: "run",
+        ok: false,
+        error: { code: "invalid_request", message: "Invalid", unknown: true },
+      }).success,
+      false,
+    );
+  });
+
+  test("validates executor output and request identity", async () => {
+    const result = await executeAnswerRequest(jsonBytes(validRequest), async () => ({
+      protocolVersion: 1,
+      requestId: "another-run",
+      ok: true,
+      answer: "Answer",
+      truncated: false,
+    }));
+    assert.deepEqual(result, createAnswerFailure("internal_error", validRequest.requestId));
+  });
+});
+
+describe("answer request CLI", () => {
+  test("emits one newline-terminated JSON success without stdout contamination", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const success: AnswerSuccess = {
+      protocolVersion: 1,
+      requestId: validRequest.requestId,
+      ok: true,
+      answer: "A bounded answer.",
+      truncated: false,
+    };
+
+    const exitCode = await runAnswerRequestCli({
+      input: chunks(jsonBytes(validRequest)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: (value) => stderr.push(value) },
+      execute: async () => success,
+    });
+
+    assert.equal(exitCode, 0);
+    assert.deepEqual(stdout, [`${JSON.stringify(success)}\n`]);
+    assert.equal(stdout[0]?.split("\n").length, 2);
+    assert.deepEqual(stderr, []);
+  });
+
+  test("redacts thrown diagnostics and still emits one failure result", async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const secretPrompt = validRequest.prompt;
+
+    const exitCode = await runAnswerRequestCli({
+      input: chunks(jsonBytes(validRequest)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: (value) => stderr.push(value) },
+      execute: async () => {
+        throw new Error(`provider rejected ${secretPrompt} at /private/capture.png`);
+      },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.length, 1);
+    assert.equal(stdout[0]?.endsWith("\n"), true);
+    assert.equal(JSON.parse(stdout[0] ?? "").error.code, "internal_error");
+    assert.equal(`${stdout.join("")} ${stderr.join("")}`.includes(secretPrompt), false);
+    assert.equal(
+      `${stdout.join("")} ${stderr.join("")}`.includes("/private/capture.png"),
+      false,
+    );
+  });
+
+  test("bounds stdin before execution", async () => {
+    let executed = false;
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runAnswerRequestCli({
+      input: chunks(new Uint8Array(answerRequestLimits.requestBytes + 1)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: (value) => stderr.push(value) },
+      execute: async () => {
+        executed = true;
+      },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(executed, false);
+    assert.equal(JSON.parse(stdout[0] ?? "").error.code, "invalid_request");
+    assert.ok(Buffer.byteLength(stderr.join("")) <= answerRequestLimits.diagnosticBytes);
+  });
+
+  test("bounds stalled stdin before execution", async () => {
+    let executed = false;
+    const stdout: string[] = [];
+
+    const exitCode = await runAnswerRequestCli({
+      input: stalledInput(),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: () => undefined },
+      execute: async () => {
+        executed = true;
+      },
+      inputTimeoutMilliseconds: 10,
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(executed, false);
+    assert.equal(JSON.parse(stdout[0] ?? "").error.code, "invalid_request");
+  });
+
+  test("isolates process stdout and stderr from a noisy executor", () => {
+    const fixture = fileURLToPath(new URL("./fixtures/noisy-cli.ts", import.meta.url));
+    const result = spawnSync(process.execPath, ["run", "--no-install", fixture], {
+      input: JSON.stringify(validRequest),
+      encoding: "utf8",
+    });
+    const expected = {
+      protocolVersion: 1,
+      requestId: validRequest.requestId,
+      ok: true,
+      answer: "A bounded answer.",
+      truncated: false,
+    };
+
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout, `${JSON.stringify(expected)}\n`);
+    assert.equal(result.stderr, "");
+  });
+});
+
+function jsonBytes(value: unknown): Uint8Array {
+  return encoder.encode(JSON.stringify(value));
+}
+
+async function* chunks(...values: Uint8Array[]): AsyncGenerator<Uint8Array> {
+  yield* values;
+}
+
+async function* stalledInput(): AsyncGenerator<Uint8Array> {
+  yield jsonBytes(validRequest);
+  await new Promise<never>(() => undefined);
+}
