@@ -26,6 +26,25 @@ The AI Pointer SHALL render the active stroke on temporary click-through overlay
 - **WHEN** the drawing gesture is cancelled before capture
 - **THEN** all stroke surfaces are hidden and retained stroke coordinates are discarded
 
+### Requirement: Drawing-time cursor outline
+The AI Pointer SHALL request a configurable accent outline around the compositor cursor only after the drawing overlay starts successfully. It SHALL request that the outline be disabled on release, cancellation, failure cleanup, teardown, and controller initialization. Cursor decoration failure MUST NOT interrupt selection, capture, or cleanup, and an uncertain failed request SHALL remain eligible for a later cleanup retry. Thickness and color SHALL be configurable through the Hyprland configuration without rebuilding the plugin.
+
+#### Scenario: Drawing starts successfully
+- **WHEN** the drawing overlay starts for an active gesture
+- **THEN** the system requests the configured outline around the cursor silhouette
+
+#### Scenario: Drawing reaches a terminal path
+- **WHEN** the gesture is released, cancelled, fails, or its controller shuts down
+- **THEN** the system idempotently requests that the cursor outline be disabled
+
+#### Scenario: Cursor decoration is unavailable
+- **WHEN** the compositor plugin is absent, reloading, incompatible, or unreachable
+- **THEN** the drawing and capture workflow continues without cursor decoration
+
+#### Scenario: Cursor style changes
+- **WHEN** configured outline thickness or color changes and Hyprland reloads its configuration
+- **THEN** subsequent cursor-outline rendering uses the new style without rebuilding the plugin
+
 ### Requirement: Capture bounds derive from the complete stroke
 The AI Pointer SHALL derive one capture rectangle from the minimum and maximum global coordinates reached by the stroke, add bounded padding, and validate the result against the existing capture limits. A stroke with meaningful travel in only one axis SHALL receive a bounded minimum extent in the other axis. It MUST NOT reinterpret the gesture as an endpoint rectangle or semantic UI target in this change.
 

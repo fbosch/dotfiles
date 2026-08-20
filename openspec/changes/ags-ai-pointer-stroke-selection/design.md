@@ -12,6 +12,7 @@ Wayland does not provide a global pointer-motion stream to a layer surface mappe
 - Preserve global coordinates across negative monitor origins and monitor boundaries.
 - Bound sampling work and retained stroke history independently.
 - Keep the visual overlay click-through so it cannot become a desktop interaction surface.
+- Keep cursor decoration synchronized with drawing without making capture depend on it.
 
 **Non-Goals:**
 
@@ -39,6 +40,16 @@ The controller owns the stroke and sampling source. The view owns windows, drawi
 
 Alternative considered: one desktop-sized window. Rejected because layer-shell surfaces are output-scoped and a single surface does not represent arbitrary multi-monitor layouts.
 
+### Render cursor feedback through a version-pinned Hyprland plugin
+
+The AGS overlay cannot decorate the compositor-owned cursor texture reliably. A small Hyprland plugin therefore renders an alpha-dilated accent outline around the software cursor silhouette during an active drawing gesture. The plugin starts disabled, locks software cursor rendering only while enabled, and exposes idempotent `on` and `off` Lua functions so duplicate lifecycle requests cannot invert state. Thickness and packed AARRGGBB color are standard plugin config values declared in `.config/hypr/cursor-outline.lua` and update on config reload.
+
+The controller enables the outline only after the drawing overlay starts successfully. It disables the outline on release, cancellation, failure cleanup, teardown, and controller initialization to reconcile stale compositor state after an AGS restart. IPC failure leaves cursor decoration unknown so a later cleanup path retries `off`; decoration failure remains advisory and cannot block selection or capture.
+
+The plugin uses private renderer and cursor APIs, so its Nix package builds against the exact Hyprland dependency graph and rejects any runtime commit other than the pinned version. This keeps ABI failure explicit rather than loading a potentially incompatible plugin.
+
+Alternative considered: draw a cursor proxy in the AGS overlay. Rejected because it would lag compositor cursor presentation, duplicate cursor visibility, and still could not outline hardware cursor composition reliably.
+
 ### Derive a padded axis-aligned rectangle from stroke extrema
 
 The pure stroke policy records minimum and maximum global X/Y values across every accepted sample. Completion requires minimum raw width and height, adds fixed padding on all sides, and then applies the existing safe-integer and maximum-pixel validation.
@@ -60,6 +71,8 @@ Hyprland continues to send closed `start` and `finish` requests with global coor
 - [Monitor layout changes during drawing] -> Snapshot monitor surfaces at activation and derive capture geometry from global compositor coordinates; cancellation and the next activation rebuild the surfaces.
 - [The fading trail appears in the screenshot] -> Exclude the namespace from screen sharing, await a bounded compositor fade and unmapping, synchronize the display, and delay capture by two frames.
 - [A stroke has huge or degenerate bounds] -> Require two-dimensional extent and reuse the existing maximum pixel-area limit before capture.
+- [Cursor plugin IPC or reload fails] -> Treat decoration as advisory, use idempotent state requests, retry cleanup from later terminal paths, and reconcile to disabled when the controller initializes.
+- [Hyprland private APIs change] -> Pin the accepted compositor commit and rebuild the plugin with Hyprland's compiler and dependency graph.
 
 ## Migration Plan
 
