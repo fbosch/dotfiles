@@ -7,6 +7,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local loader = require("rule-loader")
 
 require("base")
+require("cursor-outline")
 require("programs")
 require("monitors")
 require("layouts.ultrawide_master")

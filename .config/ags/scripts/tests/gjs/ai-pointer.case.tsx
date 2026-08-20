@@ -155,6 +155,8 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 
 test("AI Pointer preserves a release that arrives before the AGS start request", async () => {
 	let captured = "";
+	const cursorOutlineStates: boolean[] = [];
+	let cursorOutlineDisableAttempts = 0;
 	const view = {
 		create() {},
 		beginStroke() {
@@ -188,6 +190,12 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
 			};
 		},
+		setCursorOutline: (enabled) => {
+			cursorOutlineStates.push(enabled);
+			if (enabled) return true;
+			cursorOutlineDisableAttempts += 1;
+			return cursorOutlineDisableAttempts !== 2;
+		},
 	});
 	controller.init();
 	try {
@@ -195,6 +203,42 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
 		assert(captured === "-22,-12 84x84", "release-first geometry was not captured");
+		assert(
+			cursorOutlineStates.join(",") === "false,true,false,false",
+			"cursor outline disable failure was not retried after drawing",
+		);
+	} finally {
+		controller.teardown();
+	}
+});
+
+test("AI Pointer removes the cursor outline when drawing is cancelled", () => {
+	const cursorOutlineStates: boolean[] = [];
+	const view = {
+		create() {},
+		beginStroke() {
+			return true;
+		},
+		updateStroke() {},
+		endStroke() {},
+		clearOcr() {},
+		hide() {},
+		dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		readPointer: () => null,
+		setCursorOutline: (enabled) => cursorOutlineStates.push(enabled),
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		controller.cancel();
+		assert(
+			cursorOutlineStates.join(",") === "false,true,false",
+			"cursor outline survived drawing cancellation",
+		);
 	} finally {
 		controller.teardown();
 	}

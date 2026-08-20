@@ -2,7 +2,7 @@ import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
-import { queryHyprlandJson } from "@/services/hyprland-ipc";
+import { evaluateHyprland, queryHyprlandJson } from "@/services/hyprland-ipc";
 import { perf } from "@/services/performance-monitor";
 import {
 	type AccessibilityLookupMode,
@@ -46,6 +46,7 @@ interface AiPointerControllerOptions {
 	readPointer?(): PointerPosition | null;
 	resolveClickGeometry?(point: PointerPosition): SelectionGeometry | null;
 	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
+	setCursorOutline?(enabled: boolean): boolean | void;
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
 		cancellable: Gio.Cancellable,
@@ -70,6 +71,7 @@ export class AiPointerController {
 	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
+	readonly #setCursorOutline: NonNullable<AiPointerControllerOptions["setCursorOutline"]>;
 	#actor: AiPointerActor | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
@@ -89,6 +91,7 @@ export class AiPointerController {
 	#finishing = false;
 	#runId = 0;
 	#workflowMark: ReturnType<typeof perf.start> | null = null;
+	#cursorOutlineState: boolean | null = null;
 
 	constructor(options: AiPointerControllerOptions = {}) {
 		this.#view = options.view ?? new AiPointerView();
@@ -98,6 +101,12 @@ export class AiPointerController {
 		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
 		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
 		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
+		this.#setCursorOutline = options.setCursorOutline ?? ((enabled) => {
+			evaluateHyprland(`hl.plugin.cursor_outline.${enabled ? "on" : "off"}()`, {
+				component: "ai-pointer",
+				metric: "cursorOutline",
+			});
+		});
 		this.#readPointer = options.readPointer ?? (() => {
 			const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
 				component: "ai-pointer",
@@ -153,6 +162,7 @@ export class AiPointerController {
 				if (snapshot.hasTag("surface-visible") === false) this.#view.hide();
 			});
 			this.#actor.start();
+			this.#setCursorOutlineState(false, true);
 		}
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
@@ -181,6 +191,7 @@ export class AiPointerController {
 			this.#actor?.send({ type: "FAIL" });
 			return true;
 		}
+		this.#setCursorOutlineState(true);
 		if (this.#pendingFinish) {
 			const endPosition = this.#pendingFinish;
 			this.#clearPendingFinish();
@@ -208,6 +219,7 @@ export class AiPointerController {
 
 	#captureAt(endPosition: PointerPosition): void {
 		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
+		this.#setCursorOutlineState(false);
 		const directory = this.#directory;
 		const stroke = this.#stroke;
 		if (!stroke || !directory) {
@@ -238,6 +250,7 @@ export class AiPointerController {
 		void this.#view.finishStroke().then((hidden) => {
 			overlayMark?.end(hidden, hidden ? undefined : "failed");
 			if (runId !== this.#runId) return;
+			this.#setCursorOutlineState(false);
 			if (hidden === false) {
 				this.#finishing = false;
 				this.#finishWorkflow(false, "overlay-failed");
@@ -358,6 +371,7 @@ export class AiPointerController {
 	}
 
 	cancel(): void {
+		this.#setCursorOutlineState(false);
 		this.#runId += 1;
 		this.#finishWorkflow(false, "cancelled");
 		this.#stopOcr();
@@ -380,6 +394,7 @@ export class AiPointerController {
 
 	teardown(): void {
 		this.cancel();
+		this.#setCursorOutlineState(false, true);
 		this.#subscription?.unsubscribe();
 		this.#subscription = null;
 		this.#actor?.stop();
@@ -451,6 +466,16 @@ export class AiPointerController {
 	#finishWorkflow(ok: boolean, reason?: string): void {
 		this.#workflowMark?.end(ok, reason);
 		this.#workflowMark = null;
+	}
+
+	#setCursorOutlineState(enabled: boolean, force = false): void {
+		if (force === false && this.#cursorOutlineState === enabled) return;
+		try {
+			this.#cursorOutlineState = this.#setCursorOutline(enabled) === false ? null : enabled;
+		} catch {
+			this.#cursorOutlineState = null;
+			// Cursor decoration is advisory and must not interrupt capture.
+		}
 	}
 
 	#sampleStroke(): void {

@@ -106,6 +106,13 @@ export function dispatchHyprland(
 	return queryHyprland(`dispatch ${dispatcher}`, options)?.trim() === "ok";
 }
 
+export function evaluateHyprland(
+	expression: string,
+	options: HyprlandIpcOptions = {},
+): boolean {
+	return queryHyprland(`eval ${expression}`, options)?.trim() === "ok";
+}
+
 export function queryHyprlandJson<T>(
 	request: string,
 	options: HyprlandIpcOptions = {},
