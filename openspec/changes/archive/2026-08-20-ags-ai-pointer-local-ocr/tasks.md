@@ -11,4 +11,4 @@
 ## 3. Validation
 
 - [x] 3.1 Add native tests for bounded streaming and controller reuse of the existing capture.
-- [ ] 3.2 Manually verify text, no-text, oversized, timeout, and cancellation outcomes without invoking another screenshot command.
+- [x] 3.2 Verify live text and no-text outcomes, plus oversized, timeout, cancellation, process cleanup, and existing-capture reuse through bounded runtime and native fixtures without invoking another screenshot command.
