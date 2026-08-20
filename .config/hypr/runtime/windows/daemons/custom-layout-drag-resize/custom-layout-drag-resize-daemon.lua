@@ -15,11 +15,8 @@ local control_protocol = require("runtime.windows.daemons.custom-layout-drag-res
 local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
 local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
 local pid_file = hypr_ipc.instance_path("custom-layout-drag-resize.pid")
-local drag_numerator = 1
-local drag_denominator = 1
 local monitors_by_id = {}
 local drag_active = false
-local tiled_drag_active = false
 local quit_requested = false
 local latest_control_sequence = 0
 local hypr_socket = hypr_ipc.socket_path(".socket.sock")
@@ -238,23 +235,13 @@ local function resize_edge(axis, cursor, x, y, width, height)
 	return cursor < y + height / 2 and "up" or "down"
 end
 
-local function scaled_position(initial, current)
-	local delta = (current - initial) * drag_numerator / drag_denominator
-	if delta >= 0 then
-		return initial + math.floor(delta)
-	end
-
-	return initial + math.ceil(delta)
-end
-
 local accept_command
 local handle_command
 
 local function stop_drag()
 	local was_active = drag_active or read_file(state_file) ~= ""
-	if tiled_drag_active then
+	if drag_active then
 		pcall(save_pending_resize)
-		tiled_drag_active = false
 	end
 
 	drag_active = false
@@ -363,7 +350,6 @@ local function start_drag()
 	end
 	local edge = resize_edge(axis, initial, active.x, active.y, active.width, active.height)
 	drag_active = true
-	tiled_drag_active = true
 	disable_resize_animation()
 	write_file(state_file, "active\n")
 
@@ -374,25 +360,18 @@ local function start_drag()
 			break
 		end
 
-		if not drag_active then
-			break
-		end
-
 		local ok, current = pcall(cursor_axis, axis)
 		if ok then
-			local scaled = scaled_position(initial, current)
-			if scaled ~= last_sent then
-				local dispatched = pcall(dispatch, command, target_id, edge, scaled)
+			if current ~= last_sent then
+				local dispatched = pcall(dispatch, command, target_id, edge, current)
 				if dispatched then
-					last_sent = scaled
+					last_sent = current
 				end
 			end
 		end
 
 		socket.sleep(poll_interval)
 	end
-
-	stop_drag()
 end
 
 local function ensure_command_socket()
