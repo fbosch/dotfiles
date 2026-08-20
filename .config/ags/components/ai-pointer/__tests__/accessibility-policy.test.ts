@@ -63,6 +63,20 @@ describe("accessible click targeting", () => {
 		expect(evaluation.diagnostics[0].reason).toBe("not at click");
 	});
 
+	test("accepts GTK button roles as actionable targets", () => {
+		const evaluation = evaluateAccessibleClick({ x: 200, y: 150 }, [
+			{
+				centerHit: true,
+				geometry: { x: 170, y: 130, width: 60, height: 40 },
+				name: "7",
+				role: "button",
+			},
+		], client, client);
+
+		expect(evaluation.resolution?.metadata).toMatchObject({ name: "7", role: "button" });
+		expect(evaluation.diagnostics[0]).toMatchObject({ reason: "eligible", selected: true });
+	});
+
 	test("bounds diagnostics for the maximum click candidate set", () => {
 		const candidates = Array.from({ length: 24 }, (_, index) => ({
 			centerHit: true,

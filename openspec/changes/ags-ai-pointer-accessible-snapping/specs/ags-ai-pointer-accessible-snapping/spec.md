@@ -22,6 +22,10 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **WHEN** one candidate overlaps the capture-padding tolerance, has compatible area, and its combined geometric score exceeds the confidence and ambiguity thresholds
 - **THEN** the system captures bounded padded geometry around that accessible candidate
 
+#### Scenario: GTK exposes an ordinary button role
+- **WHEN** an otherwise eligible actionable control is reported as `button` rather than `push button`
+- **THEN** click and stroke targeting treat it with the same actionable priority
+
 #### Scenario: Painted brush crosses a target
 - **WHEN** a bounded centerline or brush-edge sample resolves through an eligible accessible target even though the region grid misses it
 - **THEN** that hit contributes to the same bounded fuzzy ranking policy
@@ -31,8 +35,16 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **THEN** the system captures the original stroke-derived geometry
 
 #### Scenario: Gesture covers related targets
-- **WHEN** several sampled points resolve through one bounded common ancestor whose geometry confidently matches the gesture
+- **WHEN** a closed enclosing gesture resolves through one bounded common ancestor whose geometry confidently matches the gesture
 - **THEN** the system captures padded geometry around that common ancestor
+
+#### Scenario: Open stroke crosses distinct targets
+- **WHEN** an open stroke crosses two to eight strong non-overlapping semantic candidates that satisfy the bounded collection rules
+- **THEN** the system captures their padded union instead of selecting their enclosing common ancestor
+
+#### Scenario: Hand-drawn loop overlaps at its closure
+- **WHEN** the final drawn segment overlaps the first segment only within the shared brush footprint and encloses distinct targets
+- **THEN** the system treats the gesture as closed for bounded interior candidate discovery
 
 #### Scenario: Gesture intentionally covers multiple distinct targets
 - **WHEN** two to eight strong non-overlapping semantic candidates have centers inside the selection, no clear common ancestor supersedes them, their combined area occupies at least fifteen percent of their bounded union, and that union is no more than five times the selection area

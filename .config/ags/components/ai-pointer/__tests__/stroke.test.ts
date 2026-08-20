@@ -186,6 +186,19 @@ describe("pointer stroke", () => {
 		expect(strokeRegionContainsGeometry(region, { x: 140, y: 40, width: 20, height: 20 })).toBeFalse();
 	});
 
+	test("accepts a loop whose final segment overlaps the start within the brush footprint", () => {
+		const region = strokeSelectionRegion([
+			{ x: 100, y: 200 },
+			{ x: 100, y: 100 },
+			{ x: 400, y: 100 },
+			{ x: 400, y: 300 },
+			{ x: 130, y: 230 },
+			{ x: 90, y: 190 },
+		]);
+
+		expect(region.kind).toBe("closed");
+	});
+
 	test("keeps a U-shaped gesture as a corridor without filling its center", () => {
 		const region = strokeSelectionRegion([
 			{ x: 0, y: 0 },

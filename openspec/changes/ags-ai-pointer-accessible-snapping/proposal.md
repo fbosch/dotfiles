@@ -6,7 +6,7 @@ Stroke bounds are predictable but often include excess desktop context around on
 
 - Query the active application's accessibility tree only after an explicit AI Pointer gesture.
 - Isolate synchronous AT-SPI calls in a bounded helper process.
-- Automatically replace stroke-derived bounds only for one high-confidence accessible candidate.
+- Automatically replace stroke-derived bounds only for one high-confidence accessible candidate or a bounded collection of distinct targets crossed by the gesture.
 - Keep the stroke bounds when accessibility is unavailable, ambiguous, stale, or geometrically inconsistent.
 - Show the chosen accessible role and name locally without adding them to provider payloads.
 

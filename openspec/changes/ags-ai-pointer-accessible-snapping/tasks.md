@@ -2,6 +2,9 @@
 
 - [x] 1.1 Add pure candidate validation, scoring, ambiguity rejection, and padded snap geometry.
 - [x] 1.2 Add tests for confident, ambiguous, sensitive, invalid, and oversized candidates.
+- [x] 1.3 Prefer a bounded collection over an enclosing common ancestor when an open stroke crosses several distinct targets.
+- [x] 1.4 Preserve closed-region discovery when a hand-drawn loop overlaps only at its intended closure.
+- [x] 1.5 Accept GTK `button` roles consistently in helper, click, and stroke policy.
 
 ## 2. Bounded Runtime Lookup
 

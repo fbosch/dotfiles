@@ -33,7 +33,8 @@ const maximumTraversalDurationMs = 350;
 const maximumCandidates = 24;
 const maximumHitCount = 24;
 const maximumUrlLength = 512;
-const strokeSampleAnchors = 9;
+const closedStrokeSampleAnchors = 9;
+const corridorStrokeSampleAnchors = 13;
 const interiorGridDivisions = 4;
 const maximumHitPoints = 40;
 const callTimeoutMs = 100;
@@ -259,7 +260,10 @@ function hitPoints(input: HelperInput): HitPoint[] {
 	const points: HitPoint[] = pointInStrokeRegion(region, center)
 		? [{ ...center, centerHit: true }]
 		: [];
-	const anchors = representativeStrokePoints(stroke.points, strokeSampleAnchors);
+	const anchors = representativeStrokePoints(
+		stroke.points,
+		region.kind === "closed" ? closedStrokeSampleAnchors : corridorStrokeSampleAnchors,
+	);
 	for (let index = 0; index < anchors.length; index += 1) {
 		const point = anchors[index];
 		const previous = anchors[Math.max(0, index - 1)];

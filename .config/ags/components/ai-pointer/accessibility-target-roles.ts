@@ -1,5 +1,6 @@
 const eligibleRoles = new Set([
 	"article",
+	"button",
 	"check box",
 	"combo box",
 	"entry",
@@ -22,6 +23,7 @@ const eligibleRoles = new Set([
 ]);
 
 const actionRoles = new Set([
+	"button",
 	"check box",
 	"combo box",
 	"entry",

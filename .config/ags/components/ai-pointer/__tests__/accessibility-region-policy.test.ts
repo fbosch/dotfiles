@@ -78,6 +78,44 @@ describe("accessible stroke region selection", () => {
 		expect(result?.geometry).toEqual({ x: 78, y: 158, width: 54, height: 54 });
 	});
 
+	test("bundles distinct targets crossed by a line instead of their enclosing ancestor", () => {
+		const points = [
+			{ x: 100, y: 150 },
+			{ x: 400, y: 150 },
+		];
+		const result = chooseAccessibleSnap(
+			{ x: 68, y: 118, width: 364, height: 64 },
+			[
+				{
+					geometry: { x: 110, y: 130, width: 100, height: 40 },
+					hitCount: 3,
+					name: "Previous",
+					role: "push button",
+				},
+				{
+					geometry: { x: 290, y: 130, width: 100, height: 40 },
+					hitCount: 3,
+					name: "Next",
+					role: "push button",
+				},
+				{
+					geometry: { x: 80, y: 100, width: 360, height: 100 },
+					hitCount: 9,
+					name: "Pagination",
+					role: "section",
+				},
+			],
+			client,
+			strokeSelectionRegion(points),
+		);
+
+		expect(result?.metadata.role).toBe("collection");
+		expect(result?.metadata.targets?.map(({ name }) => name).sort()).toEqual([
+			"Next",
+			"Previous",
+		]);
+	});
+
 	test("rejects a single-hit oversized ancestor inside a small loop", () => {
 		const points = [
 			{ x: 400, y: 300 },

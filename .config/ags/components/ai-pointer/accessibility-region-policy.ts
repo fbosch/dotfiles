@@ -9,6 +9,7 @@ import {
 	validatedSelectionGeometry,
 } from "./selection";
 import type { AccessibleCandidate, AccessibilityResolution } from "./accessibility-policy";
+import type { StrokeSelectionRegion } from "./stroke";
 
 const snapPadding = 12;
 const minimumConfidence = 0.5;
@@ -27,6 +28,7 @@ export function resolveStrokeRegionSelection(
 	selection: SelectionGeometry,
 	ranked: RankedAccessibleCandidate[],
 	clientGeometry: SelectionGeometry,
+	regionKind: StrokeSelectionRegion["kind"],
 ): AccessibilityResolution | null {
 	const eligible = [...ranked]
 		.filter(({ confidence }) => confidence >= minimumConfidence)
@@ -50,7 +52,7 @@ export function resolveStrokeRegionSelection(
 			(role === "list item" || hasDirectTarget === false)
 		);
 	});
-	if (commonAncestors.length === 1) {
+	if (regionKind === "closed" && commonAncestors.length === 1) {
 		const [commonAncestor] = commonAncestors;
 		return resolutionFromCandidate(
 			commonAncestor.candidate,

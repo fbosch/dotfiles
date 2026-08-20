@@ -300,7 +300,12 @@ function strokeSelfIntersects(points: PointerPosition[]): boolean {
 	for (let first = 0; first < points.length; first += 1) {
 		for (let second = first + 1; second < points.length; second += 1) {
 			const adjacent = second === first + 1 || (first === 0 && second === points.length - 1);
-			if (adjacent) continue;
+			// Near the start, the final drawn segment is the first segment's conceptual neighbor.
+			const closureOverlap =
+				first === 0 &&
+				second === points.length - 2 &&
+				pointDistance(points[0], points.at(-1)!) <= strokeBrushRadius;
+			if (adjacent || closureOverlap) continue;
 			if (
 				segmentsIntersect(
 					points[first],

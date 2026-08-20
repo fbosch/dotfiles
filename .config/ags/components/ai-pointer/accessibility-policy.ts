@@ -144,7 +144,7 @@ export function evaluateAccessibleSnap(
 			(left.candidate.name ?? "").localeCompare(right.candidate.name ?? "")
 		);
 	const resolution = region
-		? resolveStrokeRegionSelection(selection, ranked, clientGeometry)
+		? resolveStrokeRegionSelection(selection, ranked, clientGeometry, region.kind)
 		: chooseAccessibleSnapInternal(selection, candidates, clientGeometry, ranked);
 	return {
 		diagnostics: diagnoseCandidates(selection, analyzed, clientGeometry, resolution, region),

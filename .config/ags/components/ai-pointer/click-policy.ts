@@ -3,6 +3,10 @@ import type {
 	AccessibleCandidate,
 } from "./accessibility-policy";
 import {
+	accessibilityRegionRolePriority,
+	isEligibleAccessibilityRole,
+} from "./accessibility-target-roles";
+import {
 	clickTargetGeometry,
 	containsPoint,
 	type PointerPosition,
@@ -11,42 +15,6 @@ import {
 } from "./selection";
 
 const maximumDiagnostics = 12;
-const eligibleRoles = new Set([
-	"article",
-	"check box",
-	"combo box",
-	"entry",
-	"heading",
-	"icon",
-	"image",
-	"link",
-	"list item",
-	"menu item",
-	"page tab",
-	"paragraph",
-	"push button",
-	"radio button",
-	"section",
-	"slider",
-	"spin button",
-	"table cell",
-	"text",
-	"toggle button",
-]);
-const actionRoles = new Set([
-	"check box",
-	"combo box",
-	"entry",
-	"link",
-	"menu item",
-	"page tab",
-	"push button",
-	"radio button",
-	"slider",
-	"spin button",
-	"toggle button",
-]);
-
 export function evaluateAccessibleClick(
 	point: PointerPosition,
 	candidates: AccessibleCandidate[],
@@ -110,7 +78,7 @@ function candidateReason(
 	candidate: AccessibleCandidate,
 	clientGeometry: SelectionGeometry,
 ): string {
-	if (eligibleRoles.has(candidate.role.trim().toLowerCase()) === false) return "ineligible role";
+	if (isEligibleAccessibilityRole(candidate.role) === false) return "ineligible role";
 	const geometry = validatedSelectionGeometry(
 		candidate.geometry.x,
 		candidate.geometry.y,
@@ -124,10 +92,7 @@ function candidateReason(
 }
 
 function rolePriority(role: string): number {
-	const normalized = role.trim().toLowerCase();
-	if (actionRoles.has(normalized)) return 0;
-	if (normalized === "icon" || normalized === "image") return 1;
-	return 2;
+	return accessibilityRegionRolePriority(role);
 }
 
 function containsGeometry(container: SelectionGeometry, target: SelectionGeometry): boolean {
