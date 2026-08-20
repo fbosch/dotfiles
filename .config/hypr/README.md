@@ -22,7 +22,10 @@ Window rules are applied in this order:
 2. Static rules from `rules/`.
 3. Window-state rules from `rules/window-state.lua`.
 
-Edit `rules/window-state-selectors.lua` when changing which windows should persist size and position. Do not edit generated rule outputs directly.
+Edit `rules/window-state-selectors.lua` when changing which windows should
+persist size and position. Do not edit generated rule outputs directly. See
+[window-state persistence](docs/window-state-persistence.md) for the data flow
+and upgrade debugging procedure.
 
 ## Local Setup
 
