@@ -133,7 +133,7 @@ hl.window_rule({ match = { class = "^(zenity)$" }, no_blur = true })
 
 -- Codex pet :)
 hl.window_rule({
-	match = { initial_title = "Codex", initial_class = "chatgpt" },
+	match = { initial_title = "^Codex$", initial_class = "^chatgpt$" },
 	no_blur = true,
 	no_shadow = true,
 	border_size = 0,

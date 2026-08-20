@@ -45,6 +45,11 @@
         "exec env NVIM_CONTEXT_SOCKET=\"$OPENCODE_NVIM_SOCKET\" bun \"$HOME/.config/opencode/mcp/neovim/neovim-context.ts\""
       ],
       "enabled": true
+    },
+    "shared-todo": {
+      "type": "remote",
+      "url": "http://192.168.1.46:8092/mcp",
+      "enabled": true
     }
   },
   "permission": {
