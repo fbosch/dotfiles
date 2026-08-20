@@ -48,8 +48,8 @@ The preview SHALL show the image and the application context that will be sent. 
 - **WHEN** the user cancels during composition or before submitting the question
 - **THEN** the system sends no image, question, or compositor context
 
-### Requirement: Read-only agent execution
-The AI Pointer SHALL submit requests only through the fixed `desktop-pointer` agent with a deny-all tool policy. The system MUST NOT allow model output or on-screen content to run commands, mutate applications, open links, or perform desktop actions.
+### Requirement: Read-only answer execution
+The AI Pointer SHALL submit only the backend-neutral `answer` operation and SHALL NOT select or configure a backend, agent, model, tool policy, server, or execution directory. The configured runtime backend SHALL enforce answer-only execution; the initial OpenCode backend SHALL use the fixed `desktop-pointer` agent with a deny-all tool policy. The system MUST NOT allow model output or on-screen content to run commands, mutate applications, open links, or perform desktop actions.
 
 #### Scenario: Selected content contains hostile instructions
 - **WHEN** a selected image or typed question contains instructions that request tool use or desktop changes
@@ -81,10 +81,10 @@ The AI Pointer SHALL store captures only in a feature-private directory under `X
 - **THEN** the system removes the partial file, presents an error, and does not submit a request
 
 ### Requirement: Safe availability and lock behavior
-The AI Pointer SHALL fail safely when required selection, capture, request-runtime, agent, server, or model capabilities are unavailable. If the Hyprland session locks during an active workflow, it SHALL cancel and hide the workflow and MUST NOT present an answer over the lock screen.
+The AI Pointer SHALL fail safely when required selection, capture, answer-runtime, or configured backend capabilities are unavailable. If the Hyprland session locks during an active workflow, it SHALL cancel and hide the workflow and MUST NOT present an answer over the lock screen.
 
 #### Scenario: Required runtime is unavailable
-- **WHEN** a required local executable, agent, compatible server, or image-capable model is unavailable
+- **WHEN** a required local executable, answer runtime, or configured backend capability is unavailable
 - **THEN** the system returns to a non-active state with a concise failure and does not submit a capture
 
 #### Scenario: Session locks during a request

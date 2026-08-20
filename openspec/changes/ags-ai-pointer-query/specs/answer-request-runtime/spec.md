@@ -1,11 +1,11 @@
 ## Purpose
 
-Provide a bounded machine interface for non-interactive OpenCode requests so desktop and future local workflows can submit context without owning SDK, server, or session lifecycle details.
+Provide a bounded backend-neutral machine interface so desktop and future local workflows can request answers without owning provider, SDK, policy, server, or session lifecycle details.
 
 ## ADDED Requirements
 
 ### Requirement: Versioned machine protocol
-The runtime SHALL accept one versioned JSON request on standard input and emit exactly one versioned JSON success or failure result followed by one newline on standard output. It MUST reject malformed JSON, trailing documents, unsupported protocol versions, and unknown request fields before contacting an OpenCode server.
+The runtime SHALL accept one versioned JSON request on standard input and emit exactly one versioned JSON success or failure result followed by one newline on standard output. A request SHALL contain a request identifier, the fixed `answer` operation, prompt text, attachment descriptors, and timeout. It MUST reject malformed JSON, trailing documents, unsupported protocol versions, unknown request fields, unsupported operations, and backend-selection fields before contacting the configured backend.
 
 #### Scenario: Valid request
 - **WHEN** a caller submits a valid supported request with text and no attachments
@@ -13,21 +13,21 @@ The runtime SHALL accept one versioned JSON request on standard input and emit e
 
 #### Scenario: Invalid input
 - **WHEN** standard input contains malformed JSON, trailing non-whitespace bytes, an unsupported version, or an unknown request field
-- **THEN** the runtime emits one `invalid_request` or `unsupported_version` failure and does not contact an OpenCode server
+- **THEN** the runtime emits one `invalid_request` or `unsupported_version` failure and does not contact the configured backend
 
 ### Requirement: Bounded request and response data
 The runtime SHALL reject input larger than 64 KiB, prompt text larger than 16 KiB UTF-8, more than four attachments, individual attachments larger than 12 MiB, aggregate attachments larger than 20 MiB, image dimensions exceeding 8192 pixels on either side, images exceeding 16 megapixels, and request timeouts outside 5 to 120 seconds. It SHALL limit normalized assistant text to 32 KiB UTF-8 and make truncation explicit.
 
 #### Scenario: Oversized attachment
 - **WHEN** a caller submits an image that exceeds a byte, dimension, pixel, or aggregate attachment limit
-- **THEN** the runtime emits `attachment_too_large` before sending the image to OpenCode
+- **THEN** the runtime emits `attachment_too_large` before sending the image to the configured backend
 
 #### Scenario: Oversized assistant response
-- **WHEN** OpenCode returns final assistant text larger than the response limit
+- **WHEN** the configured backend returns final answer text larger than the response limit
 - **THEN** the runtime returns bounded text and marks the result as truncated
 
 ### Requirement: Verified image attachments
-The runtime SHALL accept only regular PNG or JPEG files whose declared MIME type, magic bytes, dimensions, byte size, and SHA-256 digest match the request. It SHALL construct the OpenCode file part from the exact verified bytes rather than allowing OpenCode to reopen the supplied path. It MUST reject symbolic links, non-regular files, MIME mismatches, unsupported formats, and changed files.
+The runtime SHALL accept only regular PNG or JPEG files whose declared MIME type, magic bytes, dimensions, byte size, and SHA-256 digest match the request. It SHALL pass the exact verified bytes to the configured backend rather than allowing a backend to reopen the supplied path. It MUST reject symbolic links, non-regular files, MIME mismatches, unsupported formats, and changed files.
 
 #### Scenario: Previewed image remains unchanged
 - **WHEN** a caller supplies a valid PNG with a matching digest
@@ -37,19 +37,23 @@ The runtime SHALL accept only regular PNG or JPEG files whose declared MIME type
 - **WHEN** an attachment file no longer matches its submitted digest
 - **THEN** the runtime emits `attachment_changed` and does not submit the attachment
 
-### Requirement: Trusted OpenCode execution context
-The runtime SHALL require an explicit agent and tool policy. When the caller requests the deny-all tool policy, the runtime SHALL verify that the selected agent exists and has no enabled tools before submitting user context. It MUST fail with `agent_unavailable` or `agent_policy_invalid` rather than falling back to another agent.
+### Requirement: Trusted backend-owned execution policy
+The runtime SHALL select one trusted backend through local composition and MUST NOT accept backend, agent, model, tool, endpoint, server, session, or execution-directory configuration from the request. The configured backend SHALL verify its answer-only policy before submitting user context. The initial OpenCode backend SHALL require the fixed `desktop-pointer` agent and deny-all tool policy, and SHALL fail with stable backend errors rather than falling back to another agent or policy.
 
-#### Scenario: Tool-free agent is available
-- **WHEN** a request selects an installed agent whose effective tool policy denies all tools
-- **THEN** the runtime submits the request using that agent
+#### Scenario: Configured answer backend is available
+- **WHEN** the locally configured backend verifies its answer-only execution policy
+- **THEN** the runtime submits the validated answer request through that backend
 
-#### Scenario: Agent cannot be verified
-- **WHEN** the requested agent is absent, resolves to a different agent, or exposes any enabled tool under a deny-all request
-- **THEN** the runtime does not submit the prompt or attachment
+#### Scenario: Caller attempts to select backend policy
+- **WHEN** a request includes an agent, model, tool policy, endpoint, server, session, execution directory, or other backend configuration field
+- **THEN** the runtime returns `invalid_request` and does not submit the prompt or attachment
 
-### Requirement: Compatible server selection and ownership
-The runtime SHALL only reuse the configured loopback OpenCode endpoint after bounded health, version, and agent-policy checks pass. It SHALL start an owned temporary server when the endpoint is absent or unsuitable. It MUST NOT scan ports, use remote endpoints, restart an external server, terminate an external server, or close an external server.
+#### Scenario: OpenCode answer policy cannot be verified
+- **WHEN** the configured OpenCode backend cannot resolve the fixed agent or verify its deny-all tool policy
+- **THEN** the runtime returns `backend_policy_invalid` and does not submit the prompt or attachment
+
+### Requirement: Compatible OpenCode backend ownership
+The initial OpenCode backend SHALL only reuse the configured loopback endpoint after bounded health, version, image-capability, and agent-policy checks pass. It SHALL start an owned temporary server when the endpoint is absent or unsuitable. It MUST NOT scan ports, use remote endpoints, restart an external server, terminate an external server, or close an external server.
 
 #### Scenario: Compatible external server
 - **WHEN** the configured loopback endpoint reports a supported version and verifies the requested agent policy
@@ -59,8 +63,8 @@ The runtime SHALL only reuse the configured loopback OpenCode endpoint after bou
 - **WHEN** the configured loopback endpoint is unavailable, has an unsupported version, or cannot verify the requested agent policy
 - **THEN** the runtime starts an owned temporary server or returns a safe unavailable error without transmitting user context to the unsuitable endpoint
 
-### Requirement: Ephemeral request lifecycle
-The runtime SHALL create one ephemeral OpenCode session per request and delete it after success, failure, timeout, or cancellation. It SHALL close an owned temporary server after the request ends. It MUST surface `cleanup_failed` when it cannot complete session cleanup and MUST NOT claim provider-side deletion.
+### Requirement: Ephemeral backend lifecycle
+The configured backend SHALL isolate each request and clean its owned resources after success, failure, timeout, or cancellation. The initial OpenCode backend SHALL create and delete one ephemeral session per request and close an owned temporary server after the request ends. The runtime MUST surface `cleanup_failed` when backend cleanup cannot complete and MUST NOT claim provider-side deletion.
 
 #### Scenario: Successful request cleanup
 - **WHEN** OpenCode returns a valid assistant response
@@ -92,8 +96,8 @@ The runtime SHALL return only final assistant text parts. It MUST exclude reason
 - **WHEN** an OpenCode or provider request fails
 - **THEN** the runtime emits a stable error code and safe message without exposing sensitive request data
 
-### Requirement: Pinned runtime compatibility
-The runtime SHALL use the pinned SDK version validated for the installed OpenCode version and run without dependency auto-install. It MUST reject unsupported CLI or server versions before attachment transmission.
+### Requirement: Pinned OpenCode backend compatibility
+The initial OpenCode backend SHALL use the pinned SDK version validated for the installed OpenCode version and run without dependency auto-install. It MUST reject unsupported CLI or server versions before attachment transmission.
 
 #### Scenario: Supported version pair
 - **WHEN** the configured OpenCode binary and server match the validated runtime version policy

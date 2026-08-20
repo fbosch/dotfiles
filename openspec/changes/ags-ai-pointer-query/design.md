@@ -9,10 +9,10 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 **Goals:**
 
 - Keep pointer selection, capture, presentation, and cancellation in one AGS feature slice.
-- Keep OpenCode SDK, server, session, attachment, and response-shape knowledge in one Bun runtime boundary.
+- Keep backend, SDK, server, session, policy, and response-shape knowledge behind one Bun runtime boundary.
 - Send the smallest reviewed image and compositor metadata needed to explain the selection.
 - Make the model request read-only by construction and preserve cancellation/resource ownership across AGS and Bun process boundaries.
-- Preserve a stable machine protocol that future non-interactive OpenCode consumers can use without inheriting pointer UI behavior.
+- Preserve a stable backend-neutral machine protocol that future local answer workflows can use without inheriting pointer UI or OpenCode concepts.
 
 **Non-Goals:**
 
@@ -24,25 +24,29 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 
 ## Decisions
 
-### A separate Bun request boundary isolates OpenCode from AGS
+### A backend-neutral Bun boundary isolates inference from AGS
 
-The request runtime lives under `.config/opencode/libexec/opencode-request/` and has a library API plus a JSON stdin/stdout CLI. AGS invokes the CLI through `Gio.Subprocess` with argv arrays; it never imports Node or Bun SDK code.
+The answer runtime lives under `.config/opencode/libexec/answer-request/` and has a library API plus a JSON stdin/stdout CLI. AGS invokes the CLI through `Gio.Subprocess` with argv arrays; it never imports Node or Bun SDK code and never names OpenCode, an agent, a model, tools, a configuration directory, an endpoint, or a session.
 
-The protocol owns validation, data-URL construction from verified image bytes, OpenCode connection, server ownership, session lifecycle, cancellation, final-text normalization, and machine-safe errors. The caller owns prompt wording, selection, capture, preview, rendering, and any retry UX.
+The protocol owns validation, verified attachment loading, backend invocation, cancellation, final-text normalization, and machine-safe errors. The caller owns prompt wording, selection, capture, preview, rendering, and retry UX. Its request contains only a request ID, the fixed `answer` operation, prompt text, attachment descriptors, and timeout.
+
+Inside the runtime, one deep `AnswerBackend.execute()` interface accepts validated prompt and attachment bytes and returns final answer parts or stable backend failures. The OpenCode implementation owns agent, model, tool policy, connection, server ownership, session lifecycle, and cleanup. Runtime composition selects that trusted implementation locally; untrusted request fields cannot select or configure a backend. Replacing OpenCode later means implementing the same backend interface while preserving the caller protocol and AGS workflow.
 
 Alternative considered: make an AGS service call OpenCode directly. Rejected because GJS and Bun have separate dependency and lifecycle models, and it would spread SDK compatibility/cancellation details into the desktop process.
 
 Alternative considered: reuse AI Commit's generator. Rejected because it owns commit prompts, parsing, server UI, and terminal behavior. The request runtime is introduced alongside it; AI Commit remains unchanged.
 
-### Protocol version 1 is closed, bounded, and answer-only
+### Protocol version 1 is closed, bounded, and backend-neutral
 
-The CLI accepts one JSON request with a run ID, fixed trusted directory, agent, optional model, deny-all tool policy, prompt text, attachment descriptors, and timeout. It returns one success or error response with the same run ID. Zod validates both input and external response boundaries. The runtime never writes progress, SDK logs, or provider output to stdout.
+The CLI accepts one JSON request with a run ID, fixed `answer` operation, prompt text, attachment descriptors, and timeout. It returns one success or error response with the same run ID. Zod validates both input and external response boundaries. The runtime never writes progress, backend logs, or provider output to stdout.
 
-The initial Pointer caller uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the directory, agent, tools, server URL, or model from the focused window, selected text, image, or user prompt. The generic runtime can retain explicit directory and model inputs for future trusted callers, but pointer policy remains fixed and local.
+The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt.
 
 The deny-all policy combines the `desktop-pointer` agent's `tools: { "*": false }` configuration with a request-time all-known-tool denial map. The implementation verifies this behavior against the pinned OpenCode version. If the runtime cannot enumerate and deny the available tools or cannot resolve the requested agent, it fails before transmitting user content.
 
 Alternative considered: pass a caller-defined tool map. Rejected because it makes the desktop capture boundary an authority boundary and is not required for read-only Q&A.
+
+Alternative considered: expose agent and model fields in the versioned protocol. Rejected because those fields leak the initial backend into every caller and force an AGS migration when the backend changes.
 
 ### Pinned SDK and owned-server fallback contain compatibility drift
 

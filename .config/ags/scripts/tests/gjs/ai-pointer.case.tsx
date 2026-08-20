@@ -107,26 +107,12 @@ test("AI Pointer view presents a capture and disposes", async () => {
 				path: capturePath,
 				geometry: { x: 10, y: 20, width: 20, height: 20 },
 			},
-			{
-				centerHit: true,
-				confidence: 0.9,
-				hitCount: 7,
-				name: "Submit",
-				program: {
-					class: "org.example.App",
-					geometry: { x: 0, y: 0, width: 100, height: 100 },
-					pid: 123,
-					title: "Example",
-				},
-				role: "push button",
-				targetGeometry: { x: 12, y: 22, width: 16, height: 12 },
-				url: "https://example.com/action",
-			},
 		),
 		"AI Pointer capture preview was rejected",
 	);
 	await settleMainLoop();
 	assert(view.isCreated, "AI Pointer view was not created");
+	assert(view.isPromptVisible, "AI Pointer prompt was not shown");
 	view.hide();
 	view.dispose();
 	assert(view.isCreated === false, "AI Pointer view was not disposed");
@@ -456,12 +442,13 @@ test("AI Pointer converts an unexpected OCR rejection into a bounded failure", a
 	}
 });
 
-test("AI Pointer captures and presents a confident accessible snap", async () => {
+test("AI Pointer captures a confident accessible snap without presenting metadata", async () => {
 	let captured = "";
-	let presentedTarget = "";
-	let presentedProgram = "";
-	let presentedDiagnostics = 0;
+	let previewArgumentCount = 0;
+	let resolvedAccessibility = false;
+	let resolvedPrograms = false;
 	let ocrInput = "";
+	const presentationOrder: string[] = [];
 	const ocrStates: string[] = [];
 	const view = {
 		create() {},
@@ -473,10 +460,9 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture(_capture, accessibility, programs, diagnostics) {
-			presentedTarget = `${accessibility?.role}:${accessibility?.name}`;
-			presentedProgram = `${programs[0]?.class}:${programs[0]?.pid}`;
-			presentedDiagnostics = diagnostics.length;
+		showCapture(...args) {
+			presentationOrder.push("preview");
+			previewArgumentCount = args.length;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -492,6 +478,7 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async (_geometry, _stroke, _cancellable, _onProcess, onDiagnostics) => {
+			resolvedAccessibility = true;
 			onDiagnostics?.([
 				{
 					centerHit: true,
@@ -509,15 +496,19 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 				metadata: { confidence: 0.9, name: "Submit", role: "push button" },
 			};
 		},
-		resolvePrograms: () => [
-			{
-				class: "org.wezfurlong.wezterm",
-				geometry: { x: 0, y: 0, width: 500, height: 400 },
-				pid: 123,
-				title: "Terminal",
-			},
-		],
+		resolvePrograms: () => {
+			resolvedPrograms = true;
+			return [
+				{
+					class: "org.wezfurlong.wezterm",
+					geometry: { x: 0, y: 0, width: 500, height: 400 },
+					pid: 123,
+					title: "Terminal",
+				},
+			];
+		},
 		recognizeOcr: async (input) => {
+			presentationOrder.push("ocr");
 			ocrInput = `${input.path}:${input.pixelWidth}x${input.pixelHeight}`;
 			return { kind: "text", text: "Local text" };
 		},
@@ -535,12 +526,10 @@ test("AI Pointer captures and presents a confident accessible snap", async () =>
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
-		assert(presentedTarget === "push button:Submit", "accessible metadata was not presented");
-		assert(
-			presentedProgram === "org.wezfurlong.wezterm:123",
-			"coordinate-matched program metadata was not presented",
-		);
-		assert(presentedDiagnostics === 1, "candidate diagnostics were not presented");
+		assert(resolvedAccessibility, "accessible metadata was not resolved");
+		assert(resolvedPrograms, "program metadata was not resolved");
+		assert(previewArgumentCount === 1, "metadata was passed to the prompt view");
+		assert(presentationOrder.join(",") === "preview,ocr", "OCR started before presentation");
 		assert(
 			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
 			"OCR did not reuse the presented capture",

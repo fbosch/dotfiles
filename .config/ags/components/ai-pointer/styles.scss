@@ -12,65 +12,28 @@
     .ai-pointer-stroke-canvas { background-color: transparent; }
   }
 
-  box.ai-pointer-panel {
-    min-width: 720px;
-    padding: 16px;
-    color: var(--ags-color-foreground-primary);
-    background-color: var(--ags-color-background-secondary);
-    border: 1px solid var(--ags-color-accent-primary);
-    border-radius: 12px;
-    box-shadow: 0 8px 32px rgb(0 0 0 / 20%), 0 0 18px var(--ags-color-accent-primary);
-  }
+  /* The monitor-sized prompt surface owns placement; only the pill has visual padding. */
+  &.ai-pointer-prompt-surface { padding: 0; }
 
-  box.ai-pointer-heading { min-height: 12px; }
+  box.ai-pointer-prompt-host { background-color: transparent; }
 
-  box.ai-pointer-signal {
-    min-width: 8px;
-    min-height: 8px;
-    background-color: var(--ags-color-accent-primary);
-    border-radius: 8px;
-    box-shadow: 0 0 10px var(--ags-color-accent-primary);
-  }
-
-  label.ai-pointer-title {
-    font-family: var(--ags-font-primary), system-ui, sans-serif;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  picture.ai-pointer-preview {
-    min-width: 360px;
-    min-height: 180px;
+  box.ai-pointer-prompt-panel {
+    min-height: 52px;
+    padding: 0 16px;
+    color: #fff;
     background-color: var(--ags-color-background-primary);
-    border: 1px solid var(--ags-color-accent-primary);
-    border-radius: 8px;
+    border: 2px solid var(--ags-color-accent-primary);
+    border-radius: 999px;
   }
 
-  box.ai-pointer-metadata {
-    min-width: 220px;
-    padding: 12px;
-    background-color: var(--ags-color-background-primary);
-    border: 1px solid var(--ags-color-border-default);
-    border-radius: 8px;
-  }
-
-  label.ai-pointer-metadata-title {
-    color: var(--ags-color-accent-primary);
+  .ai-pointer-prompt-input {
+    min-width: 0;
+    padding: 0;
+    color: #fff;
+    background-color: transparent;
+    border: none;
     font-family: var(--ags-font-primary), system-ui, sans-serif;
-    font-size: 10px;
-    font-weight: 700;
-  }
-
-  label.ai-pointer-metadata-value {
-    color: var(--ags-color-foreground-secondary);
-    font-family: monospace;
-    font-size: 11px;
-  }
-
-  label.ai-pointer-geometry,
-  label.ai-pointer-status {
-    color: var(--ags-color-foreground-tertiary);
-    font-family: var(--ags-font-primary), system-ui, sans-serif;
-    font-size: 12px;
+    font-size: 18px;
+    font-weight: 600;
   }
 }

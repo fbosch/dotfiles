@@ -77,6 +77,7 @@ export class AiPointerController {
 	#shutdownSignalId = 0;
 	#cancellable: Gio.Cancellable | null = null;
 	#process: Gio.Subprocess | null = null;
+	#ocrStartId = 0;
 	#ocrCancellable: Gio.Cancellable | null = null;
 	#ocrProcess: Gio.Subprocess | null = null;
 	#capture: Capture | null = null;
@@ -134,12 +135,7 @@ export class AiPointerController {
 						: null;
 					let preview: CapturePreview | null = null;
 					try {
-						preview = this.#view.showCapture(
-							this.#capture,
-							this.#accessibilityMetadata,
-							this.#programMetadata,
-							this.#accessibilityDiagnostics,
-						);
+						preview = this.#view.showCapture(this.#capture);
 					} catch {
 						previewMark?.end(false, "failed");
 					}
@@ -152,7 +148,7 @@ export class AiPointerController {
 						this.#actor?.send({ type: "FAIL" });
 						return;
 					}
-					this.#startOcr(this.#capture, preview);
+					this.#scheduleOcr(this.#capture, preview);
 					return;
 				}
 				if (snapshot.matches("failed")) {
@@ -412,8 +408,17 @@ export class AiPointerController {
 		this.#pendingFinish = null;
 	}
 
-	#startOcr(capture: Capture, preview: CapturePreview): void {
+	#scheduleOcr(capture: Capture, preview: CapturePreview): void {
 		this.#stopOcr();
+		const runId = this.#runId;
+		this.#ocrStartId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+			this.#ocrStartId = 0;
+			if (runId === this.#runId) this.#startOcr(capture, preview);
+			return GLib.SOURCE_REMOVE;
+		});
+	}
+
+	#startOcr(capture: Capture, preview: CapturePreview): void {
 		const runId = this.#runId;
 		const cancellable = new Gio.Cancellable();
 		this.#ocrCancellable = cancellable;
@@ -456,6 +461,8 @@ export class AiPointerController {
 	}
 
 	#stopOcr(): void {
+		if (this.#ocrStartId !== 0) GLib.source_remove(this.#ocrStartId);
+		this.#ocrStartId = 0;
 		this.#ocrCancellable?.cancel();
 		this.#ocrCancellable = null;
 		this.#ocrProcess?.force_exit();

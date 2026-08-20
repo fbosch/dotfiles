@@ -5,18 +5,23 @@ import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import Pango from "gi://Pango?version=1.0";
-import { configureButton } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
-import type {
-	AccessibilityCandidateDiagnostic,
-	AccessibilityMetadata,
-	ProgramMetadata,
-} from "./accessibility-policy";
 import type { Capture } from "./capture";
 import type { OcrResult } from "./ocr";
+import { promptPosition } from "./selection";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
+
+const promptMinimumWidth = 40;
+const promptMaximumWidth = 348;
+const promptHostWidth = 400;
+const promptHostHeight = 56;
+const allEdges =
+	Astal.WindowAnchor.TOP |
+	Astal.WindowAnchor.BOTTOM |
+	Astal.WindowAnchor.LEFT |
+	Astal.WindowAnchor.RIGHT;
 
 export interface AiPointerViewHandlers {
 	onCancel(): void;
@@ -31,19 +36,19 @@ export type OcrViewState = Exclude<OcrResult, { kind: "cancelled" }> | { kind: "
 
 export class AiPointerView {
 	#window: Astal.Window | null = null;
-	#preview: Gtk.Picture | null = null;
-	#geometry: Gtk.Label | null = null;
-	#program: Gtk.Label | null = null;
-	#target: Gtk.Label | null = null;
-	#evidence: Gtk.Label | null = null;
-	#diagnostics: Gtk.Label | null = null;
-	#ocr: Gtk.Label | null = null;
-	#status: Gtk.Label | null = null;
+	#promptCanvas: Gtk.Fixed | null = null;
+	#promptHost: Gtk.CenterBox | null = null;
+	#prompt: Gtk.Entry | null = null;
+	#capture: Capture | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	readonly #strokeOverlay = new StrokeOverlay();
 
 	get isCreated(): boolean {
 		return this.#window !== null;
+	}
+
+	get isPromptVisible(): boolean {
+		return this.#window?.get_visible() ?? false;
 	}
 
 	create(handlers: AiPointerViewHandlers): void {
@@ -55,141 +60,62 @@ export class AiPointerView {
 					name="ai-pointer"
 					namespace="ags-ai-pointer"
 					visible={false}
-					anchor={Astal.WindowAnchor.NONE}
+					anchor={allEdges}
 					layer={Astal.Layer.OVERLAY}
 					exclusivity={Astal.Exclusivity.IGNORE}
 					keymode={Astal.Keymode.EXCLUSIVE}
-					class="ai-pointer"
+					class="ai-pointer ai-pointer-prompt-surface"
 					application={app}
 					$={(self: Astal.Window) => {
 						bindGamingOpacity(self);
-						const keyController = new Gtk.EventControllerKey();
-						keyController.connect("key-pressed", (_controller, keyval: number) => {
-							if (keyval !== Gdk.KEY_Escape) return false;
-							this.#handlers?.onCancel();
-							return true;
+						self.add_controller(this.#createCancelController());
+
+						const canvas = new Gtk.Fixed({ hexpand: true, vexpand: true });
+						const host = new Gtk.CenterBox({
+							width_request: promptHostWidth,
+							height_request: promptHostHeight,
 						});
-						self.add_controller(keyController);
+						host.add_css_class("ai-pointer-prompt-host");
+						const panel = new Gtk.Box({ valign: Gtk.Align.CENTER });
+						panel.add_css_class("ai-pointer-prompt-panel");
+						const prompt = new Gtk.Entry();
+						prompt.add_css_class("ai-pointer-prompt-input");
+						prompt.add_controller(this.#createCancelController());
+						prompt.connect("notify::text", () => this.#resizePrompt());
+						panel.append(prompt);
+						host.set_center_widget(panel);
+						canvas.put(host, 0, 0);
+						self.set_child(canvas);
+
+						this.#promptCanvas = canvas;
+						this.#promptHost = host;
+						this.#prompt = prompt;
+						this.#resizePrompt();
 					}}
-				>
-					<box orientation={Gtk.Orientation.VERTICAL} spacing={12} class="ai-pointer-panel">
-						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} class="ai-pointer-heading">
-							<box class="ai-pointer-signal" />
-							<label label="SELECTED REGION" class="ai-pointer-title" halign={Gtk.Align.START} />
-						</box>
-						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={12} class="ai-pointer-review">
-							{this.#createPreview()}
-							<box orientation={Gtk.Orientation.VERTICAL} spacing={10} class="ai-pointer-metadata">
-								{this.#createMetadataField("PROGRAM", (label) => {
-									this.#program = label;
-								})}
-								{this.#createMetadataField("ACCESSIBLE ELEMENT", (label) => {
-									this.#target = label;
-								})}
-								{this.#createMetadataField("MATCH EVIDENCE", (label) => {
-									this.#evidence = label;
-								})}
-								{this.#createDiagnosticsField()}
-								{this.#createOcrField()}
-							</box>
-						</box>
-						<label
-							label=""
-							class="ai-pointer-geometry"
-							halign={Gtk.Align.START}
-							$={(self: Gtk.Label) => {
-								this.#geometry = self;
-							}}
-						/>
-						<label
-							label=""
-							class="ai-pointer-status"
-							wrap={true}
-							xalign={0}
-							$={(self: Gtk.Label) => {
-								this.#status = self;
-							}}
-						/>
-						<box orientation={Gtk.Orientation.HORIZONTAL} spacing={8} halign={Gtk.Align.END}>
-							<button
-								canFocus={true}
-								class="ai-pointer-discard"
-								onClicked={() => this.#handlers?.onCancel()}
-								$={(self: Gtk.Button) => configureButton(self, { variant: "default" })}
-							>
-								<label label="Discard" />
-							</button>
-							<button sensitive={false} class="ai-pointer-ask">
-								<label label="Ask (next slice)" />
-							</button>
-						</box>
-					</box>
-				</window>
+				/>
 			) as Astal.Window;
 			this.#window.connect("destroy", dispose);
 		});
 	}
 
-	showCapture(
-		capture: Capture,
-		accessibility: AccessibilityMetadata | null = null,
-		programs: ProgramMetadata[] = accessibility?.program ? [accessibility.program] : [],
-		diagnostics: AccessibilityCandidateDiagnostic[] = [],
-	): CapturePreview | null {
+	showCapture(capture: Capture): CapturePreview | null {
 		let texture: Gdk.Texture;
 		try {
 			texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path));
-			this.#preview?.set_paintable(texture);
 		} catch {
 			return null;
 		}
-		this.#geometry?.set_label(
-			`${capture.geometry.width} × ${capture.geometry.height} at ${capture.geometry.x}, ${capture.geometry.y}`,
-		);
-		const target = this.#formatTarget(accessibility);
-		this.#program?.set_label(this.#formatPrograms(programs));
-		this.#target?.set_label(target ?? "No reliable accessible element");
-		this.#evidence?.set_label(this.#formatEvidence(accessibility));
-		this.#diagnostics?.set_label(this.#formatDiagnostics(diagnostics));
-		this.#status?.set_label(
-			target
-				? `Snapped locally to ${target}. Accessibility metadata stays on this device; AI requests remain disabled.`
-				: "No reliable accessible target was found; using the drawn region. AI requests remain disabled.",
-		);
 		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return null;
-		this.#show();
+		this.#capture = capture;
+		this.#prompt?.set_text("");
+		this.#resizePrompt();
+		this.#showAt(capture);
 		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
 	}
 
-	setOcrState(state: OcrViewState): void {
-		if (!this.#ocr) return;
-		if (state.kind === "pending") {
-			this.#ocr.set_label("Reading text locally...");
-			return;
-		}
-		if (state.kind === "text") {
-			this.#ocr.set_label(state.text);
-			return;
-		}
-		if (state.kind === "truncated") {
-			this.#ocr.set_label(`OCR output truncated at 64 KiB.\n\n${state.text}`);
-			return;
-		}
-		if (state.kind === "no-text") {
-			this.#ocr.set_label("No text detected.");
-			return;
-		}
-		const messages: Record<string, string> = {
-			"executable-missing": "OCR unavailable: Tesseract is not installed.",
-			"image-too-large": "OCR unavailable: image exceeds the 6 MP limit.",
-			timeout: "OCR unavailable: extraction exceeded 10 seconds.",
-		};
-		this.#ocr.set_label(messages[state.reason] ?? "OCR unavailable for this image.");
-	}
+	setOcrState(_state: OcrViewState): void {}
 
-	clearOcr(): void {
-		this.#ocr?.set_label("");
-	}
+	clearOcr(): void {}
 
 	beginStroke(stroke: PointerStroke, onFrame: () => void): boolean {
 		return this.#strokeOverlay.show(stroke, () => this.#handlers?.onCancel(), onFrame);
@@ -209,14 +135,14 @@ export class AiPointerView {
 
 	showError(message: string): void {
 		this.clearOcr();
-		this.#preview?.set_paintable(null);
-		this.#geometry?.set_label("");
-		this.#status?.set_label(message);
+		this.#prompt?.set_text(message);
+		this.#resizePrompt();
 		this.#show();
 	}
 
 	hide(): void {
 		this.clearOcr();
+		this.#capture = null;
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
 	}
@@ -225,15 +151,75 @@ export class AiPointerView {
 		this.#strokeOverlay.hide();
 		this.#window?.destroy();
 		this.#window = null;
-		this.#preview = null;
-		this.#geometry = null;
-		this.#program = null;
-		this.#target = null;
-		this.#evidence = null;
-		this.#diagnostics = null;
-		this.#ocr = null;
-		this.#status = null;
+		this.#promptCanvas = null;
+		this.#promptHost = null;
+		this.#prompt = null;
+		this.#capture = null;
 		this.#handlers = null;
+	}
+
+	#createCancelController(): Gtk.EventControllerKey {
+		const controller = new Gtk.EventControllerKey();
+		controller.connect("key-pressed", (_controller, keyval: number) => {
+			if (keyval !== Gdk.KEY_Escape) return false;
+			this.#handlers?.onCancel();
+			return true;
+		});
+		return controller;
+	}
+
+	#resizePrompt(): void {
+		const prompt = this.#prompt;
+		if (!prompt) return;
+		const layout = Pango.Layout.new(prompt.get_pango_context());
+		layout.set_text(prompt.get_text(), -1);
+		const [textWidth] = layout.get_pixel_size();
+		const width = Math.min(Math.max(textWidth, promptMinimumWidth), promptMaximumWidth);
+		prompt.set_size_request(width, -1);
+	}
+
+	#showAt(capture: Capture): void {
+		this.#capture = capture;
+		if (this.#positionPrompt() === false) {
+			this.#show();
+			return;
+		}
+		this.#window?.set_visible(true);
+		this.#prompt?.grab_focus();
+	}
+
+	#positionPrompt(): boolean {
+		const capture = this.#capture;
+		if (!capture) return false;
+		const display = Gdk.Display.get_default();
+		const monitors = display?.get_monitors();
+		const centerX = capture.geometry.x + capture.geometry.width / 2;
+		const centerY = capture.geometry.y + capture.geometry.height / 2;
+		for (let index = 0; monitors && index < monitors.get_n_items(); index += 1) {
+			const monitor = monitors.get_item(index) as Gdk.Monitor | null;
+			if (!monitor) continue;
+			const bounds = monitor.get_geometry();
+			if (
+				centerX < bounds.x ||
+				centerX >= bounds.x + bounds.width ||
+				centerY < bounds.y ||
+				centerY >= bounds.y + bounds.height
+			)
+				continue;
+			const position = promptPosition(capture.geometry, bounds, {
+				width: promptHostWidth,
+				height: promptHostHeight,
+			});
+			this.#window?.set_gdkmonitor(monitor);
+			if (this.#promptCanvas && this.#promptHost)
+				this.#promptCanvas.move(
+					this.#promptHost,
+					position.x - bounds.x,
+					position.y - bounds.y,
+				);
+			return true;
+		}
+		return false;
 	}
 
 	#show(): void {
@@ -241,145 +227,9 @@ export class AiPointerView {
 			const monitor = getPointerMonitor();
 			if (monitor) this.#window?.set_gdkmonitor(monitor.monitor);
 		} catch {
-			// A placement lookup must not prevent the reviewed capture from appearing.
+			// A placement lookup must not prevent the prompt from appearing.
 		}
 		this.#window?.set_visible(true);
-	}
-
-	#createPreview(): Gtk.Picture {
-		const preview = new Gtk.Picture({
-			contentFit: Gtk.ContentFit.CONTAIN,
-			canShrink: true,
-			widthRequest: 480,
-			heightRequest: 270,
-		});
-		preview.add_css_class("ai-pointer-preview");
-		this.#preview = preview;
-		return preview;
-	}
-
-	#createMetadataField(heading: string, assign: (label: Gtk.Label) => void): Gtk.Box {
-		const value = new Gtk.Label({
-			halign: Gtk.Align.START,
-			selectable: true,
-			wrap: true,
-			xalign: 0,
-		});
-		value.add_css_class("ai-pointer-metadata-value");
-		assign(value);
-		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
-		const title = new Gtk.Label({ halign: Gtk.Align.START, label: heading, xalign: 0 });
-		title.add_css_class("ai-pointer-metadata-title");
-		box.append(title);
-		box.append(value);
-		return box;
-	}
-
-	#createOcrField(): Gtk.Box {
-		const value = new Gtk.Label({
-			halign: Gtk.Align.FILL,
-			selectable: true,
-			valign: Gtk.Align.START,
-			wrap: true,
-			xalign: 0,
-		});
-		value.set_wrap_mode(Pango.WrapMode.CHAR);
-		value.add_css_class("ai-pointer-metadata-value");
-		this.#ocr = value;
-		const scroll = new Gtk.ScrolledWindow({
-			hscrollbarPolicy: Gtk.PolicyType.NEVER,
-			vscrollbarPolicy: Gtk.PolicyType.AUTOMATIC,
-		});
-		scroll.add_css_class("ai-pointer-ocr-scroll");
-		scroll.set_min_content_height(96);
-		scroll.set_max_content_height(160);
-		scroll.set_propagate_natural_height(true);
-		scroll.set_child(value);
-		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
-		const title = new Gtk.Label({ halign: Gtk.Align.START, label: "LOCAL OCR", xalign: 0 });
-		title.add_css_class("ai-pointer-metadata-title");
-		box.append(title);
-		box.append(scroll);
-		return box;
-	}
-
-	#createDiagnosticsField(): Gtk.Box {
-		const value = new Gtk.Label({
-			halign: Gtk.Align.FILL,
-			selectable: true,
-			valign: Gtk.Align.START,
-			wrap: true,
-			xalign: 0,
-		});
-		value.set_wrap_mode(Pango.WrapMode.CHAR);
-		value.add_css_class("ai-pointer-metadata-value");
-		this.#diagnostics = value;
-		const scroll = new Gtk.ScrolledWindow({
-			hscrollbarPolicy: Gtk.PolicyType.NEVER,
-			vscrollbarPolicy: Gtk.PolicyType.AUTOMATIC,
-		});
-		scroll.set_min_content_height(96);
-		scroll.set_max_content_height(180);
-		scroll.set_propagate_natural_height(true);
-		scroll.set_child(value);
-		const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 });
-		const title = new Gtk.Label({
-			halign: Gtk.Align.START,
-			label: "CANDIDATE DIAGNOSTICS",
-			xalign: 0,
-		});
-		title.add_css_class("ai-pointer-metadata-title");
-		box.append(title);
-		box.append(scroll);
-		return box;
-	}
-
-	#formatTarget(accessibility: AccessibilityMetadata | null): string | null {
-		if (!accessibility) return null;
-		if (accessibility.targets && accessibility.targets.length > 1)
-			return `${accessibility.targets.length} matched elements\n${accessibility.targets
-				.map(({ name, role, targetGeometry, url }, index) =>
-					`${index + 1}. ${role}${name ? `: ${name}` : ""} · ${targetGeometry.width} × ${targetGeometry.height} at ${targetGeometry.x}, ${targetGeometry.y}${url ? `\n   ${url}` : ""}`,
-				)
-				.join("\n")}`;
-		let target = `${accessibility.role}${accessibility.name ? `: ${accessibility.name}` : ""}`;
-		if (accessibility.targetGeometry)
-			target += `\n${accessibility.targetGeometry.width} × ${accessibility.targetGeometry.height} at ${accessibility.targetGeometry.x}, ${accessibility.targetGeometry.y}`;
-		if (accessibility.url) target += `\n${accessibility.url}`;
-		return target;
-	}
-
-	#formatEvidence(accessibility: AccessibilityMetadata | null): string {
-		if (!accessibility) return "Stroke geometry fallback";
-		const hitCount = accessibility.hitCount ?? 1;
-		let matchKind = "fuzzy hit";
-		if (accessibility.targets && accessibility.targets.length > 1) matchKind = "collection";
-		else if (accessibility.centerHit) matchKind = "center hit";
-		return `${Math.round(accessibility.confidence * 100)}% confidence · ${matchKind} · ${hitCount} sample${hitCount === 1 ? "" : "s"}`;
-	}
-
-	#formatPrograms(programs: ProgramMetadata[]): string {
-		if (programs.length === 0) return "No matched program metadata";
-		return programs
-			.map((program, index) => {
-				const identity = program.class ?? "Unknown application";
-				const coverage = program.coverage === undefined
-					? ""
-					: ` · ${Math.round(program.coverage * 100)}% of capture`;
-				return `${index + 1}. ${identity} · PID ${program.pid}${coverage}${program.title ? `\n   ${program.title}` : ""}\n   ${program.geometry.width} × ${program.geometry.height} at ${program.geometry.x}, ${program.geometry.y}`;
-			})
-			.join("\n");
-	}
-
-	#formatDiagnostics(diagnostics: AccessibilityCandidateDiagnostic[]): string {
-		if (diagnostics.length === 0) return "No AT-SPI candidates returned.";
-		return diagnostics
-			.map((candidate, index) => {
-				const confidence = candidate.confidence === undefined
-					? "unscored"
-					: `${Math.round(candidate.confidence * 100)}%`;
-				return `${index + 1}. ${candidate.selected ? "[selected] " : ""}${candidate.role}${candidate.name ? `: ${candidate.name}` : ""}\n   ${candidate.geometry.width} × ${candidate.geometry.height} at ${candidate.geometry.x}, ${candidate.geometry.y} · ${confidence} · ${candidate.centerHit ? "center" : "fuzzy"} · ${candidate.hitCount} hit${candidate.hitCount === 1 ? "" : "s"} · ${candidate.reason}`;
-			})
-			.join("\n");
+		this.#prompt?.grab_focus();
 	}
 }

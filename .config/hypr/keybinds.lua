@@ -44,6 +44,7 @@ local function focus_gaming_workspace()
 end
 
 local function release_super()
+	ai_pointer.consume_super_chord()
 	return window_switcher.release_super()
 end
 
@@ -53,7 +54,7 @@ end
 
 -- Window switching
 bind.register(
-	"SUPER_L",
+	main("SUPER_L"),
 	-- Keep the Waybar toggle out of the gaming workspace.
 	"printf 'hold\\n' | nc -U "
 		.. waybar_control_socket
@@ -67,8 +68,8 @@ bind.register(
 		on_false = bind.consume,
 	}
 )
-bind.register("SUPER_L", release_super, { ignore_mods = true, release = true })
-bind.register("SUPER_R", release_super_right, { release = true })
+bind.register(main("SUPER_L"), release_super, { release = true })
+bind.register(main("SUPER_R"), release_super_right, { release = true })
 bind.register(main("TAB"), window_switcher.action("next", main_mod))
 bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 

@@ -4,6 +4,7 @@ import {
 	clickTargetGeometry,
 	grimGeometry,
 	maximumSelectionPixels,
+	promptPosition,
 	selectionFromPoints,
 } from "../selection";
 
@@ -26,6 +27,39 @@ describe("selectionFromPoints", () => {
 		expect(grimGeometry({ x: -10, y: 20, width: 30, height: 40 })).toBe(
 			"-10,20 30x40",
 		);
+	});
+});
+
+describe("promptPosition", () => {
+	const monitor = { x: 0, y: 0, width: 1920, height: 1080 };
+	const prompt = { width: 460, height: 64 };
+
+	test("centers above the selection when that space is available", () => {
+		expect(promptPosition({ x: 800, y: 300, width: 320, height: 240 }, monitor, prompt)).toEqual({
+			x: 730,
+			y: 220,
+		});
+	});
+
+	test("uses the space below a selection near the monitor top", () => {
+		expect(promptPosition({ x: 100, y: 20, width: 200, height: 100 }, monitor, prompt)).toEqual({
+			x: 16,
+			y: 136,
+		});
+	});
+
+	test("uses an available side when the selection fills the monitor height", () => {
+		expect(promptPosition({ x: 400, y: 0, width: 500, height: 1080 }, monitor, prompt)).toEqual({
+			x: 916,
+			y: 508,
+		});
+	});
+
+	test("preserves signed monitor coordinates", () => {
+		const leftMonitor = { x: -1920, y: 0, width: 1920, height: 1080 };
+		expect(
+			promptPosition({ x: -1500, y: 300, width: 200, height: 100 }, leftMonitor, prompt),
+		).toEqual({ x: -1630, y: 220 });
 	});
 });
 

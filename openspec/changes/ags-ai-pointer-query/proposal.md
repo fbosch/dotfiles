@@ -4,7 +4,7 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 
 ## What Changes
 
-- Add a standalone Bun request runtime that submits bounded text and image context to OpenCode through a versioned JSON stdin/stdout protocol.
+- Add a standalone Bun answer runtime with a backend-neutral, versioned JSON stdin/stdout protocol and an initial OpenCode backend.
 - Add a hidden, answer-only `desktop-pointer` OpenCode agent with all tools disabled.
 - Add an AGS AI Pointer workflow that lets a user drag-select a screen region, review it with its associated application context, type a question, and receive a read-only answer.
 - Add direct Hyprland press/release selection and `grim` capture so the workflow retains global selection geometry and can classify a unique exact window geometry separately from geometric window and layer candidates.
@@ -17,7 +17,7 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 
 ### New Capabilities
 
-- `opencode-request-runtime`: Provides a bounded, non-interactive request boundary around OpenCode server selection, sessions, attachments, cancellation, and normalized responses.
+- `answer-request-runtime`: Provides a bounded, non-interactive answer boundary that hides backend selection, policy, lifecycle, cancellation, and response normalization from callers.
 - `ags-ai-pointer-query`: Provides explicit drag selection, compositor-context enrichment, typed questions, and safe read-only answer presentation through AGS and Hyprland.
 
 ### Modified Capabilities
@@ -26,7 +26,7 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 
 ## Impact
 
-- New Bun/TypeScript helper code and a pinned `@opencode-ai/sdk` dependency under `.config/opencode/libexec/`.
+- New Bun/TypeScript answer runtime with an OpenCode backend and a pinned `@opencode-ai/sdk` dependency under `.config/opencode/libexec/`.
 - New hidden OpenCode agent under `.config/opencode/agents/`.
 - New AGS feature slice, bundled-component registration, styles, Hyprland binding, and layer rule.
 - Existing OpenCode tools, AI Commit workflow, Fish functions, and persistent configuration formats remain unchanged.

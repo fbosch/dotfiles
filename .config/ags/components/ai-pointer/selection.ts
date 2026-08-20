@@ -10,6 +10,11 @@ export interface PointerPosition {
 	y: number;
 }
 
+export interface PromptDimensions {
+	height: number;
+	width: number;
+}
+
 export const maximumSelectionPixels = 32_000_000;
 export const clickFallbackSize = 256;
 export const clickTargetMaximumSize = 384;
@@ -123,6 +128,40 @@ export function containsPoint(geometry: SelectionGeometry, point: PointerPositio
 		point.y >= geometry.y &&
 		point.y < geometry.y + geometry.height
 	);
+}
+
+export function promptPosition(
+	selection: SelectionGeometry,
+	monitor: SelectionGeometry,
+	prompt: PromptDimensions,
+): PointerPosition {
+	const edgePadding = 16;
+	const gap = 16;
+	const centerX = selection.x + selection.width / 2;
+	const centerY = selection.y + selection.height / 2;
+	const left = monitor.x + edgePadding;
+	const top = monitor.y + edgePadding;
+	const right = monitor.x + monitor.width - edgePadding;
+	const bottom = monitor.y + monitor.height - edgePadding;
+	const centeredX = clamp(centerX - prompt.width / 2, left, right - prompt.width);
+	const centeredY = clamp(centerY - prompt.height / 2, top, bottom - prompt.height);
+	const aboveY = selection.y - gap - prompt.height;
+	if (aboveY >= top) return { x: centeredX, y: aboveY };
+
+	const belowY = selection.y + selection.height + gap;
+	if (belowY + prompt.height <= bottom) return { x: centeredX, y: belowY };
+
+	const rightX = selection.x + selection.width + gap;
+	if (rightX + prompt.width <= right) return { x: rightX, y: centeredY };
+
+	const leftX = selection.x - gap - prompt.width;
+	if (leftX >= left) return { x: leftX, y: centeredY };
+
+	return { x: centeredX, y: top };
+}
+
+function clamp(value: number, minimum: number, maximum: number): number {
+	return Math.min(Math.max(value, minimum), Math.max(minimum, maximum));
 }
 
 export function grimGeometry({ x, y, width, height }: SelectionGeometry): string {

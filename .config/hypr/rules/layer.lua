@@ -35,7 +35,7 @@ hl.layer_rule({
 hl.layer_rule({
 	match = { namespace = "ags-ai-pointer" },
 	blur = true,
-	animation = "popin 95%",
+	animation = "fade",
 	ignore_alpha = 0.3,
 	no_screen_share = true,
 })
