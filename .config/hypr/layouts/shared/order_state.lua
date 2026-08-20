@@ -75,6 +75,16 @@ function M.target_id(target)
 	return nil
 end
 
+function M.target_index(targets, id)
+	for index, target in ipairs(targets or {}) do
+		if M.target_id(target) == id then
+			return index
+		end
+	end
+
+	return nil
+end
+
 function M.window_id(window)
 	if not window then
 		return nil

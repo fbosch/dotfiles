@@ -305,10 +305,13 @@ function M.layout_msg(ctx, msg)
 	elseif command == "resize-x" then
 		M.resize(ctx, nil, { x = tonumber(msg:match("^%S+%s+(-?%d+%.?%d*)")) or 0 }, nil)
 	elseif command == "resize-x-at" then
-		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		local target_id, edge, position = msg:match("^%S+%s+(%S+)%s+(%S+)%s+(-?%d+%.?%d*)")
+		if not position then
+			edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		end
 		local area = ctx.area
 		local ratios = ratios_for_workspace(key, count)
-		local index = active_index(targets)
+		local index = target_id and order_state.target_index(targets, target_id) or active_index(targets)
 		if not index then
 			return true
 		end
@@ -326,10 +329,13 @@ function M.layout_msg(ctx, msg)
 			resize_dirty = true
 		end
 	elseif command == "resize-y-at" then
-		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		local target_id, edge, position = msg:match("^%S+%s+(%S+)%s+(%S+)%s+(-?%d+%.?%d*)")
+		if not position then
+			edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		end
 		local area = ctx.area
 		local ratios = row_ratios_for_workspace(key, count)
-		local index = active_index(targets)
+		local index = target_id and order_state.target_index(targets, target_id) or active_index(targets)
 		if not index then
 			return true
 		end

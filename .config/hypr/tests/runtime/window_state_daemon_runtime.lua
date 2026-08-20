@@ -49,6 +49,7 @@ local updated_clients = [=[
   {"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]},
   {"class":"nemo","initialTitle":"File Operations","floating":true,"monitor":1,"at":[250,360],"size":[300,200]},
   {"class":"nemo","initialTitle":"Preparing","floating":true,"monitor":1,"at":[350,460],"size":[320,220]},
+  {"class":"Mullvad VPN","floating":true,"fullscreen":1,"fullscreenClient":1,"monitor":1,"at":[0,0],"size":[1920,1080]},
   {"class":"nemo","floating":true,"monitor":2,"at":[1030,140],"size":[500,600]}
 ]
 ]=]
@@ -394,6 +395,7 @@ local function fixture()
 		local rules = read_file(rules_path)
 		return state
 			and state:find('"Bitwarden"', 1, true)
+			and not state:find('"Mullvad VPN"', 1, true)
 			and not state:find('"width":300', 1, true)
 			and not state:find('"width":320', 1, true)
 			and rules
@@ -402,6 +404,7 @@ local function fixture()
 			and rules:find('workspace = "m[DP-1]"', 1, true)
 			and rules:find('workspace = "m[HDMI-A-1]"', 1, true)
 			and generated_rule("DP-1", "^nemo$")
+			and generated_rule("DP-1", "^nemo$").effects.fullscreen_state == "0 0"
 			and generated_rule("DP-1", "^nemo$").effects.move == "150 260"
 			and generated_rule("HDMI-A-1", "^nemo$")
 			and generated_rule("HDMI-A-1", "^nemo$").match.workspace == "m[HDMI-A-1]"

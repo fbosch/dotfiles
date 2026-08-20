@@ -276,10 +276,13 @@ function M.layout_msg(ctx, msg)
 	elseif command == "resize-y" then
 		M.resize(ctx, nil, { y = tonumber(msg:match("^%S+%s+(-?%d+%.?%d*)")) or 0 }, nil)
 	elseif command == "resize-y-at" then
-		local edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		local target_id, edge, position = msg:match("^%S+%s+(%S+)%s+(%S+)%s+(-?%d+%.?%d*)")
+		if not position then
+			edge, position = msg:match("^%S+%s+(%S+)%s+(-?%d+%.?%d*)")
+		end
 		local area = ctx.area
 		local ratios = ratios_for(ratio_key, count)
-		local index = active_index(targets)
+		local index = target_id and order_state.target_index(targets, target_id) or active_index(targets)
 		if not index then
 			return true
 		end

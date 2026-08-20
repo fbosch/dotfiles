@@ -33,6 +33,13 @@ describe("custom layout order state", function()
 		assert.are.equal("address:0xaddress", order_state.window_id(window))
 	end)
 
+	it("finds a target by its captured identity", function()
+		local targets = { target("0xfirst"), target("0xsecond") }
+
+		assert.are.equal(2, order_state.target_index(targets, "address:0xsecond"))
+		assert.is_nil(order_state.target_index(targets, "address:0xmissing"))
+	end)
+
 	it("does not mutate state when a target identity is missing", function()
 		assert_sync_failure_preserves_state({ target("0xvalid"), { window = {} } })
 	end)

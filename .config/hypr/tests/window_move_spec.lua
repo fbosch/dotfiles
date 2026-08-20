@@ -178,6 +178,22 @@ run("dp down moves window to portrait monitor", function()
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
 end)
 
+run("native layouts bypass the custom resize daemon", function()
+	reset("DP-2")
+	active_window.workspace.tiled_layout = "dwindle"
+
+	assert_equal(custom_layout.start_custom_layout_resize(), false, "custom resize handled")
+	assert_equal(#dispatched, 0, "dispatch count")
+end)
+
+run("floating windows bypass the custom resize daemon", function()
+	reset("DP-2")
+	active_window.floating = true
+
+	assert_equal(custom_layout.start_custom_layout_resize(), false, "custom resize handled")
+	assert_equal(#dispatched, 0, "dispatch count")
+end)
+
 run("ultrawide focus includes a floating window", function()
 	reset("DP-2")
 	active_window.visible = true

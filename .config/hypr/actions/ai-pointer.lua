@@ -18,17 +18,23 @@ end
 
 function M.start()
 	local position = cursor_position()
-	if position then
-		super_chord_used = true
-		ags.request("ai-pointer", { action = "start", x = position.x, y = position.y })
+	if not position then
+		return false
 	end
+
+	super_chord_used = true
+	ags.request("ai-pointer", { action = "start", x = position.x, y = position.y })
+	return true
 end
 
 function M.finish()
 	local position = cursor_position()
-	if position then
-		ags.request("ai-pointer", { action = "finish", x = position.x, y = position.y })
+	if not position then
+		return false
 	end
+
+	ags.request("ai-pointer", { action = "finish", x = position.x, y = position.y })
+	return true
 end
 
 function M.has_super_chord()

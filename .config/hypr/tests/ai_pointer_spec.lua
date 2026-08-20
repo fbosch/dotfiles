@@ -26,7 +26,7 @@ before_each(function()
 end)
 
 it("latches the Super chord from pointer start until explicit consumption", function()
-	ai_pointer.start()
+	assert.is_true(ai_pointer.start())
 
 	assert.is_true(ai_pointer.has_super_chord())
 	assert.is_true(ai_pointer.consume_super_chord())
@@ -41,7 +41,7 @@ it("does not latch when a cursor position is unavailable", function()
 		return nil
 	end
 
-	ai_pointer.start()
+	assert.is_false(ai_pointer.start())
 
 	assert.is_false(ai_pointer.has_super_chord())
 	assert.are.equal(0, #requests)

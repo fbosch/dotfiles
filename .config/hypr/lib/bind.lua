@@ -2,6 +2,7 @@
 ---@field pass_event? boolean Pass the original input event to the focused client.
 ---@field ok? boolean Whether the callback completed successfully.
 ---@field error? string Failure description when `ok` is false.
+---@field request_release? boolean Invoke this callback again when the triggering input is released.
 
 ---@alias BindCallback fun(...: any): BindResult?
 ---@alias BindAction string|BindCallback|table
@@ -19,6 +20,7 @@
 ---@field ignore_mods? boolean
 ---@field transparent? boolean
 ---@field locked? boolean
+---@field mouse? boolean
 
 ---@class Bind
 ---@field pass fun(): BindResult

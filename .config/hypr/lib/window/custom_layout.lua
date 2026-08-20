@@ -79,8 +79,15 @@ function M.toggle_float(state)
 end
 
 function M.start_custom_layout_resize()
+	local active = hl.get_active_window()
+	local workspace = active and active.workspace
+	if not active or active.floating == true or not layout_contexts[workspace and workspace.tiled_layout] then
+		return false
+	end
+
 	M.reset_keep_aspect_ratio()
 	dispatch(custom_layout_resize("start"))
+	return true
 end
 
 function M.stop_custom_layout_resize()

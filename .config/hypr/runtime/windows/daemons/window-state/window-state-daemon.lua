@@ -208,7 +208,8 @@ local function get_window_states()
 	local mon_map = monitor_index()
 	local windows = {}
 	for _, client in ipairs(json.array(clients)) do
-		if client.floating == true then
+		local windowed = (tonumber(client.fullscreen) or 0) == 0 and (tonumber(client.fullscreenClient) or 0) == 0
+		if client.floating == true and windowed then
 			local selector = matched_selector(client)
 			if selector then
 				local monitor = mon_map[tostring(client.monitor)] or { name = "", x = 0, y = 0 }

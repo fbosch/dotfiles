@@ -78,13 +78,18 @@ this shape:
     workspace = "m[DP-2]",
   },
   effects = {
+    fullscreen_state = "0 0",
     size = "999 1113",
     move = "300 120",
   },
 }
 ```
 
-`monitor` is not a rule effect. The `workspace = "m[<monitor>]"` matcher keeps
+`monitor` is not a rule effect. `fullscreen_state = "0 0"` ensures an
+application's maximize request cannot override restored windowed geometry. The
+daemon does not capture maximized or fullscreen clients, so those temporary
+states cannot replace the last windowed geometry. The
+`workspace = "m[<monitor>]"` matcher keeps
 each monitor's saved geometry local to that monitor. `size` and `move` must stay
 space-separated strings because that is the Lua window-rule API contract.
 

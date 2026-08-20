@@ -780,6 +780,20 @@ run("absolute resize follows cursor boundary", function()
 	assert_box(second.placed, { x = 10, y = 155, w = 120, h = 165 }, "second resized target")
 end)
 
+run("absolute resize targets the captured window identity", function()
+	local first = make_workspace_target(1, "captured-resize", true)
+	local second = make_workspace_target(2, "captured-resize")
+	local third = make_workspace_target(3, "captured-resize")
+	local ctx = make_context({ first, second, third })
+
+	registered_layout.layout.layout_msg(ctx, "resize-y-at address:0x2 down 260")
+	registered_layout.layout.recalculate(ctx)
+
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
+	assert_box(second.placed, { x = 10, y = 120, w = 120, h = 140 }, "captured target")
+	assert_box(third.placed, { x = 10, y = 260, w = 120, h = 60 }, "bottom target")
+end)
+
 run("absolute resize persists once when the drag stops", function()
 	_G.__PORTRAIT_ROWS_DISABLE_STATE = nil
 	_G.__PORTRAIT_ROWS_STATE_FILE = os.tmpname()

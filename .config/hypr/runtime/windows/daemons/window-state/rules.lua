@@ -230,6 +230,7 @@ local function render_rules(cache, selectors_path, selectors)
 			lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
 			lines[#lines + 1] = "    },"
 			lines[#lines + 1] = "    effects = {"
+			lines[#lines + 1] = '      fullscreen_state = "0 0",'
 			lines[#lines + 1] = "      size = "
 				.. json.encode(generated_rules.format_pair(entry.width, entry.height))
 				.. ","

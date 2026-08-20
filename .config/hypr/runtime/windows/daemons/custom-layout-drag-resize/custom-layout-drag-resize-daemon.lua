@@ -15,7 +15,6 @@ local control_protocol = require("runtime.windows.daemons.custom-layout-drag-res
 local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
 local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
 local pid_file = hypr_ipc.instance_path("custom-layout-drag-resize.pid")
-local min_floating_size = 64
 local drag_numerator = 1
 local drag_denominator = 1
 local monitors_by_id = {}
@@ -220,18 +219,8 @@ function cursor_position()
 	return x, y
 end
 
-local function dispatch(command, edge, position)
-	request(string.format('dispatch hl.dsp.layout("%s %s %d")', command, edge, position))
-end
-
-local function dispatch_window_geometry(active, x, y, width, height)
-	if width ~= active.width or height ~= active.height then
-		request(string.format("dispatch hl.dsp.window.resize({ x = %d, y = %d })", width, height))
-	end
-
-	if x ~= active.x or y ~= active.y then
-		request(string.format("dispatch hl.dsp.window.move({ x = %d, y = %d })", x, y))
-	end
+local function dispatch(command, target_id, edge, position)
+	request(string.format('dispatch hl.dsp.layout("%s %s %s %d")', command, target_id, edge, position))
 end
 
 local function write_file(path, value)
@@ -257,15 +246,6 @@ local function scaled_position(initial, current)
 	return initial + math.ceil(delta)
 end
 
-local function floating_axis(edge, origin, size, delta)
-	if edge == "left" or edge == "up" then
-		local next_size = math.max(min_floating_size, size - delta)
-		return origin + size - next_size, next_size
-	end
-
-	return origin, math.max(min_floating_size, size + delta)
-end
-
 local accept_command
 local handle_command
 
@@ -285,45 +265,6 @@ end
 
 local function disable_resize_animation()
 	eval([[hl.animation({ leaf = "windowsMove", enabled = false })]])
-end
-
-local function start_floating_drag(active, poll_interval)
-	poll_interval = math.max(poll_interval, 1 / 60)
-	local initial_x, initial_y = cursor_position()
-	local edge_x = resize_edge("x", initial_x, active.x, active.y, active.width, active.height)
-	local edge_y = resize_edge("y", initial_y, active.x, active.y, active.width, active.height)
-	drag_active = true
-	disable_resize_animation()
-	write_file(state_file, "active\n")
-
-	local last_geometry = nil
-
-	for _ = 1, 1200 do
-		if handle_command(accept_command(0)) then
-			break
-		end
-
-		if not drag_active then
-			break
-		end
-
-		local ok, current_x, current_y = pcall(cursor_position)
-		if ok then
-			local x, width = floating_axis(edge_x, active.x, active.width, current_x - initial_x)
-			local y, height = floating_axis(edge_y, active.y, active.height, current_y - initial_y)
-			local geometry = string.format("%d,%d,%d,%d", x, y, width, height)
-			if geometry ~= last_geometry then
-				local dispatched = pcall(dispatch_window_geometry, active, x, y, width, height)
-				if dispatched then
-					last_geometry = geometry
-				end
-			end
-		end
-
-		socket.sleep(poll_interval)
-	end
-
-	stop_drag()
 end
 
 local command_server = nil
@@ -383,14 +324,17 @@ local function start_drag()
 	if window_tags.has(active.tags, window_tags.non_resizable) then
 		return
 	end
+	if active.floating then
+		return
+	end
+	if type(active.address) ~= "string" or not active.address:match("^0x%x+$") then
+		return
+	end
 
 	local monitor = monitor_info(active.monitor_id)
 	local role = monitor_role.for_name(monitor and monitor.name)
 	local poll_interval = monitor and monitor.poll_interval or 0.008
-	if active.floating then
-		start_floating_drag(active, poll_interval)
-		return
-	end
+	local target_id = "address:" .. active.address
 
 	local axis, command
 	local layout = active_workspace_layout()
@@ -404,7 +348,6 @@ local function start_drag()
 		axis = "y"
 		command = "resize-y-at"
 	else
-		request("dispatch hl.dsp.window.resize()")
 		return
 	end
 
@@ -433,7 +376,7 @@ local function start_drag()
 		if ok then
 			local scaled = scaled_position(initial, current)
 			if scaled ~= last_sent then
-				local dispatched = pcall(dispatch, command, edge, scaled)
+				local dispatched = pcall(dispatch, command, target_id, edge, scaled)
 				if dispatched then
 					last_sent = scaled
 				end

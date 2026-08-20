@@ -2,6 +2,7 @@ local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
 local command = require("lib.command")
+local mouse_release = require("lib.mouse_release").new(bind)
 local window_tags = require("lib.window_tags")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local window_interaction = require("lib.window.interaction")
@@ -30,13 +31,12 @@ local function main(key)
 end
 
 local function start_drag()
-	window_interaction.start_drag(window_state)
-	return bind.consume()
-end
-
-local function finish_drag()
-	window_interaction.finish_drag(window_state, window_custom_layout)
-	return bind.consume()
+	if window_interaction.start_drag(window_state) then
+		return function()
+			hl.dispatch(hl.dsp.window.drag())
+			window_interaction.finish_drag(window_state, window_custom_layout)
+		end
+	end
 end
 
 local function focus_gaming_workspace()
@@ -44,12 +44,22 @@ local function focus_gaming_workspace()
 end
 
 local function release_super()
+	mouse_release.finish_all()
 	ai_pointer.consume_super_chord()
 	return window_switcher.release_super()
 end
 
 local function release_super_right()
+	mouse_release.finish_all()
 	return window_switcher.commit()
+end
+
+local function release_mouse_modifier()
+	if mouse_release.finish_all() then
+		return bind.consume()
+	end
+
+	return bind.pass()
 end
 
 -- Window switching
@@ -76,8 +86,13 @@ bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 -- Launchers
 bind.register(main("SPACE"), programs.menu)
 bind.register(main("R"), programs.menu)
-bind.register("ALT + mouse:274", ai_pointer.start)
-bind.register("ALT + mouse:274", ai_pointer.finish, { release = true })
+mouse_release.bind("ALT + mouse:274", function()
+	if ai_pointer.start() then
+		return ai_pointer.finish
+	end
+end)
+bind.register("ALT + ALT_L", release_mouse_modifier, { release = true, auto_consuming = true })
+bind.register("ALT + ALT_R", release_mouse_modifier, { release = true, auto_consuming = true })
 
 -- Input and clipboard
 bind.register("CTRL + SPACE", keyboard_layout.switch, {
@@ -205,28 +220,38 @@ hl.config({
 -- Custom layout controls
 -- Current Lua mouse binds do not become native bindm entries, so custom layout
 -- right-drag resize is bridged through a bounded IPC helper.
-bind.register(main("mouse:272"), start_drag)
-bind.register(main("mouse:272"), finish_drag, { release = true })
-bind.register(main("mouse:273"), function()
-	if picture_in_picture.start_resize(false) == false then
-		window_custom_layout.start_custom_layout_resize()
+mouse_release.bind(main("mouse:272"), start_drag)
+mouse_release.bind(main("mouse:273"), function()
+	if picture_in_picture.start_resize(false) then
+		return function()
+			hl.dispatch(hl.dsp.window.resize())
+			picture_in_picture.finish_resize(false)
+		end
+	elseif window_custom_layout.start_custom_layout_resize() then
+		return window_custom_layout.stop_custom_layout_resize
+	end
+
+	hl.dispatch(hl.dsp.window.resize())
+	return function()
+		hl.dispatch(hl.dsp.window.resize())
 	end
 end)
-bind.register(main("mouse:273"), function()
-	if picture_in_picture.finish_resize(false) == false then
-		window_custom_layout.stop_custom_layout_resize()
+mouse_release.bind(main("SHIFT + mouse:273"), function()
+	if picture_in_picture.start_resize(true) then
+		return function()
+			hl.dispatch(hl.dsp.window.resize())
+			picture_in_picture.finish_resize(true)
+		end
 	end
-end, { release = true })
-bind.register(main("SHIFT + mouse:273"), function()
-	if picture_in_picture.start_resize(true) == false then
-		window_custom_layout.resize_keep_aspect_ratio()
-	end
-end)
-bind.register(main("SHIFT + mouse:273"), function()
-	if picture_in_picture.finish_resize(true) == false then
+
+	window_custom_layout.resize_keep_aspect_ratio()
+	return function()
+		hl.dispatch(hl.dsp.window.resize())
 		window_custom_layout.reset_keep_aspect_ratio()
 	end
-end, { release = true })
+end)
+bind.register("SHIFT + SHIFT_L", release_mouse_modifier, { release = true, auto_consuming = true })
+bind.register("SHIFT + SHIFT_R", release_mouse_modifier, { release = true, auto_consuming = true })
 bind.register(main("SHIFT + H"), window_directional.move(window_state, "left"))
 bind.register(main("SHIFT + L"), window_directional.move(window_state, "right"))
 bind.register(main("SHIFT + J"), window_directional.move(window_state, "down"))
