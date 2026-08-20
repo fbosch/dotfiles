@@ -21,8 +21,8 @@
    "font": {
       "rendering": "native",
       "normal": {
-         "family": "SF Pro Text",
-         "size": 10
+         "family": "SF Pro Display",
+         "size": 10.5
       }
    },
    "theme": {
