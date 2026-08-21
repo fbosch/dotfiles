@@ -23,8 +23,8 @@ Rules:
 - A subject ending mid-thought or with a dangling connector/preposition is invalid. Rewrite it as a complete phrase before responding.
 - If only lock/generated files are staged, output exactly:
   {"type":"chore","scope":"deps","subject":"update lock file"}
-- Keep final formatted message `type(scope): subject` within 50 chars whenever possible, but ticket inclusion in `scope` takes priority.
-- Never truncate or cut off `subject` to fit a character limit. If shortening is needed, rewrite to a shorter complete phrase; if that is not possible, exceed 50 chars.
+- The final formatted message `type(scope): subject` MUST be at most 50 characters, including a required ticket scope.
+- Never truncate or cut off `subject` to fit the limit. Rewrite it as a shorter complete phrase.
 - Prefer short wording: authentication->auth, implement->add, function->fn.
 - Avoid filler: no "this commit", "now", "currently", "as requested", AI attribution, emoji, or restating file names when scope already gives context.
 - Choose the smallest accurate subject; include the non-obvious why only when the caller asks for a full commit body.

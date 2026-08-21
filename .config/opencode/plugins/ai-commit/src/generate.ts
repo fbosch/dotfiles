@@ -662,6 +662,19 @@ function parseGeneratedCommit(
   return err(createParseError(result, options, detail));
 }
 
+function parseAndValidateGeneratedCommit(
+  result: unknown,
+  context: GitContext,
+  options: GenerateOptions,
+): Result<GeneratedCommit, GenerateError> {
+  const parsed = parseGeneratedCommit(result, options);
+  if (parsed.isErr()) {
+    return err(parsed.error);
+  }
+
+  return validateGeneratedScope(parsed.value, context);
+}
+
 async function createSession(client: SessionClient): Promise<string> {
   const result = await withTimeout(client.session.create(), SESSION_TIMEOUT_MS, "session.create").catch(
     (error) => {
@@ -774,6 +787,15 @@ function buildCommandArgs(context: GitContext): string {
   ]
     .filter((value): value is string => value !== null)
     .join("\n");
+}
+
+function buildCorrectionArgs(error: GenerateError): string {
+  return [
+    `Your previous response was invalid: ${error.message}`,
+    "Return one corrected JSON object only.",
+    `The full commit line must be at most ${MAX_COMMIT_MESSAGE_LENGTH} characters without truncating words.`,
+    "No prose, explanation, markdown, or code fences.",
+  ].join("\n");
 }
 
 function summarizeStagedFiles(stagedFiles: string[]): string | null {
@@ -934,7 +956,7 @@ async function generateCommitValue(
     writeDebugTiming("session.create", createSessionStart);
 
     const promptStart = startDebugTimer(options);
-    const result = await runCommitCommand(
+    let result = await runCommitCommand(
       connected.client,
       sessionId,
       commandArgs,
@@ -944,18 +966,29 @@ async function generateCommitValue(
     writeDebugTiming("session.prompt", promptStart);
 
     const parseStart = startDebugTimer(options);
-    const parsed = parseGeneratedCommit(result, options);
+    let validated = parseAndValidateGeneratedCommit(result, context, options);
     writeDebugTiming("parseGeneratedCommit", parseStart);
-    if (parsed.isErr()) {
-      throw parsed.error;
+
+    if (validated.isErr()) {
+      const retryStart = startDebugTimer(options);
+      result = await runCommitCommand(
+        connected.client,
+        sessionId,
+        buildCorrectionArgs(validated.error),
+        model,
+        commandTimeoutMs,
+      );
+      writeDebugTiming("session.prompt.corrective", retryStart);
+
+      const retryParseStart = startDebugTimer(options);
+      validated = parseAndValidateGeneratedCommit(result, context, options);
+      writeDebugTiming("parseGeneratedCommit.corrective", retryParseStart);
+      if (validated.isErr()) {
+        throw validated.error;
+      }
     }
 
-    const validatedScope = validateGeneratedScope(parsed.value, context);
-    if (validatedScope.isErr()) {
-      throw validatedScope.error;
-    }
-
-    return validatedScope.value;
+    return validated.value;
   } finally {
     await cleanup();
     process.off("SIGINT", onInterrupt);
