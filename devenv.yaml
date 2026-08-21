@@ -1,3 +1,4 @@
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
+    flake: false

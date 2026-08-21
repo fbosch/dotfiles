@@ -32,6 +32,7 @@ storybook-static
 .config/gtk-4.0/**/*
 .config/gtk-3.0/**/*
 .config/opencode/package-lock.json
+.config/herdr/release-notes.json
 # use /commands/ instead
 .config/opencode/command/**
 
