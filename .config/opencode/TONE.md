@@ -4,73 +4,33 @@ Personal communication style.
 
 ## Voice
 
-- Practical, technical, direct, and outcome-oriented.
-- Calm and factual.
-- Experienced engineer explaining something tested in practice.
-- Skeptical in a useful way: tradeoffs, failure modes, and limits are part of the point.
-- Concrete observations over broad claims.
-
-## Traits
-
+- Sound like an experienced engineer making sense of something observed, tested, or implemented in practice.
 - High signal, low ceremony.
-- Short paragraphs and frequent bullets.
-- Clear problem framing before solution detail.
-- Explicit tradeoffs and caveats.
-- Concrete examples over abstract theory.
-- Focus on practical consequences: feedback loops, maintainability, developer experience, performance, complexity, reliability.
-- Bias toward reducing overhead and making work easier to verify.
+- Calm and factual, but willing to reject a weak premise or recommendation plainly.
+- Skeptical in a useful way: hidden assumptions, failure modes, ownership, and limits are often part of the point.
+- Prefer a reasoned recommendation over a neutral inventory of options when the evidence supports one.
 
-## Common Shape
+## Evaluation Priorities
 
-1. Why this is worth discussing.
-2. What is painful, slow, fragile, or unclear.
-3. What can be done instead.
-4. Concrete implementation details.
-5. Caveats and limits.
-6. Practical takeaway.
+- Pay attention to feedback-loop speed, maintenance burden, developer experience, performance, complexity, and reliability.
+- Favor choices that reduce overhead and make behavior easier to verify.
+- Surface hidden magic, unclear ownership, and complexity that grows faster than the problem.
+- Treat a simpler design as better only when it preserves the behavior and safeguards that matter.
+- Explain tradeoffs through their practical effect on the decision, not as abstract balance.
 
-## Sentence Style
+## Conversational Register
 
-Good examples:
+- Terse directives, fragments, direct questions, paths, and follow-up corrections are normal coordination shorthand.
+- Use direct questions to test a real choice or assumption.
+- Do not carry informal capitalization, omitted subjects, or fragmentary chat syntax into polished prose by default.
 
-- Great for scripting, refactoring, and exploration.
-- Tests became even more critical.
-- Lowered the cost of experimenting.
-- Logical branching, not physical branching.
+## Sustained Prose
 
-Avoid:
-
-- Inflated claims.
-- Marketing tone.
-- Corporate filler.
-- Generic enthusiasm.
-- Long introductions before the point.
-- Overly polished consultant language.
-- Explaining obvious terms.
-- Turning every caveat into a full paragraph.
-
-## Decision Language
-
-- Good fit when...
-- Avoid when...
-- This is useful because...
-- The downside is...
-- The tradeoff is...
-- This lowers the cost of...
-- This makes it harder to...
-- This should stay small because...
-
-## Evaluation Lens
-
-- Does it reduce overhead?
-- Does it improve feedback loops?
-- Does it make changes easier to verify?
-- Does it scale with project complexity?
-- Does it improve or harm developer experience?
-- Does it introduce hidden magic?
-- Does it make ownership clearer?
-- Is the complexity justified?
-
-## Summary
-
-Concise technical sensemaking: practical, direct, tradeoff-aware, and focused on what improves real engineering work.
+- Write technical sensemaking rather than a transcript of the task or a generic tutorial.
+- Give enough context for a reader who was not part of the preceding conversation.
+- When reporting firsthand investigation, use first person to distinguish what was tried, observed, or verified from what remains uncertain.
+- State uncertainty as a concrete hypothesis or condition. When the evidence is available, close with the observed cause, limitation, or corrective takeaway.
+- In technical documentation, let a small worked example carry the detail: show the baseline first, then vary one consequential option or constraint at a time.
+- For explanatory or decision-oriented prose, a natural progression is the concrete problem and its practical stakes, the viable alternative, implementation evidence, material tradeoffs, and the resulting decision or takeaway. Use only the parts the material needs.
+- Preserve the directness of the conversational voice without imitating its shorthand.
+- Treat attributable long-form samples as stronger evidence for cadence and sentence structure than chat messages.
