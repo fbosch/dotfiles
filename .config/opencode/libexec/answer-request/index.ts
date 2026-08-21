@@ -1,5 +1,9 @@
 import { TextDecoder } from "node:util";
+import { z } from "zod";
+import { validateAttachments, type VerifiedAttachment } from "./attachment.js";
+import { normalizeAssistantResponse } from "./response.js";
 import {
+  answerErrorCodeSchema,
   answerRequestLimits,
   answerRequestSchema,
   answerResultSchema,
@@ -7,11 +11,21 @@ import {
   type AnswerFailure,
   type AnswerRequest,
   type AnswerResult,
+  isUnicodeScalarString,
 } from "./protocol.js";
 
 const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
 
-export type AnswerRequestExecutor = (request: AnswerRequest) => Promise<unknown>;
+export type ValidatedAnswerRequest = Omit<AnswerRequest, "attachments"> & {
+  attachments: VerifiedAttachment[];
+};
+
+export type AnswerRequestExecutor = (request: ValidatedAnswerRequest) => Promise<unknown>;
+
+const backendAnswerResultSchema = z.discriminatedUnion("ok", [
+  z.object({ ok: z.literal(true), parts: z.unknown() }).strict(),
+  z.object({ ok: z.literal(false), code: answerErrorCodeSchema }).strict(),
+]);
 
 export type ParsedAnswerRequest =
   | { ok: true; request: AnswerRequest }
@@ -62,27 +76,55 @@ export async function executeAnswerRequest(
   const parsed = parseAnswerRequest(input);
   if (parsed.ok === false) return parsed.result;
 
+  const attachments = await validateAttachments(parsed.request.attachments);
+  if (attachments.isErr()) {
+    return createAnswerFailure(attachments.error.code, parsed.request.requestId);
+  }
+
   try {
-    const result = answerResultSchema.safeParse(await execute(parsed.request));
-    if (result.success === false || result.data.requestId !== parsed.request.requestId) {
+    const result = backendAnswerResultSchema.safeParse(
+      await execute({ ...parsed.request, attachments: attachments.value }),
+    );
+    if (result.success === false) {
       return createAnswerFailure("internal_error", parsed.request.requestId);
     }
-    return result.data;
+    if (result.data.ok === false) {
+      return createAnswerFailure(result.data.code, parsed.request.requestId);
+    }
+
+    const normalized = normalizeAssistantResponse(result.data.parts);
+    if (normalized.ok === false) {
+      return createAnswerFailure(normalized.code, parsed.request.requestId);
+    }
+    return {
+      protocolVersion: 1,
+      requestId: parsed.request.requestId,
+      ok: true,
+      answer: normalized.answer,
+      truncated: normalized.truncated,
+    };
   } catch {
     return createAnswerFailure("internal_error", parsed.request.requestId);
   }
 }
 
 export function serializeAnswerResult(result: AnswerResult): string {
-  return `${JSON.stringify(answerResultSchema.parse(result))}\n`;
+  const parsed = answerResultSchema.parse(result);
+  const safeResult = parsed.ok
+    ? parsed
+    : createAnswerFailure(parsed.error.code, parsed.requestId);
+  return `${JSON.stringify(safeResult)}\n`;
 }
 
 export * from "./protocol.js";
+export * from "./attachment.js";
+export * from "./response.js";
 
 function extractRequestId(raw: unknown): string | null {
   if (typeof raw !== "object" || raw === null || !("requestId" in raw)) return null;
   const requestId = Reflect.get(raw, "requestId");
   if (typeof requestId !== "string" || requestId.length === 0) return null;
+  if (isUnicodeScalarString(requestId) === false) return null;
   if (new TextEncoder().encode(requestId).byteLength > answerRequestLimits.requestIdBytes) {
     return null;
   }

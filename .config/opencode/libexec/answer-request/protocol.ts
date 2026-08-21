@@ -17,6 +17,8 @@ export const answerRequestLimitsSchema = z
     minimumTimeoutSeconds: z.number().int().positive(),
     maximumTimeoutSeconds: z.number().int().positive(),
     responseBytes: z.number().int().positive(),
+    responseParts: z.number().int().positive(),
+    responseProcessingCodeUnits: z.number().int().positive(),
     diagnosticBytes: z.number().int().positive(),
     inputTimeoutMilliseconds: z.number().int().positive(),
   })
@@ -36,6 +38,8 @@ export const answerRequestLimits = Object.freeze(
     minimumTimeoutSeconds: 5,
     maximumTimeoutSeconds: 120,
     responseBytes: 32 * 1024,
+    responseParts: 256,
+    responseProcessingCodeUnits: 64 * 1024,
     diagnosticBytes: 1024,
     inputTimeoutMilliseconds: 5000,
   }),
@@ -44,7 +48,7 @@ export const answerRequestLimits = Object.freeze(
 const boundedUtf8String = (maximumBytes: number) =>
   z
     .string()
-    .refine(hasOnlyUnicodeScalarValues)
+    .refine(isUnicodeScalarString)
     .refine((value) => utf8Encoder.encode(value).byteLength <= maximumBytes);
 
 const requestIdSchema = boundedUtf8String(answerRequestLimits.requestIdBytes).refine(
@@ -108,7 +112,7 @@ export const answerSuccessSchema = z
     requestId: requestIdSchema,
     ok: z.literal(true),
     answer: boundedUtf8String(answerRequestLimits.responseBytes).refine(
-      (value) => value.length > 0,
+      (value) => value.trim().length > 0,
     ),
     truncated: z.boolean(),
   })
@@ -172,7 +176,7 @@ export function createAnswerFailure(
   };
 }
 
-function hasOnlyUnicodeScalarValues(value: string): boolean {
+export function isUnicodeScalarString(value: string): boolean {
   for (let index = 0; index < value.length; index += 1) {
     const codeUnit = value.charCodeAt(index);
     if (codeUnit < 0xd800 || codeUnit > 0xdfff) continue;

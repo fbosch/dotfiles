@@ -5,10 +5,7 @@ await runAnswerRequestProcess(async (request) => {
   process.stderr.write(`stderr secret: ${request.prompt}\n`);
   setTimeout(() => process.stdout.write("delayed noise\n"), 1);
   return {
-    protocolVersion: 1,
-    requestId: request.requestId,
     ok: true,
-    answer: "A bounded answer.",
-    truncated: false,
+    parts: [{ type: "text", text: "A bounded answer." }],
   };
 });

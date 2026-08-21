@@ -23,11 +23,11 @@
 
 ## 3. Attachment Integrity And Response Normalization
 
-- [ ] 3.1 Implement regular-file, MIME, magic-byte, image-dimension, pixel-count, byte-count, aggregate-count, and SHA-256 validation for PNG and JPEG attachments.
-- [ ] 3.2 Read each accepted attachment once and construct its OpenCode file part from the verified bytes rather than passing a mutable file path to OpenCode.
-- [ ] 3.3 Reject symlinks, non-regular files, MIME mismatches, excessive images, and digest changes without submitting content.
-- [ ] 3.4 Normalize only final assistant text parts, exclude reasoning/tool/provider parts, bound output size, explicitly mark truncation, and reject empty output.
-- [ ] 3.5 Add attachment and normalization tests, including changed files after preview, high-pixel images, mixed response parts, empty responses, and redacted failure diagnostics.
+- [x] 3.1 Implement regular-file, MIME, magic-byte, image-dimension, pixel-count, byte-count, aggregate-count, and SHA-256 validation for PNG and JPEG attachments.
+- [x] 3.2 Read each accepted attachment once and construct its OpenCode file part from the verified bytes rather than passing a mutable file path to OpenCode.
+- [x] 3.3 Reject symlinks, non-regular files, MIME mismatches, excessive images, and digest changes without submitting content.
+- [x] 3.4 Normalize only final assistant text parts, exclude reasoning/tool/provider parts, bound output size, explicitly mark truncation, and reject empty output.
+- [x] 3.5 Add attachment and normalization tests, including changed files after preview, high-pixel images, mixed response parts, empty responses, and redacted failure diagnostics.
 
 ## 4. OpenCode Server And Session Lifecycle
 

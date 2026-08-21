@@ -12,6 +12,7 @@ import {
   createAnswerFailure,
   executeAnswerRequest,
   parseAnswerRequest,
+  serializeAnswerResult,
   type AnswerRequest,
   type AnswerSuccess,
 } from "../index.js";
@@ -125,7 +126,7 @@ describe("answer request protocol", () => {
     );
   });
 
-  test("validates executor output and request identity", async () => {
+  test("rejects malformed backend output", async () => {
     const result = await executeAnswerRequest(jsonBytes(validRequest), async () => ({
       protocolVersion: 1,
       requestId: "another-run",
@@ -134,6 +135,23 @@ describe("answer request protocol", () => {
       truncated: false,
     }));
     assert.deepEqual(result, createAnswerFailure("internal_error", validRequest.requestId));
+  });
+
+  test("canonicalizes failure messages during serialization", () => {
+    const serialized = serializeAnswerResult({
+      protocolVersion: 1,
+      requestId: validRequest.requestId,
+      ok: false,
+      error: {
+        code: "provider_failed",
+        message: "SECRET at /private/capture.png",
+      },
+    });
+
+    assert.equal(
+      serialized,
+      `${JSON.stringify(createAnswerFailure("provider_failed", validRequest.requestId))}\n`,
+    );
   });
 });
 
@@ -153,7 +171,10 @@ describe("answer request CLI", () => {
       input: chunks(jsonBytes(validRequest)),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: (value) => stderr.push(value) },
-      execute: async () => success,
+      execute: async () => ({
+        ok: true,
+        parts: [{ type: "text", text: success.answer }],
+      }),
     });
 
     assert.equal(exitCode, 0);
@@ -185,6 +206,55 @@ describe("answer request CLI", () => {
       `${stdout.join("")} ${stderr.join("")}`.includes("/private/capture.png"),
       false,
     );
+  });
+
+  test("canonicalizes backend failures without accepting backend messages", async () => {
+    const secret = "SECRET at /private/capture.png";
+    const result = await executeAnswerRequest(jsonBytes(validRequest), async () => ({
+      ok: false,
+      code: "provider_failed",
+      message: secret,
+    }));
+
+    assert.deepEqual(result, createAnswerFailure("internal_error", validRequest.requestId));
+    assert.equal(JSON.stringify(result).includes(secret), false);
+  });
+
+  test("rejects invalid attachments before content execution", async () => {
+    let executed = false;
+    const result = await executeAnswerRequest(
+      jsonBytes({
+        ...validRequest,
+        attachments: [
+          {
+            path: "/does/not/exist.png",
+            mimeType: "image/png",
+            sha256: "0".repeat(64),
+          },
+        ],
+      }),
+      async () => {
+        executed = true;
+        return { ok: true, parts: [{ type: "text", text: "should not execute" }] };
+      },
+    );
+
+    assert.equal(executed, false);
+    assert.deepEqual(result, createAnswerFailure("attachment_invalid", validRequest.requestId));
+  });
+
+  test("returns one invalid request result for a non-scalar request ID", async () => {
+    const stdout: string[] = [];
+    const exitCode = await runAnswerRequestCli({
+      input: chunks(jsonBytes({ ...validRequest, requestId: "\ud800" })),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: () => undefined },
+      execute: async () => ({ ok: true, parts: [] }),
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(stdout.length, 1);
+    assert.deepEqual(JSON.parse(stdout[0] ?? ""), createAnswerFailure("invalid_request"));
   });
 
   test("bounds stdin before execution", async () => {
