@@ -1,6 +1,7 @@
 import { TextDecoder } from "node:util";
 import { z } from "zod";
-import { validateAttachments, type VerifiedAttachment } from "./attachment.js";
+import { validateAttachments } from "./attachment.js";
+import type { AnswerBackend } from "./backend.js";
 import { normalizeAssistantResponse } from "./response.js";
 import {
   answerErrorCodeSchema,
@@ -15,12 +16,6 @@ import {
 } from "./protocol.js";
 
 const utf8Decoder = new TextDecoder("utf-8", { fatal: true });
-
-export type ValidatedAnswerRequest = Omit<AnswerRequest, "attachments"> & {
-  attachments: VerifiedAttachment[];
-};
-
-export type AnswerRequestExecutor = (request: ValidatedAnswerRequest) => Promise<unknown>;
 
 const backendAnswerResultSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), parts: z.unknown() }).strict(),
@@ -71,19 +66,26 @@ export function parseAnswerRequest(input: Uint8Array): ParsedAnswerRequest {
 
 export async function executeAnswerRequest(
   input: Uint8Array,
-  execute: AnswerRequestExecutor,
+  backend: AnswerBackend,
+  signal?: AbortSignal,
 ): Promise<AnswerResult> {
   const parsed = parseAnswerRequest(input);
   if (parsed.ok === false) return parsed.result;
 
-  const attachments = await validateAttachments(parsed.request.attachments);
-  if (attachments.isErr()) {
-    return createAnswerFailure(attachments.error.code, parsed.request.requestId);
-  }
+  let loadedAttachments: ReturnType<typeof validateAttachments> | undefined;
+  const loadAttachments = () => {
+    loadedAttachments ??= validateAttachments(parsed.request.attachments);
+    return loadedAttachments;
+  };
 
   try {
     const result = backendAnswerResultSchema.safeParse(
-      await execute({ ...parsed.request, attachments: attachments.value }),
+      await backend.execute({
+        prompt: parsed.request.prompt,
+        timeoutSeconds: parsed.request.timeoutSeconds,
+        signal,
+        loadAttachments,
+      }),
     );
     if (result.success === false) {
       return createAnswerFailure("internal_error", parsed.request.requestId);
@@ -119,6 +121,8 @@ export function serializeAnswerResult(result: AnswerResult): string {
 export * from "./protocol.js";
 export * from "./attachment.js";
 export * from "./response.js";
+export * from "./backend.js";
+export * from "./opencode-backend.js";
 
 function extractRequestId(raw: unknown): string | null {
   if (typeof raw !== "object" || raw === null || !("requestId" in raw)) return null;

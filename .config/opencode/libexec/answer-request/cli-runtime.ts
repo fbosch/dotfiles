@@ -5,7 +5,7 @@ import {
   createAnswerFailure,
   executeAnswerRequest,
   serializeAnswerResult,
-  type AnswerRequestExecutor,
+  type AnswerBackend,
   type AnswerResult,
 } from "./index.js";
 
@@ -15,7 +15,8 @@ export interface AnswerRequestCliOptions {
   input: AsyncIterable<InputChunk>;
   stdout: { write(value: string): unknown };
   stderr: { write(value: string): unknown };
-  execute: AnswerRequestExecutor;
+  backend: AnswerBackend;
+  signal?: AbortSignal;
   inputTimeoutMilliseconds?: number;
 }
 
@@ -27,25 +28,30 @@ export async function runAnswerRequestCli(options: AnswerRequestCliOptions): Pro
   const result =
     input === null
       ? createAnswerFailure("invalid_request")
-      : await executeAnswerRequest(input, options.execute);
+      : await executeAnswerRequest(input, options.backend, options.signal);
 
   options.stdout.write(serializeAnswerResult(result));
   if (result.ok === false) options.stderr.write(boundedDiagnostic(result));
   return result.ok ? 0 : 1;
 }
 
-export async function runAnswerRequestProcess(execute: AnswerRequestExecutor): Promise<never> {
+export async function runAnswerRequestProcess(backend: AnswerBackend): Promise<never> {
   // Reserve process output for the machine protocol, including while SDK code runs.
   Object.defineProperty(process.stdout, "write", { value: () => true });
   Object.defineProperty(process.stderr, "write", { value: () => true });
 
   let exitCode: number;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  process.once("SIGINT", abort);
+  process.once("SIGTERM", abort);
   try {
     exitCode = await runAnswerRequestCli({
       input: process.stdin,
       stdout: { write: (value) => writeSync(1, value) },
       stderr: { write: (value) => writeSync(2, value) },
-      execute,
+      backend,
+      signal: controller.signal,
     });
   } catch {
     const result = createAnswerFailure("internal_error");
@@ -53,6 +59,9 @@ export async function runAnswerRequestProcess(execute: AnswerRequestExecutor): P
     writeSync(2, boundedDiagnostic(result));
     exitCode = 1;
   }
+
+  process.removeListener("SIGINT", abort);
+  process.removeListener("SIGTERM", abort);
 
   process.exit(exitCode);
 }

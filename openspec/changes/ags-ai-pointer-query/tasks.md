@@ -31,13 +31,13 @@
 
 ## 4. OpenCode Server And Session Lifecycle
 
-- [ ] 4.1 Define the deep `AnswerBackend.execute()` interface and implement the OpenCode adapter with fixed-loopback health, version, agent, image-capability, and deny-all tool-policy checks before attachment transmission.
-- [ ] 4.2 Implement owned ephemeral-server startup when external reuse is unavailable or unsuitable, and model external versus owned ownership explicitly.
-- [ ] 4.3 Implement ephemeral session creation, prompt submission with the deny-all tool map, final response extraction, and session deletion after success.
-- [ ] 4.4 Implement timeout, SIGINT, SIGTERM, and caller cancellation using independent fresh deadlines for session abort, session deletion, and owned-server closure.
-- [ ] 4.5 Ensure external servers are never restarted, terminated, or closed, while owned servers close exactly once on every terminal path.
-- [ ] 4.6 Launch the helper through `bun run --no-install` and reject unvalidated OpenCode/SDK version combinations before prompt or attachment submission.
-- [ ] 4.7 Add backend-contract, fake-server, and SDK-lifecycle tests for external reuse, owned fallback, missing agent, tool-policy rejection, success, provider failure, timeout, cancellation, cleanup failure, version mismatch, and caller independence from OpenCode-specific fields.
+- [x] 4.1 Define the deep `AnswerBackend.execute()` interface and implement the OpenCode adapter with fixed-loopback health, version, agent, image-capability, and deny-all tool-policy checks before attachment transmission.
+- [x] 4.2 Implement owned ephemeral-server startup when external reuse is unavailable or unsuitable, and model external versus owned ownership explicitly.
+- [x] 4.3 Implement ephemeral session creation, prompt submission with the deny-all tool map, final response extraction, and session deletion after success.
+- [x] 4.4 Implement timeout, SIGINT, SIGTERM, and caller cancellation using independent fresh deadlines for session abort, session deletion, and owned-server closure.
+- [x] 4.5 Ensure external servers are never restarted, terminated, or closed, while owned servers close exactly once on every terminal path.
+- [x] 4.6 Launch the helper through `bun run --no-install` and reject unvalidated OpenCode/SDK version combinations before prompt or attachment submission.
+- [x] 4.7 Add backend-contract, fake-server, and SDK-lifecycle tests for external reuse, owned fallback, missing agent, tool-policy rejection, success, provider failure, timeout, cancellation, cleanup failure, version mismatch, and caller independence from OpenCode-specific fields.
 
 ## 5. AI Pointer Selection And Context Model
 

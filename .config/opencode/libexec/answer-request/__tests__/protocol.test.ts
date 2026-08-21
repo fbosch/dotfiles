@@ -13,6 +13,7 @@ import {
   executeAnswerRequest,
   parseAnswerRequest,
   serializeAnswerResult,
+  type AnswerBackend,
   type AnswerRequest,
   type AnswerSuccess,
 } from "../index.js";
@@ -127,13 +128,13 @@ describe("answer request protocol", () => {
   });
 
   test("rejects malformed backend output", async () => {
-    const result = await executeAnswerRequest(jsonBytes(validRequest), async () => ({
+    const result = await executeAnswerRequest(jsonBytes(validRequest), backend(async () => ({
       protocolVersion: 1,
       requestId: "another-run",
       ok: true,
       answer: "Answer",
       truncated: false,
-    }));
+    }) as never));
     assert.deepEqual(result, createAnswerFailure("internal_error", validRequest.requestId));
   });
 
@@ -171,10 +172,10 @@ describe("answer request CLI", () => {
       input: chunks(jsonBytes(validRequest)),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: (value) => stderr.push(value) },
-      execute: async () => ({
+      backend: backend(async () => ({
         ok: true,
         parts: [{ type: "text", text: success.answer }],
-      }),
+      })),
     });
 
     assert.equal(exitCode, 0);
@@ -192,9 +193,9 @@ describe("answer request CLI", () => {
       input: chunks(jsonBytes(validRequest)),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: (value) => stderr.push(value) },
-      execute: async () => {
+      backend: backend(async () => {
         throw new Error(`provider rejected ${secretPrompt} at /private/capture.png`);
-      },
+      }),
     });
 
     assert.equal(exitCode, 1);
@@ -210,17 +211,17 @@ describe("answer request CLI", () => {
 
   test("canonicalizes backend failures without accepting backend messages", async () => {
     const secret = "SECRET at /private/capture.png";
-    const result = await executeAnswerRequest(jsonBytes(validRequest), async () => ({
+    const result = await executeAnswerRequest(jsonBytes(validRequest), backend(async () => ({
       ok: false,
       code: "provider_failed",
       message: secret,
-    }));
+    })));
 
     assert.deepEqual(result, createAnswerFailure("internal_error", validRequest.requestId));
     assert.equal(JSON.stringify(result).includes(secret), false);
   });
 
-  test("rejects invalid attachments before content execution", async () => {
+  test("returns attachment failures from the lazy backend loader", async () => {
     let executed = false;
     const result = await executeAnswerRequest(
       jsonBytes({
@@ -233,13 +234,15 @@ describe("answer request CLI", () => {
           },
         ],
       }),
-      async () => {
+      backend(async (request) => {
         executed = true;
+        const attachments = await request.loadAttachments();
+        if (attachments.isErr()) return { ok: false, code: attachments.error.code };
         return { ok: true, parts: [{ type: "text", text: "should not execute" }] };
-      },
+      }),
     );
 
-    assert.equal(executed, false);
+    assert.equal(executed, true);
     assert.deepEqual(result, createAnswerFailure("attachment_invalid", validRequest.requestId));
   });
 
@@ -249,7 +252,7 @@ describe("answer request CLI", () => {
       input: chunks(jsonBytes({ ...validRequest, requestId: "\ud800" })),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: () => undefined },
-      execute: async () => ({ ok: true, parts: [] }),
+      backend: backend(async () => ({ ok: true, parts: [] })),
     });
 
     assert.equal(exitCode, 1);
@@ -266,9 +269,10 @@ describe("answer request CLI", () => {
       input: chunks(new Uint8Array(answerRequestLimits.requestBytes + 1)),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: (value) => stderr.push(value) },
-      execute: async () => {
+      backend: backend(async () => {
         executed = true;
-      },
+        return { ok: false, code: "provider_failed" };
+      }),
     });
 
     assert.equal(exitCode, 1);
@@ -285,9 +289,10 @@ describe("answer request CLI", () => {
       input: stalledInput(),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: () => undefined },
-      execute: async () => {
+      backend: backend(async () => {
         executed = true;
-      },
+        return { ok: false, code: "provider_failed" };
+      }),
       inputTimeoutMilliseconds: 10,
     });
 
@@ -318,6 +323,10 @@ describe("answer request CLI", () => {
 
 function jsonBytes(value: unknown): Uint8Array {
   return encoder.encode(JSON.stringify(value));
+}
+
+function backend(execute: AnswerBackend["execute"]): AnswerBackend {
+  return { execute };
 }
 
 async function* chunks(...values: Uint8Array[]): AsyncGenerator<Uint8Array> {
