@@ -132,6 +132,9 @@
             "btop": {
                "enabled": false
             },
+            "chatgpt": {
+               "alias": "codex"
+            },
             "chrome-ndcljijdejihfgkgocfgkbffacaljofo-Default": {
                "enabled": false
             },
