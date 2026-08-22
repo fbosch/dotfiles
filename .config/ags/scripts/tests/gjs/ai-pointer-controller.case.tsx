@@ -280,6 +280,7 @@ test("AI Pointer submits the reviewed capture and presents a literal answer", as
 	let requestPrompt = "";
 	let requestDigest = "";
 	let partialAnswer = "";
+	const cursorOutlineStates: boolean[] = [];
 	let resolvePreflight: (() => void) | null = null;
 	const view = {
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
@@ -311,6 +312,7 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 			onDelta?.("draft ");
 			return { kind: "answered", answer: "<b>literal</b> https://example.com", truncated: false };
 		},
+		setCursorOutline: (enabled) => cursorOutlineStates.push(enabled),
 	});
 	controller.init();
 	try {
@@ -321,6 +323,10 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		submit("What is shown?");
 		await settleMainLoop();
 		assert(requesting, "request state was not presented");
+		assert(
+			cursorOutlineStates.join(",") === "false,true,false",
+			"cursor outline survived request submission",
+		);
 		assert(requestPrompt === "", "answer request started before backend readiness");
 		assert(resolvePreflight !== null, "backend preflight did not start");
 		resolvePreflight();

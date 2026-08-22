@@ -20,6 +20,12 @@ const promptMinimumWidth = 160;
 const promptMaximumWidth = 348;
 const promptHorizontalChrome = 58;
 const promptHostHeight = 50;
+const answerMinimumWidth = promptMinimumWidth + promptHorizontalChrome;
+const answerMaximumWidth = 416;
+const answerHorizontalPadding = 32;
+const answerVerticalPadding = 24;
+const answerMaximumContentHeight = 256;
+const panelSpacing = 8;
 const allEdges =
 	Astal.WindowAnchor.TOP |
 	Astal.WindowAnchor.BOTTOM |
@@ -56,6 +62,7 @@ export class AiPointerView {
 	#error: Gtk.Label | null = null;
 	#errorBox: Gtk.Box | null = null;
 	#selection: SelectionGeometry | null = null;
+	#promptTop: number | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	#actionMode: ActionMode = "compose";
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -67,6 +74,10 @@ export class AiPointerView {
 
 	get isPromptVisible(): boolean {
 		return this.#window?.get_visible() ?? false;
+	}
+
+	get isSelectionPreviewVisible(): boolean {
+		return this.#selectionOverlay.isVisible;
 	}
 
 	create(handlers: AiPointerViewHandlers): void {
@@ -165,9 +176,9 @@ export class AiPointerView {
 						answerBox.append(answer);
 						answerBox.append(truncated);
 						const answerScroll = new Gtk.ScrolledWindow({
-							maxContentHeight: 256,
+							maxContentHeight: answerMaximumContentHeight,
 							propagateNaturalHeight: true,
-							widthRequest: 416,
+							widthRequest: answerMinimumWidth,
 							visible: false,
 						});
 						answerScroll.add_css_class("ai-pointer-answer-scroll");
@@ -240,6 +251,7 @@ export class AiPointerView {
 	}
 
 	showPreparing(selection: SelectionGeometry): void {
+		this.#promptTop = null;
 		this.#selection = selection;
 		this.#answer?.set_label("");
 		this.#answerScroll?.set_visible(false);
@@ -254,6 +266,8 @@ export class AiPointerView {
 	}
 
 	showRequesting(): void {
+		this.#strokeOverlay.hide();
+		this.#selectionOverlay.hide();
 		this.#prompt?.set_sensitive(false);
 		this.#answer?.set_label("");
 		this.#answerScroll?.set_visible(false);
@@ -266,6 +280,7 @@ export class AiPointerView {
 		this.#answer?.set_label(answer);
 		this.#truncated?.set_visible(false);
 		this.#answerScroll?.set_visible(answer.length > 0);
+		this.#resizeAnswer(answer, false);
 	}
 
 	showAnswer(answer: string, truncated: boolean): void {
@@ -274,6 +289,7 @@ export class AiPointerView {
 		this.#answer?.set_label(answer);
 		this.#truncated?.set_visible(truncated);
 		this.#answerScroll?.set_visible(true);
+		this.#resizeAnswer(answer, truncated);
 		this.#errorBox?.set_visible(false);
 		this.#promptPill?.remove_css_class("error");
 		this.#setActionMode("close");
@@ -316,6 +332,7 @@ export class AiPointerView {
 	hide(): void {
 		this.clearOcr();
 		this.#selection = null;
+		this.#promptTop = null;
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
 		this.#selectionOverlay.hide();
@@ -339,6 +356,7 @@ export class AiPointerView {
 		this.#error = null;
 		this.#errorBox = null;
 		this.#selection = null;
+		this.#promptTop = null;
 		this.#handlers = null;
 		window?.destroy();
 	}
@@ -396,6 +414,42 @@ export class AiPointerView {
 		if (this.isPromptVisible) this.#positionPrompt();
 	}
 
+	#resizeAnswer(answer: string, truncated: boolean): void {
+		const label = this.#answer;
+		const scroller = this.#answerScroll;
+		const host = this.#promptHost;
+		if (!label || !scroller || !host) return;
+		scroller.set_max_content_height(answerMaximumContentHeight);
+		if (answer.length === 0) {
+			scroller.set_min_content_height(0);
+			this.#resizePrompt();
+			return;
+		}
+
+		const layout = Pango.Layout.new(label.get_pango_context());
+		layout.set_text(answer, -1);
+		const [unwrappedWidth] = layout.get_pixel_size();
+		const answerWidth = Math.min(
+			Math.max(unwrappedWidth + answerHorizontalPadding, answerMinimumWidth),
+			answerMaximumWidth,
+		);
+		layout.set_width((answerWidth - answerHorizontalPadding) * Pango.SCALE);
+		layout.set_wrap(Pango.WrapMode.WORD_CHAR);
+		const [, wrappedHeight] = layout.get_pixel_size();
+		const contentHeight = Math.min(
+			wrappedHeight + (truncated ? panelSpacing + 20 : 0),
+			answerMaximumContentHeight,
+		);
+		const promptWidth = (this.#prompt?.widthRequest ?? promptMinimumWidth) + promptHorizontalChrome;
+		scroller.set_size_request(answerWidth, -1);
+		scroller.set_min_content_height(contentHeight);
+		host.set_size_request(
+			Math.max(promptWidth, answerWidth),
+			promptHostHeight + panelSpacing + contentHeight + answerVerticalPadding,
+		);
+		if (this.isPromptVisible) this.#positionPrompt();
+	}
+
 	#showAt(selection: SelectionGeometry): void {
 		this.#selection = selection;
 		if (this.#positionPrompt() === false) {
@@ -428,9 +482,26 @@ export class AiPointerView {
 				this.#promptHost?.widthRequest ?? promptMinimumWidth + promptHorizontalChrome,
 				Math.max(1, bounds.width - 32),
 			);
-			const hostHeight = Math.min(promptHostHeight, Math.max(1, bounds.height - 32));
+			let hostHeight = Math.min(
+				this.#promptHost?.heightRequest ?? promptHostHeight,
+				Math.max(1, bounds.height - 32),
+			);
+			const bottom = bounds.y + bounds.height - 16;
+			if (this.#promptTop !== null) {
+				hostHeight = Math.min(hostHeight, Math.max(promptHostHeight, bottom - this.#promptTop));
+				const answerHeight = Math.max(
+					0,
+					hostHeight - promptHostHeight - panelSpacing - answerVerticalPadding,
+				);
+				this.#answerScroll?.set_max_content_height(answerHeight);
+				this.#answerScroll?.set_min_content_height(
+					Math.min(this.#answerScroll.minContentHeight, answerHeight),
+				);
+			}
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
-			const position = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
+			const calculated = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
+			this.#promptTop ??= calculated.y;
+			const position = { x: calculated.x, y: this.#promptTop };
 			this.#window?.set_gdkmonitor(monitor);
 			if (this.#promptCanvas && this.#promptHost)
 				this.#promptCanvas.move(this.#promptHost, position.x - bounds.x, position.y - bounds.y);

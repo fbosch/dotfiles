@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
@@ -40,8 +41,12 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 		"../../../components/ai-pointer/__tests__/capture.svg",
 		GLib.get_current_dir(),
 	);
-	const geometry = { x: 10, y: 20, width: 20, height: 20 };
+	const monitor = Gdk.Display.get_default()?.get_monitors().get_item(0) as Gdk.Monitor | null;
+	assert(monitor !== null, "AI Pointer view test requires a monitor");
+	const bounds = monitor.get_geometry();
+	const geometry = { x: bounds.x + 10, y: bounds.y + 20, width: 20, height: 20 };
 	view.showPreparing(geometry);
+	assert(await view.finishStroke(geometry), "AI Pointer selection preview was unavailable");
 	await settleMainLoop();
 	await settleMainLoop();
 	assert(view.isCreated, "AI Pointer view was not created");
@@ -51,11 +56,15 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	const prompt = findWidgetWithClass(window, "ai-pointer-prompt-input");
 	const action = findWidgetWithClass(window, "ai-pointer-action");
 	const pill = findWidgetWithClass(window, "ai-pointer-prompt-pill");
+	const host = findWidgetWithClass(window, "ai-pointer-prompt-host");
 	const answer = findWidgetWithClass(window, "ai-pointer-answer");
+	const answerScroll = findWidgetWithClass(window, "ai-pointer-answer-scroll");
 	assert(prompt instanceof Gtk.Entry, "AI Pointer question input was not rendered");
 	assert(action instanceof Gtk.Button, "AI Pointer action was not rendered");
 	assert(pill instanceof Gtk.Box, "AI Pointer pill was not rendered");
+	assert(host instanceof Gtk.CenterBox, "AI Pointer prompt host was not rendered");
 	assert(answer instanceof Gtk.Label, "AI Pointer answer label was not rendered");
+	assert(answerScroll instanceof Gtk.ScrolledWindow, "AI Pointer answer container was not rendered");
 	assert(pill.get_height() <= 50, "AI Pointer pill exceeded the design-system height");
 	assert(
 		action.get_width() === 32 && action.get_height() === 32,
@@ -77,12 +86,29 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 		"AI Pointer repeated prompt update was rejected",
 	);
 	assert(prompt.get_text() === "keep this question", "a repeated component update cleared the question");
+	await settleMainLoop();
+	assert(view.isSelectionPreviewVisible, "AI Pointer selection preview was not visible");
 	action.emit("clicked");
 	assert(submitted === "keep this question", "AI Pointer submitted the wrong question");
 	view.showRequesting();
+	assert(
+		view.isSelectionPreviewVisible === false,
+		"AI Pointer selection preview survived request submission",
+	);
 	assert(action.has_css_class("requesting"), "AI Pointer requesting action was not presented");
-	view.showPartialAnswer("Streaming plain text");
-	assert(answer.get_label() === "Streaming plain text", "AI Pointer partial answer was not rendered");
+	view.showPartialAnswer("Short answer");
+	await settleMainLoop();
+	const promptTop = host.get_allocation().y;
+	const shortAnswerWidth = answerScroll.widthRequest;
+	const shortAnswerHeight = answerScroll.minContentHeight;
+	view.showPartialAnswer("A longer streaming answer that should wrap across several lines. ".repeat(20));
+	await settleMainLoop();
+	assert(answer.get_label().startsWith("A longer streaming answer"), "AI Pointer partial answer was not rendered");
+	assert(answerScroll.widthRequest > shortAnswerWidth, "AI Pointer answer did not grow horizontally");
+	assert(answerScroll.widthRequest <= 416, "AI Pointer answer exceeded its width bound");
+	assert(answerScroll.minContentHeight > shortAnswerHeight, "AI Pointer answer did not grow vertically");
+	assert(answerScroll.minContentHeight <= 256, "AI Pointer answer exceeded its height bound");
+	assert(host.get_allocation().y === promptTop, "AI Pointer input moved while the answer grew");
 	assert(action.has_css_class("requesting"), "partial answer changed the requesting action");
 	view.showPartialAnswer("");
 	assert(answer.get_label() === "", "AI Pointer partial answer was not cleared");

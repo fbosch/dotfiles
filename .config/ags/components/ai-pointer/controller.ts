@@ -171,7 +171,6 @@ export class AiPointerController {
 		this.#stroke = createPointerStroke(startPosition);
 		this.#selectionContext = null;
 		this.#answer = "";
-		this.#answerTruncated = false;
 		this.#finishing = false;
 		this.#preparingShown = false;
 		++this.#runId;
@@ -469,6 +468,7 @@ export class AiPointerController {
 		const cancellable = new Gio.Cancellable();
 		let observedProcess: Gio.Subprocess | null = null;
 		this.#stopOcr();
+		this.#setCursorOutlineState(false);
 		this.#answerCancellable = cancellable;
 		this.#actor?.send({ type: "SUBMIT" });
 		void (async () => {
@@ -600,9 +600,8 @@ export class AiPointerController {
 		if (force === false && this.#cursorOutlineState === enabled) return;
 		try {
 			this.#cursorOutlineState = this.#setCursorOutline(enabled) === false ? null : enabled;
-		} catch {
+		} catch { // Cursor decoration is advisory and must not interrupt capture.
 			this.#cursorOutlineState = null;
-			// Cursor decoration is advisory and must not interrupt capture.
 		}
 	}
 

@@ -63,6 +63,10 @@ export class StrokeOverlay {
 	#frameCallbackId = 0;
 	#selectionFill = false;
 
+	get isVisible(): boolean {
+		return this.#surfaces.length > 0;
+	}
+
 	show(stroke: PointerStroke, onCancel: () => void, onFrame: () => void): boolean {
 		this.hide();
 		const display = Gdk.Display.get_default();
