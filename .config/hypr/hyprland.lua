@@ -8,6 +8,7 @@ local loader = require("rule-loader")
 
 require("base")
 require("cursor-outline")
+require("inset_border")
 require("programs")
 require("monitors")
 require("layouts.ultrawide_master")

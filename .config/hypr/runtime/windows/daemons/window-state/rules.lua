@@ -62,6 +62,27 @@ local function valid_persist_tags(tags)
 	return true
 end
 
+local function valid_persist_tag_animations(animations, tags)
+	if animations == nil then
+		return true
+	end
+	if type(animations) ~= "table" or type(tags) ~= "table" then
+		return false
+	end
+
+	local allowed = {}
+	for _, tag in ipairs(tags) do
+		allowed[tag] = true
+	end
+	for tag, animation in pairs(animations) do
+		if type(tag) ~= "string" or type(animation) ~= "string" or animation == "" or allowed[tag] ~= true then
+			return false
+		end
+	end
+
+	return true
+end
+
 function M.load_selectors(path)
 	local ok, selectors = pcall(dofile, path)
 	local normalized = {}
@@ -79,6 +100,7 @@ function M.load_selectors(path)
 			local field = M.matcher_client_field(selector.matcher)
 			local exclude = selector.exclude
 			local persist_tags = selector.persist_tags
+			local persist_tag_animations = selector.persist_tag_animations
 			local per_monitor = selector.per_monitor
 			local valid_exclude = exclude == nil
 				or (
@@ -100,6 +122,7 @@ function M.load_selectors(path)
 				field
 				and valid_exclude
 				and valid_persist_tags(persist_tags)
+				and valid_persist_tag_animations(persist_tag_animations, persist_tags)
 				and (per_monitor == nil or type(per_monitor) == "boolean")
 			then
 				normalized[#normalized + 1] = {
@@ -107,6 +130,7 @@ function M.load_selectors(path)
 					pattern = selector.pattern,
 					exclude = exclude,
 					persist_tags = persist_tags,
+					persist_tag_animations = persist_tag_animations,
 					per_monitor = per_monitor ~= false,
 				}
 				matchers[#matchers + 1] = {
@@ -322,6 +346,7 @@ local function render_rules(cache, selectors_path, selectors)
 			lines[#lines + 1] = ""
 
 			for _, tag in ipairs(tags) do
+				local animation = selector.persist_tag_animations and selector.persist_tag_animations[tag]
 				append_rule_identity(
 					lines,
 					entry,
@@ -330,6 +355,9 @@ local function render_rules(cache, selectors_path, selectors)
 				append_match(lines, entry, selector, lua_match_key)
 				lines[#lines + 1] = "    effects = {"
 				lines[#lines + 1] = "      tag = " .. json.encode("+" .. tag) .. ","
+				if animation then
+					lines[#lines + 1] = "      animation = " .. json.encode(animation) .. ","
+				end
 				lines[#lines + 1] = "    },"
 				lines[#lines + 1] = '    source = "window-state",'
 				lines[#lines + 1] = "    comment = " .. json.encode(comment .. " tag " .. tag) .. ","

@@ -69,6 +69,10 @@ first matching tag is stored as metadata and restored as a separate dynamic tag
 rule. This keeps transient and policy tags out of persisted state by default,
 and supports mutually exclusive states such as PiP corners.
 
+`persist_tag_animations` optionally maps allowed tags to entry animations. The
+animation is emitted beside the restored tag, so it is available when the
+window is created rather than after a dynamic tag update.
+
 State is per monitor by default. Set `per_monitor = false` for one
 monitor-local geometry rule that can restore on any monitor; use this for
 pinned cross-monitor windows such as Picture-in-Picture.

@@ -1,6 +1,8 @@
 -- Window state persistence selectors.
 -- Source selector list read by runtime/windows/daemons/window-state/window-state.sh.
 
+local pip = require("lib.picture_in_picture")
+
 ---@alias WindowStateMatcher
 ---| "match:class" # Hyprland client class.
 ---| "match:title" # Hyprland client title.
@@ -14,6 +16,7 @@
 ---@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
 ---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
 ---@field persist_tags? string[] Dynamic client tags to restore when present.
+---@field persist_tag_animations? table<string, string> Entry animation for each persisted tag.
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 
 ---@return WindowStateSelector[]
@@ -51,6 +54,7 @@ return {
 			"pip-bottom-left",
 			"pip-bottom-right",
 		},
+		persist_tag_animations = pip.corner_tag_animations,
 		per_monitor = false,
 	},
 }

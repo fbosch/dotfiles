@@ -168,6 +168,7 @@ describe("window-state rules", function()
 				matcher = "match:initial_title",
 				pattern = "^Picture-in-Picture$",
 				persist_tags = { "pip-top-left", "pip-top-right" },
+				persist_tag_animations = { ["pip-top-left"] = "slide right" },
 			},
 		}
 		assert.is_true(rules.write_rules_file(options))
@@ -175,6 +176,7 @@ describe("window-state rules", function()
 		local content = read_file(options.rules_lua_file)
 		assert_contains(content, 'tags = { "pip-top-left" },')
 		assert_contains(content, 'tag = "+pip-top-left",')
+		assert_contains(content, 'animation = "slide right",')
 		assert_not_contains(content, 'tag = "+pip-top-right",')
 		assert_not_contains(content, "unrelated")
 
