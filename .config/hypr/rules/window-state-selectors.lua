@@ -57,4 +57,5 @@ return {
 		persist_tag_animations = pip.corner_tag_animations,
 		per_monitor = false,
 	},
+	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
 }
