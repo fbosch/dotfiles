@@ -1,8 +1,11 @@
-@mixin panel {
+@use "surface" as ags;
+
+@mixin panel($elevation-shadows...) {
   background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
-  border: 1px solid var(--ags-color-surface-border);
+
+  @include ags.floating-border($elevation-shadows...);
+
   border-radius: 12px;
-  box-shadow: inset 0 0 0 1px var(--ags-color-surface-keyline);
 }
 
 @mixin close-button {

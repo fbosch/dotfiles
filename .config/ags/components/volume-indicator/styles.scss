@@ -9,9 +9,10 @@
   box.indicator-container {
     padding: 6px 12px;
     background-color: color-mix(in srgb, var(--ags-color-background-tertiary) 80%, transparent);
-    border: 1px solid var(--ags-color-surface-border);
+
+    @include ags.floating-border(0 4px 16px rgb(0 0 0 / 30%));
+
     border-radius: 9999px;
-    box-shadow: inset 0 0 0 1px var(--ags-color-surface-keyline), 0 4px 16px rgb(0 0 0 / 30%);
   }
 
   box.icon-container {

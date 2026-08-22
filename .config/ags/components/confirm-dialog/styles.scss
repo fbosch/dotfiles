@@ -7,11 +7,13 @@
   border: none;
 
   box.dialog-box {
-    @include utility.panel;
+    @include utility.panel(
+      0 8px 32px rgb(0 0 0 / 20%),
+      0 2px 8px rgb(0 0 0 / 10%)
+    );
 
     min-width: 280px;
     padding: 16px;
-    box-shadow: inset 0 0 0 1px var(--ags-color-surface-keyline), 0 8px 32px rgb(0 0 0 / 20%), 0 2px 8px rgb(0 0 0 / 10%);
   }
 
   box.content-box { margin-bottom: 16px; }

@@ -1,5 +1,18 @@
+@use "sass:list";
+
 @mixin surface($class) {
   window.#{$class} {
     @content;
   }
+}
+
+@mixin floating-border($elevation-shadows...) {
+  $shadows: (0 0 0 1px var(--ags-color-surface-border),);
+
+  @each $shadow in $elevation-shadows {
+    $shadows: list.append($shadows, $shadow, comma);
+  }
+
+  border: 1px solid var(--ags-color-surface-keyline);
+  box-shadow: $shadows;
 }
