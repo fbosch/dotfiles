@@ -46,7 +46,7 @@ export function AiPointerPrompt({
   return (
     <div
       className={cn(
-        'inline-flex max-w-[calc(100vw-2rem)] flex-col items-start font-primary',
+        'inline-flex max-w-[calc(100vw-2rem)] flex-col items-start font-button',
         className
       )}
     >
@@ -119,7 +119,7 @@ export function AiPointerPrompt({
           className="mt-2 max-h-64 w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl rounded-tl-md border border-white/15 bg-background-primary/95 px-4 py-3 shadow-[0_12px_36px_rgba(0,0,0,0.28)] backdrop-blur-xl"
           aria-label="Answer"
         >
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground-primary">
+          <p className="whitespace-pre-wrap font-button text-sm leading-6 text-foreground-primary">
             {state.answer}
           </p>
           {state.truncated ? (
