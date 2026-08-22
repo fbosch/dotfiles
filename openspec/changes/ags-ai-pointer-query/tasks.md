@@ -1,10 +1,10 @@
 ## 0. Selection And Consent Slice
 
 - [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super + middle-click` binding, and private no-screen-share layer surface.
-- [x] 0.2 Implement one-run XState selection, private runtime capture storage, validated global geometry from Hyprland bind-callback press/release coordinates, direct `grim` capture, and controlled Escape/shutdown cleanup.
+- [x] 0.2 Implement one-run XState stroke selection, private runtime capture storage, sampled global geometry between Hyprland press/release callbacks, direct `grim` capture, and controlled Escape/shutdown cleanup.
 - [x] 0.3 Add a local capture preview and disabled Ask control so no image can leave the machine in this slice.
 - [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS preview-surface lifecycle check.
-- [x] 0.5 Manually verify direct middle-button drag selection, screenshot accuracy, preview, and Escape cleanup.
+- [x] 0.5 Manually verify middle-button stroke and click selection, screenshot accuracy, preview, and Escape cleanup.
 
 ## 1. Runtime Prerequisites
 
@@ -42,11 +42,11 @@
 ## 5. AI Pointer Selection And Context Model
 
 - [x] 5.1 Add pure feature-local types and policies for global selection geometry, exact window resolution, geometric client/layer candidates, privacy filtering, and context prompt formatting.
-- [x] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks, then derive one global selection rectangle from their AGS payloads.
-- [x] 5.3 Validate direct-drag geometry for signed origins, positive dimensions, and the maximum capture area; treat an empty drag as cancellation.
+- [x] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks and sample one bounded pointer stroke between them.
+- [x] 5.3 Validate stroke-derived or click-fallback geometry for signed origins, positive dimensions, and the maximum capture area.
 - [x] 5.4 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
-- [x] 5.5 Capture the exact selected geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
-- [x] 5.6 Revalidate exact whole-window selections only when one fresh client geometry exactly matches the selected rectangle.
+- [x] 5.5 Capture the final stroke-, click-, or accessibility-resolved geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
+- [x] 5.6 Revalidate exact whole-window captures only when one fresh client geometry exactly matches the final capture rectangle.
 - [x] 5.7 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
 - [x] 5.8 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
 - [x] 5.9 Add pure tests for negative monitor origins, stale exact-geometry matches, overlapping windows, layer intersections, no candidates, active-window mismatch, privacy filtering, and deterministic ranking.

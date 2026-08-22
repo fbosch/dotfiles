@@ -1,36 +1,36 @@
 ## Purpose
 
-Let a user explicitly drag-select a desktop region, ask a short question about the reviewed selection, and receive a safe read-only AI answer without ambient screen observation or desktop automation.
+Let a user explicitly draw over a desktop region, ask a short question about the reviewed capture, and receive a safe read-only AI answer without ambient screen observation or desktop automation.
 
 ## ADDED Requirements
 
 ### Requirement: Explicit single-run selection workflow
-The AI Pointer SHALL start only through an explicit user activation. It SHALL allow one active workflow at a time and provide drag selection, composition, requesting, answer, failure, and cancellation states. A second activation while a workflow is active MUST NOT start another selector.
+The AI Pointer SHALL start only through an explicit user activation. It SHALL allow one active workflow at a time and provide stroke selection, composition, requesting, answer, failure, and cancellation states. A second activation while a workflow is active MUST NOT start another selector.
 
 #### Scenario: User starts a selection
 - **WHEN** the user triggers the AI Pointer binding while it is idle
-- **THEN** the system begins one drag-selection workflow
+- **THEN** the system begins one stroke-selection workflow
 
 #### Scenario: User activates while busy
 - **WHEN** the user triggers the binding while selection, composition, requesting, answer, or failure is active
 - **THEN** the system preserves the existing workflow and does not start a second selector
 
-### Requirement: Drag selection and capture preview
-The AI Pointer SHALL let the user drag a region in Hyprland global coordinates, capture only that validated region, and show a preview before any image or metadata is submitted. Cancelling selection MUST return to idle without a request.
+### Requirement: Stroke selection and capture preview
+The AI Pointer SHALL sample the pointer path while the user holds `Super + middle-button`, derive a bounded capture rectangle from the completed stroke, and show a preview before any image or metadata is submitted. A short stroke SHALL use the bounded local click-target fallback. Local accessibility resolution MAY refine the capture rectangle, but the preview and submitted attachment MUST use the same final geometry and bytes. Cancelling selection MUST return to idle without a request.
 
 #### Scenario: User selects a region
-- **WHEN** the user completes a drag selection with valid positive dimensions within the configured capture limit
-- **THEN** the system captures and previews that region before accepting a question
+- **WHEN** the user completes a stroke whose derived or locally refined rectangle has valid positive dimensions within the configured capture limit
+- **THEN** the system captures and previews that final rectangle before accepting a question
 
 #### Scenario: User cancels selection
 - **WHEN** the user dismisses the region selector
 - **THEN** the system returns to idle without retaining or submitting a capture
 
 ### Requirement: Exact and inferred compositor context
-The AI Pointer SHALL attach bounded Hyprland context for the selection geometry, monitor, workspace, active-window relationship, intersecting client candidates, and intersecting layer candidates. It SHALL classify a selection as exact only when one fresh client snapshot has exactly matching global geometry. It SHALL classify other rectangle matches as geometric inference and MUST NOT present inferred candidates as compositor hit-test or z-order facts.
+The AI Pointer SHALL attach bounded Hyprland context for the final capture geometry, monitor, workspace, active-window relationship, intersecting client candidates, and intersecting layer candidates. It SHALL classify a capture as exact only when one fresh client snapshot has exactly matching global geometry. It SHALL classify other rectangle matches as geometric inference and MUST NOT present inferred candidates as compositor hit-test or z-order facts.
 
 #### Scenario: Whole-window selection remains valid
-- **WHEN** the user selects a region whose geometry uniquely and exactly matches one client in the post-selection compositor snapshot
+- **WHEN** the resolved capture geometry uniquely and exactly matches one client in the post-selection compositor snapshot
 - **THEN** the request identifies one exact selected window
 
 #### Scenario: Freeform selection crosses applications

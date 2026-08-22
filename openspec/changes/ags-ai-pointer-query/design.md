@@ -1,8 +1,8 @@
 ## Context
 
-See `proposal.md` for motivation and the two capability specs for behavior. AGS currently has a synchronous Hyprland IPC client, a cursor-monitor helper, bundled component routing, and XState controllers for temporal UI behavior. It has no AI request client or drag-selection component. OpenCode SDK use currently exists in AI Commit, but that workflow is intentionally not an integration point for this change.
+See `proposal.md` for motivation and the two capability specs for behavior. AGS currently has a synchronous Hyprland IPC client, a cursor-monitor helper, bundled component routing, and XState controllers for temporal UI behavior. It has no AI request client. OpenCode SDK use currently exists in AI Commit, but that workflow is intentionally not an integration point for this change.
 
-Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapshots through its IPC query socket. Its existing `grimblast area` wrapper owns selection internally and returns only a captured path, so AGS needs to derive direct press/release geometry before calling `grim`.
+Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapshots through its IPC query socket. Its existing `grimblast area` wrapper owns selection internally and returns only a captured path, so AGS owns pointer-path sampling and derives the final capture geometry before calling `grim`.
 
 ## Goals / Non-Goals
 
@@ -19,7 +19,7 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 - Extracting, sharing code with, or changing AI Commit.
 - Building a generic multi-provider framework, streaming protocol, conversation store, or desktop automation layer.
 - Treating a rectangle overlap as a compositor hit test, visible-pixel calculation, or z-order assertion.
-- Collecting `/proc` command lines, process working directories, clipboard contents, OCR, accessibility trees, or semantic application content.
+- Sending `/proc` command lines, process working directories, clipboard contents, OCR output, accessibility trees, or semantic application content to the answer runtime.
 - Capturing ambient screen data, listening for voice, or retaining sessions for follow-up conversation.
 
 ## Decisions
@@ -72,23 +72,23 @@ AGS first requests cooperative helper termination and gives it a short grace per
 
 Alternative considered: terminate Bun immediately on Escape. Rejected because it can orphan an active OpenCode request, session, or SDK-owned server.
 
-### Direct Hyprland press/release selection preserves global geometry
+### Hyprland press/release drives sampled stroke selection
 
-Hyprland binds `Super + middle-button` press and release to Lua callbacks. Each callback reads the compositor cursor position synchronously at the input event, rounds it to a global pixel coordinate, and sends it to AGS in a separate request. AGS derives the canonical global selection rectangle. If process scheduling delivers release before press, AGS holds the release coordinate briefly until the matching start request arrives. This retains direct-drag interaction without trying to transfer the initiating pointer event to a process started after the bind.
+Hyprland binds `Super + middle-button` press and release to Lua callbacks. Each callback reads the compositor cursor position synchronously at the input event, rounds it to a global pixel coordinate, and sends it to AGS in a separate request. Between those events, the AGS drawing overlay samples the compositor cursor and records one bounded global stroke. If process scheduling delivers release before press, AGS holds the release coordinate briefly until the matching start request arrives.
 
-A selection is an exact-window candidate only when exactly one client in a fresh snapshot has identical global geometry. Any other drag has no claimed compositor target; it is a region selection.
+AGS derives padded bounds from a valid corridor or closed stroke. A stroke too short to establish bounds enters click mode and uses a bounded monitor-local target fallback. Local accessibility lookup may refine either rectangle; failure leaves the stroke or click geometry unchanged. A resolved capture is an exact-window candidate only when exactly one client in a fresh snapshot has identical global geometry.
 
-After release, AGS validates signed global X/Y origins, positive dimensions, and maximum pixel area. It calls `grim` with the validated geometry and captures PNG directly into private runtime storage.
+After release and optional local refinement, AGS validates signed global X/Y origins, positive dimensions, and maximum pixel area. It calls `grim` with the final geometry and captures PNG directly into private runtime storage.
 
 Alternative considered: use `slurp`. Rejected because a Hyprland binding consumes the activating mouse press before `slurp` starts, requiring a second drag interaction.
 
 Alternative considered: use `grimblast save area`. Rejected because it owns selection internally and does not expose the geometry needed for contextual matching.
 
-Alternative considered: build a GTK drag overlay. Rejected because multi-monitor global coordinate conversion, overlay input, and compositor integration would duplicate mature Wayland selection behavior without a concrete need.
+Alternative considered: derive a rectangle only from press and release coordinates. Rejected because it removes the established freehand stroke interaction, padded corridor/closed-shape targeting, and bounded click behavior.
 
 ### Hyprland context is a bounded snapshot, not target certainty
 
-Immediately after selection, AGS obtains client, layer, monitor, and active-window snapshots through the existing IPC service. It compares the selected global rectangle with client and layer rectangles using strict positive-area intersection. The payload retains at most five client and five layer candidates, ranked deterministically by selection coverage, candidate coverage, center containment, and active-window relation. It truncates window class, title, namespace, and workspace names to bounded values.
+Immediately after resolving the final capture geometry, AGS obtains client, layer, monitor, and active-window snapshots through the existing IPC service. It compares that rectangle with client and layer rectangles using strict positive-area intersection. The payload retains at most five client and five layer candidates, ranked deterministically by selection coverage, candidate coverage, center containment, and active-window relation. It truncates window class, title, namespace, and workspace names to bounded values.
 
 For exact-window selections, the payload contains one revalidated window's class, title, workspace, monitor, geometry relationship, active state, floating state, and fullscreen state. For freeform selections, it contains geometric candidates with overlap metrics and the explicit limitation that they are not compositor hit-test, z-order, or visible-pixel facts.
 

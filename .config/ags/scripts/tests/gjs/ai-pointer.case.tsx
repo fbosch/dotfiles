@@ -204,7 +204,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
-		assert(captured === "10,20 20x20", "release-first geometry was not captured");
+		assert(captured === "-22,-12 84x84", "release-first stroke geometry was not captured");
 		assert(
 			cursorOutlineStates.join(",") === "false,true,false,false",
 			"cursor outline disable failure was not retried after drawing",
@@ -246,7 +246,7 @@ test("AI Pointer removes the cursor outline when drawing is cancelled", () => {
 	}
 });
 
-test("AI Pointer cancels an empty drag without capture", async () => {
+test("AI Pointer uses a bounded fallback for a click without an accessible target", async () => {
 	let captured = "";
 	let lookupMode = "";
 	const view = {
@@ -272,6 +272,7 @@ test("AI Pointer cancels an empty drag without capture", async () => {
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
+		resolveClickGeometry: () => ({ x: 72, y: 72, width: 256, height: 256 }),
 		resolveAccessibility: async (
 			_geometry,
 			_stroke,
@@ -296,10 +297,10 @@ test("AI Pointer cancels an empty drag without capture", async () => {
 	controller.init();
 	try {
 		assert(controller.start({ x: 200, y: 200 }), "click start was rejected");
-		assert(controller.finish({ x: 200, y: 200 }), "empty-drag finish was rejected");
+		assert(controller.finish({ x: 200, y: 200 }), "click finish was rejected");
 		await settleMainLoop();
-		assert(lookupMode === "", "empty drag performed accessibility lookup");
-		assert(captured === "", "empty drag was captured");
+		assert(lookupMode === "click", "click did not use point accessibility policy");
+		assert(captured === "72,72 256x256", "click fallback geometry was not captured");
 	} finally {
 		controller.teardown();
 	}
@@ -542,7 +543,7 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
 		await settleMainLoop();
-		assert(captured === "10,20 20x20", "direct drag geometry was not captured");
+		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(resolvedAccessibility, "accessible metadata was not resolved");
 		assert(resolvedPrograms, "program metadata was not resolved");
 		assert(previewArgumentCount === 1, "metadata was passed to the prompt view");

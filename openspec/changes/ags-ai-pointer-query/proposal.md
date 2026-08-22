@@ -6,8 +6,8 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 
 - Add a standalone Bun answer runtime with a backend-neutral, versioned JSON stdin/stdout protocol and an initial OpenCode backend.
 - Add a hidden, answer-only `desktop-pointer` OpenCode agent with all tools disabled.
-- Add an AGS AI Pointer workflow that lets a user drag-select a screen region, review it with its associated application context, type a question, and receive a read-only answer.
-- Add direct Hyprland press/release selection and `grim` capture so the workflow retains global selection geometry and can classify a unique exact window geometry separately from geometric window and layer candidates.
+- Add an AGS AI Pointer workflow that lets a user draw over a screen region, review the resolved capture with its associated application context, type a question, and receive a read-only answer.
+- Add a Hyprland press/release stroke workflow with sampled pointer geometry, bounded click fallback, and direct `grim` capture so the workflow retains the final global capture geometry and can classify a unique exact window separately from geometric window and layer candidates.
 - Attach privacy-minimized Hyprland client, layer, monitor, workspace, and active-window context to the selected image.
 - Use ephemeral OpenCode sessions, explicit timeout/cancellation cleanup, and private runtime capture storage.
 - Do not modify, import from, migrate, or otherwise alter `ai_commit` or its Fish wrapper. It is only an architectural reference.
@@ -18,7 +18,7 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 ### New Capabilities
 
 - `answer-request-runtime`: Provides a bounded, non-interactive answer boundary that hides backend selection, policy, lifecycle, cancellation, and response normalization from callers.
-- `ags-ai-pointer-query`: Provides explicit drag selection, compositor-context enrichment, typed questions, and safe read-only answer presentation through AGS and Hyprland.
+- `ags-ai-pointer-query`: Provides explicit stroke selection, compositor-context enrichment, typed questions, and safe read-only answer presentation through AGS and Hyprland.
 
 ### Modified Capabilities
 
