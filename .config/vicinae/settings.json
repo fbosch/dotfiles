@@ -33,7 +33,7 @@
    },
    "launcher_window": {
       "rounding": 10,
-      "opacity": 0.7,
+      "opacity": 0.85,
       "client_side_decorations": {
          "enabled": true,
          "border_width": 1,

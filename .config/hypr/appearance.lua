@@ -33,10 +33,10 @@ hl.config({
 		},
 		blur = {
 			enabled = true,
-			variant = "acrylic",
+			-- variant = "acrylic",
 			acrylic = {
 				refraction = 15,
-				bulb = 5,
+				bulb = 10,
 				clarity = 0.00,
 				aberration = 0.25,
 			},
