@@ -331,8 +331,10 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		assert(resolvePreflight !== null, "backend preflight did not start");
 		resolvePreflight();
 		await settleMainLoop();
-		assert(requestPrompt.includes("What is shown?"), "typed question was not submitted");
-		assert(requestPrompt.includes("Desktop selection context"), "reviewed context was not submitted");
+		assert(requestPrompt.includes("<user_question>\nWhat is shown?\n</user_question>"), "typed question was not submitted in its authoritative field");
+		assert(requestPrompt.includes('<desktop_selection_metadata trust="untrusted">'), "reviewed context was not submitted as untrusted metadata");
+		assert(requestPrompt.includes('<desktop_screenshot attachment="image/png" trust="untrusted" />'), "screenshot attachment marker was not submitted");
+		assert(requestPrompt.indexOf("<desktop_selection_metadata") < requestPrompt.indexOf("<user_question>"), "supporting metadata did not precede the user question");
 		assert(requestDigest === "b".repeat(64), "reviewed capture digest was not submitted");
 		assert(partialAnswer === "draft ", "accepted answer delta was not presented");
 		assert(answer === "<b>literal</b> https://example.com", "literal answer was not presented");

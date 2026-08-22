@@ -53,7 +53,7 @@ The runtime SHALL accept only regular PNG or JPEG files whose declared MIME type
 - **THEN** the runtime emits `attachment_changed` and does not submit the attachment
 
 ### Requirement: Trusted backend-owned execution policy
-The runtime SHALL select one trusted backend through local composition and MUST NOT accept backend, agent, model, tool, endpoint, server, session, or execution-directory configuration from the request. The configured backend SHALL verify its answer-only policy before submitting user context. The initial OpenCode backend SHALL require the fixed `desktop-pointer` agent and deny-all tool policy, and SHALL fail with stable backend errors rather than falling back to another agent or policy.
+The runtime SHALL select one trusted backend through local composition and MUST NOT accept backend, agent, model, tool, endpoint, server, session, or execution-directory configuration from the request. The configured backend SHALL verify its answer-only policy before submitting user context. The initial OpenCode backend SHALL require the fixed `desktop-pointer` agent and independently disable every enumerated tool except the exact read-only web lookup allowlist, and SHALL fail with stable backend errors rather than falling back to another agent or policy.
 
 #### Scenario: Configured answer backend is available
 - **WHEN** the locally configured backend verifies its answer-only execution policy
@@ -64,7 +64,7 @@ The runtime SHALL select one trusted backend through local composition and MUST 
 - **THEN** the runtime returns `invalid_request` and does not submit the prompt or attachment
 
 #### Scenario: OpenCode answer policy cannot be verified
-- **WHEN** the configured OpenCode backend cannot resolve the fixed agent or verify its deny-all tool policy
+- **WHEN** the configured OpenCode backend cannot resolve the fixed agent or verify its read-only web tool policy
 - **THEN** the runtime returns `backend_policy_invalid` and does not submit the prompt or attachment
 
 ### Requirement: Compatible OpenCode backend ownership

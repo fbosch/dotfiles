@@ -50,7 +50,30 @@
       "type": "remote",
       "url": "http://192.168.1.46:8092/mcp",
       "enabled": true
+    },
+    "ai_pointer_exa": {
+      "type": "local",
+      "environment": {
+        "EXA_API_KEY": "{env:EXA_API_KEY}"
+      },
+      "command": [
+        "podman",
+        "run",
+        "-i",
+        "--rm",
+        "--read-only",
+        "--replace",
+        "--name",
+        "mcp-exa-ai-pointer",
+        "-e",
+        "EXA_API_KEY",
+        "mcp/exa"
+      ],
+      "enabled": true
     }
+  },
+  "tools": {
+    "ai_pointer_exa_*": false
   },
   "permission": {
     "external_directory": {
@@ -95,12 +118,15 @@
       "temperature": 0.3
     },
     "desktop-pointer": {
-      "description": "Answers questions about explicitly reviewed desktop captures without tools or actions.",
+      "description": "Answers questions about explicitly reviewed desktop captures with optional read-only web lookup.",
       "mode": "primary",
       "hidden": true,
       "prompt": "{file:../ags/components/ai-pointer/desktop-pointer-prompt.txt}",
       "tools": {
-        "*": false
+        "*": false,
+        "ai_pointer_exa_web_search_exa": true,
+        "webfetch": true,
+        "websearch": true
       }
     },
     "plan": {

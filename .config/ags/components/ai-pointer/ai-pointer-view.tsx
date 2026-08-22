@@ -62,7 +62,9 @@ export class AiPointerView {
 	#error: Gtk.Label | null = null;
 	#errorBox: Gtk.Box | null = null;
 	#selection: SelectionGeometry | null = null;
+	#promptLeft: number | null = null;
 	#promptTop: number | null = null;
+	#promptPositionLocked = false;
 	#handlers: AiPointerViewHandlers | null = null;
 	#actionMode: ActionMode = "compose";
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -251,7 +253,9 @@ export class AiPointerView {
 	}
 
 	showPreparing(selection: SelectionGeometry): void {
+		this.#promptLeft = null;
 		this.#promptTop = null;
+		this.#promptPositionLocked = false;
 		this.#selection = selection;
 		this.#answer?.set_label("");
 		this.#answerScroll?.set_visible(false);
@@ -266,6 +270,7 @@ export class AiPointerView {
 	}
 
 	showRequesting(): void {
+		this.#promptPositionLocked = true;
 		this.#strokeOverlay.hide();
 		this.#selectionOverlay.hide();
 		this.#prompt?.set_sensitive(false);
@@ -332,7 +337,9 @@ export class AiPointerView {
 	hide(): void {
 		this.clearOcr();
 		this.#selection = null;
+		this.#promptLeft = null;
 		this.#promptTop = null;
+		this.#promptPositionLocked = false;
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
 		this.#selectionOverlay.hide();
@@ -356,7 +363,9 @@ export class AiPointerView {
 		this.#error = null;
 		this.#errorBox = null;
 		this.#selection = null;
+		this.#promptLeft = null;
 		this.#promptTop = null;
+		this.#promptPositionLocked = false;
 		this.#handlers = null;
 		window?.destroy();
 	}
@@ -478,7 +487,7 @@ export class AiPointerView {
 				centerY >= bounds.y + bounds.height
 			)
 				continue;
-			const hostWidth = Math.min(
+			let hostWidth = Math.min(
 				this.#promptHost?.widthRequest ?? promptMinimumWidth + promptHorizontalChrome,
 				Math.max(1, bounds.width - 32),
 			);
@@ -487,7 +496,13 @@ export class AiPointerView {
 				Math.max(1, bounds.height - 32),
 			);
 			const bottom = bounds.y + bounds.height - 16;
-			if (this.#promptTop !== null) {
+			const right = bounds.x + bounds.width - 16;
+			if (this.#promptPositionLocked && this.#promptLeft !== null) {
+				hostWidth = Math.min(hostWidth, Math.max(1, right - this.#promptLeft));
+				if (this.#answerScroll && this.#answerScroll.widthRequest > hostWidth)
+					this.#answerScroll.set_size_request(hostWidth, -1);
+			}
+			if (this.#promptPositionLocked && this.#promptTop !== null) {
 				hostHeight = Math.min(hostHeight, Math.max(promptHostHeight, bottom - this.#promptTop));
 				const answerHeight = Math.max(
 					0,
@@ -500,8 +515,13 @@ export class AiPointerView {
 			}
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
 			const calculated = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
+			if (this.#promptPositionLocked === false) {
+				this.#promptLeft = calculated.x;
+				this.#promptTop = calculated.y;
+			}
+			this.#promptLeft ??= calculated.x;
 			this.#promptTop ??= calculated.y;
-			const position = { x: calculated.x, y: this.#promptTop };
+			const position = { x: this.#promptLeft, y: this.#promptTop };
 			this.#window?.set_gdkmonitor(monitor);
 			if (this.#promptCanvas && this.#promptHost)
 				this.#promptCanvas.move(this.#promptHost, position.x - bounds.x, position.y - bounds.y);

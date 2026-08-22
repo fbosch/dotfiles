@@ -14,7 +14,7 @@ import type { AccessibilityResolution } from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { requestAnswer } from "./answer-client";
 import type { AiPointerControllerOptions } from "./controller-options";
-import { emptySelectionContext, formatSelectionContext, type SelectionContext } from "./context";
+import { emptySelectionContext, formatDesktopPointerRequest, type SelectionContext } from "./context";
 import { querySelectionContext } from "./context-query";
 import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
@@ -477,7 +477,7 @@ export class AiPointerController {
 			return await this.#requestAnswer(
 				{
 					requestId: `ai-pointer-${runId}`,
-					prompt: `${prompt}\n\n${formatSelectionContext(context)}`,
+					prompt: formatDesktopPointerRequest(prompt, context),
 					attachment: { path: capture.path, sha256: capture.sha256 },
 					timeoutSeconds: 60,
 				},

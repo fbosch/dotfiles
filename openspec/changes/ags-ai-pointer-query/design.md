@@ -44,11 +44,11 @@ The Bun adapter consumes OpenCode SSE internally through `event.subscribe`, star
 
 AGS parses stdout incrementally as bytes, enforces per-record and aggregate limits before decoding strict UTF-8, and accepts progress only for the current immutable run ID and contiguous sequence. Partial output is presentation state within `requesting`; it does not create a machine state or count as completion. Cancellation, lock, malformed output, unsuccessful process exit, or a terminal error clears provisional text.
 
-The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt. The backend-neutral runtime owns the complete answer-only system instructions and gives them to the adapter with each execution; the OpenCode adapter passes them through `session.prompt.system`.
+The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt. The component-owned agent prompt defines the answer policy and distinguishes the XML-escaped user question from untrusted screenshot and compositor metadata.
 
 OpenCode 1.18.21 uses a truthy custom agent prompt instead of its model-family provider prompt, then appends OpenCode environment and configured project instructions. The `desktop-pointer` agent loads its complete answer-only system prompt from `.config/ags/components/ai-pointer/desktop-pointer-prompt.txt`, keeping the feature's model behavior reviewable beside the component. OpenCode's remaining harness context cannot be disabled through the 1.18.21 SDK.
 
-The deny-all policy combines the `desktop-pointer` agent's `tools: { "*": false }` configuration with a request-time all-known-tool denial map. The implementation verifies this behavior against the pinned OpenCode version. If the runtime cannot enumerate and deny the available tools or cannot resolve the requested agent, it fails before transmitting user content.
+The read-only web policy combines the `desktop-pointer` agent's deny-by-default tool configuration with explicit access to built-in web search/fetch and the dedicated `ai_pointer_exa_web_search_exa` MCP tool. The request-time map independently disables every enumerated tool except those exact identifiers. If the runtime cannot enumerate tools or resolve the requested agent, it fails before transmitting user content.
 
 Alternative considered: pass a caller-defined tool map. Rejected because it makes the desktop capture boundary an authority boundary and is not required for read-only Q&A.
 
@@ -133,14 +133,14 @@ Alternative considered: render rich model markdown. Rejected because markup and 
 - [A provider continues processing after local cancellation] -> Abort the OpenCode session, delete it on every path, state local cleanup failure clearly, and do not claim provider-side deletion.
 - [A window, layer, focus state, or monitor changes between IPC queries] -> Timestamp the context, describe it as a point-in-time snapshot, and never represent geometric candidates as hit-test facts.
 - [An external server has stale configuration or a different version] -> Require compatibility and policy checks before content submission; otherwise use an owned server or fail safely.
-- [The selected image contains prompt injection] -> Use an answer-only agent with deny-all tools, fixed trusted execution context, literal rendering, and no action path.
+- [The selected image contains prompt injection] -> XML-escape and classify image-derived context as untrusted, use an exact read-only web tool allowlist, render output literally, and provide no mutation path.
 - [Capture files survive a crash] -> Restrict files to private runtime storage and remove stale feature-owned files at component initialization; uncontrolled process termination cannot provide a deletion guarantee.
 - [Image capture or response is large] -> Enforce protocol, image, pixel, prompt, output, and timeout limits before expensive work.
 
 ## Migration Plan
 
 1. Add the pinned libexec SDK dependency and protocol/runtime tests with no AGS or Hyprland wiring.
-2. Add and verify the no-tool `desktop-pointer` agent and compatible image-capable model behavior.
+2. Add and verify the deny-by-default `desktop-pointer` agent, exact read-only web tool allowlist, and compatible image-capable model behavior.
 3. Add the AGS feature slice, private capture lifecycle, and request subprocess integration behind direct AGS requests.
 4. Validate selection, question composition, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
 5. Register the bundled component, styles, layer rule, and binding.

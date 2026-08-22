@@ -10,7 +10,7 @@
 
 - [x] 1.1 Add the compatible `@opencode-ai/sdk` range `^1.18.21` to `.config/opencode/libexec/package.json` and regenerate `.config/opencode/libexec/bun.lock` through Bun.
 - [x] 1.2 Confirm the installed OpenCode binary, pinned SDK, and generated SDK APIs support compatible health checks, agent/tool discovery, image file parts, session abort, and session deletion.
-- [x] 1.3 Add the hidden `desktop-pointer` primary agent with `tools: { "*": false }`, a component-owned answer-only system prompt, and no action or tool-use path.
+- [x] 1.3 Add the hidden `desktop-pointer` primary agent with a component-owned answer-only system prompt, deny-by-default tools, and an exact read-only web lookup allowlist.
 - [x] 1.4 Verify the configured default model accepts PNG input for the new agent and record the safe unavailable behavior for models that do not.
 
 ## 2. OpenCode Request Protocol
@@ -31,9 +31,9 @@
 
 ## 4. OpenCode Server And Session Lifecycle
 
-- [x] 4.1 Define the deep `AnswerBackend.execute()` interface and implement the OpenCode adapter with fixed-loopback health, version, agent, image-capability, and deny-all tool-policy checks before attachment transmission.
+- [x] 4.1 Define the deep `AnswerBackend.execute()` interface and implement the OpenCode adapter with fixed-loopback health, version, agent, image-capability, and read-only web tool-policy checks before attachment transmission.
 - [x] 4.2 Implement owned ephemeral-server startup when external reuse is unavailable or unsuitable, and model external versus owned ownership explicitly.
-- [x] 4.3 Implement ephemeral session creation, prompt submission with the deny-all tool map, final response extraction, and session deletion after success.
+- [x] 4.3 Implement ephemeral session creation, prompt submission with an exact read-only web tool map, final response extraction, and session deletion after success.
 - [x] 4.4 Implement timeout, SIGINT, SIGTERM, and caller cancellation using independent fresh deadlines for session abort, session deletion, and owned-server closure.
 - [x] 4.5 Ensure external servers are never restarted, terminated, or closed, while owned servers close exactly once on every terminal path.
 - [x] 4.6 Launch the helper through `bun run --no-install` and reject unvalidated OpenCode/SDK version combinations before prompt or attachment submission.

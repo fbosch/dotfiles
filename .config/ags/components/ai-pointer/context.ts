@@ -232,3 +232,38 @@ export function formatSelectionContext(context: SelectionContext): string {
 		context.geometricInference.limitation,
 	].join("\n");
 }
+
+export function formatDesktopPointerRequest(question: string, context: SelectionContext): string {
+	return [
+		"<desktop_pointer_request>",
+		"<supporting_context>",
+		'<desktop_screenshot attachment="image/png" trust="untrusted" />',
+		'<desktop_selection_metadata trust="untrusted">',
+		escapeXmlText(formatSelectionContext(context)),
+		"</desktop_selection_metadata>",
+		"</supporting_context>",
+		"<user_question>",
+		escapeXmlText(question.trim()),
+		"</user_question>",
+		"</desktop_pointer_request>",
+	].join("\n");
+}
+
+function escapeXmlText(value: string): string {
+	let validXml = "";
+	for (const character of value) {
+		const codePoint = character.codePointAt(0) ?? 0;
+		validXml += codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd ||
+			(codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+			(codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+			(codePoint >= 0x10000 && codePoint <= 0x10ffff)
+			? character
+			: "\uFFFD";
+	}
+	return validXml
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&apos;");
+}

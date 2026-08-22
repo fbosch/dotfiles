@@ -84,8 +84,11 @@ export const answerRequestSchema = z
 
 export const answerToolPolicySchema = z
   .object({
-    mode: z.literal("deny_all"),
-    tools: z.record(z.string().min(1), z.literal(false)),
+    mode: z.literal("read_only_web"),
+    tools: z.record(z.string().min(1), z.boolean()).refine(
+      (tools) => Object.entries(tools).every(([id, enabled]) =>
+        enabled === false || id === "ai_pointer_exa_web_search_exa" || id === "webfetch" || id === "websearch"),
+    ),
   })
   .strict();
 

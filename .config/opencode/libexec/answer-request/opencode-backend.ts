@@ -17,10 +17,11 @@ const DESKTOP_POINTER_AGENT = "desktop-pointer";
 const PREFLIGHT_TIMEOUT_MILLISECONDS = 2_000;
 const CLEANUP_TIMEOUT_MILLISECONDS = 2_000;
 const MAXIMUM_STREAM_EVENTS = 4_096;
+const READ_ONLY_WEB_TOOLS = new Set(["ai_pointer_exa_web_search_exa", "webfetch", "websearch"]);
 
 type Response = { data?: unknown; error?: unknown };
 type Options = { signal?: AbortSignal };
-type Preflight = { ok: true; tools: Record<string, false> } | { ok: false; code: "backend_unavailable" | "backend_policy_invalid" | "incompatible_version" | "cancelled" | "timeout" };
+type Preflight = { ok: true; tools: Record<string, boolean> } | { ok: false; code: "backend_unavailable" | "backend_policy_invalid" | "incompatible_version" | "cancelled" | "timeout" };
 type PreparedBackend = { policy: Preflight; client?: OpenCodeClient; owned?: OwnedServer };
 
 export type AnswerPreflightResult = { ready: true } | { ready: false; code: Extract<AnswerErrorCode, "backend_unavailable" | "backend_policy_invalid" | "incompatible_version" | "cancelled" | "timeout" | "cleanup_failed"> };
@@ -33,7 +34,7 @@ export interface OpenCodeClient {
   tool: { ids(input: { directory: string }, options?: Options): Promise<Response> };
   session: {
     create(input: { directory: string }, options?: Options): Promise<Response>;
-    promptAsync(input: { sessionID: string; directory: string; messageID: string; agent: string; tools: Record<string, false>; parts: unknown[] }, options?: Options): Promise<Response>;
+    promptAsync(input: { sessionID: string; directory: string; messageID: string; agent: string; tools: Record<string, boolean>; parts: unknown[] }, options?: Options): Promise<Response>;
     message(input: { sessionID: string; messageID: string; directory: string }, options?: Options): Promise<Response>;
     abort(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
     delete(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
@@ -190,7 +191,7 @@ async function verifyPreflight(client: OpenCodeClient, directory: string, signal
     ]);
     if (signal.aborted) return failureForSignal(caller, timeout);
     const agent = desktopPointerAgent(unwrap(agentsResponse));
-    const tools = denyAllTools(unwrap(idsResponse));
+    const tools = readOnlyWebTools(unwrap(idsResponse));
     if (agent === null || tools === null || supportsImage(agent, unwrap(configResponse), unwrap(providersResponse)) === false) {
       return { ok: false, code: "backend_policy_invalid" };
     }
@@ -336,9 +337,9 @@ function desktopPointerAgent(value: unknown): object | null {
   return wildcardDenied ? agent : null;
 }
 
-function denyAllTools(value: unknown): Record<string, false> | null {
+function readOnlyWebTools(value: unknown): Record<string, boolean> | null {
   if (Array.isArray(value) === false || value.some((id) => typeof id !== "string" || id.length === 0)) return null;
-  return Object.fromEntries(value.map((id) => [id, false]));
+  return Object.fromEntries(value.map((id) => [id, READ_ONLY_WEB_TOOLS.has(id)]));
 }
 
 function supportsImage(agent: object, config: unknown, providers: unknown): boolean {

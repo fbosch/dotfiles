@@ -102,9 +102,13 @@ describe("answer request protocol", () => {
       false,
     );
     assert.equal(
-      answerToolPolicySchema.safeParse({ mode: "deny_all", tools: {}, unknown: true }).success,
+      answerToolPolicySchema.safeParse({ mode: "read_only_web", tools: {}, unknown: true }).success,
       false,
     );
+		assert.equal(
+			answerToolPolicySchema.safeParse({ mode: "read_only_web", tools: { bash: true } }).success,
+			false,
+		);
     assert.equal(
       answerSuccessSchema.safeParse({
         protocolVersion: 2,

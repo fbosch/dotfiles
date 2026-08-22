@@ -98,6 +98,7 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	assert(action.has_css_class("requesting"), "AI Pointer requesting action was not presented");
 	view.showPartialAnswer("Short answer");
 	await settleMainLoop();
+	const promptLeft = host.get_allocation().x;
 	const promptTop = host.get_allocation().y;
 	const shortAnswerWidth = answerScroll.widthRequest;
 	const shortAnswerHeight = answerScroll.minContentHeight;
@@ -108,6 +109,7 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	assert(answerScroll.widthRequest <= 416, "AI Pointer answer exceeded its width bound");
 	assert(answerScroll.minContentHeight > shortAnswerHeight, "AI Pointer answer did not grow vertically");
 	assert(answerScroll.minContentHeight <= 256, "AI Pointer answer exceeded its height bound");
+	assert(host.get_allocation().x === promptLeft, "AI Pointer input moved while the answer widened");
 	assert(host.get_allocation().y === promptTop, "AI Pointer input moved while the answer grew");
 	assert(action.has_css_class("requesting"), "partial answer changed the requesting action");
 	view.showPartialAnswer("");

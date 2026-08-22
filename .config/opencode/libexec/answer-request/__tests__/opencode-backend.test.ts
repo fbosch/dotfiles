@@ -80,7 +80,13 @@ describe("OpenCode answer backend", () => {
     assert.equal(fake.state.ownedStarts, 0);
     assert.equal(fake.state.externalClose, 0);
     assert.equal(fake.state.externalDelete, 1);
-    assert.deepEqual(fake.state.tools, { bash: false, read: false });
+    assert.deepEqual(fake.state.tools, {
+      ai_pointer_exa_web_search_exa: true,
+      bash: false,
+      read: false,
+      webfetch: true,
+      websearch: true,
+    });
   });
 
   test("starts and closes an owned server when external preflight is unsuitable", async () => {
@@ -285,7 +291,7 @@ function createFake(options: {
     ownedCreate: 0,
     ownedPrompt: 0,
     ownedStarts: 0,
-    tools: {} as Record<string, false>,
+    tools: {} as Record<string, boolean>,
     events: [] as unknown[],
     parentID: "",
     messageCalls: 0,
@@ -301,7 +307,7 @@ function createFake(options: {
     app: { agents: async () => ({ data: options.agent === false ? [] : [{ name: "desktop-pointer", model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined, permission: options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }] }] }) },
     config: { get: async () => ({ data: { model: `openai/${options.modelID ?? "test"}` } }) },
     provider: { list: async () => ({ data: { connected: ["openai"], all: [{ id: "openai", models: { [options.modelID ?? "test"]: { status: "active", capabilities: { input: { image: options.imageCapable !== false } } } } }] } }) },
-    tool: { ids: async () => ({ data: options.toolIDs ?? ["bash", "read"] }) },
+    tool: { ids: async () => ({ data: options.toolIDs ?? ["ai_pointer_exa_web_search_exa", "bash", "read", "webfetch", "websearch"] }) },
     session: {
       create: async () => {
         if (kind === "external") state.externalCreate += 1;
