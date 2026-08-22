@@ -94,6 +94,15 @@
       "color": "#6099C0",
       "temperature": 0.3
     },
+    "desktop-pointer": {
+      "description": "Answers questions about explicitly reviewed desktop captures without tools or actions.",
+      "mode": "primary",
+      "hidden": true,
+      "prompt": "{file:../ags/components/ai-pointer/desktop-pointer-prompt.txt}",
+      "tools": {
+        "*": false
+      }
+    },
     "plan": {
       "color": "#B279A7",
       "model": "openai/gpt-5.6-sol",

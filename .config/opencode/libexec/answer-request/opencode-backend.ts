@@ -17,8 +17,6 @@ const DESKTOP_POINTER_AGENT = "desktop-pointer";
 const PREFLIGHT_TIMEOUT_MILLISECONDS = 2_000;
 const CLEANUP_TIMEOUT_MILLISECONDS = 2_000;
 const MAXIMUM_STREAM_EVENTS = 4_096;
-const ANSWER_SYSTEM_PROMPT =
-  "Answer the user's question using only the supplied text and image. Do not use tools, perform actions, or claim actions were performed.";
 
 type Response = { data?: unknown; error?: unknown };
 type Options = { signal?: AbortSignal };
@@ -35,7 +33,7 @@ export interface OpenCodeClient {
   tool: { ids(input: { directory: string }, options?: Options): Promise<Response> };
   session: {
     create(input: { directory: string }, options?: Options): Promise<Response>;
-    promptAsync(input: { sessionID: string; directory: string; messageID: string; system: string; agent: string; tools: Record<string, false>; parts: unknown[] }, options?: Options): Promise<Response>;
+    promptAsync(input: { sessionID: string; directory: string; messageID: string; agent: string; tools: Record<string, false>; parts: unknown[] }, options?: Options): Promise<Response>;
     message(input: { sessionID: string; messageID: string; directory: string }, options?: Options): Promise<Response>;
     abort(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
     delete(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
@@ -115,7 +113,6 @@ export function createOpenCodeAnswerBackend(dependencies: OpenCodeBackendDepende
                 sessionID: id,
                 directory,
                 messageID,
-                system: ANSWER_SYSTEM_PROMPT,
                 agent: DESKTOP_POINTER_AGENT,
                 tools: policy.tools,
                 parts: [{ type: "text", text: request.prompt }, ...attachments.value.map(createOpenCodeFilePart)],
