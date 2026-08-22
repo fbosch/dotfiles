@@ -5,6 +5,28 @@ export interface AccessibilityWindowCandidate<T> {
 	value: T;
 }
 
+interface WindowGeometry {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+export function matchesInputWindowFrame(
+	role: string,
+	geometry: WindowGeometry | null,
+	window: Pick<WindowGeometry, "width" | "height">,
+): boolean {
+	if (role !== "frame" || !geometry) return false;
+	const tolerance = Math.max(32, Math.round(Math.max(window.width, window.height) * 0.05));
+	return (
+		Math.abs(geometry.x) <= tolerance &&
+		Math.abs(geometry.y) <= tolerance &&
+		Math.abs(geometry.width - window.width) <= tolerance &&
+		Math.abs(geometry.height - window.height) <= tolerance
+	);
+}
+
 export function chooseAccessibilityWindow<T>(
 	candidates: AccessibilityWindowCandidate<T>[],
 ): T | null {

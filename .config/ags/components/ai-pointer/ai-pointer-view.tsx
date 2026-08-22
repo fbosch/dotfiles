@@ -236,7 +236,8 @@ export class AiPointerView {
 		this.#setActionMode("compose");
 		this.#resizePrompt();
 		this.#showAt(capture.geometry);
-		if (geometryChanged) this.#selectionOverlay.showSelection(capture.geometry);
+		if (geometryChanged) this.#selectionOverlay.showSelection(capture.geometry, true);
+		else this.#selectionOverlay.setSelectionFill(true);
 		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
 	}
 
@@ -252,7 +253,6 @@ export class AiPointerView {
 		this.#setActionMode("preparing");
 		this.#resizePrompt();
 		this.#showAt(selection);
-		this.#selectionOverlay.showSelection(selection);
 	}
 
 	showRequesting(): void {
@@ -293,10 +293,8 @@ export class AiPointerView {
 	}
 
 	finishStroke(selection: SelectionGeometry): Promise<boolean> {
-		if (selectionEquals(this.#selection, selection) === false) {
-			if (this.#selectionOverlay.showSelection(selection) === false) return Promise.resolve(false);
-			this.#selection = selection;
-		}
+		if (this.#selectionOverlay.showSelection(selection) === false) return Promise.resolve(false);
+		this.#selection = selection;
 		return this.#strokeOverlay.hideBeforeCapture();
 	}
 

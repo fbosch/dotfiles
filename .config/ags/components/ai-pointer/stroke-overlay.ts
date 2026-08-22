@@ -61,6 +61,7 @@ export class StrokeOverlay {
 	#segmentCreatedAtMs: number[] = [];
 	#frameDrawing: Gtk.Widget | null = null;
 	#frameCallbackId = 0;
+	#selectionFill = false;
 
 	show(stroke: PointerStroke, onCancel: () => void, onFrame: () => void): boolean {
 		this.hide();
@@ -83,8 +84,9 @@ export class StrokeOverlay {
 		return true;
 	}
 
-	showSelection(selection: SelectionGeometry): boolean {
+	showSelection(selection: SelectionGeometry, fill = false): boolean {
 		this.hide();
+		this.#selectionFill = fill;
 		const display = Gdk.Display.get_default();
 		if (!display) return false;
 
@@ -99,6 +101,12 @@ export class StrokeOverlay {
 
 		for (const surface of this.#surfaces) surface.window.set_visible(true);
 		return true;
+	}
+
+	setSelectionFill(enabled: boolean): void {
+		if (this.#selectionFill === enabled) return;
+		this.#selectionFill = enabled;
+		for (const surface of this.#surfaces) surface.drawing.queue_draw();
 	}
 
 	update(stroke: PointerStroke): void {
@@ -133,6 +141,7 @@ export class StrokeOverlay {
 		this.#displaySegments = [];
 		this.#segmentCreatedAtMs = [];
 		this.#closedStroke = false;
+		this.#selectionFill = false;
 	}
 
 	async hideBeforeCapture(): Promise<boolean> {
@@ -330,8 +339,15 @@ export class StrokeOverlay {
 			heightRequest: outerBottom - outerY,
 		});
 		drawing.add_css_class("ai-pointer-stroke-canvas");
-		drawing.set_draw_func((_area, cr: any) => {
-			this.#drawSelectionPreview(cr, outerX, outerY, selection);
+		drawing.set_draw_func((area, cr: any) => {
+			this.#drawSelectionPreview(
+				cr,
+				outerX,
+				outerY,
+				selection,
+				area.get_width(),
+				area.get_height(),
+			);
 		});
 		const window = this.#createWindow(
 			monitor,
@@ -417,9 +433,22 @@ export class StrokeOverlay {
 		originX: number,
 		originY: number,
 		selection: SelectionGeometry,
+		surfaceWidth: number,
+		surfaceHeight: number,
 	): void {
 		const color = new Gdk.RGBA();
 		color.parse(tokens.colors.accent.primary.value);
+		if (this.#selectionFill) {
+			cr.setSourceRGBA(color.red, color.green, color.blue, 0.06);
+			this.#roundedRectangle(
+				cr,
+				selection.x - originX,
+				selection.y - originY,
+				selection.width,
+				selection.height,
+			);
+			cr.fill();
+		}
 		// Keep the highlight outside captured pixels so it can remain mapped without contaminating the attachment.
 		for (const [width, alpha] of [
 			[20, 0.04],
@@ -427,18 +456,59 @@ export class StrokeOverlay {
 			[4, 0.18],
 			[2, 0.96],
 		] as const) {
-			const expansion = width / 2 + 1;
+			const expansion = Math.max(width / 2 + 1, selectionPreviewRadius / 3.4);
+			this.#drawOutsideSelection(
+				cr,
+				selection.x - originX,
+				selection.y - originY,
+				selection.width,
+				selection.height,
+				surfaceWidth,
+				surfaceHeight,
+				expansion,
+				width,
+				alpha,
+				color,
+			);
+		}
+	}
+
+	#drawOutsideSelection(
+		cr: any,
+		x: number,
+		y: number,
+		width: number,
+		height: number,
+		surfaceWidth: number,
+		surfaceHeight: number,
+		expansion: number,
+		lineWidth: number,
+		alpha: number,
+		color: Gdk.RGBA,
+	): void {
+		const regions = [
+			[0, 0, surfaceWidth, y],
+			[0, y + height, surfaceWidth, surfaceHeight - y - height],
+			[0, y, x, height],
+			[x + width, y, surfaceWidth - x - width, height],
+		] as const;
+		for (const [clipX, clipY, clipWidth, clipHeight] of regions) {
+			if (clipWidth <= 0 || clipHeight <= 0) continue;
+			cr.save();
+			cr.rectangle(clipX, clipY, clipWidth, clipHeight);
+			cr.clip();
 			cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
-			cr.setLineWidth(width);
+			cr.setLineWidth(lineWidth);
 			this.#roundedRectangle(
 				cr,
-				selection.x - originX - expansion,
-				selection.y - originY - expansion,
-				selection.width + expansion * 2,
-				selection.height + expansion * 2,
-				expansion,
+				x - expansion,
+				y - expansion,
+				width + expansion * 2,
+				height + expansion * 2,
+				selectionPreviewRadius,
 			);
 			cr.stroke();
+			cr.restore();
 		}
 	}
 

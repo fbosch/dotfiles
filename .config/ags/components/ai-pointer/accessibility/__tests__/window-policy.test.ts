@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chooseAccessibilityWindow } from "../window-policy";
+import { chooseAccessibilityWindow, matchesInputWindowFrame } from "../window-policy";
 
 describe("accessibility window matching", () => {
 	test("keeps a unique exact-PID window when AT-SPI focus is stale", () => {
@@ -51,5 +51,22 @@ describe("accessibility window matching", () => {
 				{ active: false, exactPid: false, value: "second" },
 			]),
 		).toBeNull();
+	});
+
+	test("recognizes a matching frame returned through a distinct AT-SPI proxy", () => {
+		expect(
+			matchesInputWindowFrame(
+				"frame",
+				{ x: 0, y: 1, width: 1412, height: 829 },
+				{ width: 1428, height: 830 },
+			),
+		).toBe(true);
+		expect(
+			matchesInputWindowFrame(
+				"section",
+				{ x: 0, y: 0, width: 1428, height: 830 },
+				{ width: 1428, height: 830 },
+			),
+		).toBe(false);
 	});
 });

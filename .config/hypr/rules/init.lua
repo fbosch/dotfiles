@@ -9,10 +9,13 @@ require("rules.transient-placement").register()
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
 
 -- Bitwarden
-hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900" })
+hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900", tag = "+" .. window_tags.privacy })
 
 -- Signal
-hl.window_rule({ match = { class = "^(org\\.signal\\.Signal)$" }, float = true })
+hl.window_rule({ match = { class = "^(org\\.signal\\.Signal)$" }, float = true, tag = "+" .. window_tags.privacy })
+
+-- Discord
+hl.window_rule({ match = { class = "^(discord|com\\.discordapp\\.Discord)$" }, tag = "+" .. window_tags.privacy })
 
 -- GNOME Applications (general)
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true, persistent_size = true })
@@ -96,8 +99,12 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
 -- Floorp Browser
-hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2", no_screen_share = true })
-hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2", no_screen_share = true })
+hl.window_rule({
+	match = { class = "^(one\\.ablaze\\.floorp)$" },
+	monitor = "HDMI-A-2",
+	tag = "+" .. window_tags.privacy,
+})
+hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2", tag = "+" .. window_tags.privacy })
 
 -- Winboat
 hl.window_rule({ match = { class = "(winboat)" }, float = true })
@@ -140,3 +147,6 @@ hl.window_rule({
 	border_size = 0,
 	tag = "+" .. window_tags.non_resizable,
 })
+
+-- Must follow app-specific privacy tag assignment rules.
+hl.window_rule({ match = { tag = window_tags.privacy }, no_screen_share = true })

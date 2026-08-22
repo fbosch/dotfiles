@@ -22,6 +22,7 @@ import {
 import { isEligibleAccessibilityRole } from "./target-roles";
 import {
 	chooseAccessibilityWindow,
+	matchesInputWindowFrame,
 	type AccessibilityWindowCandidate,
 } from "./window-policy";
 import {
@@ -42,10 +43,10 @@ const maximumTraversalDurationMs = 350;
 const maximumHitPointTraversalDurationMs = 750;
 const maximumCandidates = 24;
 const maximumHitCount = 24;
-const closedStrokeSampleAnchors = 9;
-const corridorStrokeSampleAnchors = 13;
+const closedStrokeSampleAnchors = 5;
+const corridorStrokeSampleAnchors = 8;
 const interiorGridDivisions = 4;
-const maximumHitPoints = 40;
+const maximumHitPoints = 24;
 const callTimeoutMs = 100;
 const excludedRoles = new Set([
 	"application",
@@ -170,14 +171,30 @@ function matchingWindow(
 	});
 	if (!applications) return null;
 	return measure(timings.windowMatching, () => {
-		const candidates: AccessibilityWindowCandidate<Atspi.Accessible>[] = [];
-		for (const { accessible, exactPid } of applications) {
-			const matches = matchingApplicationWindows(accessible, input);
-			if (!matches) return null;
-			candidates.push(...matches.map((candidate) => ({ ...candidate, exactPid })));
-		}
-		return chooseAccessibilityWindow(candidates);
+		const exactApplications = applications.filter(({ exactPid }) => exactPid);
+		const exactCandidates = collectWindowCandidates(exactApplications, input);
+		if (!exactCandidates) return null;
+		if (exactCandidates.length > 0) return chooseAccessibilityWindow(exactCandidates);
+
+		const fallbackCandidates = collectWindowCandidates(
+			applications.filter(({ exactPid }) => exactPid === false),
+			input,
+		);
+		return fallbackCandidates ? chooseAccessibilityWindow(fallbackCandidates) : null;
 	});
+}
+
+function collectWindowCandidates(
+	applications: Array<{ accessible: Atspi.Accessible; exactPid: boolean }>,
+	input: HelperInput,
+): AccessibilityWindowCandidate<Atspi.Accessible>[] | null {
+	const candidates: AccessibilityWindowCandidate<Atspi.Accessible>[] = [];
+	for (const { accessible, exactPid } of applications) {
+		const matches = matchingApplicationWindows(accessible, input);
+		if (!matches) return null;
+		candidates.push(...matches.map((candidate) => ({ ...candidate, exactPid })));
+	}
+	return candidates;
 }
 
 function matchingApplicationWindows(
@@ -216,9 +233,8 @@ function matchingApplicationWindows(
 	return matches;
 }
 
-function hitPoints(input: HelperInput): HitPoint[] {
+function hitPoints(input: HelperInput, region: StrokeSelectionRegion): HitPoint[] {
 	const { selection, stroke, windowWidth, windowHeight } = input;
-	const region = strokeSelectionRegion(stroke.points, stroke.radius);
 	const center = {
 		x: Math.round(selection.x + selection.width / 2),
 		y: Math.round(selection.y + selection.height / 2),
@@ -291,7 +307,7 @@ function collectCandidates(
 	if (!component) return { candidates: [], complete: false };
 
 	const unresolvedPoints: HitPoint[] = [];
-	for (const point of hitPoints(input)) {
+	for (const point of hitPoints(input, region)) {
 		const countedPathCandidates = new Set<string>();
 		let accessible: Atspi.Accessible | null;
 		try {
@@ -306,7 +322,7 @@ function collectCandidates(
 		let pathComplete = false;
 		measure(timings.ancestorTraversal, () => {
 			for (let depth = 0; accessible && depth < maximumAncestorDepth; depth += 1) {
-				if (accessible === window) {
+				if (accessible === window || matchesInputWindow(accessible, input)) {
 					pathComplete = true;
 					break;
 				}
@@ -347,7 +363,8 @@ function collectCandidates(
 			}
 			return true;
 		});
-		if (complete === false) return { candidates: [...candidates.values()], complete: false };
+		if (complete === false)
+			return { candidates: [...candidates.values()], complete: false };
 		if (foundCandidate === false) unresolvedPoints.push(point);
 	}
 	if (unresolvedPoints.length > 0) {
@@ -366,6 +383,13 @@ function collectCandidates(
 		candidates: [...candidates.values()].sort((left, right) => right.hitCount - left.hitCount),
 		complete: true,
 	};
+}
+
+function matchesInputWindow(accessible: Atspi.Accessible, input: HelperInput): boolean {
+	return matchesInputWindowFrame(roleName(accessible), rectangle(accessible), {
+		width: input.windowWidth,
+		height: input.windowHeight,
+	});
 }
 
 function collectHitPointCandidates(
