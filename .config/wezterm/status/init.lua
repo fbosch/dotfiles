@@ -88,6 +88,7 @@ local function update_right_status(window)
 	table.insert(status, { Text = " ▏" })
 	table.insert(status, { Foreground = color_white })
 	table.insert(status, { Text = time })
+	table.insert(status, { Text = " " })
 
 	if workhours_icon and workhours_text and workhours_color then
 		table.insert(status, { Foreground = color_separator })
