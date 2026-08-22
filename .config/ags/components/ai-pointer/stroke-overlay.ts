@@ -119,7 +119,7 @@ export class StrokeOverlay {
 		this.#stopFrameCallback();
 		const surfaces = this.#surfaces;
 		this.#surfaces = [];
-		this.#renderer.reset();
+		this.#renderer.resetStroke();
 		const unmapped = await Promise.all(
 			surfaces.map(({ window }) => this.#waitForUnmap(window)),
 		);

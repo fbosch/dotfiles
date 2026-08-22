@@ -69,10 +69,14 @@ export class StrokeOverlayRenderer {
 		this.#selectionDebugState = state;
 	}
 
-	reset(): void {
+	resetStroke(): void {
 		this.#displaySegments = [];
 		this.#segmentCreatedAtMs = [];
 		this.#closedStroke = false;
+	}
+
+	reset(): void {
+		this.resetStroke();
 		this.#selectionFill = false;
 		this.#selectionDebugState = null;
 	}
