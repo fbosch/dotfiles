@@ -50,7 +50,7 @@ const tabs = Object.keys(tabMeta) as AudioMixerTab[];
 const volumeSegments = Array.from({ length: 12 }, (_, index) => index + 1);
 
 const panelVariants = cva(
-  'w-[500px] overflow-hidden rounded-xl border border-white/15 bg-background-secondary/90 text-foreground-primary shadow-[0_8px_32px_rgba(0,0,0,0.24),0_2px_8px_rgba(0,0,0,0.12)] backdrop-blur-md font-primary',
+  'w-[500px] overflow-hidden rounded-xl border border-surface-border bg-background-secondary/90 font-primary text-foreground-primary shadow-[0_8px_32px_rgba(0,0,0,0.24),0_2px_8px_rgba(0,0,0,0.12)] ring-1 ring-inset ring-surface-keyline backdrop-blur-md',
   {
     variants: {
       animated: {

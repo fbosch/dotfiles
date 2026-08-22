@@ -75,6 +75,10 @@ export default {
           DEFAULT: colors.border.default.value,
           hover: colors.border.hover.value,
         },
+        surface: {
+          border: colors.surface.border.value,
+          keyline: colors.surface.keyline.value,
+        },
         waybar: {
           bg: `${colors.background.secondary.value}b3`,
         },

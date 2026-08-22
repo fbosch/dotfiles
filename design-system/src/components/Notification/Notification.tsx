@@ -22,12 +22,12 @@ import { Button } from "../Button";
 
 const notificationVariants = cva(
   // Base styles - macOS-style with tighter border radius
-  "group relative w-[340px] bg-background-primary/85 backdrop-blur-sm border border-white/[0.15] rounded-xl overflow-hidden transition-all duration-150",
+  "group relative w-[340px] overflow-hidden rounded-xl border border-surface-border bg-background-primary/85 ring-1 ring-inset ring-surface-keyline backdrop-blur-sm transition-all duration-150",
   {
     variants: {
       urgency: {
         // Normal: hover changes background to surface-color
-        normal: "hover:bg-background-secondary/60 hover:border-white/20",
+        normal: "hover:bg-background-secondary/60",
         // Low: reduced opacity
         low: "opacity-90",
         // Critical: red background tint with red border (2px)

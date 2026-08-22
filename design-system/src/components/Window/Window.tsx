@@ -7,7 +7,7 @@ import { cn } from "../../utils/cn";
  * Based on .config/hypr/hyprland.conf and .config/hypr/hyprbars.conf
  *
  * Configuration reference:
- * - Border: 1px, rgba(ffffff40) active / rgba(ffffff26) inactive
+ * - Border: 1px opaque dark outer edge with a 20% white inset keyline
  * - Border radius: 6px
  * - Hyprbars height: 20px
  * - Hyprbars background: rgba(252525FF)
@@ -16,12 +16,12 @@ import { cn } from "../../utils/cn";
  */
 
 const windowVariants = cva(
-  "relative overflow-hidden bg-background-secondary/90 backdrop-blur-sm transition-all duration-200",
+  "relative overflow-hidden border border-surface-border bg-background-secondary/90 ring-1 ring-inset ring-surface-keyline backdrop-blur-sm transition-all duration-200",
   {
     variants: {
       state: {
-        active: "border-white/25",
-        inactive: "border-white/15",
+        active: "",
+        inactive: "",
       },
       shadow: {
         true: "shadow-[0_2px_15px_rgba(0,0,0,0.2)]",
@@ -137,14 +137,13 @@ export const Window: React.FC<WindowProps> = ({
     <div
       className={cn(
         windowVariants({ state, shadow }),
-        "border rounded-md",
+        "rounded-md",
         className,
       )}
       style={{
         width,
         height,
         borderRadius: "6px", // From hyprland.conf decoration.rounding
-        borderWidth: "1px", // From hyprland.conf general.border_size
       }}
     >
       {showTitlebar && (

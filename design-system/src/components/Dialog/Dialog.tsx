@@ -10,13 +10,13 @@ import { cn } from "../../utils/cn";
  * - Background: rgba(42, 42, 42, 0.90) with backdrop blur
  * - Border radius: 12px
  * - Padding: 24px
- * - Border: 1px solid rgba(255, 255, 255, 0.15)
+ * - Border: 1px opaque dark outer edge with a 20% white inset keyline
  * - Shadow: 0 8px 32px rgba(0, 0, 0, 0.2), 0 2px 8px rgba(0, 0, 0, 0.1)
  */
 
 const dialogVariants = cva(
   // Base styles
-  "bg-background-secondary/90 border border-white/15 backdrop-blur-sm shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] flex flex-col",
+  "flex flex-col border border-surface-border bg-background-secondary/90 shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] ring-1 ring-inset ring-surface-keyline backdrop-blur-sm",
   {
     variants: {
       variant: {

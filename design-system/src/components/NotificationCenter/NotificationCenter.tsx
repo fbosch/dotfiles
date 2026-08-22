@@ -115,7 +115,7 @@ export const NotificationCenter: React.FC<NotificationCenterProps> = ({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl",
+        "relative overflow-hidden rounded-xl border border-surface-border ring-1 ring-inset ring-surface-keyline",
         "w-[380px] h-[560px]",
         "flex flex-col",
         "bg-background-primary/85 backdrop-blur-sm",

@@ -52,10 +52,10 @@ export function AiPointerPrompt({
     >
       <form
         className={cn(
-          'flex h-12 w-fit max-w-full items-center gap-2 rounded-full border bg-background-secondary/80 p-2 shadow-[0_12px_36px_rgba(0,0,0,0.3),0_2px_8px_rgba(0,0,0,0.18)] backdrop-blur-xl transition-colors duration-150',
+          'flex h-12 w-fit max-w-full items-center gap-2 rounded-full border border-surface-border bg-background-secondary/80 p-2 shadow-[0_12px_36px_rgba(0,0,0,0.3),0_2px_8px_rgba(0,0,0,0.18)] ring-1 ring-inset ring-surface-keyline backdrop-blur-xl transition-colors duration-150',
           state.status === 'error'
             ? 'border-state-error/60'
-            : 'border-white/15 focus-within:border-accent-primary/70'
+            : 'focus-within:border-accent-primary/70'
         )}
         onSubmit={handleSubmit}
         onKeyDown={handleKeyDown}
@@ -116,7 +116,7 @@ export function AiPointerPrompt({
 
       {state.status === 'answered' ? (
         <section
-          className="mt-2 max-h-64 w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl rounded-tl-md border border-white/15 bg-background-primary/95 px-4 py-3 shadow-[0_12px_36px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+          className="mt-2 max-h-64 w-[min(26rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl rounded-tl-md border border-surface-border bg-background-primary/95 px-4 py-3 shadow-[0_12px_36px_rgba(0,0,0,0.28)] ring-1 ring-inset ring-surface-keyline backdrop-blur-xl"
           aria-label="Answer"
         >
           <p className="whitespace-pre-wrap font-button text-sm leading-6 text-foreground-primary">
@@ -130,7 +130,7 @@ export function AiPointerPrompt({
 
       {state.status === 'error' ? (
         <div
-          className="mt-2 flex w-[min(26rem,calc(100vw-2rem))] items-start gap-2 rounded-2xl rounded-tl-md border border-state-error/40 bg-background-primary/95 px-3 py-2.5 text-xs leading-relaxed text-state-error shadow-[0_12px_36px_rgba(0,0,0,0.24)] backdrop-blur-xl"
+          className="mt-2 flex w-[min(26rem,calc(100vw-2rem))] items-start gap-2 rounded-2xl rounded-tl-md border border-state-error/40 bg-background-primary/95 px-3 py-2.5 text-xs leading-relaxed text-state-error shadow-[0_12px_36px_rgba(0,0,0,0.24)] ring-1 ring-inset ring-surface-keyline backdrop-blur-xl"
           role="alert"
         >
           <ErrorIcon />
