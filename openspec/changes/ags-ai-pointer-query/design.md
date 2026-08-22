@@ -10,7 +10,7 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 
 - Keep pointer selection, capture, presentation, and cancellation in one AGS feature slice.
 - Keep backend, SDK, server, session, policy, and response-shape knowledge behind one Bun runtime boundary.
-- Send the smallest reviewed image and compositor metadata needed to explain the selection.
+- Send the smallest selected image and compositor metadata needed to explain the selection.
 - Make the model request read-only by construction and preserve cancellation/resource ownership across AGS and Bun process boundaries.
 - Preserve a stable backend-neutral machine protocol that future local answer workflows can use without inheriting pointer UI or OpenCode concepts.
 
@@ -28,7 +28,7 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 
 The answer runtime lives under `.config/opencode/libexec/answer-request/` and has a library API plus a JSON stdin/stdout CLI. AGS invokes the CLI through `Gio.Subprocess` with argv arrays; it never imports Node or Bun SDK code and never names OpenCode, an agent, a model, tools, a configuration directory, an endpoint, or a session.
 
-The protocol owns validation, verified attachment loading, backend invocation, cancellation, final-text normalization, and machine-safe errors. The caller owns prompt wording, selection, capture, preview, rendering, and retry UX. Its request contains only a request ID, the fixed `answer` operation, prompt text, attachment descriptors, and timeout.
+The protocol owns validation, verified attachment loading, backend invocation, cancellation, final-text normalization, and machine-safe errors. The caller owns prompt wording, selection, capture, rendering, and retry UX. Its request contains only a request ID, the fixed `answer` operation, prompt text, attachment descriptors, and timeout.
 
 Inside the runtime, one deep `AnswerBackend.execute()` interface accepts validated prompt and attachment bytes and returns final answer parts or stable backend failures. The OpenCode implementation owns agent, model, tool policy, connection, server ownership, session lifecycle, and cleanup. Runtime composition selects that trusted implementation locally; untrusted request fields cannot select or configure a backend. Replacing OpenCode later means implementing the same backend interface while preserving the caller protocol and AGS workflow.
 
@@ -96,11 +96,11 @@ The payload excludes client addresses, stable IDs, PIDs, initial titles/classes,
 
 Alternative considered: claim the first overlapping client is selected. Rejected because client-list ordering is not established as z-order and layers can visually or interactively overlap clients.
 
-### The capture preview is the consent boundary
+### Explicit typed submission is the consent boundary
 
-AGS validates the captured image before previewing it, calculates a SHA-256 digest, and sends that digest in the request. The runtime reads and validates the file once, checks the digest, and creates the SDK file part from the verified bytes. The preview and sent image are therefore the same bytes on controlled paths.
+AGS validates the captured image before composition, calculates a SHA-256 digest, and sends that digest in the request. The runtime reads and validates the file once, checks the digest, and creates the SDK file part from the verified bytes. The captured and sent image are therefore the same bytes on controlled paths.
 
-The prompt view displays the selected image and a concise list of title/class/workspace context that will accompany it. Enter submits; Escape discards. The surface explains that submission sends the reviewed content to the configured model provider but does not promise provider-side deletion.
+The prompt view is a compact pointer-adjacent text pill. It does not replay the selected image or expose the private context envelope. The completed drawing remains visible while local target resolution runs, is removed before capture, and is replaced after capture by a geometry-only overlay around the final selected area. Enter submits a trimmed non-empty question; Escape discards. During a request the action position shows progress and becomes a cancel action on hover or focus. Answers and failures appear as lightweight attached surfaces.
 
 Alternative considered: immediately submit after drag selection. Rejected because it makes accidental selection and surrounding-context disclosure too easy.
 
@@ -112,11 +112,11 @@ Each activation has an immutable run ID. Completion events include that ID and a
 
 Captures reside in `$XDG_RUNTIME_DIR/ai-pointer` with a private directory and unpredictable names. There is no fallback to `/tmp`, screenshots, or clipboard locations. Initialization removes stale files known to belong to this feature; controlled terminal paths remove their run's files.
 
-Alternative considered: one mutable singleton capture path. Rejected because cancel-and-restart races can associate the wrong preview or delete a new capture.
+Alternative considered: one mutable singleton capture path. Rejected because cancel-and-restart races can associate the wrong prompt with a capture or delete a new capture.
 
-### Results stay plain, bounded, and invisible to screen sharing
+### Results stay plain and bounded
 
-The response renderer treats model output as plain text. It does not parse markup, activate links, invoke commands, or offer automatic actions. The AGS layer has `no_screen_share` enabled. Before showing a result and during active work, the controller checks session lock state; a locked session cancels/hides the workflow and cleans controlled resources.
+The response renderer treats model output as plain text. It does not parse markup, activate links, invoke commands, or offer automatic actions. AI Pointer layers remain visible to ordinary screenshot and screen-sharing tools. Before showing a result and during active work, the controller checks session lock state; a locked session cancels/hides the workflow and cleans controlled resources.
 
 Alternative considered: render rich model markdown. Rejected because markup and links turn untrusted model output into a larger desktop interaction surface.
 
@@ -134,7 +134,7 @@ Alternative considered: render rich model markdown. Rejected because markup and 
 1. Add the pinned libexec SDK dependency and protocol/runtime tests with no AGS or Hyprland wiring.
 2. Add and verify the no-tool `desktop-pointer` agent and compatible image-capable model behavior.
 3. Add the AGS feature slice, private capture lifecycle, and request subprocess integration behind direct AGS requests.
-4. Validate selection, capture preview, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
+4. Validate selection, question composition, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
 5. Register the bundled component, styles, layer rule, and binding.
 6. Roll back by removing the binding first, then unregistering the AGS feature. The request runtime and hidden agent are inert without callers.
 

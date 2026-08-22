@@ -1,6 +1,6 @@
 ## Purpose
 
-Let a user explicitly draw over a desktop region, ask a short question about the reviewed capture, and receive a safe read-only AI answer without ambient screen observation or desktop automation.
+Let a user explicitly draw over a desktop region, ask a short question about that selection, and receive a safe read-only AI answer without ambient screen observation or desktop automation.
 
 ## ADDED Requirements
 
@@ -15,12 +15,12 @@ The AI Pointer SHALL start only through an explicit user activation. It SHALL al
 - **WHEN** the user triggers the binding while selection, composition, requesting, answer, or failure is active
 - **THEN** the system preserves the existing workflow and does not start a second selector
 
-### Requirement: Stroke selection and capture preview
-The AI Pointer SHALL sample the pointer path while the user holds `Super + middle-button`, derive a bounded capture rectangle from the completed stroke, and show a preview before any image or metadata is submitted. A short stroke SHALL use the bounded local click-target fallback. Local accessibility resolution MAY refine the capture rectangle, but the preview and submitted attachment MUST use the same final geometry and bytes. Cancelling selection MUST return to idle without a request.
+### Requirement: Stroke selection and question prompt
+The AI Pointer SHALL sample the pointer path while the user holds `Super + middle-button`, derive a bounded capture rectangle from the completed stroke, and show a compact question prompt before any image or metadata is submitted. A short stroke SHALL use the bounded local click-target fallback. Local accessibility resolution MAY refine the capture rectangle, but the captured and submitted attachment MUST use the same final geometry and bytes. The completed drawing SHALL remain visible during local target resolution, then be removed immediately before capture. A geometry-only selection overlay SHALL mark the final captured area while the prompt is active. The prompt MUST NOT replay the selected image or application context. Cancelling selection MUST return to idle without a request.
 
 #### Scenario: User selects a region
 - **WHEN** the user completes a stroke whose derived or locally refined rectangle has valid positive dimensions within the configured capture limit
-- **THEN** the system captures and previews that final rectangle before accepting a question
+- **THEN** the system captures that final rectangle and presents the question prompt without replaying the selection
 
 #### Scenario: User cancels selection
 - **WHEN** the user dismisses the region selector
@@ -38,13 +38,13 @@ The AI Pointer SHALL attach bounded Hyprland context for the final capture geome
 - **THEN** the request contains ranked geometric candidates and identifies the target relationship as inferred
 
 ### Requirement: Privacy-minimized context and explicit consent
-The preview SHALL show the image and the application context that will be sent. The AI-facing context MUST omit local client addresses, stable identifiers, process identifiers, command lines, and working directories. The system SHALL send the reviewed image, typed question, and previewed context only after explicit submission.
+The AI-facing context MUST omit local client addresses, stable identifiers, process identifiers, command lines, and working directories. The system SHALL send the captured image, typed question, and privacy-minimized context only after the user explicitly submits a non-empty question. The composition surface SHALL remain text-only and MUST NOT expose private context or captured pixels again.
 
-#### Scenario: User submits a reviewed selection
-- **WHEN** the user submits a non-empty question after reviewing the capture and context
-- **THEN** the system sends only the previewed selection image, typed question, and privacy-minimized compositor context
+#### Scenario: User submits a question about the selection
+- **WHEN** the user submits a non-empty question from the composition prompt
+- **THEN** the system sends only the captured selection image, typed question, and privacy-minimized compositor context
 
-#### Scenario: User cancels after preview
+#### Scenario: User cancels during composition
 - **WHEN** the user cancels during composition or before submitting the question
 - **THEN** the system sends no image, question, or compositor context
 

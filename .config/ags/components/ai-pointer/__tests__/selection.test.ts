@@ -37,20 +37,20 @@ describe("promptPosition", () => {
 	test("centers above the selection when that space is available", () => {
 		expect(promptPosition({ x: 800, y: 300, width: 320, height: 240 }, monitor, prompt)).toEqual({
 			x: 730,
-			y: 220,
+			y: 212,
 		});
 	});
 
 	test("uses the space below a selection near the monitor top", () => {
 		expect(promptPosition({ x: 100, y: 20, width: 200, height: 100 }, monitor, prompt)).toEqual({
 			x: 16,
-			y: 136,
+			y: 144,
 		});
 	});
 
 	test("uses an available side when the selection fills the monitor height", () => {
 		expect(promptPosition({ x: 400, y: 0, width: 500, height: 1080 }, monitor, prompt)).toEqual({
-			x: 916,
+			x: 924,
 			y: 508,
 		});
 	});
@@ -59,7 +59,7 @@ describe("promptPosition", () => {
 		const leftMonitor = { x: -1920, y: 0, width: 1920, height: 1080 };
 		expect(
 			promptPosition({ x: -1500, y: 300, width: 200, height: 100 }, leftMonitor, prompt),
-		).toEqual({ x: -1630, y: 220 });
+		).toEqual({ x: -1630, y: 212 });
 	});
 });
 

@@ -9,6 +9,7 @@ import "./volume-indicator.case";
 import "./force-quit.case";
 import "./about-this-pc.case";
 import "./ai-pointer.case";
+import "./ai-pointer-view.case";
 import "./ai-pointer-controller.case";
 import "./window-switcher.case";
 import "./window-switcher-preview-cache.case";

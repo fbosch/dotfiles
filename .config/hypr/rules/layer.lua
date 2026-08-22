@@ -25,19 +25,16 @@ hl.layer_rule({ match = { namespace = "ags-desktop-clock" }, blur = true, ignore
 hl.layer_rule({
 	match = { namespace = "ags-ai-pointer-drawing" },
 	no_anim = true,
-	no_screen_share = true,
 })
 hl.layer_rule({
 	match = { namespace = "ags-ai-pointer-selection-preview" },
 	animation = "popin 98%",
-	no_screen_share = true,
 })
 hl.layer_rule({
 	match = { namespace = "ags-ai-pointer" },
 	blur = true,
 	animation = "fade",
 	ignore_alpha = 0.3,
-	no_screen_share = true,
 })
 hl.layer_rule({
 	match = { namespace = "hyprshutdown" },

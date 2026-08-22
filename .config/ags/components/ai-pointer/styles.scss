@@ -12,65 +12,109 @@
     .ai-pointer-stroke-canvas { background-color: transparent; }
   }
 
-  /* The monitor-sized prompt surface owns placement; only the pill has visual padding. */
+  /* The monitor-sized prompt surface owns placement; only the prompt elements draw a background. */
   /* stylelint-disable-next-line nesting-selector-no-missing-scoping-root -- The surface mixin supplies the window selector. */
   &.ai-pointer-prompt-surface { padding: 0; }
 
-  box.ai-pointer-prompt-host { background-color: transparent; }
+  box.ai-pointer-prompt-host,
+  box.ai-pointer-prompt-panel { background-color: transparent; }
 
-  box.ai-pointer-prompt-panel {
-    padding: 20px;
-    color: #fff;
-    background-color: var(--ags-color-background-primary);
-    border: 2px solid var(--ags-color-accent-primary);
-    border-radius: 24px;
-  }
+  box.ai-pointer-prompt-pill {
+    min-height: 32px;
+    padding: 8px;
+    background-color: color-mix(in srgb, var(--ags-color-background-secondary) 80%, transparent);
+    border: 1px solid rgb(255 255 255 / 15%);
+    border-radius: 999px;
+    box-shadow: 0 12px 36px rgb(0 0 0 / 30%), 0 2px 8px rgb(0 0 0 / 18%);
 
-  .ai-pointer-preview {
-    min-height: 220px;
-    background-color: rgb(0 0 0 / 35%);
-    border-radius: 12px;
-  }
-
-  .ai-pointer-context,
-  .ai-pointer-disclosure,
-  .ai-pointer-status,
-  .ai-pointer-answer {
-    color: #fff;
-    font-family: var(--ags-font-primary), system-ui, sans-serif;
-  }
-
-  .ai-pointer-context,
-  .ai-pointer-disclosure {
-    font-size: 12px;
-    opacity: 0.76;
-  }
-
-  .ai-pointer-status {
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .ai-pointer-answer-scroll {
-    min-height: 120px;
-    padding: 12px;
-    background-color: rgb(255 255 255 / 6%);
-    border-radius: 12px;
-  }
-
-  .ai-pointer-answer {
-    font-size: 14px;
+    &.focused { border-color: color-mix(in srgb, var(--ags-color-accent-primary) 70%, transparent); }
+    &.error { border-color: color-mix(in srgb, var(--ags-color-state-error) 60%, transparent); }
   }
 
   .ai-pointer-prompt-input {
-    min-width: 0;
-    padding: 10px 12px;
-    color: #fff;
-    background-color: rgb(255 255 255 / 8%);
-    border: 1px solid rgb(255 255 255 / 16%);
-    border-radius: 10px;
-    font-family: var(--ags-font-primary), system-ui, sans-serif;
-    font-size: 15px;
-    font-weight: 600;
+    min-height: 32px;
+    padding: 0 0 0 4px;
+    color: var(--ags-color-foreground-primary);
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    caret-color: var(--ags-color-foreground-primary);
+    font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
+    font-size: 14px;
+
+    &:focus { box-shadow: none; }
+    &:disabled { opacity: 0.7; }
+
+    /* stylelint-disable-next-line selector-type-no-unknown -- GTK exposes placeholder as a CSS node. */
+    placeholder { color: var(--ags-color-foreground-tertiary); }
+  }
+
+  button.ai-pointer-action {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: 999px;
+
+    label {
+      font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
+      font-size: 18px;
+    }
+
+    .ai-pointer-spinner,
+    .ai-pointer-cancel-icon { transition: opacity 150ms ease; }
+
+    &.requesting {
+      .ai-pointer-cancel-icon { opacity: 0; }
+
+      &:hover,
+      &:focus {
+        color: var(--ags-color-state-error-text);
+        background-color: var(--ags-color-state-error);
+
+        .ai-pointer-spinner { opacity: 0; }
+        .ai-pointer-cancel-icon { opacity: 1; }
+      }
+    }
+  }
+
+  .ai-pointer-answer-scroll,
+  box.ai-pointer-error-box {
+    padding: 12px 16px;
+    background-color: color-mix(in srgb, var(--ags-color-background-primary) 95%, transparent);
+    border: 1px solid rgb(255 255 255 / 15%);
+    border-radius: 4px 16px 16px;
+    box-shadow: 0 12px 36px rgb(0 0 0 / 28%);
+  }
+
+  .ai-pointer-answer,
+  .ai-pointer-truncated,
+  .ai-pointer-error,
+  .ai-pointer-error-icon {
+    font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
+  }
+
+  .ai-pointer-answer {
+    color: var(--ags-color-foreground-primary);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .ai-pointer-truncated {
+    color: var(--ags-color-state-warning);
+    font-size: 12px;
+  }
+
+  box.ai-pointer-error-box {
+    color: var(--ags-color-state-error);
+    border-color: color-mix(in srgb, var(--ags-color-state-error) 40%, transparent);
+  }
+
+  .ai-pointer-error { font-size: 12px; }
+
+  .ai-pointer-error-icon {
+    min-width: 14px;
+    font-size: 12px;
+    font-weight: 700;
   }
 }

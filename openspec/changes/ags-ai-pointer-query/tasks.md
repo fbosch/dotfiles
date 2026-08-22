@@ -1,10 +1,10 @@
 ## 0. Selection And Consent Slice
 
-- [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super + middle-click` binding, and private no-screen-share layer surface.
+- [x] 0.1 Add the bundled AI Pointer component, strict `start` request boundary, `Super + middle-click` binding, and layer surface.
 - [x] 0.2 Implement one-run XState stroke selection, private runtime capture storage, sampled global geometry between Hyprland press/release callbacks, direct `grim` capture, and controlled Escape/shutdown cleanup.
-- [x] 0.3 Add a local capture preview and disabled Ask control so no image can leave the machine in this slice.
-- [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS preview-surface lifecycle check.
-- [x] 0.5 Manually verify middle-button stroke and click selection, screenshot accuracy, preview, and Escape cleanup.
+- [x] 0.3 Add a local text-only composition prompt and disabled Ask control so no image can leave the machine in this slice.
+- [x] 0.4 Add pure geometry, request, and machine coverage plus a native GJS prompt-surface lifecycle check.
+- [x] 0.5 Manually verify middle-button stroke and click selection, screenshot accuracy, composition, and Escape cleanup.
 
 ## 1. Runtime Prerequisites
 
@@ -27,7 +27,7 @@
 - [x] 3.2 Read each accepted attachment once and construct its OpenCode file part from the verified bytes rather than passing a mutable file path to OpenCode.
 - [x] 3.3 Reject symlinks, non-regular files, MIME mismatches, excessive images, and digest changes without submitting content.
 - [x] 3.4 Normalize only final assistant text parts, exclude reasoning/tool/provider parts, bound output size, explicitly mark truncation, and reject empty output.
-- [x] 3.5 Add attachment and normalization tests, including changed files after preview, high-pixel images, mixed response parts, empty responses, and redacted failure diagnostics.
+- [x] 3.5 Add attachment and normalization tests, including changed files after capture, high-pixel images, mixed response parts, empty responses, and redacted failure diagnostics.
 
 ## 4. OpenCode Server And Session Lifecycle
 
@@ -45,7 +45,7 @@
 - [x] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks and sample one bounded pointer stroke between them.
 - [x] 5.3 Validate stroke-derived or click-fallback geometry for signed origins, positive dimensions, and the maximum capture area.
 - [x] 5.4 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
-- [x] 5.5 Capture the final stroke-, click-, or accessibility-resolved geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
+- [x] 5.5 Capture the final stroke-, click-, or accessibility-resolved geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before composition.
 - [x] 5.6 Revalidate exact whole-window captures only when one fresh client geometry exactly matches the final capture rectangle.
 - [x] 5.7 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
 - [x] 5.8 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
@@ -64,17 +64,17 @@
 
 ## 7. AGS Presentation And Consent
 
-- [x] 7.1 Build a pointer-adjacent review surface with the validated image preview, privacy-minimized application context, question entry, request status, result, and concise failure states.
+- [x] 7.1 Build a compact pointer-adjacent text pill with a content-growing question entry, stable action position, request status, attached result, and concise failure states.
 - [x] 7.2 Require a non-empty typed question and explicit Enter submission; Escape from composition must discard the capture without sending data.
 - [x] 7.3 Render results as bounded literal plain text with markup, automatic links, clipboard actions, command dispatch, and mutation affordances disabled.
-- [x] 7.4 Show an explicit statement that submission sends the reviewed image, question, and context to the configured model provider without promising provider-side deletion.
+- [x] 7.4 Keep captured pixels and the private context envelope out of the composition surface while retaining explicit Enter submission as the consent boundary.
 - [x] 7.5 Position and clamp the surface to the relevant monitor, including negative monitor origins and transformed monitor geometry.
 - [x] 7.6 Add feature styles through the bundled stylesheet manifest and preserve shared Gaming opacity behavior.
 
 ## 8. Desktop Registration And Hardening
 
 - [x] 8.1 Register the AI Pointer component in `.config/ags/config-bundled.tsx` with strict component request parsing.
-- [x] 8.2 Add a static Hyprland layer rule for the AI Pointer namespace with `no_screen_share` and the established shell-surface presentation behavior.
+- [x] 8.2 Add static Hyprland layer rules for the AI Pointer namespaces with the established shell-surface presentation behavior.
 - [x] 8.3 Add the provisional `Super + middle-click` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
 - [x] 8.4 Preflight selection, capture, Bun, helper, agent, compatible OpenCode server, and image-capable model availability so missing dependencies return a concise failure without blocking Hyprland.
 - [x] 8.5 Verify a partially deployed helper, agent, AGS component, or keybind fails safely and cannot leave a selector or capture active.
@@ -87,7 +87,7 @@
 - [x] 9.4 Run the relevant AGS line/style/quality checks and bundle check.
 - [x] 9.5 Run `hyprctl configerrors` after the Hyprland binding and layer-rule changes.
 - [x] 9.6 Run `stow -n .` from the dotfiles repository root.
-- [ ] 9.7 Manually verify selection, preview, context review, submission, answer rendering, all Escape paths, unavailable dependencies, oversized images, version mismatch, timeout, cleanup failure, and locked-session behavior.
+- [ ] 9.7 Manually verify selection, content-growing composition, requesting cancellation, submission, attached answer rendering, all Escape paths, unavailable dependencies, oversized images, version mismatch, timeout, cleanup failure, and locked-session behavior.
 - [ ] 9.8 Verify no AI Pointer capture or ephemeral OpenCode session remains after success, failure, timeout, cancellation, or an AGS restart.
 - [x] 9.9 Verify AI Commit remains byte-for-byte unchanged with `git diff --exit-code -- .config/opencode/plugins/ai-commit .config/fish/functions/ai_commit.fish`.
 - [x] 9.10 Run `openspec validate ags-ai-pointer-query --type change --strict --no-interactive`.

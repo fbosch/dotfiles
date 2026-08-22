@@ -165,7 +165,7 @@ test("AI Pointer samples the stroke while preflight is pending", async () => {
 		beginStroke(_stroke, onFrame: () => void) { frame = onFrame; return true; },
 		updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-		showCapture() { return { pixelHeight: 20, pixelWidth: 20 }; },
+showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() { hides += 1; }, dispose() {},
 	} as unknown as AiPointerView;
 	const controller = new AiPointerController({
@@ -208,10 +208,10 @@ test("AI Pointer samples the stroke while preflight is pending", async () => {
 	}
 });
 
-test("AI Pointer keeps the selected-region preview active without a metadata window", async () => {
+test("AI Pointer presents the question prompt without a metadata window", async () => {
 	let captured = 0;
 	let programLookups = 0;
-	let previewCalls = 0;
+let promptCalls = 0;
 	const view = {
 		create() {},
 		beginStroke() {
@@ -222,8 +222,8 @@ test("AI Pointer keeps the selected-region preview active without a metadata win
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture() {
-			previewCalls += 1;
+showPrompt() {
+promptCalls += 1;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState() {},
@@ -261,10 +261,10 @@ test("AI Pointer keeps the selected-region preview active without a metadata win
 		assert(captured === 1, "selection was not captured");
 		assert(programLookups === 1, "local context was not resolved");
 		assert(controller.selectionContext?.geometricInference.clients.length === 0, "context failure did not degrade safely");
-		assert(previewCalls === 1, "selected-region preview was not shown");
-		assert(controller.start({ x: 50, y: 60 }) === false, "selection preview did not remain active");
+assert(promptCalls === 1, "question prompt was not shown");
+assert(controller.start({ x: 50, y: 60 }) === false, "question prompt did not remain active");
 		controller.cancel();
-		assert(controller.start({ x: 50, y: 60 }), "cancelling the preview did not return to idle");
+assert(controller.start({ x: 50, y: 60 }), "cancelling the prompt did not return to idle");
 	} finally {
 		controller.teardown();
 	}
@@ -280,7 +280,7 @@ test("AI Pointer submits the reviewed capture and presents a literal answer", as
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
 		beginStroke() { return true; }, updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-		showCapture() { return { pixelHeight: 20, pixelWidth: 20 }; },
+showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		showRequesting() { requesting = true; },
 		showAnswer(value: string) { answer = value; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
@@ -326,7 +326,7 @@ test("AI Pointer rejects stale answer completion and submission after lock", asy
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
 		beginStroke() { return true; }, updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-		showCapture() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {},
+showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {},
 		showAnswer() { answerPresentations += 1; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
 	} as unknown as AiPointerView;
@@ -376,7 +376,7 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 	const view = {
 		create() {}, beginStroke() { return true; }, updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-		showCapture() { return { pixelHeight: 20, pixelWidth: 20 }; },
+showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
 	} as unknown as AiPointerView;
 	const controller = new AiPointerController({

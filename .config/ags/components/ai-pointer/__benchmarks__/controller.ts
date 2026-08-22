@@ -2,6 +2,7 @@ import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import type { AccessibilityLookupMode } from "../accessibility";
 import { AiPointerController } from "../controller";
+import { emptySelectionContext } from "../context";
 import type { AiPointerView } from "../ai-pointer-view";
 import { assertInertBenchmarkDependencies } from "./safety";
 import { benchmarkEnvironmentInteger, benchmarkStatistics } from "./stats";
@@ -83,7 +84,7 @@ function createScenario(mode: AccessibilityLookupMode): {
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture() {
+		showPrompt() {
 			throw new Error("Benchmark capture must remain inert");
 		},
 		setOcrState() {},
@@ -115,6 +116,7 @@ function createScenario(mode: AccessibilityLookupMode): {
 					metadata: { confidence: 1, role: "push button" },
 				};
 		},
+		resolveContext: (geometry) => emptySelectionContext(geometry),
 		resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async () => {

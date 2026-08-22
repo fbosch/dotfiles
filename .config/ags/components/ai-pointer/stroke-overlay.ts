@@ -8,7 +8,7 @@ import GObject from "gi://GObject?version=2.0";
 import Graphene from "gi://Graphene?version=1.0";
 import tokens from "../../../../design-system/tokens.json";
 import { createCancelController } from "./cancel-controller";
-import type { SelectionGeometry } from "./selection";
+import type { PointerPosition, SelectionGeometry } from "./selection";
 import {
 	bsplineStrokeSegments,
 	closedBsplineStrokeSegments,
@@ -398,7 +398,7 @@ export class StrokeOverlay {
 	#createWindow(
 		monitor: Gdk.Monitor,
 		index: number,
-		drawing: Gtk.DrawingArea,
+		drawing: Gtk.Widget,
 		namespace: string,
 		captureKeyboard: boolean,
 	): Astal.Window {

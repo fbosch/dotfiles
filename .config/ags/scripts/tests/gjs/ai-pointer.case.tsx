@@ -122,34 +122,6 @@ test("AI Pointer bounds local OCR output while streaming", async () => {
 	);
 });
 
-test("AI Pointer view presents a capture and disposes", async () => {
-	const view = new AiPointerView();
-	view.create({ onCancel() {}, onSubmit() {} });
-	const capturePath = GLib.canonicalize_filename(
-		"../../../components/ai-pointer/__tests__/capture.svg",
-		GLib.get_current_dir(),
-	);
-	assert(
-		view.showCapture(
-			{
-				path: capturePath,
-				geometry: { x: 10, y: 20, width: 20, height: 20 },
-				sha256: "a".repeat(64),
-			},
-			"Desktop selection context",
-		),
-		"AI Pointer capture preview was rejected",
-	);
-	await settleMainLoop();
-	assert(view.isCreated, "AI Pointer view was not created");
-	assert(view.isPromptVisible, "AI Pointer prompt was not shown");
-	view.hide();
-	await settleMainLoop();
-	view.dispose();
-	await settleMainLoop();
-	assert(view.isCreated === false, "AI Pointer view was not disposed");
-});
-
 test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	const overlay = new StrokeOverlay();
 	let stroke = createPointerStroke({ x: 10, y: 10 });
@@ -165,7 +137,7 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	assert(await overlay.hideBeforeCapture(), "AI Pointer stroke overlay did not unmap");
 	assert(
 		overlay.showSelection({ x: 0, y: 0, width: 120, height: 120 }),
-		"AI Pointer selection preview was unavailable",
+		"AI Pointer selection overlay was unavailable",
 	);
 	await settleMainLoop();
 	overlay.hide();
@@ -185,7 +157,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture() {
+showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState() {},
@@ -278,7 +250,7 @@ test("AI Pointer uses a bounded fallback for a click without an accessible targe
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture() {
+showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState() {},
@@ -326,8 +298,9 @@ test("AI Pointer uses a bounded fallback for a click without an accessible targe
 	}
 });
 
-test("AI Pointer waits for the drawing overlay before capture", async () => {
+test("AI Pointer keeps drawing visible during resolution and removes it before capture", async () => {
 	let captured = false;
+	let finishAccessibility: (() => void) | null = null;
 	let confirmHidden: ((hidden: boolean) => void) | null = null;
 	const view = {
 		create() {},
@@ -341,7 +314,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 				confirmHidden = resolve;
 			});
 		},
-		showCapture() {
+		showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState() {},
@@ -355,7 +328,10 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		preflight: readyPreflight,
 		readPointer: () => null,
-		resolveAccessibility: async () => null,
+		resolveAccessibility: () =>
+			new Promise<null>((resolve) => {
+				finishAccessibility = () => resolve(null);
+			}),
 		resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
 		capture: async (_directory, geometry) => {
@@ -371,7 +347,11 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
+		assert(confirmHidden === null, "drawing was removed while target resolution was pending");
 		assert(captured === false, "capture started while the drawing was still mapped");
+		assert(finishAccessibility !== null, "target resolution did not start");
+		finishAccessibility();
+		await settleMainLoop();
 		assert(confirmHidden !== null, "drawing teardown was not requested");
 		confirmHidden(true);
 		await settleMainLoop();
@@ -396,7 +376,7 @@ test("AI Pointer rejects a second finish while overlay teardown is pending", asy
 				confirmHidden = resolve;
 			});
 		},
-		showCapture() {
+		showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState() {},
@@ -445,7 +425,7 @@ test("AI Pointer converts an unexpected OCR rejection into a bounded failure", a
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture() {
+showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -501,9 +481,9 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 		finishStroke() {
 			return Promise.resolve(true);
 		},
-		showCapture(...args) {
-			presentationOrder.push("preview");
-			previewArgumentCount = args.length;
+showPrompt(...args) {
+presentationOrder.push("prompt");
+previewArgumentCount = args.length;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
 		setOcrState(state) {
@@ -571,8 +551,8 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(resolvedAccessibility, "accessible metadata was not resolved");
 		assert(resolvedPrograms, "program metadata was not resolved");
-		assert(previewArgumentCount === 2, "review context was not passed to the prompt view");
-		assert(presentationOrder.join(",") === "preview,ocr", "OCR started before presentation");
+assert(previewArgumentCount === 1, "private context was passed to the prompt view");
+assert(presentationOrder.join(",") === "prompt,ocr", "OCR started before presentation");
 		assert(
 			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
 			"OCR did not reuse the presented capture",

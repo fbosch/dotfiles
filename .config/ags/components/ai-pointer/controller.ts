@@ -18,7 +18,7 @@ import { emptySelectionContext, formatSelectionContext, type SelectionContext } 
 import { querySelectionContext } from "./context-query";
 import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
-import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
+import { AiPointerView, type CaptureDimensions } from "./ai-pointer-view";
 import { recognizeCapture } from "./ocr";
 import { aiPointerPerformanceMetrics } from "./performance-metrics";
 import { readPointerPosition } from "./pointer-query";
@@ -108,28 +108,25 @@ export class AiPointerController {
 						this.cancel();
 						return;
 					}
-					const previewMark = perf.isEnabled()
-						? perf.start("ai-pointer", aiPointerPerformanceMetrics.previewPresentation)
+					const promptMark = perf.isEnabled()
+						? perf.start("ai-pointer", aiPointerPerformanceMetrics.promptPresentation)
 						: null;
-					let preview: CapturePreview | null = null;
+					let dimensions: CaptureDimensions | null = null;
 					try {
-						preview = this.#view.showCapture(
-							this.#capture,
-							formatSelectionContext(this.#selectionContext),
-						);
+						dimensions = this.#view.showPrompt(this.#capture);
 					} catch {
-						previewMark?.end(false, "failed");
+						promptMark?.end(false, "failed");
 					}
-					previewMark?.end(preview !== null, preview ? undefined : "failed");
-					if (!preview) {
-						this.#finishWorkflow(false, "preview-failed");
-						this.#failureMessage = "The captured image could not be previewed.";
+					promptMark?.end(dimensions !== null, dimensions ? undefined : "failed");
+					if (!dimensions) {
+						this.#finishWorkflow(false, "prompt-failed");
+						this.#failureMessage = "The question field could not be presented.";
 						deleteCapture(this.#capture.path);
 						this.#capture = null;
 						this.#actor?.send({ type: "FAIL" });
 						return;
 					}
-					this.#scheduleOcr(this.#capture, preview);
+					this.#scheduleOcr(this.#capture, dimensions);
 					return;
 				}
 				if (snapshot.matches("requesting")) {
@@ -278,29 +275,7 @@ export class AiPointerController {
 		this.#workflowMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
 			: null;
-		const overlayMark = perf.isEnabled()
-			? perf.start("ai-pointer", aiPointerPerformanceMetrics.overlayTeardown)
-			: null;
-		void this.#view.finishStroke().then((hidden) => {
-			overlayMark?.end(hidden, hidden ? undefined : "failed");
-			if (runId !== this.#runId) return;
-			this.#setCursorOutlineState(false);
-			if (hidden === false) {
-				this.#finishing = false;
-				this.#finishWorkflow(false, "overlay-failed");
-				this.#failureMessage = "The drawing overlay could not be removed safely.";
-				this.#actor?.send({ type: "FAIL" });
-				return;
-			}
-			this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
-		}).catch(() => {
-			overlayMark?.end(false, "failed");
-			if (runId !== this.#runId) return;
-			this.#finishing = false;
-			this.#finishWorkflow(false, "overlay-failed");
-			this.#failureMessage = "The drawing overlay could not be removed safely.";
-			this.#actor?.send({ type: "FAIL" });
-		});
+		this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 	}
 
 	#captureGeometry(
@@ -363,6 +338,24 @@ export class AiPointerController {
 			return;
 		}
 		this.#resolvePrograms(captureGeometry);
+		const overlayMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.overlayTeardown)
+			: null;
+		let overlayHidden = false;
+		try {
+			overlayHidden = await this.#view.finishStroke();
+			overlayMark?.end(overlayHidden, overlayHidden ? undefined : "failed");
+		} catch {
+			overlayMark?.end(false, "failed");
+		}
+		if (runId !== this.#runId || cancellable.is_cancelled()) return;
+		if (overlayHidden === false) {
+			this.#finishing = false;
+			this.#finishWorkflow(false, "overlay-failed");
+			this.#failureMessage = "The drawing overlay could not be removed safely.";
+			this.#actor?.send({ type: "FAIL" });
+			return;
+		}
 		let result: Awaited<ReturnType<typeof captureRegion>>;
 		const captureMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.capture)
@@ -534,17 +527,17 @@ export class AiPointerController {
 		});
 	}
 
-	#scheduleOcr(capture: Capture, preview: CapturePreview): void {
+	#scheduleOcr(capture: Capture, dimensions: CaptureDimensions): void {
 		this.#stopOcr();
 		const runId = this.#runId;
 		this.#ocrStartId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
 			this.#ocrStartId = 0;
-			if (runId === this.#runId) this.#startOcr(capture, preview);
+			if (runId === this.#runId) this.#startOcr(capture, dimensions);
 			return GLib.SOURCE_REMOVE;
 		});
 	}
 
-	#startOcr(capture: Capture, preview: CapturePreview): void {
+	#startOcr(capture: Capture, dimensions: CaptureDimensions): void {
 		const runId = this.#runId;
 		const cancellable = new Gio.Cancellable();
 		this.#ocrCancellable = cancellable;
@@ -554,7 +547,7 @@ export class AiPointerController {
 			: null;
 		const workflowMark = this.#workflowMark;
 		void this.#recognizeOcr(
-			{ path: capture.path, ...preview },
+			{ path: capture.path, ...dimensions },
 			cancellable,
 			(process) => {
 				if (runId === this.#runId) this.#ocrProcess = process;

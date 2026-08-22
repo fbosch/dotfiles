@@ -19,6 +19,7 @@ export const maximumSelectionPixels = 32_000_000;
 export const clickFallbackSize = 256;
 export const clickTargetMaximumSize = 384;
 export const clickTargetPadding = 24;
+const promptSelectionGap = 24;
 
 export function validatedSelectionGeometry(
 	x: number,
@@ -136,7 +137,6 @@ export function promptPosition(
 	prompt: PromptDimensions,
 ): PointerPosition {
 	const edgePadding = 16;
-	const gap = 16;
 	const centerX = selection.x + selection.width / 2;
 	const centerY = selection.y + selection.height / 2;
 	const left = monitor.x + edgePadding;
@@ -145,16 +145,16 @@ export function promptPosition(
 	const bottom = monitor.y + monitor.height - edgePadding;
 	const centeredX = clamp(centerX - prompt.width / 2, left, right - prompt.width);
 	const centeredY = clamp(centerY - prompt.height / 2, top, bottom - prompt.height);
-	const aboveY = selection.y - gap - prompt.height;
+	const aboveY = selection.y - promptSelectionGap - prompt.height;
 	if (aboveY >= top) return { x: centeredX, y: aboveY };
 
-	const belowY = selection.y + selection.height + gap;
+	const belowY = selection.y + selection.height + promptSelectionGap;
 	if (belowY + prompt.height <= bottom) return { x: centeredX, y: belowY };
 
-	const rightX = selection.x + selection.width + gap;
+	const rightX = selection.x + selection.width + promptSelectionGap;
 	if (rightX + prompt.width <= right) return { x: rightX, y: centeredY };
 
-	const leftX = selection.x - gap - prompt.width;
+	const leftX = selection.x - promptSelectionGap - prompt.width;
 	if (leftX >= left) return { x: leftX, y: centeredY };
 
 	return { x: centeredX, y: top };

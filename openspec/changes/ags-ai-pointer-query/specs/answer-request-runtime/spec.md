@@ -29,11 +29,11 @@ The runtime SHALL reject input larger than 64 KiB, prompt text larger than 16 Ki
 ### Requirement: Verified image attachments
 The runtime SHALL accept only regular PNG or JPEG files whose declared MIME type, magic bytes, dimensions, byte size, and SHA-256 digest match the request. It SHALL pass the exact verified bytes to the configured backend rather than allowing a backend to reopen the supplied path. It MUST reject symbolic links, non-regular files, MIME mismatches, unsupported formats, and changed files.
 
-#### Scenario: Previewed image remains unchanged
+#### Scenario: Captured image remains unchanged
 - **WHEN** a caller supplies a valid PNG with a matching digest
 - **THEN** the runtime submits the bytes represented by that digest as the file attachment
 
-#### Scenario: Image changes after preview
+#### Scenario: Image changes after capture
 - **WHEN** an attachment file no longer matches its submitted digest
 - **THEN** the runtime emits `attachment_changed` and does not submit the attachment
 
