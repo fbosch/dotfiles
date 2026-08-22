@@ -16,7 +16,7 @@ import { cn } from "../../utils/cn";
  */
 
 const windowVariants = cva(
-  "relative overflow-hidden border border-surface-border bg-background-secondary/90 ring-1 ring-inset ring-surface-keyline backdrop-blur-sm transition-all duration-200",
+  "relative overflow-hidden border border-surface-keyline bg-background-secondary/90 outline outline-1 outline-surface-border backdrop-blur-sm transition-all duration-200",
   {
     variants: {
       state: {

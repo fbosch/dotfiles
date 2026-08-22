@@ -22,7 +22,7 @@ import { Button } from "../Button";
 
 const notificationVariants = cva(
   // Base styles - macOS-style with tighter border radius
-  "group relative w-[340px] overflow-hidden rounded-xl border border-surface-border bg-background-primary/85 ring-1 ring-inset ring-surface-keyline backdrop-blur-sm transition-all duration-150",
+  "group relative w-[340px] overflow-hidden rounded-xl border border-surface-keyline bg-background-primary/85 outline outline-1 outline-surface-border backdrop-blur-sm transition-all duration-150",
   {
     variants: {
       urgency: {

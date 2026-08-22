@@ -52,6 +52,8 @@ export const themeCss = `
   --ags-color-state-info-active-text: ${tokens.colors.state["info-active-text"].value};
   --ags-color-border-default: ${tokens.colors.border.default.value};
   --ags-color-border-hover: ${tokens.colors.border.hover.value};
+  --ags-color-surface-border: ${tokens.colors.surface.border.value};
+  --ags-color-surface-keyline: ${tokens.colors.surface.keyline.value};
   --ags-font-primary: "${tokens.typography.fontFamily.primary.value}";
   --ags-font-button: "${tokens.typography.fontFamily.button.value}";
   --ags-font-symbols: "${tokens.typography.fontFamily.symbols.value}";

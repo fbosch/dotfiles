@@ -11,9 +11,9 @@
     margin-bottom: 53px;
     padding: 12px;
     background-color: color-mix(in srgb, var(--ags-color-background-secondary) 90%, transparent);
-    border: 1px solid rgb(255 255 255 / 15%);
+    border: 1px solid var(--ags-color-surface-border);
     border-radius: 8px;
-    box-shadow: 0 8px 32px rgb(0 0 0 / 24%), 0 2px 8px rgb(0 0 0 / 12%);
+    box-shadow: inset 0 0 0 1px var(--ags-color-surface-keyline), 0 8px 32px rgb(0 0 0 / 24%), 0 2px 8px rgb(0 0 0 / 12%);
   }
 
   box.calendar-header { margin-bottom: 12px; }

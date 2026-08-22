@@ -5,7 +5,7 @@ import { Tag } from '../Tag';
 import { TripleToggle, type TripleToggleOption } from '../TripleToggle';
 
 const menuVariants = cva(
-  'w-72 rounded-lg border border-surface-border bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] ring-1 ring-inset ring-surface-keyline backdrop-blur-xl',
+  'w-72 rounded-lg border border-surface-keyline bg-background-secondary/85 p-2 shadow-[0_16px_40px_rgba(0,0,0,0.28),0_4px_12px_rgba(0,0,0,0.14)] outline outline-1 outline-surface-border backdrop-blur-xl',
   {
     variants: {
       isOpen: {

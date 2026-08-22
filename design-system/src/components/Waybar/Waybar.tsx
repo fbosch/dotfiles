@@ -3,7 +3,7 @@ import type React from "react";
 import { cn } from "../../utils/cn";
 
 const waybarVariants = cva(
-  "w-full flex items-center justify-between rounded-lg border border-surface-border bg-waybar-bg py-1 text-xs tracking-wide text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] ring-1 ring-inset ring-surface-keyline backdrop-blur text-shadow-waybar transition-colors duration-500",
+  "w-full flex items-center justify-between rounded-lg border border-surface-keyline bg-waybar-bg py-1 text-xs tracking-wide text-white shadow-[0_10px_24px_rgba(0,0,0,0.35)] outline outline-1 outline-surface-border backdrop-blur text-shadow-waybar transition-colors duration-500",
   {
     variants: {
       position: {

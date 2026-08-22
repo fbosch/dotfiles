@@ -20,7 +20,7 @@ import { cn } from '../../utils/cn';
 
 const switcherVariants = cva(
   // Base styles - macOS segmented control with glass effect
-  'bg-background-tertiary/80 border border-white/10 backdrop-blur-sm shadow-[0_4px_16px_rgba(0,0,0,0.3)] rounded-full flex items-center animate-in fade-in-0 zoom-in-95 duration-150',
+  'flex items-center rounded-full border border-surface-keyline bg-background-tertiary/80 shadow-[0_4px_16px_rgba(0,0,0,0.3)] outline outline-1 outline-surface-border backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-150',
   {
     variants: {
       size: {

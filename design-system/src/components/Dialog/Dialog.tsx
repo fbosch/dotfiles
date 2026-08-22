@@ -16,7 +16,7 @@ import { cn } from "../../utils/cn";
 
 const dialogVariants = cva(
   // Base styles
-  "flex flex-col border border-surface-border bg-background-secondary/90 shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] ring-1 ring-inset ring-surface-keyline backdrop-blur-sm",
+  "flex flex-col border border-surface-keyline bg-background-secondary/90 shadow-[0_8px_32px_rgba(0,0,0,0.2),0_2px_8px_rgba(0,0,0,0.1)] outline outline-1 outline-surface-border backdrop-blur-sm",
   {
     variants: {
       variant: {

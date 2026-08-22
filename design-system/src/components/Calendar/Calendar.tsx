@@ -31,7 +31,7 @@ export interface CalendarProps {
 }
 
 const calendarVariants = cva(
-  'w-[360px] rounded-lg border border-white/15 bg-background-secondary/90 p-3 text-foreground-primary shadow-[0_8px_32px_rgba(0,0,0,0.24),0_2px_8px_rgba(0,0,0,0.12)] backdrop-blur-md font-primary',
+  'w-[360px] rounded-lg border border-surface-keyline bg-background-secondary/90 p-3 font-primary text-foreground-primary shadow-[0_8px_32px_rgba(0,0,0,0.24),0_2px_8px_rgba(0,0,0,0.12)] outline outline-1 outline-surface-border backdrop-blur-md',
   {
     variants: {
       animated: {

@@ -21,7 +21,7 @@ import { cn } from '../../utils/cn';
  */
 
 const switcherVariants = cva(
-  'rounded-2xl border border-surface-border bg-background-secondary/50 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.3)] ring-1 ring-inset ring-surface-keyline backdrop-blur-lg',
+  'rounded-2xl border border-surface-keyline bg-background-secondary/50 p-6 shadow-[0_8px_32px_rgba(0,0,0,0.3)] outline outline-1 outline-surface-border backdrop-blur-lg',
   {
     variants: {
       isOpen: {
