@@ -7,7 +7,7 @@ import type { AnswerBackend, AnswerBackendRequest, AnswerBackendResult } from ".
 import type { AnswerErrorCode } from "./protocol.js";
 
 const execFileAsync = promisify(execFile);
-const OPENCODE_VERSION = "1.18.18";
+const OPENCODE_VERSION_RANGE = [1, 18, 21] as const;
 const EXTERNAL_BASE_URL = "http://127.0.0.1:4096";
 const DESKTOP_POINTER_AGENT = "desktop-pointer";
 const PREFLIGHT_TIMEOUT_MILLISECONDS = 2_000;
@@ -128,7 +128,7 @@ export async function runOpenCodePreflight(dependencies: OpenCodeBackendDependen
 
 async function prepareBackend(dependencies: OpenCodeBackendDependencies, directory: string, signal: AbortSignal, caller: AbortSignal | undefined, timeout: AbortSignal): Promise<PreparedBackend> {
   const cliVersion = await raceWithSignal(dependencies.getCliVersion(signal), signal);
-  if (cliVersion !== OPENCODE_VERSION) return { policy: { ok: false, code: "incompatible_version" } };
+  if (supportsOpenCodeVersion(cliVersion) === false) return { policy: { ok: false, code: "incompatible_version" } };
 
   const external = dependencies.createClient(EXTERNAL_BASE_URL, directory);
   const externalPolicy = await verifyPreflight(external, directory, signal, caller, timeout);
@@ -144,7 +144,7 @@ async function verifyPreflight(client: OpenCodeClient, directory: string, signal
   try {
     const health = unwrap(await bounded(client.global.health({ signal }), PREFLIGHT_TIMEOUT_MILLISECONDS));
     if (isHealth(health) === false) return { ok: false, code: "backend_unavailable" };
-    if (health.version !== OPENCODE_VERSION) return { ok: false, code: "incompatible_version" };
+    if (supportsOpenCodeVersion(health.version) === false) return { ok: false, code: "incompatible_version" };
     if (signal.aborted) return failureForSignal(caller, timeout);
     const [agentsResponse, configResponse, providersResponse, idsResponse] = await Promise.all([
       bounded(client.app.agents({ directory }, { signal }), PREFLIGHT_TIMEOUT_MILLISECONDS),
@@ -162,6 +162,18 @@ async function verifyPreflight(client: OpenCodeClient, directory: string, signal
   } catch (error) {
     return isAbort(error) || signal.aborted ? failureForSignal(caller, timeout) : { ok: false, code: "backend_unavailable" };
   }
+}
+
+function supportsOpenCodeVersion(version: string): boolean {
+  const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
+  if (match === null) return false;
+  const candidate = match.slice(1).map(Number);
+  if (candidate.some((part) => Number.isSafeInteger(part) === false)) return false;
+  const [minimumMajor, minimumMinor, minimumPatch] = OPENCODE_VERSION_RANGE;
+  const [major, minor, patch] = candidate;
+  if (major !== minimumMajor) return false;
+  if (minor !== minimumMinor) return minor > minimumMinor;
+  return patch >= minimumPatch;
 }
 
 async function cleanup(session: { client: OpenCodeClient; id: string; active: boolean } | undefined, owned: OwnedServer | undefined, directory: string): Promise<boolean> {

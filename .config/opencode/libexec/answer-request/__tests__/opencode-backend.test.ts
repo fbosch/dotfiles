@@ -20,6 +20,12 @@ describe("OpenCode answer backend", () => {
     assert.equal(fake.state.externalClose, 0);
   });
 
+  test("accepts compatible newer CLI and server versions", async () => {
+    const fake = createFake({ cliVersion: "1.18.21", serverVersion: "1.19.0" });
+
+    assert.deepEqual(await runOpenCodePreflight(fake.dependencies), { ready: true });
+  });
+
   test("uses and closes an owned fallback without creating a session", async () => {
     const fake = createFake({ externalHealthy: false });
 
@@ -37,8 +43,10 @@ describe("OpenCode answer backend", () => {
     const permissiveAgent = createFake({ wildcardDenied: false });
     const unknownTool = createFake({ toolIDs: [""] });
     const unavailableModel = createFake({ imageCapable: false });
-    const incompatibleCli = createFake({ cliVersion: "1.18.17" });
-    const incompatibleServer = createFake({ serverVersion: "1.18.17" });
+    const incompatibleCli = createFake({ cliVersion: "1.18.20" });
+    const incompatibleServer = createFake({ serverVersion: "2.0.0" });
+    const prereleaseServer = createFake({ serverVersion: "1.19.0-beta.1" });
+    const malformedServer = createFake({ serverVersion: "1.019.0" });
 
     assert.deepEqual(await runOpenCodePreflight(missingAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(permissiveAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
@@ -46,6 +54,8 @@ describe("OpenCode answer backend", () => {
     assert.deepEqual(await runOpenCodePreflight(unavailableModel.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(incompatibleCli.dependencies), { ready: false, code: "incompatible_version" });
     assert.deepEqual(await runOpenCodePreflight(incompatibleServer.dependencies), { ready: false, code: "incompatible_version" });
+    assert.deepEqual(await runOpenCodePreflight(prereleaseServer.dependencies), { ready: false, code: "incompatible_version" });
+    assert.deepEqual(await runOpenCodePreflight(malformedServer.dependencies), { ready: false, code: "incompatible_version" });
     assert.equal(incompatibleCli.state.ownedStarts, 0);
   });
 
@@ -235,7 +245,7 @@ function createFake(options: {
   const client = (kind: "external" | "owned"): OpenCodeClient => ({
     global: { health: async () => {
       if (kind === "owned" && options.ownedHealthHangs) return await new Promise<never>(() => undefined);
-      return { data: { healthy: options.externalHealthy === false && kind === "external" ? false : true, version: options.serverVersion ?? "1.18.18" } };
+      return { data: { healthy: options.externalHealthy === false && kind === "external" ? false : true, version: options.serverVersion ?? "1.18.21" } };
     } },
     app: { agents: async () => ({ data: options.agent === false ? [] : [{ name: "desktop-pointer", model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined, permission: options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }] }] }) },
     config: { get: async () => ({ data: { model: `openai/${options.modelID ?? "test"}` } }) },
@@ -273,7 +283,7 @@ function createFake(options: {
       state.ownedStarts += 1;
       return { client: owned, close: () => { state.ownedClose += 1; } };
     },
-    getCliVersion: async () => options.cliVersion ?? "1.18.18",
+    getCliVersion: async () => options.cliVersion ?? "1.18.21",
   };
   return { backend: createOpenCodeAnswerBackend(dependencies), dependencies, state };
 }

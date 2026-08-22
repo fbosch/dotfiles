@@ -96,8 +96,8 @@ The runtime SHALL return only final assistant text parts. It MUST exclude reason
 - **WHEN** an OpenCode or provider request fails
 - **THEN** the runtime emits a stable error code and safe message without exposing sensitive request data
 
-### Requirement: Pinned OpenCode backend compatibility
-The initial OpenCode backend SHALL use the pinned SDK version validated for the installed OpenCode version and run without dependency auto-install. It MUST reject unsupported CLI or server versions before attachment transmission.
+### Requirement: Semver-bounded OpenCode backend compatibility
+The initial OpenCode backend SHALL use the compatible SDK range `^1.18.21` and run without dependency auto-install. It MUST accept stable CLI and server versions in that range and reject versions outside it before attachment transmission.
 
 #### Scenario: Supported version pair
 - **WHEN** the configured OpenCode binary and server match the validated runtime version policy
