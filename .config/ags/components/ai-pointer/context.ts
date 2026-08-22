@@ -21,7 +21,7 @@ export type RawClient = RawGeometry & {
 	cwd?: unknown;
 };
 export type RawLayer = RawGeometry & { namespace?: unknown; layer?: unknown };
-export type RawMonitor = RawGeometry & { name?: unknown; activeWorkspace?: { name?: unknown } };
+export type RawMonitor = RawGeometry & { id?: unknown; name?: unknown; activeWorkspace?: { name?: unknown } };
 
 export interface SelectionContext {
 	selection: SelectionGeometry;
@@ -128,12 +128,21 @@ export function selectionContextFromSnapshots(
 	},
 ): SelectionContext {
 	const activeAddress = typeof snapshots.activeWindow?.address === "string" ? snapshots.activeWindow.address : null;
+	const monitorNames = new Map(
+		snapshots.monitors.flatMap((monitor) =>
+			Number.isSafeInteger(monitor.id) && boundedText(monitor.name)
+				? [[monitor.id as number, boundedText(monitor.name)] as const]
+				: []),
+	);
 	const clients = snapshots.clients.flatMap((client) => {
 		const clientGeometry = geometry(client);
 		if (!clientGeometry) return [];
 		const label = boundedText(client.class);
 		if (!label) return [];
-		return [{ client, geometry: clientGeometry, label, active: client.address === activeAddress }];
+		const monitor = typeof client.monitor === "number"
+			? monitorNames.get(client.monitor) ?? ""
+			: boundedText(client.monitor);
+		return [{ client, geometry: clientGeometry, label, monitor, active: client.address === activeAddress }];
 	});
 	const exact = clients.filter(({ geometry: candidate }) =>
 		candidate.x === selection.x && candidate.y === selection.y &&
@@ -144,7 +153,7 @@ export function selectionContextFromSnapshots(
 			class: exact[0].label,
 			title: boundedText(exact[0].client.title),
 			workspace: boundedText(exact[0].client.workspace?.name),
-			monitor: boundedText(exact[0].client.monitor),
+			monitor: exact[0].monitor,
 			floating: exact[0].client.floating === true,
 			fullscreen: exact[0].client.fullscreen === true,
 			active: exact[0].active,
@@ -171,8 +180,8 @@ export function selectionContextFromSnapshots(
 		exactWindow,
 		geometricInference: {
 			limitation: "Geometric intersections are not compositor hit-test, z-order, or visible-pixel facts.",
-			clients: rankCandidates(selection, clients.map(({ geometry, label, client, active }) => ({
-				kind: "client", label, workspace: boundedText(client.workspace?.name), monitor: boundedText(client.monitor), geometry, active,
+			clients: rankCandidates(selection, clients.map(({ geometry, label, monitor, client, active }) => ({
+				kind: "client", label, workspace: boundedText(client.workspace?.name), monitor, geometry, active,
 			}))),
 			layers: rankCandidates(selection, layerCandidates),
 		},
@@ -192,14 +201,32 @@ export function emptySelectionContext(selection: SelectionGeometry): SelectionCo
 
 export function formatSelectionContext(context: SelectionContext): string {
 	const exact = context.exactWindow
-		? `Exact window: ${context.exactWindow.class}${context.exactWindow.title ? `, ${context.exactWindow.title}` : ""}.`
+		? [
+			`class=${context.exactWindow.class}`,
+			`title=${context.exactWindow.title || "none"}`,
+			`workspace=${context.exactWindow.workspace || "unknown"}`,
+			`monitor=${context.exactWindow.monitor || "unknown"}`,
+			`active=${context.exactWindow.active}`,
+			`floating=${context.exactWindow.floating}`,
+			`fullscreen=${context.exactWindow.fullscreen}`,
+			`relationship=${context.exactWindow.relationship}`,
+		].join(", ")
 		: "Exact window: none.";
-	const candidates = (items: ContextCandidate[]) => items.map((item) =>
-		`${item.label} (${Math.round(item.selectionCoverage * 100)}% selection coverage)`).join(", ") || "none";
+	const candidates = (items: ContextCandidate[]) => items.map((item) => [
+		item.label,
+		`${Math.round(item.selectionCoverage * 100)}% selection coverage`,
+		`${Math.round(item.candidateCoverage * 100)}% candidate coverage`,
+		`center=${item.containsSelectionCenter}`,
+		`active=${item.active}`,
+		...(item.workspace ? [`workspace=${item.workspace}`] : []),
+		...(item.monitor ? [`monitor=${item.monitor}`] : []),
+	].join("; ")).join(" | ") || "none";
 	return [
 		"Desktop selection context (privacy-minimized point-in-time snapshot):",
+		`Snapshot: ${context.snapshotAt}.`,
 		`Selection: ${context.selection.width}x${context.selection.height} at ${context.selection.x},${context.selection.y}.`,
-		exact,
+		`Monitor: ${context.monitor ? `${context.monitor.name || "unknown"}, workspace=${context.monitor.workspace || "unknown"}` : "unknown"}.`,
+		context.exactWindow ? `Exact window: ${exact}.` : exact,
 		`Client geometric candidates: ${candidates(context.geometricInference.clients)}.`,
 		`Layer geometric candidates: ${candidates(context.geometricInference.layers)}.`,
 		context.geometricInference.limitation,

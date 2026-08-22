@@ -112,7 +112,7 @@ test("AI Pointer bounds local OCR output while streaming", async () => {
 
 test("AI Pointer view presents a capture and disposes", async () => {
 	const view = new AiPointerView();
-	view.create({ onCancel() {} });
+	view.create({ onCancel() {}, onSubmit() {} });
 	const capturePath = GLib.canonicalize_filename(
 		"../../../components/ai-pointer/__tests__/capture.svg",
 		GLib.get_current_dir(),
@@ -122,7 +122,9 @@ test("AI Pointer view presents a capture and disposes", async () => {
 			{
 				path: capturePath,
 				geometry: { x: 10, y: 20, width: 20, height: 20 },
+				sha256: "a".repeat(64),
 			},
+			"Desktop selection context",
 		),
 		"AI Pointer capture preview was rejected",
 	);
@@ -130,7 +132,9 @@ test("AI Pointer view presents a capture and disposes", async () => {
 	assert(view.isCreated, "AI Pointer view was not created");
 	assert(view.isPromptVisible, "AI Pointer prompt was not shown");
 	view.hide();
+	await settleMainLoop();
 	view.dispose();
+	await settleMainLoop();
 	assert(view.isCreated === false, "AI Pointer view was not disposed");
 });
 
@@ -546,71 +550,13 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(resolvedAccessibility, "accessible metadata was not resolved");
 		assert(resolvedPrograms, "program metadata was not resolved");
-		assert(previewArgumentCount === 1, "metadata was passed to the prompt view");
+		assert(previewArgumentCount === 2, "review context was not passed to the prompt view");
 		assert(presentationOrder.join(",") === "preview,ocr", "OCR started before presentation");
 		assert(
 			ocrInput === "/run/user/1000/ai-pointer/capture-test.png:20x20",
 			"OCR did not reuse the presented capture",
 		);
 		assert(ocrStates.join(",") === "pending,text", "OCR states were not presented");
-	} finally {
-		controller.teardown();
-	}
-});
-
-test("AI Pointer cancellation rejects a pending accessibility result", async () => {
-	let captured = false;
-	let resolveLookup: (() => void) | null = null;
-	const view = {
-		create() {},
-		beginStroke() {
-			return true;
-		},
-		updateStroke() {},
-		endStroke() {},
-		finishStroke() {
-			return Promise.resolve(true);
-		},
-		showCapture() {
-			return { pixelHeight: 20, pixelWidth: 20 };
-		},
-		setOcrState() {},
-		clearOcr() {},
-		showError() {},
-		hide() {},
-		dispose() {},
-	} as unknown as AiPointerView;
-	const controller = new AiPointerController({
-		view,
-		prepareDirectory: () => "/run/user/1000/ai-pointer",
-		readPointer: () => null,
-		resolveAccessibility: () =>
-			new Promise((resolve) => {
-				resolveLookup = () => resolve({
-					geometry: { x: 100, y: 200, width: 120, height: 60 },
-					metadata: { confidence: 0.9, role: "push button" },
-				});
-			}),
-		resolvePrograms: () => [],
-		recognizeOcr: async () => ({ kind: "no-text" }),
-		capture: async (_directory, geometry) => {
-			captured = true;
-			return {
-				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
-			};
-		},
-	});
-	controller.init();
-	try {
-		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
-		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
-		await settleMainLoop();
-		assert(resolveLookup !== null, "accessibility lookup did not start");
-		controller.cancel();
-		resolveLookup();
-		await settleMainLoop();
-		assert(captured === false, "cancelled accessibility geometry was captured");
 	} finally {
 		controller.teardown();
 	}

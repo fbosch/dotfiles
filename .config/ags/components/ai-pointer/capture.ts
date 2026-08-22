@@ -8,6 +8,7 @@ const captureDirectoryName = "ai-pointer";
 const capturePrefix = "capture-";
 const maximumCaptureBytes = 20 * 1024 * 1024;
 const captureTimeoutMs = 10_000;
+const captureCancellationGraceMs = 300;
 const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
 export interface Capture {
@@ -22,6 +23,7 @@ export type CaptureResult =
 	| { kind: "failed"; message: string };
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
+type CapturePathObserver = (path: string | null) => void;
 
 export function prepareCaptureDirectory(): string | null {
 	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
@@ -52,38 +54,50 @@ export async function captureRegion(
 	geometry: SelectionGeometry,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
+	onPath: CapturePathObserver = () => {},
+	grimExecutable = GLib.find_program_in_path("grim"),
 ): Promise<CaptureResult> {
-	const grim = GLib.find_program_in_path("grim");
-	if (!grim) return { kind: "failed", message: "grim is unavailable." };
+	if (!grimExecutable) return { kind: "failed", message: "grim is unavailable." };
 
 	const path = GLib.build_filenamev([
 		directory,
 		`${capturePrefix}${GLib.uuid_string_random()}.png`,
 	]);
+	onPath(path);
 	const capture = await runCommand(
-		[grim, "-g", grimGeometry(geometry), path],
+		[grimExecutable, "-g", grimGeometry(geometry), path],
 		cancellable,
 		captureTimeoutMs,
 		onProcess,
 	);
 	if (cancellable.is_cancelled()) {
 		deleteCapture(path);
+		onPath(null);
 		return { kind: "cancelled" };
 	}
 	if (!capture) {
 		deleteCapture(path);
+		onPath(null);
 		return { kind: "failed", message: "The screenshot process did not complete." };
+	}
+	if (capture.timedOut) {
+		deleteCapture(path);
+		onPath(null);
+		return { kind: "failed", message: "The screenshot process timed out." };
 	}
 	if (capture.success === false) {
 		deleteCapture(path);
+		onPath(null);
 		return { kind: "failed", message: "The screenshot process exited unsuccessfully." };
 	}
 	const validated = validateCapture(path, geometry);
 	if (!validated) {
 		deleteCapture(path);
+		onPath(null);
 		return { kind: "failed", message: "The screenshot failed PNG validation." };
 	}
 
+	onPath(null);
 	return { kind: "captured", capture: { path, geometry, sha256: validated.sha256 } };
 }
 
@@ -92,7 +106,7 @@ async function runCommand(
 	cancellable: Gio.Cancellable,
 	timeoutMs: number,
 	onProcess: ProcessObserver,
-): Promise<{ success: boolean; error?: string } | null> {
+): Promise<{ success: boolean; timedOut: boolean; error?: string } | null> {
 	let process: Gio.Subprocess;
 	try {
 		process = Gio.Subprocess.new(
@@ -104,26 +118,44 @@ async function runCommand(
 	}
 
 	onProcess(process);
-	const cancellationId = cancellable.connect(() => process.force_exit());
+	let timedOut = false;
+	let forceExitId = 0;
+	const terminate = () => {
+		try {
+			process.send_signal(2);
+		} catch {
+			process.force_exit();
+			return;
+		}
+		if (forceExitId === 0)
+			forceExitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, captureCancellationGraceMs, () => {
+				forceExitId = 0;
+				process.force_exit();
+				return GLib.SOURCE_REMOVE;
+			});
+	};
+	const cancellationId = cancellable.connect(terminate);
+	if (cancellable.is_cancelled()) terminate();
 	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
 		timeoutId = 0;
-		cancellable.cancel();
-		process.force_exit();
+		timedOut = true;
+		terminate();
 		return GLib.SOURCE_REMOVE;
 	});
 	try {
-		await process.wait_async(cancellable);
+		await process.wait_async(null);
 		const errorBytes = process.get_stderr_pipe()?.read_bytes(4_096, null);
 		const error = errorBytes ? new TextDecoder().decode(errorBytes.get_data()).trim() : "";
-		return { success: process.get_successful(), error: error || undefined };
+		return { success: process.get_successful(), timedOut, error: error || undefined };
 	} catch (error) {
-		return { success: false, error: String(error) };
+		return { success: false, timedOut, error: String(error) };
 	} finally {
 		try {
 			if (timeoutId !== 0) GLib.source_remove(timeoutId);
 		} catch {
 			// The source may already have removed itself after a timeout.
 		}
+		if (forceExitId !== 0) GLib.source_remove(forceExitId);
 		try {
 			cancellable.disconnect(cancellationId);
 		} catch {

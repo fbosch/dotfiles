@@ -3,6 +3,8 @@ import { setup } from "xstate";
 type AiPointerEvent =
 	| { type: "START" }
 	| { type: "CAPTURED" }
+	| { type: "SUBMIT" }
+	| { type: "ANSWERED" }
 	| { type: "CANCEL" }
 	| { type: "FAIL" };
 
@@ -21,14 +23,22 @@ export const aiPointerMachine = setup({
 		selecting: {
 			tags: ["active"],
 			on: {
-				CAPTURED: "preview",
+				CAPTURED: "composition",
 				CANCEL: "idle",
 				FAIL: "failed",
 			},
 		},
-		preview: {
+		composition: {
 			tags: ["active", "surface-visible"],
-			on: { CANCEL: "idle", FAIL: "failed" },
+			on: { SUBMIT: "requesting", CANCEL: "idle", FAIL: "failed" },
+		},
+		requesting: {
+			tags: ["active", "surface-visible"],
+			on: { ANSWERED: "answered", CANCEL: "idle", FAIL: "failed" },
+		},
+		answered: {
+			tags: ["active", "surface-visible"],
+			on: { CANCEL: "idle" },
 		},
 		failed: {
 			tags: ["active", "surface-visible"],

@@ -15,8 +15,8 @@ import { StrokeOverlay } from "./stroke-overlay";
 
 const promptMinimumWidth = 40;
 const promptMaximumWidth = 348;
-const promptHostWidth = 400;
-const promptHostHeight = 56;
+const promptHostWidth = 520;
+const promptHostHeight = 620;
 const allEdges =
 	Astal.WindowAnchor.TOP |
 	Astal.WindowAnchor.BOTTOM |
@@ -25,6 +25,7 @@ const allEdges =
 
 export interface AiPointerViewHandlers {
 	onCancel(): void;
+	onSubmit(question: string): void;
 }
 
 export interface CapturePreview {
@@ -39,6 +40,11 @@ export class AiPointerView {
 	#promptCanvas: Gtk.Fixed | null = null;
 	#promptHost: Gtk.CenterBox | null = null;
 	#prompt: Gtk.Entry | null = null;
+	#preview: Gtk.Picture | null = null;
+	#context: Gtk.Label | null = null;
+	#status: Gtk.Label | null = null;
+	#answer: Gtk.Label | null = null;
+	#answerScroll: Gtk.ScrolledWindow | null = null;
 	#capture: Capture | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -76,13 +82,64 @@ export class AiPointerView {
 							height_request: promptHostHeight,
 						});
 						host.add_css_class("ai-pointer-prompt-host");
-						const panel = new Gtk.Box({ valign: Gtk.Align.CENTER });
+						const panel = new Gtk.Box({
+							orientation: Gtk.Orientation.VERTICAL,
+							spacing: 12,
+							valign: Gtk.Align.CENTER,
+						});
 						panel.add_css_class("ai-pointer-prompt-panel");
+						const preview = new Gtk.Picture({
+							contentFit: Gtk.ContentFit.CONTAIN,
+							canShrink: true,
+							heightRequest: 220,
+						});
+						preview.add_css_class("ai-pointer-preview");
+						const context = new Gtk.Label({
+							wrap: true,
+							xalign: 0,
+							selectable: false,
+						});
+						context.add_css_class("ai-pointer-context");
+						const disclosure = new Gtk.Label({
+							label: "Press Enter to send this image, question, and context to the configured model provider. Provider-side deletion is not guaranteed.",
+							wrap: true,
+							xalign: 0,
+							selectable: false,
+						});
+						disclosure.add_css_class("ai-pointer-disclosure");
 						const prompt = new Gtk.Entry();
 						prompt.add_css_class("ai-pointer-prompt-input");
+						prompt.set_placeholder_text("Ask about this selection");
 						prompt.add_controller(this.#createCancelController());
 						prompt.connect("notify::text", () => this.#resizePrompt());
+						prompt.connect("activate", () => {
+							const question = prompt.get_text().trim();
+							if (question) this.#handlers?.onSubmit(question);
+						});
+						const status = new Gtk.Label({ wrap: true, xalign: 0, selectable: false });
+						status.add_css_class("ai-pointer-status");
+						const answer = new Gtk.Label({
+							wrap: true,
+							wrapMode: Pango.WrapMode.WORD_CHAR,
+							xalign: 0,
+							yalign: 0,
+							selectable: false,
+						});
+						answer.set_use_markup(false);
+						answer.add_css_class("ai-pointer-answer");
+						const answerScroll = new Gtk.ScrolledWindow({
+							heightRequest: 150,
+							propagateNaturalHeight: true,
+							visible: false,
+						});
+						answerScroll.add_css_class("ai-pointer-answer-scroll");
+						answerScroll.set_child(answer);
+						panel.append(preview);
+						panel.append(context);
+						panel.append(disclosure);
 						panel.append(prompt);
+						panel.append(status);
+						panel.append(answerScroll);
 						host.set_center_widget(panel);
 						canvas.put(host, 0, 0);
 						self.set_child(canvas);
@@ -90,6 +147,11 @@ export class AiPointerView {
 						this.#promptCanvas = canvas;
 						this.#promptHost = host;
 						this.#prompt = prompt;
+						this.#preview = preview;
+						this.#context = context;
+						this.#status = status;
+						this.#answer = answer;
+						this.#answerScroll = answerScroll;
 						this.#resizePrompt();
 					}}
 				/>
@@ -98,7 +160,7 @@ export class AiPointerView {
 		});
 	}
 
-	showCapture(capture: Capture): CapturePreview | null {
+	showCapture(capture: Capture, context: string): CapturePreview | null {
 		let texture: Gdk.Texture;
 		try {
 			texture = Gdk.Texture.new_from_file(Gio.File.new_for_path(capture.path));
@@ -107,10 +169,30 @@ export class AiPointerView {
 		}
 		if (this.#strokeOverlay.showSelection(capture.geometry) === false) return null;
 		this.#capture = capture;
+		this.#preview?.set_paintable(texture);
+		this.#context?.set_label(context);
+		this.#status?.set_label("");
+		this.#answer?.set_label("");
+		this.#answerScroll?.set_visible(false);
 		this.#prompt?.set_text("");
+		this.#prompt?.set_sensitive(true);
 		this.#resizePrompt();
 		this.#showAt(capture);
 		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
+	}
+
+	showRequesting(): void {
+		this.#prompt?.set_sensitive(false);
+		this.#status?.set_label("Asking the configured model provider...");
+		this.#answer?.set_label("");
+		this.#answerScroll?.set_visible(false);
+	}
+
+	showAnswer(answer: string, truncated: boolean): void {
+		this.#prompt?.set_sensitive(false);
+		this.#status?.set_label(truncated ? "Answer truncated to the local response limit." : "Answer");
+		this.#answer?.set_label(answer);
+		this.#answerScroll?.set_visible(true);
 	}
 
 	setOcrState(_state: OcrViewState): void {}
@@ -135,27 +217,36 @@ export class AiPointerView {
 
 	showError(message: string): void {
 		this.clearOcr();
-		this.#prompt?.set_text(message);
-		this.#resizePrompt();
+		this.#prompt?.set_sensitive(false);
+		this.#status?.set_label(message);
+		this.#answer?.set_label("");
+		this.#answerScroll?.set_visible(false);
 		this.#show();
 	}
 
 	hide(): void {
 		this.clearOcr();
 		this.#capture = null;
+		this.#preview?.set_paintable(null);
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
 	}
 
 	dispose(): void {
-		this.#strokeOverlay.hide();
-		this.#window?.destroy();
+		this.hide();
+		const window = this.#window;
 		this.#window = null;
 		this.#promptCanvas = null;
 		this.#promptHost = null;
 		this.#prompt = null;
+		this.#preview = null;
+		this.#context = null;
+		this.#status = null;
+		this.#answer = null;
+		this.#answerScroll = null;
 		this.#capture = null;
 		this.#handlers = null;
+		window?.destroy();
 	}
 
 	#createCancelController(): Gtk.EventControllerKey {
@@ -206,9 +297,12 @@ export class AiPointerView {
 				centerY >= bounds.y + bounds.height
 			)
 				continue;
+			const hostWidth = Math.min(promptHostWidth, Math.max(1, bounds.width - 32));
+			const hostHeight = Math.min(promptHostHeight, Math.max(1, bounds.height - 32));
+			this.#promptHost?.set_size_request(hostWidth, hostHeight);
 			const position = promptPosition(capture.geometry, bounds, {
-				width: promptHostWidth,
-				height: promptHostHeight,
+				width: hostWidth,
+				height: hostHeight,
 			});
 			this.#window?.set_gdkmonitor(monitor);
 			if (this.#promptCanvas && this.#promptHost)

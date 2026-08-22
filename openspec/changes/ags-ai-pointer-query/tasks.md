@@ -53,41 +53,41 @@
 
 ## 6. AGS AI Pointer Workflow
 
-- [ ] 6.1 Create `.config/ags/components/ai-pointer/` with a typed XState machine, controller, view, request handler, styles, and colocated tests.
-- [ ] 6.2 Model idle, selection, composition, requesting, answered, failed, and cancellation transitions; ensure repeated activation while active does not start a second selector.
-- [ ] 6.3 Give every activation an immutable run ID and keep run-owned GTK, GLib, subprocess, cancellable, capture, and cleanup resources outside machine context.
-- [ ] 6.4 Create a feature-private `$XDG_RUNTIME_DIR/ai-pointer` directory, use unpredictable capture names, remove stale feature-owned files at initialization, and never fall back to `/tmp`, screenshots, or clipboard storage.
-- [ ] 6.5 Integrate direct `grim` capture with cooperative cancellation, bounded hard-kill fallback, and cleanup for every controlled terminal path.
-- [ ] 6.6 Invoke the Bun request CLI through a JSON stdin/stdout subprocess contract and ignore completion events that do not match the active run ID.
-- [ ] 6.7 On lock detection, cancel/hide active work and prevent answer presentation over the lock screen.
+- [x] 6.1 Create `.config/ags/components/ai-pointer/` with a typed XState machine, controller, view, request handler, styles, and colocated tests.
+- [x] 6.2 Model idle, selection, composition, requesting, answered, failed, and cancellation transitions; ensure repeated activation while active does not start a second selector.
+- [x] 6.3 Give every activation an immutable run ID and keep run-owned GTK, GLib, subprocess, cancellable, capture, and cleanup resources outside machine context.
+- [x] 6.4 Create a feature-private `$XDG_RUNTIME_DIR/ai-pointer` directory, use unpredictable capture names, remove stale feature-owned files at initialization, and never fall back to `/tmp`, screenshots, or clipboard storage.
+- [x] 6.5 Integrate direct `grim` capture with cooperative cancellation, bounded hard-kill fallback, and cleanup for every controlled terminal path.
+- [x] 6.6 Invoke the Bun request CLI through a JSON stdin/stdout subprocess contract and ignore completion events that do not match the active run ID.
+- [x] 6.7 On lock detection, cancel/hide active work and prevent answer presentation over the lock screen.
 - [ ] 6.8 Add machine and GJS integration tests for Escape in every state, stale completion rejection, private capture cleanup, malformed selector output, partial capture failure, helper timeout, and lock cancellation.
 
 ## 7. AGS Presentation And Consent
 
-- [ ] 7.1 Build a pointer-adjacent review surface with the validated image preview, privacy-minimized application context, question entry, request status, result, and concise failure states.
-- [ ] 7.2 Require a non-empty typed question and explicit Enter submission; Escape from composition must discard the capture without sending data.
-- [ ] 7.3 Render results as bounded literal plain text with markup, automatic links, clipboard actions, command dispatch, and mutation affordances disabled.
-- [ ] 7.4 Show an explicit statement that submission sends the reviewed image, question, and context to the configured model provider without promising provider-side deletion.
-- [ ] 7.5 Position and clamp the surface to the relevant monitor, including negative monitor origins and transformed monitor geometry.
-- [ ] 7.6 Add feature styles through the bundled stylesheet manifest and preserve shared Gaming opacity behavior.
+- [x] 7.1 Build a pointer-adjacent review surface with the validated image preview, privacy-minimized application context, question entry, request status, result, and concise failure states.
+- [x] 7.2 Require a non-empty typed question and explicit Enter submission; Escape from composition must discard the capture without sending data.
+- [x] 7.3 Render results as bounded literal plain text with markup, automatic links, clipboard actions, command dispatch, and mutation affordances disabled.
+- [x] 7.4 Show an explicit statement that submission sends the reviewed image, question, and context to the configured model provider without promising provider-side deletion.
+- [x] 7.5 Position and clamp the surface to the relevant monitor, including negative monitor origins and transformed monitor geometry.
+- [x] 7.6 Add feature styles through the bundled stylesheet manifest and preserve shared Gaming opacity behavior.
 
 ## 8. Desktop Registration And Hardening
 
-- [ ] 8.1 Register the AI Pointer component in `.config/ags/config-bundled.tsx` with strict component request parsing.
-- [ ] 8.2 Add a static Hyprland layer rule for the AI Pointer namespace with `no_screen_share` and the established shell-surface presentation behavior.
-- [ ] 8.3 Add the provisional `Super + middle-click` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
+- [x] 8.1 Register the AI Pointer component in `.config/ags/config-bundled.tsx` with strict component request parsing.
+- [x] 8.2 Add a static Hyprland layer rule for the AI Pointer namespace with `no_screen_share` and the established shell-surface presentation behavior.
+- [x] 8.3 Add the provisional `Super + middle-click` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
 - [ ] 8.4 Preflight selection, capture, Bun, helper, agent, compatible OpenCode server, and image-capable model availability so missing dependencies return a concise failure without blocking Hyprland.
 - [ ] 8.5 Verify a partially deployed helper, agent, AGS component, or keybind fails safely and cannot leave a selector or capture active.
 
 ## 9. Validation
 
-- [ ] 9.1 Run request-runtime unit and fake-server lifecycle tests from `.config/opencode/libexec/`.
-- [ ] 9.2 Run `bunx tsc -p .config/opencode/libexec/tsconfig.json`.
-- [ ] 9.3 Run targeted AGS pure tests and GJS integration tests for the AI Pointer feature.
+- [x] 9.1 Run request-runtime unit and fake-server lifecycle tests from `.config/opencode/libexec/`.
+- [x] 9.2 Run `bunx tsc -p .config/opencode/libexec/tsconfig.json`.
+- [x] 9.3 Run targeted AGS pure tests and GJS integration tests for the AI Pointer feature.
 - [ ] 9.4 Run the relevant AGS line/style/quality checks and bundle check.
-- [ ] 9.5 Run `hyprctl configerrors` after the Hyprland binding and layer-rule changes.
-- [ ] 9.6 Run `stow -n .` from the dotfiles repository root.
+- [x] 9.5 Run `hyprctl configerrors` after the Hyprland binding and layer-rule changes.
+- [x] 9.6 Run `stow -n .` from the dotfiles repository root.
 - [ ] 9.7 Manually verify selection, preview, context review, submission, answer rendering, all Escape paths, unavailable dependencies, oversized images, version mismatch, timeout, cleanup failure, and locked-session behavior.
 - [ ] 9.8 Verify no AI Pointer capture or ephemeral OpenCode session remains after success, failure, timeout, cancellation, or an AGS restart.
-- [ ] 9.9 Verify AI Commit remains byte-for-byte unchanged with `git diff --exit-code -- .config/opencode/plugins/ai-commit .config/fish/functions/ai_commit.fish`.
-- [ ] 9.10 Run `openspec validate ags-ai-pointer-query --type change --strict --no-interactive`.
+- [x] 9.9 Verify AI Commit remains byte-for-byte unchanged with `git diff --exit-code -- .config/opencode/plugins/ai-commit .config/fish/functions/ai_commit.fish`.
+- [x] 9.10 Run `openspec validate ags-ai-pointer-query --type change --strict --no-interactive`.

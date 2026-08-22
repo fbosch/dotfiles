@@ -13,8 +13,8 @@ function context(overrides: Parameters<typeof selectionContextFromSnapshots>[1] 
 describe("selection context", () => {
 	test("resolves one fresh exact client while omitting private fields", () => {
 		const result = context({
-			clients: [{ x: -100, y: 20, width: 100, height: 80, address: "0x123", class: "org.browser", title: "Private title", pid: 42, command: "secret", cwd: "/private", workspace: { name: "work" }, monitor: "left", floating: true }],
-			layers: {}, monitors: [], activeWindow: { address: "0x123" }, locked: false, snapshotAt,
+			clients: [{ x: -100, y: 20, width: 100, height: 80, address: "0x123", class: "org.browser", title: "Private title", pid: 42, command: "secret", cwd: "/private", workspace: { name: "work" }, monitor: 7, floating: true }],
+			layers: {}, monitors: [{ id: 7, x: -1920, y: 0, width: 1920, height: 1080, name: "left", activeWorkspace: { name: "work" } }], activeWindow: { address: "0x123" }, locked: false, snapshotAt,
 		});
 		expect(result.exactWindow).toEqual({ class: "org.browser", title: "Private title", workspace: "work", monitor: "left", floating: true, fullscreen: false, active: true, relationship: "exact-geometry" });
 		expect(JSON.stringify(result)).not.toContain("0x123");

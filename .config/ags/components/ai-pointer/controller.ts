@@ -2,7 +2,7 @@ import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
-import { evaluateHyprland, queryHyprlandJson } from "@/services/hyprland-ipc";
+import { evaluateHyprland } from "@/services/hyprland-ipc";
 import { perf } from "@/services/performance-monitor";
 import {
 	type AccessibilityLookupMode,
@@ -12,17 +12,20 @@ import {
 } from "./accessibility";
 import type {
 	AccessibilityCandidateDiagnostic,
-	AccessibilityMetadata,
 	AccessibilityResolution,
 	ProgramMetadata,
 } from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
-import { emptySelectionContext, type SelectionContext } from "./context";
+import { requestAnswer, type AnswerClientResult } from "./answer-client";
+import { emptySelectionContext, formatSelectionContext, type SelectionContext } from "./context";
 import { querySelectionContext } from "./context-query";
+import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
 import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
 import { recognizeCapture, type OcrResult } from "./ocr";
 import { aiPointerPerformanceMetrics } from "./performance-metrics";
+import { readPointerPosition } from "./pointer-query";
+import { settleProcessesForShutdown } from "./shutdown-processes";
 import {
 	type PointerPosition,
 	type SelectionGeometry,
@@ -43,12 +46,19 @@ interface AiPointerControllerOptions {
 		geometry: SelectionGeometry,
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
+		onPath?: (path: string | null) => void,
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
 	readPointer?(): PointerPosition | null;
 	resolveClickGeometry?(point: PointerPosition): SelectionGeometry | null;
 	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
 	resolveContext?(geometry: SelectionGeometry): SelectionContext;
+	queryLocked?(): boolean | null;
+	requestAnswer?(
+		input: { requestId: string; prompt: string; attachment: { path: string; sha256: string }; timeoutSeconds: number },
+		cancellable: Gio.Cancellable,
+		onProcess: (process: Gio.Subprocess | null) => void,
+	): Promise<AnswerClientResult>;
 	setCursorOutline?(enabled: boolean): boolean | void;
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
@@ -72,6 +82,8 @@ export class AiPointerController {
 	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
 	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
 	readonly #resolveContext: NonNullable<AiPointerControllerOptions["resolveContext"]>;
+	readonly #requestAnswer: NonNullable<AiPointerControllerOptions["requestAnswer"]>;
+	readonly #lockMonitor: SessionLockMonitor;
 	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
@@ -84,10 +96,13 @@ export class AiPointerController {
 	#ocrStartId = 0;
 	#ocrCancellable: Gio.Cancellable | null = null;
 	#ocrProcess: Gio.Subprocess | null = null;
+	#answerCancellable: Gio.Cancellable | null = null;
+	#answerProcess: Gio.Subprocess | null = null;
+	#answer = "";
+	#answerTruncated = false;
+	readonly #terminatingProcesses = new Set<Gio.Subprocess>();
 	#capture: Capture | null = null;
-	#accessibilityMetadata: AccessibilityMetadata | null = null;
-	#accessibilityDiagnostics: AccessibilityCandidateDiagnostic[] = [];
-	#programMetadata: ProgramMetadata[] = [];
+	#pendingCapturePath: string | null = null;
 	#selectionContext: SelectionContext | null = null;
 	#directory: string | null = null;
 	#pendingFinish: PointerPosition | null = null;
@@ -105,6 +120,9 @@ export class AiPointerController {
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
 		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
 		this.#resolveContext = options.resolveContext ?? querySelectionContext;
+		const queryLocked = options.queryLocked ?? querySessionLocked;
+		this.#requestAnswer = options.requestAnswer ?? requestAnswer;
+		this.#lockMonitor = new SessionLockMonitor(queryLocked, () => this.cancel());
 		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
 		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
 		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
@@ -114,20 +132,7 @@ export class AiPointerController {
 				metric: "cursorOutline",
 			});
 		});
-		this.#readPointer = options.readPointer ?? (() => {
-			const position = queryHyprlandJson<{ x?: unknown; y?: unknown }>("j/cursorpos", {
-				component: "ai-pointer",
-				metric: "strokeCursorPosition",
-			});
-			if (
-				typeof position?.x !== "number" ||
-				typeof position.y !== "number" ||
-				Number.isSafeInteger(position.x) === false ||
-				Number.isSafeInteger(position.y) === false
-			)
-				return null;
-			return { x: position.x, y: position.y };
-		});
+		this.#readPointer = options.readPointer ?? readPointerPosition;
 	}
 
 	get selectionContext(): SelectionContext | null {
@@ -136,16 +141,26 @@ export class AiPointerController {
 
 	init(): void {
 		if (!this.#actor) {
-			this.#view.create({ onCancel: () => this.cancel() });
+			this.#view.create({
+				onCancel: () => this.cancel(),
+				onSubmit: (question) => this.#submit(question),
+			});
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
-				if (snapshot.matches("preview") && this.#capture) {
+				if (snapshot.matches("composition") && this.#capture && this.#selectionContext) {
+					if (this.#lockMonitor.blocksWorkflow) {
+						this.cancel();
+						return;
+					}
 					const previewMark = perf.isEnabled()
 						? perf.start("ai-pointer", aiPointerPerformanceMetrics.previewPresentation)
 						: null;
 					let preview: CapturePreview | null = null;
 					try {
-						preview = this.#view.showCapture(this.#capture);
+						preview = this.#view.showCapture(
+							this.#capture,
+							formatSelectionContext(this.#selectionContext),
+						);
 					} catch {
 						previewMark?.end(false, "failed");
 					}
@@ -161,6 +176,18 @@ export class AiPointerController {
 					this.#scheduleOcr(this.#capture, preview);
 					return;
 				}
+				if (snapshot.matches("requesting")) {
+					this.#view.showRequesting();
+					return;
+				}
+				if (snapshot.matches("answered")) {
+					if (this.#lockMonitor.blocksWorkflow) {
+						this.cancel();
+						return;
+					}
+					this.#view.showAnswer(this.#answer, this.#answerTruncated);
+					return;
+				}
 				if (snapshot.matches("failed")) {
 					this.#view.showError(this.#failureMessage);
 					return;
@@ -168,16 +195,18 @@ export class AiPointerController {
 				if (snapshot.hasTag("surface-visible") === false) this.#view.hide();
 			});
 			this.#actor.start();
+			this.#directory = this.#prepareDirectory();
 			this.#setCursorOutlineState(false, true);
 		}
 		if (this.#shutdownSignalId === 0)
-			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
+			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown(true));
 	}
 
 	start(startPosition: PointerPosition): boolean {
 		if (this.#actor?.getSnapshot().matches("idle") === false) return false;
+		if (this.#lockMonitor.blocksWorkflow) return false;
 
-		const directory = this.#prepareDirectory();
+		const directory = this.#directory ?? this.#prepareDirectory();
 		if (!directory) {
 			this.#failureMessage = "Private runtime storage is unavailable.";
 			this.#actor?.send({ type: "START" });
@@ -186,13 +215,13 @@ export class AiPointerController {
 		}
 		this.#directory = directory;
 		this.#stroke = createPointerStroke(startPosition);
-		this.#accessibilityMetadata = null;
-		this.#accessibilityDiagnostics = [];
-		this.#programMetadata = [];
 		this.#selectionContext = null;
+		this.#answer = "";
+		this.#answerTruncated = false;
 		this.#finishing = false;
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
+		this.#lockMonitor.start();
 		if (this.#view.beginStroke(this.#stroke, () => this.#sampleStroke()) === false) {
 			this.#failureMessage = "The drawing overlay is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
@@ -296,7 +325,10 @@ export class AiPointerController {
 		cancellable: Gio.Cancellable,
 		mode: AccessibilityLookupMode,
 	): Promise<void> {
+		let observedProcess: Gio.Subprocess | null = null;
 		const observeProcess = (process: Gio.Subprocess | null) => {
+			if (process) observedProcess = process;
+			if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
 			if (runId === this.#runId) this.#process = process;
 		};
 		let resolution: AccessibilityResolution | null = null;
@@ -309,9 +341,7 @@ export class AiPointerController {
 				stroke,
 				cancellable,
 				observeProcess,
-				(diagnostics) => {
-					if (runId === this.#runId) this.#accessibilityDiagnostics = diagnostics;
-				},
+				undefined,
 				mode,
 			);
 			accessibilityMark?.end(
@@ -330,8 +360,11 @@ export class AiPointerController {
 		} catch {
 			this.#selectionContext = emptySelectionContext(captureGeometry);
 		}
-		this.#accessibilityMetadata = resolution?.metadata ?? null;
-		this.#programMetadata = this.#resolvePrograms(captureGeometry);
+		if (this.#selectionContext.locked === true || this.#lockMonitor.blocksWorkflow) {
+			this.cancel();
+			return;
+		}
+		this.#resolvePrograms(captureGeometry);
 		let result: Awaited<ReturnType<typeof captureRegion>>;
 		const captureMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.capture)
@@ -342,6 +375,9 @@ export class AiPointerController {
 				captureGeometry,
 				cancellable,
 				observeProcess,
+				(path) => {
+					if (runId === this.#runId) this.#pendingCapturePath = path;
+				},
 			);
 			captureMark?.end(
 				result.kind === "captured",
@@ -365,6 +401,7 @@ export class AiPointerController {
 		}
 		this.#cancellable = null;
 		this.#process = null;
+		this.#pendingCapturePath = null;
 		if (cancellable.is_cancelled() || result.kind === "cancelled") {
 			this.#finishWorkflow(false, "cancelled");
 			this.#finishing = false;
@@ -388,16 +425,20 @@ export class AiPointerController {
 		this.#runId += 1;
 		this.#finishWorkflow(false, "cancelled");
 		this.#stopOcr();
+		this.#lockMonitor.stop();
+		if (this.#answerProcess) this.#terminatingProcesses.add(this.#answerProcess);
+		if (this.#process) this.#terminatingProcesses.add(this.#process);
+		this.#answerCancellable?.cancel();
+		this.#answerCancellable = null;
+		this.#answerProcess = null;
 		this.#cancellable?.cancel();
 		this.#cancellable = null;
-		this.#process?.force_exit();
 		this.#process = null;
 		this.#directory = null;
 		this.#stroke = null;
-		this.#accessibilityMetadata = null;
-		this.#accessibilityDiagnostics = [];
-		this.#programMetadata = [];
 		this.#selectionContext = null;
+		this.#answer = "";
+		this.#answerTruncated = false;
 		this.#finishing = false;
 		this.#view.endStroke();
 		this.#clearPendingFinish();
@@ -406,8 +447,15 @@ export class AiPointerController {
 		this.#actor?.send({ type: "CANCEL" });
 	}
 
-	teardown(): void {
+	teardown(force = false): void {
+		const pendingCapturePath = this.#pendingCapturePath;
+		const processes = new Set(this.#terminatingProcesses);
+		if (this.#process) processes.add(this.#process);
+		if (this.#answerProcess) processes.add(this.#answerProcess);
 		this.cancel();
+		if (force) settleProcessesForShutdown(processes);
+		if (force && pendingCapturePath) deleteCapture(pendingCapturePath);
+		this.#terminatingProcesses.clear();
 		this.#setCursorOutlineState(false, true);
 		this.#subscription?.unsubscribe();
 		this.#subscription = null;
@@ -424,6 +472,68 @@ export class AiPointerController {
 		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
 		this.#pendingFinishId = 0;
 		this.#pendingFinish = null;
+	}
+
+	#submit(question: string): void {
+		if (this.#actor?.getSnapshot().matches("composition") === false) return;
+		const capture = this.#capture;
+		const context = this.#selectionContext;
+		const prompt = question.trim();
+		if (!capture || !context || !prompt || this.#lockMonitor.blocksWorkflow) {
+			if (this.#lockMonitor.blocksWorkflow) this.cancel();
+			return;
+		}
+
+		const runId = this.#runId;
+		const cancellable = new Gio.Cancellable();
+		let observedProcess: Gio.Subprocess | null = null;
+		this.#stopOcr();
+		this.#answerCancellable = cancellable;
+		this.#actor.send({ type: "SUBMIT" });
+		void this.#requestAnswer(
+			{
+				requestId: `ai-pointer-${runId}`,
+				prompt: `${prompt}\n\n${formatSelectionContext(context)}`,
+				attachment: { path: capture.path, sha256: capture.sha256 },
+				timeoutSeconds: 60,
+			},
+			cancellable,
+			(process) => {
+				if (process) observedProcess = process;
+				if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
+				if (runId === this.#runId) this.#answerProcess = process;
+			},
+		).then((result) => {
+			if (runId !== this.#runId || cancellable.is_cancelled()) return;
+			this.#answerCancellable = null;
+			this.#answerProcess = null;
+			deleteCapture(capture.path);
+			if (this.#capture?.path === capture.path) this.#capture = null;
+			if (this.#lockMonitor.blocksWorkflow) {
+				this.cancel();
+				return;
+			}
+			if (result.kind === "answered") {
+				this.#answer = result.answer;
+				this.#answerTruncated = result.truncated;
+				this.#actor?.send({ type: "ANSWERED" });
+				return;
+			}
+			if (result.kind === "cancelled") {
+				this.cancel();
+				return;
+			}
+			this.#failureMessage = result.message;
+			this.#actor?.send({ type: "FAIL" });
+		}).catch(() => {
+			if (runId !== this.#runId || cancellable.is_cancelled()) return;
+			this.#answerCancellable = null;
+			this.#answerProcess = null;
+			deleteCapture(capture.path);
+			if (this.#capture?.path === capture.path) this.#capture = null;
+			this.#failureMessage = "The answer helper did not complete.";
+			this.#actor?.send({ type: "FAIL" });
+		});
 	}
 
 	#scheduleOcr(capture: Capture, preview: CapturePreview): void {
