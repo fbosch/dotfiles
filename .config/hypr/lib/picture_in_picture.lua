@@ -23,6 +23,7 @@ function M.register_window_rules()
 		no_initial_focus = true,
 		pin = true,
 		content = "video",
+		persistent_size = true,
 		rounding = M.rounding,
 	})
 	hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = M.default_animation })

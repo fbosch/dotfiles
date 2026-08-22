@@ -32,6 +32,7 @@ import {
 } from "../performance-metrics";
 import type { AccessibilityDebugState, AccessibilityRegionKind } from "./debug-state";
 import { selectionBoxRegion } from "./box-region";
+import { ownProcess, type ProcessObserver } from "../owned-process";
 
 export type { AccessibilityDebugState } from "./debug-state";
 
@@ -87,7 +88,6 @@ export interface AccessibilityHelperClient {
 	title?: string;
 }
 
-type ProcessObserver = (process: Gio.Subprocess | null) => void;
 export type AccessibilityLookupMode = "click" | "stroke";
 
 interface AccessibilityHelperOptions {
@@ -363,23 +363,13 @@ export async function queryAccessibilityHelper(
 		return { kind: "unavailable", reason: "helper failed to start" };
 	}
 
-	onProcess(process);
 	const cancellable = new Gio.Cancellable();
-	const cancellationId = parentCancellable.connect(() => {
-		cancellable.cancel();
-		process.force_exit();
-	});
-	if (parentCancellable.is_cancelled()) {
-		cancellable.cancel();
-		process.force_exit();
-	}
-	let timedOut = false;
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, options.timeoutMs ?? lookupTimeoutMs, () => {
-		timeoutId = 0;
-		timedOut = true;
-		cancellable.cancel();
-		process.force_exit();
-		return GLib.SOURCE_REMOVE;
+	const owned = ownProcess(process, {
+		onCancel: () => cancellable.cancel(),
+		onProcess,
+		onTimeout: () => cancellable.cancel(),
+		parentCancellable,
+		timeoutMs: options.timeoutMs ?? lookupTimeoutMs,
 	});
 
 	const responseMark = perf.isEnabled()
@@ -388,9 +378,15 @@ export async function queryAccessibilityHelper(
 	let responseSucceeded = false;
 	let helperTimings: AccessibilityHelperOutput["timings"] | null = null;
 	try {
-		const stdout = await readBoundedHelperOutput(process, cancellable);
+		const stdout = await readHelperOutput(process, cancellable, {
+			terminate: async () => {
+				owned.terminate();
+				await owned.wait();
+			},
+			wait: owned.wait,
+		});
 		if (!stdout || process.get_successful() === false)
-			return { kind: "unavailable", reason: timedOut ? "helper timed out" : "helper failed" };
+			return { kind: "unavailable", reason: owned.timedOut ? "helper timed out" : "helper failed" };
 		const helperOutput = parseAccessibilityHelperOutput(stdout);
 		if (!helperOutput) return { kind: "unavailable", reason: "invalid helper output" };
 		if (helperOutput.complete === false && helperOutput.candidates.length === 0)
@@ -414,7 +410,7 @@ export async function queryAccessibilityHelper(
 	} catch {
 		return {
 			kind: "unavailable",
-			reason: timedOut ? "helper timed out" : "helper failed",
+			reason: owned.timedOut ? "helper timed out" : "helper failed",
 		};
 	} finally {
 		responseMark?.end(responseSucceeded, responseSucceeded ? undefined : "failed");
@@ -429,19 +425,32 @@ export async function queryAccessibilityHelper(
 					startMs: timing.startMs,
 				})),
 			);
-		if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		try {
-			parentCancellable.disconnect(cancellationId);
-		} catch {
-			// Cancellation may disconnect its handlers while unwinding.
-		}
-		onProcess(null);
+		await owned.dispose();
 	}
 }
 
 export async function readBoundedHelperOutput(
 	process: Gio.Subprocess,
 	cancellable: Gio.Cancellable,
+): Promise<string | null> {
+	return readHelperOutput(process, cancellable, {
+		terminate: async () => {
+			process.force_exit();
+			await process.wait_async(null).catch(() => {});
+		},
+		wait: () => process.wait_async(cancellable).then(() => true),
+	});
+}
+
+interface ProcessSettlement {
+	terminate(): Promise<void>;
+	wait(): Promise<boolean>;
+}
+
+async function readHelperOutput(
+	process: Gio.Subprocess,
+	cancellable: Gio.Cancellable,
+	settlement: ProcessSettlement,
 ): Promise<string | null> {
 	const stream = process.get_stdout_pipe();
 	if (!stream) return null;
@@ -453,17 +462,12 @@ export async function readBoundedHelperOutput(
 		if (!data || data.length === 0) break;
 		byteCount += data.length;
 		if (byteCount > maximumHelperOutputBytes) {
-			process.force_exit();
-			try {
-				await process.wait_async(null);
-			} catch {
-				// The process may have exited between the oversized read and termination.
-			}
+			await settlement.terminate();
 			return null;
 		}
 		chunks.push(data.slice());
 	}
-	await process.wait_async(cancellable);
+	if (await settlement.wait() === false) return null;
 	const output = new Uint8Array(byteCount);
 	let offset = 0;
 	for (const chunk of chunks) {

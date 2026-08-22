@@ -40,4 +40,5 @@ return {
 	{ matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Codex$]=] },
+	{ matcher = "match:initial_title", pattern = [=[^Picture-in-Picture$]=] },
 }

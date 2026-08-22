@@ -8,11 +8,11 @@ import {
 	type AnswerClientResult,
 	type AnswerRequestInput,
 } from "./answer-protocol";
+import { ownProcess, type ProcessObserver } from "./owned-process";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.OutputStream.prototype, "write_all_async", "write_all_finish");
 Gio._promisify(Gio.OutputStream.prototype, "close_async", "close_finish");
-Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
 
 const answerRequestScript = GLib.build_filenamev([
 	GLib.get_home_dir(),
@@ -27,7 +27,6 @@ const readChunkBytes = 4096;
 const cancellationGraceMs = 7_000;
 const requestCleanupBudgetMs = 8_000;
 
-type ProcessObserver = (process: Gio.Subprocess | null) => void;
 type StreamRead = { kind: "complete"; bytes: Uint8Array } | { kind: "too-large" } | { kind: "failed" };
 type AnswerStreamRead = { kind: "complete" } | { kind: "failed"; result: AnswerClientResult };
 interface AnswerClientOptions {
@@ -75,36 +74,17 @@ export async function requestAnswer(
 		return { kind: "failed", code: "spawn_failed", message: "The answer helper is unavailable." };
 	}
 
-	onProcess(process);
-	let forceExitId = 0;
-	let timedOut = false;
-	const terminate = () => {
-		requestCancellation(process);
-		if (forceExitId === 0)
-			forceExitId = scheduleForceExit(
-				process,
-				options.cancellationGraceMs ?? cancellationGraceMs,
-				() => { forceExitId = 0; },
-			);
-	};
-	let timeoutId = GLib.timeout_add(
-		GLib.PRIORITY_DEFAULT,
-		options.hardTimeoutMs ?? input.timeoutSeconds * 1000 + requestCleanupBudgetMs,
-		() => {
-		timeoutId = 0;
-		timedOut = true;
-		terminate();
-		return GLib.SOURCE_REMOVE;
+	const owned = ownProcess(process, {
+		cancellationGraceMs: options.cancellationGraceMs ?? cancellationGraceMs,
+		onProcess,
+		parentCancellable: cancellable,
+		timeoutMs: options.hardTimeoutMs ?? input.timeoutSeconds * 1000 + requestCleanupBudgetMs,
 	});
-	const cancellationId = cancellable.connect(terminate);
 
 	try {
-		if (cancellable.is_cancelled()) {
-			terminate();
-		}
 		const parser = createAnswerResponseParser(input.requestId, onDelta ?? (() => {}));
-		const stdout = readAnswerStream(process.get_stdout_pipe(), parser, terminate);
-		const stderr = readBoundedStream(process.get_stderr_pipe(), maximumStderrBytes, terminate);
+		const stdout = readAnswerStream(process.get_stdout_pipe(), parser, owned.terminate);
+		const stderr = readBoundedStream(process.get_stderr_pipe(), maximumStderrBytes, owned.terminate);
 		let inputFailed = false;
 		try {
 			await writeRequest(
@@ -113,15 +93,15 @@ export async function requestAnswer(
 			);
 		} catch {
 			inputFailed = true;
-			terminate();
+			owned.terminate();
 		}
 		const [stdoutResult, _stderr, waited] = await Promise.all([
 			stdout,
 			stderr,
-			process.wait_async(null).then(() => true).catch(() => false),
+			owned.wait(),
 		]);
 		if (cancellable.is_cancelled()) return { kind: "cancelled" };
-		if (timedOut)
+		if (owned.timedOut)
 			return { kind: "failed", code: "timeout", message: "The answer request timed out." };
 		if (inputFailed)
 			return { kind: "failed", code: "process_failed", message: "The answer helper did not accept the request." };
@@ -136,14 +116,7 @@ export async function requestAnswer(
 			? { kind: "cancelled" }
 			: { kind: "failed", code: "process_failed", message: "The answer helper did not complete." };
 	} finally {
-		if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		if (forceExitId !== 0) GLib.source_remove(forceExitId);
-		try {
-			cancellable.disconnect(cancellationId);
-		} catch {
-			// Cancellation may disconnect handlers while the request unwinds.
-		}
-		onProcess(null);
+		await owned.dispose();
 	}
 }
 
@@ -162,39 +135,21 @@ export async function preflightAnswer(
 		return preflightFailure("backend_unavailable");
 	}
 
-	onProcess(process);
-	let forceExitId = 0;
-	let timedOut = false;
-	const terminate = () => {
-		requestCancellation(process);
-		if (forceExitId === 0)
-			forceExitId = scheduleForceExit(
-				process,
-				options.cancellationGraceMs ?? cancellationGraceMs,
-				() => { forceExitId = 0; },
-			);
-	};
-	let timeoutId = GLib.timeout_add(
-		GLib.PRIORITY_DEFAULT,
-		options.hardTimeoutMs ?? 10_000,
-		() => {
-			timeoutId = 0;
-			timedOut = true;
-			terminate();
-			return GLib.SOURCE_REMOVE;
-		},
-	);
-	const cancellationId = cancellable.connect(terminate);
+	const owned = ownProcess(process, {
+		cancellationGraceMs: options.cancellationGraceMs ?? cancellationGraceMs,
+		onProcess,
+		parentCancellable: cancellable,
+		timeoutMs: options.hardTimeoutMs ?? 10_000,
+	});
 
 	try {
-		if (cancellable.is_cancelled()) terminate();
 		const [stdout, _stderr, waited] = await Promise.all([
-			readBoundedStream(process.get_stdout_pipe(), 256, terminate),
-			readBoundedStream(process.get_stderr_pipe(), maximumStderrBytes, terminate),
-			process.wait_async(null).then(() => true).catch(() => false),
+			readBoundedStream(process.get_stdout_pipe(), 256, owned.terminate),
+			readBoundedStream(process.get_stderr_pipe(), maximumStderrBytes, owned.terminate),
+			owned.wait(),
 		]);
 		if (cancellable.is_cancelled()) return preflightFailure("cancelled");
-		if (timedOut) return preflightFailure("timeout");
+		if (owned.timedOut) return preflightFailure("timeout");
 		if (waited === false || stdout.kind !== "complete") return preflightFailure("invalid_response");
 		const response = parsePreflightResponse(stdout.bytes);
 		if (!response) return preflightFailure("invalid_response");
@@ -207,14 +162,7 @@ export async function preflightAnswer(
 			? preflightFailure("cancelled")
 			: preflightFailure("backend_unavailable");
 	} finally {
-		if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		if (forceExitId !== 0) GLib.source_remove(forceExitId);
-		try {
-			cancellable.disconnect(cancellationId);
-		} catch {
-			// Cancellation may disconnect handlers while the preflight unwinds.
-		}
-		onProcess(null);
+		await owned.dispose();
 	}
 }
 
@@ -289,22 +237,6 @@ async function readAnswerStream(
 		return { kind: "failed", result: { kind: "failed", code: "invalid_response", message: "The answer response could not be read." } };
 	}
 	return invalid ? { kind: "failed", result: invalidResult! } : { kind: "complete" };
-}
-
-function requestCancellation(process: Gio.Subprocess): void {
-	try {
-		process.send_signal(2);
-	} catch {
-		process.force_exit();
-	}
-}
-
-function scheduleForceExit(process: Gio.Subprocess, delayMs: number, onForceExit: () => void): number {
-	return GLib.timeout_add(GLib.PRIORITY_DEFAULT, delayMs, () => {
-		onForceExit();
-		process.force_exit();
-		return GLib.SOURCE_REMOVE;
-	});
 }
 
 function parsePreflightResponse(bytes: Uint8Array): PreflightResponse | null {

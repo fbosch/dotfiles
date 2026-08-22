@@ -1,8 +1,7 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { ownProcess, type ProcessObserver } from "./owned-process";
 import { grimGeometry, type SelectionGeometry } from "./selection";
-
-Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
 
 const captureDirectoryName = "ai-pointer";
 const capturePrefix = "capture-";
@@ -22,7 +21,6 @@ export type CaptureResult =
 	| { kind: "cancelled" }
 	| { kind: "failed"; message: string };
 
-type ProcessObserver = (process: Gio.Subprocess | null) => void;
 type CapturePathObserver = (path: string | null) => void;
 
 interface CaptureOptions {
@@ -125,51 +123,24 @@ async function runCommand(
 		return null;
 	}
 
-	onProcess(process);
-	let timedOut = false;
-	let forceExitId = 0;
-	const terminate = () => {
-		try {
-			process.send_signal(2);
-		} catch {
-			process.force_exit();
-			return;
-		}
-		if (forceExitId === 0)
-			forceExitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, cancellationGraceMs, () => {
-				forceExitId = 0;
-				process.force_exit();
-				return GLib.SOURCE_REMOVE;
-			});
-	};
-	const cancellationId = cancellable.connect(terminate);
-	if (cancellable.is_cancelled()) terminate();
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
-		timeoutId = 0;
-		timedOut = true;
-		terminate();
-		return GLib.SOURCE_REMOVE;
+	const owned = ownProcess(process, {
+		cancellationGraceMs,
+		onProcess,
+		parentCancellable: cancellable,
+		timeoutMs,
 	});
 	try {
-		await process.wait_async(null);
+		const waited = await owned.wait();
+		if (waited === false)
+			return { success: false, timedOut: owned.timedOut, error: "Process wait failed." };
 		const errorBytes = process.get_stderr_pipe()?.read_bytes(4_096, null);
-		const error = errorBytes ? new TextDecoder().decode(errorBytes.get_data()).trim() : "";
-		return { success: process.get_successful(), timedOut, error: error || undefined };
+		const errorData = errorBytes?.get_data();
+		const error = errorData ? new TextDecoder().decode(errorData).trim() : "";
+		return { success: process.get_successful(), timedOut: owned.timedOut, error: error || undefined };
 	} catch (error) {
-		return { success: false, timedOut, error: String(error) };
+		return { success: false, timedOut: owned.timedOut, error: String(error) };
 	} finally {
-		try {
-			if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		} catch {
-			// The source may already have removed itself after a timeout.
-		}
-		if (forceExitId !== 0) GLib.source_remove(forceExitId);
-		try {
-			cancellable.disconnect(cancellationId);
-		} catch {
-			// Cancellation may disconnect its handlers while unwinding.
-		}
-		onProcess(null);
+		await owned.dispose();
 	}
 }
 

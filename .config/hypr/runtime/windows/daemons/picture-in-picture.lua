@@ -512,6 +512,12 @@ local function move_pip(mode, address, assign_default_corner)
 				local height = tonumber(window.size[2]) or 0
 				local corner = tagged_corner(window)
 				if corner == nil and assign_default_corner then
+					local default_x = monitor.x + monitor.width - width - pip.margin
+					local default_y = monitor.y + monitor.height - height - pip.margin
+					-- A window-state rule has already restored any non-default position.
+					if (tonumber(window.at[1]) or 0) ~= default_x or (tonumber(window.at[2]) or 0) ~= default_y then
+						return
+					end
 					corner = "bottom-right"
 					tag_pip_corner(window, corner)
 				end

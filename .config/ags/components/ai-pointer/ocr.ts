@@ -1,5 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { ownProcess, type ProcessObserver } from "./owned-process";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -30,8 +31,6 @@ export type OcrResult =
 	| { kind: "text"; text: string }
 	| { kind: "truncated"; text: string }
 	| { kind: "unavailable"; reason: OcrUnavailableReason };
-
-type ProcessObserver = (process: Gio.Subprocess | null) => void;
 
 interface OcrOptions {
 	executable?: string;
@@ -80,34 +79,25 @@ export async function recognizeCapture(
 		return { kind: "unavailable", reason: "spawn-failed" };
 	}
 
-	onProcess(process);
-	let timedOut = false;
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, options.timeoutMs ?? ocrTimeoutMs, () => {
-		timeoutId = 0;
-		timedOut = true;
-		cancellable.cancel();
-		process.force_exit();
-		return GLib.SOURCE_REMOVE;
+	const owned = ownProcess(process, {
+		onProcess,
+		onTimeout: () => cancellable.cancel(),
+		parentCancellable: cancellable,
+		timeoutMs: options.timeoutMs ?? ocrTimeoutMs,
 	});
 	try {
-		const output = await readBoundedOcrOutput(process, cancellable);
-		if (timedOut) return { kind: "unavailable", reason: "timeout" };
-		if (cancellable.is_cancelled()) {
-			process.force_exit();
-			try {
-				await process.wait_async(null);
-			} catch {
-				// Cancellation owns process termination; a concurrent exit is already settled.
-			}
-			return { kind: "cancelled" };
-		}
+		const output = await readOcrOutput(process, cancellable, {
+			terminate: async () => {
+				owned.terminate();
+				await owned.wait();
+			},
+			wait: owned.wait,
+		});
+		if (owned.timedOut) return { kind: "unavailable", reason: "timeout" };
+		if (cancellable.is_cancelled()) return { kind: "cancelled" };
 		if (output.kind === "read-failed") {
-			process.force_exit();
-			try {
-				await process.wait_async(null);
-			} catch {
-				// The process may already have exited after the stream failure.
-			}
+			owned.terminate();
+			await owned.wait();
 			return { kind: "unavailable", reason: "read-failed" };
 		}
 		if (output.kind === "invalid-output")
@@ -118,13 +108,12 @@ export async function recognizeCapture(
 		if (output.text.length === 0) return { kind: "no-text" };
 		return { kind: "text", text: output.text };
 	} catch {
-		if (timedOut) return { kind: "unavailable", reason: "timeout" };
+		if (owned.timedOut) return { kind: "unavailable", reason: "timeout" };
 		return cancellable.is_cancelled()
 			? { kind: "cancelled" }
 			: { kind: "unavailable", reason: "read-failed" };
 	} finally {
-		if (timeoutId !== 0) GLib.source_remove(timeoutId);
-		onProcess(null);
+		await owned.dispose();
 	}
 }
 
@@ -137,6 +126,25 @@ type OcrOutput =
 export async function readBoundedOcrOutput(
 	process: Gio.Subprocess,
 	cancellable: Gio.Cancellable,
+): Promise<OcrOutput> {
+	return readOcrOutput(process, cancellable, {
+		terminate: async () => {
+			process.force_exit();
+			await process.wait_async(null).catch(() => {});
+		},
+		wait: () => process.wait_async(cancellable).then(() => true).catch(() => false),
+	});
+}
+
+interface ProcessSettlement {
+	terminate(): Promise<void>;
+	wait(): Promise<boolean>;
+}
+
+async function readOcrOutput(
+	process: Gio.Subprocess,
+	cancellable: Gio.Cancellable,
+	settlement: ProcessSettlement,
 ): Promise<OcrOutput> {
 	const stream = process.get_stdout_pipe();
 	if (!stream) return { kind: "read-failed" };
@@ -154,19 +162,14 @@ export async function readBoundedOcrOutput(
 		const remaining = maximumOcrOutputBytes - byteCount;
 		if (data.length > remaining) {
 			if (remaining > 0) chunks.push(data.slice(0, remaining));
-			process.force_exit();
-			try {
-				await process.wait_async(null);
-			} catch {
-				// The process may exit between overflow detection and termination.
-			}
+			await settlement.terminate();
 			return { kind: "truncated", text: decodeTruncated(joinChunks(chunks)) };
 		}
 		chunks.push(data.slice());
 		byteCount += data.length;
 	}
+	if (await settlement.wait() === false) return { kind: "read-failed" };
 	try {
-		await process.wait_async(cancellable);
 		return { kind: "complete", text: normalizeText(new TextDecoder("utf-8", { fatal: true }).decode(joinChunks(chunks))) };
 	} catch {
 		return { kind: "read-failed" };
