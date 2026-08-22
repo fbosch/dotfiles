@@ -7,6 +7,8 @@ describe("answer request launcher", () => {
   test("runs the CLI through Bun without dependency installation", async () => {
     const launcher = fileURLToPath(new URL("../../../scripts/answer-request.sh", import.meta.url));
     const source = await readFile(launcher, "utf8");
-    assert.match(source, /bun --cwd .* run --no-install answer-request\/cli\.ts/);
+    assert.match(source, /bun --cwd .* --no-install answer-request\/cli\.ts/);
+    assert.doesNotMatch(source, / run --no-install /);
+    assert.match(source, /answer-request\/cli\.ts "\$@"/);
   });
 });

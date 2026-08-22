@@ -1,4 +1,5 @@
 import Gio from "gi://Gio?version=2.0";
+import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import { readBoundedHelperOutput } from "@/components/ai-pointer/accessibility";
 import {
@@ -7,6 +8,7 @@ import {
 } from "@/components/ai-pointer/accessibility/helper-argument";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
+import { createCancelController } from "@/components/ai-pointer/cancel-controller";
 import { pngDimensions, sha256 } from "@/components/ai-pointer/capture";
 import {
 	maximumOcrOutputBytes,
@@ -24,6 +26,16 @@ function settleMainLoop(): Promise<void> {
 		});
 	});
 }
+
+const readyPreflight = async () => ({ kind: "ready" } as const);
+
+test("AI Pointer Escape controller consumes Escape and cancels", () => {
+	let cancellations = 0;
+	const controller = createCancelController(() => { cancellations += 1; });
+	assert(controller.emit("key-pressed", Gdk.KEY_Escape, 0, 0), "Escape was not consumed");
+	assert(cancellations === 1, "Escape did not request cancellation");
+	assert(controller.emit("key-pressed", Gdk.KEY_Return, 0, 0) === false, "non-Escape key was consumed");
+});
 
 test("AI Pointer reads helper output with a streaming byte limit", async () => {
 	const shell = GLib.find_program_in_path("sh");
@@ -185,6 +197,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
 		resolvePrograms: () => [],
@@ -218,7 +231,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 	}
 });
 
-test("AI Pointer removes the cursor outline when drawing is cancelled", () => {
+test("AI Pointer removes the cursor outline when drawing is cancelled", async () => {
 	const cursorOutlineStates: boolean[] = [];
 	const view = {
 		create() {},
@@ -234,12 +247,14 @@ test("AI Pointer removes the cursor outline when drawing is cancelled", () => {
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		setCursorOutline: (enabled) => cursorOutlineStates.push(enabled),
 	});
 	controller.init();
 	try {
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		await settleMainLoop();
 		controller.cancel();
 		assert(
 			cursorOutlineStates.join(",") === "false,true,false",
@@ -275,6 +290,7 @@ test("AI Pointer uses a bounded fallback for a click without an accessible targe
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveClickGeometry: () => ({ x: 72, y: 72, width: 256, height: 256 }),
 		resolveAccessibility: async (
@@ -337,6 +353,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
 		resolvePrograms: () => [],
@@ -391,6 +408,7 @@ test("AI Pointer rejects a second finish while overlay teardown is pending", asy
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
 		resolvePrograms: () => [],
@@ -405,6 +423,7 @@ test("AI Pointer rejects a second finish while overlay teardown is pending", asy
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "first finish request was rejected");
 		assert(controller.finish({ x: 31, y: 41 }) === false, "second finish request was accepted");
+		await settleMainLoop();
 		assert(confirmHidden !== null, "drawing teardown was not requested");
 		confirmHidden(true);
 		await settleMainLoop();
@@ -440,6 +459,7 @@ test("AI Pointer converts an unexpected OCR rejection into a bounded failure", a
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
 		resolvePrograms: () => [],
@@ -497,6 +517,7 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 	const controller = new AiPointerController({
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: readyPreflight,
 		readPointer: () => null,
 		resolveAccessibility: async (_geometry, _stroke, _cancellable, _onProcess, onDiagnostics) => {
 			resolvedAccessibility = true;

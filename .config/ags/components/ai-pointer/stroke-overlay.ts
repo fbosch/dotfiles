@@ -7,6 +7,7 @@ import GLib from "gi://GLib?version=2.0";
 import GObject from "gi://GObject?version=2.0";
 import Graphene from "gi://Graphene?version=1.0";
 import tokens from "../../../../design-system/tokens.json";
+import { createCancelController } from "./cancel-controller";
 import type { SelectionGeometry } from "./selection";
 import {
 	bsplineStrokeSegments,
@@ -424,13 +425,7 @@ export class StrokeOverlay {
 	}
 
 	#addCancelController(window: Astal.Window, onCancel: () => void): void {
-		const keyController = new Gtk.EventControllerKey();
-		keyController.connect("key-pressed", (_controller, keyval: number) => {
-			if (keyval !== Gdk.KEY_Escape) return false;
-			onCancel();
-			return true;
-		});
-		window.add_controller(keyController);
+		window.add_controller(createCancelController(onCancel));
 	}
 
 	#drawSelectionPreview(

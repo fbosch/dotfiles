@@ -1,8 +1,41 @@
 {
 	"entry": ["config-bundled.tsx", "styles/stylelint-surface-scope.mjs"],
 	"ignorePatterns": ["**/__tests__/**"],
-	"ignoreDependencies": ["ags"],
-	"ignoreExports": [],
+	"ignoreDependencies": ["ags", "cairo"],
+	"ignoreExports": [
+		{
+			"file": "components/ai-pointer/selection.ts",
+			"exports": [
+				"maximumSelectionPixels",
+				"clickFallbackSize",
+				"clickTargetMaximumSize",
+				"clickTargetPadding",
+				"selectionFromPoints"
+			]
+		},
+		{
+			"file": "components/ai-pointer/stroke.ts",
+			"exports": [
+				"minimumStrokePointDistance",
+				"minimumStrokeSpan",
+				"minimumClosedStrokeSpan",
+				"minimumStrokeClosureGap",
+				"maximumStrokeClosureGap"
+			]
+		},
+		{
+			"file": "components/ai-pointer/accessibility/policy.ts",
+			"exports": [
+				"chooseAccessibleSnap",
+				"isEligibleAccessibilityRole",
+				"AccessibilityHelperTiming"
+			]
+		},
+		{
+			"file": "components/ai-pointer/ocr.ts",
+			"exports": ["maximumOcrPixels"]
+		}
+	],
 	"rules": {
 		"unused-files": "warn",
 		"unused-exports": "warn",

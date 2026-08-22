@@ -8,6 +8,7 @@ import {
   type AnswerBackend,
   type AnswerResult,
 } from "./index.js";
+import type { AnswerPreflightResult } from "./opencode-backend.js";
 
 type InputChunk = string | Uint8Array;
 
@@ -18,6 +19,12 @@ export interface AnswerRequestCliOptions {
   backend: AnswerBackend;
   signal?: AbortSignal;
   inputTimeoutMilliseconds?: number;
+}
+
+export interface AnswerPreflightCliOptions {
+  preflight: (signal?: AbortSignal) => Promise<AnswerPreflightResult>;
+  stdout: { write(value: string): unknown };
+  signal?: AbortSignal;
 }
 
 export async function runAnswerRequestCli(options: AnswerRequestCliOptions): Promise<number> {
@@ -33,6 +40,17 @@ export async function runAnswerRequestCli(options: AnswerRequestCliOptions): Pro
   options.stdout.write(serializeAnswerResult(result));
   if (result.ok === false) options.stderr.write(boundedDiagnostic(result));
   return result.ok ? 0 : 1;
+}
+
+export async function runAnswerPreflightCli(options: AnswerPreflightCliOptions): Promise<number> {
+  let result: AnswerPreflightResult;
+  try {
+    result = await options.preflight(options.signal);
+  } catch {
+    result = { ready: false, code: "backend_unavailable" };
+  }
+  options.stdout.write(`${JSON.stringify(result)}\n`);
+  return result.ready ? 0 : 1;
 }
 
 export async function runAnswerRequestProcess(backend: AnswerBackend): Promise<never> {
@@ -63,6 +81,24 @@ export async function runAnswerRequestProcess(backend: AnswerBackend): Promise<n
   process.removeListener("SIGINT", abort);
   process.removeListener("SIGTERM", abort);
 
+  process.exit(exitCode);
+}
+
+export async function runAnswerPreflightProcess(preflight: (signal?: AbortSignal) => Promise<AnswerPreflightResult>): Promise<never> {
+  Object.defineProperty(process.stdout, "write", { value: () => true });
+  Object.defineProperty(process.stderr, "write", { value: () => true });
+
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  process.once("SIGINT", abort);
+  process.once("SIGTERM", abort);
+  const exitCode = await runAnswerPreflightCli({
+    preflight,
+    stdout: { write: (value) => writeSync(1, value) },
+    signal: controller.signal,
+  });
+  process.removeListener("SIGINT", abort);
+  process.removeListener("SIGTERM", abort);
   process.exit(exitCode);
 }
 

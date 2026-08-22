@@ -17,7 +17,7 @@ import {
   type AnswerRequest,
   type AnswerSuccess,
 } from "../index.js";
-import { runAnswerRequestCli } from "../cli-runtime.js";
+import { runAnswerPreflightCli, runAnswerRequestCli } from "../cli-runtime.js";
 
 const encoder = new TextEncoder();
 
@@ -157,6 +157,23 @@ describe("answer request protocol", () => {
 });
 
 describe("answer request CLI", () => {
+  test("emits one bounded newline-terminated readiness result without reading a request", async () => {
+    const stdout: string[] = [];
+    let called = 0;
+    const exitCode = await runAnswerPreflightCli({
+      preflight: async () => {
+        called += 1;
+        return { ready: false, code: "backend_policy_invalid" };
+      },
+      stdout: { write: (value) => stdout.push(value) },
+    });
+
+    assert.equal(exitCode, 1);
+    assert.equal(called, 1);
+    assert.deepEqual(stdout, ["{\"ready\":false,\"code\":\"backend_policy_invalid\"}\n"]);
+    assert.ok(Buffer.byteLength(stdout[0] ?? "") <= answerRequestLimits.diagnosticBytes);
+  });
+
   test("emits one newline-terminated JSON success without stdout contamination", async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];

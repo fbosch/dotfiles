@@ -1,8 +1,12 @@
 #!/usr/bin/env bun
 
-import { createOpenCodeAnswerBackend } from "./opencode-backend.js";
-import { runAnswerRequestProcess } from "./cli-runtime.js";
+import { createOpenCodeAnswerBackend, runOpenCodePreflight } from "./opencode-backend.js";
+import { runAnswerPreflightProcess, runAnswerRequestProcess } from "./cli-runtime.js";
 
 if (import.meta.main) {
-  await runAnswerRequestProcess(createOpenCodeAnswerBackend());
+  if (process.argv.length === 3 && process.argv[2] === "--preflight") {
+    await runAnswerPreflightProcess((signal) => runOpenCodePreflight(undefined, signal));
+  } else {
+    await runAnswerRequestProcess(createOpenCodeAnswerBackend());
+  }
 }

@@ -97,6 +97,7 @@ function createScenario(mode: AccessibilityLookupMode): {
 	const dependencies = {
 		view,
 		prepareDirectory: () => "/run/user/benchmark/ai-pointer",
+		preflight: async () => ({ kind: "ready" } as const),
 		readPointer: () => null,
 		resolveAccessibility: async (
 			_geometry,

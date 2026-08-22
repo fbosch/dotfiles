@@ -60,7 +60,7 @@
 - [x] 6.5 Integrate direct `grim` capture with cooperative cancellation, bounded hard-kill fallback, and cleanup for every controlled terminal path.
 - [x] 6.6 Invoke the Bun request CLI through a JSON stdin/stdout subprocess contract and ignore completion events that do not match the active run ID.
 - [x] 6.7 On lock detection, cancel/hide active work and prevent answer presentation over the lock screen.
-- [ ] 6.8 Add machine and GJS integration tests for Escape in every state, stale completion rejection, private capture cleanup, malformed selector output, partial capture failure, helper timeout, and lock cancellation.
+- [x] 6.8 Add machine and GJS integration tests for Escape in every state, stale completion rejection, private capture cleanup, malformed selector output, partial capture failure, helper timeout, and lock cancellation.
 
 ## 7. AGS Presentation And Consent
 
@@ -76,15 +76,15 @@
 - [x] 8.1 Register the AI Pointer component in `.config/ags/config-bundled.tsx` with strict component request parsing.
 - [x] 8.2 Add a static Hyprland layer rule for the AI Pointer namespace with `no_screen_share` and the established shell-surface presentation behavior.
 - [x] 8.3 Add the provisional `Super + middle-click` Hyprland binding that opens the AI Pointer through the bundled AGS request interface.
-- [ ] 8.4 Preflight selection, capture, Bun, helper, agent, compatible OpenCode server, and image-capable model availability so missing dependencies return a concise failure without blocking Hyprland.
-- [ ] 8.5 Verify a partially deployed helper, agent, AGS component, or keybind fails safely and cannot leave a selector or capture active.
+- [x] 8.4 Preflight selection, capture, Bun, helper, agent, compatible OpenCode server, and image-capable model availability so missing dependencies return a concise failure without blocking Hyprland.
+- [x] 8.5 Verify a partially deployed helper, agent, AGS component, or keybind fails safely and cannot leave a selector or capture active.
 
 ## 9. Validation
 
 - [x] 9.1 Run request-runtime unit and fake-server lifecycle tests from `.config/opencode/libexec/`.
 - [x] 9.2 Run `bunx tsc -p .config/opencode/libexec/tsconfig.json`.
 - [x] 9.3 Run targeted AGS pure tests and GJS integration tests for the AI Pointer feature.
-- [ ] 9.4 Run the relevant AGS line/style/quality checks and bundle check.
+- [x] 9.4 Run the relevant AGS line/style/quality checks and bundle check.
 - [x] 9.5 Run `hyprctl configerrors` after the Hyprland binding and layer-rule changes.
 - [x] 9.6 Run `stow -n .` from the dotfiles repository root.
 - [ ] 9.7 Manually verify selection, preview, context review, submission, answer rendering, all Escape paths, unavailable dependencies, oversized images, version mismatch, timeout, cleanup failure, and locked-session behavior.

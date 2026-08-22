@@ -10,70 +10,24 @@ import {
 	programsForSelection,
 	resolveAccessibleSelection,
 } from "./accessibility";
-import type {
-	AccessibilityCandidateDiagnostic,
-	AccessibilityResolution,
-	ProgramMetadata,
-} from "./accessibility/policy";
+import type { AccessibilityResolution } from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
-import { requestAnswer, type AnswerClientResult } from "./answer-client";
+import { requestAnswer } from "./answer-client";
+import type { AiPointerControllerOptions } from "./controller-options";
 import { emptySelectionContext, formatSelectionContext, type SelectionContext } from "./context";
 import { querySelectionContext } from "./context-query";
 import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
 import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
-import { recognizeCapture, type OcrResult } from "./ocr";
+import { recognizeCapture } from "./ocr";
 import { aiPointerPerformanceMetrics } from "./performance-metrics";
 import { readPointerPosition } from "./pointer-query";
+import { beginPreflightSelection, preflightAiPointer, runSelectionPreflight } from "./preflight";
 import { settleProcessesForShutdown } from "./shutdown-processes";
-import {
-	type PointerPosition,
-	type SelectionGeometry,
-} from "./selection";
-import {
-	appendStrokePoint,
-	createPointerStroke,
-	type PointerStroke,
-	selectionFromStroke,
-} from "./stroke";
+import type { PointerPosition, SelectionGeometry } from "./selection";
+import { appendStrokePoint, createPointerStroke, type PointerStroke, selectionFromStroke } from "./stroke";
 
 type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
-
-interface AiPointerControllerOptions {
-	view?: AiPointerView;
-	capture?(
-		directory: string,
-		geometry: SelectionGeometry,
-		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
-		onPath?: (path: string | null) => void,
-	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
-	prepareDirectory?(): string | null;
-	readPointer?(): PointerPosition | null;
-	resolveClickGeometry?(point: PointerPosition): SelectionGeometry | null;
-	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
-	resolveContext?(geometry: SelectionGeometry): SelectionContext;
-	queryLocked?(): boolean | null;
-	requestAnswer?(
-		input: { requestId: string; prompt: string; attachment: { path: string; sha256: string }; timeoutSeconds: number },
-		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
-	): Promise<AnswerClientResult>;
-	setCursorOutline?(enabled: boolean): boolean | void;
-	recognizeOcr?(
-		input: { path: string; pixelHeight: number; pixelWidth: number },
-		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
-	): Promise<OcrResult>;
-	resolveAccessibility?(
-		geometry: SelectionGeometry,
-		stroke: PointerStroke,
-		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
-		onDiagnostics?: (diagnostics: AccessibilityCandidateDiagnostic[]) => void,
-		mode?: AccessibilityLookupMode,
-	): Promise<AccessibilityResolution | null>;
-}
 
 export class AiPointerController {
 	readonly #view: AiPointerView;
@@ -83,6 +37,7 @@ export class AiPointerController {
 	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
 	readonly #resolveContext: NonNullable<AiPointerControllerOptions["resolveContext"]>;
 	readonly #requestAnswer: NonNullable<AiPointerControllerOptions["requestAnswer"]>;
+	readonly #preflight: NonNullable<AiPointerControllerOptions["preflight"]>;
 	readonly #lockMonitor: SessionLockMonitor;
 	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
@@ -122,6 +77,7 @@ export class AiPointerController {
 		this.#resolveContext = options.resolveContext ?? querySelectionContext;
 		const queryLocked = options.queryLocked ?? querySessionLocked;
 		this.#requestAnswer = options.requestAnswer ?? requestAnswer;
+		this.#preflight = options.preflight ?? preflightAiPointer;
 		this.#lockMonitor = new SessionLockMonitor(queryLocked, () => this.cancel());
 		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
 		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
@@ -192,7 +148,8 @@ export class AiPointerController {
 					this.#view.showError(this.#failureMessage);
 					return;
 				}
-				if (snapshot.hasTag("surface-visible") === false) this.#view.hide();
+				if (snapshot.hasTag("surface-visible") === false && snapshot.hasTag("selector-active") === false)
+					this.#view.hide();
 			});
 			this.#actor.start();
 			this.#directory = this.#prepareDirectory();
@@ -220,9 +177,11 @@ export class AiPointerController {
 		this.#answerTruncated = false;
 		this.#finishing = false;
 		++this.#runId;
+		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
+		this.#pendingFinishId = 0;
 		this.#actor?.send({ type: "START" });
 		this.#lockMonitor.start();
-		if (this.#view.beginStroke(this.#stroke, () => this.#sampleStroke()) === false) {
+		if (beginPreflightSelection(this.#view, this.#stroke, () => this.#sampleStroke()) === false) {
 			this.#failureMessage = "The drawing overlay is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return true;
@@ -230,13 +189,25 @@ export class AiPointerController {
 		this.#setCursorOutlineState(true);
 		if (this.#pendingFinish) {
 			const endPosition = this.#pendingFinish;
-			this.#clearPendingFinish();
-			this.#captureAt(endPosition);
+			this.#pendingFinish = null;
+			this.finish(endPosition);
 		}
+		this.#startPreflight(this.#runId);
 		return true;
 	}
 
 	finish(endPosition: PointerPosition): boolean {
+		if (this.#actor?.getSnapshot().matches("preflighting")) {
+			if (this.#pendingFinish) return false;
+			if (this.#stroke) {
+				this.#stroke = appendStrokePoint(this.#stroke, endPosition, true);
+				this.#view.updateStroke(this.#stroke);
+			}
+			this.#setCursorOutlineState(false);
+			this.#finishing = true;
+			this.#pendingFinish = endPosition;
+			return true;
+		}
 		if (this.#actor?.getSnapshot().matches("selecting") && this.#finishing === false) {
 			this.#captureAt(endPosition);
 			return true;
@@ -251,6 +222,33 @@ export class AiPointerController {
 			return GLib.SOURCE_REMOVE;
 		});
 		return true;
+	}
+
+	#startPreflight(runId: number): void {
+		const cancellable = new Gio.Cancellable();
+		let observedProcess: Gio.Subprocess | null = null;
+		this.#cancellable = cancellable;
+		void runSelectionPreflight(this.#preflight, cancellable, (process) => {
+			if (process) observedProcess = process;
+			if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
+			if (runId === this.#runId) this.#process = process;
+		}).then((result) => {
+			if (runId !== this.#runId || cancellable.is_cancelled()) return;
+			this.#cancellable = null;
+			this.#process = null;
+			if (result.kind === "failed") {
+				this.#setCursorOutlineState(false);
+				this.#view.endStroke();
+				this.#failureMessage = result.message;
+				this.#actor?.send({ type: "FAIL" });
+				return;
+			}
+			this.#actor?.send({ type: "READY" });
+			if (!this.#pendingFinish) return;
+			const endPosition = this.#pendingFinish;
+			this.#clearPendingFinish();
+			this.#captureAt(endPosition);
+		});
 	}
 
 	#captureAt(endPosition: PointerPosition): void {
@@ -614,7 +612,9 @@ export class AiPointerController {
 	}
 
 	#sampleStroke(): void {
-		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
+		if (this.#finishing) return;
+		const snapshot = this.#actor?.getSnapshot();
+		if (snapshot?.matches("preflighting") !== true && snapshot?.matches("selecting") !== true) return;
 		const point = this.#readPointer();
 		if (!point || !this.#stroke) return;
 		this.#stroke = appendStrokePoint(this.#stroke, point);

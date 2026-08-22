@@ -3,12 +3,65 @@ import { describe, test } from "node:test";
 import { ok } from "neverthrow";
 import {
   createOpenCodeAnswerBackend,
+  runOpenCodePreflight,
   type AnswerBackendRequest,
   type OpenCodeBackendDependencies,
   type OpenCodeClient,
 } from "../index.js";
 
 describe("OpenCode answer backend", () => {
+  test("reports ready from a compatible external server without creating a session", async () => {
+    const fake = createFake();
+
+    assert.deepEqual(await runOpenCodePreflight(fake.dependencies), { ready: true });
+    assert.equal(fake.state.ownedStarts, 0);
+    assert.equal(fake.state.externalCreate, 0);
+    assert.equal(fake.state.externalPrompt, 0);
+    assert.equal(fake.state.externalClose, 0);
+  });
+
+  test("uses and closes an owned fallback without creating a session", async () => {
+    const fake = createFake({ externalHealthy: false });
+
+    assert.deepEqual(await runOpenCodePreflight(fake.dependencies), { ready: true });
+    assert.equal(fake.state.ownedStarts, 1);
+    assert.equal(fake.state.ownedClose, 1);
+    assert.equal(fake.state.externalCreate, 0);
+    assert.equal(fake.state.externalPrompt, 0);
+    assert.equal(fake.state.ownedCreate, 0);
+    assert.equal(fake.state.ownedPrompt, 0);
+  });
+
+  test("returns concise readiness failures for invalid agent policy, model, and version", async () => {
+    const missingAgent = createFake({ agent: false });
+    const permissiveAgent = createFake({ wildcardDenied: false });
+    const unknownTool = createFake({ toolIDs: [""] });
+    const unavailableModel = createFake({ imageCapable: false });
+    const incompatibleCli = createFake({ cliVersion: "1.18.17" });
+    const incompatibleServer = createFake({ serverVersion: "1.18.17" });
+
+    assert.deepEqual(await runOpenCodePreflight(missingAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
+    assert.deepEqual(await runOpenCodePreflight(permissiveAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
+    assert.deepEqual(await runOpenCodePreflight(unknownTool.dependencies), { ready: false, code: "backend_policy_invalid" });
+    assert.deepEqual(await runOpenCodePreflight(unavailableModel.dependencies), { ready: false, code: "backend_policy_invalid" });
+    assert.deepEqual(await runOpenCodePreflight(incompatibleCli.dependencies), { ready: false, code: "incompatible_version" });
+    assert.deepEqual(await runOpenCodePreflight(incompatibleServer.dependencies), { ready: false, code: "incompatible_version" });
+    assert.equal(incompatibleCli.state.ownedStarts, 0);
+  });
+
+  test("returns cancellation and closes an owned server during readiness checks", async () => {
+    const fake = createFake({ externalHealthy: false, ownedHealthHangs: true });
+    const controller = new AbortController();
+    const pending = runOpenCodePreflight(fake.dependencies, controller.signal);
+    await waitFor(() => fake.state.ownedStarts === 1);
+    controller.abort();
+
+    assert.deepEqual(await pending, { ready: false, code: "cancelled" });
+    assert.equal(fake.state.ownedClose, 1);
+    assert.equal(fake.state.ownedCreate, 0);
+    assert.equal(fake.state.ownedPrompt, 0);
+  });
+
   test("reuses a compatible external server without closing it", async () => {
     const fake = createFake();
     const result = await fake.backend.execute(request());
@@ -157,6 +210,7 @@ function createFake(options: {
   deleteFalse?: boolean;
   externalHealthy?: boolean;
   incompleteAssistant?: boolean;
+  imageCapable?: boolean;
   agentModel?: boolean;
   modelID?: string;
   ownedHealthHangs?: boolean;
@@ -173,6 +227,8 @@ function createFake(options: {
     externalDelete: 0,
     externalPrompt: 0,
     ownedClose: 0,
+    ownedCreate: 0,
+    ownedPrompt: 0,
     ownedStarts: 0,
     tools: {} as Record<string, false>,
   };
@@ -183,12 +239,17 @@ function createFake(options: {
     } },
     app: { agents: async () => ({ data: options.agent === false ? [] : [{ name: "desktop-pointer", model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined, permission: options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }] }] }) },
     config: { get: async () => ({ data: { model: `openai/${options.modelID ?? "test"}` } }) },
-    provider: { list: async () => ({ data: { connected: ["openai"], all: [{ id: "openai", models: { [options.modelID ?? "test"]: { status: "active", capabilities: { input: { image: true } } } } }] } }) },
+    provider: { list: async () => ({ data: { connected: ["openai"], all: [{ id: "openai", models: { [options.modelID ?? "test"]: { status: "active", capabilities: { input: { image: options.imageCapable !== false } } } } }] } }) },
     tool: { ids: async () => ({ data: options.toolIDs ?? ["bash", "read"] }) },
     session: {
-      create: async () => { state.externalCreate += kind === "external" ? 1 : 0; return { data: { id: `${kind}-session` } }; },
+      create: async () => {
+        if (kind === "external") state.externalCreate += 1;
+        else state.ownedCreate += 1;
+        return { data: { id: `${kind}-session` } };
+      },
       prompt: async (input) => {
-        state.externalPrompt += kind === "external" ? 1 : 0;
+        if (kind === "external") state.externalPrompt += 1;
+        else state.ownedPrompt += 1;
         state.tools = input.tools;
         if (options.promptHangs) return await new Promise<never>(() => undefined);
         if (options.promptFailure) throw new Error("provider failed");
@@ -214,7 +275,7 @@ function createFake(options: {
     },
     getCliVersion: async () => options.cliVersion ?? "1.18.18",
   };
-  return { backend: createOpenCodeAnswerBackend(dependencies), state };
+  return { backend: createOpenCodeAnswerBackend(dependencies), dependencies, state };
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

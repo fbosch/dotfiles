@@ -12,6 +12,7 @@ import type { OcrResult } from "./ocr";
 import { promptPosition } from "./selection";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
+import { createCancelController } from "./cancel-controller";
 
 const promptMinimumWidth = 40;
 const promptMaximumWidth = 348;
@@ -74,7 +75,7 @@ export class AiPointerView {
 					application={app}
 					$={(self: Astal.Window) => {
 						bindGamingOpacity(self);
-						self.add_controller(this.#createCancelController());
+						self.add_controller(createCancelController(() => this.#handlers?.onCancel()));
 
 						const canvas = new Gtk.Fixed({ hexpand: true, vexpand: true });
 						const host = new Gtk.CenterBox({
@@ -110,7 +111,7 @@ export class AiPointerView {
 						const prompt = new Gtk.Entry();
 						prompt.add_css_class("ai-pointer-prompt-input");
 						prompt.set_placeholder_text("Ask about this selection");
-						prompt.add_controller(this.#createCancelController());
+						prompt.add_controller(createCancelController(() => this.#handlers?.onCancel()));
 						prompt.connect("notify::text", () => this.#resizePrompt());
 						prompt.connect("activate", () => {
 							const question = prompt.get_text().trim();
@@ -247,16 +248,6 @@ export class AiPointerView {
 		this.#capture = null;
 		this.#handlers = null;
 		window?.destroy();
-	}
-
-	#createCancelController(): Gtk.EventControllerKey {
-		const controller = new Gtk.EventControllerKey();
-		controller.connect("key-pressed", (_controller, keyval: number) => {
-			if (keyval !== Gdk.KEY_Escape) return false;
-			this.#handlers?.onCancel();
-			return true;
-		});
-		return controller;
 	}
 
 	#resizePrompt(): void {

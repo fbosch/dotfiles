@@ -2,6 +2,7 @@ import { setup } from "xstate";
 
 type AiPointerEvent =
 	| { type: "START" }
+	| { type: "READY" }
 	| { type: "CAPTURED" }
 	| { type: "SUBMIT" }
 	| { type: "ANSWERED" }
@@ -11,17 +12,21 @@ type AiPointerEvent =
 export const aiPointerMachine = setup({
 	types: {
 		events: {} as AiPointerEvent,
-		tags: {} as "active" | "surface-visible",
+		tags: {} as "active" | "selector-active" | "surface-visible",
 	},
 }).createMachine({
 	id: "ai-pointer",
 	initial: "idle",
 	states: {
 		idle: {
-			on: { START: "selecting" },
+			on: { START: "preflighting" },
+		},
+		preflighting: {
+			tags: ["active", "selector-active"],
+			on: { READY: "selecting", CANCEL: "idle", FAIL: "failed" },
 		},
 		selecting: {
-			tags: ["active"],
+			tags: ["active", "selector-active"],
 			on: {
 				CAPTURED: "composition",
 				CANCEL: "idle",

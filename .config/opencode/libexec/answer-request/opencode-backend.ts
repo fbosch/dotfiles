@@ -4,6 +4,7 @@ import { promisify } from "node:util";
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { createOpenCodeFilePart } from "./attachment.js";
 import type { AnswerBackend, AnswerBackendRequest, AnswerBackendResult } from "./backend.js";
+import type { AnswerErrorCode } from "./protocol.js";
 
 const execFileAsync = promisify(execFile);
 const OPENCODE_VERSION = "1.18.18";
@@ -17,6 +18,9 @@ const ANSWER_SYSTEM_PROMPT =
 type Response = { data?: unknown; error?: unknown };
 type Options = { signal?: AbortSignal };
 type Preflight = { ok: true; tools: Record<string, false> } | { ok: false; code: "backend_unavailable" | "backend_policy_invalid" | "incompatible_version" | "cancelled" | "timeout" };
+type PreparedBackend = { policy: Preflight; client?: OpenCodeClient; owned?: OwnedServer };
+
+export type AnswerPreflightResult = { ready: true } | { ready: false; code: Extract<AnswerErrorCode, "backend_unavailable" | "backend_policy_invalid" | "incompatible_version" | "cancelled" | "timeout" | "cleanup_failed"> };
 
 export interface OpenCodeClient {
   global: { health(options?: Options): Promise<Response> };
@@ -54,23 +58,14 @@ export function createOpenCodeAnswerBackend(dependencies: OpenCodeBackendDepende
     let result: AnswerBackendResult = { ok: false, code: "provider_failed" };
 
     try {
-      const cliVersion = await raceWithSignal(dependencies.getCliVersion(signal), signal);
-      if (cliVersion !== OPENCODE_VERSION) result = { ok: false, code: "incompatible_version" };
-      if (result.ok === false && result.code !== "provider_failed") return result;
-
-      let client = dependencies.createClient(EXTERNAL_BASE_URL, directory);
-      let policy = await verifyPreflight(client, directory, signal, request.signal, deadline.signal);
-      if (policy.ok === false && signal.aborted) return policy;
-      if (policy.ok === false) {
-        const created = dependencies.createOwned(signal);
-        const createdOwned = await raceWithSignal(created.then(closeIfAborted(signal)), signal);
-        owned = closeOnce(createdOwned);
-        client = owned.client;
-        policy = await verifyPreflight(client, directory, signal, request.signal, deadline.signal);
-      }
+      const prepared = await prepareBackend(dependencies, directory, signal, request.signal, deadline.signal);
+      owned = prepared.owned;
+      const policy = prepared.policy;
       if (policy.ok === false) {
         result = policy;
       } else {
+        const client = prepared.client;
+        if (client === undefined) throw new Error("missing prepared client");
         const attachments = await request.loadAttachments();
         if (attachments.isErr()) {
           result = { ok: false, code: attachments.error.code };
@@ -106,6 +101,43 @@ export function createOpenCodeAnswerBackend(dependencies: OpenCodeBackendDepende
     }
     return result;
   } };
+}
+
+export async function runOpenCodePreflight(dependencies: OpenCodeBackendDependencies = defaultDependencies(), signal?: AbortSignal): Promise<AnswerPreflightResult> {
+  const deadline = new AbortController();
+  const timeout = setTimeout(() => deadline.abort(), PREFLIGHT_TIMEOUT_MILLISECONDS * 3);
+  const combined = signal === undefined ? deadline.signal : AbortSignal.any([signal, deadline.signal]);
+  const directory = process.env.OPENCODE_CONFIG_DIR ?? `${homedir()}/.config/opencode`;
+  let owned: OwnedServer | undefined;
+  let result: AnswerPreflightResult = { ready: false, code: "backend_unavailable" };
+
+  try {
+    const prepared = await prepareBackend(dependencies, directory, combined, signal, deadline.signal);
+    owned = prepared.owned;
+    result = prepared.policy.ok ? { ready: true } : { ready: false, code: prepared.policy.code };
+  } catch (error) {
+    result = isAbort(error) || combined.aborted
+      ? { ready: false, code: failureForSignal(signal, deadline.signal).code }
+      : { ready: false, code: "backend_unavailable" };
+  } finally {
+    clearTimeout(timeout);
+    if (await cleanup(undefined, owned, directory)) result = { ready: false, code: "cleanup_failed" };
+  }
+  return result;
+}
+
+async function prepareBackend(dependencies: OpenCodeBackendDependencies, directory: string, signal: AbortSignal, caller: AbortSignal | undefined, timeout: AbortSignal): Promise<PreparedBackend> {
+  const cliVersion = await raceWithSignal(dependencies.getCliVersion(signal), signal);
+  if (cliVersion !== OPENCODE_VERSION) return { policy: { ok: false, code: "incompatible_version" } };
+
+  const external = dependencies.createClient(EXTERNAL_BASE_URL, directory);
+  const externalPolicy = await verifyPreflight(external, directory, signal, caller, timeout);
+  if (externalPolicy.ok || signal.aborted) return { policy: externalPolicy, client: external };
+
+  const created = dependencies.createOwned(signal);
+  const owned = closeOnce(await raceWithSignal(created.then(closeIfAborted(signal)), signal));
+  const policy = await verifyPreflight(owned.client, directory, signal, caller, timeout);
+  return { policy, client: owned.client, owned };
 }
 
 async function verifyPreflight(client: OpenCodeClient, directory: string, signal: AbortSignal, caller: AbortSignal | undefined, timeout: AbortSignal): Promise<Preflight> {
@@ -221,7 +253,7 @@ function closeOnce(owned: OwnedServer): OwnedServer {
 }
 
 function closeIfAborted(signal: AbortSignal): (owned: OwnedServer) => Promise<OwnedServer> {
-  return async (owned) => { if (signal.aborted) await owned.close(); return owned; };
+  return async (owned) => { if (signal.aborted) await cleanupCall(() => Promise.resolve(owned.close())); return owned; };
 }
 
 function deleteIfAborted(client: OpenCodeClient, directory: string, signal: AbortSignal): (response: Response) => Promise<Response> {
