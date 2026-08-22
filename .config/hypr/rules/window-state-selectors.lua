@@ -14,6 +14,7 @@
 ---@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
 ---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
 ---@field persist_tags? string[] Dynamic client tags to restore when present.
+---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 
 ---@return WindowStateSelector[]
 return {
@@ -50,5 +51,6 @@ return {
 			"pip-bottom-left",
 			"pip-bottom-right",
 		},
+		per_monitor = false,
 	},
 }

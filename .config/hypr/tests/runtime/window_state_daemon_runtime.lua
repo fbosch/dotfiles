@@ -411,8 +411,9 @@ local function fixture()
 			and generated_rule("HDMI-A-1", "^nemo$").match.workspace == "m[HDMI-A-1]"
 			and generated_rule("DP-1", "^nemo$").match.initial_title == "negative:(^File Operations$|^Preparing$)"
 			and generated_rule("HDMI-A-1", "^nemo$").effects.move == "30 40"
-			and generated_rule("DP-1", "^Picture-in-Picture$")
-			and generated_rule("DP-1", "^Picture-in-Picture$").tags[1] == "pip-top-left"
+			and generated_rule(nil, "^Picture-in-Picture$")
+			and generated_rule(nil, "^Picture-in-Picture$").tags[1] == "pip-top-left"
+			and generated_rule(nil, "^Picture-in-Picture$").match.workspace == nil
 			and rules:find('tag = "+pip-top-left"', 1, true)
 	end, 3)
 	local log = read_file(log_path)

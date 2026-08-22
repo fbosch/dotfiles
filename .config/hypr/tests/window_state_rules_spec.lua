@@ -150,7 +150,7 @@ describe("window-state rules", function()
 		assert_contains(content, 'class = "Test.+",')
 	end)
 
-	it("renders opted-in tags as separate rules", function()
+	it("renders the first matching opted-in tag as a separate rule", function()
 		options.cache = {
 			pip = {
 				matcher = "match:initial_title",
@@ -160,7 +160,7 @@ describe("window-state rules", function()
 				y = 15,
 				width = 300,
 				height = 200,
-				tags = { "pip-top-left", "unrelated" },
+				tags = { "pip-top-left", "pip-top-right", "unrelated" },
 			},
 		}
 		options.selectors = {
@@ -175,6 +175,7 @@ describe("window-state rules", function()
 		local content = read_file(options.rules_lua_file)
 		assert_contains(content, 'tags = { "pip-top-left" },')
 		assert_contains(content, 'tag = "+pip-top-left",')
+		assert_not_contains(content, 'tag = "+pip-top-right",')
 		assert_not_contains(content, "unrelated")
 
 		local cache = rules.load_rules_cache(options.rules_lua_file)
@@ -187,6 +188,29 @@ describe("window-state rules", function()
 		end
 		assert.is_not_nil(entry)
 		assert.are.same({ "pip-top-left" }, entry.tags)
+	end)
+
+	it("renders global state without monitor metadata or workspace matching", function()
+		options.cache = {
+			pip = {
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				monitor = "",
+				x = 15,
+				y = 15,
+				width = 300,
+				height = 200,
+			},
+		}
+		options.selectors = {
+			{ matcher = "match:initial_title", pattern = "^Picture-in-Picture$", per_monitor = false },
+		}
+		assert.is_true(rules.write_rules_file(options))
+
+		local content = read_file(options.rules_lua_file)
+		assert_contains(content, 'id = "window-state:match:initial_title:^Picture-in-Picture$:global",')
+		assert_not_contains(content, "monitor =")
+		assert_not_contains(content, "workspace =")
 	end)
 
 	it("retains independent geometry for each monitor", function()

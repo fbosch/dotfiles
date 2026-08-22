@@ -206,7 +206,8 @@ local function persisted_tags(client, selector)
 	local tags = {}
 	for _, tag in ipairs(selector.persist_tags) do
 		if client_tags[tag] then
-			tags[#tags + 1] = tag
+			tags[1] = tag
+			break
 		end
 	end
 
@@ -239,7 +240,7 @@ local function get_window_states()
 					class = client.class,
 					matcher = selector.matcher,
 					pattern = selector.pattern,
-					monitor = monitor.name,
+					monitor = selector.per_monitor and monitor.name or "",
 					x = number_at(client.at, 1) - monitor.x,
 					y = number_at(client.at, 2) - monitor.y,
 					width = number_at(client.size, 1),

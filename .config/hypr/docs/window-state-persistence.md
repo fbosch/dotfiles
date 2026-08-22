@@ -64,9 +64,14 @@ The Nemo selector is the useful reference: it captures the main Nemo window but
 excludes clients whose initial title is `File Operations` or `Preparing`. The
 generated rule expresses that exclusion as Hyprland's `negative:(...)` matcher.
 
-`persist_tags` is a list of dynamic client tags to retain. The generated state
-stores matching tags as metadata and restores each as a separate dynamic tag
-rule. This keeps transient and policy tags out of persisted state by default.
+`persist_tags` is an ordered allowlist of dynamic client tags to retain. The
+first matching tag is stored as metadata and restored as a separate dynamic tag
+rule. This keeps transient and policy tags out of persisted state by default,
+and supports mutually exclusive states such as PiP corners.
+
+State is per monitor by default. Set `per_monitor = false` for one
+monitor-local geometry rule that can restore on any monitor; use this for
+pinned cross-monitor windows such as Picture-in-Picture.
 
 ## Generated Rule Contract
 

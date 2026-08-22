@@ -79,6 +79,7 @@ function M.load_selectors(path)
 			local field = M.matcher_client_field(selector.matcher)
 			local exclude = selector.exclude
 			local persist_tags = selector.persist_tags
+			local per_monitor = selector.per_monitor
 			local valid_exclude = exclude == nil
 				or (
 					type(exclude) == "table"
@@ -95,12 +96,18 @@ function M.load_selectors(path)
 					end
 				end
 			end
-			if field and valid_exclude and valid_persist_tags(persist_tags) then
+			if
+				field
+				and valid_exclude
+				and valid_persist_tags(persist_tags)
+				and (per_monitor == nil or type(per_monitor) == "boolean")
+			then
 				normalized[#normalized + 1] = {
 					matcher = selector.matcher,
 					pattern = selector.pattern,
 					exclude = exclude,
 					persist_tags = persist_tags,
+					per_monitor = per_monitor ~= false,
 				}
 				matchers[#matchers + 1] = {
 					matcher = selector.matcher,
@@ -130,7 +137,7 @@ local function rule_pattern(pattern)
 end
 
 local function rule_id(matcher, pattern, monitor)
-	return "window-state:" .. matcher .. ":" .. pattern .. ":" .. monitor
+	return "window-state:" .. matcher .. ":" .. pattern .. ":" .. (monitor ~= "" and monitor or "global")
 end
 
 local function cache_key(matcher, pattern, monitor)
@@ -174,8 +181,8 @@ function M.load_rules_cache(path)
 			local matcher, pattern = rule_identity(rule)
 			local width, height = generated_rules.parse_pair(rule.effects.size)
 			local x, y = generated_rules.parse_pair(rule.effects.move)
-			local monitor = rule.monitor or rule.effects.monitor
-			if matcher and pattern and monitor and monitor ~= "" and width and height and x and y then
+			local monitor = rule.monitor or rule.effects.monitor or ""
+			if matcher and pattern and width and height and x and y then
 				cache[cache_key(matcher, pattern, monitor)] =
 					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags)
 			end
@@ -188,11 +195,14 @@ end
 function M.prune_rules_cache(cache, selectors)
 	local valid = {}
 	for _, selector in ipairs(selectors) do
-		valid[cache_key(selector.matcher, selector.pattern, "")] = true
+		valid[cache_key(selector.matcher, selector.pattern, "")] = selector
 	end
 
 	for key, entry in pairs(cache) do
-		if not valid[cache_key(entry.matcher, entry.pattern, "")] then
+		local selector = valid[cache_key(entry.matcher, entry.pattern, "")]
+		local global = entry.monitor == ""
+		local per_monitor = selector and selector.per_monitor ~= false
+		if not selector or global == per_monitor then
 			cache[key] = nil
 		end
 	end
@@ -222,7 +232,8 @@ local function persisted_tags(entry, selector)
 	local tags = {}
 	for _, tag in ipairs(selector.persist_tags) do
 		if saved[tag] then
-			tags[#tags + 1] = tag
+			tags[1] = tag
+			break
 		end
 	end
 
@@ -254,7 +265,9 @@ local function append_match(lines, entry, selector, lua_match_key)
 				.. ","
 		end
 	end
-	lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
+	if entry.monitor ~= "" then
+		lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
+	end
 	lines[#lines + 1] = "    },"
 end
 
@@ -263,7 +276,9 @@ local function append_rule_identity(lines, entry, id)
 	lines[#lines + 1] = "    id = " .. json.encode(id) .. ","
 	lines[#lines + 1] = "    matcher = " .. json.encode(entry.matcher) .. ","
 	lines[#lines + 1] = "    pattern = " .. json.encode(entry.pattern) .. ","
-	lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
+	if entry.monitor ~= "" then
+		lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
+	end
 end
 
 local function render_rules(cache, selectors_path, selectors)
@@ -285,8 +300,9 @@ local function render_rules(cache, selectors_path, selectors)
 		local lua_match_key = M.matcher_lua_key(entry.matcher)
 		local selector = selectors_by_identity[cache_key(entry.matcher, entry.pattern, "")]
 		if lua_match_key then
-			local comment = entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
-			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
+			local scope = entry.monitor ~= "" and " on " .. entry.monitor or " globally"
+			local comment = entry.matcher .. " " .. entry.pattern .. scope
+			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. scope
 			local tags = persisted_tags(entry, selector)
 			append_rule_identity(lines, entry, rule_id(entry.matcher, entry.pattern, entry.monitor))
 			append_match(lines, entry, selector, lua_match_key)
@@ -348,7 +364,7 @@ end
 
 function M.update_cache_from_windows(cache, windows, log)
 	for _, window in ipairs(json.array(windows)) do
-		if window.class and window.class ~= "" and window.monitor and window.monitor ~= "" then
+		if window.class and window.class ~= "" and window.monitor ~= nil then
 			cache[cache_key(window.matcher, window.pattern, window.monitor)] = cache_entry(
 				window.matcher,
 				window.pattern,
@@ -369,7 +385,7 @@ function M.update_cache_from_windows(cache, windows, log)
 						window.height,
 						window.x,
 						window.y,
-						window.monitor ~= "" and window.monitor or "unknown"
+						window.monitor ~= "" and window.monitor or "global"
 					)
 				)
 			end

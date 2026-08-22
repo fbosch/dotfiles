@@ -17,5 +17,6 @@ export const aiPointerPerformanceMetrics = {
 	ocrCompletion: "ocrCompletion",
 	overlayTeardown: "overlayTeardown",
 	promptPresentation: "promptPresentation",
+	selectionPresentation: "selectionPresentation",
 	workflowCompletion: "workflowCompletion",
 } as const;

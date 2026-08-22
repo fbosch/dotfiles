@@ -169,7 +169,19 @@ export class AiPointerController {
 		this.#pendingFinishId = 0;
 		this.#actor?.send({ type: "START" });
 		this.#lockMonitor.start();
-		if (beginPreflightSelection(this.#view, this.#stroke, () => this.#sampleStroke()) === false) {
+		const selectionMark = perf.isEnabled()
+			? perf.start("ai-pointer", aiPointerPerformanceMetrics.selectionPresentation)
+			: null;
+		let selectionPresented = false;
+		const selectionStarted = beginPreflightSelection(this.#view, this.#stroke, () => {
+			if (selectionPresented === false) {
+				selectionPresented = true;
+				selectionMark?.end();
+			}
+			this.#sampleStroke();
+		});
+		if (selectionStarted === false) {
+			selectionMark?.end(false, "failed");
 			this.#failureMessage = "The drawing overlay is unavailable.";
 			this.#actor?.send({ type: "FAIL" });
 			return true;
