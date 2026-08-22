@@ -48,7 +48,7 @@ hl.window_rule({ match = { class = "^(com\\.github\\.tchx84\\.Flatseal)$" }, flo
 hl.window_rule({ match = { class = "^(org\\.gnome\\.font-viewer)$" }, float = true })
 
 -- GCR Prompter
-hl.window_rule({ match = { class = "^(gcr-prompter)$" }, pin = true })
+hl.window_rule({ match = { class = "^(gcr-prompter)$" }, pin = true, tag = "+" .. window_tags.privacy })
 
 -- Mullvad VPN
 hl.window_rule({ match = { class = "^(Mullvad VPN)$" }, float = true, pin = true })
@@ -81,7 +81,11 @@ hl.window_rule({ match = { class = "^(protonvpn-app)$" }, float = true, pin = tr
 hl.window_rule({ match = { class = "^(protonvpn\\.app)$", title = "^(Proton VPN)$" }, float = true })
 
 -- Proton Mail
-hl.window_rule({ match = { class = "^(chrome-mail\\.proton\\.me__-ProtonmailProfile)$" }, workspace = "1" })
+hl.window_rule({
+	match = { class = "^(chrome-mail\\.proton\\.me__-ProtonmailProfile)$" },
+	workspace = "1",
+	tag = "+" .. window_tags.privacy,
+})
 
 -- Vicinae
 hl.window_rule({
