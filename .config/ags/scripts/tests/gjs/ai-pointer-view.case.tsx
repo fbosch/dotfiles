@@ -51,9 +51,11 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	const prompt = findWidgetWithClass(window, "ai-pointer-prompt-input");
 	const action = findWidgetWithClass(window, "ai-pointer-action");
 	const pill = findWidgetWithClass(window, "ai-pointer-prompt-pill");
+	const answer = findWidgetWithClass(window, "ai-pointer-answer");
 	assert(prompt instanceof Gtk.Entry, "AI Pointer question input was not rendered");
 	assert(action instanceof Gtk.Button, "AI Pointer action was not rendered");
 	assert(pill instanceof Gtk.Box, "AI Pointer pill was not rendered");
+	assert(answer instanceof Gtk.Label, "AI Pointer answer label was not rendered");
 	assert(pill.get_height() <= 50, "AI Pointer pill exceeded the design-system height");
 	assert(
 		action.get_width() === 32 && action.get_height() === 32,
@@ -69,10 +71,21 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	);
 	assert(prompt.get_text().includes("question"), "capture completion cleared the prepared question");
 	assert(action.get_sensitive(), "non-empty AI Pointer question was not submittable");
+	prompt.set_text("keep this question");
+	assert(
+		view.showPrompt({ path: capturePath, geometry, sha256: "a".repeat(64) }),
+		"AI Pointer repeated prompt update was rejected",
+	);
+	assert(prompt.get_text() === "keep this question", "a repeated component update cleared the question");
 	action.emit("clicked");
-	assert(submitted === "question ".repeat(80).trim(), "AI Pointer did not trim the submitted question");
+	assert(submitted === "keep this question", "AI Pointer submitted the wrong question");
 	view.showRequesting();
 	assert(action.has_css_class("requesting"), "AI Pointer requesting action was not presented");
+	view.showPartialAnswer("Streaming plain text");
+	assert(answer.get_label() === "Streaming plain text", "AI Pointer partial answer was not rendered");
+	assert(action.has_css_class("requesting"), "partial answer changed the requesting action");
+	view.showPartialAnswer("");
+	assert(answer.get_label() === "", "AI Pointer partial answer was not cleared");
 	action.emit("clicked");
 	assert(cancelled === 1, "AI Pointer requesting action did not cancel");
 	view.hide();

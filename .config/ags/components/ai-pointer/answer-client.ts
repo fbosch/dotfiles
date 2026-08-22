@@ -2,8 +2,8 @@ import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import {
 	answerResponseOutputBytes,
+	createAnswerResponseParser,
 	createAnswerRequest,
-	parseAnswerResponse,
 	serializeAnswerRequest,
 	type AnswerClientResult,
 	type AnswerRequestInput,
@@ -29,6 +29,7 @@ const requestCleanupBudgetMs = 8_000;
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
 type StreamRead = { kind: "complete"; bytes: Uint8Array } | { kind: "too-large" } | { kind: "failed" };
+type AnswerStreamRead = { kind: "complete" } | { kind: "failed"; result: AnswerClientResult };
 interface AnswerClientOptions {
 	executable?: string;
 	hardTimeoutMs?: number;
@@ -53,6 +54,7 @@ export async function requestAnswer(
 	input: AnswerRequestInput,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
+	onDelta?: (text: string) => void,
 	options: AnswerClientOptions = {},
 ): Promise<AnswerClientResult> {
 	const request = createAnswerRequest(input);
@@ -100,7 +102,8 @@ export async function requestAnswer(
 		if (cancellable.is_cancelled()) {
 			terminate();
 		}
-		const stdout = readBoundedStream(process.get_stdout_pipe(), maximumStdoutBytes, terminate);
+		const parser = createAnswerResponseParser(input.requestId, onDelta ?? (() => {}));
+		const stdout = readAnswerStream(process.get_stdout_pipe(), parser, terminate);
 		const stderr = readBoundedStream(process.get_stderr_pipe(), maximumStderrBytes, terminate);
 		let inputFailed = false;
 		try {
@@ -122,11 +125,9 @@ export async function requestAnswer(
 			return { kind: "failed", code: "timeout", message: "The answer request timed out." };
 		if (inputFailed)
 			return { kind: "failed", code: "process_failed", message: "The answer helper did not accept the request." };
-		if (stdoutResult.kind === "too-large")
-			return { kind: "failed", code: "output_too_large", message: "The answer response exceeded its limit." };
 		if (stdoutResult.kind === "failed")
-			return { kind: "failed", code: "invalid_response", message: "The answer response could not be read." };
-		const response = parseAnswerResponse(stdoutResult.bytes, input.requestId);
+			return stdoutResult.result;
+		const response = parser.finish();
 		if (response.kind === "answered" && (waited === false || process.get_successful() === false))
 			return { kind: "failed", code: "process_failed", message: "The answer helper exited unsuccessfully." };
 		return response;
@@ -262,6 +263,32 @@ async function readBoundedStream(
 		offset += chunk.length;
 	}
 	return { kind: "complete", bytes: output };
+}
+
+async function readAnswerStream(
+	stream: Gio.InputStream | null,
+	parser: ReturnType<typeof createAnswerResponseParser>,
+	onInvalid: () => void,
+): Promise<AnswerStreamRead> {
+	if (!stream) return { kind: "failed", result: { kind: "failed", code: "invalid_response", message: "The answer response could not be read." } };
+	let invalid = false;
+	let invalidResult: AnswerClientResult | null = null;
+	try {
+		while (true) {
+			const bytes = await stream.read_bytes_async(readChunkBytes, GLib.PRIORITY_DEFAULT, null);
+			const data = bytes.get_data();
+			if (!data || data.length === 0) break;
+			const result = invalid === false ? parser.push(data.slice()) : null;
+			if (result) {
+				invalid = true;
+				invalidResult = result;
+				onInvalid();
+			}
+		}
+	} catch {
+		return { kind: "failed", result: { kind: "failed", code: "invalid_response", message: "The answer response could not be read." } };
+	}
+	return invalid ? { kind: "failed", result: invalidResult! } : { kind: "complete" };
 }
 
 function requestCancellation(process: Gio.Subprocess): void {

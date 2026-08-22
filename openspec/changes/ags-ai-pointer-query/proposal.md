@@ -4,7 +4,7 @@ OpenCode can reason over screenshots, but AGS has no safe non-interactive path f
 
 ## What Changes
 
-- Add a standalone Bun answer runtime with a backend-neutral, versioned JSON stdin/stdout protocol and an initial OpenCode backend.
+- Add a standalone Bun answer runtime with a backend-neutral, versioned JSON stdin and streaming NDJSON stdout protocol, plus an initial OpenCode backend.
 - Add a hidden, answer-only `desktop-pointer` OpenCode agent with all tools disabled.
 - Add an AGS AI Pointer workflow that lets a user draw over a screen region, review the resolved capture with its associated application context, type a question, and receive a read-only answer.
 - Add a Hyprland press/release stroke workflow with sampled pointer geometry, bounded click fallback, and direct `grim` capture so the workflow retains the final global capture geometry and can classify a unique exact window separately from geometric window and layer candidates.

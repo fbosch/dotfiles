@@ -67,7 +67,7 @@ export const attachmentDescriptorSchema = z
 
 export const answerRequestSchema = z
   .object({
-    protocolVersion: z.literal(1),
+    protocolVersion: z.literal(2),
     requestId: requestIdSchema,
     operation: z.literal("answer"),
     prompt: boundedUtf8String(answerRequestLimits.promptBytes).refine(
@@ -108,7 +108,7 @@ export const answerErrorCodeSchema = z.enum([
 
 export const answerSuccessSchema = z
   .object({
-    protocolVersion: z.literal(1),
+    protocolVersion: z.literal(2),
     requestId: requestIdSchema,
     ok: z.literal(true),
     answer: boundedUtf8String(answerRequestLimits.responseBytes).refine(
@@ -120,7 +120,7 @@ export const answerSuccessSchema = z
 
 export const answerFailureSchema = z
   .object({
-    protocolVersion: z.literal(1),
+    protocolVersion: z.literal(2),
     requestId: requestIdSchema.nullable(),
     ok: z.literal(false),
     error: z
@@ -139,6 +139,14 @@ export const answerResultSchema = z.discriminatedUnion("ok", [
   answerFailureSchema,
 ]);
 
+const streamTextSchema = boundedUtf8String(64 * 1024).refine((value) => value.length > 0);
+
+export const answerStreamStartSchema = z.object({ protocolVersion: z.literal(2), requestId: requestIdSchema, sequence: z.literal(0), event: z.literal("start") }).strict();
+export const answerStreamDeltaSchema = z.object({ protocolVersion: z.literal(2), requestId: requestIdSchema, sequence: z.number().int().positive(), event: z.literal("delta"), text: streamTextSchema }).strict();
+export const answerStreamFinalSchema = z.object({ protocolVersion: z.literal(2), requestId: requestIdSchema, sequence: z.number().int().positive(), event: z.literal("final"), answer: boundedUtf8String(answerRequestLimits.responseBytes).refine((value) => value.trim().length > 0), truncated: z.boolean() }).strict();
+export const answerStreamErrorSchema = z.object({ protocolVersion: z.literal(2), requestId: requestIdSchema.nullable(), sequence: z.number().int().nonnegative(), event: z.literal("error"), error: z.object({ code: answerErrorCodeSchema, message: boundedUtf8String(answerRequestLimits.diagnosticBytes).refine((value) => value.length > 0) }).strict() }).strict();
+export const answerStreamEventSchema = z.discriminatedUnion("event", [answerStreamStartSchema, answerStreamDeltaSchema, answerStreamFinalSchema, answerStreamErrorSchema]);
+
 export type AnswerRequest = z.infer<typeof answerRequestSchema>;
 export type AttachmentDescriptor = z.infer<typeof attachmentDescriptorSchema>;
 export type AnswerToolPolicy = z.infer<typeof answerToolPolicySchema>;
@@ -146,6 +154,7 @@ export type AnswerErrorCode = z.infer<typeof answerErrorCodeSchema>;
 export type AnswerResult = z.infer<typeof answerResultSchema>;
 export type AnswerSuccess = z.infer<typeof answerSuccessSchema>;
 export type AnswerFailure = z.infer<typeof answerFailureSchema>;
+export type AnswerStreamEvent = z.infer<typeof answerStreamEventSchema>;
 
 const errorMessages = {
   invalid_request: "The request is invalid.",
@@ -169,7 +178,7 @@ export function createAnswerFailure(
   requestId: string | null = null,
 ): AnswerFailure {
   return {
-    protocolVersion: 1,
+    protocolVersion: 2,
     requestId,
     ok: false,
     error: { code, message: errorMessages[code] },

@@ -36,6 +36,7 @@ export interface AiPointerControllerOptions {
 		input: { requestId: string; prompt: string; attachment: { path: string; sha256: string }; timeoutSeconds: number },
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
+		onDelta?: (text: string) => void,
 	): Promise<AnswerClientResult>;
 	setCursorOutline?(enabled: boolean): boolean | void;
 	recognizeOcr?(

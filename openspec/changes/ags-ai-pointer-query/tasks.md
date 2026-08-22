@@ -91,3 +91,11 @@
 - [ ] 9.8 Verify no AI Pointer capture or ephemeral OpenCode session remains after success, failure, timeout, cancellation, or an AGS restart.
 - [x] 9.9 Verify AI Commit remains byte-for-byte unchanged with `git diff --exit-code -- .config/opencode/plugins/ai-commit .config/fish/functions/ai_commit.fish`.
 - [x] 9.10 Run `openspec validate ags-ai-pointer-query --type change --strict --no-interactive`.
+
+## 10. Streaming Answer Delivery
+
+- [x] 10.1 Replace protocol version 1 with a closed, bounded protocol-version-2 NDJSON event contract and tests.
+- [x] 10.2 Stream exactly correlated OpenCode assistant text through `event.subscribe` and `session.promptAsync`, then retrieve and validate the final message before cleanup.
+- [x] 10.3 Parse bounded NDJSON incrementally through Gio and reject malformed framing, ordering, stale IDs, invalid UTF-8, and unsuccessful terminal process outcomes.
+- [x] 10.4 Present provisional plain text during `requesting`, replace it on terminal success, and clear it on cancellation, lock, failure, or stale completion.
+- [x] 10.5 Run scoped Bun, TypeScript, AGS, GJS, bundle, and strict OpenSpec validation, then verify one live streamed request and cleanup path.

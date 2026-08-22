@@ -5,15 +5,30 @@ Provide a bounded backend-neutral machine interface so desktop and future local 
 ## ADDED Requirements
 
 ### Requirement: Versioned machine protocol
-The runtime SHALL accept one versioned JSON request on standard input and emit exactly one versioned JSON success or failure result followed by one newline on standard output. A request SHALL contain a request identifier, the fixed `answer` operation, prompt text, attachment descriptors, and timeout. It MUST reject malformed JSON, trailing documents, unsupported protocol versions, unknown request fields, unsupported operations, and backend-selection fields before contacting the configured backend.
+The runtime SHALL accept one protocol-version-2 JSON request on standard input and emit a sequence of newline-delimited protocol-version-2 JSON records on standard output. A request SHALL contain a request identifier, the fixed `answer` operation, prompt text, attachment descriptors, and timeout. A valid request SHALL emit one `start`, zero or more append-only `delta` records, and exactly one terminal `final` or `error` record with contiguous sequence numbers and the same request identifier. Invalid input SHALL emit only an `error` with a nullable request identifier. The runtime MUST reject malformed JSON, trailing documents, unsupported protocol versions, unknown request fields, unsupported operations, and backend-selection fields before contacting the configured backend.
 
 #### Scenario: Valid request
 - **WHEN** a caller submits a valid supported request with text and no attachments
-- **THEN** the runtime emits one result with the request identifier and no non-JSON output on standard output
+- **THEN** the runtime emits a `start` and exactly one terminal record with the request identifier and no non-NDJSON output on standard output
 
 #### Scenario: Invalid input
 - **WHEN** standard input contains malformed JSON, trailing non-whitespace bytes, an unsupported version, or an unknown request field
-- **THEN** the runtime emits one `invalid_request` or `unsupported_version` failure and does not contact the configured backend
+- **THEN** the runtime emits one terminal `invalid_request` or `unsupported_version` error record and does not contact the configured backend
+
+### Requirement: Bounded incremental answer delivery
+The runtime SHALL emit only assistant text deltas correlated to the request's ephemeral backend session, assistant message, and accepted text parts. Every record and aggregate standard output SHALL be bounded. The terminal `final` answer SHALL be authoritative, normalized, and limited to 32 KiB UTF-8. The runtime SHALL suppress excess progress rather than consume space reserved for a terminal record, and MUST reject or terminate malformed event ordering, invalid UTF-8, sequence gaps, duplicate terminal records, and output after a terminal record.
+
+#### Scenario: Assistant text arrives incrementally
+- **WHEN** the configured backend emits correlated non-synthetic assistant text deltas
+- **THEN** the runtime emits bounded append-only `delta` records before the terminal `final` record
+
+#### Scenario: Unrelated backend events are interleaved
+- **WHEN** backend events belong to another session, message, part, reasoning stream, tool stream, synthetic text, or ignored text
+- **THEN** the runtime does not expose those events on standard output
+
+#### Scenario: Final text differs from provisional text
+- **WHEN** backend finalization changes the completed assistant text
+- **THEN** the terminal `final` record contains the authoritative answer that replaces provisional text
 
 ### Requirement: Bounded request and response data
 The runtime SHALL reject input larger than 64 KiB, prompt text larger than 16 KiB UTF-8, more than four attachments, individual attachments larger than 12 MiB, aggregate attachments larger than 20 MiB, image dimensions exceeding 8192 pixels on either side, images exceeding 16 megapixels, and request timeouts outside 5 to 120 seconds. It SHALL limit normalized assistant text to 32 KiB UTF-8 and make truncation explicit.
@@ -64,7 +79,7 @@ The initial OpenCode backend SHALL only reuse the configured loopback endpoint a
 - **THEN** the runtime starts an owned temporary server or returns a safe unavailable error without transmitting user context to the unsuitable endpoint
 
 ### Requirement: Ephemeral backend lifecycle
-The configured backend SHALL isolate each request and clean its owned resources after success, failure, timeout, or cancellation. The initial OpenCode backend SHALL create and delete one ephemeral session per request and close an owned temporary server after the request ends. The runtime MUST surface `cleanup_failed` when backend cleanup cannot complete and MUST NOT claim provider-side deletion.
+The configured backend SHALL isolate each request and clean its owned resources after success, failure, timeout, or cancellation. The initial OpenCode backend SHALL create and delete one ephemeral session per request, stop its event subscription, and close an owned temporary server after the request ends. The runtime MUST NOT emit `final` before cleanup succeeds. It SHALL emit terminal `cleanup_failed` and callers SHALL discard provisional text when backend cleanup cannot complete. It MUST NOT claim provider-side deletion.
 
 #### Scenario: Successful request cleanup
 - **WHEN** OpenCode returns a valid assistant response

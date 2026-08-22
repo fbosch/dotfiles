@@ -6,6 +6,7 @@ export interface AnswerBackendRequest {
   prompt: string;
   timeoutSeconds: number;
   signal?: AbortSignal;
+  onDelta?: (text: string) => void;
   loadAttachments: () => Promise<Result<VerifiedAttachment[], AttachmentValidationError>>;
 }
 

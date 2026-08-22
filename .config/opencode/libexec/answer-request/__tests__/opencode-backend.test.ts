@@ -111,12 +111,54 @@ describe("OpenCode answer backend", () => {
 
   test("submits final assistant parts and deletes the ephemeral session", async () => {
     const fake = createFake();
-    const result = await fake.backend.execute(request());
+    const deltas: string[] = [];
+    const result = await fake.backend.execute({ ...request(), onDelta: (text) => deltas.push(text) });
 
     assert.deepEqual(result, { ok: true, parts: [{ type: "text", text: "answer" }] });
+    assert.deepEqual(deltas, ["answer"]);
     assert.equal(fake.state.externalCreate, 1);
     assert.equal(fake.state.externalDelete, 1);
     assert.equal(fake.state.externalPrompt, 1);
+    assert.equal(fake.state.parentID.startsWith("msg_"), true);
+  });
+
+  test("streams only registered text from the matching assistant", async () => {
+    const fake = createFake({ noisyEvents: true });
+    const deltas: string[] = [];
+
+    const result = await fake.backend.execute({ ...request(), onDelta: (text) => deltas.push(text) });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(deltas, ["answer"]);
+  });
+
+  test("revokes a text part that becomes ignored", async () => {
+    const fake = createFake({ revokedPart: true });
+    const deltas: string[] = [];
+
+    const result = await fake.backend.execute({ ...request(), onDelta: (text) => deltas.push(text) });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(deltas, []);
+  });
+
+  test("waits for the event stream before prompting", async () => {
+    const fake = createFake();
+
+    assert.equal((await fake.backend.execute(request())).ok, true);
+    assert.equal(fake.state.promptBeforeConnect, false);
+  });
+
+  test("cancels hung final retrieval and still cleans the session", async () => {
+    const fake = createFake({ messageHangs: true });
+    const controller = new AbortController();
+    const pending = fake.backend.execute({ ...request(), signal: controller.signal });
+    await waitFor(() => fake.state.messageCalls === 1);
+    controller.abort();
+
+    assert.deepEqual(await pending, { ok: false, code: "cancelled" });
+    assert.equal(fake.state.externalAbort, 1);
+    assert.equal(fake.state.externalDelete, 1);
   });
 
   test("returns provider failure and still deletes its session", async () => {
@@ -223,9 +265,12 @@ function createFake(options: {
   imageCapable?: boolean;
   agentModel?: boolean;
   modelID?: string;
+  messageHangs?: boolean;
   ownedHealthHangs?: boolean;
+  noisyEvents?: boolean;
   promptFailure?: boolean;
   promptHangs?: boolean;
+  revokedPart?: boolean;
   serverVersion?: string;
   toolIDs?: string[];
   wildcardDenied?: boolean;
@@ -241,11 +286,17 @@ function createFake(options: {
     ownedPrompt: 0,
     ownedStarts: 0,
     tools: {} as Record<string, false>,
+    events: [] as unknown[],
+    parentID: "",
+    messageCalls: 0,
+    promptBeforeConnect: false,
+    streamConnected: false,
+    streamDone: false,
   };
   const client = (kind: "external" | "owned"): OpenCodeClient => ({
     global: { health: async () => {
       if (kind === "owned" && options.ownedHealthHangs) return await new Promise<never>(() => undefined);
-      return { data: { healthy: options.externalHealthy === false && kind === "external" ? false : true, version: options.serverVersion ?? "1.18.21" } };
+      return { data: { healthy: options.externalHealthy !== false || kind !== "external", version: options.serverVersion ?? "1.18.21" } };
     } },
     app: { agents: async () => ({ data: options.agent === false ? [] : [{ name: "desktop-pointer", model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined, permission: options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }] }] }) },
     config: { get: async () => ({ data: { model: `openai/${options.modelID ?? "test"}` } }) },
@@ -257,13 +308,42 @@ function createFake(options: {
         else state.ownedCreate += 1;
         return { data: { id: `${kind}-session` } };
       },
-      prompt: async (input) => {
+      promptAsync: async (input) => {
         if (kind === "external") state.externalPrompt += 1;
         else state.ownedPrompt += 1;
         state.tools = input.tools;
+        state.parentID = input.messageID;
+        state.promptBeforeConnect ||= state.streamConnected === false;
         if (options.promptHangs) return await new Promise<never>(() => undefined);
         if (options.promptFailure) throw new Error("provider failed");
-        return { data: { info: options.incompleteAssistant ? { role: "assistant", time: {} } : { role: "assistant", time: { completed: 1 } }, parts: [{ type: "text", text: "answer" }] } };
+        const assistantID = `${kind}-assistant`;
+        if (options.noisyEvents) {
+          state.events.push(
+            { type: "message.updated", properties: { sessionID: "other-session", info: { id: "other-assistant", role: "assistant", parentID: input.messageID } } },
+            { type: "message.part.updated", properties: { sessionID: `${kind}-session`, part: { id: "reasoning-1", messageID: assistantID, type: "reasoning" } } },
+            { type: "message.part.delta", properties: { sessionID: `${kind}-session`, messageID: assistantID, partID: "reasoning-1", field: "text", delta: "secret reasoning" } },
+            { type: "message.part.updated", properties: { sessionID: `${kind}-session`, part: { id: "synthetic-1", messageID: assistantID, type: "text", synthetic: true } } },
+            { type: "message.part.delta", properties: { sessionID: `${kind}-session`, messageID: assistantID, partID: "synthetic-1", field: "text", delta: "synthetic" } },
+          );
+        }
+        state.events.push(
+          { type: "message.updated", properties: { sessionID: `${kind}-session`, info: { id: assistantID, role: "assistant", parentID: input.messageID } } },
+          { type: "message.part.updated", properties: { sessionID: `${kind}-session`, part: { id: "text-1", messageID: assistantID, type: "text" } } },
+          ...(options.revokedPart ? [{ type: "message.part.updated", properties: { sessionID: `${kind}-session`, part: { id: "text-1", messageID: assistantID, type: "text", ignored: true } } }] : []),
+          { type: "message.part.delta", properties: { sessionID: `${kind}-session`, messageID: assistantID, partID: "text-1", field: "text", delta: "answer" } },
+          { type: "session.idle", properties: { sessionID: `${kind}-session` } },
+        );
+        state.streamDone = true;
+        return { data: undefined };
+      },
+      message: async (input, messageOptions) => {
+        state.messageCalls += 1;
+        if (options.messageHangs) {
+          return await new Promise<never>((_resolve, reject) => {
+            messageOptions?.signal?.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+          });
+        }
+        return { data: { info: options.incompleteAssistant ? { id: input.messageID, role: "assistant", parentID: state.parentID, time: {} } : { id: input.messageID, role: "assistant", parentID: state.parentID, time: { completed: 1 } }, parts: [{ type: "text", text: "answer" }] } };
       },
       abort: async () => { state.externalAbort += kind === "external" ? 1 : 0; return {}; },
       delete: async () => {
@@ -274,6 +354,7 @@ function createFake(options: {
         return {};
       },
     },
+    event: { subscribe: async (_input, subscribeOptions) => ({ stream: events(state, subscribeOptions?.signal) }) },
   });
   const external = client("external");
   const owned = client("owned");
@@ -286,6 +367,16 @@ function createFake(options: {
     getCliVersion: async () => options.cliVersion ?? "1.18.21",
   };
   return { backend: createOpenCodeAnswerBackend(dependencies), dependencies, state };
+}
+
+async function* events(state: { events: unknown[]; streamDone: boolean; streamConnected: boolean }, signal?: AbortSignal): AsyncGenerator<unknown> {
+  state.streamConnected = true;
+  yield { type: "server.connected", properties: {} };
+  while (signal?.aborted !== true && (state.streamDone === false || state.events.length > 0)) {
+    const event = state.events.shift();
+    if (event !== undefined) yield event;
+    else await new Promise((resolve) => setTimeout(resolve, 1));
+  }
 }
 
 async function waitFor(predicate: () => boolean): Promise<void> {

@@ -279,6 +279,7 @@ test("AI Pointer submits the reviewed capture and presents a literal answer", as
 	let answer = "";
 	let requestPrompt = "";
 	let requestDigest = "";
+	let partialAnswer = "";
 	let resolvePreflight: (() => void) | null = null;
 	const view = {
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
@@ -286,6 +287,7 @@ test("AI Pointer submits the reviewed capture and presents a literal answer", as
 		finishStroke() { return Promise.resolve(true); },
 showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		showRequesting() { requesting = true; },
+		showPartialAnswer(value: string) { partialAnswer = value; },
 		showAnswer(value: string) { answer = value; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
 	} as unknown as AiPointerView;
@@ -303,9 +305,10 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 			kind: "captured",
 			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "b".repeat(64) },
 		}),
-		requestAnswer: async (input) => {
+		requestAnswer: async (input, _cancellable, _onProcess, onDelta) => {
 			requestPrompt = input.prompt;
 			requestDigest = input.attachment.sha256;
+			onDelta?.("draft ");
 			return { kind: "answered", answer: "<b>literal</b> https://example.com", truncated: false };
 		},
 	});
@@ -325,6 +328,7 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		assert(requestPrompt.includes("What is shown?"), "typed question was not submitted");
 		assert(requestPrompt.includes("Desktop selection context"), "reviewed context was not submitted");
 		assert(requestDigest === "b".repeat(64), "reviewed capture digest was not submitted");
+		assert(partialAnswer === "draft ", "accepted answer delta was not presented");
 		assert(answer === "<b>literal</b> https://example.com", "literal answer was not presented");
 	} finally { controller.teardown(); }
 });
@@ -335,11 +339,14 @@ test("AI Pointer rejects stale answer completion and submission after lock", asy
 	let answerPresentations = 0;
 	let locked = false;
 	let requestCount = 0;
+	let emitDelta: ((text: string) => void) | null = null;
+	let partialPresentations = 0;
 	const view = {
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
 		beginStroke() { return true; }, updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {},
+		showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {},
+		showPartialAnswer() { partialPresentations += 1; },
 		showAnswer() { answerPresentations += 1; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
 	} as unknown as AiPointerView;
@@ -352,8 +359,9 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {
 			kind: "captured",
 			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "c".repeat(64) },
 		}),
-		requestAnswer: () => {
+		requestAnswer: (_input, _cancellable, _onProcess, onDelta) => {
 			requestCount += 1;
+			emitDelta = onDelta ?? null;
 			return new Promise((resolve) => {
 				resolveAnswer = () => resolve({ kind: "answered", answer: "stale", truncated: false });
 			});
@@ -368,10 +376,13 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {
 		submit("First question");
 		await settleMainLoop();
 		assert(resolveAnswer !== null, "answer request did not start");
+		assert(emitDelta !== null, "stream callback was not provided");
 		controller.cancel();
+		emitDelta("late");
 		resolveAnswer();
 		await settleMainLoop();
 		assert(answerPresentations === 0, "stale answer was presented");
+		assert(partialPresentations === 0, "cancelled stream delta was presented");
 		assert(controller.start({ x: 10, y: 20 }), "second start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "second finish request was rejected");
 		await settleMainLoop(); await settleMainLoop();
@@ -520,6 +531,7 @@ test("AI Pointer bounds a helper that ignores cooperative cancellation", async (
 			},
 			new Gio.Cancellable(),
 			() => {},
+			undefined,
 			{ executable: helper, hardTimeoutMs: 10, cancellationGraceMs: 20 },
 		);
 		assert(result.kind === "failed" && result.code === "timeout", "helper timeout was not bounded");

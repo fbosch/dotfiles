@@ -56,11 +56,15 @@ The AI Pointer SHALL submit only the backend-neutral `answer` operation and SHAL
 - **THEN** the request remains limited to read-only answer generation
 
 ### Requirement: Safe answer presentation
-The AI Pointer SHALL render bounded assistant output as literal plain text near the selection or pointer monitor. It MUST NOT interpret markup, automatically activate links, execute model output, or claim that an external action was completed.
+The AI Pointer SHALL render bounded provisional and final assistant output as literal plain text near the selection or pointer monitor. It SHALL accept provisional output only for the active immutable run while remaining in the requesting state, and SHALL replace it with the authoritative terminal answer before entering the answered state. Cancellation, lock, terminal failure, malformed output, or stale-run output SHALL clear or ignore provisional text. It MUST NOT interpret markup, automatically activate links, execute model output, or claim that an external action was completed.
 
 #### Scenario: Assistant returns markup-like output
 - **WHEN** the assistant response contains markup, links, or command-like text
 - **THEN** the system renders it as literal text without performing an action
+
+#### Scenario: Assistant streams an answer
+- **WHEN** bounded answer deltas arrive for the active request
+- **THEN** the system presents them as provisional plain text while preserving request cancellation and waiting for terminal success
 
 ### Requirement: Controlled cancellation and stale-result isolation
 The AI Pointer SHALL support cancellation during selection, composition, requesting, answer, and failure states. Each activation SHALL own an immutable run identity, and a completion from a cancelled or superseded run MUST NOT update the current workflow or delete another run's capture.

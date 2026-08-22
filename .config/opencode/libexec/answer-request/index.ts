@@ -68,6 +68,7 @@ export async function executeAnswerRequest(
   input: Uint8Array,
   backend: AnswerBackend,
   signal?: AbortSignal,
+  onDelta?: (text: string) => void,
 ): Promise<AnswerResult> {
   const parsed = parseAnswerRequest(input);
   if (parsed.ok === false) return parsed.result;
@@ -84,6 +85,7 @@ export async function executeAnswerRequest(
         prompt: parsed.request.prompt,
         timeoutSeconds: parsed.request.timeoutSeconds,
         signal,
+        onDelta,
         loadAttachments,
       }),
     );
@@ -99,7 +101,7 @@ export async function executeAnswerRequest(
       return createAnswerFailure(normalized.code, parsed.request.requestId);
     }
     return {
-      protocolVersion: 1,
+      protocolVersion: 2,
       requestId: parsed.request.requestId,
       ok: true,
       answer: normalized.answer,
@@ -138,5 +140,5 @@ function extractRequestId(raw: unknown): string | null {
 function hasUnsupportedVersion(raw: unknown): boolean {
   if (typeof raw !== "object" || raw === null || !("protocolVersion" in raw)) return false;
   const protocolVersion = Reflect.get(raw, "protocolVersion");
-  return typeof protocolVersion === "number" && protocolVersion !== 1;
+  return typeof protocolVersion === "number" && protocolVersion !== 2;
 }

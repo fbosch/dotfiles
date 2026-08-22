@@ -3,8 +3,12 @@ import { homedir } from "node:os";
 import { promisify } from "node:util";
 import { createOpencode, createOpencodeClient } from "@opencode-ai/sdk/v2";
 import { createOpenCodeFilePart } from "./attachment.js";
-import type { AnswerBackend, AnswerBackendRequest, AnswerBackendResult } from "./backend.js";
-import type { AnswerErrorCode } from "./protocol.js";
+import type { AnswerBackend, AnswerBackendResult } from "./backend.js";
+import {
+  answerRequestLimits,
+  isUnicodeScalarString,
+  type AnswerErrorCode,
+} from "./protocol.js";
 
 const execFileAsync = promisify(execFile);
 const OPENCODE_VERSION_RANGE = [1, 18, 21] as const;
@@ -12,6 +16,7 @@ const EXTERNAL_BASE_URL = "http://127.0.0.1:4096";
 const DESKTOP_POINTER_AGENT = "desktop-pointer";
 const PREFLIGHT_TIMEOUT_MILLISECONDS = 2_000;
 const CLEANUP_TIMEOUT_MILLISECONDS = 2_000;
+const MAXIMUM_STREAM_EVENTS = 4_096;
 const ANSWER_SYSTEM_PROMPT =
   "Answer the user's question using only the supplied text and image. Do not use tools, perform actions, or claim actions were performed.";
 
@@ -30,10 +35,12 @@ export interface OpenCodeClient {
   tool: { ids(input: { directory: string }, options?: Options): Promise<Response> };
   session: {
     create(input: { directory: string }, options?: Options): Promise<Response>;
-    prompt(input: { sessionID: string; directory: string; system: string; agent: string; tools: Record<string, false>; parts: unknown[] }, options?: Options): Promise<Response>;
+    promptAsync(input: { sessionID: string; directory: string; messageID: string; system: string; agent: string; tools: Record<string, false>; parts: unknown[] }, options?: Options): Promise<Response>;
+    message(input: { sessionID: string; messageID: string; directory: string }, options?: Options): Promise<Response>;
     abort(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
     delete(input: { sessionID: string; directory: string }, options?: Options): Promise<Response>;
   };
+  event: { subscribe(input: { directory: string }, options?: Options & { sseMaxRetryAttempts?: number }): Promise<{ stream: AsyncIterable<unknown> }> };
 }
 
 export interface OwnedServer {
@@ -79,17 +86,49 @@ export function createOpenCodeAnswerBackend(dependencies: OpenCodeBackendDepende
             result = { ok: false, code: "provider_failed" };
           } else {
             session = { client, id, active: true };
-            const prompted = await raceWithSignal(client.session.prompt({
-              sessionID: id,
+            const messageID = `msg_${crypto.randomUUID().replaceAll("-", "")}`;
+            const subscriptionAbort = new AbortController();
+            const subscriptionSignal = AbortSignal.any([signal, subscriptionAbort.signal]);
+            const subscription = await client.event.subscribe({ directory }, {
+              signal: subscriptionSignal,
+              sseMaxRetryAttempts: 0,
+            });
+            let markConnected: (() => void) | undefined;
+            const connected = new Promise<void>((resolve) => { markConnected = resolve; });
+            const consume = consumeAnswerEvents(
+              subscription.stream,
+              client,
               directory,
-              system: ANSWER_SYSTEM_PROMPT,
-              agent: DESKTOP_POINTER_AGENT,
-              tools: policy.tools,
-              parts: [{ type: "text", text: request.prompt }, ...attachments.value.map(createOpenCodeFilePart)],
-            }, { signal }), signal);
-            session.active = false;
-            const parts = finalAssistantParts(prompted);
-            result = parts === null ? { ok: false, code: "provider_failed" } : { ok: true, parts };
+              id,
+              messageID,
+              request.onDelta,
+              subscriptionSignal,
+              () => markConnected?.(),
+            ).catch(() => ({ parts: null, needsAbort: true }));
+            try {
+              const ready = await raceWithSignal(Promise.race([
+                connected.then(() => true),
+                consume.then(() => false),
+              ]), signal);
+              if (ready === false) throw new Error("event stream ended before connecting");
+              unwrap(await raceWithSignal(client.session.promptAsync({
+                sessionID: id,
+                directory,
+                messageID,
+                system: ANSWER_SYSTEM_PROMPT,
+                agent: DESKTOP_POINTER_AGENT,
+                tools: policy.tools,
+                parts: [{ type: "text", text: request.prompt }, ...attachments.value.map(createOpenCodeFilePart)],
+              }, { signal }), signal));
+              const streamed = await raceWithSignal(consume, signal);
+              session.active = streamed.needsAbort;
+              result = streamed.parts === null
+                ? { ok: false, code: "provider_failed" }
+                : { ok: true, parts: streamed.parts };
+            } finally {
+              subscriptionAbort.abort();
+              await bounded(consume.then(() => undefined), CLEANUP_TIMEOUT_MILLISECONDS).catch(() => undefined);
+            }
           }
         }
       }
@@ -164,6 +203,95 @@ async function verifyPreflight(client: OpenCodeClient, directory: string, signal
   }
 }
 
+async function consumeAnswerEvents(
+  stream: AsyncIterable<unknown>,
+  client: OpenCodeClient,
+  directory: string,
+  sessionID: string,
+  userMessageID: string,
+  onDelta: ((text: string) => void) | undefined,
+  signal: AbortSignal,
+  onConnected: () => void,
+): Promise<{ parts: unknown[] | null; needsAbort: boolean }> {
+  let assistantID: string | undefined;
+  const textPartIDs = new Set<string>();
+  let eventCount = 0;
+  for await (const event of stream) {
+    eventCount += 1;
+    if (eventCount > MAXIMUM_STREAM_EVENTS) return { parts: null, needsAbort: true };
+    const type = stringField(event, "type");
+    const properties = field(event, "properties");
+    if (type === "server.connected") {
+      onConnected();
+      continue;
+    }
+    if (type === "message.updated" && stringField(properties, "sessionID") === sessionID) {
+      const info = field(properties, "info");
+      if (stringField(info, "role") === "assistant" && stringField(info, "parentID") === userMessageID) {
+        const nextAssistantID = stringField(info, "id");
+        if (nextAssistantID !== null && nextAssistantID !== assistantID) {
+          assistantID = nextAssistantID;
+          textPartIDs.clear();
+        }
+      }
+      continue;
+    }
+    if (type === "message.part.updated" && stringField(properties, "sessionID") === sessionID) {
+      const part = field(properties, "part");
+      const partID = stringField(part, "id");
+      if (partID === null) continue;
+      const accepted = stringField(part, "messageID") === assistantID &&
+        stringField(part, "type") === "text" &&
+        field(part, "synthetic") !== true &&
+        field(part, "ignored") !== true;
+      if (accepted) {
+        if (textPartIDs.size >= answerRequestLimits.responseParts && textPartIDs.has(partID) === false) {
+          return { parts: null, needsAbort: true };
+        }
+        textPartIDs.add(partID);
+      } else {
+        textPartIDs.delete(partID);
+      }
+      continue;
+    }
+    if (type === "message.part.removed" && stringField(properties, "sessionID") === sessionID) {
+      textPartIDs.delete(stringField(properties, "partID") ?? "");
+      continue;
+    }
+    if (type === "message.part.delta" && stringField(properties, "sessionID") === sessionID && stringField(properties, "messageID") === assistantID && textPartIDs.has(stringField(properties, "partID") ?? "") && stringField(properties, "field") === "text") {
+      const delta = stringField(properties, "delta");
+      if (delta !== null && delta.length > 0 && isUnicodeScalarString(delta)) onDelta?.(delta);
+      continue;
+    }
+    if (type === "session.error" && stringField(properties, "sessionID") === sessionID) {
+      return { parts: null, needsAbort: true };
+    }
+    if (type !== "session.idle" || stringField(properties, "sessionID") !== sessionID || assistantID === undefined) continue;
+    return {
+      parts: await finalParts(client, directory, sessionID, assistantID, userMessageID, signal),
+      needsAbort: false,
+    };
+  }
+  return { parts: null, needsAbort: true };
+}
+
+async function finalParts(client: OpenCodeClient, directory: string, sessionID: string, assistantID: string, userMessageID: string, signal: AbortSignal): Promise<unknown[] | null> {
+  return finalAssistantParts(
+    unwrap(await client.session.message({ sessionID, messageID: assistantID, directory }, { signal })),
+    assistantID,
+    userMessageID,
+  );
+}
+
+function field(value: unknown, key: string): unknown {
+  return typeof value === "object" && value !== null ? Reflect.get(value, key) : undefined;
+}
+
+function stringField(value: unknown, key: string): string | null {
+  const result = field(value, key);
+  return typeof result === "string" ? result : null;
+}
+
 function supportsOpenCodeVersion(version: string): boolean {
   const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.exec(version);
   if (match === null) return false;
@@ -180,11 +308,11 @@ async function cleanup(session: { client: OpenCodeClient; id: string; active: bo
   let failed = false;
   if (session?.active) failed = (await cleanupCall((signal) => session.client.session.abort({ sessionID: session.id, directory }, { signal })) || failed);
   if (session !== undefined) failed = (await cleanupCall((signal) => session.client.session.delete({ sessionID: session.id, directory }, { signal })) || failed);
-  if (owned !== undefined) failed = (await cleanupCall(() => Promise.resolve(owned.close())) || failed);
+  if (owned !== undefined) failed = (await cleanupCall(() => Promise.resolve(owned.close()).then(() => undefined)) || failed);
   return failed;
 }
 
-async function cleanupCall(call: (signal: AbortSignal) => Promise<Response | void>): Promise<boolean> {
+async function cleanupCall(call: (signal: AbortSignal) => Promise<Response | undefined>): Promise<boolean> {
   const deadline = new AbortController();
   const timeout = setTimeout(() => deadline.abort(), CLEANUP_TIMEOUT_MILLISECONDS);
   try {
@@ -250,12 +378,10 @@ function sessionID(response: Response): string | null {
   return typeof data === "object" && data !== null && typeof Reflect.get(data, "id") === "string" ? Reflect.get(data, "id") as string : null;
 }
 
-function finalAssistantParts(response: Response): unknown[] | null {
-  const data = unwrap(response);
-  if (typeof data !== "object" || data === null) return null;
-  const info = Reflect.get(data, "info");
-  const parts = Reflect.get(data, "parts");
-  if (typeof info !== "object" || info === null || Reflect.get(info, "role") !== "assistant" || Reflect.get(info, "error") !== undefined || typeof Reflect.get(info, "time") !== "object" || Reflect.get(info, "time") === null || typeof Reflect.get(Reflect.get(info, "time") as object, "completed") !== "number") return null;
+function finalAssistantParts(data: unknown, assistantID: string, userMessageID: string): unknown[] | null {
+  const info = field(data, "info");
+  const parts = field(data, "parts");
+  if (stringField(info, "id") !== assistantID || stringField(info, "role") !== "assistant" || stringField(info, "parentID") !== userMessageID || field(info, "error") !== undefined || typeof field(field(info, "time"), "completed") !== "number") return null;
   return Array.isArray(parts) ? parts : null;
 }
 
@@ -265,7 +391,7 @@ function closeOnce(owned: OwnedServer): OwnedServer {
 }
 
 function closeIfAborted(signal: AbortSignal): (owned: OwnedServer) => Promise<OwnedServer> {
-  return async (owned) => { if (signal.aborted) await cleanupCall(() => Promise.resolve(owned.close())); return owned; };
+  return async (owned) => { if (signal.aborted) await cleanupCall(() => Promise.resolve(owned.close()).then(() => undefined)); return owned; };
 }
 
 function deleteIfAborted(client: OpenCodeClient, directory: string, signal: AbortSignal): (response: Response) => Promise<Response> {

@@ -60,12 +60,17 @@
     min-width: 32px;
     min-height: 32px;
     padding: 0;
+    color: var(--ags-color-foreground-primary);
     border-radius: 999px;
 
     label {
       font-family: var(--ags-font-button), var(--ags-font-primary), system-ui, sans-serif;
       font-size: 18px;
     }
+
+    .ai-pointer-send-icon,
+    .ai-pointer-spinner,
+    .ai-pointer-cancel-icon { color: var(--ags-color-foreground-primary); }
 
     .ai-pointer-spinner,
     .ai-pointer-cancel-icon { transition: opacity 150ms ease; }

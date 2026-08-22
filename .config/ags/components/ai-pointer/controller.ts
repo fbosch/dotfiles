@@ -27,8 +27,6 @@ import { settleProcessesForShutdown } from "./shutdown-processes";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import { appendStrokePoint, createPointerStroke, type PointerStroke, selectionFromStroke } from "./stroke";
 
-type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
-
 export class AiPointerController {
 	readonly #view: AiPointerView;
 	readonly #captureRegion: NonNullable<AiPointerControllerOptions["capture"]>;
@@ -43,7 +41,7 @@ export class AiPointerController {
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
 	readonly #setCursorOutline: NonNullable<AiPointerControllerOptions["setCursorOutline"]>;
-	#actor: AiPointerActor | null = null;
+	#actor: ActorRefFrom<typeof aiPointerMachine> | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
 	#preflightCancellable: Gio.Cancellable | null = null;
@@ -95,9 +93,7 @@ export class AiPointerController {
 		this.#readPointer = options.readPointer ?? readPointerPosition;
 	}
 
-	get selectionContext(): SelectionContext | null {
-		return this.#selectionContext;
-	}
+	get selectionContext(): SelectionContext | null { return this.#selectionContext; }
 
 	init(): void {
 		if (!this.#actor) {
@@ -474,7 +470,7 @@ export class AiPointerController {
 		let observedProcess: Gio.Subprocess | null = null;
 		this.#stopOcr();
 		this.#answerCancellable = cancellable;
-		this.#actor.send({ type: "SUBMIT" });
+		this.#actor?.send({ type: "SUBMIT" });
 		void (async () => {
 			const readiness = await preflight;
 			if (readiness.kind === "failed") return readiness;
@@ -490,6 +486,14 @@ export class AiPointerController {
 					if (process) observedProcess = process;
 					if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
 					if (runId === this.#runId) this.#answerProcess = process;
+				},
+				(text) => {
+					if (runId !== this.#runId || cancellable.is_cancelled()) return;
+					if (this.#lockMonitor.blocksWorkflow) {
+						this.cancel();
+						return;
+					}
+					this.#view.showPartialAnswer?.(text);
 				},
 			);
 		})().then((result) => {

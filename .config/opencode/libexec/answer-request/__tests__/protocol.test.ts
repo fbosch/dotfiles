@@ -22,7 +22,7 @@ import { runAnswerPreflightCli, runAnswerRequestCli } from "../cli-runtime.js";
 const encoder = new TextEncoder();
 
 const validRequest = {
-  protocolVersion: 1,
+  protocolVersion: 2,
   requestId: "run-123",
   operation: "answer",
   prompt: "What is visible?",
@@ -31,7 +31,7 @@ const validRequest = {
 } satisfies AnswerRequest;
 
 describe("answer request protocol", () => {
-  test("accepts a valid version 1 request", () => {
+  test("accepts a valid version 2 request", () => {
     assert.deepEqual(parseAnswerRequest(jsonBytes(validRequest)), {
       ok: true,
       request: validRequest,
@@ -49,7 +49,7 @@ describe("answer request protocol", () => {
     ],
     [
       "unsupported versions",
-      jsonBytes({ ...validRequest, protocolVersion: 2 }),
+      jsonBytes({ ...validRequest, protocolVersion: 1 }),
       "unsupported_version",
     ],
     ["empty prompts", jsonBytes({ ...validRequest, prompt: " \n " }), "invalid_request"],
@@ -107,7 +107,7 @@ describe("answer request protocol", () => {
     );
     assert.equal(
       answerSuccessSchema.safeParse({
-        protocolVersion: 1,
+        protocolVersion: 2,
         requestId: "run",
         ok: true,
         answer: "answer",
@@ -118,7 +118,7 @@ describe("answer request protocol", () => {
     );
     assert.equal(
       answerFailureSchema.safeParse({
-        protocolVersion: 1,
+        protocolVersion: 2,
         requestId: "run",
         ok: false,
         error: { code: "invalid_request", message: "Invalid", unknown: true },
@@ -129,7 +129,7 @@ describe("answer request protocol", () => {
 
   test("rejects malformed backend output", async () => {
     const result = await executeAnswerRequest(jsonBytes(validRequest), backend(async () => ({
-      protocolVersion: 1,
+      protocolVersion: 2,
       requestId: "another-run",
       ok: true,
       answer: "Answer",
@@ -140,7 +140,7 @@ describe("answer request protocol", () => {
 
   test("canonicalizes failure messages during serialization", () => {
     const serialized = serializeAnswerResult({
-      protocolVersion: 1,
+      protocolVersion: 2,
       requestId: validRequest.requestId,
       ok: false,
       error: {
@@ -174,11 +174,11 @@ describe("answer request CLI", () => {
     assert.ok(Buffer.byteLength(stdout[0] ?? "") <= answerRequestLimits.diagnosticBytes);
   });
 
-  test("emits one newline-terminated JSON success without stdout contamination", async () => {
+  test("emits bounded start, delta, and final records without stdout contamination", async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];
     const success: AnswerSuccess = {
-      protocolVersion: 1,
+      protocolVersion: 2,
       requestId: validRequest.requestId,
       ok: true,
       answer: "A bounded answer.",
@@ -189,15 +189,20 @@ describe("answer request CLI", () => {
       input: chunks(jsonBytes(validRequest)),
       stdout: { write: (value) => stdout.push(value) },
       stderr: { write: (value) => stderr.push(value) },
-      backend: backend(async () => ({
-        ok: true,
-        parts: [{ type: "text", text: success.answer }],
-      })),
+      backend: backend(async (request) => {
+        request.onDelta?.("A bounded ");
+        request.onDelta?.("answer.");
+        return { ok: true, parts: [{ type: "text", text: success.answer }] };
+      }),
     });
 
     assert.equal(exitCode, 0);
-    assert.deepEqual(stdout, [`${JSON.stringify(success)}\n`]);
-    assert.equal(stdout[0]?.split("\n").length, 2);
+    assert.deepEqual(records(stdout), [
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 0, event: "start" },
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 1, event: "delta", text: "A bounded " },
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 2, event: "delta", text: "answer." },
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 3, event: "final", answer: success.answer, truncated: false },
+    ]);
     assert.deepEqual(stderr, []);
   });
 
@@ -216,9 +221,8 @@ describe("answer request CLI", () => {
     });
 
     assert.equal(exitCode, 1);
-    assert.equal(stdout.length, 1);
-    assert.equal(stdout[0]?.endsWith("\n"), true);
-    assert.equal(JSON.parse(stdout[0] ?? "").error.code, "internal_error");
+    assert.equal(records(stdout).length, 2);
+    assert.equal(records(stdout)[1]?.error?.code, "internal_error");
     assert.equal(`${stdout.join("")} ${stderr.join("")}`.includes(secretPrompt), false);
     assert.equal(
       `${stdout.join("")} ${stderr.join("")}`.includes("/private/capture.png"),
@@ -274,7 +278,13 @@ describe("answer request CLI", () => {
 
     assert.equal(exitCode, 1);
     assert.equal(stdout.length, 1);
-    assert.deepEqual(JSON.parse(stdout[0] ?? ""), createAnswerFailure("invalid_request"));
+    assert.deepEqual(JSON.parse(stdout[0] ?? ""), {
+      protocolVersion: 2,
+      requestId: null,
+      sequence: 0,
+      event: "error",
+      error: createAnswerFailure("invalid_request").error,
+    });
   });
 
   test("bounds stdin before execution", async () => {
@@ -324,17 +334,64 @@ describe("answer request CLI", () => {
       input: JSON.stringify(validRequest),
       encoding: "utf8",
     });
-    const expected = {
-      protocolVersion: 1,
-      requestId: validRequest.requestId,
-      ok: true,
-      answer: "A bounded answer.",
-      truncated: false,
-    };
-
     assert.equal(result.status, 0);
-    assert.equal(result.stdout, `${JSON.stringify(expected)}\n`);
+    assert.deepEqual(records([result.stdout]), [
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 0, event: "start" },
+      { protocolVersion: 2, requestId: validRequest.requestId, sequence: 1, event: "final", answer: "A bounded answer.", truncated: false },
+    ]);
     assert.equal(result.stderr, "");
+  });
+
+  test("suppresses deltas beyond the answer budget and keeps a terminal record", async () => {
+    const stdout: string[] = [];
+    const exitCode = await runAnswerRequestCli({
+      input: chunks(jsonBytes(validRequest)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: () => undefined },
+      backend: backend(async (request) => {
+        request.onDelta?.("a".repeat(answerRequestLimits.responseBytes));
+        request.onDelta?.("ignored");
+        return { ok: true, parts: [{ type: "text", text: "final" }] };
+      }),
+    });
+
+    const output = records(stdout);
+    assert.equal(exitCode, 0);
+    assert.deepEqual(output.map((record) => record.event), ["start", "delta", "final"]);
+    assert.equal(output[2]?.sequence, 2);
+    assert.ok(Buffer.byteLength(stdout.join("")) <= 256 * 1024);
+  });
+
+  test("fits heavily escaped final text in one bounded frame", async () => {
+    const stdout: string[] = [];
+    await runAnswerRequestCli({
+      input: chunks(jsonBytes(validRequest)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: () => undefined },
+      backend: backend(async () => ({ ok: true, parts: [{ type: "text", text: "\u0000".repeat(answerRequestLimits.responseBytes) }] })),
+    });
+
+    const final = records(stdout).at(-1);
+    assert.equal(final?.event, "final");
+    assert.equal(final?.truncated, true);
+    assert.ok(Buffer.byteLength(stdout.at(-1) ?? "") <= 64 * 1024);
+  });
+
+  test("ignores a retained delta callback after backend settlement", async () => {
+    const stdout: string[] = [];
+    let emitLateDelta: ((text: string) => void) | undefined;
+    await runAnswerRequestCli({
+      input: chunks(jsonBytes(validRequest)),
+      stdout: { write: (value) => stdout.push(value) },
+      stderr: { write: () => undefined },
+      backend: backend(async (request) => {
+        emitLateDelta = request.onDelta;
+        return { ok: true, parts: [{ type: "text", text: "final" }] };
+      }),
+    });
+
+    emitLateDelta?.("late");
+    assert.deepEqual(records(stdout).map((record) => record.event), ["start", "final"]);
   });
 });
 
@@ -353,4 +410,15 @@ async function* chunks(...values: Uint8Array[]): AsyncGenerator<Uint8Array> {
 async function* stalledInput(): AsyncGenerator<Uint8Array> {
   yield jsonBytes(validRequest);
   await new Promise<never>(() => undefined);
+}
+
+type StreamRecord = Record<string, unknown> & {
+  error?: { code?: unknown };
+  event?: unknown;
+  sequence?: unknown;
+  truncated?: unknown;
+};
+
+function records(chunks: string[]): StreamRecord[] {
+  return chunks.join("").trimEnd().split("\n").map((line) => JSON.parse(line) as StreamRecord);
 }

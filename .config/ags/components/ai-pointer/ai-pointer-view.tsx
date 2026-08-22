@@ -223,7 +223,6 @@ export class AiPointerView {
 		} catch {
 			return null;
 		}
-		const wasPreparing = this.#actionMode === "preparing";
 		const geometryChanged = selectionEquals(this.#selection, capture.geometry) === false;
 		this.#selection = capture.geometry;
 		this.#answer?.set_label("");
@@ -231,7 +230,6 @@ export class AiPointerView {
 		this.#error?.set_label("");
 		this.#errorBox?.set_visible(false);
 		this.#promptPill?.remove_css_class("error");
-		if (wasPreparing === false) this.#prompt?.set_text("");
 		this.#prompt?.set_sensitive(true);
 		this.#setActionMode("compose");
 		this.#resizePrompt();
@@ -262,6 +260,12 @@ export class AiPointerView {
 		this.#errorBox?.set_visible(false);
 		this.#promptPill?.remove_css_class("error");
 		this.#setActionMode("requesting");
+	}
+
+	showPartialAnswer(answer: string): void {
+		this.#answer?.set_label(answer);
+		this.#truncated?.set_visible(false);
+		this.#answerScroll?.set_visible(answer.length > 0);
 	}
 
 	showAnswer(answer: string, truncated: boolean): void {
@@ -301,8 +305,7 @@ export class AiPointerView {
 	showError(message: string): void {
 		this.clearOcr();
 		this.#prompt?.set_sensitive(false);
-		this.#answer?.set_label("");
-		this.#answerScroll?.set_visible(false);
+		this.showPartialAnswer("");
 		this.#error?.set_label(message);
 		this.#errorBox?.set_visible(true);
 		this.#promptPill?.add_css_class("error");

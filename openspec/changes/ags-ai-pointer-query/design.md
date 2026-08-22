@@ -17,7 +17,7 @@ Hyprland exposes client, layer, monitor, active-window, cursor, and lock snapsho
 **Non-Goals:**
 
 - Extracting, sharing code with, or changing AI Commit.
-- Building a generic multi-provider framework, streaming protocol, conversation store, or desktop automation layer.
+- Building a generic multi-provider framework, conversation store, or desktop automation layer.
 - Treating a rectangle overlap as a compositor hit test, visible-pixel calculation, or z-order assertion.
 - Sending `/proc` command lines, process working directories, clipboard contents, OCR output, accessibility trees, or semantic application content to the answer runtime.
 - Capturing ambient screen data, listening for voice, or retaining sessions for follow-up conversation.
@@ -36,9 +36,13 @@ Alternative considered: make an AGS service call OpenCode directly. Rejected bec
 
 Alternative considered: reuse AI Commit's generator. Rejected because it owns commit prompts, parsing, server UI, and terminal behavior. The request runtime is introduced alongside it; AI Commit remains unchanged.
 
-### Protocol version 1 is closed, bounded, and backend-neutral
+### Protocol version 2 streams closed, bounded, backend-neutral events
 
-The CLI accepts one JSON request with a run ID, fixed `answer` operation, prompt text, attachment descriptors, and timeout. It returns one success or error response with the same run ID. Zod validates both input and external response boundaries. The runtime never writes progress, backend logs, or provider output to stdout.
+The CLI accepts one protocol-version-2 JSON request with a run ID, fixed `answer` operation, prompt text, attachment descriptors, and timeout. It emits newline-delimited JSON records with the same run ID: one `start`, bounded append-only `delta` records, and exactly one terminal `final` or `error`. Invalid input emits only an `error` with a nullable run ID. Sequence numbers are contiguous, records and aggregate output are bounded, and a terminal record is followed only by process completion. Zod validates input and Bun-side output boundaries. The runtime never writes backend logs, raw SDK events, reasoning, tool parts, provider objects, or unframed output to stdout.
+
+The Bun adapter consumes OpenCode SSE internally through `event.subscribe`, starts generation through `session.promptAsync`, and correlates the ephemeral session, assistant message, and text part before forwarding deltas. It disables SSE reconnects because OpenCode does not expose resumable event IDs. A matching idle event triggers retrieval and validation of the completed assistant message. The terminal `final` record contains the authoritative normalized answer and is emitted only after session and owned-server cleanup succeeds. A terminal failure clears provisional text in AGS.
+
+AGS parses stdout incrementally as bytes, enforces per-record and aggregate limits before decoding strict UTF-8, and accepts progress only for the current immutable run ID and contiguous sequence. Partial output is presentation state within `requesting`; it does not create a machine state or count as completion. Cancellation, lock, malformed output, unsuccessful process exit, or a terminal error clears provisional text.
 
 The initial OpenCode backend uses the fixed OpenCode configuration directory and fixed `desktop-pointer` agent. It does not derive the backend, directory, agent, tools, server URL, or model from the focused window, selected text, image, caller payload, or user prompt. The backend-neutral runtime owns the complete answer-only system instructions and gives them to the adapter with each execution; the OpenCode adapter passes them through `session.prompt.system`.
 
@@ -49,6 +53,10 @@ The deny-all policy combines the `desktop-pointer` agent's `tools: { "*": false 
 Alternative considered: pass a caller-defined tool map. Rejected because it makes the desktop capture boundary an authority boundary and is not required for read-only Q&A.
 
 Alternative considered: expose agent and model fields in the versioned protocol. Rejected because those fields leak the initial backend into every caller and force an AGS migration when the backend changes.
+
+Alternative considered: forward SSE to AGS or use SSE framing over stdout. Rejected because SSE retry, event-ID, comment, and field-folding semantics belong at the OpenCode HTTP boundary, not a strict local subprocess protocol.
+
+Alternative considered: add a streaming toolkit. Rejected because the installed SDK already parses SSE, while native JSON, UTF-8 encoders, and Gio byte streams provide the bounded NDJSON subprocess framing without another dependency.
 
 ### Semver-bounded SDK and owned-server fallback contain compatibility drift
 
@@ -137,5 +145,6 @@ Alternative considered: render rich model markdown. Rejected because markup and 
 4. Validate selection, question composition, context envelope, cancellation, lock behavior, and cleanup before adding the Hyprland bind.
 5. Register the bundled component, styles, layer rule, and binding.
 6. Roll back by removing the binding first, then unregistering the AGS feature. The request runtime and hidden agent are inert without callers.
+7. Replace the internal protocol version 1 caller and runtime together with protocol version 2, then rebuild and restart the long-lived AGS daemon before invoking the helper. No compatibility mode is required because there is no persisted data or external consumer after that coordinated restart.
 
 No AI Commit migration or rollback step is required because that workflow is not changed.
