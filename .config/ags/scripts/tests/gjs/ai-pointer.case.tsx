@@ -298,7 +298,7 @@ showPrompt() {
 	}
 });
 
-test("AI Pointer clears drawing on release and unmaps the highlight before capture", async () => {
+test("AI Pointer clears drawing on release and prepares the final highlight before capture", async () => {
 	let captured = false;
 	let drawingEnded = false;
 	let preparingShown = false;
@@ -354,15 +354,15 @@ test("AI Pointer clears drawing on release and unmaps the highlight before captu
 		await settleMainLoop();
 		assert(preparingShown, "question input waited for target resolution");
 		assert(drawingEnded, "drawing remained visible after release");
-		assert(confirmHidden === null, "highlight teardown started before target resolution completed");
+		assert(confirmHidden === null, "final highlight preparation started before target resolution completed");
 		assert(captured === false, "capture started while the drawing was still mapped");
 		assert(finishAccessibility !== null, "target resolution did not start");
 		finishAccessibility();
 		await settleMainLoop();
-		assert(confirmHidden !== null, "highlight teardown was not requested");
+		assert(confirmHidden !== null, "final highlight preparation was not requested");
 		confirmHidden(true);
 		await settleMainLoop();
-		assert(captured, "capture did not start after the highlight was removed");
+		assert(captured, "capture did not start after the final highlight was prepared");
 	} finally {
 		controller.teardown();
 	}

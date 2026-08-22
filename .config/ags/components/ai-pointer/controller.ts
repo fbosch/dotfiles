@@ -328,7 +328,7 @@ export class AiPointerController {
 			: null;
 		let overlayHidden = false;
 		try {
-			overlayHidden = await this.#view.finishStroke();
+			overlayHidden = await this.#view.finishStroke(captureGeometry);
 			overlayMark?.end(overlayHidden, overlayHidden ? undefined : "failed");
 		} catch {
 			overlayMark?.end(false, "failed");

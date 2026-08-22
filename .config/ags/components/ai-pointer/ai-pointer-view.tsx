@@ -224,6 +224,7 @@ export class AiPointerView {
 			return null;
 		}
 		const wasPreparing = this.#actionMode === "preparing";
+		const geometryChanged = selectionEquals(this.#selection, capture.geometry) === false;
 		this.#selection = capture.geometry;
 		this.#answer?.set_label("");
 		this.#answerScroll?.set_visible(false);
@@ -235,7 +236,7 @@ export class AiPointerView {
 		this.#setActionMode("compose");
 		this.#resizePrompt();
 		this.#showAt(capture.geometry);
-		this.#selectionOverlay.showSelection(capture.geometry);
+		if (geometryChanged) this.#selectionOverlay.showSelection(capture.geometry);
 		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
 	}
 
@@ -264,6 +265,7 @@ export class AiPointerView {
 	}
 
 	showAnswer(answer: string, truncated: boolean): void {
+		this.#selectionOverlay.hide();
 		this.#prompt?.set_sensitive(false);
 		this.#answer?.set_label(answer);
 		this.#truncated?.set_visible(truncated);
@@ -290,11 +292,12 @@ export class AiPointerView {
 		this.#selectionOverlay.hide();
 	}
 
-	finishStroke(): Promise<boolean> {
-		return Promise.all([
-			this.#strokeOverlay.hideBeforeCapture(),
-			this.#selectionOverlay.hideBeforeCapture(),
-		]).then((results) => results.every(Boolean));
+	finishStroke(selection: SelectionGeometry): Promise<boolean> {
+		if (selectionEquals(this.#selection, selection) === false) {
+			if (this.#selectionOverlay.showSelection(selection) === false) return Promise.resolve(false);
+			this.#selection = selection;
+		}
+		return this.#strokeOverlay.hideBeforeCapture();
 	}
 
 	showError(message: string): void {
@@ -357,7 +360,7 @@ export class AiPointerView {
 		this.#actionButton?.remove_css_class("requesting");
 		this.#sendIcon?.set_visible(mode === "compose" || mode === "preparing");
 		this.#spinner?.set_visible(mode === "requesting");
-		this.#cancelIcon?.set_visible(mode !== "compose");
+		this.#cancelIcon?.set_visible(mode === "requesting" || mode === "close");
 		if (mode === "requesting") {
 			this.#actionButton?.add_css_class("requesting");
 			this.#spinner?.start();
@@ -445,6 +448,18 @@ export class AiPointerView {
 		this.#window?.set_visible(true);
 		this.#prompt?.grab_focus();
 	}
+}
+
+function selectionEquals(
+	left: SelectionGeometry | null,
+	right: SelectionGeometry,
+): boolean {
+	return (
+		left?.x === right.x &&
+		left.y === right.y &&
+		left.width === right.width &&
+		left.height === right.height
+	);
 }
 
 function createSendIcon(): Gtk.DrawingArea {

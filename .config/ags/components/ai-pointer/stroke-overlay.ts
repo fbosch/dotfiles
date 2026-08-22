@@ -314,40 +314,24 @@ export class StrokeOverlay {
 		selection: SelectionGeometry,
 	): StrokeSurface | null {
 		const monitorGeometry = monitor.get_geometry();
-		const x = Math.max(selection.x, monitorGeometry.x);
-		const y = Math.max(selection.y, monitorGeometry.y);
-		const right = Math.min(
-			selection.x + selection.width,
-			monitorGeometry.x + monitorGeometry.width,
-		);
-		const bottom = Math.min(
-			selection.y + selection.height,
-			monitorGeometry.y + monitorGeometry.height,
-		);
-		if (right <= x || bottom <= y) return null;
-
-		const outerX = Math.max(monitorGeometry.x, x - selectionPreviewGlow);
-		const outerY = Math.max(monitorGeometry.y, y - selectionPreviewGlow);
+		const outerX = Math.max(monitorGeometry.x, selection.x - selectionPreviewGlow);
+		const outerY = Math.max(monitorGeometry.y, selection.y - selectionPreviewGlow);
 		const outerRight = Math.min(
+			selection.x + selection.width + selectionPreviewGlow,
 			monitorGeometry.x + monitorGeometry.width,
-			right + selectionPreviewGlow,
 		);
 		const outerBottom = Math.min(
+			selection.y + selection.height + selectionPreviewGlow,
 			monitorGeometry.y + monitorGeometry.height,
-			bottom + selectionPreviewGlow,
 		);
+		if (outerRight <= outerX || outerBottom <= outerY) return null;
 		const drawing = new Gtk.DrawingArea({
 			widthRequest: outerRight - outerX,
 			heightRequest: outerBottom - outerY,
 		});
 		drawing.add_css_class("ai-pointer-stroke-canvas");
 		drawing.set_draw_func((_area, cr: any) => {
-			this.#drawSelectionPreview(cr, outerX, outerY, {
-				x,
-				y,
-				width: right - x,
-				height: bottom - y,
-			});
+			this.#drawSelectionPreview(cr, outerX, outerY, selection);
 		});
 		const window = this.#createWindow(
 			monitor,
@@ -436,29 +420,37 @@ export class StrokeOverlay {
 	): void {
 		const color = new Gdk.RGBA();
 		color.parse(tokens.colors.accent.primary.value);
-		const x = selection.x - originX;
-		const y = selection.y - originY;
+		// Keep the highlight outside captured pixels so it can remain mapped without contaminating the attachment.
 		for (const [width, alpha] of [
 			[20, 0.04],
 			[10, 0.1],
 			[4, 0.18],
+			[2, 0.96],
 		] as const) {
+			const expansion = width / 2 + 1;
 			cr.setSourceRGBA(color.red, color.green, color.blue, alpha);
 			cr.setLineWidth(width);
-			this.#roundedRectangle(cr, x, y, selection.width, selection.height);
+			this.#roundedRectangle(
+				cr,
+				selection.x - originX - expansion,
+				selection.y - originY - expansion,
+				selection.width + expansion * 2,
+				selection.height + expansion * 2,
+				expansion,
+			);
 			cr.stroke();
 		}
-		cr.setSourceRGBA(color.red, color.green, color.blue, 0.16);
-		this.#roundedRectangle(cr, x, y, selection.width, selection.height);
-		cr.fill();
-		cr.setSourceRGBA(color.red, color.green, color.blue, 0.96);
-		cr.setLineWidth(2);
-		this.#roundedRectangle(cr, x, y, selection.width, selection.height);
-		cr.stroke();
 	}
 
-	#roundedRectangle(cr: any, x: number, y: number, width: number, height: number): void {
-		const radius = Math.min(selectionPreviewRadius, width / 2, height / 2);
+	#roundedRectangle(
+		cr: any,
+		x: number,
+		y: number,
+		width: number,
+		height: number,
+		maximumRadius = selectionPreviewRadius,
+	): void {
+		const radius = Math.min(maximumRadius, width / 2, height / 2);
 		cr.newSubPath();
 		cr.arc(x + width - radius, y + radius, radius, -Math.PI / 2, 0);
 		cr.arc(x + width - radius, y + height - radius, radius, 0, Math.PI / 2);
