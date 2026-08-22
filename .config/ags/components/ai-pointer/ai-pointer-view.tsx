@@ -26,6 +26,8 @@ const answerHorizontalPadding = 32;
 const answerVerticalPadding = 24;
 const answerMaximumContentHeight = 256;
 const panelSpacing = 8;
+const answerMaximumHostHeight =
+	promptHostHeight + panelSpacing + answerMaximumContentHeight + answerVerticalPadding;
 const allEdges =
 	Astal.WindowAnchor.TOP |
 	Astal.WindowAnchor.BOTTOM |
@@ -508,16 +510,19 @@ export class AiPointerView {
 					0,
 					hostHeight - promptHostHeight - panelSpacing - answerVerticalPadding,
 				);
-				this.#answerScroll?.set_max_content_height(answerHeight);
 				this.#answerScroll?.set_min_content_height(
 					Math.min(this.#answerScroll.minContentHeight, answerHeight),
 				);
+				this.#answerScroll?.set_max_content_height(answerHeight);
 			}
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
 			const calculated = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
 			if (this.#promptPositionLocked === false) {
-				this.#promptLeft = calculated.x;
-				this.#promptTop = calculated.y;
+				const maximumHostWidth = Math.min(answerMaximumWidth, Math.max(1, bounds.width - 32));
+				const maximumHostHeight = Math.min(answerMaximumHostHeight, Math.max(1, bounds.height - 32));
+				// Reserve room for streaming growth before locking the prompt's top-left corner.
+				this.#promptLeft = Math.min(calculated.x, right - maximumHostWidth);
+				this.#promptTop = Math.min(calculated.y, bottom - maximumHostHeight);
 			}
 			this.#promptLeft ??= calculated.x;
 			this.#promptTop ??= calculated.y;

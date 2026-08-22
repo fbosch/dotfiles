@@ -41,6 +41,7 @@ describe("OpenCode answer backend", () => {
   test("returns concise readiness failures for invalid agent policy, model, and version", async () => {
     const missingAgent = createFake({ agent: false });
     const permissiveAgent = createFake({ wildcardDenied: false });
+    const missingWebPolicy = createFake({ webToolsAllowed: false });
     const unknownTool = createFake({ toolIDs: [""] });
     const unavailableModel = createFake({ imageCapable: false });
     const incompatibleCli = createFake({ cliVersion: "1.18.20" });
@@ -50,6 +51,7 @@ describe("OpenCode answer backend", () => {
 
     assert.deepEqual(await runOpenCodePreflight(missingAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(permissiveAgent.dependencies), { ready: false, code: "backend_policy_invalid" });
+    assert.deepEqual(await runOpenCodePreflight(missingWebPolicy.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(unknownTool.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(unavailableModel.dependencies), { ready: false, code: "backend_policy_invalid" });
     assert.deepEqual(await runOpenCodePreflight(incompatibleCli.dependencies), { ready: false, code: "incompatible_version" });
@@ -86,6 +88,16 @@ describe("OpenCode answer backend", () => {
       read: false,
       webfetch: true,
       websearch: true,
+    });
+  });
+
+  test("adds only the dedicated Exa MCP tool when MCP tools are not enumerated", async () => {
+    const fake = createFake({ toolIDs: ["bash"] });
+
+    assert.equal((await fake.backend.execute(request())).ok, true);
+    assert.deepEqual(fake.state.tools, {
+      ai_pointer_exa_web_search_exa: true,
+      bash: false,
     });
   });
 
@@ -280,6 +292,7 @@ function createFake(options: {
   serverVersion?: string;
   toolIDs?: string[];
   wildcardDenied?: boolean;
+  webToolsAllowed?: boolean;
 } = {}) {
   const state = {
     externalAbort: 0,
@@ -304,7 +317,14 @@ function createFake(options: {
       if (kind === "owned" && options.ownedHealthHangs) return await new Promise<never>(() => undefined);
       return { data: { healthy: options.externalHealthy !== false || kind !== "external", version: options.serverVersion ?? "1.18.21" } };
     } },
-    app: { agents: async () => ({ data: options.agent === false ? [] : [{ name: "desktop-pointer", model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined, permission: options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }] }] }) },
+    app: { agents: async () => ({ data: options.agent === false ? [] : [{
+      name: "desktop-pointer",
+      model: options.agentModel ? { providerID: "openai", modelID: options.modelID ?? "test" } : undefined,
+      permission: [
+        ...(options.wildcardDenied === false ? [] : [{ permission: "*", pattern: "*", action: "deny" }]),
+        ...(options.webToolsAllowed === false ? [] : ["ai_pointer_exa_web_search_exa", "webfetch", "websearch"].map((permission) => ({ permission, pattern: "*", action: "allow" }))),
+      ],
+    }] }) },
     config: { get: async () => ({ data: { model: `openai/${options.modelID ?? "test"}` } }) },
     provider: { list: async () => ({ data: { connected: ["openai"], all: [{ id: "openai", models: { [options.modelID ?? "test"]: { status: "active", capabilities: { input: { image: options.imageCapable !== false } } } } }] } }) },
     tool: { ids: async () => ({ data: options.toolIDs ?? ["ai_pointer_exa_web_search_exa", "bash", "read", "webfetch", "websearch"] }) },

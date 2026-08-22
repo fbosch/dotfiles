@@ -44,7 +44,12 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	const monitor = Gdk.Display.get_default()?.get_monitors().get_item(0) as Gdk.Monitor | null;
 	assert(monitor !== null, "AI Pointer view test requires a monitor");
 	const bounds = monitor.get_geometry();
-	const geometry = { x: bounds.x + 10, y: bounds.y + 20, width: 20, height: 20 };
+	const geometry = {
+		x: bounds.x + bounds.width - 30,
+		y: bounds.y + bounds.height - 30,
+		width: 20,
+		height: 20,
+	};
 	view.showPreparing(geometry);
 	assert(await view.finishStroke(geometry), "AI Pointer selection preview was unavailable");
 	await settleMainLoop();

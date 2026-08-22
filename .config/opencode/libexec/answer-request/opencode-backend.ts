@@ -17,7 +17,8 @@ const DESKTOP_POINTER_AGENT = "desktop-pointer";
 const PREFLIGHT_TIMEOUT_MILLISECONDS = 2_000;
 const CLEANUP_TIMEOUT_MILLISECONDS = 2_000;
 const MAXIMUM_STREAM_EVENTS = 4_096;
-const READ_ONLY_WEB_TOOLS = new Set(["ai_pointer_exa_web_search_exa", "webfetch", "websearch"]);
+const EXA_WEB_TOOL = "ai_pointer_exa_web_search_exa";
+const READ_ONLY_WEB_TOOLS = new Set([EXA_WEB_TOOL, "webfetch", "websearch"]);
 
 type Response = { data?: unknown; error?: unknown };
 type Options = { signal?: AbortSignal };
@@ -334,12 +335,20 @@ function desktopPointerAgent(value: unknown): object | null {
   if (typeof agent !== "object" || agent === null) return null;
   const permission = Reflect.get(agent, "permission");
   const wildcardDenied = Array.isArray(permission) && permission.some((rule) => typeof rule === "object" && rule !== null && Reflect.get(rule, "permission") === "*" && Reflect.get(rule, "pattern") === "*" && Reflect.get(rule, "action") === "deny");
-  return wildcardDenied ? agent : null;
+  const webToolsAllowed = Array.isArray(permission) && [...READ_ONLY_WEB_TOOLS].every((tool) => permission.some((rule) =>
+    typeof rule === "object" && rule !== null &&
+    Reflect.get(rule, "permission") === tool &&
+    Reflect.get(rule, "pattern") === "*" &&
+    Reflect.get(rule, "action") === "allow"));
+  return wildcardDenied && webToolsAllowed ? agent : null;
 }
 
 function readOnlyWebTools(value: unknown): Record<string, boolean> | null {
   if (Array.isArray(value) === false || value.some((id) => typeof id !== "string" || id.length === 0)) return null;
-  return Object.fromEntries(value.map((id) => [id, READ_ONLY_WEB_TOOLS.has(id)]));
+  return {
+    ...Object.fromEntries(value.map((id) => [id, READ_ONLY_WEB_TOOLS.has(id)])),
+    [EXA_WEB_TOOL]: true,
+  };
 }
 
 function supportsImage(agent: object, config: unknown, providers: unknown): boolean {
