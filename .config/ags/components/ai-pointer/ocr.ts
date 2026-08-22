@@ -33,10 +33,16 @@ export type OcrResult =
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
 
+interface OcrOptions {
+	executable?: string;
+	timeoutMs?: number;
+}
+
 export async function recognizeCapture(
 	input: OcrInput,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
+	options: OcrOptions = {},
 ): Promise<OcrResult> {
 	if (
 		input.path.length === 0 ||
@@ -48,7 +54,7 @@ export async function recognizeCapture(
 		return { kind: "unavailable", reason: "invalid-source" };
 	if (input.pixelWidth * input.pixelHeight > maximumOcrPixels)
 		return { kind: "unavailable", reason: "image-too-large" };
-	const executable = GLib.find_program_in_path("tesseract");
+	const executable = options.executable ?? GLib.find_program_in_path("tesseract");
 	if (!executable) return { kind: "unavailable", reason: "executable-missing" };
 
 	let process: Gio.Subprocess;
@@ -76,7 +82,7 @@ export async function recognizeCapture(
 
 	onProcess(process);
 	let timedOut = false;
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ocrTimeoutMs, () => {
+	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, options.timeoutMs ?? ocrTimeoutMs, () => {
 		timeoutId = 0;
 		timedOut = true;
 		cancellable.cancel();

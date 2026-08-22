@@ -36,8 +36,10 @@ const answerMaximumWidth = 640;
 const answerHorizontalPadding = 32;
 const answerVerticalPadding = 24;
 const preferredAnswerContentHeight = 480;
-const answerMaximumContentHeight = preferredAnswerContentHeight * 3;
+const answerMaximumContentHeight = 32_768;
 const panelSpacing = 8;
+const answerMaximumHostHeight =
+	promptHostHeight + panelSpacing + answerMaximumContentHeight + answerVerticalPadding;
 const allEdges =
 	Astal.WindowAnchor.TOP |
 	Astal.WindowAnchor.BOTTOM |
@@ -470,6 +472,7 @@ export class AiPointerView {
 		scroller.set_max_content_height(answerMaximumContentHeight);
 		if (answer.length === 0) {
 			scroller.set_min_content_height(0);
+			scroller.set_size_request(answerMinimumWidth, -1);
 			this.#resizePrompt();
 			return;
 		}
@@ -486,12 +489,13 @@ export class AiPointerView {
 		const [, wrappedHeight] = layout.get_pixel_size();
 		const truncationHeight = truncated ? panelSpacing + 20 : 0;
 		const contentHeight = Math.min(wrappedHeight + truncationHeight, answerMaximumContentHeight);
+		const scrollerHeight = contentHeight + answerVerticalPadding;
 		const promptWidth = (this.#prompt?.widthRequest ?? promptMinimumWidth) + promptHorizontalChrome;
-		scroller.set_size_request(answerWidth, -1);
+		scroller.set_size_request(answerWidth, scrollerHeight);
 		scroller.set_min_content_height(contentHeight);
 		host.set_size_request(
 			Math.max(promptWidth, answerWidth),
-			promptHostHeight + panelSpacing + contentHeight + answerVerticalPadding,
+			promptHostHeight + panelSpacing + scrollerHeight,
 		);
 		if (this.isPromptVisible) this.#positionPrompt();
 	}
@@ -516,12 +520,11 @@ export class AiPointerView {
 			height: promptHostHeight,
 		}, {
 			width: answerMaximumWidth,
-			height: promptHostHeight + panelSpacing + preferredAnswerContentHeight + answerVerticalPadding,
+			height: answerMaximumHostHeight,
 		});
 		if (!growth) return;
 		this.#horizontalGrowth = growth.horizontal;
 		this.#verticalGrowth = growth.vertical;
-
 		applyResponseGrowth(panel, promptPill, answerScroll, errorBox, growth);
 	}
 
@@ -610,10 +613,16 @@ export class AiPointerView {
 					0,
 					hostHeight - promptHostHeight - panelSpacing - answerVerticalPadding,
 				);
-				this.#answerScroll?.set_min_content_height(
-					Math.min(this.#answerScroll.minContentHeight, answerHeight),
-				);
-				this.#answerScroll?.set_max_content_height(answerHeight);
+				if (this.#answerScroll) {
+					this.#answerScroll.set_min_content_height(
+						Math.min(this.#answerScroll.minContentHeight, answerHeight),
+					);
+					this.#answerScroll.set_max_content_height(answerHeight);
+					this.#answerScroll.set_size_request(
+						this.#answerScroll.widthRequest,
+						answerHeight + answerVerticalPadding,
+					);
+				}
 			}
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
 			const calculated = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });

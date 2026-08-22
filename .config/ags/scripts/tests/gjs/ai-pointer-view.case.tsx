@@ -45,8 +45,8 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	assert(monitor !== null, "AI Pointer view test requires a monitor");
 	const bounds = monitor.get_geometry();
 	const geometry = {
-		x: bounds.x + bounds.width - 30,
-		y: bounds.y + bounds.height - 30,
+		x: bounds.x + Math.floor(bounds.width / 2) - 10,
+		y: bounds.y + Math.floor(bounds.height / 2) - 10,
 		width: 20,
 		height: 20,
 	};
@@ -95,7 +95,16 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	assert(view.isSelectionPreviewVisible, "AI Pointer selection preview was not visible");
 	action.emit("clicked");
 	assert(submitted === submittedQuestion.trim(), "AI Pointer submitted the wrong question");
+	const [composePositionResolved, composeLeft, composeTop] = pill.translate_coordinates(window, 0, 0);
+	assert(composePositionResolved, "AI Pointer composition position was unavailable");
 	view.showRequesting();
+	await settleMainLoop(50);
+	const [requestPositionResolved, requestLeft, requestTop] = pill.translate_coordinates(window, 0, 0);
+	assert(requestPositionResolved, "AI Pointer request position was unavailable");
+	assert(
+		requestLeft === composeLeft && requestTop === composeTop,
+		`AI Pointer input jumped from ${composeLeft},${composeTop} to ${requestLeft},${requestTop}`,
+	);
 	assert(
 		view.isSelectionPreviewVisible === false,
 		"AI Pointer selection preview survived request submission",
@@ -110,14 +119,33 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	const shortAnswerWidth = answerScroll.widthRequest;
 	const shortAnswerHeight = answerScroll.minContentHeight;
 	assert(shortRenderedWidth === shortAnswerWidth, "AI Pointer answer expanded to the prompt width");
-	view.showPartialAnswer("A longer streaming answer that should wrap across several lines. ".repeat(80));
-	await settleMainLoop(50);
+	assert(answerScroll.heightRequest > 0, "AI Pointer answer height remained implicit");
+	const streamedHeights: number[] = [];
+	const streamedHeightRequests: number[] = [];
+	for (const repetitions of [8, 20, 40, 80, 240]) {
+		view.showPartialAnswer("A longer streaming answer that should wrap across several lines. ".repeat(repetitions));
+		await settleMainLoop(50);
+		streamedHeights.push(answerScroll.get_height());
+		streamedHeightRequests.push(answerScroll.heightRequest);
+	}
 	assert(answer.get_label().startsWith("A longer streaming answer"), "AI Pointer partial answer was not rendered");
+	assert(
+		streamedHeights.every((height, index) => index === 0 || height >= streamedHeights[index - 1]),
+		`AI Pointer answer height regressed while streaming: ${streamedHeights.join(", ")}`,
+	);
+	assert(
+		new Set(streamedHeights).size > 1,
+		`AI Pointer answer height did not grow while streaming: ${streamedHeights.join(", ")}`,
+	);
+	assert(
+		streamedHeightRequests.every((height, index) => index === 0 || height >= streamedHeightRequests[index - 1]),
+		`AI Pointer answer height request regressed while streaming: ${streamedHeightRequests.join(", ")}`,
+	);
 	assert(answerScroll.widthRequest > shortAnswerWidth, "AI Pointer answer did not grow horizontally");
 	assert(answerScroll.widthRequest <= 640, "AI Pointer answer exceeded its width bound");
 	assert(answerScroll.minContentHeight > shortAnswerHeight, "AI Pointer answer did not grow vertically");
 	assert(answerScroll.minContentHeight > 480, "AI Pointer answer stopped at the former height cap");
-	assert(answerScroll.minContentHeight <= 1_440, "AI Pointer answer exceeded its height bound");
+	assert(answerScroll.minContentHeight < bounds.height, "AI Pointer answer exceeded its height bound");
 	assert(answerScroll.get_height() < bounds.height, "AI Pointer answer exceeded its monitor");
 	assert(answerScroll.get_width() > shortRenderedWidth, "AI Pointer answer did not render wider");
 	assert(answerScroll.get_height() > shortRenderedHeight, "AI Pointer answer did not render taller");

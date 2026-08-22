@@ -3,13 +3,16 @@ import GLib from "gi://GLib?version=2.0";
 
 const shutdownGraceMs = 7_500;
 
-export function settleProcessesForShutdown(processes: Iterable<Gio.Subprocess>): void {
+export function settleProcessesForShutdown(
+	processes: Iterable<Gio.Subprocess>,
+	graceMs = shutdownGraceMs,
+): void {
 	const owned = [...new Set(processes)];
 	if (owned.length === 0) return;
 
 	const loop = new GLib.MainLoop(null, false);
 	let remaining = owned.length;
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, shutdownGraceMs, () => {
+	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, graceMs, () => {
 		timeoutId = 0;
 		for (const process of owned) process.force_exit();
 		loop.quit();

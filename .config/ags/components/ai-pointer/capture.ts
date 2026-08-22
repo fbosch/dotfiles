@@ -25,6 +25,11 @@ export type CaptureResult =
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
 type CapturePathObserver = (path: string | null) => void;
 
+interface CaptureOptions {
+	cancellationGraceMs?: number;
+	timeoutMs?: number;
+}
+
 export function prepareCaptureDirectory(): string | null {
 	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
 	if (!runtimeDirectory) return null;
@@ -56,6 +61,7 @@ export async function captureRegion(
 	onProcess: ProcessObserver,
 	onPath: CapturePathObserver = () => {},
 	grimExecutable = GLib.find_program_in_path("grim"),
+	options: CaptureOptions = {},
 ): Promise<CaptureResult> {
 	if (!grimExecutable) return { kind: "failed", message: "grim is unavailable." };
 
@@ -67,8 +73,9 @@ export async function captureRegion(
 	const capture = await runCommand(
 		[grimExecutable, "-g", grimGeometry(geometry), path],
 		cancellable,
-		captureTimeoutMs,
+		options.timeoutMs ?? captureTimeoutMs,
 		onProcess,
+		options.cancellationGraceMs ?? captureCancellationGraceMs,
 	);
 	if (cancellable.is_cancelled()) {
 		deleteCapture(path);
@@ -106,6 +113,7 @@ async function runCommand(
 	cancellable: Gio.Cancellable,
 	timeoutMs: number,
 	onProcess: ProcessObserver,
+	cancellationGraceMs: number,
 ): Promise<{ success: boolean; timedOut: boolean; error?: string } | null> {
 	let process: Gio.Subprocess;
 	try {
@@ -128,7 +136,7 @@ async function runCommand(
 			return;
 		}
 		if (forceExitId === 0)
-			forceExitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, captureCancellationGraceMs, () => {
+			forceExitId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, cancellationGraceMs, () => {
 				forceExitId = 0;
 				process.force_exit();
 				return GLib.SOURCE_REMOVE;

@@ -80,7 +80,7 @@ export function responseGrowth(
 }
 
 export function queueFollowLatest(scroller: Gtk.ScrolledWindow, onComplete: () => void): number {
-	return GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+	return GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
 		onComplete();
 		const adjustment = scroller.get_vadjustment();
 		adjustment.set_value(

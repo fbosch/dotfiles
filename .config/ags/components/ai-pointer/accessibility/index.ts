@@ -78,7 +78,7 @@ interface AccessibleHelperInput {
 	windowWidth: number;
 }
 
-interface ValidatedClient {
+export interface AccessibilityHelperClient {
 	address: string;
 	class?: string;
 	geometry: SelectionGeometry;
@@ -89,6 +89,11 @@ interface ValidatedClient {
 
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
 export type AccessibilityLookupMode = "click" | "stroke";
+
+interface AccessibilityHelperOptions {
+	executable?: string;
+	timeoutMs?: number;
+}
 
 type HelperQueryResult =
 	| { kind: "candidates"; candidates: AccessibleCandidate[]; partial: boolean }
@@ -118,7 +123,13 @@ export async function resolveAccessibleSelection(
 		onDebugState({ kind: "unavailable", regionKind, reason: "no active client" });
 		return null;
 	}
-	const helperResult = await queryHelper(client, lookupSelection, stroke, cancellable, onProcess);
+	const helperResult = await queryAccessibilityHelper(
+		client,
+		lookupSelection,
+		stroke,
+		cancellable,
+		onProcess,
+	);
 	if (cancellable.is_cancelled()) return null;
 	if (helperResult.kind === "unavailable") {
 		onDebugState({ kind: "unavailable", regionKind, reason: helperResult.reason });
@@ -204,7 +215,7 @@ export function programsForSelection(selection: SelectionGeometry): ProgramMetad
 	return chooseProgramsForSelection(selection, [...windows.values()], activeClient?.address);
 }
 
-function activeClientForSelection(selection: SelectionGeometry): ValidatedClient | null {
+function activeClientForSelection(selection: SelectionGeometry): AccessibilityHelperClient | null {
 	const active = queryHyprlandJson<ActiveClient>("j/activewindow", {
 		component: "ai-pointer",
 		metric: "accessibleActiveWindow",
@@ -238,7 +249,7 @@ function monitorGeometryForPoint(point: PointerPosition): SelectionGeometry | nu
 	return null;
 }
 
-function validatedClient(client: ActiveClient | null): ValidatedClient | null {
+function validatedClient(client: ActiveClient | null): AccessibilityHelperClient | null {
 	if (
 		!client ||
 		client.mapped === false ||
@@ -271,7 +282,7 @@ function validatedClient(client: ActiveClient | null): ValidatedClient | null {
 	};
 }
 
-function programMetadata(client: ValidatedClient): ProgramMetadata {
+function programMetadata(client: AccessibilityHelperClient): ProgramMetadata {
 	return {
 		class: client.class,
 		geometry: client.geometry,
@@ -280,7 +291,7 @@ function programMetadata(client: ValidatedClient): ProgramMetadata {
 	};
 }
 
-function programWindow(client: ValidatedClient, focusHistoryId: unknown): ProgramWindow {
+function programWindow(client: AccessibilityHelperClient, focusHistoryId: unknown): ProgramWindow {
 	return {
 		address: client.address,
 		class: client.class,
@@ -303,16 +314,18 @@ function boundedClientText(value: unknown, maximumLength: number): string | unde
 		.trim() || undefined;
 }
 
-async function queryHelper(
-	client: ValidatedClient,
+export async function queryAccessibilityHelper(
+	client: AccessibilityHelperClient,
 	selection: SelectionGeometry,
 	stroke: PointerStroke,
 	parentCancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
+	options: AccessibilityHelperOptions = {},
 ): Promise<HelperQueryResult> {
 	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
-	if (!runtimeDirectory) return { kind: "unavailable", reason: "runtime directory unavailable" };
-	const helperExecutable = GLib.build_filenamev([runtimeDirectory, helperExecutableName]);
+	if (!runtimeDirectory && !options.executable)
+		return { kind: "unavailable", reason: "runtime directory unavailable" };
+	const helperExecutable = options.executable ?? GLib.build_filenamev([runtimeDirectory!, helperExecutableName]);
 	const input: AccessibleHelperInput = {
 		coordinateSpace: accessibilityCoordinateSpace,
 		pid: client.pid,
@@ -361,7 +374,7 @@ async function queryHelper(
 		process.force_exit();
 	}
 	let timedOut = false;
-	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, lookupTimeoutMs, () => {
+	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, options.timeoutMs ?? lookupTimeoutMs, () => {
 		timeoutId = 0;
 		timedOut = true;
 		cancellable.cancel();
@@ -464,7 +477,7 @@ export async function readBoundedHelperOutput(
 	}
 }
 
-function sameClient(left: ValidatedClient, right: ValidatedClient): boolean {
+function sameClient(left: AccessibilityHelperClient, right: AccessibilityHelperClient): boolean {
 	return (
 		left.address === right.address &&
 		left.pid === right.pid &&
