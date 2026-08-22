@@ -7,7 +7,7 @@ const dependencies = {
 	readPointer: true,
 	recognizeOcr: true,
 	resolveAccessibility: true,
-	resolveClickGeometry: true,
+	resolveContext: true,
 	resolvePrograms: true,
 	view: true,
 };

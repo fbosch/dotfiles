@@ -34,6 +34,8 @@ it("latches the Super chord from pointer start until explicit consumption", func
 	assert.is_false(ai_pointer.consume_super_chord())
 	assert.are.equal("ai-pointer", requests[1].component)
 	assert.are.same({ action = "start", x = 100, y = 200 }, requests[1].payload)
+	assert.is_true(ai_pointer.finish())
+	assert.are.same({ action = "finish", x = 100, y = 200 }, requests[2].payload)
 end)
 
 it("does not latch when a cursor position is unavailable", function()
@@ -45,4 +47,14 @@ it("does not latch when a cursor position is unavailable", function()
 
 	assert.is_false(ai_pointer.has_super_chord())
 	assert.are.equal(0, #requests)
+end)
+
+it("uses the Super middle-button release binding", function()
+	local keybinds_path = config_dir .. "/keybinds.lua"
+	local file = assert(io.open(keybinds_path, "r"))
+	local keybinds = file:read("*a")
+	file:close()
+
+	assert.is_truthy(keybinds:find('mouse_release.bind(main("mouse:274")', 1, true))
+	assert.is_nil(keybinds:find('mouse_release.bind("ALT + mouse:274"', 1, true))
 end)

@@ -87,7 +87,7 @@ bind.register(main("SHIFT + TAB"), window_switcher.action("prev", main_mod))
 -- Launchers
 bind.register(main("SPACE"), programs.menu)
 bind.register(main("R"), programs.menu)
-mouse_release.bind("ALT + mouse:274", function()
+mouse_release.bind(main("mouse:274"), function()
 	if ai_pointer.start() then
 		return ai_pointer.finish
 	end

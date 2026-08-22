@@ -98,7 +98,6 @@ function createScenario(mode: AccessibilityLookupMode): {
 		view,
 		prepareDirectory: () => "/run/user/benchmark/ai-pointer",
 		readPointer: () => null,
-		resolveClickGeometry: () => clickFallback,
 		resolveAccessibility: async (
 			_geometry,
 			_stroke,

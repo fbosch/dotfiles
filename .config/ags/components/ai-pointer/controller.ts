@@ -6,7 +6,6 @@ import { evaluateHyprland, queryHyprlandJson } from "@/services/hyprland-ipc";
 import { perf } from "@/services/performance-monitor";
 import {
 	type AccessibilityLookupMode,
-	clickFallbackForPoint,
 	programsForSelection,
 	resolveAccessibleSelection,
 } from "./accessibility";
@@ -17,6 +16,8 @@ import type {
 	ProgramMetadata,
 } from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
+import { emptySelectionContext, type SelectionContext } from "./context";
+import { querySelectionContext } from "./context-query";
 import { aiPointerMachine } from "./machine";
 import { AiPointerView, type CapturePreview } from "./ai-pointer-view";
 import { recognizeCapture, type OcrResult } from "./ocr";
@@ -24,13 +25,9 @@ import { aiPointerPerformanceMetrics } from "./performance-metrics";
 import {
 	type PointerPosition,
 	type SelectionGeometry,
+	selectionFromPoints,
 } from "./selection";
-import {
-	appendStrokePoint,
-	createPointerStroke,
-	type PointerStroke,
-	selectionFromStroke,
-} from "./stroke";
+import { appendStrokePoint, createPointerStroke, type PointerStroke } from "./stroke";
 
 type AiPointerActor = ActorRefFrom<typeof aiPointerMachine>;
 
@@ -44,8 +41,8 @@ interface AiPointerControllerOptions {
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
 	readPointer?(): PointerPosition | null;
-	resolveClickGeometry?(point: PointerPosition): SelectionGeometry | null;
 	resolvePrograms?(geometry: SelectionGeometry): ProgramMetadata[];
+	resolveContext?(geometry: SelectionGeometry): SelectionContext;
 	setCursorOutline?(enabled: boolean): boolean | void;
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
@@ -68,7 +65,7 @@ export class AiPointerController {
 	readonly #prepareDirectory: NonNullable<AiPointerControllerOptions["prepareDirectory"]>;
 	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
 	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
-	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
+	readonly #resolveContext: NonNullable<AiPointerControllerOptions["resolveContext"]>;
 	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
 	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
 	readonly #setCursorOutline: NonNullable<AiPointerControllerOptions["setCursorOutline"]>;
@@ -84,6 +81,7 @@ export class AiPointerController {
 	#accessibilityMetadata: AccessibilityMetadata | null = null;
 	#accessibilityDiagnostics: AccessibilityCandidateDiagnostic[] = [];
 	#programMetadata: ProgramMetadata[] = [];
+	#selectionContext: SelectionContext | null = null;
 	#directory: string | null = null;
 	#pendingFinish: PointerPosition | null = null;
 	#pendingFinishId = 0;
@@ -99,7 +97,7 @@ export class AiPointerController {
 		this.#captureRegion = options.capture ?? captureRegion;
 		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
 		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
-		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
+		this.#resolveContext = options.resolveContext ?? querySelectionContext;
 		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
 		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
 		this.#setCursorOutline = options.setCursorOutline ?? ((enabled) => {
@@ -122,6 +120,10 @@ export class AiPointerController {
 				return null;
 			return { x: position.x, y: position.y };
 		});
+	}
+
+	get selectionContext(): SelectionContext | null {
+		return this.#selectionContext;
 	}
 
 	init(): void {
@@ -179,6 +181,7 @@ export class AiPointerController {
 		this.#accessibilityMetadata = null;
 		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
+		this.#selectionContext = null;
 		this.#finishing = false;
 		++this.#runId;
 		this.#actor?.send({ type: "START" });
@@ -226,13 +229,10 @@ export class AiPointerController {
 		}
 		this.#stroke = appendStrokePoint(stroke, endPosition, true);
 		const completedStroke = this.#stroke;
-		const strokeGeometry = selectionFromStroke(completedStroke);
-		const mode: AccessibilityLookupMode = strokeGeometry ? "stroke" : "click";
-		const geometry = strokeGeometry ?? this.#resolveClickGeometry(endPosition);
+		const geometry = selectionFromPoints(completedStroke.points[0], endPosition);
 		if (!geometry) {
 			this.#view.endStroke();
-			this.#failureMessage = "The clicked monitor could not be resolved.";
-			this.#actor?.send({ type: "FAIL" });
+			this.#actor?.send({ type: "CANCEL" });
 			return;
 		}
 		const runId = this.#runId;
@@ -254,7 +254,7 @@ export class AiPointerController {
 				this.#actor?.send({ type: "FAIL" });
 				return;
 			}
-			this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
+			this.#captureGeometry(directory, geometry, completedStroke, runId, "stroke");
 		}).catch(() => {
 			overlayMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
@@ -313,8 +313,13 @@ export class AiPointerController {
 		}
 		if (runId !== this.#runId || cancellable.is_cancelled()) return;
 
+		try {
+			this.#selectionContext = this.#resolveContext(strokeGeometry);
+		} catch {
+			this.#selectionContext = emptySelectionContext(strokeGeometry);
+		}
 		this.#accessibilityMetadata = resolution?.metadata ?? null;
-		this.#programMetadata = this.#resolvePrograms(resolution?.geometry ?? strokeGeometry);
+		this.#programMetadata = this.#resolvePrograms(strokeGeometry);
 		let result: Awaited<ReturnType<typeof captureRegion>>;
 		const captureMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.capture)
@@ -322,7 +327,7 @@ export class AiPointerController {
 		try {
 			result = await this.#captureRegion(
 				directory,
-				resolution?.geometry ?? strokeGeometry,
+				strokeGeometry,
 				cancellable,
 				observeProcess,
 			);
@@ -380,6 +385,7 @@ export class AiPointerController {
 		this.#accessibilityMetadata = null;
 		this.#accessibilityDiagnostics = [];
 		this.#programMetadata = [];
+		this.#selectionContext = null;
 		this.#finishing = false;
 		this.#view.endStroke();
 		this.#clearPendingFinish();

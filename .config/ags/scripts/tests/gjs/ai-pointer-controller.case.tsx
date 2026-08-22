@@ -40,6 +40,9 @@ test("AI Pointer keeps the selected-region preview active without a metadata win
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
 		resolveAccessibility: async () => null,
+		resolveContext: () => {
+			throw new Error("fixture IPC failure");
+		},
 		resolvePrograms: () => {
 			programLookups += 1;
 			return [];
@@ -49,7 +52,7 @@ test("AI Pointer keeps the selected-region preview active without a metadata win
 			captured += 1;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 	});
@@ -60,6 +63,7 @@ test("AI Pointer keeps the selected-region preview active without a metadata win
 		await settleMainLoop();
 		assert(captured === 1, "selection was not captured");
 		assert(programLookups === 1, "local context was not resolved");
+		assert(controller.selectionContext?.geometricInference.clients.length === 0, "context failure did not degrade safely");
 		assert(previewCalls === 1, "selected-region preview was not shown");
 		assert(controller.start({ x: 50, y: 60 }) === false, "selection preview did not remain active");
 		controller.cancel();

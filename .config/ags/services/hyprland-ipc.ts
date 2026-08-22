@@ -42,7 +42,7 @@ export function getHyprlandSocketPath(
 	return socketPath;
 }
 
-function queryHyprland(
+export function queryHyprlandText(
 	request: string,
 	options: HyprlandIpcOptions = {},
 ): string | null {
@@ -103,21 +103,21 @@ export function dispatchHyprland(
 	dispatcher: string,
 	options: HyprlandIpcOptions = {},
 ): boolean {
-	return queryHyprland(`dispatch ${dispatcher}`, options)?.trim() === "ok";
+	return queryHyprlandText(`dispatch ${dispatcher}`, options)?.trim() === "ok";
 }
 
 export function evaluateHyprland(
 	expression: string,
 	options: HyprlandIpcOptions = {},
 ): boolean {
-	return queryHyprland(`eval ${expression}`, options)?.trim() === "ok";
+	return queryHyprlandText(`eval ${expression}`, options)?.trim() === "ok";
 }
 
 export function queryHyprlandJson<T>(
 	request: string,
 	options: HyprlandIpcOptions = {},
 ): T | null {
-	const response = queryHyprland(request, options);
+	const response = queryHyprlandText(request, options);
 	if (!response) return null;
 
 	try {

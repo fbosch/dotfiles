@@ -4,7 +4,7 @@ const requiredInertDependencies = [
 	"readPointer",
 	"recognizeOcr",
 	"resolveAccessibility",
-	"resolveClickGeometry",
+	"resolveContext",
 	"resolvePrograms",
 	"view",
 ] as const;

@@ -13,6 +13,7 @@ const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 export interface Capture {
 	path: string;
 	geometry: SelectionGeometry;
+	sha256: string;
 }
 
 export type CaptureResult =
@@ -77,12 +78,13 @@ export async function captureRegion(
 		deleteCapture(path);
 		return { kind: "failed", message: "The screenshot process exited unsuccessfully." };
 	}
-	if (isValidCapture(path) === false) {
+	const validated = validateCapture(path, geometry);
+	if (!validated) {
 		deleteCapture(path);
 		return { kind: "failed", message: "The screenshot failed PNG validation." };
 	}
 
-	return { kind: "captured", capture: { path, geometry } };
+	return { kind: "captured", capture: { path, geometry, sha256: validated.sha256 } };
 }
 
 async function runCommand(
@@ -131,7 +133,27 @@ async function runCommand(
 	}
 }
 
-function isValidCapture(path: string): boolean {
+export function pngDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+	if (bytes.length < 24 || pngSignature.some((byte, index) => bytes[index] !== byte)) return null;
+	const ihdrLength = readUint32(bytes, 8);
+	if (ihdrLength !== 13 || bytes[12] !== 0x49 || bytes[13] !== 0x48 || bytes[14] !== 0x44 || bytes[15] !== 0x52)
+		return null;
+	const width = readUint32(bytes, 16);
+	const height = readUint32(bytes, 20);
+	return width > 0 && height > 0 ? { width, height } : null;
+}
+
+export function sha256(bytes: Uint8Array): string {
+	const checksum = new GLib.Checksum(GLib.ChecksumType.SHA256);
+	checksum.update(bytes);
+	return checksum.get_string();
+}
+
+function readUint32(bytes: Uint8Array, offset: number): number {
+	return (((bytes[offset] << 24) >>> 0) + (bytes[offset + 1] << 16) + (bytes[offset + 2] << 8) + bytes[offset + 3]);
+}
+
+function validateCapture(path: string, geometry: SelectionGeometry): { sha256: string } | null {
 	try {
 		const file = Gio.File.new_for_path(path);
 		const info = file.query_info(
@@ -144,11 +166,14 @@ function isValidCapture(path: string): boolean {
 			info.get_size() <= 0 ||
 			info.get_size() > maximumCaptureBytes
 		)
-			return false;
+			return null;
 		const [loaded, bytes] = file.load_contents(null);
-		return loaded && bytes ? pngSignature.every((byte, index) => bytes[index] === byte) : false;
+		if (!loaded || !bytes) return null;
+		const dimensions = pngDimensions(bytes);
+		if (!dimensions || dimensions.width !== geometry.width || dimensions.height !== geometry.height) return null;
+		return { sha256: sha256(bytes) };
 	} catch {
-		return false;
+		return null;
 	}
 }
 

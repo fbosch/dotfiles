@@ -7,6 +7,7 @@ import {
 } from "@/components/ai-pointer/accessibility/helper-argument";
 import { AiPointerController } from "@/components/ai-pointer/controller";
 import { AiPointerView } from "@/components/ai-pointer/ai-pointer-view";
+import { pngDimensions, sha256 } from "@/components/ai-pointer/capture";
 import {
 	maximumOcrOutputBytes,
 	readBoundedOcrOutput,
@@ -67,6 +68,21 @@ test("AI Pointer helper arguments survive the generated shell launcher", () => {
 	assert(/^[A-Za-z0-9+/]+=*$/.test(encoded), "helper argument contains shell-splittable data");
 	assert(decodeAccessibilityHelperArgument(encoded) === input, "helper argument did not round trip");
 	assert(decodeAccessibilityHelperArgument("not base64") === null, "malformed base64 was accepted");
+});
+
+test("AI Pointer validates PNG headers and computes a capture digest", () => {
+	const png = new Uint8Array([
+		0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+		0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52,
+		0, 0, 0, 20, 0, 0, 0, 10,
+	]);
+	assert(JSON.stringify(pngDimensions(png)) === JSON.stringify({ width: 20, height: 10 }), "PNG dimensions were not parsed");
+	assert(pngDimensions(png.slice(0, 12)) === null, "partial PNG was accepted");
+	png[12] = 0;
+	assert(pngDimensions(png) === null, "invalid PNG IHDR was accepted");
+	png[12] = 0x49;
+	assert(/^[a-f0-9]{64}$/.test(sha256(png)), "capture digest is not SHA-256");
+	assert(sha256(png) !== sha256(png.slice(0, 23)), "different capture bytes shared a digest");
 });
 
 test("AI Pointer bounds local OCR output while streaming", async () => {
@@ -173,7 +189,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 		setCursorOutline: (enabled) => {
@@ -188,7 +204,7 @@ test("AI Pointer preserves a release that arrives before the AGS start request",
 		assert(controller.finish({ x: 30, y: 40 }), "release request was rejected");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
-		assert(captured === "-22,-12 84x84", "release-first geometry was not captured");
+		assert(captured === "10,20 20x20", "release-first geometry was not captured");
 		assert(
 			cursorOutlineStates.join(",") === "false,true,false,false",
 			"cursor outline disable failure was not retried after drawing",
@@ -230,7 +246,7 @@ test("AI Pointer removes the cursor outline when drawing is cancelled", () => {
 	}
 });
 
-test("AI Pointer uses a bounded fallback for a click without an accessible target", async () => {
+test("AI Pointer cancels an empty drag without capture", async () => {
 	let captured = "";
 	let lookupMode = "";
 	const view = {
@@ -256,7 +272,6 @@ test("AI Pointer uses a bounded fallback for a click without an accessible targe
 		view,
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		readPointer: () => null,
-		resolveClickGeometry: () => ({ x: 72, y: 72, width: 256, height: 256 }),
 		resolveAccessibility: async (
 			_geometry,
 			_stroke,
@@ -274,17 +289,17 @@ test("AI Pointer uses a bounded fallback for a click without an accessible targe
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 	});
 	controller.init();
 	try {
 		assert(controller.start({ x: 200, y: 200 }), "click start was rejected");
-		assert(controller.finish({ x: 200, y: 200 }), "click finish was rejected");
+		assert(controller.finish({ x: 200, y: 200 }), "empty-drag finish was rejected");
 		await settleMainLoop();
-		assert(lookupMode === "click", "click did not use point accessibility policy");
-		assert(captured === "72,72 256x256", "click fallback geometry was not captured");
+		assert(lookupMode === "", "empty drag performed accessibility lookup");
+		assert(captured === "", "empty drag was captured");
 	} finally {
 		controller.teardown();
 	}
@@ -325,7 +340,7 @@ test("AI Pointer waits for the drawing overlay before capture", async () => {
 			captured = true;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 	});
@@ -428,13 +443,14 @@ test("AI Pointer converts an unexpected OCR rejection into a bounded failure", a
 		},
 		capture: async (_directory, geometry) => ({
 			kind: "captured",
-			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 		}),
 	});
 	controller.init();
 	try {
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
+		await settleMainLoop();
 		await settleMainLoop();
 		assert(ocrStates.join(",") === "pending,unavailable", "OCR rejection escaped the workflow");
 	} finally {
@@ -516,7 +532,7 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 			captured = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 	});
@@ -525,7 +541,8 @@ test("AI Pointer captures a confident accessible snap without presenting metadat
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
-		assert(captured === "100,200 120x60", "accessible geometry was not captured");
+		await settleMainLoop();
+		assert(captured === "10,20 20x20", "direct drag geometry was not captured");
 		assert(resolvedAccessibility, "accessible metadata was not resolved");
 		assert(resolvedPrograms, "program metadata was not resolved");
 		assert(previewArgumentCount === 1, "metadata was passed to the prompt view");
@@ -579,7 +596,7 @@ test("AI Pointer cancellation rejects a pending accessibility result", async () 
 			captured = true;
 			return {
 				kind: "captured",
-				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry },
+				capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "a".repeat(64) },
 			};
 		},
 	});

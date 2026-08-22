@@ -41,15 +41,15 @@
 
 ## 5. AI Pointer Selection And Context Model
 
-- [ ] 5.1 Add pure feature-local types and policies for global selection geometry, exact window resolution, geometric client/layer candidates, privacy filtering, and context prompt formatting.
-- [ ] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks, then derive one global selection rectangle from their AGS payloads.
-- [ ] 5.3 Validate direct-drag geometry for signed origins, positive dimensions, and the maximum capture area; treat an empty drag as cancellation.
-- [ ] 5.4 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
-- [ ] 5.5 Capture the exact selected geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
-- [ ] 5.6 Revalidate exact whole-window selections only when one fresh client geometry exactly matches the selected rectangle.
-- [ ] 5.7 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
-- [ ] 5.8 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
-- [ ] 5.9 Add pure tests for negative monitor origins, stale exact-geometry matches, overlapping windows, layer intersections, no candidates, active-window mismatch, privacy filtering, and deterministic ranking.
+- [x] 5.1 Add pure feature-local types and policies for global selection geometry, exact window resolution, geometric client/layer candidates, privacy filtering, and context prompt formatting.
+- [x] 5.2 Record Hyprland cursor positions in the synchronous `Super + middle-button` press and release bind callbacks, then derive one global selection rectangle from their AGS payloads.
+- [x] 5.3 Validate direct-drag geometry for signed origins, positive dimensions, and the maximum capture area; treat an empty drag as cancellation.
+- [x] 5.4 Query fresh Hyprland clients, layers, monitors, active window, and lock state after selection through the existing IPC service.
+- [x] 5.5 Capture the exact selected geometry with `grim`, validate the PNG, calculate its SHA-256 digest, and reject partial or invalid captures before preview.
+- [x] 5.6 Revalidate exact whole-window selections only when one fresh client geometry exactly matches the selected rectangle.
+- [x] 5.7 Calculate deterministic positive-area overlap metrics for freeform client and layer candidates, cap candidate counts, and label them as geometric inference rather than hit-test or z-order facts.
+- [x] 5.8 Exclude AI Pointer and selector layer namespaces, local addresses, stable IDs, PIDs, process data, and raw Hyprland JSON from the AI-facing context envelope.
+- [x] 5.9 Add pure tests for negative monitor origins, stale exact-geometry matches, overlapping windows, layer intersections, no candidates, active-window mismatch, privacy filtering, and deterministic ranking.
 
 ## 6. AGS AI Pointer Workflow
 
