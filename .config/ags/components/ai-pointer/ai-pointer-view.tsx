@@ -12,7 +12,7 @@ import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { Capture } from "./capture";
 import { createCancelController } from "./cancel-controller";
 import type { OcrResult } from "./ocr";
-import { promptPosition } from "./selection";
+import { promptPosition, type SelectionGeometry } from "./selection";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
 
@@ -26,7 +26,7 @@ const allEdges =
 	Astal.WindowAnchor.LEFT |
 	Astal.WindowAnchor.RIGHT;
 
-type ActionMode = "compose" | "requesting" | "close";
+type ActionMode = "preparing" | "compose" | "requesting" | "close";
 
 export interface AiPointerViewHandlers {
 	onCancel(): void;
@@ -55,10 +55,11 @@ export class AiPointerView {
 	#answerScroll: Gtk.ScrolledWindow | null = null;
 	#error: Gtk.Label | null = null;
 	#errorBox: Gtk.Box | null = null;
-	#capture: Capture | null = null;
+	#selection: SelectionGeometry | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	#actionMode: ActionMode = "compose";
 	readonly #strokeOverlay = new StrokeOverlay();
+	readonly #selectionOverlay = new StrokeOverlay();
 
 	get isCreated(): boolean {
 		return this.#window !== null;
@@ -222,7 +223,24 @@ export class AiPointerView {
 		} catch {
 			return null;
 		}
-		this.#capture = capture;
+		const wasPreparing = this.#actionMode === "preparing";
+		this.#selection = capture.geometry;
+		this.#answer?.set_label("");
+		this.#answerScroll?.set_visible(false);
+		this.#error?.set_label("");
+		this.#errorBox?.set_visible(false);
+		this.#promptPill?.remove_css_class("error");
+		if (wasPreparing === false) this.#prompt?.set_text("");
+		this.#prompt?.set_sensitive(true);
+		this.#setActionMode("compose");
+		this.#resizePrompt();
+		this.#showAt(capture.geometry);
+		this.#selectionOverlay.showSelection(capture.geometry);
+		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
+	}
+
+	showPreparing(selection: SelectionGeometry): void {
+		this.#selection = selection;
 		this.#answer?.set_label("");
 		this.#answerScroll?.set_visible(false);
 		this.#error?.set_label("");
@@ -230,11 +248,10 @@ export class AiPointerView {
 		this.#promptPill?.remove_css_class("error");
 		this.#prompt?.set_text("");
 		this.#prompt?.set_sensitive(true);
-		this.#setActionMode("compose");
+		this.#setActionMode("preparing");
 		this.#resizePrompt();
-		this.#showAt(capture);
-		this.#strokeOverlay.showSelection(capture.geometry);
-		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
+		this.#showAt(selection);
+		this.#selectionOverlay.showSelection(selection);
 	}
 
 	showRequesting(): void {
@@ -270,10 +287,14 @@ export class AiPointerView {
 
 	endStroke(): void {
 		this.#strokeOverlay.hide();
+		this.#selectionOverlay.hide();
 	}
 
 	finishStroke(): Promise<boolean> {
-		return this.#strokeOverlay.hideBeforeCapture();
+		return Promise.all([
+			this.#strokeOverlay.hideBeforeCapture(),
+			this.#selectionOverlay.hideBeforeCapture(),
+		]).then((results) => results.every(Boolean));
 	}
 
 	showError(message: string): void {
@@ -290,9 +311,10 @@ export class AiPointerView {
 
 	hide(): void {
 		this.clearOcr();
-		this.#capture = null;
+		this.#selection = null;
 		this.#window?.set_visible(false);
 		this.#strokeOverlay.hide();
+		this.#selectionOverlay.hide();
 	}
 
 	dispose(): void {
@@ -312,7 +334,7 @@ export class AiPointerView {
 		this.#answerScroll = null;
 		this.#error = null;
 		this.#errorBox = null;
-		this.#capture = null;
+		this.#selection = null;
 		this.#handlers = null;
 		window?.destroy();
 	}
@@ -333,7 +355,7 @@ export class AiPointerView {
 	#setActionMode(mode: ActionMode): void {
 		this.#actionMode = mode;
 		this.#actionButton?.remove_css_class("requesting");
-		this.#sendIcon?.set_visible(mode === "compose");
+		this.#sendIcon?.set_visible(mode === "compose" || mode === "preparing");
 		this.#spinner?.set_visible(mode === "requesting");
 		this.#cancelIcon?.set_visible(mode !== "compose");
 		if (mode === "requesting") {
@@ -344,11 +366,17 @@ export class AiPointerView {
 		}
 		if (!this.#actionButton) return;
 		setButtonVariant(this.#actionButton, mode === "close" ? "transparent" : "primary");
-		const label = mode === "compose" ? "Send question" : mode === "requesting" ? "Cancel request" : "Close AI Pointer";
+		const label =
+			mode === "compose" || mode === "preparing"
+				? "Send question"
+				: mode === "requesting"
+					? "Cancel request"
+					: "Close AI Pointer";
 		this.#actionButton.set_tooltip_text(label);
 		this.#actionButton.update_property([Gtk.AccessibleProperty.LABEL], [label]);
 		this.#actionButton.set_sensitive(
-			mode !== "compose" || (this.#prompt?.get_text().trim().length ?? 0) > 0,
+			mode !== "preparing" &&
+				(mode !== "compose" || (this.#prompt?.get_text().trim().length ?? 0) > 0),
 		);
 	}
 
@@ -364,8 +392,8 @@ export class AiPointerView {
 		if (this.isPromptVisible) this.#positionPrompt();
 	}
 
-	#showAt(capture: Capture): void {
-		this.#capture = capture;
+	#showAt(selection: SelectionGeometry): void {
+		this.#selection = selection;
 		if (this.#positionPrompt() === false) {
 			this.#show();
 			return;
@@ -375,12 +403,12 @@ export class AiPointerView {
 	}
 
 	#positionPrompt(): boolean {
-		const capture = this.#capture;
-		if (!capture) return false;
+		const selection = this.#selection;
+		if (!selection) return false;
 		const display = Gdk.Display.get_default();
 		const monitors = display?.get_monitors();
-		const centerX = capture.geometry.x + capture.geometry.width / 2;
-		const centerY = capture.geometry.y + capture.geometry.height / 2;
+		const centerX = selection.x + selection.width / 2;
+		const centerY = selection.y + selection.height / 2;
 		for (let index = 0; monitors && index < monitors.get_n_items(); index += 1) {
 			const monitor = monitors.get_item(index) as Gdk.Monitor | null;
 			if (!monitor) continue;
@@ -398,7 +426,7 @@ export class AiPointerView {
 			);
 			const hostHeight = Math.min(promptHostHeight, Math.max(1, bounds.height - 32));
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
-			const position = promptPosition(capture.geometry, bounds, { width: hostWidth, height: hostHeight });
+			const position = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
 			this.#window?.set_gdkmonitor(monitor);
 			if (this.#promptCanvas && this.#promptHost)
 				this.#promptCanvas.move(this.#promptHost, position.x - bounds.x, position.y - bounds.y);

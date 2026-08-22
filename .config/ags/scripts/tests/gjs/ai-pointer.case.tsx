@@ -300,6 +300,7 @@ showPrompt() {
 
 test("AI Pointer keeps drawing visible during resolution and removes it before capture", async () => {
 	let captured = false;
+	let preparingShown = false;
 	let finishAccessibility: (() => void) | null = null;
 	let confirmHidden: ((hidden: boolean) => void) | null = null;
 	const view = {
@@ -313,6 +314,9 @@ test("AI Pointer keeps drawing visible during resolution and removes it before c
 			return new Promise<boolean>((resolve) => {
 				confirmHidden = resolve;
 			});
+		},
+		showPreparing() {
+			preparingShown = true;
 		},
 		showPrompt() {
 			return { pixelHeight: 20, pixelWidth: 20 };
@@ -347,6 +351,7 @@ test("AI Pointer keeps drawing visible during resolution and removes it before c
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
+		assert(preparingShown, "question input waited for target resolution");
 		assert(confirmHidden === null, "drawing was removed while target resolution was pending");
 		assert(captured === false, "capture started while the drawing was still mapped");
 		assert(finishAccessibility !== null, "target resolution did not start");

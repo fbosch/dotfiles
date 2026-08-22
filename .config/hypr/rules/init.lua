@@ -96,8 +96,8 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
 -- Floorp Browser
-hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2" })
-hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2" })
+hl.window_rule({ match = { class = "^(one\\.ablaze\\.floorp)$" }, monitor = "HDMI-A-2", no_screen_share = true })
+hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2", no_screen_share = true })
 
 -- Winboat
 hl.window_rule({ match = { class = "(winboat)" }, float = true })

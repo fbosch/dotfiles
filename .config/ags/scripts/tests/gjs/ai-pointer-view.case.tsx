@@ -40,14 +40,8 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 		"../../../components/ai-pointer/__tests__/capture.svg",
 		GLib.get_current_dir(),
 	);
-	assert(
-		view.showPrompt({
-			path: capturePath,
-			geometry: { x: 10, y: 20, width: 20, height: 20 },
-			sha256: "a".repeat(64),
-		}),
-		"AI Pointer question prompt was rejected",
-	);
+	const geometry = { x: 10, y: 20, width: 20, height: 20 };
+	view.showPreparing(geometry);
 	await settleMainLoop();
 	await settleMainLoop();
 	assert(view.isCreated, "AI Pointer view was not created");
@@ -68,6 +62,12 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 	assert(action.get_sensitive() === false, "empty AI Pointer question was submittable");
 	prompt.set_text(`  ${"question ".repeat(80)}  `);
 	assert(prompt.widthRequest === 348, "AI Pointer question did not grow to its width bound");
+	assert(action.get_sensitive() === false, "question was submittable before capture completed");
+	assert(
+		view.showPrompt({ path: capturePath, geometry, sha256: "a".repeat(64) }),
+		"AI Pointer question prompt was rejected",
+	);
+	assert(prompt.get_text().includes("question"), "capture completion cleared the prepared question");
 	assert(action.get_sensitive(), "non-empty AI Pointer question was not submittable");
 	action.emit("clicked");
 	assert(submitted === "question ".repeat(80).trim(), "AI Pointer did not trim the submitted question");

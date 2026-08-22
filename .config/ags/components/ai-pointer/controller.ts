@@ -275,6 +275,7 @@ export class AiPointerController {
 		this.#workflowMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
 			: null;
+		this.#view.showPreparing?.(geometry);
 		this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 	}
 
