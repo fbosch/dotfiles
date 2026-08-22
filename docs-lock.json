@@ -23,16 +23,16 @@
     "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "2e15371506b91846615f1f62bc3fc6c9236fd038",
-      "bytes": 218667,
+      "resolvedCommit": "b3d25de341ccf70bb081753a1108e2ed6ef0ef5a",
+      "bytes": 218675,
       "fileCount": 32,
-      "manifestSha256": "36470454160594c45fd0b0b4deccfa627be14b40ded0a0e0cd49e429fc3f6942",
+      "manifestSha256": "108aa4fd0383f30f401f5b52a9c273080693386d1dcce2c308c60c8331e9e925",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar-docs": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "194fc7f102b3ee9b97ad8815dbdacbab5ab73554",
+      "resolvedCommit": "fb2065762139616d46b499a7425b50449a176201",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
@@ -41,19 +41,19 @@
     "glance-docs": {
       "repo": "https://github.com/glanceapp/glance",
       "ref": "HEAD",
-      "resolvedCommit": "2956979b4e8242eaf69aa5efa1ec4926c2f003fd",
-      "bytes": 122966,
+      "resolvedCommit": "20672ee30bb2fa8ec6d9da8eeb8f0c055291cd9c",
+      "bytes": 123119,
       "fileCount": 6,
-      "manifestSha256": "47f0bc29f2d97f903577a7abb5de80163e97b6f612d241d0c19fb00ad72993f4",
+      "manifestSha256": "e34c9fc4ab699f38383171691f7fd417050031f4ef424f9ba0d61b2f2b2d8dda",
       "rulesSha256": "292a912375f27e4d0426baae461ae7a8c300a1f84c557d8cf7421743fb8b1fde"
     },
     "herdr-docs": {
       "repo": "https://github.com/ogulcancelik/herdr.git",
       "ref": "HEAD",
-      "resolvedCommit": "ffc4e263168f9e81d5bbc14db4b16ca9818d684a",
-      "bytes": 693241,
+      "resolvedCommit": "1c76079f8b9494ec1c971c80fda34c116ecb89dd",
+      "bytes": 695205,
       "fileCount": 60,
-      "manifestSha256": "c817b0db3a5bf5e77d8d0ebbfba6fd19526438cbdc2e962dbd1a9a5a25c45033",
+      "manifestSha256": "3098ca3412a894e6cdfae09e381e8f9fbe8e8795d7a3221b6f3cb24c0789c320",
       "rulesSha256": "6c03a23386fd099bc5a3c54454281ab61c9eedaa5c656dbfeebc0ca5474f1032"
     }
   },
