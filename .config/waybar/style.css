@@ -16,11 +16,13 @@
 
 #waybar {
   all: unset;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #191919;
   background-color: rgba(36, 36, 36, 0.85);
   border-radius: 8px;
   padding: 0 0.35rem;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    0 10px 24px rgba(0, 0, 0, 0.35);
   transition-property: background-color;
   transition-duration: 500ms;
   text-shadow: 0 0 2px rgba(0, 0, 0, 0.3);
