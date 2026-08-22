@@ -326,7 +326,7 @@ end
 
 local function bench_rule_loader(iterations)
 	clear_modules()
-	local loader = require("rule-loader")
+	local loader = require("rule_loader")
 	run_case("rule-loader/generated phase", math.max(100, math.floor(iterations / 10)), function()
 		loader.apply_window_rule_phase(config_dir, "generated")
 	end)

@@ -40,7 +40,7 @@ Sources:
 - The Lua entrypoint prepends the same config-root paths to `package.path` so plain `lua .config/hypr/hyprland.lua` validates the same module layout.
 - On reload, Hyprland clears non-stdlib `package.loaded` entries, so required user modules re-run.
 - Hyprland wraps `require` and tracks required module paths for config watching.
-- Use absolute path-loading in `rule-loader.lua` for generated data files when cache avoidance matters.
+- Use absolute path-loading in `rule_loader.lua` for generated data files when cache avoidance matters.
 - Generated data paths are not source-backed as watched config paths, so generated writers should explicitly trigger reload when Lua config is live.
 
 Sources:

@@ -4,11 +4,10 @@ local config_dir = os.getenv("HOME") .. "/.config/hypr"
 
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local loader = require("rule-loader")
+local loader = require("rule_loader")
 
 require("base")
-require("cursor-outline")
-require("inset_border")
+require("plugins")
 require("programs")
 require("monitors")
 require("layouts.ultrawide_master")

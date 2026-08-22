@@ -9,6 +9,7 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - Prefer Lua over Bash for Hyprland runtime helpers when practical; keep Bash for thin launchers, external command glue, or cases where shell is materially simpler.
 - Use LuaJIT for every executable Hyprland Lua runtime helper and launcher; do not invoke the system `lua` interpreter.
 - Use directory modules with `init.lua` for grouped Lua config, e.g. `rules/init.lua`, not sibling aggregators like `rules.lua`.
+- Name importable Lua config modules with `snake_case` filenames and matching `require(...)` paths; keep kebab-case for executable runtime helpers and generated artifacts that follow command naming.
 - Keep general static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`; keep cohesive policy-owned rules with their policy module.
 - Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would move them before window-state rules.
 - Keep generated/window-state Lua rule data under `rules/generated.lua` and `rules/window-state.lua`; they return data tables, not `hl.*` calls. Do not edit generated outputs; edit their source or writer instead.

@@ -2,8 +2,8 @@ local window_tags = require("lib.window_tags")
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
 require("rules.ags").register()
-require("rules.initial-window-state").register()
-require("rules.transient-placement").register()
+require("rules.initial_window_state").register()
+require("rules.transient_placement").register()
 
 -- GTK Application
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })

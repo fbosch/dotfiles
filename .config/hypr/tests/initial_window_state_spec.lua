@@ -24,8 +24,8 @@ before_each(function()
 			},
 		},
 	}
-	package.loaded["rules.initial-window-state"] = nil
-	require("rules.initial-window-state").register()
+	package.loaded["rules.initial_window_state"] = nil
+	require("rules.initial_window_state").register()
 end)
 
 it("clears an initial client maximize request for a tiled window", function()

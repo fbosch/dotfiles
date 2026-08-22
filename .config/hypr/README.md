@@ -8,7 +8,7 @@ Lua-first Hyprland configuration with runtime helpers for window rules, session 
 - `base.lua`, `programs.lua`, `monitors.lua`, `keybinds.lua`, `animations.lua`, `environment.lua`, `appearance.lua`, `input.lua`, and `autostart.lua` hold the main config groups.
 - `layouts/` contains custom layout modules.
 - `rules/` contains static layer, workspace, window, generated, and window-state rule data.
-- `rule-loader.lua` applies generated and window-state rule phases in the required order.
+- `rule_loader.lua` applies generated and window-state rule phases in the required order.
 - `runtime/` contains shell and Lua helpers invoked by binds, daemons, and startup scripts.
 - `lib/` contains shared Lua helpers used by runtime scripts.
 - `docs/window-tags.md` records tags used as contracts between rules and

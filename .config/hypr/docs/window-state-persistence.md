@@ -221,4 +221,4 @@ contract.
 - `runtime/windows/daemons/window-state/rules.lua`: selector validation, cache,
   and generated Lua rule rendering.
 - `rules/window-state.lua`: generated persistent state; never edit manually.
-- `rule-loader.lua` and `hyprland.lua`: generated rule loading and ordering.
+- `rule_loader.lua` and `hyprland.lua`: generated rule loading and ordering.
