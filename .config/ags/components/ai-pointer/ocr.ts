@@ -92,7 +92,15 @@ export async function recognizeCapture(
 	try {
 		const output = await readBoundedOcrOutput(process, cancellable);
 		if (timedOut) return { kind: "unavailable", reason: "timeout" };
-		if (cancellable.is_cancelled()) return { kind: "cancelled" };
+		if (cancellable.is_cancelled()) {
+			process.force_exit();
+			try {
+				await process.wait_async(null);
+			} catch {
+				// Cancellation owns process termination; a concurrent exit is already settled.
+			}
+			return { kind: "cancelled" };
+		}
 		if (output.kind === "read-failed") {
 			process.force_exit();
 			try {

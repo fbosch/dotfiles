@@ -144,6 +144,7 @@ test("AI Pointer OCR cancellation and timeout settle owned processes", async () 
 		const input = { path: "/unread", pixelHeight: 1, pixelWidth: 1 };
 		const cancellable = new Gio.Cancellable();
 		const cancellationObservations: ProcessObservation[] = [];
+		const cancellationStartedAt = monotonicMs();
 		const cancelled = await recognizeCapture(
 			input,
 			cancellable,
@@ -151,9 +152,11 @@ test("AI Pointer OCR cancellation and timeout settle owned processes", async () 
 			{ executable: helper, timeoutMs: 1_000 },
 		);
 		assert(cancelled.kind === "cancelled", "OCR cancellation did not reach the caller");
+		assert(monotonicMs() - cancellationStartedAt < 1_000, "OCR cancellation left its process running");
 		assertObserverSettled(cancellationObservations, "OCR cancellation");
 
 		const timeoutObservations: ProcessObservation[] = [];
+		const timeoutStartedAt = monotonicMs();
 		const timedOut = await recognizeCapture(
 			input,
 			new Gio.Cancellable(),
@@ -164,6 +167,7 @@ test("AI Pointer OCR cancellation and timeout settle owned processes", async () 
 			timedOut.kind === "unavailable" && timedOut.reason === "timeout",
 			"OCR timeout did not reach the caller",
 		);
+		assert(monotonicMs() - timeoutStartedAt < 1_000, "OCR timeout left its process running");
 		assertObserverSettled(timeoutObservations, "OCR timeout");
 	});
 });
