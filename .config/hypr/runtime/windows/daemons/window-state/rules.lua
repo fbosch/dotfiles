@@ -43,6 +43,25 @@ function M.matcher_lua_key(matcher)
 	return mapped and mapped.lua_key or nil
 end
 
+local function valid_persist_tags(tags)
+	if tags == nil then
+		return true
+	end
+	if type(tags) ~= "table" or #tags == 0 then
+		return false
+	end
+
+	local seen = {}
+	for _, tag in ipairs(tags) do
+		if type(tag) ~= "string" or tag == "" or tag:sub(-1) == "*" or seen[tag] then
+			return false
+		end
+		seen[tag] = true
+	end
+
+	return true
+end
+
 function M.load_selectors(path)
 	local ok, selectors = pcall(dofile, path)
 	local normalized = {}
@@ -59,6 +78,7 @@ function M.load_selectors(path)
 		if type(selector) == "table" and type(selector.matcher) == "string" and type(selector.pattern) == "string" then
 			local field = M.matcher_client_field(selector.matcher)
 			local exclude = selector.exclude
+			local persist_tags = selector.persist_tags
 			local valid_exclude = exclude == nil
 				or (
 					type(exclude) == "table"
@@ -75,11 +95,12 @@ function M.load_selectors(path)
 					end
 				end
 			end
-			if field and valid_exclude then
+			if field and valid_exclude and valid_persist_tags(persist_tags) then
 				normalized[#normalized + 1] = {
 					matcher = selector.matcher,
 					pattern = selector.pattern,
 					exclude = exclude,
+					persist_tags = persist_tags,
 				}
 				matchers[#matchers + 1] = {
 					matcher = selector.matcher,
@@ -116,7 +137,7 @@ local function cache_key(matcher, pattern, monitor)
 	return string.format("%d:%s%d:%s%d:%s", #matcher, matcher, #pattern, pattern, #monitor, monitor)
 end
 
-local function cache_entry(matcher, pattern, monitor, x, y, width, height)
+local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags)
 	return {
 		matcher = matcher,
 		pattern = pattern,
@@ -125,6 +146,7 @@ local function cache_entry(matcher, pattern, monitor, x, y, width, height)
 		y = tonumber(y),
 		width = tonumber(width),
 		height = tonumber(height),
+		tags = tags,
 	}
 end
 
@@ -155,7 +177,7 @@ function M.load_rules_cache(path)
 			local monitor = rule.monitor or rule.effects.monitor
 			if matcher and pattern and monitor and monitor ~= "" and width and height and x and y then
 				cache[cache_key(matcher, pattern, monitor)] =
-					cache_entry(matcher, pattern, monitor, x, y, width, height)
+					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags)
 			end
 		end
 	end
@@ -185,6 +207,65 @@ local function sorted_cache_keys(cache)
 	return keys
 end
 
+local function persisted_tags(entry, selector)
+	if type(entry.tags) ~= "table" or type(selector and selector.persist_tags) ~= "table" then
+		return {}
+	end
+
+	local saved = {}
+	for _, tag in ipairs(entry.tags) do
+		if type(tag) == "string" then
+			saved[tag] = true
+		end
+	end
+
+	local tags = {}
+	for _, tag in ipairs(selector.persist_tags) do
+		if saved[tag] then
+			tags[#tags + 1] = tag
+		end
+	end
+
+	return tags
+end
+
+local function lua_array(values)
+	local encoded = {}
+	for _, value in ipairs(values) do
+		encoded[#encoded + 1] = json.encode(value)
+	end
+	return "{ " .. table.concat(encoded, ", ") .. " }"
+end
+
+local function append_match(lines, entry, selector, lua_match_key)
+	lines[#lines + 1] = "    match = {"
+	lines[#lines + 1] = "      " .. lua_match_key .. " = " .. json.encode(rule_pattern(entry.pattern)) .. ","
+	if selector and selector.exclude then
+		local exclude_match_key = M.matcher_lua_key(selector.exclude.matcher)
+		if exclude_match_key then
+			local exclude_patterns = {}
+			for _, pattern in ipairs(selector.exclude.patterns) do
+				exclude_patterns[#exclude_patterns + 1] = rule_pattern(pattern)
+			end
+			lines[#lines + 1] = "      "
+				.. exclude_match_key
+				.. " = "
+				.. json.encode("negative:(" .. table.concat(exclude_patterns, "|") .. ")")
+				.. ","
+		end
+	end
+	lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
+	lines[#lines + 1] = "    },"
+end
+
+local function append_rule_identity(lines, entry, id)
+	lines[#lines + 1] = "  {"
+	lines[#lines + 1] = "    id = " .. json.encode(id) .. ","
+	lines[#lines + 1] = "    matcher = " .. json.encode(entry.matcher) .. ","
+	lines[#lines + 1] = "    pattern = " .. json.encode(entry.pattern) .. ","
+	lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
+end
+
 local function render_rules(cache, selectors_path, selectors)
 	local selectors_by_identity = {}
 	for _, selector in ipairs(selectors or {}) do
@@ -206,29 +287,9 @@ local function render_rules(cache, selectors_path, selectors)
 		if lua_match_key then
 			local comment = entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
 			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. " on " .. entry.monitor
-			lines[#lines + 1] = "  {"
-			lines[#lines + 1] = "    id = " .. json.encode(rule_id(entry.matcher, entry.pattern, entry.monitor)) .. ","
-			lines[#lines + 1] = "    matcher = " .. json.encode(entry.matcher) .. ","
-			lines[#lines + 1] = "    pattern = " .. json.encode(entry.pattern) .. ","
-			lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
-			lines[#lines + 1] = "    match = {"
-			lines[#lines + 1] = "      " .. lua_match_key .. " = " .. json.encode(rule_pattern(entry.pattern)) .. ","
-			if selector and selector.exclude then
-				local exclude_match_key = M.matcher_lua_key(selector.exclude.matcher)
-				if exclude_match_key then
-					local exclude_patterns = {}
-					for _, pattern in ipairs(selector.exclude.patterns) do
-						exclude_patterns[#exclude_patterns + 1] = rule_pattern(pattern)
-					end
-					lines[#lines + 1] = "      "
-						.. exclude_match_key
-						.. " = "
-						.. json.encode("negative:(" .. table.concat(exclude_patterns, "|") .. ")")
-						.. ","
-				end
-			end
-			lines[#lines + 1] = "      workspace = " .. json.encode("m[" .. entry.monitor .. "]") .. ","
-			lines[#lines + 1] = "    },"
+			local tags = persisted_tags(entry, selector)
+			append_rule_identity(lines, entry, rule_id(entry.matcher, entry.pattern, entry.monitor))
+			append_match(lines, entry, selector, lua_match_key)
 			lines[#lines + 1] = "    effects = {"
 			lines[#lines + 1] = '      fullscreen_state = "0 0",'
 			lines[#lines + 1] = "      size = "
@@ -236,10 +297,29 @@ local function render_rules(cache, selectors_path, selectors)
 				.. ","
 			lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
 			lines[#lines + 1] = "    },"
+			if #tags > 0 then
+				lines[#lines + 1] = "    tags = " .. lua_array(tags) .. ","
+			end
 			lines[#lines + 1] = '    source = "window-state",'
 			lines[#lines + 1] = "    comment = " .. json.encode(comment) .. ","
 			lines[#lines + 1] = "  },"
 			lines[#lines + 1] = ""
+
+			for _, tag in ipairs(tags) do
+				append_rule_identity(
+					lines,
+					entry,
+					rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":tag:" .. tag
+				)
+				append_match(lines, entry, selector, lua_match_key)
+				lines[#lines + 1] = "    effects = {"
+				lines[#lines + 1] = "      tag = " .. json.encode("+" .. tag) .. ","
+				lines[#lines + 1] = "    },"
+				lines[#lines + 1] = '    source = "window-state",'
+				lines[#lines + 1] = "    comment = " .. json.encode(comment .. " tag " .. tag) .. ","
+				lines[#lines + 1] = "  },"
+				lines[#lines + 1] = ""
+			end
 		end
 	end
 
@@ -276,7 +356,8 @@ function M.update_cache_from_windows(cache, windows, log)
 				window.x,
 				window.y,
 				window.width,
-				window.height
+				window.height,
+				window.tags
 			)
 			if log then
 				log(

@@ -44,9 +44,10 @@ local reconnected = false
 
 local initial_clients = [=[[{"class":"nemo","floating":true,"monitor":1,"at":[110,220],"size":[800,600]}]]=]
 local updated_clients = [=[
-[
-  {"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},
-  {"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]},
+	[
+	  {"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},
+	  {"class":"app.zen_browser.zen","initialTitle":"Picture-in-Picture","tags":["pip-top-left"],"floating":true,"monitor":1,"at":[15,15],"size":[500,300]},
+	  {"class":"nemo","floating":true,"monitor":1,"at":[150,260],"size":[900,650]},
   {"class":"nemo","initialTitle":"File Operations","floating":true,"monitor":1,"at":[250,360],"size":[300,200]},
   {"class":"nemo","initialTitle":"Preparing","floating":true,"monitor":1,"at":[350,460],"size":[320,220]},
   {"class":"Mullvad VPN","floating":true,"fullscreen":1,"fullscreenClient":1,"monitor":1,"at":[0,0],"size":[1920,1080]},
@@ -410,6 +411,9 @@ local function fixture()
 			and generated_rule("HDMI-A-1", "^nemo$").match.workspace == "m[HDMI-A-1]"
 			and generated_rule("DP-1", "^nemo$").match.initial_title == "negative:(^File Operations$|^Preparing$)"
 			and generated_rule("HDMI-A-1", "^nemo$").effects.move == "30 40"
+			and generated_rule("DP-1", "^Picture-in-Picture$")
+			and generated_rule("DP-1", "^Picture-in-Picture$").tags[1] == "pip-top-left"
+			and rules:find('tag = "+pip-top-left"', 1, true)
 	end, 3)
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")

@@ -150,6 +150,45 @@ describe("window-state rules", function()
 		assert_contains(content, 'class = "Test.+",')
 	end)
 
+	it("renders opted-in tags as separate rules", function()
+		options.cache = {
+			pip = {
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				monitor = "DP-1",
+				x = 15,
+				y = 15,
+				width = 300,
+				height = 200,
+				tags = { "pip-top-left", "unrelated" },
+			},
+		}
+		options.selectors = {
+			{
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				persist_tags = { "pip-top-left", "pip-top-right" },
+			},
+		}
+		assert.is_true(rules.write_rules_file(options))
+
+		local content = read_file(options.rules_lua_file)
+		assert_contains(content, 'tags = { "pip-top-left" },')
+		assert_contains(content, 'tag = "+pip-top-left",')
+		assert_not_contains(content, "unrelated")
+
+		local cache = rules.load_rules_cache(options.rules_lua_file)
+		local entry
+		for _, candidate in pairs(cache) do
+			if candidate.matcher == "match:initial_title" and candidate.pattern == "^Picture-in-Picture$" then
+				entry = candidate
+				break
+			end
+		end
+		assert.is_not_nil(entry)
+		assert.are.same({ "pip-top-left" }, entry.tags)
+	end)
+
 	it("retains independent geometry for each monitor", function()
 		options.cache = {}
 		rules.update_cache_from_windows(

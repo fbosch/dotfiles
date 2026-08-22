@@ -516,6 +516,10 @@ local function move_pip(mode, address, assign_default_corner)
 					local default_y = monitor.y + monitor.height - height - pip.margin
 					-- A window-state rule has already restored any non-default position.
 					if (tonumber(window.at[1]) or 0) ~= default_x or (tonumber(window.at[2]) or 0) ~= default_y then
+						local restored_corner = snap_target(window, monitor, bars)
+						if restored_corner then
+							tag_pip_corner(window, restored_corner.corner)
+						end
 						return
 					end
 					corner = "bottom-right"

@@ -1,5 +1,4 @@
 import app from "ags/gtk4/app";
-import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { evaluateHyprland } from "@/services/hyprland-ipc";
@@ -18,12 +17,12 @@ import { emptySelectionContext, formatDesktopPointerRequest, type SelectionConte
 import { querySelectionContext } from "./context-query";
 import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
+import { AiPointerOperationRegistry, type AiPointerOperation } from "./operation-registry";
 import { AiPointerView, type CaptureDimensions } from "./ai-pointer-view";
 import { recognizeCapture } from "./ocr";
 import { aiPointerPerformanceMetrics } from "./performance-metrics";
 import { readPointerPosition } from "./pointer-query";
 import { beginPreflightSelection, preflightAiPointer, runSelectionPreflight } from "./preflight";
-import { settleProcessesForShutdown } from "./shutdown-processes";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import { appendStrokePoint, createPointerStroke, type PointerStroke, selectionFromStroke } from "./stroke";
 
@@ -44,19 +43,11 @@ export class AiPointerController {
 	#actor: ActorRefFrom<typeof aiPointerMachine> | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
-	#preflightCancellable: Gio.Cancellable | null = null;
-	#preflightProcess: Gio.Subprocess | null = null;
 	#preflightPromise: ReturnType<typeof runSelectionPreflight> | null = null;
-	#cancellable: Gio.Cancellable | null = null;
-	#process: Gio.Subprocess | null = null;
 	#ocrStartId = 0;
-	#ocrCancellable: Gio.Cancellable | null = null;
-	#ocrProcess: Gio.Subprocess | null = null;
-	#answerCancellable: Gio.Cancellable | null = null;
-	#answerProcess: Gio.Subprocess | null = null;
 	#answer = "";
 	#answerTruncated = false;
-	readonly #terminatingProcesses = new Set<Gio.Subprocess>();
+	readonly #operations = new AiPointerOperationRegistry();
 	#capture: Capture | null = null;
 	#pendingCapturePath: string | null = null;
 	#selectionContext: SelectionContext | null = null;
@@ -211,19 +202,15 @@ export class AiPointerController {
 	}
 
 	#startPreflight(runId: number): void {
-		const cancellable = new Gio.Cancellable();
-		let observedProcess: Gio.Subprocess | null = null;
-		this.#preflightCancellable = cancellable;
-		const promise = runSelectionPreflight(this.#preflight, cancellable, (process) => {
-			if (process) observedProcess = process;
-			if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
-			if (runId === this.#runId) this.#preflightProcess = process;
-		});
+		const operation = this.#operations.start("preflight");
+		const promise = runSelectionPreflight(
+			this.#preflight,
+			operation.cancellable,
+			operation.observeProcess,
+		);
 		this.#preflightPromise = promise;
 		void promise.finally(() => {
-			if (runId !== this.#runId) return;
-			this.#preflightCancellable = null;
-			this.#preflightProcess = null;
+			operation.complete();
 		});
 	}
 
@@ -265,9 +252,9 @@ export class AiPointerController {
 		runId: number,
 		mode: AccessibilityLookupMode,
 	): void {
-		const cancellable = new Gio.Cancellable();
-		this.#cancellable = cancellable;
-		void this.#resolveAndCapture(directory, geometry, stroke, runId, cancellable, mode);
+		const operation = this.#operations.start("capture");
+		void this.#resolveAndCapture(directory, geometry, stroke, runId, operation, mode)
+			.finally(operation.complete);
 	}
 
 	async #resolveAndCapture(
@@ -275,15 +262,10 @@ export class AiPointerController {
 		strokeGeometry: SelectionGeometry,
 		stroke: PointerStroke,
 		runId: number,
-		cancellable: Gio.Cancellable,
+		operation: AiPointerOperation,
 		mode: AccessibilityLookupMode,
 	): Promise<void> {
-		let observedProcess: Gio.Subprocess | null = null;
-		const observeProcess = (process: Gio.Subprocess | null) => {
-			if (process) observedProcess = process;
-			if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
-			if (runId === this.#runId) this.#process = process;
-		};
+		const { cancellable, observeProcess } = operation;
 		let resolution: AccessibilityResolution | null = null;
 		const accessibilityMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityLookup)
@@ -359,8 +341,6 @@ export class AiPointerController {
 			if (runId !== this.#runId) return;
 			this.#finishWorkflow(false, "capture-failed");
 			this.#finishing = false;
-			this.#cancellable = null;
-			this.#process = null;
 			this.#failureMessage = "The selected region could not be captured.";
 			this.#actor?.send({ type: "FAIL" });
 			return;
@@ -370,8 +350,6 @@ export class AiPointerController {
 			if (result.kind === "captured") deleteCapture(result.capture.path);
 			return;
 		}
-		this.#cancellable = null;
-		this.#process = null;
 		this.#pendingCapturePath = null;
 		if (cancellable.is_cancelled() || result.kind === "cancelled") {
 			this.#finishWorkflow(false, "cancelled");
@@ -397,19 +375,8 @@ export class AiPointerController {
 		this.#finishWorkflow(false, "cancelled");
 		this.#stopOcr();
 		this.#lockMonitor.stop();
-		if (this.#answerProcess) this.#terminatingProcesses.add(this.#answerProcess);
-		if (this.#preflightProcess) this.#terminatingProcesses.add(this.#preflightProcess);
-		if (this.#process) this.#terminatingProcesses.add(this.#process);
-		this.#answerCancellable?.cancel();
-		this.#answerCancellable = null;
-		this.#answerProcess = null;
-		this.#preflightCancellable?.cancel();
-		this.#preflightCancellable = null;
-		this.#preflightProcess = null;
+		this.#operations.cancelAll();
 		this.#preflightPromise = null;
-		this.#cancellable?.cancel();
-		this.#cancellable = null;
-		this.#process = null;
 		this.#directory = null;
 		this.#stroke = null;
 		this.#selectionContext = null;
@@ -426,14 +393,9 @@ export class AiPointerController {
 
 	teardown(force = false): void {
 		const pendingCapturePath = this.#pendingCapturePath;
-		const processes = new Set(this.#terminatingProcesses);
-		if (this.#preflightProcess) processes.add(this.#preflightProcess);
-		if (this.#process) processes.add(this.#process);
-		if (this.#answerProcess) processes.add(this.#answerProcess);
 		this.cancel();
-		if (force) settleProcessesForShutdown(processes);
+		if (force) this.#operations.settleForShutdown();
 		if (force && pendingCapturePath) deleteCapture(pendingCapturePath);
-		this.#terminatingProcesses.clear();
 		this.#setCursorOutlineState(false, true);
 		this.#subscription?.unsubscribe();
 		this.#subscription = null;
@@ -465,14 +427,15 @@ export class AiPointerController {
 		const runId = this.#runId;
 		const preflight = this.#preflightPromise;
 		if (!preflight) return;
-		const cancellable = new Gio.Cancellable();
-		let observedProcess: Gio.Subprocess | null = null;
+		const operation = this.#operations.start("answer");
+		const { cancellable } = operation;
 		this.#stopOcr();
 		this.#setCursorOutlineState(false);
-		this.#answerCancellable = cancellable;
 		this.#actor?.send({ type: "SUBMIT" });
 		void (async () => {
 			const readiness = await preflight;
+			if (runId !== this.#runId || cancellable.is_cancelled())
+				return { kind: "cancelled" } as const;
 			if (readiness.kind === "failed") return readiness;
 			return await this.#requestAnswer(
 				{
@@ -482,11 +445,7 @@ export class AiPointerController {
 					timeoutSeconds: 60,
 				},
 				cancellable,
-				(process) => {
-					if (process) observedProcess = process;
-					if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
-					if (runId === this.#runId) this.#answerProcess = process;
-				},
+				operation.observeProcess,
 				(text) => {
 					if (runId !== this.#runId || cancellable.is_cancelled()) return;
 					if (this.#lockMonitor.blocksWorkflow) {
@@ -498,8 +457,6 @@ export class AiPointerController {
 			);
 		})().then((result) => {
 			if (runId !== this.#runId || cancellable.is_cancelled()) return;
-			this.#answerCancellable = null;
-			this.#answerProcess = null;
 			deleteCapture(capture.path);
 			if (this.#capture?.path === capture.path) this.#capture = null;
 			if (this.#lockMonitor.blocksWorkflow) {
@@ -520,13 +477,11 @@ export class AiPointerController {
 			this.#actor?.send({ type: "FAIL" });
 		}).catch(() => {
 			if (runId !== this.#runId || cancellable.is_cancelled()) return;
-			this.#answerCancellable = null;
-			this.#answerProcess = null;
 			deleteCapture(capture.path);
 			if (this.#capture?.path === capture.path) this.#capture = null;
 			this.#failureMessage = "The answer helper did not complete.";
 			this.#actor?.send({ type: "FAIL" });
-		});
+		}).finally(operation.complete);
 	}
 
 	#scheduleOcr(capture: Capture, dimensions: CaptureDimensions): void {
@@ -541,8 +496,8 @@ export class AiPointerController {
 
 	#startOcr(capture: Capture, dimensions: CaptureDimensions): void {
 		const runId = this.#runId;
-		const cancellable = new Gio.Cancellable();
-		this.#ocrCancellable = cancellable;
+		const operation = this.#operations.start("ocr");
+		const { cancellable } = operation;
 		this.#view.setOcrState({ kind: "pending" });
 		const ocrMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.ocrCompletion)
@@ -551,9 +506,7 @@ export class AiPointerController {
 		void this.#recognizeOcr(
 			{ path: capture.path, ...dimensions },
 			cancellable,
-			(process) => {
-				if (runId === this.#runId) this.#ocrProcess = process;
-			},
+			operation.observeProcess,
 		).then((result) => {
 			const succeeded = result.kind === "no-text" || result.kind === "text" || result.kind === "truncated";
 			ocrMark?.end(succeeded, succeeded ? undefined : result.kind);
@@ -572,22 +525,17 @@ export class AiPointerController {
 			if (runId === this.#runId && cancellable.is_cancelled() === false)
 				this.#view.setOcrState({ kind: "unavailable", reason: "process-failed" });
 		}).finally(() => {
+			operation.complete();
 			ocrMark?.end(false, "failed");
 			workflowMark?.end(false, "failed");
 			if (this.#workflowMark === workflowMark) this.#workflowMark = null;
-			if (runId !== this.#runId) return;
-			this.#ocrCancellable = null;
-			this.#ocrProcess = null;
 		});
 	}
 
 	#stopOcr(): void {
 		if (this.#ocrStartId !== 0) GLib.source_remove(this.#ocrStartId);
 		this.#ocrStartId = 0;
-		this.#ocrCancellable?.cancel();
-		this.#ocrCancellable = null;
-		this.#ocrProcess?.force_exit();
-		this.#ocrProcess = null;
+		this.#operations.cancel("ocr");
 		this.#view.clearOcr();
 	}
 

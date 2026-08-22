@@ -7,6 +7,8 @@ import {
 import { preflightAnswer, requestAnswer } from "@/components/ai-pointer/answer-client";
 import { captureRegion } from "@/components/ai-pointer/capture";
 import { recognizeCapture } from "@/components/ai-pointer/ocr";
+import { AiPointerOperationRegistry } from "@/components/ai-pointer/operation-registry";
+import { ownProcess } from "@/components/ai-pointer/owned-process";
 import { settleProcessesForShutdown } from "@/components/ai-pointer/shutdown-processes";
 import { createPointerStroke } from "@/components/ai-pointer/stroke";
 import { assert, test } from "./harness";
@@ -38,6 +40,34 @@ test("AI Pointer shutdown force-exits every remaining process", async () => {
 		assert(monotonicMs() - startedAt < 1_000, "forced shutdown exceeded its bounded grace period");
 		assertTerminated(first, "first shutdown process remained alive");
 		assertTerminated(second, "second shutdown process remained alive");
+	});
+});
+
+test("AI Pointer operation registry replaces slots and settles shutdown", async () => {
+	await withFixture(async ({ executable }) => {
+		const helper = executable("registry-helper", "trap '' INT TERM\nexec sleep 30");
+		const registry = new AiPointerOperationRegistry();
+		const firstOperation = registry.start("answer");
+		const firstProcess = spawn(helper);
+		const firstOwned = ownProcess(firstProcess, {
+			onProcess: firstOperation.observeProcess,
+			parentCancellable: firstOperation.cancellable,
+			timeoutMs: 1_000,
+		});
+
+		const secondOperation = registry.start("answer");
+		await firstOwned.dispose();
+		assertTerminated(firstProcess, "replaced operation remained alive");
+
+		const secondProcess = spawn(helper);
+		const secondOwned = ownProcess(secondProcess, {
+			onProcess: secondOperation.observeProcess,
+			parentCancellable: secondOperation.cancellable,
+			timeoutMs: 1_000,
+		});
+		registry.settleForShutdown();
+		await secondOwned.dispose();
+		assertTerminated(secondProcess, "shutdown operation remained alive");
 	});
 });
 

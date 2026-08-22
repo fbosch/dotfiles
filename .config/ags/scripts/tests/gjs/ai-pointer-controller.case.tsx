@@ -402,6 +402,47 @@ test("AI Pointer rejects stale answer completion and submission after lock", asy
 	} finally { controller.teardown(); }
 });
 
+test("AI Pointer forced teardown prevents a deferred answer request", async () => {
+	let submit: ((question: string) => void) | null = null;
+	let requestCount = 0;
+	let tornDown = false;
+	const view = {
+		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
+		beginStroke() { return true; }, updateStroke() {}, endStroke() {},
+		finishStroke() { return Promise.resolve(true); },
+		showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; }, showRequesting() {},
+		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
+	} as unknown as AiPointerView;
+	const controller = new AiPointerController({
+		view, prepareDirectory: () => "/run/user/1000/ai-pointer", preflight: readyPreflight,
+		readPointer: () => null, queryLocked: () => false, resolveAccessibility: async () => null,
+		resolveContext: (geometry) => emptySelectionContext(geometry), resolvePrograms: () => [],
+		recognizeOcr: async () => ({ kind: "no-text" }),
+		capture: async (_directory, geometry) => ({
+			kind: "captured",
+			capture: { path: "/run/user/1000/ai-pointer/capture-test.png", geometry, sha256: "d".repeat(64) },
+		}),
+		requestAnswer: async () => {
+			requestCount += 1;
+			return { kind: "answered", answer: "late", truncated: false };
+		},
+	});
+	controller.init();
+	try {
+		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
+		await settleMainLoop(); await settleMainLoop();
+		assert(submit !== null, "composition submit handler was unavailable");
+		submit("Deferred question");
+		controller.teardown(true);
+		tornDown = true;
+		await settleMainLoop();
+		assert(requestCount === 0, "answer request started after forced teardown");
+	} finally {
+		if (tornDown === false) controller.teardown();
+	}
+});
+
 test("AI Pointer cancellation rejects a pending accessibility result", async () => {
 	let captured = false;
 	let resolveLookup: (() => void) | null = null;

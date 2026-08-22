@@ -13,6 +13,7 @@
 ---@field matcher WindowStateMatcher Identifies the client field and emitted window-rule selector.
 ---@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
 ---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
+---@field persist_tags? string[] Dynamic client tags to restore when present.
 
 ---@return WindowStateSelector[]
 return {
@@ -40,5 +41,14 @@ return {
 	{ matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Codex$]=] },
-	{ matcher = "match:initial_title", pattern = [=[^Picture-in-Picture$]=] },
+	{
+		matcher = "match:initial_title",
+		pattern = [=[^Picture-in-Picture$]=],
+		persist_tags = {
+			"pip-top-left",
+			"pip-top-right",
+			"pip-bottom-left",
+			"pip-bottom-right",
+		},
+	},
 }

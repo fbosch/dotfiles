@@ -37,7 +37,8 @@ available at the event boundary.
 ## Selector Contract
 
 Each entry in `rules/window-state-selectors.lua` has a `matcher`, a `pattern`,
-and optionally an `exclude` matcher with one or more patterns.
+and optionally an `exclude` matcher with one or more patterns or a
+`persist_tags` allowlist. Only opted-in tags are captured and restored.
 
 | Selector matcher | Client JSON field | Generated Lua match key |
 | --- | --- | --- |
@@ -62,6 +63,10 @@ regex syntax has identical capture and restore semantics.
 The Nemo selector is the useful reference: it captures the main Nemo window but
 excludes clients whose initial title is `File Operations` or `Preparing`. The
 generated rule expresses that exclusion as Hyprland's `negative:(...)` matcher.
+
+`persist_tags` is a list of dynamic client tags to retain. The generated state
+stores matching tags as metadata and restores each as a separate dynamic tag
+rule. This keeps transient and policy tags out of persisted state by default.
 
 ## Generated Rule Contract
 

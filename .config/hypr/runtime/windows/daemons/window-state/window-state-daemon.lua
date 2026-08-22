@@ -191,6 +191,28 @@ local function number_at(values, index)
 	return tonumber(values and values[index]) or 0
 end
 
+local function persisted_tags(client, selector)
+	if type(selector.persist_tags) ~= "table" then
+		return nil
+	end
+
+	local client_tags = {}
+	for _, tag in ipairs(client.tags or {}) do
+		if type(tag) == "string" then
+			client_tags[tag:gsub("%*$", "")] = true
+		end
+	end
+
+	local tags = {}
+	for _, tag in ipairs(selector.persist_tags) do
+		if client_tags[tag] then
+			tags[#tags + 1] = tag
+		end
+	end
+
+	return tags
+end
+
 local function get_window_states()
 	if #selector_state.selectors == 0 then
 		parse_selectors()
@@ -222,6 +244,7 @@ local function get_window_states()
 					y = number_at(client.at, 2) - monitor.y,
 					width = number_at(client.size, 1),
 					height = number_at(client.size, 2),
+					tags = persisted_tags(client, selector),
 				}
 			end
 		end

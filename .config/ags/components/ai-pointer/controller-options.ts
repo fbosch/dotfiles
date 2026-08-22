@@ -9,6 +9,7 @@ import type { AiPointerView } from "./ai-pointer-view";
 import type { Capture, captureRegion } from "./capture";
 import type { SelectionContext } from "./context";
 import type { OcrResult } from "./ocr";
+import type { ProcessObserver } from "./owned-process";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import type { PointerStroke } from "./stroke";
 
@@ -18,7 +19,7 @@ export interface AiPointerControllerOptions {
 		directory: string,
 		geometry: SelectionGeometry,
 		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
+		onProcess: ProcessObserver,
 		onPath?: (path: string | null) => void,
 	): Promise<Awaited<ReturnType<typeof captureRegion>>>;
 	prepareDirectory?(): string | null;
@@ -29,25 +30,25 @@ export interface AiPointerControllerOptions {
 	queryLocked?(): boolean | null;
 	preflight?(
 		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
+		onProcess: ProcessObserver,
 	): Promise<AnswerPreflightResult>;
 	requestAnswer?(
 		input: { requestId: string; prompt: string; attachment: { path: string; sha256: string }; timeoutSeconds: number },
 		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
+		onProcess: ProcessObserver,
 		onDelta?: (text: string) => void,
 	): Promise<AnswerClientResult>;
 	setCursorOutline?(enabled: boolean): boolean | void;
 	recognizeOcr?(
 		input: { path: string; pixelHeight: number; pixelWidth: number },
 		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
+		onProcess: ProcessObserver,
 	): Promise<OcrResult>;
 	resolveAccessibility?(
 		geometry: SelectionGeometry,
 		stroke: PointerStroke,
 		cancellable: Gio.Cancellable,
-		onProcess: (process: Gio.Subprocess | null) => void,
+		onProcess: ProcessObserver,
 		onDebugState?: (state: AccessibilityDebugState) => void,
 		mode?: AccessibilityLookupMode,
 	): Promise<AccessibilityResolution | null>;
