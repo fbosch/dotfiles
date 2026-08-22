@@ -294,7 +294,7 @@ export class AiPointerController {
 				stroke,
 				cancellable,
 				observeProcess,
-				undefined,
+				this.#view.setAccessibilityDebugState?.bind(this.#view),
 				mode,
 			);
 			accessibilityMark?.end(

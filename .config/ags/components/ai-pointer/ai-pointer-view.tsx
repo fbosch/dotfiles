@@ -1,7 +1,6 @@
 import { Astal } from "ags/gtk4";
 import app from "ags/gtk4/app";
 import { createRoot } from "ags";
-import Cairo from "cairo";
 import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
@@ -11,8 +10,20 @@ import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { Capture } from "./capture";
 import { createCancelController } from "./cancel-controller";
+import { accessibilityDebugEnabled } from "./accessibility-debug";
+import type { AccessibilityDebugState } from "./accessibility";
+import { createCloseIcon, createSendIcon } from "./icons";
 import type { OcrResult } from "./ocr";
-import { promptPosition, type SelectionGeometry } from "./selection";
+import {
+	applyResponseGrowth,
+	clearFollowLatest,
+	queueFollowLatest,
+	resetResponseGrowth,
+	responseGrowth,
+	type HorizontalGrowth,
+	type VerticalGrowth,
+} from "./response-layout";
+import { promptPosition, selectionEquals, type SelectionGeometry } from "./selection";
 import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
 
@@ -21,13 +32,12 @@ const promptMaximumWidth = 348;
 const promptHorizontalChrome = 58;
 const promptHostHeight = 50;
 const answerMinimumWidth = promptMinimumWidth + promptHorizontalChrome;
-const answerMaximumWidth = 416;
+const answerMaximumWidth = 640;
 const answerHorizontalPadding = 32;
 const answerVerticalPadding = 24;
-const answerMaximumContentHeight = 256;
+const preferredAnswerContentHeight = 480;
+const answerMaximumContentHeight = preferredAnswerContentHeight * 3;
 const panelSpacing = 8;
-const answerMaximumHostHeight =
-	promptHostHeight + panelSpacing + answerMaximumContentHeight + answerVerticalPadding;
 const allEdges =
 	Astal.WindowAnchor.TOP |
 	Astal.WindowAnchor.BOTTOM |
@@ -51,7 +61,8 @@ export type OcrViewState = Exclude<OcrResult, { kind: "cancelled" }> | { kind: "
 export class AiPointerView {
 	#window: Astal.Window | null = null;
 	#promptCanvas: Gtk.Fixed | null = null;
-	#promptHost: Gtk.CenterBox | null = null;
+	#promptHost: Gtk.Box | null = null;
+	#promptPanel: Gtk.Box | null = null;
 	#prompt: Gtk.Entry | null = null;
 	#actionButton: Gtk.Button | null = null;
 	#promptPill: Gtk.Box | null = null;
@@ -67,6 +78,11 @@ export class AiPointerView {
 	#promptLeft: number | null = null;
 	#promptTop: number | null = null;
 	#promptPositionLocked = false;
+	#lockedPromptWidth = promptMinimumWidth + promptHorizontalChrome;
+	#horizontalGrowth: HorizontalGrowth = "right";
+	#verticalGrowth: VerticalGrowth = "down";
+	#answerScrollUpdateId = 0;
+	#accessibilityDebugState: AccessibilityDebugState | null = null;
 	#handlers: AiPointerViewHandlers | null = null;
 	#actionMode: ActionMode = "compose";
 	readonly #strokeOverlay = new StrokeOverlay();
@@ -104,7 +120,7 @@ export class AiPointerView {
 						self.add_controller(createCancelController(() => this.#handlers?.onCancel()));
 
 						const canvas = new Gtk.Fixed({ hexpand: true, vexpand: true });
-						const host = new Gtk.CenterBox({
+						const host = new Gtk.Box({
 							widthRequest: promptMinimumWidth + promptHorizontalChrome,
 							heightRequest: promptHostHeight,
 						});
@@ -112,7 +128,7 @@ export class AiPointerView {
 						const panel = new Gtk.Box({
 							orientation: Gtk.Orientation.VERTICAL,
 							spacing: 8,
-							valign: Gtk.Align.CENTER,
+							valign: Gtk.Align.START,
 						});
 						panel.add_css_class("ai-pointer-prompt-panel");
 
@@ -180,7 +196,7 @@ export class AiPointerView {
 						answerBox.append(answer);
 						answerBox.append(truncated);
 						const answerScroll = new Gtk.ScrolledWindow({
-							maxContentHeight: answerMaximumContentHeight,
+							halign: Gtk.Align.START,
 							propagateNaturalHeight: true,
 							widthRequest: answerMinimumWidth,
 							visible: false,
@@ -205,12 +221,13 @@ export class AiPointerView {
 						panel.append(promptPill);
 						panel.append(answerScroll);
 						panel.append(errorBox);
-						host.set_center_widget(panel);
+						host.append(panel);
 						canvas.put(host, 0, 0);
 						self.set_child(canvas);
 
 						this.#promptCanvas = canvas;
 						this.#promptHost = host;
+						this.#promptPanel = panel;
 						this.#prompt = prompt;
 						this.#promptPill = promptPill;
 						this.#actionButton = actionButton;
@@ -249,12 +266,22 @@ export class AiPointerView {
 		this.#setActionMode("compose");
 		this.#resizePrompt();
 		this.#showAt(capture.geometry);
-		if (geometryChanged) this.#selectionOverlay.showSelection(capture.geometry, true);
-		else this.#selectionOverlay.setSelectionFill(true);
+		const debugState = accessibilityDebugEnabled() ? this.#accessibilityDebugState : null;
+		if (geometryChanged) this.#selectionOverlay.showSelection(capture.geometry, true, debugState);
+		else {
+			this.#selectionOverlay.setSelectionFill(true);
+			this.#selectionOverlay.setSelectionDebugState(debugState);
+		}
 		return { pixelHeight: texture.get_height(), pixelWidth: texture.get_width() };
 	}
 
+	setAccessibilityDebugState(state: AccessibilityDebugState): void {
+		this.#accessibilityDebugState = state;
+	}
+
 	showPreparing(selection: SelectionGeometry): void {
+		this.#accessibilityDebugState = null;
+		this.#resetGrowthLayout();
 		this.#promptLeft = null;
 		this.#promptTop = null;
 		this.#promptPositionLocked = false;
@@ -272,6 +299,7 @@ export class AiPointerView {
 	}
 
 	showRequesting(): void {
+		this.#chooseGrowthDirection();
 		this.#promptPositionLocked = true;
 		this.#strokeOverlay.hide();
 		this.#selectionOverlay.hide();
@@ -288,6 +316,7 @@ export class AiPointerView {
 		this.#truncated?.set_visible(false);
 		this.#answerScroll?.set_visible(answer.length > 0);
 		this.#resizeAnswer(answer, false);
+		this.#queueFollowAnswer();
 	}
 
 	showAnswer(answer: string, truncated: boolean): void {
@@ -297,6 +326,7 @@ export class AiPointerView {
 		this.#truncated?.set_visible(truncated);
 		this.#answerScroll?.set_visible(true);
 		this.#resizeAnswer(answer, truncated);
+		this.#queueFollowAnswer();
 		this.#errorBox?.set_visible(false);
 		this.#promptPill?.remove_css_class("error");
 		this.#setActionMode("close");
@@ -320,7 +350,9 @@ export class AiPointerView {
 	}
 
 	finishStroke(selection: SelectionGeometry): Promise<boolean> {
-		if (this.#selectionOverlay.showSelection(selection) === false) return Promise.resolve(false);
+		const debugState = accessibilityDebugEnabled() ? this.#accessibilityDebugState : null;
+		if (this.#selectionOverlay.showSelection(selection, false, null, debugState) === false)
+			return Promise.resolve(false);
 		this.#selection = selection;
 		return this.#strokeOverlay.hideBeforeCapture();
 	}
@@ -338,6 +370,7 @@ export class AiPointerView {
 
 	hide(): void {
 		this.clearOcr();
+		this.#clearAnswerScrollUpdate();
 		this.#selection = null;
 		this.#promptLeft = null;
 		this.#promptTop = null;
@@ -353,6 +386,7 @@ export class AiPointerView {
 		this.#window = null;
 		this.#promptCanvas = null;
 		this.#promptHost = null;
+		this.#promptPanel = null;
 		this.#prompt = null;
 		this.#promptPill = null;
 		this.#actionButton = null;
@@ -368,6 +402,9 @@ export class AiPointerView {
 		this.#promptLeft = null;
 		this.#promptTop = null;
 		this.#promptPositionLocked = false;
+		this.#lockedPromptWidth = promptMinimumWidth + promptHorizontalChrome;
+		this.#horizontalGrowth = "right";
+		this.#verticalGrowth = "down";
 		this.#handlers = null;
 		window?.destroy();
 	}
@@ -447,10 +484,8 @@ export class AiPointerView {
 		layout.set_width((answerWidth - answerHorizontalPadding) * Pango.SCALE);
 		layout.set_wrap(Pango.WrapMode.WORD_CHAR);
 		const [, wrappedHeight] = layout.get_pixel_size();
-		const contentHeight = Math.min(
-			wrappedHeight + (truncated ? panelSpacing + 20 : 0),
-			answerMaximumContentHeight,
-		);
+		const truncationHeight = truncated ? panelSpacing + 20 : 0;
+		const contentHeight = Math.min(wrappedHeight + truncationHeight, answerMaximumContentHeight);
 		const promptWidth = (this.#prompt?.widthRequest ?? promptMinimumWidth) + promptHorizontalChrome;
 		scroller.set_size_request(answerWidth, -1);
 		scroller.set_min_content_height(contentHeight);
@@ -459,6 +494,61 @@ export class AiPointerView {
 			promptHostHeight + panelSpacing + contentHeight + answerVerticalPadding,
 		);
 		if (this.isPromptVisible) this.#positionPrompt();
+	}
+
+	#chooseGrowthDirection(): void {
+		const selection = this.#selection;
+		const promptLeft = this.#promptLeft;
+		const promptTop = this.#promptTop;
+		const host = this.#promptHost;
+		const panel = this.#promptPanel;
+		const promptPill = this.#promptPill;
+		const answerScroll = this.#answerScroll;
+		const errorBox = this.#errorBox;
+		if (!selection || promptLeft === null || promptTop === null || !host || !panel || !promptPill || !answerScroll || !errorBox)
+			return;
+
+		this.#lockedPromptWidth = host.get_width();
+		const growth = responseGrowth(selection, {
+			x: promptLeft,
+			y: promptTop,
+			width: this.#lockedPromptWidth,
+			height: promptHostHeight,
+		}, {
+			width: answerMaximumWidth,
+			height: promptHostHeight + panelSpacing + preferredAnswerContentHeight + answerVerticalPadding,
+		});
+		if (!growth) return;
+		this.#horizontalGrowth = growth.horizontal;
+		this.#verticalGrowth = growth.vertical;
+
+		applyResponseGrowth(panel, promptPill, answerScroll, errorBox, growth);
+	}
+
+	#resetGrowthLayout(): void {
+		const panel = this.#promptPanel;
+		const promptPill = this.#promptPill;
+		const answerScroll = this.#answerScroll;
+		const errorBox = this.#errorBox;
+		if (!panel || !promptPill || !answerScroll || !errorBox) return;
+		this.#horizontalGrowth = "right";
+		this.#verticalGrowth = "down";
+		resetResponseGrowth(panel, promptPill, answerScroll, errorBox);
+	}
+
+	#queueFollowAnswer(): void {
+		if (this.#answerScrollUpdateId !== 0) return;
+		const scroller = this.#answerScroll;
+		if (!scroller) return;
+		this.#answerScrollUpdateId = queueFollowLatest(scroller, () => {
+			this.#answerScrollUpdateId = 0;
+		});
+	}
+
+	#clearAnswerScrollUpdate(): void {
+		if (this.#answerScrollUpdateId === 0) return;
+		clearFollowLatest(this.#answerScrollUpdateId);
+		this.#answerScrollUpdateId = 0;
 	}
 
 	#showAt(selection: SelectionGeometry): void {
@@ -474,8 +564,7 @@ export class AiPointerView {
 	#positionPrompt(): boolean {
 		const selection = this.#selection;
 		if (!selection) return false;
-		const display = Gdk.Display.get_default();
-		const monitors = display?.get_monitors();
+		const monitors = Gdk.Display.get_default()?.get_monitors();
 		const centerX = selection.x + selection.width / 2;
 		const centerY = selection.y + selection.height / 2;
 		for (let index = 0; monitors && index < monitors.get_n_items(); index += 1) {
@@ -500,12 +589,23 @@ export class AiPointerView {
 			const bottom = bounds.y + bounds.height - 16;
 			const right = bounds.x + bounds.width - 16;
 			if (this.#promptPositionLocked && this.#promptLeft !== null) {
-				hostWidth = Math.min(hostWidth, Math.max(1, right - this.#promptLeft));
+				const availableWidth = this.#horizontalGrowth === "right"
+					? right - this.#promptLeft
+					: this.#promptLeft + this.#lockedPromptWidth - (bounds.x + 16);
+				hostWidth = Math.min(
+					Math.max(hostWidth, this.#lockedPromptWidth),
+					Math.max(1, availableWidth),
+				);
 				if (this.#answerScroll && this.#answerScroll.widthRequest > hostWidth)
 					this.#answerScroll.set_size_request(hostWidth, -1);
 			}
 			if (this.#promptPositionLocked && this.#promptTop !== null) {
-				hostHeight = Math.min(hostHeight, Math.max(promptHostHeight, bottom - this.#promptTop));
+				const naturalHeight = this.#promptPanel?.measure(Gtk.Orientation.VERTICAL, -1)[1] ?? promptHostHeight;
+				hostHeight = Math.max(hostHeight, naturalHeight);
+				const availableHeight = this.#verticalGrowth === "down"
+					? bottom - this.#promptTop
+					: this.#promptTop + promptHostHeight - (bounds.y + 16);
+				hostHeight = Math.min(hostHeight, Math.max(promptHostHeight, availableHeight));
 				const answerHeight = Math.max(
 					0,
 					hostHeight - promptHostHeight - panelSpacing - answerVerticalPadding,
@@ -518,15 +618,19 @@ export class AiPointerView {
 			this.#promptHost?.set_size_request(hostWidth, hostHeight);
 			const calculated = promptPosition(selection, bounds, { width: hostWidth, height: hostHeight });
 			if (this.#promptPositionLocked === false) {
-				const maximumHostWidth = Math.min(answerMaximumWidth, Math.max(1, bounds.width - 32));
-				const maximumHostHeight = Math.min(answerMaximumHostHeight, Math.max(1, bounds.height - 32));
-				// Reserve room for streaming growth before locking the prompt's top-left corner.
-				this.#promptLeft = Math.min(calculated.x, right - maximumHostWidth);
-				this.#promptTop = Math.min(calculated.y, bottom - maximumHostHeight);
+				this.#promptLeft = calculated.x;
+				this.#promptTop = calculated.y;
 			}
 			this.#promptLeft ??= calculated.x;
 			this.#promptTop ??= calculated.y;
-			const position = { x: this.#promptLeft, y: this.#promptTop };
+			const position = {
+				x: this.#promptPositionLocked && this.#horizontalGrowth === "left"
+					? this.#promptLeft + this.#lockedPromptWidth - hostWidth
+					: this.#promptLeft,
+				y: this.#promptPositionLocked && this.#verticalGrowth === "up"
+					? this.#promptTop + promptHostHeight - hostHeight
+					: this.#promptTop,
+			};
 			this.#window?.set_gdkmonitor(monitor);
 			if (this.#promptCanvas && this.#promptHost)
 				this.#promptCanvas.move(this.#promptHost, position.x - bounds.x, position.y - bounds.y);
@@ -545,55 +649,4 @@ export class AiPointerView {
 		this.#window?.set_visible(true);
 		this.#prompt?.grab_focus();
 	}
-}
-
-function selectionEquals(
-	left: SelectionGeometry | null,
-	right: SelectionGeometry,
-): boolean {
-	return (
-		left?.x === right.x &&
-		left.y === right.y &&
-		left.width === right.width &&
-		left.height === right.height
-	);
-}
-
-function createSendIcon(): Gtk.DrawingArea {
-	const icon = new Gtk.DrawingArea({ widthRequest: 15, heightRequest: 15 });
-	icon.add_css_class("ai-pointer-send-icon");
-	icon.set_draw_func((area, cr: any) => {
-		setIconStroke(area, cr);
-		cr.translate((area.get_width() - 15) / 2, (area.get_height() - 15) / 2);
-		cr.moveTo(3, 7.5);
-		cr.lineTo(11, 7.5);
-		cr.moveTo(7.75, 3.75);
-		cr.lineTo(11.5, 7.5);
-		cr.lineTo(7.75, 11.25);
-		cr.stroke();
-	});
-	return icon;
-}
-
-function createCloseIcon(): Gtk.DrawingArea {
-	const icon = new Gtk.DrawingArea({ widthRequest: 13, heightRequest: 13 });
-	icon.add_css_class("ai-pointer-cancel-icon");
-	icon.set_draw_func((area, cr: any) => {
-		setIconStroke(area, cr);
-		cr.translate((area.get_width() - 13) / 2, (area.get_height() - 13) / 2);
-		cr.moveTo(3, 3);
-		cr.lineTo(10, 10);
-		cr.moveTo(10, 3);
-		cr.lineTo(3, 10);
-		cr.stroke();
-	});
-	return icon;
-}
-
-function setIconStroke(area: Gtk.DrawingArea, cr: any): void {
-	const color = area.get_style_context().get_color();
-	cr.setSourceRGBA(color.red, color.green, color.blue, color.alpha);
-	cr.setLineWidth(1.5);
-	cr.setLineCap(Cairo.LineCap.ROUND);
-	cr.setLineJoin(Cairo.LineJoin.ROUND);
 }

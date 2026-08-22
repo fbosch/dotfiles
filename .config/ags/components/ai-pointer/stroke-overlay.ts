@@ -7,6 +7,8 @@ import GLib from "gi://GLib?version=2.0";
 import GObject from "gi://GObject?version=2.0";
 import Graphene from "gi://Graphene?version=1.0";
 import tokens from "../../../../design-system/tokens.json";
+import { drawAccessibilityDiagnostics } from "./accessibility-debug";
+import type { AccessibilityDebugState } from "./accessibility/debug-state";
 import { createCancelController } from "./cancel-controller";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import {
@@ -62,6 +64,7 @@ export class StrokeOverlay {
 	#frameDrawing: Gtk.Widget | null = null;
 	#frameCallbackId = 0;
 	#selectionFill = false;
+	#selectionDebugState: AccessibilityDebugState | null = null;
 
 	get isVisible(): boolean {
 		return this.#surfaces.length > 0;
@@ -88,9 +91,15 @@ export class StrokeOverlay {
 		return true;
 	}
 
-	showSelection(selection: SelectionGeometry, fill = false): boolean {
+	showSelection(
+		selection: SelectionGeometry,
+		fill = false,
+		debugState: AccessibilityDebugState | null = null,
+		debugBounds: AccessibilityDebugState | null = debugState,
+	): boolean {
 		this.hide();
 		this.#selectionFill = fill;
+		this.#selectionDebugState = debugState;
 		const display = Gdk.Display.get_default();
 		if (!display) return false;
 
@@ -98,7 +107,7 @@ export class StrokeOverlay {
 		for (let index = 0; index < monitors.get_n_items(); index += 1) {
 			const monitor = monitors.get_item(index) as Gdk.Monitor | null;
 			if (!monitor) continue;
-			const surface = this.#createSelectionSurface(monitor, index, selection);
+			const surface = this.#createSelectionSurface(monitor, index, selection, debugBounds);
 			if (surface) this.#surfaces.push(surface);
 		}
 		if (this.#surfaces.length === 0) return false;
@@ -110,6 +119,11 @@ export class StrokeOverlay {
 	setSelectionFill(enabled: boolean): void {
 		if (this.#selectionFill === enabled) return;
 		this.#selectionFill = enabled;
+		for (const surface of this.#surfaces) surface.drawing.queue_draw();
+	}
+
+	setSelectionDebugState(state: AccessibilityDebugState | null): void {
+		this.#selectionDebugState = state;
 		for (const surface of this.#surfaces) surface.drawing.queue_draw();
 	}
 
@@ -146,6 +160,7 @@ export class StrokeOverlay {
 		this.#segmentCreatedAtMs = [];
 		this.#closedStroke = false;
 		this.#selectionFill = false;
+		this.#selectionDebugState = null;
 	}
 
 	async hideBeforeCapture(): Promise<boolean> {
@@ -325,16 +340,27 @@ export class StrokeOverlay {
 		monitor: Gdk.Monitor,
 		index: number,
 		selection: SelectionGeometry,
+		debugState: AccessibilityDebugState | null,
 	): StrokeSurface | null {
 		const monitorGeometry = monitor.get_geometry();
-		const outerX = Math.max(monitorGeometry.x, selection.x - selectionPreviewGlow);
-		const outerY = Math.max(monitorGeometry.y, selection.y - selectionPreviewGlow);
+		const debugGeometries = debugState?.kind === "evaluated"
+			? debugState.diagnostics.map(({ geometry }) => geometry)
+			: [];
+		const geometries = [selection, ...debugGeometries];
+		const outerX = Math.max(
+			monitorGeometry.x,
+			Math.min(...geometries.map(({ x }) => x)) - selectionPreviewGlow,
+		);
+		const outerY = Math.max(
+			monitorGeometry.y,
+			Math.min(...geometries.map(({ y }) => y)) - selectionPreviewGlow,
+		);
 		const outerRight = Math.min(
-			selection.x + selection.width + selectionPreviewGlow,
+			Math.max(...geometries.map(({ x, width }) => x + width)) + selectionPreviewGlow,
 			monitorGeometry.x + monitorGeometry.width,
 		);
 		const outerBottom = Math.min(
-			selection.y + selection.height + selectionPreviewGlow,
+			Math.max(...geometries.map(({ y, height }) => y + height)) + selectionPreviewGlow,
 			monitorGeometry.y + monitorGeometry.height,
 		);
 		if (outerRight <= outerX || outerBottom <= outerY) return null;
@@ -475,6 +501,13 @@ export class StrokeOverlay {
 				color,
 			);
 		}
+		drawAccessibilityDiagnostics(
+			cr,
+			originX,
+			originY,
+			selection,
+			this.#selectionDebugState,
+		);
 	}
 
 	#drawOutsideSelection(

@@ -24,8 +24,8 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": {
           "model": "opencode/gpt-5.6",
@@ -87,8 +87,8 @@
       "small_model": "github-copilot/claude-haiku-4.5",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": "github-copilot/claude-opus-4.6",
         "backlog-planning": "github-copilot/claude-opus-4.6",
@@ -134,8 +134,8 @@
       "small_model": "opencode/claude-haiku-4-5",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": "opencode/claude-opus-4-6",
         "backlog-planning": "opencode/claude-opus-4-6",
@@ -173,8 +173,8 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": "anthropic/claude-opus-4-6",
         "backlog-planning": "anthropic/claude-opus-4-6",
@@ -208,8 +208,8 @@
       "small_model": "openai/gpt-5.6-luna-fast",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": {
           "model": "openai/gpt-5.6-sol",
@@ -344,8 +344,8 @@
       "small_model": "anthropic/claude-haiku-4-5",
       "agents": {
         "desktop-pointer": {
-          "model": "openai/gpt-5.6-luna",
-          "reasoningEffort": "high"
+          "model": "openai/gpt-5.6-luna-fast",
+          "reasoningEffort": "low"
         },
         "plan": "anthropic/claude-sonnet-4-6",
         "backlog-planning": "anthropic/claude-sonnet-4-6",

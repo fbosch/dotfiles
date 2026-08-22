@@ -546,6 +546,9 @@ describe("accessibility helper protocol", () => {
 		])
 			expect(parseAccessibilityHelperOutput(JSON.stringify(response))).toBeNull();
 		expect(
+			parseAccessibilityHelperOutput(JSON.stringify({ ...helperOutput([candidate]), complete: false })),
+		).toEqual({ candidates: [candidate], complete: false, timings: helperTimings });
+		expect(
 			parseAccessibilityHelperOutput(JSON.stringify({ ...helperOutput([]), complete: false })),
 		).toEqual({ candidates: [], complete: false, timings: helperTimings });
 	});

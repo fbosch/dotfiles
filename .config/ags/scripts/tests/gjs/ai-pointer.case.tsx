@@ -1,3 +1,4 @@
+import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import Gdk from "gi://Gdk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
@@ -140,6 +141,45 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 		"AI Pointer selection overlay was unavailable",
 	);
 	await settleMainLoop();
+	assert(
+		overlay.showSelection(
+			{ x: 0, y: 0, width: 120, height: 120 },
+			false,
+			null,
+			{
+				kind: "evaluated",
+				regionKind: "closed",
+				candidateCount: 24,
+				partial: true,
+				diagnostics: [
+					{
+						centerHit: true,
+						confidence: 0.9,
+						geometry: { x: 20, y: 20, width: 60, height: 40 },
+						hitCount: 3,
+						reason: "eligible",
+						role: "push button",
+						selected: true,
+					},
+				],
+			},
+		),
+		"AI Pointer accessibility debug overlay was unavailable",
+	);
+	await settleMainLoop();
+	const previewWindow = app.get_window("ai-pointer-ags-ai-pointer-selection-preview-0");
+	assert(previewWindow !== null, "AI Pointer accessibility preview was not registered");
+	overlay.setSelectionFill(true);
+	overlay.setSelectionDebugState({
+		kind: "unavailable",
+		regionKind: "corridor",
+		reason: "helper incomplete",
+	});
+	await settleMainLoop();
+	assert(
+		app.get_window("ai-pointer-ags-ai-pointer-selection-preview-0") === previewWindow,
+		"AI Pointer accessibility diagnostics recreated the preview window",
+	);
 	overlay.hide();
 });
 
@@ -472,6 +512,7 @@ showPrompt() {
 
 test("AI Pointer captures a confident accessible snap without presenting metadata", async () => {
 	let captured = "";
+	let debugCandidateRole = "";
 	let previewArgumentCount = 0;
 	let resolvedAccessibility = false;
 	let resolvedPrograms = false;
@@ -493,6 +534,9 @@ presentationOrder.push("prompt");
 previewArgumentCount = args.length;
 			return { pixelHeight: 20, pixelWidth: 20 };
 		},
+		setAccessibilityDebugState(state) {
+			debugCandidateRole = state.kind === "evaluated" ? state.diagnostics[0]?.role ?? "" : "";
+		},
 		setOcrState(state) {
 			ocrStates.push(state.kind);
 		},
@@ -506,20 +550,26 @@ previewArgumentCount = args.length;
 		prepareDirectory: () => "/run/user/1000/ai-pointer",
 		preflight: readyPreflight,
 		readPointer: () => null,
-		resolveAccessibility: async (_geometry, _stroke, _cancellable, _onProcess, onDiagnostics) => {
+		resolveAccessibility: async (_geometry, _stroke, _cancellable, _onProcess, onDebugState) => {
 			resolvedAccessibility = true;
-			onDiagnostics?.([
-				{
-					centerHit: true,
-					confidence: 0.9,
-					geometry: { x: 100, y: 200, width: 120, height: 60 },
-					hitCount: 7,
-					name: "Submit",
-					reason: "eligible",
-					role: "push button",
-					selected: true,
-				},
-			]);
+			onDebugState?.({
+				kind: "evaluated",
+				regionKind: "closed",
+				candidateCount: 1,
+				partial: false,
+				diagnostics: [
+					{
+						centerHit: true,
+						confidence: 0.9,
+						geometry: { x: 100, y: 200, width: 120, height: 60 },
+						hitCount: 7,
+						name: "Submit",
+						reason: "eligible",
+						role: "push button",
+						selected: true,
+					},
+				],
+			});
 			return {
 				geometry: { x: 100, y: 200, width: 120, height: 60 },
 				metadata: { confidence: 0.9, name: "Submit", role: "push button" },
@@ -558,6 +608,7 @@ previewArgumentCount = args.length;
 		assert(captured === "100,200 120x60", "accessible geometry was not captured");
 		assert(resolvedAccessibility, "accessible metadata was not resolved");
 		assert(resolvedPrograms, "program metadata was not resolved");
+		assert(debugCandidateRole === "push button", "accessibility diagnostics were not presented");
 assert(previewArgumentCount === 1, "private context was passed to the prompt view");
 assert(presentationOrder.join(",") === "prompt,ocr", "OCR started before presentation");
 		assert(

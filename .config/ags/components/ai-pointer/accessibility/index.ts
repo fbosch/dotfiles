@@ -30,6 +30,9 @@ import {
 	accessibilityHelperTimingMetrics,
 	aiPointerPerformanceMetrics,
 } from "../performance-metrics";
+import type { AccessibilityDebugState, AccessibilityRegionKind } from "./debug-state";
+
+export type { AccessibilityDebugState } from "./debug-state";
 
 Gio._promisify(Gio.InputStream.prototype, "read_bytes_async", "read_bytes_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
@@ -86,39 +89,77 @@ interface ValidatedClient {
 type ProcessObserver = (process: Gio.Subprocess | null) => void;
 export type AccessibilityLookupMode = "click" | "stroke";
 
+type HelperQueryResult =
+	| { kind: "candidates"; candidates: AccessibleCandidate[]; partial: boolean }
+	| { kind: "unavailable"; reason: string };
+
 export async function resolveAccessibleSelection(
 	selection: SelectionGeometry,
 	stroke: PointerStroke,
 	cancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
-	onDiagnostics: (diagnostics: AccessibilityCandidateDiagnostic[]) => void = () => {},
+	onDebugState: (state: AccessibilityDebugState) => void = () => {},
 	mode: AccessibilityLookupMode = "stroke",
 ): Promise<AccessibilityResolution | null> {
 	const clickPoint = mode === "click" ? stroke.points.at(-1) : undefined;
+	const region = clickPoint ? null : strokeSelectionRegion(stroke.points, strokeBrushRadius);
+	const regionKind: AccessibilityRegionKind = clickPoint ? "click" : region!.kind;
+	onDebugState({ kind: "pending", regionKind });
 	const lookupSelection = clickPoint
 		? validatedSelectionGeometry(clickPoint.x, clickPoint.y, 1, 1)
 		: selection;
-	if (!lookupSelection) return null;
+	if (!lookupSelection) {
+		onDebugState({ kind: "unavailable", regionKind, reason: "invalid selection" });
+		return null;
+	}
 	const client = activeClientForSelection(lookupSelection);
-	if (!client) return null;
-	const candidates = await queryHelper(client, lookupSelection, stroke, cancellable, onProcess);
-	if (!candidates || cancellable.is_cancelled()) return null;
+	if (!client) {
+		onDebugState({ kind: "unavailable", regionKind, reason: "no active client" });
+		return null;
+	}
+	const helperResult = await queryHelper(client, lookupSelection, stroke, cancellable, onProcess);
+	if (cancellable.is_cancelled()) return null;
+	if (helperResult.kind === "unavailable") {
+		onDebugState({ kind: "unavailable", regionKind, reason: helperResult.reason });
+		return null;
+	}
 	const freshClient = activeClientForSelection(lookupSelection);
-	if (!freshClient || sameClient(client, freshClient) === false) return null;
+	if (!freshClient || sameClient(client, freshClient) === false) {
+		onDebugState({ kind: "unavailable", regionKind, reason: "active client changed" });
+		return null;
+	}
 	const monitor = clickPoint ? monitorGeometryForPoint(clickPoint) : null;
 	let evaluation: AccessibilityEvaluation;
 	if (clickPoint) {
-		if (!monitor) return null;
-		evaluation = evaluateAccessibleClick(clickPoint, candidates, freshClient.geometry, monitor);
+		if (!monitor) {
+			onDebugState({ kind: "unavailable", regionKind, reason: "monitor unavailable" });
+			return null;
+		}
+		evaluation = evaluateAccessibleClick(
+			clickPoint,
+			helperResult.candidates,
+			freshClient.geometry,
+			monitor,
+		);
 	} else {
 		evaluation = evaluateAccessibleSnap(
 			selection,
-			candidates,
+			helperResult.candidates,
 			freshClient.geometry,
-			strokeSelectionRegion(stroke.points, strokeBrushRadius),
+			region!,
 		);
 	}
-	onDiagnostics(evaluation.diagnostics);
+	if (helperResult.candidates.length === 0) onDebugState({ kind: "empty", regionKind });
+	else
+		onDebugState({
+			kind: "evaluated",
+			regionKind,
+			candidateCount: helperResult.candidates.length,
+			diagnostics: evaluation.diagnostics,
+			partial: helperResult.partial,
+		});
+	// Incomplete traversal is useful for diagnostics but cannot safely change capture bounds.
+	if (helperResult.partial) return null;
 	const { resolution } = evaluation;
 	if (!resolution) return null;
 	return {
@@ -267,9 +308,9 @@ async function queryHelper(
 	stroke: PointerStroke,
 	parentCancellable: Gio.Cancellable,
 	onProcess: ProcessObserver,
-): Promise<AccessibleCandidate[] | null> {
+): Promise<HelperQueryResult> {
 	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
-	if (!runtimeDirectory) return null;
+	if (!runtimeDirectory) return { kind: "unavailable", reason: "runtime directory unavailable" };
 	const helperExecutable = GLib.build_filenamev([runtimeDirectory, helperExecutableName]);
 	const input: AccessibleHelperInput = {
 		coordinateSpace: accessibilityCoordinateSpace,
@@ -305,7 +346,7 @@ async function queryHelper(
 		spawnMark?.end();
 	} catch {
 		spawnMark?.end(false, "failed");
-		return null;
+		return { kind: "unavailable", reason: "helper failed to start" };
 	}
 
 	onProcess(process);
@@ -318,8 +359,10 @@ async function queryHelper(
 		cancellable.cancel();
 		process.force_exit();
 	}
+	let timedOut = false;
 	let timeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, lookupTimeoutMs, () => {
 		timeoutId = 0;
+		timedOut = true;
 		cancellable.cancel();
 		process.force_exit();
 		return GLib.SOURCE_REMOVE;
@@ -332,9 +375,12 @@ async function queryHelper(
 	let helperTimings: AccessibilityHelperOutput["timings"] | null = null;
 	try {
 		const stdout = await readBoundedHelperOutput(process, cancellable);
-		if (!stdout || process.get_successful() === false) return null;
+		if (!stdout || process.get_successful() === false)
+			return { kind: "unavailable", reason: timedOut ? "helper timed out" : "helper failed" };
 		const helperOutput = parseAccessibilityHelperOutput(stdout);
-		if (!helperOutput || helperOutput.complete === false) return null;
+		if (!helperOutput) return { kind: "unavailable", reason: "invalid helper output" };
+		if (helperOutput.complete === false && helperOutput.candidates.length === 0)
+			return { kind: "unavailable", reason: "helper incomplete" };
 		const translated = helperOutput.candidates.map((candidate) => ({
 			...candidate,
 			geometry: {
@@ -346,9 +392,16 @@ async function queryHelper(
 		}));
 		helperTimings = helperOutput.timings;
 		responseSucceeded = true;
-		return translated;
+		return {
+			kind: "candidates",
+			candidates: translated,
+			partial: helperOutput.complete === false,
+		};
 	} catch {
-		return null;
+		return {
+			kind: "unavailable",
+			reason: timedOut ? "helper timed out" : "helper failed",
+		};
 	} finally {
 		responseMark?.end(responseSucceeded, responseSucceeded ? undefined : "failed");
 		if (responseSucceeded && helperTimings)

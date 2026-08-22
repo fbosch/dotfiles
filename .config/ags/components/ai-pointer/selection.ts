@@ -15,6 +15,18 @@ export interface PromptDimensions {
 	width: number;
 }
 
+export function selectionEquals(
+	left: SelectionGeometry | null,
+	right: SelectionGeometry,
+): boolean {
+	return (
+		left?.x === right.x &&
+		left.y === right.y &&
+		left.width === right.width &&
+		left.height === right.height
+	);
+}
+
 export const maximumSelectionPixels = 32_000_000;
 export const clickFallbackSize = 256;
 export const clickTargetMaximumSize = 384;

@@ -1,7 +1,6 @@
 import Gio from "gi://Gio?version=2.0";
-import type { AccessibilityLookupMode } from "./accessibility";
+import type { AccessibilityDebugState, AccessibilityLookupMode } from "./accessibility";
 import type {
-	AccessibilityCandidateDiagnostic,
 	AccessibilityResolution,
 	ProgramMetadata,
 } from "./accessibility/policy";
@@ -49,7 +48,7 @@ export interface AiPointerControllerOptions {
 		stroke: PointerStroke,
 		cancellable: Gio.Cancellable,
 		onProcess: (process: Gio.Subprocess | null) => void,
-		onDiagnostics?: (diagnostics: AccessibilityCandidateDiagnostic[]) => void,
+		onDebugState?: (state: AccessibilityDebugState) => void,
 		mode?: AccessibilityLookupMode,
 	): Promise<AccessibilityResolution | null>;
 }
