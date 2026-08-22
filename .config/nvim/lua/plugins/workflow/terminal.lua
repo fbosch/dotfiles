@@ -113,7 +113,10 @@ require("config.pack.registry").register({
 			local diffnav_instance = nil
 			local diffnav_root = nil
 			usrcmd("FTermDiffnav", function()
-				local root = vim.fs.root(vim.fn.getcwd(), { ".git", ".bare" })
+				local bufpath = vim.api.nvim_buf_get_name(0)
+				bufpath = (bufpath ~= "" and vim.uv.fs_realpath(bufpath)) or bufpath
+				local path = bufpath ~= "" and bufpath or vim.fn.getcwd()
+				local root = vim.fs.root(path, { ".git", ".bare" })
 				if not root then
 					vim.notify("No git repository found", vim.log.levels.WARN)
 					return
