@@ -1,7 +1,6 @@
-import type { StrokeSelectionRegion } from "../stroke";
 import type { AccessibilityCandidateDiagnostic } from "./policy";
 
-export type AccessibilityRegionKind = "click" | StrokeSelectionRegion["kind"];
+export type AccessibilityRegionKind = "box" | "click";
 
 export type AccessibilityDebugState =
 	| { kind: "pending"; regionKind: AccessibilityRegionKind }

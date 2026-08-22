@@ -1,6 +1,6 @@
 ## Purpose
 
-Use locally available accessibility geometry to tighten an AI Pointer capture when one semantic target clearly matches the completed gesture.
+Use locally available accessibility geometry to identify semantic targets inside the stroke-derived capture rectangle and tighten the capture only when the result is unambiguous.
 
 ## Requirements
 
@@ -16,7 +16,7 @@ The AI Pointer SHALL query accessibility data only after an explicit completed g
 - **THEN** the system does not inspect accessibility trees or retain accessible objects
 
 ### Requirement: Fuzzy bounded automatic snapping
-The AI Pointer SHALL replace stroke-derived capture geometry only when visible, showing, non-sensitive accessible targets have eligible semantic roles and the combined padded overlap, center affinity, relative size, and repeated-hit evidence distinguish them from alternatives. A result MAY be one candidate, a repeatedly hit common ancestor, or a bounded collection of distinct candidates. Every candidate and the final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
+The AI Pointer SHALL use the complete stroke only to derive the padded capture rectangle. Accessibility candidate discovery and ranking SHALL use that rectangle as the selection region regardless of whether the stroke is open, closed, concave, or self-intersecting. The system SHALL replace stroke-derived capture geometry only when visible, showing, non-sensitive accessible targets have eligible semantic roles and the combined padded overlap, center affinity, relative size, and repeated-hit evidence distinguish them from alternatives. A result MAY be one candidate, a repeatedly hit common ancestor, or a bounded collection of distinct candidates. Every candidate and the final padded geometry SHALL remain wholly inside the matched active client. It SHALL otherwise preserve the validated stroke geometry.
 
 #### Scenario: One control fuzzily matches the gesture
 - **WHEN** one candidate overlaps the capture-padding tolerance, has compatible area, and its combined geometric score exceeds the confidence and ambiguity thresholds
@@ -26,25 +26,25 @@ The AI Pointer SHALL replace stroke-derived capture geometry only when visible, 
 - **WHEN** an otherwise eligible actionable control is reported as `button` rather than `push button`
 - **THEN** click and stroke targeting treat it with the same actionable priority
 
-#### Scenario: Painted brush crosses a target
-- **WHEN** a bounded centerline or brush-edge sample resolves through an eligible accessible target even though the region grid misses it
-- **THEN** that hit contributes to the same bounded fuzzy ranking policy
+#### Scenario: Target is inside the capture box but away from the stroke
+- **WHEN** an eligible accessible target lies inside the padded stroke-derived rectangle without intersecting the drawn path
+- **THEN** the target participates in the same bounded fuzzy ranking policy
 
 #### Scenario: Candidates are ambiguous
 - **WHEN** multiple geometrically distinct candidates have similar confidence
 - **THEN** the system captures the original stroke-derived geometry
 
-#### Scenario: Gesture covers related targets
-- **WHEN** a closed enclosing gesture resolves through one bounded common ancestor whose geometry confidently matches the gesture
+#### Scenario: Capture box covers related targets
+- **WHEN** the selection rectangle resolves through one bounded common ancestor whose geometry confidently matches the rectangle
 - **THEN** the system captures padded geometry around that common ancestor
 
-#### Scenario: Open stroke crosses distinct targets
-- **WHEN** an open stroke crosses two to eight strong non-overlapping semantic candidates that satisfy the bounded collection rules
+#### Scenario: Capture box contains distinct targets
+- **WHEN** the selection rectangle contains two to eight strong non-overlapping semantic candidates that satisfy the bounded collection rules
 - **THEN** the system captures their padded union instead of selecting their enclosing common ancestor
 
-#### Scenario: Hand-drawn loop overlaps at its closure
-- **WHEN** the final drawn segment overlaps the first segment only within the shared brush footprint and encloses distinct targets
-- **THEN** the system treats the gesture as closed for bounded interior candidate discovery
+#### Scenario: Gesture topology changes inside the same bounds
+- **WHEN** open, closed, concave, or self-intersecting strokes produce the same padded capture rectangle
+- **THEN** accessibility discovery evaluates the same rectangular region
 
 #### Scenario: Gesture intentionally covers multiple distinct targets
 - **WHEN** two to eight strong non-overlapping semantic candidates have centers inside the selection, no clear common ancestor supersedes them, their combined area occupies at least fifteen percent of their bounded union, and that union is no more than five times the selection area

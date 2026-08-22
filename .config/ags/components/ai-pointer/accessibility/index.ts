@@ -24,13 +24,14 @@ import {
 	type SelectionGeometry,
 	validatedSelectionGeometry,
 } from "../selection";
-import { strokeBrushRadius, strokeSelectionRegion, type PointerStroke } from "../stroke";
+import { strokeBrushRadius, type PointerStroke } from "../stroke";
 import { chooseProgramsForSelection, type ProgramWindow } from "../program-policy";
 import {
 	accessibilityHelperTimingMetrics,
 	aiPointerPerformanceMetrics,
 } from "../performance-metrics";
 import type { AccessibilityDebugState, AccessibilityRegionKind } from "./debug-state";
+import { selectionBoxRegion } from "./box-region";
 
 export type { AccessibilityDebugState } from "./debug-state";
 
@@ -102,8 +103,8 @@ export async function resolveAccessibleSelection(
 	mode: AccessibilityLookupMode = "stroke",
 ): Promise<AccessibilityResolution | null> {
 	const clickPoint = mode === "click" ? stroke.points.at(-1) : undefined;
-	const region = clickPoint ? null : strokeSelectionRegion(stroke.points, strokeBrushRadius);
-	const regionKind: AccessibilityRegionKind = clickPoint ? "click" : region!.kind;
+	const region = clickPoint ? null : selectionBoxRegion(selection);
+	const regionKind: AccessibilityRegionKind = clickPoint ? "click" : "box";
 	onDebugState({ kind: "pending", regionKind });
 	const lookupSelection = clickPoint
 		? validatedSelectionGeometry(clickPoint.x, clickPoint.y, 1, 1)

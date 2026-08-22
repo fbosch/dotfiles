@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { chooseAccessibleSnap } from "../policy";
+import { selectionBoxRegion } from "../box-region";
 import { strokeSelectionRegion } from "../../stroke";
 
 const client = { x: 0, y: 0, width: 1_000, height: 800 };
@@ -48,16 +49,10 @@ describe("accessible stroke region selection", () => {
 		expect(result?.geometry).toEqual({ x: 138, y: 128, width: 134, height: 134 });
 	});
 
-	test("selects only targets touched by an open U-shaped corridor", () => {
-		const points = [
-			{ x: 100, y: 100 },
-			{ x: 100, y: 280 },
-			{ x: 200, y: 330 },
-			{ x: 300, y: 280 },
-			{ x: 300, y: 100 },
-		];
+	test("includes targets inside the final box but away from the drawn path", () => {
+		const selection = { x: 68, y: 68, width: 264, height: 294 };
 		const result = chooseAccessibleSnap(
-			{ x: 68, y: 68, width: 264, height: 294 },
+			selection,
 			[
 				{
 					geometry: { x: 90, y: 170, width: 30, height: 30 },
@@ -71,11 +66,15 @@ describe("accessible stroke region selection", () => {
 				},
 			],
 			{ x: 0, y: 0, width: 500, height: 400 },
-			strokeSelectionRegion(points),
+			selectionBoxRegion(selection),
 		);
 
-		expect(result?.metadata.name).toBe("Touched control");
-		expect(result?.geometry).toEqual({ x: 78, y: 158, width: 54, height: 54 });
+		expect(result?.metadata.role).toBe("collection");
+		expect(result?.metadata.targets?.map(({ name }) => name).sort()).toEqual([
+			"Inside the U",
+			"Touched control",
+		]);
+		expect(result?.geometry).toEqual({ x: 78, y: 148, width: 154, height: 64 });
 	});
 
 	test("bundles distinct targets crossed by a line instead of their enclosing ancestor", () => {

@@ -547,11 +547,11 @@
       <div>
         <p class="eyebrow">AI Pointer / behavior study</p>
         <h1>One gesture, five interpretations.</h1>
-        <p class="intro">Explore how an accessibility-aware pointer can distinguish an intentional enclosure from an open stroke without inventing a selection the user never drew.</p>
+        <p class="intro">Compare geometric interpretations of a freehand gesture. Production behavior uses the padded stroke bounds so the visible capture box and accessibility lookup always describe the same area.</p>
       </div>
       <aside class="recommendation">
         <strong>Recommended default</strong>
-        Hybrid closes a confident loop. Every other gesture becomes a thick corridor along the actual pointer path.
+        Derive one padded bounding box from the complete stroke, then find accessible elements inside that box.
       </aside>
     </header>
 
@@ -572,11 +572,11 @@
         <div class="control-group">
           <p class="group-title">Interpretation</p>
           <div class="mode-stack" id="mode-buttons">
-            <button class="mode-button" type="button" data-mode="hybrid" aria-pressed="true"><span class="mode-dot"></span><span>Hybrid</span><span class="recommended-tag">default</span></button>
+            <button class="mode-button" type="button" data-mode="hybrid" aria-pressed="false"><span class="mode-dot"></span><span>Hybrid</span><span></span></button>
             <button class="mode-button" type="button" data-mode="corridor" aria-pressed="false"><span class="mode-dot"></span><span>Corridor</span><span></span></button>
             <button class="mode-button" type="button" data-mode="force-close" aria-pressed="false"><span class="mode-dot"></span><span>Force close</span><span></span></button>
             <button class="mode-button" type="button" data-mode="hull" aria-pressed="false"><span class="mode-dot"></span><span>Convex hull</span><span></span></button>
-            <button class="mode-button" type="button" data-mode="bounds" aria-pressed="false"><span class="mode-dot"></span><span>Bounds</span><span></span></button>
+            <button class="mode-button" type="button" data-mode="bounds" aria-pressed="true"><span class="mode-dot"></span><span>Bounds</span><span class="recommended-tag">default</span></button>
           </div>
         </div>
 
@@ -613,7 +613,7 @@
         <div class="stage-head">
           <div>
             <h2 id="workbench-title">Selection field</h2>
-            <p id="mode-description">Closes a reliable loop; otherwise follows the brush-width path.</p>
+            <p id="mode-description">Uses the final padded capture box for every accessible candidate.</p>
           </div>
           <span class="classification" id="classification">Closed loop</span>
         </div>
@@ -640,24 +640,24 @@
 
       <div class="rules">
         <article class="rule-card">
-          <h3>Hybrid decision path</h3>
+          <h3>Production decision path</h3>
           <ol class="decision-list">
-            <li>Reject click-sized and degenerate paths from shape analysis.</li>
-            <li>Close only when endpoint proximity and path topology make the inferred edge credible.</li>
-            <li>Use polygon containment for a closed loop; use the brush corridor for every open path.</li>
-            <li>Resolve enclosed accessible candidates, then capture their rectangular union.</li>
+            <li>Collect the complete bounded stroke until release.</li>
+            <li>Derive one padded rectangle from the stroke extrema.</li>
+            <li>Find accessible candidates throughout that rectangle, independent of the drawn path.</li>
+            <li>Refine the capture only when the bounded candidate policy finds an unambiguous result.</li>
           </ol>
         </article>
         <article class="rule-card">
           <h3>Expected gesture semantics</h3>
           <table class="behavior-table">
-            <thead><tr><th>Gesture</th><th>Hybrid result</th><th>Reason</th></tr></thead>
+            <thead><tr><th>Gesture</th><th>Production result</th><th>Reason</th></tr></thead>
             <tbody>
-              <tr><td>Near-circle</td><td>Filled enclosure</td><td>The endpoint gap is small and the path is simple.</td></tr>
-              <tr><td>Wide-gap C</td><td>Stroke corridor</td><td>A closing chord would invent a large boundary.</td></tr>
-              <tr><td>U stroke</td><td>Stroke corridor</td><td>The empty center remains intentionally unselected.</td></tr>
-              <tr><td>Crossing line</td><td>Stroke corridor</td><td>Only controls crossed by the gesture are candidates.</td></tr>
-              <tr><td>Scribble</td><td>Stroke corridor</td><td>Self-intersection makes polygon interior ambiguous.</td></tr>
+              <tr><td>Near-circle</td><td>Padded bounds</td><td>The full stroke determines the rectangle.</td></tr>
+              <tr><td>Wide-gap C</td><td>Padded bounds</td><td>The endpoint gap does not change candidate inclusion.</td></tr>
+              <tr><td>U stroke</td><td>Padded bounds</td><td>Elements between the arms remain inside the capture box.</td></tr>
+              <tr><td>Crossing line</td><td>Padded bounds</td><td>Every element in the resulting strip is considered.</td></tr>
+              <tr><td>Scribble</td><td>Padded bounds</td><td>Self-intersection does not change the rectangular lookup region.</td></tr>
             </tbody>
           </table>
         </article>
@@ -672,7 +672,7 @@
       corridor: { title: "Corridor", note: "Never fills an interior. Selects only what the brush traverses." },
       "force-close": { title: "Force close", note: "Always joins the endpoints, even when the new edge is unintended." },
       hull: { title: "Convex hull", note: "Wraps every point and fills concavities the gesture may have avoided." },
-      bounds: { title: "Bounding box", note: "Fast and predictable, but includes every element inside the rectangle." },
+      bounds: { title: "Bounding box", note: "Production behavior: includes every eligible element inside the padded capture rectangle." },
     };
 
     const targets = [
@@ -709,7 +709,7 @@
 
     const state = {
       scenario: "near-loop",
-      mode: "hybrid",
+      mode: "bounds",
       threshold: 56,
       radius: 28,
       inclusion: "center",
@@ -943,7 +943,7 @@
         const region = regionFor(mode, scenario.points, state.threshold, state.radius);
         const selected = targets.filter((target) => targetSelected(region, target, state.inclusion));
         const card = document.createElement("article");
-        card.className = `comparison-card${mode === "hybrid" ? " recommended" : ""}`;
+        card.className = `comparison-card${mode === "bounds" ? " recommended" : ""}`;
         const head = document.createElement("div");
         head.className = "mini-head";
         const title = document.createElement("span");

@@ -24,11 +24,10 @@ import { matchesInputWindowFrame } from "./window-policy";
 import { matchingWindow } from "./window-discovery";
 import {
 	pointInStrokeRegion,
-	representativeStrokePoints,
 	strokeRegionContainsGeometry,
-	strokeSelectionRegion,
 	type StrokeSelectionRegion,
 } from "../stroke";
+import { accessibilitySelectionRegion } from "./box-region";
 
 const maximumAncestorDepth = 32;
 const maximumTraversalDepth = 16;
@@ -38,8 +37,6 @@ const maximumTraversalDurationMs = 350;
 const maximumHitPointTraversalDurationMs = 750;
 const maximumCandidates = 24;
 const maximumHitCount = 24;
-const closedStrokeSampleAnchors = 5;
-const corridorStrokeSampleAnchors = 8;
 const interiorGridDivisions = 4;
 const maximumHitPoints = 24;
 const callTimeoutMs = 100;
@@ -125,35 +122,13 @@ function measure<T>(timing: Timing, operation: () => T): T {
 }
 
 function hitPoints(input: HelperInput, region: StrokeSelectionRegion): HitPoint[] {
-	const { selection, stroke, windowWidth, windowHeight } = input;
+	const { selection, windowWidth, windowHeight } = input;
 	const center = {
-		x: Math.round(selection.x + selection.width / 2),
-		y: Math.round(selection.y + selection.height / 2),
+		x: selection.x + Math.floor(selection.width / 2),
+		y: selection.y + Math.floor(selection.height / 2),
 	};
-	const points: HitPoint[] = pointInStrokeRegion(region, center)
-		? [{ ...center, centerHit: true }]
-		: [];
-	const anchors = representativeStrokePoints(
-		stroke.points,
-		region.kind === "closed" ? closedStrokeSampleAnchors : corridorStrokeSampleAnchors,
-	);
-	for (let index = 0; index < anchors.length; index += 1) {
-		const point = anchors[index];
-		const previous = anchors[Math.max(0, index - 1)];
-		const next = anchors[Math.min(anchors.length - 1, index + 1)];
-		const tangentX = next.x - previous.x;
-		const tangentY = next.y - previous.y;
-		const tangentLength = Math.hypot(tangentX, tangentY);
-		points.push({ centerHit: false, x: Math.round(point.x), y: Math.round(point.y) });
-		if (tangentLength === 0) continue;
-		const normalX = (-tangentY / tangentLength) * stroke.radius;
-		const normalY = (tangentX / tangentLength) * stroke.radius;
-		points.push(
-			{ centerHit: false, x: Math.round(point.x + normalX), y: Math.round(point.y + normalY) },
-			{ centerHit: false, x: Math.round(point.x - normalX), y: Math.round(point.y - normalY) },
-		);
-	}
-	if (region.kind === "closed") {
+	const points: HitPoint[] = [{ ...center, centerHit: true }];
+	if (selection.width > 1 || selection.height > 1) {
 		for (let row = 0; row < interiorGridDivisions; row += 1) {
 			for (let column = 0; column < interiorGridDivisions; column += 1) {
 				const point = {
@@ -188,7 +163,7 @@ function collectCandidates(
 	timings: HelperTimings,
 ): CandidateCollection {
 	const candidates = new Map<string, Candidate>();
-	const region = strokeSelectionRegion(input.stroke.points, input.stroke.radius);
+	const region = accessibilitySelectionRegion(input.selection, input.stroke);
 	let component: Atspi.Component;
 	try {
 		component = window.get_component_iface();

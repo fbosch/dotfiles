@@ -148,7 +148,7 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 			null,
 			{
 				kind: "evaluated",
-				regionKind: "closed",
+				regionKind: "box",
 				candidateCount: 24,
 				partial: true,
 				diagnostics: [
@@ -172,7 +172,7 @@ test("AI Pointer stroke overlay maps, redraws, and disposes", async () => {
 	overlay.setSelectionFill(true);
 	overlay.setSelectionDebugState({
 		kind: "unavailable",
-		regionKind: "corridor",
+		regionKind: "box",
 		reason: "helper incomplete",
 	});
 	await settleMainLoop();
@@ -554,7 +554,7 @@ previewArgumentCount = args.length;
 			resolvedAccessibility = true;
 			onDebugState?.({
 				kind: "evaluated",
-				regionKind: "closed",
+				regionKind: "box",
 				candidateCount: 1,
 				partial: false,
 				diagnostics: [

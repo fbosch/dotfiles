@@ -84,7 +84,7 @@ Alternative considered: terminate Bun immediately on Escape. Rejected because it
 
 Hyprland binds `Super + middle-button` press and release to Lua callbacks. Each callback reads the compositor cursor position synchronously at the input event, rounds it to a global pixel coordinate, and sends it to AGS in a separate request. Between those events, the AGS drawing overlay samples the compositor cursor and records one bounded global stroke. The cursor outline remains enabled while the selector, composition prompt, request, answer, or failure surface is visible and is disabled only when the workflow is cancelled, torn down, or returns to idle. If process scheduling delivers release before press, AGS holds the release coordinate briefly until the matching start request arrives.
 
-AGS derives padded bounds from a valid corridor or closed stroke. A stroke too short to establish bounds enters click mode and uses a bounded monitor-local target fallback. Local accessibility lookup may refine either rectangle; failure leaves the stroke or click geometry unchanged. A resolved capture is an exact-window candidate only when exactly one client in a fresh snapshot has identical global geometry.
+AGS derives padded rectangular bounds from the complete stroke. A stroke too short to establish bounds enters click mode and uses a bounded monitor-local target fallback. Drag accessibility lookup discovers candidates throughout the padded rectangle rather than along the original stroke path; click lookup remains point-based. Local accessibility lookup may refine either rectangle, while failure leaves the stroke or click geometry unchanged. A resolved capture is an exact-window candidate only when exactly one client in a fresh snapshot has identical global geometry.
 
 After release and optional local refinement, AGS validates signed global X/Y origins, positive dimensions, and maximum pixel area. It calls `grim` with the final geometry and captures PNG directly into private runtime storage.
 
@@ -92,7 +92,7 @@ Alternative considered: use `slurp`. Rejected because a Hyprland binding consume
 
 Alternative considered: use `grimblast save area`. Rejected because it owns selection internally and does not expose the geometry needed for contextual matching.
 
-Alternative considered: derive a rectangle only from press and release coordinates. Rejected because it removes the established freehand stroke interaction, padded corridor/closed-shape targeting, and bounded click behavior.
+Alternative considered: derive a rectangle only from press and release coordinates. Rejected because extrema from the complete freehand stroke produce more predictable bounds for loops and curved gestures.
 
 ### Hyprland context is a bounded snapshot, not target certainty
 
