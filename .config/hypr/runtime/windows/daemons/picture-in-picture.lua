@@ -27,6 +27,7 @@ local dragging_address = nil
 local drag_source = nil
 local client_drag_settle_at = nil
 local pip_geometries = {}
+local expected_pip_positions = {}
 local next_pip_observation_at = 0
 local preview_signature = nil
 local resize_anchor = nil
@@ -185,8 +186,12 @@ local function observe_client_drag()
 			local address = window.address
 			local position, size = pip_geometry(window)
 			local previous = pip_geometries[address]
+			local expected_position = expected_pip_positions[address]
 			seen[address] = true
-			if previous and previous.position ~= position and previous.size == size then
+			if expected_position == position then
+				expected_pip_positions[address] = nil
+			elseif previous and previous.position ~= position and previous.size == size then
+				expected_pip_positions[address] = nil
 				moved_address = moved_address or address
 			end
 			pip_geometries[address] = { position = position, size = size }
@@ -196,6 +201,7 @@ local function observe_client_drag()
 	for address in pairs(pip_geometries) do
 		if seen[address] == nil then
 			pip_geometries[address] = nil
+			expected_pip_positions[address] = nil
 		end
 	end
 
@@ -244,6 +250,8 @@ local function move_window(window, x, y)
 		return
 	end
 
+	expected_pip_positions[window.address] =
+		string.format("%s:%s:%s", tostring(window.monitor), tostring(x), tostring(y))
 	request(
 		string.format(
 			"dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })",

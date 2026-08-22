@@ -65,13 +65,14 @@ excludes clients whose initial title is `File Operations` or `Preparing`. The
 generated rule expresses that exclusion as Hyprland's `negative:(...)` matcher.
 
 `persist_tags` is an ordered allowlist of dynamic client tags to retain. The
-first matching tag is stored as metadata and restored as a separate dynamic tag
-rule. This keeps transient and policy tags out of persisted state by default,
-and supports mutually exclusive states such as PiP corners.
+first matching tag is stored as metadata. This keeps transient and policy tags
+out of persisted state by default, and supports mutually exclusive states such
+as PiP corners.
 
 `persist_tag_animations` optionally maps allowed tags to entry animations. The
-animation is emitted beside the restored tag, so it is available when the
-window is created rather than after a dynamic tag update.
+animation is emitted into a separate generated rule, so it is available when
+the window is created without forcing a dynamic tag that would interfere with
+later tag transitions.
 
 State is per monitor by default. Set `per_monitor = false` for one
 monitor-local geometry rule that can restore on any monitor; use this for

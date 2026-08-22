@@ -5,12 +5,12 @@ local M = {
 	overlap_gap = 15,
 	snap_vicinity = 100,
 	rounding = 8,
-	default_animation = "slide left",
+	default_animation = "slide right",
 	corners = {
-		["top-left"] = { tag = "pip-top-left", animation = "slide right" },
-		["top-right"] = { tag = "pip-top-right", animation = "slide left" },
-		["bottom-left"] = { tag = "pip-bottom-left", animation = "slide right" },
-		["bottom-right"] = { tag = "pip-bottom-right", animation = "slide left" },
+		["top-left"] = { tag = "pip-top-left", animation = "slide left" },
+		["top-right"] = { tag = "pip-top-right", animation = "slide right" },
+		["bottom-left"] = { tag = "pip-bottom-left", animation = "slide left" },
+		["bottom-right"] = { tag = "pip-bottom-right", animation = "slide right" },
 	},
 }
 

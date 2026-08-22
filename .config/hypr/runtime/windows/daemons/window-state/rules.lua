@@ -347,22 +347,21 @@ local function render_rules(cache, selectors_path, selectors)
 
 			for _, tag in ipairs(tags) do
 				local animation = selector.persist_tag_animations and selector.persist_tag_animations[tag]
-				append_rule_identity(
-					lines,
-					entry,
-					rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":tag:" .. tag
-				)
-				append_match(lines, entry, selector, lua_match_key)
-				lines[#lines + 1] = "    effects = {"
-				lines[#lines + 1] = "      tag = " .. json.encode("+" .. tag) .. ","
 				if animation then
+					append_rule_identity(
+						lines,
+						entry,
+						rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":animation:" .. tag
+					)
+					append_match(lines, entry, selector, lua_match_key)
+					lines[#lines + 1] = "    effects = {"
 					lines[#lines + 1] = "      animation = " .. json.encode(animation) .. ","
+					lines[#lines + 1] = "    },"
+					lines[#lines + 1] = '    source = "window-state",'
+					lines[#lines + 1] = "    comment = " .. json.encode(comment .. " animation " .. tag) .. ","
+					lines[#lines + 1] = "  },"
+					lines[#lines + 1] = ""
 				end
-				lines[#lines + 1] = "    },"
-				lines[#lines + 1] = '    source = "window-state",'
-				lines[#lines + 1] = "    comment = " .. json.encode(comment .. " tag " .. tag) .. ","
-				lines[#lines + 1] = "  },"
-				lines[#lines + 1] = ""
 			end
 		end
 	end

@@ -9,7 +9,7 @@ hl.config({
 			enabled = true,
 			thickness = 1,
 			inset = 0,
-			active_color = "rgba(ffffff33)",
+			active_color = "rgba(ffffff66)",
 			inactive_color = "rgba(ffffff33)",
 		},
 	},

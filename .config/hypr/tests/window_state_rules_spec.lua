@@ -150,7 +150,7 @@ describe("window-state rules", function()
 		assert_contains(content, 'class = "Test.+",')
 	end)
 
-	it("renders the first matching opted-in tag as a separate rule", function()
+	it("renders the first matching opted-in tag's entry animation", function()
 		options.cache = {
 			pip = {
 				matcher = "match:initial_title",
@@ -168,16 +168,15 @@ describe("window-state rules", function()
 				matcher = "match:initial_title",
 				pattern = "^Picture-in-Picture$",
 				persist_tags = { "pip-top-left", "pip-top-right" },
-				persist_tag_animations = { ["pip-top-left"] = "slide right" },
+				persist_tag_animations = { ["pip-top-left"] = "slide left" },
 			},
 		}
 		assert.is_true(rules.write_rules_file(options))
 
 		local content = read_file(options.rules_lua_file)
 		assert_contains(content, 'tags = { "pip-top-left" },')
-		assert_contains(content, 'tag = "+pip-top-left",')
-		assert_contains(content, 'animation = "slide right",')
-		assert_not_contains(content, 'tag = "+pip-top-right",')
+		assert_contains(content, 'animation = "slide left",')
+		assert_not_contains(content, "tag =")
 		assert_not_contains(content, "unrelated")
 
 		local cache = rules.load_rules_cache(options.rules_lua_file)
