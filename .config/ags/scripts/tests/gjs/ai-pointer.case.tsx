@@ -195,8 +195,8 @@ showPrompt() {
 		await settleMainLoop();
 		assert(captured === "-22,-12 84x84", "release-first stroke geometry was not captured");
 		assert(
-			cursorOutlineStates.join(",") === "false,true,false,false",
-			"cursor outline disable failure was not retried after drawing",
+			cursorOutlineStates.join(",") === "false,true",
+			"cursor outline did not persist while the question prompt was active",
 		);
 	} finally {
 		controller.teardown();
@@ -298,8 +298,9 @@ showPrompt() {
 	}
 });
 
-test("AI Pointer keeps drawing visible during resolution and removes it before capture", async () => {
+test("AI Pointer clears drawing on release and unmaps the highlight before capture", async () => {
 	let captured = false;
+	let drawingEnded = false;
 	let preparingShown = false;
 	let finishAccessibility: (() => void) | null = null;
 	let confirmHidden: ((hidden: boolean) => void) | null = null;
@@ -309,7 +310,7 @@ test("AI Pointer keeps drawing visible during resolution and removes it before c
 			return true;
 		},
 		updateStroke() {},
-		endStroke() {},
+		endStroke() { drawingEnded = true; },
 		finishStroke() {
 			return new Promise<boolean>((resolve) => {
 				confirmHidden = resolve;
@@ -352,15 +353,16 @@ test("AI Pointer keeps drawing visible during resolution and removes it before c
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
 		await settleMainLoop();
 		assert(preparingShown, "question input waited for target resolution");
-		assert(confirmHidden === null, "drawing was removed while target resolution was pending");
+		assert(drawingEnded, "drawing remained visible after release");
+		assert(confirmHidden === null, "highlight teardown started before target resolution completed");
 		assert(captured === false, "capture started while the drawing was still mapped");
 		assert(finishAccessibility !== null, "target resolution did not start");
 		finishAccessibility();
 		await settleMainLoop();
-		assert(confirmHidden !== null, "drawing teardown was not requested");
+		assert(confirmHidden !== null, "highlight teardown was not requested");
 		confirmHidden(true);
 		await settleMainLoop();
-		assert(captured, "capture did not start after the drawing was removed");
+		assert(captured, "capture did not start after the highlight was removed");
 	} finally {
 		controller.teardown();
 	}

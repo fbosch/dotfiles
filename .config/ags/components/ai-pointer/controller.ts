@@ -46,6 +46,9 @@ export class AiPointerController {
 	#actor: AiPointerActor | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
 	#shutdownSignalId = 0;
+	#preflightCancellable: Gio.Cancellable | null = null;
+	#preflightProcess: Gio.Subprocess | null = null;
+	#preflightPromise: ReturnType<typeof runSelectionPreflight> | null = null;
 	#cancellable: Gio.Cancellable | null = null;
 	#process: Gio.Subprocess | null = null;
 	#ocrStartId = 0;
@@ -65,6 +68,7 @@ export class AiPointerController {
 	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
 	#finishing = false;
+	#preparingShown = false;
 	#runId = 0;
 	#workflowMark: ReturnType<typeof perf.start> | null = null;
 	#cursorOutlineState: boolean | null = null;
@@ -173,6 +177,7 @@ export class AiPointerController {
 		this.#answer = "";
 		this.#answerTruncated = false;
 		this.#finishing = false;
+		this.#preparingShown = false;
 		++this.#runId;
 		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
 		this.#pendingFinishId = 0;
@@ -184,27 +189,16 @@ export class AiPointerController {
 			return true;
 		}
 		this.#setCursorOutlineState(true);
+		this.#startPreflight(this.#runId);
 		if (this.#pendingFinish) {
 			const endPosition = this.#pendingFinish;
 			this.#pendingFinish = null;
 			this.finish(endPosition);
 		}
-		this.#startPreflight(this.#runId);
 		return true;
 	}
 
 	finish(endPosition: PointerPosition): boolean {
-		if (this.#actor?.getSnapshot().matches("preflighting")) {
-			if (this.#pendingFinish) return false;
-			if (this.#stroke) {
-				this.#stroke = appendStrokePoint(this.#stroke, endPosition, true);
-				this.#view.updateStroke(this.#stroke);
-			}
-			this.#setCursorOutlineState(false);
-			this.#finishing = true;
-			this.#pendingFinish = endPosition;
-			return true;
-		}
 		if (this.#actor?.getSnapshot().matches("selecting") && this.#finishing === false) {
 			this.#captureAt(endPosition);
 			return true;
@@ -224,33 +218,22 @@ export class AiPointerController {
 	#startPreflight(runId: number): void {
 		const cancellable = new Gio.Cancellable();
 		let observedProcess: Gio.Subprocess | null = null;
-		this.#cancellable = cancellable;
-		void runSelectionPreflight(this.#preflight, cancellable, (process) => {
+		this.#preflightCancellable = cancellable;
+		const promise = runSelectionPreflight(this.#preflight, cancellable, (process) => {
 			if (process) observedProcess = process;
 			if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
-			if (runId === this.#runId) this.#process = process;
-		}).then((result) => {
-			if (runId !== this.#runId || cancellable.is_cancelled()) return;
-			this.#cancellable = null;
-			this.#process = null;
-			if (result.kind === "failed") {
-				this.#setCursorOutlineState(false);
-				this.#view.endStroke();
-				this.#failureMessage = result.message;
-				this.#actor?.send({ type: "FAIL" });
-				return;
-			}
-			this.#actor?.send({ type: "READY" });
-			if (!this.#pendingFinish) return;
-			const endPosition = this.#pendingFinish;
-			this.#clearPendingFinish();
-			this.#captureAt(endPosition);
+			if (runId === this.#runId) this.#preflightProcess = process;
+		});
+		this.#preflightPromise = promise;
+		void promise.finally(() => {
+			if (runId !== this.#runId) return;
+			this.#preflightCancellable = null;
+			this.#preflightProcess = null;
 		});
 	}
 
 	#captureAt(endPosition: PointerPosition): void {
 		if (this.#actor?.getSnapshot().matches("selecting") === false) return;
-		this.#setCursorOutlineState(false);
 		const directory = this.#directory;
 		const stroke = this.#stroke;
 		if (!stroke || !directory) {
@@ -275,7 +258,8 @@ export class AiPointerController {
 		this.#workflowMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
 			: null;
-		this.#view.showPreparing?.(geometry);
+		this.#view.endStroke();
+		this.#showPreparing(endPosition);
 		this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 	}
 
@@ -419,10 +403,15 @@ export class AiPointerController {
 		this.#stopOcr();
 		this.#lockMonitor.stop();
 		if (this.#answerProcess) this.#terminatingProcesses.add(this.#answerProcess);
+		if (this.#preflightProcess) this.#terminatingProcesses.add(this.#preflightProcess);
 		if (this.#process) this.#terminatingProcesses.add(this.#process);
 		this.#answerCancellable?.cancel();
 		this.#answerCancellable = null;
 		this.#answerProcess = null;
+		this.#preflightCancellable?.cancel();
+		this.#preflightCancellable = null;
+		this.#preflightProcess = null;
+		this.#preflightPromise = null;
 		this.#cancellable?.cancel();
 		this.#cancellable = null;
 		this.#process = null;
@@ -432,6 +421,7 @@ export class AiPointerController {
 		this.#answer = "";
 		this.#answerTruncated = false;
 		this.#finishing = false;
+		this.#preparingShown = false;
 		this.#view.endStroke();
 		this.#clearPendingFinish();
 		if (this.#capture) deleteCapture(this.#capture.path);
@@ -442,6 +432,7 @@ export class AiPointerController {
 	teardown(force = false): void {
 		const pendingCapturePath = this.#pendingCapturePath;
 		const processes = new Set(this.#terminatingProcesses);
+		if (this.#preflightProcess) processes.add(this.#preflightProcess);
 		if (this.#process) processes.add(this.#process);
 		if (this.#answerProcess) processes.add(this.#answerProcess);
 		this.cancel();
@@ -477,25 +468,31 @@ export class AiPointerController {
 		}
 
 		const runId = this.#runId;
+		const preflight = this.#preflightPromise;
+		if (!preflight) return;
 		const cancellable = new Gio.Cancellable();
 		let observedProcess: Gio.Subprocess | null = null;
 		this.#stopOcr();
 		this.#answerCancellable = cancellable;
 		this.#actor.send({ type: "SUBMIT" });
-		void this.#requestAnswer(
-			{
-				requestId: `ai-pointer-${runId}`,
-				prompt: `${prompt}\n\n${formatSelectionContext(context)}`,
-				attachment: { path: capture.path, sha256: capture.sha256 },
-				timeoutSeconds: 60,
-			},
-			cancellable,
-			(process) => {
-				if (process) observedProcess = process;
-				if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
-				if (runId === this.#runId) this.#answerProcess = process;
-			},
-		).then((result) => {
+		void (async () => {
+			const readiness = await preflight;
+			if (readiness.kind === "failed") return readiness;
+			return await this.#requestAnswer(
+				{
+					requestId: `ai-pointer-${runId}`,
+					prompt: `${prompt}\n\n${formatSelectionContext(context)}`,
+					attachment: { path: capture.path, sha256: capture.sha256 },
+					timeoutSeconds: 60,
+				},
+				cancellable,
+				(process) => {
+					if (process) observedProcess = process;
+					if (!process && observedProcess) this.#terminatingProcesses.delete(observedProcess);
+					if (runId === this.#runId) this.#answerProcess = process;
+				},
+			);
+		})().then((result) => {
 			if (runId !== this.#runId || cancellable.is_cancelled()) return;
 			this.#answerCancellable = null;
 			this.#answerProcess = null;
@@ -608,10 +605,20 @@ export class AiPointerController {
 	#sampleStroke(): void {
 		if (this.#finishing) return;
 		const snapshot = this.#actor?.getSnapshot();
-		if (snapshot?.matches("preflighting") !== true && snapshot?.matches("selecting") !== true) return;
+		if (snapshot?.matches("selecting") !== true) return;
 		const point = this.#readPointer();
 		if (!point || !this.#stroke) return;
 		this.#stroke = appendStrokePoint(this.#stroke, point);
 		this.#view.updateStroke(this.#stroke);
+	}
+
+	#showPreparing(endPosition: PointerPosition): void {
+		if (this.#preparingShown) return;
+		const stroke = this.#stroke;
+		if (!stroke) return;
+		const geometry = selectionFromStroke(stroke) ?? this.#resolveClickGeometry(endPosition);
+		if (!geometry) return;
+		this.#view.showPreparing?.(geometry);
+		this.#preparingShown = true;
 	}
 }

@@ -5,7 +5,7 @@ Let a user explicitly draw over a desktop region, ask a short question about tha
 ## ADDED Requirements
 
 ### Requirement: Explicit single-run selection workflow
-The AI Pointer SHALL start only through an explicit user activation. It SHALL allow one active workflow at a time and provide stroke selection, composition, requesting, answer, failure, and cancellation states. A second activation while a workflow is active MUST NOT start another selector.
+The AI Pointer SHALL start only through an explicit user activation. It SHALL allow one active workflow at a time and provide stroke selection, composition, requesting, answer, failure, and cancellation states. A second activation while a workflow is active MUST NOT start another selector. The cursor outline effect SHALL remain active for the full visible workflow and be removed on cancellation, teardown, or return to idle.
 
 #### Scenario: User starts a selection
 - **WHEN** the user triggers the AI Pointer binding while it is idle
@@ -16,7 +16,7 @@ The AI Pointer SHALL start only through an explicit user activation. It SHALL al
 - **THEN** the system preserves the existing workflow and does not start a second selector
 
 ### Requirement: Stroke selection and question prompt
-The AI Pointer SHALL sample the pointer path while the user holds `Super + middle-button`, derive a bounded capture rectangle from the completed stroke, and show a compact question prompt immediately after release. The prompt SHALL accept text while local target resolution and capture finish, but submission MUST remain disabled until the private capture is validated. A short stroke SHALL use the bounded local click-target fallback. Local accessibility resolution MAY refine the capture rectangle, but the captured and submitted attachment MUST use the same final geometry and bytes. The completed drawing and a provisional geometry highlight SHALL remain visible during local target resolution, then be removed immediately before capture. A geometry-only selection overlay SHALL mark the final captured area while the prompt is active. The prompt MUST NOT replay the selected image or application context. Cancelling selection MUST return to idle without a request.
+The AI Pointer SHALL sample the pointer path while the user holds `Super + middle-button`, derive a bounded capture rectangle from the completed stroke, and show a compact question prompt immediately after release. The completed drawing SHALL be cleared on release and replaced by a provisional geometry highlight. The prompt SHALL accept text while local target resolution and capture finish, but submission MUST remain disabled until the private capture is validated. Backend readiness MUST NOT delay drawing cleanup, capture, or prompt rendering; a submission made before readiness completes SHALL wait for readiness before contacting the answer backend. A short stroke SHALL use the bounded local click-target fallback. Local accessibility resolution MAY refine the capture rectangle, but the captured and submitted attachment MUST use the same final geometry and bytes. The provisional highlight SHALL be removed immediately before capture. A geometry-only selection overlay SHALL mark the final captured area while the prompt is active. The prompt MUST NOT replay the selected image or application context. Cancelling selection MUST return to idle without a request.
 
 #### Scenario: User selects a region
 - **WHEN** the user completes a stroke whose derived or locally refined rectangle has valid positive dimensions within the configured capture limit

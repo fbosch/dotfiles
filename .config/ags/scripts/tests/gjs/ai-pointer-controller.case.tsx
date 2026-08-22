@@ -54,7 +54,7 @@ test("AI Pointer rejects missing and malformed preflight helpers", async () => {
 	}
 });
 
-test("AI Pointer preflight failure stops selection before capture", async () => {
+test("AI Pointer preflight failure does not block selection rendering", async () => {
 	let selections = 0;
 	let selectionEnds = 0;
 	let captures = 0;
@@ -81,9 +81,9 @@ test("AI Pointer preflight failure stops selection before capture", async () => 
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		await settleMainLoop();
 		assert(selections === 1, "selection did not start while readiness ran");
-		assert(selectionEnds >= 1, "selection remained active after readiness failed");
-		assert(captures === 0, "capture started after readiness failed");
-		assert(failure === "The configured answer service is unavailable.", "readiness failure was not shown");
+		assert(selectionEnds === 0, "readiness failure removed the active selector");
+		assert(captures === 0, "capture started without a release");
+		assert(failure === "", "readiness failure was shown before submission");
 	} finally {
 		controller.teardown();
 	}
@@ -143,7 +143,7 @@ test("AI Pointer cancellation remains available after release during preflight",
 	try {
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
-		assert(selectionEnds === 0, "selector surface was removed before readiness completed");
+		assert(selectionEnds >= 1, "drawing remained visible after release");
 		assert(cancel !== null, "cancel handler was unavailable");
 		cancel();
 		await settleMainLoop();
@@ -159,13 +159,15 @@ test("AI Pointer samples the stroke while preflight is pending", async () => {
 	let resolvePreflight: (() => void) | null = null;
 	let captureGeometry = "";
 	let hides = 0;
+	let preparingCalls = 0;
 	const pointer = { x: 200, y: 100 };
 	const view = {
 		create() {},
 		beginStroke(_stroke, onFrame: () => void) { frame = onFrame; return true; },
 		updateStroke() {}, endStroke() {},
 		finishStroke() { return Promise.resolve(true); },
-showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
+		showPreparing() { preparingCalls += 1; },
+		showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() { hides += 1; }, dispose() {},
 	} as unknown as AiPointerView;
 	const controller = new AiPointerController({
@@ -195,6 +197,7 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		assert(frame !== null, "stroke sampling did not start with preflight");
 		frame();
 		assert(controller.finish({ x: 30, y: 40 }), "finish request was rejected");
+		assert(preparingCalls === 1, "question input waited for preflight readiness");
 		assert(resolvePreflight !== null, "preflight did not start");
 		resolvePreflight();
 		await settleMainLoop(); await settleMainLoop(); await settleMainLoop();
@@ -276,6 +279,7 @@ test("AI Pointer submits the reviewed capture and presents a literal answer", as
 	let answer = "";
 	let requestPrompt = "";
 	let requestDigest = "";
+	let resolvePreflight: (() => void) | null = null;
 	const view = {
 		create(handlers: AiPointerViewHandlers) { submit = handlers.onSubmit; },
 		beginStroke() { return true; }, updateStroke() {}, endStroke() {},
@@ -286,7 +290,12 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		setOcrState() {}, clearOcr() {}, showError() {}, hide() {}, dispose() {},
 	} as unknown as AiPointerView;
 	const controller = new AiPointerController({
-		view, prepareDirectory: () => "/run/user/1000/ai-pointer", preflight: readyPreflight, readPointer: () => null,
+		view,
+		prepareDirectory: () => "/run/user/1000/ai-pointer",
+		preflight: () => new Promise((resolve) => {
+			resolvePreflight = () => resolve({ kind: "ready" });
+		}),
+		readPointer: () => null,
 		queryLocked: () => false, resolveAccessibility: async () => null,
 		resolveContext: (geometry) => emptySelectionContext(geometry), resolvePrograms: () => [],
 		recognizeOcr: async () => ({ kind: "no-text" }),
@@ -309,6 +318,10 @@ showPrompt() { return { pixelHeight: 20, pixelWidth: 20 }; },
 		submit("What is shown?");
 		await settleMainLoop();
 		assert(requesting, "request state was not presented");
+		assert(requestPrompt === "", "answer request started before backend readiness");
+		assert(resolvePreflight !== null, "backend preflight did not start");
+		resolvePreflight();
+		await settleMainLoop();
 		assert(requestPrompt.includes("What is shown?"), "typed question was not submitted");
 		assert(requestPrompt.includes("Desktop selection context"), "reviewed context was not submitted");
 		assert(requestDigest === "b".repeat(64), "reviewed capture digest was not submitted");

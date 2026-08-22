@@ -6,9 +6,6 @@ describe("aiPointerMachine", () => {
 	test("moves through selection, composition, request, and answer", () => {
 		const actor = createActor(aiPointerMachine).start();
 		actor.send({ type: "START" });
-		expect(actor.getSnapshot().matches("preflighting")).toBe(true);
-		expect(actor.getSnapshot().hasTag("selector-active")).toBe(true);
-		actor.send({ type: "READY" });
 		expect(actor.getSnapshot().matches("selecting")).toBe(true);
 		expect(actor.getSnapshot().hasTag("selector-active")).toBe(true);
 		actor.send({ type: "CAPTURED" });
@@ -25,10 +22,9 @@ describe("aiPointerMachine", () => {
 	test("supports cancellation and failure from every active phase", () => {
 		for (const events of [
 			[{ type: "START" }],
-			[{ type: "START" }, { type: "READY" }],
-			[{ type: "START" }, { type: "READY" }, { type: "CAPTURED" }],
-			[{ type: "START" }, { type: "READY" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
-			[{ type: "START" }, { type: "READY" }, { type: "CAPTURED" }, { type: "SUBMIT" }, { type: "ANSWERED" }],
+			[{ type: "START" }, { type: "CAPTURED" }],
+			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
+			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }, { type: "ANSWERED" }],
 		] as const) {
 			const actor = createActor(aiPointerMachine).start();
 			for (const event of events) actor.send(event);
@@ -39,9 +35,8 @@ describe("aiPointerMachine", () => {
 
 		for (const events of [
 			[{ type: "START" }],
-			[{ type: "START" }, { type: "READY" }],
-			[{ type: "START" }, { type: "READY" }, { type: "CAPTURED" }],
-			[{ type: "START" }, { type: "READY" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
+			[{ type: "START" }, { type: "CAPTURED" }],
+			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
 		] as const) {
 			const actor = createActor(aiPointerMachine).start();
 			for (const event of events) actor.send(event);
@@ -57,7 +52,7 @@ describe("aiPointerMachine", () => {
 		const actor = createActor(aiPointerMachine).start();
 		actor.send({ type: "START" });
 		actor.send({ type: "START" });
-		expect(actor.getSnapshot().matches("preflighting")).toBe(true);
+		expect(actor.getSnapshot().matches("selecting")).toBe(true);
 		actor.stop();
 	});
 });
