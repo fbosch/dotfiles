@@ -69,12 +69,12 @@ export class PreviewCache {
 		return null;
 	}
 
-	getInfo(path: string | null): PreviewInfo {
+	getInfo(path: string | null, size?: WindowInfo["size"]): PreviewInfo {
     const mark = perf.start("window-switcher", "getPreviewInfo");
-    if (!path)
+		if (!path)
 		return finishPreviewInfo(mark, {
 				mtime: 0,
-				...fallbackPreviewDimensions,
+				...fallbackPreviewDimensions(size),
 			});
 
 		try {
@@ -93,7 +93,7 @@ export class PreviewCache {
 			if (!success || !contents)
         return finishPreviewInfo(mark, {
 					mtime,
-					...fallbackPreviewDimensions,
+					...fallbackPreviewDimensions(size),
 				});
 
 			const stream = Gio.MemoryInputStream.new_from_bytes(
@@ -103,7 +103,7 @@ export class PreviewCache {
 			if (!pixbuf)
         return finishPreviewInfo(mark, {
 					mtime,
-					...fallbackPreviewDimensions,
+					...fallbackPreviewDimensions(size),
 				});
 
 			const dimensions = scaledPreviewDimensions(
@@ -126,7 +126,7 @@ export class PreviewCache {
 		} catch (error) {
 			console.error("Failed to get preview info:", error);
 			mark.end(false, String(error));
-			return { mtime: 0, ...fallbackPreviewDimensions };
+			return { mtime: 0, ...fallbackPreviewDimensions(size) };
 		}
 	}
 

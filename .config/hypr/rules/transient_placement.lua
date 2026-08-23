@@ -2,6 +2,12 @@ local M = {}
 
 -- Add children under the class of the window that opens them.
 local child_classes_by_parent_class = {
+	["app.zen_browser.zen"] = {
+		"app.zen_browser.zen-popup",
+	},
+	helium = {
+		"helium-popup",
+	},
 	nemo = {
 		"zenity",
 		"org.gnome.FileRoller",

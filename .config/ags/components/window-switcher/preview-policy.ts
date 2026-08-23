@@ -2,10 +2,15 @@ const previewHeight = 180;
 const previewMaxWidth = 320;
 const previewMinWidth = 30;
 
-export const fallbackPreviewDimensions = {
-	width: previewMinWidth,
-	height: previewHeight,
-};
+export function fallbackPreviewDimensions(size?: {
+	width: number;
+	height: number;
+}): { width: number; height: number } {
+	if (!size || size.width <= 0 || size.height <= 0)
+		return { width: previewMinWidth, height: previewHeight };
+
+	return scaledPreviewDimensions(size.width, size.height);
+}
 
 export function scaledPreviewDimensions(
 	imageWidth: number,

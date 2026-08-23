@@ -17,7 +17,18 @@ describe("scaledPreviewDimensions", () => {
 		expect(scaledPreviewDimensions(1, 100)).toEqual({ width: 30, height: 180 });
 	});
 
-	test("exports the fallback dimensions", () => {
-		expect(fallbackPreviewDimensions).toEqual({ width: 30, height: 180 });
+	test("uses the window proportions for image-less previews", () => {
+		expect(fallbackPreviewDimensions({ width: 1920, height: 1080 })).toEqual({
+			width: 320,
+			height: 180,
+		});
+		expect(fallbackPreviewDimensions({ width: 900, height: 1600 })).toEqual({
+			width: 101,
+			height: 180,
+		});
+	});
+
+	test("uses default dimensions when window geometry is unavailable", () => {
+		expect(fallbackPreviewDimensions()).toEqual({ width: 30, height: 180 });
 	});
 });

@@ -102,6 +102,12 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 -- XDG Desktop Portal GTK (File Picker)
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
+-- Zen Browser
+hl.window_rule({ match = { class = "^(app\\.zen_browser\\.zen-popup)$" }, float = true })
+
+-- Helium Browser
+hl.window_rule({ match = { class = "^(helium-popup)$" }, float = true })
+
 -- Floorp Browser
 hl.window_rule({
 	match = { class = "^(one\\.ablaze\\.floorp)$" },

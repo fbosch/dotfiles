@@ -173,7 +173,7 @@ export class WindowSwitcherView {
 			const widgets = this.#previewWidgets.get(window.address);
 			if (!widgets) continue;
 			const path = this.previews.getPath(window);
-			const info = this.previews.getInfo(path);
+			const info = this.previews.getInfo(path, window.size);
 			if (widgets.path === path && widgets.mtime === info.mtime) continue;
 
 			widgets.path = path;
@@ -520,7 +520,7 @@ export class WindowSwitcherView {
 
 	#resolvePreview(window: WindowInfo): ResolvedPreview {
 		const path = this.previews.getPath(window);
-		return { path, info: this.previews.getInfo(path) };
+		return { path, info: this.previews.getInfo(path, window.size) };
 	}
 
 	#updateSelection(session: Session): void {

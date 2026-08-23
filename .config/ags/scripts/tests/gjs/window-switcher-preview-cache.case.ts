@@ -19,8 +19,11 @@ test("Window Switcher decodes and caches preview textures", () => {
 
 	try {
 		const cache = new PreviewCache(() => {});
-		const fallback = cache.getInfo(null);
-		assert(fallback.width === 30 && fallback.height === 180, "fallback dimensions changed");
+		const fallback = cache.getInfo(null, { width: 1920, height: 1080 });
+		assert(
+			fallback.width === 320 && fallback.height === 180,
+			"fallback dimensions did not preserve window proportions",
+		);
 		const decoded = cache.getInfo(fixturePath);
     assert(decoded.texture !== undefined, "decoded preview has no texture");
     assert(
