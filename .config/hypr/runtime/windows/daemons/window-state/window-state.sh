@@ -10,7 +10,10 @@ if [[ -z "${WINDOW_STATE_IDLE_SCHED:-}" ]]; then
     fi
 fi
 
-LOCK_FILE="${XDG_RUNTIME_DIR}/hypr-window-state.lock"
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+
+LOCK_FILE="$(hypr_instance_path window-state.lock)"
 exec 9>"$LOCK_FILE"
 if command -v flock &>/dev/null; then
     if ! flock -n 9; then

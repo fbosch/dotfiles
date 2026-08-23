@@ -13,9 +13,8 @@ local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
 local rules_lua_file = config_dir .. "/rules/window-state.lua"
-local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-local state_file = runtime_dir .. "/hypr-window-state.cache"
-local debounce_file = runtime_dir .. "/hypr-window-state-debounce"
+local state_file = hypr_ipc.instance_path("window-state.cache")
+local debounce_file = hypr_ipc.instance_path("window-state-debounce")
 local debounce_delay = 1
 local poll_interval_active_idle = 0.05
 local poll_interval_active_busy = 0.15
