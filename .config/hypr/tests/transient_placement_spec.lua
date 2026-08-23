@@ -62,6 +62,32 @@ it("centers a relabeled Zen popup over its parent window", function()
 	}, dispatched)
 end)
 
+it("centers a relabeled Helium popup over its parent window", function()
+	parent = {
+		class = "helium",
+		at = { x = 100, y = 200 },
+		size = { x = 1200, y = 800 },
+	}
+
+	listener({
+		address = "0xpopup",
+		class = "helium-popup",
+		at = { x = 0, y = 0 },
+		size = { x = 400, y = 300 },
+	})
+
+	assert.are.same({
+		{
+			operation = "set_prop",
+			options = { prop = "no_anim", value = "1", window = "address:0xpopup" },
+		},
+		{
+			operation = "move",
+			options = { x = 500, y = 450, window = "address:0xpopup" },
+		},
+	}, dispatched)
+end)
+
 it("ignores a normal Zen window", function()
 	parent = {
 		class = "app.zen_browser.zen",
