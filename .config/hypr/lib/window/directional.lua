@@ -19,6 +19,37 @@ local ultrawide_resize_right = hl.dsp.layout("resize-right")
 local ultrawide_x = 1440
 local edge_tolerance = 64
 
+local directions = {
+	l = "left",
+	r = "right",
+	u = "up",
+	d = "down",
+	left = "left",
+	right = "right",
+	up = "up",
+	down = "down",
+}
+
+local deltas = {
+	left = { x = -32, y = 0 },
+	right = { x = 32, y = 0 },
+	up = { x = 0, y = -32 },
+	down = { x = 0, y = 32 },
+}
+
+local function direction(value)
+	local normalized = directions[value]
+	if normalized == nil then
+		error("unknown window direction: " .. tostring(value))
+	end
+
+	return normalized
+end
+
+local function delta(value)
+	return deltas[direction(value)]
+end
+
 --- One-shot placement request consumed when a window enters a custom layout.
 ---@class TransferIntent
 ---@field monitor_role string Target monitor role.
@@ -228,7 +259,7 @@ local function with_window_behavior(state, action, direction, fallback)
 end
 
 function M.focus(state, value)
-	local normalized = state.direction(value)
+	local normalized = direction(value)
 	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
 	return with_window_behavior(state, "focus", normalized, function()
 		local active = state.active()
@@ -248,7 +279,7 @@ function M.focus(state, value)
 end
 
 function M.move(state, value)
-	local normalized = state.direction(value)
+	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
 	local move_to_portrait = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.portrait) })
 	local move_to_ultrawide = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.ultrawide) })
@@ -292,7 +323,7 @@ function M.move(state, value)
 end
 
 function M.adjust(state, kind, value)
-	local delta = state.delta(value)
+	local delta = delta(value)
 	if kind == "nudge" then
 		return hl.dsp.window.move({ x = delta.x, y = delta.y, relative = true })
 	end

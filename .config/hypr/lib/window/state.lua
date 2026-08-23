@@ -3,24 +3,6 @@ local window_tags = require("lib.window_tags")
 
 local M = {}
 
-local directions = {
-	l = "left",
-	r = "right",
-	u = "up",
-	d = "down",
-	left = "left",
-	right = "right",
-	up = "up",
-	down = "down",
-}
-
-local deltas = {
-	left = { x = -32, y = 0 },
-	right = { x = 32, y = 0 },
-	up = { x = 0, y = -32 },
-	down = { x = 0, y = 32 },
-}
-
 local function expected_layout(role)
 	if role == monitor_role.portrait then
 		return "lua:portrait_rows"
@@ -37,19 +19,6 @@ local function workspace_name(workspace)
 	end
 
 	return tostring(workspace.name or workspace.id)
-end
-
-function M.direction(value)
-	local normalized = directions[value]
-	if normalized == nil then
-		error("unknown window direction: " .. tostring(value))
-	end
-
-	return normalized
-end
-
-function M.delta(value)
-	return deltas[M.direction(value)]
 end
 
 function M.active()
