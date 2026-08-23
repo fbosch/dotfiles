@@ -16,6 +16,7 @@ term_keymaps({
 	{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 	{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
 	{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
+	{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
 	{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 	{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
 	{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
@@ -32,6 +33,7 @@ require("config.pack.registry").register({
 			"FTermToggle",
 			"FTermMProcs",
 			"FTermLazyGit",
+			"FTermDiffnav",
 			"FTermBtop",
 			"FTermCheckmate",
 			"FTermScooter",
@@ -106,6 +108,36 @@ require("config.pack.registry").register({
 					})
 				end
 				lazygit_instance:toggle()
+			end, { bang = true })
+
+			local diffnav_instance = nil
+			local diffnav_root = nil
+			usrcmd("FTermDiffnav", function()
+				local bufpath = vim.api.nvim_buf_get_name(0)
+				bufpath = (bufpath ~= "" and vim.uv.fs_realpath(bufpath)) or bufpath
+				local path = bufpath ~= "" and bufpath or vim.fn.getcwd()
+				local root = vim.fs.root(path, { ".git", ".bare" })
+				if not root then
+					vim.notify("No git repository found", vim.log.levels.WARN)
+					return
+				end
+
+				if not diffnav_instance or diffnav_root ~= root then
+					if diffnav_instance then
+						diffnav_instance:close(true)
+					end
+
+					diffnav_root = root
+					diffnav_instance = fterm:new({
+						ft = "fterm_diffnav",
+						env = env,
+						shell = "dash",
+						cmd = string.format("cd %s && diffnav --watch", vim.fn.shellescape(root)),
+						dimensions = dimensions,
+					})
+				end
+
+				diffnav_instance:toggle()
 			end, { bang = true })
 
 			local btop_instance = nil
