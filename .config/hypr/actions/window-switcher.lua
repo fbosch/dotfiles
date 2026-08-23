@@ -3,11 +3,11 @@
 
 local ags = require("lib.ags")
 local minimized_state = require("runtime.windows.minimized-state")
+local waybar = require("actions.waybar")
 
 local M = {}
 
 local minimized_workspace_prefix = "special:minimized"
-local waybar_toggle_smart = hl.dsp.exec_cmd("sleep 0.5 && ~/.config/hypr/runtime/desktop/waybar-toggle-smart.sh")
 local action_payloads = {}
 local diagnostic_log_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-window-switcher-bind.debug"
 
@@ -130,7 +130,7 @@ end
 function M.release_super()
 	diagnostic_log("super_l release")
 	M.commit()
-	hl.dispatch(waybar_toggle_smart)
+	hl.dispatch(waybar.release)
 end
 
 function M.hide()

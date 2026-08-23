@@ -1,10 +1,8 @@
 local programs = require("programs")
 local async = require("lib.async")
 local bind = require("lib.bind")
-local command = require("lib.command")
 local mouse_release = require("lib.mouse_release").new(bind)
 local window_tags = require("lib.window_tags")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
 local window_interaction = require("lib.window.interaction")
 local window_custom_layout = require("lib.window.custom_layout")
 local window_directional = require("lib.window.directional")
@@ -20,10 +18,9 @@ local ai_pointer = require("actions.ai-pointer")
 local toggle_powersave_mode = require("actions.toggle-powersave-mode")
 local pip = require("lib.picture_in_picture")
 local window_switcher = require("actions.window-switcher")
+local waybar = require("actions.waybar")
 
 local main_mod = "SUPER"
-local waybar_control_socket = command.arg(hypr_ipc.instance_socket_path("waybar-monitor.sock"))
-local waybar_process_pattern = command.arg("(^|/)waybar( |$)")
 local active_is_not_passthrough_exempt = window_state.active_is_not_tagged(window_tags.passthrough_exempt)
 local waybar_hold_allowed = window_state.active_workspace_is_not(gaming.workspace)
 
@@ -67,10 +64,7 @@ end
 bind.register(
 	main("SUPER_L"),
 	-- Keep the Waybar toggle out of the gaming workspace.
-	"printf 'hold\\n' | nc -U "
-		.. waybar_control_socket
-		.. " >/dev/null 2>&1 || pkill -SIGUSR1 -f "
-		.. waybar_process_pattern,
+	waybar.hold,
 	{
 		long_press = true,
 		predicate = function()

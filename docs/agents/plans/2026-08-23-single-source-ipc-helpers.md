@@ -28,10 +28,12 @@ direction, not fork cost.
 
 ## Decision
 
-**ags-ipc: Lua owns the interface.** `runtime/lib/ags-ipc.lua` is the single
-implementation. A thin `luajit` launcher exposes it to shell callers, and
-`runtime/lib/ags-ipc.sh` shrinks to a one-line shim so its only consumer,
-`waybar-lib.sh`, is unchanged.
+**ags-ipc: Lua owns the interface, pure-Lua.** `runtime/lib/ags-ipc.lua` is the
+single implementation with no shell counterpart. The only shell consumer chain
+— `waybar-lib.sh`, sourced by `waybar-toggle-smart.sh` — duplicated the
+visibility logic that `waybar-monitor.lua` already runs continuously, so it was
+deleted rather than given a shim. `window-switcher.lua` now sends `release`
+straight to the waybar-monitor control socket.
 
 **hypr-ipc: do not merge.** Merging the path grammar across the language seam
 forces one side to spawn the other at runtime (Lua daemons would shell out for
@@ -40,42 +42,33 @@ complexity — it just moves it to a process boundary. Pin the contract with a
 cross-language parity test instead.
 
 ```text
-Lua consumers (3)                      Shell consumer (1)
-pip · waybar-monitor · switch-layout   waybar-lib.sh
-      │ require (in-process)                 │
-      └──────────────┬───────────────────────┘
-                     ▼
-          ┏━━━━━━━━━━━━━━━━━┓
-          ┃  ags-ipc.lua     ┃   ← single parser + busctl/ags invocation
-          ┗━━━━━━━━┬━━━━━━━━┛
-                   │ forked once by shell via ags-request.lua
-                   ▼
-            busctl ──> fallback `ags request -i`
+Lua consumers (3)
+pip · waybar-monitor · switch-layout
+      │ require (in-process)
+      ▼
+┏━━━━━━━━━━━━━━━━━┓
+┃  ags-ipc.lua     ┃   ← single parser + busctl/ags invocation
+┗━━━━━━━━┬━━━━━━━━┛
+         ▼
+  busctl ──> fallback `ags request -i`
 ```
 
 ## Implementation
 
-1. Keep `runtime/lib/ags-ipc.lua` as the single source of truth. Its parser
-   already handles escaped quotes correctly. Extract the parser into a
-   pure, unit-testable function if the inline `parse_busctl_string` is hard to
-   cover; otherwise leave the module as-is.
+1. Expose `parse_busctl_string` from `runtime/lib/ags-ipc.lua` so the parser is
+   unit-testable. Add `tests/ags_ipc_spec.lua` covering quoted/unquoted
+   responses, escape handling, and trailing whitespace.
 
-2. Add `runtime/lib/ags-request.lua` (executable, `luajit`).
-   - Set `package.path` to include the config dir.
-   - `require("runtime.lib.ags-ipc")`.
-   - Read `component` and `payload` from argv and `instance` from
-     `AGS_INSTANCE` (default `ags-bundled`), matching the existing
-     `ags_request` signature and env contract.
-   - Print the request result.
+2. Remove the shell consumer chain.
+   - `actions/window-switcher.lua`: replace the `waybar-toggle-smart.sh` call
+     with a direct `printf 'release\n' | nc -U <waybar-monitor.sock>` dispatch.
+     The daemon's `release` handler clears `super_held` and re-evaluates
+     visibility on its next tick.
+   - Delete `runtime/desktop/waybar-toggle-smart.sh`,
+     `runtime/desktop/waybar-lib.sh`, `runtime/lib/ags-ipc.sh`, and
+     `runtime/lib/ags-request.lua`.
 
-3. Reduce `runtime/lib/ags-ipc.sh` to a shim:
-   - Keep `ags_request()` and have it call
-     `luajit "$HOME/.config/hypr/runtime/lib/ags-request.lua" "$1" "$2"`.
-   - Delete `ags_busctl_available` and `ags_parse_busctl_string`.
-
-4. Leave `waybar-lib.sh` unchanged; it still calls `ags_request`.
-
-5. Add a cross-language parity test for the hypr-ipc path grammar. Drive
+3. Add a cross-language parity test for the hypr-ipc path grammar. Drive
    `runtime/lib/hypr-ipc.lua` and `runtime/lib/hypr-ipc.sh` against the same
    input matrix (`XDG_RUNTIME_DIR`, `HYPRLAND_INSTANCE_SIGNATURE`, socket
    name, including the 107-byte boundary) and assert identical results and
@@ -83,20 +76,18 @@ pip · waybar-monitor · switch-layout   waybar-lib.sh
 
 ## Validation
 
-1. `devenv test:lua` — existing `tests/hypr_ipc_spec.lua` and any new ags-ipc
-   parser spec stay green.
-2. `devenv test:runtime-shell` — new parity test passes `bash -n` and
-   `shellcheck`, then runs green.
-3. Confirm `ags_request start-menu '{"action":"is-visible"}'` from a shell
-   returns the same value as the pre-change dash implementation against a live
-   AGS instance.
-4. Confirm `waybar-lib.sh` visibility checks behave unchanged (the escape
-   handling is the only intentional difference; it is a fix).
+1. `stylua --check` on changed Lua files is clean.
+2. `busted --lua=luajit` full suite: 210 successes, 0 failures.
+3. `shellcheck` across `.config/hypr/runtime/**/*.sh` is clean.
+4. Parity test runs green under `test:runtime-shell`.
+5. No remaining references to `waybar-toggle-smart`, `waybar-lib`,
+   `ags-request`, or `ags-ipc.sh`.
 
 ## Success Criteria
 
-- ags-ipc has exactly one parser and one busctl/ags invocation path.
-- `waybar-lib.sh` still calls `ags_request` and its output is unchanged.
+- ags-ipc has exactly one parser and one busctl/ags invocation path, Lua-only.
+- No shell consumer of ags-ipc remains; `waybar-monitor.lua` is the single
+  owner of waybar visibility.
 - hypr-ipc path grammar and the 107-byte rule are pinned by one parity test.
-- No Lua daemon gains a subprocess for path derivation; no dash script gains a
-  `luajit` spawn for anything but the ags-ipc request.
+- No Lua daemon gains a subprocess for path derivation; no dash script spawns
+  `luajit`.
