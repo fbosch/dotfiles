@@ -16,7 +16,8 @@ Consumers must treat `name` and `name*` as the same tag. Use
 - Purpose: marks fixed-size windows that custom drag-resize must ignore.
 - Producers: title-specific rules in `rules/ags.lua` for Force Quit and About
   This PC.
-- Consumer: `custom-layout-drag-resize-daemon.lua`.
+- Consumer: the native custom-layout resize plugin, configured by
+  `lib/window/custom_layout.lua`.
 
 ### `passthrough-exempt`
 
@@ -41,5 +42,5 @@ Consumers must treat `name` and `name*` as the same tag. Use
 2. Put cross-module policy tags in `lib/window_tags.lua`; keep feature-local
    state tags in the owning feature module.
 3. Add the tag to this registry with its owner and consumers.
-4. Add focused coverage for matching behavior when a daemon depends on the
-   tag.
+4. Add focused coverage for matching behavior when runtime behavior depends on
+   the tag.

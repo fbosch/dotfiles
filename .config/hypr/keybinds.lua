@@ -213,8 +213,8 @@ hl.config({
 })
 
 -- Custom layout controls
--- Custom tiled resize keeps geometry in its layout process while Hyprland owns
--- the pressed-input release lifecycle for every mouse interaction.
+-- Hyprland owns the pressed-input release lifecycle; the native resize plugin
+-- owns custom tiled target selection and pointer-driven resize mechanics.
 mouse_release.bind(main("mouse:272"), start_drag)
 mouse_release.bind(main("mouse:273"), function()
 	if picture_in_picture.start_resize(false) then

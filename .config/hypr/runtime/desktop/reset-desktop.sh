@@ -57,11 +57,9 @@ wait_for_shutdowns() {
   window_capture_pid=$!
   wait_for_shutdown "window state" pgrep -f "window-state(-daemon)?\.(sh|lua)" &
   window_state_pid=$!
-  wait_for_shutdown "custom layout" pgrep -f "custom-layout-drag-resize(-daemon)?\.(sh|lua)" &
-  custom_layout_pid=$!
 
   status=0
-  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid" "$custom_layout_pid"; do
+  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid"; do
     if wait "$pid"; then
       continue
     fi
@@ -81,8 +79,6 @@ pkill -f window-state.sh 2>/dev/null || true
 pkill -f window-state-daemon.lua 2>/dev/null || true
 pkill -CONT -f window-capture-daemon 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
-pkill -f "custom-layout-drag-resize.sh daemon" 2>/dev/null || true
-pkill -f custom-layout-drag-resize-daemon.lua 2>/dev/null || true
 pkill -f hyprpaper 2>/dev/null || true
 
 if ! wait_for_shutdowns; then
@@ -103,7 +99,6 @@ swaync-client -rs &
 uwsm-app -s s -- hyprpaper >/dev/null 2>&1 &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon &
 
 sleep 1
 
