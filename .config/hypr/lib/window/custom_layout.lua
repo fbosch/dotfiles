@@ -1,6 +1,7 @@
 local M = {}
 local dispatch = hl.dispatch
 local monitor_role = require("lib.monitor_role")
+local state = require("lib.window.state")
 local order_state = require("layouts.shared.order_state")
 local intents = require("layouts.shared.intents")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
@@ -63,13 +64,13 @@ local function custom_layout_resize(action)
 	return hl.dsp.exec_cmd(string.format("%s %s %d", custom_layout_resize_command, action, sequence))
 end
 
-function M.place_custom_layout_at_cursor(state)
+function M.place_custom_layout_at_cursor()
 	if state.uses_any_custom_layout(state.active()) then
 		dispatch(hl.dsp.layout("place-at-cursor"))
 	end
 end
 
-function M.toggle_float(state)
+function M.toggle_float()
 	local window = state.active()
 	local intent = placement_intent(window)
 	if intent then

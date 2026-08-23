@@ -344,9 +344,9 @@ local function bench_window_motion(iterations)
 	clear_modules()
 	local window_directional = require("lib.window.directional")
 	local window_state = require("lib.window.state")
-	local move_right = window_directional.move(window_state, "right")
-	local move_up = window_directional.move(window_state, "up")
-	local resize_right = window_directional.adjust(window_state, "resize", "right")
+	local move_right = window_directional.move("right")
+	local move_up = window_directional.move("up")
+	local resize_right = window_directional.adjust("resize", "right")
 	local normal_window = make_window(1, { workspace = make_workspace(1), active = true })
 	normal_window.monitor = { name = "DP-2" }
 	normal_window.at = { x = 1440, y = 500 }

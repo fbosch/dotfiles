@@ -1,5 +1,6 @@
 local async = require("lib.async")
 local gaming = require("gaming")
+local state = require("lib.window.state")
 
 local M = {}
 local dispatch = hl.dispatch
@@ -11,7 +12,7 @@ local function pin_workspace_one()
 	dispatch(hl.dsp.workspace.move({ workspace = pinned_workspace, monitor = pinned_workspace_monitor }))
 end
 
-function M.focus_gaming_workspace(state)
+function M.focus_gaming_workspace()
 	local target
 	for _, client in ipairs(hl.get_windows()) do
 		local workspace = client.workspace

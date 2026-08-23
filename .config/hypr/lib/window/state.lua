@@ -96,16 +96,10 @@ function M.uses_any_custom_layout(active)
 	return M.uses_custom_layout(active, monitor_role.portrait) or M.uses_custom_layout(active, monitor_role.ultrawide)
 end
 
-function M.active_workspace_is(workspace_name)
-	return function()
-		local active_workspace = hl.get_active_workspace()
-		return active_workspace ~= nil and active_workspace.name == workspace_name
-	end
-end
-
 function M.active_workspace_is_not(workspace_name)
 	return function()
-		return M.active_workspace_is(workspace_name)() == false
+		local active_workspace = hl.get_active_workspace()
+		return active_workspace == nil or active_workspace.name ~= workspace_name
 	end
 end
 

@@ -29,16 +29,16 @@ local function main(key)
 end
 
 local function start_drag()
-	if window_interaction.start_drag(window_state) then
+	if window_interaction.start_drag() then
 		return function()
 			hl.dispatch(hl.dsp.window.drag())
-			window_interaction.finish_drag(window_state, window_custom_layout)
+			window_interaction.finish_drag(window_custom_layout)
 		end
 	end
 end
 
 local function focus_gaming_workspace()
-	return window_workspace.focus_gaming_workspace(window_state)
+	return window_workspace.focus_gaming_workspace()
 end
 
 local function release_super()
@@ -156,7 +156,7 @@ bind.register(main("E"), programs.file_manager)
 bind.register(main("W"), async.runtime_lua("windows/killactive-selective.lua"))
 bind.register(main("CTRL + C"), "~/.config/hypr/runtime/windows/confirm-hyprprop-kill.sh")
 bind.register(main("V"), function()
-	return window_custom_layout.toggle_float(window_state)
+	return window_custom_layout.toggle_float()
 end, {
 	predicate = active_is_not_passthrough_exempt,
 })
@@ -179,10 +179,10 @@ bind.register(main("SHIFT + Z"), "~/.config/hypr/runtime/windows/minimized-state
 bind.register(main("X"), window_workspace.hide_from_current_workspace)
 
 -- Window focus and layout
-bind.register(main("H"), window_directional.focus(window_state, "left"))
-bind.register(main("L"), window_directional.focus(window_state, "right"))
-bind.register(main("J"), window_directional.focus(window_state, "down"))
-bind.register(main("K"), window_directional.focus(window_state, "up"))
+bind.register(main("H"), window_directional.focus("left"))
+bind.register(main("L"), window_directional.focus("right"))
+bind.register(main("J"), window_directional.focus("down"))
+bind.register(main("K"), window_directional.focus("up"))
 
 bind.register(main("SHIFT + d"), hl.dsp.layout("setratio 0.6"))
 
@@ -247,21 +247,21 @@ mouse_release.bind(main("SHIFT + mouse:273"), function()
 end)
 bind.register("SHIFT + SHIFT_L", release_mouse_modifier, { release = true, auto_consuming = true })
 bind.register("SHIFT + SHIFT_R", release_mouse_modifier, { release = true, auto_consuming = true })
-bind.register(main("SHIFT + H"), window_directional.move(window_state, "left"))
-bind.register(main("SHIFT + L"), window_directional.move(window_state, "right"))
-bind.register(main("SHIFT + J"), window_directional.move(window_state, "down"))
-bind.register(main("SHIFT + K"), window_directional.move(window_state, "up"))
+bind.register(main("SHIFT + H"), window_directional.move("left"))
+bind.register(main("SHIFT + L"), window_directional.move("right"))
+bind.register(main("SHIFT + J"), window_directional.move("down"))
+bind.register(main("SHIFT + K"), window_directional.move("up"))
 
 -- Window movement and resizing
-bind.register(main("right"), window_directional.adjust(window_state, "nudge", "right"), { repeating = true })
-bind.register(main("left"), window_directional.adjust(window_state, "nudge", "left"), { repeating = true })
-bind.register(main("up"), window_directional.adjust(window_state, "nudge", "up"), { repeating = true })
-bind.register(main("down"), window_directional.adjust(window_state, "nudge", "down"), { repeating = true })
+bind.register(main("right"), window_directional.adjust("nudge", "right"), { repeating = true })
+bind.register(main("left"), window_directional.adjust("nudge", "left"), { repeating = true })
+bind.register(main("up"), window_directional.adjust("nudge", "up"), { repeating = true })
+bind.register(main("down"), window_directional.adjust("nudge", "down"), { repeating = true })
 
-bind.register(main("SHIFT + right"), window_directional.adjust(window_state, "resize", "right"), { repeating = true })
-bind.register(main("SHIFT + left"), window_directional.adjust(window_state, "resize", "left"), { repeating = true })
-bind.register(main("SHIFT + up"), window_directional.adjust(window_state, "resize", "up"), { repeating = true })
-bind.register(main("SHIFT + down"), window_directional.adjust(window_state, "resize", "down"), { repeating = true })
+bind.register(main("SHIFT + right"), window_directional.adjust("resize", "right"), { repeating = true })
+bind.register(main("SHIFT + left"), window_directional.adjust("resize", "left"), { repeating = true })
+bind.register(main("SHIFT + up"), window_directional.adjust("resize", "up"), { repeating = true })
+bind.register(main("SHIFT + down"), window_directional.adjust("resize", "down"), { repeating = true })
 
 -- Hardware controls
 bind.register("XF86AudioRaiseVolume", volume.raise, { repeating = true, locked = true })

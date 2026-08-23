@@ -3,6 +3,7 @@ local monitor_role = require("lib.monitor_role")
 local intents = require("layouts.shared.intents")
 local pip = require("lib.picture_in_picture")
 local picture_in_picture = require("actions.picture-in-picture")
+local state = require("lib.window.state")
 
 local M = {}
 local dispatch = hl.dispatch
@@ -224,7 +225,7 @@ local function workspace_candidate(active, direction)
 	return directional_candidate(active, direction, workspace:get_windows())
 end
 
-local function monitor_candidate(state, active, direction)
+local function monitor_candidate(active, direction)
 	local destination_role = nil
 	if direction == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
 		destination_role = monitor_role.ultrawide
@@ -239,7 +240,7 @@ local function monitor_candidate(state, active, direction)
 	return directional_candidate(active, direction, hl.get_windows(), destination_role)
 end
 
-local function with_window_behavior(state, action, direction, fallback)
+local function with_window_behavior(action, direction, fallback)
 	return function()
 		local active = state.active()
 		if active then
@@ -258,14 +259,14 @@ local function with_window_behavior(state, action, direction, fallback)
 	end
 end
 
-function M.focus(state, value)
+function M.focus(value)
 	local normalized = direction(value)
 	local focus_dispatcher = hl.dsp.focus({ direction = normalized })
-	return with_window_behavior(state, "focus", normalized, function()
+	return with_window_behavior("focus", normalized, function()
 		local active = state.active()
 		if state.uses_any_custom_layout(active) then
 			local candidate = workspace_candidate(active, normalized)
-			candidate = candidate or monitor_candidate(state, active, normalized)
+			candidate = candidate or monitor_candidate(active, normalized)
 			if candidate then
 				dispatch(hl.dsp.focus({ window = candidate }))
 				dispatch(warp_active_after_focus)
@@ -278,7 +279,7 @@ function M.focus(state, value)
 	end)
 end
 
-function M.move(state, value)
+function M.move(value)
 	local normalized = direction(value)
 	local move_dispatcher = hl.dsp.window.move({ direction = normalized })
 	local move_to_portrait = hl.dsp.window.move({ monitor = monitor_role.name_for(monitor_role.portrait) })
@@ -319,10 +320,10 @@ function M.move(state, value)
 		warp_window(active)
 	end
 
-	return with_window_behavior(state, "move", normalized, move_window)
+	return with_window_behavior("move", normalized, move_window)
 end
 
-function M.adjust(state, kind, value)
+function M.adjust(kind, value)
 	local delta = delta(value)
 	if kind == "nudge" then
 		return hl.dsp.window.move({ x = delta.x, y = delta.y, relative = true })
