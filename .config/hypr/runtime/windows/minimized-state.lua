@@ -579,6 +579,20 @@ local M = {
 	init = ensure_state_file,
 }
 
+-- Policy owner: consumers ask whether a window/workspace is minimized instead
+-- of restating the workspace naming scheme.
+function M.is_minimized_workspace(name)
+	return type(name) == "string" and name:sub(1, #minimized_workspace_prefix) == minimized_workspace_prefix
+end
+
+function M.is_minimized_window(win)
+	local workspace = type(win) == "table" and win.workspace or nil
+	if type(workspace) == "table" then
+		return M.is_minimized_workspace(workspace.name or "")
+	end
+	return M.is_minimized_workspace(tostring(workspace or ""))
+end
+
 if not (arg and arg[0] and arg[0]:match("minimized%-state%.lua$")) then
 	return M
 end

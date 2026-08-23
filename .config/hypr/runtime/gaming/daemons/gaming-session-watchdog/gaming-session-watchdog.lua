@@ -10,13 +10,13 @@ local command = require("lib.command")
 local daemon = require("runtime.lib.daemon")
 local profile_state = require("lib.profile_state")
 local gaming = require("gaming")
+local minimized_state = require("runtime.windows.minimized-state")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local kit = daemon.new({})
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
 local diagnostic_interval_seconds = 30
 local gaming_workspace = gaming.workspace
-local minimized_workspace_prefix = "special:minimized"
 local gaming_overlay_workspace = "special:gaming-overlay"
 local wl_freeze_checked = false
 local wl_freeze_available = false
@@ -94,7 +94,7 @@ local function get_gaming_window_count(clients)
 	local count = 0
 	for _, client in ipairs(clients or kit:clients()) do
 		if
-			not starts_with(workspace_name(client), minimized_workspace_prefix)
+			not minimized_state.is_minimized_workspace(workspace_name(client))
 			and not has_profile_excluded_title(client)
 			and has_game_content(client)
 		then
@@ -120,7 +120,7 @@ local function get_freezable_gaming_windows(clients)
 	for _, client in ipairs(clients or kit:clients()) do
 		local workspace = workspace_name(client)
 		if
-			(workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
+			(workspace == gaming_workspace or minimized_state.is_minimized_workspace(workspace))
 			and not excludes_freezing(client)
 			and has_game_content(client)
 		then

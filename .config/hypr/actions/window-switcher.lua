@@ -7,28 +7,7 @@ local waybar = require("actions.waybar")
 
 local M = {}
 
-local minimized_workspace_prefix = "special:minimized"
 local action_payloads = {}
-local diagnostic_log_path = (os.getenv("XDG_RUNTIME_DIR") or "/tmp") .. "/hypr-window-switcher-bind.debug"
-
-local function diagnostic_log(event)
-	local file = io.open(diagnostic_log_path, "a")
-	if not file then
-		return
-	end
-
-	file:write(string.format("[WS-BIND-7f42] %s\n", event))
-	file:close()
-end
-
-local function workspace_name(win)
-	local workspace = win.workspace
-	if type(workspace) == "table" then
-		return workspace.name or (workspace.id and tostring(workspace.id)) or ""
-	end
-
-	return tostring(workspace or "")
-end
 
 local function regular_window(win)
 	local workspace = win.workspace
@@ -68,7 +47,7 @@ local function focus_window(win)
 		return false
 	end
 
-	local is_minimized = workspace_name(win):match("^" .. minimized_workspace_prefix)
+	local is_minimized = minimized_state.is_minimized_window(win)
 	if is_minimized then
 		minimized_state.toggle_workspace(address(win))
 	end
@@ -118,7 +97,6 @@ end
 
 function M.action(action, trigger_modifier)
 	return function()
-		diagnostic_log("tab action=" .. action .. " modifier=" .. trigger_modifier)
 		M[action]({ trigger_modifier = trigger_modifier })
 	end
 end
@@ -128,7 +106,6 @@ function M.commit()
 end
 
 function M.release_super()
-	diagnostic_log("super_l release")
 	M.commit()
 	hl.dispatch(waybar.release)
 end

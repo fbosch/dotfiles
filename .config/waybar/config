@@ -132,7 +132,7 @@
   "wlr/taskbar": {
     "format": "{icon}  {title}",
     "markup": true,
-    "icon-size": 22,
+    "icon-size": 24,
     "sort-by-app-id": true,
     "max-length": 25,
     "truncate": true,
