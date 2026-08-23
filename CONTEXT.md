@@ -11,20 +11,41 @@ should use these terms; new concepts named during design work land here.
   `daemon.new({ transport = ... })`; tests inject an in-memory transport.
   Locking deliberately stays in shell launchers, not the kit.
 - **instance path** — `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/…`.
-  All daemon sockets, locks, and state files derive from it through
-  `runtime/lib/hypr-ipc.{lua,sh}` (ADR-0011).
+  This is the ownership boundary for daemon sockets, locks, and state files;
+  all paths derive from it through `runtime/lib/hypr-ipc.{lua,sh}` and must
+  respect the Unix socket path-length limit (ADR-0011).
 - **control socket** — instance-scoped command channel a daemon serves so
   keybind actions can drive it (e.g. `pip-monitor.sock`).
+- **query/dispatch IPC split** — read-only Hyprland queries use the query
+  socket and may fall back once to `hyprctl`; state-changing dispatches use
+  the explicit IPC path and never silently fall back.
 - **monitor role** — logical display identity (`ultrawide`, `portrait`) mapped
   from connector names by `lib/monitor_role.lua`; layouts and policies target
   roles, never connector names.
+- **source/derived rule pipeline** — writable policy and selector sources
+  generate runtime rule data. Generated outputs are never edited directly,
+  and their application order relative to static rules is significant.
 - **window-state selectors** — writable source list
   (`rules/window-state-selectors.lua`) describing which floating windows get
   position/size persistence; `rules/window-state.lua` is generated data
   produced by the window-state daemon from captured state.
+- **window-state capture** — pure snapshot module
+  (`runtime/windows/daemons/window-state/capture.lua`) that turns normalized
+  selectors, clients, and monitors into deterministic persisted JSON. The
+  window-state daemon owns IPC queries, scheduling, publication, and reloads.
+- **stable target identity** — identity used to approve and revalidate a
+  window before targeted actions. Prefer stable client IDs, use addresses only
+  as a fallback, and never treat broad class/title selectors as sufficient
+  proof of identity (ADR-0010).
 - **PiP placement** — pure placement reducer for the Picture-in-Picture
   window (`lib/pip_placement.lua`): owns snap geometry, waybar avoidance,
   the client-drag state machine, corner-tag policy, and preview dedup.
   Interface is `place(state, input) → (state, commands)` over plain tables;
   the picture-in-picture daemon is a thin adapter that feeds it IPC data and
   interprets returned commands as dispatches, tags, and preview actions.
+
+## AGS runtime
+
+- **bundled AGS host** — the single login-started `ags-bundled` process. Shell
+  surfaces load eagerly; task-oriented utility windows load on demand and are
+  routed through `UtilityManager`.
