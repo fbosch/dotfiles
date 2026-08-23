@@ -6,7 +6,7 @@ hl.config({
 		gaps_out = 5,
 		border_size = 1,
 		col = {
-			active_border = "rgba(333333ff)",
+			active_border = "rgba(191919ff)",
 			inactive_border = "rgba(191919ff)",
 		},
 		resize_on_border = true,

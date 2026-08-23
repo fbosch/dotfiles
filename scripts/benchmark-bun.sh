@@ -16,7 +16,7 @@ require_positive_integer() {
 
 usage() {
   cat <<'EOF'
-Usage: benchmark-bun.sh [runtime|install|all]
+Usage: benchmark-bun.sh [runtime|install|profiles|all]
 
 Environment:
   BUN_BENCHMARK_STARTUP_RUNS    Bun startup measurements (default: 30)
@@ -31,7 +31,7 @@ EOF
 [[ $# -le 1 ]] || fail "expected at most one target"
 target="${1:-runtime}"
 case "$target" in
-  runtime|install|all) ;;
+  runtime|install|profiles|all) ;;
   -h|--help)
     usage
     exit 0
@@ -201,6 +201,33 @@ run_install_benchmarks() (
     --command-name fish-libexec-warm-install 'bun install --frozen-lockfile --ignore-scripts --cwd fish-libexec'
 )
 
+run_profiles() {
+  local profile_dir="$output_dir/profiles"
+  mkdir -p "$profile_dir"
+
+  AI_POINTER_BENCH_SAMPLES=5 AI_POINTER_POLICY_BATCH=100 bun \
+    --cpu-prof-md \
+    --cpu-prof-dir "$profile_dir" \
+    --cpu-prof-name ai-pointer-policy-cpu.md \
+    --cwd .config/ags \
+    components/ai-pointer/__benchmarks__/policy.ts \
+    >"$profile_dir/ai-pointer-policy-cpu.txt" 2>&1
+  bun \
+    --cpu-prof-md \
+    --cpu-prof-dir "$profile_dir" \
+    --cpu-prof-name typo-engine-cpu.md \
+    --cwd .config/opencode/plugins \
+    prompt-enhancements/typo-engine.bench.ts \
+    >"$profile_dir/typo-engine-cpu.txt" 2>&1
+  AI_POINTER_BENCH_SAMPLES=5 AI_POINTER_POLICY_BATCH=100 bun \
+    --heap-prof-md \
+    --heap-prof-dir "$profile_dir" \
+    --heap-prof-name ai-pointer-policy-heap.md \
+    --cwd .config/ags \
+    components/ai-pointer/__benchmarks__/policy.ts \
+    >"$profile_dir/ai-pointer-policy-heap.txt" 2>&1
+}
+
 printf 'Bun %s benchmark results: %s\n' "$bun_version" "$output_dir"
 
 case "$target" in
@@ -209,6 +236,9 @@ case "$target" in
     ;;
   install)
     run_install_benchmarks
+    ;;
+  profiles)
+    run_profiles
     ;;
   all)
     run_runtime_benchmarks

@@ -16,7 +16,7 @@ install-fbb:
 devenv-test:
 	devenv test
 
-# Record Bun runtime and package-manager benchmarks. Target: runtime, install, all.
+# Record Bun benchmarks or opt-in profiles. Target: runtime, install, profiles, all.
 bun-benchmark target="runtime":
 	bash scripts/benchmark-bun.sh {{quote(target)}}
 
