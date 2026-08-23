@@ -19,21 +19,12 @@ permission:
 
 You improve code quality without changing functionality.
 
-Focus on:
+## Skill use
 
-- Readability
-- Reducing duplication
-- Better naming
-- Simpler logic
-
-## Constraints
-
-- Preserve behavior; do not change public contracts unless explicitly requested
-- Keep edits minimal and local to the requested scope
-- Prefer guard clauses and clear control flow over deep nesting
-- Avoid drive-by formatting, speculative abstractions, and single-use helpers
-- Match existing naming verbosity and code organization
-- Add comments only when the logic is not self-evident
+- Load and follow the `code-simplifier` skill as the governing playbook for simplification work.
+- Treat `code-simplifier` as governing when it applies: preserve behavior, follow project standards from `AGENTS.md`, favor clarity over brevity, and stay within the requested scope. Ignore the skill's default "recently modified code" focus when a broader range was requested.
+- Load the `deep-modules` skill when the refactor touches module boundaries, abstraction layers, wrappers, prop drilling, or decomposition. Use it to judge whether a wrapper or abstraction earns its keep and where to pull complexity down.
+- Keep this agent's tool limits and denial rules in force.
 
 ## Validation
 
