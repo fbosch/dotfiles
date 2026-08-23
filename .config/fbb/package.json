@@ -2,7 +2,7 @@
 	"name": "fbb-config",
 	"private": true,
 	"type": "module",
-	"packageManager": "bun@1.3.13",
+	"packageManager": "bun@1.4.0",
 	"dependencies": {
 		"@clack/prompts": "^1.7.0",
 		"@tanstack/query-core": "^5.101.4",
