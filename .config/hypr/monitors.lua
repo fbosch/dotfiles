@@ -2,11 +2,12 @@
 -- Replaces generated, gitignored monitors.conf in the staged Lua config.
 
 local system = require("lib.system")
+local monitor_role = require("lib.monitor_role")
 local host = system.hostname()
 
 if host == "rvn-pc" then
 	hl.monitor({
-		output = "DP-2",
+		output = monitor_role.name_for(monitor_role.ultrawide),
 		mode = "3440x1440@164.9",
 		position = "1440x500",
 		scale = 1.0,
@@ -19,7 +20,7 @@ if host == "rvn-pc" then
 	})
 
 	hl.monitor({
-		output = "HDMI-A-2",
+		output = monitor_role.name_for(monitor_role.portrait),
 		mode = "2560x1440@59.95",
 		position = "0x0",
 		scale = 1.0,

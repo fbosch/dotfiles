@@ -56,8 +56,7 @@ local function is_pip(window)
 		and window.mapped ~= false
 		and window.hidden ~= true
 		and window.floating == true
-		and window.class == pip.class
-		and window.title == pip.title
+		and pip.matches(window)
 end
 
 local function monitor_for(window, monitors)

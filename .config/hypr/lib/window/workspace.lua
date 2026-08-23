@@ -1,12 +1,13 @@
 local async = require("lib.async")
 local gaming = require("gaming")
+local monitor_role = require("lib.monitor_role")
 local state = require("lib.window.state")
 
 local M = {}
 local dispatch = hl.dispatch
 local warp_active_after_focus = async.runtime_lua("windows/warp-cursor-to-active-window.lua", "--delay", "0.03")
 local pinned_workspace = "1"
-local pinned_workspace_monitor = "HDMI-A-2"
+local pinned_workspace_monitor = monitor_role.name_for(monitor_role.portrait)
 
 local function pin_workspace_one()
 	dispatch(hl.dsp.workspace.move({ workspace = pinned_workspace, monitor = pinned_workspace_monitor }))

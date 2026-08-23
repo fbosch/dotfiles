@@ -21,6 +21,10 @@ end
 
 M.normal_move = string.format("(monitor_w-window_w-%d) (monitor_h-window_h-%d)", M.margin, M.margin)
 
+function M.matches(window)
+	return window ~= nil and window.class == M.class and window.title == M.title
+end
+
 -- Control protocol for pip-monitor.sock. Single owner of the wire format:
 -- senders encode, the daemon decodes. One line per command.
 M.control = {}

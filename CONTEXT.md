@@ -44,6 +44,10 @@ should use these terms; new concepts named during design work land here.
   Interface is `place(state, input) → (state, commands)` over plain tables;
   the picture-in-picture daemon is a thin adapter that feeds it IPC data and
   interprets returned commands as dispatches, tags, and preview actions.
+- **pointer interaction router** — `lib/window/pointer.lua`. Selects the PiP,
+  custom-layout, or native owner for pointer drag/resize presses and returns a
+  release callback to `lib.mouse_release`. Hyprland remains the release-event
+  owner; keybinds register physical inputs but do not orchestrate adapter state.
 
 ## AGS runtime
 

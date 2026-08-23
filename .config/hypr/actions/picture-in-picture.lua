@@ -16,7 +16,7 @@ end
 
 local function active_pip()
 	local active = hl.get_active_window and hl.get_active_window()
-	if active and active.class == pip.class and active.title == pip.title and active.address then
+	if pip.matches(active) and active.address then
 		return active
 	end
 end

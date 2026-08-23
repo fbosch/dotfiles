@@ -64,9 +64,7 @@ local ultrawide_transfer_start = { monitor_role = monitor_role.ultrawide, axis =
 
 local window_behaviors = {
 	{
-		matches = function(window)
-			return window.class == pip.class and window.title == pip.title
-		end,
+		matches = pip.matches,
 		focus = picture_in_picture.focus,
 		move = picture_in_picture.move_corner,
 	},

@@ -3,9 +3,9 @@ local async = require("lib.async")
 local bind = require("lib.bind")
 local mouse_release = require("lib.mouse_release").new(bind)
 local window_tags = require("lib.window_tags")
-local window_interaction = require("lib.window.interaction")
 local window_custom_layout = require("lib.window.custom_layout")
 local window_directional = require("lib.window.directional")
+local pointer_interaction = require("lib.window.pointer").new()
 local window_state = require("lib.window.state")
 local window_workspace = require("lib.window.workspace")
 local gaming = require("gaming")
@@ -13,7 +13,6 @@ local volume = require("actions.volume")
 local confirm_exit = require("actions.confirm-exit")
 local clipboard_bridge = require("actions.clipboard-bridge")
 local keyboard_layout = require("actions.keyboard-layout")
-local picture_in_picture = require("actions.picture-in-picture")
 local ai_pointer = require("actions.ai-pointer")
 local toggle_powersave_mode = require("actions.toggle-powersave-mode")
 local pip = require("lib.picture_in_picture")
@@ -26,15 +25,6 @@ local waybar_hold_allowed = window_state.active_workspace_is_not(gaming.workspac
 
 local function main(key)
 	return main_mod .. " + " .. key
-end
-
-local function start_drag()
-	if window_interaction.start_drag() then
-		return function()
-			hl.dispatch(hl.dsp.window.drag())
-			window_interaction.finish_drag(window_custom_layout)
-		end
-	end
 end
 
 local function focus_gaming_workspace()
@@ -215,35 +205,12 @@ hl.config({
 -- Custom layout controls
 -- Hyprland owns the pressed-input release lifecycle; the native resize plugin
 -- owns custom tiled target selection and pointer-driven resize mechanics.
-mouse_release.bind(main("mouse:272"), start_drag)
+mouse_release.bind(main("mouse:272"), pointer_interaction.start_drag)
 mouse_release.bind(main("mouse:273"), function()
-	if picture_in_picture.start_resize(false) then
-		return function()
-			hl.dispatch(hl.dsp.window.resize())
-			picture_in_picture.finish_resize(false)
-		end
-	elseif window_custom_layout.start_custom_layout_resize() then
-		return window_custom_layout.stop_custom_layout_resize
-	end
-
-	hl.dispatch(hl.dsp.window.resize())
-	return function()
-		hl.dispatch(hl.dsp.window.resize())
-	end
+	return pointer_interaction.start_resize(false)
 end)
 mouse_release.bind(main("SHIFT + mouse:273"), function()
-	if picture_in_picture.start_resize(true) then
-		return function()
-			hl.dispatch(hl.dsp.window.resize())
-			picture_in_picture.finish_resize(true)
-		end
-	end
-
-	window_custom_layout.resize_keep_aspect_ratio()
-	return function()
-		hl.dispatch(hl.dsp.window.resize())
-		window_custom_layout.reset_keep_aspect_ratio()
-	end
+	return pointer_interaction.start_resize(true)
 end)
 bind.register("SHIFT + SHIFT_L", release_mouse_modifier, { release = true, auto_consuming = true })
 bind.register("SHIFT + SHIFT_R", release_mouse_modifier, { release = true, auto_consuming = true })

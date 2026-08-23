@@ -1,4 +1,5 @@
 local window_tags = require("lib.window_tags")
+local monitor_role = require("lib.monitor_role")
 require("gaming").register_window_rules()
 require("lib.picture_in_picture").register_window_rules()
 require("rules.ags").register()
@@ -121,10 +122,14 @@ hl.window_rule({ match = { tag = window_tags.popup }, suppress_event = "maximize
 -- Floorp Browser
 hl.window_rule({
 	match = { class = "^(one\\.ablaze\\.floorp)$" },
-	monitor = "HDMI-A-2",
+	monitor = monitor_role.name_for(monitor_role.portrait),
 	tag = "+" .. window_tags.privacy,
 })
-hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2", tag = "+" .. window_tags.privacy })
+hl.window_rule({
+	match = { class = "^(floorp)$" },
+	monitor = monitor_role.name_for(monitor_role.portrait),
+	tag = "+" .. window_tags.privacy,
+})
 
 -- xfreerdp (FreeRDP)
 hl.window_rule({ match = { initial_class = "^(xfreerdp)$" }, fullscreen = true })
