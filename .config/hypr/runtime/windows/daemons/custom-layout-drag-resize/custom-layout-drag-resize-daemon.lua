@@ -5,24 +5,28 @@ local unix = require("socket.unix")
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local hypr_ipc = require("runtime.lib.hypr-ipc")
+local daemon = require("runtime.lib.daemon")
 local json = require("lib.json")
 local monitor_role = require("lib.monitor_role")
 local profile_state = require("lib.profile_state")
 local window_tags = require("lib.window_tags")
 local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 
-local command_socket_path = hypr_ipc.instance_socket_path("clr.sock")
-local state_file = hypr_ipc.instance_path("custom-layout-drag-resize.state")
-local pid_file = hypr_ipc.instance_path("custom-layout-drag-resize.pid")
+local kit = daemon.new({})
+local command_socket_path = kit:socket_path("clr.sock")
+local state_file = kit:instance_path("custom-layout-drag-resize.state")
+local pid_file = kit:instance_path("custom-layout-drag-resize.pid")
 local monitors_by_id = {}
 local drag_active = false
 local quit_requested = false
 local latest_control_sequence = 0
-local hypr_socket = hypr_ipc.socket_path(".socket.sock")
 
 local function request(message)
-	return hypr_ipc.request(message, { path = hypr_socket, timeout = 0.2 })
+	local response, err = kit:request(message, { timeout = 0.2 })
+	if err ~= nil then
+		error(err, 0)
+	end
+	return response or ""
 end
 
 local function eval(code)
@@ -30,14 +34,7 @@ local function eval(code)
 end
 
 local function read_file(path)
-	local handle = io.open(path, "r")
-	if not handle then
-		return ""
-	end
-
-	local value = handle:read("*l") or ""
-	handle:close()
-	return value
+	return (kit:read_file(path) or ""):match("^[^\n]*")
 end
 
 local function restore_resize_animation()
@@ -56,15 +53,11 @@ end
 
 local function active_monitor_info()
 	monitors_by_id = {}
-	for _, monitor in ipairs(json.array(request("j/monitors"))) do
-		local id = monitor.id
-		if id then
-			local refresh = monitor.refreshRate or 60
-			monitors_by_id[id] = {
-				name = monitor.name,
-				poll_interval = math.max(0.006, math.min(0.017, 1 / refresh)),
-			}
-		end
+	for _, monitor in ipairs(kit:monitors({ force = true })) do
+		monitors_by_id[tonumber(monitor.id)] = {
+			name = monitor.name,
+			poll_interval = math.max(0.006, math.min(0.017, 1 / monitor.refresh_rate)),
+		}
 	end
 	return monitors_by_id
 end
@@ -160,7 +153,7 @@ end
 
 local function hovered_window_info(x, y)
 	local best = nil
-	for _, candidate in ipairs(json.array(request("j/clients"))) do
+	for _, candidate in ipairs(kit:clients()) do
 		local client = client_window_info(candidate)
 		if client_contains_cursor(client, x, y) and preferred_hover_candidate(client, best) then
 			best = client
@@ -222,9 +215,7 @@ local function dispatch(command, target_id, edge, position)
 end
 
 local function write_file(path, value)
-	local handle = assert(io.open(path, "w"))
-	handle:write(value)
-	handle:close()
+	kit:write_file(path, value)
 end
 
 local function resize_edge(axis, cursor, x, y, width, height)

@@ -6,12 +6,12 @@ local home = os.getenv("HOME")
 local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
-local json = require("lib.json")
 local command = require("lib.command")
+local daemon = require("runtime.lib.daemon")
 local profile_state = require("lib.profile_state")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
 local gaming = require("gaming")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
+local kit = daemon.new({})
 local reconnect_delay_seconds = 1
 local event_idle_timeout_seconds = 5
 local diagnostic_interval_seconds = 30
@@ -48,20 +48,12 @@ local function apply_presentation(presentation)
 	return command.ok("hyprctl eval " .. command.arg(expression) .. " >/dev/null 2>&1")
 end
 
-local function get_clients()
-	local ok, clients = pcall(hypr_ipc.request, "j/clients")
-	if ok and clients and clients ~= "" then
-		return json.array(clients)
+local function request(message)
+	local response, err = kit:request(message)
+	if err ~= nil then
+		error(err, 0)
 	end
-	return {}
-end
-
-local function get_monitors()
-	local ok, monitors = pcall(hypr_ipc.request, "j/monitors")
-	if ok and monitors and monitors ~= "" then
-		return json.array(monitors)
-	end
-	return {}
+	return response
 end
 
 local function workspace_name(client)
@@ -100,7 +92,7 @@ end
 
 local function get_gaming_window_count(clients)
 	local count = 0
-	for _, client in ipairs(clients or get_clients()) do
+	for _, client in ipairs(clients or kit:clients()) do
 		if
 			not starts_with(workspace_name(client), minimized_workspace_prefix)
 			and not has_profile_excluded_title(client)
@@ -114,7 +106,7 @@ end
 
 local function get_gaming_workspace_window_count(clients)
 	local count = 0
-	for _, client in ipairs(clients or get_clients()) do
+	for _, client in ipairs(clients or kit:clients()) do
 		if workspace_name(client) == gaming_workspace and has_game_content(client) then
 			count = count + 1
 		end
@@ -125,7 +117,7 @@ end
 
 local function get_freezable_gaming_windows(clients)
 	local windows = {}
-	for _, client in ipairs(clients or get_clients()) do
+	for _, client in ipairs(clients or kit:clients()) do
 		local workspace = workspace_name(client)
 		if
 			(workspace == gaming_workspace or starts_with(workspace, minimized_workspace_prefix))
@@ -145,7 +137,7 @@ local function workspace_visible(workspace, monitors)
 		monitor_field = "specialWorkspace"
 	end
 
-	for _, monitor in ipairs(monitors or get_monitors()) do
+	for _, monitor in ipairs(monitors or kit:monitors({ force = true })) do
 		local active_workspace = monitor[monitor_field]
 		if active_workspace and active_workspace.name == workspace then
 			return true
@@ -199,7 +191,7 @@ end
 
 local function sync_gaming_freeze_state(clients, monitors)
 	local windows = get_freezable_gaming_windows(clients)
-	monitors = monitors or get_monitors()
+	monitors = monitors or kit:monitors({ force = true })
 
 	local tracked_pids = {}
 	local should_freeze_by_pid = {}
@@ -296,7 +288,7 @@ end
 
 local function overlay_window_count(clients)
 	local count = 0
-	for _, client in ipairs(clients or get_clients()) do
+	for _, client in ipairs(clients or kit:clients()) do
 		if workspace_name(client) == gaming_overlay_workspace then
 			count = count + 1
 		end
@@ -309,7 +301,7 @@ local function lua_string(value)
 end
 
 local function gaming_workspace_monitor(monitors)
-	monitors = monitors or get_monitors()
+	monitors = monitors or kit:monitors({ force = true })
 	for _, monitor in ipairs(monitors) do
 		local active_workspace = monitor.activeWorkspace
 		if active_workspace and active_workspace.name == gaming_workspace then
@@ -326,7 +318,7 @@ local function focus_previous_workspace_after_game_close(clients, monitors)
 	end
 
 	local target_monitor_id = nil
-	for _, monitor in ipairs(monitors or get_monitors()) do
+	for _, monitor in ipairs(monitors or kit:monitors({ force = true })) do
 		if monitor.name == target_monitor then
 			target_monitor_id = monitor.id
 			break
@@ -337,7 +329,7 @@ local function focus_previous_workspace_after_game_close(clients, monitors)
 	end
 
 	local candidate = nil
-	for _, client in ipairs(clients or get_clients()) do
+	for _, client in ipairs(clients or kit:clients()) do
 		local workspace = workspace_name(client)
 		if
 			client.monitor == target_monitor_id
@@ -350,7 +342,7 @@ local function focus_previous_workspace_after_game_close(clients, monitors)
 	end
 
 	if candidate then
-		hypr_ipc.request("dispatch hl.dsp.focus({ workspace = " .. lua_string(workspace_name(candidate)) .. " })")
+		request("dispatch hl.dsp.focus({ workspace = " .. lua_string(workspace_name(candidate)) .. " })")
 	end
 end
 
@@ -359,8 +351,8 @@ local function toggle_gaming_overlay(monitor_name)
 		return
 	end
 
-	hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(monitor_name) .. " })")
-	hypr_ipc.request(
+	request("dispatch hl.dsp.focus({ monitor = " .. lua_string(monitor_name) .. " })")
+	request(
 		"dispatch hl.dsp.workspace.toggle_special(" .. lua_string(gaming_overlay_workspace:gsub("^special:", "")) .. ")"
 	)
 end
@@ -370,7 +362,7 @@ local function maybe_show_gaming_overlay(current_count, last_count, monitors)
 		return
 	end
 
-	monitors = monitors or get_monitors()
+	monitors = monitors or kit:monitors({ force = true })
 	local target_monitor = gaming_workspace_monitor(monitors)
 	if target_monitor == "" then
 		return
@@ -391,7 +383,7 @@ local function maybe_show_gaming_overlay(current_count, last_count, monitors)
 end
 
 local function hide_gaming_overlay_outside_workspace(monitors)
-	monitors = monitors or get_monitors()
+	monitors = monitors or kit:monitors({ force = true })
 	local target_monitor = gaming_workspace_monitor(monitors)
 	local focused_monitor = ""
 	local hidden_overlay = false
@@ -410,7 +402,7 @@ local function hide_gaming_overlay_outside_workspace(monitors)
 	end
 
 	if hidden_overlay and focused_monitor ~= "" then
-		hypr_ipc.request("dispatch hl.dsp.focus({ monitor = " .. lua_string(focused_monitor) .. " })")
+		request("dispatch hl.dsp.focus({ monitor = " .. lua_string(focused_monitor) .. " })")
 	end
 end
 
@@ -449,13 +441,13 @@ local function run()
 
 	while true do
 		local ok, err = pcall(function()
-			local events = hypr_ipc.connect_event_socket({ read_timeout = event_idle_timeout_seconds })
+			local events = kit:connect_events({ read_timeout = event_idle_timeout_seconds })
 			if event_reconnect_pending then
 				log_diagnostic("event-recovered", "event socket reconnected")
 				event_reconnect_pending = false
 			end
-			local clients = get_clients()
-			local monitors = get_monitors()
+			local clients = kit:clients()
+			local monitors = kit:monitors({ force = true })
 			last_overlay_count = overlay_window_count(clients)
 			last_gaming_workspace_count = get_gaming_workspace_window_count(clients)
 			hide_gaming_overlay_outside_workspace(monitors)
@@ -469,19 +461,19 @@ local function run()
 				line = line or partial
 				local kind = line and event_kind(line) or nil
 				if kind then
-					local clients = get_clients()
+					local clients = kit:clients()
 					local current_gaming_workspace_count = get_gaming_workspace_window_count(clients)
 					local current_overlay_count = overlay_window_count(clients)
 					local monitors = nil
 					if current_overlay_count > last_overlay_count or kind == "workspace" then
-						monitors = get_monitors()
+						monitors = kit:monitors({ force = true })
 					end
 					if
 						line:match("^closewindow")
 						and last_gaming_workspace_count > 0
 						and current_gaming_workspace_count == 0
 					then
-						monitors = monitors or get_monitors()
+						monitors = monitors or kit:monitors({ force = true })
 						focus_previous_workspace_after_game_close(clients, monitors)
 					end
 

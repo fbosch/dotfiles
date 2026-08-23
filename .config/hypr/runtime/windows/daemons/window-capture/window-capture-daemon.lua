@@ -8,7 +8,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command = require("lib.command")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
+local daemon = require("runtime.lib.daemon")
 
 ffi.cdef([[
   typedef int pid_t;
@@ -60,6 +60,7 @@ local capture_window_preview
 local worker_pid = nil
 local worker_token = nil
 local write_sequence = 0
+local kit = daemon.new({})
 
 local sigterm = 15
 local sigkill = 9
@@ -94,28 +95,12 @@ local function now_ms()
 	return math.floor(socket.gettime() * 1000)
 end
 
-local function read_file(path)
-	local handle = io.open(path, "r")
-	if not handle then
-		return nil
-	end
-
-	local content = handle:read("*a")
-	handle:close()
-	return content
-end
-
 local function read_number(path)
-	return tonumber(read_file(path) or "")
+	return tonumber(kit:read_file(path) or "")
 end
 
 local function write_file(path, content)
-	write_sequence = write_sequence + 1
-	local temporary_path = path .. ".tmp." .. tostring(ffi.C.getpid()) .. "." .. tostring(write_sequence)
-	local handle = assert(io.open(temporary_path, "w"))
-	handle:write(content)
-	handle:close()
-	assert(os.rename(temporary_path, path))
+	kit:write_shared_file(path, content)
 end
 
 local function remove_file(path)
@@ -137,23 +122,8 @@ local function mkdir(path)
 	command.ok("mkdir -p " .. command.arg(path) .. " >/dev/null 2>&1")
 end
 
-local function query(request)
-	local ok, response = pcall(hypr_ipc.request, request, { timeout = 0.5 })
-	if ok and response and response ~= "" then
-		return response
-	end
-
-	local fallback = {
-		["j/activewindow"] = "hyprctl activewindow -j 2>/dev/null",
-		["j/clients"] = "hyprctl clients -j 2>/dev/null",
-		["j/monitors"] = "hyprctl monitors -j 2>/dev/null",
-	}
-
-	if fallback[request] then
-		return command.output(fallback[request])
-	end
-
-	return ""
+local function query(request_message)
+	return kit:query(request_message)
 end
 
 local function preview_id_for_window(window)
@@ -462,7 +432,7 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 		local sleep_ms = math.min(20, delay_ms - elapsed_sleep)
 		socket.sleep(sleep_ms / 1000)
 		elapsed_sleep = elapsed_sleep + sleep_ms
-		local current_change_id = read_file(workspace_change_file)
+		local current_change_id = kit:read_file(workspace_change_file)
 		if current_change_id and current_change_id:gsub("%s+$", "") ~= capture_id then
 			return
 		end
@@ -568,12 +538,12 @@ local function handle_event(line, capture_id, worker_owned)
 end
 
 local function current_pid()
-	local stat = read_file("/proc/self/stat") or ""
+	local stat = kit:read_file("/proc/self/stat") or ""
 	return stat:match("^(%d+)") or ""
 end
 
 local function current_start_time()
-	local stat = read_file("/proc/self/stat") or ""
+	local stat = kit:read_file("/proc/self/stat") or ""
 	local fields = {}
 	local remainder = stat:match("^%d+ %b() (.+)$") or ""
 	for field in remainder:gmatch("[^ ]+") do
@@ -594,7 +564,7 @@ local function acquire_daemon_lock()
 		return true
 	end
 
-	local pid = read_file(daemon_lock_dir .. "/pid") or ""
+	local pid = kit:read_file(daemon_lock_dir .. "/pid") or ""
 	pid = pid:gsub("%s+$", "")
 	if pid_is_running(pid) then
 		return false
@@ -611,7 +581,7 @@ local function acquire_daemon_lock()
 end
 
 local function worker_owner(lock_dir)
-	local owner = read_file((lock_dir or worker_lock_dir) .. "/owner") or ""
+	local owner = kit:read_file((lock_dir or worker_lock_dir) .. "/owner") or ""
 	local pid, token = owner:match("^(%d+)\t([^\n]+)")
 	return pid or "", token or ""
 end
@@ -741,7 +711,7 @@ end
 run_capture_worker = function()
 	-- The reader overwrites pending state while this worker captures the latest event.
 	while true do
-		local pending_event = read_file(pending_event_file)
+		local pending_event = kit:read_file(pending_event_file)
 		if pending_event then
 			remove_file(pending_event_file)
 			local capture_id, line = pending_event:match("^([^\t]+)\t(.*)$")
@@ -779,7 +749,7 @@ end
 local function run_event_loop()
 	local connection_failed = false
 	while true do
-		local ok, client = pcall(hypr_ipc.connect_event_socket, {
+		local ok, client = pcall(kit.connect_events, kit, {
 			connect_timeout = event_reconnect_delay_s,
 			read_timeout = event_read_timeout_s,
 		})
@@ -802,7 +772,7 @@ local function run_event_loop()
 					enqueue_event(line)
 				end
 				if err == "timeout" then
-					if read_file(pending_event_file) then
+					if kit:read_file(pending_event_file) then
 						start_capture_worker()
 					end
 				elseif err == "closed" then

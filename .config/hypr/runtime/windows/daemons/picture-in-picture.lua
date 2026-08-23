@@ -8,19 +8,18 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local ags_ipc = require("runtime.lib.ags-ipc")
 local command = require("lib.command")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
+local daemon = require("runtime.lib.daemon")
 local json = require("lib.json")
 local pip = require("lib.picture_in_picture")
 
-local monitor_cache_ttl_s = 10
 local drag_interval_s = 0.08
 local client_drag_settle_s = 0.2
 local open_window_delay_s = 0.1
 local waybar_position_vicinity = 12
-local control_socket_path = hypr_ipc.instance_socket_path("pip-monitor.sock")
+local kit = daemon.new({})
+local control_socket_path = kit:socket_path("pip-monitor.sock")
 
 local monitors = {}
-local monitor_cache_at = 0
 local waybar_visible = false
 local dragging = false
 local dragging_address = nil
@@ -41,24 +40,8 @@ local function log(message)
 	io.stderr:write("picture-in-picture: ", message, "\n")
 end
 
-local function read_file(path)
-	local handle = io.open(path, "r")
-	if not handle then
-		return ""
-	end
-
-	local content = handle:read("*a")
-	handle:close()
-	return content
-end
-
 local function request(message)
-	local ok, response = pcall(hypr_ipc.request, message)
-	if ok then
-		return response or ""
-	end
-
-	return ""
+	return kit:request(message) or ""
 end
 
 local function rectangle(left, top, width, height)
@@ -78,33 +61,21 @@ local function overlaps(first, second)
 end
 
 local function refresh_monitors()
-	if os.time() - monitor_cache_at <= monitor_cache_ttl_s and next(monitors) then
-		return true
-	end
-
-	local refreshed = {}
-	for _, monitor in ipairs(json.array(request("j/monitors"))) do
-		local width = tonumber(monitor.width) or 0
-		local height = tonumber(monitor.height) or 0
-		if monitor.transform == 1 or monitor.transform == 3 then
-			width, height = height, width
-		end
-		refreshed[monitor.name] = {
-			name = monitor.name,
-			id = tostring(monitor.id),
-			x = tonumber(monitor.x) or 0,
-			y = tonumber(monitor.y) or 0,
-			width = width,
-			height = height,
-		}
-	end
-
-	if next(refreshed) == nil then
+	local refreshed, err = kit:monitors()
+	if err ~= nil then
 		return next(monitors) ~= nil
 	end
 
-	monitors = refreshed
-	monitor_cache_at = os.time()
+	local by_name = {}
+	for _, monitor in ipairs(refreshed) do
+		by_name[monitor.name] = monitor
+	end
+
+	if next(by_name) == nil then
+		return next(monitors) ~= nil
+	end
+
+	monitors = by_name
 	return true
 end
 
@@ -117,7 +88,7 @@ local function monitor_for(window)
 end
 
 local function predicted_waybar_layers()
-	local config = json.object(read_file(os.getenv("HOME") .. "/.config/waybar/config"))
+	local config = json.object(kit:read_file(os.getenv("HOME") .. "/.config/waybar/config") or "")
 	local height = tonumber(config.height)
 	if config.position ~= "bottom" or not height then
 		return {}
@@ -181,7 +152,7 @@ local function observe_client_drag()
 	local now = socket.gettime()
 	local seen = {}
 	local moved_address = nil
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if is_pip(window) then
 			local address = window.address
 			local position, size = pip_geometry(window)
@@ -347,7 +318,7 @@ local function move_pip_corner(direction, address)
 
 	refresh_monitors()
 	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if is_pip(window) and window.address == address then
 			local monitor = monitor_for(window)
 			if not monitor then
@@ -415,7 +386,7 @@ local function finish_resize()
 		return
 	end
 
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if window.address == anchor.address and is_pip(window) then
 			local width = tonumber(window.size[1]) or 0
 			local height = tonumber(window.size[2]) or 0
@@ -476,7 +447,7 @@ local function update_snap_preview()
 		return
 	end
 
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if is_pip(window) and window.address == dragging_address then
 			local monitor = monitor_for(window)
 			local target = monitor and snap_target(window, monitor, bars)
@@ -493,7 +464,7 @@ end
 local function snap_pip(address)
 	refresh_monitors()
 	local bars = waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if is_pip(window) and (address == nil or window.address == address) then
 			local monitor = monitor_for(window)
 			if monitor then
@@ -512,7 +483,7 @@ end
 local function move_pip(mode, address, assign_default_corner)
 	refresh_monitors()
 	local bars = mode == "show" and predicted_waybar_layers() or visible_waybar_layers()
-	for _, window in ipairs(json.array(request("j/clients"))) do
+	for _, window in ipairs(kit:clients()) do
 		if is_pip(window) and (address == nil or window.address == address) then
 			local monitor = monitor_for(window)
 			if monitor then
@@ -637,7 +608,7 @@ local function run()
 	refresh_monitors()
 	waybar_visible = next(visible_waybar_layers()) ~= nil
 	move_pip(waybar_visible and "show" or "hide")
-	event_socket = hypr_ipc.connect_event_socket({ read_timeout = 0 })
+	event_socket = kit:connect_events({ read_timeout = 0 })
 
 	control_server = assert(unix())
 	assert(control_server:bind(control_socket_path))
@@ -710,7 +681,7 @@ local function run()
 				end
 				if err == "closed" then
 					event_socket:close()
-					event_socket = hypr_ipc.connect_event_socket({ read_timeout = 0 })
+					event_socket = kit:connect_events({ read_timeout = 0 })
 				end
 			end
 		end

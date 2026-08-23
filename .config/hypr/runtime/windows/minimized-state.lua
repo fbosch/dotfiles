@@ -6,8 +6,8 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command_lib = require("lib.command")
+local daemon = require("runtime.lib.daemon")
 local gaming = require("gaming")
-local hypr_ipc = nil
 
 local minimized_workspace_prefix = "special:minimized"
 local desktop_workspace = "special:desktop"
@@ -17,6 +17,7 @@ local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local state_file = runtime_dir .. "/hypr-minimized-state.json"
 local state_lock = runtime_dir .. "/hypr-minimized-state.lock"
 local show_desktop_dir = runtime_dir .. "/hypr-show-desktop"
+local kit = daemon.new({})
 
 local function exit_from_status(ok, _, code)
 	if ok == true then
@@ -48,35 +49,12 @@ local function run_locked()
 	exit_from_status(os.execute(table.concat(command, " ")))
 end
 
-local function read_file(path)
-	local handle = io.open(path, "r")
-	if not handle then
-		return nil
-	end
-
-	local content = handle:read("*a")
-	handle:close()
-	return content
-end
-
-local function write_file(path, content)
-	local handle = assert(io.open(path, "w"))
-	handle:write(content)
-	handle:close()
-end
-
-local function temp_path_for(path)
-	return path .. ".tmp." .. tostring(os.time()) .. "." .. tostring(math.random(1000000))
-end
-
 local function write_file_atomic(path, content)
-	local temp = temp_path_for(path)
-	write_file(temp, content)
-	assert(os.rename(temp, path))
+	kit:write_shared_file(path, content)
 end
 
 local function load_state()
-	return json.object(read_file(state_file))
+	return json.object(kit:read_file(state_file))
 end
 
 local function save_state(state)
@@ -94,39 +72,8 @@ local function ensure_state_file()
 	return state
 end
 
-local function request(message)
-	if not hypr_ipc then
-		local ok, ipc = pcall(dofile, config_dir .. "/runtime/lib/hypr-ipc.lua")
-		if ok then
-			hypr_ipc = ipc
-		end
-	end
-
-	local ok, response = hypr_ipc and pcall(hypr_ipc.request, message)
-	if ok and response and response ~= "" then
-		return response
-	end
-
-	local fallback = {
-		["j/activewindow"] = "hyprctl activewindow -j 2>/dev/null",
-		["j/clients"] = "hyprctl clients -j 2>/dev/null",
-		["j/monitors"] = "hyprctl monitors -j 2>/dev/null",
-	}
-	local command = fallback[message]
-	if not command then
-		return ""
-	end
-
-	local handle = io.popen(command, "r")
-	local output = handle and handle:read("*a") or ""
-	if handle then
-		handle:close()
-	end
-	return output
-end
-
 local function query_json(message, fallback)
-	return json.decode_or(request(message), fallback)
+	return json.decode_or(kit:query(message), fallback)
 end
 
 local function lua_quote(value)
@@ -143,15 +90,7 @@ local function dispatch_lua(script)
 		end
 	end
 
-	if not hypr_ipc then
-		local load_ok, ipc = pcall(require, "runtime.lib.hypr-ipc")
-		if load_ok then
-			hypr_ipc = ipc
-		end
-	end
-
-	local ok = hypr_ipc and pcall(hypr_ipc.request, "dispatch " .. script)
-	if ok then
+	if kit:request("dispatch " .. script) ~= nil then
 		return
 	end
 
@@ -522,7 +461,7 @@ local function mkdir_p(path)
 end
 
 local function restore_show_desktop(state_path, current_workspace)
-	local state = json.object(read_file(state_path))
+	local state = json.object(kit:read_file(state_path))
 	local target_workspace = state.workspace or current_workspace
 
 	for _, window in ipairs(json.array(state.windows)) do
@@ -576,7 +515,7 @@ local function toggle_show_desktop()
 	end
 
 	local state_path = state_path_for_show_desktop(monitor_name, current_workspace)
-	if read_file(state_path) then
+	if kit:read_file(state_path) then
 		restore_show_desktop(state_path, current_workspace)
 		return
 	end

@@ -7,14 +7,15 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command = require("lib.command")
+local daemon = require("runtime.lib.daemon")
 local rate_limit = require("lib.rate_limit")
 local state_rules = require("runtime.windows.daemons.window-state.rules")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
 local rules_lua_file = config_dir .. "/rules/window-state.lua"
-local state_file = hypr_ipc.instance_path("window-state.cache")
-local debounce_file = hypr_ipc.instance_path("window-state-debounce")
+local kit = daemon.new({})
+local state_file = kit:instance_path("window-state.cache")
+local debounce_file = kit:instance_path("window-state-debounce")
 local debounce_delay = 1
 local poll_interval_active_idle = 0.05
 local poll_interval_active_busy = 0.15
@@ -28,16 +29,13 @@ local selector_state = {
 	selectors = {},
 	matchers_json = "[]",
 }
-local monitors_json = "[]"
-local monitors_cache_json = nil
-local monitors_cache = {}
+local monitors = {}
 local rules_cache = {}
 local current_hash = ""
 local debounce_started_at = nil
 local polling = false
 local next_poll_at = nil
 local lua_pattern_cache = {}
-local state_write_sequence = 0
 local event_reconnect_at = nil
 
 local function now()
@@ -51,36 +49,11 @@ end
 
 local log_rate_limited, reset_rate_limit = rate_limit.new(log, event_reconnect_log_interval, now)
 
-local function read_file(path)
-	local handle = io.open(path, "r")
-	if not handle then
-		return nil
-	end
-	local content = handle:read("*a")
-	handle:close()
-	return content
-end
-
-local function write_file(path, content)
-	local handle = assert(io.open(path, "w"))
-	handle:write(content)
-	handle:close()
-end
-
-local function write_shared_file(path, content)
-	state_write_sequence = state_write_sequence + 1
-	local temporary = string.format("%s.%d.%d.tmp", path, math.floor(now() * 1000000), state_write_sequence)
-	local handle = assert(io.open(temporary, "w"))
-	handle:write(content)
-	handle:close()
-	assert(os.rename(temporary, path))
-end
-
-local query_socket_path = hypr_ipc.socket_path(".socket.sock")
-local event_socket_path = hypr_ipc.socket_path(".socket2.sock")
+local query_socket_path = kit:socket_path(".socket.sock")
+local event_socket_path = kit:socket_path(".socket2.sock")
 
 local function request(message)
-	return hypr_ipc.request(message, { path = query_socket_path })
+	return kit:request(message, { path = query_socket_path })
 end
 
 local function parse_selectors()
@@ -88,11 +61,11 @@ local function parse_selectors()
 end
 
 local function fetch_monitors()
-	monitors_json = request("j/monitors")
-	if not monitors_json or monitors_json == "" then
-		monitors_json = "[]"
+	local fetched, err = kit:monitors({ force = true })
+	if err ~= nil or next(fetched) == nil then
 		error("monitors query failed")
 	end
+	monitors = fetched
 end
 
 local function lua_pattern_for_regex(pattern)
@@ -159,26 +132,15 @@ local function matched_selector(client)
 end
 
 local function monitor_index()
-	if monitors_cache_json == monitors_json then
-		return monitors_cache
-	end
-
 	local indexed = {}
-	for _, monitor in ipairs(json.array(monitors_json)) do
-		indexed[tostring(monitor.id)] = {
-			name = monitor.name or "",
-			x = tonumber(monitor.x) or 0,
-			y = tonumber(monitor.y) or 0,
+	for _, monitor in ipairs(monitors) do
+		indexed[monitor.id] = {
+			name = monitor.name,
+			x = monitor.x,
+			y = monitor.y,
 		}
 	end
-
-	monitors_cache_json = monitors_json
-	monitors_cache = indexed
-	return monitors_cache
-end
-
-local function number_at(values, index)
-	return tonumber(values and values[index]) or 0
+	return indexed
 end
 
 local function persisted_tags(client, selector)
@@ -212,15 +174,15 @@ local function get_window_states()
 		return "[]"
 	end
 
-	local clients = request("j/clients")
-	if not clients or clients == "" then
+	local clients, clients_err = kit:clients()
+	if clients_err ~= nil then
 		log_rate_limited("clients-query", "clients query failed")
 		return "[]"
 	end
 
 	local mon_map = monitor_index()
 	local windows = {}
-	for _, client in ipairs(json.array(clients)) do
+	for _, client in ipairs(clients) do
 		local windowed = (tonumber(client.fullscreen) or 0) == 0 and (tonumber(client.fullscreenClient) or 0) == 0
 		if client.floating == true and windowed then
 			local selector = matched_selector(client)
@@ -231,10 +193,10 @@ local function get_window_states()
 					matcher = selector.matcher,
 					pattern = selector.pattern,
 					monitor = selector.per_monitor and monitor.name or "",
-					x = number_at(client.at, 1) - monitor.x,
-					y = number_at(client.at, 2) - monitor.y,
-					width = number_at(client.size, 1),
-					height = number_at(client.size, 2),
+					x = client.at[1] - monitor.x,
+					y = client.at[2] - monitor.y,
+					width = client.size[1],
+					height = client.size[2],
 					tags = persisted_tags(client, selector),
 				}
 			end
@@ -286,7 +248,7 @@ local function update_rules(windows)
 	state_rules.update_cache_from_windows(rules_cache, windows)
 
 	local changed = write_lua_rules_cache_file()
-	write_shared_file(state_file, windows .. "\n")
+	kit:write_shared_file(state_file, windows .. "\n")
 
 	if not changed then
 		return
@@ -357,9 +319,9 @@ local function check_and_save_with_state(state)
 	end
 
 	if states_changed(state) then
-		write_shared_file(state_file, state .. "\n")
+		kit:write_shared_file(state_file, state .. "\n")
 		debounce_started_at = now()
-		write_file(debounce_file, tostring(math.floor(debounce_started_at)) .. "\n")
+		kit:write_file(debounce_file, tostring(math.floor(debounce_started_at)) .. "\n")
 		return
 	end
 
@@ -371,7 +333,7 @@ local function check_and_save_with_state(state)
 end
 
 local function flush_pending_cached_state()
-	local state = read_file(state_file)
+	local state = kit:read_file(state_file)
 	if is_state_empty(state) then
 		return false
 	end
@@ -391,7 +353,7 @@ end
 local function immediate_save()
 	local state = get_window_states()
 	if is_state_empty(state) then
-		if debounce_started_at or read_file(debounce_file) then
+		if debounce_started_at or kit:read_file(debounce_file) then
 			flush_pending_cached_state()
 		end
 		return state
@@ -464,7 +426,7 @@ local function handle_event(event)
 end
 
 local function connect_events()
-	return hypr_ipc.connect_event_socket({ path = event_socket_path, read_timeout = 0 })
+	return kit:connect_events({ path = event_socket_path, read_timeout = 0 })
 end
 
 local function schedule_event_reconnect(events, reason)
@@ -509,8 +471,8 @@ local function reconnect_events()
 end
 
 local function startup()
-	hypr_ipc.assert_socket_connects(query_socket_path)
-	hypr_ipc.assert_socket_connects(event_socket_path)
+	kit:assert_socket_connects(query_socket_path)
+	kit:assert_socket_connects(event_socket_path)
 
 	log("started (LuaSocket events + adaptive polling)")
 
@@ -522,7 +484,7 @@ local function startup()
 		log("WARNING: Failed to refresh window-state rules")
 	end
 	fetch_monitors()
-	if read_file(debounce_file) then
+	if kit:read_file(debounce_file) then
 		flush_pending_cached_state()
 	end
 
