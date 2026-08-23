@@ -11,7 +11,7 @@ not create another special case.
 - A bounded action is a one-shot helper, even when it lives beside a daemon. Do
   not add daemon lifecycle machinery to a one-shot command.
 - Keep a one-shot mode with its daemon only when both share the same feature
-  contract. `minimized-state` and `window-capture` are examples.
+  contract. `window-capture` is an example.
 
 ## Ownership And Naming
 
@@ -97,8 +97,8 @@ singleton external process needs an explicit ownership mechanism.
   relies on process ownership, lock state, and reconnect diagnostics instead.
 - A health check proves liveness, not readiness. Add a `status` command only
   when callers need to distinguish ready and degraded states.
-- Prefer Hyprland socket2 events for compositor changes. Query state after
-  relevant events instead of continuously polling clients or monitors.
+- Prefer native `hl.on` events for compositor-resident Lua behavior. Use
+  Hyprland socket2 events when an external daemon must react to compositor changes.
 - Polling is appropriate only when Hyprland has no event, for pointer or drag
   sampling, or for a short convergence period.
 - Bound and debounce polling. Use adaptive intervals where interaction rate

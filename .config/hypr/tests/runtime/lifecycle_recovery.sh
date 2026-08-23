@@ -81,14 +81,12 @@ restart_log="$test_dir/restart.log"
 FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
 # The recovery script intentionally launches replacements in the background.
 # Wait for every launcher stub before assertions or fixture cleanup can race it.
-wait_for_log_count "$restart_log" uwsm-app 15
-assert_contains "$restart_log" 'pkill -f minimized-state-daemon'
+wait_for_log_count "$restart_log" uwsm-app 14
 assert_contains "$restart_log" 'pkill -f gaming-session-watchdog'
-assert_contains "$restart_log" 'pgrep -f minimized-state-daemon\.(sh|lua)'
 assert_contains "$restart_log" 'pgrep -f gaming-session-watchdog\.(sh|lua)'
-assert_contains "$restart_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh"
 assert_contains "$restart_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh"
 assert_contains "$restart_log" 'uwsm-app -s s -- atuin daemon start'
+assert_not_contains "$restart_log" 'minimized-state-daemon'
 assert_not_contains "$restart_log" 'pkill -f custom-layout-drag-resize'
 assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
 

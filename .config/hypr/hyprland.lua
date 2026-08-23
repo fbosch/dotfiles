@@ -14,6 +14,7 @@ require("layouts.ultrawide_master")
 require("layouts.portrait_rows")
 require("rules.workspace")
 require("keybinds")
+require("runtime.windows.minimized-state").register_lifecycle()
 require("animations")
 
 local generated = loader.apply_window_rule_phase(config_dir, "generated")
