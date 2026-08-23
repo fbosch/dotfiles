@@ -2,7 +2,9 @@
 
 set -euo pipefail
 
-LOCK_FILE="${XDG_RUNTIME_DIR:-/tmp}/hypr-minimized-state-daemon.lock"
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+LOCK_FILE="$(hypr_instance_path "minimized-state-daemon.lock")"
 exec 9>"$LOCK_FILE"
 if command -v flock &>/dev/null; then
     if ! flock -n 9; then

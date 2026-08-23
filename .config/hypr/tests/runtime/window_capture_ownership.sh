@@ -141,7 +141,7 @@ start_daemon() {
     "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.sh" \
     >"$test_dir/daemon.log" 2>&1 &
   wrapper_pid="$!"
-  wait_for_file "$runtime_dir/hypr-window-capture-daemon.lock.d/pid" "daemon lock"
+  wait_for_file "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d/pid" "daemon lock"
 }
 
 capturectl() {
@@ -182,7 +182,7 @@ stop_daemon() {
   fi
   wait "$wrapper_pid" || true
   wrapper_pid=""
-  wait_for_absent "$runtime_dir/hypr-window-capture-daemon.lock.d" "daemon lock cleanup"
+  wait_for_absent "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d" "daemon lock cleanup"
 }
 
 reader_failed="$test_dir/reader-failed"
@@ -206,16 +206,16 @@ reader_pid="$!"
 sleep 0.01 &
 stale_pid="$!"
 wait "$stale_pid"
-mkdir "$runtime_dir/hypr-window-capture-worker.lock.d"
-printf '%s\tstale-token\n' "$stale_pid" > "$runtime_dir/hypr-window-capture-worker.lock.d/owner"
+mkdir "$runtime_dir/hypr/fixture/window-capture-worker.lock.d"
+printf '%s\tstale-token\n' "$stale_pid" > "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
 
 stale_trigger="$test_dir/stale-trigger"
 stale_sent="$test_dir/stale-sent"
 stale_owner_seen="$test_dir/stale-owner-seen"
 start_event_server "$stale_trigger" "$stale_sent"
 start_daemon
-daemon_pid="$(<"$runtime_dir/hypr-window-capture-daemon.lock.d/pid")"
-wait_for_file "$runtime_dir/hypr-window-capture-daemon.lock.d/owner" "daemon owner record"
+daemon_pid="$(<"$runtime_dir/hypr/fixture/window-capture-daemon.lock.d/pid")"
+wait_for_file "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d/owner" "daemon owner record"
 capture_status="$(capturectl status)"
 [[ "$capture_status" == *'daemon=running'* ]]
 capturectl pause
@@ -243,21 +243,21 @@ setsid bash -c 'trap "exit 0" TERM INT; while true; do sleep 1; done' bash &
 unrelated_pid="$!"
 mkdir "$runtime_dir/unrelated-lock"
 printf '%s\t%s\n' "$unrelated_pid" "$(process_start_time "$unrelated_pid")" > "$runtime_dir/unrelated-lock/owner"
-mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/real-daemon-lock"
-mv "$runtime_dir/unrelated-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
+mv "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d" "$runtime_dir/real-daemon-lock"
+mv "$runtime_dir/unrelated-lock" "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d"
 capturectl pause
 if process_is_stopped "$unrelated_pid"; then
   exit 1
 fi
-mv "$runtime_dir/hypr-window-capture-daemon.lock.d" "$runtime_dir/unrelated-lock"
-mv "$runtime_dir/real-daemon-lock" "$runtime_dir/hypr-window-capture-daemon.lock.d"
+mv "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d" "$runtime_dir/unrelated-lock"
+mv "$runtime_dir/real-daemon-lock" "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d"
 rm -rf "$runtime_dir/unrelated-lock"
 kill -TERM -- "-$unrelated_pid" >/dev/null 2>&1 || true
 wait "$unrelated_pid" || true
 (
   for _ in {1..300}; do
-    if [[ -r "$runtime_dir/hypr-window-capture-worker.lock.d/owner" ]]; then
-      owner_line="$(<"$runtime_dir/hypr-window-capture-worker.lock.d/owner")"
+    if [[ -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" ]]; then
+      owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
       owner_pid="${owner_line%%$'\t'*}"
       owner_token="${owner_line#*$'\t'}"
       if [[ "$owner_pid" =~ ^[0-9]+$ && "$owner_pid" != "$stale_pid" && "$owner_token" != stale-token ]]; then
@@ -279,7 +279,7 @@ wait "$reader_pid"
 reader_pid=""
 test ! -e "$reader_failed"
 stop_daemon
-wait_for_absent "$runtime_dir/hypr-window-capture-worker.lock.d" "worker lock cleanup"
+wait_for_absent "$runtime_dir/hypr/fixture/window-capture-worker.lock.d" "worker lock cleanup"
 kill -TERM "$event_server_pid" >/dev/null 2>&1 || true
 wait "$event_server_pid" || true
 event_server_pid=""
@@ -287,8 +287,8 @@ event_server_pid=""
 # A live, externally recorded worker must survive a competing real daemon.
 setsid bash -c 'trap "exit 0" TERM INT; while true; do sleep 1; done' bash &
 live_worker_pid="$!"
-mkdir "$runtime_dir/hypr-window-capture-worker.lock.d"
-printf '%s\tlive-token\n' "$live_worker_pid" > "$runtime_dir/hypr-window-capture-worker.lock.d/owner"
+mkdir "$runtime_dir/hypr/fixture/window-capture-worker.lock.d"
+printf '%s\tlive-token\n' "$live_worker_pid" > "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
 
 live_trigger="$test_dir/live-trigger"
 live_sent="$test_dir/live-sent"
@@ -296,16 +296,16 @@ start_event_server "$live_trigger" "$live_sent"
 start_daemon
 touch "$live_trigger"
 wait_for_file "$live_sent" "live-owner event delivery"
-wait_for_file "$runtime_dir/hypr-window-capture-worker.lock.d/owner" "live owner record"
-owner_line="$(<"$runtime_dir/hypr-window-capture-worker.lock.d/owner")"
+wait_for_file "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" "live owner record"
+owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
 owner_pid="${owner_line%%$'\t'*}"
 owner_token="${owner_line#*$'\t'}"
 test "$owner_pid" = "$live_worker_pid"
 test "$owner_token" = live-token
 
 stop_daemon
-test -r "$runtime_dir/hypr-window-capture-worker.lock.d/owner"
-owner_line="$(<"$runtime_dir/hypr-window-capture-worker.lock.d/owner")"
+test -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
+owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
 owner_pid="${owner_line%%$'\t'*}"
 owner_token="${owner_line#*$'\t'}"
 test "$owner_pid" = "$live_worker_pid"
@@ -313,7 +313,7 @@ test "$owner_token" = live-token
 kill -TERM -- "-$live_worker_pid" >/dev/null 2>&1 || true
 wait "$live_worker_pid" || true
 live_worker_pid=""
-rm -rf "$runtime_dir/hypr-window-capture-worker.lock.d"
+rm -rf "$runtime_dir/hypr/fixture/window-capture-worker.lock.d"
 kill -TERM "$event_server_pid" >/dev/null 2>&1 || true
 wait "$event_server_pid" || true
 event_server_pid=""

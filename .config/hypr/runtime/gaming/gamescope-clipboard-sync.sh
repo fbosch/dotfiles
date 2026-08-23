@@ -4,12 +4,14 @@ set -euo pipefail
 
 SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
 
-if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
-  printf 'gamescope-clipboard-sync: XDG_RUNTIME_DIR is required\n' >&2
+if [[ -z "${XDG_RUNTIME_DIR:-}" || -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  printf 'gamescope-clipboard-sync: XDG_RUNTIME_DIR and HYPRLAND_INSTANCE_SIGNATURE are required\n' >&2
   exit 1
 fi
 
-RUNTIME_DIR="$XDG_RUNTIME_DIR/hypr-clipboard"
+# shellcheck disable=SC1091
+. "$(dirname "$SCRIPT_PATH")/../lib/hypr-ipc.sh"
+RUNTIME_DIR="$(hypr_instance_path "gamescope-clipboard-sync")"
 LOG_FILE="$RUNTIME_DIR/gamescope-clipboard-sync.log"
 LAST_VALUE_FILE="$RUNTIME_DIR/gamescope-wayland-last.txt"
 

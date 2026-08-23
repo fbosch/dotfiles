@@ -9,14 +9,16 @@ if [[ "$mode" != "daemon" ]]; then
   exec "$daemon" "$@"
 fi
 
-if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
-  printf 'window-capture: XDG_RUNTIME_DIR is required\n' >&2
+if [[ -z "${XDG_RUNTIME_DIR:-}" || -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  printf 'window-capture: XDG_RUNTIME_DIR and HYPRLAND_INSTANCE_SIGNATURE are required\n' >&2
   exit 1
 fi
 
-daemon_lock_dir="$XDG_RUNTIME_DIR/hypr-window-capture-daemon.lock.d"
-worker_lock_dir="$XDG_RUNTIME_DIR/hypr-window-capture-worker.lock.d"
-worker_owner_file="$XDG_RUNTIME_DIR/hypr-window-capture-worker.lock.d/owner"
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+daemon_lock_dir="$(hypr_instance_path "window-capture-daemon.lock.d")"
+worker_lock_dir="$(hypr_instance_path "window-capture-worker.lock.d")"
+worker_owner_file="$worker_lock_dir/owner"
 child_pid=""
 
 # shellcheck disable=SC2329

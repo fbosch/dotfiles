@@ -13,11 +13,10 @@ local minimized_workspace_prefix = "special:minimized"
 local desktop_workspace = "special:desktop"
 local gaming_workspace = gaming.workspace
 local gaming_overlay_workspace = "special:gaming-overlay"
-local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
-local state_file = runtime_dir .. "/hypr-minimized-state.json"
-local state_lock = runtime_dir .. "/hypr-minimized-state.lock"
-local show_desktop_dir = runtime_dir .. "/hypr-show-desktop"
 local kit = daemon.new({})
+local state_file = kit:instance_path("minimized-state.json")
+local state_lock = kit:instance_path("minimized-state.lock")
+local show_desktop_dir = kit:instance_path("show-desktop")
 
 local function exit_from_status(ok, _, code)
 	if ok == true then

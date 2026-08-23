@@ -20,7 +20,6 @@ ffi.cdef([[
 ]])
 
 local mode = arg[1] or "daemon"
-local runtime_dir = os.getenv("XDG_RUNTIME_DIR") or "/tmp"
 local screenshot_dir = os.getenv("HYPR_WINDOW_CAPTURE_DIR")
 if not screenshot_dir then
 	screenshot_dir = "/tmp/hypr-window-captures"
@@ -29,8 +28,13 @@ if not screenshot_dir then
 	end
 end
 
-local daemon_lock_dir = runtime_dir .. "/hypr-window-capture-daemon.lock.d"
-local worker_lock_dir = runtime_dir .. "/hypr-window-capture-worker.lock.d"
+local kit = daemon.new({})
+local daemon_lock_dir = kit:instance_path("window-capture-daemon.lock.d")
+local worker_lock_dir = kit:instance_path("window-capture-worker.lock.d")
+-- Lock exclusivity relies on plain mkdir failing when the lock dir exists, so
+-- only the parent chain may be created with -p.
+local instance_runtime_dir = daemon_lock_dir:match("^(.*)/")
+command.ok("mkdir -p " .. command.arg(instance_runtime_dir) .. " >/dev/null 2>&1")
 local last_screenshot_file = screenshot_dir .. "/.last_screenshot"
 local last_event_file = screenshot_dir .. "/.last_event"
 local capture_lock_file = screenshot_dir .. "/.capture_lock"
@@ -60,7 +64,6 @@ local capture_window_preview
 local worker_pid = nil
 local worker_token = nil
 local write_sequence = 0
-local kit = daemon.new({})
 
 local sigterm = 15
 local sigkill = 9
