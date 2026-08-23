@@ -1,0 +1,45 @@
+local script_path = debug.getinfo(1, "S").source:sub(2)
+local config_dir = script_path:match("^(.*)/tests/pip_control_protocol_spec%.lua$") or ".config/hypr"
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
+local pip = require("lib.picture_in_picture")
+
+local function assert_equal(actual, expected, message)
+	if actual ~= expected then
+		error(string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)), 2)
+	end
+end
+
+describe("picture-in-picture control protocol", function()
+	it("round-trips commands with an address", function()
+		local line = pip.control.encode("drag-start", "0x55f0")
+		assert_equal(line, "drag-start 0x55f0", "encoded line")
+
+		local action, address = pip.control.decode(line)
+		assert_equal(action, "drag-start", "action")
+		assert_equal(address, "0x55f0", "address")
+	end)
+
+	it("encodes bare commands without a trailing separator", function()
+		assert_equal(pip.control.encode("ping"), "ping", "bare command")
+		assert_equal(select(2, pip.control.decode("resize-end")), nil, "no address decoded")
+	end)
+
+	it("carries the move direction as a first-class field", function()
+		local line = pip.control.encode("move", "0x55f0", "left")
+		assert_equal(line, "move left 0x55f0", "encoded move")
+
+		local action, address, direction = pip.control.decode(line)
+		assert_equal(action, "move", "move action")
+		assert_equal(address, "0x55f0", "move address")
+		assert_equal(direction, "left", "move direction")
+	end)
+
+	it("rejects malformed input instead of guessing", function()
+		assert_equal(pip.control.decode(nil), nil, "nil line")
+		assert_equal(pip.control.decode(""), nil, "empty line")
+		local action = pip.control.decode("move")
+		assert_equal(action, "move", "move without payload still parses")
+		assert_equal(select(3, pip.control.decode("move")), nil, "move without payload has no direction")
+	end)
+end)

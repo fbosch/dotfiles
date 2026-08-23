@@ -10,8 +10,8 @@ local dragging = false
 local resizing = false
 local warp_active_after_focus = async.runtime_lua("windows/warp-cursor-to-active-window.lua", "--delay", "0.03")
 
-local function notify(event)
-	hl.dispatch(hl.dsp.exec_cmd("printf '" .. event .. "\\n' | " .. control_socket))
+local function notify(line)
+	hl.dispatch(hl.dsp.exec_cmd("printf '%s\\n' " .. command.arg(line) .. " | " .. control_socket))
 end
 
 local function active_pip()
@@ -25,9 +25,9 @@ function M.drag()
 	local active = active_pip()
 	if active then
 		dragging = true
-		notify("drag-start " .. active.address)
+		notify(pip.control.encode("drag-start", active.address))
 	else
-		notify("drag-cancel")
+		notify(pip.control.encode("drag-cancel"))
 	end
 
 	hl.dispatch(hl.dsp.window.drag())
@@ -35,9 +35,9 @@ end
 
 function M.finish_drag()
 	if dragging then
-		notify("drag-end")
+		notify(pip.control.encode("drag-end"))
 	else
-		notify("drag-cancel")
+		notify(pip.control.encode("drag-cancel"))
 	end
 
 	dragging = false
@@ -49,7 +49,7 @@ function M.start_resize(keep_aspect_ratio)
 	end
 
 	resizing = true
-	notify("resize-start")
+	notify(pip.control.encode("resize-start"))
 	if keep_aspect_ratio then
 		hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
 	end
@@ -65,7 +65,7 @@ function M.finish_resize(keep_aspect_ratio)
 	if keep_aspect_ratio then
 		hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 	end
-	notify("resize-end")
+	notify(pip.control.encode("resize-end"))
 	resizing = false
 	return true
 end
@@ -76,7 +76,7 @@ function M.move_corner(direction)
 		return false
 	end
 
-	notify("move " .. direction .. " " .. active.address)
+	notify(pip.control.encode("move", active.address, direction))
 	return true
 end
 

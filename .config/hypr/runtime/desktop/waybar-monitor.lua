@@ -11,6 +11,7 @@ local command = require("lib.command")
 local gaming = require("gaming.policies")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
+local pip = require("lib.picture_in_picture")
 
 local show_threshold = 20
 local hide_threshold = 60
@@ -171,14 +172,14 @@ local function swaync_visible()
 end
 
 local function show_waybar()
-	command.ok("printf 'waybar-show\\n' | " .. pip_control_socket)
+	command.ok("printf '%s\\n' " .. command.arg(pip.control.encode("waybar-show")) .. " | " .. pip_control_socket)
 	if command.ok("pkill -SIGUSR1 -f " .. command.arg(waybar_process_pattern) .. " >/dev/null 2>&1") then
 		waybar_visible = true
 	end
 end
 
 local function hide_waybar()
-	command.ok("printf 'waybar-hide\\n' | " .. pip_control_socket)
+	command.ok("printf '%s\\n' " .. command.arg(pip.control.encode("waybar-hide")) .. " | " .. pip_control_socket)
 	if command.ok("pkill -SIGUSR2 -f " .. command.arg(waybar_process_pattern) .. " >/dev/null 2>&1") then
 		waybar_visible = false
 	end

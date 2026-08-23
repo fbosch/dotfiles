@@ -538,13 +538,7 @@ end
 local function handle_control(control)
 	control:settimeout(0.05)
 	local message = control:receive("*l")
-	local action, address
-	if message then
-		action, address = message:match("^(%S+)%s*(.*)$")
-	end
-	if address == "" then
-		address = nil
-	end
+	local action, address, direction = pip.control.decode(message)
 	if action == "drag-start" then
 		dragging = true
 		dragging_address = address
@@ -563,11 +557,8 @@ local function handle_control(control)
 	elseif action == "resize-end" then
 		finish_resize()
 	elseif action == "move" then
-		if address then
-			local direction, window_address = address:match("^(%S+)%s+(%S+)$")
-			if direction and window_address then
-				move_pip_corner(direction, window_address)
-			end
+		if address and direction then
+			move_pip_corner(direction, address)
 		end
 	elseif action == "waybar-show" then
 		move_pip("show")
