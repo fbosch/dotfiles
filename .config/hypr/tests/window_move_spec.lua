@@ -75,7 +75,7 @@ local interaction
 local custom_layout
 local monitor_role = require("lib.monitor_role")
 local directional
-local order_state
+local intents
 local state
 
 local function reset(monitor, x, monitor_x, workspace_windows, name)
@@ -131,6 +131,7 @@ local function load_modules()
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
+	package.loaded["layouts.shared.intents"] = nil
 	package.loaded["runtime.lib.hypr-ipc"] = {
 		instance_path = function(name)
 			return "/tmp/" .. name
@@ -152,7 +153,7 @@ local function load_modules()
 	custom_layout = require("lib.window.custom_layout")
 	directional = require("lib.window.directional")
 	state = require("lib.window.state")
-	order_state = require("layouts.shared.order_state")
+	intents = require("layouts.shared.intents")
 end
 
 before_each(load_modules)
@@ -166,13 +167,9 @@ run("dp down moves window to portrait monitor", function()
 	directional.move(state, "down")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(
-		order_state.transfer_intent_for_window(active_window).monitor_role,
-		monitor_role.portrait,
-		"transfer role"
-	)
-	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
-	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
+	assert_equal(intents.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(intents.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
+	assert_equal(intents.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 	assert_equal(dispatched[2].args.x, 250, "cursor x")
 	assert_equal(dispatched[2].args.y, 400, "cursor y")
@@ -511,7 +508,7 @@ run("float toggle records ultrawide window center before tiling", function()
 
 	custom_layout.toggle_float(state)
 
-	local intent = order_state.placement_intent_for_window(active_window)
+	local intent = intents.placement_intent_for_window(active_window)
 	assert_equal(intent.layout_name, "ultrawide_master", "layout name")
 	assert_equal(intent.workspace_key, "2", "workspace key")
 	assert_equal(intent.axis, "x", "layout axis")
@@ -528,7 +525,7 @@ run("float toggle records portrait window center before tiling", function()
 
 	custom_layout.toggle_float(state)
 
-	local intent = order_state.placement_intent_for_window(active_window)
+	local intent = intents.placement_intent_for_window(active_window)
 	assert_equal(intent.layout_name, "portrait_rows", "layout name")
 	assert_equal(intent.axis, "y", "layout axis")
 	assert_equal(intent.position, 700, "window center")
@@ -542,7 +539,7 @@ run("float toggle falls through without placement intent", function()
 
 	custom_layout.toggle_float(state)
 
-	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(intents.placement_intent_for_window(active_window), nil, "placement intent")
 	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
 end)
 
@@ -553,7 +550,7 @@ run("float toggle falls through without complete geometry", function()
 
 	custom_layout.toggle_float(state)
 
-	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(intents.placement_intent_for_window(active_window), nil, "placement intent")
 	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
 end)
 
@@ -565,7 +562,7 @@ run("float toggle falls through without stable identity", function()
 
 	custom_layout.toggle_float(state)
 
-	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(intents.placement_intent_for_window(active_window), nil, "placement intent")
 	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
 end)
 
@@ -575,7 +572,7 @@ run("tiled to floating does not record placement intent", function()
 
 	custom_layout.toggle_float(state)
 
-	assert_equal(order_state.placement_intent_for_window(active_window), nil, "placement intent")
+	assert_equal(intents.placement_intent_for_window(active_window), nil, "placement intent")
 	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
 end)
 
@@ -586,7 +583,7 @@ run("float placement intent expires", function()
 	custom_layout.toggle_float(state)
 	timers[1].callback()
 
-	assert_equal(order_state.placement_intent_for_window(active_window), nil, "expired intent")
+	assert_equal(intents.placement_intent_for_window(active_window), nil, "expired intent")
 end)
 
 run("dp left edge moves window to portrait monitor", function()
@@ -594,13 +591,9 @@ run("dp left edge moves window to portrait monitor", function()
 	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(
-		order_state.transfer_intent_for_window(active_window).monitor_role,
-		monitor_role.portrait,
-		"transfer role"
-	)
-	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
-	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
+	assert_equal(intents.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
+	assert_equal(intents.transfer_intent_for_window(active_window).axis, "y", "transfer axis")
+	assert_equal(intents.transfer_intent_for_window(active_window).edge, "end", "transfer edge")
 	assert_equal(dispatched[2].op, "cursor.move", "cursor dispatcher")
 end)
 
@@ -628,7 +621,7 @@ run("floating dp window moves left to portrait without transfer intent", functio
 
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window), nil, "transfer intent")
+	assert_equal(intents.transfer_intent_for_window(active_window), nil, "transfer intent")
 end)
 
 run("floating window preserves its relative position across monitors", function()
@@ -698,11 +691,7 @@ run("dp only tiled window moves left to portrait", function()
 	directional.move(state, "left")()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "HDMI-A-2", "target monitor")
-	assert_equal(
-		order_state.transfer_intent_for_window(active_window).monitor_role,
-		monitor_role.portrait,
-		"transfer role"
-	)
+	assert_equal(intents.transfer_intent_for_window(active_window).monitor_role, monitor_role.portrait, "transfer role")
 end)
 
 run("dp multiple tiled windows still swap left", function()
@@ -750,12 +739,12 @@ run("hdmi right moves window to ultrawide monitor", function()
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
 	assert_equal(
-		order_state.transfer_intent_for_window(active_window).monitor_role,
+		intents.transfer_intent_for_window(active_window).monitor_role,
 		monitor_role.ultrawide,
 		"transfer role"
 	)
-	assert_equal(order_state.transfer_intent_for_window(active_window).axis, "x", "transfer axis")
-	assert_equal(order_state.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
+	assert_equal(intents.transfer_intent_for_window(active_window).axis, "x", "transfer axis")
+	assert_equal(intents.transfer_intent_for_window(active_window).edge, "start", "transfer edge")
 end)
 
 run("floating hdmi window moves right to ultrawide without transfer intent", function()
@@ -767,7 +756,7 @@ run("floating hdmi window moves right to ultrawide without transfer intent", fun
 
 	assert_equal(dispatched[1].op, "window.move", "dispatcher")
 	assert_equal(dispatched[1].args.monitor, "DP-2", "target monitor")
-	assert_equal(order_state.transfer_intent_for_window(active_window), nil, "transfer intent")
+	assert_equal(intents.transfer_intent_for_window(active_window), nil, "transfer intent")
 end)
 
 run("hdmi down uses portrait layout swap", function()

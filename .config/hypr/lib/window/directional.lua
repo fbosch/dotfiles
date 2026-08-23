@@ -1,6 +1,6 @@
 local async = require("lib.async")
 local monitor_role = require("lib.monitor_role")
-local order_state = require("layouts.shared.order_state")
+local intents = require("layouts.shared.intents")
 local pip = require("lib.picture_in_picture")
 local picture_in_picture = require("actions.picture-in-picture")
 
@@ -264,12 +264,12 @@ function M.move(state, value)
 				dispatch(move_dispatcher)
 			end
 		elseif normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
-			order_state.record_transfer_intent(active, ultrawide_transfer_start)
+			intents.record_transfer_intent(active, ultrawide_transfer_start)
 			dispatch(move_to_ultrawide)
 		elseif normalized == "right" and state.uses_custom_layout(active, monitor_role.ultrawide) then
 			dispatch(ultrawide_swap_right)
 		elseif normalized == "down" and state.uses_custom_layout(active, monitor_role.ultrawide) then
-			order_state.record_transfer_intent(active, portrait_transfer_end)
+			intents.record_transfer_intent(active, portrait_transfer_end)
 			dispatch(move_to_portrait)
 		elseif normalized == "down" and state.uses_custom_layout(active, monitor_role.portrait) then
 			dispatch(portrait_swap_down)
@@ -277,7 +277,7 @@ function M.move(state, value)
 			dispatch(portrait_swap_up)
 		elseif normalized == "left" and state.uses_custom_layout(active, monitor_role.ultrawide) then
 			if is_only_tiled_window(active) or on_ultrawide_left_edge(active) then
-				order_state.record_transfer_intent(active, portrait_transfer_end)
+				intents.record_transfer_intent(active, portrait_transfer_end)
 				dispatch(move_to_portrait)
 			else
 				dispatch(ultrawide_swap_left)

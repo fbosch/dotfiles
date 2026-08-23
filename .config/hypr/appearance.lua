@@ -48,7 +48,7 @@ hl.config({
 			ignore_opacity = false,
 			new_optimizations = true,
 			brightness = 1,
-			noise = 0.03,
+			noise = 0.025, -- frosted glass look
 			vibrancy = 0.5,
 			input_methods = true,
 			vibrancy_darkness = 0.05,

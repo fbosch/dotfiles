@@ -27,7 +27,7 @@ _G.__ULTRAWIDE_MASTER_DISABLE_STATE = true
 local monitor_role = require("lib.monitor_role")
 local ordered_axis = require("layouts.shared.ordered_axis")
 local persistent_state = require("layouts.shared.persistent_state")
-local order_state
+local intents
 
 local function make_target(index, active)
 	return {
@@ -122,7 +122,8 @@ local function load_layout()
 	package.loaded["layouts.portrait_rows"] = nil
 	package.loaded["layouts.shared.ordered_axis"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
-	order_state = require("layouts.shared.order_state")
+	package.loaded["layouts.shared.intents"] = nil
+	intents = require("layouts.shared.intents")
 	require("layouts.ultrawide_master")
 end
 
@@ -204,7 +205,7 @@ run("newly tiled window uses nearest resulting ultrawide slot center", function(
 
 	local tiled = make_target(303, true)
 	local ctx = make_context({ left, right, tiled }, workspace)
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -216,7 +217,7 @@ run("newly tiled window uses nearest resulting ultrawide slot center", function(
 	assert_box(left.placed, { x = 10, y = 20, w = 300, h = 500 }, "left target")
 	assert_box(right.placed, { x = 310, y = 20, w = 400, h = 500 }, "center target")
 	assert_box(tiled.placed, { x = 710, y = 20, w = 300, h = 500 }, "newly tiled target")
-	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	assert_equal(intents.placement_intent_for_window(tiled.window), nil, "consumed intent")
 end)
 
 run("retiled window moves from its previous order to the nearest slot", function()
@@ -227,7 +228,7 @@ run("retiled window moves from its previous order to the nearest slot", function
 	registered_layout.layout.recalculate(make_context({ retiled, middle, right }, workspace))
 	registered_layout.layout.recalculate(make_context({ middle, right }, workspace))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -249,7 +250,7 @@ run("retiled placement ignores retained missing identities", function()
 	registered_layout.layout.recalculate(make_context({ missing, retiled, existing }, workspace))
 	registered_layout.layout.recalculate(make_context({ retiled, existing }, workspace))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -266,7 +267,7 @@ run("single tiled column consumes placement intent", function()
 	local tiled = make_target(341, true)
 	local workspace = "single-placement"
 	local ctx = make_context({ tiled }, workspace)
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -275,7 +276,7 @@ run("single tiled column consumes placement intent", function()
 	})
 	registered_layout.layout.recalculate(ctx)
 
-	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	assert_equal(intents.placement_intent_for_window(tiled.window), nil, "consumed intent")
 	local second = make_target(342)
 	registered_layout.layout.recalculate(make_context({ tiled, second }, workspace))
 	assert_box(tiled.placed, { x = 10, y = 20, w = 670, h = 500 }, "existing target")
@@ -291,7 +292,7 @@ run("visible no-op placement preserves hidden identity order", function()
 	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }, workspace))
 	registered_layout.layout.recalculate(make_context({ first, retiled, last }, workspace))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -315,7 +316,7 @@ run("equidistant ultrawide slot centers choose the earlier slot", function()
 
 	local tiled = make_target(313, true)
 	local ctx = make_context({ first, second, tiled }, workspace)
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "ultrawide_master",
 		workspace_key = workspace,
 		monitor_role = monitor_role.ultrawide,
@@ -425,7 +426,7 @@ run("portrait transfer intent inserts leftmost despite outside source x", functi
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, -900, 800)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		dragged.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -523,7 +524,7 @@ run("drag geometry beats non-exact ultrawide transfer fallback", function()
 	dragged.window.address = nil
 	local left = make_target(40)
 	local right = make_target(41)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -553,7 +554,7 @@ run("portrait transfer intent inserts leftmost despite outside right source x", 
 	dragged.window.workspace = { name = workspace }
 	dragged.window.monitor.name = "DP-2"
 	set_geometry(dragged, 2000)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		dragged.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -574,7 +575,7 @@ run("transfer intent wins when target already arrives leftmost", function()
 	registered_layout.layout.recalculate(make_context({ dragged, right }, workspace))
 
 	set_geometry(dragged, 900)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		dragged.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -589,7 +590,7 @@ run("portrait transfer exact id wins over existing active ultrawide target", fun
 	local dragged = set_geometry(make_target(92), -900, 800)
 	local workspace = "transfer-exact-beats-existing-active"
 
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		dragged.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -604,11 +605,8 @@ run("new ultrawide transfer replaces stale exact intent", function()
 	local current = set_geometry(make_target(94, true), 800)
 	local workspace = "transfer-replaces-stale-exact"
 
-	order_state.record_transfer_intent(
-		stale.window,
-		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
-	)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(stale.window, { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" })
+	intents.record_transfer_intent(
 		current.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -626,7 +624,7 @@ run("portrait transfer survives destination recalculate before arrival", functio
 	registered_layout.layout.recalculate(make_context({ left, active_existing }, workspace))
 
 	local dragged = set_geometry(make_target(103), -900, 800)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		dragged.window,
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -643,7 +641,7 @@ run("portrait transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_target(71, true), -900, 800)
 	local left = make_target(72)
 	local right = make_target(73)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)
@@ -662,7 +660,7 @@ run("portrait transfer fallback uses single added target without active flag", f
 	registered_layout.layout.recalculate(make_context({ left, right }, workspace))
 
 	local dragged = set_geometry(make_target(83), -900, 800)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 	)

@@ -385,19 +385,19 @@ end
 local function bench_transfer_intent(iterations)
 	clear_modules()
 	local monitor_role = require("lib.monitor_role")
-	local order_state = require("layouts.shared.order_state")
+	local intents = require("layouts.shared.intents")
 	local stale = { address = "0xstale" }
 	local current = { address = "0xcurrent" }
 	local target = { window = current }
 	local intent = { monitor_role = monitor_role.ultrawide, axis = "x", edge = "start" }
 
 	run_case("order_state/record-stale-replace", iterations, function()
-		order_state.record_transfer_intent(stale, intent)
-		order_state.record_transfer_intent(current, intent)
+		intents.record_transfer_intent(stale, intent)
+		intents.record_transfer_intent(current, intent)
 	end)
 	run_case("order_state/consume-exact-id", iterations, function()
-		order_state.record_transfer_intent(current, intent)
-		order_state.consume_transfer_intent_by_id(target, monitor_role.ultrawide, "x")
+		intents.record_transfer_intent(current, intent)
+		intents.consume_transfer_intent_by_id(target, monitor_role.ultrawide, "x")
 	end)
 end
 

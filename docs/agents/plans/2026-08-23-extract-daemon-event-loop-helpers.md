@@ -23,12 +23,13 @@ not the extraction target.
 
 ## Decision
 
-Two slices; do not unify the loops.
+Slice 1 is done. Slice 2 and the scaffolding were investigated and rejected.
 
 1. **Extract the rate-limited logger.** One module owns the per-key throttle;
-   both window-state and minimized-state consume it. (Strong.)
-2. **Extract the reconnect-with-backoff policy** from window-state; adopt in
-   window-capture and minimized-state. (Worth exploring.)
+   both window-state and minimized-state consume it. (Strong.) — done.
+2. **Reconnect-with-backoff policy** — rejected after investigation (below).
+3. **Daemon scaffolding** (`read_file`/`write_file`/`log`) — rejected; the
+   copies have drifted (below).
 
 A single `event_loop.run(on_event)` is rejected: the select-vs-blocking choice
 and each loop's extra work (adaptive polling, worker reaping, control-socket
@@ -52,13 +53,33 @@ seam would produce an interface as wide as three implementations.
 4. Add `tests/rate_limit_spec.lua` covering first-emit, suppression, emit after
    interval, per-key isolation, and reset.
 
-## Implementation — slice 2
+## Rejected — slice 2 and scaffolding
 
-1. Add a reconnect helper in `runtime/lib/` owning the connect-fail → backoff →
-   rate-limited-log cycle from window-state's `schedule_event_reconnect`/
-   `reconnect_events`.
-2. Adopt it in window-capture and minimized-state; leave picture-in-picture's
-   no-backoff inline reconnect as-is (it cannot block).
+The reconnect policy has no stable seam across the three daemons:
+
+- window-state reconnects non-blocking via a `socket.select` deadline
+  (`schedule_event_reconnect`/`reconnect_events` with `event_reconnect_at`).
+- window-capture and minimized-state reconnect by `socket.sleep(delay)`, but
+  with different `pcall` placement and logging (boolean-transition vs
+  rate-limited vs fresh-key).
+
+A shared "reconnect policy" would have to model select-vs-blocking plus
+callbacks for connect/idle/disconnect — an interface as wide as the three
+implementations.
+
+The scaffolding helpers are also drifted, not copy-paste:
+
+- `read_file`: three variants — `read("*a")` returning `nil` (window-state,
+  window-state/rules), `read("*a")` returning `""` (picture-in-picture), and
+  `read("*l")` returning `""` (custom-layout-drag-resize).
+- `write_file`: two atomic-write strategies — `ffi.C.getpid()` suffix
+  (window-capture, cross-process worker safety) vs timestamp+sequence
+  (window-state).
+- `log`: window-state prefixes `os.date("%H:%M:%S")`; the other three do not.
+
+Each extraction would require normalizing drifted semantics, not deduplicating.
+That is a behavior change, not a deepening. Leave them; slice 1 was the clean
+win.
 
 ## Validation
 

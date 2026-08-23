@@ -1,4 +1,5 @@
 local order_state = require("layouts.shared.order_state")
+local intents = require("layouts.shared.intents")
 
 local M = {}
 
@@ -107,8 +108,8 @@ end
 function M.remember_single(state, key, targets, layout_name, role, axis, center, active_index)
 	local scope = order_state.scope(layout_name, key, role, axis)
 	order_state.sync(state, key, targets, nil, true)
-	order_state.consume_transfer_intent(targets[1], role, axis, true)
-	order_state.consume_placement_intent(targets[1], layout_name, key, role, axis)
+	intents.consume_transfer_intent(targets[1], role, axis, true)
+	intents.consume_placement_intent(targets[1], layout_name, key, role, axis)
 	order_state.remember_active(state, key, targets, active_index)
 	order_state.remember_position(state, targets[1], scope, center, axis)
 end
@@ -134,7 +135,7 @@ function M.recalculate_ordered(opts)
 		order_state.sync(state, key, source_targets, opts.insert_after_id, true)
 	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	local targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	local tiled_drag_target = order_state.consume_tiled_drag(state, key, targets)
+	local tiled_drag_target = intents.consume_tiled_drag(state, key, targets)
 	if tiled_drag_target then
 		local position = order_state.cursor_position(axis) or order_state.position(tiled_drag_target, axis)
 		local target_index = M.nearest_slot_index(position, opts.ratios, opts.start, opts.span)
@@ -147,7 +148,7 @@ function M.recalculate_ordered(opts)
 	local placement_target = nil
 	local placement_intent = nil
 	for index = 1, #targets do
-		local intent = order_state.consume_placement_intent(targets[index], opts.layout_name, key, role, axis)
+		local intent = intents.consume_placement_intent(targets[index], opts.layout_name, key, role, axis)
 		if intent then
 			placement_target = targets[index]
 			placement_intent = intent
@@ -167,7 +168,7 @@ function M.recalculate_ordered(opts)
 	local transfer_target = nil
 	local transfer_intent = nil
 	for index = 1, #targets do
-		local intent = order_state.consume_transfer_intent_by_id(targets[index], role, axis)
+		local intent = intents.consume_transfer_intent_by_id(targets[index], role, axis)
 		if intent then
 			transfer_target = targets[index]
 			transfer_intent = intent
@@ -175,10 +176,10 @@ function M.recalculate_ordered(opts)
 		end
 	end
 
-	local has_transfer_intent = order_state.has_transfer_intent(role, axis)
+	local has_transfer_intent = intents.has_transfer_intent(role, axis)
 	if has_transfer_intent and not transfer_target and added_id then
 		local added_target = targets_by_id and targets_by_id[added_id] or nil
-		local intent = added_target and order_state.consume_transfer_intent(added_target, role, axis, true) or nil
+		local intent = added_target and intents.consume_transfer_intent(added_target, role, axis, true) or nil
 		if intent then
 			transfer_target = added_target
 			transfer_intent = intent
@@ -198,7 +199,7 @@ function M.recalculate_ordered(opts)
 			end
 		end
 
-		local intent = outside_target and order_state.consume_transfer_intent(outside_target, role, axis, true) or nil
+		local intent = outside_target and intents.consume_transfer_intent(outside_target, role, axis, true) or nil
 		if intent then
 			transfer_target = outside_target
 			transfer_intent = intent

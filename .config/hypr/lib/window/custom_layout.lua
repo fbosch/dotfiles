@@ -2,6 +2,7 @@ local M = {}
 local dispatch = hl.dispatch
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
+local intents = require("layouts.shared.intents")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
 local custom_layout_resize_command =
@@ -72,7 +73,7 @@ function M.toggle_float(state)
 	local window = state.active()
 	local intent = placement_intent(window)
 	if intent then
-		order_state.record_placement_intent(window, intent)
+		intents.record_placement_intent(window, intent)
 	end
 
 	return dispatch(float_toggle)

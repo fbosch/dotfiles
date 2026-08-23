@@ -26,7 +26,7 @@ _G.__PORTRAIT_ROWS_DISABLE_STATE = true
 local monitor_role = require("lib.monitor_role")
 local ordered_axis = require("layouts.shared.ordered_axis")
 local persistent_state = require("layouts.shared.persistent_state")
-local order_state
+local intents
 
 local function make_target(index, active)
 	return {
@@ -136,7 +136,8 @@ local function load_layout()
 	package.loaded["layouts.portrait_rows"] = nil
 	package.loaded["layouts.shared.ordered_axis"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
-	order_state = require("layouts.shared.order_state")
+	package.loaded["layouts.shared.intents"] = nil
+	intents = require("layouts.shared.intents")
 	require("layouts.portrait_rows")
 end
 
@@ -242,7 +243,7 @@ run("newly tiled window uses nearest resulting portrait slot center", function()
 
 	local tiled = make_workspace_target(303, "float-to-tile-nearest-bottom", true)
 	ctx = make_context({ top, bottom, tiled })
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "float-to-tile-nearest-bottom",
 		monitor_role = monitor_role.portrait,
@@ -254,7 +255,7 @@ run("newly tiled window uses nearest resulting portrait slot center", function()
 	assert_box(top.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
 	assert_box(bottom.placed, { x = 10, y = 120, w = 120, h = 100 }, "middle target")
 	assert_box(tiled.placed, { x = 10, y = 220, w = 120, h = 100 }, "newly tiled target")
-	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	assert_equal(intents.placement_intent_for_window(tiled.window), nil, "consumed intent")
 end)
 
 run("retiled window moves from its previous order to the nearest row", function()
@@ -264,7 +265,7 @@ run("retiled window moves from its previous order to the nearest row", function(
 	registered_layout.layout.recalculate(make_context({ retiled, middle, bottom }))
 	registered_layout.layout.recalculate(make_context({ middle, bottom }))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "retile-nearest-bottom",
 		monitor_role = monitor_role.portrait,
@@ -285,7 +286,7 @@ run("retiled placement ignores retained missing identities", function()
 	registered_layout.layout.recalculate(make_context({ missing, retiled, existing }))
 	registered_layout.layout.recalculate(make_context({ retiled, existing }))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "retile-stale-order",
 		monitor_role = monitor_role.portrait,
@@ -300,7 +301,7 @@ end)
 
 run("single tiled row consumes placement intent", function()
 	local tiled = make_workspace_target(341, "single-placement", true)
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "single-placement",
 		monitor_role = monitor_role.portrait,
@@ -309,7 +310,7 @@ run("single tiled row consumes placement intent", function()
 	})
 	registered_layout.layout.recalculate(make_context({ tiled }))
 
-	assert_equal(order_state.placement_intent_for_window(tiled.window), nil, "consumed intent")
+	assert_equal(intents.placement_intent_for_window(tiled.window), nil, "consumed intent")
 	local second = make_workspace_target(342, "single-placement")
 	registered_layout.layout.recalculate(make_context({ tiled, second }))
 	assert_box(tiled.placed, { x = 10, y = 20, w = 120, h = 100 }, "existing target")
@@ -324,7 +325,7 @@ run("visible no-op placement preserves hidden identity order", function()
 	registered_layout.layout.recalculate(make_context({ first, retiled, hidden, last }))
 	registered_layout.layout.recalculate(make_context({ first, retiled, last }))
 
-	order_state.record_placement_intent(retiled.window, {
+	intents.record_placement_intent(retiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "hidden-order",
 		monitor_role = monitor_role.portrait,
@@ -348,7 +349,7 @@ run("equidistant portrait slot centers choose the earlier slot", function()
 
 	local tiled = make_workspace_target(313, "float-to-tile-tie", true)
 	ctx = make_context({ first, second, tiled })
-	order_state.record_placement_intent(tiled.window, {
+	intents.record_placement_intent(tiled.window, {
 		layout_name = "portrait_rows",
 		workspace_key = "float-to-tile-tie",
 		monitor_role = monitor_role.portrait,
@@ -439,7 +440,7 @@ end)
 run("transfer into empty portrait does not affect later spawn order", function()
 	local first = set_geometry(make_workspace_target(211, "transfer-then-spawn", true), 2000, 800)
 	first.window.at.x = 2000
-	order_state.record_transfer_intent(first.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	intents.record_transfer_intent(first.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(make_context({ first }))
 
 	first.window.active = false
@@ -536,7 +537,7 @@ run("drag geometry beats non-exact keyboard transfer fallback", function()
 	dragged.window.address = nil
 	local existing = set_geometry(make_workspace_target(2, "portrait-drag-stale-fallback"), 220)
 	set_geometry(dragged, -120)
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 	)
@@ -579,10 +580,7 @@ run("ultrawide transfer intent inserts bottommost despite outside source y", fun
 	dragged.window.monitor.name = "HDMI-A-2"
 	set_geometry(dragged, 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent(
-		dragged.window,
-		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
-	)
+	intents.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 
 	local existing = make_workspace_target(2, "portrait-transfer")
 	registered_layout.layout.recalculate(make_context({ existing, dragged }))
@@ -598,10 +596,7 @@ run("transfer intent wins when target already arrives topmost", function()
 	registered_layout.layout.recalculate(ctx)
 
 	set_geometry(dragged, 260)
-	order_state.record_transfer_intent(
-		dragged.window,
-		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
-	)
+	intents.record_transfer_intent(dragged.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(bottom.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")
@@ -612,11 +607,8 @@ run("new portrait transfer replaces stale exact intent", function()
 	local stale = set_geometry(make_workspace_target(231, "portrait-transfer-replaces-stale"), 20)
 	local current = set_geometry(make_workspace_target(232, "portrait-transfer-replaces-stale", true), 220)
 
-	order_state.record_transfer_intent(stale.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
-	order_state.record_transfer_intent(
-		current.window,
-		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
-	)
+	intents.record_transfer_intent(stale.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
+	intents.record_transfer_intent(current.window, { monitor_role = monitor_role.portrait, axis = "y", edge = "end" })
 	registered_layout.layout.recalculate(make_context({ stale, current }))
 
 	assert_box(stale.placed, { x = 10, y = 20, w = 120, h = 100 }, "stale transfer target")
@@ -627,7 +619,7 @@ run("ultrawide transfer intent survives active target id mismatch", function()
 	local dragged = set_geometry(make_workspace_target(1, "portrait-transfer-id-mismatch", true), 2000, 800)
 	dragged.window.at.x = 2000
 	local existing = make_workspace_target(2, "portrait-transfer-id-mismatch")
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 	)
@@ -645,7 +637,7 @@ run("ultrawide transfer fallback uses single added target without active flag", 
 
 	local dragged = set_geometry(make_workspace_target(2, "portrait-transfer-added-no-active"), 2000, 800)
 	dragged.window.at.x = 2000
-	order_state.record_transfer_intent(
+	intents.record_transfer_intent(
 		{ address = "0xmissing" },
 		{ monitor_role = monitor_role.portrait, axis = "y", edge = "end" }
 	)

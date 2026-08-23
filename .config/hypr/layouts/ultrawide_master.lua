@@ -1,6 +1,7 @@
 local M = {}
 local monitor_role = require("lib.monitor_role")
 local order_state = require("layouts.shared.order_state")
+local intents = require("layouts.shared.intents")
 local ordered_axis = require("layouts.shared.ordered_axis")
 local persistent_state = require("layouts.shared.persistent_state")
 local resize_state = require("layouts.shared.resize_state")
@@ -171,7 +172,7 @@ function M.recalculate(ctx)
 	end
 
 	local key = workspace_key(targets)
-	order_state.observe_floating_active(state, key, targets)
+	intents.observe_floating_active(state, key, targets)
 
 	local area = ctx.area
 	if count == 1 then
