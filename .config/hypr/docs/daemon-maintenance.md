@@ -56,6 +56,8 @@ it and state the reason in that script when it intentionally does not.
 - Use `runtime/lib/daemon-supervisor.sh` for a daemon with a fixed command
   socket, `ping` health check, and supervised LuaJIT child. Keep each wrapper's
   socket path and ordered shutdown commands declarative.
+- Use the daemon kit's control-socket interface for Lua listeners that follow
+  the one-line `ok` protocol; keep feature message dispatch in the feature.
 - A daemon without a command socket that directly owns workers needs a
   feature-local shell supervisor. It must parent and reap the resident process,
   terminate owned worker groups on signals, and leave one-shot modes direct.

@@ -1,7 +1,6 @@
 #!/usr/bin/env luajit
 
 local socket = require("socket")
-local unix = require("socket.unix")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
@@ -15,7 +14,6 @@ local pip = require("lib.picture_in_picture")
 -- Thin adapter around the PiP placement reducer: feeds IPC snapshots and
 -- events into lib.pip_placement and interprets the returned commands.
 local kit = daemon.new({})
-local control_socket_path = kit:socket_path("pip-monitor.sock")
 local state = placement.new()
 
 local monitors_by_name = {}
@@ -145,23 +143,17 @@ local function place(now, event, bars)
 	apply_commands(commands)
 end
 
-local function handle_control(control)
-	control:settimeout(0.05)
-	local message = control:receive("*l")
+local function handle_control(message)
 	local action, address, direction = pip.control.decode(message)
 
 	-- Bars must reflect the visibility this command transitions to.
 	local bars = bars_for(action == "waybar-show" or (action ~= "waybar-hide" and state.waybar_visible))
 	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, bars)
-
-	control:send("ok\n")
-	control:close()
 	return action == "quit"
 end
 
 local event_socket = nil
-local control_server = nil
-local owns_control_socket = false
+local control_socket = nil
 
 local function cleanup_control_socket()
 	if event_socket then
@@ -169,14 +161,9 @@ local function cleanup_control_socket()
 		event_socket = nil
 	end
 
-	if control_server then
-		control_server:close()
-		control_server = nil
-	end
-
-	if owns_control_socket then
-		os.remove(control_socket_path)
-		owns_control_socket = false
+	if control_socket then
+		control_socket:close()
+		control_socket = nil
 	end
 end
 
@@ -215,12 +202,7 @@ local function run()
 	state.waybar_visible = next(visible_waybar_layers()) ~= nil
 	place(socket.gettime(), { type = "startup" }, bars_for(state.waybar_visible))
 	event_socket = kit:connect_events({ read_timeout = 0 })
-
-	control_server = assert(unix())
-	assert(control_server:bind(control_socket_path))
-	assert(control_server:listen())
-	owns_control_socket = true
-	control_server:settimeout(0)
+	control_socket = kit:control_socket("pip-monitor.sock")
 
 	while true do
 		local now = socket.gettime()
@@ -241,11 +223,10 @@ local function run()
 		consider(state.settle_at)
 		consider(state.reconcile_at)
 
-		local ready = socket.select({ control_server, event_socket }, nil, timeout)
+		local ready = socket.select({ control_socket:reader(), event_socket }, nil, timeout)
 		for _, reader in ipairs(ready) do
-			if reader == control_server then
-				local control = control_server:accept()
-				if control and handle_control(control) then
+			if reader == control_socket:reader() then
+				if control_socket:handle_ready(handle_control) then
 					return
 				end
 			elseif reader == event_socket then

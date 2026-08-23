@@ -1,7 +1,7 @@
 -- Deep module for long-lived Hyprland Lua daemons: one interface hiding the
--- IPC transport, normalized compositor queries, the event socket, and file
--- helpers. Locking stays in shell launchers by design (see CONTEXT.md).
--- Tests inject an in-memory transport via daemon.new({ transport = ... }).
+-- IPC transport, normalized compositor queries, event and owned control
+-- sockets, and file helpers. Locking stays in shell launchers by design (see
+-- CONTEXT.md). Tests inject transports and socket factories through new().
 
 local json = require("lib.json")
 
@@ -20,6 +20,11 @@ local fallback_commands = {
 local function default_spawn(command_line)
 	local command = require("lib.command")
 	return command.output(command_line)
+end
+
+local function default_unix_server()
+	local unix = require("socket.unix")
+	return assert(unix())
 end
 
 local function number(value)
@@ -93,6 +98,8 @@ function M.new(opts)
 	local transport = opts.transport or default_transport()
 	local monitor_cache_ttl_s = opts.monitor_cache_ttl_s or default_monitor_cache_ttl_s
 	local spawn = opts.spawn or default_spawn
+	local unix_server = opts.unix_server or default_unix_server
+	local remove = opts.remove or os.remove
 
 	local monitors_cache = nil
 	local monitors_cached_at = -math.huge
@@ -186,6 +193,49 @@ function M.new(opts)
 
 	function kit:connect_events(event_opts)
 		return transport.connect_event_socket(event_opts)
+	end
+
+	function kit:control_socket(name)
+		local path = kit:socket_path(name)
+		local server = unix_server()
+		assert(server:bind(path))
+		assert(server:listen())
+		server:settimeout(0)
+		local owned = true
+
+		local control = {}
+
+		function control:reader()
+			return server
+		end
+
+		function control:handle_ready(handler)
+			assert(server, "control socket is closed")
+			local client = server:accept()
+			if not client then
+				return false
+			end
+
+			client:settimeout(0.05)
+			local message = client:receive("*l")
+			local should_quit = handler(message) == true
+			client:send("ok\n")
+			client:close()
+			return should_quit
+		end
+
+		function control:close()
+			if server then
+				server:close()
+				server = nil
+			end
+			if owned then
+				remove(path)
+				owned = false
+			end
+		end
+
+		return control
 	end
 
 	function kit:read_file(path)

@@ -1,13 +1,13 @@
 #!/usr/bin/env luajit
 
 local socket = require("socket")
-local unix = require("socket.unix")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local ags_ipc = require("runtime.lib.ags-ipc")
 local command = require("lib.command")
+local daemon = require("runtime.lib.daemon")
 local gaming = require("gaming.policies")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
@@ -21,11 +21,11 @@ local fast_interval_ms = 80
 local slow_interval_ms = 1000
 local monitor_cache_ttl_s = 10
 local monitor_margin = 50
-local control_socket_path = hypr_ipc.instance_socket_path("waybar-monitor.sock")
 local waybar_process_pattern = "(^|/)waybar( |$)"
 local pip_control_socket = "nc -U "
 	.. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock"))
 	.. " >/dev/null 2>&1"
+local kit = daemon.new({})
 
 local monitors = {}
 local last_monitor_name = nil
@@ -34,8 +34,7 @@ local waybar_visible = false
 local super_held = false
 local show_started_at = nil
 local hide_started_at = nil
-local control_server = nil
-local owns_control_socket = false
+local control_socket = nil
 
 local function log(message)
 	io.stderr:write("waybar-monitor: ", message, "\n")
@@ -201,25 +200,15 @@ local control_handlers = {
 	end,
 }
 
-local function handle_control(control)
-	control:settimeout(0.05)
-	local message = control:receive("*l")
+local function handle_control(message)
 	local handler = control_handlers[message]
-	local should_quit = handler ~= nil and handler() == true
-	control:send("ok\n")
-	control:close()
-	return should_quit
+	return handler ~= nil and handler() == true
 end
 
 local function cleanup_control_socket()
-	if control_server then
-		control_server:close()
-		control_server = nil
-	end
-
-	if owns_control_socket then
-		os.remove(control_socket_path)
-		owns_control_socket = false
+	if control_socket then
+		control_socket:close()
+		control_socket = nil
 	end
 end
 
@@ -228,11 +217,7 @@ local function run()
 	waybar_visible = current_waybar_visibility()
 	command.ok("printf 'waybar-" .. (waybar_visible and "show" or "hide") .. "\\n' | " .. pip_control_socket)
 
-	control_server = assert(unix())
-	assert(control_server:bind(control_socket_path))
-	assert(control_server:listen())
-	owns_control_socket = true
-	control_server:settimeout(0)
+	control_socket = kit:control_socket("waybar-monitor.sock")
 
 	while true do
 		local x, y = request("cursorpos"):match("^%s*([^,]+),%s*(.+)%s*$")
@@ -277,10 +262,9 @@ local function run()
 			end
 		end
 
-		local ready = socket.select({ control_server }, nil, interval / 1000)
+		local ready = socket.select({ control_socket:reader() }, nil, interval / 1000)
 		if #ready > 0 then
-			local control = control_server:accept()
-			if control and handle_control(control) then
+			if control_socket:handle_ready(handle_control) then
 				return
 			end
 		end

@@ -123,6 +123,78 @@ it("derives instance paths through the transport", function()
 	assert_equal(kit:socket_path(".socket.sock"), "/fake/socket.sock", "socket path")
 end)
 
+it("owns the one-line control socket lifecycle", function()
+	local calls = {}
+	local client = {
+		settimeout = function(_, timeout)
+			calls.client_timeout = timeout
+		end,
+		receive = function(_, mode)
+			calls.receive_mode = mode
+			return "quit"
+		end,
+		send = function(_, response)
+			calls.response = response
+		end,
+		close = function()
+			calls.client_closed = true
+		end,
+	}
+	local server = {
+		bind = function(_, path)
+			calls.bound_path = path
+			return true
+		end,
+		listen = function()
+			calls.listened = true
+			return true
+		end,
+		settimeout = function(_, timeout)
+			calls.server_timeout = timeout
+		end,
+		accept = function()
+			return client
+		end,
+		close = function()
+			calls.server_closed = true
+		end,
+	}
+	local removed = 0
+	local kit = daemon.new({
+		transport = fake_transport("[]", "[]"),
+		unix_server = function()
+			return server
+		end,
+		remove = function(path)
+			removed = removed + 1
+			calls.removed_path = path
+		end,
+	})
+
+	local control = kit:control_socket("control.sock")
+	assert_equal(control:reader(), server, "selectable reader")
+	assert_equal(calls.bound_path, "/fake/socket.sock", "instance-scoped bind path")
+	assert_equal(calls.listened, true, "server listens")
+	assert_equal(calls.server_timeout, 0, "server is nonblocking")
+
+	local received
+	assert_equal(control:handle_ready(function(message)
+		received = message
+		return true
+	end), true, "quit result")
+	assert_equal(received, "quit", "one-line message")
+	assert_equal(calls.receive_mode, "*l", "line read mode")
+	assert_equal(calls.client_timeout, 0.05, "bounded client read")
+	assert_equal(calls.response, "ok\n", "health acknowledgement")
+	assert_equal(calls.client_closed, true, "client closes after acknowledgement")
+
+	control:close()
+	control:close()
+	assert_equal(calls.server_closed, true, "server closes")
+	assert_equal(calls.removed_path, "/fake/socket.sock", "owned socket path removed")
+	assert_equal(removed, 1, "owned socket removed once")
+end)
+
 it("round-trips files through the kit helpers", function()
 	local transport = fake_transport("[]", "[]")
 	local kit = daemon.new({ transport = transport })

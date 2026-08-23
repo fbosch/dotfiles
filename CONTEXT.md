@@ -7,9 +7,10 @@ should use these terms; new concepts named during design work land here.
 
 - **daemon kit** — `runtime/lib/daemon.lua`. Deep module owning the Hypr IPC
   transport seam, normalized `clients()`/`monitors()` records, the event
-  socket, and atomic file helpers for long-lived Lua daemons. Constructed with
-  `daemon.new({ transport = ... })`; tests inject an in-memory transport.
-  Locking deliberately stays in shell launchers, not the kit.
+  socket, owned one-line control sockets, and atomic file helpers for long-lived
+  Lua daemons. Constructed with `daemon.new({ transport = ... })`; tests inject
+  in-memory transports and socket factories. Locking deliberately stays in
+  shell launchers, not the kit.
 - **instance path** — `$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/…`.
   This is the ownership boundary for daemon sockets, locks, and state files;
   all paths derive from it through `runtime/lib/hypr-ipc.{lua,sh}` and must
