@@ -2,9 +2,8 @@
 
 set -eu
 
-# Broad desktop-service recovery. It leaves custom-layout drag/resize live to
-# avoid interrupting an active interaction and leaves Gamescope clipboard sync
-# live because it is independent of the desktop UI services restarted here.
+# Broad desktop-service recovery. Gamescope clipboard sync remains live because
+# it is independent of the desktop UI services restarted here.
 
 wait_for_pip_shutdown() {
   attempts=0

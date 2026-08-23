@@ -108,18 +108,15 @@ if (( SECONDS > 2 )); then
   printf 'reset-desktop shutdown waits ran serially (%ss)\n' "$SECONDS" >&2
   exit 1
 fi
-wait_for_log_count "$reset_log" uwsm-app 8
+wait_for_log_count "$reset_log" uwsm-app 7
 wait_for_log_count "$reset_log" swaync-client 2
-assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize.sh daemon'
-assert_contains "$reset_log" 'pkill -f custom-layout-drag-resize-daemon.lua'
-assert_contains "$reset_log" 'pgrep -f custom-layout-drag-resize(-daemon)?\.(sh|lua)'
 assert_contains "$reset_log" 'pgrep -f (^|/)waybar( |$)'
 assert_contains "$reset_log" 'hyprctl reload'
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
 assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
 assert_contains "$reset_log" 'uwsm-app -s s -- hyprpaper'
-assert_contains "$reset_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh daemon"
+assert_not_contains "$reset_log" 'custom-layout-drag-resize'
 assert_not_contains "$reset_log" 'pkill -f minimized-state-daemon'
 assert_not_contains "$reset_log" 'pkill -f gaming-session-watchdog'
 

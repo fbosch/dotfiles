@@ -4,20 +4,22 @@ local monitor_role = require("lib.monitor_role")
 local state = require("lib.window.state")
 local order_state = require("layouts.shared.order_state")
 local intents = require("layouts.shared.intents")
-local hypr_ipc = require("runtime.lib.hypr-ipc")
-local control_protocol = require("runtime.windows.daemons.custom-layout-drag-resize.control-protocol")
-local custom_layout_resize_command =
-	"~/.config/hypr/runtime/windows/daemons/custom-layout-drag-resize/custom-layout-drag-resize.sh"
-local custom_layout_resize_sequence_file = hypr_ipc.instance_path("custom-layout-drag-resize.sequence")
+local window_tags = require("lib.window_tags")
 local float_toggle = hl.dsp.window.float()
+local resize_plugin = hl.plugin and hl.plugin.custom_layout_resize or nil
+local native_resize_active = false
+local native_resize_ready = false
+
+local ultrawide_layout = "lua:ultrawide_master"
+local portrait_layout = "lua:portrait_rows"
 
 local layout_contexts = {
-	["lua:portrait_rows"] = {
+	[portrait_layout] = {
 		layout_name = "portrait_rows",
 		monitor_role = monitor_role.portrait,
 		axis = "y",
 	},
-	["lua:ultrawide_master"] = {
+	[ultrawide_layout] = {
 		layout_name = "ultrawide_master",
 		monitor_role = monitor_role.ultrawide,
 		axis = "x",
@@ -59,9 +61,25 @@ local function placement_intent(window)
 	}
 end
 
-local function custom_layout_resize(action)
-	local sequence = control_protocol.next_sequence(custom_layout_resize_sequence_file)
-	return hl.dsp.exec_cmd(string.format("%s %s %d", custom_layout_resize_command, action, sequence))
+local function restore_resize_animation()
+	local ok, mode = pcall(function()
+		return require("lib.profile_state").resolved()
+	end)
+	if ok and mode ~= "default" then
+		require("profiles").apply_current()
+	else
+		require("animations").restore_windows_move()
+	end
+end
+
+if resize_plugin and type(resize_plugin.start) == "function" and type(resize_plugin.stop) == "function" and type(hl.on) == "function" then
+	local ok, subscription = pcall(hl.on, "custom_layout_resize.command", function(message)
+		dispatch(hl.dsp.layout(message))
+	end)
+	if ok then
+		native_resize_ready = true
+		M._resize_command_subscription = subscription
+	end
 end
 
 function M.place_custom_layout_at_cursor()
@@ -81,23 +99,43 @@ function M.toggle_float()
 end
 
 function M.start_custom_layout_resize()
-	local active = hl.get_active_window()
+	local active = state.active()
 	local workspace = active and active.workspace
 	if not active or active.floating == true or not layout_contexts[workspace and workspace.tiled_layout] then
 		return false
 	end
 
 	M.reset_keep_aspect_ratio()
-	dispatch(custom_layout_resize("start"))
+	if not native_resize_ready then
+		return true
+	end
+
+	local ok, started, handled = pcall(
+		resize_plugin.start,
+		ultrawide_layout,
+		portrait_layout,
+		monitor_role.name_for(monitor_role.portrait),
+		window_tags.non_resizable
+	)
+	if ok and handled == true and started == true then
+		native_resize_active = true
+		hl.animation({ leaf = "windowsMove", enabled = false })
+	end
 	return true
 end
 
 function M.stop_custom_layout_resize()
-	dispatch(custom_layout_resize("stop"))
+	if not native_resize_active then
+		return
+	end
+
+	native_resize_active = false
+	pcall(resize_plugin.stop)
+	restore_resize_animation()
 end
 
 function M.resize_keep_aspect_ratio()
-	dispatch(custom_layout_resize("stop"))
+	M.stop_custom_layout_resize()
 	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
 	dispatch(hl.dsp.window.resize())
 end
