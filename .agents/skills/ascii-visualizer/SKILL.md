@@ -4,7 +4,7 @@ license: MIT
 compatibility: "Claude Code 2.1.76+."
 description: "ASCII diagram patterns for architecture, workflows, file trees, and data visualizations. Use when creating terminal-rendered diagrams, box-drawing layouts, progress bars, swimlanes, or blast radius visualizations."
 tags: [ascii, diagrams, visualization, box-drawing, architecture, terminal]
-version: 1.0.0
+version: 1.1.0
 author: OrchestKit
 user-invocable: false
 disable-model-invocation: true
@@ -44,6 +44,39 @@ Checks:    ✓ ✗ ● ○ ◆ ◇ ★ ☆
 | Standard `─│` | Normal boxes and connectors | Most diagrams |
 | Heavy `━┃` | Emphasis, borders, headers | Key components, outer frames |
 | Double `═║` | Separation, titles | Section dividers, title boxes |
+
+### Border Integrity
+
+Build diagrams on a fixed-width character grid before adding annotations. Treat
+each box as immutable: choose its width from the widest label plus padding, then
+reuse the same left and right edges on every row.
+
+- Keep connector lanes outside boxes. Never draw a connector through a label,
+  corner, or border segment, and never repair an overlap by replacing a corner
+  with `─` or `│`.
+- Use a junction character where a connector meets a border (`┬ ┴ ├ ┤ ┼`, or
+  the matching heavy characters `┳ ┻ ┣ ┫ ╋`). Select the junction from the
+  lines that actually meet there.
+- Do not mix standard and heavy strokes at one join. If a mixed-weight join is
+  not representable cleanly, use standard weight for the complete connected
+  path.
+- Leave at least two spaces before an annotation so its arrow cannot be
+  mistaken for, or overwrite, the box edge.
+- Before emitting the diagram, check every row's display width and inspect each
+  box for intact corners, continuous edges, and intentional junctions. Never
+  use tabs for layout.
+
+For example, a heavy box with a downward connector keeps the border and uses a
+junction rather than cutting a hole in the bottom edge:
+
+```
+                   ▼
+             ┏━━━━━━━━━━━━━━━┓
+             ┃  ags-ipc.lua  ┃  ← single parser
+             ┗━━━━━━━┳━━━━━━━┛
+                     ┃
+                     ▼
+```
 
 
 ## Diagram Patterns
@@ -148,6 +181,7 @@ Phase 4  [........????????]  IRREVERSIBLE        (drop column)
 | Annotations | `!!` for risk, `**` for new, `[A/M/D]` for change type |
 | Width | Keep under 80 chars for terminal compatibility |
 | Nesting | Max 3 levels of box nesting before readability degrades |
+| Integrity | Compose on a grid; use junctions for joins; never overwrite borders |
 
 
 ## When to Use Each Pattern

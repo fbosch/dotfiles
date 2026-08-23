@@ -24,6 +24,8 @@ local function parse_busctl_string(response)
 	return response:match("^s (.*)$")
 end
 
+M.parse_busctl_string = parse_busctl_string
+
 function M.request(component, payload, opts)
 	opts = opts or empty_opts
 	payload = payload or ""

@@ -8,9 +8,9 @@
       "computedHash": "a674b7d81066e3cc471a7512ddb4ae724418cbfefa75cbb050b0dc430e4d57a0"
     },
     "ascii-visualizer": {
-      "source": "yonatangross/orchestkit",
-      "sourceType": "github",
-      "computedHash": "789d0c57c7f27e0b0c6a41e37a1335255064e64882c96f4a9d3479852a252400"
+      "source": "./.agents/skills",
+      "sourceType": "local",
+      "computedHash": "3fd2c84278c06b60fb965dab30a133161b1726a70efc229286f24d154ee3fea1"
     },
     "bun": {
       "source": "bun.sh",

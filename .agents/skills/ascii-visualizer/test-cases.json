@@ -1,6 +1,6 @@
 {
   "skill": "ascii-visualizer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "testCases": [
     {
       "id": "basic-draw-an-architecture-diagram",
@@ -57,6 +57,18 @@
         "Keeps diagrams under 80 characters wide for terminal compatibility across environments",
         "Uses consistent alignment and spacing to ensure monospace rendering looks correct",
         "Applies directional arrow characters to show data flow and dependency relationships"
+      ]
+    },
+    {
+      "id": "border-safe-connected-box",
+      "rule": "ascii-diagrams",
+      "query": "Draw a connected box labeled ags-ipc.lua with a downward connector and an annotation to the right.",
+      "expectedBehavior": [
+        "Builds the box on a fixed-width grid with identical left and right edges on every row",
+        "Keeps the label and right-side annotation separated from the border",
+        "Uses a junction character where the downward connector meets the bottom border",
+        "Preserves all four corners and does not overwrite a border with a plain line",
+        "Uses one stroke weight consistently across the connected path"
       ]
     }
   ]
