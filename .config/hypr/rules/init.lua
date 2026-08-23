@@ -9,7 +9,12 @@ require("rules.transient_placement").register()
 hl.window_rule({ match = { class = "^(GTK Application)$" }, float = true })
 
 -- Bitwarden
-hl.window_rule({ match = { class = "^(Bitwarden)$" }, float = true, size = "900 900", tag = "+" .. window_tags.privacy })
+hl.window_rule({
+	match = { class = "^(Bitwarden)$" },
+	float = true,
+	size = "900 900",
+	tag = "+" .. window_tags.privacy,
+})
 
 -- Signal
 hl.window_rule({ match = { class = "^(org\\.signal\\.Signal)$" }, float = true, tag = "+" .. window_tags.privacy })
@@ -103,10 +108,15 @@ hl.window_rule({ match = { class = "^(io\\.github\\.flattool\\.Warehouse)$" }, f
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk)$" }, float = true, pin = true, no_anim = true })
 
 -- Zen Browser
-hl.window_rule({ match = { class = "^(app\\.zen_browser\\.zen-popup)$" }, float = true })
+hl.window_rule({ match = { class = "^(app\\.zen_browser\\.zen-popup)$" }, size = "730 900", float = true })
 
 -- Helium Browser
-hl.window_rule({ match = { class = "^(helium-popup)$" }, float = true })
+hl.window_rule({ match = { class = "^(helium-popup)$" }, size = "730 900", float = true })
+hl.window_rule({
+	match = { class = "^(Bitwarden|app[.]zen_browser[.]zen-popup|helium-popup)$" },
+	tag = "+" .. window_tags.popup,
+})
+hl.window_rule({ match = { tag = window_tags.popup }, suppress_event = "maximize" })
 
 -- Floorp Browser
 hl.window_rule({

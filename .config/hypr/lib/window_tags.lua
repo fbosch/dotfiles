@@ -1,6 +1,7 @@
 local M = {
 	non_resizable = "non-resizable",
 	passthrough_exempt = "passthrough-exempt",
+	popup = "popup",
 	privacy = "privacy",
 }
 
