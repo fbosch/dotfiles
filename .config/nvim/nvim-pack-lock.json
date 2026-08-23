@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "d7c0ddc37465c027ec8bb116356d9ea4e97606b4",
+      "rev": "28fce4145a3aa6ee7ab72de010539a498365aa45",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -86,7 +86,7 @@
       "src": "https://github.com/folke/lazydev.nvim.git"
     },
     "leap.nvim": {
-      "rev": "3e6b4be90b227479aab2c124de0664878cf47ec9",
+      "rev": "7884f9455e5bf07bd11a3dcd9f961095a966a5d7",
       "src": "https://codeberg.org/andyg/leap.nvim"
     },
     "live-command.nvim": {
@@ -135,7 +135,7 @@
       "src": "https://github.com/nacro90/numb.nvim.git"
     },
     "nvim-autopairs": {
-      "rev": "7b9923abad60b903ece7c52940e1321d39eccc79",
+      "rev": "430522f95fe4fb7c511ec64f8c1a90cc6a66c05c",
       "src": "https://github.com/windwp/nvim-autopairs.git"
     },
     "nvim-coverage": {
@@ -151,7 +151,7 @@
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "fbaef6156f9ad65790931ab543ab1dfec57bbec7",
+      "rev": "221c43884319e791519f0d6c94a7f2fbcd653278",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,7 +188,7 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "074aa4422bf029908338e855d0c0f71470a971bb",
+      "rev": "e82ef6ae2c3eeb96c6916b29917f96bf630b2cdb",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -200,7 +200,7 @@
       "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
     "opencode.nvim": {
-      "rev": "41622312d5d8fb074699c1d5d96f089286191376",
+      "rev": "2ddeebd3212596b51bf078e6ff52862655b80419",
       "src": "https://github.com/NickvanDyke/opencode.nvim.git"
     },
     "plenary.nvim": {
@@ -208,7 +208,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "289971cfdbc7f7b1c91670a228b239d870130af7",
+      "rev": "5e92431aa7f5e618c2f6825f682df6d94f6e0a02",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
@@ -236,7 +236,7 @@
       "src": "https://github.com/Wansmer/treesj.git"
     },
     "treewalker.nvim": {
-      "rev": "afa598a8a380602d6a488b1ce7f7db619606cbfb",
+      "rev": "5ba91123699e8c43c1e7cf85c2313326a3a37f6f",
       "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {
