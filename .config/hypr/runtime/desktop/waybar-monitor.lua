@@ -185,28 +185,30 @@ local function hide_waybar()
 	end
 end
 
+local control_handlers = {
+	show = show_waybar,
+	hold = function()
+		super_held = true
+		show_waybar()
+	end,
+	release = function()
+		super_held = false
+	end,
+	hide = hide_waybar,
+	ping = function() end,
+	quit = function()
+		return true
+	end,
+}
+
 local function handle_control(control)
 	control:settimeout(0.05)
 	local message = control:receive("*l")
-	if message == "show" then
-		show_waybar()
-	elseif message == "hold" then
-		super_held = true
-		show_waybar()
-	elseif message == "release" then
-		super_held = false
-	elseif message == "hide" then
-		hide_waybar()
-	elseif message == "ping" then
-		-- Side-effect-free health check for the launcher.
-	elseif message == "quit" then
-		control:send("ok\n")
-		control:close()
-		return true
-	end
+	local handler = control_handlers[message]
+	local should_quit = handler ~= nil and handler() == true
 	control:send("ok\n")
 	control:close()
-	return false
+	return should_quit
 end
 
 local function cleanup_control_socket()

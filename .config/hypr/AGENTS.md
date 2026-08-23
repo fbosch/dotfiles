@@ -22,6 +22,7 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - For state-changing dispatches on Hyprland 0.55, send Lua dispatcher expressions (e.g. `hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })"`); do not use legacy `dispatch closewindow ...` syntax.
 - For Lua runtime helpers, reuse existing `lib/` modules such as `lib.json`, `lib.command`, `lib.paths`, and `lib.monitor_role` before adding local parsing, quoting, or path helpers.
 - Prefer configuring `package.path` and using `require(...)` for Lua modules; reserve `dofile(...)` for dynamic data/config files that must be re-read or are not modules.
+- For reducers and event routers with mutually exclusive tagged cases, prefer dispatch tables keyed by `event.type` and nested `event.action`/`event.name` over long `elseif` chains; handle unknown tags explicitly, while keeping independent conditions as ordinary `if` statements.
 - Avoid spawning `jq` from long-lived Lua daemons or hot loops when `lib.json` plus in-process filtering is practical; keep `jq` for one-shot shell glue where it is simpler.
 - Notify only on user-actionable failures; rate-limit repeated daemon/profile warnings and keep normal gaming transitions silent.
 

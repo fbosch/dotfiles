@@ -22,3 +22,9 @@ should use these terms; new concepts named during design work land here.
   (`rules/window-state-selectors.lua`) describing which floating windows get
   position/size persistence; `rules/window-state.lua` is generated data
   produced by the window-state daemon from captured state.
+- **PiP placement** — pure placement reducer for the Picture-in-Picture
+  window (`lib/pip_placement.lua`): owns snap geometry, waybar avoidance,
+  the client-drag state machine, corner-tag policy, and preview dedup.
+  Interface is `place(state, input) → (state, commands)` over plain tables;
+  the picture-in-picture daemon is a thin adapter that feeds it IPC data and
+  interprets returned commands as dispatches, tags, and preview actions.
