@@ -126,16 +126,6 @@ hl.window_rule({
 })
 hl.window_rule({ match = { class = "^(floorp)$" }, monitor = "HDMI-A-2", tag = "+" .. window_tags.privacy })
 
--- Winboat
-hl.window_rule({ match = { class = "(winboat)" }, float = true })
-hl.window_rule({ match = { initial_class = "^(winboat-⚙️ Windows Explorer)$" }, float = true })
-hl.window_rule({
-	match = { initial_class = "^(winboat-Huetrofor Hue)$" },
-	float = true,
-	size = "1460 880",
-	move = "3255 779",
-})
-
 -- xfreerdp (FreeRDP)
 hl.window_rule({ match = { initial_class = "^(xfreerdp)$" }, fullscreen = true })
 
