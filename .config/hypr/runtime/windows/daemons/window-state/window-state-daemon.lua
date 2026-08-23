@@ -7,6 +7,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local json = require("lib.json")
 local command = require("lib.command")
+local rate_limit = require("lib.rate_limit")
 local state_rules = require("runtime.windows.daemons.window-state.rules")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 
@@ -39,7 +40,6 @@ local next_poll_at = nil
 local lua_pattern_cache = {}
 local state_write_sequence = 0
 local event_reconnect_at = nil
-local last_failure_log_at = {}
 
 local function now()
 	return socket.gettime()
@@ -50,16 +50,7 @@ local function log(message)
 	io.stderr:flush()
 end
 
-local function log_rate_limited(key, message)
-	local timestamp = now()
-	local last_log_at = last_failure_log_at[key]
-	if last_log_at and timestamp - last_log_at < event_reconnect_log_interval then
-		return
-	end
-
-	last_failure_log_at[key] = timestamp
-	log(message)
-end
+local log_rate_limited, reset_rate_limit = rate_limit.new(log, event_reconnect_log_interval, now)
 
 local function read_file(path)
 	local handle = io.open(path, "r")
@@ -501,7 +492,7 @@ local function reconnect_events()
 	local ok, events_or_err = pcall(connect_events)
 	if ok then
 		event_reconnect_at = nil
-		last_failure_log_at["event-reconnect"] = nil
+		reset_rate_limit("event-reconnect")
 		log("event socket reconnected")
 		return events_or_err
 	end

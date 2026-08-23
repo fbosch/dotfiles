@@ -7,27 +7,18 @@ local config_dir = home .. "/.config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local command = require("lib.command")
+local rate_limit = require("lib.rate_limit")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local state_command = home .. "/.config/hypr/runtime/windows/minimized-state.lua"
 local reconnect_delay_seconds = 1
 local diagnostic_interval_seconds = 30
-local last_diagnostic_at = {}
 
 local function log(message)
 	io.stderr:write("minimized-state-daemon: ", message, "\n")
 	io.stderr:flush()
 end
 
-local function log_diagnostic(key, message)
-	local timestamp = socket.gettime()
-	local previous = last_diagnostic_at[key]
-	if previous and timestamp - previous < diagnostic_interval_seconds then
-		return
-	end
-
-	last_diagnostic_at[key] = timestamp
-	log(message)
-end
+local log_diagnostic = rate_limit.new(log, diagnostic_interval_seconds)
 
 local function state_command_ok(...)
 	local parts = { command.arg(state_command) }
