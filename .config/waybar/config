@@ -70,7 +70,7 @@
     "exec": "~/.config/waybar/scripts/temperatures cpu",
     "interval": 60,
     "return-type": "json",
-    "format": "  {}",
+    "format": "   {}",
     "tooltip": true
   },
 
