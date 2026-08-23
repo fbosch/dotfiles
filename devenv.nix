@@ -21,6 +21,7 @@ in
     fish
     git
     gnused
+    hyperfine
     jq
     just
     lefthook

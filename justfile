@@ -16,6 +16,10 @@ install-fbb:
 devenv-test:
 	devenv test
 
+# Record Bun runtime and package-manager benchmarks. Target: runtime, install, all.
+bun-benchmark target="runtime":
+	bash scripts/benchmark-bun.sh {{quote(target)}}
+
 # Run Storybook for the design system.
 storybook:
 	pnpm --dir design-system storybook

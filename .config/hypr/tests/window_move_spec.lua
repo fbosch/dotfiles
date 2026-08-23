@@ -473,13 +473,10 @@ run("drag targets the normal cursor window instead of the active game", function
 	cursor_position = { x = 700, y = 400 }
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
-	assert_equal(dispatched[1].op, "focus", "focus dispatcher")
-	assert_equal(dispatched[1].args.window, normal_window, "focused cursor window")
-	assert_equal(dispatched[2].op, "window.float", "float dispatcher")
-	assert_equal(dispatched[2].args.action, "set", "float action")
-	assert_equal(dispatched[4].op, "window.drag", "drag dispatcher")
+	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
+	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
 	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
-	assert_equal(dispatched[5].op, "exec_cmd", "finish drag dispatcher")
+	assert_equal(dispatched[3].op, "exec_cmd", "finish drag dispatcher")
 end)
 
 run("custom layout drag places the active window after interactive dragging", function()
@@ -488,9 +485,10 @@ run("custom layout drag places the active window after interactive dragging", fu
 	cursor_position = { x = 250, y = 400 }
 
 	assert_equal(interaction.start_drag(state), true, "drag starts")
-	assert_equal(dispatched[1].op, "window.float", "float dispatcher")
-	assert_equal(dispatched[3].op, "window.drag", "drag dispatcher")
+	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
+	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
 	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
+	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
 	assert_equal(dispatched[4].op, "exec_cmd", "finish drag dispatcher")
 end)
 
@@ -502,7 +500,8 @@ run("drag keeps an already floating window floating", function()
 	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
 	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
 	assert_equal(interaction.finish_drag(state, custom_layout), true, "drag finishes")
-	assert_equal(dispatched[3].op, "exec_cmd", "finish drag dispatcher")
+	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
+	assert_equal(dispatched[4].op, "exec_cmd", "finish drag dispatcher")
 end)
 
 run("float toggle records ultrawide window center before tiling", function()
@@ -781,8 +780,8 @@ end)
 run("hdmi up uses portrait layout swap", function()
 	reset("HDMI-A-2")
 	directional.move(state, "up")()
-	art_equal(dispatched[1].op, "layout", "dispatcher")
-	assert_equal(dispatched[1].value, "resize-up", "layout message")
+	assert_equal(dispatched[1].op, "layout", "dispatcher")
+	assert_equal(dispatched[1].value, "swapprev", "layout message")
 end)
 
 run("non-special resize uses window resize dispatcher", function()
