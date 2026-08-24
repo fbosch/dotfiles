@@ -53,9 +53,10 @@ cleanup_stopped_worker_lock() {
 cleanup() {
   if [[ -n "$child_pid" ]]; then
     kill -CONT "$child_pid" >/dev/null 2>&1 || true
+    # Preserve the parent relationship until worker ownership has been verified.
+    stop_worker_group
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
     pkill -TERM -P "$child_pid" >/dev/null 2>&1 || true
-    stop_worker_group
     wait "$child_pid" >/dev/null 2>&1 || true
     cleanup_stopped_worker_lock
   fi
