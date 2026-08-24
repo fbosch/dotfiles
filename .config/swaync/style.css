@@ -267,6 +267,17 @@
   max-width: var(--notification-icon-size);
   max-height: var(--notification-icon-size);
   margin: 4px;
+  /* Fallback for unpatched SwayNC; remove after the patch is deployed everywhere. */
+  transform: translateY(-6px);
+}
+
+.notification-content .app-icon {
+  transform: translateY(-6px);
+}
+
+.notification-content .notification-image-overlay .image,
+.notification-content .notification-image-overlay .app-icon {
+  transform: none;
 }
 
 .notification-content .text-box {
