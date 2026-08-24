@@ -23,6 +23,7 @@ export interface AudioMixerControllerOptions {
 export class AudioMixerController {
 	#visible = false;
 	#initialized = false;
+	#backendStarted = false;
 	#shutdownSignalId = 0;
 	#waybarSource = 0;
 	#snapshot = emptySnapshot("Audio backend unavailable", "unavailable");
@@ -62,8 +63,6 @@ export class AudioMixerController {
 		this.#initialized = true;
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		this.#view.create();
-		this.#backend.init();
 	}
 
 	teardown(): void {
@@ -71,7 +70,8 @@ export class AudioMixerController {
 		this.#initialized = false;
 		this.#visible = false;
 		this.#cancelWaybarSignal();
-		this.#backend.stop();
+		if (this.#backendStarted) this.#backend.stop();
+		this.#backendStarted = false;
 		this.#view.dispose();
 		if (this.#shutdownSignalId !== 0) {
 			app.disconnect(this.#shutdownSignalId);
@@ -86,7 +86,11 @@ export class AudioMixerController {
 		this.#view.show();
 		this.#visible = true;
 		this.#backend.setActive(true);
-		this.#backend.refresh();
+		if (this.#backendStarted) this.#backend.refresh();
+		else {
+			this.#backendStarted = true;
+			this.#backend.init();
+		}
 		this.#scheduleWaybarSignal();
 	}
 	hide(): void {

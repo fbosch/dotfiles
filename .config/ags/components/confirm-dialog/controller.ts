@@ -39,10 +39,6 @@ export class ConfirmDialogController {
 
 	init(): void {
 		if (!this.#actor) {
-			this.#view.create({
-				onCancel: () => this.hide(),
-				onConfirm: () => this.#confirm(),
-			});
 			this.#actor = this.#clock
 				? createActor(confirmDialogMachine, { clock: this.#clock })
 				: createActor(confirmDialogMachine);
@@ -58,6 +54,10 @@ export class ConfirmDialogController {
 
 	show(config: ConfirmConfig): void {
 		if (this.#actor?.getSnapshot().hasTag("dialog-active")) return;
+		this.#view.create({
+			onCancel: () => this.hide(),
+			onConfirm: () => this.#confirm(),
+		});
 		this.#config = config;
 		this.#view.setConfig(config);
 		if (config.playWarningSound) {

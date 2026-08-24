@@ -14,6 +14,11 @@ return {
 			inactive_opacity = 1.0,
 			fullscreen_opacity = 1.0,
 		},
+		plugin = {
+			adaptive_soft_shadow = {
+				enabled = false,
+			},
+		},
 		general = {
 			allow_tearing = false,
 		},

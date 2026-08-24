@@ -55,12 +55,13 @@ test("AI Pointer rejects missing and malformed preflight helpers", async () => {
 });
 
 test("AI Pointer preflight failure does not block selection rendering", async () => {
+	let creates = 0;
 	let selections = 0;
 	let selectionEnds = 0;
 	let captures = 0;
 	let failure = "";
 	const view = {
-		create() {},
+		create() { creates += 1; },
 		beginStroke() { selections += 1; return true; },
 		endStroke() { selectionEnds += 1; }, clearOcr() {}, hide() {}, dispose() {},
 		showError(message: string) { failure = message; },
@@ -78,7 +79,9 @@ test("AI Pointer preflight failure does not block selection rendering", async ()
 	});
 	controller.init();
 	try {
+		assert(creates === 0, "AI Pointer view was created during initialization");
 		assert(controller.start({ x: 10, y: 20 }), "start request was rejected");
+		assert(creates === 1, "AI Pointer view was not created on demand");
 		await settleMainLoop();
 		assert(selections === 1, "selection did not start while readiness ran");
 		assert(selectionEnds === 0, "readiness failure removed the active selector");

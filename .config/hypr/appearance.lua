@@ -24,12 +24,7 @@ hl.config({
 		active_opacity = 1.0,
 		inactive_opacity = 0.97,
 		shadow = {
-			enabled = true,
-			range = 20,
-			render_power = 3,
-			color = "rgba(0000004D)",
-			offset = "1 1",
-			scale = 2,
+			enabled = false,
 		},
 		blur = {
 			enabled = true,
@@ -48,7 +43,7 @@ hl.config({
 			ignore_opacity = false,
 			new_optimizations = true,
 			brightness = 1,
-			noise = 0.025, -- frosted glass look
+			noise = 0.04, -- frosted glass look
 			vibrancy = 0.5,
 			input_methods = true,
 			vibrancy_darkness = 0.05,

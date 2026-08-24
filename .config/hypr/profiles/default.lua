@@ -9,11 +9,16 @@ return {
 				passes = 4,
 			},
 			shadow = {
-				enabled = true,
+				enabled = false,
 			},
 			active_opacity = 1.0,
 			inactive_opacity = 0.97,
 			fullscreen_opacity = 1.0,
+		},
+		plugin = {
+			adaptive_soft_shadow = {
+				enabled = true,
+			},
 		},
 		misc = {
 			vrr = 3,
@@ -24,5 +29,5 @@ return {
 		render = {
 			direct_scanout = 0,
 		},
-	}
+	},
 }

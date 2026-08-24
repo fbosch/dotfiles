@@ -37,6 +37,7 @@ export class WindowSwitcherController {
 	#unsubscribeProfile: (() => void) | null = null;
 	#shutdownSignalId = 0;
 	#requestGeneration = 0;
+	#viewAttached = false;
 	readonly #repository: WindowRepositoryPort;
 	#previews = new PreviewCache(() => {
 		if (this.isVisible() && this.#displayMode === DisplayMode.PREVIEWS)
@@ -65,7 +66,6 @@ export class WindowSwitcherController {
 		);
 		if (this.#shutdownSignalId === 0)
 			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown());
-		this.#modifiers.attach(this.#view.create());
 	}
 
 	teardown(): void {
@@ -77,6 +77,7 @@ export class WindowSwitcherController {
 		this.#actor?.stop();
 		this.#actor = null;
 		this.#view.dispose();
+		this.#viewAttached = false;
 		if (this.#shutdownSignalId !== 0) {
 			app.disconnect(this.#shutdownSignalId);
 			this.#shutdownSignalId = 0;
@@ -232,6 +233,10 @@ export class WindowSwitcherController {
 		index: number,
 		triggerModifier: string,
 	): void {
+		if (this.#viewAttached === false) {
+			this.#modifiers.attach(this.#view.create());
+			this.#viewAttached = true;
+		}
 		writeBindDiagnostic(
 			`enter active modifier=${triggerModifier} pressed=${this.#isModifierPressed(triggerModifier)}`,
 		);

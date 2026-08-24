@@ -6,6 +6,11 @@ import {
 	type ComponentModule,
 } from "@/services/component-host";
 import { bundledCss } from "@/styles/stylesheets";
+import GLib from "gi://GLib?version=2.0";
+
+// A unique benchmark instance keeps fresh-process measurements isolated from the live shell.
+const instanceName =
+	GLib.getenv("AGS_MEMORY_BENCHMARK_INSTANCE") ?? "ags-bundled";
 
 declare global {
 	var ConfirmDialog: ComponentModule;
@@ -32,7 +37,7 @@ import "@/components/pip-snap-preview.tsx";
 import "@/components/ai-pointer/index.tsx";
 
 startComponentHost({
-	instanceName: "ags-bundled",
+	instanceName,
 	css: bundledCss,
 	components: [
 		() => globalThis.ConfirmDialog,

@@ -88,10 +88,6 @@ export class AiPointerController {
 
 	init(): void {
 		if (!this.#actor) {
-			this.#view.create({
-				onCancel: () => this.cancel(),
-				onSubmit: (question) => this.#submit(question),
-			});
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
 				if (snapshot.matches("composition") && this.#capture && this.#selectionContext) {
@@ -150,6 +146,10 @@ export class AiPointerController {
 	start(startPosition: PointerPosition): boolean {
 		if (this.#actor?.getSnapshot().matches("idle") === false) return false;
 		if (this.#lockMonitor.blocksWorkflow) return false;
+		this.#view.create({
+			onCancel: () => this.cancel(),
+			onSubmit: (question) => this.#submit(question),
+		});
 
 		const directory = this.#directory ?? this.#prepareDirectory();
 		if (!directory) {

@@ -86,6 +86,7 @@ test("Confirm Dialog validates requests before changing lifecycle", () => {
 	const handle = createRequestHandler(controller);
 	controller.init();
 	try {
+		assert(handlers === null, "dialog view was created during initialization");
 		assert(request(handle, []) === "ready", "empty request response changed");
 		assert(
 			request(handle, ["not-json"]) === "error: invalid JSON",
@@ -97,6 +98,7 @@ test("Confirm Dialog validates requests before changing lifecycle", () => {
 			"malformed show request was accepted",
 		);
 		assert(configured === 0, "malformed request mutated dialog configuration");
+		assert(handlers === null, "invalid request created the dialog view");
 		assert(
 			request(handle, [JSON.stringify({ action: "show", config })]) === "shown",
 			"valid show request failed",

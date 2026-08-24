@@ -11,6 +11,42 @@ local function valid_mode(mode)
 	return profiles[mode] ~= nil
 end
 
+local function is_plugin_loaded(name)
+	for _, plugin in ipairs(hl.get_loaded_plugins()) do
+		if plugin.name == name then
+			return true
+		end
+	end
+
+	return false
+end
+
+local function applicable_config(profile)
+	local plugin_config = profile.config.plugin
+	if is_plugin_loaded("adaptive-soft-shadow") or not plugin_config or not plugin_config.adaptive_soft_shadow then
+		return profile.config
+	end
+
+	local config = {}
+	for key, value in pairs(profile.config) do
+		if key ~= "plugin" then
+			config[key] = value
+		end
+	end
+
+	local plugins = {}
+	for name, value in pairs(plugin_config) do
+		if name ~= "adaptive_soft_shadow" then
+			plugins[name] = value
+		end
+	end
+	if next(plugins) then
+		config.plugin = plugins
+	end
+
+	return config
+end
+
 function M.current_mode()
 	local ok, mode = pcall(profile_state.resolved)
 	if ok then
@@ -38,7 +74,7 @@ function M.apply(mode)
 		profile.on_apply()
 	end
 
-	hl.config(profile.config)
+	hl.config(applicable_config(profile))
 	return true
 end
 

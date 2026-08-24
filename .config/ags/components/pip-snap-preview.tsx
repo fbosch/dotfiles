@@ -107,10 +107,6 @@ function applyCss(rounding: number): void {
   );
 }
 
-function initPipSnapPreview(): void {
-  createWindow();
-}
-
 function handlePipSnapPreviewRequest(argv: string[], res: (response: string) => void): void {
   try {
     const data = JSON.parse(argv.join(" ")) as PreviewRequest;
@@ -135,7 +131,7 @@ function handlePipSnapPreviewRequest(argv: string[], res: (response: string) => 
 }
 
 globalThis.PipSnapPreview = {
-  init: initPipSnapPreview,
+  init: () => {},
   handleRequest: handlePipSnapPreviewRequest,
   instanceName: "pip-snap-preview",
 };

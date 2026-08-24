@@ -149,9 +149,9 @@ test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
 	});
 	controller.init();
 	try {
-		assert(creates === 1, "view was not prepared during initialization");
+		assert(creates === 0, "view was created before the mixer was shown");
 		controller.show();
-		assert(shows === 1, "prepared view was not shown");
+		assert(shows === 1, "view was not shown on demand");
 		assert(signals === 0, "Waybar signaling blocked the show request");
 		await flushIdle();
 		assert(signals === 1, "deferred Waybar signal did not run");
@@ -202,7 +202,7 @@ test("Audio Mixer scopes backend refresh work to its visible lifecycle", () => {
 	controller.teardown();
 
 	assert(
-		events.join(",") === "init,active:true,refresh,active:false,stop",
+		events.join(",") === "active:true,init,active:false,stop",
 		"backend work did not follow visibility",
 	);
 });
