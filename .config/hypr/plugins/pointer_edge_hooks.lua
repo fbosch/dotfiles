@@ -1,7 +1,7 @@
 local command = require("lib.command")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 
-local plugin_path = os.getenv("HYPR_WAYBAR_POINTER_PLUGIN")
+local plugin_path = os.getenv("HYPR_POINTER_EDGE_HOOKS_PLUGIN")
 if not plugin_path or plugin_path == "" then
 	return
 end
@@ -23,16 +23,16 @@ end
 local ok, err = pcall(function()
 	hl.plugin.load(plugin_path)
 	pcall(function()
-		hl.plugin.waybar_pointer.rebind()
+		hl.plugin.pointer_edge_hooks.rebind()
 	end)
 
-	hl.on("waybar_pointer.zone", function(zone)
+	hl.on("pointer_edge_hooks.zone", function(zone)
 		forward_zone(zone)
 	end)
 
-	hl.plugin.waybar_pointer.start(20, 60)
+	hl.plugin.pointer_edge_hooks.start(20, 60)
 end)
 
 if not ok then
-	io.stderr:write("waybar-pointer: plugin load failed; automatic Waybar edge positioning is disabled: ", tostring(err), "\n")
+	io.stderr:write("pointer-edge-hooks: plugin load failed; automatic Waybar edge positioning is disabled: ", tostring(err), "\n")
 end

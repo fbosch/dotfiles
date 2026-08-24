@@ -11,7 +11,6 @@
   "control-center-margin-right": 4,
   "control-center-margin-left": 0,
   "notification-window-width": 280,
-  "notification-icon-size": 24,
   "notification-body-image-height": 200,
   "notification-body-image-width": 320,
   "timeout": 5,

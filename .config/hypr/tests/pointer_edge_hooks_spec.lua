@@ -1,5 +1,5 @@
 local script_path = debug.getinfo(1, "S").source:sub(2)
-local config_dir = script_path:match("^(.*)/tests/waybar_pointer_spec%.lua$") or ".config/hypr"
+local config_dir = script_path:match("^(.*)/tests/pointer_edge_hooks_spec%.lua$") or ".config/hypr"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local original_getenv = os.getenv
@@ -21,8 +21,8 @@ local function load_module()
 	dispatched = {}
 
 	os.getenv = function(name)
-		if name == "HYPR_WAYBAR_POINTER_PLUGIN" then
-			return "/nix/store/waybar-pointer/lib/libwaybar-pointer.so"
+		if name == "HYPR_POINTER_EDGE_HOOKS_PLUGIN" then
+			return "/nix/store/pointer-edge-hooks/lib/libpointer-edge-hooks.so"
 		end
 		return original_getenv(name)
 	end
@@ -43,7 +43,7 @@ local function load_module()
 			load = function(path)
 				loaded_path = path
 			end,
-			waybar_pointer = {
+			pointer_edge_hooks = {
 				rebind = function()
 					rebound = rebound + 1
 				end,
@@ -61,29 +61,29 @@ local function load_module()
 			dispatched[#dispatched + 1] = value
 		end,
 		on = function(name, callback)
-			assert.are.equal("waybar_pointer.zone", name)
+			assert.are.equal("pointer_edge_hooks.zone", name)
 			zone_handler = callback
 			return { name = name }
 		end,
 	}
 
-	package.loaded["plugins.waybar_pointer"] = nil
-	require("plugins.waybar_pointer")
+	package.loaded["plugins.pointer_edge_hooks"] = nil
+	require("plugins.pointer_edge_hooks")
 end
 
 after_each(function()
 	os.getenv = original_getenv
-	package.loaded["plugins.waybar_pointer"] = nil
+	package.loaded["plugins.pointer_edge_hooks"] = nil
 	package.loaded["lib.command"] = original_command
 	package.loaded["runtime.lib.hypr-ipc"] = original_hypr_ipc
 	_G.hl = original_hl
 end)
 
-describe("Waybar pointer plugin adapter", function()
+describe("Pointer edge hooks Waybar adapter", function()
 	it("loads the plugin and forwards native zone transitions", function()
 		load_module()
 
-		assert.are.equal("/nix/store/waybar-pointer/lib/libwaybar-pointer.so", loaded_path)
+		assert.are.equal("/nix/store/pointer-edge-hooks/lib/libpointer-edge-hooks.so", loaded_path)
 		assert.are.equal(1, rebound)
 		assert.are.same({ 20, 60 }, started)
 

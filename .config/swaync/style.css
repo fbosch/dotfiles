@@ -25,6 +25,7 @@
   --radius-medium: 18px;
   --radius-small: 6px;
   --radius-control-center: 12px;
+  --notification-icon-size: 24px;
   --shadow-elevation-low:
     0.4px 0.8px 0.7px hsl(var(--shadow-color) / 0.15),
     0.5px 1px 0.8px -2.5px hsl(var(--shadow-color) / 0.1),
@@ -299,12 +300,6 @@
 .time {
   color: var(--text-tertiary);
   font-size: 11px;
-}
-
-/* Ensure app icons in notification content don't stretch */
-.notification-content image {
-  min-width: unset;
-  min-height: unset;
 }
 
 /* Notification Text */

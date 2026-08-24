@@ -1,4 +1,4 @@
-# Native Waybar pointer zones
+# Native pointer edge hooks for Waybar
 
 ## Goal
 
@@ -6,7 +6,7 @@ Replace cursor-position and monitor-geometry polling in the Waybar visibility co
 
 ## Boundary
 
-The `waybar-pointer` plugin owns only compositor-local mechanics:
+The `pointer-edge-hooks` plugin owns only compositor-local mechanics:
 
 - read native pointer motion;
 - resolve the logical monitor under the pointer;
@@ -26,7 +26,7 @@ Dotfiles continue to own:
 
 1. Merge and deploy the NixOS plugin PR.
 2. Rebuild the desktop host and start a fresh Hyprland session.
-3. Verify `HYPR_WAYBAR_POINTER_PLUGIN` resolves to `libwaybar-pointer.so`.
+3. Verify `HYPR_POINTER_EDGE_HOOKS_PLUGIN` resolves to `libpointer-edge-hooks.so`.
 4. Merge the dotfiles integration PR.
 5. Reload Hyprland and restart the Waybar monitor controller.
 

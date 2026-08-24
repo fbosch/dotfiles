@@ -179,7 +179,7 @@ local function run()
 	command.ok("printf 'waybar-" .. (waybar_visible and "show" or "hide") .. "\\n' | " .. pip_control_socket)
 
 	control_socket = kit:control_socket("waybar-monitor.sock")
-	command.ok("hyprctl eval " .. command.arg("hl.plugin.waybar_pointer.sync()") .. " >/dev/null 2>&1")
+	command.ok("hyprctl eval " .. command.arg("hl.plugin.pointer_edge_hooks.sync()") .. " >/dev/null 2>&1")
 
 	while true do
 		local interval = update_visibility()
