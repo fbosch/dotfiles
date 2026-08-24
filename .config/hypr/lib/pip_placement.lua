@@ -238,6 +238,7 @@ local function set_preview(state, commands, target)
 
 	state.preview_signature = signature
 	commands[#commands + 1] = { kind = "preview", target = target }
+	commands[#commands + 1] = { kind = "cursor-outline", enabled = target ~= nil }
 end
 
 local function update_preview(state, input, commands)

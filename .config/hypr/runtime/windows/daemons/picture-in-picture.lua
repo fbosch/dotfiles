@@ -119,6 +119,8 @@ local function apply_commands(commands)
 			else
 				ags_ipc.request("pip-snap-preview", '{"action":"hide"}')
 			end
+		elseif cmd.kind == "cursor-outline" then
+			request(string.format("eval hl.plugin.cursor_outline.%s()", cmd.enabled and "on" or "off"))
 		end
 	end
 end

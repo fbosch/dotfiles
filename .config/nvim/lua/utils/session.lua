@@ -70,7 +70,9 @@ function M.resolve_requested(cwd)
 	end
 
 	cwd = resolve_cwd(cwd)
-	local workspace_id, pane_id = (vim.env.HERDR_ENV == "1" and vim.env.HERDR_PANE_ID or ""):match("^w([A-Za-z0-9_-]+):p([A-Za-z0-9_-]+)$")
+	local workspace_id, pane_id = (vim.env.HERDR_ENV == "1" and vim.env.HERDR_PANE_ID or ""):match(
+		"^w([A-Za-z0-9_-]+):p([A-Za-z0-9_-]+)$"
+	)
 	if workspace_id ~= nil then
 		return M.resolve(cwd, ("herdr-w%s-p%s"):format(workspace_id, pane_id)), true
 	end
@@ -97,6 +99,20 @@ end
 
 function M.set_current(session)
 	current_session = session
+end
+
+function M.set_restore_pending(pending, session)
+	session = session or M.get_current()
+	if session == nil then
+		return false
+	end
+
+	local metadata = M.get_metadata(session)
+	metadata.cwd = session.cwd
+	metadata.specifier = session.specifier
+	metadata.restore_pending = pending
+	M.set_metadata(metadata, session)
+	return true
 end
 
 function M.get_current(cwd)

@@ -24,6 +24,8 @@ export class AudioMixerController {
 	#visible = false;
 	#initialized = false;
 	#backendStarted = false;
+	#backendReady = false;
+	#showPending = false;
 	#shutdownSignalId = 0;
 	#waybarSource = 0;
 	#snapshot = emptySnapshot("Audio backend unavailable", "unavailable");
@@ -42,6 +44,12 @@ export class AudioMixerController {
 		this.#backend = createBackend((snapshot) => {
 			this.#snapshot = snapshot;
 			this.#view.setSnapshot(snapshot);
+			if (snapshot.status === "loading") return;
+			this.#backendReady = true;
+			if (this.#showPending === false || this.#visible === false) return;
+			this.#showPending = false;
+			this.#view.show();
+			this.#scheduleWaybarSignal();
 		});
 		this.#view = (
 			options.createView ??
@@ -69,9 +77,11 @@ export class AudioMixerController {
 		if (this.#initialized === false) return;
 		this.#initialized = false;
 		this.#visible = false;
+		this.#showPending = false;
 		this.#cancelWaybarSignal();
 		if (this.#backendStarted) this.#backend.stop();
 		this.#backendStarted = false;
+		this.#backendReady = false;
 		this.#view.dispose();
 		if (this.#shutdownSignalId !== 0) {
 			app.disconnect(this.#shutdownSignalId);
@@ -83,17 +93,22 @@ export class AudioMixerController {
 		return this.#visible;
 	}
 	show(): void {
-		this.#view.show();
 		this.#visible = true;
 		this.#backend.setActive(true);
-		if (this.#backendStarted) this.#backend.refresh();
-		else {
+		if (this.#backendReady) {
+			this.#view.show();
+			this.#backend.refresh();
+			this.#scheduleWaybarSignal();
+			return;
+		}
+		this.#showPending = true;
+		if (this.#backendStarted === false) {
 			this.#backendStarted = true;
 			this.#backend.init();
 		}
-		this.#scheduleWaybarSignal();
 	}
 	hide(): void {
+		this.#showPending = false;
 		this.#cancelWaybarSignal();
 		this.#backend.setActive(false);
 		this.#view.hide();

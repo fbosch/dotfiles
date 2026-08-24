@@ -4,6 +4,60 @@ set -euo pipefail
 herdr_bin="${HERDR_BIN_PATH:-herdr}"
 herdr_socket="${HERDR_SOCKET_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/herdr/herdr.sock}"
 herdr_session_path="$(dirname "$herdr_socket")/session.json"
+nvim_session_metadata_dir="${NVIM_SESSION_METADATA_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/nvim/.sessions/.metadata}"
+
+report_neovim_session() {
+	local pane_id="$1"
+	local nvim_session="$2"
+
+	"$herdr_bin" pane report-metadata "$pane_id" --source neovim-sessions --token "nvim_session=$nvim_session"
+}
+
+restore_missing_neovim_sessions() {
+	local metadata_path record cwd nvim_session panes workspace_id result pane_id
+
+	[[ -d "$nvim_session_metadata_dir" ]] || return
+	panes="$("$herdr_bin" pane list)"
+
+	for metadata_path in "$nvim_session_metadata_dir"/*.json; do
+		[[ -e "$metadata_path" ]] || continue
+		record="$(jq -er '
+			select(.restore_pending == true)
+			| select((.cwd | type) == "string" and .cwd != "")
+			| select((.specifier | type) == "string" and (.specifier | test("^[A-Za-z0-9][A-Za-z0-9_-]*$")))
+			| [.cwd, .specifier]
+			| @tsv
+		' "$metadata_path")" || continue
+		IFS=$'\t' read -r cwd nvim_session <<<"$record"
+		[[ -d "$cwd" ]] || continue
+
+		if jq -e --arg nvim_session "$nvim_session" '
+			.result.panes[]?
+			| select(.label == "nvim" and .tokens.nvim_session == $nvim_session)
+		' >/dev/null <<<"$panes"; then
+			continue
+		fi
+
+		workspace_id="$(jq -r --arg cwd "$cwd" '
+			first(
+				.result.panes[]?
+				| select(.label == "nvim" and (.foreground_cwd // .cwd) == $cwd)
+				| .workspace_id
+			) // empty
+		' <<<"$panes")"
+		if [[ -n "$workspace_id" ]]; then
+			result="$("$herdr_bin" tab create --workspace "$workspace_id" --cwd "$cwd" --no-focus)"
+		else
+			result="$("$herdr_bin" workspace create --cwd "$cwd" --no-focus)"
+		fi
+
+		pane_id="$(jq -er '.result.root_pane.pane_id' <<<"$result")"
+		"$herdr_bin" pane rename "$pane_id" nvim
+		report_neovim_session "$pane_id" "$nvim_session"
+		"$herdr_bin" pane run "$pane_id" "HERDR_ENV=1 HERDR_PANE_ID=$pane_id HERDR_SOCKET_PATH=$herdr_socket NVIM_SESSION=$nvim_session HERDR_MINI_SESSION_RESTORE=1 exec nvim"
+		panes="$("$herdr_bin" pane list)"
+	done
+}
 
 workspace_has_custom_label() {
 	local workspace_id="$1"
@@ -82,6 +136,7 @@ for _ in {1..20}; do
 
 			if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" or . == "bash" or . == "zsh" or . == "sh")' >/dev/null <<<"$processes"; then
 				nvim_session="herdr-${pane_id/:/-}"
+				report_neovim_session "$pane_id" "$nvim_session"
 				"$herdr_bin" pane run "$pane_id" "HERDR_ENV=1 HERDR_PANE_ID=$pane_id HERDR_SOCKET_PATH=$herdr_socket NVIM_SESSION=$nvim_session HERDR_MINI_SESSION_RESTORE=1 exec nvim"
 			fi
 			pending=1
@@ -90,6 +145,8 @@ for _ in {1..20}; do
 	[[ "$pending" -eq 0 ]] && break
 	sleep 0.1
 done
+
+restore_missing_neovim_sessions
 
 # Herdr labels a workspace from its first tab, which can be a different repo.
 while IFS= read -r workspace_id; do

@@ -75,6 +75,10 @@ it("snaps to the nearest corner on drag-end and tags it", function()
 	assert.equal(2, #previews)
 	assert.is_table(previews[1].target)
 	assert.is_nil(previews[2].target)
+	local outlines = of_kind(cmds, "cursor-outline")
+	assert.equal(2, #outlines)
+	assert.is_true(outlines[1].enabled)
+	assert.is_false(outlines[2].enabled)
 end)
 
 it("leaves windows alone beyond the snap vicinity", function()
@@ -147,6 +151,7 @@ it("emits the snap preview once per distinct target", function()
 
 	local _, second = placement.place(state, input(0.08, { type = "tick" }, snapshot))
 	assert.equal(0, #of_kind(second, "preview"))
+	assert.equal(0, #of_kind(second, "cursor-outline"))
 end)
 
 it("restores the anchored corner after a resize", function()

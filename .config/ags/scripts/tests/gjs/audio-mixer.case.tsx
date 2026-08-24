@@ -128,6 +128,7 @@ test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
 	let creates = 0;
 	let shows = 0;
 	let signals = 0;
+	let applySnapshot = (_snapshot: ReturnType<typeof emptySnapshot>) => {};
 	const view = {
 		create: () => {
 			creates += 1;
@@ -141,7 +142,10 @@ test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
 		dispose() {},
 	} as unknown as AudioMixerView;
 	const controller = new AudioMixerController({
-		createBackend: () => fakeBackend(),
+		createBackend: (nextSnapshot) => {
+			applySnapshot = nextSnapshot;
+			return fakeBackend();
+		},
 		createView: () => view,
 		signalWaybar: () => {
 			signals += 1;
@@ -151,6 +155,8 @@ test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
 	try {
 		assert(creates === 0, "view was created before the mixer was shown");
 		controller.show();
+		assert(shows === 0, "view was shown before backend data was ready");
+		applySnapshot(emptySnapshot("", "ready"));
 		assert(shows === 1, "view was not shown on demand");
 		assert(signals === 0, "Waybar signaling blocked the show request");
 		await flushIdle();
@@ -166,6 +172,45 @@ test("Audio Mixer prepares its view and defers Waybar signaling", async () => {
 		controller.teardown();
 		await flushIdle();
 		assert(signals === 1, "teardown did not cancel deferred Waybar signaling");
+	} finally {
+		controller.teardown();
+	}
+});
+
+test("Audio Mixer waits for backend data before its first presentation", () => {
+	let applySnapshot = (_snapshot: ReturnType<typeof emptySnapshot>) => {};
+	let shows = 0;
+	const backend = fakeBackend();
+	const view = {
+		create() {},
+		show: () => {
+			shows += 1;
+		},
+		hide() {},
+		setSnapshot() {},
+		setTab() {},
+		dispose() {},
+	} as unknown as AudioMixerView;
+	const controller = new AudioMixerController({
+		createBackend: (nextSnapshot) => {
+			applySnapshot = nextSnapshot;
+			return backend;
+		},
+		createView: () => view,
+		signalWaybar: () => {},
+	});
+
+	controller.init();
+	try {
+		controller.show();
+		assert(shows === 0, "mixer presented its placeholder before backend data");
+		applySnapshot(emptySnapshot("", "loading"));
+		assert(shows === 0, "mixer presented its loading snapshot");
+		applySnapshot(emptySnapshot("", "ready"));
+		assert(shows === 1, "mixer did not present its first ready snapshot");
+		controller.hide();
+		controller.show();
+		assert(shows === 2, "warm mixer presentation was delayed");
 	} finally {
 		controller.teardown();
 	}
