@@ -4,6 +4,8 @@
   "description": "AGS (Aylur's GTK Shell) configuration for Hyprland",
   "type": "module",
   "private": true,
+  "packageManager": "bun@1.4.0",
+  "trustedDependencies": [],
   "scripts": {
     "postinstall": "ags types",
     "start": "bash -c 'source scripts/runtime-artifacts.sh; publish_runtime_artifacts source-host || { printf \"%s\\n\" \"$RUNTIME_ARTIFACT_ERROR\" >&2; exit 1; }; trap cleanup_runtime_artifacts EXIT; ags run config-bundled.tsx'",
@@ -12,19 +14,19 @@
     "bundle": "bash scripts/runtime-artifacts.sh bundle",
     "inspect": "ags inspect",
     "list": "ags list",
-    "test": "bun test --parallel && pnpm test:gjs",
+    "test": "bun test --parallel && bun run test:gjs",
     "test:gjs": "bash -c 'source scripts/runtime-artifacts.sh; configure_runtime_artifacts source-host || { printf \"%s\\n\" \"$RUNTIME_ARTIFACT_ERROR\" >&2; exit 1; }; trap cleanup_runtime_artifacts EXIT; ags run --gtk 4 scripts/tests/gjs/run.ts'",
     "test:gjs:ai-pointer-process-lifecycle": "ags run --gtk 4 scripts/tests/gjs/run-ai-pointer-process-lifecycle.ts",
-    "test:coverage": "bun test --parallel --coverage --coverage-reporter=lcov --coverage-dir /tmp/ags-coverage && pnpm test:coverage:gjs",
+    "test:coverage": "bun test --parallel --coverage --coverage-reporter=lcov --coverage-dir /tmp/ags-coverage && bun run test:coverage:gjs",
     "test:coverage:gjs": "bash scripts/tests/gjs/coverage.sh",
-    "test:coverage:istanbul": "pnpm test:coverage && bun run scripts/lcov-to-istanbul.ts /tmp/ags-coverage/lcov.info /tmp/ags-coverage/coverage-final.json",
-    "health:coverage": "pnpm test:coverage:istanbul && fallow health --coverage /tmp/ags-coverage/coverage-final.json --report-only",
+    "test:coverage:istanbul": "bun run test:coverage && bun run scripts/lcov-to-istanbul.ts /tmp/ags-coverage/lcov.info /tmp/ags-coverage/coverage-final.json",
+    "health:coverage": "bun run test:coverage:istanbul && fallow health --coverage /tmp/ags-coverage/coverage-final.json --report-only",
     "lint:lines": "biome lint .",
     "lint:styles": "stylelint \"{components,styles}/**/*.scss\"",
     "benchmark": "bash scripts/benchmark/run-benchmarks.sh",
     "benchmark:ai-pointer": "bun run components/ai-pointer/__benchmarks__/policy.ts && ags run --gtk 4 components/ai-pointer/__benchmarks__/workflow.ts",
     "benchmark:ai-pointer:live": "bun run components/ai-pointer/__benchmarks__/live-collector.ts",
-    "quality": "pnpm lint:lines && pnpm lint:styles && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
+    "quality": "bun run lint:lines && bun run lint:styles && fallow --only dead-code --regression-baseline .fallow-regression-baseline.json --fail-on-regression"
   },
   "keywords": [
     "ags",

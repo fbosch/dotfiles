@@ -109,8 +109,9 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 			],
 		}),
 		onMenuAction: (id) => calls.push(`menu:${id}`),
-		onMenuIntentStart: (id) => calls.push(`intent-start:${id}`),
-		onMenuIntentEnd: (id) => calls.push(`intent-end:${id}`),
+		onMenuIntentStart: (id, source) =>
+			calls.push(`intent-start:${id}:${source}`),
+		onMenuIntentEnd: (id, source) => calls.push(`intent-end:${id}:${source}`),
 		onProfileSelect: (selection) => calls.push(`profile:${selection}`),
 		onHide: () => calls.push("hide"),
 		onRecentOpenRequest: () => calls.push("recent-open-request"),
@@ -150,10 +151,10 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 	assert(
 		JSON.stringify(calls.slice(intentStart)) ===
 			JSON.stringify([
-				"intent-start:about-this-pc",
-				"intent-start:about-this-pc",
-				"intent-end:about-this-pc",
-				"intent-end:about-this-pc",
+				"intent-start:about-this-pc:pointer",
+				"intent-start:about-this-pc:focus",
+				"intent-end:about-this-pc:pointer",
+				"intent-end:about-this-pc:focus",
 			]),
 		"About This PC hover and focus intent was imbalanced",
 	);

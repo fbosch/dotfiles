@@ -1,10 +1,14 @@
 import { isMatching, match, P } from "ts-pattern";
 import type { ComponentModule } from "@/services/component-host";
+import { createPreparationIntentClaims } from "@/services/preparation-intent";
 import { parseComponentRequest } from "@/services/request";
 import { aboutThisPCRequestPattern } from "./request";
 
 const PREPARATION_RELEASE_DELAY_MS = 1_000;
 type IsolatedAboutThisPCRequest = P.infer<typeof aboutThisPCRequestPattern>;
+export type AboutThisPCPreparationSource =
+	| "start-menu:pointer"
+	| "start-menu:focus";
 
 export interface IsolatedUtilityProcess {
 	readonly ready: Promise<void>;
@@ -21,8 +25,8 @@ interface IsolatedAboutThisPCOptions {
 }
 
 export interface AboutThisPCLifecycle extends ComponentModule {
-	intentStart(): void;
-	intentEnd(): void;
+	intentStart(source: AboutThisPCPreparationSource): void;
+	intentEnd(source: AboutThisPCPreparationSource): void;
 	intentClear(): void;
 }
 
@@ -36,8 +40,8 @@ export function createAboutThisPCLifecycle({
 	let showClaims = 0;
 	let stopping: { process: IsolatedUtilityProcess; promise: Promise<void> } | null = null;
 	let visible = false;
-	// Pointer and focus intent overlap; one claim owns preparation until delayed release.
-	let intentCount = 0;
+	const preparationClaims =
+		createPreparationIntentClaims<AboutThisPCPreparationSource>();
 	let preparationClaimed = false;
 	let preparationGeneration = 0;
 	let cancelPendingRelease: (() => void) | null = null;
@@ -191,7 +195,7 @@ export function createAboutThisPCLifecycle({
 		initialized = true;
 		onShutdown?.(() => {
 			clearPendingRelease();
-			intentCount = 0;
+			preparationClaims.clear();
 			preparationClaimed = false;
 			preparationGeneration += 1;
 			visible = false;
@@ -202,14 +206,14 @@ export function createAboutThisPCLifecycle({
 	function activate(): void {
 		init();
 		clearPendingRelease();
-		intentCount = 0;
+		preparationClaims.clear();
 		preparationClaimed = false;
 		preparationGeneration += 1;
 	}
 
 	function deactivate(): Promise<void> {
 		clearPendingRelease();
-		intentCount = 0;
+		preparationClaims.clear();
 		preparationClaimed = false;
 		preparationGeneration += 1;
 		return stop();
@@ -218,10 +222,10 @@ export function createAboutThisPCLifecycle({
 	return {
 		instanceName: "about-this-pc",
 		init,
-		intentStart() {
+		intentStart(source) {
 			init();
 			clearPendingRelease();
-			intentCount += 1;
+			preparationClaims.claim(source);
 			if (preparationClaimed) return;
 			preparationClaimed = true;
 			const generation = ++preparationGeneration;
@@ -231,13 +235,11 @@ export function createAboutThisPCLifecycle({
 				console.error("Failed to prepare About This PC:", error);
 			});
 		},
-		intentEnd() {
-			const previousCount = intentCount;
-			intentCount = Math.max(0, intentCount - 1);
-			if (previousCount === 1) schedulePreparationRelease();
+		intentEnd(source) {
+			if (preparationClaims.release(source)) schedulePreparationRelease();
 		},
 		intentClear() {
-			intentCount = 0;
+			preparationClaims.clear();
 			schedulePreparationRelease();
 		},
 		handleRequest(argv, res) {

@@ -54,10 +54,10 @@ describe("isolated About This PC component", () => {
 			},
 		});
 
-		component.intentStart();
-		component.intentStart();
+		component.intentStart("start-menu:pointer");
+		component.intentStart("start-menu:focus");
 		expect(launches).toBe(1);
-		component.intentEnd();
+		component.intentEnd("start-menu:pointer");
 		expect(scheduled).toHaveLength(0);
 	});
 
@@ -83,8 +83,8 @@ describe("isolated About This PC component", () => {
 			},
 		});
 
-		component.intentStart();
-		component.intentEnd();
+		component.intentStart("start-menu:pointer");
+		component.intentEnd("start-menu:pointer");
 		expect(scheduled).toHaveLength(1);
 		expect(delays).toEqual([1_000]);
 		expect(stops).toBe(0);
@@ -119,11 +119,11 @@ describe("isolated About This PC component", () => {
 			},
 		});
 
-		component.intentStart();
-		component.intentEnd();
-		component.intentStart();
+		component.intentStart("start-menu:pointer");
+		component.intentEnd("start-menu:pointer");
+		component.intentStart("start-menu:pointer");
 		expect(scheduled).toHaveLength(0);
-		component.intentEnd();
+		component.intentEnd("start-menu:pointer");
 		expect(scheduled).toHaveLength(1);
 		const showing = request(component, "show");
 		expect(scheduled).toHaveLength(0);
@@ -152,8 +152,8 @@ describe("isolated About This PC component", () => {
 			},
 		});
 
-		component.intentStart();
-		component.intentStart();
+		component.intentStart("start-menu:pointer");
+		component.intentStart("start-menu:focus");
 		component.intentClear();
 		expect(scheduled).toHaveLength(1);
 		scheduled[0]?.();
@@ -210,7 +210,7 @@ describe("isolated About This PC component", () => {
 
 		try {
 			component.init();
-			component.intentStart();
+			component.intentStart("start-menu:pointer");
 			await expect(request(component, "show")).resolves.toBe(
 				"error: utility unavailable",
 			);
@@ -383,8 +383,8 @@ describe("isolated About This PC component", () => {
 
 		component.init();
 		await request(component, "show");
-		component.intentStart();
-		component.intentEnd();
+		component.intentStart("start-menu:pointer");
+		component.intentEnd("start-menu:pointer");
 		expect(scheduled).toHaveLength(1);
 		shutdown();
 		expect(terminations).toBe(1);

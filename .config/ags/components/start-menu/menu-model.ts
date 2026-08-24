@@ -6,6 +6,8 @@ export interface MenuItem {
 	prefetchOnIntent?: boolean;
 }
 
+export type MenuIntentSource = "pointer" | "focus";
+
 export const defaultMenuItems: MenuItem[] = [
 	{
 		id: "about-this-pc",

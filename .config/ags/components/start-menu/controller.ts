@@ -23,6 +23,7 @@ import {
 	openRecentDocument,
 } from "@/services/recent-documents";
 import { aboutThisPCLifecycle } from "@/components/about-this-pc/lifecycle";
+import type { AboutThisPCPreparationSource } from "@/components/about-this-pc/isolated-component";
 import { openUtility } from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
@@ -32,6 +33,7 @@ import {
 } from "./menu-commands";
 import { startMenuMachine } from "./machine";
 import type { RecentItemsMenuModel } from "./recent-items-menu";
+import type { MenuIntentSource } from "./menu-model";
 import { StartMenuView } from "./start-menu-view";
 import { UpdatesCache } from "./updates-cache";
 import type { UpdatesSnapshot } from "./updates-policy";
@@ -39,6 +41,10 @@ import type { UpdatesSnapshot } from "./updates-policy";
 type StartMenuActor = ActorRefFrom<typeof startMenuMachine>;
 
 const emptyUpdates: UpdatesSnapshot = { flake: null, flatpak: null };
+const aboutThisPCPreparationSources = {
+	pointer: "start-menu:pointer",
+	focus: "start-menu:focus",
+} satisfies Record<MenuIntentSource, AboutThisPCPreparationSource>;
 
 export class StartMenuController {
 	#actor: StartMenuActor | null = null;
@@ -57,11 +63,13 @@ export class StartMenuController {
 		}),
 		getRecentItems: () => this.#recentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
-		onMenuIntentStart: (itemId) => {
-			if (itemId === "about-this-pc") aboutThisPCLifecycle.intentStart();
+		onMenuIntentStart: (itemId, source) => {
+			if (itemId === "about-this-pc")
+				aboutThisPCLifecycle.intentStart(aboutThisPCPreparationSources[source]);
 		},
-		onMenuIntentEnd: (itemId) => {
-			if (itemId === "about-this-pc") aboutThisPCLifecycle.intentEnd();
+		onMenuIntentEnd: (itemId, source) => {
+			if (itemId === "about-this-pc")
+				aboutThisPCLifecycle.intentEnd(aboutThisPCPreparationSources[source]);
 		},
 		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),

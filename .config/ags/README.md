@@ -59,7 +59,7 @@ Start Menu and external callers keep using the `ags-bundled` request route.
 Start the bundled process manually:
 
 ```bash
-cd ~/.config/ags && pnpm start
+cd ~/.config/ags && bun run start
 ```
 
 Regenerate AGS typings after AGS updates:

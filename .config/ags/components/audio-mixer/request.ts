@@ -1,4 +1,8 @@
 import { isMatching, P } from "ts-pattern";
+import { createPreparationRequestPattern } from "@/services/preparation-intent";
+
+export const audioMixerPreparationSource = "waybar:pulseaudio" as const;
+export type AudioMixerPreparationSource = typeof audioMixerPreparationSource;
 
 const requestPattern = P.union(
 	{ action: "show" },

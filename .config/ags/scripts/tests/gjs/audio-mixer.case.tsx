@@ -270,6 +270,7 @@ test("Audio Mixer scopes backend refresh work to its visible lifecycle", () => {
 test("Audio Mixer prepares its backend without presenting the view", () => {
 	const events: string[] = [];
 	let shows = 0;
+	let applySnapshot = (_snapshot: ReturnType<typeof emptySnapshot>) => {};
 	const backend: AudioBackend = {
 		init: () => events.push("init"),
 		setActive: (active) => events.push(`active:${active}`),
@@ -290,7 +291,10 @@ test("Audio Mixer prepares its backend without presenting the view", () => {
 		dispose() {},
 	} as unknown as AudioMixerView;
 	const controller = new AudioMixerController({
-		createBackend: () => backend,
+		createBackend: (nextSnapshot) => {
+			applySnapshot = nextSnapshot;
+			return backend;
+		},
 		createView: () => view,
 		signalWaybar: () => {},
 	});
@@ -303,10 +307,15 @@ test("Audio Mixer prepares its backend without presenting the view", () => {
 		events.join(",") === "active:true,init",
 		"preparation did not initialize the backend exactly once",
 	);
+	applySnapshot(emptySnapshot("", "ready"));
+	assert(
+		events.join(",") === "active:true,init,active:false",
+		"completed preparation did not suspend the hidden backend",
+	);
 	controller.release("waybar:pulseaudio");
 	assert(
 		events.join(",") === "active:true,init,active:false",
-		"release did not suspend the hidden backend",
+		"release repeated completed preparation cleanup",
 	);
 	controller.teardown();
 });

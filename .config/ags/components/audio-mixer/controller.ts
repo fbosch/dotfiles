@@ -1,5 +1,6 @@
 import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
+import { createPreparationIntentClaims } from "@/services/preparation-intent";
 import { createAudioBackend } from "./audio-backend";
 import { AudioMixerView, type AudioMixerViewActions } from "./audio-mixer-view";
 import {
@@ -8,6 +9,7 @@ import {
 	type AudioMixerTab,
 	type AudioSnapshot,
 } from "./model";
+import type { AudioMixerPreparationSource } from "./request";
 
 export interface AudioMixerControllerOptions {
 	createBackend?: (
@@ -31,6 +33,8 @@ export class AudioMixerController {
 	#snapshot = emptySnapshot("Audio backend unavailable", "unavailable");
 	#backend: AudioBackend;
 	#view: AudioMixerView;
+	readonly #preparationClaims =
+		createPreparationIntentClaims<AudioMixerPreparationSource>();
 	readonly #signalWaybar: () => void;
 
 	constructor(options: AudioMixerControllerOptions = {}) {
@@ -46,7 +50,12 @@ export class AudioMixerController {
 			this.#view.setSnapshot(snapshot);
 			if (snapshot.status === "loading") return;
 			this.#backendReady = true;
-			if (this.#showPending === false || this.#visible === false) return;
+			if (this.#visible === false) {
+				this.#preparationClaims.clear();
+				this.#backend.setActive(false);
+				return;
+			}
+			if (this.#showPending === false) return;
 			this.#showPending = false;
 			this.#view.show();
 			this.#scheduleWaybarSignal();
@@ -78,6 +87,7 @@ export class AudioMixerController {
 		this.#initialized = false;
 		this.#visible = false;
 		this.#showPending = false;
+		this.#preparationClaims.clear();
 		this.#cancelWaybarSignal();
 		if (this.#backendStarted) this.#backend.stop();
 		this.#backendStarted = false;
@@ -104,12 +114,22 @@ export class AudioMixerController {
 		this.#showPending = true;
 		this.#startBackend();
 	}
+	prepare(source: AudioMixerPreparationSource): void {
+		if (this.#preparationClaims.claim(source) === false) return;
+		this.#backend.setActive(true);
+		this.#startBackend();
+	}
+	release(source: AudioMixerPreparationSource): void {
+		if (this.#preparationClaims.release(source) === false || this.#visible) return;
+		this.#backend.setActive(false);
+	}
 	hide(): void {
 		this.#showPending = false;
 		this.#cancelWaybarSignal();
-		this.#backend.setActive(false);
 		this.#view.hide();
 		this.#visible = false;
+		if (this.#preparationClaims.hasClaims() === false)
+			this.#backend.setActive(false);
 	}
 	toggle(): string {
 		if (this.#visible) this.hide();
@@ -118,6 +138,12 @@ export class AudioMixerController {
 	}
 	setTab(tab: AudioMixerTab): void {
 		this.#view.setTab(tab);
+	}
+
+	#startBackend(): void {
+		if (this.#backendStarted) return;
+		this.#backendStarted = true;
+		this.#backend.init();
 	}
 
 	#setDefault(row: AudioSnapshot["rows"][AudioMixerTab][number]): void {

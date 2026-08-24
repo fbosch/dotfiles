@@ -115,7 +115,7 @@ ags-types:
 
 # Bundle the AGS configuration to a runtime artifact.
 ags-bundle:
-	pnpm --dir .config/ags bundle
+	bun run --cwd .config/ags bundle
 
 # Rebuild and restart the bundled AGS daemon.
 ags-refresh: ags-bundle

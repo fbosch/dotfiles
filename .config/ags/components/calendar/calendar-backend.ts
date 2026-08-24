@@ -53,8 +53,9 @@ export interface CalendarBackend {
 
 export interface CalendarBackendOptions {
 	readRange(): CalendarRange;
-	isVisible(): boolean;
+	isActive(): boolean;
 	applySnapshot(snapshot: CalendarBackendSnapshot): void;
+	onRefreshComplete(): void;
 }
 
 const edsConnectWaitSeconds = 1;
@@ -274,7 +275,7 @@ export function createCalendarBackend(
 		if (
 			currentLoadVersion !== loadVersion ||
 			cancellable.is_cancelled() ||
-			options.isVisible() === false
+			options.isActive() === false
 		) {
 			for (const view of views)
 				try {
@@ -386,7 +387,7 @@ export function createCalendarBackend(
 		const isCurrent = () =>
 			currentLoadVersion === loadVersion &&
 			cancellable.is_cancelled() === false &&
-			options.isVisible();
+			options.isActive();
 		const range = options.readRange();
 		const cacheKey = gridRangeKey(range.start, range.end);
 		try {
@@ -427,6 +428,7 @@ export function createCalendarBackend(
 				eventCache.set(cacheKey, snapshot);
 				writeCacheEntryToTmpfs(cacheKey, snapshot);
 				options.applySnapshot(snapshot);
+				options.onRefreshComplete();
 				return;
 			}
 			const sexp = buildRangeQuery(range);
@@ -490,6 +492,7 @@ export function createCalendarBackend(
 			eventCache.set(cacheKey, snapshot);
 			writeCacheEntryToTmpfs(cacheKey, snapshot);
 			options.applySnapshot(snapshot);
+			options.onRefreshComplete();
 		} catch (error) {
 			if (!isCurrent()) return;
 			ok = false;
@@ -503,6 +506,7 @@ export function createCalendarBackend(
 			writeCacheEntryToTmpfs(cacheKey, snapshot);
 			console.error("EDS calendar backend unavailable:", error);
 			options.applySnapshot(snapshot);
+			options.onRefreshComplete();
 		} finally {
 			if (activeCancellable === cancellable) activeCancellable = null;
 			mark.end(ok, errorMessage);
@@ -510,7 +514,7 @@ export function createCalendarBackend(
 	}
 
 	function scheduleBackendRefresh(): void {
-		if (!options.isVisible() || refreshSource !== 0) return;
+		if (!options.isActive() || refreshSource !== 0) return;
 		refreshSource = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
 			refreshSource = 0;
 			invalidate();
@@ -520,7 +524,7 @@ export function createCalendarBackend(
 	}
 
 	function startBackendWatch(): void {
-		if (!registry || registrySignalIds.length > 0 || !options.isVisible()) return;
+		if (!registry || registrySignalIds.length > 0 || !options.isActive()) return;
 		for (const signal of [
 			"source-added",
 			"source-changed",
@@ -552,16 +556,16 @@ export function createCalendarBackend(
 	return {
 		init: loadCacheFromTmpfs,
 		refresh(): boolean {
-			if (!options.isVisible()) return false;
+			if (!options.isActive()) return false;
 			const appliedCache = applyVisibleGridCache();
 			if (!appliedCache)
 				options.applySnapshot({ events: [], status: "loading", message: "" });
 			if (loadSource !== 0) return appliedCache;
 			loadSource = GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => {
 				loadSource = 0;
-				if (options.isVisible())
+				if (options.isActive())
 					void loadEventsForVisibleGrid(!appliedCache).then(() => {
-						if (options.isVisible()) startBackendWatch();
+						if (options.isActive()) startBackendWatch();
 					});
 				return GLib.SOURCE_REMOVE;
 			});

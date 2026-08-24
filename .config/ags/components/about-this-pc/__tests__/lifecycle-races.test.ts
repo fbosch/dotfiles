@@ -75,13 +75,13 @@ describe("About This PC lifecycle races", () => {
 		});
 
 		try {
-			lifecycle.intentStart();
+			lifecycle.intentStart("start-menu:pointer");
 			firstReady.reject(new Error("fixture startup failure"));
 			await firstCompletion.promise;
 			await new Promise((resolve) => setTimeout(resolve, 0));
-			lifecycle.intentEnd();
+			lifecycle.intentEnd("start-menu:pointer");
 			expect(scheduler.pending).toHaveLength(0);
-			lifecycle.intentStart();
+			lifecycle.intentStart("start-menu:pointer");
 			expect(launches).toBe(2);
 		} finally {
 			console.error = originalError;
@@ -108,11 +108,11 @@ describe("About This PC lifecycle races", () => {
 			schedule: scheduler.schedule,
 		});
 
-		lifecycle.intentStart();
-		lifecycle.intentEnd();
+		lifecycle.intentStart("start-menu:pointer");
+		lifecycle.intentEnd("start-menu:pointer");
 		scheduler.fire();
-		lifecycle.intentStart();
-		lifecycle.intentEnd();
+		lifecycle.intentStart("start-menu:pointer");
+		lifecycle.intentEnd("start-menu:pointer");
 		scheduler.fire();
 		firstCompletion.resolve();
 		await firstCompletion.promise;
@@ -152,7 +152,7 @@ describe("About This PC lifecycle races", () => {
 			schedule: () => () => {},
 		});
 
-		lifecycle.intentStart();
+		lifecycle.intentStart("start-menu:pointer");
 		firstCompletion.resolve();
 		await firstCompletion.promise;
 		await Promise.resolve();
@@ -185,12 +185,12 @@ describe("About This PC lifecycle races", () => {
 				schedule: () => () => {},
 			});
 
-			lifecycle.intentStart();
+			lifecycle.intentStart("start-menu:pointer");
 			await expect(request(lifecycle, action)).resolves.toBe(
 				action === "hide" ? "hidden" : "destroyed",
 			);
-			lifecycle.intentEnd();
-			lifecycle.intentStart();
+			lifecycle.intentEnd("start-menu:pointer");
+			lifecycle.intentStart("start-menu:pointer");
 			expect(launches).toBe(2);
 		});
 	}
