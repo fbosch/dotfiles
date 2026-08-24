@@ -1,6 +1,7 @@
 -- Animations ported from animations.conf.
 
 local M = {}
+local focus_animation = require("plugins.focus_animation")
 
 hl.config({
 	animations = {
@@ -22,6 +23,9 @@ hl.animation({ leaf = "global", enabled = true, speed = 10, spring = "window" })
 hl.animation({ leaf = "border", enabled = true, speed = 1.75, spring = "windowQuick" })
 hl.animation({ leaf = "windows", enabled = true, speed = 4.79, spring = "window" })
 M.restore_windows_move()
+if focus_animation.ready then
+	hl.animation({ leaf = "windowsFocus", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
+end
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 0.8, spring = "windowInstant", style = "popin 94%" })
 hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, spring = "windowQuick" })
