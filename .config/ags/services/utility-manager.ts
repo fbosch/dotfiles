@@ -33,5 +33,9 @@ export function openUtility(id: UtilityId): void {
 	void utilityManager.openUtility(id);
 }
 
+export function prepareUtility(id: UtilityId): void {
+	void utilityManager.prepareUtility(id);
+}
+
 export const handleUtilityRequest = utilityManager.handleRequest;
 export const visibleUtilityComponent = utilityManager.visibleComponent;

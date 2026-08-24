@@ -7,6 +7,7 @@ export interface UtilityDefinition {
 }
 
 export interface UtilityManager {
+  prepareUtility: (id: string) => Promise<void>;
   openUtility: (id: string) => Promise<void>;
   handleRequest: (
     component: string,
@@ -73,6 +74,19 @@ export function createUtilityManager(
       });
   }
 
+  function prepareUtility(id: string): Promise<void> {
+    if (isUtilityId(id) === false) {
+      console.error(`Unknown utility: ${id}`);
+      return Promise.resolve();
+    }
+
+    return loadUtility(id)
+      .then(() => {})
+      .catch((error) => {
+        console.error(`Failed to prepare ${id}:`, error);
+      });
+  }
+
   function handleRequest(
     component: string,
     argv: string[],
@@ -112,5 +126,5 @@ export function createUtilityManager(
     return null;
   }
 
-  return { openUtility, handleRequest, visibleComponent };
+  return { prepareUtility, openUtility, handleRequest, visibleComponent };
 }

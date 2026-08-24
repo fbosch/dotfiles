@@ -565,13 +565,19 @@
 }
 
 .floating-notifications .notification-background {
-  margin-bottom: 8px;
-  margin-right: 0;
-  box-shadow: var(--shadow-toast);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  padding: 4px 0;
+  box-shadow: none;
 }
 
-.floating-notifications .notification-row:last-child .notification-background {
-  margin-bottom: 0;
+.floating-notifications .notification-row .notification-background .notification {
+  background: var(--floating-bg-color);
+  border: 1px solid var(--surface-keyline);
+  border-radius: var(--radius-large);
+  box-shadow: var(--shadow-toast);
 }
 
 .close-button:active {

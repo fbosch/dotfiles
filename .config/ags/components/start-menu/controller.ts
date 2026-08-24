@@ -25,7 +25,7 @@ import {
 } from "@/services/recent-documents";
 import { aboutThisPCLifecycle } from "@/components/about-this-pc/lifecycle";
 import type { AboutThisPCPreparationSource } from "@/components/about-this-pc/isolated-component";
-import { openUtility } from "@/services/utility-manager";
+import { openUtility, prepareUtility } from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,
@@ -56,6 +56,9 @@ export class StartMenuController {
 	#stopRecentFocusHistory: (() => void) | null = null;
 	#profileState: ProfileState | null = getProfileState();
 	#updates: UpdatesSnapshot = emptyUpdates;
+	#preparedRecentItems: RecentItemsMenuModel | null = null;
+	#recentItemsPreparationClaims =
+		createPreparationIntentClaims<MenuIntentSource>();
 	#preparationClaims =
 		createPreparationIntentClaims<StartMenuPreparationSource>();
 	#cache = new UpdatesCache();
@@ -65,15 +68,18 @@ export class StartMenuController {
 			profileState: this.#profileState,
 			updates: this.#updates,
 		}),
-		getRecentItems: () => this.#recentItemsModel(),
+		getRecentItems: () => this.#consumeRecentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
 		onMenuIntentStart: (itemId, source) => {
 			if (itemId === "about-this-pc")
 				aboutThisPCLifecycle.intentStart(aboutThisPCPreparationSources[source]);
+			if (itemId === "force-quit") prepareUtility("force-quit");
+			if (itemId === "recent-items") this.#prepareRecentItems(source);
 		},
 		onMenuIntentEnd: (itemId, source) => {
 			if (itemId === "about-this-pc")
 				aboutThisPCLifecycle.intentEnd(aboutThisPCPreparationSources[source]);
+			if (itemId === "recent-items") this.#releaseRecentItems(source);
 		},
 		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),
@@ -127,6 +133,7 @@ export class StartMenuController {
 
 	teardown(): void {
 		aboutThisPCLifecycle.intentClear();
+		this.#clearPreparedRecentItems();
 		this.#preparationClaims.clear();
 		this.#unsubscribeProfile?.();
 		this.#unsubscribeProfile = null;
@@ -178,6 +185,7 @@ export class StartMenuController {
 
 	hide(): void {
 		aboutThisPCLifecycle.intentClear();
+		this.#clearPreparedRecentItems();
 		this.#actor?.send({ type: "HIDE" });
 		this.#view.hide();
 	}
@@ -224,6 +232,28 @@ export class StartMenuController {
 				fallbackLetter: getFallbackLetter({ class: document.name }),
 			})),
 		};
+	}
+
+	#prepareRecentItems(source: MenuIntentSource): void {
+		if (this.#recentItemsAreVisible()) return;
+		if (this.#recentItemsPreparationClaims.claim(source) === false) return;
+		this.#preparedRecentItems = this.#recentItemsModel();
+	}
+
+	#releaseRecentItems(source: MenuIntentSource): void {
+		if (this.#recentItemsPreparationClaims.release(source) === false) return;
+		this.#preparedRecentItems = null;
+	}
+
+	#consumeRecentItemsModel(): RecentItemsMenuModel {
+		const prepared = this.#preparedRecentItems;
+		this.#clearPreparedRecentItems();
+		return prepared ?? this.#recentItemsModel();
+	}
+
+	#clearPreparedRecentItems(): void {
+		this.#recentItemsPreparationClaims.clear();
+		this.#preparedRecentItems = null;
 	}
 
 	#executeMenuAction(itemId: string): void {

@@ -118,6 +118,37 @@ describe("utility manager", () => {
     expect(utility.requests).toEqual(["show"]);
   });
 
+  test("prepares a utility without showing it", async () => {
+    const utility = createFakeUtility();
+    const manager = createUtilityManager({ utility: utility.definition });
+
+    await manager.prepareUtility("utility");
+
+    expect(utility.loadCount()).toBe(1);
+    expect(utility.initCount()).toBe(1);
+    expect(utility.requests).toEqual([]);
+  });
+
+  test("an open request reuses an in-flight preparation", async () => {
+    const utility = createFakeUtility();
+    const loading = Promise.withResolvers<void>();
+    const load = utility.definition.load;
+    utility.definition.load = async () => {
+      await load();
+      await loading.promise;
+    };
+    const manager = createUtilityManager({ utility: utility.definition });
+
+    const preparation = manager.prepareUtility("utility");
+    const opening = manager.openUtility("utility");
+    loading.resolve();
+    await Promise.all([preparation, opening]);
+
+    expect(utility.loadCount()).toBe(1);
+    expect(utility.initCount()).toBe(1);
+    expect(utility.requests).toEqual(["show"]);
+  });
+
   test("reports visibility only for loaded utilities", async () => {
     const first = createFakeUtility();
     const second = createFakeUtility();
