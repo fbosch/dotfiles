@@ -1,8 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import {
-	createIsolatedAboutThisPCComponent,
+	createAboutThisPCLifecycle,
 	type IsolatedUtilityProcess,
 } from "../isolated-component";
+
+type LifecycleOptions = Parameters<typeof createAboutThisPCLifecycle>[0];
+
+function createLifecycle(
+	options: Omit<LifecycleOptions, "schedule"> &
+		Partial<Pick<LifecycleOptions, "schedule">>,
+) {
+	return createAboutThisPCLifecycle({
+		schedule: () => () => {},
+		...options,
+	});
+}
 
 function deferred() {
 	let resolve = () => {};
@@ -13,7 +25,7 @@ function deferred() {
 }
 
 function request(
-	component: ReturnType<typeof createIsolatedAboutThisPCComponent>,
+	component: ReturnType<typeof createAboutThisPCLifecycle>,
 	action: string,
 ): Promise<string> {
 	return new Promise((resolve) => {
@@ -22,16 +34,74 @@ function request(
 }
 
 describe("isolated About This PC component", () => {
-	test("prepares a hidden process and reuses it on show", async () => {
+	test("prepares once across overlapping pointer and focus intent", () => {
 		let launches = 0;
-		let showRequests = 0;
-		const completion = deferred();
-		const component = createIsolatedAboutThisPCComponent({
+		const scheduled: Array<() => void> = [];
+		const component = createLifecycle({
 			launch: () => {
 				launches += 1;
 				return {
 					ready: Promise.resolve(),
-					completion: completion.promise,
+					completion: new Promise<void>(() => {}),
+					request: () => Promise.resolve(),
+					stop: () => Promise.resolve(),
+					terminate() {},
+				};
+			},
+			schedule: (callback) => {
+				scheduled.push(callback);
+				return () => {};
+			},
+		});
+
+		component.intentStart();
+		component.intentStart();
+		expect(launches).toBe(1);
+		component.intentEnd();
+		expect(scheduled).toHaveLength(0);
+	});
+
+	test("delays stopping an unused preparation after the final intent release", () => {
+		const scheduled: Array<() => void> = [];
+		const delays: number[] = [];
+		let stops = 0;
+		const component = createLifecycle({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: new Promise<void>(() => {}),
+				request: () => Promise.resolve(),
+				stop: () => {
+					stops += 1;
+					return Promise.resolve();
+				},
+				terminate() {},
+			}),
+			schedule: (callback, delayMs) => {
+				scheduled.push(callback);
+				delays.push(delayMs);
+				return () => {};
+			},
+		});
+
+		component.intentStart();
+		component.intentEnd();
+		expect(scheduled).toHaveLength(1);
+		expect(delays).toEqual([1_000]);
+		expect(stops).toBe(0);
+		scheduled[0]?.();
+		expect(stops).toBe(1);
+	});
+
+	test("reentry and activation cancel a pending preparation release", async () => {
+		const scheduled: Array<() => void> = [];
+		let launches = 0;
+		let showRequests = 0;
+		const component = createLifecycle({
+			launch: () => {
+				launches += 1;
+				return {
+					ready: Promise.resolve(),
+					completion: new Promise<void>(() => {}),
 					request: () => {
 						showRequests += 1;
 						return Promise.resolve();
@@ -40,67 +110,54 @@ describe("isolated About This PC component", () => {
 					terminate() {},
 				};
 			},
+			schedule: (callback) => {
+				scheduled.push(callback);
+				return () => {
+					const index = scheduled.indexOf(callback);
+					if (index >= 0) scheduled.splice(index, 1);
+				};
+			},
 		});
 
-		component.init();
-		await expect(request(component, "prepare")).resolves.toBe("prepared");
-		expect(launches).toBe(1);
-		expect(showRequests).toBe(0);
-		await expect(request(component, "is-visible")).resolves.toBe("false");
-		await expect(request(component, "show")).resolves.toBe("shown");
+		component.intentStart();
+		component.intentEnd();
+		component.intentStart();
+		expect(scheduled).toHaveLength(0);
+		component.intentEnd();
+		expect(scheduled).toHaveLength(1);
+		const showing = request(component, "show");
+		expect(scheduled).toHaveLength(0);
+		await expect(showing).resolves.toBe("shown");
 		expect(launches).toBe(1);
 		expect(showRequests).toBe(1);
 	});
 
-	test("stops an unused prepared process", async () => {
-		const completion = deferred();
+	test("clears overlapping intent and releases the unused preparation", () => {
+		const scheduled: Array<() => void> = [];
 		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
-				completion: completion.promise,
+				completion: new Promise<void>(() => {}),
 				request: () => Promise.resolve(),
 				stop: () => {
 					stops += 1;
-					completion.resolve();
 					return Promise.resolve();
 				},
 				terminate() {},
 			}),
+			schedule: (callback) => {
+				scheduled.push(callback);
+				return () => {};
+			},
 		});
 
-		component.init();
-		await request(component, "prepare");
-		await expect(request(component, "cancel-prepare")).resolves.toBe("cancelled");
+		component.intentStart();
+		component.intentStart();
+		component.intentClear();
+		expect(scheduled).toHaveLength(1);
+		scheduled[0]?.();
 		expect(stops).toBe(1);
-	});
-
-	test("activation wins over concurrent preparation cancellation", async () => {
-		const completion = deferred();
-		const showRequest = deferred();
-		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
-			launch: () => ({
-				ready: Promise.resolve(),
-				completion: completion.promise,
-				request: () => showRequest.promise,
-				stop: () => {
-					stops += 1;
-					completion.resolve();
-					return Promise.resolve();
-				},
-				terminate() {},
-			}),
-		});
-
-		component.init();
-		await request(component, "prepare");
-		const showing = request(component, "show");
-		await expect(request(component, "cancel-prepare")).resolves.toBe("cancelled");
-		expect(stops).toBe(0);
-		showRequest.resolve();
-		await expect(showing).resolves.toBe("shown");
-		await expect(request(component, "is-visible")).resolves.toBe("true");
 	});
 
 	test("does not commit visibility after the process exits", async () => {
@@ -108,7 +165,7 @@ describe("isolated About This PC component", () => {
 		console.error = () => {};
 		const completion = deferred();
 		const showRequest = deferred();
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: completion.promise,
@@ -137,7 +194,7 @@ describe("isolated About This PC component", () => {
 		console.error = () => {};
 		const completion = deferred();
 		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: completion.promise,
@@ -153,7 +210,7 @@ describe("isolated About This PC component", () => {
 
 		try {
 			component.init();
-			await request(component, "prepare");
+			component.intentStart();
 			await expect(request(component, "show")).resolves.toBe(
 				"error: utility unavailable",
 			);
@@ -169,7 +226,7 @@ describe("isolated About This PC component", () => {
 		const errors: unknown[][] = [];
 		console.error = (...args: unknown[]) => errors.push(args);
 		const completion = deferred();
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: completion.promise,
@@ -201,7 +258,7 @@ describe("isolated About This PC component", () => {
 		const completion = deferred();
 		let requests = 0;
 		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: completion.promise,
@@ -249,7 +306,7 @@ describe("isolated About This PC component", () => {
 			stop: () => Promise.resolve(),
 			terminate() {},
 		};
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => {
 				launches += 1;
 				return process;
@@ -277,7 +334,7 @@ describe("isolated About This PC component", () => {
 	test("waits for process termination before completing hide", async () => {
 		const completion = deferred();
 		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: completion.promise,
@@ -301,7 +358,8 @@ describe("isolated About This PC component", () => {
 	test("terminates its owned process synchronously during host shutdown", async () => {
 		let shutdown = () => {};
 		let terminations = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const scheduled: Array<() => void> = [];
+		const component = createLifecycle({
 			launch: () => ({
 				ready: Promise.resolve(),
 				completion: new Promise<void>(() => {}),
@@ -314,19 +372,30 @@ describe("isolated About This PC component", () => {
 			onShutdown: (callback) => {
 				shutdown = callback;
 			},
+			schedule: (callback) => {
+				scheduled.push(callback);
+				return () => {
+					const index = scheduled.indexOf(callback);
+					if (index >= 0) scheduled.splice(index, 1);
+				};
+			},
 		});
 
 		component.init();
 		await request(component, "show");
+		component.intentStart();
+		component.intentEnd();
+		expect(scheduled).toHaveLength(1);
 		shutdown();
 		expect(terminations).toBe(1);
+		expect(scheduled).toHaveLength(0);
 		await expect(request(component, "is-visible")).resolves.toBe("false");
 	});
 
 	test("restarts after the isolated process exits", async () => {
 		const completions = [deferred(), deferred()];
 		let launches = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => {
 				const completion = completions[launches];
 				launches += 1;
@@ -356,7 +425,7 @@ describe("isolated About This PC component", () => {
 		const firstCompletion = deferred();
 		let launches = 0;
 		let stops = 0;
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => {
 				launches += 1;
 				if (launches > 1) {
@@ -398,7 +467,7 @@ describe("isolated About This PC component", () => {
 	test("reports launch failures without claiming visibility", async () => {
 		const originalError = console.error;
 		console.error = () => {};
-		const component = createIsolatedAboutThisPCComponent({
+		const component = createLifecycle({
 			launch: () => {
 				throw new Error("unavailable");
 			},

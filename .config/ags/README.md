@@ -45,8 +45,9 @@ Start Menu and external callers keep using the `ags-bundled` request route.
   starts only `ags-bundled`.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
-- `services/utility-manager.ts` owns lazy utility loading, process startup, and request routing.
-- `services/utility-prefetch.ts` owns reusable pointer/focus intent and delayed release semantics.
+- `services/utility-manager.ts` owns lazy utility loading and request routing.
+- `components/about-this-pc/` owns isolated process startup, overlapping
+  preparation intent, and delayed release.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.

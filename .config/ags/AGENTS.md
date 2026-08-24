@@ -12,10 +12,9 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 - Keep AI Pointer in `ags-bundled`, but import its generated runtime module only
   on the first request. Preserve startup capture cleanup, cursor-outline reset,
   and request arrival order while the module loads.
-- Prefetch isolated utilities through `services/utility-prefetch.ts`: treat
-  pointer hover and keyboard focus as overlapping intent, keep preparation
-  hidden, and release unused preparation when intent ends or the owning
-  surface hides.
+- Keep About This PC preparation in its feature-local lifecycle: treat pointer
+  hover and keyboard focus as overlapping intent, keep preparation hidden, and
+  release unused preparation when intent ends or the owning surface hides.
 - Keep growing features as vertical slices under `components/<feature>/`.
   Colocate feature-local state machines, controllers, child surfaces, policies,
   and tests; reserve `services/` for integrations shared across features.

@@ -3,14 +3,8 @@ import type { ComponentModule } from "@/services/component-host";
 import { parseComponentRequest } from "@/services/request";
 import { aboutThisPCRequestPattern } from "./request";
 
-const isolatedAboutThisPCRequestPattern = P.union(
-	aboutThisPCRequestPattern,
-	{ action: "prepare" },
-	{ action: "cancel-prepare" },
-);
-type IsolatedAboutThisPCRequest = P.infer<
-	typeof isolatedAboutThisPCRequestPattern
->;
+const PREPARATION_RELEASE_DELAY_MS = 1_000;
+type IsolatedAboutThisPCRequest = P.infer<typeof aboutThisPCRequestPattern>;
 
 export interface IsolatedUtilityProcess {
 	readonly ready: Promise<void>;
@@ -23,17 +17,34 @@ export interface IsolatedUtilityProcess {
 interface IsolatedAboutThisPCOptions {
 	launch(): IsolatedUtilityProcess;
 	onShutdown?(callback: () => void): void;
+	schedule(callback: () => void, delayMs: number): () => void;
 }
 
-export function createIsolatedAboutThisPCComponent({
+export interface AboutThisPCLifecycle extends ComponentModule {
+	intentStart(): void;
+	intentEnd(): void;
+	intentClear(): void;
+}
+
+export function createAboutThisPCLifecycle({
 	launch,
 	onShutdown,
-}: IsolatedAboutThisPCOptions): ComponentModule {
+	schedule,
+}: IsolatedAboutThisPCOptions): AboutThisPCLifecycle {
 	let initialized = false;
 	let process: IsolatedUtilityProcess | null = null;
 	let showClaims = 0;
 	let stopping: Promise<void> | null = null;
 	let visible = false;
+	// Pointer and focus intent overlap; one claim owns preparation until delayed release.
+	let intentCount = 0;
+	let preparationClaimed = false;
+	let cancelPendingRelease: (() => void) | null = null;
+
+	function clearPendingRelease(): void {
+		cancelPendingRelease?.();
+		cancelPendingRelease = null;
+	}
 
 	function trackProcess(nextProcess: IsolatedUtilityProcess): void {
 		process = nextProcess;
@@ -119,6 +130,17 @@ export function createIsolatedAboutThisPCComponent({
 		await stop();
 	}
 
+	function schedulePreparationRelease(): void {
+		if (preparationClaimed === false || cancelPendingRelease) return;
+		cancelPendingRelease = schedule(() => {
+			cancelPendingRelease = null;
+			preparationClaimed = false;
+			void cancelPreparation().catch((error) => {
+				console.error("Failed to release About This PC preparation:", error);
+			});
+		}, PREPARATION_RELEASE_DELAY_MS);
+	}
+
 	async function stop(): Promise<void> {
 		visible = false;
 		if (stopping) return stopping;
@@ -141,15 +163,46 @@ export function createIsolatedAboutThisPCComponent({
 		);
 	}
 
+	function init(): void {
+		if (initialized) return;
+		initialized = true;
+		onShutdown?.(() => {
+			clearPendingRelease();
+			intentCount = 0;
+			preparationClaimed = false;
+			visible = false;
+			process?.terminate();
+		});
+	}
+
+	function activate(): void {
+		init();
+		clearPendingRelease();
+		intentCount = 0;
+		preparationClaimed = false;
+	}
+
 	return {
 		instanceName: "about-this-pc",
-		init() {
-			if (initialized) return;
-			initialized = true;
-			onShutdown?.(() => {
-				visible = false;
-				process?.terminate();
+		init,
+		intentStart() {
+			init();
+			clearPendingRelease();
+			intentCount += 1;
+			if (preparationClaimed) return;
+			preparationClaimed = true;
+			void prepare().catch((error) => {
+				console.error("Failed to prepare About This PC:", error);
 			});
+		},
+		intentEnd() {
+			const previousCount = intentCount;
+			intentCount = Math.max(0, intentCount - 1);
+			if (previousCount === 1) schedulePreparationRelease();
+		},
+		intentClear() {
+			intentCount = 0;
+			schedulePreparationRelease();
 		},
 		handleRequest(argv, res) {
 			const data = parseComponentRequest<{ action?: string }>(
@@ -159,19 +212,16 @@ export function createIsolatedAboutThisPCComponent({
 			);
 			if (!data) return;
 			const request: unknown = data;
-			if (isMatching(isolatedAboutThisPCRequestPattern, request) === false) {
+			if (isMatching(aboutThisPCRequestPattern, request) === false) {
 				res("unknown action");
 				return;
 			}
 
 			match(request as IsolatedAboutThisPCRequest)
-				.with({ action: "prepare" }, () =>
-					respondAfter(prepare().then(() => {}), "prepared", res),
-				)
-				.with({ action: "cancel-prepare" }, () =>
-					respondAfter(cancelPreparation(), "cancelled", res),
-				)
-				.with({ action: "show" }, () => respondAfter(show(), "shown", res))
+				.with({ action: "show" }, () => {
+					activate();
+					respondAfter(show(), "shown", res);
+				})
 				.with({ action: "hide" }, () => respondAfter(stop(), "hidden", res))
 				.with({ action: "destroy" }, () =>
 					respondAfter(stop(), "destroyed", res),

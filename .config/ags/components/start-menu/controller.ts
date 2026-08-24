@@ -22,12 +22,8 @@ import {
 	getRecentDocuments,
 	openRecentDocument,
 } from "@/services/recent-documents";
-import {
-	clearUtilityPreparationIntent,
-	openUtility,
-	prepareUtility,
-	releaseUtilityPreparation,
-} from "@/services/utility-manager";
+import { aboutThisPCLifecycle } from "@/components/about-this-pc/lifecycle";
+import { openUtility } from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,
@@ -62,10 +58,10 @@ export class StartMenuController {
 		getRecentItems: () => this.#recentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
 		onMenuIntentStart: (itemId) => {
-			if (itemId === "about-this-pc") prepareUtility(itemId);
+			if (itemId === "about-this-pc") aboutThisPCLifecycle.intentStart();
 		},
 		onMenuIntentEnd: (itemId) => {
-			if (itemId === "about-this-pc") releaseUtilityPreparation(itemId);
+			if (itemId === "about-this-pc") aboutThisPCLifecycle.intentEnd();
 		},
 		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),
@@ -118,7 +114,7 @@ export class StartMenuController {
 	}
 
 	teardown(): void {
-		clearUtilityPreparationIntent("about-this-pc");
+		aboutThisPCLifecycle.intentClear();
 		this.#unsubscribeProfile?.();
 		this.#unsubscribeProfile = null;
 		this.#cache.dispose();
@@ -156,7 +152,7 @@ export class StartMenuController {
 	}
 
 	hide(): void {
-		clearUtilityPreparationIntent("about-this-pc");
+		aboutThisPCLifecycle.intentClear();
 		this.#actor?.send({ type: "HIDE" });
 		this.#view.hide();
 	}
