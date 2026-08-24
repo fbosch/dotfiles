@@ -33,7 +33,11 @@ should use these terms; new concepts named during design work land here.
 - **window-state capture** — pure snapshot module
   (`runtime/windows/daemons/window-state/capture.lua`) that turns normalized
   selectors, clients, and monitors into deterministic persisted JSON. The
-  window-state daemon owns IPC queries, scheduling, publication, and reloads.
+  window-state daemon owns IPC queries and scheduling.
+- **window-state publication** — activation step that merges a stable capture
+  into retained selector state, prunes state when selectors change, atomically
+  replaces derived rules only when their content changes, and then refreshes
+  active rules. Capture and scheduling remain outside this step.
 - **stable target identity** — identity used to approve and revalidate a
   window before targeted actions. Prefer stable client IDs, use addresses only
   as a fallback, and never treat broad class/title selectors as sufficient

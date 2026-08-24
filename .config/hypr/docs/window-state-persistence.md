@@ -23,9 +23,10 @@ worked, but not that the current Hyprland version accepts or applies the rule.
 4. On relevant events, it captures every selected **floating** client. Position
    is stored relative to the client's monitor origin, keyed by selector and
    monitor name.
-5. After geometry has been stable for one second, it atomically writes
-   `rules/window-state.lua` and runs `hyprctl reload config-only` when the file
-   changed.
+5. After geometry has been stable for one second, the daemon passes the capture
+   to the window-state publication module. Publication updates retained state,
+   atomically writes `rules/window-state.lua`, and runs
+   `hyprctl reload config-only` when the generated file changed.
 6. `hyprland.lua` loads those data rules after generated and static rules.
    Hyprland then applies `size` and `move` to a future client that matches both
    the selector and the current monitor workspace.
@@ -115,8 +116,8 @@ Rule order is significant:
 2. Static rules under `rules/`
 3. `rules/window-state.lua`
 
-The daemon must request `hyprctl reload config-only` because generated data
-files are not watched Lua configuration dependencies.
+Window-state publication must request `hyprctl reload config-only` because
+generated data files are not watched Lua configuration dependencies.
 
 ## Upgrade Debugging
 
@@ -218,7 +219,9 @@ contract.
 - `rules/window-state-selectors.lua`: writable client-selection policy.
 - `runtime/windows/daemons/window-state/window-state.sh`: launcher and lock.
 - `runtime/windows/daemons/window-state/window-state-daemon.lua`: IPC, events,
-  capture, debounce, persistence, and reload.
+  capture, and debounce scheduling.
+- `runtime/windows/daemons/window-state/publication.lua`: retained rule cache,
+  selector reconciliation, generated-rule publication, and reload.
 - `runtime/windows/daemons/window-state/rules.lua`: selector validation, cache,
   and generated Lua rule rendering.
 - `rules/window-state.lua`: generated persistent state; never edit manually.

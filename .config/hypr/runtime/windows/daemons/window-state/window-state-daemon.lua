@@ -9,10 +9,10 @@ local command = require("lib.command")
 local daemon = require("runtime.lib.daemon")
 local rate_limit = require("lib.rate_limit")
 local capture = require("runtime.windows.daemons.window-state.capture")
+local publication = require("runtime.windows.daemons.window-state.publication")
 local state_rules = require("runtime.windows.daemons.window-state.rules")
 
 local selectors_lua_file = config_dir .. "/rules/window-state-selectors.lua"
-local rules_lua_file = config_dir .. "/rules/window-state.lua"
 local kit = daemon.new({})
 local state_file = kit:instance_path("window-state.cache")
 local debounce_file = kit:instance_path("window-state-debounce")
@@ -30,7 +30,6 @@ local selector_state = {
 	matchers_json = "[]",
 }
 local monitors = {}
-local rules_cache = {}
 local current_hash = ""
 local debounce_started_at = nil
 local polling = false
@@ -45,6 +44,15 @@ local function log(message)
 	io.stderr:write(os.date("%H:%M:%S"), " window-state: ", message, "\n")
 	io.stderr:flush()
 end
+
+local publisher = publication.new({
+	kit = kit,
+	config_dir = config_dir,
+	reload = function()
+		return command.ok("hyprctl reload config-only >/dev/null 2>&1")
+	end,
+	log = log,
+})
 
 local log_rate_limited, reset_rate_limit = rate_limit.new(log, event_reconnect_log_interval, now)
 
@@ -88,50 +96,8 @@ local function is_state_empty(state)
 	return not state or state == "" or state == "[]"
 end
 
-local function load_rules_cache()
-	rules_cache = state_rules.load_rules_cache(rules_lua_file)
-end
-
-local function prune_stale_rules_cache()
-	state_rules.prune_rules_cache(rules_cache, selector_state.selectors)
-end
-
-local function write_lua_rules_cache_file()
-	return state_rules.write_rules_file({
-		cache = rules_cache,
-		selectors = selector_state.selectors,
-		config_dir = config_dir,
-		selectors_lua_file = selectors_lua_file,
-		rules_lua_file = rules_lua_file,
-	})
-end
-
-local function apply_window_state_rules()
-	return command.ok("hyprctl reload config-only >/dev/null 2>&1")
-end
-
 local function update_rules(windows)
-	if is_state_empty(windows) then
-		return
-	end
-
-	if not next(rules_cache) then
-		load_rules_cache()
-	end
-	prune_stale_rules_cache()
-
-	state_rules.update_cache_from_windows(rules_cache, windows)
-
-	local changed = write_lua_rules_cache_file()
-	kit:write_shared_file(state_file, windows .. "\n")
-
-	if not changed then
-		return
-	end
-
-	if not apply_window_state_rules() then
-		log("WARNING: Failed to refresh window-state rules")
-	end
+	publisher:publish(windows, selector_state.selectors)
 end
 
 local function states_changed(state)
@@ -279,12 +245,7 @@ local function handle_event(event)
 		end
 	elseif event:match("^configreloaded") then
 		parse_selectors()
-		load_rules_cache()
-		prune_stale_rules_cache()
-		local changed = write_lua_rules_cache_file()
-		if changed and not apply_window_state_rules() then
-			log("WARNING: Failed to refresh window-state rules")
-		end
+		publisher:reconcile(selector_state.selectors)
 		local state = get_window_states()
 		if not is_state_empty(state) then
 			start_polling()
@@ -352,12 +313,7 @@ local function startup()
 	log("started (LuaSocket events + adaptive polling)")
 
 	parse_selectors()
-	load_rules_cache()
-	prune_stale_rules_cache()
-	local changed = write_lua_rules_cache_file()
-	if changed and not apply_window_state_rules() then
-		log("WARNING: Failed to refresh window-state rules")
-	end
+	publisher:reconcile(selector_state.selectors)
 	fetch_monitors()
 	if kit:read_file(debounce_file) then
 		flush_pending_cached_state()

@@ -20,6 +20,6 @@ hl.config({
 	},
 	render = {
 		direct_scanout = false,
-		expand_undersized_textures = false,
+		expand_undersized_textures = true,
 	},
 })
