@@ -1,8 +1,9 @@
 local M = {}
 
-local root_dir = vim.fn.expand("~/.config/nvim/.sessions/")
+local root_dir = vim.fn.stdpath("config") .. "/.sessions/"
 local metadata_dir = root_dir .. ".metadata/"
 local current_session
+local max_herdr_session_specifier_length = 80
 
 local function resolve_cwd(cwd)
 	if type(cwd) ~= "string" or cwd == "" then
@@ -62,7 +63,8 @@ function M.resolve_requested(cwd)
 	vim.env.NVIM_SESSION = nil
 
 	if specifier ~= nil and specifier ~= "" then
-		if specifier:match("^[A-Za-z0-9][A-Za-z0-9_-]*$") == nil then
+		local exceeds_herdr_limit = vim.env.HERDR_ENV == "1" and #specifier > max_herdr_session_specifier_length
+		if exceeds_herdr_limit or specifier:match("^[A-Za-z0-9][A-Za-z0-9_-]*$") == nil then
 			vim.notify("Ignoring invalid NVIM_SESSION: " .. specifier, vim.log.levels.WARN)
 		else
 			return M.resolve(cwd, specifier), true
@@ -101,15 +103,21 @@ function M.set_current(session)
 	current_session = session
 end
 
-function M.set_restore_pending(pending, session)
+function M.set_herdr_restore_pending(pending, herdr, session)
 	session = session or M.get_current()
 	if session == nil then
 		return false
 	end
 
 	local metadata = M.get_metadata(session)
-	metadata.cwd = session.cwd
-	metadata.specifier = session.specifier
+	if pending then
+		metadata.cwd = session.cwd
+		metadata.herdr_managed = true
+		metadata.herdr_pane_id = herdr.pane_id
+		metadata.herdr_tab_id = herdr.tab_id
+		metadata.herdr_workspace_id = herdr.workspace_id
+		metadata.specifier = session.specifier
+	end
 	metadata.restore_pending = pending
 	M.set_metadata(metadata, session)
 	return true

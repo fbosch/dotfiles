@@ -97,9 +97,6 @@ hl.window_rule({
 hl.window_rule({
 	match = { initial_title = "^(Vicinae (Launcher|Settings))$" },
 	no_anim = true,
-	border_size = 0,
-	rounding = 10,
-	no_shadow = false,
 })
 
 -- Warehouse (Flattool)

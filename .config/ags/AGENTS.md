@@ -4,10 +4,11 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 
 ## Essentials
 
-- Keep all GTK surfaces in `config-bundled.tsx` (`ags-bundled`), started by
-  `start-daemons.sh` at login. Keep task-oriented system windows as lazy
-  modules behind `services/utility-manager.ts`; do not import them from the
-  entry point or make shell components depend on their globals.
+- Keep persistent GTK surfaces in `config-bundled.tsx` (`ags-bundled`), started
+  by `start-daemons.sh` at login. `about-this-pc` is the only short-lived GTK
+  host: preserve its public route through `services/utility-manager.ts` and
+  make it exit when hidden. Require retained-memory evidence before isolating
+  another GTK utility.
 - Keep growing features as vertical slices under `components/<feature>/`.
   Colocate feature-local state machines, controllers, child surfaces, policies,
   and tests; reserve `services/` for integrations shared across features.

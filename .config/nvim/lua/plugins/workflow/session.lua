@@ -2,12 +2,19 @@ local git = require("utils.git")
 local session = require("utils.session")
 local register = require("config.pack.registry").register
 
-local function mark_herdr_pane(target)
+local function herdr_context()
 	local pane_id = vim.env.HERDR_PANE_ID
 	if vim.env.HERDR_ENV ~= "1" or type(pane_id) ~= "string" or pane_id == "" then
-		return
+		return nil
 	end
+	return {
+		pane_id = pane_id,
+		tab_id = vim.env.HERDR_TAB_ID,
+		workspace_id = vim.env.HERDR_WORKSPACE_ID,
+	}
+end
 
+local function mark_herdr_pane(target, pane_id)
 	vim.system({ "herdr", "pane", "rename", pane_id, "nvim" }, { detach = true })
 	vim.system({
 		"herdr",
@@ -71,8 +78,11 @@ register({
 
 			vim.api.nvim_create_autocmd({ "VimEnter" }, {
 				callback = function()
-					session.set_restore_pending(true, target)
-					mark_herdr_pane(target)
+					local herdr = herdr_context()
+					if herdr ~= nil then
+						session.set_herdr_restore_pending(true, herdr, target)
+						mark_herdr_pane(target, herdr.pane_id)
+					end
 					local existing_session = vim.uv.fs_stat(target.path)
 					if existing_session and existing_session.type == "file" then
 						vim.defer_fn(function()
@@ -88,8 +98,9 @@ register({
 					if dir_exists and dir_exists.type == "directory" then
 						sessions.write(target.name)
 					end
-					if vim.v.dying == 0 then
-						session.set_restore_pending(false, target)
+					local herdr = herdr_context()
+					if herdr ~= nil and vim.v.dying == 0 then
+						session.set_herdr_restore_pending(false, herdr, target)
 					end
 				end,
 			})

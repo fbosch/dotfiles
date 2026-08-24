@@ -1,7 +1,7 @@
 # AGS Configuration
 
-Bundled AGS configuration for Hyprland desktop UI. One `ags-bundled` process
-owns shell surfaces and lazy task-oriented utility modules.
+Bundled AGS configuration for Hyprland desktop UI. The persistent
+`ags-bundled` process owns shell surfaces and routes task-oriented utilities.
 
 ## Components
 
@@ -22,21 +22,22 @@ The bundled entrypoint imports these components from `components/`:
 
 ## Lazy Utility Components
 
-`services/utility-manager.ts` imports these task-oriented windows only on
-their first request:
+`services/utility-manager.ts` starts these task-oriented windows only on their
+first request:
 
-- `force-quit/` for selecting and terminating an application.
-- `about-this-pc/` for system information.
+- `force-quit/` is imported lazily into `ags-bundled`.
+- `about-this-pc/` runs as `ags-about-this-pc` and exits when its window closes.
 
-Start Menu opens utilities through `UtilityManager`, not their runtime globals.
+Start Menu and external callers keep using the `ags-bundled` request route.
 
 ## Layout
 
 - `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
-- `start-daemons.sh` builds a runtime bundle and executes it through the Nix-provided `ags-bundle-runtime` environment.
+- `config-about-this-pc.tsx` is the short-lived system-information entry point.
+- `start-daemons.sh` builds both runtime bundles and starts only `ags-bundled`.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
-- `services/utility-manager.ts` owns lazy utility-module loading and request routing.
+- `services/utility-manager.ts` owns lazy utility loading, process startup, and request routing.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.
@@ -60,7 +61,8 @@ Use component-specific request formats from the component source or agent docs. 
 ## Validation
 
 For runtime checks, restart the bundled process and confirm Hyprland callers
-can still reach shell surfaces. Utilities remain unloaded until requested:
+can still reach shell surfaces. `ags-about-this-pc` should appear only while
+its window is open:
 
 ```bash
 ags quit --instance ags-bundled

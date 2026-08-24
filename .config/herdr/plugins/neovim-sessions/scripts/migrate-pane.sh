@@ -14,7 +14,8 @@ if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" 
 	"$herdr_bin" pane rename "$new_pane_id" nvim
 	nvim_session="herdr-${new_pane_id/:/-}"
 	"$herdr_bin" pane report-metadata "$new_pane_id" --source neovim-sessions --token "nvim_session=$nvim_session"
-	"$herdr_bin" pane run "$new_pane_id" "HERDR_ENV=1 HERDR_PANE_ID=$new_pane_id HERDR_SOCKET_PATH=$herdr_socket NVIM_SESSION=$nvim_session HERDR_MINI_SESSION_RESTORE=1 exec nvim"
+	printf -v nvim_command 'HERDR_ENV=1 HERDR_PANE_ID=%q HERDR_SOCKET_PATH=%q NVIM_SESSION=%q HERDR_MINI_SESSION_RESTORE=1 exec nvim' "$new_pane_id" "$herdr_socket" "$nvim_session"
+	"$herdr_bin" pane run "$new_pane_id" "$nvim_command"
 	"$herdr_bin" pane close "$pane_id"
 	exec "$herdr_bin" pane focus "$new_pane_id"
 fi

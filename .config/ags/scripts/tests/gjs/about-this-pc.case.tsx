@@ -58,10 +58,14 @@ function createFakeView() {
 
 test("About This PC handles its complete request lifecycle", async () => {
 	const fake = createFakeView();
+	let hidden = 0;
 	const controller = new AboutThisPCController({
 		view: fake.view,
 		getInfo: () => Promise.resolve(info),
 		launchMoreInfo: () => true,
+		onHidden: () => {
+			hidden += 1;
+		},
 	});
 	const handle = createRequestHandler(controller);
 	controller.init();
@@ -89,6 +93,7 @@ test("About This PC handles its complete request lifecycle", async () => {
 			request(handle, [JSON.stringify({ action: "destroy" })]) === "destroyed",
 			"destroy request failed",
 		);
+		assert(hidden === 2, "hidden lifecycle hook was not called");
 		assert(
 			request(handle, [JSON.stringify({ action: "unknown" })]) ===
 				"unknown action",

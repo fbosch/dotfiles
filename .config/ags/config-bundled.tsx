@@ -5,7 +5,7 @@ import {
 	startComponentHost,
 	type ComponentModule,
 } from "@/services/component-host";
-import { bundledCss } from "@/styles/stylesheets";
+import { bundledCss } from "@/styles/bundled-css";
 import GLib from "gi://GLib?version=2.0";
 
 // A unique benchmark instance keeps fresh-process measurements isolated from the live shell.

@@ -8,6 +8,22 @@ platforms = ["linux", "macos"]
 [[startup]]
 command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/restore.sh\""]
 
+[[events]]
+on = "pane.closed"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/handle-lifecycle-event.sh\""]
+
+[[events]]
+on = "tab.closed"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/handle-lifecycle-event.sh\""]
+
+[[events]]
+on = "workspace.closed"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/handle-lifecycle-event.sh\""]
+
+[[events]]
+on = "pane.moved"
+command = ["bash", "-c", "exec \"$HERDR_PLUGIN_ROOT/scripts/handle-lifecycle-event.sh\""]
+
 [[actions]]
 id = "migrate-pane"
 title = "Migrate pane to Neovim session"

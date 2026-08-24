@@ -10,12 +10,14 @@ interface AboutThisPCControllerOptions {
 	view?: AboutThisPCView;
 	getInfo?(cancellable: Gio.Cancellable | null): Promise<AboutThisPCInfo>;
 	launchMoreInfo?(): boolean;
+	onHidden?(): void;
 }
 
 export class AboutThisPCController {
 	readonly #view: AboutThisPCView;
 	readonly #getInfo: NonNullable<AboutThisPCControllerOptions["getInfo"]>;
 	readonly #launchMoreInfo: NonNullable<AboutThisPCControllerOptions["launchMoreInfo"]>;
+	readonly #onHidden: NonNullable<AboutThisPCControllerOptions["onHidden"]>;
 	#cancellable: Gio.Cancellable | null = null;
 	#generation = 0;
 	#shutdownSignalId = 0;
@@ -24,6 +26,7 @@ export class AboutThisPCController {
 		this.#view = options.view ?? new AboutThisPCView();
 		this.#getInfo = options.getInfo ?? getAboutThisPCInfo;
 		this.#launchMoreInfo = options.launchMoreInfo ?? launchAboutMoreInfo;
+		this.#onHidden = options.onHidden ?? (() => {});
 	}
 
 	init(): void {
@@ -66,10 +69,12 @@ export class AboutThisPCController {
 
 	hide(): void {
 		this.#destroyView();
+		this.#onHidden();
 	}
 
 	destroy(): void {
 		this.#destroyView();
+		this.#onHidden();
 	}
 
 	get isVisible(): boolean {

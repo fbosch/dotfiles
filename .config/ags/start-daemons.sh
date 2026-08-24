@@ -17,6 +17,7 @@ BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
 BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
 AI_POINTER_HELPER_CONFIG="components/ai-pointer/accessibility/helper.ts"
+ABOUT_THIS_PC_CONFIG="config-about-this-pc.tsx"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
 # EDS calendar loading also needs transitive typelibs, e.g. libical and json-glib,
@@ -136,6 +137,9 @@ main() {
     local ai_pointer_helper="$RUNTIME_DIR/ags-ai-pointer-accessibility-helper"
     local ai_pointer_helper_candidate="$ai_pointer_helper.$$"
     local ai_pointer_helper_config="$AGS_CONFIG_DIR/$AI_POINTER_HELPER_CONFIG"
+    local about_this_pc_config="$AGS_CONFIG_DIR/$ABOUT_THIS_PC_CONFIG"
+    local about_this_pc_executable="$RUNTIME_DIR/ags-about-this-pc-executable"
+    local about_this_pc_candidate="$about_this_pc_executable.$$"
     local pid_identity
 
     exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
@@ -154,6 +158,11 @@ main() {
     if [[ ! -f "$ai_pointer_helper_config" ]]; then
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} AI Pointer helper not found: $ai_pointer_helper_config"
+        return 1
+    fi
+    if [[ ! -f "$about_this_pc_config" ]]; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} About This PC config not found: $about_this_pc_config"
         return 1
     fi
     
@@ -177,12 +186,19 @@ main() {
     fi
     if command -v ags-bundle-runtime >/dev/null 2>&1; then
         if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$BUNDLED_CONFIG" "$bundled_candidate"); then
-            rm -f "$bundled_candidate" "$ai_pointer_helper_candidate"
+            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate"
             release_start_lock "$startup_lock_fd"
             log "${RED}✗${NC} Failed to build bundled AGS executable"
             return 1
         fi
+        if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$ABOUT_THIS_PC_CONFIG" "$about_this_pc_candidate"); then
+            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate"
+            release_start_lock "$startup_lock_fd"
+            log "${RED}✗${NC} Failed to build About This PC executable"
+            return 1
+        fi
         mv -f "$bundled_candidate" "$bundled_executable"
+        mv -f "$about_this_pc_candidate" "$about_this_pc_executable"
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
         (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
     else

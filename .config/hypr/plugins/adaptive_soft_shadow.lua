@@ -1,5 +1,4 @@
-local plugin_path = os.getenv("HYPR_ADAPTIVE_SOFT_SHADOW_PLUGIN")
-	or "/run/current-system/sw/lib/libadaptive-soft-shadow.so"
+local plugin_path = "/run/current-system/sw/lib/libadaptive-soft-shadow.so"
 
 local function is_loaded()
 	for _, plugin in ipairs(hl.get_loaded_plugins()) do
@@ -21,11 +20,13 @@ end
 hl.config({
 	plugin = {
 		adaptive_soft_shadow = {
+			blend_mode = "multiply",
+			color = "rgba(33333366)",
 			enabled = true,
-			range = 20,
+			range = 40,
 			render_power = 4,
 			offset = "1 1",
-			strength = 0.5,
+			strength = 0.7,
 		},
 	},
 })

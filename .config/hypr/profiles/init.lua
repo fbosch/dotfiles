@@ -44,6 +44,19 @@ local function applicable_config(profile)
 		config.plugin = plugins
 	end
 
+	local decoration = {}
+	for key, value in pairs(config.decoration or {}) do
+		decoration[key] = value
+	end
+
+	local shadow = {}
+	for key, value in pairs(decoration.shadow or {}) do
+		shadow[key] = value
+	end
+	shadow.enabled = plugin_config.adaptive_soft_shadow.enabled
+	decoration.shadow = shadow
+	config.decoration = decoration
+
 	return config
 end
 
