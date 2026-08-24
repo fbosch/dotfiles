@@ -47,7 +47,11 @@ log() {
 
 # Check if bundled instance is running
 is_bundled_running() {
-    ags list 2>/dev/null | grep -q "$BUNDLED_INSTANCE"
+    local instances
+    if ! instances="$(ags list 2>/dev/null)"; then
+        return 2
+    fi
+    grep -q "$BUNDLED_INSTANCE" <<< "$instances"
 }
 
 process_identity() {
@@ -138,13 +142,13 @@ main() {
     local ai_pointer_helper="$RUNTIME_DIR/ags-ai-pointer-accessibility-helper"
     local ai_pointer_helper_candidate="$ai_pointer_helper.$$"
     local ai_pointer_helper_config="$AGS_CONFIG_DIR/$AI_POINTER_HELPER_CONFIG"
-    local ai_pointer_module="$RUNTIME_DIR/ags-ai-pointer-module.js"
-    local ai_pointer_module_candidate="$ai_pointer_module.$$"
+    local ai_pointer_module="$RUNTIME_DIR/ags-ai-pointer-module-bundled-$$.js"
     local ai_pointer_module_config="$AGS_CONFIG_DIR/$AI_POINTER_MODULE_CONFIG"
     local about_this_pc_config="$AGS_CONFIG_DIR/$ABOUT_THIS_PC_CONFIG"
     local about_this_pc_executable="$RUNTIME_DIR/ags-about-this-pc-executable"
     local about_this_pc_candidate="$about_this_pc_executable.$$"
     local about_this_pc_bundled=false
+    local bundled_probe_status
     local pid_identity
 
     exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
@@ -176,10 +180,17 @@ main() {
     fi
     
     # Check if already running
-    if is_bundled_running; then
+    is_bundled_running
+    bundled_probe_status=$?
+    if [[ "$bundled_probe_status" -eq 0 ]]; then
         release_start_lock "$startup_lock_fd"
         log "${YELLOW}⚠${NC} Bundled daemon already running: $BUNDLED_INSTANCE"
         return 0
+    fi
+    if [[ "$bundled_probe_status" -eq 2 ]]; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} Failed to query running AGS instances"
+        return 1
     fi
     
     # AGS can run TypeScript directly.
@@ -187,21 +198,28 @@ main() {
     if [[ -d "$SYSTEM_GI_TYPELIB_PATH" ]]; then
         export GI_TYPELIB_PATH="$SYSTEM_GI_TYPELIB_PATH${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
     fi
+    if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} XDG_RUNTIME_DIR is required for the AI Pointer module"
+        return 1
+    fi
+    # No bundled host remains, so its prior host-specific modules are no longer addressable.
+    rm -f -- "$XDG_RUNTIME_DIR"/ags-ai-pointer-module-bundled-*.js
     if ! (cd "$AGS_CONFIG_DIR" && ags bundle --gtk 4 "$AI_POINTER_HELPER_CONFIG" "$ai_pointer_helper_candidate"); then
         rm -f "$ai_pointer_helper_candidate"
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Failed to build AI Pointer accessibility helper"
         return 1
     fi
-    if ! (cd "$AGS_CONFIG_DIR" && python3 scripts/build-ags-module.py --gtk 4 "$AI_POINTER_MODULE_CONFIG" "$ai_pointer_module_candidate"); then
-        rm -f "$ai_pointer_helper_candidate" "$ai_pointer_module_candidate"
+    if ! (cd "$AGS_CONFIG_DIR" && python3 scripts/build-ags-module.py --gtk 4 "$AI_POINTER_MODULE_CONFIG" "$ai_pointer_module"); then
+        rm -f "$ai_pointer_helper_candidate" "$ai_pointer_module"
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Failed to build AI Pointer module"
         return 1
     fi
     if command -v ags-bundle-runtime >/dev/null 2>&1; then
         if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$BUNDLED_CONFIG" "$bundled_candidate"); then
-            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate" "$ai_pointer_module_candidate"
+            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate" "$ai_pointer_module"
             release_start_lock "$startup_lock_fd"
             log "${RED}✗${NC} Failed to build bundled AGS executable"
             return 1
@@ -219,13 +237,11 @@ main() {
             mv -f "$about_this_pc_candidate" "$about_this_pc_executable"
         fi
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
-        mv -f "$ai_pointer_module_candidate" "$ai_pointer_module"
-        (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
+        (exec {startup_lock_fd}>&-; AGS_AI_POINTER_MODULE_PATH="$ai_pointer_module" exec ags-bundle-runtime "$bundled_executable") &
     else
         # compatibility: remove after ags-bundle-runtime is deployed on every host.
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
-        mv -f "$ai_pointer_module_candidate" "$ai_pointer_module"
-        (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
+        (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && AGS_AI_POINTER_MODULE_PATH="$ai_pointer_module" exec ags run "$BUNDLED_CONFIG") &
     fi
     local pid=$!
     pid_identity="$(process_identity "$pid")"
@@ -245,6 +261,7 @@ main() {
         return 0
     else
         stop_owned_process "$pid" "$pid_identity"
+        rm -f "$ai_pointer_module"
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Failed to start bundled daemon: $BUNDLED_INSTANCE"
         log "════════════════════════════════════════"

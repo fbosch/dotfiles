@@ -14,11 +14,11 @@ function configureWindow(window: Gtk.Window): void {
 		surface.set_application_id(AGS_TASKBAR_APPLICATION_ID);
 	};
 
-	if (window.get_realized()) {
+	if (window.get_mapped()) {
 		setApplicationId();
 		return;
 	}
-	window.connect("realize", setApplicationId);
+	window.connect("map", setApplicationId);
 }
 
 export function configureAgsTaskbarIdentity(): void {

@@ -339,6 +339,7 @@
 .notification-row .notification-background .notification {
   background: transparent;
   border: none;
+  box-shadow: none;
   margin: 0;
 }
 

@@ -39,8 +39,9 @@ Bundled mode details:
 - `ags-bundled` starts at login and hosts all windows.
 - Shell components initialize at startup; About This PC, AI Pointer, and Force
   Quit load on their first request through `UtilityManager`.
-- AI Pointer loads from `ags-ai-pointer-module.js` so the main bundle does not
-  parse its feature graph during login. The module still runs in `ags-bundled`.
+- AI Pointer loads from a host-specific `ags-ai-pointer-module-*.js` so the main
+  bundle does not parse its feature graph during login. The module still runs
+  in `ags-bundled`.
 - The bundled registry routes utility IPC requests through `UtilityManager`
   without loading a utility for an `is-visible` query.
 - Shell components open utilities through `UtilityManager`, not direct

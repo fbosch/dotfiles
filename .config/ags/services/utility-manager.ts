@@ -14,7 +14,7 @@ export type PrefetchableUtilityId = "about-this-pc";
 type ManagedUtilityId = UtilityId | "ai-pointer";
 
 const PREFETCH_RELEASE_DELAY_MS = 1_000;
-const AI_POINTER_MODULE = "ags-ai-pointer-module.js";
+const AI_POINTER_MODULE_PATH = "AGS_AI_POINTER_MODULE_PATH";
 
 declare global {
   var AiPointer: ComponentModule;
@@ -43,8 +43,8 @@ const utilities: Record<ManagedUtilityId, UtilityDefinition> = {
 };
 
 function aiPointerModuleUri(): string {
-	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR") ?? GLib.get_tmp_dir();
-	const path = GLib.build_filenamev([runtimeDirectory, AI_POINTER_MODULE]);
+	const path = GLib.getenv(AI_POINTER_MODULE_PATH);
+	if (!path) throw new Error(`${AI_POINTER_MODULE_PATH} is unavailable`);
 	return Gio.File.new_for_path(path).get_uri();
 }
 
