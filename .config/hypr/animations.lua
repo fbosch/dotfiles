@@ -10,7 +10,8 @@ hl.config({
 })
 
 hl.curve("window", { type = "spring", mass = 1, stiffness = 302, dampening = 34.8 })
-hl.curve("windowFocus", { type = "bezier", points = { { 0.25, 0.46 }, { 0.45, 0.94 } } })
+-- Ease-out sine reaches zero velocity at the endpoint, avoiding a final pixel snap.
+hl.curve("windowFocus", { type = "bezier", points = { { 0.39, 0.575 }, { 0.565, 1 } } })
 hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 3780, dampening = 123 })
 hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 14745, dampening = 242.9 })
 
@@ -29,9 +30,9 @@ if focus_animation.ready then
 	hl.animation({
 		leaf = "windowsFocus",
 		enabled = true,
-		speed = 1.4,
+		speed = 2.5,
 		bezier = "windowFocus",
-		style = "popin 99.70%",
+		style = "popin 99.8%",
 	})
 end
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
