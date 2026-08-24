@@ -17,6 +17,7 @@ BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
 BUNDLED_START_LOCK="$RUNTIME_DIR/ags-bundled-start.lock"
 AI_POINTER_HELPER_CONFIG="components/ai-pointer/accessibility/helper.ts"
+AI_POINTER_MODULE_CONFIG="components/ai-pointer/index.tsx"
 ABOUT_THIS_PC_CONFIG="config-about-this-pc.tsx"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
@@ -137,6 +138,9 @@ main() {
     local ai_pointer_helper="$RUNTIME_DIR/ags-ai-pointer-accessibility-helper"
     local ai_pointer_helper_candidate="$ai_pointer_helper.$$"
     local ai_pointer_helper_config="$AGS_CONFIG_DIR/$AI_POINTER_HELPER_CONFIG"
+    local ai_pointer_module="$RUNTIME_DIR/ags-ai-pointer-module.js"
+    local ai_pointer_module_candidate="$ai_pointer_module.$$"
+    local ai_pointer_module_config="$AGS_CONFIG_DIR/$AI_POINTER_MODULE_CONFIG"
     local about_this_pc_config="$AGS_CONFIG_DIR/$ABOUT_THIS_PC_CONFIG"
     local about_this_pc_executable="$RUNTIME_DIR/ags-about-this-pc-executable"
     local about_this_pc_candidate="$about_this_pc_executable.$$"
@@ -159,6 +163,11 @@ main() {
     if [[ ! -f "$ai_pointer_helper_config" ]]; then
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} AI Pointer helper not found: $ai_pointer_helper_config"
+        return 1
+    fi
+    if [[ ! -f "$ai_pointer_module_config" ]]; then
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} AI Pointer module not found: $ai_pointer_module_config"
         return 1
     fi
     if [[ ! -f "$about_this_pc_config" ]]; then
@@ -184,9 +193,15 @@ main() {
         log "${RED}✗${NC} Failed to build AI Pointer accessibility helper"
         return 1
     fi
+    if ! (cd "$AGS_CONFIG_DIR" && python3 scripts/build-ags-module.py --gtk 4 "$AI_POINTER_MODULE_CONFIG" "$ai_pointer_module_candidate"); then
+        rm -f "$ai_pointer_helper_candidate" "$ai_pointer_module_candidate"
+        release_start_lock "$startup_lock_fd"
+        log "${RED}✗${NC} Failed to build AI Pointer module"
+        return 1
+    fi
     if command -v ags-bundle-runtime >/dev/null 2>&1; then
         if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$BUNDLED_CONFIG" "$bundled_candidate"); then
-            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate"
+            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate" "$ai_pointer_module_candidate"
             release_start_lock "$startup_lock_fd"
             log "${RED}✗${NC} Failed to build bundled AGS executable"
             return 1
@@ -204,10 +219,12 @@ main() {
             mv -f "$about_this_pc_candidate" "$about_this_pc_executable"
         fi
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
+        mv -f "$ai_pointer_module_candidate" "$ai_pointer_module"
         (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
     else
         # compatibility: remove after ags-bundle-runtime is deployed on every host.
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
+        mv -f "$ai_pointer_module_candidate" "$ai_pointer_module"
         (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
     fi
     local pid=$!

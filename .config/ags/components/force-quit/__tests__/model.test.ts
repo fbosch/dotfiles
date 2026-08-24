@@ -50,6 +50,7 @@ describe("Force Quit model", () => {
 			class: "Example",
 		};
 		expect(isProtectedWindow({ ...ordinary, class: "Hyprland" }, [])).toBe(true);
+		expect(isProtectedWindow({ ...ordinary, class: "io.Astal.ags" }, [])).toBe(true);
 		expect(isProtectedWindow(ordinary, ["/usr/bin/ags"])).toBe(true);
 		expect(
 			isProtectedWindow(

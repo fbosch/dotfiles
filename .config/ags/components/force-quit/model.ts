@@ -31,6 +31,7 @@ const protectedIdentities = new Set([
 	"hyprland",
 	"hyprlock",
 	"io.astal.ags-bundled",
+	"io.astal.ags",
 	"start-menu",
 	"waybar",
 ]);

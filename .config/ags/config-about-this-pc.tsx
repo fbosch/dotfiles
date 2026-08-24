@@ -11,6 +11,7 @@ import { createRequestHandler } from "@/components/about-this-pc/request-handler
 import buttonCss from "./styles/button.scss";
 import gamingOpacityCss from "./styles/gaming-opacity.scss";
 import { themeCss } from "@/styles/theme-css";
+import { configureAgsTaskbarIdentity } from "@/services/taskbar-identity";
 
 let quitSource = 0;
 function scheduleQuit(): void {
@@ -25,6 +26,7 @@ function scheduleQuit(): void {
 const controller = new AboutThisPCController({ onHidden: scheduleQuit });
 const handleRequest = createRequestHandler(controller);
 
+configureAgsTaskbarIdentity();
 app.start({
 	instanceName:
 		GLib.getenv("AGS_ABOUT_THIS_PC_INSTANCE") ?? aboutThisPCIsolatedInstance,

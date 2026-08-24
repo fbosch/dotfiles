@@ -1,5 +1,5 @@
 import { evaluateHyprland } from "@/services/hyprland-ipc";
-import { prepareCaptureDirectory } from "./capture";
+import { prepareCaptureDirectory } from "./capture-directory";
 
 export function resetAiPointerStartupState(): void {
 	prepareCaptureDirectory();

@@ -1,12 +1,14 @@
 #!/usr/bin/env -S ags run
 
 import "ags/gtk4/app";
+import "@/components/ai-pointer/install-host-runtime";
 import {
 	startComponentHost,
 	type ComponentModule,
 } from "@/services/component-host";
 import { resetAiPointerStartupState } from "@/components/ai-pointer/startup";
 import { bundledCss } from "@/styles/bundled-css";
+import { configureAgsTaskbarIdentity } from "@/services/taskbar-identity";
 import GLib from "gi://GLib?version=2.0";
 
 // A unique benchmark instance keeps fresh-process measurements isolated from the live shell.
@@ -35,6 +37,7 @@ import "@/components/calendar/index.tsx";
 import "@/components/audio-mixer/index.tsx";
 import "@/components/pip-snap-preview.tsx";
 
+configureAgsTaskbarIdentity();
 resetAiPointerStartupState();
 
 startComponentHost({

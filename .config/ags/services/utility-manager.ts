@@ -1,6 +1,7 @@
 import { createUtilityManager, type UtilityDefinition } from "./utility-registry";
 import { createUtilityPrefetch } from "./utility-prefetch";
 import type { ComponentModule } from "./component-host";
+import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createIsolatedAboutThisPCComponent } from "@/components/about-this-pc/isolated-component";
 import {
@@ -13,6 +14,7 @@ export type PrefetchableUtilityId = "about-this-pc";
 type ManagedUtilityId = UtilityId | "ai-pointer";
 
 const PREFETCH_RELEASE_DELAY_MS = 1_000;
+const AI_POINTER_MODULE = "ags-ai-pointer-module.js";
 
 declare global {
   var AiPointer: ComponentModule;
@@ -26,7 +28,7 @@ const aboutThisPC = createIsolatedAboutThisPCComponent({
 
 const utilities: Record<ManagedUtilityId, UtilityDefinition> = {
 	"ai-pointer": {
-		load: () => import("@/components/ai-pointer/index"),
+		load: () => import(aiPointerModuleUri()),
 		component: () => globalThis.AiPointer,
 		reportsVisibility: false,
 	},
@@ -39,6 +41,12 @@ const utilities: Record<ManagedUtilityId, UtilityDefinition> = {
 		component: () => globalThis.ForceQuit,
 	},
 };
+
+function aiPointerModuleUri(): string {
+	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR") ?? GLib.get_tmp_dir();
+	const path = GLib.build_filenamev([runtimeDirectory, AI_POINTER_MODULE]);
+	return Gio.File.new_for_path(path).get_uri();
+}
 
 const utilityManager = createUtilityManager(utilities);
 

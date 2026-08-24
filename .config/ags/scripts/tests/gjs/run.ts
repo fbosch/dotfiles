@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import "@/components/ai-pointer/install-host-runtime";
 import "./styles.case";
 import "./confirm-dialog.case";
 import "./start-menu.case";

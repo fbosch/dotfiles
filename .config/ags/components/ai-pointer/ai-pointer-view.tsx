@@ -1,6 +1,6 @@
+/** @jsxImportSource ./external-jsx */
+
 import { Astal } from "ags/gtk4";
-import app from "ags/gtk4/app";
-import { createRoot } from "ags";
 import Gdk from "gi://Gdk?version=4.0";
 import Gio from "gi://Gio?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
@@ -9,6 +9,7 @@ import { configureButton, setButtonVariant } from "@/components/button";
 import { bindGamingOpacity } from "@/services/gaming-opacity";
 import { getPointerMonitor } from "@/services/pointer-monitor";
 import type { Capture } from "./capture";
+import { getAiPointerApplication, getAiPointerCreateRoot } from "./host-runtime";
 import { createCancelController } from "./cancel-controller";
 import { accessibilityDebugEnabled } from "./accessibility-debug";
 import type { AccessibilityDebugState } from "./accessibility";
@@ -28,6 +29,7 @@ import type { PointerStroke } from "./stroke";
 import { StrokeOverlay } from "./stroke-overlay";
 
 const promptMinimumWidth = 160;
+const createRoot = getAiPointerCreateRoot();
 const promptMaximumWidth = 348;
 const promptHorizontalChrome = 58;
 const promptHostHeight = 50;
@@ -116,7 +118,7 @@ export class AiPointerView {
 					exclusivity={Astal.Exclusivity.IGNORE}
 					keymode={Astal.Keymode.EXCLUSIVE}
 					class="ai-pointer ai-pointer-prompt-surface"
-					application={app}
+					application={getAiPointerApplication()}
 					$={(self: Astal.Window) => {
 						bindGamingOpacity(self);
 						self.add_controller(createCancelController(() => this.#handlers?.onCancel()));

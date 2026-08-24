@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import "@/components/ai-pointer/install-host-runtime";
 import "./ai-pointer-process-lifecycle.case";
 import { runSuite } from "./harness";
 

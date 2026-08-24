@@ -1,9 +1,9 @@
 # Architecture and Components
 
 AGS runs in bundled mode for performance. Shell components load from
-`config-bundled.tsx` at startup. Task-oriented system windows are separate
-modules loaded by `services/utility-manager.ts` on first use, keeping their
-dependencies out of the login path while retaining one GTK process.
+`config-bundled.tsx` at startup. The utility manager loads occasional features
+on first use. Force Quit and AI Pointer stay in the bundled GTK process; About
+This PC uses a short-lived process so its retained memory can be reclaimed.
 
 Shell components (in `components/`):
 
@@ -17,6 +17,7 @@ Shell components (in `components/`):
 Lazy utility components (in `components/`):
 
 - `components/about-this-pc/` - On-demand system information feature slice
+- `components/ai-pointer/` - On-demand pointer capture and question workflow
 - `components/force-quit/` - On-demand application termination feature slice
 
 Services (in `services/`):
@@ -36,8 +37,10 @@ Entry points:
 Bundled mode details:
 
 - `ags-bundled` starts at login and hosts all windows.
-- Shell components initialize at startup; About This PC and Force Quit load on
-  their first request through `UtilityManager`.
+- Shell components initialize at startup; About This PC, AI Pointer, and Force
+  Quit load on their first request through `UtilityManager`.
+- AI Pointer loads from `ags-ai-pointer-module.js` so the main bundle does not
+  parse its feature graph during login. The module still runs in `ags-bundled`.
 - The bundled registry routes utility IPC requests through `UtilityManager`
   without loading a utility for an `is-visible` query.
 - Shell components open utilities through `UtilityManager`, not direct

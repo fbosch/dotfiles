@@ -1,4 +1,5 @@
 import app from "ags/gtk4/app";
+import "../install-host-runtime";
 import GLib from "gi://GLib?version=2.0";
 import type { AccessibilityLookupMode } from "../accessibility";
 import { AiPointerController } from "../controller";

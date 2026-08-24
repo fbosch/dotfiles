@@ -26,6 +26,8 @@ The bundled entrypoint imports these components from `components/`:
 first request:
 
 - `force-quit/` is imported lazily into `ags-bundled`.
+- `ai-pointer/` is built as a runtime JavaScript module and imported into
+  `ags-bundled` on its first request.
 - `about-this-pc/` runs under an `ags-about-this-pc-*` instance and exits when
   its window closes.
 
@@ -39,7 +41,8 @@ Start Menu and external callers keep using the `ags-bundled` request route.
 
 - `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
 - `config-about-this-pc.tsx` is the short-lived system-information entry point.
-- `start-daemons.sh` builds both runtime bundles and starts only `ags-bundled`.
+- `start-daemons.sh` builds the runtime bundles and lazy AI Pointer module, then
+  starts only `ags-bundled`.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
 - `services/utility-manager.ts` owns lazy utility loading, process startup, and request routing.
@@ -53,7 +56,7 @@ Start Menu and external callers keep using the `ags-bundled` request route.
 Start the bundled process manually:
 
 ```bash
-cd ~/.config/ags && ags run config-bundled.tsx
+cd ~/.config/ags && pnpm start
 ```
 
 Regenerate AGS typings after AGS updates:

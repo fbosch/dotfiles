@@ -1,11 +1,11 @@
 import { Astal } from "ags/gtk4";
-import app from "ags/gtk4/app";
 import Cairo from "cairo";
 import Gdk from "gi://Gdk?version=4.0";
 import Gtk from "gi://Gtk?version=4.0";
 import GLib from "gi://GLib?version=2.0";
 import GObject from "gi://GObject?version=2.0";
 import type { AccessibilityDebugState } from "./accessibility/debug-state";
+import { getAiPointerApplication } from "./host-runtime";
 import { createCancelController } from "./cancel-controller";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import type { PointerStroke } from "./stroke";
@@ -261,7 +261,7 @@ export class StrokeOverlay {
 		captureKeyboard: boolean,
 	): Astal.Window {
 		const window = new Astal.Window({
-			application: app,
+			application: getAiPointerApplication(),
 			name: `ai-pointer-${namespace}-${index}`,
 			namespace,
 			visible: false,

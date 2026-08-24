@@ -9,6 +9,9 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
   host: preserve its public route through `services/utility-manager.ts` and
   make it exit when hidden. Require retained-memory evidence before isolating
   another GTK utility.
+- Keep AI Pointer in `ags-bundled`, but import its generated runtime module only
+  on the first request. Preserve startup capture cleanup, cursor-outline reset,
+  and request arrival order while the module loads.
 - Prefetch isolated utilities through `services/utility-prefetch.ts`: treat
   pointer hover and keyboard focus as overlapping intent, keep preparation
   hidden, and release unused preparation when intent ends or the owning

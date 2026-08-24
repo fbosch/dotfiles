@@ -1,4 +1,3 @@
-import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { evaluateHyprland } from "@/services/hyprland-ipc";
@@ -12,6 +11,7 @@ import {
 import type { AccessibilityResolution } from "./accessibility/policy";
 import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
 import { requestAnswer } from "./answer-client";
+import { getAiPointerApplication } from "./host-runtime";
 import type { AiPointerControllerOptions } from "./controller-options";
 import { emptySelectionContext, formatDesktopPointerRequest, type SelectionContext } from "./context";
 import { querySelectionContext } from "./context-query";
@@ -140,7 +140,7 @@ export class AiPointerController {
 			this.#setCursorOutlineState(false, true);
 		}
 		if (this.#shutdownSignalId === 0)
-			this.#shutdownSignalId = app.connect("shutdown", () => this.teardown(true));
+			this.#shutdownSignalId = getAiPointerApplication().connect("shutdown", () => this.teardown(true));
 	}
 
 	start(startPosition: PointerPosition): boolean {
@@ -415,7 +415,7 @@ export class AiPointerController {
 		this.#actor = null;
 		this.#view.dispose();
 		if (this.#shutdownSignalId !== 0) {
-			app.disconnect(this.#shutdownSignalId);
+			getAiPointerApplication().disconnect(this.#shutdownSignalId);
 			this.#shutdownSignalId = 0;
 		}
 	}

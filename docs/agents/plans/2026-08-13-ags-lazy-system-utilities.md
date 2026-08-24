@@ -9,10 +9,16 @@ failure isolation it provides for the current utility set.
 
 ## Decision
 
-Keep one login-started `ags-bundled` process. Load Force Quit in that process,
-but run About This PC in a short-lived `ags-about-this-pc` process. The utility
-manager preserves the existing `ags-bundled` request route and supervises the
-child process.
+Keep one login-started `ags-bundled` process. Load Force Quit and AI Pointer in
+that process, but run About This PC in a short-lived `ags-about-this-pc`
+process. The utility manager preserves the existing `ags-bundled` request
+route and supervises the child process.
+
+AI Pointer is built as a separate JavaScript module because a same-file dynamic
+import leaves its code in the main AGS bundle and does not reduce startup PSS.
+A paired ablation estimated a 10.71 MiB startup saving. Two five-run
+implementation samples measured median startup PSS at 110.83 MiB and
+109.01 MiB, compared with 121.53 MiB when AI Pointer was eager.
 
 The earlier always-running utility host remains rejected because its empty GTK
 and GJS runtime costs about 40 MiB PSS. Later measurements showed that opening
@@ -54,6 +60,7 @@ ags-bundled
 │
 ├── Utility modules loaded on first request
 │   ├── Force Quit
+│   ├── AI Pointer
 │   └── future task-oriented system windows
 │
 └── on-demand process routing
@@ -76,6 +83,7 @@ non-GTK process, not another always-warm AGS host.
 | --- | --- | --- |
 | Start Menu, Window Switcher, indicators, mixer, calendar, clock, PiP, confirmation dialogs | Shell | Import and initialize at login. |
 | Force Quit | Utility | Import and initialize on first `open` or direct AGS request. |
+| AI Pointer | Utility | Import its runtime module on the first `start`, `finish`, or `cancel` request. |
 | About This PC | Isolated utility | Start on first `open`, then exit on hide, destroy, or window close. |
 | Future task-oriented system windows | Utilities by default | Use the classification rule below. |
 
@@ -94,6 +102,8 @@ loss of it impairs routine desktop operation.
 2. Route utilities through `services/utility-manager.ts`.
    - Allow-list stable utility IDs.
    - Dynamically import Force Quit on its first open/request.
+   - Import AI Pointer's generated runtime module on its first request and
+     preserve request order while the module loads.
    - Start one `ags-about-this-pc-*` child and deduplicate concurrent opens.
    - Return `false` for an unloaded or stopped utility's `is-visible` request.
    - Include utility visibility in the existing taskbar query.
