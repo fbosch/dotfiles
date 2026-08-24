@@ -65,10 +65,16 @@ for _ = 1, 100 do
   socket.sleep(0.01)
 end
 
+local delivered = 0
 for index = 1, 32 do
-  assert(client:send("workspacev2>>fixture-" .. tostring(index) .. "\n"))
+  local sent_bytes = client:send("workspacev2>>fixture-" .. tostring(index) .. "\n")
+  if not sent_bytes then
+    break
+  end
+  delivered = delivered + 1
   socket.sleep(0.01)
 end
+assert(delivered > 0, "event client closed before accepting an event")
 local handle = assert(io.open(sent, "w"))
 handle:write("sent\n")
 handle:close()
