@@ -553,7 +553,7 @@
 }
 
 .floating-notifications {
-  padding: 12px 4px 4px 12px;
+  padding: 12px 0 4px 0;
 }
 
 .floating-notifications .notification {
@@ -569,7 +569,7 @@
   border: none;
   border-radius: 0;
   margin: 0;
-  padding: 4px 0;
+  padding: 4px 12px;
   box-shadow: none;
 }
 
