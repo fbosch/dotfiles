@@ -49,9 +49,11 @@ test("Start Menu handles its complete request lifecycle", () => {
 			]) === "prepared",
 			"prepare request failed",
 		);
+		const preparedWindow = app.get_window("start-menu");
+		assert(Boolean(preparedWindow), "prepare did not create the menu view");
 		assert(
-			Boolean(app.get_window("start-menu")),
-			"prepare did not create the hidden menu view",
+			preparedWindow?.get_visible() === false,
+			"prepare mapped the menu window",
 		);
 		assert(controller.isVisible() === false, "prepare showed the menu");
 		assert(

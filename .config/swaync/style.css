@@ -565,8 +565,13 @@
 }
 
 .floating-notifications .notification-background {
+  margin-bottom: 8px;
   margin-right: 0;
   box-shadow: var(--shadow-toast);
+}
+
+.floating-notifications .notification-row:last-child .notification-background {
+  margin-bottom: 0;
 }
 
 .close-button:active {
