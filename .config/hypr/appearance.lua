@@ -15,8 +15,8 @@ hl.config({
 		layout = "dwindle",
 	},
 	layout = {
-		single_window_aspect_ratio = "5.6 3.9",
-		single_window_aspect_ratio_tolerance = 0.2,
+		single_window_aspect_ratio = "6.5 4",
+		single_window_aspect_ratio_tolerance = 0.1,
 	},
 	decoration = {
 		rounding = 8,

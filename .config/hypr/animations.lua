@@ -32,7 +32,7 @@ if focus_animation.ready then
 		enabled = true,
 		speed = 2.5,
 		bezier = "windowFocus",
-		style = "popin 99.8%",
+		style = "popin 99.77%",
 	})
 end
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
