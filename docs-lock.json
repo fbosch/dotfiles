@@ -23,16 +23,16 @@
     "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "b3d25de341ccf70bb081753a1108e2ed6ef0ef5a",
-      "bytes": 218675,
+      "resolvedCommit": "767416d8ad85a3795cdcf02b70945389eeef450b",
+      "bytes": 222862,
       "fileCount": 32,
-      "manifestSha256": "108aa4fd0383f30f401f5b52a9c273080693386d1dcce2c308c60c8331e9e925",
+      "manifestSha256": "4bf670c184db41452a4f94f58c4f0286b24ca41ba3c7be540afd6dbb1fc37ddb",
       "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
     },
     "waybar-docs": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "fb2065762139616d46b499a7425b50449a176201",
+      "resolvedCommit": "9e8ed49d8b1e7df3f137509a39f3034415582a94",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
@@ -50,10 +50,10 @@
     "herdr-docs": {
       "repo": "https://github.com/ogulcancelik/herdr.git",
       "ref": "HEAD",
-      "resolvedCommit": "1c76079f8b9494ec1c971c80fda34c116ecb89dd",
-      "bytes": 695205,
+      "resolvedCommit": "7d56b4c51b046a5d477439bcea4512339f8841aa",
+      "bytes": 699123,
       "fileCount": 60,
-      "manifestSha256": "3098ca3412a894e6cdfae09e381e8f9fbe8e8795d7a3221b6f3cb24c0789c320",
+      "manifestSha256": "1a626275131f50ea2e9315641d374c936cb7d68ca58af97224d0a1ef76b4d777",
       "rulesSha256": "6c03a23386fd099bc5a3c54454281ab61c9eedaa5c656dbfeebc0ca5474f1032"
     }
   },
