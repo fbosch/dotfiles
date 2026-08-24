@@ -26,7 +26,8 @@ The bundled entrypoint imports these components from `components/`:
 first request:
 
 - `force-quit/` is imported lazily into `ags-bundled`.
-- `about-this-pc/` runs as `ags-about-this-pc` and exits when its window closes.
+- `about-this-pc/` runs under an `ags-about-this-pc-*` instance and exits when
+  its window closes.
 
 Start Menu and external callers keep using the `ags-bundled` request route.
 
@@ -61,8 +62,8 @@ Use component-specific request formats from the component source or agent docs. 
 ## Validation
 
 For runtime checks, restart the bundled process and confirm Hyprland callers
-can still reach shell surfaces. `ags-about-this-pc` should appear only while
-its window is open:
+can still reach shell surfaces. An `ags-about-this-pc-*` instance should appear
+only while its window is open:
 
 ```bash
 ags quit --instance ags-bundled

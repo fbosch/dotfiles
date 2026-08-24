@@ -26,7 +26,8 @@ const controller = new AboutThisPCController({ onHidden: scheduleQuit });
 const handleRequest = createRequestHandler(controller);
 
 app.start({
-	instanceName: aboutThisPCIsolatedInstance,
+	instanceName:
+		GLib.getenv("AGS_ABOUT_THIS_PC_INSTANCE") ?? aboutThisPCIsolatedInstance,
 	css: [themeCss, buttonCss, gamingOpacityCss, aboutThisPCCss].join("\n"),
 	main() {
 		controller.init();

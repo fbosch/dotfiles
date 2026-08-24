@@ -20,6 +20,12 @@ About This PC adds about 15 MiB PSS to `ags-bundled` and retains most of it
 after the window closes. The short-lived host trades higher memory while the
 window is open for reclaiming its complete runtime afterward.
 
+A five-cycle live validation of the isolated design measured a median active
+overhead of 85,181 KiB PSS and a median post-close delta of 80 KiB PSS. Four
+post-close samples were within -11 to 100 KiB of their baseline. One sample
+included an unrelated 5,081 KiB persistent-host increase, which remained in
+the next baseline.
+
 ```text
 ags-bundled
 ├── Shell components loaded at login
@@ -34,7 +40,7 @@ ags-bundled
 │   └── future task-oriented system windows
 │
 └── on-demand process routing
-    └── ags-about-this-pc → About This PC → exit on close
+    └── ags-about-this-pc-* → About This PC → exit on close
 ```
 
 `services/utility-manager.ts` is the boundary. Shell components request a
@@ -71,7 +77,7 @@ loss of it impairs routine desktop operation.
 2. Route utilities through `services/utility-manager.ts`.
    - Allow-list stable utility IDs.
    - Dynamically import Force Quit on its first open/request.
-   - Start one `ags-about-this-pc` child and deduplicate concurrent opens.
+   - Start one `ags-about-this-pc-*` child and deduplicate concurrent opens.
    - Return `false` for an unloaded or stopped utility's `is-visible` request.
    - Include utility visibility in the existing taskbar query.
 
@@ -99,7 +105,7 @@ loss of it impairs routine desktop operation.
 ## Validation
 
 1. Confirm `ags list` shows only `ags-bundled` while About This PC is closed,
-   and also shows `ags-about-this-pc` while its window is open.
+   and also shows an `ags-about-this-pc-*` instance while its window is open.
 2. Open About This PC and Force Quit from Start Menu. Verify each opens and
    remains addressable through its existing `ags-bundled` component ID.
 3. Confirm `taskbar-visibility` reports a loaded visible utility and returns
@@ -116,7 +122,8 @@ loss of it impairs routine desktop operation.
 
 - The desktop has one persistent AGS GTK/GJS process.
 - About This PC is not imported into the persistent host.
-- `ags-about-this-pc` exists only while its window is open or starting.
+- An `ags-about-this-pc-*` instance exists only while its window is open or
+  starting.
 - Shell code depends only on stable utility IDs.
 - Existing shell request routes and Hyprland/Waybar application identity remain
   unchanged.

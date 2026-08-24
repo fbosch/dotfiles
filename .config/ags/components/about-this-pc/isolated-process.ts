@@ -73,13 +73,16 @@ async function runAgs(argv: string[], timeoutMs: number): Promise<void> {
 	await waitForCommand(process, timeoutMs);
 }
 
-async function waitUntilReady(isCompleted: () => boolean): Promise<void> {
+async function waitUntilReady(
+	instanceName: string,
+	isCompleted: () => boolean,
+): Promise<void> {
 	const deadline = GLib.get_monotonic_time() + READY_TIMEOUT_MS * 1_000;
 	while (GLib.get_monotonic_time() < deadline) {
 		if (isCompleted()) throw new Error("utility exited during startup");
 		try {
 			await runAgs(
-				["request", "-i", aboutThisPCIsolatedInstance, ""],
+				["request", "-i", instanceName, ""],
 				READY_PROBE_TIMEOUT_MS,
 			);
 			return;
@@ -94,21 +97,21 @@ export function launchIsolatedAboutThisPC(): IsolatedUtilityProcess {
 	const home = GLib.get_home_dir();
 	const runtimeDirectory = GLib.get_user_runtime_dir();
 	const parentPid = Gio.Credentials.new().get_unix_pid();
-	const process = Gio.Subprocess.new(
-		[
+	const instanceName = `${aboutThisPCIsolatedInstance}-${GLib.uuid_string_random()}`;
+	const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.NONE });
+	launcher.setenv("AGS_ABOUT_THIS_PC_INSTANCE", instanceName, true);
+	const process = launcher.spawnv([
 			`${home}/.config/ags/scripts/run-isolated-utility.sh`,
 			parentPid.toString(),
 			`${runtimeDirectory}/${aboutThisPCIsolatedExecutable}`,
 			`${home}/.config/ags/config-about-this-pc.tsx`,
-		],
-		Gio.SubprocessFlags.NONE,
-	);
+		]);
 	let completed = false;
 	let stopping: Promise<void> | null = null;
 	const completion = process.wait_async(null).then(() => {
 		completed = true;
 	});
-	const ready = waitUntilReady(() => completed);
+	const ready = waitUntilReady(instanceName, () => completed);
 
 	return {
 		ready,
@@ -118,7 +121,7 @@ export function launchIsolatedAboutThisPC(): IsolatedUtilityProcess {
 				[
 					"request",
 					"-i",
-					aboutThisPCIsolatedInstance,
+					instanceName,
 					"about-this-pc",
 					JSON.stringify({ action }),
 				],
@@ -136,7 +139,7 @@ export function launchIsolatedAboutThisPC(): IsolatedUtilityProcess {
 						[
 							"request",
 							"-i",
-							aboutThisPCIsolatedInstance,
+							instanceName,
 							"about-this-pc",
 							JSON.stringify({ action: "hide" }),
 						],

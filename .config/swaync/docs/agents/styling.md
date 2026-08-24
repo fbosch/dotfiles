@@ -52,7 +52,7 @@ background: var(--bg-color);
 }
 ```
 
-Define palette values in `style.css` `:root` and use those variables throughout. Keep them aligned with `design-system/tokens.json`: background `#191919`, surface `#242424`, tertiary `#2a2a2a`, sky accent `#6baedb`, and rose critical `#d86659`.
+Define palette values in `style.css` `:root` and use those variables throughout. Keep them aligned with `design-system/tokens.json`: background `#191919`, surface `#242424`, tertiary `#2a2a2a`, sky accent `#6099c0`, and rose critical `#de6e7c`.
 
 ## Style organization
 
