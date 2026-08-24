@@ -110,26 +110,27 @@
       "gh api * -XDELETE*": "ask"
     }
   },
-  "model": "openai/gpt-5.6-terra-fast",
+  "model": "openai/gpt-5.6-luna-fast",
   "small_model": "openai/gpt-5.6-luna-fast",
   "agent": {
     "build": {
       "color": "#6099C0",
-      "temperature": 0.3
+      "temperature": 0.3,
+      "reasoningEffort": "xhigh"
     },
     "desktop-pointer": {
       "description": "Answers questions about explicitly reviewed desktop captures with optional read-only web lookup.",
       "mode": "primary",
       "hidden": true,
-      "model": "openai/gpt-5.6-luna-fast",
-      "reasoningEffort": "low",
       "prompt": "{file:../ags/components/ai-pointer/desktop-pointer-prompt.txt}",
       "tools": {
         "*": false,
         "ai_pointer_exa_web_search_exa": true,
         "webfetch": true,
         "websearch": true
-      }
+      },
+      "model": "openai/gpt-5.6-luna-fast",
+      "reasoningEffort": "low"
     },
     "plan": {
       "color": "#B279A7",
