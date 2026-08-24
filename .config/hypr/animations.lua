@@ -10,7 +10,7 @@ hl.config({
 })
 
 hl.curve("window", { type = "spring", mass = 1, stiffness = 302, dampening = 34.8 })
-hl.curve("windowFocus", { type = "spring", mass = 1, stiffness = 900, dampening = 57 })
+hl.curve("windowFocus", { type = "bezier", points = { { 0.25, 0.46 }, { 0.45, 0.94 } } })
 hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 3780, dampening = 123 })
 hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 14745, dampening = 242.9 })
 
@@ -26,7 +26,13 @@ hl.animation({ leaf = "windows", enabled = true, speed = 4.79, spring = "window"
 M.restore_windows_move()
 
 if focus_animation.ready then
-	hl.animation({ leaf = "windowsFocus", enabled = true, speed = 1.5, spring = "windowFocus", style = "popin 99%" })
+	hl.animation({
+		leaf = "windowsFocus",
+		enabled = true,
+		speed = 1.4,
+		bezier = "windowFocus",
+		style = "popin 99.70%",
+	})
 end
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 0.8, spring = "windowInstant", style = "popin 94%" })
