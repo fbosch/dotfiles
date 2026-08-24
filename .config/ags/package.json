@@ -33,7 +33,7 @@
     "wayland"
   ],
   "author": "",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "devDependencies": {
     "@biomejs/biome": "2.5.5",
     "fallow": "3.14.0",
