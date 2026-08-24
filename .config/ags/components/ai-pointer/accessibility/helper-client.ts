@@ -1,6 +1,7 @@
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { perf } from "@/services/performance-monitor";
+import { runtimeArtifactPath } from "@/services/runtime-artifacts";
 import { ownProcess, type ProcessObserver } from "../owned-process";
 import {
 	accessibilityHelperTimingMetrics,
@@ -23,7 +24,6 @@ Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
 
 const lookupTimeoutMs = 900;
 const maximumHelperOutputBytes = 32_768;
-const helperExecutableName = "ags-ai-pointer-accessibility-helper";
 
 export interface AccessibilityHelperClient {
 	address: string;
@@ -51,10 +51,10 @@ export async function queryAccessibilityHelper(
 	onProcess: ProcessObserver,
 	options: AccessibilityHelperOptions = {},
 ): Promise<HelperQueryResult> {
-	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
-	if (!runtimeDirectory && !options.executable)
-		return { kind: "unavailable", reason: "runtime directory unavailable" };
-	const helperExecutable = options.executable ?? GLib.build_filenamev([runtimeDirectory!, helperExecutableName]);
+	const helperExecutable =
+		options.executable ?? runtimeArtifactPath("aiPointerAccessibilityHelper");
+	if (!helperExecutable)
+		return { kind: "unavailable", reason: "helper executable unavailable" };
 	const input: AccessibilityHelperInput = {
 		coordinateSpace: accessibilityCoordinateSpace,
 		pid: client.pid,

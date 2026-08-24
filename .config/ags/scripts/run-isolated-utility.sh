@@ -11,7 +11,14 @@ stop_grace_seconds=0.1
 if command -v ags-bundle-runtime >/dev/null 2>&1 && [[ -x "$bundled_executable" ]]; then
 	command=(ags-bundle-runtime "$bundled_executable")
 else
-	command=(ags run "$source_config")
+	command=(
+		bash
+		-c
+		'cd -- "$1" && exec ags run "$2"'
+		_
+		"$(dirname "$source_config")"
+		"$(basename "$source_config")"
+	)
 fi
 
 setsid "${command[@]}" &

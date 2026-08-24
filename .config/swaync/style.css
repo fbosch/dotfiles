@@ -37,6 +37,9 @@
   --notification-icon-size: 24px;
   --shadow-elevation-low:
     0 0 0 1px var(--surface-border), 0 2px 8px rgba(0, 0, 0, 0.12);
+  --shadow-toast:
+    0 0 0 1px var(--surface-border), 0 8px 24px rgba(0, 0, 0, 0.28),
+    0 2px 8px rgba(0, 0, 0, 0.18);
   --shadow-elevation-medium:
     0 0 0 1px var(--surface-border), 0 8px 32px rgba(0, 0, 0, 0.24),
     0 2px 8px rgba(0, 0, 0, 0.12);
@@ -550,16 +553,20 @@
 }
 
 .floating-notifications {
-  padding-right: 4px;
-  padding-bottom: 0;
+  padding: 12px 4px 4px 12px;
 }
 
 .floating-notifications .notification {
   margin-right: 0;
 }
 
+.floating-notifications .notification-row:last-child {
+  margin-bottom: 0;
+}
+
 .floating-notifications .notification-background {
   margin-right: 0;
+  box-shadow: var(--shadow-toast);
 }
 
 .close-button:active {

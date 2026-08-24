@@ -41,14 +41,16 @@ Start Menu and external callers keep using the `ags-bundled` request route.
 
 - `config-bundled.tsx` imports shell components and starts AGS with `instanceName: "ags-bundled"`.
 - `config-about-this-pc.tsx` is the short-lived system-information entry point.
-- `start-daemons.sh` builds the runtime bundles and lazy AI Pointer module, then
-  starts only `ags-bundled`.
+- `scripts/runtime-artifacts.sh` builds and publishes one immutable runtime
+  artifact generation per host.
+- `start-daemons.sh` starts only `ags-bundled` and owns its process lifecycle.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
 - `services/utility-manager.ts` owns lazy utility loading and request routing.
 - `components/about-this-pc/` owns isolated process startup, overlapping
   preparation intent, and delayed release.
-- `start-daemons.sh` starts the bundled process during the desktop session.
+- `services/runtime-artifacts.ts` resolves published artifact paths for runtime
+  consumers.
 - `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.
 
