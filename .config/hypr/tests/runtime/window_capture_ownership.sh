@@ -308,6 +308,7 @@ test "$owner_token" = live-token
 
 stop_daemon
 test -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
+kill -0 "$live_worker_pid"
 owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
 owner_pid="${owner_line%%$'\t'*}"
 owner_token="${owner_line#*$'\t'}"
