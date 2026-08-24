@@ -42,7 +42,7 @@ Regenerate when:
 pnpm benchmark:ai-pointer
 ```
 
-This command measures pure click and drag policy throughput, controller initialization and teardown, and inert click and drag interactions. It injects capture, accessibility, OCR, program, click-geometry, pointer, storage, and view dependencies, so it does not invoke `grim`, inspect AT-SPI, read Hyprland state, create captures, or emit selected content. RSS output is process-wide and includes runtime and JIT retention; it is not an allocation or leak measurement. Adjust bounded sample sizes with `AI_POINTER_BENCH_SAMPLES`, `AI_POINTER_POLICY_BATCH`, and `AI_POINTER_CONTROLLER_BATCH`.
+This command measures pure click and drag policy throughput, workflow initialization and teardown, and inert click and drag interactions. It injects capture, accessibility, OCR, program, click-geometry, pointer, storage, and view dependencies, so it does not invoke `grim`, inspect AT-SPI, read Hyprland state, create captures, or emit selected content. RSS output is process-wide and includes runtime and JIT retention; it is not an allocation or leak measurement. Adjust bounded sample sizes with `AI_POINTER_BENCH_SAMPLES`, `AI_POINTER_POLICY_BATCH`, and `AI_POINTER_WORKFLOW_BATCH`.
 
 For live stage timings against the deployed bundle:
 

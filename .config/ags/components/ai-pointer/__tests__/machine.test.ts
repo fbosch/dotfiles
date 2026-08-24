@@ -8,6 +8,9 @@ describe("aiPointerMachine", () => {
 		actor.send({ type: "START" });
 		expect(actor.getSnapshot().matches("selecting")).toBe(true);
 		expect(actor.getSnapshot().hasTag("selector-active")).toBe(true);
+		actor.send({ type: "FINISH" });
+		expect(actor.getSnapshot().matches("preparing")).toBe(true);
+		expect(actor.getSnapshot().hasTag("surface-visible")).toBe(true);
 		actor.send({ type: "CAPTURED" });
 		expect(actor.getSnapshot().matches("composition")).toBe(true);
 		actor.send({ type: "SUBMIT" });
@@ -22,9 +25,10 @@ describe("aiPointerMachine", () => {
 	test("supports cancellation and failure from every active phase", () => {
 		for (const events of [
 			[{ type: "START" }],
-			[{ type: "START" }, { type: "CAPTURED" }],
-			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
-			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }, { type: "ANSWERED" }],
+			[{ type: "START" }, { type: "FINISH" }],
+			[{ type: "START" }, { type: "FINISH" }, { type: "CAPTURED" }],
+			[{ type: "START" }, { type: "FINISH" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
+			[{ type: "START" }, { type: "FINISH" }, { type: "CAPTURED" }, { type: "SUBMIT" }, { type: "ANSWERED" }],
 		] as const) {
 			const actor = createActor(aiPointerMachine).start();
 			for (const event of events) actor.send(event);
@@ -35,8 +39,9 @@ describe("aiPointerMachine", () => {
 
 		for (const events of [
 			[{ type: "START" }],
-			[{ type: "START" }, { type: "CAPTURED" }],
-			[{ type: "START" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
+			[{ type: "START" }, { type: "FINISH" }],
+			[{ type: "START" }, { type: "FINISH" }, { type: "CAPTURED" }],
+			[{ type: "START" }, { type: "FINISH" }, { type: "CAPTURED" }, { type: "SUBMIT" }],
 		] as const) {
 			const actor = createActor(aiPointerMachine).start();
 			for (const event of events) actor.send(event);

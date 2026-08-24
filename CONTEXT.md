@@ -58,3 +58,6 @@ should use these terms; new concepts named during design work land here.
 - **bundled AGS host** — the single login-started `ags-bundled` process. Shell
   surfaces load eagerly; task-oriented utility windows load on demand and are
   routed through `UtilityManager`.
+- **AI Pointer workflow** — the user interaction that begins with pointer
+  selection and ends in an answer, cancellation, or failure. Results arriving
+  from an earlier interaction are stale and cannot change the current one.
