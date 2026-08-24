@@ -50,6 +50,7 @@ in
 
 {
   packages = with pkgs; [
+    act
     projectBun
     coreutils
     fish
