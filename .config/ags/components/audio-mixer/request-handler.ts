@@ -55,5 +55,13 @@ function dispatch(
 			controller.setTab(tab);
 			return "ok";
 		})
+		.with({ action: "prepare" }, ({ source }) => {
+			controller.prepare(source);
+			return "preparing";
+		})
+		.with({ action: "release" }, ({ source }) => {
+			controller.release(source);
+			return "released";
+		})
 		.exhaustive();
 }

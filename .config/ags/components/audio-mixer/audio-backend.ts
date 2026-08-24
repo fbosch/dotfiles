@@ -230,7 +230,11 @@ export function createAudioBackend(
 		init: () => void load(),
 		setActive: (value) => {
 			active = value;
-			if (active || refreshSource === 0) return;
+			if (active) {
+				if (audio) refresh();
+				return;
+			}
+			if (refreshSource === 0) return;
 			GLib.source_remove(refreshSource);
 			refreshSource = 0;
 		},

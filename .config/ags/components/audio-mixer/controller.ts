@@ -102,10 +102,7 @@ export class AudioMixerController {
 			return;
 		}
 		this.#showPending = true;
-		if (this.#backendStarted === false) {
-			this.#backendStarted = true;
-			this.#backend.init();
-		}
+		this.#startBackend();
 	}
 	hide(): void {
 		this.#showPending = false;
