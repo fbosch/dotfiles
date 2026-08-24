@@ -158,6 +158,11 @@ in
         exit 1
       fi
       fish -n "''${test_files[@]}"
+      fish_output="$(env -u SSH_TTY -u SSH_CONNECTION -u DISPLAY -u WAYLAND_DISPLAY fish -c 'source .config/fish/config.fish' 2>&1)"
+      if [[ -n "$fish_output" ]]; then
+        printf '%s\n' "$fish_output" >&2
+        exit 1
+      fi
     '';
 
     "test:git-pull-system-repos".exec = ''
