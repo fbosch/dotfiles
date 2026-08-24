@@ -17,6 +17,7 @@ local kit = daemon.new({})
 local state_file = kit:instance_path("minimized-state.json")
 local state_lock = kit:instance_path("minimized-state.lock")
 local show_desktop_dir = kit:instance_path("show-desktop")
+local state_command = config_dir .. "/runtime/windows/minimized-state.lua"
 
 local function exit_from_status(ok, _, code)
 	if ok == true then
@@ -229,22 +230,8 @@ local function restore_window_state(state, address)
 	clear_window_state(state, address)
 end
 
-local function ensure_daemon_running()
-	if command_lib.ok("pgrep -f '[m]inimized-state-daemon' >/dev/null 2>&1") then
-		return
-	end
-
-	local daemon_script = config_dir .. "/runtime/windows/daemons/minimized-state/minimized-state-daemon.sh"
-	if command_lib.ok("command -v uwsm-app >/dev/null 2>&1") then
-		command_lib.ok("uwsm-app -s b -- " .. command_lib.arg(daemon_script) .. " >/dev/null 2>&1 &")
-	else
-		command_lib.ok(command_lib.arg(daemon_script) .. " >/dev/null 2>&1 &")
-	end
-end
-
 local function toggle_window()
 	local state = ensure_state_file()
-	ensure_daemon_running()
 
 	local active_window = query_json("j/activewindow", {})
 	local address = active_window.address or ""
@@ -591,6 +578,41 @@ function M.is_minimized_window(win)
 		return M.is_minimized_workspace(workspace.name or "")
 	end
 	return M.is_minimized_workspace(tostring(workspace or ""))
+end
+
+function M.register_lifecycle()
+	if M._lifecycle_subscriptions then
+		return true
+	end
+	if type(hl) ~= "table" or type(hl.on) ~= "function" or type(hl.exec_cmd) ~= "function" then
+		return false
+	end
+
+	-- Keep state mutation in the existing flock-protected CLI worker so native
+	-- callbacks remain non-blocking and external toggle commands cannot race it.
+	local function run(action, value)
+		if value and value ~= "" then
+			hl.exec_cmd(command_lib.line(state_command, action, value))
+		else
+			hl.exec_cmd(command_lib.line(state_command, action))
+		end
+	end
+
+	M._lifecycle_subscriptions = {
+		hl.on("window.close", function(window)
+			local address = window and window.address or ""
+			if address ~= "" then
+				run("delete", address)
+			end
+		end),
+		hl.on("hyprland.start", function()
+			run("prune")
+		end),
+		hl.on("config.reloaded", function()
+			run("prune")
+		end),
+	}
+	return true
 end
 
 if not (arg and arg[0] and arg[0]:match("minimized%-state%.lua$")) then

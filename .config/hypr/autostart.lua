@@ -21,7 +21,6 @@ local commands = {
 	background("foot --server"),
 	background("swayosd-server"),
 	background(paths.runtime_script("windows/daemons/window-state/window-state.sh")),
-	background(paths.runtime_script("windows/daemons/minimized-state/minimized-state-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/window-capture/window-capture-daemon.sh")),
 	background(paths.runtime_script("windows/daemons/picture-in-picture.sh")),
 	background(paths.runtime_script("gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh")),
