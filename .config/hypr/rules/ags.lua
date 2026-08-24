@@ -17,6 +17,8 @@ function M.register()
 		size = "462 534",
 		min_size = "462 534",
 		max_size = "462 534",
+		border_size = 1,
+		rounding = 12,
 		tag = "+" .. window_tags.non_resizable,
 	})
 	hl.window_rule({
