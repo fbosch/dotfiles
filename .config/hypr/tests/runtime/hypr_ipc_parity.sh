@@ -18,17 +18,17 @@ assert_equal() {
 }
 
 lua_runtime_dir() {
-  XDG_RUNTIME_DIR="$1" HYPRLAND_INSTANCE_SIGNATURE="$2" luajit -e '
-    local home = os.getenv("HOME")
-    package.path = home .. "/.config/hypr/?.lua;" .. home .. "/.config/hypr/?/init.lua;" .. package.path
+  HYPR_CONFIG_ROOT="$repo_root" XDG_RUNTIME_DIR="$1" HYPRLAND_INSTANCE_SIGNATURE="$2" luajit -e '
+    local root = assert(os.getenv("HYPR_CONFIG_ROOT"))
+    package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
     print(require("runtime.lib.hypr-ipc").instance_runtime_dir())
   '
 }
 
 lua_socket_path() {
-  XDG_RUNTIME_DIR="$1" HYPRLAND_INSTANCE_SIGNATURE="$2" PARITY_NAME="$3" luajit -e '
-    local home = os.getenv("HOME")
-    package.path = home .. "/.config/hypr/?.lua;" .. home .. "/.config/hypr/?/init.lua;" .. package.path
+  HYPR_CONFIG_ROOT="$repo_root" XDG_RUNTIME_DIR="$1" HYPRLAND_INSTANCE_SIGNATURE="$2" PARITY_NAME="$3" luajit -e '
+    local root = assert(os.getenv("HYPR_CONFIG_ROOT"))
+    package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
     local hypr_ipc = require("runtime.lib.hypr-ipc")
     local ok, path = pcall(hypr_ipc.instance_socket_path, os.getenv("PARITY_NAME"))
     print(ok and path or "ERR")
