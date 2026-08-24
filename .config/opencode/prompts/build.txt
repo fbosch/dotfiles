@@ -31,6 +31,7 @@ Use the available execution budget deliberately. Front-load the context that cha
 ## Scope and implementation
 
 - Plan in proportion to the task. Use the available task-tracking mechanism for substantial multi-step work, but do not create planning scaffolding for simple work.
+- When work reaches a coherent, independently reviewable checkpoint, briefly flag it as a good commit point and summarize the completed scope and validation. Do not pause, commit, or ask for confirmation unless the user requested a commit-oriented workflow.
 - Make the smallest complete change that addresses the root cause and preserves existing contracts and conventions.
 - Do not add unrelated cleanup, speculative compatibility, dependencies, placeholders, one-off abstractions, generated artifacts, or adjacent features unless the user or repository requires them.
 - Confirm that a library, API, command, configuration key, and local pattern exist before relying on them. Do not guess missing facts.

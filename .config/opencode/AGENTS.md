@@ -7,7 +7,7 @@
 ## Always-on guardrails
 
 - Only commit, amend, rebase, push, or open PRs when explicitly asked; otherwise report proposed git actions without running them.
-- Only run destructive or hard-to-reverse commands when explicitly asked and the target is unambiguous; if unsure, ask first.
+- Only run destructive or hard-to-reverse commands when explicitly asked and the target is unambiguous; if unsure, do not run them, and ask the user when available or return a decision point to the caller.
 - Do not add secrets to the repo; use env vars, placeholders, or redacted examples instead.
 - Do not add dependencies, perform major upgrades, or create lockfile churn unless explicitly asked; prefer existing dependencies.
 - Do not fabricate paths, APIs, config keys, env vars, capabilities, results, or file contents; if unverified, say what is unknown.
@@ -19,18 +19,15 @@
 - Default to current schema/contract; add compatibility layers only when explicitly required.
 - Run the smallest reasonable validation for changed behavior.
 - For screenshots, capture only the smallest useful window or region; use full-screen captures only when explicitly requested.
-- Read references on demand; do not load all of them by default.
-- Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. When multiple suitable listed options exist and the repository does not establish one, ask the user to choose before adding one.
+- Read only the narrowest relevant references on demand; skip reference reads for trivial work or references already read for the current task.
+- Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. When multiple suitable listed options exist and the repository does not establish one, ask the user when available or return the choice to the caller before adding one.
 - Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
 - Before running or reporting validation, read `~/.config/opencode/references/validation.md`.
 - Before substantial user-facing prose, PR descriptions, issue summaries, or docs, read `~/.config/opencode/TONE.md`.
-- Skip reference reads for trivial answers, single-line edits, or when the same reference has already been read for the current task.
-- If unsure whether a task is non-trivial, prefer reading the narrowest relevant reference over guessing.
 - Format user-executed multi-step instructions as a numbered list of bounded actions, with the immediate next action first.
-- For work spanning multiple replies, state the current step, completed outcome, and immediate next action; use the task list rather than repeating a full plan.
+- For work spanning multiple replies, state the current step, completed outcome, and immediate next action; use task tracking when available rather than repeating a full plan.
 - Before creating a plan, look for existing planning documents in `docs/agents/plans/`, `docs/plans/`, `plans/`, and repository guidance. Use the established location and naming convention when present.
 - When asked to output a plan, write it to `docs/agents/plans/` by default, named `YYYY-MM-DD-brief-kebab-case-title.md`.
-- When work reaches a coherent, independently reviewable checkpoint, briefly flag it as a good commit point and summarize the completed scope and validation. Do not pause, commit, or ask for confirmation unless the user requested a commit-oriented workflow.
 - Keep responses and implementation focused on the active problem; raise unrelated findings only when they affect correctness, safety, or the requested outcome.
 
 ## Coding style
@@ -56,11 +53,7 @@
 ## Simplicity ladder
 
 - First ask whether the code needs to exist; no code is best when the requirement can be removed or handled operationally.
-- Prefer stdlib APIs before custom code.
-- Prefer native platform features before dependencies.
-- Prefer existing dependencies before adding new dependencies.
-- Prefer existing repo patterns before new architecture.
-- Prefer one clear expression or small local block before scaffolding helpers, classes, adapters, or config.
+- Prefer stdlib APIs, native platform features, existing dependencies, established repository patterns, and small local expressions before adding custom code or architecture.
 - Only add abstraction when there is a concrete second use case or the implementation complexity is large enough to hide behind a stable interface.
 - Do not simplify away authorization, security checks, observability needed to debug failures, or other required safeguards.
 - When deliberately taking a shortcut, add `shortcut:` with the limitation and upgrade trigger.
@@ -98,7 +91,6 @@
 
 ## Ambiguity and execution loop
 
-- Read the root `AGENTS.md` first; read deeper `AGENTS.md` files once target files or subtree are known.
 - Treat requests for "guidance" as referring primarily to `AGENTS.md`, `docs/agents/**/*.md`, or equivalent repository guidance. When asked to add guidance, locate the most appropriate existing guidance file and append it there.
 - If a request has multiple valid interpretations, list options with tradeoffs; do not pick silently.
 - Treat follow-up requests as cumulative unless the user clearly resets scope.
