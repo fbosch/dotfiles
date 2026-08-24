@@ -38,8 +38,8 @@
   --shadow-elevation-low:
     0 0 0 1px var(--surface-border), 0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-toast:
-    0 0 0 1px var(--surface-border), 0 8px 24px rgba(0, 0, 0, 0.28),
-    0 2px 8px rgba(0, 0, 0, 0.18);
+    0 0 0 1px var(--surface-border), 0 8px 24px rgba(0, 0, 0, 0.2),
+    0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-elevation-medium:
     0 0 0 1px var(--surface-border), 0 8px 32px rgba(0, 0, 0, 0.24),
     0 2px 8px rgba(0, 0, 0, 0.12);
