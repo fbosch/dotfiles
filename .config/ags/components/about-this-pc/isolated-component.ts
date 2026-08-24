@@ -34,11 +34,12 @@ export function createAboutThisPCLifecycle({
 	let initialized = false;
 	let process: IsolatedUtilityProcess | null = null;
 	let showClaims = 0;
-	let stopping: Promise<void> | null = null;
+	let stopping: { process: IsolatedUtilityProcess; promise: Promise<void> } | null = null;
 	let visible = false;
 	// Pointer and focus intent overlap; one claim owns preparation until delayed release.
 	let intentCount = 0;
 	let preparationClaimed = false;
+	let preparationGeneration = 0;
 	let cancelPendingRelease: (() => void) | null = null;
 
 	function clearPendingRelease(): void {
@@ -51,22 +52,34 @@ export function createAboutThisPCLifecycle({
 		void nextProcess.completion.then(
 			() => {
 				if (process !== nextProcess) return;
+				const expectedStop = stopping?.process === nextProcess;
 				process = null;
 				visible = false;
+				if (expectedStop === false) {
+					preparationClaimed = false;
+					preparationGeneration += 1;
+				}
 			},
 			(error) => {
 				console.error("Isolated About This PC process failed:", error);
 				if (process !== nextProcess) return;
+				const expectedStop = stopping?.process === nextProcess;
 				process = null;
 				visible = false;
+				if (expectedStop === false) {
+					preparationClaimed = false;
+					preparationGeneration += 1;
+				}
 			},
 		);
 	}
 
 	function stopProcess(runningProcess: IsolatedUtilityProcess): Promise<void> {
-		visible = false;
-		if (stopping) return stopping;
-		stopping = (async () => {
+		const currentStop = stopping;
+		if (currentStop?.process === runningProcess) return currentStop.promise;
+		const ownsProcess = process === runningProcess;
+		if (ownsProcess) visible = false;
+		const promise = (async () => {
 			try {
 				await runningProcess.stop();
 			} finally {
@@ -74,13 +87,14 @@ export function createAboutThisPCLifecycle({
 			}
 		})().finally(() => {
 			if (process === runningProcess) process = null;
-			stopping = null;
+			if (stopping?.process === runningProcess) stopping = null;
 		});
-		return stopping;
+		if (ownsProcess) stopping = { process: runningProcess, promise };
+		return promise;
 	}
 
 	async function prepare(): Promise<IsolatedUtilityProcess> {
-		if (stopping) await stopping;
+		if (stopping) await stopping.promise;
 		const runningProcess = process;
 		if (runningProcess) {
 			await runningProcess.ready;
@@ -94,13 +108,21 @@ export function createAboutThisPCLifecycle({
 			if (process !== nextProcess) throw new Error("utility exited during startup");
 			return nextProcess;
 		} catch (error) {
-			try {
-				await stopProcess(nextProcess);
-			} catch (stopError) {
-				console.error("Failed to clean up isolated About This PC:", stopError);
+			if (process === nextProcess) {
+				try {
+					await stopProcess(nextProcess);
+				} catch (stopError) {
+					console.error("Failed to clean up isolated About This PC:", stopError);
+				}
 			}
 			throw error;
 		}
+	}
+
+	async function prepareClaimed(generation: number): Promise<void> {
+		if (stopping) await stopping.promise;
+		if (preparationClaimed === false || generation !== preparationGeneration) return;
+		await prepare();
 	}
 
 	async function show(): Promise<void> {
@@ -135,6 +157,7 @@ export function createAboutThisPCLifecycle({
 		cancelPendingRelease = schedule(() => {
 			cancelPendingRelease = null;
 			preparationClaimed = false;
+			preparationGeneration += 1;
 			void cancelPreparation().catch((error) => {
 				console.error("Failed to release About This PC preparation:", error);
 			});
@@ -143,7 +166,7 @@ export function createAboutThisPCLifecycle({
 
 	async function stop(): Promise<void> {
 		visible = false;
-		if (stopping) return stopping;
+		if (stopping) return stopping.promise;
 		const runningProcess = process;
 		if (!runningProcess) return;
 		return stopProcess(runningProcess);
@@ -170,6 +193,7 @@ export function createAboutThisPCLifecycle({
 			clearPendingRelease();
 			intentCount = 0;
 			preparationClaimed = false;
+			preparationGeneration += 1;
 			visible = false;
 			process?.terminate();
 		});
@@ -180,6 +204,15 @@ export function createAboutThisPCLifecycle({
 		clearPendingRelease();
 		intentCount = 0;
 		preparationClaimed = false;
+		preparationGeneration += 1;
+	}
+
+	function deactivate(): Promise<void> {
+		clearPendingRelease();
+		intentCount = 0;
+		preparationClaimed = false;
+		preparationGeneration += 1;
+		return stop();
 	}
 
 	return {
@@ -191,7 +224,10 @@ export function createAboutThisPCLifecycle({
 			intentCount += 1;
 			if (preparationClaimed) return;
 			preparationClaimed = true;
-			void prepare().catch((error) => {
+			const generation = ++preparationGeneration;
+			void prepareClaimed(generation).catch((error) => {
+				if (generation !== preparationGeneration) return;
+				preparationClaimed = false;
 				console.error("Failed to prepare About This PC:", error);
 			});
 		},
@@ -222,9 +258,9 @@ export function createAboutThisPCLifecycle({
 					activate();
 					respondAfter(show(), "shown", res);
 				})
-				.with({ action: "hide" }, () => respondAfter(stop(), "hidden", res))
+				.with({ action: "hide" }, () => respondAfter(deactivate(), "hidden", res))
 				.with({ action: "destroy" }, () =>
-					respondAfter(stop(), "destroyed", res),
+					respondAfter(deactivate(), "destroyed", res),
 				)
 				.with({ action: "is-visible" }, () => res(visible ? "true" : "false"))
 				.exhaustive();

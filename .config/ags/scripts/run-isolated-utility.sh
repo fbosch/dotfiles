@@ -5,6 +5,8 @@ set -euo pipefail
 parent_pid="$1"
 bundled_executable="$2"
 source_config="$3"
+stop_grace_attempts=10
+stop_grace_seconds=0.1
 
 if command -v ags-bundle-runtime >/dev/null 2>&1 && [[ -x "$bundled_executable" ]]; then
 	command=(ags-bundle-runtime "$bundled_executable")
@@ -16,9 +18,17 @@ setsid "${command[@]}" &
 utility_pid=$!
 
 stop_utility() {
-	if kill -0 "$utility_pid" >/dev/null 2>&1; then
-		kill -TERM -- "-$utility_pid" >/dev/null 2>&1 || true
+	if ! kill -0 -- "-$utility_pid" >/dev/null 2>&1; then
+		return
 	fi
+	kill -TERM -- "-$utility_pid" >/dev/null 2>&1 || true
+	for ((attempt = 0; attempt < stop_grace_attempts; attempt++)); do
+		if ! kill -0 -- "-$utility_pid" >/dev/null 2>&1; then
+			return
+		fi
+		sleep "$stop_grace_seconds" || true
+	done
+	kill -KILL -- "-$utility_pid" >/dev/null 2>&1 || true
 }
 
 trap stop_utility INT TERM

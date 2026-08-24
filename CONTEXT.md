@@ -58,6 +58,11 @@ should use these terms; new concepts named during design work land here.
 - **bundled AGS host** — the single login-started `ags-bundled` process. Shell
   surfaces load eagerly; task-oriented utility windows load on demand and are
   routed through `UtilityManager`.
+- **bundled host router** — pure request-policy seam
+  (`.config/ags/services/component-host-router.ts`) inside the bundled AGS host. It
+  normalizes the stable request forms, prefers eager component handlers, and
+  delegates utility targets without owning their lazy-load lifecycle. Taskbar
+  visibility is synchronous; ordinary utility responses may arrive later.
 - **AI Pointer workflow** — the user interaction that begins with pointer
   selection and ends in an answer, cancellation, or failure. Results arriving
   from an earlier interaction are stale and cannot change the current one.
