@@ -8,6 +8,7 @@ export interface IsolatedUtilityProcess {
 	readonly completion: Promise<void>;
 	request(action: "show"): Promise<void>;
 	stop(): Promise<void>;
+	terminate(): void;
 }
 
 interface IsolatedAboutThisPCOptions {
@@ -112,9 +113,8 @@ export function createIsolatedAboutThisPCComponent({
 			if (initialized) return;
 			initialized = true;
 			onShutdown?.(() => {
-				void stop().catch((error) => {
-					console.error("Failed to stop isolated About This PC:", error);
-				});
+				visible = false;
+				process?.terminate();
 			});
 		},
 		handleRequest(argv, res) {

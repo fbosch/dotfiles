@@ -35,6 +35,7 @@ describe("isolated About This PC component", () => {
 				return Promise.resolve();
 			},
 			stop: () => Promise.resolve(),
+			terminate() {},
 		};
 		const component = createIsolatedAboutThisPCComponent({
 			launch: () => {
@@ -74,6 +75,7 @@ describe("isolated About This PC component", () => {
 					completion.resolve();
 					return Promise.resolve();
 				},
+				terminate() {},
 			}),
 		});
 
@@ -81,6 +83,31 @@ describe("isolated About This PC component", () => {
 		await expect(request(component, "show")).resolves.toBe("shown");
 		await expect(request(component, "hide")).resolves.toBe("hidden");
 		expect(stops).toBe(1);
+		await expect(request(component, "is-visible")).resolves.toBe("false");
+	});
+
+	test("terminates its owned process synchronously during host shutdown", async () => {
+		let shutdown = () => {};
+		let terminations = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: new Promise<void>(() => {}),
+				request: () => Promise.resolve(),
+				stop: () => Promise.resolve(),
+				terminate: () => {
+					terminations += 1;
+				},
+			}),
+			onShutdown: (callback) => {
+				shutdown = callback;
+			},
+		});
+
+		component.init();
+		await request(component, "show");
+		shutdown();
+		expect(terminations).toBe(1);
 		await expect(request(component, "is-visible")).resolves.toBe("false");
 	});
 
@@ -96,6 +123,7 @@ describe("isolated About This PC component", () => {
 					completion: completion?.promise ?? Promise.resolve(),
 					request: () => Promise.resolve(),
 					stop: () => Promise.resolve(),
+					terminate() {},
 				};
 			},
 		});
@@ -107,6 +135,52 @@ describe("isolated About This PC component", () => {
 		await Promise.resolve();
 		await expect(request(component, "show")).resolves.toBe("shown");
 		expect(launches).toBe(2);
+	});
+
+	test("finishes failed-start cleanup before allowing a retry", async () => {
+		const originalError = console.error;
+		console.error = () => {};
+		const firstReady = Promise.withResolvers<void>();
+		const firstCompletion = deferred();
+		let launches = 0;
+		let stops = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => {
+				launches += 1;
+				if (launches > 1) {
+					return {
+						ready: Promise.resolve(),
+						completion: new Promise<void>(() => {}),
+						request: () => Promise.resolve(),
+						stop: () => Promise.resolve(),
+						terminate() {},
+					};
+				}
+				return {
+					ready: firstReady.promise,
+					completion: firstCompletion.promise,
+					request: () => Promise.resolve(),
+					stop: () => {
+						stops += 1;
+						firstCompletion.resolve();
+						return Promise.resolve();
+					},
+					terminate() {},
+				};
+			},
+		});
+
+		try {
+			component.init();
+			const failedShow = request(component, "show");
+			firstReady.reject(new Error("startup failed"));
+			await expect(failedShow).resolves.toBe("error: utility unavailable");
+			expect(stops).toBe(1);
+			await expect(request(component, "show")).resolves.toBe("shown");
+			expect(launches).toBe(2);
+		} finally {
+			console.error = originalError;
+		}
 	});
 
 	test("reports launch failures without claiming visibility", async () => {

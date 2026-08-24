@@ -100,7 +100,7 @@ function M.apply_presentation(vrr, direct_scanout)
 end
 
 function M.apply_current()
-	return M.apply(M.current_mode())
+	return M.apply(M.current_mode() or "default")
 end
 
 return M

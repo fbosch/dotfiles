@@ -140,6 +140,7 @@ main() {
     local about_this_pc_config="$AGS_CONFIG_DIR/$ABOUT_THIS_PC_CONFIG"
     local about_this_pc_executable="$RUNTIME_DIR/ags-about-this-pc-executable"
     local about_this_pc_candidate="$about_this_pc_executable.$$"
+    local about_this_pc_bundled=false
     local pid_identity
 
     exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
@@ -161,9 +162,8 @@ main() {
         return 1
     fi
     if [[ ! -f "$about_this_pc_config" ]]; then
-        release_start_lock "$startup_lock_fd"
-        log "${RED}✗${NC} About This PC config not found: $about_this_pc_config"
-        return 1
+        rm -f "$about_this_pc_executable"
+        log "${YELLOW}⚠${NC} About This PC config not found: $about_this_pc_config"
     fi
     
     # Check if already running
@@ -191,14 +191,18 @@ main() {
             log "${RED}✗${NC} Failed to build bundled AGS executable"
             return 1
         fi
-        if ! (cd "$AGS_CONFIG_DIR" && ags bundle "$ABOUT_THIS_PC_CONFIG" "$about_this_pc_candidate"); then
-            rm -f "$bundled_candidate" "$about_this_pc_candidate" "$ai_pointer_helper_candidate"
-            release_start_lock "$startup_lock_fd"
-            log "${RED}✗${NC} Failed to build About This PC executable"
-            return 1
+        if [[ -f "$about_this_pc_config" ]]; then
+            if (cd "$AGS_CONFIG_DIR" && ags bundle "$ABOUT_THIS_PC_CONFIG" "$about_this_pc_candidate"); then
+                about_this_pc_bundled=true
+            else
+                rm -f "$about_this_pc_candidate" "$about_this_pc_executable"
+                log "${YELLOW}⚠${NC} Failed to build About This PC; source fallback will be used"
+            fi
         fi
         mv -f "$bundled_candidate" "$bundled_executable"
-        mv -f "$about_this_pc_candidate" "$about_this_pc_executable"
+        if [[ "$about_this_pc_bundled" == "true" ]]; then
+            mv -f "$about_this_pc_candidate" "$about_this_pc_executable"
+        fi
         mv -f "$ai_pointer_helper_candidate" "$ai_pointer_helper"
         (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$bundled_executable") &
     else
