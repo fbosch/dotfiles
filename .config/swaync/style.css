@@ -260,6 +260,19 @@
   padding: 12px;
 }
 
+.notification-content .image {
+  -gtk-icon-size: var(--notification-icon-size);
+  min-width: var(--notification-icon-size);
+  min-height: var(--notification-icon-size);
+  max-width: var(--notification-icon-size);
+  max-height: var(--notification-icon-size);
+  margin: 4px;
+}
+
+.notification-content .text-box {
+  margin-left: 6px;
+}
+
 .notification-default-action {
   padding: 0;
   margin: 0;
@@ -280,12 +293,6 @@
   background: transparent;
   border: none;
   margin: 0;
-}
-
-.notification-row image,
-.notification-row .image {
-  padding: 0;
-  margin-right: 10px;
 }
 
 .app-name {
