@@ -292,7 +292,7 @@ register({
 				pattern = "SessionSavePre",
 				callback = function()
 					save_opencode_terminal_state()
-					if opened_fresh_opencode then
+					if opened_fresh_opencode and saved_session_id() == nil then
 						capture_fresh_session_id(vim.fn.getcwd())
 					end
 				end,
