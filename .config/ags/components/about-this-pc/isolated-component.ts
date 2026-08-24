@@ -1,7 +1,16 @@
-import { isMatching, match } from "ts-pattern";
+import { isMatching, match, P } from "ts-pattern";
 import type { ComponentModule } from "@/services/component-host";
 import { parseComponentRequest } from "@/services/request";
-import { aboutThisPCRequestPattern, type AboutThisPCRequest } from "./request";
+import { aboutThisPCRequestPattern } from "./request";
+
+const isolatedAboutThisPCRequestPattern = P.union(
+	aboutThisPCRequestPattern,
+	{ action: "prepare" },
+	{ action: "cancel-prepare" },
+);
+type IsolatedAboutThisPCRequest = P.infer<
+	typeof isolatedAboutThisPCRequestPattern
+>;
 
 export interface IsolatedUtilityProcess {
 	readonly ready: Promise<void>;
@@ -22,6 +31,7 @@ export function createIsolatedAboutThisPCComponent({
 }: IsolatedAboutThisPCOptions): ComponentModule {
 	let initialized = false;
 	let process: IsolatedUtilityProcess | null = null;
+	let showClaims = 0;
 	let stopping: Promise<void> | null = null;
 	let visible = false;
 
@@ -58,14 +68,12 @@ export function createIsolatedAboutThisPCComponent({
 		return stopping;
 	}
 
-	async function show(): Promise<void> {
+	async function prepare(): Promise<IsolatedUtilityProcess> {
 		if (stopping) await stopping;
 		const runningProcess = process;
 		if (runningProcess) {
 			await runningProcess.ready;
-			await runningProcess.request("show");
-			visible = true;
-			return;
+			return runningProcess;
 		}
 
 		const nextProcess = launch();
@@ -73,8 +81,7 @@ export function createIsolatedAboutThisPCComponent({
 		try {
 			await nextProcess.ready;
 			if (process !== nextProcess) throw new Error("utility exited during startup");
-			await nextProcess.request("show");
-			visible = true;
+			return nextProcess;
 		} catch (error) {
 			try {
 				await stopProcess(nextProcess);
@@ -83,6 +90,33 @@ export function createIsolatedAboutThisPCComponent({
 			}
 			throw error;
 		}
+	}
+
+	async function show(): Promise<void> {
+		showClaims += 1;
+		let shown = false;
+		try {
+			const runningProcess = await prepare();
+			await runningProcess.request("show");
+			if (process !== runningProcess || stopping)
+				throw new Error("utility exited while being shown");
+			visible = true;
+			shown = true;
+		} finally {
+			showClaims -= 1;
+			if (shown === false && showClaims === 0 && visible === false) {
+				try {
+					await stop();
+				} catch (error) {
+					console.error("Failed to clean up unsuccessful About This PC show:", error);
+				}
+			}
+		}
+	}
+
+	async function cancelPreparation(): Promise<void> {
+		if (visible || showClaims > 0) return;
+		await stop();
 	}
 
 	async function stop(): Promise<void> {
@@ -125,12 +159,18 @@ export function createIsolatedAboutThisPCComponent({
 			);
 			if (!data) return;
 			const request: unknown = data;
-			if (isMatching(aboutThisPCRequestPattern, request) === false) {
+			if (isMatching(isolatedAboutThisPCRequestPattern, request) === false) {
 				res("unknown action");
 				return;
 			}
 
-			match(request as AboutThisPCRequest)
+			match(request as IsolatedAboutThisPCRequest)
+				.with({ action: "prepare" }, () =>
+					respondAfter(prepare().then(() => {}), "prepared", res),
+				)
+				.with({ action: "cancel-prepare" }, () =>
+					respondAfter(cancelPreparation(), "cancelled", res),
+				)
 				.with({ action: "show" }, () => respondAfter(show(), "shown", res))
 				.with({ action: "hide" }, () => respondAfter(stop(), "hidden", res))
 				.with({ action: "destroy" }, () =>

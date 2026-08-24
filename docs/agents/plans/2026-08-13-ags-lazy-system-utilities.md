@@ -26,6 +26,23 @@ post-close samples were within -11 to 100 KiB of their baseline. One sample
 included an unrelated 5,081 KiB persistent-host increase, which remained in
 the next baseline.
 
+## Intent Prefetch
+
+Start Menu can move isolated-process startup off the activation path without
+keeping the process resident for the session:
+
+1. A menu item opts in with `prefetchOnIntent`.
+2. Pointer hover and keyboard focus acquire reference-counted intent.
+3. The utility manager starts the process and waits for readiness without
+   mapping its window.
+4. Activation cancels pending release and presents the prepared utility.
+5. Leaving the item or hiding Start Menu releases all intent. An unused
+   process exits after a one-second grace period.
+
+Five paired runs measured median About This PC request latency at 431 ms cold
+and 107 ms after preparation. Median preparation time was 337 ms and occurred
+before activation.
+
 ```text
 ags-bundled
 ├── Shell components loaded at login

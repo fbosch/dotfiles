@@ -3,10 +3,16 @@ export interface MenuItem {
 	label: string;
 	icon: string;
 	variant?: "default" | "warning" | "danger" | "purple";
+	prefetchOnIntent?: boolean;
 }
 
 export const defaultMenuItems: MenuItem[] = [
-	{ id: "about-this-pc", label: "About This PC", icon: "\uE946" },
+	{
+		id: "about-this-pc",
+		label: "About This PC",
+		icon: "\uE946",
+		prefetchOnIntent: true,
+	},
 	{ id: "system-settings", label: "System Settings", icon: "\uE713" },
 	{ id: "system-updates", label: "System Updates", icon: "\uE895" },
 	{ id: "divider-profile", label: "", icon: "" },

@@ -91,6 +91,22 @@ describe("utility manager", () => {
     expect(utility.requests).toEqual(["show", "show"]);
   });
 
+  test("preserves release-before-start order while a utility is loading", async () => {
+    const utility = createFakeUtility();
+    const loading = Promise.withResolvers<void>();
+    utility.definition.load = () => loading.promise;
+    const manager = createUtilityManager({ utility: utility.definition });
+
+    const finish = request(manager, "utility", "finish");
+    const start = request(manager, "utility", "start");
+    expect(utility.requests).toEqual([]);
+
+    loading.resolve();
+    await expect(Promise.all([finish, start])).resolves.toEqual(["hidden", "hidden"]);
+    expect(utility.initCount()).toBe(1);
+    expect(utility.requests).toEqual(["finish", "start"]);
+  });
+
   test("opens an allow-listed utility through its public entry point", async () => {
     const utility = createFakeUtility();
     const manager = createUtilityManager({ utility: utility.definition });
@@ -115,6 +131,18 @@ describe("utility manager", () => {
 
     expect(manager.visibleComponent()).toBe("first");
     expect(second.loadCount()).toBe(0);
+  });
+
+  test("skips loaded components that do not report utility visibility", async () => {
+    const utility = createFakeUtility();
+    utility.definition.reportsVisibility = false;
+    const manager = createUtilityManager({ utility: utility.definition });
+
+    utility.setVisible(true);
+    await request(manager, "utility", "show");
+
+    expect(manager.visibleComponent()).toBeNull();
+    expect(utility.requests).toEqual(["show"]);
   });
 
   test("rejects unknown utility request targets", () => {

@@ -22,6 +22,218 @@ function request(
 }
 
 describe("isolated About This PC component", () => {
+	test("prepares a hidden process and reuses it on show", async () => {
+		let launches = 0;
+		let showRequests = 0;
+		const completion = deferred();
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => {
+				launches += 1;
+				return {
+					ready: Promise.resolve(),
+					completion: completion.promise,
+					request: () => {
+						showRequests += 1;
+						return Promise.resolve();
+					},
+					stop: () => Promise.resolve(),
+					terminate() {},
+				};
+			},
+		});
+
+		component.init();
+		await expect(request(component, "prepare")).resolves.toBe("prepared");
+		expect(launches).toBe(1);
+		expect(showRequests).toBe(0);
+		await expect(request(component, "is-visible")).resolves.toBe("false");
+		await expect(request(component, "show")).resolves.toBe("shown");
+		expect(launches).toBe(1);
+		expect(showRequests).toBe(1);
+	});
+
+	test("stops an unused prepared process", async () => {
+		const completion = deferred();
+		let stops = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => Promise.resolve(),
+				stop: () => {
+					stops += 1;
+					completion.resolve();
+					return Promise.resolve();
+				},
+				terminate() {},
+			}),
+		});
+
+		component.init();
+		await request(component, "prepare");
+		await expect(request(component, "cancel-prepare")).resolves.toBe("cancelled");
+		expect(stops).toBe(1);
+	});
+
+	test("activation wins over concurrent preparation cancellation", async () => {
+		const completion = deferred();
+		const showRequest = deferred();
+		let stops = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => showRequest.promise,
+				stop: () => {
+					stops += 1;
+					completion.resolve();
+					return Promise.resolve();
+				},
+				terminate() {},
+			}),
+		});
+
+		component.init();
+		await request(component, "prepare");
+		const showing = request(component, "show");
+		await expect(request(component, "cancel-prepare")).resolves.toBe("cancelled");
+		expect(stops).toBe(0);
+		showRequest.resolve();
+		await expect(showing).resolves.toBe("shown");
+		await expect(request(component, "is-visible")).resolves.toBe("true");
+	});
+
+	test("does not commit visibility after the process exits", async () => {
+		const originalError = console.error;
+		console.error = () => {};
+		const completion = deferred();
+		const showRequest = deferred();
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => showRequest.promise,
+				stop: () => Promise.resolve(),
+				terminate() {},
+			}),
+		});
+
+		try {
+			component.init();
+			const showing = request(component, "show");
+			completion.resolve();
+			await completion.promise;
+			await Promise.resolve();
+			showRequest.resolve();
+			await expect(showing).resolves.toBe("error: utility unavailable");
+			await expect(request(component, "is-visible")).resolves.toBe("false");
+		} finally {
+			console.error = originalError;
+		}
+	});
+
+	test("stops a hidden process after its final show claim fails", async () => {
+		const originalError = console.error;
+		console.error = () => {};
+		const completion = deferred();
+		let stops = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => Promise.reject(new Error("show failed")),
+				stop: () => {
+					stops += 1;
+					completion.resolve();
+					return Promise.resolve();
+				},
+				terminate() {},
+			}),
+		});
+
+		try {
+			component.init();
+			await request(component, "prepare");
+			await expect(request(component, "show")).resolves.toBe(
+				"error: utility unavailable",
+			);
+			expect(stops).toBe(1);
+			await expect(request(component, "is-visible")).resolves.toBe("false");
+		} finally {
+			console.error = originalError;
+		}
+	});
+
+	test("preserves the show failure when cleanup also fails", async () => {
+		const originalError = console.error;
+		const errors: unknown[][] = [];
+		console.error = (...args: unknown[]) => errors.push(args);
+		const completion = deferred();
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => Promise.reject(new Error("show failed")),
+				stop: () => {
+					completion.resolve();
+					return Promise.reject(new Error("stop failed"));
+				},
+				terminate() {},
+			}),
+		});
+
+		try {
+			component.init();
+			await expect(request(component, "show")).resolves.toBe(
+				"error: utility unavailable",
+			);
+			expect(errors).toHaveLength(2);
+			expect(String(errors[0]?.[1])).toContain("stop failed");
+			expect(String(errors[1]?.[1])).toContain("show failed");
+		} finally {
+			console.error = originalError;
+		}
+	});
+
+	test("keeps the process when one of concurrent show claims succeeds", async () => {
+		const originalError = console.error;
+		console.error = () => {};
+		const completion = deferred();
+		let requests = 0;
+		let stops = 0;
+		const component = createIsolatedAboutThisPCComponent({
+			launch: () => ({
+				ready: Promise.resolve(),
+				completion: completion.promise,
+				request: () => {
+					requests += 1;
+					return requests === 1
+						? Promise.resolve()
+						: Promise.reject(new Error("duplicate show failed"));
+				},
+				stop: () => {
+					stops += 1;
+					completion.resolve();
+					return Promise.resolve();
+				},
+				terminate() {},
+			}),
+		});
+
+		try {
+			component.init();
+			const results = await Promise.all([
+				request(component, "show"),
+				request(component, "show"),
+			]);
+			expect(results).toEqual(["shown", "error: utility unavailable"]);
+			expect(stops).toBe(0);
+			await expect(request(component, "is-visible")).resolves.toBe("true");
+		} finally {
+			console.error = originalError;
+		}
+	});
+
 	test("deduplicates startup and reports visibility only after readiness", async () => {
 		const ready = deferred();
 		const completion = deferred();

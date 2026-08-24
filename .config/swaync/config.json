@@ -5,9 +5,9 @@
   "positionY": "bottom",
   "cssPriority": "user",
   "control-center-width": 380,
-  "control-center-height": 840,
+  "control-center-height": -1,
   "control-center-margin-top": 10,
-  "control-center-margin-bottom": 8,
+  "control-center-margin-bottom": 4,
   "control-center-margin-right": 4,
   "control-center-margin-left": 0,
   "notification-window-width": 340,
@@ -58,6 +58,9 @@
     "buttons-grid"
   ],
   "widget-config": {
+    "notifications": {
+      "vexpand": false
+    },
     "title": {
       "text": "Notifications",
       "clear-all-button": true,

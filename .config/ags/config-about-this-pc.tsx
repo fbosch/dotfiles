@@ -31,7 +31,6 @@ app.start({
 	css: [themeCss, buttonCss, gamingOpacityCss, aboutThisPCCss].join("\n"),
 	main() {
 		controller.init();
-		controller.show();
 		return null;
 	},
 	requestHandler(argv, res) {

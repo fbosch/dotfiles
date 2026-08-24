@@ -5,6 +5,7 @@ import {
 	startComponentHost,
 	type ComponentModule,
 } from "@/services/component-host";
+import { resetAiPointerStartupState } from "@/components/ai-pointer/startup";
 import { bundledCss } from "@/styles/bundled-css";
 import GLib from "gi://GLib?version=2.0";
 
@@ -22,7 +23,6 @@ declare global {
 	var CalendarWidget: ComponentModule;
 	var AudioMixerWidget: ComponentModule;
 	var PipSnapPreview: ComponentModule;
-	var AiPointer: ComponentModule;
 }
 
 import "@/components/confirm-dialog/index.tsx";
@@ -34,7 +34,8 @@ import "@/components/desktop-clock";
 import "@/components/calendar/index.tsx";
 import "@/components/audio-mixer/index.tsx";
 import "@/components/pip-snap-preview.tsx";
-import "@/components/ai-pointer/index.tsx";
+
+resetAiPointerStartupState();
 
 startComponentHost({
 	instanceName,
@@ -49,7 +50,6 @@ startComponentHost({
 		() => globalThis.CalendarWidget,
 		() => globalThis.AudioMixerWidget,
 		() => globalThis.PipSnapPreview,
-		() => globalThis.AiPointer,
 	],
 	taskbarVisibilityComponents: [
 		"start-menu",

@@ -54,6 +54,8 @@ function isProtectedIdentity(value: string): boolean {
 	const identity = normalizeIdentity(value);
 	return (
 		protectedIdentities.has(identity) ||
+		identity.startsWith("ags-about-this-pc-") ||
+		identity.startsWith("io.astal.ags-about-this-pc-") ||
 		identity.startsWith("xdg-desktop-portal")
 	);
 }

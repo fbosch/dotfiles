@@ -23,6 +23,10 @@
   --surface-border: #191919;
   --surface-keyline: rgba(255, 255, 255, 0.2);
   --divider-color: rgba(255, 255, 255, 0.1);
+  --button-border: rgba(255, 255, 255, 0.1);
+  --button-border-hover: rgba(255, 255, 255, 0.2);
+  --button-focus: rgba(255, 255, 255, 0.3);
+  --button-focus-muted: rgba(255, 255, 255, 0.2);
   --critical-color: #de6e7c;
   --critical-bright-color: #e8838f;
   --critical-subtle: rgba(222, 110, 124, 0.14);
@@ -32,15 +36,12 @@
   --radius-control-center: 12px;
   --notification-icon-size: 24px;
   --shadow-elevation-low:
-    0 0 0 1px var(--surface-border),
-    0 2px 8px rgba(0, 0, 0, 0.12);
+    0 0 0 1px var(--surface-border), 0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-elevation-medium:
-    0 0 0 1px var(--surface-border),
-    0 8px 32px rgba(0, 0, 0, 0.24),
+    0 0 0 1px var(--surface-border), 0 8px 32px rgba(0, 0, 0, 0.24),
     0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-elevation-high:
-    0 0 0 1px var(--surface-border),
-    0 16px 40px rgba(0, 0, 0, 0.28),
+    0 0 0 1px var(--surface-border), 0 16px 40px rgba(0, 0, 0, 0.28),
     0 4px 12px rgba(0, 0, 0, 0.14);
   --volume-bg: var(--bg-color);
   --volume-surface: rgba(255, 255, 255, 0.05);
@@ -72,6 +73,7 @@
 
 .control-center-list {
   background: transparent;
+  padding-top: 12px;
 }
 
 .control-center-list .notification {
@@ -104,11 +106,7 @@
 }
 
 .control-center-list .notification:active,
-.control-center-list .notification-action:active,
-.control-center-list .notification-action > button:active,
-.notification-list .notification:active,
-.notification-list .notification-action:active,
-.notification-list .notification-action > button:active {
+.notification-list .notification:active {
   transform: none;
 }
 
@@ -119,6 +117,10 @@
 .control-center-list .notification-background:last-child,
 .notification-list .notification-background:last-child {
   margin-bottom: 12px;
+}
+
+.widget-notifications {
+  min-height: 180px;
 }
 
 .notification-list-scroll {
@@ -155,7 +157,8 @@
   border-radius: 9999px;
   transition:
     background 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    transform 150ms ease;
 }
 
 .notification-group-close-button * {
@@ -170,6 +173,17 @@
 .notification-group-close-button:hover {
   background: var(--surface-hover);
   color: var(--text-color);
+}
+
+.notification-group-close-button:active {
+  transform: scale(0.98);
+}
+
+.notification-group-close-button:focus-visible {
+  color: var(--text-color);
+  background: var(--surface-hover);
+  outline: 2px solid var(--button-focus-muted);
+  outline-offset: 2px;
 }
 
 .notifications-placeholder {
@@ -203,11 +217,20 @@
 .control-center-list-placeholder {
   background: transparent;
   border: none;
-  border-radius: var(--radius-medium);
-  padding: 32px 24px;
+  min-height: 0;
+  max-height: 0;
+  padding: 0;
   margin: 0;
   box-shadow: none;
   opacity: 0;
+  font-size: 0;
+}
+
+.control-center-list-placeholder * {
+  min-width: 0;
+  min-height: 0;
+  max-width: 0;
+  max-height: 0;
   font-size: 0;
 }
 
@@ -221,7 +244,8 @@
   border: none;
   transition:
     background 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    transform 150ms ease;
 }
 
 .control-center .widget-title > button:hover {
@@ -230,8 +254,15 @@
 }
 
 .control-center .widget-title > button:active {
-  background: var(--surface-active);
+  transform: scale(0.98);
   transition-duration: 100ms;
+}
+
+.control-center .widget-title > button:focus-visible {
+  color: var(--text-color);
+  background: var(--surface-hover);
+  outline: 2px solid var(--button-focus-muted);
+  outline-offset: 2px;
 }
 
 /* Notification Popup Window */
@@ -311,6 +342,11 @@
   margin: 0;
 }
 
+.notification-row .notification-background .notification.critical {
+  background: var(--critical-subtle);
+  border: 2px solid var(--critical-color);
+}
+
 .control-center .notification-background {
   background: var(--solid-bg-color);
 }
@@ -331,6 +367,15 @@
 .time {
   color: var(--text-tertiary);
   font-size: 11px;
+  margin-right: 0;
+  transition: margin-right 150ms ease;
+}
+
+.notification:hover .time,
+.notification:focus-within .time,
+.notification-row:hover .time,
+.notification-row:focus-within .time {
+  margin-right: 28px;
 }
 
 /* Notification Text */
@@ -402,7 +447,8 @@
   max-height: 28px;
   padding: 0 12px;
   margin: 0;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--button-border);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition:
     background 150ms ease,
     border-color 150ms ease,
@@ -412,18 +458,17 @@
 .notification-action:hover,
 .notification-action > button:hover {
   background: rgba(42, 42, 42, 0.9);
-  border-color: var(--border-hover);
+  border-color: var(--button-border-hover);
 }
 
 .notification-action:active,
 .notification-action > button:active {
-  background: rgba(42, 42, 42, 0.8);
   transform: scale(0.98);
 }
 
 .notification-action:focus-visible,
 .notification-action > button:focus-visible {
-  outline: 2px solid rgba(255, 255, 255, 0.3);
+  outline: 2px solid var(--button-focus);
   outline-offset: 2px;
   border-radius: var(--radius-small);
 }
@@ -458,7 +503,8 @@
   transition:
     background 150ms ease,
     color 150ms ease,
-    opacity 150ms ease;
+    opacity 150ms ease,
+    transform 150ms ease;
 }
 
 .control-center .close-button,
@@ -495,6 +541,13 @@
   opacity: 1;
 }
 
+.close-button:focus-visible {
+  color: var(--text-color);
+  background: var(--surface-hover);
+  outline: 2px solid var(--button-focus-muted);
+  outline-offset: 2px;
+}
+
 .floating-notifications {
   padding-right: 4px;
   padding-bottom: 0;
@@ -509,7 +562,7 @@
 }
 
 .close-button:active {
-  background: var(--surface-active);
+  transform: scale(0.98);
 }
 
 /* Do Not Disturb Widget */
@@ -771,7 +824,7 @@
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button {
-  background: var(--surface-color);
+  background: var(--surface-solid);
   border-radius: var(--radius-small);
   color: var(--text-color);
   font-size: 16px;
@@ -780,25 +833,37 @@
   min-height: 36px;
   padding: 0;
   margin: 0;
-  border: 1px solid var(--border-color);
-  transition: all 150ms ease;
+  border: 1px solid var(--button-border);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition:
+    background 150ms ease,
+    border-color 150ms ease,
+    transform 150ms ease;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button label {
   font-family: "SF Pro Rounded", system-ui, sans-serif;
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button:hover {
-  background: var(--surface-hover);
-  border-color: var(--border-hover);
-  transform: scale(1.02);
+  background: rgba(42, 42, 42, 0.9);
+  border-color: var(--button-border-hover);
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button:active {
-  background: var(--surface-active);
   transform: scale(0.98);
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button:focus-visible {
+  outline: 2px solid var(--button-focus);
+  outline-offset: 2px;
+}
+
+.widget-buttons-grid > flowbox > flowboxchild > button:disabled {
+  opacity: 0.4;
+  transform: none;
 }
 
 .widget-buttons-grid > flowbox > flowboxchild > button.active,

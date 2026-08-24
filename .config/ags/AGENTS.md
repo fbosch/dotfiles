@@ -9,6 +9,10 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
   host: preserve its public route through `services/utility-manager.ts` and
   make it exit when hidden. Require retained-memory evidence before isolating
   another GTK utility.
+- Prefetch isolated utilities through `services/utility-prefetch.ts`: treat
+  pointer hover and keyboard focus as overlapping intent, keep preparation
+  hidden, and release unused preparation when intent ends or the owning
+  surface hides.
 - Keep growing features as vertical slices under `components/<feature>/`.
   Colocate feature-local state machines, controllers, child surfaces, policies,
   and tests; reserve `services/` for integrations shared across features.

@@ -3,6 +3,7 @@ import type { ComponentModule } from "./component-host";
 export interface UtilityDefinition {
   load: () => Promise<unknown>;
   component: () => ComponentModule;
+  reportsVisibility?: boolean;
 }
 
 export interface UtilityManager {
@@ -101,6 +102,7 @@ export function createUtilityManager(
 
   function visibleComponent(): string | null {
     for (const [id, component] of loadedUtilities) {
+      if (definitions[id]?.reportsVisibility === false) continue;
       let response = "";
       component.handleRequest(['{"action":"is-visible"}'], (value) => {
         response = value;

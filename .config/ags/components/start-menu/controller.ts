@@ -22,7 +22,12 @@ import {
 	getRecentDocuments,
 	openRecentDocument,
 } from "@/services/recent-documents";
-import { openUtility } from "@/services/utility-manager";
+import {
+	clearUtilityPreparationIntent,
+	openUtility,
+	prepareUtility,
+	releaseUtilityPreparation,
+} from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,
@@ -56,6 +61,12 @@ export class StartMenuController {
 		}),
 		getRecentItems: () => this.#recentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
+		onMenuIntentStart: (itemId) => {
+			if (itemId === "about-this-pc") prepareUtility(itemId);
+		},
+		onMenuIntentEnd: (itemId) => {
+			if (itemId === "about-this-pc") releaseUtilityPreparation(itemId);
+		},
 		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),
 		onRecentOpenRequest: () =>
@@ -107,6 +118,7 @@ export class StartMenuController {
 	}
 
 	teardown(): void {
+		clearUtilityPreparationIntent("about-this-pc");
 		this.#unsubscribeProfile?.();
 		this.#unsubscribeProfile = null;
 		this.#cache.dispose();
@@ -144,6 +156,7 @@ export class StartMenuController {
 	}
 
 	hide(): void {
+		clearUtilityPreparationIntent("about-this-pc");
 		this.#actor?.send({ type: "HIDE" });
 		this.#view.hide();
 	}

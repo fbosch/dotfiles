@@ -29,6 +29,10 @@ first request:
 - `about-this-pc/` runs under an `ags-about-this-pc-*` instance and exits when
   its window closes.
 
+Hovering or focusing the About This PC Start Menu item prepares its process
+without mapping the window. Activation reuses that process; leaving the item
+or closing the menu releases an unused preparation after a short grace period.
+
 Start Menu and external callers keep using the `ags-bundled` request route.
 
 ## Layout
@@ -39,6 +43,7 @@ Start Menu and external callers keep using the `ags-bundled` request route.
 - `components/<feature>/` contains vertical feature slices once a component
   needs local policies, child surfaces, state machines, controllers, or tests.
 - `services/utility-manager.ts` owns lazy utility loading, process startup, and request routing.
+- `services/utility-prefetch.ts` owns reusable pointer/focus intent and delayed release semantics.
 - `start-daemons.sh` starts the bundled process during the desktop session.
 - `components/` is the canonical component source.
 - `docs/agents/` contains deeper implementation notes for agents.

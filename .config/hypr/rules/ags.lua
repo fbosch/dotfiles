@@ -25,6 +25,8 @@ function M.register()
 		size = "422 562",
 		min_size = "422 562",
 		max_size = "422 562",
+		border_size = 1,
+		rounding = 12,
 		tag = "+" .. window_tags.non_resizable,
 	})
 	hl.window_rule({ match = { class = "^(flake_update_terminal)$" }, float = true, pin = true })

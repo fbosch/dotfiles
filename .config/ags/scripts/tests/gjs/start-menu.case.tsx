@@ -1,4 +1,5 @@
 import { createRoot } from "ags";
+import app from "ags/gtk4/app";
 import Gtk from "gi://Gtk?version=4.0";
 import type { ProfileState } from "@/services/profile-state";
 import { StartMenuController } from "@/components/start-menu/controller";
@@ -108,6 +109,8 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 			],
 		}),
 		onMenuAction: (id) => calls.push(`menu:${id}`),
+		onMenuIntentStart: (id) => calls.push(`intent-start:${id}`),
+		onMenuIntentEnd: (id) => calls.push(`intent-end:${id}`),
 		onProfileSelect: (selection) => calls.push(`profile:${selection}`),
 		onHide: () => calls.push("hide"),
 		onRecentOpenRequest: () => calls.push("recent-open-request"),
@@ -123,6 +126,37 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 
 	view.create();
 	assert(view.isCreated, "view was not created");
+	const startMenu = app.get_window("start-menu");
+	const aboutButton = startMenu
+		? collectButtons(startMenu).find((button) => hasLabel(button, "About This PC"))
+		: null;
+	assert(Boolean(aboutButton), "About This PC button was not rendered");
+	const controllers = aboutButton?.observe_controllers();
+	let motionController: Gtk.EventControllerMotion | null = null;
+	let focusController: Gtk.EventControllerFocus | null = null;
+	for (let index = 0; index < (controllers?.get_n_items() ?? 0); index++) {
+		const controller = controllers?.get_item(index);
+		if (controller instanceof Gtk.EventControllerMotion)
+			motionController = controller;
+		if (controller instanceof Gtk.EventControllerFocus) focusController = controller;
+	}
+	assert(Boolean(motionController), "About This PC has no hover controller");
+	assert(Boolean(focusController), "About This PC has no focus controller");
+	const intentStart = calls.length;
+	motionController?.emit("enter", 0, 0);
+	focusController?.emit("enter");
+	motionController?.emit("leave");
+	focusController?.emit("leave");
+	assert(
+		JSON.stringify(calls.slice(intentStart)) ===
+			JSON.stringify([
+				"intent-start:about-this-pc",
+				"intent-start:about-this-pc",
+				"intent-end:about-this-pc",
+				"intent-end:about-this-pc",
+			]),
+		"About This PC hover and focus intent was imbalanced",
+	);
 	view.updateProfile(profileState);
 	view.updateUpdates({ flake: null, flatpak: null });
 	view.updateUpdates({
@@ -216,4 +250,14 @@ function collectButtons(widget: Gtk.Widget): Gtk.Button[] {
 		child = child.get_next_sibling();
 	}
 	return buttons;
+}
+
+function hasLabel(widget: Gtk.Widget, label: string): boolean {
+	if (widget instanceof Gtk.Label && widget.get_label() === label) return true;
+	let child = widget.get_first_child();
+	while (child) {
+		if (hasLabel(child, label)) return true;
+		child = child.get_next_sibling();
+	}
+	return false;
 }

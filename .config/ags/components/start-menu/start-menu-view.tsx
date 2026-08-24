@@ -30,6 +30,8 @@ interface StartMenuViewActions {
 	getModel: () => StartMenuViewModel;
 	getRecentItems: () => RecentItemsMenuModel;
 	onMenuAction: (itemId: string) => void;
+	onMenuIntentStart: (itemId: string) => void;
+	onMenuIntentEnd: (itemId: string) => void;
 	onProfileSelect: (selection: ProfileSelection) => void;
 	onHide: () => void;
 	onRecentOpenRequest: () => void;
@@ -265,6 +267,16 @@ export class StartMenuView {
 				$={(self: Gtk.Button) => {
 					self.set_cursor_from_name("pointer");
 					this.#menuItemButtons.set(item.id, self);
+					if (item.prefetchOnIntent) {
+						const motion = new Gtk.EventControllerMotion();
+						motion.connect("enter", () => this.actions.onMenuIntentStart(item.id));
+						motion.connect("leave", () => this.actions.onMenuIntentEnd(item.id));
+						self.add_controller(motion);
+						const focus = new Gtk.EventControllerFocus();
+						focus.connect("enter", () => this.actions.onMenuIntentStart(item.id));
+						focus.connect("leave", () => this.actions.onMenuIntentEnd(item.id));
+						self.add_controller(focus);
+					}
 					if (item.id === "recent-items") {
 						const motion = new Gtk.EventControllerMotion();
 						motion.connect("enter", this.actions.onRecentOpenRequest);
