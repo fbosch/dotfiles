@@ -189,12 +189,10 @@ reader_failed="$test_dir/reader-failed"
 tab=$'\t'
 (
   for _ in {1..600}; do
-    if [[ -r "$capture_dir/.pending_event" ]]; then
-      if pending="$(<"$capture_dir/.pending_event")" 2>/dev/null; then
-        if [[ ! "$pending" =~ ^[0-9]+_(activewindow|workspace|windowupdate|windowtitle|windowsettle)${tab}workspacev2\>\>fixture-[0-9]+$ ]]; then
-          : > "$reader_failed"
-          exit 1
-        fi
+    if pending="$(cat "$capture_dir/.pending_event" 2>/dev/null)"; then
+      if [[ ! "$pending" =~ ^[0-9]+_(activewindow|workspace|windowupdate|windowtitle|windowsettle)${tab}workspacev2\>\>fixture-[0-9]+$ ]]; then
+        : > "$reader_failed"
+        exit 1
       fi
     fi
     sleep 0.01
@@ -256,8 +254,7 @@ kill -TERM -- "-$unrelated_pid" >/dev/null 2>&1 || true
 wait "$unrelated_pid" || true
 (
   for _ in {1..300}; do
-    if [[ -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" ]]; then
-      owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
+    if owner_line="$(cat "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" 2>/dev/null)"; then
       owner_pid="${owner_line%%$'\t'*}"
       owner_token="${owner_line#*$'\t'}"
       if [[ "$owner_pid" =~ ^[0-9]+$ && "$owner_pid" != "$stale_pid" && "$owner_token" != stale-token ]]; then
