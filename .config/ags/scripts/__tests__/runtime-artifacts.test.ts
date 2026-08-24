@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readdir,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -202,7 +211,7 @@ printf '%s\n' "$first_generation" "$first_about" "$AGS_RUNTIME_ARTIFACT_GENERATI
   const [firstGeneration, firstAbout, failedGeneration] = outputLines(result.stdout);
   expect(await Bun.file(firstAbout).exists()).toBe(true);
   expect((await stat(firstGeneration)).isDirectory()).toBe(true);
-  expect(await Bun.file(failedGeneration).exists()).toBe(false);
+  expect(failedGeneration).toBe(firstGeneration);
 });
 
 test("rejects a shared runtime directory before publishing files", async () => {
@@ -216,4 +225,107 @@ test("rejects a shared runtime directory before publishing files", async () => {
   expect(result.exitCode).not.toBe(0);
   expect(await Bun.file(evidence).text()).toBe("preserve");
   expect(new TextDecoder().decode(result.stderr)).toBe("");
+});
+
+test("normalizes a trailing slash before cleaning a source-host generation", async () => {
+  const fixture = await createFixture();
+  fixture.environment.XDG_RUNTIME_DIR = `${fixture.runtimeDirectory}/`;
+  const result = runPublisher(
+    fixture,
+    `publish_runtime_artifacts source-host || exit 1
+generation="$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"
+cleanup_runtime_artifacts
+printf '%s\n' "$generation" "$XDG_RUNTIME_DIR"`,
+  );
+
+  expect(result.exitCode).toBe(0);
+  const [generation, normalizedRuntimeDirectory] = outputLines(result.stdout);
+  expect(normalizedRuntimeDirectory).toBe(fixture.runtimeDirectory);
+  expect(await Bun.file(generation).exists()).toBe(false);
+});
+
+test("the host owner removes its generation after the host exits", async () => {
+  const fixture = await createFixture();
+  const owner = resolve(import.meta.dir, "../run-runtime-artifact-host.sh");
+  const ownedResult = Bun.spawnSync({
+    cmd: [
+      "bash",
+      "-c",
+      `source "$1"; configure_runtime_artifacts session || exit 1; generation="$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"; "$2" "$generation" "$AGS_CONFIG_DIR" bash -c 'exit 0' || exit 1; printf '%s\\n' "$generation"`,
+      "runtime-artifacts-owner-test",
+      publisher,
+      owner,
+    ],
+    env: fixture.environment,
+  });
+
+  expect(ownedResult.exitCode).toBe(0);
+  expect((await stat(owner)).mode & 0o100).not.toBe(0);
+  const [generation] = outputLines(ownedResult.stdout);
+  expect(await Bun.file(generation).exists()).toBe(false);
+});
+
+test("successful bundle publication retains only the latest generation", async () => {
+  const fixture = await createFixture();
+  const result = runPublisher(
+    fixture,
+    `publish_runtime_artifacts bundle || exit 1
+first_generation="$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"
+publish_runtime_artifacts bundle || exit 1
+printf '%s\n' "$first_generation" "$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"`,
+  );
+
+  expect(result.exitCode).toBe(0);
+  const [firstGeneration, secondGeneration] = outputLines(result.stdout);
+  expect(await Bun.file(firstGeneration).exists()).toBe(false);
+  expect((await stat(secondGeneration)).isDirectory()).toBe(true);
+  const generations = (await readdir(fixture.runtimeDirectory)).filter((entry) =>
+    entry.startsWith("ags-runtime-bundle-"),
+  );
+  expect(generations).toHaveLength(1);
+});
+
+test("publication rejects a symlink lock without truncating its target", async () => {
+  const fixture = await createFixture();
+  const evidence = join(fixture.runtimeDirectory, "evidence");
+  await writeFile(evidence, "preserve");
+  await symlink(evidence, join(fixture.runtimeDirectory, "ags-runtime-artifacts.lock"));
+
+  const result = runPublisher(fixture, "publish_runtime_artifacts session");
+
+  expect(result.exitCode).not.toBe(0);
+  expect(await Bun.file(evidence).text()).toBe("preserve");
+});
+
+test("startup lock preparation rejects a symlink without truncating its target", async () => {
+  const fixture = await createFixture();
+  const evidence = join(fixture.runtimeDirectory, "startup-evidence");
+  const lock = join(fixture.runtimeDirectory, "ags-bundled-start.lock");
+  await writeFile(evidence, "preserve");
+  await symlink(evidence, lock);
+
+  const result = runPublisher(
+    fixture,
+    `require_private_runtime_directory || exit 1
+prepare_runtime_lock "$XDG_RUNTIME_DIR/ags-bundled-start.lock"`,
+  );
+
+  expect(result.exitCode).not.toBe(0);
+  expect(await Bun.file(evidence).text()).toBe("preserve");
+});
+
+test("concurrent first publication serializes through the shared lock", async () => {
+  const fixture = await createFixture();
+  const command = `source "$1"; publish_runtime_artifacts source-host`;
+  const processes = Array.from({ length: 2 }, () =>
+    Bun.spawn({
+      cmd: ["bash", "-c", command, "runtime-artifacts-concurrency-test", publisher],
+      env: fixture.environment,
+      stderr: "pipe",
+      stdout: "pipe",
+    }),
+  );
+
+  const exitCodes = await Promise.all(processes.map((process) => process.exited));
+  expect(exitCodes).toEqual([0, 0]);
 });

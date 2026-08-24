@@ -7,6 +7,7 @@ RUNTIME_ARTIFACT_ERROR=""
 RUNTIME_ARTIFACT_WARNING=""
 RUNTIME_ARTIFACT_BUNDLED_HOST_READY=false
 AGS_RUNTIME_ARTIFACT_GENERATION_DIR=""
+export RUNTIME_ARTIFACT_BUNDLED_HOST_READY
 
 runtime_artifact_fail() {
     RUNTIME_ARTIFACT_ERROR="$1"
@@ -15,6 +16,7 @@ runtime_artifact_fail() {
 
 require_private_runtime_directory() {
     local runtime_dir="${XDG_RUNTIME_DIR:-}"
+    local canonical_runtime_dir
     local owner
     local permissions
 
@@ -34,10 +36,16 @@ require_private_runtime_directory() {
         runtime_artifact_fail "XDG_RUNTIME_DIR must not be accessible by group or other users"
         return 1
     fi
+    if ! canonical_runtime_dir="$(realpath -e -- "$runtime_dir")"; then
+        runtime_artifact_fail "Unable to resolve XDG_RUNTIME_DIR"
+        return 1
+    fi
+    XDG_RUNTIME_DIR="$canonical_runtime_dir"
+    export XDG_RUNTIME_DIR
 }
 
-cleanup_runtime_artifacts() {
-    local generation="${AGS_RUNTIME_ARTIFACT_GENERATION_DIR:-}"
+cleanup_runtime_artifact_generation() {
+    local generation="$1"
     if [[ -z "$generation" || ! -d "$generation" ]]; then
         return
     fi
@@ -46,6 +54,44 @@ cleanup_runtime_artifacts() {
         return 1
     fi
     rm -rf -- "$generation"
+}
+
+cleanup_runtime_artifacts() {
+    cleanup_runtime_artifact_generation "${AGS_RUNTIME_ARTIFACT_GENERATION_DIR:-}"
+}
+
+prune_superseded_bundle_generations() {
+    local current_generation="$1"
+    find "$XDG_RUNTIME_DIR" \
+        -mindepth 1 \
+        -maxdepth 1 \
+        -type d \
+        -name 'ags-runtime-bundle-*' \
+        ! -path "$current_generation" \
+        -exec rm -rf -- {} +
+}
+
+prepare_runtime_lock() {
+    local lock_path="$1"
+    local owner
+
+    if [[ ! -e "$lock_path" ]]; then
+        # Another publisher may create the same lock between the check and noclobber write.
+        (umask 077; set -o noclobber; : > "$lock_path") 2>/dev/null || true
+    fi
+    if [[ -L "$lock_path" || ! -f "$lock_path" ]]; then
+        runtime_artifact_fail "Runtime lock must be a regular file: $lock_path"
+        return 1
+    fi
+    if ! owner="$(stat -c %u -- "$lock_path")" || [[ "$owner" != "$EUID" ]]; then
+        runtime_artifact_fail "Runtime lock must be owned by the current user: $lock_path"
+        return 1
+    fi
+    if ! chmod 600 "$lock_path"; then
+        runtime_artifact_fail "Failed to secure runtime lock: $lock_path"
+        return 1
+    fi
+    RUNTIME_LOCK_PATH="$lock_path"
 }
 
 configure_runtime_artifacts() {
@@ -114,7 +160,7 @@ build_ai_pointer_module() {
         "$AGS_AI_POINTER_MODULE_PATH")
 }
 
-publish_runtime_artifacts() {
+publish_runtime_artifacts_impl() {
     local mode="$1"
     local build_bundled_host=false
     local strict_about_this_pc=false
@@ -202,6 +248,64 @@ publish_runtime_artifacts() {
     RUNTIME_ARTIFACT_BUNDLED_HOST_READY=true
 }
 
+publish_runtime_artifacts() {
+    local mode="$1"
+    local lock_fd
+    local status
+    local variable
+    local -a selection_variables=(
+        AGS_RUNTIME_ARTIFACT_GENERATION_DIR
+        AGS_BUNDLED_CONFIG_PATH
+        AGS_ABOUT_THIS_PC_CONFIG_PATH
+        AGS_AI_POINTER_MODULE_CONFIG_PATH
+        AGS_AI_POINTER_ACCESSIBILITY_HELPER_CONFIG_PATH
+        AGS_BUNDLED_EXECUTABLE_PATH
+        AGS_ABOUT_THIS_PC_EXECUTABLE_PATH
+        AGS_AI_POINTER_ACCESSIBILITY_HELPER_PATH
+        AGS_AI_POINTER_MODULE_PATH
+        RUNTIME_ARTIFACT_BUNDLED_HOST_READY
+    )
+    local -A previous_values=()
+    local -A previous_presence=()
+
+    require_private_runtime_directory || return 1
+    prepare_runtime_lock "$XDG_RUNTIME_DIR/ags-runtime-artifacts.lock" || return 1
+    exec {lock_fd}<>"$RUNTIME_LOCK_PATH"
+    if ! flock -w 30 "$lock_fd"; then
+        exec {lock_fd}>&-
+        runtime_artifact_fail "Timed out waiting for the runtime artifact publication lock"
+        return 1
+    fi
+    for variable in "${selection_variables[@]}"; do
+        previous_values["$variable"]="${!variable-}"
+        previous_presence["$variable"]="${!variable+x}"
+    done
+
+    publish_runtime_artifacts_impl "$mode"
+    status=$?
+    if [[ "$status" -eq 0 && "$mode" == "bundle" ]]; then
+        if ! prune_superseded_bundle_generations "$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"; then
+            cleanup_runtime_artifacts
+            runtime_artifact_fail "Failed to prune superseded bundle generations"
+            status=1
+        fi
+    fi
+    flock -u "$lock_fd" 2>/dev/null || true
+    exec {lock_fd}>&-
+    if [[ "$status" -eq 0 ]]; then
+        return 0
+    fi
+
+    for variable in "${selection_variables[@]}"; do
+        if [[ -n "${previous_presence[$variable]}" ]]; then
+            declare -gx "$variable=${previous_values[$variable]}"
+        else
+            unset "$variable"
+        fi
+    done
+    return "$status"
+}
+
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     if [[ $# -ne 1 ]]; then
         printf 'usage: %s session|source-host|bundle\n' "$0" >&2
@@ -214,4 +318,5 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     if [[ -n "$RUNTIME_ARTIFACT_WARNING" ]]; then
         printf '%s\n' "$RUNTIME_ARTIFACT_WARNING" >&2
     fi
+    printf '%s\n' "$AGS_RUNTIME_ARTIFACT_GENERATION_DIR"
 fi

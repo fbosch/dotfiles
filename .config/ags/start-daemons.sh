@@ -17,6 +17,7 @@ BUNDLED_CONFIG="config-bundled.tsx"
 BUNDLED_INSTANCE="ags-bundled"
 BUNDLED_START_LOCK=""
 
+# shellcheck source=.config/ags/scripts/runtime-artifacts.sh
 source "$AGS_CONFIG_DIR/scripts/runtime-artifacts.sh"
 
 # Let GJS resolve GIR typelibs exported by the current Nix system profile.
@@ -146,7 +147,11 @@ main() {
     local bundled_probe_status
     local pid_identity
 
-    exec {startup_lock_fd}>"$BUNDLED_START_LOCK"
+    if ! prepare_runtime_lock "$BUNDLED_START_LOCK"; then
+        log "${RED}✗${NC} $RUNTIME_ARTIFACT_ERROR"
+        return 1
+    fi
+    exec {startup_lock_fd}<>"$RUNTIME_LOCK_PATH"
     if ! flock -w 10 "$startup_lock_fd"; then
         release_start_lock "$startup_lock_fd"
         log "${RED}✗${NC} Timed out waiting for bundled AGS startup lock"
@@ -188,10 +193,19 @@ main() {
         log "${YELLOW}⚠${NC} $RUNTIME_ARTIFACT_WARNING"
     fi
     if [[ "$RUNTIME_ARTIFACT_BUNDLED_HOST_READY" == "true" ]]; then
-        (exec {startup_lock_fd}>&-; exec ags-bundle-runtime "$AGS_BUNDLED_EXECUTABLE_PATH") &
+        (exec {startup_lock_fd}>&-; exec "$AGS_CONFIG_DIR/scripts/run-runtime-artifact-host.sh" \
+            "$AGS_RUNTIME_ARTIFACT_GENERATION_DIR" \
+            "$AGS_CONFIG_DIR" \
+            ags-bundle-runtime \
+            "$AGS_BUNDLED_EXECUTABLE_PATH") &
     else
         # compatibility: remove after ags-bundle-runtime is deployed on every host.
-        (exec {startup_lock_fd}>&-; cd "$AGS_CONFIG_DIR" && exec ags run "$BUNDLED_CONFIG") &
+        (exec {startup_lock_fd}>&-; exec "$AGS_CONFIG_DIR/scripts/run-runtime-artifact-host.sh" \
+            "$AGS_RUNTIME_ARTIFACT_GENERATION_DIR" \
+            "$AGS_CONFIG_DIR" \
+            ags \
+            run \
+            "$BUNDLED_CONFIG") &
     fi
     local pid=$!
     pid_identity="$(process_identity "$pid")"
@@ -205,7 +219,7 @@ main() {
     if is_bundled_running; then
         release_start_lock "$startup_lock_fd"
         log "${GREEN}✓${NC} Bundled daemon started successfully: $BUNDLED_INSTANCE"
-        log "${BLUE}ℹ${NC} Bundled PID: $pid"
+        log "${BLUE}ℹ${NC} Bundled owner PID: $pid"
         log "${GREEN}✓${NC} Shell components initialized; utility modules remain lazy"
         log "════════════════════════════════════════"
         return 0
