@@ -66,14 +66,16 @@ ags request
 `component-host-router.ts` accepts the live eager-handler map and utility
 adapter functions as dependencies. It owns blank and `ping` readiness requests,
 direct `<target> <payload>` requests, `taskbar-visibility`, legacy
-`target:action` requests, routing precedence, and error responses. It does not
-load or initialize components.
+`target:action` requests, routing precedence, and routing-level error responses.
+It does not load or initialize components. Delegated components and utilities
+retain ownership of their own errors.
 
 Taskbar visibility is deliberately synchronous: eager handlers must answer
-`is-visible` before returning, and unloaded utilities are inspected without
-being loaded. Ordinary utility requests may answer after the router returns.
-Pure Bun tests call this same routing interface directly; native GJS tests stay
-focused on component and process integration.
+`is-visible` before returning. Unloaded utilities are skipped; loaded utilities
+are queried synchronously without triggering another load. Ordinary utility
+requests may answer after the router returns. Pure Bun tests call this same
+routing interface directly; native GJS tests stay focused on component and
+process integration.
 
 File structure:
 

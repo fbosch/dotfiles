@@ -189,6 +189,7 @@ describe("component host router", () => {
 
   test("routes the legacy action form and preserves extra fields", async () => {
     let forwarded: unknown;
+    let targetUtilityCalls = 0;
     const router = createRouter({
       componentHandlers: new Map([
         [
@@ -199,6 +200,12 @@ describe("component host router", () => {
           },
         ],
       ]),
+      handleUtilityRequest(component, _argv, res) {
+        if (component !== "target") return false;
+        targetUtilityCalls += 1;
+        res("utility");
+        return true;
+      },
     });
 
     await expect(
@@ -208,6 +215,7 @@ describe("component host router", () => {
       ]),
     ).resolves.toBe("shown");
     expect(forwarded).toEqual({ action: "show", source: "legacy" });
+    expect(targetUtilityCalls).toBe(0);
   });
 
   test("routes the legacy action form to utilities", async () => {
