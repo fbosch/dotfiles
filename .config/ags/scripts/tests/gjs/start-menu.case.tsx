@@ -40,6 +40,31 @@ test("Start Menu handles its complete request lifecycle", () => {
 			"menu started visible",
 		);
 		assert(
+			request(handleRequest, [
+				JSON.stringify({
+					action: "prepare",
+					source: "waybar:startbutton",
+					sequence: 1,
+				}),
+			]) === "prepared",
+			"prepare request failed",
+		);
+		assert(
+			Boolean(app.get_window("start-menu")),
+			"prepare did not create the hidden menu view",
+		);
+		assert(controller.isVisible() === false, "prepare showed the menu");
+		assert(
+			request(handleRequest, [
+				JSON.stringify({
+					action: "release",
+					source: "waybar:startbutton",
+					sequence: 2,
+				}),
+			]) === "released",
+			"release request failed",
+		);
+		assert(
 			request(handleRequest, [JSON.stringify({ action: "show" })]) === "shown",
 			"show request failed",
 		);

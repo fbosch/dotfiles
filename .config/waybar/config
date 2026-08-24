@@ -45,6 +45,8 @@
   "custom/startbutton": {
     "format": "",
     "on-click": "ags request -i ags-bundled start-menu '{\"action\":\"toggle\"}'",
+    "on-hover": "ags request -i ags-bundled start-menu '{\"action\":\"prepare\",\"source\":\"waybar:startbutton\",\"sequence\":{sequence}}'",
+    "on-hover-lost": "ags request -i ags-bundled start-menu '{\"action\":\"release\",\"source\":\"waybar:startbutton\",\"sequence\":{sequence}}'",
     "tooltip": false
   },
 
