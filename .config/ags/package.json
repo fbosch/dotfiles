@@ -7,7 +7,7 @@
   "packageManager": "bun@1.4.0",
   "trustedDependencies": [],
   "scripts": {
-    "postinstall": "ags types",
+    "postinstall": "test -s @girs/index.d.ts && test -s @girs/astal-4.0.d.ts && test -s @girs/gtk-4.0.d.ts || ags types",
     "start": "bash -c 'source scripts/runtime-artifacts.sh; publish_runtime_artifacts source-host || { printf \"%s\\n\" \"$RUNTIME_ARTIFACT_ERROR\" >&2; exit 1; }; trap cleanup_runtime_artifacts EXIT; ags run config-bundled.tsx'",
     "dev": "bash -c 'source scripts/runtime-artifacts.sh; publish_runtime_artifacts source-host || { printf \"%s\\n\" \"$RUNTIME_ARTIFACT_ERROR\" >&2; exit 1; }; trap cleanup_runtime_artifacts EXIT; ags run config-bundled.tsx'",
     "types": "ags types",

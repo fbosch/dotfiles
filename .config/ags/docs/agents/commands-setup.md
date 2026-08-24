@@ -21,18 +21,17 @@ ags msg ags-bundled '{"window":"window-switcher","action":"next"}'
 
 ## TypeScript type definitions
 
-Type definitions for GObject Introspection libraries are auto-generated in `.config/ags/@girs/` (git-ignored).
+Type definitions for GObject Introspection libraries are auto-generated in `.config/ags/@girs/` (git-ignored). `bun install` generates them only when the core typings are missing.
 
-Generate types (run after installing AGS or updating GTK libraries):
+Regenerate explicitly after updating AGS or system GTK libraries:
 
 ```bash
 cd ~/.config/ags
-ags types
+bun run types
 ```
 
 Regenerate when:
 
-- Fresh system setup
 - After updating AGS or system GTK libraries
 - TypeScript shows "Cannot find module" errors for GI imports
 

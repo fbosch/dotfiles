@@ -59,12 +59,12 @@ export function createRequestHandler(controller: CalendarController) {
 						controller.selectDate(date);
 						return "ok";
 					})
-					.with({ action: "prepare" }, ({ source }) => {
-						controller.prepare(source);
+					.with({ action: "prepare" }, ({ source, sequence }) => {
+						controller.prepare(source, sequence);
 						return "preparing";
 					})
-					.with({ action: "release" }, ({ source }) => {
-						controller.release(source);
+					.with({ action: "release" }, ({ source, sequence }) => {
+						controller.release(source, sequence);
 						return "released";
 					})
 					.exhaustive(),

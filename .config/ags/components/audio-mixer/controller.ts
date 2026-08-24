@@ -103,6 +103,7 @@ export class AudioMixerController {
 		return this.#visible;
 	}
 	show(): void {
+		this.#preparationClaims.clear();
 		this.#visible = true;
 		this.#backend.setActive(true);
 		if (this.#backendReady) {
@@ -114,13 +115,21 @@ export class AudioMixerController {
 		this.#showPending = true;
 		this.#startBackend();
 	}
-	prepare(source: AudioMixerPreparationSource): void {
-		if (this.#preparationClaims.claim(source) === false) return;
+	prepare(source: AudioMixerPreparationSource, sequence?: number): void {
+		if (this.#preparationClaims.claim(source, sequence) === false) return;
+		if (this.#visible) {
+			this.#preparationClaims.clear();
+			return;
+		}
 		this.#backend.setActive(true);
 		this.#startBackend();
 	}
-	release(source: AudioMixerPreparationSource): void {
-		if (this.#preparationClaims.release(source) === false || this.#visible) return;
+	release(source: AudioMixerPreparationSource, sequence?: number): void {
+		if (
+			this.#preparationClaims.release(source, sequence) === false ||
+			this.#visible
+		)
+			return;
 		this.#backend.setActive(false);
 	}
 	hide(): void {

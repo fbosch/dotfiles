@@ -58,4 +58,5 @@ return {
 		per_monitor = false,
 	},
 	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
+	{ matcher = "match:class", pattern = [=[^org\.gnome\.Calendar$]=] },
 }

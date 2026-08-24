@@ -34,4 +34,23 @@ describe("preparation intent claims", () => {
 		expect(claims.hasClaims()).toBe(false);
 		expect(claims.clear()).toBe(false);
 	});
+
+	test("ignores stale releases after a newer preparation", () => {
+		const claims = createPreparationIntentClaims<Source>();
+
+		expect(claims.claim("pointer", 10)).toBe(true);
+		expect(claims.claim("pointer", 12)).toBe(false);
+		expect(claims.release("pointer", 11)).toBe(false);
+		expect(claims.hasClaims()).toBe(true);
+		expect(claims.release("pointer", 13)).toBe(true);
+	});
+
+	test("ignores stale preparation after a newer release", () => {
+		const claims = createPreparationIntentClaims<Source>();
+
+		expect(claims.release("pointer", 20)).toBe(false);
+		expect(claims.claim("pointer", 19)).toBe(false);
+		expect(claims.hasClaims()).toBe(false);
+		expect(claims.claim("pointer", 21)).toBe(true);
+	});
 });

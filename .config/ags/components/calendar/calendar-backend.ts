@@ -289,21 +289,33 @@ export function createCalendarBackend(
 		try {
 			for (const view of views) {
 				view.set_flags(ECal.ClientViewFlags.NONE);
-				const signalIds = [
+				const connection: EventViewConnection = { view, signalIds: [] };
+				nextConnections.push(connection);
+				connection.signalIds.push(
 					view.connect("objects-added", scheduleBackendRefresh),
+				);
+				connection.signalIds.push(
 					view.connect("objects-modified", scheduleBackendRefresh),
+				);
+				connection.signalIds.push(
 					view.connect("objects-removed", scheduleBackendRefresh),
+				);
+				connection.signalIds.push(
 					view.connect("complete", (_view: unknown, error: unknown) => {
 						if (error) console.error("EDS calendar watch failed:", error);
 					}),
-				];
-				nextConnections.push({ view, signalIds });
+				);
 				view.start();
 			}
 			eventViewConnections = nextConnections;
 		} catch (error) {
 			for (const { view, signalIds } of nextConnections) {
-				for (const signalId of signalIds) view.disconnect(signalId);
+				for (const signalId of signalIds)
+					try {
+						view.disconnect(signalId);
+					} catch {
+						// EDS may already have released a partially connected view.
+					}
 			}
 			for (const view of views) {
 				try {

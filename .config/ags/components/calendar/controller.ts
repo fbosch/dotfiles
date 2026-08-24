@@ -88,6 +88,7 @@ export class CalendarController {
 	}
 
 	show(): void {
+		this.#preparationClaims.clear();
 		this.#cancelHiddenTeardown();
 		this.#view.show();
 		this.#visible = true;
@@ -99,14 +100,22 @@ export class CalendarController {
 		}
 	}
 
-	prepare(source: CalendarPreparationSource): void {
-		if (this.#preparationClaims.claim(source) === false) return;
+	prepare(source: CalendarPreparationSource, sequence?: number): void {
+		if (this.#preparationClaims.claim(source, sequence) === false) return;
+		if (this.#visible) {
+			this.#preparationClaims.clear();
+			return;
+		}
 		this.#cancelHiddenTeardown();
 		this.#backend.refresh();
 	}
 
-	release(source: CalendarPreparationSource): void {
-		if (this.#preparationClaims.release(source) === false || this.#visible) return;
+	release(source: CalendarPreparationSource, sequence?: number): void {
+		if (
+			this.#preparationClaims.release(source, sequence) === false ||
+			this.#visible
+		)
+			return;
 		this.#backend.stop();
 		this.#scheduleHiddenTeardown();
 	}

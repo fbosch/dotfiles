@@ -63,13 +63,18 @@ test("Audio Mixer handles its complete request lifecycle", () => {
 				JSON.stringify({
 					action: "prepare",
 					source: "waybar:pulseaudio",
+					sequence: 1,
 				}),
 			]) === "preparing",
 			"prepare request failed",
 		);
 		assert(
 			request(handle, [
-				JSON.stringify({ action: "release", source: "waybar:pulseaudio" }),
+				JSON.stringify({
+					action: "release",
+					source: "waybar:pulseaudio",
+					sequence: 2,
+				}),
 			]) === "released",
 			"release request failed",
 		);
@@ -316,6 +321,48 @@ test("Audio Mixer prepares its backend without presenting the view", () => {
 	assert(
 		events.join(",") === "active:true,init,active:false",
 		"release repeated completed preparation cleanup",
+	);
+	controller.teardown();
+});
+
+test("Audio Mixer activation consumes preparation without requiring release", () => {
+	const events: string[] = [];
+	let applySnapshot = (_snapshot: ReturnType<typeof emptySnapshot>) => {};
+	const backend: AudioBackend = {
+		init: () => events.push("init"),
+		setActive: (active) => events.push(`active:${active}`),
+		refresh: () => events.push("refresh"),
+		stop: () => events.push("stop"),
+		setVolume() {},
+		toggleMute() {},
+		setDefault() {},
+	};
+	const view = {
+		create() {},
+		show() {},
+		hide() {},
+		setSnapshot() {},
+		setTab() {},
+		dispose() {},
+	} as unknown as AudioMixerView;
+	const controller = new AudioMixerController({
+		createBackend: (nextSnapshot) => {
+			applySnapshot = nextSnapshot;
+			return backend;
+		},
+		createView: () => view,
+		signalWaybar: () => {},
+	});
+
+	controller.init();
+	controller.prepare("waybar:pulseaudio", 10);
+	controller.show();
+	controller.prepare("waybar:pulseaudio", 11);
+	applySnapshot(emptySnapshot("", "ready"));
+	controller.hide();
+	assert(
+		events.join(",") === "active:true,init,active:true,active:false",
+		"activation left stale preparation work active after hide",
 	);
 	controller.teardown();
 });

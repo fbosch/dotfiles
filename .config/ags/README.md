@@ -65,7 +65,7 @@ cd ~/.config/ags && bun run start
 Regenerate AGS typings after AGS updates:
 
 ```bash
-ags types
+bun run types
 ```
 
 Use component-specific request formats from the component source or agent docs. The request handler expects a component name followed by that component's payload.
