@@ -43,7 +43,7 @@ pane_gaps = false
 hide_tab_bar_when_single_tab = true
 agent_panel_sort = "priority"
 
-show_agent_labels_on_pane_borders = false
+show_agent_labels_on_pane_borders = true
 [ui.sidebar.agents.rows_by_agent]
 opencode = [
   ["state_icon", "workspace", "tab"],
