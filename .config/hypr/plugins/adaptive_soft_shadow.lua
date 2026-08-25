@@ -1,4 +1,8 @@
-local plugin_path = "/run/current-system/sw/lib/libadaptive-soft-shadow.so"
+local plugin_path = os.getenv("HYPR_ADAPTIVE_SOFT_SHADOW_PLUGIN")
+
+if not plugin_path then
+	return
+end
 
 local function is_loaded()
 	for _, plugin in ipairs(hl.get_loaded_plugins()) do
