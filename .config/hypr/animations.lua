@@ -30,7 +30,7 @@ if focus_animation.ready then
 	hl.animation({
 		leaf = "windowsFocus",
 		enabled = true,
-		speed = 2.5,
+		speed = 3,
 		bezier = "windowFocus",
 		style = "popin 99.77%",
 	})
