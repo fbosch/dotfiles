@@ -1,0 +1,61 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Automated dependency updates for JavaScript workspaces and GitHub Actions",
+  "extends": [
+    "config:recommended"
+  ],
+  "enabledManagers": [
+    "bun",
+    "npm",
+    "github-actions"
+  ],
+  "timezone": "Europe/Copenhagen",
+  "schedule": [
+    "before 3am on the first day of the month"
+  ],
+  "automerge": false,
+  "platformAutomerge": false,
+  "rebaseWhen": "behind-base-branch",
+  "prConcurrentLimit": 5,
+  "prHourlyLimit": 2,
+  "osvVulnerabilityAlerts": true,
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+  "packageRules": [
+    {
+      "description": "Npm updates must pass a 24-hour release-age policy before a PR is created",
+      "matchDatasources": [
+        "npm"
+      ],
+      "minimumReleaseAge": "1 day",
+      "internalChecksFilter": "strict"
+    },
+    {
+      "description": "OpenCode currently has overlapping Bun and pnpm lockfile ownership",
+      "matchFileNames": [
+        ".config/opencode/**"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Keep package-manager toolchain versions aligned manually",
+      "matchPackageNames": [
+        "bun",
+        "pnpm"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Major version updates require explicit review",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "addLabels": [
+        "major-update",
+        "needs-review"
+      ]
+    }
+  ]
+}
