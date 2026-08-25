@@ -55,6 +55,14 @@ If you are validating unknown input or parsing collection-heavy data, load `refe
 - NEVER use `.otherwise(...)` on a closed union just to silence missing cases; use `.exhaustive()` and handle the real missing branch.
 - NEVER put `P._` before specific cases; it makes the rest of the match unreachable and hides ordering mistakes.
 - NEVER reach for `P.when(...)` if a literal, object, tuple, `P.union(...)`, or built-in matcher already expresses the condition; structural patterns narrow better and keep the decision table readable.
+- For several top-level alternatives with one handler, prefer `.with(patternA, patternB, handler)`; do not wrap them in `P.union(...)`. Use `P.union(...)` when alternatives must form one nested, composable, or reusable pattern. The final `.with(...)` argument is the handler:
+
+  ```ts
+  match(value)
+    .with('a', 'b', () => 'group-one')
+    .with('c', 'd', () => 'group-two')
+    .otherwise(() => 'unsupported');
+  ```
 - NEVER dump large business logic blocks into handlers; the match should read like a decision table, not hide work in branch-local imperative code.
 - NEVER use `.run()` unless you intentionally accept runtime failure instead of compile-time exhaustiveness.
 - NEVER introduce `ts-pattern` where a plain lookup table or a single guard clause is clearer; extra abstraction hurts more than it helps in simple flows.
