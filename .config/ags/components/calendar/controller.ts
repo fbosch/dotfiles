@@ -1,6 +1,7 @@
 import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { createPreparationIntentClaims } from "@/services/preparation-intent";
 import {
 	createCalendarBackend,
 	type CalendarBackend,
@@ -18,6 +19,7 @@ import {
 	type CalendarBackendSnapshot,
 	type CalendarModel,
 } from "./model";
+import type { CalendarPreparationSource } from "./request";
 
 interface CalendarControllerDependencies {
 	createBackend?(options: CalendarBackendOptions): CalendarBackend;
@@ -33,6 +35,8 @@ export class CalendarController {
 	readonly #view: CalendarView;
 	readonly #model = initialCalendarModel();
 	readonly #signalWaybar: () => void;
+	readonly #preparationClaims =
+		createPreparationIntentClaims<CalendarPreparationSource>();
 	#initialized = false;
 	#shutdownConnected = false;
 	#visible = false;
@@ -63,8 +67,9 @@ export class CalendarController {
 		const createBackend = dependencies.createBackend ?? createCalendarBackend;
 		this.#backend = createBackend({
 			readRange: () => getCalendarGridRange(this.#model.visibleMonth),
-			isVisible: () => this.#visible,
+			isActive: () => this.#visible || this.#preparationClaims.hasClaims(),
 			applySnapshot: (snapshot) => this.#applySnapshot(snapshot),
+			onRefreshComplete: () => this.#finishPreparation(),
 		});
 	}
 
@@ -83,6 +88,7 @@ export class CalendarController {
 	}
 
 	show(): void {
+		this.#preparationClaims.clear();
 		this.#cancelHiddenTeardown();
 		this.#view.show();
 		this.#visible = true;
@@ -94,10 +100,31 @@ export class CalendarController {
 		}
 	}
 
+	prepare(source: CalendarPreparationSource, sequence?: number): void {
+		if (this.#preparationClaims.claim(source, sequence) === false) return;
+		if (this.#visible) {
+			this.#preparationClaims.clear();
+			return;
+		}
+		this.#cancelHiddenTeardown();
+		this.#backend.refresh();
+	}
+
+	release(source: CalendarPreparationSource, sequence?: number): void {
+		if (
+			this.#preparationClaims.release(source, sequence) === false ||
+			this.#visible
+		)
+			return;
+		this.#backend.stop();
+		this.#scheduleHiddenTeardown();
+	}
+
 	hide(): void {
 		if (!this.#view.isCreated) return;
 		this.#view.hide();
 		this.#visible = false;
+		if (this.#preparationClaims.hasClaims()) return;
 		this.#backend.stop();
 		this.#scheduleHiddenTeardown();
 	}
@@ -151,6 +178,7 @@ export class CalendarController {
 		this.#initialized = false;
 		this.#cancelHiddenTeardown();
 		this.#visible = false;
+		this.#preparationClaims.clear();
 		this.#backend.cooldown();
 		this.#view.dispose();
 	}
@@ -192,6 +220,12 @@ export class CalendarController {
 		this.#model.status = snapshot.status;
 		this.#model.message = snapshot.message;
 		this.#view.render(this.#model);
+	}
+
+	#finishPreparation(): void {
+		if (this.#visible || this.#preparationClaims.clear() === false) return;
+		this.#backend.stop();
+		this.#scheduleHiddenTeardown();
 	}
 
 	#refreshOrRender(): void {

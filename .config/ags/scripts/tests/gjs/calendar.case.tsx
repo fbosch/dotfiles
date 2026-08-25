@@ -76,6 +76,27 @@ test("Calendar Widget handles its complete request lifecycle", () => {
 			"calendar started visible",
 		);
 		assert(
+			request(handle, [
+				JSON.stringify({
+					action: "prepare",
+					source: "waybar:clock",
+					sequence: 1,
+				}),
+			]) === "preparing",
+			"prepare request failed",
+		);
+		assert(
+			request(handle, [
+				JSON.stringify({
+					action: "release",
+					source: "waybar:clock",
+					sequence: 2,
+				}),
+			]) === "released",
+			"release request failed",
+		);
+		refreshes = 0;
+		assert(
 			request(handle, [JSON.stringify({ action: "show" })]) === "shown",
 			"show request failed",
 		);
@@ -134,4 +155,106 @@ test("Calendar Widget view creates, renders, updates, and disposes", () => {
 	view.hide();
 	view.dispose();
 	assert(view.isCreated === false, "calendar view was not disposed");
+});
+
+test("Calendar Widget prepares its current grid without presenting the view", () => {
+	let backendOptions: CalendarBackendOptions | null = null;
+	let refreshes = 0;
+	let stops = 0;
+	let shows = 0;
+	const backend: CalendarBackend = {
+		init() {},
+		refresh() {
+			refreshes += 1;
+			return false;
+		},
+		stop() {
+			stops += 1;
+		},
+		cooldown() {},
+	};
+	const controller = new CalendarController({
+		createBackend: (options) => {
+			backendOptions = options;
+			return backend;
+		},
+		createView: () =>
+			({
+				get isCreated() {
+					return false;
+				},
+				show() {
+					shows += 1;
+				},
+				hide() {},
+				dispose() {},
+				render() {},
+				updateSelection() {},
+			}) as unknown as CalendarView,
+		signalWaybar() {},
+	});
+
+	controller.init();
+	controller.prepare("waybar:clock");
+	controller.prepare("waybar:clock");
+	assert(shows === 0, "preparation presented the calendar");
+	assert(refreshes === 1, "preparation did not refresh exactly once");
+	assert(
+		backendOptions?.isActive() === true,
+		"backend was not active during preparation",
+	);
+	backendOptions?.onRefreshComplete();
+	assert(stops === 1, "completed preparation did not stop calendar watches");
+	assert(
+		backendOptions?.isActive() === false,
+		"backend remained active after preparation completed",
+	);
+	controller.release("waybar:clock");
+	assert(stops === 1, "release repeated completed preparation cleanup");
+	controller.teardown();
+});
+
+test("Calendar Widget activation consumes preparation without requiring release", () => {
+	let backendOptions: CalendarBackendOptions | null = null;
+	let refreshes = 0;
+	let stops = 0;
+	const backend: CalendarBackend = {
+		init() {},
+		refresh() {
+			refreshes += 1;
+			return false;
+		},
+		stop() {
+			stops += 1;
+		},
+		cooldown() {},
+	};
+	const controller = new CalendarController({
+		createBackend: (options) => {
+			backendOptions = options;
+			return backend;
+		},
+		createView: () =>
+			({
+				get isCreated() {
+					return true;
+				},
+				show() {},
+				hide() {},
+				dispose() {},
+				render() {},
+				updateSelection() {},
+			}) as unknown as CalendarView,
+		signalWaybar() {},
+	});
+
+	controller.init();
+	controller.prepare("waybar:clock", 10);
+	controller.show();
+	controller.prepare("waybar:clock", 11);
+	backendOptions?.onRefreshComplete();
+	controller.hide();
+	assert(refreshes === 2, "visible preparation repeated the calendar refresh");
+	assert(stops === 1, "activation left stale EDS watches active after hide");
+	controller.teardown();
 });

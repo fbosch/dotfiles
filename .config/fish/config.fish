@@ -179,7 +179,7 @@ if test $OS_TYPE = Linux
     # Exclude SSH sessions (SSH_TTY or SSH_CONNECTION will be set)
     if test -z "$SSH_TTY" -a -z "$SSH_CONNECTION" -a -z "$DISPLAY" -a -z "$WAYLAND_DISPLAY"
         set -l tty_device (tty 2>/dev/null)
-        if test -n "$tty_device" -a (string match -q "/dev/tty*" "$tty_device")
+        if test -n "$tty_device"; and string match -q "/dev/tty*" "$tty_device"
             set -gx STARSHIP_CONFIG "$HOME/.config/starship-tty.toml"
         else
             set -gx STARSHIP_CONFIG "$HOME/.config/starship.toml"

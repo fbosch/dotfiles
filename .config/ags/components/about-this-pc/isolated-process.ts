@@ -2,10 +2,8 @@ import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import type { IsolatedUtilityProcess } from "./isolated-component";
-import {
-	aboutThisPCIsolatedExecutable,
-	aboutThisPCIsolatedInstance,
-} from "./isolated-contract";
+import { requireRuntimeArtifactPath } from "@/services/runtime-artifacts";
+import { aboutThisPCIsolatedInstance } from "./isolated-contract";
 
 Gio._promisify(Gio.Subprocess.prototype, "wait_async", "wait_finish");
 Gio._promisify(Gio.Subprocess.prototype, "wait_check_async", "wait_check_finish");
@@ -95,7 +93,6 @@ async function waitUntilReady(
 
 export function launchIsolatedAboutThisPC(): IsolatedUtilityProcess {
 	const home = GLib.get_home_dir();
-	const runtimeDirectory = GLib.get_user_runtime_dir();
 	const parentPid = Gio.Credentials.new().get_unix_pid();
 	const instanceName = `${aboutThisPCIsolatedInstance}-${GLib.uuid_string_random()}`;
 	const launcher = new Gio.SubprocessLauncher({ flags: Gio.SubprocessFlags.NONE });
@@ -103,7 +100,7 @@ export function launchIsolatedAboutThisPC(): IsolatedUtilityProcess {
 	const process = launcher.spawnv([
 			`${home}/.config/ags/scripts/run-isolated-utility.sh`,
 			parentPid.toString(),
-			`${runtimeDirectory}/${aboutThisPCIsolatedExecutable}`,
+			requireRuntimeArtifactPath("aboutThisPCExecutable"),
 			`${home}/.config/ags/config-about-this-pc.tsx`,
 		]);
 	let completed = false;

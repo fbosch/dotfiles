@@ -65,10 +65,16 @@ for _ = 1, 100 do
   socket.sleep(0.01)
 end
 
+local delivered = 0
 for index = 1, 32 do
-  assert(client:send("workspacev2>>fixture-" .. tostring(index) .. "\n"))
+  local sent_bytes = client:send("workspacev2>>fixture-" .. tostring(index) .. "\n")
+  if not sent_bytes then
+    break
+  end
+  delivered = delivered + 1
   socket.sleep(0.01)
 end
+assert(delivered > 0, "event client closed before accepting an event")
 local handle = assert(io.open(sent, "w"))
 handle:write("sent\n")
 handle:close()
@@ -189,12 +195,10 @@ reader_failed="$test_dir/reader-failed"
 tab=$'\t'
 (
   for _ in {1..600}; do
-    if [[ -r "$capture_dir/.pending_event" ]]; then
-      if pending="$(<"$capture_dir/.pending_event")" 2>/dev/null; then
-        if [[ ! "$pending" =~ ^[0-9]+_(activewindow|workspace|windowupdate|windowtitle|windowsettle)${tab}workspacev2\>\>fixture-[0-9]+$ ]]; then
-          : > "$reader_failed"
-          exit 1
-        fi
+    if pending="$(cat "$capture_dir/.pending_event" 2>/dev/null)"; then
+      if [[ ! "$pending" =~ ^[0-9]+_(activewindow|workspace|windowupdate|windowtitle|windowsettle)${tab}workspacev2\>\>fixture-[0-9]+$ ]]; then
+        : > "$reader_failed"
+        exit 1
       fi
     fi
     sleep 0.01
@@ -256,8 +260,7 @@ kill -TERM -- "-$unrelated_pid" >/dev/null 2>&1 || true
 wait "$unrelated_pid" || true
 (
   for _ in {1..300}; do
-    if [[ -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" ]]; then
-      owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
+    if owner_line="$(cat "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" 2>/dev/null)"; then
       owner_pid="${owner_line%%$'\t'*}"
       owner_token="${owner_line#*$'\t'}"
       if [[ "$owner_pid" =~ ^[0-9]+$ && "$owner_pid" != "$stale_pid" && "$owner_token" != stale-token ]]; then
@@ -305,6 +308,7 @@ test "$owner_token" = live-token
 
 stop_daemon
 test -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
+kill -0 "$live_worker_pid"
 owner_line="$(<"$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner")"
 owner_pid="${owner_line%%$'\t'*}"
 owner_token="${owner_line#*$'\t'}"

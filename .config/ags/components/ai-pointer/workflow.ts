@@ -1,48 +1,27 @@
 import GLib from "gi://GLib?version=2.0";
 import { createActor, type ActorRefFrom } from "xstate";
-import { evaluateHyprland } from "@/services/hyprland-ipc";
 import { perf } from "@/services/performance-monitor";
-import {
-	type AccessibilityLookupMode,
-	clickFallbackForPoint,
-	programsForSelection,
-	resolveAccessibleSelection,
-} from "./accessibility";
+import type { AccessibilityLookupMode } from "./accessibility";
 import type { AccessibilityResolution } from "./accessibility/policy";
-import { captureRegion, deleteCapture, prepareCaptureDirectory, type Capture } from "./capture";
-import { requestAnswer } from "./answer-client";
-import { getAiPointerApplication } from "./host-runtime";
-import type { AiPointerControllerOptions } from "./controller-options";
+import type { Capture } from "./capture";
 import { emptySelectionContext, formatDesktopPointerRequest, type SelectionContext } from "./context";
-import { querySelectionContext } from "./context-query";
-import { querySessionLocked, SessionLockMonitor } from "./lock-monitor";
+import { SessionLockMonitor } from "./lock-monitor";
 import { aiPointerMachine } from "./machine";
+import type { AiPointerNativeAdapter, AiPointerWorkflowView } from "./native-adapter";
 import { AiPointerOperationRegistry, type AiPointerOperation } from "./operation-registry";
-import { AiPointerView, type CaptureDimensions } from "./ai-pointer-view";
-import { recognizeCapture } from "./ocr";
+import type { CaptureDimensions } from "./ai-pointer-view";
 import { aiPointerPerformanceMetrics } from "./performance-metrics";
-import { readPointerPosition } from "./pointer-query";
-import { beginPreflightSelection, preflightAiPointer, runSelectionPreflight } from "./preflight";
+import { beginPreflightSelection, runSelectionPreflight } from "./preflight";
 import type { PointerPosition, SelectionGeometry } from "./selection";
 import { appendStrokePoint, createPointerStroke, type PointerStroke, selectionFromStroke } from "./stroke";
 
-export class AiPointerController {
-	readonly #view: AiPointerView;
-	readonly #captureRegion: NonNullable<AiPointerControllerOptions["capture"]>;
-	readonly #prepareDirectory: NonNullable<AiPointerControllerOptions["prepareDirectory"]>;
-	readonly #readPointer: NonNullable<AiPointerControllerOptions["readPointer"]>;
-	readonly #recognizeOcr: NonNullable<AiPointerControllerOptions["recognizeOcr"]>;
-	readonly #resolveContext: NonNullable<AiPointerControllerOptions["resolveContext"]>;
-	readonly #requestAnswer: NonNullable<AiPointerControllerOptions["requestAnswer"]>;
-	readonly #preflight: NonNullable<AiPointerControllerOptions["preflight"]>;
+export class AiPointerWorkflow {
+	readonly #adapter: AiPointerNativeAdapter;
+	readonly #view: AiPointerWorkflowView;
 	readonly #lockMonitor: SessionLockMonitor;
-	readonly #resolveClickGeometry: NonNullable<AiPointerControllerOptions["resolveClickGeometry"]>;
-	readonly #resolveAccessibility: NonNullable<AiPointerControllerOptions["resolveAccessibility"]>;
-	readonly #resolvePrograms: NonNullable<AiPointerControllerOptions["resolvePrograms"]>;
-	readonly #setCursorOutline: NonNullable<AiPointerControllerOptions["setCursorOutline"]>;
 	#actor: ActorRefFrom<typeof aiPointerMachine> | null = null;
 	#subscription: { unsubscribe(): void } | null = null;
-	#shutdownSignalId = 0;
+	#disconnectShutdown: (() => void) | null = null;
 	#preflightPromise: ReturnType<typeof runSelectionPreflight> | null = null;
 	#ocrStartId = 0;
 	#answer = "";
@@ -56,40 +35,35 @@ export class AiPointerController {
 	#pendingFinishId = 0;
 	#stroke: PointerStroke | null = null;
 	#failureMessage = "";
-	#finishing = false;
-	#preparingShown = false;
+	#preparingGeometry: SelectionGeometry | null = null;
 	#runId = 0;
 	#workflowMark: ReturnType<typeof perf.start> | null = null;
 	#cursorOutlineState: boolean | null = null;
 
-	constructor(options: AiPointerControllerOptions = {}) {
-		this.#view = options.view ?? new AiPointerView();
-		this.#captureRegion = options.capture ?? captureRegion;
-		this.#prepareDirectory = options.prepareDirectory ?? prepareCaptureDirectory;
-		this.#resolveAccessibility = options.resolveAccessibility ?? resolveAccessibleSelection;
-		this.#resolveContext = options.resolveContext ?? querySelectionContext;
-		const queryLocked = options.queryLocked ?? querySessionLocked;
-		this.#requestAnswer = options.requestAnswer ?? requestAnswer;
-		this.#preflight = options.preflight ?? preflightAiPointer;
-		this.#lockMonitor = new SessionLockMonitor(queryLocked, () => this.cancel());
-		this.#resolveClickGeometry = options.resolveClickGeometry ?? clickFallbackForPoint;
-		this.#resolvePrograms = options.resolvePrograms ?? programsForSelection;
-		this.#recognizeOcr = options.recognizeOcr ?? recognizeCapture;
-		this.#setCursorOutline = options.setCursorOutline ?? ((enabled) => {
-			evaluateHyprland(`hl.plugin.cursor_outline.${enabled ? "on" : "off"}()`, {
-				component: "ai-pointer",
-				metric: "cursorOutline",
-			});
-		});
-		this.#readPointer = options.readPointer ?? readPointerPosition;
+	constructor(adapter: AiPointerNativeAdapter) {
+		this.#adapter = adapter;
+		this.#view = adapter.view;
+		this.#lockMonitor = new SessionLockMonitor(
+			adapter.desktop.queryLocked,
+			() => this.cancel(),
+		);
 	}
-
-	get selectionContext(): SelectionContext | null { return this.#selectionContext; }
 
 	init(): void {
 		if (!this.#actor) {
 			this.#actor = createActor(aiPointerMachine);
 			this.#subscription = this.#actor.subscribe((snapshot) => {
+				if (snapshot.matches("preparing")) {
+					if (!this.#preparingGeometry) return;
+					try {
+						this.#view.showPreparing(this.#preparingGeometry);
+					} catch {
+						this.#finishWorkflow(false, "preparing-failed");
+						this.#failureMessage = "The question field could not be prepared.";
+						this.#actor?.send({ type: "FAIL" });
+					}
+					return;
+				}
 				if (snapshot.matches("composition") && this.#capture && this.#selectionContext) {
 					if (this.#lockMonitor.blocksWorkflow) {
 						this.cancel();
@@ -108,7 +82,7 @@ export class AiPointerController {
 					if (!dimensions) {
 						this.#finishWorkflow(false, "prompt-failed");
 						this.#failureMessage = "The question field could not be presented.";
-						deleteCapture(this.#capture.path);
+						this.#releaseCapture(this.#capture.path);
 						this.#capture = null;
 						this.#actor?.send({ type: "FAIL" });
 						return;
@@ -136,11 +110,10 @@ export class AiPointerController {
 					this.#view.hide();
 			});
 			this.#actor.start();
-			this.#directory = this.#prepareDirectory();
+			this.#directory = this.#adapter.desktop.prepareCaptureDirectory();
 			this.#setCursorOutlineState(false, true);
 		}
-		if (this.#shutdownSignalId === 0)
-			this.#shutdownSignalId = getAiPointerApplication().connect("shutdown", () => this.teardown(true));
+		this.#disconnectShutdown ??= this.#adapter.host.connectShutdown(() => this.teardown(true));
 	}
 
 	start(startPosition: PointerPosition): boolean {
@@ -151,7 +124,7 @@ export class AiPointerController {
 			onSubmit: (question) => this.#submit(question),
 		});
 
-		const directory = this.#directory ?? this.#prepareDirectory();
+		const directory = this.#directory ?? this.#adapter.desktop.prepareCaptureDirectory();
 		if (!directory) {
 			this.#failureMessage = "Private runtime storage is unavailable.";
 			this.#actor?.send({ type: "START" });
@@ -162,8 +135,7 @@ export class AiPointerController {
 		this.#stroke = createPointerStroke(startPosition);
 		this.#selectionContext = null;
 		this.#answer = "";
-		this.#finishing = false;
-		this.#preparingShown = false;
+		this.#preparingGeometry = null;
 		++this.#runId;
 		if (this.#pendingFinishId !== 0) GLib.source_remove(this.#pendingFinishId);
 		this.#pendingFinishId = 0;
@@ -197,7 +169,7 @@ export class AiPointerController {
 	}
 
 	finish(endPosition: PointerPosition): boolean {
-		if (this.#actor?.getSnapshot().matches("selecting") && this.#finishing === false) {
+		if (this.#actor?.getSnapshot().matches("selecting")) {
 			this.#captureAt(endPosition);
 			return true;
 		}
@@ -216,7 +188,7 @@ export class AiPointerController {
 	#startPreflight(runId: number): void {
 		const operation = this.#operations.start("preflight");
 		const promise = runSelectionPreflight(
-			this.#preflight,
+			this.#adapter.assistant.preflight,
 			operation.cancellable,
 			operation.observeProcess,
 		);
@@ -240,7 +212,7 @@ export class AiPointerController {
 		const completedStroke = this.#stroke;
 		const strokeGeometry = selectionFromStroke(completedStroke);
 		const mode: AccessibilityLookupMode = strokeGeometry ? "stroke" : "click";
-		const geometry = strokeGeometry ?? this.#resolveClickGeometry(endPosition);
+		const geometry = strokeGeometry ?? this.#adapter.selection.resolveClickGeometry(endPosition);
 		if (!geometry) {
 			this.#view.endStroke();
 			this.#failureMessage = "The clicked monitor could not be resolved.";
@@ -248,12 +220,13 @@ export class AiPointerController {
 			return;
 		}
 		const runId = this.#runId;
-		this.#finishing = true;
 		this.#workflowMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.workflowCompletion)
 			: null;
 		this.#view.endStroke();
-		this.#showPreparing(endPosition);
+		this.#preparingGeometry = geometry;
+		this.#actor?.send({ type: "FINISH" });
+		if (this.#actor?.getSnapshot().matches("preparing") === false) return;
 		this.#captureGeometry(directory, geometry, completedStroke, runId, mode);
 	}
 
@@ -283,12 +256,16 @@ export class AiPointerController {
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.accessibilityLookup)
 			: null;
 		try {
-			resolution = await this.#resolveAccessibility(
+			const onDebugState = (state: Parameters<AiPointerWorkflowView["setAccessibilityDebugState"]>[0]) => {
+				if (runId !== this.#runId || cancellable.is_cancelled()) return;
+				this.#view.setAccessibilityDebugState(state);
+			};
+			resolution = await this.#adapter.selection.resolveAccessibility(
 				strokeGeometry,
 				stroke,
 				cancellable,
 				observeProcess,
-				this.#view.setAccessibilityDebugState?.bind(this.#view),
+				onDebugState,
 				mode,
 			);
 			accessibilityMark?.end(
@@ -303,7 +280,7 @@ export class AiPointerController {
 
 		const captureGeometry = resolution?.geometry ?? strokeGeometry;
 		try {
-			this.#selectionContext = this.#resolveContext(captureGeometry);
+			this.#selectionContext = this.#adapter.selection.resolveContext(captureGeometry);
 		} catch {
 			this.#selectionContext = emptySelectionContext(captureGeometry);
 		}
@@ -311,7 +288,7 @@ export class AiPointerController {
 			this.cancel();
 			return;
 		}
-		this.#resolvePrograms(captureGeometry);
+		this.#adapter.selection.resolvePrograms(captureGeometry);
 		const overlayMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.overlayTeardown)
 			: null;
@@ -324,18 +301,17 @@ export class AiPointerController {
 		}
 		if (runId !== this.#runId || cancellable.is_cancelled()) return;
 		if (overlayHidden === false) {
-			this.#finishing = false;
 			this.#finishWorkflow(false, "overlay-failed");
 			this.#failureMessage = "The drawing overlay could not be removed safely.";
 			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
-		let result: Awaited<ReturnType<typeof captureRegion>>;
+		let result: Awaited<ReturnType<AiPointerNativeAdapter["capture"]["create"]>>;
 		const captureMark = perf.isEnabled()
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.capture)
 			: null;
 		try {
-			result = await this.#captureRegion(
+			result = await this.#adapter.capture.create(
 				directory,
 				captureGeometry,
 				cancellable,
@@ -352,32 +328,29 @@ export class AiPointerController {
 			captureMark?.end(false, "failed");
 			if (runId !== this.#runId) return;
 			this.#finishWorkflow(false, "capture-failed");
-			this.#finishing = false;
 			this.#failureMessage = "The selected region could not be captured.";
 			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
 
 		if (runId !== this.#runId) {
-			if (result.kind === "captured") deleteCapture(result.capture.path);
+			if (result.kind === "captured") this.#releaseCapture(result.capture.path);
 			return;
 		}
 		this.#pendingCapturePath = null;
 		if (cancellable.is_cancelled() || result.kind === "cancelled") {
 			this.#finishWorkflow(false, "cancelled");
-			this.#finishing = false;
 			this.#actor?.send({ type: "CANCEL" });
 			return;
 		}
 		if (result.kind === "failed") {
 			this.#finishWorkflow(false, "capture-failed");
-			this.#finishing = false;
 			this.#failureMessage = result.message;
 			this.#actor?.send({ type: "FAIL" });
 			return;
 		}
 		this.#capture = result.capture;
-		this.#finishing = false;
+		this.#preparingGeometry = null;
 		this.#actor?.send({ type: "CAPTURED" });
 	}
 
@@ -394,11 +367,10 @@ export class AiPointerController {
 		this.#selectionContext = null;
 		this.#answer = "";
 		this.#answerTruncated = false;
-		this.#finishing = false;
-		this.#preparingShown = false;
+		this.#preparingGeometry = null;
 		this.#view.endStroke();
 		this.#clearPendingFinish();
-		if (this.#capture) deleteCapture(this.#capture.path);
+		if (this.#capture) this.#releaseCapture(this.#capture.path);
 		this.#capture = null;
 		this.#actor?.send({ type: "CANCEL" });
 	}
@@ -407,17 +379,15 @@ export class AiPointerController {
 		const pendingCapturePath = this.#pendingCapturePath;
 		this.cancel();
 		if (force) this.#operations.settleForShutdown();
-		if (force && pendingCapturePath) deleteCapture(pendingCapturePath);
+		if (force && pendingCapturePath) this.#releaseCapture(pendingCapturePath);
 		this.#setCursorOutlineState(false, true);
 		this.#subscription?.unsubscribe();
 		this.#subscription = null;
 		this.#actor?.stop();
 		this.#actor = null;
 		this.#view.dispose();
-		if (this.#shutdownSignalId !== 0) {
-			getAiPointerApplication().disconnect(this.#shutdownSignalId);
-			this.#shutdownSignalId = 0;
-		}
+		this.#disconnectShutdown?.();
+		this.#disconnectShutdown = null;
 	}
 
 	#clearPendingFinish(): void {
@@ -449,7 +419,7 @@ export class AiPointerController {
 			if (runId !== this.#runId || cancellable.is_cancelled())
 				return { kind: "cancelled" } as const;
 			if (readiness.kind === "failed") return readiness;
-			return await this.#requestAnswer(
+			return await this.#adapter.assistant.requestAnswer(
 				{
 					requestId: `ai-pointer-${runId}`,
 					prompt: formatDesktopPointerRequest(prompt, context),
@@ -469,7 +439,7 @@ export class AiPointerController {
 			);
 		})().then((result) => {
 			if (runId !== this.#runId || cancellable.is_cancelled()) return;
-			deleteCapture(capture.path);
+			this.#releaseCapture(capture.path);
 			if (this.#capture?.path === capture.path) this.#capture = null;
 			if (this.#lockMonitor.blocksWorkflow) {
 				this.cancel();
@@ -489,7 +459,7 @@ export class AiPointerController {
 			this.#actor?.send({ type: "FAIL" });
 		}).catch(() => {
 			if (runId !== this.#runId || cancellable.is_cancelled()) return;
-			deleteCapture(capture.path);
+			this.#releaseCapture(capture.path);
 			if (this.#capture?.path === capture.path) this.#capture = null;
 			this.#failureMessage = "The answer helper did not complete.";
 			this.#actor?.send({ type: "FAIL" });
@@ -515,7 +485,7 @@ export class AiPointerController {
 			? perf.start("ai-pointer", aiPointerPerformanceMetrics.ocrCompletion)
 			: null;
 		const workflowMark = this.#workflowMark;
-		void this.#recognizeOcr(
+		void this.#adapter.assistant.recognizeOcr(
 			{ path: capture.path, ...dimensions },
 			cancellable,
 			operation.observeProcess,
@@ -556,32 +526,30 @@ export class AiPointerController {
 		this.#workflowMark = null;
 	}
 
+	#releaseCapture(path: string): void {
+		try {
+			this.#adapter.capture.remove(path);
+		} catch {
+			// Capture cleanup is best effort and must not block workflow settlement.
+		}
+	}
+
 	#setCursorOutlineState(enabled: boolean, force = false): void {
 		if (force === false && this.#cursorOutlineState === enabled) return;
 		try {
-			this.#cursorOutlineState = this.#setCursorOutline(enabled) === false ? null : enabled;
+			this.#cursorOutlineState = this.#adapter.desktop.setCursorOutline(enabled) === false ? null : enabled;
 		} catch { // Cursor decoration is advisory and must not interrupt capture.
 			this.#cursorOutlineState = null;
 		}
 	}
 
 	#sampleStroke(): void {
-		if (this.#finishing) return;
 		const snapshot = this.#actor?.getSnapshot();
 		if (snapshot?.matches("selecting") !== true) return;
-		const point = this.#readPointer();
+		const point = this.#adapter.desktop.readPointer();
 		if (!point || !this.#stroke) return;
 		this.#stroke = appendStrokePoint(this.#stroke, point);
 		this.#view.updateStroke(this.#stroke);
 	}
 
-	#showPreparing(endPosition: PointerPosition): void {
-		if (this.#preparingShown) return;
-		const stroke = this.#stroke;
-		if (!stroke) return;
-		const geometry = selectionFromStroke(stroke) ?? this.#resolveClickGeometry(endPosition);
-		if (!geometry) return;
-		this.#view.showPreparing?.(geometry);
-		this.#preparingShown = true;
-	}
 }

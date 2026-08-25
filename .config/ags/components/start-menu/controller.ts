@@ -5,6 +5,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import { createActor, type ActorRefFrom } from "xstate";
 import { getFallbackLetter } from "@/services/app-icons";
 import { perf } from "@/services/performance-monitor";
+import { createPreparationIntentClaims } from "@/services/preparation-intent";
 import {
 	getProfileState,
 	subscribeProfileState,
@@ -22,12 +23,9 @@ import {
 	getRecentDocuments,
 	openRecentDocument,
 } from "@/services/recent-documents";
-import {
-	clearUtilityPreparationIntent,
-	openUtility,
-	prepareUtility,
-	releaseUtilityPreparation,
-} from "@/services/utility-manager";
+import { aboutThisPCLifecycle } from "@/components/about-this-pc/lifecycle";
+import type { AboutThisPCPreparationSource } from "@/components/about-this-pc/isolated-component";
+import { openUtility, prepareUtility } from "@/services/utility-manager";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,
@@ -36,6 +34,8 @@ import {
 } from "./menu-commands";
 import { startMenuMachine } from "./machine";
 import type { RecentItemsMenuModel } from "./recent-items-menu";
+import type { MenuIntentSource } from "./menu-model";
+import type { StartMenuPreparationSource } from "./request";
 import { StartMenuView } from "./start-menu-view";
 import { UpdatesCache } from "./updates-cache";
 import type { UpdatesSnapshot } from "./updates-policy";
@@ -43,6 +43,10 @@ import type { UpdatesSnapshot } from "./updates-policy";
 type StartMenuActor = ActorRefFrom<typeof startMenuMachine>;
 
 const emptyUpdates: UpdatesSnapshot = { flake: null, flatpak: null };
+const aboutThisPCPreparationSources = {
+	pointer: "start-menu:pointer",
+	focus: "start-menu:focus",
+} satisfies Record<MenuIntentSource, AboutThisPCPreparationSource>;
 
 export class StartMenuController {
 	#actor: StartMenuActor | null = null;
@@ -52,6 +56,11 @@ export class StartMenuController {
 	#stopRecentFocusHistory: (() => void) | null = null;
 	#profileState: ProfileState | null = getProfileState();
 	#updates: UpdatesSnapshot = emptyUpdates;
+	#preparedRecentItems: RecentItemsMenuModel | null = null;
+	#recentItemsPreparationClaims =
+		createPreparationIntentClaims<MenuIntentSource>();
+	#preparationClaims =
+		createPreparationIntentClaims<StartMenuPreparationSource>();
 	#cache = new UpdatesCache();
 	#commands = createMenuCommands();
 	#view = new StartMenuView({
@@ -59,13 +68,18 @@ export class StartMenuController {
 			profileState: this.#profileState,
 			updates: this.#updates,
 		}),
-		getRecentItems: () => this.#recentItemsModel(),
+		getRecentItems: () => this.#consumeRecentItemsModel(),
 		onMenuAction: (itemId) => this.#executeMenuAction(itemId),
-		onMenuIntentStart: (itemId) => {
-			if (itemId === "about-this-pc") prepareUtility(itemId);
+		onMenuIntentStart: (itemId, source) => {
+			if (itemId === "about-this-pc")
+				aboutThisPCLifecycle.intentStart(aboutThisPCPreparationSources[source]);
+			if (itemId === "force-quit") prepareUtility("force-quit");
+			if (itemId === "recent-items") this.#prepareRecentItems(source);
 		},
-		onMenuIntentEnd: (itemId) => {
-			if (itemId === "about-this-pc") releaseUtilityPreparation(itemId);
+		onMenuIntentEnd: (itemId, source) => {
+			if (itemId === "about-this-pc")
+				aboutThisPCLifecycle.intentEnd(aboutThisPCPreparationSources[source]);
+			if (itemId === "recent-items") this.#releaseRecentItems(source);
 		},
 		onProfileSelect: (selection) => this.#selectProfile(selection),
 		onHide: () => this.hide(),
@@ -118,7 +132,9 @@ export class StartMenuController {
 	}
 
 	teardown(): void {
-		clearUtilityPreparationIntent("about-this-pc");
+		aboutThisPCLifecycle.intentClear();
+		this.#clearPreparedRecentItems();
+		this.#preparationClaims.clear();
 		this.#unsubscribeProfile?.();
 		this.#unsubscribeProfile = null;
 		this.#cache.dispose();
@@ -136,13 +152,12 @@ export class StartMenuController {
 	}
 
 	show(): void {
+		this.#preparationClaims.clear();
 		const mark = perf.start("start-menu", "showMenu");
 		let ok = true;
 		let error: string | undefined;
 		try {
-			const updatesChanged = this.#refreshCacheData(false);
-			if (this.#view.isCreated === false) this.#view.create();
-			else if (updatesChanged) this.#view.updateUpdates(this.#updates);
+			this.#prepareView();
 			this.#view.show();
 			this.#showWaybar();
 			this.actor.send({ type: "SHOW" });
@@ -155,8 +170,22 @@ export class StartMenuController {
 		}
 	}
 
+	prepare(source: StartMenuPreparationSource, sequence: number): void {
+		if (this.#preparationClaims.claim(source, sequence) === false) return;
+		try {
+			if (this.isVisible() === false) this.#prepareView();
+		} finally {
+			this.#preparationClaims.clear();
+		}
+	}
+
+	release(source: StartMenuPreparationSource, sequence: number): void {
+		this.#preparationClaims.release(source, sequence);
+	}
+
 	hide(): void {
-		clearUtilityPreparationIntent("about-this-pc");
+		aboutThisPCLifecycle.intentClear();
+		this.#clearPreparedRecentItems();
 		this.#actor?.send({ type: "HIDE" });
 		this.#view.hide();
 	}
@@ -205,6 +234,28 @@ export class StartMenuController {
 		};
 	}
 
+	#prepareRecentItems(source: MenuIntentSource): void {
+		if (this.#recentItemsAreVisible()) return;
+		if (this.#recentItemsPreparationClaims.claim(source) === false) return;
+		this.#preparedRecentItems = this.#recentItemsModel();
+	}
+
+	#releaseRecentItems(source: MenuIntentSource): void {
+		if (this.#recentItemsPreparationClaims.release(source) === false) return;
+		this.#preparedRecentItems = null;
+	}
+
+	#consumeRecentItemsModel(): RecentItemsMenuModel {
+		const prepared = this.#preparedRecentItems;
+		this.#clearPreparedRecentItems();
+		return prepared ?? this.#recentItemsModel();
+	}
+
+	#clearPreparedRecentItems(): void {
+		this.#recentItemsPreparationClaims.clear();
+		this.#preparedRecentItems = null;
+	}
+
 	#executeMenuAction(itemId: string): void {
 		dispatchStartMenuAction(itemId, {
 			commands: this.#commands,
@@ -227,6 +278,15 @@ export class StartMenuController {
 		if (changed && updateVisibleMenu && this.#view.isCreated)
 			this.#view.updateUpdates(updates);
 		return changed;
+	}
+
+	#prepareView(): void {
+		const updatesChanged = this.#refreshCacheData(false);
+		if (this.#view.isCreated === false) {
+			this.#view.create();
+			return;
+		}
+		if (updatesChanged) this.#view.updateUpdates(this.#updates);
 	}
 
 	#startProfileSubscription(): void {

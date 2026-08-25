@@ -45,6 +45,8 @@
   "custom/startbutton": {
     "format": "",
     "on-click": "ags request -i ags-bundled start-menu '{\"action\":\"toggle\"}'",
+    "on-hover": "ags request -i ags-bundled start-menu '{\"action\":\"prepare\",\"source\":\"waybar:startbutton\",\"sequence\":{sequence}}'",
+    "on-hover-lost": "ags request -i ags-bundled start-menu '{\"action\":\"release\",\"source\":\"waybar:startbutton\",\"sequence\":{sequence}}'",
     "tooltip": false
   },
 
@@ -101,6 +103,8 @@
       "default": ["",  "", "", "", "", ""]
     },
     "on-click": "ags request -i ags-bundled audio-mixer-widget '{\"action\":\"toggle\"}'",
+    "on-hover": "ags request -i ags-bundled audio-mixer-widget '{\"action\":\"prepare\",\"source\":\"waybar:pulseaudio\",\"sequence\":{sequence}}'",
+    "on-hover-lost": "ags request -i ags-bundled audio-mixer-widget '{\"action\":\"release\",\"source\":\"waybar:pulseaudio\",\"sequence\":{sequence}}'",
     "on-click-middle": "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle",
     "tooltip": true
   },
@@ -189,6 +193,8 @@
     "align": 1,
     "justify": "right",
     "on-click": "ags request -i ags-bundled calendar-widget '{\"action\":\"toggle\"}'",
+    "on-hover": "ags request -i ags-bundled calendar-widget '{\"action\":\"prepare\",\"source\":\"waybar:clock\",\"sequence\":{sequence}}'",
+    "on-hover-lost": "ags request -i ags-bundled calendar-widget '{\"action\":\"release\",\"source\":\"waybar:clock\",\"sequence\":{sequence}}'",
     "tooltip": false
   },
 

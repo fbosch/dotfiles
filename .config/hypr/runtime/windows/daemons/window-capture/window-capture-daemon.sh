@@ -25,11 +25,14 @@ child_pid=""
 stop_worker_group() {
   [[ -r "$worker_owner_file" ]] || return 0
 
-  local worker_pid
-  local owner_line
+  local worker_pid owner_line stat remainder fields
   owner_line="$(<"$worker_owner_file")"
   worker_pid="${owner_line%%$'\t'*}"
-  [[ "$worker_pid" =~ ^[0-9]+$ ]] || return 0
+  [[ "$worker_pid" =~ ^[0-9]+$ && "$child_pid" =~ ^[0-9]+$ && -r "/proc/$worker_pid/stat" ]] || return 0
+  stat="$(<"/proc/$worker_pid/stat")"
+  remainder="${stat##*) }"
+  read -r -a fields <<< "$remainder"
+  [[ "${fields[1]:-}" == "$child_pid" ]] || return 0
   kill -CONT -- "-$worker_pid" >/dev/null 2>&1 || true
   kill -TERM -- "-$worker_pid" >/dev/null 2>&1 || true
 }
@@ -50,9 +53,10 @@ cleanup_stopped_worker_lock() {
 cleanup() {
   if [[ -n "$child_pid" ]]; then
     kill -CONT "$child_pid" >/dev/null 2>&1 || true
+    # Preserve the parent relationship until worker ownership has been verified.
+    stop_worker_group
     kill -TERM "$child_pid" >/dev/null 2>&1 || true
     pkill -TERM -P "$child_pid" >/dev/null 2>&1 || true
-    stop_worker_group
     wait "$child_pid" >/dev/null 2>&1 || true
     cleanup_stopped_worker_lock
   fi

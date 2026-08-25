@@ -40,6 +40,33 @@ test("Start Menu handles its complete request lifecycle", () => {
 			"menu started visible",
 		);
 		assert(
+			request(handleRequest, [
+				JSON.stringify({
+					action: "prepare",
+					source: "waybar:startbutton",
+					sequence: 1,
+				}),
+			]) === "prepared",
+			"prepare request failed",
+		);
+		const preparedWindow = app.get_window("start-menu");
+		assert(Boolean(preparedWindow), "prepare did not create the menu view");
+		assert(
+			preparedWindow?.get_visible() === false,
+			"prepare mapped the menu window",
+		);
+		assert(controller.isVisible() === false, "prepare showed the menu");
+		assert(
+			request(handleRequest, [
+				JSON.stringify({
+					action: "release",
+					source: "waybar:startbutton",
+					sequence: 2,
+				}),
+			]) === "released",
+			"release request failed",
+		);
+		assert(
 			request(handleRequest, [JSON.stringify({ action: "show" })]) === "shown",
 			"show request failed",
 		);
@@ -109,8 +136,9 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 			],
 		}),
 		onMenuAction: (id) => calls.push(`menu:${id}`),
-		onMenuIntentStart: (id) => calls.push(`intent-start:${id}`),
-		onMenuIntentEnd: (id) => calls.push(`intent-end:${id}`),
+		onMenuIntentStart: (id, source) =>
+			calls.push(`intent-start:${id}:${source}`),
+		onMenuIntentEnd: (id, source) => calls.push(`intent-end:${id}:${source}`),
 		onProfileSelect: (selection) => calls.push(`profile:${selection}`),
 		onHide: () => calls.push("hide"),
 		onRecentOpenRequest: () => calls.push("recent-open-request"),
@@ -127,35 +155,49 @@ test("Start Menu view renders profile, updates, and recent items", () => {
 	view.create();
 	assert(view.isCreated, "view was not created");
 	const startMenu = app.get_window("start-menu");
-	const aboutButton = startMenu
-		? collectButtons(startMenu).find((button) => hasLabel(button, "About This PC"))
-		: null;
-	assert(Boolean(aboutButton), "About This PC button was not rendered");
-	const controllers = aboutButton?.observe_controllers();
-	let motionController: Gtk.EventControllerMotion | null = null;
-	let focusController: Gtk.EventControllerFocus | null = null;
-	for (let index = 0; index < (controllers?.get_n_items() ?? 0); index++) {
-		const controller = controllers?.get_item(index);
-		if (controller instanceof Gtk.EventControllerMotion)
-			motionController = controller;
-		if (controller instanceof Gtk.EventControllerFocus) focusController = controller;
-	}
-	assert(Boolean(motionController), "About This PC has no hover controller");
-	assert(Boolean(focusController), "About This PC has no focus controller");
 	const intentStart = calls.length;
-	motionController?.emit("enter", 0, 0);
-	focusController?.emit("enter");
-	motionController?.emit("leave");
-	focusController?.emit("leave");
+	for (const label of ["About This PC", "Recent Items", "Force Quit"]) {
+		const button = startMenu
+			? collectButtons(startMenu).find((candidate) => hasLabel(candidate, label))
+			: null;
+		assert(Boolean(button), `${label} button was not rendered`);
+		const controllers = button?.observe_controllers();
+		const motionControllers: Gtk.EventControllerMotion[] = [];
+		let focusController: Gtk.EventControllerFocus | null = null;
+		for (let index = 0; index < (controllers?.get_n_items() ?? 0); index++) {
+			const controller = controllers?.get_item(index);
+			if (controller instanceof Gtk.EventControllerMotion)
+				motionControllers.push(controller);
+			if (controller instanceof Gtk.EventControllerFocus)
+				focusController = controller;
+		}
+		assert(motionControllers.length > 0, `${label} has no hover controller`);
+		assert(Boolean(focusController), `${label} has no focus controller`);
+		for (const controller of motionControllers) controller.emit("enter", 0, 0);
+		focusController?.emit("enter");
+		for (const controller of motionControllers) controller.emit("leave");
+		focusController?.emit("leave");
+	}
+	const intentCalls = calls
+		.slice(intentStart)
+		.filter((call) => call.startsWith("intent-"));
 	assert(
-		JSON.stringify(calls.slice(intentStart)) ===
+		JSON.stringify(intentCalls) ===
 			JSON.stringify([
-				"intent-start:about-this-pc",
-				"intent-start:about-this-pc",
-				"intent-end:about-this-pc",
-				"intent-end:about-this-pc",
+				"intent-start:about-this-pc:pointer",
+				"intent-start:about-this-pc:focus",
+				"intent-end:about-this-pc:pointer",
+				"intent-end:about-this-pc:focus",
+				"intent-start:recent-items:pointer",
+				"intent-start:recent-items:focus",
+				"intent-end:recent-items:pointer",
+				"intent-end:recent-items:focus",
+				"intent-start:force-quit:pointer",
+				"intent-start:force-quit:focus",
+				"intent-end:force-quit:pointer",
+				"intent-end:force-quit:focus",
 			]),
-		"About This PC hover and focus intent was imbalanced",
+		"menu item hover and focus intent was imbalanced",
 	);
 	view.updateProfile(profileState);
 	view.updateUpdates({ flake: null, flatpak: null });

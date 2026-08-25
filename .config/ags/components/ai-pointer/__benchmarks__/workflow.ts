@@ -2,9 +2,9 @@ import app from "ags/gtk4/app";
 import "../install-host-runtime";
 import GLib from "gi://GLib?version=2.0";
 import type { AccessibilityLookupMode } from "../accessibility";
-import { AiPointerController } from "../controller";
 import { emptySelectionContext } from "../context";
-import type { AiPointerView } from "../ai-pointer-view";
+import type { AiPointerNativeAdapter, AiPointerWorkflowView } from "../native-adapter";
+import { AiPointerWorkflow } from "../workflow";
 import { assertInertBenchmarkDependencies } from "./safety";
 import { benchmarkEnvironmentInteger, benchmarkStatistics } from "./stats";
 
@@ -16,8 +16,8 @@ const samples = benchmarkEnvironmentInteger(
 	200,
 );
 const batchSize = benchmarkEnvironmentInteger(
-	"AI_POINTER_CONTROLLER_BATCH",
-	GLib.getenv("AI_POINTER_CONTROLLER_BATCH"),
+	"AI_POINTER_WORKFLOW_BATCH",
+	GLib.getenv("AI_POINTER_WORKFLOW_BATCH"),
 	10,
 	1,
 	1_000,
@@ -29,12 +29,12 @@ app.register(null);
 
 const rssBeforeKb = readRssKb();
 const metrics: Record<string, unknown> = {};
-metrics["controller-init-teardown"] = await measure(async () => {
+metrics["workflow-init-teardown"] = await measure(async () => {
 	createScenario("click").dispose();
 });
 for (const mode of ["click", "stroke"] as const) {
 	const scenario = createScenario(mode);
-	metrics[`${mode === "stroke" ? "drag" : mode}-controller-interaction`] = await measure(
+	metrics[`${mode === "stroke" ? "drag" : mode}-workflow-interaction`] = await measure(
 		scenario.run,
 	);
 	scenario.dispose();
@@ -42,7 +42,7 @@ for (const mode of ["click", "stroke"] as const) {
 const rssAfterKb = readRssKb();
 
 console.log(JSON.stringify({
-	benchmark: "ai-pointer-controller",
+	benchmark: "ai-pointer-workflow",
 	batchSize,
 	processRssAcrossRunKb: {
 		after: rssAfterKb,
@@ -75,7 +75,7 @@ function createScenario(mode: AccessibilityLookupMode): {
 	run(): Promise<void>;
 } {
 	let completed: (() => void) | null = null;
-	const view = {
+	const view: AiPointerWorkflowView = {
 		create() {},
 		beginStroke() {
 			return true;
@@ -85,9 +85,14 @@ function createScenario(mode: AccessibilityLookupMode): {
 		finishStroke() {
 			return Promise.resolve(true);
 		},
+		setAccessibilityDebugState() {},
+		showPreparing() {},
 		showPrompt() {
 			throw new Error("Benchmark capture must remain inert");
 		},
+		showRequesting() {},
+		showPartialAnswer() {},
+		showAnswer() {},
 		setOcrState() {},
 		clearOcr() {},
 		showError(message: string) {
@@ -95,48 +100,64 @@ function createScenario(mode: AccessibilityLookupMode): {
 		},
 		hide() {},
 		dispose() {},
-	} as unknown as AiPointerView;
-	const dependencies = {
+	};
+	const adapter: AiPointerNativeAdapter = {
 		view,
-		prepareDirectory: () => "/run/user/benchmark/ai-pointer",
-		preflight: async () => ({ kind: "ready" } as const),
-		readPointer: () => null,
-		resolveAccessibility: async (
-			_geometry,
-			_stroke,
-			_cancellable,
-			_onProcess,
-			_onDiagnostics,
-			lookupMode,
-		) => {
-			if (lookupMode !== mode) throw new Error(`Expected ${mode} lookup`);
-			return mode === "click"
-				? null
-				: {
-					geometry: dragTarget,
-					metadata: { confidence: 1, role: "push button" },
-				};
+		host: {
+			connectShutdown: () => () => {},
 		},
-		resolveContext: (geometry) => emptySelectionContext(geometry),
-		resolvePrograms: () => [],
-		recognizeOcr: async () => ({ kind: "no-text" }),
-		capture: async () => {
-			completed?.();
-			return { kind: "cancelled" } as const;
+		desktop: {
+			prepareCaptureDirectory: () => "/run/user/benchmark/ai-pointer",
+			queryLocked: () => false,
+			readPointer: () => null,
+			setCursorOutline: () => true,
+		},
+		selection: {
+			resolveAccessibility: async (
+				_geometry,
+				_stroke,
+				_cancellable,
+				_onProcess,
+				_onDiagnostics,
+				lookupMode,
+			) => {
+				if (lookupMode !== mode) throw new Error(`Expected ${mode} lookup`);
+				return mode === "click"
+					? null
+					: {
+						geometry: dragTarget,
+						metadata: { confidence: 1, role: "push button" },
+					};
+			},
+			resolveClickGeometry: () => clickFallback,
+			resolveContext: (geometry) => emptySelectionContext(geometry),
+			resolvePrograms: () => [],
+		},
+		capture: {
+			create: async () => {
+				completed?.();
+				return { kind: "cancelled" } as const;
+			},
+			remove() {},
+		},
+		assistant: {
+			preflight: async () => ({ kind: "ready" } as const),
+			recognizeOcr: async () => ({ kind: "no-text" }),
+			requestAnswer: async () => ({ kind: "cancelled" }),
 		},
 	};
-	assertInertBenchmarkDependencies(dependencies);
-	const controller = new AiPointerController(dependencies);
-	controller.init();
+	assertInertBenchmarkDependencies(adapter);
+	const workflow = new AiPointerWorkflow(adapter);
+	workflow.init();
 	return {
-		dispose: () => controller.teardown(),
+		dispose: () => workflow.teardown(),
 		run: async () => {
 			const finished = new Promise<void>((resolve) => {
 				completed = resolve;
 			});
 			const start = { x: 500, y: 400 };
 			const end = mode === "click" ? start : { x: 540, y: 430 };
-			if (controller.start(start) === false || controller.finish(end) === false)
+			if (workflow.start(start) === false || workflow.finish(end) === false)
 				throw new Error("Benchmark lifecycle did not start");
 			await finished;
 			await settleMainLoop();

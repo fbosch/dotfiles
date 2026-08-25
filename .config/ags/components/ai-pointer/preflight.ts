@@ -4,8 +4,10 @@ import { preflightAnswer, type AnswerPreflightResult } from "./answer-client";
 import type { AiPointerView } from "./ai-pointer-view";
 import type { PointerStroke } from "./stroke";
 
+type SelectionView = Pick<AiPointerView, "beginStroke" | "endStroke">;
+
 export function beginPreflightSelection(
-	view: AiPointerView,
+	view: SelectionView,
 	stroke: PointerStroke,
 	onFrame: () => void,
 ): boolean {

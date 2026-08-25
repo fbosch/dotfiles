@@ -43,12 +43,14 @@ let
     ".config/ags/components/**/__benchmarks__/*.sh"
     ".config/hypr/runtime/**/*.sh"
     ".config/hypr/legacy/scripts/*.sh"
+    ".config/herdr/plugins/neovim-sessions/**/*.sh"
     ".config/vicinae/extensions/*.sh"
   ];
 in
 
 {
   packages = with pkgs; [
+    act
     projectBun
     coreutils
     fish
@@ -157,6 +159,11 @@ in
         exit 1
       fi
       fish -n "''${test_files[@]}"
+      fish_output="$(env -u SSH_TTY -u SSH_CONNECTION -u DISPLAY -u WAYLAND_DISPLAY fish -c 'source .config/fish/config.fish' 2>&1)"
+      if [[ -n "$fish_output" ]]; then
+        printf '%s\n' "$fish_output" >&2
+        exit 1
+      fi
     '';
 
     "test:git-pull-system-repos".exec = ''
@@ -247,6 +254,13 @@ in
       done
     '';
 
+    "test:herdr-neovim-sessions".exec = "bash .config/herdr/plugins/neovim-sessions/tests/restore.sh";
+
+    "test:nvim-opencode-session-restore".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/opencode-session-restore.sock" \
+        -l .config/nvim/tests/opencode_session_restore.lua
+    '';
+
     "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
 
     "test:lua".exec = ''
@@ -275,7 +289,9 @@ in
         "test:fish"
         "test:git-pull-system-repos"
         "test:fish-starship-cache"
+        "test:herdr-neovim-sessions"
         "test:lua-quality"
+        "test:nvim-opencode-session-restore"
         "test:vicinae"
         "test:runtime-shell"
         "test:lua"

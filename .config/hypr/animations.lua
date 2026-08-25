@@ -1,6 +1,7 @@
 -- Animations ported from animations.conf.
 
 local M = {}
+local focus_animation = require("plugins.focus_animation")
 
 hl.config({
 	animations = {
@@ -9,6 +10,8 @@ hl.config({
 })
 
 hl.curve("window", { type = "spring", mass = 1, stiffness = 302, dampening = 34.8 })
+-- Ease-out sine reaches zero velocity at the endpoint, avoiding a final pixel snap.
+hl.curve("windowFocus", { type = "bezier", points = { { 0.39, 0.575 }, { 0.565, 1 } } })
 hl.curve("windowQuick", { type = "spring", mass = 1, stiffness = 3780, dampening = 123 })
 hl.curve("windowInstant", { type = "spring", mass = 1, stiffness = 14745, dampening = 242.9 })
 
@@ -22,6 +25,16 @@ hl.animation({ leaf = "global", enabled = true, speed = 10, spring = "window" })
 hl.animation({ leaf = "border", enabled = true, speed = 1.75, spring = "windowQuick" })
 hl.animation({ leaf = "windows", enabled = true, speed = 4.79, spring = "window" })
 M.restore_windows_move()
+
+if focus_animation.ready then
+	hl.animation({
+		leaf = "windowsFocus",
+		enabled = true,
+		speed = 2.5,
+		bezier = "windowFocus",
+		style = "popin 99.77%",
+	})
+end
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 0.8, spring = "windowInstant", style = "popin 94%" })
 hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, spring = "windowQuick" })
@@ -31,9 +44,27 @@ hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 2, spring = "windowQ
 hl.animation({ leaf = "workspaces", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefade 10%" })
 hl.animation({ leaf = "workspacesIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefade 10%" })
 hl.animation({ leaf = "workspacesOut", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefade 10%" })
-hl.animation({ leaf = "specialWorkspace", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefadevert 10%" })
-hl.animation({ leaf = "specialWorkspaceIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefadevert 10%" })
-hl.animation({ leaf = "specialWorkspaceOut", enabled = true, speed = 1.5, spring = "windowQuick", style = "slidefadevert 10%" })
+hl.animation({
+	leaf = "specialWorkspace",
+	enabled = true,
+	speed = 1.5,
+	spring = "windowQuick",
+	style = "slidefadevert 10%",
+})
+hl.animation({
+	leaf = "specialWorkspaceIn",
+	enabled = true,
+	speed = 1.5,
+	spring = "windowQuick",
+	style = "slidefadevert 10%",
+})
+hl.animation({
+	leaf = "specialWorkspaceOut",
+	enabled = true,
+	speed = 1.5,
+	spring = "windowQuick",
+	style = "slidefadevert 10%",
+})
 hl.animation({ leaf = "zoomFactor", enabled = true, speed = 7, spring = "window" })
 hl.animation({ leaf = "fadeLayersIn", enabled = true, speed = 1.79, spring = "windowQuick" })
 hl.animation({ leaf = "fadeLayersOut", enabled = true, speed = 1.39, spring = "windowQuick" })

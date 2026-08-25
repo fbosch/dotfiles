@@ -1,10 +1,10 @@
 import { isMatching, match } from "ts-pattern";
 import { parseComponentRequest } from "@/services/request";
 import { perf } from "@/services/performance-monitor";
-import type { AiPointerController } from "./controller";
 import { aiPointerRequestPattern, type AiPointerRequest } from "./request";
+import type { AiPointerWorkflow } from "./workflow";
 
-export function createRequestHandler(controller: AiPointerController) {
+export function createRequestHandler(workflow: AiPointerWorkflow) {
 	return (argv: string[], respond: (response: string) => void): void => {
 		const data = parseComponentRequest<{ action?: string }>(
 			"ai-pointer",
@@ -23,13 +23,13 @@ export function createRequestHandler(controller: AiPointerController) {
 				.returnType<string>()
 				.with({ action: "start" }, ({ x, y }) => {
 					perf.refresh();
-					return controller.start({ x, y }) ? "selecting" : "busy";
+					return workflow.start({ x, y }) ? "selecting" : "busy";
 				})
 				.with({ action: "finish" }, ({ x, y }) =>
-					controller.finish({ x, y }) ? "capturing" : "idle",
+					workflow.finish({ x, y }) ? "capturing" : "idle",
 				)
 				.with({ action: "cancel" }, () => {
-					controller.cancel();
+					workflow.cancel();
 					return "cancelled";
 				})
 				.exhaustive(),

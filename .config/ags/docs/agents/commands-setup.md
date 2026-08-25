@@ -21,33 +21,32 @@ ags msg ags-bundled '{"window":"window-switcher","action":"next"}'
 
 ## TypeScript type definitions
 
-Type definitions for GObject Introspection libraries are auto-generated in `.config/ags/@girs/` (git-ignored).
+Type definitions for GObject Introspection libraries are auto-generated in `.config/ags/@girs/` (git-ignored). `bun install` generates them only when the core typings are missing.
 
-Generate types (run after installing AGS or updating GTK libraries):
+Regenerate explicitly after updating AGS or system GTK libraries:
 
 ```bash
 cd ~/.config/ags
-ags types
+bun run types
 ```
 
 Regenerate when:
 
-- Fresh system setup
 - After updating AGS or system GTK libraries
 - TypeScript shows "Cannot find module" errors for GI imports
 
 ## AI Pointer benchmarks
 
 ```bash
-pnpm benchmark:ai-pointer
+bun run benchmark:ai-pointer
 ```
 
-This command measures pure click and drag policy throughput, controller initialization and teardown, and inert click and drag interactions. It injects capture, accessibility, OCR, program, click-geometry, pointer, storage, and view dependencies, so it does not invoke `grim`, inspect AT-SPI, read Hyprland state, create captures, or emit selected content. RSS output is process-wide and includes runtime and JIT retention; it is not an allocation or leak measurement. Adjust bounded sample sizes with `AI_POINTER_BENCH_SAMPLES`, `AI_POINTER_POLICY_BATCH`, and `AI_POINTER_CONTROLLER_BATCH`.
+This command measures pure click and drag policy throughput, workflow initialization and teardown, and inert click and drag interactions. It injects capture, accessibility, OCR, program, click-geometry, pointer, storage, and view dependencies, so it does not invoke `grim`, inspect AT-SPI, read Hyprland state, create captures, or emit selected content. RSS output is process-wide and includes runtime and JIT retention; it is not an allocation or leak measurement. Adjust bounded sample sizes with `AI_POINTER_BENCH_SAMPLES`, `AI_POINTER_POLICY_BATCH`, and `AI_POINTER_WORKFLOW_BATCH`.
 
 For live stage timings against the deployed bundle:
 
 ```bash
-pnpm benchmark:ai-pointer:live
+bun run benchmark:ai-pointer:live
 ```
 
 1. Complete the requested mix of accessible and fallback clicks and drags.

@@ -23,15 +23,19 @@ Lazy utility components (in `components/`):
 Services (in `services/`):
 
 - `services/app-icons.ts` - Application identity and icon resolution
+- `services/component-host.ts` - Native AGS startup and component initialization adapter
+- `services/component-host-router.ts` - Pure bundled request routing policy
 - `services/hyprland-ipc.ts` - Hyprland socket discovery and request helpers
 - `services/recent-applications.ts` - Session-scoped focus history
 - `services/recent-documents.ts` - XBEL-backed recent document history
 - `services/performance-monitor.ts` - Shared performance instrumentation
+- `services/utility-registry.ts` - Lazy utility loading and lifecycle state
 
 Entry points:
 
 - `config-bundled.tsx` - Main bundled configuration
-- `services/utility-manager.ts` - Lazy utility loader and request router
+- `services/component-host.ts` - Bundled AGS process adapter
+- `services/utility-manager.ts` - Bundled utility registry adapter
 - `start-daemons.sh` - Boot script to start AGS in bundled mode
 
 Bundled mode details:
@@ -48,13 +52,38 @@ Bundled mode details:
   `globalThis` references.
 - Each component window has its own namespace and applies CSS through AGS APIs.
 
+Bundled request path:
+
+```text
+ags request
+  -> component-host.ts           native app.start() adapter
+  -> component-host-router.ts    normalization and routing policy
+       -> eager component handler
+       -> utility-manager.ts
+            -> utility-registry.ts  lazy loading and lifecycle
+```
+
+`component-host-router.ts` accepts the live eager-handler map and utility
+adapter functions as dependencies. It owns blank and `ping` readiness requests,
+direct `<target> <payload>` requests, `taskbar-visibility`, legacy
+`target:action` requests, routing precedence, and routing-level error responses.
+It does not load or initialize components. Delegated components and utilities
+retain ownership of their own errors.
+
+Taskbar visibility is deliberately synchronous: eager handlers must answer
+`is-visible` before returning. Unloaded utilities are skipped; loaded utilities
+are queried synchronously without triggering another load. Ordinary utility
+requests may answer after the router returns. Pure Bun tests call this same
+routing interface directly; native GJS tests stay focused on component and
+process integration.
+
 File structure:
 
 ```
 .config/ags/
 ├── components/                 # GTK surfaces and shared widgets
 │   └── start-menu/             # Start Menu vertical feature slice
-├── services/                   # Runtime state, integrations, and lazy loading
+├── services/                   # Host routing, runtime state, and integrations
 ├── config-bundled.tsx          # Main bundled entry point
 └── start-daemons.sh            # Boot script (runs config-bundled.tsx)
 ```

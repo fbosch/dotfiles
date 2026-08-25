@@ -55,5 +55,13 @@ function dispatch(
 			controller.refresh();
 			return "refreshed";
 		})
+		.with({ action: "prepare" }, ({ source, sequence }) => {
+			controller.prepare(source, sequence);
+			return "prepared";
+		})
+		.with({ action: "release" }, ({ source, sequence }) => {
+			controller.release(source, sequence);
+			return "released";
+		})
 		.exhaustive();
 }

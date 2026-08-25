@@ -24,13 +24,19 @@ run_neovim_session() {
 
 pending_neovim_session_for_pane() {
 	local pane_id="$1"
+	local cwd="$2"
 	local metadata_path
 
 	[[ -d "$nvim_session_metadata_dir" ]] || return 0
 	for metadata_path in "$nvim_session_metadata_dir"/*.json; do
 		[[ -e "$metadata_path" ]] || continue
-		if jq -er --arg pane_id "$pane_id" '
-			select(.herdr_managed == true and .restore_pending == true and .herdr_pane_id == $pane_id)
+		if jq -er --arg pane_id "$pane_id" --arg cwd "$cwd" '
+			select(
+				.herdr_managed == true
+				and .restore_pending == true
+				and .herdr_pane_id == $pane_id
+				and .cwd == $cwd
+			)
 			| .specifier
 			| select(type == "string" and test("^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$"))
 		' "$metadata_path"; then
@@ -141,55 +147,66 @@ workspace_label_from_restored_panes() {
 	[[ "$current_label" == "$label" ]] || "$herdr_bin" workspace rename "$workspace_id" "$label"
 }
 
-for _ in {1..20}; do
-	pending=0
+main() {
+	local pending workspace_list workspace_ids workspace_id panes pane_ids pane_id cwd nvim_session processes
+
+	for _ in {1..20}; do
+		pending=0
+		workspace_list="$("$herdr_bin" workspace list)"
+		workspace_ids="$(jq -ce '[.result.workspaces[]?.workspace_id | select(. != null and . != "")]' <<<"$workspace_list")"
+		while IFS= read -r workspace_id; do
+			panes="$("$herdr_bin" pane list --workspace "$workspace_id")"
+			pane_ids="$(jq -ce '[.result.panes[]? | select(.label == "nvim") | .pane_id]' <<<"$panes")"
+			while IFS= read -r pane_id; do
+				cwd="$(jq -er --arg pane_id "$pane_id" '
+					first(.result.panes[]? | select(.pane_id == $pane_id) | (.foreground_cwd // .cwd))
+				' <<<"$panes")"
+				nvim_session="$(jq -r --arg pane_id "$pane_id" '
+					first(.result.panes[]? | select(.pane_id == $pane_id) | .tokens.nvim_session) // empty
+				' <<<"$panes")"
+				if [[ ! "$nvim_session" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$ ]]; then
+					nvim_session="$(pending_neovim_session_for_pane "$pane_id" "$cwd")"
+				fi
+				if [[ ! "$nvim_session" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$ ]]; then
+					nvim_session="herdr-${pane_id/:/-}"
+				fi
+
+				processes=""
+				for _ in {1..20}; do
+					if processes="$("$herdr_bin" pane process-info --pane "$pane_id" 2>/dev/null)"; then
+						break
+					fi
+					sleep 0.1
+				done
+				if [[ -z "$processes" ]]; then
+					pending=1
+					continue
+				fi
+				if jq -e '.result.process_info.foreground_processes[]? | select(.name == "nvim")' >/dev/null <<<"$processes"; then
+					continue
+				fi
+
+				if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" or . == "bash" or . == "zsh" or . == "sh")' >/dev/null <<<"$processes"; then
+					report_neovim_session "$pane_id" "$nvim_session"
+					run_neovim_session "$pane_id" "$nvim_session"
+				fi
+				pending=1
+			done < <(jq -r '.[]' <<<"$pane_ids")
+		done < <(jq -r '.[]' <<<"$workspace_ids")
+		[[ "$pending" -eq 0 ]] && break
+		sleep 0.1
+	done
+
+	restore_missing_neovim_sessions
+
+	# Herdr labels a workspace from its first tab, which can be a different repo.
 	workspace_list="$("$herdr_bin" workspace list)"
 	workspace_ids="$(jq -ce '[.result.workspaces[]?.workspace_id | select(. != null and . != "")]' <<<"$workspace_list")"
 	while IFS= read -r workspace_id; do
-		panes="$("$herdr_bin" pane list --workspace "$workspace_id")"
-		pane_ids="$(jq -ce '[.result.panes[]? | select(.label == "nvim") | .pane_id]' <<<"$panes")"
-		while IFS= read -r pane_id; do
-			nvim_session="$(jq -r --arg pane_id "$pane_id" '
-				first(.result.panes[]? | select(.pane_id == $pane_id) | .tokens.nvim_session) // empty
-			' <<<"$panes")"
-			if [[ ! "$nvim_session" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$ ]]; then
-				nvim_session="$(pending_neovim_session_for_pane "$pane_id")"
-			fi
-			if [[ ! "$nvim_session" =~ ^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$ ]]; then
-				nvim_session="herdr-${pane_id/:/-}"
-			fi
-
-			processes=""
-			for _ in {1..20}; do
-				if processes="$("$herdr_bin" pane process-info --pane "$pane_id" 2>/dev/null)"; then
-					break
-				fi
-				sleep 0.1
-			done
-			if [[ -z "$processes" ]]; then
-				pending=1
-				continue
-			fi
-			if jq -e '.result.process_info.foreground_processes[]? | select(.name == "nvim")' >/dev/null <<<"$processes"; then
-				continue
-			fi
-
-			if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" or . == "bash" or . == "zsh" or . == "sh")' >/dev/null <<<"$processes"; then
-				report_neovim_session "$pane_id" "$nvim_session"
-				run_neovim_session "$pane_id" "$nvim_session"
-			fi
-			pending=1
-		done < <(jq -r '.[]' <<<"$pane_ids")
+		workspace_label_from_restored_panes "$workspace_id"
 	done < <(jq -r '.[]' <<<"$workspace_ids")
-	[[ "$pending" -eq 0 ]] && break
-	sleep 0.1
-done
+}
 
-restore_missing_neovim_sessions
-
-# Herdr labels a workspace from its first tab, which can be a different repo.
-workspace_list="$("$herdr_bin" workspace list)"
-workspace_ids="$(jq -ce '[.result.workspaces[]?.workspace_id | select(. != null and . != "")]' <<<"$workspace_list")"
-while IFS= read -r workspace_id; do
-	workspace_label_from_restored_panes "$workspace_id"
-done < <(jq -r '.[]' <<<"$workspace_ids")
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+	main "$@"
+fi

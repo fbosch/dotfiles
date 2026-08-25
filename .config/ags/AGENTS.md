@@ -12,10 +12,9 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 - Keep AI Pointer in `ags-bundled`, but import its generated runtime module only
   on the first request. Preserve startup capture cleanup, cursor-outline reset,
   and request arrival order while the module loads.
-- Prefetch isolated utilities through `services/utility-prefetch.ts`: treat
-  pointer hover and keyboard focus as overlapping intent, keep preparation
-  hidden, and release unused preparation when intent ends or the owning
-  surface hides.
+- Keep About This PC preparation in its feature-local lifecycle: treat pointer
+  hover and keyboard focus as overlapping intent, keep preparation hidden, and
+  release unused preparation when intent ends or the owning surface hides.
 - Keep growing features as vertical slices under `components/<feature>/`.
   Colocate feature-local state machines, controllers, child surfaces, policies,
   and tests; reserve `services/` for integrations shared across features.
@@ -37,18 +36,18 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 ## Commands
 
 - `ags types`
-- `pnpm test` - run pure AGS feature and service logic tests.
-- `pnpm test:coverage` - write Bun LCOV to `/tmp/ags-coverage` and print the
+- `bun run test` - run pure AGS feature and service logic tests.
+- `bun run test:coverage` - write Bun LCOV to `/tmp/ags-coverage` and print the
   temporary native GJS LCOV path.
-- `pnpm test:coverage:gjs` - run only native GJS integration coverage.
-- `pnpm test:coverage:istanbul` - convert LCOV to Istanbul JSON for Fallow.
-- `pnpm health:coverage` - report Fallow health with pure-logic coverage.
+- `bun run test:coverage:gjs` - run only native GJS integration coverage.
+- `bun run test:coverage:istanbul` - convert LCOV to Istanbul JSON for Fallow.
+- `bun run health:coverage` - report Fallow health with pure-logic coverage.
 - `bash scripts/benchmark/run-benchmarks.sh calendar-widget` - benchmark only the Calendar Widget slice.
 - `bash scripts/benchmark/run-benchmarks.sh window-switcher` - benchmark only the Window Switcher slice.
 - `bash scripts/benchmark/run-benchmarks.sh components` - benchmark bundled non-calendar component toggles.
 - `bash scripts/benchmark/run-benchmarks.sh memory` - run only the legacy bundled memory loop.
-- `pnpm benchmark:ai-pointer` - run privacy-safe AI Pointer policy and inert controller lifecycle benchmarks without capture, OCR, AT-SPI, or Hyprland access.
-- `pnpm benchmark:ai-pointer:live` - collect bounded timing-only live AI Pointer stages from explicit manual interactions.
+- `bun run benchmark:ai-pointer` - run privacy-safe AI Pointer policy and inert workflow lifecycle benchmarks without capture, OCR, AT-SPI, or Hyprland access.
+- `bun run benchmark:ai-pointer:live` - collect bounded timing-only live AI Pointer stages from explicit manual interactions.
 - `bash scripts/benchmark/run-benchmarks.sh all` - run the full benchmark suite.
 
 Benchmark target can also be set with `BENCH_TARGET`; positional target wins. Keep targeted runs focused when investigating one bundled component.

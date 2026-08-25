@@ -153,6 +153,9 @@
             "hyprprop": {
                "enabled": false
             },
+            "io.github.Faugus.faugus-launcher": {
+               "enabled": false
+            },
             "io.github.Foldex.AdwSteamGtk": {
                "enabled": false
             },

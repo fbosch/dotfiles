@@ -2,6 +2,12 @@
 set -euo pipefail
 
 coverage_dir="$(mktemp -d "${TMPDIR:-/tmp}/ags-gjs-coverage.XXXXXX")"
+source scripts/runtime-artifacts.sh
+if ! configure_runtime_artifacts source-host; then
+  printf '%s\n' "$RUNTIME_ARTIFACT_ERROR" >&2
+  exit 1
+fi
+trap cleanup_runtime_artifacts EXIT
 
 GJS_COVERAGE_PREFIXES=file \
 GJS_COVERAGE_OUTPUT="$coverage_dir" \
