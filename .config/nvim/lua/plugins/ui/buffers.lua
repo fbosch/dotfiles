@@ -136,6 +136,8 @@ require("config.pack.registry").register({
 			end
 		end
 
+		-- Barbar derives and caches devicon backgrounds during setup.
+		setup_barbar_highlights()
 		require("barbar").setup({
 			animation = false,
 			auto_hide = true,
@@ -177,7 +179,6 @@ require("config.pack.registry").register({
 				},
 			},
 		})
-		setup_barbar_highlights()
 
 		if vim.v.vim_did_enter == 0 then
 			return
