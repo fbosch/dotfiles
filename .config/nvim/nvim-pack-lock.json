@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "896e11c3df821655678630bae3073e145dff7681",
+      "rev": "c642d0743da5b830e22b3aefa2977c366604950e",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -86,7 +86,7 @@
       "src": "https://github.com/folke/lazydev.nvim.git"
     },
     "leap.nvim": {
-      "rev": "c1be35db274f5976cce683b93fcab99937420b63",
+      "rev": "5db34d1a302ef18bc819dc8a38011abe29dae229",
       "src": "https://codeberg.org/andyg/leap.nvim"
     },
     "live-command.nvim": {
@@ -236,7 +236,7 @@
       "src": "https://github.com/Wansmer/treesj.git"
     },
     "treewalker.nvim": {
-      "rev": "5ba91123699e8c43c1e7cf85c2313326a3a37f6f",
+      "rev": "c6c37b912e84d0522fa585ce83da93b0fd53563b",
       "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {
