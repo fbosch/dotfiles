@@ -557,6 +557,7 @@ end
 
 local event_handlers = {
 	startup = handle_startup,
+	monitorchange = handle_startup,
 	control = handle_control,
 	compositor = handle_compositor,
 	tick = handle_tick,
@@ -565,6 +566,7 @@ local event_handlers = {
 --- Feed one event through the placement reducer.
 --- input: { now, event, clients?, monitors?, bars?, active? }
 --- event: { type = "startup" }
+---      | { type = "monitorchange" }
 ---      | { type = "control", action, address?, direction? }
 ---      | { type = "compositor", name, address? }
 ---      | { type = "tick" }

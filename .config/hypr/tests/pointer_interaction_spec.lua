@@ -7,6 +7,7 @@ local pointer = require("lib.window.pointer")
 local function setup(opts)
 	opts = opts or {}
 	local calls = {}
+	local resize_target
 	local function record(value)
 		calls[#calls + 1] = value
 	end
@@ -38,7 +39,8 @@ local function setup(opts)
 			end,
 		},
 		picture_in_picture = {
-			start_resize = function(keep_aspect_ratio)
+			start_resize = function(target, keep_aspect_ratio)
+				resize_target = target
 				record("pip.start:" .. tostring(keep_aspect_ratio))
 				return opts.pip_resize == true
 			end,
@@ -47,6 +49,14 @@ local function setup(opts)
 			end,
 		},
 		custom_layout = custom_layout,
+		state = {
+			at_cursor = function()
+				return opts.cursor_target
+			end,
+			active = function()
+				return opts.active_target
+			end,
+		},
 		dispatch = function(value)
 			record("dispatch:" .. value)
 		end,
@@ -60,7 +70,9 @@ local function setup(opts)
 		},
 	})
 
-	return router, calls
+	return router, calls, function()
+		return resize_target
+	end
 end
 
 describe("pointer interaction router", function()
@@ -80,9 +92,17 @@ describe("pointer interaction router", function()
 	end)
 
 	it("routes resize to PiP before other owners", function()
-		local router, calls = setup({ pip_resize = true, custom_resize = true })
+		local cursor_target = { address = "0x1" }
+		local active_target = { address = "0x2" }
+		local router, calls, resized_target = setup({
+			pip_resize = true,
+			custom_resize = true,
+			cursor_target = cursor_target,
+			active_target = active_target,
+		})
 		local release = router.start_resize(false)
 		assert.same({ "pip.start:false" }, calls)
+		assert.equal(cursor_target, resized_target())
 
 		release()
 		assert.same({ "pip.start:false", "dispatch:resize", "pip.finish:false" }, calls)
@@ -121,9 +141,6 @@ describe("pointer interaction router", function()
 		assert.same({ "pip.start:true", "custom.aspect.start" }, calls)
 
 		release()
-		assert.same(
-			{ "pip.start:true", "custom.aspect.start", "dispatch:resize", "custom.aspect.reset" },
-			calls
-		)
+		assert.same({ "pip.start:true", "custom.aspect.start", "dispatch:resize", "custom.aspect.reset" }, calls)
 	end)
 end)

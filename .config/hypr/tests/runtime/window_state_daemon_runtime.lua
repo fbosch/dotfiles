@@ -414,7 +414,7 @@ local function fixture()
 			and generated_rule(nil, "^Picture-in-Picture$")
 			and generated_rule(nil, "^Picture-in-Picture$").tags[1] == "pip-top-left"
 			and generated_rule(nil, "^Picture-in-Picture$").match.workspace == nil
-			and rules:find('animation = "slide left"', 1, true)
+			and rules:find('animation = "slide top"', 1, true)
 	end, 3)
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")

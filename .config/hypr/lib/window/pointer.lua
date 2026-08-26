@@ -9,6 +9,7 @@ function M.new(opts)
 	local interaction = opts.interaction or require("lib.window.interaction")
 	local picture_in_picture = opts.picture_in_picture or require("actions.picture-in-picture")
 	local custom_layout = opts.custom_layout or require("lib.window.custom_layout")
+	local state = opts.state or require("lib.window.state")
 	local dispatch = opts.dispatch or hl.dispatch
 	local window = opts.window or hl.dsp.window
 
@@ -27,7 +28,8 @@ function M.new(opts)
 	end
 
 	function router.start_resize(keep_aspect_ratio)
-		if picture_in_picture.start_resize(keep_aspect_ratio) then
+		local target = state.at_cursor() or state.active()
+		if picture_in_picture.start_resize(target, keep_aspect_ratio) then
 			return function()
 				dispatch(window.resize())
 				picture_in_picture.finish_resize(keep_aspect_ratio)

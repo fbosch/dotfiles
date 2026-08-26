@@ -77,7 +77,13 @@ later tag transitions.
 
 State is per monitor by default. Set `per_monitor = false` for one
 monitor-local geometry rule that can restore on any monitor; use this for
-pinned cross-monitor windows such as Picture-in-Picture.
+pinned cross-monitor windows such as Picture-in-Picture. Add
+`restore_monitor = true` when that global rule must also reopen on the monitor
+captured with its latest geometry.
+
+Set `restore_size = false` when another owner persists size. Picture-in-Picture
+uses Hyprland's dynamic `persistent_size` rule so generated-rule reloads cannot
+reapply a stale size over an active manual resize.
 
 ## Generated Rule Contract
 

@@ -124,6 +124,7 @@ function M.snapshot(selectors, clients, monitors)
 					matcher = selector.matcher,
 					pattern = selector.pattern,
 					monitor = selector.per_monitor and monitor.name or "",
+					target_monitor = selector.restore_monitor and monitor.name or nil,
 					x = client.at[1] - monitor.x,
 					y = client.at[2] - monitor.y,
 					width = client.size[1],

@@ -18,6 +18,8 @@ local pip = require("lib.picture_in_picture")
 ---@field persist_tags? string[] Dynamic client tags to restore when present.
 ---@field persist_tag_animations? table<string, string> Entry animation for each persisted tag.
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
+---@field restore_monitor? boolean Restores the monitor captured by a global selector.
+---@field restore_size? boolean Emits a generated size rule; defaults to true.
 
 ---@return WindowStateSelector[]
 return {
@@ -45,6 +47,20 @@ return {
 	{ matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Codex$]=] },
+	{
+		matcher = "match:initial_title",
+		pattern = [=[^Picture-in-Picture$]=],
+		persist_tags = {
+			"pip-top-left",
+			"pip-top-right",
+			"pip-bottom-left",
+			"pip-bottom-right",
+		},
+		persist_tag_animations = pip.corner_tag_animations,
+		per_monitor = false,
+		restore_monitor = true,
+		restore_size = false,
+	},
 	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
 	{ matcher = "match:class", pattern = [=[^org\.gnome\.Calendar$]=] },
 }

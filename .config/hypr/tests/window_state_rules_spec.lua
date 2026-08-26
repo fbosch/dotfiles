@@ -214,6 +214,58 @@ describe("window-state rules", function()
 		assert_not_contains(content, "workspace =")
 	end)
 
+	it("restores the captured monitor for an opted-in global state", function()
+		options.cache = {
+			pip = {
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				monitor = "",
+				target_monitor = "HDMI-A-1",
+				x = 15,
+				y = 15,
+				width = 500,
+				height = 300,
+			},
+		}
+		options.selectors = {
+			{
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				per_monitor = false,
+				restore_monitor = true,
+				restore_size = false,
+			},
+		}
+		assert.is_true(rules.write_rules_file(options))
+
+		local rule = assert(generated_rule(options.rules_lua_file, nil))
+		assert.equal("HDMI-A-1", rule.target_monitor)
+		assert.equal("HDMI-A-1", rule.effects.monitor)
+		assert.is_nil(rule.effects.size)
+		assert.is_nil(rule.match.workspace)
+	end)
+
+	it("keeps PiP geometry and corner tags selected for global persistence", function()
+		local loaded = rules.load_selectors(config_dir .. "/rules/window-state-selectors.lua")
+		local pip_selector
+		for _, selector in ipairs(loaded.selectors) do
+			if selector.matcher == "match:initial_title" and selector.pattern == "^Picture-in-Picture$" then
+				pip_selector = selector
+				break
+			end
+		end
+
+		assert.is_not_nil(pip_selector)
+		assert.is_false(pip_selector.per_monitor)
+		assert.is_true(pip_selector.restore_monitor)
+		assert.is_false(pip_selector.restore_size)
+		assert.are.same(
+			{ "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
+			pip_selector.persist_tags
+		)
+		assert.are.same(require("lib.picture_in_picture").corner_tag_animations, pip_selector.persist_tag_animations)
+	end)
+
 	it("retains independent geometry for each monitor", function()
 		options.cache = {}
 		rules.update_cache_from_windows(

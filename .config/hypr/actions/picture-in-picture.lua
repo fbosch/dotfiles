@@ -14,18 +14,21 @@ local function notify(line)
 	hl.dispatch(hl.dsp.exec_cmd("printf '%s\\n' " .. command.arg(line) .. " | " .. control_socket))
 end
 
-local function active_pip()
-	local active = hl.get_active_window and hl.get_active_window()
-	if pip.matches(active) and active.address then
-		return active
+local function matching_pip(window)
+	if pip.matches(window) and window.address then
+		return window
 	end
 end
 
-function M.drag()
-	local active = active_pip()
-	if active then
+local function active_pip()
+	return matching_pip(hl.get_active_window and hl.get_active_window())
+end
+
+function M.drag(target)
+	target = matching_pip(target)
+	if target then
 		dragging = true
-		notify(pip.control.encode("drag-start", active.address))
+		notify(pip.control.encode("drag-start", target.address))
 	else
 		notify(pip.control.encode("drag-cancel"))
 	end
@@ -43,8 +46,8 @@ function M.finish_drag()
 	dragging = false
 end
 
-function M.start_resize(keep_aspect_ratio)
-	if not active_pip() then
+function M.start_resize(target, keep_aspect_ratio)
+	if matching_pip(target) == nil then
 		return false
 	end
 

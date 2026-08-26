@@ -11,7 +11,7 @@ function M.start_drag()
 	end
 
 	drag_started = true
-	picture_in_picture.drag()
+	picture_in_picture.drag(target)
 	return true
 end
 

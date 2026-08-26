@@ -102,6 +102,8 @@ function M.load_selectors(path)
 			local persist_tags = selector.persist_tags
 			local persist_tag_animations = selector.persist_tag_animations
 			local per_monitor = selector.per_monitor
+			local restore_monitor = selector.restore_monitor
+			local restore_size = selector.restore_size
 			local valid_exclude = exclude == nil
 				or (
 					type(exclude) == "table"
@@ -124,6 +126,9 @@ function M.load_selectors(path)
 				and valid_persist_tags(persist_tags)
 				and valid_persist_tag_animations(persist_tag_animations, persist_tags)
 				and (per_monitor == nil or type(per_monitor) == "boolean")
+				and (restore_monitor == nil or type(restore_monitor) == "boolean")
+				and (restore_monitor ~= true or per_monitor == false)
+				and (restore_size == nil or type(restore_size) == "boolean")
 			then
 				normalized[#normalized + 1] = {
 					matcher = selector.matcher,
@@ -132,6 +137,8 @@ function M.load_selectors(path)
 					persist_tags = persist_tags,
 					persist_tag_animations = persist_tag_animations,
 					per_monitor = per_monitor ~= false,
+					restore_monitor = restore_monitor == true,
+					restore_size = restore_size ~= false,
 				}
 				matchers[#matchers + 1] = {
 					matcher = selector.matcher,
@@ -168,7 +175,7 @@ local function cache_key(matcher, pattern, monitor)
 	return string.format("%d:%s%d:%s%d:%s", #matcher, matcher, #pattern, pattern, #monitor, monitor)
 end
 
-local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags)
+local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags, target_monitor)
 	return {
 		matcher = matcher,
 		pattern = pattern,
@@ -178,6 +185,7 @@ local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags)
 		width = tonumber(width),
 		height = tonumber(height),
 		tags = tags,
+		target_monitor = target_monitor,
 	}
 end
 
@@ -205,10 +213,12 @@ function M.load_rules_cache(path)
 			local matcher, pattern = rule_identity(rule)
 			local width, height = generated_rules.parse_pair(rule.effects.size)
 			local x, y = generated_rules.parse_pair(rule.effects.move)
-			local monitor = rule.monitor or rule.effects.monitor or ""
-			if matcher and pattern and width and height and x and y then
+			local target_monitor = rule.target_monitor
+			local monitor = rule.monitor or (target_monitor == nil and rule.effects.monitor) or ""
+			local valid_size = (width ~= nil and height ~= nil) or (width == nil and height == nil)
+			if matcher and pattern and valid_size and x and y then
 				cache[cache_key(matcher, pattern, monitor)] =
-					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags)
+					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags, target_monitor)
 			end
 		end
 	end
@@ -303,6 +313,9 @@ local function append_rule_identity(lines, entry, id)
 	if entry.monitor ~= "" then
 		lines[#lines + 1] = "    monitor = " .. json.encode(entry.monitor) .. ","
 	end
+	if entry.target_monitor then
+		lines[#lines + 1] = "    target_monitor = " .. json.encode(entry.target_monitor) .. ","
+	end
 end
 
 local function render_rules(cache, selectors_path, selectors)
@@ -332,10 +345,15 @@ local function render_rules(cache, selectors_path, selectors)
 			append_match(lines, entry, selector, lua_match_key)
 			lines[#lines + 1] = "    effects = {"
 			lines[#lines + 1] = '      fullscreen_state = "0 0",'
-			lines[#lines + 1] = "      size = "
-				.. json.encode(generated_rules.format_pair(entry.width, entry.height))
-				.. ","
+			if selector == nil or selector.restore_size ~= false then
+				lines[#lines + 1] = "      size = "
+					.. json.encode(generated_rules.format_pair(entry.width, entry.height))
+					.. ","
+			end
 			lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
+			if entry.target_monitor then
+				lines[#lines + 1] = "      monitor = " .. json.encode(entry.target_monitor) .. ","
+			end
 			lines[#lines + 1] = "    },"
 			if #tags > 0 then
 				lines[#lines + 1] = "    tags = " .. lua_array(tags) .. ","
@@ -400,7 +418,8 @@ function M.update_cache_from_windows(cache, windows, log)
 				window.y,
 				window.width,
 				window.height,
-				window.tags
+				window.tags,
+				window.target_monitor
 			)
 			if log then
 				log(

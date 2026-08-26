@@ -91,6 +91,7 @@ it("persists the first configured tag and keeps global monitor scope", function(
 			matcher = "match:initialTitle",
 			pattern = "^Picture-in-Picture$",
 			per_monitor = false,
+			restore_monitor = true,
 			persist_tags = { "pip-top-left", "pip-top-right" },
 		},
 	}
@@ -104,6 +105,7 @@ it("persists the first configured tag and keeps global monitor scope", function(
 	local windows = json.array(capture.snapshot(selectors, clients, monitors))
 	assert.equal(1, #windows)
 	assert.equal("", windows[1].monitor)
+	assert.equal("DP-1", windows[1].target_monitor)
 	assert.equal(15, windows[1].x)
 	assert.equal(15, windows[1].y)
 	assert.same({ "pip-top-left" }, windows[1].tags)
@@ -114,6 +116,8 @@ it("returns an empty snapshot for no selectors or invalid patterns", function()
 	assert.same({}, json.array(capture.snapshot({}, clients, monitors)))
 	assert.same(
 		{},
-		json.array(capture.snapshot({ { matcher = "match:class", pattern = "[", per_monitor = true } }, clients, monitors))
+		json.array(
+			capture.snapshot({ { matcher = "match:class", pattern = "[", per_monitor = true } }, clients, monitors)
+		)
 	)
 end)

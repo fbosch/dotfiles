@@ -59,7 +59,8 @@ it("snaps to the nearest corner on drag-end and tags it", function()
 	assert.equal(0, #of_kind(start_cmds, "move"))
 
 	local window = client("0x1", 2960, 1150, 400, 225)
-	local _, cmds = placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
+	local _, cmds =
+		placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
 
 	local moves = of_kind(cmds, "move")
 	assert.equal(1, #moves)
@@ -86,7 +87,8 @@ it("leaves windows alone beyond the snap vicinity", function()
 	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
 
 	local window = client("0x1", 1500, 600, 400, 225)
-	local _, cmds = placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
+	local _, cmds =
+		placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
 
 	assert.equal(0, #of_kind(cmds, "move"))
 	assert.equal(0, #of_kind(cmds, "tag"))
@@ -164,10 +166,8 @@ it("restores the anchored corner after a resize", function()
 	assert.is_table(state.resize_anchor)
 
 	local after = client("0x1", 200, 900, 800, 450, { tags = { "pip-bottom-left" } })
-	local _, cmds = placement.place(
-		state,
-		input(1, { type = "control", action = "resize-end" }, { clients = { after } })
-	)
+	local _, cmds =
+		placement.place(state, input(1, { type = "control", action = "resize-end" }, { clients = { after } }))
 
 	local moves = of_kind(cmds, "move")
 	assert.equal(1, #moves)
@@ -178,10 +178,7 @@ end)
 it("reconciles newly opened pip windows onto their default corner", function()
 	local state = placement.new()
 	state.waybar_visible = false
-	local _, cmds = placement.place(
-		state,
-		input(10, { type = "compositor", name = "openwindow", address = "0x9" })
-	)
+	local _, cmds = placement.place(state, input(10, { type = "compositor", name = "openwindow", address = "0x9" }))
 	assert.equal(0, #cmds)
 
 	local window = client("0x9", rest_x, rest_y, 400, 225)
@@ -192,6 +189,21 @@ it("reconciles newly opened pip windows onto their default corner", function()
 	assert.equal(1, #tags)
 	assert.equal(pip.corners["bottom-right"].tag, tags[1].tag)
 	assert.is_true(tags[1].add)
+end)
+
+it("repositions tagged PiP windows after monitor geometry changes", function()
+	local state = placement.new()
+	local resized_monitors = { ultrawide = monitor("ultrawide", 0, 0, 0, 2560, 1080) }
+	local window = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, cmds = placement.place(
+		state,
+		input(0, { type = "monitorchange" }, { clients = { window }, monitors = resized_monitors })
+	)
+
+	local moves = of_kind(cmds, "move")
+	assert.equal(1, #moves)
+	assert.equal(2145, moves[1].x)
+	assert.equal(840, moves[1].y)
 end)
 
 it("moves a tagged window between corners on the move command", function()

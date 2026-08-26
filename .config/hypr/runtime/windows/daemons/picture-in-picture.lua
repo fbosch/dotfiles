@@ -26,8 +26,8 @@ local function request(message)
 	return kit:request(message) or ""
 end
 
-local function refresh_monitors()
-	local refreshed, err = kit:monitors()
+local function refresh_monitors(query_opts)
+	local refreshed, err = kit:monitors(query_opts)
 	if err ~= nil then
 		return next(monitors_by_name) ~= nil
 	end
@@ -100,18 +100,22 @@ end
 local function apply_commands(commands)
 	for _, cmd in ipairs(commands) do
 		if cmd.kind == "move" then
-			request(string.format(
-				"dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })",
-				cmd.x,
-				cmd.y,
-				json.encode("address:" .. cmd.address)
-			))
+			request(
+				string.format(
+					"dispatch hl.dsp.window.move({ x = %d, y = %d, window = %s })",
+					cmd.x,
+					cmd.y,
+					json.encode("address:" .. cmd.address)
+				)
+			)
 		elseif cmd.kind == "tag" then
-			request(string.format(
-				"dispatch hl.dsp.window.tag({ tag = %s, window = %s })",
-				json.encode((cmd.add and "+" or "-") .. cmd.tag),
-				json.encode("address:" .. cmd.address)
-			))
+			request(
+				string.format(
+					"dispatch hl.dsp.window.tag({ tag = %s, window = %s })",
+					json.encode((cmd.add and "+" or "-") .. cmd.tag),
+					json.encode("address:" .. cmd.address)
+				)
+			)
 		elseif cmd.kind == "preview" then
 			if cmd.target then
 				cmd.target.action = "show"
@@ -172,6 +176,12 @@ end
 local function compositor_event(line, now)
 	local name = line:match("^(%w+)")
 	if name == nil then
+		return
+	end
+	-- Topology and config events invalidate the daemon kit's monitor TTL cache.
+	if name == "configreloaded" or name:match("^monitoradded") or name == "monitorremoved" then
+		refresh_monitors({ force = true })
+		place(now, { type = "monitorchange" }, bars_for(state.waybar_visible))
 		return
 	end
 
