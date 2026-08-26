@@ -20,6 +20,16 @@ map("n", "<leader>S", ":wqa!<CR>", "Save all files and quit")
 map("v", "<", "<gv", "Indent left")
 map("v", ">", ">gv", "Indent right")
 
+-- Incrementally select treesitter nodes (built into Neovim 0.12+)
+map("n", "<Tab>", ":normal van<cr>", "Increment treesitter selection")
+map("v", "<Tab>", function()
+	vim.api.nvim_feedkeys("an", "v", false)
+end, "Increment treesitter selection")
+map("n", "<S-Tab>", ":normal vin<cr>", "Decrement treesitter selection")
+map("v", "<S-Tab>", function()
+	vim.api.nvim_feedkeys("in", "v", false)
+end, "Decrement treesitter selection")
+
 -- Keep direct Alt bindings available to Herdr.
 map("n", "<C-A-S-Down>", ":m .+1<CR>==")
 map("n", "<C-A-S-Up>", ":m .-2<CR>==")
