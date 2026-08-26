@@ -5,6 +5,48 @@ set -eu
 # Broad desktop-service recovery. Gamescope clipboard sync remains live because
 # it is independent of the desktop UI services restarted here.
 
+resolve_supervised_daemon() {
+  case "$1" in
+    picture-in-picture)
+      daemon_launcher="${HOME}/.config/hypr/runtime/windows/daemons/picture-in-picture.sh"
+      ;;
+    waybar-monitor)
+      daemon_launcher="${HOME}/.config/hypr/runtime/desktop/waybar-monitor.sh"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+restart_supervised_daemons() {
+  requested_daemons=""
+  for daemon_name in "$@"; do
+    if ! resolve_supervised_daemon "$daemon_name"; then
+      printf 'restart-daemons: unsupported daemon argument\n' >&2
+      printf 'restart-daemons: supported daemons: picture-in-picture, waybar-monitor\n' >&2
+      return 2
+    fi
+    case " $requested_daemons " in
+      *" $daemon_name "*) ;;
+      *) requested_daemons="$requested_daemons $daemon_name" ;;
+    esac
+  done
+
+  status=0
+  for daemon_name in $requested_daemons; do
+    resolve_supervised_daemon "$daemon_name"
+    if ! "$daemon_launcher" restart; then
+      printf 'restart-daemons: failed to restart %s\n' "$daemon_name" >&2
+      status=1
+    fi
+  done
+  return "$status"
+}
+
+if [ "$#" -gt 0 ]; then
+  restart_supervised_daemons "$@"
+  exit $?
+fi
+
 wait_for_pip_shutdown() {
   attempts=0
   while pgrep -f "picture-in-picture\.(sh|lua)" >/dev/null 2>&1; do

@@ -44,6 +44,8 @@ daemon-status:
     daemons=(
       "Window state|[w]indow-state-daemon.lua"
       "Window capture|[w]indow-capture-daemon.lua"
+      "Picture in picture|[p]icture-in-picture.lua"
+      "Waybar monitor|[w]aybar-monitor.lua"
       "Custom layout|[c]ustom-layout-drag-resize-daemon.lua"
       "Minimized state|[m]inimized-state-daemon.lua"
       "Gaming watchdog|[g]aming-session-watchdog"
@@ -79,10 +81,17 @@ glance-validate:
 hypr-validate:
     bash -lc 'if [ "$(uname)" = "Linux" ]; then hyprctl configerrors; fi'
 
-# Restart user daemons used by the desktop setup asynchronously.
+# Restart allowlisted daemons, or all desktop daemons when none are specified.
 [group('desktop')]
-restart-daemons:
-    nohup bash .config/hypr/runtime/desktop/restart-daemons.sh >/dev/null 2>&1 &
+[positional-arguments]
+restart-daemons *daemons:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ "$#" -eq 0 ]]; then
+      nohup bash .config/hypr/runtime/desktop/restart-daemons.sh >/dev/null 2>&1 &
+      exit 0
+    fi
+    bash .config/hypr/runtime/desktop/restart-daemons.sh "$@"
 
 # Build Storybook for the design system.
 [group('development')]

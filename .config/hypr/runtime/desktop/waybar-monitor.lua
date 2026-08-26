@@ -184,15 +184,21 @@ local function run()
 	while true do
 		local interval = update_visibility()
 		local ready = socket.select({ control_socket:reader() }, nil, interval / 1000)
-		if #ready > 0 and control_socket:handle_ready(handle_control) then
-			return
+		if #ready > 0 then
+			local action = control_socket:handle_ready(handle_control)
+			if action then
+				return action
+			end
 		end
 	end
 end
 
-local ok, err = xpcall(run, debug.traceback)
+local ok, result = xpcall(run, debug.traceback)
 cleanup_control_socket()
 if ok == false then
-	log(err)
+	log(result)
 	os.exit(1)
+end
+if result == "restart" then
+	os.exit(daemon.restart_exit_status)
 end

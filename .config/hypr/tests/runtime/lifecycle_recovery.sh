@@ -14,7 +14,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir -p "$bin_dir" "$home_dir/.config/hypr/runtime/desktop" "$home_dir/.config/hypr/runtime/profiles"
+mkdir -p \
+  "$bin_dir" \
+  "$home_dir/.config/hypr/runtime/desktop" \
+  "$home_dir/.config/hypr/runtime/profiles" \
+  "$home_dir/.config/hypr/runtime/windows/daemons"
 
 write_stub() {
   local name="$1"
@@ -39,6 +43,19 @@ printf '%s\n' '#!/bin/sh' 'printf "%s\n" fixture-icon' > "$home_dir/.config/hypr
 printf '%s\n' '#!/bin/sh' 'exit 0' > "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
 chmod +x "$bin_dir/nc" "$bin_dir/pgrep" "$bin_dir/sleep" "$home_dir/.config/hypr/runtime/desktop/nerd-icon-gen.sh" \
   "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
+
+write_daemon_launcher() {
+  local path="$1"
+  # shellcheck disable=SC2016
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' \
+    '[ "${FAIL_DAEMON:-}" != "${0##*/}" ]' > "$path"
+  chmod +x "$path"
+}
+
+write_daemon_launcher "$home_dir/.config/hypr/runtime/windows/daemons/picture-in-picture.sh"
+write_daemon_launcher "$home_dir/.config/hypr/runtime/desktop/waybar-monitor.sh"
 
 assert_contains() {
   local file="$1" expected="$2"
@@ -76,6 +93,48 @@ export HOME="$home_dir"
 export PATH="$bin_dir:$original_path"
 waybar_started_file="$test_dir/waybar-started"
 export WAYBAR_STARTED_FILE="$waybar_started_file"
+
+targeted_log="$test_dir/targeted.log"
+FIXTURE_LOG="$targeted_log" "$repo_root/runtime/desktop/restart-daemons.sh" \
+  picture-in-picture picture-in-picture waybar-monitor
+assert_contains "$targeted_log" 'picture-in-picture.sh restart'
+assert_contains "$targeted_log" 'waybar-monitor.sh restart'
+if [[ "$(grep -c '^picture-in-picture.sh restart$' "$targeted_log")" -ne 1 ]]; then
+  printf 'targeted restart did not deduplicate daemon arguments\n' >&2
+  exit 1
+fi
+assert_not_contains "$targeted_log" 'pkill'
+
+failed_log="$test_dir/failed.log"
+set +e
+failed_output="$(FAIL_DAEMON=waybar-monitor.sh FIXTURE_LOG="$failed_log" \
+  "$repo_root/runtime/desktop/restart-daemons.sh" picture-in-picture waybar-monitor 2>&1)"
+failed_status="$?"
+set -e
+if [[ "$failed_status" -ne 1 || "$failed_output" != *'failed to restart waybar-monitor'* ]]; then
+  printf 'targeted restart did not propagate a launcher failure\n' >&2
+  exit 1
+fi
+assert_contains "$failed_log" 'picture-in-picture.sh restart'
+assert_contains "$failed_log" 'waybar-monitor.sh restart'
+
+invalid_log="$test_dir/invalid.log"
+set +e
+invalid_output="$(FIXTURE_LOG="$invalid_log" "$repo_root/runtime/desktop/restart-daemons.sh" picture-in-picture unknown 2>&1)"
+invalid_status="$?"
+set -e
+if [[ "$invalid_status" -ne 2 ]]; then
+  printf 'targeted restart accepted an invalid daemon\n' >&2
+  exit 1
+fi
+if [[ "$invalid_output" != *'unsupported daemon argument'* ]]; then
+  printf 'targeted restart did not reject the invalid daemon\n' >&2
+  exit 1
+fi
+if [[ -s "$invalid_log" ]]; then
+  printf 'targeted restart launched a daemon before validation completed\n' >&2
+  exit 1
+fi
 
 restart_log="$test_dir/restart.log"
 FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"

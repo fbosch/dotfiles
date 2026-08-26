@@ -20,7 +20,6 @@ function M.new(opts)
 			return nil
 		end
 
-		dispatch(window.drag())
 		return function()
 			dispatch(window.drag())
 			interaction.finish_drag(custom_layout)

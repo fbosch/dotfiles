@@ -84,7 +84,7 @@ end)
 
 it("normalizes client geometry and preserves matcher fields", function()
 	local transport = fake_transport(
-		'[]',
+		"[]",
 		'[{"address":"0x1","class":"nemo","initialClass":"nemo","at":[12.4,"30"],"size":["800","600"],"floating":true,"tags":["pip*"]}]'
 	)
 	local kit = daemon.new({ transport = transport })
@@ -125,13 +125,14 @@ end)
 
 it("owns the one-line control socket lifecycle", function()
 	local calls = {}
+	local control_message = "quit"
 	local client = {
 		settimeout = function(_, timeout)
 			calls.client_timeout = timeout
 		end,
 		receive = function(_, mode)
 			calls.receive_mode = mode
-			return "quit"
+			return control_message
 		end,
 		send = function(_, response)
 			calls.response = response
@@ -178,15 +179,31 @@ it("owns the one-line control socket lifecycle", function()
 	assert_equal(calls.server_timeout, 0, "server is nonblocking")
 
 	local received
-	assert_equal(control:handle_ready(function(message)
-		received = message
-		return true
-	end), true, "quit result")
+	assert_equal(
+		control:handle_ready(function(message)
+			received = message
+			return true
+		end),
+		true,
+		"quit result"
+	)
 	assert_equal(received, "quit", "one-line message")
 	assert_equal(calls.receive_mode, "*l", "line read mode")
 	assert_equal(calls.client_timeout, 0.05, "bounded client read")
 	assert_equal(calls.response, "ok\n", "health acknowledgement")
 	assert_equal(calls.client_closed, true, "client closes after acknowledgement")
+
+	control_message = "restart"
+	local feature_handler_called = false
+	assert_equal(
+		control:handle_ready(function()
+			feature_handler_called = true
+			return false
+		end),
+		"restart",
+		"restart result"
+	)
+	assert_equal(feature_handler_called, false, "restart bypasses feature handlers")
 
 	control:close()
 	control:close()
@@ -218,11 +235,11 @@ it("query falls back to hyprctl when the transport yields nothing", function()
 		transport = transport,
 		spawn = function(command_line)
 			spawned[#spawned + 1] = command_line
-			return "[{\"id\":1,\"name\":\"DP-2\"}]"
+			return '[{"id":1,"name":"DP-2"}]'
 		end,
 	})
 
-	assert_equal(kit:query("j/monitors"), "[{\"id\":1,\"name\":\"DP-2\"}]", "fallback response")
+	assert_equal(kit:query("j/monitors"), '[{"id":1,"name":"DP-2"}]', "fallback response")
 	assert_equal(#spawned, 1, "one spawn")
 	assert_equal(spawned[1], "hyprctl monitors -j 2>/dev/null", "fallback command")
 
@@ -250,7 +267,7 @@ it("clients with fallback normalizes the spawned response", function()
 	local kit = daemon.new({
 		transport = transport,
 		spawn = function()
-			return "[{\"address\":\"0x2\",\"at\":[\"5\",\"6\"],\"size\":[10,20]}]"
+			return '[{"address":"0x2","at":["5","6"],"size":[10,20]}]'
 		end,
 	})
 

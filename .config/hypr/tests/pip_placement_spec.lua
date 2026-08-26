@@ -59,6 +59,12 @@ it("snaps to the nearest corner on drag-end and tags it", function()
 	assert.equal(0, #of_kind(start_cmds, "move"))
 
 	local window = client("0x1", 2960, 1150, 400, 225)
+	local _, held_cmds = placement.place(state, input(0.3, { type = "tick" }, { clients = { window } }))
+	assert.is_true(state.dragging)
+	assert.equal(0, #of_kind(held_cmds, "move"))
+	assert.is_table(of_kind(held_cmds, "preview")[1].target)
+	assert.is_true(of_kind(held_cmds, "cursor-outline")[1].enabled)
+
 	local _, cmds =
 		placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
 
@@ -73,13 +79,23 @@ it("snaps to the nearest corner on drag-end and tags it", function()
 	assert.is_true(tags[1].add)
 
 	local previews = of_kind(cmds, "preview")
-	assert.equal(2, #previews)
-	assert.is_table(previews[1].target)
-	assert.is_nil(previews[2].target)
+	assert.equal(1, #previews)
+	assert.is_nil(previews[1].target)
 	local outlines = of_kind(cmds, "cursor-outline")
-	assert.equal(2, #outlines)
-	assert.is_true(outlines[1].enabled)
-	assert.is_false(outlines[2].enabled)
+	assert.equal(1, #outlines)
+	assert.is_false(outlines[1].enabled)
+end)
+
+it("snaps when released exactly at the snap-vicinity boundary", function()
+	local state = placement.new()
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+
+	local window = client("0x1", 3440 - 400 - pip.snap_vicinity, 1440 - 225 - pip.snap_vicinity, 400, 225)
+	local _, cmds =
+		placement.place(state, input(1, { type = "control", action = "drag-end" }, { clients = { window } }))
+
+	assert.equal(1, #of_kind(cmds, "move"))
+	assert.equal(pip.corners["bottom-right"].tag, of_kind(cmds, "tag")[1].tag)
 end)
 
 it("leaves windows alone beyond the snap vicinity", function()
@@ -121,7 +137,7 @@ it("suppresses echo of its own moves during observation", function()
 	assert.equal(0, #of_kind(cmds, "move"))
 end)
 
-it("detects client-initiated drags and settles into a snap", function()
+it("does not treat settled client movement as a mouse release", function()
 	local state = placement.new()
 	local still = client("0x1", 1500, 600, 400, 225)
 	placement.place(state, input(0, { type = "tick" }, { clients = { still } }))
@@ -132,14 +148,10 @@ it("detects client-initiated drags and settles into a snap", function()
 	assert.equal("client", state.drag_source)
 	assert.equal(0, #of_kind(cmds, "move"))
 
-	-- Movement stops; the snap fires once the settle deadline passes.
+	-- Movement stopping alone cannot distinguish a held mouse from a release.
 	_, cmds = placement.place(state, input(0.3, { type = "tick" }, { clients = { moved } }))
 	assert.is_false(state.dragging)
-
-	local moves = of_kind(cmds, "move")
-	assert.equal(1, #moves)
-	assert.equal(3025, moves[1].x)
-	assert.equal(1200, moves[1].y)
+	assert.equal(0, #of_kind(cmds, "move"))
 end)
 
 it("emits the snap preview once per distinct target", function()

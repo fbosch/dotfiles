@@ -6,6 +6,7 @@
 local json = require("lib.json")
 
 local M = {}
+M.restart_exit_status = tonumber(os.getenv("DAEMON_SUPERVISOR_RESTART_EXIT_STATUS")) or 75
 
 local default_monitor_cache_ttl_s = 10
 
@@ -218,10 +219,10 @@ function M.new(opts)
 
 			client:settimeout(0.05)
 			local message = client:receive("*l")
-			local should_quit = handler(message) == true
+			local result = message == "restart" and "restart" or handler(message)
 			client:send("ok\n")
 			client:close()
-			return should_quit
+			return result
 		end
 
 		function control:close()

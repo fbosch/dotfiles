@@ -82,13 +82,13 @@ describe("pointer interaction router", function()
 		assert.same({ "interaction.start" }, calls)
 	end)
 
-	it("preserves drag press and release ordering", function()
+	it("lets the interaction start the drag and dispatches release before finishing", function()
 		local router, calls = setup({ drag_started = true })
 		local release = router.start_drag()
-		assert.same({ "interaction.start", "dispatch:drag" }, calls)
+		assert.same({ "interaction.start" }, calls)
 
 		release()
-		assert.same({ "interaction.start", "dispatch:drag", "dispatch:drag", "interaction.finish" }, calls)
+		assert.same({ "interaction.start", "dispatch:drag", "interaction.finish" }, calls)
 	end)
 
 	it("routes resize to PiP before other owners", function()

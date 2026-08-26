@@ -538,7 +538,7 @@ local function handle_tick(state, input, commands)
 	if state.dragging then
 		update_preview(state, input, commands)
 		if state.drag_source == "client" and state.settle_at and now >= state.settle_at then
-			snap_pip(state, state.dragging_address, input, commands)
+			-- Geometry settling does not prove the mouse was released; only drag-end may snap.
 			stop_drag(state, now, commands)
 		end
 	end

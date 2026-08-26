@@ -22,4 +22,4 @@ daemon_supervisor_cleanup_paths=""
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/daemon-supervisor.sh"
 
-daemon_supervise luajit "$daemon"
+daemon_supervisor_main "$@" -- luajit "$daemon"

@@ -238,8 +238,9 @@ local function run()
 		local ready = socket.select({ control_socket:reader(), event_socket }, nil, timeout)
 		for _, reader in ipairs(ready) do
 			if reader == control_socket:reader() then
-				if control_socket:handle_ready(handle_control) then
-					return
+				local action = control_socket:handle_ready(handle_control)
+				if action then
+					return action
 				end
 			elseif reader == event_socket then
 				local event, err, partial = event_socket:receive("*l")
@@ -261,10 +262,13 @@ local function run()
 	end
 end
 
-local ok, err = xpcall(run, debug.traceback)
+local ok, result = xpcall(run, debug.traceback)
 ags_ipc.request("pip-snap-preview", '{"action":"hide"}')
 cleanup_control_socket()
 if ok == false then
-	log(err)
+	log(result)
 	os.exit(1)
+end
+if result == "restart" then
+	os.exit(daemon.restart_exit_status)
 end
