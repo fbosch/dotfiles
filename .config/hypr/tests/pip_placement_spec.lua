@@ -173,7 +173,7 @@ it("restores the anchored corner after a resize", function()
 	local before = client("0x1", 15, 1215, 400, 225, { tags = { "pip-bottom-left" } })
 	placement.place(
 		state,
-		input(0, { type = "control", action = "resize-start" }, { active = before, clients = { before } })
+		input(0, { type = "control", action = "resize-start", address = "0x1" }, { clients = { before } })
 	)
 	assert.is_table(state.resize_anchor)
 
@@ -185,6 +185,20 @@ it("restores the anchored corner after a resize", function()
 	assert.equal(1, #moves)
 	assert.equal(15, moves[1].x)
 	assert.equal(990, moves[1].y)
+end)
+
+it("clears resize state when release target revalidation fails", function()
+	local state = placement.new()
+	local before = client("0x1", 15, 1215, 400, 225, { tags = { "pip-bottom-left" } })
+	placement.place(
+		state,
+		input(0, { type = "control", action = "resize-start", address = "0x1" }, { clients = { before } })
+	)
+	assert.is_table(state.resize_anchor)
+
+	local _, cmds = placement.place(state, input(1, { type = "control", action = "resize-cancel" }))
+	assert.is_nil(state.resize_anchor)
+	assert.equal(0, #of_kind(cmds, "move"))
 end)
 
 it("reconciles newly opened pip windows onto their default corner", function()

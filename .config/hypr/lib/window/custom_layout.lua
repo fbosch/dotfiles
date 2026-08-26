@@ -72,7 +72,12 @@ local function restore_resize_animation()
 	end
 end
 
-if resize_plugin and type(resize_plugin.start) == "function" and type(resize_plugin.stop) == "function" and type(hl.on) == "function" then
+if
+	resize_plugin
+	and type(resize_plugin.start) == "function"
+	and type(resize_plugin.stop) == "function"
+	and type(hl.on) == "function"
+then
 	local ok, subscription = pcall(hl.on, "custom_layout_resize.command", function(message)
 		dispatch(hl.dsp.layout(message))
 	end)
@@ -82,8 +87,8 @@ if resize_plugin and type(resize_plugin.start) == "function" and type(resize_plu
 	end
 end
 
-function M.place_custom_layout_at_cursor()
-	if state.uses_any_custom_layout(state.active()) then
+function M.place_custom_layout_at_cursor(target)
+	if state.uses_any_custom_layout(target) then
 		dispatch(hl.dsp.layout("place-at-cursor"))
 	end
 end
@@ -98,14 +103,12 @@ function M.toggle_float()
 	return dispatch(float_toggle)
 end
 
-function M.start_custom_layout_resize()
-	local active = state.active()
-	local workspace = active and active.workspace
-	if not active or active.floating == true or not layout_contexts[workspace and workspace.tiled_layout] then
+function M.start_custom_layout_resize(target)
+	local workspace = target and target.workspace
+	if not target or target.floating == true or not layout_contexts[workspace and workspace.tiled_layout] then
 		return false
 	end
 
-	M.reset_keep_aspect_ratio()
 	if not native_resize_ready then
 		return true
 	end
@@ -132,16 +135,6 @@ function M.stop_custom_layout_resize()
 	native_resize_active = false
 	pcall(resize_plugin.stop)
 	restore_resize_animation()
-end
-
-function M.resize_keep_aspect_ratio()
-	M.stop_custom_layout_resize()
-	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
-	dispatch(hl.dsp.window.resize())
-end
-
-function M.reset_keep_aspect_ratio()
-	dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
 end
 
 return M

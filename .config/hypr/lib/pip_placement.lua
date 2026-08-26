@@ -333,24 +333,32 @@ local function move_pip_corner(state, direction, address, input, commands)
 	end
 end
 
-local function begin_resize(state, active)
-	if not is_pip(active) then
+local function begin_resize(state, address, clients)
+	local target
+	for _, window in ipairs(clients) do
+		if window.address == address then
+			target = window
+			break
+		end
+	end
+
+	if not is_pip(target) then
 		state.resize_anchor = nil
 		return
 	end
 
-	local corner = tagged_corner(active)
+	local corner = tagged_corner(target)
 	if not corner then
 		state.resize_anchor = nil
 		return
 	end
 
-	local x = tonumber(active.at[1]) or 0
-	local y = tonumber(active.at[2]) or 0
-	local width = tonumber(active.size[1]) or 0
-	local height = tonumber(active.size[2]) or 0
+	local x = tonumber(target.at[1]) or 0
+	local y = tonumber(target.at[2]) or 0
+	local width = tonumber(target.size[1]) or 0
+	local height = tonumber(target.size[2]) or 0
 	state.resize_anchor = {
-		address = active.address,
+		address = target.address,
 		left = corner:match("left$") ~= nil,
 		top = corner:match("^top") ~= nil,
 		x = corner:match("left$") and x or x + width,
@@ -456,11 +464,15 @@ local function handle_drag_cancel(state, input, commands)
 end
 
 local function handle_resize_start(state, input)
-	begin_resize(state, input.active)
+	begin_resize(state, input.event.address, input.clients)
 end
 
 local function handle_resize_end(state, input, commands)
 	finish_resize(state, input.clients, commands)
+end
+
+local function handle_resize_cancel(state)
+	state.resize_anchor = nil
 end
 
 local function handle_move(state, input, commands)
@@ -486,6 +498,7 @@ local control_handlers = {
 	["drag-cancel"] = handle_drag_cancel,
 	["resize-start"] = handle_resize_start,
 	["resize-end"] = handle_resize_end,
+	["resize-cancel"] = handle_resize_cancel,
 	move = handle_move,
 	["waybar-show"] = handle_waybar_show,
 	["waybar-hide"] = handle_waybar_hide,

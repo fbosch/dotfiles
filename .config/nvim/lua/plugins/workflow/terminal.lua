@@ -41,6 +41,7 @@ require("config.pack.registry").register({
 		setup = function()
 			local usrcmd = vim.api.nvim_create_user_command
 			local fterm = require("FTerm")
+			local terminal = require("utils.terminal")
 			local env = {
 				["IN_NEOVIM"] = "1",
 			}
@@ -49,7 +50,7 @@ require("config.pack.registry").register({
 				width = 0.85,
 			}
 
-			fterm.setup({
+			local default_instance = fterm:new({
 				border = "rounded",
 				env = env,
 				dimensions = dimensions,
@@ -57,10 +58,18 @@ require("config.pack.registry").register({
 				cmd = "fish",
 			})
 
-			usrcmd("FTermOpen", fterm.open, { bang = true })
-			usrcmd("FTermClose", fterm.close, { bang = true })
-			usrcmd("FTermExit", fterm.exit, { bang = true })
-			usrcmd("FTermToggle", fterm.toggle, { bang = true })
+			usrcmd("FTermOpen", function()
+				terminal.open_floating_terminal(default_instance)
+			end, { bang = true })
+			usrcmd("FTermClose", function()
+				terminal.close_floating_terminal(default_instance)
+			end, { bang = true })
+			usrcmd("FTermExit", function()
+				terminal.close_floating_terminal(default_instance, true)
+			end, { bang = true })
+			usrcmd("FTermToggle", function()
+				terminal.toggle_floating_terminal(default_instance)
+			end, { bang = true })
 
 			local mprocs_instance = nil
 			local mprocs_command = nil
@@ -81,7 +90,7 @@ require("config.pack.registry").register({
 
 				if not mprocs_instance or mprocs_command ~= cmd then
 					if mprocs_instance then
-						mprocs_instance:close(true)
+						terminal.close_floating_terminal(mprocs_instance, true)
 					end
 
 					mprocs_command = cmd
@@ -93,7 +102,7 @@ require("config.pack.registry").register({
 						dimensions = dimensions,
 					})
 				end
-				mprocs_instance:toggle()
+				terminal.toggle_floating_terminal(mprocs_instance)
 			end, { bang = true })
 
 			local lazygit_instance = nil
@@ -107,7 +116,7 @@ require("config.pack.registry").register({
 						dimensions = dimensions,
 					})
 				end
-				lazygit_instance:toggle()
+				terminal.toggle_floating_terminal(lazygit_instance)
 			end, { bang = true })
 
 			local diffnav_instance = nil
@@ -124,7 +133,7 @@ require("config.pack.registry").register({
 
 				if not diffnav_instance or diffnav_root ~= root then
 					if diffnav_instance then
-						diffnav_instance:close(true)
+						terminal.close_floating_terminal(diffnav_instance, true)
 					end
 
 					diffnav_root = root
@@ -137,7 +146,7 @@ require("config.pack.registry").register({
 					})
 				end
 
-				diffnav_instance:toggle()
+				terminal.toggle_floating_terminal(diffnav_instance)
 			end, { bang = true })
 
 			local btop_instance = nil
@@ -152,7 +161,7 @@ require("config.pack.registry").register({
 					})
 				end
 
-				btop_instance:toggle()
+				terminal.toggle_floating_terminal(btop_instance)
 			end, { bang = true })
 
 			local scooter_instance = nil
@@ -167,7 +176,7 @@ require("config.pack.registry").register({
 					})
 				end
 
-				scooter_instance:toggle()
+				terminal.toggle_floating_terminal(scooter_instance)
 			end, { bang = true })
 
 			local checkmate_instance = nil
@@ -193,7 +202,7 @@ require("config.pack.registry").register({
 					})
 				end
 
-				checkmate_instance:toggle()
+				terminal.toggle_floating_terminal(checkmate_instance)
 			end, { bang = true })
 		end,
 	},

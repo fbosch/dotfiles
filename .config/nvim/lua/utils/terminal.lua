@@ -1,5 +1,43 @@
 local M = {}
 
+local active_floating_terminal = nil
+
+local function is_floating_terminal_open(instance)
+	return instance.win ~= nil and vim.api.nvim_win_is_valid(instance.win)
+end
+
+--- Open a floating terminal after hiding any other open floating terminal.
+function M.open_floating_terminal(instance)
+	if active_floating_terminal ~= nil and active_floating_terminal ~= instance then
+		active_floating_terminal:close()
+	end
+
+	instance:open()
+	active_floating_terminal = instance
+end
+
+--- Close a floating terminal and stop tracking it when active.
+function M.close_floating_terminal(instance, force)
+	instance:close(force)
+	if active_floating_terminal == instance then
+		active_floating_terminal = nil
+	end
+end
+
+--- Toggle a floating terminal while keeping floating terminals mutually exclusive.
+function M.toggle_floating_terminal(instance)
+	if active_floating_terminal ~= nil and active_floating_terminal ~= instance then
+		active_floating_terminal:close()
+	end
+
+	instance:toggle()
+	if is_floating_terminal_open(instance) then
+		active_floating_terminal = instance
+	elseif active_floating_terminal == instance then
+		active_floating_terminal = nil
+	end
+end
+
 --- Check if running in a plain TTY (not a terminal emulator)
 -- @return boolean true if in plain TTY
 function M.is_plain_tty()

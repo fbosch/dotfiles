@@ -6,8 +6,6 @@ local hypr_ipc = require("runtime.lib.hypr-ipc")
 local M = {}
 
 local control_socket = "nc -U " .. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock")) .. " >/dev/null 2>&1"
-local dragging = false
-local resizing = false
 local warp_active_after_focus = async.runtime_lua("windows/warp-cursor-to-active-window.lua", "--delay", "0.03")
 
 local function notify(line)
@@ -24,53 +22,41 @@ local function active_pip()
 	return matching_pip(hl.get_active_window and hl.get_active_window())
 end
 
-function M.drag(target)
+function M.start_drag(target)
 	target = matching_pip(target)
 	if target then
-		dragging = true
 		notify(pip.control.encode("drag-start", target.address))
-	else
-		notify(pip.control.encode("drag-cancel"))
+		return true
 	end
 
-	hl.dispatch(hl.dsp.window.drag())
+	notify(pip.control.encode("drag-cancel"))
+	return false
 end
 
-function M.finish_drag()
-	if dragging then
+function M.finish_drag(target)
+	if matching_pip(target) then
 		notify(pip.control.encode("drag-end"))
 	else
 		notify(pip.control.encode("drag-cancel"))
 	end
-
-	dragging = false
 end
 
-function M.start_resize(target, keep_aspect_ratio)
-	if matching_pip(target) == nil then
+function M.start_resize(target)
+	target = matching_pip(target)
+	if target == nil then
 		return false
 	end
 
-	resizing = true
-	notify(pip.control.encode("resize-start"))
-	if keep_aspect_ratio then
-		hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "1" }))
-	end
-	hl.dispatch(hl.dsp.window.resize())
+	notify(pip.control.encode("resize-start", target.address))
 	return true
 end
 
-function M.finish_resize(keep_aspect_ratio)
-	if resizing == false then
-		return false
+function M.finish_resize(target)
+	if matching_pip(target) then
+		notify(pip.control.encode("resize-end"))
+	else
+		notify(pip.control.encode("resize-cancel"))
 	end
-
-	if keep_aspect_ratio then
-		hl.dispatch(hl.dsp.window.set_prop({ prop = "keep_aspect_ratio", value = "0" }))
-	end
-	notify(pip.control.encode("resize-end"))
-	resizing = false
-	return true
 end
 
 function M.move_corner(direction)

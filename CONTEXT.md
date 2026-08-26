@@ -49,9 +49,10 @@ should use these terms; new concepts named during design work land here.
   the picture-in-picture daemon is a thin adapter that feeds it IPC data and
   interprets returned commands as dispatches, tags, and preview actions.
 - **pointer interaction router** — `lib/window/pointer.lua`. Selects the PiP,
-  custom-layout, or native owner for pointer drag/resize presses and returns a
-  release callback to `lib.mouse_release`. Hyprland remains the release-event
-  owner; keybinds register physical inputs but do not orchestrate adapter state.
+  custom-layout, or native owner for pointer drag/resize presses, captures one
+  stable target identity, and revalidates it before targeted release work. It
+  owns native interaction dispatch and returns one release callback to
+  `lib.mouse_release`; adapters do not orchestrate the pointer lifecycle.
 
 ## AGS runtime
 

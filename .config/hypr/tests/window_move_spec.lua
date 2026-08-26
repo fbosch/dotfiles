@@ -71,7 +71,6 @@ _G.hl = {
 	end,
 }
 
-local interaction
 local custom_layout
 local monitor_role = require("lib.monitor_role")
 local directional
@@ -125,7 +124,6 @@ local function set_workspace_windows(layout, workspace_windows)
 end
 
 local function load_modules()
-	package.loaded["lib.window.interaction"] = nil
 	package.loaded["lib.window.custom_layout"] = nil
 	package.loaded["lib.window.directional"] = nil
 	package.loaded["lib.window.state"] = nil
@@ -140,16 +138,6 @@ local function load_modules()
 			return "/tmp/" .. name
 		end,
 	}
-	package.loaded["actions.picture-in-picture"] = {
-		drag = function()
-			hl.dispatch(hl.dsp.exec_cmd("pip drag"))
-			hl.dispatch(hl.dsp.window.drag())
-		end,
-		finish_drag = function()
-			hl.dispatch(hl.dsp.exec_cmd("pip finish-drag"))
-		end,
-	}
-	interaction = require("lib.window.interaction")
 	custom_layout = require("lib.window.custom_layout")
 	directional = require("lib.window.directional")
 	state = require("lib.window.state")
@@ -179,7 +167,7 @@ run("native layouts bypass the custom resize daemon", function()
 	reset("DP-2")
 	active_window.workspace.tiled_layout = "dwindle"
 
-	assert_equal(custom_layout.start_custom_layout_resize(), false, "custom resize handled")
+	assert_equal(custom_layout.start_custom_layout_resize(active_window), false, "custom resize handled")
 	assert_equal(#dispatched, 0, "dispatch count")
 end)
 
@@ -187,7 +175,7 @@ run("floating windows bypass the custom resize daemon", function()
 	reset("DP-2")
 	active_window.floating = true
 
-	assert_equal(custom_layout.start_custom_layout_resize(), false, "custom resize handled")
+	assert_equal(custom_layout.start_custom_layout_resize(active_window), false, "custom resize handled")
 	assert_equal(#dispatched, 0, "dispatch count")
 end)
 
@@ -450,55 +438,6 @@ run("cursor lookup ignores games on inactive workspaces", function()
 	cursor_position = { x = 700, y = 400 }
 
 	assert_equal(state.at_cursor(), active_window, "window on active workspace")
-end)
-
-run("drag targets the normal cursor window instead of the active game", function()
-	reset("DP-2")
-	active_window = {
-		content_type = "game",
-		visible = true,
-		at = { x = 1440, y = 0 },
-		size = { x = 3440, y = 1440 },
-	}
-	local normal_window = {
-		content_type = "none",
-		visible = true,
-		at = { x = 0, y = 0 },
-		size = { x = 1428, y = 830 },
-	}
-	windows = { active_window, normal_window }
-	cursor_position = { x = 700, y = 400 }
-
-	assert_equal(interaction.start_drag(), true, "drag starts")
-	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
-	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(interaction.finish_drag(custom_layout), true, "drag finishes")
-	assert_equal(dispatched[3].op, "exec_cmd", "finish drag dispatcher")
-end)
-
-run("custom layout drag places the active window after interactive dragging", function()
-	reset("DP-2")
-	active_window.workspace.tiled_layout = "lua:ultrawide_master"
-	cursor_position = { x = 250, y = 400 }
-
-	assert_equal(interaction.start_drag(), true, "drag starts")
-	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
-	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(interaction.finish_drag(custom_layout), true, "drag finishes")
-	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
-	assert_equal(dispatched[4].op, "exec_cmd", "finish drag dispatcher")
-end)
-
-run("drag keeps an already floating window floating", function()
-	reset("DP-2")
-	active_window.floating = true
-
-	assert_equal(interaction.start_drag(), true, "drag starts")
-	assert_equal(dispatched[1].op, "exec_cmd", "PiP drag dispatcher")
-	assert_equal(dispatched[2].op, "window.drag", "drag dispatcher")
-	assert_equal(interaction.finish_drag(custom_layout), true, "drag finishes")
-	assert_equal(dispatched[3].op, "layout", "layout dispatcher")
-	assert_equal(dispatched[4].op, "exec_cmd", "finish drag dispatcher")
 end)
 
 run("float toggle records ultrawide window center before tiling", function()

@@ -203,8 +203,8 @@ hl.config({
 })
 
 -- Custom layout controls
--- Hyprland owns the pressed-input release lifecycle; the native resize plugin
--- owns custom tiled target selection and pointer-driven resize mechanics.
+-- Hyprland owns the pressed-input release event; the pointer router keeps one
+-- target identity and interaction owner from press through release.
 mouse_release.bind(main("mouse:272"), pointer_interaction.start_drag)
 mouse_release.bind(main("mouse:273"), function()
 	return pointer_interaction.start_resize(false)

@@ -9,6 +9,7 @@ local command_handler
 local plugin_args
 local plugin_stops
 local restored
+local layout_target
 
 local function load_module(with_plugin)
 	dispatched = {}
@@ -17,6 +18,7 @@ local function load_module(with_plugin)
 	plugin_args = nil
 	plugin_stops = 0
 	restored = 0
+	layout_target = nil
 
 	local plugin = nil
 	if with_plugin then
@@ -77,8 +79,9 @@ local function load_module(with_plugin)
 		active = function()
 			return active_window
 		end,
-		uses_any_custom_layout = function()
-			return true
+		uses_any_custom_layout = function(target)
+			layout_target = target
+			return target and target.custom_layout == true
 		end,
 	}
 	package.loaded["layouts.shared.order_state"] = {
@@ -90,9 +93,21 @@ local function load_module(with_plugin)
 		record_placement_intent = function() end,
 	}
 	package.loaded["lib.window_tags"] = { non_resizable = "non-resizable" }
-	package.loaded["lib.profile_state"] = { resolved = function() return "default" end }
-	package.loaded["profiles"] = { apply_current = function() restored = restored + 1 end }
-	package.loaded["animations"] = { restore_windows_move = function() restored = restored + 1 end }
+	package.loaded["lib.profile_state"] = {
+		resolved = function()
+			return "default"
+		end,
+	}
+	package.loaded["profiles"] = {
+		apply_current = function()
+			restored = restored + 1
+		end,
+	}
+	package.loaded["animations"] = {
+		restore_windows_move = function()
+			restored = restored + 1
+		end,
+	}
 	package.loaded["lib.window.custom_layout"] = nil
 	return require("lib.window.custom_layout")
 end
@@ -107,14 +122,21 @@ before_each(function()
 end)
 
 describe("custom layout resize adapter", function()
+	it("places the revalidated pointer target instead of the active window", function()
+		local custom_layout = load_module(false)
+		local target = { custom_layout = true }
+
+		custom_layout.place_custom_layout_at_cursor(target)
+		assert.equal(target, layout_target)
+		assert.are.equal("layout", dispatched[1].op)
+		assert.are.equal("place-at-cursor", dispatched[1].value)
+	end)
+
 	it("delegates resize mechanics to the plugin", function()
 		local custom_layout = load_module(true)
 
-		assert.is_true(custom_layout.start_custom_layout_resize())
-		assert.are.same(
-			{ "lua:ultrawide_master", "lua:portrait_rows", "HDMI-A-2", "non-resizable" },
-			plugin_args
-		)
+		assert.is_true(custom_layout.start_custom_layout_resize(active_window))
+		assert.are.same({ "lua:ultrawide_master", "lua:portrait_rows", "HDMI-A-2", "non-resizable" }, plugin_args)
 		assert.are.same({ leaf = "windowsMove", enabled = false }, animations[1])
 
 		command_handler("resize-x-at address:0xabc right 420")
@@ -129,8 +151,8 @@ describe("custom layout resize adapter", function()
 	it("fails closed when the required plugin is unavailable", function()
 		local custom_layout = load_module(false)
 
-		assert.is_true(custom_layout.start_custom_layout_resize())
+		assert.is_true(custom_layout.start_custom_layout_resize(active_window))
 		assert.is_nil(plugin_args)
-		assert.are.equal("set_prop", dispatched[#dispatched].op)
+		assert.are.equal(0, #dispatched)
 	end)
 end)
