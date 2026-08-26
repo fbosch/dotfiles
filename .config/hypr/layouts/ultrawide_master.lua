@@ -249,6 +249,9 @@ function M.resize(ctx, target, delta, corner)
 	end
 
 	local changed = resize_state.adjust_active(ratios, index, count, amount, min_ratio)
+	if changed and key and role_for_targets(targets) == monitor_role.ultrawide then
+		state.ratio_change_by_key[key] = true
+	end
 	if key and changed then
 		save_ratio_state()
 	end
@@ -327,6 +330,9 @@ function M.layout_msg(ctx, msg)
 			min_ratio
 		)
 		if key and changed then
+			if role_for_targets(targets) == monitor_role.ultrawide then
+				state.ratio_change_by_key[key] = true
+			end
 			resize_dirty = true
 		end
 	elseif command == "resize-y-at" then
@@ -357,6 +363,9 @@ function M.layout_msg(ctx, msg)
 		if key then
 			ratios_by_workspace[key] = nil
 			row_ratios_by_workspace[key] = nil
+			if role_for_targets(targets) == monitor_role.ultrawide then
+				state.ratio_change_by_key[key] = true
+			end
 			save_ratio_state()
 		end
 	else

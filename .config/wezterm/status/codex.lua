@@ -99,13 +99,13 @@ local function append_usage(items, windows)
 			if rendered == 0 then
 				table.insert(items, { Text = " " })
 			else
-				table.insert(items, { Text = "/" })
+				table.insert(items, { Text = " · " })
 			end
 			table.insert(items, { Foreground = { Color = usage_color(remaining) } })
 			table.insert(items, { Text = string.format("%d%%", math.floor(remaining)) })
 			if type(window.resetsIn) == "string" then
 				table.insert(items, { Foreground = { Color = palette.semantic.muted } })
-				table.insert(items, { Text = " " .. superscript_duration(window.resetsIn) })
+				table.insert(items, { Text = superscript_duration(window.resetsIn) })
 			end
 			rendered = rendered + 1
 		end

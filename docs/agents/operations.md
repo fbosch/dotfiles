@@ -3,11 +3,12 @@
 ## Setup & Installation
 
 ```bash
-brew bundle install              # Install/update all dependencies
 stow .                           # Apply dotfiles (creates symlinks from ~/)
 stow -n .                        # Dry-run to preview changes
-bash ./scripts/install.sh        # Fresh system setup (installs everything)
 ```
+
+On NixOS and nix-darwin, install system packages and bootstrap Home Manager from
+the [NixOS configuration](https://github.com/fbosch/nixos).
 
 ## Adoption Migration
 

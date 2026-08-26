@@ -18,5 +18,4 @@
   scripts.fish             # Helper functions
 .config/vicinae/extensions/ # Custom Vicinae extensions (see AGENTS.md in this dir)
 scripts/                    # Repo maintenance scripts (ignored by stow)
-Brewfile                    # All Homebrew dependencies
 ```

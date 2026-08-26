@@ -121,6 +121,10 @@ function M.recalculate_ordered(opts)
 	local axis = opts.axis
 	local role = opts.role
 	local manual_change = state.manual_change_by_key[key]
+	local ratio_change = state.ratio_change_by_key[key]
+	if key then
+		state.ratio_change_by_key[key] = nil
+	end
 	local scope = order_state.scope(opts.layout_name, key, role, axis)
 	local cleared_stale_order = order_state.clear_order_if_stale(state, key, source_targets)
 	local needs_state_save = key and state.order_by_key[key] == nil
@@ -215,7 +219,8 @@ function M.recalculate_ordered(opts)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
 		needs_state_save = true
-	else
+	-- Ratio changes move window centers during relayout and must not be mistaken for drag reordering.
+	elseif not ratio_change then
 		local active = opts.active_index(targets)
 		local active_target = active and targets[active] or nil
 		if

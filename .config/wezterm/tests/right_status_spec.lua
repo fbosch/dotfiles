@@ -221,7 +221,9 @@ assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator
 assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
 assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
-assert_eq(find_text(captured_status, " ³ʰ"), true, "ChatGPT usage reset countdown rendered")
+assert_eq(find_text(captured_status, "³ʰ"), true, "ChatGPT usage reset countdown rendered")
+assert_eq(find_text(captured_status, " · "), true, "ChatGPT usage windows separated")
+assert_eq(color_before_text(captured_status, "³ʰ"), "#636363", "usage reset countdown is muted")
 assert_eq(color_before_text(captured_status, "²"), "#E8838F", "imminently expiring reset credits are prominent")
 
 for _, case in ipairs({

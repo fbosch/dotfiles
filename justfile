@@ -21,16 +21,6 @@ ags-refresh: ags-bundle
 ags-types:
     bash -lc 'cd .config/ags && ags types'
 
-# Check Homebrew bundle dependencies.
-[group('dependencies')]
-brew-check:
-    brew bundle check
-
-# Install Homebrew bundle dependencies.
-[group('dependencies')]
-brew-install:
-    brew bundle install
-
 # Install dependencies for shared FBB helpers.
 [group('dependencies')]
 install-fbb:

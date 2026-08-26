@@ -45,18 +45,6 @@ return {
 	{ matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Codex$]=] },
-	{
-		matcher = "match:initial_title",
-		pattern = [=[^Picture-in-Picture$]=],
-		persist_tags = {
-			"pip-top-left",
-			"pip-top-right",
-			"pip-bottom-left",
-			"pip-bottom-right",
-		},
-		persist_tag_animations = pip.corner_tag_animations,
-		per_monitor = false,
-	},
 	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
 	{ matcher = "match:class", pattern = [=[^org\.gnome\.Calendar$]=] },
 }
