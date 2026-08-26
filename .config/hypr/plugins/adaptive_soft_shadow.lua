@@ -27,10 +27,10 @@ hl.config({
 			blend_mode = "hard-light",
 			color = "rgba(0000002A)",
 			enabled = true,
-			range = 40,
+			range = 35,
 			render_power = 4,
 			offset = "1 3",
-			strength = 0.7,
+			strength = 0.8,
 		},
 	},
 })

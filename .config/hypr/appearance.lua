@@ -22,7 +22,7 @@ hl.config({
 		rounding = 8,
 		rounding_power = 4.0,
 		active_opacity = 1.0,
-		inactive_opacity = 0.97,
+		inactive_opacity = 0.96,
 		shadow = {
 			enabled = false,
 		},
@@ -30,12 +30,12 @@ hl.config({
 			enabled = true,
 			-- variant = "acrylic",
 			acrylic = {
-				refraction = 15,
-				bulb = 10,
+				refraction = 5,
+				bulb = 4.5,
 				clarity = 0.00,
 				aberration = 0.25,
 			},
-			size = 7,
+			size = 10,
 			special = true,
 			popups = true,
 			popups_ignorealpha = 0.5,
@@ -43,10 +43,12 @@ hl.config({
 			ignore_opacity = false,
 			new_optimizations = true,
 			brightness = 1,
-			noise = 0.04, -- frosted glass look
+			contrast = 1,
+			noise = 0.03, -- frosted glass look
 			vibrancy = 0.5,
+			vibrancy_darkness = 0.35,
 			input_methods = true,
-			vibrancy_darkness = 0.05,
+			input_methods_ignorealpha = 0.8,
 		},
 	},
 	dwindle = {
