@@ -36,6 +36,8 @@ When instructions conflict, use this priority order:
 - State what happened or what the reader should do. Cut puffery such as "pivotal moment", "testament to", "evolving landscape", and "setting the stage".
 - Replace promotional adjectives with relevant facts. "Groundbreaking", "renowned", and "powerful" need evidence or should disappear.
 - Name the source of an attributed claim. Delete phrases such as "experts believe", "reports suggest", or "critics argue" when no source is available.
+- Verify externally checkable details, including names, dates, numbers, quotations, links, publication details, and citations. Confirm that each source supports the exact claim attached to it. Remove or qualify details that cannot be verified.
+- Bound general claims by naming the relevant actor, population, environment, condition, mechanism, or evidence. Avoid universal claims and false consensus unless the source establishes that scope.
 - Delete superficial `-ing` clauses such as "highlighting", "ensuring", "reflecting", or "showcasing" when they merely announce a consequence. Expand them only when they carry evidence or explain causality.
 - Replace formulaic challenge-and-triumph framing with the actual constraint and outcome.
 - Apply the portability test to project-specific prose: if a sentence could appear unchanged in another project's documentation, rewrite it with this project's mechanism or cut it.
@@ -44,7 +46,7 @@ When instructions conflict, use this priority order:
 
 - Prefer plain words, but do not replace precise domain terms merely because they sound formal.
 - Replace inflated substitutes for "is" or "has", such as "serves as", "stands as", and "boasts", unless the distinction matters.
-- State the point directly instead of using "not just X, but Y" as artificial emphasis.
+- Avoid reflexive corrective contrasts such as "It's not X; it's Y", "It's not that X; it's that Y", "not merely X, but Y", and "less about X than Y". Keep the contrast only when X is a plausible interpretation and distinguishing Y changes the reader's understanding. Otherwise, state Y directly.
 - Do not force ideas into groups of three or use "from X to Y" unless the endpoints form a meaningful scale.
 - Repeat an established technical term instead of cycling through synonyms that could imply different concepts.
 - Cut adverbs that prop up weak or unmeasured claims. Replace "significantly improves" with the measured change or the exact failure mode avoided.
@@ -56,6 +58,8 @@ When instructions conflict, use this priority order:
 - Let the material determine the number and shape of sections. Avoid mechanically balanced outlines and lists that repeat the same sentence pattern.
 - Use headings and bullets for navigation, not decoration. Avoid bold-label bullets that restate their own label.
 - Keep paragraphs focused; split when the topic or reader task changes.
+- Each paragraph or section must add evidence, explanation, a decision, or a reader action. Delete closing sentences and subsection summaries that merely restate earlier text.
+- Use signposting only when it establishes scope, prerequisites, navigation, or the reader's next task. Delete document-anatomy narration such as "This section discusses" and "Below we explore".
 - Vary sentence rhythm when it improves readability. Do not manufacture fragments or deliberate messiness to simulate a human voice.
 - Do not use em dashes. Separate the thought with a period or comma instead; do not substitute parentheses, en dashes, or hyphens merely to preserve the same interruption. Treat repeated parenthetical asides, colons, boldface, and decorative emoji as warning signs, not banned syntax.
 
@@ -63,7 +67,8 @@ When instructions conflict, use this priority order:
 
 - Have opinions when the evidence supports a judgment. React to the facts instead of flattening every topic into a neutral inventory of pros and cons, while preserving the writer's actual stance.
 - Use first person only when the genre and source material support personal experience or judgment.
-- Acknowledge mixed outcomes with specific tradeoffs, not performative reactions.
+- Preserve supported authorial, regional, and culturally grounded language. Change an expression when it obstructs the intended reader, not merely because a generic alternative sounds more polished.
+- Preserve negative and mixed findings when the evidence is negative or mixed. Do not append optimism, reassurance, or false balance as a conversational default.
 - Prefer concrete observations over statements about how something "feels". Name the behavior, instruction, or measurable result.
 - Preserve useful irregularity in a draft, but never add errors, ambiguity, or clutter for artificial "soul".
 
@@ -80,6 +85,7 @@ Use the mechanism's real name or a plain replacement. For example, "substrate" b
 - NEVER make prose sound polished by removing uncertainty that matters. Keep real caveats, but make them short and specific.
 - NEVER preserve the user's draft wording when it hides the point; preserve intent and technical meaning instead.
 - NEVER add unsupported opinions, first person, or emotional language merely to make prose sound human.
+- NEVER accept a premise or change a factual conclusion merely to sound supportive. Acknowledge the concern when useful, then state whether the premise is supported, contradicted, or uncertain.
 - NEVER replace one visible tell with another, such as swapping every em dash for parentheses or every paragraph for bullets.
 - NEVER end with chatbot filler such as "I hope this helps", "Let me know if", or a generic optimistic conclusion.
 
@@ -101,9 +107,12 @@ Before returning prose, verify:
 
 - The first sentence or section makes the purpose clear.
 - Each paragraph has one job.
-- Claims are concrete enough to verify.
+- Each paragraph or section advances the prose instead of restating it.
+- Claims have a defensible scope, and externally checkable details have been verified.
+- Each citation supports the exact claim attached to it.
 - The prose sounds practical, direct, and low-ceremony per `TONE.md`.
 - No marketing tone, consultant polish, or generic enthusiasm remains.
+- No unsupported agreement, optimism, reassurance, or false balance remains.
 - No em dashes remain, and listed jargon has been replaced unless it carries a precise domain meaning.
 - Lists, headings, punctuation, and sentence rhythm follow the material rather than a repeated template.
 - No chatbot artifacts, vague attribution, synonym cycling, forced contrast, false range, or generic conclusion remains.
