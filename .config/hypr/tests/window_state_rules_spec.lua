@@ -236,6 +236,7 @@ describe("window-state rules", function()
 				per_monitor = false,
 				restore_monitor = true,
 				restore_size = false,
+				force_windowed = false,
 			},
 		}
 		assert.is_true(rules.write_rules_file(options))
@@ -244,6 +245,7 @@ describe("window-state rules", function()
 		assert.equal("HDMI-A-1", rule.target_monitor)
 		assert.equal("HDMI-A-1", rule.effects.monitor)
 		assert.is_nil(rule.effects.size)
+		assert.is_nil(rule.effects.fullscreen_state)
 		assert.is_nil(rule.match.workspace)
 	end)
 
@@ -262,6 +264,7 @@ describe("window-state rules", function()
 		assert.is_false(pip_selector.per_monitor)
 		assert.is_true(pip_selector.restore_monitor)
 		assert.is_false(pip_selector.restore_size)
+		assert.is_false(pip_selector.force_windowed)
 		assert.are.same(
 			{ "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
 			pip_selector.persist_tags

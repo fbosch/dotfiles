@@ -81,9 +81,15 @@ pinned cross-monitor windows such as Picture-in-Picture. Add
 `restore_monitor = true` when that global rule must also reopen on the monitor
 captured with its latest geometry.
 
-Set `restore_size = false` when another owner persists size. Picture-in-Picture
-uses Hyprland's dynamic `persistent_size` rule so generated-rule reloads cannot
-reapply a stale size over an active manual resize.
+Set `restore_size = false` when another owner controls size. Picture-in-Picture
+uses a static creation size because Zen requests monitor-sized geometry on
+Wayland, and suppresses Zen's erroneous maximize request. Static `size` applies
+only when the window maps, so browser-driven and manual resizing remain
+unrestricted afterward. Generated-rule reloads cannot reapply a stale size over
+the client.
+Set `force_windowed = false` when the client also owns its initial fullscreen
+state. Picture-in-Picture uses both options so its generated rule controls only
+the accepted monitor, position, and corner tag.
 
 ## Generated Rule Contract
 
@@ -107,10 +113,11 @@ this shape:
 }
 ```
 
-`monitor` is not a rule effect. `fullscreen_state = "0 0"` ensures an
-application's maximize request cannot override restored windowed geometry. The
-daemon does not capture maximized or fullscreen clients, so those temporary
-states cannot replace the last windowed geometry. The
+`monitor` is not a rule effect. By default, `fullscreen_state = "0 0"` ensures
+an application's maximize request cannot override restored windowed geometry;
+selectors with `force_windowed = false` omit that effect. The daemon does not
+capture maximized or fullscreen clients, so those temporary states cannot
+replace the last windowed geometry. The
 `workspace = "m[<monitor>]"` matcher keeps
 each monitor's saved geometry local to that monitor. `size` and `move` must stay
 space-separated strings because that is the Lua window-rule API contract.

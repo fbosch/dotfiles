@@ -452,6 +452,7 @@ local function fixture()
 			and generated_rule(nil, "^Picture-in-Picture$").effects.tag == "+pip-top-left"
 			and generated_rule(nil, "^Picture-in-Picture$").effects.move == "15 15"
 			and generated_rule(nil, "^Picture-in-Picture$").effects.size == nil
+			and generated_rule(nil, "^Picture-in-Picture$").effects.fullscreen_state == nil
 			and generated_rule(nil, "^Picture-in-Picture$").match.workspace == nil
 			and rules:find('tag = "-pip-top-right"', 1, true)
 			and rules:find('animation = "slide top"', 1, true)

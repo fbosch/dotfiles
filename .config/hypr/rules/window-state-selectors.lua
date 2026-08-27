@@ -21,6 +21,7 @@ local pip = require("lib.picture_in_picture")
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 ---@field restore_monitor? boolean Restores the monitor captured by a global selector.
 ---@field restore_size? boolean Emits a generated size rule; defaults to true.
+---@field force_windowed? boolean Emits fullscreen_state = "0 0"; defaults to true.
 
 ---@return WindowStateSelector[]
 return {
@@ -62,6 +63,7 @@ return {
 		per_monitor = false,
 		restore_monitor = true,
 		restore_size = false,
+		force_windowed = false,
 	},
 	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
 	{ matcher = "match:class", pattern = [=[^org\.gnome\.Calendar$]=] },

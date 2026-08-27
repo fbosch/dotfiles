@@ -79,3 +79,24 @@ describe("picture-in-picture identity", function()
 		assert_equal(pip.matches(nil), false, "missing window")
 	end)
 end)
+
+describe("picture-in-picture window rules", function()
+	it("applies only a static initial size", function()
+		local rules = {}
+		_G.hl = {
+			window_rule = function(rule)
+				rules[#rules + 1] = rule
+			end,
+		}
+
+		pip.register_window_rules()
+		_G.hl = nil
+
+		local base_rule = rules[1]
+		assert_equal(base_rule.suppress_event, "maximize", "suppressed event")
+		assert.same({ 640, 360 }, base_rule.size)
+		assert_equal(base_rule.max_size, nil, "maximum size")
+		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
+		assert_equal(base_rule.persistent_size, nil, "persistent size")
+	end)
+end)

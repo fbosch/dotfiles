@@ -107,6 +107,7 @@ function M.load_selectors(path)
 			local per_monitor = selector.per_monitor
 			local restore_monitor = selector.restore_monitor
 			local restore_size = selector.restore_size
+			local force_windowed = selector.force_windowed
 			local valid_geometry_authority = geometry_authority == nil
 				or (
 					geometry_authority == "pip"
@@ -143,6 +144,7 @@ function M.load_selectors(path)
 				and (restore_monitor == nil or type(restore_monitor) == "boolean")
 				and (restore_monitor ~= true or per_monitor == false)
 				and (restore_size == nil or type(restore_size) == "boolean")
+				and (force_windowed == nil or type(force_windowed) == "boolean")
 			then
 				normalized[#normalized + 1] = {
 					matcher = selector.matcher,
@@ -154,6 +156,7 @@ function M.load_selectors(path)
 					per_monitor = per_monitor ~= false,
 					restore_monitor = restore_monitor == true,
 					restore_size = restore_size ~= false,
+					force_windowed = force_windowed ~= false,
 				}
 				matchers[#matchers + 1] = {
 					matcher = selector.matcher,
@@ -488,7 +491,9 @@ local function render_rules(cache, selectors_path, selectors)
 			append_rule_identity(lines, entry, rule_id(entry.matcher, entry.pattern, entry.monitor), true)
 			append_match(lines, entry, selector, lua_match_key)
 			lines[#lines + 1] = "    effects = {"
-			lines[#lines + 1] = '      fullscreen_state = "0 0",'
+			if selector == nil or selector.force_windowed ~= false then
+				lines[#lines + 1] = '      fullscreen_state = "0 0",'
+			end
 			if (selector == nil or selector.restore_size ~= false) and entry.width and entry.height then
 				lines[#lines + 1] = "      size = "
 					.. json.encode(generated_rules.format_pair(entry.width, entry.height))

@@ -130,7 +130,8 @@ function M.register_window_rules()
 		no_initial_focus = true,
 		pin = true,
 		content = "video",
-		persistent_size = true,
+		suppress_event = "maximize",
+		size = { 640, 360 },
 		rounding = M.rounding,
 	})
 	hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = M.default_animation })
