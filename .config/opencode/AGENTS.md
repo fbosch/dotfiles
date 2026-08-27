@@ -23,7 +23,7 @@
 - Before adding or selecting a dependency, library, or development tool, read `~/.config/opencode/references/library-preferences.md`. If the file lists multiple suitable options and the repository does not establish one, ask the user when available or return the choice to the caller before adding an option.
 - Before changing behavior, APIs, config formats, data handling, or validation paths, read `~/.config/opencode/references/compatibility.md`.
 - Before running or reporting validation, read `~/.config/opencode/references/validation.md`.
-- Before writing substantial user-facing prose, PR descriptions, issue summaries, or documentation, read `~/.config/opencode/TONE.md` as the canonical voice reference. Also use the `writing-clearly` skill for substantial user-facing documentation, README prose, PR descriptions, and long-form explanations.
+- Before drafting or editing substantial human-facing prose, use the `writing-clearly` skill.
 - Format user-executed multi-step instructions as a numbered list of bounded actions. Put the immediate next action first.
 - For work spanning multiple replies, state the current step, completed outcome, and immediate next action. When task tracking is available, use it instead of repeating the full plan.
 - Before creating a plan, look for existing planning documents in `docs/agents/plans/`, `docs/plans/`, `plans/`, and repository guidance. Use the established location and naming convention when present.

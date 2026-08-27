@@ -23,7 +23,7 @@ When instructions conflict, use this priority order:
 
 ## Process
 
-1. Identify the reader and the decision or action the prose should support.
+1. Identify the reader, the decision or action the prose should support, and whether the task asks for a rewrite or a summary. A plain-language rewrite preserves supported detail; a summary may omit lower-priority detail.
 2. Draft the smallest complete version that gives necessary context. Put the point first unless suspense or narrative order is explicitly useful.
 3. **Scan.** Find the AI patterns below, including puffery, vague attribution, formulaic structure, empty consequence clauses, chatbot artifacts, and generic conclusions. Treat words as diagnostic signals rather than automatic replacements. Em dashes are prohibited.
 4. **Rewrite.** Fix substance before style. Cut filler and replace broad claims with verified mechanisms, consequences, examples, measurements, or limits. Preserve meaning, evidence, uncertainty, constraints, and technical distinctions. If the source does not support a concrete rewrite, qualify or remove the claim instead of inventing detail.
@@ -42,10 +42,15 @@ When instructions conflict, use this priority order:
 - Replace formulaic challenge-and-triumph framing with the actual constraint and outcome.
 - Apply the portability test to project-specific prose: if a sentence could appear unchanged in another project's documentation, rewrite it with this project's mechanism or cut it.
 
+## Protected Detail
+
+- Treat code blocks, inline code, identifiers, commands, file paths, URLs and link targets, quoted output, names, and numbers as protected text. Keep them unchanged unless the task explicitly requires correcting or rewriting them.
+
 ## Language
 
 - Prefer plain words, but do not replace precise domain terms merely because they sound formal.
 - Replace inflated substitutes for "is" or "has", such as "serves as", "stands as", and "boasts", unless the distinction matters.
+- Preserve the source language unless the user requests translation. This includes headings, labels, and surrounding prose; keep code and other technical literals unchanged.
 - Avoid reflexive corrective contrasts such as "It's not X; it's Y", "It's not that X; it's that Y", "not merely X, but Y", and "less about X than Y". Keep the contrast only when X is a plausible interpretation and distinguishing Y changes the reader's understanding. Otherwise, state Y directly.
 - Do not force ideas into groups of three or use "from X to Y" unless the endpoints form a meaningful scale.
 - Repeat an established technical term instead of cycling through synonyms that could imply different concepts.
@@ -58,6 +63,7 @@ When instructions conflict, use this priority order:
 - Let the material determine the number and shape of sections. Avoid mechanically balanced outlines and lists that repeat the same sentence pattern.
 - Use headings and bullets for navigation, not decoration. Avoid bold-label bullets that restate their own label.
 - Keep paragraphs focused; split when the topic or reader task changes.
+- Preserve meaningful Markdown structure, link targets, and frontmatter unless restructuring is requested or the existing structure obstructs comprehension.
 - Each paragraph or section must add evidence, explanation, a decision, or a reader action. Delete closing sentences and subsection summaries that merely restate earlier text.
 - Use signposting only when it establishes scope, prerequisites, navigation, or the reader's next task. Delete document-anatomy narration such as "This section discusses" and "Below we explore".
 - Vary sentence rhythm when it improves readability. Do not manufacture fragments or deliberate messiness to simulate a human voice.
@@ -121,4 +127,4 @@ Before returning prose, verify:
 
 For copyediting, return the revised text first. Add notes only when a choice materially changes meaning, risk, or audience fit.
 
-For new prose, ask at most one clarifying question when audience, destination, or hard constraints are missing and guessing would change the output.
+For new prose, ask at most one clarifying question when audience, destination, or hard constraints are missing and guessing would change the output. Use the request and surrounding material only to resolve meaning and scope. Rewrite the supplied prose rather than answering it or introducing new claims.
