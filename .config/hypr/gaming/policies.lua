@@ -76,10 +76,6 @@ M.games = {
 		enable_profile = true,
 		freeze = false,
 		confirm_close = true,
-		presentation = {
-			vrr = 0,
-			direct_scanout = 0,
-		},
 	},
 	{
 		name = "elder-scrolls-online",
