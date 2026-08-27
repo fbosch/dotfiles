@@ -211,6 +211,90 @@ test("rotates after confirmed usage exhaustion without replaying the failed requ
   expect(accounts).toEqual(["jpb", "fbb"])
 })
 
+test("rotates after a successful Codex response reports an exhausted usage window", async () => {
+  const accounts: string[] = []
+  const resets: Array<number | null> = []
+  let requests = 0
+  const currentTime = 1_000_000
+  const fetch = createCodexFetch({
+    credential: credential("jpb", currentTime + 60_000),
+    now: () => currentTime,
+    onUsageLimit: async (attempted, info) => {
+      expect(attempted.accountId).toBe("jpb")
+      resets.push(info.resetsAt)
+      return credential("fbb", currentTime + 60_000)
+    },
+    paths: pathsFor("/unused"),
+    fetch: async (_input, init) => {
+      requests += 1
+      accounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (requests === 1) {
+        return new Response("ok", {
+          headers: {
+            "x-codex-primary-reset-at": "1120",
+            "x-codex-primary-used-percent": "100",
+          },
+        })
+      }
+      return new Response("ok")
+    },
+  })
+
+  const exhausted = await fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  expect(exhausted.status).toBe(200)
+  expect(await exhausted.text()).toBe("ok")
+  expect(exhausted.headers.get("x-codex-primary-used-percent")).toBe("100")
+  expect(resets).toEqual([1_120_000])
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(accounts).toEqual(["jpb", "fbb"])
+})
+
+test("uses a Codex reset-after header when the reset timestamp is absent", async () => {
+  let reset: number | null = null
+  const currentTime = 1_000_000
+  const fetch = createCodexFetch({
+    credential: credential("jpb", currentTime + 60_000),
+    now: () => currentTime,
+    onUsageLimit: async (_attempted, info) => {
+      reset = info.resetsAt
+      return credential("fbb", currentTime + 60_000)
+    },
+    paths: pathsFor("/unused"),
+    fetch: async () =>
+      new Response("ok", {
+        headers: {
+          "x-codex-primary-reset-after-seconds": "120",
+          "x-codex-primary-used-percent": "100",
+        },
+      }),
+  })
+
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(reset).toBe(1_120_000)
+})
+
+test("does not rotate after a successful Codex response with remaining usage", async () => {
+  let rotations = 0
+  const accounts: string[] = []
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    onUsageLimit: async () => {
+      rotations += 1
+      return credential("fbb", Date.now() + 60_000)
+    },
+    paths: pathsFor("/unused"),
+    fetch: async (_input, init) => {
+      accounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      return new Response("ok", { headers: { "x-codex-primary-used-percent": "99.99" } })
+    },
+  })
+
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect((await fetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(rotations).toBe(0)
+  expect(accounts).toEqual(["jpb", "jpb"])
+})
+
 test("does not rotate for transient rate limiting", async () => {
   let rotations = 0
   const fetch = createCodexFetch({
@@ -223,7 +307,13 @@ test("does not rotate for transient rate limiting", async () => {
     fetch: async () =>
       Response.json(
         { error: { code: "rate_limit_exceeded", message: "slow down", type: "invalid_request_error" } },
-        { status: 429 },
+        {
+          headers: {
+            "x-codex-primary-reset-at": "1120",
+            "x-codex-primary-used-percent": "100",
+          },
+          status: 429,
+        },
       ),
   })
 
@@ -232,6 +322,51 @@ test("does not rotate for transient rate limiting", async () => {
   expect(response.status).toBe(429)
   expect(rotations).toBe(0)
   expect(await response.json()).toMatchObject({ error: { code: "rate_limit_exceeded" } })
+})
+
+test("returns a successful quota response while header-triggered failover is in progress", async () => {
+  let resolveRotation: (() => void) | undefined
+  let markRotationStarted: (() => void) | undefined
+  const rotationGate = new Promise<void>((resolve) => {
+    resolveRotation = resolve
+  })
+  const rotationStarted = new Promise<void>((resolve) => {
+    markRotationStarted = resolve
+  })
+  const accounts: string[] = []
+  let requests = 0
+  const fetch = createCodexFetch({
+    credential: credential("jpb", Date.now() + 60_000),
+    onUsageLimit: async () => {
+      markRotationStarted?.()
+      await rotationGate
+      return credential("fbb", Date.now() + 60_000)
+    },
+    paths: pathsFor("/unused"),
+    fetch: async (_input, init) => {
+      requests += 1
+      accounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (requests === 1) {
+        return new Response("stream-body", { headers: { "x-codex-primary-used-percent": "100" } })
+      }
+      return new Response("ok")
+    },
+  })
+
+  const first = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  await rotationStarted
+  const firstResponse = await Promise.race([first, Bun.sleep(100).then(() => undefined)])
+  expect(firstResponse).toBeInstanceOf(Response)
+  if (!(firstResponse instanceof Response)) throw new Error("successful quota response was not returned")
+  expect(await firstResponse.text()).toBe("stream-body")
+
+  const second = fetch("https://api.openai.com/v1/responses", { method: "POST" })
+  await Bun.sleep(10)
+  expect(accounts).toEqual(["jpb"])
+  resolveRotation?.()
+
+  expect((await second).status).toBe(200)
+  expect(accounts).toEqual(["jpb", "fbb"])
 })
 
 test("does not inspect or rotate oversized quota responses", async () => {
@@ -488,6 +623,56 @@ test("switches the next request and profile indicator after usage exhaustion", a
 
   expect((await routedFetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
   expect(requestAccounts).toEqual([fixture.accountIds.jpb, fixture.accountIds.fbb])
+  await plugin.dispose?.()
+})
+
+test("falls back to the default profile after a preferred account exhausts its window", async () => {
+  const fixture = await pluginFixture(["jpb"])
+  const serverUrl = new URL("http://127.0.0.1:43127")
+  const requestAccounts: string[] = []
+  const toasts: string[] = []
+  let codexRequests = 0
+  replaceGlobalFetch(async (input, init) => {
+    const url = String(input)
+    if (url.includes("/wham/usage")) return Response.json(usageResponse(20, 20))
+    if (url.includes("/backend-api/codex/responses")) {
+      codexRequests += 1
+      requestAccounts.push(new Headers(init?.headers).get("ChatGPT-Account-Id") || "")
+      if (codexRequests === 1) {
+        return new Response("ok", { headers: { "x-codex-primary-used-percent": "100" } })
+      }
+      return new Response("ok")
+    }
+    throw new Error(`unexpected request: ${url}`)
+  })
+  const plugin = await OpenAIAccountSelectorPlugin({
+    $: originShell("git@github.com:org/pkdx.git"),
+    client: {
+      app: { log: async () => undefined },
+      tui: {
+        showToast: async ({ body }: { body: { message: string } }) => {
+          toasts.push(body.message)
+        },
+      },
+    },
+    directory: fixture.worktree,
+    project: { worktree: fixture.worktree },
+    serverUrl,
+  } as never)
+  const config: {
+    disabled_providers: string[]
+    provider: Record<string, { options: Record<string, unknown> }>
+  } = { disabled_providers: ["openai"], provider: { openai: { options: {} } } }
+  await plugin.config?.(config as never)
+  const routedFetch = config.provider.openai.options.fetch
+  if (typeof routedFetch !== "function") throw new Error("selector fetch was not installed")
+
+  expect((await routedFetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect((await routedFetch("https://api.openai.com/v1/responses", { method: "POST" })).status).toBe(200)
+  expect(await readProfileState(fixture.worktree, serverUrl)).toEqual({ profile: "default", repository: "pkdx" })
+  expect(toasts).toEqual(["jpb exhausted; switched to default. Retry the request."])
+  expect(requestAccounts).toEqual([fixture.accountIds.jpb, fixture.accountIds.fbb])
+  expect(codexRequests).toBe(2)
   await plugin.dispose?.()
 })
 

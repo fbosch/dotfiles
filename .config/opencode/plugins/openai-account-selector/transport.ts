@@ -16,6 +16,7 @@ const usageLimitRetryMs = 60_000
 type Fetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 
 type UsageLimitInfo = {
+  payload?: Record<string, unknown>
   resetsAt: number | null
 }
 
@@ -102,7 +103,7 @@ export function createCodexFetch({
       redirect: "error",
       signal: request.signal,
     })
-    const usageLimit = await usageLimitPayload(response)
+    const usageLimit = await usageLimitInfo(response, now())
     if (!usageLimit || !onUsageLimit) return response
 
     const handledUntil = handledUsageLimits.get(attemptedCredential.accountId) || 0
@@ -123,6 +124,7 @@ export function createCodexFetch({
           rotationPromise = undefined
         })
     }
+    if (!usageLimit.payload) return response
     if (rotationPromise) {
       await rotationPromise
     }
@@ -130,23 +132,66 @@ export function createCodexFetch({
   }
 }
 
-async function usageLimitPayload(
+async function usageLimitInfo(
   response: Response,
-): Promise<{ payload: Record<string, unknown>; resetsAt: number | null } | undefined> {
-  if (response.status !== 429) return
-  try {
-    const payload = await boundedResponseJson(response)
-    if (isJsonObject(payload) === false || isJsonObject(payload.error) === false) return
-    if (payload.error.type !== "usage_limit_reached") return
-    const resetsAtSeconds = payload.error.resets_at
-    const resetsAt =
-      typeof resetsAtSeconds === "number" && Number.isFinite(resetsAtSeconds) && resetsAtSeconds > 0
-        ? resetsAtSeconds * 1000
-        : null
-    return { payload, resetsAt }
-  } catch {
-    return
+  currentTime: number,
+): Promise<UsageLimitInfo | undefined> {
+  if (response.status === 429) {
+    try {
+      const payload = await boundedResponseJson(response)
+      if (isJsonObject(payload) && isJsonObject(payload.error)) {
+        if (payload.error.type !== "usage_limit_reached") return
+        const resetsAtSeconds = payload.error.resets_at
+        const resetsAt =
+          typeof resetsAtSeconds === "number" && Number.isFinite(resetsAtSeconds) && resetsAtSeconds > 0
+            ? resetsAtSeconds * 1000
+            : null
+        return { payload, resetsAt: resetsAt ?? usageLimitFromHeaders(response, currentTime)?.resetsAt ?? null }
+      }
+    } catch {
+      // Header-based quota detection still applies when the error body is unavailable.
+    }
   }
+  return usageLimitFromHeaders(response, currentTime)
+}
+
+function usageLimitFromHeaders(response: Response, currentTime: number): UsageLimitInfo | undefined {
+  const resetTimes: number[] = []
+  let exhausted = false
+  for (const window of ["primary", "secondary"] as const) {
+    const usedPercent = finiteHeaderNumber(response.headers.get(`x-codex-${window}-used-percent`))
+    if (usedPercent === undefined || usedPercent < 100) continue
+
+    exhausted = true
+    const resetAt = resetAtFromHeaders(response.headers, window, currentTime)
+    if (resetAt !== null) resetTimes.push(resetAt)
+  }
+
+  if (exhausted === false) return
+  // These timestamps only cool down the account; this transport never redeems reset credits.
+  return { resetsAt: resetTimes.length > 0 ? Math.max(...resetTimes) : null }
+}
+
+function resetAtFromHeaders(headers: Headers, window: "primary" | "secondary", currentTime: number) {
+  const resetAtSeconds = finiteHeaderNumber(headers.get(`x-codex-${window}-reset-at`))
+  if (resetAtSeconds !== undefined) {
+    const resetAt = resetAtSeconds * 1000
+    if (Number.isFinite(resetAt) && resetAt > currentTime) return resetAt
+  }
+
+  const resetAfterSeconds = finiteHeaderNumber(headers.get(`x-codex-${window}-reset-after-seconds`))
+  if (resetAfterSeconds !== undefined && resetAfterSeconds >= 0) {
+    const resetAt = currentTime + resetAfterSeconds * 1000
+    if (Number.isFinite(resetAt) && resetAt > currentTime) return resetAt
+  }
+
+  return null
+}
+
+function finiteHeaderNumber(value: string | null) {
+  if (value === null || value.trim() === "") return
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 async function boundedResponseJson(response: Response): Promise<unknown> {

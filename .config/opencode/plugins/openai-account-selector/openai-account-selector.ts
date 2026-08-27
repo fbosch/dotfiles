@@ -118,7 +118,6 @@ export const OpenAIAccountSelectorPlugin: Plugin = async ({ $, client, directory
       let next: Awaited<ReturnType<typeof selectRepositoryAccount>>
       try {
         next = await selectRepositoryAccount({
-          allowFallback: false,
           excludedAccountIds: new Set(exhaustedUntil.keys()),
           forceUsageRefresh: true,
           repository,
