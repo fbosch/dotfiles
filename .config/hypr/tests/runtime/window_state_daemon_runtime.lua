@@ -22,6 +22,7 @@ local bin_dir = test_dir .. "/bin"
 local hypr_dir = runtime_dir .. "/hypr/fixture"
 local query_path = hypr_dir .. "/.socket.sock"
 local event_path = hypr_dir .. "/.socket2.sock"
+local control_path = hypr_dir .. "/window-state.sock"
 local state_path = hypr_dir .. "/window-state.cache"
 local rules_path = home_dir .. "/.config/hypr/rules/window-state.lua"
 local log_path = test_dir .. "/daemon.log"
@@ -157,6 +158,26 @@ local function wait_for(phase, predicate, timeout)
 		socket.sleep(0.02)
 	end
 	fail(phase, "timed out after " .. timeout .. "s")
+end
+
+local function send_control(message, expected_response)
+	expected_response = expected_response or "ok"
+	local deadline = socket.gettime() + 2
+	while socket.gettime() < deadline do
+		local client = assert(unix())
+		client:settimeout(1)
+		local connected = client:connect(control_path)
+		if connected then
+			assert(client:send(message .. "\n"))
+			local response = client:receive("*l")
+			client:close()
+			assert(response == expected_response, "unexpected window-state control response: " .. tostring(response))
+			return
+		end
+		client:close()
+		socket.sleep(0.02)
+	end
+	fail("window-state control socket", "failed to connect")
 end
 
 local function accept_query()
@@ -337,6 +358,19 @@ local function fixture()
       move = "110 220",
     },
   },
+  {
+    id = "window-state:match:initial_title:^Picture-in-Picture$:global",
+    matcher = "match:initial_title",
+    pattern = "^Picture-in-Picture$",
+    target_monitor = "DP-1",
+    match = { initial_title = "^Picture-in-Picture$" },
+    effects = {
+      monitor = "DP-1",
+      size = "500 300",
+      move = "15 15",
+    },
+    tags = { "pip-top-left" },
+  },
 }
 ]]
 	)
@@ -396,6 +430,7 @@ local function fixture()
 		local rules = read_file(rules_path)
 		return state
 			and state:find('"Bitwarden"', 1, true)
+			and not state:find("Picture-in-Picture", 1, true)
 			and not state:find('"Mullvad VPN"', 1, true)
 			and not state:find('"width":300', 1, true)
 			and not state:find('"width":320', 1, true)
@@ -413,9 +448,31 @@ local function fixture()
 			and generated_rule("HDMI-A-1", "^nemo$").effects.move == "30 40"
 			and generated_rule(nil, "^Picture-in-Picture$")
 			and generated_rule(nil, "^Picture-in-Picture$").tags[1] == "pip-top-left"
+			and generated_rule(nil, "^Picture-in-Picture$").placement.corner == "top-left"
+			and generated_rule(nil, "^Picture-in-Picture$").effects.tag == "+pip-top-left"
+			and generated_rule(nil, "^Picture-in-Picture$").effects.move == nil
+			and generated_rule(nil, "^Picture-in-Picture$").effects.size == nil
 			and generated_rule(nil, "^Picture-in-Picture$").match.workspace == nil
+			and rules:find('tag = "-pip-top-right"', 1, true)
 			and rules:find('animation = "slide top"', 1, true)
 	end, 3)
+
+	write_file(hyprctl_log_path, "")
+	send_control("not-a-placement", "error")
+	send_control('accept-pip-placement-v1 {"kind":"corner","corner":"bottom-right","target_monitor":"DP-1"}')
+	send_control('accept-pip-placement-v1 {"kind":"free","target_monitor":"HDMI-A-1","x":75,"y":85}')
+	assert(read_file(hyprctl_log_path) == "", "placement acknowledgement waited for rule activation")
+	local accepted = generated_rule(nil, "^Picture-in-Picture$")
+	assert(accepted, "accepted PiP rule is missing")
+	assert(accepted.placement.kind == "free", "last accepted PiP placement did not win")
+	assert(accepted.placement.target_monitor == "HDMI-A-1", "accepted PiP monitor was not persisted")
+	assert(accepted.effects.monitor == "HDMI-A-1", "accepted PiP monitor effect is missing")
+	assert(accepted.effects.move == "75 85", "accepted free PiP position is missing")
+	assert(accepted.tags == nil, "free PiP placement retained a corner tag")
+	wait_for("debounced PiP rule activation", function()
+		local calls = read_file(hyprctl_log_path)
+		return calls and calls:find("reload config-only", 1, true) ~= nil
+	end, 1)
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")
 	assert_contains("window-state rule refresh", read_file(hyprctl_log_path), "reload config-only")

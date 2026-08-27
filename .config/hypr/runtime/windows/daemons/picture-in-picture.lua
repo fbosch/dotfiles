@@ -10,20 +10,48 @@ local json = require("lib.json")
 local daemon = require("runtime.lib.daemon")
 local placement = require("lib.pip_placement")
 local pip = require("lib.picture_in_picture")
+local rate_limit = require("lib.rate_limit")
 
 -- Thin adapter around the PiP placement reducer: feeds IPC snapshots and
 -- events into lib.pip_placement and interprets the returned commands.
 local kit = daemon.new({})
 local state = placement.new()
+local acceptance_delivery_timeout_s = 1
 
 local monitors_by_name = {}
+local acceptance_socket_path = kit:socket_path("window-state.sock")
 
 local function log(message)
 	io.stderr:write("picture-in-picture: ", message, "\n")
 end
 
+local log_rate_limited, reset_rate_limit = rate_limit.new(log, 30, socket.gettime)
+
 local function request(message)
 	return kit:request(message) or ""
+end
+
+local function monitor_geometry_changed(previous, current)
+	for name, monitor in pairs(current) do
+		local old = previous[name]
+		if
+			old == nil
+			or old.id ~= monitor.id
+			or old.x ~= monitor.x
+			or old.y ~= monitor.y
+			or old.width ~= monitor.width
+			or old.height ~= monitor.height
+		then
+			return true
+		end
+	end
+
+	for name in pairs(previous) do
+		if current[name] == nil then
+			return true
+		end
+	end
+	return false
 end
 
 local function refresh_monitors(query_opts)
@@ -41,8 +69,9 @@ local function refresh_monitors(query_opts)
 		return next(monitors_by_name) ~= nil
 	end
 
+	local geometry_changed = monitor_geometry_changed(monitors_by_name, by_name)
 	monitors_by_name = by_name
-	return true
+	return true, geometry_changed
 end
 
 local function predicted_waybar_layers()
@@ -97,6 +126,19 @@ local function bars_for(waybar_visible)
 	return waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
 end
 
+local function accept_placement(value)
+	local response, err = kit:request(pip.acceptance.encode(value) .. "\n", {
+		path = acceptance_socket_path,
+		timeout = acceptance_delivery_timeout_s,
+	})
+	if err ~= nil or response ~= "ok\n" then
+		log_rate_limited("placement-acceptance", "accepted placement was not persisted")
+		return
+	end
+
+	reset_rate_limit("placement-acceptance")
+end
+
 local function apply_commands(commands)
 	for _, cmd in ipairs(commands) do
 		if cmd.kind == "move" then
@@ -125,6 +167,10 @@ local function apply_commands(commands)
 			end
 		elseif cmd.kind == "cursor-outline" then
 			request(string.format("eval hl.plugin.cursor_outline.%s()", cmd.enabled and "on" or "off"))
+		elseif cmd.kind == "accept-placement" then
+			accept_placement(cmd.placement)
+		elseif cmd.kind == "acceptance-timeout" then
+			log_rate_limited("placement-observation", "final placement was not observed")
 		end
 	end
 end
@@ -178,8 +224,16 @@ local function compositor_event(line, now)
 	if name == nil then
 		return
 	end
-	-- Topology and config events invalidate the daemon kit's monitor TTL cache.
-	if name == "configreloaded" or name:match("^monitoradded") or name == "monitorremoved" then
+	if name == "configreloaded" then
+		local _, geometry_changed = refresh_monitors({ force = true })
+		place(
+			now,
+			{ type = geometry_changed and "monitorchange" or "configreload" },
+			geometry_changed and bars_for(state.waybar_visible) or nil
+		)
+		return
+	end
+	if name:match("^monitoradded") or name == "monitorremoved" then
 		refresh_monitors({ force = true })
 		place(now, { type = "monitorchange" }, bars_for(state.waybar_visible))
 		return
@@ -201,9 +255,6 @@ local function tick_due(now)
 		return true
 	end
 	if now >= state.next_observation_at then
-		return true
-	end
-	if state.settle_at and now >= state.settle_at then
 		return true
 	end
 	return state.reconcile_at ~= nil and now >= state.reconcile_at
@@ -229,10 +280,12 @@ local function run()
 		end
 
 		consider(state.next_observation_at)
+		if state.pending_acceptance then
+			consider(state.pending_acceptance.deadline)
+		end
 		if state.dragging then
 			timeout = timeout and math.min(timeout, placement.drag_interval_s) or placement.drag_interval_s
 		end
-		consider(state.settle_at)
 		consider(state.reconcile_at)
 
 		local ready = socket.select({ control_socket:reader(), event_socket }, nil, timeout)

@@ -1,3 +1,5 @@
+local json = require("lib.json")
+
 local M = {
 	class = "app.zen_browser.zen",
 	title = "Picture-in-Picture",
@@ -60,6 +62,58 @@ function M.control.decode(line)
 	end
 
 	return action, rest
+end
+
+M.acceptance = {
+	action = "accept-pip-placement-v1",
+}
+
+local function finite_number(value)
+	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
+end
+
+function M.acceptance.normalize(value)
+	if type(value) ~= "table" or type(value.target_monitor) ~= "string" or value.target_monitor == "" then
+		return nil, "expected target_monitor"
+	end
+
+	if value.kind == "corner" and M.corners[value.corner] then
+		return {
+			kind = "corner",
+			corner = value.corner,
+			target_monitor = value.target_monitor,
+		}
+	end
+
+	if value.kind == "free" and finite_number(value.x) and finite_number(value.y) then
+		return {
+			kind = "free",
+			target_monitor = value.target_monitor,
+			x = value.x,
+			y = value.y,
+		}
+	end
+
+	return nil, "expected corner or free placement"
+end
+
+function M.acceptance.encode(value)
+	local normalized, err = M.acceptance.normalize(value)
+	assert(normalized, err)
+	return M.acceptance.action .. " " .. json.encode(normalized)
+end
+
+function M.acceptance.decode(line)
+	if type(line) ~= "string" then
+		return nil, "expected placement command"
+	end
+
+	local action, payload = line:match("^(%S+)%s+(.+)$")
+	if action ~= M.acceptance.action then
+		return nil, "unknown placement command"
+	end
+
+	return M.acceptance.normalize(json.object(payload))
 end
 
 function M.register_window_rules()

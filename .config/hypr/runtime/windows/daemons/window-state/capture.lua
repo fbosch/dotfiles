@@ -50,7 +50,7 @@ end
 local function matched_selector(client, selectors)
 	for _, selector in ipairs(selectors) do
 		local field = state_rules.matcher_client_field(selector.matcher)
-		if field and field_matches(client[field], selector.pattern) then
+		if selector.geometry_authority == nil and field and field_matches(client[field], selector.pattern) then
 			local exclude = selector.exclude
 			local exclude_field = exclude and state_rules.matcher_client_field(exclude.matcher)
 			local excluded = false

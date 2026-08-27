@@ -44,6 +44,33 @@ describe("picture-in-picture control protocol", function()
 	end)
 end)
 
+describe("picture-in-picture placement acceptance protocol", function()
+	it("round-trips corner and free placements", function()
+		local corner = { kind = "corner", corner = "top-left", target_monitor = "DP-1" }
+		local free = { kind = "free", target_monitor = "HDMI-A-1", x = 120, y = 340 }
+
+		assert.same(corner, assert(pip.acceptance.decode(pip.acceptance.encode(corner))))
+		assert.same(free, assert(pip.acceptance.decode(pip.acceptance.encode(free))))
+	end)
+
+	it("rejects malformed placement records", function()
+		local malformed = {
+			{},
+			{ kind = "corner", corner = "sideways", target_monitor = "DP-1" },
+			{ kind = "corner", corner = "top-left", target_monitor = "" },
+			{ kind = "free", target_monitor = "DP-1", x = "10", y = 20 },
+			{ kind = "free", target_monitor = "DP-1", x = 0 / 0, y = 20 },
+		}
+
+		assert.is_nil(pip.acceptance.normalize(nil))
+		for _, value in ipairs(malformed) do
+			assert.is_nil(pip.acceptance.normalize(value))
+		end
+		assert.is_nil(pip.acceptance.decode("wrong-command {}"))
+		assert.is_nil(pip.acceptance.decode(pip.acceptance.action .. " not-json"))
+	end)
+end)
+
 describe("picture-in-picture identity", function()
 	it("matches only the exact class and title", function()
 		assert_equal(pip.matches({ class = pip.class, title = pip.title }), true, "exact identity")

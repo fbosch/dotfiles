@@ -50,6 +50,14 @@ local function of_kind(commands, kind)
 	return matched
 end
 
+local function accepted_placements(commands)
+	local placements = {}
+	for _, command in ipairs(of_kind(commands, "accept-placement")) do
+		placements[#placements + 1] = command.placement
+	end
+	return placements
+end
+
 -- Default bottom-right resting spot for a 400x225 window on the test monitor.
 local rest_x, rest_y = 3440 - 400 - 15, 1440 - 225 - 15
 
@@ -110,6 +118,94 @@ it("leaves windows alone beyond the snap vicinity", function()
 	assert.equal(0, #of_kind(cmds, "tag"))
 end)
 
+it("accepts an explicit router drag-end free placement immediately when no correction is needed", function()
+	local state = placement.new()
+	local window = client("0x1", 1500, 600, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+
+	local _, commands =
+		placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { window } }))
+
+	assert.equal(0, #of_kind(commands, "move"))
+	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600 } }, accepted_placements(commands))
+end)
+
+it("accepts a snapped router drag-end only after observing its exact position and tag", function()
+	local state = placement.new()
+	local dragged = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+
+	local _, corrected =
+		placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+	assert.equal(0, #accepted_placements(corrected))
+
+	local observed = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, accepted = placement.place(state, input(0.2, { type = "tick" }, { clients = { observed } }))
+	assert.same(
+		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide" } },
+		accepted_placements(accepted)
+	)
+end)
+
+it("accepts free placement after the bare corner tag clears while the old dynamic rule tag remains", function()
+	local state = placement.new()
+	local dragged = client("0x1", 1500, 600, 400, 225, { tags = { "pip-top-left", "pip-top-left*" } })
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+
+	local _, clearing =
+		placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+	assert.equal(0, #accepted_placements(clearing))
+
+	local observed = client("0x1", 1500, 600, 400, 225, { tags = { "pip-top-left*" } })
+	local _, accepted = placement.place(state, input(0.2, { type = "tick" }, { clients = { observed } }))
+	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600 } }, accepted_placements(accepted))
+end)
+
+it("drops corrected router drag-end placement after the 500ms observation deadline", function()
+	local state = placement.new()
+	local dragged = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+	placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+
+	local _, commands = placement.place(state, input(0.6, { type = "tick" }, { clients = { dragged } }))
+	assert.equal(0, #accepted_placements(commands))
+	assert.equal(1, #of_kind(commands, "acceptance-timeout"))
+end)
+
+it("keeps corrected placement pending across config reloads and empty observations", function()
+	local state = placement.new()
+	local dragged = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+	placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+
+	placement.place(state, input(0.15, { type = "configreload" }))
+	placement.place(state, input(0.2, { type = "tick" }))
+	assert.is_not_nil(state.pending_acceptance)
+	assert.is_true(state.next_observation_at < math.huge)
+
+	local observed = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, accepted = placement.place(state, input(0.3, { type = "tick" }, { clients = { observed } }))
+	assert.same(
+		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide" } },
+		accepted_placements(accepted)
+	)
+end)
+
+it("does not accept pending placement from derived startup or waybar events", function()
+	local state = placement.new()
+	local dragged = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+	placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+	local observed = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+
+	local _, startup = placement.place(state, input(0.2, { type = "startup" }, { clients = { observed } }))
+	local _, waybar =
+		placement.place(state, input(0.3, { type = "control", action = "waybar-hide" }, { clients = { observed } }))
+
+	assert.equal(0, #accepted_placements(startup))
+	assert.equal(0, #accepted_placements(waybar))
+end)
+
 it("lifts the resting spot above a visible waybar", function()
 	local state = placement.new()
 	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
@@ -137,21 +233,20 @@ it("suppresses echo of its own moves during observation", function()
 	assert.equal(0, #of_kind(cmds, "move"))
 end)
 
-it("does not treat settled client movement as a mouse release", function()
+it("ignores direct client movement and sleeps while no router interaction is active", function()
 	local state = placement.new()
 	local still = client("0x1", 1500, 600, 400, 225)
-	placement.place(state, input(0, { type = "tick" }, { clients = { still } }))
+	local _, initial = placement.place(state, input(0, { type = "tick" }, { clients = { still } }))
+	assert.is_false(state.dragging)
+	assert.equal(math.huge, state.next_observation_at)
+	assert.equal(0, #initial)
 
 	local moved = client("0x1", 2960, 1150, 400, 225)
 	local _, cmds = placement.place(state, input(0.08, { type = "tick" }, { clients = { moved } }))
-	assert.is_true(state.dragging)
-	assert.equal("client", state.drag_source)
-	assert.equal(0, #of_kind(cmds, "move"))
-
-	-- Movement stopping alone cannot distinguish a held mouse from a release.
-	_, cmds = placement.place(state, input(0.3, { type = "tick" }, { clients = { moved } }))
 	assert.is_false(state.dragging)
+	assert.equal(math.huge, state.next_observation_at)
 	assert.equal(0, #of_kind(cmds, "move"))
+	assert.equal(0, #accepted_placements(cmds))
 end)
 
 it("emits the snap preview once per distinct target", function()
@@ -185,6 +280,14 @@ it("restores the anchored corner after a resize", function()
 	assert.equal(1, #moves)
 	assert.equal(15, moves[1].x)
 	assert.equal(990, moves[1].y)
+	assert.equal(0, #accepted_placements(cmds))
+
+	local observed = client("0x1", 15, 990, 800, 450, { tags = { "pip-bottom-left" } })
+	local _, accepted = placement.place(state, input(1.1, { type = "tick" }, { clients = { observed } }))
+	assert.same(
+		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide" } },
+		accepted_placements(accepted)
+	)
 end)
 
 it("clears resize state when release target revalidation fails", function()
@@ -255,4 +358,12 @@ it("moves a tagged window between corners on the move command", function()
 	end
 	assert.same({ pip.corners["bottom-left"].tag }, added)
 	assert.same({ pip.corners["bottom-right"].tag }, removed)
+	assert.equal(0, #accepted_placements(cmds))
+
+	local observed = client("0x1", 15, 1200, 400, 225, { tags = { "pip-bottom-right*", "pip-bottom-left" } })
+	local _, accepted = placement.place(state, input(0.1, { type = "tick" }, { clients = { observed } }))
+	assert.same(
+		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide" } },
+		accepted_placements(accepted)
+	)
 end)

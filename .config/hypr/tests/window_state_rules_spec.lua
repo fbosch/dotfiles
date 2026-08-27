@@ -4,6 +4,7 @@ local config_dir = script_path:match("^(.*)/tests/window_state_rules_spec%.lua$"
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local json = require("lib.json")
+local generated_rules = require("lib.generated_rules")
 local command_calls = 0
 
 local function read_file(path)
@@ -175,8 +176,9 @@ describe("window-state rules", function()
 
 		local content = read_file(options.rules_lua_file)
 		assert_contains(content, 'tags = { "pip-top-left" },')
+		assert_contains(content, 'tag = "+pip-top-left",')
+		assert_contains(content, 'tag = "-pip-top-right",')
 		assert_contains(content, 'animation = "slide left",')
-		assert_not_contains(content, "tag =")
 		assert_not_contains(content, "unrelated")
 
 		local cache = rules.load_rules_cache(options.rules_lua_file)
@@ -245,7 +247,7 @@ describe("window-state rules", function()
 		assert.is_nil(rule.match.workspace)
 	end)
 
-	it("keeps PiP geometry and corner tags selected for global persistence", function()
+	it("selects one PiP geometry authority for global persistence", function()
 		local loaded = rules.load_selectors(config_dir .. "/rules/window-state-selectors.lua")
 		local pip_selector
 		for _, selector in ipairs(loaded.selectors) do
@@ -256,6 +258,7 @@ describe("window-state rules", function()
 		end
 
 		assert.is_not_nil(pip_selector)
+		assert.equal("pip", pip_selector.geometry_authority)
 		assert.is_false(pip_selector.per_monitor)
 		assert.is_true(pip_selector.restore_monitor)
 		assert.is_false(pip_selector.restore_size)
@@ -264,6 +267,16 @@ describe("window-state rules", function()
 			pip_selector.persist_tags
 		)
 		assert.are.same(require("lib.picture_in_picture").corner_tag_animations, pip_selector.persist_tag_animations)
+
+		local cache = {}
+		local accepted, err = rules.accept_pip_placement(
+			cache,
+			{ pip_selector, pip_selector },
+			{ kind = "corner", corner = "top-left", target_monitor = "DP-1" }
+		)
+		assert.is_nil(accepted)
+		assert.equal("multiple PiP geometry authority selectors", err)
+		assert.is_nil(next(cache))
 	end)
 
 	it("retains independent geometry for each monitor", function()
@@ -348,5 +361,95 @@ describe("window-state rules", function()
 		local rule = assert(generated_rule(options.rules_lua_file, "DP-1"))
 		assert.are.equal("300 400", rule.effects.size)
 		assert.are.equal("10 20", rule.effects.move)
+	end)
+
+	it("migrates legacy PiP geometry once and preserves semantic corner and free placements", function()
+		os.execute("mkdir -p " .. string.format("%q", temp_dir .. "/rules"))
+		write_file(
+			options.rules_lua_file,
+			[[return {
+  {
+    matcher = "match:initial_title",
+    pattern = "^Picture-in-Picture$",
+    target_monitor = "DP-1",
+    effects = { monitor = "DP-1", size = "400 225", move = "15 15" },
+    tags = { "pip-top-left" },
+  },
+  {
+    matcher = "match:initial_title",
+    pattern = "^Other PiP$",
+    target_monitor = "HDMI-A-1",
+    effects = { monitor = "HDMI-A-1", size = "400 225", move = "120 340" },
+  },
+}
+]]
+		)
+		options.cache = rules.load_rules_cache(options.rules_lua_file)
+		options.selectors = {
+			{
+				matcher = "match:initial_title",
+				pattern = "^Picture-in-Picture$",
+				geometry_authority = "pip",
+				per_monitor = false,
+				restore_monitor = true,
+				restore_size = false,
+				persist_tags = { "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
+			},
+			{
+				matcher = "match:initial_title",
+				pattern = "^Other PiP$",
+				geometry_authority = "pip",
+				per_monitor = false,
+				restore_monitor = true,
+				restore_size = false,
+			},
+		}
+
+		assert.is_true(rules.migrate_geometry_authorities(options.cache, options.selectors))
+		assert.is_false(rules.migrate_geometry_authorities(options.cache, options.selectors))
+		assert.is_true(rules.write_rules_file(options))
+
+		local content = read_file(options.rules_lua_file)
+		assert_contains(content, 'placement = { kind = "corner", corner = "top-left", target_monitor = "DP-1" },')
+		assert_contains(content, 'placement = { kind = "free", target_monitor = "HDMI-A-1", x = 120, y = 340 },')
+		assert_contains(content, 'tags = { "pip-top-left" },')
+		assert_contains(content, 'monitor = "DP-1",')
+		assert_contains(content, 'tag = "-pip-bottom-right",')
+		assert_not_contains(content, 'size = "400 225",')
+
+		local generated_corner
+		local generated_free
+		for _, rule in ipairs(assert(loadfile(options.rules_lua_file))()) do
+			if rule.pattern == "^Picture-in-Picture$" and rule.placement then
+				generated_corner = rule
+			elseif rule.pattern == "^Other PiP$" and rule.placement then
+				generated_free = rule
+			end
+		end
+		assert.is_nil(generated_corner.effects.size)
+		assert.is_nil(generated_corner.effects.move)
+		assert.equal("DP-1", generated_corner.effects.monitor)
+		assert.equal("+pip-top-left", generated_corner.effects.tag)
+		assert.same({ "pip-top-left" }, generated_corner.tags)
+		assert.equal("+pip-top-left", generated_rules.compile(generated_corner).tag)
+		assert.equal("120 340", generated_free.effects.move)
+
+		local reloaded = rules.load_rules_cache(options.rules_lua_file)
+		assert.is_false(rules.migrate_geometry_authorities(reloaded, options.selectors))
+		local corner
+		local free
+		for _, entry in pairs(reloaded) do
+			if entry.pattern == "^Picture-in-Picture$" then
+				corner = entry
+			else
+				free = entry
+			end
+		end
+		assert.same({ kind = "corner", corner = "top-left", target_monitor = "DP-1" }, corner.placement)
+		assert.is_nil(corner.x)
+		assert.is_nil(corner.y)
+		assert.same({ kind = "free", target_monitor = "HDMI-A-1", x = 120, y = 340 }, free.placement)
+		assert.equal(120, free.x)
+		assert.equal(340, free.y)
 	end)
 end)

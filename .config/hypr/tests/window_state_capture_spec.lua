@@ -111,6 +111,21 @@ it("persists the first configured tag and keeps global monitor scope", function(
 	assert.same({ "pip-top-left" }, windows[1].tags)
 end)
 
+it("skips geometry capture for selectors owned by PiP", function()
+	local selectors = {
+		{ matcher = "match:initialTitle", pattern = "^Picture-in-Picture$", geometry_authority = "pip" },
+		{ matcher = "match:class", pattern = "^nemo$", per_monitor = true },
+	}
+	local clients = {
+		client("app.zen_browser.zen", 1, 115, 215, 500, 300, { initial_title = "Picture-in-Picture" }),
+		client("nemo", 2, 1030, 140, 500, 600),
+	}
+
+	local windows = json.array(capture.snapshot(selectors, clients, monitors))
+	assert.equal(1, #windows)
+	assert.equal("nemo", windows[1].class)
+end)
+
 it("returns an empty snapshot for no selectors or invalid patterns", function()
 	local clients = { client("nemo", 1, 110, 220, 800, 600) }
 	assert.same({}, json.array(capture.snapshot({}, clients, monitors)))

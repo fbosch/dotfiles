@@ -9,7 +9,7 @@ local pip = require("lib.picture_in_picture")
 local M = {}
 
 local drag_interval_s = 0.08
-local client_drag_settle_s = 0.2
+local acceptance_timeout_s = 0.5
 local open_window_delay_s = 0.1
 local waybar_position_vicinity = 12
 
@@ -37,15 +37,13 @@ function M.new(opts)
 		-- Written by the adapter (startup detection, waybar-show/hide peek);
 		-- read here to pick show/hide modes for reconciliation moves.
 		waybar_visible = opts.waybar_visible == true,
-		geometries = {},
-		expected_positions = {},
 		dragging = false,
 		dragging_address = nil,
-		drag_source = nil,
-		settle_at = nil,
-		next_observation_at = 0,
+		next_observation_at = math.huge,
 		preview_signature = nil,
 		resize_anchor = nil,
+		resizing_address = nil,
+		pending_acceptance = nil,
 		reconcile_at = nil,
 		reconcile_addresses = {},
 	}
@@ -65,12 +63,6 @@ local function monitor_for(window, monitors)
 			return monitor
 		end
 	end
-end
-
-local function geometry_keys(window)
-	local position = string.format("%s:%s:%s", tostring(window.monitor), tostring(window.at[1]), tostring(window.at[2]))
-	local size = string.format("%s:%s", tostring(window.size[1]), tostring(window.size[2]))
-	return position, size
 end
 
 local function has_tag(window, expected)
@@ -111,13 +103,82 @@ local function tagged_corner(window)
 	end
 end
 
+local function acceptance_corner_observed(window, expected_corner)
+	if expected_corner then
+		return has_tag(window, pip.corners[expected_corner].tag)
+	end
+
+	for _, tag in ipairs(window.tags or {}) do
+		if tag:sub(-1) ~= "*" then
+			for _, candidate in pairs(pip.corners) do
+				if tag == candidate.tag then
+					return false
+				end
+			end
+		end
+	end
+	return true
+end
+
+local function queue_acceptance(state, input, window, monitor, corner, x, y)
+	state.pending_acceptance = {
+		address = window.address,
+		corner = corner,
+		deadline = input.now + acceptance_timeout_s,
+		target_monitor = monitor.name,
+		x = x,
+		y = y,
+	}
+	state.next_observation_at = math.min(state.next_observation_at, input.now + drag_interval_s)
+end
+
+local function complete_pending_acceptance(state, input, commands)
+	local pending = state.pending_acceptance
+	if pending == nil then
+		return
+	end
+
+	if input.now >= pending.deadline then
+		state.pending_acceptance = nil
+		commands[#commands + 1] = { kind = "acceptance-timeout" }
+		return
+	end
+
+	for _, window in ipairs(input.clients) do
+		if is_pip(window) and window.address == pending.address then
+			local monitor = monitor_for(window, input.monitors)
+			local x = tonumber(window.at[1]) or 0
+			local y = tonumber(window.at[2]) or 0
+			if
+				monitor
+				and monitor.name == pending.target_monitor
+				and x == pending.x
+				and y == pending.y
+				and acceptance_corner_observed(window, pending.corner)
+			then
+				local accepted = {
+					kind = pending.corner and "corner" or "free",
+					target_monitor = monitor.name,
+				}
+				if pending.corner then
+					accepted.corner = pending.corner
+				else
+					accepted.x = x - monitor.x
+					accepted.y = y - monitor.y
+				end
+				commands[#commands + 1] = { kind = "accept-placement", placement = accepted }
+				state.pending_acceptance = nil
+			end
+			return
+		end
+	end
+end
+
 local function move_window(state, commands, window, x, y)
 	if (tonumber(window.at[1]) or 0) == x and (tonumber(window.at[2]) or 0) == y then
 		return
 	end
 
-	state.expected_positions[window.address] =
-		string.format("%s:%s:%s", tostring(window.monitor), tostring(x), tostring(y))
 	commands[#commands + 1] = { kind = "move", address = window.address, x = x, y = y }
 end
 
@@ -176,50 +237,6 @@ local function snap_target(window, monitor, bars)
 	}
 end
 
-local function observe_client_drag(state, now, clients)
-	local seen = {}
-	local moved_address = nil
-	for _, window in ipairs(clients) do
-		if is_pip(window) then
-			local address = window.address
-			local position, size = geometry_keys(window)
-			local previous = state.geometries[address]
-			local expected_position = state.expected_positions[address]
-			seen[address] = true
-			if expected_position == position then
-				state.expected_positions[address] = nil
-			elseif previous and previous.position ~= position and previous.size == size then
-				state.expected_positions[address] = nil
-				moved_address = moved_address or address
-			end
-			state.geometries[address] = { position = position, size = size }
-		end
-	end
-
-	for address in pairs(state.geometries) do
-		if seen[address] == nil then
-			state.geometries[address] = nil
-			state.expected_positions[address] = nil
-		end
-	end
-
-	if state.drag_source == "client" then
-		if moved_address == state.dragging_address then
-			state.settle_at = now + client_drag_settle_s
-		end
-		return next(seen) ~= nil
-	end
-
-	if state.dragging == false and moved_address then
-		state.dragging = true
-		state.dragging_address = moved_address
-		state.drag_source = "client"
-		state.settle_at = now + client_drag_settle_s
-	end
-
-	return next(seen) ~= nil
-end
-
 local function set_preview(state, commands, target)
 	local signature = target
 			and string.format(
@@ -265,15 +282,9 @@ local function update_preview(state, input, commands)
 end
 
 local function stop_drag(state, now, commands)
-	if state.dragging_address then
-		state.geometries[state.dragging_address] = nil
-	end
-
 	state.dragging = false
 	state.dragging_address = nil
-	state.drag_source = nil
-	state.settle_at = nil
-	state.next_observation_at = now
+	state.next_observation_at = state.pending_acceptance and now or math.huge
 	set_preview(state, commands, nil)
 end
 
@@ -282,12 +293,22 @@ local function snap_pip(state, address, input, commands)
 		if is_pip(window) and (address == nil or window.address == address) then
 			local monitor = monitor_for(window, input.monitors)
 			if monitor then
+				local command_count = #commands
 				local target = snap_target(window, monitor, input.bars)
 				if target then
 					tag_corner(commands, window, target.corner)
-					move_window(state, commands, window, target.x + monitor.x, target.y + monitor.y)
+					local x = target.x + monitor.x
+					local y = target.y + monitor.y
+					move_window(state, commands, window, x, y)
+					return window, monitor, target.corner, x, y, #commands > command_count
 				else
 					clear_corner_tags(commands, window)
+					return window,
+						monitor,
+						nil,
+						tonumber(window.at[1]) or 0,
+						tonumber(window.at[2]) or 0,
+						#commands > command_count
 				end
 			end
 		end
@@ -306,6 +327,7 @@ local function move_pip_corner(state, direction, address, input, commands)
 				return
 			end
 
+			local command_count = #commands
 			local corner = tagged_corner(window) or "bottom-right"
 			local left = corner:match("left$") ~= nil
 			local top = corner:match("^top") ~= nil
@@ -328,12 +350,13 @@ local function move_pip_corner(state, direction, address, input, commands)
 			local target_corner = (top and "top" or "bottom") .. "-" .. (left and "left" or "right")
 			tag_corner(commands, window, target_corner)
 			move_window(state, commands, window, target_x, target_y)
-			return
+			return window, monitor, target_corner, target_x, target_y, #commands > command_count
 		end
 	end
 end
 
 local function begin_resize(state, address, clients)
+	state.resizing_address = nil
 	local target
 	for _, window in ipairs(clients) do
 		if window.address == address then
@@ -346,6 +369,7 @@ local function begin_resize(state, address, clients)
 		state.resize_anchor = nil
 		return
 	end
+	state.resizing_address = target.address
 
 	local corner = tagged_corner(target)
 	if not corner then
@@ -359,6 +383,7 @@ local function begin_resize(state, address, clients)
 	local height = tonumber(target.size[2]) or 0
 	state.resize_anchor = {
 		address = target.address,
+		corner = corner,
 		left = corner:match("left$") ~= nil,
 		top = corner:match("^top") ~= nil,
 		x = corner:match("left$") and x or x + width,
@@ -366,21 +391,34 @@ local function begin_resize(state, address, clients)
 	}
 end
 
-local function finish_resize(state, clients, commands)
+local function finish_resize(state, input, commands)
 	local anchor = state.resize_anchor
 	state.resize_anchor = nil
-	if not anchor then
+	local address = state.resizing_address
+	state.resizing_address = nil
+	if address == nil then
 		return
 	end
 
-	for _, window in ipairs(clients) do
-		if window.address == anchor.address and is_pip(window) then
+	for _, window in ipairs(input.clients) do
+		if window.address == address and is_pip(window) then
+			local monitor = monitor_for(window, input.monitors)
+			if monitor == nil then
+				return
+			end
+			local command_count = #commands
 			local width = tonumber(window.size[1]) or 0
 			local height = tonumber(window.size[2]) or 0
-			local x = anchor.left and anchor.x or anchor.x - width
-			local y = anchor.top and anchor.y or anchor.y - height
-			move_window(state, commands, window, x, y)
-			return
+			local x = tonumber(window.at[1]) or 0
+			local y = tonumber(window.at[2]) or 0
+			local corner = tagged_corner(window)
+			if anchor then
+				x = anchor.left and anchor.x or anchor.x - width
+				y = anchor.top and anchor.y or anchor.y - height
+				corner = anchor.corner
+				move_window(state, commands, window, x, y)
+			end
+			return window, monitor, corner, x, y, #commands > command_count
 		end
 	end
 end
@@ -412,8 +450,9 @@ local function move_pip(state, mode, address, assign_default_corner, input, comm
 				local normal_y = monitor.y + monitor.height - height - pip.margin
 				local window_rect = M.rectangle(window.at[1], window.at[2], width, height)
 				local target_y
-				if corner and corner:match("^bottom") then
-					target_y = mode == "show" and bottom_y(window, monitor, normal_x, input.bars) or normal_y
+				if corner then
+					target_y = corner:match("^top") and monitor.y + pip.margin
+						or (mode == "show" and bottom_y(window, monitor, normal_x, input.bars) or normal_y)
 				else
 					for _, bar in ipairs(input.bars[monitor.name] or {}) do
 						if mode == "show" and M.overlaps(window_rect, bar) then
@@ -445,16 +484,23 @@ local function handle_startup(state, input, commands)
 end
 
 local function handle_drag_start(state, input)
+	state.pending_acceptance = nil
 	state.dragging = true
 	state.dragging_address = input.event.address
-	state.drag_source = "bind"
-	state.settle_at = nil
+	state.next_observation_at = input.now
 end
 
 local function handle_drag_end(state, input, commands)
 	if state.dragging then
 		update_preview(state, input, commands)
-		snap_pip(state, state.dragging_address, input, commands)
+		local window, monitor, corner, x, y, needs_observation =
+			snap_pip(state, state.dragging_address, input, commands)
+		if window then
+			queue_acceptance(state, input, window, monitor, corner, x, y)
+			if needs_observation == false then
+				complete_pending_acceptance(state, input, commands)
+			end
+		end
 	end
 	stop_drag(state, input.now, commands)
 end
@@ -464,30 +510,48 @@ local function handle_drag_cancel(state, input, commands)
 end
 
 local function handle_resize_start(state, input)
+	state.pending_acceptance = nil
 	begin_resize(state, input.event.address, input.clients)
 end
 
 local function handle_resize_end(state, input, commands)
-	finish_resize(state, input.clients, commands)
+	local window, monitor, corner, x, y, needs_observation = finish_resize(state, input, commands)
+	if window then
+		queue_acceptance(state, input, window, monitor, corner, x, y)
+		if needs_observation == false then
+			complete_pending_acceptance(state, input, commands)
+		end
+	end
 end
 
 local function handle_resize_cancel(state)
 	state.resize_anchor = nil
+	state.resizing_address = nil
 end
 
 local function handle_move(state, input, commands)
 	local event = input.event
 	if event.address and event.direction then
-		move_pip_corner(state, event.direction, event.address, input, commands)
+		state.pending_acceptance = nil
+		local window, monitor, corner, x, y, needs_observation =
+			move_pip_corner(state, event.direction, event.address, input, commands)
+		if window then
+			queue_acceptance(state, input, window, monitor, corner, x, y)
+			if needs_observation == false then
+				complete_pending_acceptance(state, input, commands)
+			end
+		end
 	end
 end
 
 local function handle_waybar_show(state, input, commands)
+	state.pending_acceptance = nil
 	state.waybar_visible = true
 	move_pip(state, "show", nil, nil, input, commands)
 end
 
 local function handle_waybar_hide(state, input, commands)
+	state.pending_acceptance = nil
 	state.waybar_visible = false
 	move_pip(state, "hide", nil, nil, input, commands)
 end
@@ -523,12 +587,9 @@ end
 
 local compositor_handlers = {
 	openwindow = function(state, input)
-		state.next_observation_at = input.now
 		schedule_reconcile(state, input, true)
 	end,
-	closewindow = function(state, input)
-		state.next_observation_at = input.now
-	end,
+	closewindow = ignore_event,
 	resizewindow = function(state, input)
 		if state.dragging == false and state.resize_anchor == nil then
 			schedule_reconcile(state, input, false)
@@ -543,34 +604,30 @@ end
 
 local function handle_tick(state, input, commands)
 	local now = input.now
-	if now >= state.next_observation_at then
-		local has_pip = observe_client_drag(state, now, input.clients)
-		state.next_observation_at = has_pip and now + drag_interval_s or math.huge
-	end
-
 	if state.dragging then
 		update_preview(state, input, commands)
-		if state.drag_source == "client" and state.settle_at and now >= state.settle_at then
-			-- Geometry settling does not prove the mouse was released; only drag-end may snap.
-			stop_drag(state, now, commands)
-		end
 	end
+
+	complete_pending_acceptance(state, input, commands)
+	state.next_observation_at = (state.dragging or state.pending_acceptance) and now + drag_interval_s or math.huge
 
 	if state.reconcile_at and now >= state.reconcile_at then
 		state.reconcile_at = nil
 		local mode = state.waybar_visible and "show" or "hide"
 		for address, assign_default_corner in pairs(state.reconcile_addresses) do
 			move_pip(state, mode, address, assign_default_corner, input, commands)
-			state.geometries[address] = nil
 			state.reconcile_addresses[address] = nil
 		end
-		state.next_observation_at = now
 	end
 end
 
 local event_handlers = {
 	startup = handle_startup,
-	monitorchange = handle_startup,
+	configreload = ignore_event,
+	monitorchange = function(state, input, commands)
+		state.pending_acceptance = nil
+		handle_startup(state, input, commands)
+	end,
 	control = handle_control,
 	compositor = handle_compositor,
 	tick = handle_tick,
@@ -579,11 +636,12 @@ local event_handlers = {
 --- Feed one event through the placement reducer.
 --- input: { now, event, clients?, monitors?, bars?, active? }
 --- event: { type = "startup" }
+---      | { type = "configreload" }
 ---      | { type = "monitorchange" }
 ---      | { type = "control", action, address?, direction? }
 ---      | { type = "compositor", name, address? }
 ---      | { type = "tick" }
---- Commands: move{address,x,y} · tag{address,tag,add} · preview{target?}
+--- Commands: move{address,x,y} · tag{address,tag,add} · preview{target?} · accept-placement{placement}
 function M.place(state, input)
 	local commands = {}
 	local handler = event_handlers[input.event.type]

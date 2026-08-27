@@ -17,6 +17,7 @@ local pip = require("lib.picture_in_picture")
 ---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
 ---@field persist_tags? string[] Dynamic client tags to restore when present.
 ---@field persist_tag_animations? table<string, string> Entry animation for each persisted tag.
+---@field geometry_authority? "pip" Excludes geometry from generic capture and accepts it through the PiP port.
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 ---@field restore_monitor? boolean Restores the monitor captured by a global selector.
 ---@field restore_size? boolean Emits a generated size rule; defaults to true.
@@ -50,6 +51,7 @@ return {
 	{
 		matcher = "match:initial_title",
 		pattern = [=[^Picture-in-Picture$]=],
+		geometry_authority = "pip",
 		persist_tags = {
 			"pip-top-left",
 			"pip-top-right",

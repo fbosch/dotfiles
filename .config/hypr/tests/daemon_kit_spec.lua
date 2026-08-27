@@ -193,6 +193,11 @@ it("owns the one-line control socket lifecycle", function()
 	assert_equal(calls.response, "ok\n", "health acknowledgement")
 	assert_equal(calls.client_closed, true, "client closes after acknowledgement")
 
+	control:handle_ready(function()
+		return false, "error"
+	end)
+	assert_equal(calls.response, "error\n", "feature-specific acknowledgement")
+
 	control_message = "restart"
 	local feature_handler_called = false
 	assert_equal(

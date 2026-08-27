@@ -47,7 +47,15 @@ should use these terms; new concepts named during design work land here.
   the client-drag state machine, corner-tag policy, and preview dedup.
   Interface is `place(state, input) → (state, commands)` over plain tables;
   the picture-in-picture daemon is a thin adapter that feeds it IPC data and
-  interprets returned commands as dispatches, tags, and preview actions.
+  interprets returned commands as dispatches, tags, and preview actions. The
+  adapter sleeps while idle and samples geometry only during an explicit drag
+  or the bounded final-correction acceptance window.
+- **accepted PiP placement** — user-selected base placement that may be
+  persisted after an explicit PiP interaction completes. It is either a
+  snapped corner or an exact monitor-relative free position plus the target
+  monitor. Client-owned size and derived Waybar or topology offsets are not
+  part of accepted placement. Only router drag-end, resize-end, and corner
+  move completion may accept placement; direct client drags remain live-only.
 - **pointer interaction router** — `lib/window/pointer.lua`. Selects the PiP,
   custom-layout, or native owner for pointer drag/resize presses, captures one
   stable target identity, and revalidates it before targeted release work. It

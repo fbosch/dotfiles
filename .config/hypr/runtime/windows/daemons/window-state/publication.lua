@@ -15,6 +15,7 @@ function M.new(opts)
 	local rules_lua_file = config_dir .. "/rules/window-state.lua"
 	local state_file = kit:instance_path("window-state.cache")
 	local rules_cache = {}
+	local activation_pending = false
 
 	local function load_rules_cache()
 		rules_cache = state_rules.load_rules_cache(rules_lua_file)
@@ -26,9 +27,9 @@ function M.new(opts)
 		end
 	end
 
-	local function write_rules(selectors)
+	local function write_rules(selectors, cache)
 		return state_rules.write_rules_file({
-			cache = rules_cache,
+			cache = cache or rules_cache,
 			selectors = selectors,
 			config_dir = config_dir,
 			selectors_lua_file = selectors_lua_file,
@@ -37,9 +38,16 @@ function M.new(opts)
 	end
 
 	local function refresh_rules(changed)
-		if changed and not reload() then
-			log("WARNING: Failed to refresh window-state rules")
+		if changed == false then
+			return false
 		end
+
+		activation_pending = false
+		if not reload() then
+			log("WARNING: Failed to refresh window-state rules")
+			return false
+		end
+		return true
 	end
 
 	local publisher = {}
@@ -51,7 +59,7 @@ function M.new(opts)
 
 		ensure_rules_cache()
 		state_rules.prune_rules_cache(rules_cache, selectors)
-		state_rules.update_cache_from_windows(rules_cache, snapshot)
+		state_rules.update_cache_from_windows(rules_cache, snapshot, nil, selectors)
 
 		-- Make both recovery artifacts durable before activating the new rules.
 		local changed = write_rules(selectors)
@@ -60,12 +68,35 @@ function M.new(opts)
 		return changed
 	end
 
-	function publisher:reconcile(selectors)
+	function publisher:reconcile(selectors, force_refresh)
 		load_rules_cache()
 		state_rules.prune_rules_cache(rules_cache, selectors)
+		state_rules.migrate_geometry_authorities(rules_cache, selectors)
 		local changed = write_rules(selectors)
-		refresh_rules(changed)
+		refresh_rules(changed or force_refresh == true)
 		return changed
+	end
+
+	function publisher:accept_pip_placement(placement, selectors)
+		ensure_rules_cache()
+		local next_cache = {}
+		for key, entry in pairs(rules_cache) do
+			next_cache[key] = entry
+		end
+		state_rules.prune_rules_cache(next_cache, selectors)
+		local accepted, err = state_rules.accept_pip_placement(next_cache, selectors, placement)
+		if accepted == nil then
+			return nil, err
+		end
+
+		local changed = write_rules(selectors, next_cache)
+		rules_cache = next_cache
+		activation_pending = activation_pending or changed
+		return true, activation_pending
+	end
+
+	function publisher:activate()
+		return refresh_rules(activation_pending)
 	end
 
 	return publisher

@@ -219,8 +219,14 @@ function M.new(opts)
 
 			client:settimeout(0.05)
 			local message = client:receive("*l")
-			local result = message == "restart" and "restart" or handler(message)
-			client:send("ok\n")
+			local result
+			local response
+			if message == "restart" then
+				result = "restart"
+			else
+				result, response = handler(message)
+			end
+			client:send((response or "ok") .. "\n")
 			client:close()
 			return result
 		end

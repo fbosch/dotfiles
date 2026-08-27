@@ -12,10 +12,10 @@ hl.config({
 		inset_border = {
 			enabled = true,
 			thickness = 1,
-			inset = 1,
-			active_color = "rgba(ffffffff)",
-			inactive_color = "rgba(ffffff33)",
-			blend_mode = "overlay",
+			inset = 0,
+			active_color = "rgba(ffffff99)",
+			inactive_color = "rgba(ffffff59)",
+			blend_mode = "soft-light",
 		},
 	},
 })

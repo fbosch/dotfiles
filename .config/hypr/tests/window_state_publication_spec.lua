@@ -153,4 +153,65 @@ describe("window-state publication", function()
 		assert.are.equal(0, reload_calls)
 		assert.is_nil(read_file(rules_path))
 	end)
+
+	it("preserves an accepted semantic PiP placement across generic snapshot publication", function()
+		local pip_selector = {
+			matcher = "match:initial_title",
+			pattern = "^Picture-in-Picture$",
+			geometry_authority = "pip",
+			per_monitor = false,
+			restore_monitor = true,
+			restore_size = false,
+			persist_tags = { "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
+		}
+		local selectors = { pip_selector, selector("Test") }
+		local placement = { kind = "corner", corner = "bottom-right", target_monitor = "DP-1" }
+
+		local accepted, activation_needed = publisher:accept_pip_placement(placement, selectors)
+		assert.is_true(accepted)
+		assert.is_true(activation_needed)
+		assert.are.equal(0, reload_calls)
+		assert.is_true(publisher:activate())
+		assert.are.equal(1, reload_calls)
+		assert.is_true(publisher:publish(json.encode({ saved_window("Test", "DP-1", 10) }), selectors))
+		publisher:publish(
+			json.encode({
+				{
+					class = "app.zen_browser.zen",
+					matcher = "match:initial_title",
+					pattern = "^Picture-in-Picture$",
+					monitor = "",
+					target_monitor = "HDMI-A-1",
+					x = 999,
+					y = 888,
+					width = 500,
+					height = 300,
+				},
+				saved_window("Test", "DP-1", 30),
+			}),
+			selectors
+		)
+
+		local rules = assert(loadfile(rules_path))()
+		local pip_rule
+		for _, rule in ipairs(rules) do
+			if rule.pattern == "^Picture-in-Picture$" then
+				pip_rule = rule
+				break
+			end
+		end
+		assert.is_not_nil(pip_rule)
+		assert.same(placement, pip_rule.placement)
+		assert.same({ "pip-bottom-right" }, pip_rule.tags)
+		assert.equal("+pip-bottom-right", pip_rule.effects.tag)
+		assert.is_nil(pip_rule.effects.move)
+
+		local cleanup_tags = {}
+		for _, rule in ipairs(rules) do
+			if rule.id:find(":tag-cleanup:", 1, true) then
+				cleanup_tags[rule.effects.tag] = true
+			end
+		end
+		assert.same({ ["-pip-bottom-left"] = true, ["-pip-top-left"] = true, ["-pip-top-right"] = true }, cleanup_tags)
+	end)
 end)

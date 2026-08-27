@@ -7,6 +7,7 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 
 local command = require("lib.command")
 local daemon = require("runtime.lib.daemon")
+local pip = require("lib.picture_in_picture")
 local rate_limit = require("lib.rate_limit")
 local capture = require("runtime.windows.daemons.window-state.capture")
 local publication = require("runtime.windows.daemons.window-state.publication")
@@ -17,6 +18,7 @@ local kit = daemon.new({})
 local state_file = kit:instance_path("window-state.cache")
 local debounce_file = kit:instance_path("window-state-debounce")
 local debounce_delay = 1
+local placement_activation_delay = 0.25
 local poll_interval_active_idle = 0.05
 local poll_interval_active_busy = 0.15
 local poll_interval_stable_idle = 1
@@ -35,6 +37,8 @@ local debounce_started_at = nil
 local polling = false
 local next_poll_at = nil
 local event_reconnect_at = nil
+local control_socket = nil
+local placement_activation_at = nil
 
 local function now()
 	return socket.gettime()
@@ -98,6 +102,36 @@ end
 
 local function update_rules(windows)
 	publisher:publish(windows, selector_state.selectors)
+end
+
+local function handle_control(message)
+	if message == "ping" then
+		return false, "ok"
+	end
+
+	local placement, decode_err = pip.acceptance.decode(message)
+	if placement == nil then
+		log_rate_limited("pip-placement", "rejected PiP placement: " .. tostring(decode_err))
+		return false, "error"
+	end
+
+	local ok, accepted, activation_or_err = pcall(function()
+		return publisher:accept_pip_placement(placement, selector_state.selectors)
+	end)
+	if not ok or accepted == nil then
+		log_rate_limited(
+			"pip-placement",
+			"failed to persist PiP placement: " .. tostring(activation_or_err or accepted)
+		)
+		return false, "error"
+	end
+	if activation_or_err == true then
+		-- Keep rule activation outside the acknowledgement path and collapse rapid placements.
+		placement_activation_at = now() + placement_activation_delay
+	end
+
+	reset_rate_limit("pip-placement")
+	return false, "ok"
 end
 
 local function states_changed(state)
@@ -313,7 +347,7 @@ local function startup()
 	log("started (LuaSocket events + adaptive polling)")
 
 	parse_selectors()
-	publisher:reconcile(selector_state.selectors)
+	publisher:reconcile(selector_state.selectors, true)
 	fetch_monitors()
 	if kit:read_file(debounce_file) then
 		flush_pending_cached_state()
@@ -324,6 +358,10 @@ local function startup()
 		start_polling()
 		check_and_save_with_state(initial_state)
 	end
+
+	-- The launcher lock guarantees that only this daemon may replace a stale control socket.
+	os.remove(kit:socket_path("window-state.sock"))
+	control_socket = kit:control_socket("window-state.sock")
 end
 
 local function run()
@@ -341,24 +379,40 @@ local function run()
 		if event_reconnect_at then
 			timeout = math.max(0, math.min(timeout, event_reconnect_at - now()))
 		end
+		if placement_activation_at then
+			timeout = math.max(0, math.min(timeout, placement_activation_at - now()))
+		end
 
-		local ready = socket.select(events and { events } or {}, nil, timeout)
-		if #ready > 0 then
-			while true do
-				local line, err, partial = events:receive("*l")
-				line = line or partial
-				if line and line ~= "" then
-					handle_event(line)
+		local readers = { control_socket:reader() }
+		if events then
+			readers[#readers + 1] = events
+		end
+		local event_reader = events
+		local ready = socket.select(readers, nil, timeout)
+		for _, reader in ipairs(ready) do
+			if reader == event_reader then
+				while true do
+					local line, err, partial = reader:receive("*l")
+					line = line or partial
+					if line and line ~= "" then
+						handle_event(line)
+					end
+					if err == "timeout" then
+						break
+					elseif err then
+						events = schedule_event_reconnect(reader, err)
+						break
+					end
 				end
-				if err == "timeout" then
-					break
-				elseif err then
-					events = schedule_event_reconnect(events, err)
-					break
-				end
+			else
+				control_socket:handle_ready(handle_control)
 			end
 		end
 		events = reconnect_events() or events
+		if placement_activation_at and now() >= placement_activation_at then
+			placement_activation_at = nil
+			publisher:activate()
+		end
 
 		if polling and next_poll_at and now() >= next_poll_at then
 			local ok, err = pcall(poll_once)
@@ -386,6 +440,9 @@ elseif arg[1] ~= nil then
 end
 
 local ok, err = pcall(run)
+if control_socket then
+	control_socket:close()
+end
 if not ok then
 	io.stderr:write("ERROR: ", tostring(err), "\n")
 	os.exit(1)

@@ -1,6 +1,7 @@
 local json = require("lib.json")
 local command = require("lib.command")
 local generated_rules = require("lib.generated_rules")
+local pip = require("lib.picture_in_picture")
 
 local M = {}
 
@@ -87,6 +88,7 @@ function M.load_selectors(path)
 	local ok, selectors = pcall(dofile, path)
 	local normalized = {}
 	local matchers = {}
+	local geometry_authority_seen = false
 
 	if not ok or type(selectors) ~= "table" then
 		return {
@@ -101,9 +103,20 @@ function M.load_selectors(path)
 			local exclude = selector.exclude
 			local persist_tags = selector.persist_tags
 			local persist_tag_animations = selector.persist_tag_animations
+			local geometry_authority = selector.geometry_authority
 			local per_monitor = selector.per_monitor
 			local restore_monitor = selector.restore_monitor
 			local restore_size = selector.restore_size
+			local valid_geometry_authority = geometry_authority == nil
+				or (
+					geometry_authority == "pip"
+					and geometry_authority_seen == false
+					and selector.matcher == "match:initial_title"
+					and selector.pattern == "^" .. pip.title .. "$"
+					and per_monitor == false
+					and restore_monitor == true
+					and restore_size == false
+				)
 			local valid_exclude = exclude == nil
 				or (
 					type(exclude) == "table"
@@ -125,6 +138,7 @@ function M.load_selectors(path)
 				and valid_exclude
 				and valid_persist_tags(persist_tags)
 				and valid_persist_tag_animations(persist_tag_animations, persist_tags)
+				and valid_geometry_authority
 				and (per_monitor == nil or type(per_monitor) == "boolean")
 				and (restore_monitor == nil or type(restore_monitor) == "boolean")
 				and (restore_monitor ~= true or per_monitor == false)
@@ -136,6 +150,7 @@ function M.load_selectors(path)
 					exclude = exclude,
 					persist_tags = persist_tags,
 					persist_tag_animations = persist_tag_animations,
+					geometry_authority = geometry_authority,
 					per_monitor = per_monitor ~= false,
 					restore_monitor = restore_monitor == true,
 					restore_size = restore_size ~= false,
@@ -145,6 +160,7 @@ function M.load_selectors(path)
 					pattern = selector.pattern,
 					field = field,
 				}
+				geometry_authority_seen = geometry_authority_seen or geometry_authority == "pip"
 			end
 		end
 	end
@@ -175,7 +191,7 @@ local function cache_key(matcher, pattern, monitor)
 	return string.format("%d:%s%d:%s%d:%s", #matcher, matcher, #pattern, pattern, #monitor, monitor)
 end
 
-local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags, target_monitor)
+local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags, target_monitor, placement)
 	return {
 		matcher = matcher,
 		pattern = pattern,
@@ -186,6 +202,7 @@ local function cache_entry(matcher, pattern, monitor, x, y, width, height, tags,
 		height = tonumber(height),
 		tags = tags,
 		target_monitor = target_monitor,
+		placement = placement,
 	}
 end
 
@@ -215,15 +232,116 @@ function M.load_rules_cache(path)
 			local x, y = generated_rules.parse_pair(rule.effects.move)
 			local target_monitor = rule.target_monitor
 			local monitor = rule.monitor or (target_monitor == nil and rule.effects.monitor) or ""
+			local placement = pip.acceptance.normalize(rule.placement)
 			local valid_size = (width ~= nil and height ~= nil) or (width == nil and height == nil)
-			if matcher and pattern and valid_size and x and y then
+			if matcher and pattern and valid_size and ((x and y) or placement) then
 				cache[cache_key(matcher, pattern, monitor)] =
-					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags, target_monitor)
+					cache_entry(matcher, pattern, monitor, x, y, width, height, rule.tags, target_monitor, placement)
 			end
 		end
 	end
 
 	return cache
+end
+
+local function corner_from_tags(tags)
+	if type(tags) ~= "table" then
+		return nil
+	end
+
+	for corner, definition in pairs(pip.corners) do
+		for _, tag in ipairs(tags) do
+			if tag == definition.tag then
+				return corner
+			end
+		end
+	end
+end
+
+function M.migrate_geometry_authorities(cache, selectors)
+	local authorities = {}
+	for _, selector in ipairs(selectors) do
+		if selector.geometry_authority == "pip" then
+			authorities[cache_key(selector.matcher, selector.pattern, "")] = true
+		end
+	end
+
+	local changed = false
+	for _, entry in pairs(cache) do
+		local identity = cache_key(entry.matcher, entry.pattern, "")
+		if
+			authorities[identity]
+			and entry.placement == nil
+			and type(entry.target_monitor) == "string"
+			and entry.target_monitor ~= ""
+		then
+			local corner = corner_from_tags(entry.tags)
+			if corner then
+				entry.placement = {
+					kind = "corner",
+					corner = corner,
+					target_monitor = entry.target_monitor,
+				}
+				entry.x = nil
+				entry.y = nil
+				changed = true
+			elseif entry.x and entry.y then
+				entry.placement = {
+					kind = "free",
+					target_monitor = entry.target_monitor,
+					x = entry.x,
+					y = entry.y,
+				}
+				changed = true
+			end
+		end
+	end
+
+	return changed
+end
+
+function M.accept_pip_placement(cache, selectors, value)
+	local placement, err = pip.acceptance.normalize(value)
+	if placement == nil then
+		return nil, err
+	end
+
+	local authority
+	for _, selector in ipairs(selectors) do
+		if selector.geometry_authority == "pip" then
+			if authority then
+				return nil, "multiple PiP geometry authority selectors"
+			end
+			authority = selector
+		end
+	end
+	if authority == nil then
+		return nil, "missing PiP geometry authority selector"
+	end
+
+	local monitor = authority.per_monitor and placement.target_monitor or ""
+	local tags
+	local x
+	local y
+	if placement.kind == "corner" then
+		tags = { pip.corners[placement.corner].tag }
+	else
+		x = placement.x
+		y = placement.y
+	end
+	cache[cache_key(authority.matcher, authority.pattern, monitor)] = cache_entry(
+		authority.matcher,
+		authority.pattern,
+		monitor,
+		x,
+		y,
+		nil,
+		nil,
+		tags,
+		placement.target_monitor,
+		placement
+	)
+	return true
 end
 
 function M.prune_rules_cache(cache, selectors)
@@ -305,7 +423,26 @@ local function append_match(lines, entry, selector, lua_match_key)
 	lines[#lines + 1] = "    },"
 end
 
-local function append_rule_identity(lines, entry, id)
+local function placement_literal(placement)
+	if placement.kind == "corner" then
+		return string.format(
+			"{ kind = %s, corner = %s, target_monitor = %s }",
+			json.encode(placement.kind),
+			json.encode(placement.corner),
+			json.encode(placement.target_monitor)
+		)
+	end
+
+	return string.format(
+		"{ kind = %s, target_monitor = %s, x = %s, y = %s }",
+		json.encode(placement.kind),
+		json.encode(placement.target_monitor),
+		tostring(placement.x),
+		tostring(placement.y)
+	)
+end
+
+local function append_rule_identity(lines, entry, id, include_placement)
 	lines[#lines + 1] = "  {"
 	lines[#lines + 1] = "    id = " .. json.encode(id) .. ","
 	lines[#lines + 1] = "    matcher = " .. json.encode(entry.matcher) .. ","
@@ -315,6 +452,9 @@ local function append_rule_identity(lines, entry, id)
 	end
 	if entry.target_monitor then
 		lines[#lines + 1] = "    target_monitor = " .. json.encode(entry.target_monitor) .. ","
+	end
+	if include_placement and entry.placement then
+		lines[#lines + 1] = "    placement = " .. placement_literal(entry.placement) .. ","
 	end
 end
 
@@ -341,18 +481,23 @@ local function render_rules(cache, selectors_path, selectors)
 			local comment = entry.matcher .. " " .. entry.pattern .. scope
 			lines[#lines + 1] = "  -- " .. entry.matcher .. " " .. entry.pattern .. scope
 			local tags = persisted_tags(entry, selector)
-			append_rule_identity(lines, entry, rule_id(entry.matcher, entry.pattern, entry.monitor))
+			append_rule_identity(lines, entry, rule_id(entry.matcher, entry.pattern, entry.monitor), true)
 			append_match(lines, entry, selector, lua_match_key)
 			lines[#lines + 1] = "    effects = {"
 			lines[#lines + 1] = '      fullscreen_state = "0 0",'
-			if selector == nil or selector.restore_size ~= false then
+			if (selector == nil or selector.restore_size ~= false) and entry.width and entry.height then
 				lines[#lines + 1] = "      size = "
 					.. json.encode(generated_rules.format_pair(entry.width, entry.height))
 					.. ","
 			end
-			lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
+			if entry.x and entry.y then
+				lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
+			end
 			if entry.target_monitor then
 				lines[#lines + 1] = "      monitor = " .. json.encode(entry.target_monitor) .. ","
+			end
+			if #tags > 0 then
+				lines[#lines + 1] = "      tag = " .. json.encode("+" .. tags[1]) .. ","
 			end
 			lines[#lines + 1] = "    },"
 			if #tags > 0 then
@@ -369,7 +514,8 @@ local function render_rules(cache, selectors_path, selectors)
 					append_rule_identity(
 						lines,
 						entry,
-						rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":animation:" .. tag
+						rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":animation:" .. tag,
+						false
 					)
 					append_match(lines, entry, selector, lua_match_key)
 					lines[#lines + 1] = "    effects = {"
@@ -377,6 +523,25 @@ local function render_rules(cache, selectors_path, selectors)
 					lines[#lines + 1] = "    },"
 					lines[#lines + 1] = '    source = "window-state",'
 					lines[#lines + 1] = "    comment = " .. json.encode(comment .. " animation " .. tag) .. ","
+					lines[#lines + 1] = "  },"
+					lines[#lines + 1] = ""
+				end
+			end
+
+			for _, tag in ipairs((selector and selector.persist_tags) or {}) do
+				if tag ~= tags[1] then
+					append_rule_identity(
+						lines,
+						entry,
+						rule_id(entry.matcher, entry.pattern, entry.monitor) .. ":tag-cleanup:" .. tag,
+						false
+					)
+					append_match(lines, entry, selector, lua_match_key)
+					lines[#lines + 1] = "    effects = {"
+					lines[#lines + 1] = "      tag = " .. json.encode("-" .. tag) .. ","
+					lines[#lines + 1] = "    },"
+					lines[#lines + 1] = '    source = "window-state",'
+					lines[#lines + 1] = "    comment = " .. json.encode(comment .. " tag cleanup " .. tag) .. ","
 					lines[#lines + 1] = "  },"
 					lines[#lines + 1] = ""
 				end
@@ -401,15 +566,36 @@ function M.write_rules_file(opts)
 	command.ok("mkdir -p " .. command.arg(rules_dir) .. " >/dev/null 2>&1")
 	local temp = temp_path_in(rules_dir, ".window-state")
 	local handle = assert(io.open(temp, "w"))
-	handle:write(next_content)
-	handle:close()
-	assert(os.rename(temp, opts.rules_lua_file))
+	local written, write_err = handle:write(next_content)
+	if written == nil then
+		handle:close()
+		os.remove(temp)
+		error(write_err or "failed to write generated rules")
+	end
+	local closed, close_err = handle:close()
+	if closed == nil then
+		os.remove(temp)
+		error(close_err or "failed to close generated rules")
+	end
+	local renamed, rename_err = os.rename(temp, opts.rules_lua_file)
+	if renamed == nil then
+		os.remove(temp)
+		error(rename_err or "failed to replace generated rules")
+	end
 	return true
 end
 
-function M.update_cache_from_windows(cache, windows, log)
+function M.update_cache_from_windows(cache, windows, log, selectors)
+	local geometry_authorities = {}
+	for _, selector in ipairs(selectors or {}) do
+		if selector.geometry_authority ~= nil then
+			geometry_authorities[cache_key(selector.matcher, selector.pattern, "")] = true
+		end
+	end
+
 	for _, window in ipairs(json.array(windows)) do
-		if window.class and window.class ~= "" and window.monitor ~= nil then
+		local identity = cache_key(window.matcher or "", window.pattern or "", "")
+		if geometry_authorities[identity] == nil and window.class and window.class ~= "" and window.monitor ~= nil then
 			cache[cache_key(window.matcher, window.pattern, window.monitor)] = cache_entry(
 				window.matcher,
 				window.pattern,
@@ -419,7 +605,8 @@ function M.update_cache_from_windows(cache, windows, log)
 				window.width,
 				window.height,
 				window.tags,
-				window.target_monitor
+				window.target_monitor,
+				nil
 			)
 			if log then
 				log(
