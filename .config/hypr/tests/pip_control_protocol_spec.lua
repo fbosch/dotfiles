@@ -93,10 +93,12 @@ describe("picture-in-picture window rules", function()
 		_G.hl = nil
 
 		local base_rule = rules[1]
+		assert.is_true(base_rule.no_initial_focus)
+		assert.is_false(base_rule.focus_on_activate)
 		assert_equal(base_rule.suppress_event, "maximize", "suppressed event")
-		assert.same({ 640, 360 }, base_rule.size)
+		assert_equal(base_rule.size, nil, "size")
 		assert_equal(base_rule.max_size, nil, "maximum size")
 		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
-		assert_equal(base_rule.persistent_size, nil, "persistent size")
+		assert.is_true(base_rule.persistent_size)
 	end)
 end)

@@ -82,11 +82,10 @@ pinned cross-monitor windows such as Picture-in-Picture. Add
 captured with its latest geometry.
 
 Set `restore_size = false` when another owner controls size. Picture-in-Picture
-uses a static creation size because Zen requests monitor-sized geometry on
-Wayland, and suppresses Zen's erroneous maximize request. Static `size` applies
-only when the window maps, so browser-driven and manual resizing remain
-unrestricted afterward. Generated-rule reloads cannot reapply a stale size over
-the client.
+leaves initial sizing to Zen's saved geometry and suppresses Zen's erroneous
+maximize request. Hyprland's `persistent_size` restores the last manually chosen
+size on later opens. Browser-driven and manual resizing remain unrestricted,
+and generated-rule reloads cannot reapply a stale size over the client.
 Set `force_windowed = false` when the client also owns its initial fullscreen
 state. Picture-in-Picture uses both options so its generated rule controls only
 the accepted monitor, position, and corner tag.

@@ -101,6 +101,10 @@ local function register_one(plugin)
 	)
 	assert(plugin.root == nil or type(plugin.root) == "boolean", "native root must be boolean: " .. plugin.name)
 	assert(
+		plugin.enabled == nil or type(plugin.enabled) == "function",
+		"native enabled must be a function: " .. plugin.name
+	)
+	assert(
 		plugin.condition == nil or type(plugin.condition) == "function",
 		"native condition must be a function: " .. plugin.name
 	)
@@ -129,6 +133,15 @@ local function register_one(plugin)
 		assert(has_triggers(plugin) == false, "native dependency-only plugin cannot have triggers: " .. plugin.name)
 	elseif plugin.startup == true then
 		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
+	end
+
+	if plugin.enabled ~= nil then
+		local ok, enabled = xpcall(plugin.enabled, debug.traceback)
+		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
+		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
+		if enabled == false then
+			return
+		end
 	end
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then

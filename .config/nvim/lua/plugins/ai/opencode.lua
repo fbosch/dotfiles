@@ -28,6 +28,9 @@ register({
 	{
 		name = "opencode.nvim",
 		src = "https://github.com/NickvanDyke/opencode.nvim.git",
+		enabled = function()
+			return vim.fn.executable("opencode") == 1
+		end,
 		keys = {
 			key("<leader>ac", { "n", "x" }, "Ask opencode"),
 			key("<leader>as", { "n", "x" }, "opencode actions"),
