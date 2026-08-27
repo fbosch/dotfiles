@@ -25,7 +25,7 @@ When instructions conflict, use this priority order:
 
 1. Identify the reader and the decision or action the prose should support.
 2. Draft the smallest complete version that gives necessary context. Put the point first unless suspense or narrative order is explicitly useful.
-3. **Scan.** Find the AI patterns below, including puffery, vague attribution, formulaic structure, empty consequence clauses, chatbot artifacts, and generic conclusions. Treat them as diagnostic signals, not a word blacklist.
+3. **Scan.** Find the AI patterns below, including puffery, vague attribution, formulaic structure, empty consequence clauses, chatbot artifacts, and generic conclusions. Treat words as diagnostic signals rather than automatic replacements. Em dashes are prohibited.
 4. **Rewrite.** Fix substance before style. Cut filler and replace broad claims with verified mechanisms, consequences, examples, measurements, or limits. Preserve meaning, evidence, uncertainty, constraints, and technical distinctions. If the source does not support a concrete rewrite, qualify or remove the claim instead of inventing detail.
 5. **Restore voice.** Match the intended tone and recover useful stance, rhythm, emphasis, and first person already supported by the source, genre, or `TONE.md`. Do not invent personality, opinions, or deliberate messiness.
 6. **Self-audit.** Ask, "What still makes this read like generic AI-generated prose?" Fix the remaining tells without weakening accuracy or violating the output contract.
@@ -49,7 +49,7 @@ When instructions conflict, use this priority order:
 - Repeat an established technical term instead of cycling through synonyms that could imply different concepts.
 - Cut adverbs that prop up weak or unmeasured claims. Replace "significantly improves" with the measured change or the exact failure mode avoided.
 - Prefer active voice when the actor matters. Keep passive voice when the actor is unknown, irrelevant, or would distract from the subject.
-- Split sentences when readers must backtrack to parse them. Do not enforce one idea per sentence when related clauses are clearer together.
+- Keep one idea per sentence. Split dense sentences when readers must backtrack to parse them, and remove clauses that do not support the sentence's main point.
 
 ## Structure and Presentation
 
@@ -57,15 +57,21 @@ When instructions conflict, use this priority order:
 - Use headings and bullets for navigation, not decoration. Avoid bold-label bullets that restate their own label.
 - Keep paragraphs focused; split when the topic or reader task changes.
 - Vary sentence rhythm when it improves readability. Do not manufacture fragments or deliberate messiness to simulate a human voice.
-- Treat repeated em dashes, parenthetical asides, colons, boldface, and decorative emoji as warning signs, not banned syntax. Keep punctuation and formatting that clarify the sentence.
+- Do not use em dashes. Separate the thought with a period or comma instead; do not substitute parentheses, en dashes, or hyphens merely to preserve the same interruption. Treat repeated parenthetical asides, colons, boldface, and decorative emoji as warning signs, not banned syntax.
 
 ## Voice
 
-- Preserve the writer's actual stance instead of flattening every claim into neutral pros and cons.
+- Have opinions when the evidence supports a judgment. React to the facts instead of flattening every topic into a neutral inventory of pros and cons, while preserving the writer's actual stance.
 - Use first person only when the genre and source material support personal experience or judgment.
 - Acknowledge mixed outcomes with specific tradeoffs, not performative reactions.
 - Prefer concrete observations over statements about how something "feels". Name the behavior, instruction, or measurable result.
 - Preserve useful irregularity in a draft, but never add errors, ambiguity, or clutter for artificial "soul".
+
+## Jargon
+
+Treat these abstract metaphor nouns as AI-pattern warnings when a concrete term would say what actually happens: "substrate", "wedge", "vector", "locus", "vantage", "nexus", "primitive" as a noun, "harness" as a metaphor, "surface" as in "API surface", "bedrock", "scaffolding" as a metaphor, "modality", "paradigm", "gold-plating", "ratchet" as a metaphor, "evacuate" for moving code, "endgame", "north star", and "flywheel".
+
+Use the mechanism's real name or a plain replacement. For example, "substrate" becomes "base", "wedge in" becomes "add", "vector" becomes "way" or "method", "gold-plating" becomes "more than the job needs", "ratchet" becomes the mechanism's name or "a limit that only tightens", "evacuate" becomes "move out", and "endgame" becomes "the last phase". Keep a listed term only when it has a precise, established meaning for the intended reader.
 
 ## NEVER
 
@@ -98,6 +104,7 @@ Before returning prose, verify:
 - Claims are concrete enough to verify.
 - The prose sounds practical, direct, and low-ceremony per `TONE.md`.
 - No marketing tone, consultant polish, or generic enthusiasm remains.
+- No em dashes remain, and listed jargon has been replaced unless it carries a precise domain meaning.
 - Lists, headings, punctuation, and sentence rhythm follow the material rather than a repeated template.
 - No chatbot artifacts, vague attribution, synonym cycling, forced contrast, false range, or generic conclusion remains.
 
