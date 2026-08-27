@@ -312,7 +312,35 @@ it("clears resize state when release target revalidation fails", function()
 
 	local _, cmds = placement.place(state, input(1, { type = "control", action = "resize-cancel" }))
 	assert.is_nil(state.resize_anchor)
+	assert.is_nil(state.resizing_address)
 	assert.equal(0, #of_kind(cmds, "move"))
+end)
+
+it("suppresses resize reconciliation throughout a free manual resize", function()
+	local state = placement.new()
+	local before = client("0x1", 1200, 600, 400, 225)
+	placement.place(state, input(-0.1, { type = "compositor", name = "resizewindow", address = "0x1" }))
+	assert.equal(0, state.reconcile_at)
+	assert.is_false(state.reconcile_addresses["0x1"])
+
+	placement.place(
+		state,
+		input(0, { type = "control", action = "resize-start", address = "0x1" }, { clients = { before } })
+	)
+	assert.equal("0x1", state.resizing_address)
+	assert.is_nil(state.resize_anchor)
+	assert.is_nil(state.reconcile_at)
+	assert.same({}, state.reconcile_addresses)
+
+	placement.place(state, input(0.05, { type = "compositor", name = "resizewindow", address = "0x1" }))
+	assert.is_nil(state.reconcile_at)
+	assert.same({}, state.reconcile_addresses)
+
+	local after = client("0x1", 1200, 600, 800, 450)
+	local _, commands =
+		placement.place(state, input(0.1, { type = "control", action = "resize-end" }, { clients = { after } }))
+	assert.is_nil(state.resizing_address)
+	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1200, y = 600 } }, accepted_placements(commands))
 end)
 
 it("reconciles newly opened pip windows onto their default corner", function()
@@ -377,4 +405,227 @@ it("moves a tagged window between corners on the move command", function()
 		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide" } },
 		accepted_placements(accepted)
 	)
+end)
+
+it("clears drag state and preview without snapping when a drag is cancelled", function()
+	local state = placement.new()
+	local window = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+	placement.place(state, input(0.08, { type = "tick" }, { clients = { window }, active = window }))
+
+	local _, commands = placement.place(state, input(0.1, { type = "control", action = "drag-cancel" }))
+
+	assert.is_false(state.dragging)
+	assert.is_nil(state.dragging_address)
+	assert.equal(math.huge, state.next_observation_at)
+	assert.equal(0, #of_kind(commands, "move"))
+	assert.is_nil(of_kind(commands, "preview")[1].target)
+	assert.is_false(of_kind(commands, "cursor-outline")[1].enabled)
+end)
+
+it("places tagged PiP windows according to waybar visibility at startup", function()
+	local bar = { ultrawide = { placement.rectangle(0, 1408, 3440, 32) } }
+	local state = placement.new({ waybar_visible = true })
+	local resting = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, shown = placement.place(state, input(0, { type = "startup" }, { clients = { resting }, bars = bar }))
+
+	assert.same({ { kind = "move", address = "0x1", x = rest_x, y = 1168 } }, of_kind(shown, "move"))
+
+	local avoided = client("0x1", rest_x, 1168, 400, 225, { tags = { "pip-bottom-right" } })
+	local hidden_state = placement.new()
+	local _, hidden =
+		placement.place(hidden_state, input(1, { type = "startup" }, { clients = { avoided }, bars = bar }))
+
+	assert.same({ { kind = "move", address = "0x1", x = rest_x, y = rest_y } }, of_kind(hidden, "move"))
+end)
+
+it("sets waybar visibility and only moves PiP windows that need each geometry transition", function()
+	local state = placement.new()
+	local bar = { ultrawide = { placement.rectangle(0, 1408, 3440, 32) } }
+	local bottom = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, shown = placement.place(
+		state,
+		input(0, { type = "control", action = "waybar-show" }, { clients = { bottom }, bars = bar })
+	)
+
+	assert.is_true(state.waybar_visible)
+	assert.same({ { kind = "move", address = "0x1", x = rest_x, y = 1168 } }, of_kind(shown, "move"))
+
+	local top = client("0x2", 15, 15, 400, 225, { tags = { "pip-top-left" } })
+	local _, unchanged = placement.place(
+		state,
+		input(1, { type = "control", action = "waybar-show" }, { clients = { top }, bars = bar })
+	)
+	assert.equal(0, #of_kind(unchanged, "move"))
+
+	local avoided = client("0x1", rest_x, 1168, 400, 225, { tags = { "pip-bottom-right" } })
+	local _, hidden = placement.place(
+		state,
+		input(2, { type = "control", action = "waybar-hide" }, { clients = { avoided }, bars = bar })
+	)
+	assert.is_false(state.waybar_visible)
+	assert.same({ { kind = "move", address = "0x1", x = rest_x, y = rest_y } }, of_kind(hidden, "move"))
+end)
+
+it("schedules resize reconciliation unless the PiP is being dragged or resized", function()
+	local state = placement.new()
+	placement.place(state, input(0, { type = "compositor", name = "resizewindow", address = "0x1" }))
+	assert.equal(0.1, state.reconcile_at)
+	assert.is_false(state.reconcile_addresses["0x1"])
+
+	placement.place(state, input(0.05, { type = "control", action = "drag-start", address = "0x1" }))
+	assert.is_nil(state.reconcile_at)
+	assert.same({}, state.reconcile_addresses)
+	placement.place(state, input(0.06, { type = "compositor", name = "resizewindow", address = "0x2" }))
+	assert.is_nil(state.reconcile_addresses["0x2"])
+
+	local tagged = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	placement.place(state, input(0.07, { type = "control", action = "drag-cancel" }, { clients = { tagged } }))
+	placement.place(
+		state,
+		input(0.08, { type = "control", action = "resize-start", address = "0x1" }, { clients = { tagged } })
+	)
+	placement.place(state, input(0.09, { type = "compositor", name = "resizewindow", address = "0x3" }))
+	assert.is_nil(state.reconcile_addresses["0x3"])
+
+	local resized = client("0x1", 100, 100, 800, 450, { tags = { "pip-bottom-right" } })
+	local _, held = placement.place(state, input(0.1, { type = "tick" }, { clients = { resized } }))
+	assert.equal(0, #of_kind(held, "move"))
+end)
+
+it("coalesces queued reconciliations and preserves default-corner assignment", function()
+	local state = placement.new()
+	placement.place(state, input(0, { type = "compositor", name = "openwindow", address = "0x1" }))
+	placement.place(state, input(0.05, { type = "compositor", name = "resizewindow", address = "0x1" }))
+	placement.place(state, input(0.06, { type = "compositor", name = "openwindow", address = "0x2" }))
+	assert.equal(0.16, state.reconcile_at)
+	assert.is_true(state.reconcile_addresses["0x1"])
+	assert.is_true(state.reconcile_addresses["0x2"])
+
+	local first = client("0x1", rest_x, rest_y, 400, 225)
+	local second = client("0x2", rest_x, rest_y, 400, 225)
+	local _, commands = placement.place(state, input(0.16, { type = "tick" }, { clients = { first, second } }))
+
+	assert.is_nil(state.reconcile_at)
+	assert.same({}, state.reconcile_addresses)
+	local tags = of_kind(commands, "tag")
+	assert.equal(2, #tags)
+	assert.same(
+		{ ["0x1"] = true, ["0x2"] = true },
+		{ [tags[1].address] = tags[1].add, [tags[2].address] = tags[2].add }
+	)
+end)
+
+it("interrupts pending acceptance when a new interaction or layout transition supersedes it", function()
+	local function pending_state()
+		local state = placement.new()
+		local dragged = client("0x1", 2960, 1150, 400, 225)
+		placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+		placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { dragged } }))
+		return state, client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	end
+
+	for _, action in ipairs({ "drag-start", "resize-start", "waybar-show", "waybar-hide" }) do
+		local state, window = pending_state()
+		placement.place(
+			state,
+			input(0.2, { type = "control", action = action, address = "0x1" }, { clients = { window } })
+		)
+		assert.is_nil(state.pending_acceptance)
+	end
+
+	local moved, window = pending_state()
+	placement.place(
+		moved,
+		input(0.2, { type = "control", action = "move", address = "0x1", direction = "left" }, { clients = { window } })
+	)
+	assert.is_table(moved.pending_acceptance)
+	assert.equal("0x1", moved.pending_acceptance.address)
+	assert.equal("bottom-left", moved.pending_acceptance.corner)
+
+	local monitor_changed, observed = pending_state()
+	placement.place(monitor_changed, input(0.2, { type = "monitorchange" }, { clients = { observed } }))
+	assert.is_nil(monitor_changed.pending_acceptance)
+end)
+
+it("ignores no-op nested events and rejects invalid move targets without changing placement state", function()
+	local state = placement.new()
+	local baseline = placement.new()
+	local events = {
+		{ type = "configreload" },
+		{ type = "compositor", name = "closewindow", address = "0x1" },
+		{ type = "control", action = "ping" },
+		{ type = "control", action = "quit" },
+		{ type = "control", action = "drag-end" },
+		{ type = "control", action = "resize-end" },
+		{ type = "control", action = "resize-cancel" },
+		{ type = "control", action = "unknown", address = "0x1" },
+		{ type = "compositor", name = "unknown", address = "0x1" },
+		{ type = "control", action = "move", address = "0x1", direction = "diagonal" },
+		{ type = "control", action = "move", direction = "left" },
+	}
+	for _, event in ipairs(events) do
+		local _, commands = placement.place(state, input(0, event))
+		assert.equal(0, #commands)
+	end
+
+	local missing_monitor = client("0x1", rest_x, rest_y, 400, 225, { monitor = 9, tags = { "pip-bottom-right" } })
+	local _, commands = placement.place(
+		state,
+		input(
+			0,
+			{ type = "control", action = "move", address = "0x1", direction = "left" },
+			{ clients = { missing_monitor } }
+		)
+	)
+	assert.equal(0, #commands)
+	assert.same(baseline, state)
+
+	local pending = {
+		address = "0x1",
+		corner = "bottom-right",
+		deadline = 1,
+		target_monitor = "ultrawide",
+		x = rest_x,
+		y = rest_y,
+	}
+	state.pending_acceptance = pending
+	_, commands = placement.place(
+		state,
+		input(
+			0,
+			{ type = "control", action = "move", address = "0x1", direction = "diagonal" },
+			{ clients = { client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } }) } }
+		)
+	)
+	assert.equal(0, #commands)
+	assert.same(pending, state.pending_acceptance)
+end)
+
+it("filters non-PiP clients from startup placement", function()
+	local state = placement.new({ waybar_visible = true })
+	local bar = { ultrawide = { placement.rectangle(0, 1408, 3440, 32) } }
+	local floating = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local unmapped = client("0x2", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local hidden = client("0x3", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	local unrelated = client("0x4", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
+	floating.floating = false
+	unmapped.mapped = false
+	hidden.hidden = true
+	unrelated.class = "other"
+
+	local _, commands = placement.place(
+		state,
+		input(0, { type = "startup" }, { clients = { floating, unmapped, hidden, unrelated }, bars = bar })
+	)
+	assert.equal(0, #commands)
+end)
+
+it("raises an error for unknown top-level placement events", function()
+	local ok, err = pcall(function()
+		placement.place(placement.new(), input(0, { type = "unknown" }))
+	end)
+
+	assert.is_false(ok)
+	assert.matches("unknown PiP placement event type: unknown", err)
 end)

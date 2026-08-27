@@ -23,7 +23,13 @@ mkdir -p \
 write_stub() {
   local name="$1"
   # shellcheck disable=SC2016
-  printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' '[ "${0##*/}" = "uwsm-app" ] && [ "$*" = "-s s -- waybar" ] && : > "$WAYBAR_STARTED_FILE"' 'exit 0' > "$bin_dir/$name"
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' \
+    'if [ "${0##*/}" = "systemctl" ] && [ "$*" = "--user show-environment" ]; then printf "HYPRLAND_INSTANCE_SIGNATURE=%s\n" "${SYSTEMD_HYPRLAND_INSTANCE_SIGNATURE:-fixture}"; fi' \
+    'if [ "${0##*/}" = "uwsm-app" ]; then printf "uwsm-env %s\n" "${HYPRLAND_INSTANCE_SIGNATURE:-}" >> "$FIXTURE_LOG"; fi' \
+    '[ "${0##*/}" = "uwsm-app" ] && [ "$*" = "-s s -- waybar" ] && : > "$WAYBAR_STARTED_FILE"' \
+    'exit 0' > "$bin_dir/$name"
   chmod +x "$bin_dir/$name"
 }
 
@@ -137,13 +143,16 @@ if [[ -s "$invalid_log" ]]; then
 fi
 
 restart_log="$test_dir/restart.log"
-FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
+SYSTEMD_HYPRLAND_INSTANCE_SIGNATURE=current-instance HYPRLAND_INSTANCE_SIGNATURE=stale-instance \
+  FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
 # The recovery script intentionally launches replacements in the background.
 # Wait for every launcher stub before assertions or fixture cleanup can race it.
 wait_for_log_count "$restart_log" uwsm-app 14
 assert_contains "$restart_log" 'pkill -f gaming-session-watchdog'
 assert_contains "$restart_log" 'pgrep -f gaming-session-watchdog\.(sh|lua)'
 assert_contains "$restart_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh"
+assert_contains "$restart_log" 'uwsm-env current-instance'
+assert_not_contains "$restart_log" 'uwsm-env stale-instance'
 assert_contains "$restart_log" 'uwsm-app -s s -- atuin daemon start'
 assert_not_contains "$restart_log" 'minimized-state-daemon'
 assert_not_contains "$restart_log" 'pkill -f custom-layout-drag-resize'

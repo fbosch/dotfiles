@@ -5,6 +5,24 @@ set -eu
 # Broad desktop-service recovery. Gamescope clipboard sync remains live because
 # it is independent of the desktop UI services restarted here.
 
+refresh_hyprland_instance_signature() {
+  # Long-lived terminals can retain the signature of a replaced compositor.
+  active_signature="$(
+    systemctl --user show-environment | while IFS='=' read -r name value; do
+      if [ "$name" = "HYPRLAND_INSTANCE_SIGNATURE" ]; then
+        printf '%s\n' "$value"
+        break
+      fi
+    done
+  )"
+  if [ -z "$active_signature" ]; then
+    printf 'restart-daemons: active Hyprland instance is unavailable\n' >&2
+    exit 1
+  fi
+
+  export HYPRLAND_INSTANCE_SIGNATURE="$active_signature"
+}
+
 resolve_supervised_daemon() {
   case "$1" in
     picture-in-picture)
@@ -31,6 +49,7 @@ restart_supervised_daemons() {
     esac
   done
 
+  refresh_hyprland_instance_signature
   status=0
   for daemon_name in $requested_daemons; do
     resolve_supervised_daemon "$daemon_name"
@@ -125,6 +144,7 @@ wait_for_gaming_watchdog_shutdown() {
   done
 }
 
+refresh_hyprland_instance_signature
 hyprctl reload
 systemctl --user restart vicinae.service
 

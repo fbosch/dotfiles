@@ -319,8 +319,12 @@ local function snap_pip(state, address, input, commands)
 	end
 end
 
+local function is_direction(direction)
+	return direction == "left" or direction == "right" or direction == "up" or direction == "down"
+end
+
 local function move_pip_corner(state, direction, address, input, commands)
-	if direction ~= "left" and direction ~= "right" and direction ~= "up" and direction ~= "down" then
+	if is_direction(direction) == false then
 		return
 	end
 
@@ -483,6 +487,17 @@ end
 
 local function ignore_event() end
 
+local function cancel_reconcile(state, address)
+	if address == nil then
+		return
+	end
+
+	state.reconcile_addresses[address] = nil
+	if next(state.reconcile_addresses) == nil then
+		state.reconcile_at = nil
+	end
+end
+
 local function handle_startup(state, input, commands)
 	move_pip(state, state.waybar_visible and "show" or "hide", nil, nil, input, commands)
 end
@@ -492,6 +507,7 @@ local function handle_drag_start(state, input)
 	state.dragging = true
 	state.dragging_address = input.event.address
 	state.next_observation_at = input.now
+	cancel_reconcile(state, state.dragging_address)
 end
 
 local function handle_drag_end(state, input, commands)
@@ -516,6 +532,7 @@ end
 local function handle_resize_start(state, input)
 	state.pending_acceptance = nil
 	begin_resize(state, input.event.address, input.clients)
+	cancel_reconcile(state, state.resizing_address)
 end
 
 local function handle_resize_end(state, input, commands)
@@ -535,7 +552,7 @@ end
 
 local function handle_move(state, input, commands)
 	local event = input.event
-	if event.address and event.direction then
+	if event.address and is_direction(event.direction) then
 		state.pending_acceptance = nil
 		local window, monitor, corner, x, y, needs_observation =
 			move_pip_corner(state, event.direction, event.address, input, commands)
@@ -595,7 +612,7 @@ local compositor_handlers = {
 	end,
 	closewindow = ignore_event,
 	resizewindow = function(state, input)
-		if state.dragging == false and state.resize_anchor == nil then
+		if state.dragging == false and state.resizing_address == nil then
 			schedule_reconcile(state, input, false)
 		end
 	end,
