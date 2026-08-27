@@ -22,6 +22,8 @@
   --border-hover: rgba(255, 255, 255, 0.15);
   --surface-border: #191919;
   --surface-keyline: rgba(255, 255, 255, 0.2);
+  --surface-keyline-current: var(--surface-keyline);
+  --surface-keyline-width: 1px;
   --divider-color: rgba(255, 255, 255, 0.1);
   --button-border: rgba(255, 255, 255, 0.1);
   --button-border-hover: rgba(255, 255, 255, 0.2);
@@ -36,14 +38,18 @@
   --radius-control-center: 12px;
   --notification-icon-size: 24px;
   --shadow-elevation-low:
+    inset 0 0 0 var(--surface-keyline-width) var(--surface-keyline-current),
     0 0 0 1px var(--surface-border), 0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-toast:
+    inset 0 0 0 var(--surface-keyline-width) var(--surface-keyline-current),
     0 0 0 1px var(--surface-border), 0 8px 24px rgba(0, 0, 0, 0.2),
     0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-elevation-medium:
+    inset 0 0 0 var(--surface-keyline-width) var(--surface-keyline-current),
     0 0 0 1px var(--surface-border), 0 8px 32px rgba(0, 0, 0, 0.24),
     0 2px 8px rgba(0, 0, 0, 0.12);
   --shadow-elevation-high:
+    inset 0 0 0 var(--surface-keyline-width) var(--surface-keyline-current),
     0 0 0 1px var(--surface-border), 0 16px 40px rgba(0, 0, 0, 0.28),
     0 4px 12px rgba(0, 0, 0, 0.14);
   --volume-bg: var(--bg-color);
@@ -69,7 +75,7 @@
 /* Control Center Widget */
 .control-center {
   background: var(--bg-color);
-  border: 1px solid var(--surface-keyline);
+  border: none;
   border-radius: var(--radius-control-center);
   box-shadow: var(--shadow-elevation-medium);
 }
@@ -91,7 +97,7 @@
 .control-center-list .notification-background,
 .notification-list .notification-background {
   background: var(--solid-bg-color);
-  border: 1px solid var(--surface-keyline);
+  border: none;
   border-radius: var(--radius-large);
   box-shadow: var(--shadow-elevation-low);
   margin: 0 12px 8px 12px;
@@ -105,7 +111,8 @@
 .control-center-list .notification-background:hover,
 .notification-list .notification-background:hover {
   background: var(--notification-hover);
-  border-color: var(--border-hover);
+
+  --surface-keyline-current: var(--border-hover);
 }
 
 .control-center-list .notification:active,
@@ -278,14 +285,15 @@
 .notification {
   background: var(--floating-bg-color);
   border-radius: var(--radius-large);
-  border: 1px solid var(--surface-keyline);
+  border: none;
   box-shadow: var(--shadow-elevation-low);
   transition: all 150ms ease;
 }
 
 .notification:hover {
   background: var(--notification-hover);
-  border-color: var(--border-hover);
+
+  --surface-keyline-current: var(--border-hover);
 }
 
 /* Auto-width for floating notifications */
@@ -334,7 +342,7 @@
 
 .notification-row .notification-background {
   background: var(--floating-bg-color);
-  border: 1px solid var(--surface-keyline);
+  border: none;
   border-radius: var(--radius-large);
   box-shadow: var(--shadow-elevation-low);
 }
@@ -405,8 +413,10 @@
 .body-image {
   height: auto;
   border-radius: var(--radius-medium);
+
+  --surface-keyline-current: rgba(255, 255, 255, 0.15);
   box-shadow: var(--shadow-elevation-medium);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: none;
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -575,7 +585,7 @@
 
 .floating-notifications .notification-row .notification-background .notification {
   background: var(--floating-bg-color);
-  border: 1px solid var(--surface-keyline);
+  border: none;
   border-radius: var(--radius-large);
   box-shadow: var(--shadow-toast);
 }
@@ -1005,8 +1015,9 @@ scrollbar slider:active {
 
 .notification.critical {
   background: var(--critical-subtle);
-  border-color: var(--critical-color);
-  border-width: 2px;
+
+  --surface-keyline-current: var(--critical-color);
+  --surface-keyline-width: 2px;
 }
 
 .notification.critical .summary {
@@ -1020,7 +1031,9 @@ scrollbar slider:active {
 
 .widget-label.placeholder {
   background: var(--surface-color);
-  border: 1px solid var(--border-color);
+
+  --surface-keyline-current: var(--border-color);
+  border: none;
   border-radius: var(--radius-medium);
   color: var(--text-tertiary);
   font-size: 16px;

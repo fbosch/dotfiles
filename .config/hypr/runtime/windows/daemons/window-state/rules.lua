@@ -233,6 +233,10 @@ function M.load_rules_cache(path)
 			local target_monitor = rule.target_monitor
 			local monitor = rule.monitor or (target_monitor == nil and rule.effects.monitor) or ""
 			local placement = pip.acceptance.normalize(rule.placement)
+			if placement and placement.kind == "corner" then
+				x = nil
+				y = nil
+			end
 			local valid_size = (width ~= nil and height ~= nil) or (width == nil and height == nil)
 			if matcher and pattern and valid_size and ((x and y) or placement) then
 				cache[cache_key(matcher, pattern, monitor)] =
@@ -492,6 +496,8 @@ local function render_rules(cache, selectors_path, selectors)
 			end
 			if entry.x and entry.y then
 				lines[#lines + 1] = "      move = " .. json.encode(generated_rules.format_pair(entry.x, entry.y)) .. ","
+			elseif entry.placement and entry.placement.kind == "corner" then
+				lines[#lines + 1] = "      move = " .. json.encode(pip.corner_moves[entry.placement.corner]) .. ","
 			end
 			if entry.target_monitor then
 				lines[#lines + 1] = "      monitor = " .. json.encode(entry.target_monitor) .. ","

@@ -279,6 +279,30 @@ describe("window-state rules", function()
 		assert.is_nil(next(cache))
 	end)
 
+	it("renders an initial move for every accepted PiP corner", function()
+		local loaded = rules.load_selectors(config_dir .. "/rules/window-state-selectors.lua")
+		local expected_moves = {
+			["top-left"] = "15 15",
+			["top-right"] = "(monitor_w-window_w-15) 15",
+			["bottom-left"] = "15 (monitor_h-window_h-15)",
+			["bottom-right"] = "(monitor_w-window_w-15) (monitor_h-window_h-15)",
+		}
+
+		for corner, expected_move in pairs(expected_moves) do
+			options.cache = {}
+			options.selectors = loaded.selectors
+			assert.is_true(rules.accept_pip_placement(options.cache, options.selectors, {
+				kind = "corner",
+				corner = corner,
+				target_monitor = "DP-1",
+			}))
+			assert.is_true(rules.write_rules_file(options))
+
+			local rule = assert(generated_rule(options.rules_lua_file, nil))
+			assert.equal(expected_move, rule.effects.move)
+		end
+	end)
+
 	it("retains independent geometry for each monitor", function()
 		options.cache = {}
 		rules.update_cache_from_windows(
@@ -427,7 +451,7 @@ describe("window-state rules", function()
 			end
 		end
 		assert.is_nil(generated_corner.effects.size)
-		assert.is_nil(generated_corner.effects.move)
+		assert.equal("15 15", generated_corner.effects.move)
 		assert.equal("DP-1", generated_corner.effects.monitor)
 		assert.equal("+pip-top-left", generated_corner.effects.tag)
 		assert.same({ "pip-top-left" }, generated_corner.tags)

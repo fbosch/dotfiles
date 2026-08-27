@@ -207,7 +207,7 @@ describe("window-state publication", function()
 		assert.same(placement, pip_rule.placement)
 		assert.same({ "pip-bottom-right" }, pip_rule.tags)
 		assert.equal("+pip-bottom-right", pip_rule.effects.tag)
-		assert.is_nil(pip_rule.effects.move)
+		assert.equal("(monitor_w-window_w-15) (monitor_h-window_h-15)", pip_rule.effects.move)
 
 		local cleanup_tags = {}
 		for _, rule in ipairs(rules) do

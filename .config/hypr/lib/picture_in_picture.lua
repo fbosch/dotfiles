@@ -20,7 +20,14 @@ for _, corner in pairs(M.corners) do
 	M.corner_tag_animations[corner.tag] = corner.animation
 end
 
-M.normal_move = string.format("(monitor_w-window_w-%d) (monitor_h-window_h-%d)", M.margin, M.margin)
+M.corner_moves = {
+	["top-left"] = string.format("%d %d", M.margin, M.margin),
+	["top-right"] = string.format("(monitor_w-window_w-%d) %d", M.margin, M.margin),
+	["bottom-left"] = string.format("%d (monitor_h-window_h-%d)", M.margin, M.margin),
+	["bottom-right"] = string.format("(monitor_w-window_w-%d) (monitor_h-window_h-%d)", M.margin, M.margin),
+}
+
+M.normal_move = M.corner_moves["bottom-right"]
 
 function M.matches(window)
 	return window ~= nil and window.class == M.class and window.title == M.title

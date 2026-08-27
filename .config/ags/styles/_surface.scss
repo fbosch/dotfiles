@@ -7,12 +7,15 @@
 }
 
 @mixin floating-border($elevation-shadows...) {
-  $shadows: (0 0 0 1px var(--ags-color-surface-border),);
+  $shadows: (
+    inset 0 0 0 1px var(--ags-color-surface-keyline),
+    0 0 0 1px var(--ags-color-surface-border),
+  );
 
   @each $shadow in $elevation-shadows {
     $shadows: list.append($shadows, $shadow, comma);
   }
 
-  border: 1px solid var(--ags-color-surface-keyline);
+  border: none;
   box-shadow: $shadows;
 }
