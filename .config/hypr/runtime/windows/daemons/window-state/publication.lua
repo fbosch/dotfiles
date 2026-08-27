@@ -37,8 +37,11 @@ function M.new(opts)
 		})
 	end
 
-	local function refresh_rules(changed)
+	local function refresh_rules(changed, force)
 		if changed == false then
+			return false
+		end
+		if activation_pending and force ~= true then
 			return false
 		end
 
@@ -73,7 +76,7 @@ function M.new(opts)
 		state_rules.prune_rules_cache(rules_cache, selectors)
 		state_rules.migrate_geometry_authorities(rules_cache, selectors)
 		local changed = write_rules(selectors)
-		refresh_rules(changed or force_refresh == true)
+		refresh_rules(changed or force_refresh == true, force_refresh == true)
 		return changed
 	end
 
@@ -96,7 +99,7 @@ function M.new(opts)
 	end
 
 	function publisher:activate()
-		return refresh_rules(activation_pending)
+		return refresh_rules(activation_pending, true)
 	end
 
 	return publisher

@@ -15,6 +15,10 @@ local waybar_position_vicinity = 12
 
 M.drag_interval_s = drag_interval_s
 
+function M.tick_due(state, now)
+	return now >= state.next_observation_at or (state.reconcile_at ~= nil and now >= state.reconcile_at)
+end
+
 function M.rectangle(left, top, width, height)
 	return {
 		left = tonumber(left) or 0,

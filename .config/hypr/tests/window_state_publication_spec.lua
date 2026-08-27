@@ -171,9 +171,8 @@ describe("window-state publication", function()
 		assert.is_true(accepted)
 		assert.is_true(activation_needed)
 		assert.are.equal(0, reload_calls)
-		assert.is_true(publisher:activate())
-		assert.are.equal(1, reload_calls)
 		assert.is_true(publisher:publish(json.encode({ saved_window("Test", "DP-1", 10) }), selectors))
+		assert.are.equal(0, reload_calls)
 		publisher:publish(
 			json.encode({
 				{
@@ -191,6 +190,10 @@ describe("window-state publication", function()
 			}),
 			selectors
 		)
+		assert.are.equal(0, reload_calls)
+		assert.is_true(publisher:activate())
+		assert.are.equal(1, reload_calls)
+		assert.is_false(publisher:activate())
 
 		local rules = assert(loadfile(rules_path))()
 		local pip_rule

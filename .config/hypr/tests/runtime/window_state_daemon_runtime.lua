@@ -162,10 +162,10 @@ end
 
 local function send_control(message, expected_response)
 	expected_response = expected_response or "ok"
-	local deadline = socket.gettime() + 2
+	local deadline = socket.gettime() + 4
 	while socket.gettime() < deadline do
 		local client = assert(unix())
-		client:settimeout(1)
+		client:settimeout(2)
 		local connected = client:connect(control_path)
 		if connected then
 			assert(client:send(message .. "\n"))

@@ -250,16 +250,6 @@ local function compositor_event(line, now)
 	place(now, { type = "compositor", name = name, address = address })
 end
 
-local function tick_due(now)
-	if state.dragging then
-		return true
-	end
-	if now >= state.next_observation_at then
-		return true
-	end
-	return state.reconcile_at ~= nil and now >= state.reconcile_at
-end
-
 local function run()
 	refresh_monitors()
 	state.waybar_visible = next(visible_waybar_layers()) ~= nil
@@ -309,7 +299,7 @@ local function run()
 		end
 
 		now = socket.gettime()
-		if tick_due(now) then
+		if placement.tick_due(state, now) then
 			place(now, { type = "tick" }, bars_for(state.waybar_visible))
 		end
 	end

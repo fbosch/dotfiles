@@ -263,6 +263,17 @@ it("emits the snap preview once per distinct target", function()
 	assert.equal(0, #of_kind(second, "cursor-outline"))
 end)
 
+it("limits drag sampling to the configured observation cadence", function()
+	local state = placement.new()
+	local window = client("0x1", 2960, 1150, 400, 225)
+	placement.place(state, input(0, { type = "control", action = "drag-start", address = "0x1" }))
+	assert.is_true(placement.tick_due(state, 0))
+
+	placement.place(state, input(0, { type = "tick" }, { clients = { window }, active = window }))
+	assert.is_false(placement.tick_due(state, placement.drag_interval_s - 0.001))
+	assert.is_true(placement.tick_due(state, placement.drag_interval_s))
+end)
+
 it("restores the anchored corner after a resize", function()
 	local state = placement.new()
 	local before = client("0x1", 15, 1215, 400, 225, { tags = { "pip-bottom-left" } })
