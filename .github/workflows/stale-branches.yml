@@ -1,0 +1,29 @@
+name: Stale Branch Cleanup
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: stale-branch-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Mark and delete stale branches
+        uses: crs-k/stale-branches@138918e25f06d439bf76db5305a591d8a3c03678 # v10.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          days-before-stale: 14
+          days-before-delete: 30
+          compare-branches: info
+          pr-check: true
