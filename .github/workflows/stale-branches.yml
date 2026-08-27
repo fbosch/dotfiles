@@ -21,7 +21,7 @@ jobs:
       - name: Mark and delete stale branches
         uses: crs-k/stale-branches@138918e25f06d439bf76db5305a591d8a3c03678 # v10.0.0
         with:
-          days-before-stale: 120
-          days-before-delete: 180
+          days-before-stale: 14
+          days-before-delete: 30
           compare-branches: info
           pr-check: true
