@@ -263,7 +263,7 @@ describe("window-state rules", function()
 		assert.equal("pip", pip_selector.geometry_authority)
 		assert.is_false(pip_selector.per_monitor)
 		assert.is_true(pip_selector.restore_monitor)
-		assert.is_false(pip_selector.restore_size)
+		assert.is_true(pip_selector.restore_size)
 		assert.is_false(pip_selector.force_windowed)
 		assert.are.same(
 			{ "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
@@ -298,11 +298,14 @@ describe("window-state rules", function()
 				kind = "corner",
 				corner = corner,
 				target_monitor = "DP-1",
+				width = 640,
+				height = 360,
 			}))
 			assert.is_true(rules.write_rules_file(options))
 
 			local rule = assert(generated_rule(options.rules_lua_file, nil))
 			assert.equal(expected_move, rule.effects.move)
+			assert.equal("640 360", rule.effects.size)
 		end
 	end)
 
@@ -419,7 +422,7 @@ describe("window-state rules", function()
 				geometry_authority = "pip",
 				per_monitor = false,
 				restore_monitor = true,
-				restore_size = false,
+				restore_size = true,
 				persist_tags = { "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
 			},
 			{
@@ -442,7 +445,7 @@ describe("window-state rules", function()
 		assert_contains(content, 'tags = { "pip-top-left" },')
 		assert_contains(content, 'monitor = "DP-1",')
 		assert_contains(content, 'tag = "-pip-bottom-right",')
-		assert_not_contains(content, 'size = "400 225",')
+		assert_contains(content, 'size = "400 225",')
 
 		local generated_corner
 		local generated_free
@@ -453,7 +456,7 @@ describe("window-state rules", function()
 				generated_free = rule
 			end
 		end
-		assert.is_nil(generated_corner.effects.size)
+		assert.equal("400 225", generated_corner.effects.size)
 		assert.equal("15 15", generated_corner.effects.move)
 		assert.equal("DP-1", generated_corner.effects.monitor)
 		assert.equal("+pip-top-left", generated_corner.effects.tag)

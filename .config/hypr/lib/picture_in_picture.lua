@@ -79,26 +79,50 @@ local function finite_number(value)
 	return type(value) == "number" and value == value and value ~= math.huge and value ~= -math.huge
 end
 
+local function normalized_size(value)
+	if value.width == nil and value.height == nil then
+		return nil
+	end
+	if finite_number(value.width) and value.width > 0 and finite_number(value.height) and value.height > 0 then
+		return { width = value.width, height = value.height }
+	end
+	return false
+end
+
 function M.acceptance.normalize(value)
 	if type(value) ~= "table" or type(value.target_monitor) ~= "string" or value.target_monitor == "" then
 		return nil, "expected target_monitor"
 	end
+	local size = normalized_size(value)
+	if size == false then
+		return nil, "expected positive width and height"
+	end
 
 	if value.kind == "corner" and M.corners[value.corner] then
-		return {
+		local placement = {
 			kind = "corner",
 			corner = value.corner,
 			target_monitor = value.target_monitor,
 		}
+		if size then
+			placement.width = size.width
+			placement.height = size.height
+		end
+		return placement
 	end
 
 	if value.kind == "free" and finite_number(value.x) and finite_number(value.y) then
-		return {
+		local placement = {
 			kind = "free",
 			target_monitor = value.target_monitor,
 			x = value.x,
 			y = value.y,
 		}
+		if size then
+			placement.width = size.width
+			placement.height = size.height
+		end
+		return placement
 	end
 
 	return nil, "expected corner or free placement"

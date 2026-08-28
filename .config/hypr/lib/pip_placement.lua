@@ -163,6 +163,8 @@ local function complete_pending_acceptance(state, input, commands)
 				local accepted = {
 					kind = pending.corner and "corner" or "free",
 					target_monitor = monitor.name,
+					width = tonumber(window.size[1]) or 0,
+					height = tonumber(window.size[2]) or 0,
 				}
 				if pending.corner then
 					accepted.corner = pending.corner

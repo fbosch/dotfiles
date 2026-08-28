@@ -451,7 +451,7 @@ local function fixture()
 			and generated_rule(nil, "^Picture-in-Picture$").placement.corner == "top-left"
 			and generated_rule(nil, "^Picture-in-Picture$").effects.tag == "+pip-top-left"
 			and generated_rule(nil, "^Picture-in-Picture$").effects.move == "15 15"
-			and generated_rule(nil, "^Picture-in-Picture$").effects.size == nil
+			and generated_rule(nil, "^Picture-in-Picture$").effects.size == "500 300"
 			and generated_rule(nil, "^Picture-in-Picture$").effects.fullscreen_state == nil
 			and generated_rule(nil, "^Picture-in-Picture$").match.workspace == nil
 			and rules:find('tag = "-pip-top-right"', 1, true)
@@ -460,8 +460,12 @@ local function fixture()
 
 	write_file(hyprctl_log_path, "")
 	send_control("not-a-placement", "error")
-	send_control('accept-pip-placement-v1 {"kind":"corner","corner":"bottom-right","target_monitor":"DP-1"}')
-	send_control('accept-pip-placement-v1 {"kind":"free","target_monitor":"HDMI-A-1","x":75,"y":85}')
+	send_control(
+		'accept-pip-placement-v1 {"kind":"corner","corner":"bottom-right","target_monitor":"DP-1","width":640,"height":360}'
+	)
+	send_control(
+		'accept-pip-placement-v1 {"kind":"free","target_monitor":"HDMI-A-1","x":75,"y":85,"width":800,"height":450}'
+	)
 	assert(read_file(hyprctl_log_path) == "", "placement acknowledgement waited for rule activation")
 	local accepted = generated_rule(nil, "^Picture-in-Picture$")
 	assert(accepted, "accepted PiP rule is missing")
@@ -469,6 +473,7 @@ local function fixture()
 	assert(accepted.placement.target_monitor == "HDMI-A-1", "accepted PiP monitor was not persisted")
 	assert(accepted.effects.monitor == "HDMI-A-1", "accepted PiP monitor effect is missing")
 	assert(accepted.effects.move == "75 85", "accepted free PiP position is missing")
+	assert(accepted.effects.size == "800 450", "accepted PiP size is missing")
 	assert(accepted.tags == nil, "free PiP placement retained a corner tag")
 	wait_for("debounced PiP rule activation", function()
 		local calls = read_file(hyprctl_log_path)

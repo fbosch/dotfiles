@@ -127,7 +127,10 @@ it("accepts an explicit router drag-end free placement immediately when no corre
 		placement.place(state, input(0.1, { type = "control", action = "drag-end" }, { clients = { window } }))
 
 	assert.equal(0, #of_kind(commands, "move"))
-	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600 } }, accepted_placements(commands))
+	assert.same(
+		{ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600, width = 400, height = 225 } },
+		accepted_placements(commands)
+	)
 end)
 
 it("accepts a snapped router drag-end only after observing its exact position and tag", function()
@@ -142,7 +145,7 @@ it("accepts a snapped router drag-end only after observing its exact position an
 	local observed = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
 	local _, accepted = placement.place(state, input(0.2, { type = "tick" }, { clients = { observed } }))
 	assert.same(
-		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide" } },
+		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide", width = 400, height = 225 } },
 		accepted_placements(accepted)
 	)
 end)
@@ -158,7 +161,10 @@ it("accepts free placement after the bare corner tag clears while the old dynami
 
 	local observed = client("0x1", 1500, 600, 400, 225, { tags = { "pip-top-left*" } })
 	local _, accepted = placement.place(state, input(0.2, { type = "tick" }, { clients = { observed } }))
-	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600 } }, accepted_placements(accepted))
+	assert.same(
+		{ { kind = "free", target_monitor = "ultrawide", x = 1500, y = 600, width = 400, height = 225 } },
+		accepted_placements(accepted)
+	)
 end)
 
 it("drops corrected router drag-end placement after the 500ms observation deadline", function()
@@ -186,7 +192,7 @@ it("keeps corrected placement pending across config reloads and empty observatio
 	local observed = client("0x1", rest_x, rest_y, 400, 225, { tags = { "pip-bottom-right" } })
 	local _, accepted = placement.place(state, input(0.3, { type = "tick" }, { clients = { observed } }))
 	assert.same(
-		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide" } },
+		{ { kind = "corner", corner = "bottom-right", target_monitor = "ultrawide", width = 400, height = 225 } },
 		accepted_placements(accepted)
 	)
 end)
@@ -296,7 +302,7 @@ it("restores the anchored corner after a resize", function()
 	local observed = client("0x1", 15, 990, 800, 450, { tags = { "pip-bottom-left" } })
 	local _, accepted = placement.place(state, input(1.1, { type = "tick" }, { clients = { observed } }))
 	assert.same(
-		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide" } },
+		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide", width = 800, height = 450 } },
 		accepted_placements(accepted)
 	)
 end)
@@ -340,7 +346,10 @@ it("suppresses resize reconciliation throughout a free manual resize", function(
 	local _, commands =
 		placement.place(state, input(0.1, { type = "control", action = "resize-end" }, { clients = { after } }))
 	assert.is_nil(state.resizing_address)
-	assert.same({ { kind = "free", target_monitor = "ultrawide", x = 1200, y = 600 } }, accepted_placements(commands))
+	assert.same(
+		{ { kind = "free", target_monitor = "ultrawide", x = 1200, y = 600, width = 800, height = 450 } },
+		accepted_placements(commands)
+	)
 end)
 
 it("reconciles newly opened pip windows onto their default corner", function()
@@ -402,7 +411,7 @@ it("moves a tagged window between corners on the move command", function()
 	local observed = client("0x1", 15, 1200, 400, 225, { tags = { "pip-bottom-right*", "pip-bottom-left" } })
 	local _, accepted = placement.place(state, input(0.1, { type = "tick" }, { clients = { observed } }))
 	assert.same(
-		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide" } },
+		{ { kind = "corner", corner = "bottom-left", target_monitor = "ultrawide", width = 400, height = 225 } },
 		accepted_placements(accepted)
 	)
 end)

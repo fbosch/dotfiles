@@ -116,7 +116,7 @@ function M.load_selectors(path)
 					and selector.pattern == "^" .. pip.title .. "$"
 					and per_monitor == false
 					and restore_monitor == true
-					and restore_size == false
+					and restore_size ~= false
 				)
 			local valid_exclude = exclude == nil
 				or (
@@ -342,8 +342,8 @@ function M.accept_pip_placement(cache, selectors, value)
 		monitor,
 		x,
 		y,
-		nil,
-		nil,
+		placement.width,
+		placement.height,
 		tags,
 		placement.target_monitor,
 		placement

@@ -161,11 +161,17 @@ describe("window-state publication", function()
 			geometry_authority = "pip",
 			per_monitor = false,
 			restore_monitor = true,
-			restore_size = false,
+			restore_size = true,
 			persist_tags = { "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
 		}
 		local selectors = { pip_selector, selector("Test") }
-		local placement = { kind = "corner", corner = "bottom-right", target_monitor = "DP-1" }
+		local placement = {
+			kind = "corner",
+			corner = "bottom-right",
+			target_monitor = "DP-1",
+			width = 640,
+			height = 360,
+		}
 
 		local accepted, activation_needed = publisher:accept_pip_placement(placement, selectors)
 		assert.is_true(accepted)
@@ -204,10 +210,11 @@ describe("window-state publication", function()
 			end
 		end
 		assert.is_not_nil(pip_rule)
-		assert.same(placement, pip_rule.placement)
+		assert.same({ kind = "corner", corner = "bottom-right", target_monitor = "DP-1" }, pip_rule.placement)
 		assert.same({ "pip-bottom-right" }, pip_rule.tags)
 		assert.equal("+pip-bottom-right", pip_rule.effects.tag)
 		assert.equal("(monitor_w-window_w-15) (monitor_h-window_h-15)", pip_rule.effects.move)
+		assert.equal("640 360", pip_rule.effects.size)
 
 		local cleanup_tags = {}
 		for _, rule in ipairs(rules) do
