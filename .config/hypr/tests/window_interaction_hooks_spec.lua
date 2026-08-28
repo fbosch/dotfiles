@@ -1,3 +1,7 @@
+local script_path = debug.getinfo(1, "S").source:sub(2)
+local config_dir = script_path:match("^(.*)/tests/window_interaction_hooks_spec%.lua$") or ".config/hypr"
+package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
+
 local module_names = {
 	"lib.async",
 	"lib.command",
@@ -115,9 +119,10 @@ describe("window interaction hooks adapter", function()
 	it("forwards valid completed interactions", function()
 		require("plugins.window_interaction_hooks")
 
-		handlers["window_interaction_hooks.finished"]({}, "move", 10, 20, 300, 200)
-
-		assert.matches("interaction%-finished move", dispatches[#dispatches])
+		for _, kind in ipairs({ "move", "resize" }) do
+			handlers["window_interaction_hooks.finished"]({}, kind, 10, 20, 300, 200)
+			assert.matches("interaction%-finished " .. kind, dispatches[#dispatches])
+		end
 	end)
 
 	it("ignores invalid interaction kinds", function()
@@ -139,6 +144,21 @@ describe("window interaction hooks adapter", function()
 
 		deferred[1].callback()
 		assert.matches("interaction%-hooks%-ready", dispatches[#dispatches])
+	end)
+
+	it("keeps polling fallback when the plugin path is unavailable", function()
+		os.getenv = function(name)
+			if name == "HYPR_WINDOW_INTERACTION_HOOKS_PLUGIN" then
+				return nil
+			end
+			return original_getenv(name)
+		end
+
+		local adapter = require("plugins.window_interaction_hooks")
+
+		assert.matches("polling fallback", adapter.error)
+		assert.is_nil(loaded_plugin)
+		assert.is_nil(handlers["window_interaction_hooks.finished"])
 	end)
 
 	it("keeps polling fallback when plugin loading fails", function()

@@ -34,14 +34,15 @@ local reader_report_path = test_dir .. "/reader.report"
 
 local query_server
 local event_server
+local event_client
 local daemon_pid
 local reader_pid
 local active_event_connections = 0
 local event_closed_at
 local reconnect_at
 local first_query_done = false
-local initial_published = false
 local reconnected = false
+local client_query_count = 0
 
 local initial_clients = [=[[{"class":"nemo","floating":true,"monitor":1,"at":[110,220],"size":[800,600]}]]=]
 local updated_clients = [=[
@@ -55,6 +56,15 @@ local updated_clients = [=[
   {"class":"nemo","floating":true,"monitor":2,"at":[1030,140],"size":[500,600]}
 ]
 ]=]
+local native_event_clients = [=[
+[
+  {"class":"Bitwarden","floating":true,"monitor":1,"at":[130,240],"size":[1000,700]},
+  {"class":"app.zen_browser.zen","initialTitle":"Picture-in-Picture","tags":["pip-bottom-right"],"floating":true,"monitor":1,"at":[999,888],"size":[900,500]},
+  {"class":"nemo","floating":true,"monitor":1,"at":[170,280],"size":[950,675]},
+  {"class":"nemo","floating":true,"monitor":2,"at":[1030,140],"size":[500,600]}
+]
+]=]
+local current_clients = initial_clients
 local monitors = [=[
 [
   {"id":1,"name":"DP-1","x":0,"y":0},
@@ -160,26 +170,6 @@ local function wait_for(phase, predicate, timeout)
 	fail(phase, "timed out after " .. timeout .. "s")
 end
 
-local function send_control(message, expected_response)
-	expected_response = expected_response or "ok"
-	local deadline = socket.gettime() + 4
-	while socket.gettime() < deadline do
-		local client = assert(unix())
-		client:settimeout(2)
-		local connected = client:connect(control_path)
-		if connected then
-			assert(client:send(message .. "\n"))
-			local response = client:receive("*l")
-			client:close()
-			assert(response == expected_response, "unexpected window-state control response: " .. tostring(response))
-			return
-		end
-		client:close()
-		socket.sleep(0.02)
-	end
-	fail("window-state control socket", "failed to connect")
-end
-
 local function accept_query()
 	local client = query_server:accept()
 	if not client then
@@ -192,8 +182,8 @@ local function accept_query()
 		assert(client:send(monitors))
 	elseif request:find("j/clients", 1, true) then
 		first_query_done = true
-		assert(client:send(initial_published and updated_clients or initial_clients))
-		initial_published = true
+		client_query_count = client_query_count + 1
+		assert(client:send(current_clients))
 	end
 	client:close()
 end
@@ -212,11 +202,57 @@ local function accept_event()
 	if active_event_connections == 3 then
 		reconnect_at = socket.gettime()
 		reconnected = true
-		assert(client:send("closewindow>>fixture\n"))
-		client:close()
+		event_client = client
+		event_client:settimeout(0)
+		assert(event_client:send("closewindow>>fixture\n"))
 		return
 	end
 	client:close()
+end
+
+local function send_control(message, expected_response)
+	expected_response = expected_response or "ok"
+	local deadline = socket.gettime() + 4
+	while socket.gettime() < deadline do
+		local client = assert(unix())
+		client:settimeout(2)
+		local connected = client:connect(control_path)
+		if connected then
+			assert(client:send(message .. "\n"))
+			client:settimeout(0)
+			while socket.gettime() < deadline do
+				local ready = socket.select({ client, query_server, event_server }, nil, 0.05)
+				for _, reader in ipairs(ready) do
+					if reader == client then
+						local response, err = client:receive("*l")
+						if response then
+							client:close()
+							assert(
+								response == expected_response,
+								"unexpected window-state control response: " .. tostring(response)
+							)
+							return
+						end
+						assert(err == "timeout", "window-state control socket failed: " .. tostring(err))
+					elseif reader == query_server then
+						accept_query()
+					else
+						accept_event()
+					end
+				end
+			end
+			client:close()
+			fail("window-state control socket", "timed out waiting for response")
+		end
+		client:close()
+		socket.sleep(0.02)
+	end
+	fail("window-state control socket", "failed to connect")
+end
+
+local function send_event(message)
+	assert(event_client, "event client is not connected")
+	assert(event_client:send(message .. "\n"))
 end
 
 local function service_until(phase, predicate, timeout)
@@ -244,6 +280,20 @@ local function service_until(phase, predicate, timeout)
 			.. tostring(read_file(state_path))
 			.. ")"
 	)
+end
+
+local function service_for(duration)
+	local deadline = socket.gettime() + duration
+	while socket.gettime() < deadline do
+		local ready = socket.select({ query_server, event_server }, nil, 0.05)
+		for _, server in ipairs(ready) do
+			if server == query_server then
+				accept_query()
+			else
+				accept_event()
+			end
+		end
+	end
 end
 
 local function assert_contains(phase, content, expected)
@@ -278,11 +328,12 @@ local function stop_reader()
 	end, 1)
 	local log = read_file(reader_log_path)
 	local report = read_file(reader_report_path)
+	local iterations = report and tonumber(report:match("%d+"))
 	reader_pid = nil
 	if log and log ~= "" then
 		fail("concurrent reader", log)
 	end
-	if not report or tonumber(report:match("%d+")) < 1 then
+	if not iterations or iterations < 1 then
 		fail("concurrent reader", "reader did not complete any validation\n" .. (log or "reader log unavailable"))
 	end
 end
@@ -314,6 +365,9 @@ local function cleanup()
 	end
 	if event_server then
 		event_server:close()
+	end
+	if event_client then
+		event_client:close()
 	end
 	stop_reader()
 	os.execute("rm -rf " .. shell_quote(test_dir))
@@ -414,6 +468,10 @@ local function fixture()
 		local state = read_file(state_path)
 		return first_query_done and not reconnected and state and state:find('"width":800', 1, true) ~= nil
 	end, 3)
+	service_until("adaptive polling fallback", function()
+		return client_query_count >= 2
+	end, 2)
+	current_clients = updated_clients
 
 	service_until("event socket closure", function()
 		return event_closed_at ~= nil
@@ -458,6 +516,35 @@ local function fixture()
 			and rules:find('animation = "slide top"', 1, true)
 	end, 3)
 
+	local fallback_query_count = client_query_count
+	send_event("movewindow>>fixture")
+	service_until("geometry polling before interaction hooks are ready", function()
+		return client_query_count > fallback_query_count
+	end, 1)
+
+	send_control("interaction-hooks-ready")
+	local stopped_query_count = client_query_count
+	send_event("movewindow>>fixture")
+	send_event("resizewindow>>fixture")
+	service_for(1.2)
+	assert(client_query_count == stopped_query_count, "geometry events restarted polling after native readiness")
+
+	current_clients = native_event_clients
+	local move_query_count = client_query_count
+	send_control("interaction-finished move")
+	assert(client_query_count == move_query_count + 1, "move completion did not perform exactly one snapshot")
+	assert(generated_rule("DP-1", "^nemo$").effects.move == "170 280", "move completion was not persisted")
+	local pip_after_move = generated_rule(nil, "^Picture-in-Picture$")
+	assert(pip_after_move.placement.corner == "top-left", "native completion overwrote semantic PiP placement")
+
+	local resize_query_count = client_query_count
+	send_control("interaction-finished resize")
+	assert(client_query_count == resize_query_count + 1, "resize completion did not perform exactly one snapshot")
+	assert(generated_rule("DP-1", "^nemo$").effects.size == "950 675", "resize completion was not persisted")
+	local invalid_query_count = client_query_count
+	send_control("interaction-finished unknown", "error")
+	assert(client_query_count == invalid_query_count, "invalid interaction kind captured window state")
+
 	write_file(hyprctl_log_path, "")
 	send_control("not-a-placement", "error")
 	send_control(
@@ -481,6 +568,7 @@ local function fixture()
 	end, 1)
 	local log = read_file(log_path)
 	assert_contains("daemon reconnect log", log, "window-state: event socket reconnected")
+	assert_contains("native interaction readiness", log, "interaction hooks ready; disabled geometry polling")
 	assert_contains("window-state rule refresh", read_file(hyprctl_log_path), "reload config-only")
 	stop_daemon()
 	stop_reader()
@@ -492,4 +580,4 @@ if not ok then
 	io.stderr:write(message, "\n")
 	os.exit(1)
 end
-print("PASS window-state daemon query, reconnect, and cache publication")
+print("PASS window-state daemon native interactions, fallback polling, reconnect, and cache publication")
