@@ -54,8 +54,6 @@ local function validate_events(plugin)
 				event.pattern == nil or type(event.pattern) == "string",
 				"native event pattern must be a string: " .. plugin.name
 			)
-		else
-			assert(type(event) == "string", "native event must be a name or table: " .. plugin.name)
 		end
 	end
 end
@@ -93,7 +91,22 @@ local function validate_keys(plugin)
 	end
 end
 
-local function register_one(plugin)
+local function validate_dependencies(plugin)
+	if plugin.dependencies == nil then
+		return
+	end
+
+	assert(vim.islist(plugin.dependencies), "native dependencies must be a list: " .. plugin.name)
+	local dependencies = {}
+	for _, dependency in ipairs(plugin.dependencies) do
+		assert(type(dependency) == "string", "native dependency must be a name: " .. plugin.name)
+		assert(dependency ~= plugin.name, "native plugin cannot depend on itself: " .. plugin.name)
+		assert(dependencies[dependency] == nil, "duplicate native dependency: " .. plugin.name .. " -> " .. dependency)
+		dependencies[dependency] = true
+	end
+end
+
+local function validate_plugin(plugin)
 	assert(valid_package_name(plugin.name), "native plugin name must be one path segment")
 	assert(type(plugin.src) == "string" and plugin.src ~= "", "native plugin source is required for " .. plugin.name)
 	assert(registered_names[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
@@ -126,20 +139,7 @@ local function register_one(plugin)
 	validate_string_list(plugin, "filetypes")
 	validate_events(plugin)
 	validate_keys(plugin)
-
-	if plugin.dependencies ~= nil then
-		assert(vim.islist(plugin.dependencies), "native dependencies must be a list: " .. plugin.name)
-		local dependencies = {}
-		for _, dependency in ipairs(plugin.dependencies) do
-			assert(type(dependency) == "string", "native dependency must be a name: " .. plugin.name)
-			assert(dependency ~= plugin.name, "native plugin cannot depend on itself: " .. plugin.name)
-			assert(
-				dependencies[dependency] == nil,
-				"duplicate native dependency: " .. plugin.name .. " -> " .. dependency
-			)
-			dependencies[dependency] = true
-		end
-	end
+	validate_dependencies(plugin)
 
 	if plugin.root == false then
 		assert(plugin.startup ~= true, "native dependency-only plugin cannot be startup-loaded: " .. plugin.name)
@@ -148,16 +148,26 @@ local function register_one(plugin)
 	elseif plugin.startup == true then
 		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
 	end
+end
+
+local function plugin_is_enabled(plugin)
+	if plugin.enabled == nil then
+		return true
+	end
+
+	local ok, enabled = xpcall(plugin.enabled, debug.traceback)
+	assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
+	assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
+	return enabled
+end
+
+local function register_one(plugin)
+	validate_plugin(plugin)
 	registered_names[plugin.name] = true
 
-	if plugin.enabled ~= nil then
-		local ok, enabled = xpcall(plugin.enabled, debug.traceback)
-		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
-		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
-		if enabled == false then
-			disabled_packages[plugin.name] = true
-			return
-		end
+	if plugin_is_enabled(plugin) == false then
+		disabled_packages[plugin.name] = true
+		return
 	end
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then

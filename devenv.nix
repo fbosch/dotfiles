@@ -268,6 +268,11 @@ in
         -l .config/nvim/tests/pack_registry_enabled.lua
     '';
 
+    "test:nvim-pack-loader".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pack_loader.lua
+    '';
+
     "test:nvim-pack-disabled-sync".exec = ''
       test_root="$(mktemp -d)"
       trap 'rm -rf "$test_root"' EXIT
@@ -308,6 +313,7 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:nvim-pack-disabled-sync"
+        "test:nvim-pack-loader"
         "test:nvim-pack-registry-enabled"
         "test:vicinae"
         "test:runtime-shell"

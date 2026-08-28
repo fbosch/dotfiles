@@ -49,4 +49,4 @@ Neovim 0.12 synchronizes every lock entry before adding explicit specs, so disab
 
 Native callback keys cannot overwrite an existing mapping unless that key explicitly sets `replace = true`. Reserve replacement for intentional overrides of known Neovim defaults.
 
-The local loader intentionally supports only the lifecycle behavior used by this configuration. It does not implement priority ordering, generic event or filetype replay, or generic key replay. Add those capabilities only when a plugin requires them and the first-trigger behavior can be tested directly.
+The local loader intentionally supports only the lifecycle behavior used by this configuration. It does not implement priority ordering, generic event or filetype replay, or generic key replay. Add those capabilities only when a plugin requires them and the first-trigger behavior can be tested directly. Core loader tests cover dependency order, retryable conditions, sticky failures, and scheduled `PackReady` publication through the existing loader interface; package-specific readiness and passed-event recovery stay with their declarations.
