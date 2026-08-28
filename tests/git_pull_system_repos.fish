@@ -45,6 +45,11 @@ end
 
 function nvim
     printf 'nvim %s\n' (string join ' ' -- $argv) >> "$TEST_LOG"
+    if env | string match -q 'CORPORATE=*'
+        set -g TEST_NVIM_CORPORATE_EXPORTED 1
+    else
+        set -g TEST_NVIM_CORPORATE_EXPORTED 0
+    end
     return "$TEST_NVIM_STATUS"
 end
 
@@ -98,6 +103,7 @@ function add_remote_commit
 end
 
 function setup_scenario
+    set -e CORPORATE
     set -g SCENARIO (mktemp -d "$TEST_ROOT/scenario.XXXXXX")
     set -gx HOME "$SCENARIO/home"
     command mkdir -p "$HOME" "$SCENARIO/remotes" "$SCENARIO/seeds" "$SCENARIO/writers"
@@ -109,8 +115,20 @@ function setup_scenario
     set -g TEST_STOW_STATUS 0
     set -g TEST_JUST_STATUS 0
     set -g TEST_NVIM_STATUS 0
+    set -g TEST_NVIM_CORPORATE_EXPORTED 0
     set -g TEST_HERDR_STATUS 0
     source "$SYNC_FUNCTION"
+end
+
+function test_corporate_context_reaches_native_plugin_install
+    setup_scenario
+    set -g CORPORATE 1
+
+    git_pull_system_repos --yes
+    assert_status 0 $status
+    assert_log_contains install-fbb
+    assert_log_absent install-opencode-plugins
+    assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
 end
 
 function test_clean_repositories_fast_forward
@@ -246,6 +264,7 @@ function test_post_pull_failure_returns_nonzero
 end
 
 test_clean_repositories_fast_forward
+test_corporate_context_reaches_native_plugin_install
 test_dirty_repository_aborts_before_updates
 test_non_git_directory_aborts
 test_pull_failure_skips_post_pull_setup

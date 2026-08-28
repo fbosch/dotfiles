@@ -258,6 +258,10 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
     end
 
     printf '%sWorking%s  Installing native Neovim plugins and parsers...\n' "$working" "$normal" >&2
+    if set -q CORPORATE
+        # Ensure Neovim applies corporate plugin policy even when the Fish marker was not exported.
+        set --function --export CORPORATE 1
+    end
     nvim --headless -i NONE '+TSInstallMissing' '+qa'
     set command_status $status
     if contains -- $command_status 130 143

@@ -52,6 +52,10 @@ end
 
 dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")
 assert(type(registration) == "table" and type(registration[1]) == "table", "opencode plugin was not registered")
+local corporate = vim.env.CORPORATE
+vim.env.CORPORATE = "1"
+assert(registration[1].enabled() == false, "opencode plugin was enabled in corporate context")
+vim.env.CORPORATE = corporate
 registration[1].init()
 
 vim.g.opencode_opts.server.start()
