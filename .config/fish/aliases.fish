@@ -76,36 +76,38 @@ abbr nxud flake_updates_daemon
 abbr nxgc nix-collect-garbage
 
 # OpenCode
-abbr oc opencode
-abbr ocps opencode_profile_switch
-abbr ocas opencode_auth_switch
+if not set -q CORPORATE
+    abbr oc opencode
+    abbr ocps opencode_profile_switch
+    abbr ocas opencode_auth_switch
+    abbr liw linear_issue_workflow
 
-abbr liw linear_issue_workflow
-function wsc --wraps='wt switch --create --execute=opencode' --description 'alias wsc wt switch --create --execute=opencode'
-    set -l opencode_path (__opencode_command_path)
-    if test -z "$opencode_path"
-        set opencode_path opencode
-    end
-
-    if not type -q direnv
-        wt switch --create --execute=$opencode_path $argv
-        return $status
-    end
-
-    set -l switch_args
-    set -l opencode_args
-    set -l forwarding_opencode_args false
-    for argument in $argv
-        if test "$argument" = "--"
-            set forwarding_opencode_args true
-        else if test "$forwarding_opencode_args" = true
-            set -a opencode_args $argument
-        else
-            set -a switch_args $argument
+    function wsc --wraps='wt switch --create --execute=opencode' --description 'alias wsc wt switch --create --execute=opencode'
+        set -l opencode_path (__opencode_command_path)
+        if test -z "$opencode_path"
+            set opencode_path opencode
         end
-    end
 
-    wt switch --create --execute=direnv $switch_args -- exec "{{ worktree_path }}" $opencode_path $opencode_args
+        if not type -q direnv
+            wt switch --create --execute=$opencode_path $argv
+            return $status
+        end
+
+        set -l switch_args
+        set -l opencode_args
+        set -l forwarding_opencode_args false
+        for argument in $argv
+            if test "$argument" = "--"
+                set forwarding_opencode_args true
+            else if test "$forwarding_opencode_args" = true
+                set -a opencode_args $argument
+            else
+                set -a switch_args $argument
+            end
+        end
+
+        wt switch --create --execute=direnv $switch_args -- exec "{{ worktree_path }}" $opencode_path $opencode_args
+    end
 end
 
 # Helpers

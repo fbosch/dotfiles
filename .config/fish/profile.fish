@@ -7,7 +7,6 @@ set -gx ARCHPREFERENCE arm64
 set -gx MANPAGER "sh -c 'col -bx | bat -l man -p'"
 set -gx EDITOR nvim
 set -gx NVIM_INIT $HOME/.config/nvim/init.lua
-set -gx OPENCODE_CONFIG_DIR $HOME/.config/opencode
 set -gx NH_FLAKE $HOME/nixos
 set -gx NH_OS_FLAKE $HOME/nixos
 set -gx AGENT_BROWSER_ENGINE lightpanda
@@ -26,16 +25,18 @@ set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
 
 # opencode
-set -gx OPENCODE_DISABLE_MODELS_FETCH true
-set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
-set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
-set -gx OPENCODE_EXPERIMENTAL_EXA 1
+if not set -q CORPORATE
+    set -gx OPENCODE_CONFIG_DIR $HOME/.config/opencode
+    set -gx OPENCODE_DISABLE_MODELS_FETCH true
+    set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
+    set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
+    set -gx OPENCODE_EXPERIMENTAL_EXA 1
+    set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
+end
 
 # headroom proxy
 set -gx OPENAI_BASE_URL http://127.0.0.1:8787/v1
 set -gx ANTHROPIC_BASE_URL http://127.0.0.1:8787
-
-set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
 
 # Pinentry-curses must target this shell's terminal, not an inherited TTY.
 set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)

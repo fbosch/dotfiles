@@ -171,6 +171,8 @@ in
       fish tests/git_pull_system_repos.fish
     '';
 
+    "test:fish-corporate-opencode".exec = "fish tests/fish_corporate_opencode.fish";
+
     "test:fish-starship-cache".exec = ''
       set -euo pipefail
       test_dir="$(mktemp -d)"
