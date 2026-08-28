@@ -171,6 +171,85 @@ local function validate_key_triggers()
 	end
 end
 
+local function register_autocmd_triggers(name, plugin)
+	for _, filetype in ipairs(plugin.filetypes or {}) do
+		local id = vim.api.nvim_create_autocmd("FileType", {
+			pattern = filetype,
+			callback = function(event)
+				if states[name] == "loading" then
+					return
+				end
+				M.activate(name, event)
+			end,
+		})
+		track_trigger_autocmd(name, id)
+	end
+
+	for _, event in ipairs(plugin.events or {}) do
+		local event_name = type(event) == "table" and event[1] or event
+		local id = vim.api.nvim_create_autocmd(event_name, {
+			pattern = type(event) == "table" and event.pattern or nil,
+			callback = function(event_context)
+				if states[name] == "loading" then
+					return
+				end
+				M.activate(name, event_context)
+			end,
+		})
+		track_trigger_autocmd(name, id)
+	end
+
+	for _, command in ipairs(plugin.commands or {}) do
+		vim.api.nvim_create_autocmd("CmdUndefined", {
+			pattern = command,
+			callback = function(event)
+				local activated, reason = M.activate(name, event)
+				if activated == false then
+					vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
+				end
+			end,
+		})
+	end
+end
+
+local function register_key_triggers(name, plugin)
+	for _, key in ipairs(plugin.keys or {}) do
+		local callback
+		if key.expr then
+			callback = function()
+				local activated = M.activate(name, {
+					buf = vim.api.nvim_get_current_buf(),
+					mode = vim.fn.mode(1),
+					source = "key",
+				})
+				if activated == false then
+					return ""
+				end
+				return key[2]()
+			end
+		else
+			callback = function()
+				local activated, reason = M.activate(name, {
+					buf = vim.api.nvim_get_current_buf(),
+					mode = vim.fn.mode(1),
+					source = "key",
+				})
+				if activated == false then
+					vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
+					return
+				end
+				key[2]()
+			end
+		end
+
+		vim.keymap.set(key.mode or "n", key[1], callback, {
+			desc = key.desc,
+			expr = key.expr == true,
+			silent = key.silent,
+		})
+	end
+end
+
 function M.setup()
 	validate_dependencies()
 	validate_key_triggers()
@@ -182,80 +261,8 @@ function M.setup()
 	end
 
 	for name, plugin in pairs(registry.all()) do
-		for _, filetype in ipairs(plugin.filetypes or {}) do
-			local id = vim.api.nvim_create_autocmd("FileType", {
-				pattern = filetype,
-				callback = function(event)
-					if states[name] == "loading" then
-						return
-					end
-					M.activate(name, event)
-				end,
-			})
-			track_trigger_autocmd(name, id)
-		end
-
-		for _, event in ipairs(plugin.events or {}) do
-			local event_name = type(event) == "table" and event[1] or event
-			local id = vim.api.nvim_create_autocmd(event_name, {
-				pattern = type(event) == "table" and event.pattern or nil,
-				callback = function(event_context)
-					if states[name] == "loading" then
-						return
-					end
-					M.activate(name, event_context)
-				end,
-			})
-			track_trigger_autocmd(name, id)
-		end
-
-		for _, command in ipairs(plugin.commands or {}) do
-			vim.api.nvim_create_autocmd("CmdUndefined", {
-				pattern = command,
-				callback = function(event)
-					local activated, reason = M.activate(name, event)
-					if activated == false then
-						vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
-					end
-				end,
-			})
-		end
-
-		for _, key in ipairs(plugin.keys or {}) do
-			local callback
-			if key.expr then
-				callback = function()
-					local activated = M.activate(name, {
-						buf = vim.api.nvim_get_current_buf(),
-						mode = vim.fn.mode(1),
-						source = "key",
-					})
-					if activated == false then
-						return ""
-					end
-					return key[2]()
-				end
-			else
-				callback = function()
-					local activated, reason = M.activate(name, {
-						buf = vim.api.nvim_get_current_buf(),
-						mode = vim.fn.mode(1),
-						source = "key",
-					})
-					if activated == false then
-						vim.notify(("%s is unavailable: %s"):format(name, reason), vim.log.levels.WARN)
-						return
-					end
-					key[2]()
-				end
-			end
-
-			vim.keymap.set(key.mode or "n", key[1], callback, {
-				desc = key.desc,
-				expr = key.expr == true,
-				silent = key.silent,
-			})
-		end
+		register_autocmd_triggers(name, plugin)
+		register_key_triggers(name, plugin)
 	end
 
 	local startup_plugins = {}
