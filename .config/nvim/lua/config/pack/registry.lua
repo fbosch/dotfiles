@@ -1,6 +1,49 @@
 local M = {}
 
 local plugins = {}
+local disabled_package_stubs = {}
+
+local function package_path(name)
+	return vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt", name)
+end
+
+local function disabled_marker(path)
+	return vim.fs.joinpath(path, ".nvim-pack-disabled")
+end
+
+local function has_lock_entry(name)
+	local lock_path = vim.fs.joinpath(vim.fn.stdpath("config"), "nvim-pack-lock.json")
+	if vim.fn.filereadable(lock_path) == 0 then
+		return false
+	end
+
+	local ok, lines = pcall(vim.fn.readfile, lock_path)
+	if ok == false then
+		return false
+	end
+	local decoded, lock = pcall(vim.json.decode, table.concat(lines, "\n"))
+	return decoded and type(lock) == "table" and type(lock.plugins) == "table" and type(lock.plugins[name]) == "table"
+end
+
+local function clear_disabled_stub(name)
+	local path = package_path(name)
+	if vim.uv.fs_lstat(disabled_marker(path)) ~= nil then
+		vim.fs.rm(path, { recursive = true, force = true })
+	end
+end
+
+local function prepare_disabled_package(name)
+	local path = package_path(name)
+	assert(not vim.tbl_contains(vim.opt.runtimepath:get(), path), "native disabled plugin is active: " .. name)
+	vim.fs.rm(path, { recursive = true, force = true })
+	if has_lock_entry(name) == false then
+		return
+	end
+
+	vim.fn.mkdir(path, "p")
+	vim.fn.writefile({}, disabled_marker(path))
+	disabled_package_stubs[path] = true
+end
 
 local function has_triggers(plugin)
 	return #(plugin.events or {}) > 0
@@ -140,23 +183,15 @@ local function register_one(plugin)
 		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
 		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
 		if enabled == false then
-			-- Avoid vim.pack APIs here: reading the lock installs missing lock-only packages.
+			-- Keep lock synchronization from reinstalling a disabled lock-only package.
 			local cleaned, cause = xpcall(function()
-				local path = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt", plugin.name)
-				if vim.uv.fs_lstat(path) == nil then
-					return
-				end
-
-				assert(
-					not vim.tbl_contains(vim.opt.runtimepath:get(), path),
-					"native disabled plugin is active: " .. plugin.name
-				)
-				vim.fs.rm(path, { recursive = true, force = true })
+				prepare_disabled_package(plugin.name)
 			end, debug.traceback)
 			assert(cleaned, ("native disabled plugin cleanup failed: %s\n%s"):format(plugin.name, cause))
 			return
 		end
 	end
+	clear_disabled_stub(plugin.name)
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then
 		plugin.events = { { "User", pattern = "PackReady" } }
@@ -200,6 +235,13 @@ function M.pack_specs()
 	end)
 
 	return specs
+end
+
+function M.cleanup_disabled_packages()
+	for path in pairs(disabled_package_stubs) do
+		vim.fs.rm(path, { recursive = true, force = true })
+		disabled_package_stubs[path] = nil
+	end
 end
 
 return M

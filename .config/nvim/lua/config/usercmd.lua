@@ -1,4 +1,5 @@
 local utils = require("utils")
+local pack_registry = require("config.pack.registry")
 local usrcmd = utils.set_usrcmd
 local keymap_modules = {
 	"config.keymaps.core",
@@ -55,21 +56,25 @@ usrcmd("ReloadConfig", function()
 	vim.notify("Reloaded Neovim keymaps", vim.log.levels.INFO)
 end, "Reload Neovim keymaps")
 
+local function enabled_plugin_names()
+	local names = vim.tbl_keys(pack_registry.all())
+	table.sort(names)
+	return names
+end
+
 usrcmd("PackUpdate", function(args)
-	vim.pack.update(#args.fargs > 0 and args.fargs or nil)
+	for _, name in ipairs(args.fargs) do
+		assert(pack_registry.get(name) ~= nil, "native plugin is disabled or unknown: " .. name)
+	end
+	vim.pack.update(#args.fargs > 0 and args.fargs or enabled_plugin_names())
 end, {
 	nargs = "*",
 	desc = "Review native plugin updates",
 	complete = function(arg_lead)
-		local names = vim.iter(vim.pack.get())
-			:map(function(plugin)
-				return plugin.spec.name
-			end)
+		return vim.iter(enabled_plugin_names())
 			:filter(function(name)
 				return vim.startswith(name, arg_lead)
 			end)
 			:totable()
-		table.sort(names)
-		return names
 	end,
 })

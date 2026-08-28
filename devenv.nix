@@ -266,6 +266,14 @@ in
         -l .config/nvim/tests/pack_registry_enabled.lua
     '';
 
+    "test:nvim-pack-registry-lock-sync".exec = ''
+      test_root="$(mktemp -d)"
+      trap 'rm -rf "$test_root"' EXIT
+      XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" REPO_ROOT="$PWD" \
+        timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pack_registry_lock_sync.lua
+    '';
+
     "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
 
     "test:lua".exec = ''
