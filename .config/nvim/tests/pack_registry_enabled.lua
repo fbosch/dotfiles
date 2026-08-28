@@ -1,5 +1,6 @@
 local repo_root = assert(vim.env.REPO_ROOT)
 local registry_path = repo_root .. "/.config/nvim/lua/config/pack/registry.lua"
+local example_path = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt", "example.nvim")
 
 local function plugin(overrides)
 	return vim.tbl_extend("force", {
@@ -12,10 +13,11 @@ do
 	local registry = dofile(registry_path)
 	local calls = 0
 	local removed
-	local pack_get = vim.pack.get
+	local fs_lstat = vim.uv.fs_lstat
 	local fs_rm = vim.fs.rm
-	vim.pack.get = function()
-		return { { active = false, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
+	vim.uv.fs_lstat = function(path)
+		assert(path == example_path, "unexpected disabled plugin path: " .. path)
+		return { type = "directory" }
 	end
 	vim.fs.rm = function(path, opts)
 		removed = { path = path, opts = opts }
@@ -26,11 +28,11 @@ do
 			return false
 		end,
 	}))
-	vim.pack.get = pack_get
+	vim.uv.fs_lstat = fs_lstat
 	vim.fs.rm = fs_rm
 
 	assert(calls == 1, "disabled predicate was not evaluated exactly once")
-	assert(removed.path == "/tmp/example.nvim", "disabled plugin directory was not removed")
+	assert(removed.path == example_path, "disabled plugin directory was not removed")
 	assert(
 		vim.deep_equal(removed.opts, { recursive = true, force = true }),
 		"disabled plugin removal was not recursive"
@@ -43,8 +45,8 @@ end
 do
 	local registry = dofile(registry_path)
 	local calls = 0
-	local pack_get = vim.pack.get
-	vim.pack.get = function()
+	local fs_lstat = vim.uv.fs_lstat
+	vim.uv.fs_lstat = function()
 		error("enabled plugin must not be inspected for cleanup")
 	end
 	registry.register(plugin({
@@ -53,7 +55,7 @@ do
 			return true
 		end,
 	}))
-	vim.pack.get = pack_get
+	vim.uv.fs_lstat = fs_lstat
 
 	assert(calls == 1, "enabled predicate was not evaluated exactly once")
 	assert(registry.get("example.nvim") ~= nil, "enabled plugin was not registered")
@@ -62,10 +64,10 @@ end
 
 do
 	local registry = dofile(registry_path)
-	local pack_get = vim.pack.get
+	local fs_lstat = vim.uv.fs_lstat
 	local fs_rm = vim.fs.rm
-	vim.pack.get = function()
-		return { { active = false, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
+	vim.uv.fs_lstat = function()
+		return { type = "directory" }
 	end
 	vim.fs.rm = function()
 		error("remove exploded")
@@ -78,7 +80,7 @@ do
 			end,
 		})
 	)
-	vim.pack.get = pack_get
+	vim.uv.fs_lstat = fs_lstat
 	vim.fs.rm = fs_rm
 
 	assert(ok == false, "disabled plugin cleanup failure was ignored")
@@ -91,11 +93,13 @@ end
 
 do
 	local registry = dofile(registry_path)
-	local pack_get = vim.pack.get
+	local fs_lstat = vim.uv.fs_lstat
 	local fs_rm = vim.fs.rm
-	vim.pack.get = function()
-		return { { active = true, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
+	local runtimepath = vim.opt.runtimepath:get()
+	vim.uv.fs_lstat = function()
+		return { type = "directory" }
 	end
+	vim.opt.runtimepath:append(example_path)
 	vim.fs.rm = function()
 		error("active plugin directory must not be removed")
 	end
@@ -107,8 +111,9 @@ do
 			end,
 		})
 	)
-	vim.pack.get = pack_get
+	vim.uv.fs_lstat = fs_lstat
 	vim.fs.rm = fs_rm
+	vim.opt.runtimepath = runtimepath
 
 	assert(ok == false, "active disabled plugin was removed")
 	assert(
@@ -120,11 +125,12 @@ end
 do
 	local registry = dofile(registry_path)
 	local pack_get = vim.pack.get
-	vim.pack.get = function(names)
-		if names ~= nil then
-			error("Plugin `example.nvim` is not installed")
-		end
-		return {}
+	local fs_lstat = vim.uv.fs_lstat
+	vim.pack.get = function()
+		error("disabled cleanup must not trigger vim.pack lock synchronization")
+	end
+	vim.uv.fs_lstat = function()
+		return nil
 	end
 	local ok, err = pcall(
 		registry.register,
@@ -135,6 +141,7 @@ do
 		})
 	)
 	vim.pack.get = pack_get
+	vim.uv.fs_lstat = fs_lstat
 
 	assert(ok, "absent disabled plugin cleanup failed: " .. tostring(err))
 	assert(registry.get("example.nvim") == nil, "absent disabled plugin was registered")

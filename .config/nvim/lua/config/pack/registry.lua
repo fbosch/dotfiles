@@ -140,14 +140,18 @@ local function register_one(plugin)
 		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
 		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
 		if enabled == false then
-			-- Preserve the shared lock entry while removing software forbidden on this machine.
+			-- Avoid vim.pack APIs here: reading the lock installs missing lock-only packages.
 			local cleaned, cause = xpcall(function()
-				for _, installed in ipairs(vim.pack.get()) do
-					if installed.spec.name == plugin.name then
-						assert(installed.active == false, "native disabled plugin is active: " .. plugin.name)
-						vim.fs.rm(installed.path, { recursive = true, force = true })
-					end
+				local path = vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt", plugin.name)
+				if vim.uv.fs_lstat(path) == nil then
+					return
 				end
+
+				assert(
+					not vim.tbl_contains(vim.opt.runtimepath:get(), path),
+					"native disabled plugin is active: " .. plugin.name
+				)
+				vim.fs.rm(path, { recursive = true, force = true })
 			end, debug.traceback)
 			assert(cleaned, ("native disabled plugin cleanup failed: %s\n%s"):format(plugin.name, cause))
 			return
