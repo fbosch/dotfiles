@@ -4,7 +4,6 @@ require("config.pack.registry").register({
 	dependencies = { "nvim-web-devicons" },
 	setup = function()
 		local git = require("utils.git")
-		require("utils.usage.opencode")
 
 		local function is_valid_status(result)
 			return type(result) == "string"
