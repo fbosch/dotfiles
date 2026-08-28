@@ -142,9 +142,11 @@ local function register_one(plugin)
 		if enabled == false then
 			-- Preserve the shared lock entry while removing software forbidden on this machine.
 			local cleaned, cause = xpcall(function()
-				for _, installed in ipairs(vim.pack.get({ plugin.name })) do
-					assert(installed.active == false, "native disabled plugin is active: " .. plugin.name)
-					vim.fs.rm(installed.path, { recursive = true, force = true })
+				for _, installed in ipairs(vim.pack.get()) do
+					if installed.spec.name == plugin.name then
+						assert(installed.active == false, "native disabled plugin is active: " .. plugin.name)
+						vim.fs.rm(installed.path, { recursive = true, force = true })
+					end
 				end
 			end, debug.traceback)
 			assert(cleaned, ("native disabled plugin cleanup failed: %s\n%s"):format(plugin.name, cause))

@@ -14,9 +14,8 @@ do
 	local removed
 	local pack_get = vim.pack.get
 	local fs_rm = vim.fs.rm
-	vim.pack.get = function(names)
-		assert(vim.deep_equal(names, { "example.nvim" }), "unexpected disabled plugin lookup")
-		return { { active = false, path = "/tmp/example.nvim" } }
+	vim.pack.get = function()
+		return { { active = false, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
 	end
 	vim.fs.rm = function(path, opts)
 		removed = { path = path, opts = opts }
@@ -66,7 +65,7 @@ do
 	local pack_get = vim.pack.get
 	local fs_rm = vim.fs.rm
 	vim.pack.get = function()
-		return { { active = false, path = "/tmp/example.nvim" } }
+		return { { active = false, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
 	end
 	vim.fs.rm = function()
 		error("remove exploded")
@@ -95,7 +94,7 @@ do
 	local pack_get = vim.pack.get
 	local fs_rm = vim.fs.rm
 	vim.pack.get = function()
-		return { { active = true, path = "/tmp/example.nvim" } }
+		return { { active = true, path = "/tmp/example.nvim", spec = { name = "example.nvim" } } }
 	end
 	vim.fs.rm = function()
 		error("active plugin directory must not be removed")
@@ -116,6 +115,29 @@ do
 		tostring(err):find("native disabled plugin is active: example.nvim", 1, true) ~= nil,
 		"unexpected active disabled plugin error: " .. tostring(err)
 	)
+end
+
+do
+	local registry = dofile(registry_path)
+	local pack_get = vim.pack.get
+	vim.pack.get = function(names)
+		if names ~= nil then
+			error("Plugin `example.nvim` is not installed")
+		end
+		return {}
+	end
+	local ok, err = pcall(
+		registry.register,
+		plugin({
+			enabled = function()
+				return false
+			end,
+		})
+	)
+	vim.pack.get = pack_get
+
+	assert(ok, "absent disabled plugin cleanup failed: " .. tostring(err))
+	assert(registry.get("example.nvim") == nil, "absent disabled plugin was registered")
 end
 
 local invalid_cases = {
