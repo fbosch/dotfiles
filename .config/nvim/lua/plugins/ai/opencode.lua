@@ -36,6 +36,7 @@ register({
 			key("<leader>as", { "n", "x" }, "opencode actions"),
 			key("<leader>aS", "n", "Select opencode session"),
 			key("ga", { "n", "x" }, "Add to opencode"),
+			key("<C-\\>", "n", "Toggle opencode focus"),
 			key("<A-a>", { "n", "t" }, "Toggle opencode"),
 			key("<A-x>", { "n", "v" }, "Send to opencode"),
 			key("<leader>ae", { "n", "v" }, "Explain code"),
@@ -369,7 +370,9 @@ register({
 				local buf_opts = { buffer = buf, silent = true }
 
 				local function exit_opencode_terminal()
-					vim.cmd("stopinsert")
+					if vim.fn.mode(1):sub(1, 1) == "t" then
+						vim.cmd("stopinsert")
+					end
 					vim.cmd("wincmd p")
 				end
 
@@ -382,11 +385,11 @@ register({
 					})
 				)
 				vim.keymap.set(
-					"t",
+					{ "n", "t" },
 					"<C-\\>",
 					exit_opencode_terminal,
 					vim.tbl_extend("force", buf_opts, {
-						desc = "Exit opencode terminal",
+						desc = "Toggle opencode focus",
 					})
 				)
 
@@ -428,6 +431,8 @@ register({
 							return
 						end
 					end
+
+					require("opencode.config").opts.server.start()
 				end)
 			end
 
@@ -576,6 +581,8 @@ register({
 			})
 
 			-- Core keymaps
+			vim.keymap.set("n", "<C-\\>", focus_opencode_window, { desc = "Toggle opencode focus" })
+
 			vim.keymap.set({ "n", "x" }, "<leader>ac", function()
 				ask_opencode_and_focus_after_submit("@this: ")
 			end, { desc = "Ask opencode" })
