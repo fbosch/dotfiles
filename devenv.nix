@@ -268,12 +268,12 @@ in
         -l .config/nvim/tests/pack_registry_enabled.lua
     '';
 
-    "test:nvim-pack-registry-lock-sync".exec = ''
+    "test:nvim-pack-disabled-sync".exec = ''
       test_root="$(mktemp -d)"
       trap 'rm -rf "$test_root"' EXIT
       XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" REPO_ROOT="$PWD" \
         timeout --foreground 15s nvim --headless -u NONE \
-        -l .config/nvim/tests/pack_registry_lock_sync.lua
+        -l .config/nvim/tests/pack_disabled_sync.lua
     '';
 
     "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
@@ -307,6 +307,8 @@ in
         "test:herdr-neovim-sessions"
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
+        "test:nvim-pack-disabled-sync"
+        "test:nvim-pack-registry-enabled"
         "test:vicinae"
         "test:runtime-shell"
         "test:lua"

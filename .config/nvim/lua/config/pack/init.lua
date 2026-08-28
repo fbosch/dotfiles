@@ -10,13 +10,8 @@ assert(vim.tbl_contains(vim.opt.packpath:get(), site), "native package site is m
 require("config.pack.discovery").load()
 require("config.pack.build").register()
 local registry = require("config.pack.registry")
-local added, add_cause = xpcall(function()
-	vim.pack.add(registry.pack_specs(), {
-		confirm = true,
-		load = function() end,
-	})
-end, debug.traceback)
-local cleaned, cleanup_cause = xpcall(registry.cleanup_disabled_packages, debug.traceback)
-assert(added, add_cause)
-assert(cleaned, cleanup_cause)
+require("config.pack.disabled_sync").synchronize({
+	specs = registry.pack_specs(),
+	disabled_names = registry.disabled_package_names(),
+})
 require("config.pack.loader").setup()

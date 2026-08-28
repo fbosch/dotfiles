@@ -76,3 +76,11 @@ should use these terms; new concepts named during design work land here.
 - **AI Pointer workflow** — the user interaction that begins with pointer
   selection and ends in an answer, cancellation, or failure. Results arriving
   from an earlier interaction are stale and cannot change the current one.
+
+## Neovim package lifecycle
+
+- **disabled package synchronization** — native package lifecycle transaction
+  that keeps declarations disabled for the current machine absent without
+  discarding their shared lock entries, and restores re-enabled declarations to
+  normal package state. Safe pre-synchronization state, synchronization timing,
+  and cleanup are one operation; runtime activation is outside it.

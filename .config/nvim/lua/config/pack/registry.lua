@@ -1,48 +1,21 @@
 local M = {}
 
 local plugins = {}
-local disabled_package_stubs = {}
+local disabled_packages = {}
+local registered_names = {}
 
-local function package_path(name)
-	return vim.fs.joinpath(vim.fn.stdpath("data"), "site", "pack", "core", "opt", name)
+local function valid_package_name(name)
+	return type(name) == "string"
+		and name ~= ""
+		and name ~= "."
+		and name ~= ".."
+		and name:find("\0", 1, true) == nil
+		and name:find("/", 1, true) == nil
+		and name:find("\\", 1, true) == nil
 end
 
-local function disabled_marker(path)
-	return vim.fs.joinpath(path, ".nvim-pack-disabled")
-end
-
-local function has_lock_entry(name)
-	local lock_path = vim.fs.joinpath(vim.fn.stdpath("config"), "nvim-pack-lock.json")
-	if vim.fn.filereadable(lock_path) == 0 then
-		return false
-	end
-
-	local ok, lines = pcall(vim.fn.readfile, lock_path)
-	if ok == false then
-		return false
-	end
-	local decoded, lock = pcall(vim.json.decode, table.concat(lines, "\n"))
-	return decoded and type(lock) == "table" and type(lock.plugins) == "table" and type(lock.plugins[name]) == "table"
-end
-
-local function clear_disabled_stub(name)
-	local path = package_path(name)
-	if vim.uv.fs_lstat(disabled_marker(path)) ~= nil then
-		vim.fs.rm(path, { recursive = true, force = true })
-	end
-end
-
-local function prepare_disabled_package(name)
-	local path = package_path(name)
-	assert(not vim.tbl_contains(vim.opt.runtimepath:get(), path), "native disabled plugin is active: " .. name)
-	vim.fs.rm(path, { recursive = true, force = true })
-	if has_lock_entry(name) == false then
-		return
-	end
-
-	vim.fn.mkdir(path, "p")
-	vim.fn.writefile({}, disabled_marker(path))
-	disabled_package_stubs[path] = true
+local function valid_version(version)
+	return type(version) == "string" or (type(version) == "table" and pcall(version.has, version, "1"))
 end
 
 local function has_triggers(plugin)
@@ -121,17 +94,15 @@ local function validate_keys(plugin)
 end
 
 local function register_one(plugin)
-	assert(type(plugin.name) == "string" and plugin.name ~= "", "native plugin name is required")
+	assert(valid_package_name(plugin.name), "native plugin name must be one path segment")
 	assert(type(plugin.src) == "string" and plugin.src ~= "", "native plugin source is required for " .. plugin.name)
-	assert(plugins[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
+	assert(registered_names[plugin.name] == nil, "duplicate native plugin registration: " .. plugin.name)
 	assert(plugin.module == nil or type(plugin.module) == "string", "native module must be a string: " .. plugin.name)
 	assert(plugin.opts == nil or type(plugin.opts) == "table", "native opts must be a table: " .. plugin.name)
 	assert(plugin.init == nil or type(plugin.init) == "function", "native init must be a function: " .. plugin.name)
 	assert(plugin.setup == nil or type(plugin.setup) == "function", "native setup must be a function: " .. plugin.name)
 	assert(
-		plugin.version == nil
-			or type(plugin.version) == "string"
-			or (type(plugin.version) == "table" and type(plugin.version.has) == "function"),
+		plugin.version == nil or valid_version(plugin.version),
 		"native version must be a Git ref or vim.VersionRange: " .. plugin.name
 	)
 	assert(
@@ -177,21 +148,17 @@ local function register_one(plugin)
 	elseif plugin.startup == true then
 		assert(has_triggers(plugin) == false, "native startup plugin cannot have triggers: " .. plugin.name)
 	end
+	registered_names[plugin.name] = true
 
 	if plugin.enabled ~= nil then
 		local ok, enabled = xpcall(plugin.enabled, debug.traceback)
 		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
 		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
 		if enabled == false then
-			-- Keep lock synchronization from reinstalling a disabled lock-only package.
-			local cleaned, cause = xpcall(function()
-				prepare_disabled_package(plugin.name)
-			end, debug.traceback)
-			assert(cleaned, ("native disabled plugin cleanup failed: %s\n%s"):format(plugin.name, cause))
+			disabled_packages[plugin.name] = true
 			return
 		end
 	end
-	clear_disabled_stub(plugin.name)
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then
 		plugin.events = { { "User", pattern = "PackReady" } }
@@ -237,11 +204,10 @@ function M.pack_specs()
 	return specs
 end
 
-function M.cleanup_disabled_packages()
-	for path in pairs(disabled_package_stubs) do
-		vim.fs.rm(path, { recursive = true, force = true })
-		disabled_package_stubs[path] = nil
-	end
+function M.disabled_package_names()
+	local names = vim.tbl_keys(disabled_packages)
+	table.sort(names)
+	return names
 end
 
 return M
