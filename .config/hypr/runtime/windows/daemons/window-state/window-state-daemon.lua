@@ -26,6 +26,7 @@ local poll_interval_stable_busy = 1.5
 local event_reconnect_delay = 1
 local event_reconnect_log_interval = 30
 local cpu_count = tonumber((io.popen("nproc 2>/dev/null"):read("*l"))) or 1
+local interaction_kinds = { move = true, resize = true }
 
 local selector_state = {
 	selectors = {},
@@ -39,6 +40,9 @@ local next_poll_at = nil
 local event_reconnect_at = nil
 local control_socket = nil
 local placement_activation_at = nil
+local interaction_events_ready = false
+local stop_polling
+local immediate_save
 
 local function now()
 	return socket.gettime()
@@ -109,6 +113,34 @@ local function handle_control(message)
 		return false, "ok"
 	end
 
+	if message == "interaction-hooks-ready" then
+		if not interaction_events_ready then
+			log("interaction hooks ready; disabled geometry polling")
+		end
+		interaction_events_ready = true
+		stop_polling()
+		return false, "ok"
+	end
+
+	local interaction_kind = message:match("^interaction%-finished%s+(%S+)$")
+	if interaction_kind then
+		if interaction_kinds[interaction_kind] ~= true then
+			log_rate_limited("interaction-finished", "rejected interaction kind: " .. tostring(interaction_kind))
+			return false, "error"
+		end
+
+		interaction_events_ready = true
+		stop_polling()
+		local ok, state_or_err = pcall(immediate_save)
+		if not ok then
+			log_rate_limited("interaction-finished", "failed to persist completed interaction: " .. tostring(state_or_err))
+			return false, "error"
+		end
+
+		reset_rate_limit("interaction-finished")
+		return false, "ok"
+	end
+
 	local placement, decode_err = pip.acceptance.decode(message)
 	if placement == nil then
 		log_rate_limited("pip-placement", "rejected PiP placement: " .. tostring(decode_err))
@@ -151,7 +183,7 @@ local function start_polling()
 	next_poll_at = now()
 end
 
-local function stop_polling()
+stop_polling = function()
 	if not polling then
 		return
 	end
@@ -225,7 +257,7 @@ local function flush_pending_cached_state()
 	return true
 end
 
-local function immediate_save()
+immediate_save = function()
 	local state = get_window_states()
 	if is_state_empty(state) then
 		if debounce_started_at or kit:read_file(debounce_file) then
@@ -264,12 +296,16 @@ local function handle_event(event)
 	if event:match("^openwindow") or event:match("^changefloatingmode") then
 		local state = get_window_states()
 		if not is_state_empty(state) then
-			start_polling()
+			if not interaction_events_ready then
+				start_polling()
+			end
 			check_and_save_with_state(state)
 		end
 	elseif event:match("^movewindow") or event:match("^resizewindow") then
-		-- Coalesce compositor-rate geometry events into the active polling interval.
-		schedule_active_poll()
+		if not interaction_events_ready then
+			-- Coalesce compositor-rate geometry events into the fallback polling interval.
+			schedule_active_poll()
+		end
 	elseif event:match("^closewindow") then
 		local state = immediate_save()
 		if not is_state_empty(state) then
@@ -282,7 +318,9 @@ local function handle_event(event)
 		publisher:reconcile(selector_state.selectors)
 		local state = get_window_states()
 		if not is_state_empty(state) then
-			start_polling()
+			if not interaction_events_ready then
+				start_polling()
+			end
 			check_and_save_with_state(state)
 		else
 			stop_polling()
@@ -344,7 +382,7 @@ local function startup()
 	kit:assert_socket_connects(query_socket_path)
 	kit:assert_socket_connects(event_socket_path)
 
-	log("started (LuaSocket events + adaptive polling)")
+	log("started (native interaction events with adaptive polling fallback)")
 
 	parse_selectors()
 	publisher:reconcile(selector_state.selectors, true)
