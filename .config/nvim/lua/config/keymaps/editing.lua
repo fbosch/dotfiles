@@ -1,6 +1,15 @@
 local map = require("utils").set_keymap
 local refactor = require("utils.refactor")
 
+local function select_node(target, lsp_direction)
+	if vim.treesitter.get_parser(nil, nil, { error = false }) then
+		vim.treesitter.select(target, vim.v.count1)
+		return
+	end
+
+	vim.lsp.buf.selection_range(lsp_direction * vim.v.count1)
+end
+
 -- find and replace
 map("n", "<leader>cw", ":%s/<C-R><C-W>//gI<left><left><left>", "Replace words under cursor in buffer") -- in buffer
 map("n", "<leader>R", refactor.find_and_replace_word, "Replace word under cursor in project")
@@ -21,13 +30,11 @@ map("v", "<", "<gv", "Indent left")
 map("v", ">", ">gv", "Indent right")
 
 -- Incrementally select treesitter nodes (built into Neovim 0.12+)
-map("n", "<Tab>", ":normal van<cr>", "Increment treesitter selection")
-map("v", "<Tab>", function()
-	vim.api.nvim_feedkeys("an", "v", false)
+map("x", "v", function()
+	select_node("parent", 1)
 end, "Increment treesitter selection")
-map("n", "<S-Tab>", ":normal vin<cr>", "Decrement treesitter selection")
-map("v", "<S-Tab>", function()
-	vim.api.nvim_feedkeys("in", "v", false)
+map("x", "V", function()
+	select_node("child", -1)
 end, "Decrement treesitter selection")
 
 -- Keep direct Alt bindings available to Herdr.

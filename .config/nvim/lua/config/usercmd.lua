@@ -1,4 +1,5 @@
 local utils = require("utils")
+local pack_registry = require("config.pack.registry")
 local usrcmd = utils.set_usrcmd
 local keymap_modules = {
 	"config.keymaps.core",
@@ -35,17 +36,6 @@ end, "Compare Active File with Clipboard")
 
 usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe all sessions" })
 
-usrcmd("RefreshUsage", function()
-	local modules = { "codex", "copilot", "opencode" }
-	for _, mod in ipairs(modules) do
-		local ok, module = pcall(require, "utils.usage." .. mod)
-		if ok and module.clear_cache then
-			module.clear_cache()
-		end
-	end
-	vim.notify("Refreshing usage stats...", vim.log.levels.INFO)
-end, { desc = "Clear cache and refetch usage stats for all providers" })
-
 usrcmd("ReloadConfig", function()
 	-- Only reload keymaps: other config modules register commands and autocmds that are not reload-safe.
 	for _, module_name in ipairs(keymap_modules) do
@@ -55,21 +45,25 @@ usrcmd("ReloadConfig", function()
 	vim.notify("Reloaded Neovim keymaps", vim.log.levels.INFO)
 end, "Reload Neovim keymaps")
 
+local function enabled_plugin_names()
+	local names = vim.tbl_keys(pack_registry.all())
+	table.sort(names)
+	return names
+end
+
 usrcmd("PackUpdate", function(args)
-	vim.pack.update(#args.fargs > 0 and args.fargs or nil)
+	for _, name in ipairs(args.fargs) do
+		assert(pack_registry.get(name) ~= nil, "native plugin is disabled or unknown: " .. name)
+	end
+	vim.pack.update(#args.fargs > 0 and args.fargs or enabled_plugin_names())
 end, {
 	nargs = "*",
 	desc = "Review native plugin updates",
 	complete = function(arg_lead)
-		local names = vim.iter(vim.pack.get())
-			:map(function(plugin)
-				return plugin.spec.name
-			end)
+		return vim.iter(enabled_plugin_names())
 			:filter(function(name)
 				return vim.startswith(name, arg_lead)
 			end)
 			:totable()
-		table.sort(names)
-		return names
 	end,
 })

@@ -171,6 +171,8 @@ in
       fish tests/git_pull_system_repos.fish
     '';
 
+    "test:fish-corporate-opencode".exec = "fish tests/fish_corporate_opencode.fish";
+
     "test:fish-starship-cache".exec = ''
       set -euo pipefail
       test_dir="$(mktemp -d)"
@@ -259,6 +261,19 @@ in
     "test:nvim-opencode-session-restore".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/opencode-session-restore.sock" \
         -l .config/nvim/tests/opencode_session_restore.lua
+    '';
+
+    "test:nvim-pack-registry-enabled".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pack_registry_enabled.lua
+    '';
+
+    "test:nvim-pack-registry-lock-sync".exec = ''
+      test_root="$(mktemp -d)"
+      trap 'rm -rf "$test_root"' EXIT
+      XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" REPO_ROOT="$PWD" \
+        timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pack_registry_lock_sync.lua
     '';
 
     "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
