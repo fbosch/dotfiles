@@ -29,44 +29,6 @@ register({
 		opts = {},
 	},
 	{
-		name = "dial.nvim",
-		src = "https://github.com/monaqa/dial.nvim.git",
-		keys = {
-			{
-				"<C-a>",
-				function()
-					require("dial.map").manipulate("increment", "visual")
-				end,
-				mode = "x",
-				desc = "Increment visual selection",
-			},
-			{
-				"<C-x>",
-				function()
-					require("dial.map").manipulate("decrement", "visual")
-				end,
-				mode = "x",
-				desc = "Decrement visual selection",
-			},
-			{
-				"g<C-a>",
-				function()
-					require("dial.map").manipulate("increment", "gvisual")
-				end,
-				mode = "x",
-				desc = "Increment visual selection sequentially",
-			},
-			{
-				"g<C-x>",
-				function()
-					require("dial.map").manipulate("decrement", "gvisual")
-				end,
-				mode = "x",
-				desc = "Decrement visual selection sequentially",
-			},
-		},
-	},
-	{
 		name = "nvim-surround",
 		src = "https://github.com/kylechui/nvim-surround.git",
 		version = vim.version.range("^3.0.0"),
