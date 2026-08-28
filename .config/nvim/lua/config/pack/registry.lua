@@ -150,24 +150,18 @@ local function validate_plugin(plugin)
 	end
 end
 
-local function plugin_is_enabled(plugin)
-	if plugin.enabled == nil then
-		return true
-	end
-
-	local ok, enabled = xpcall(plugin.enabled, debug.traceback)
-	assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
-	assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
-	return enabled
-end
-
 local function register_one(plugin)
 	validate_plugin(plugin)
 	registered_names[plugin.name] = true
 
-	if plugin_is_enabled(plugin) == false then
-		disabled_packages[plugin.name] = true
-		return
+	if plugin.enabled ~= nil then
+		local ok, enabled = xpcall(plugin.enabled, debug.traceback)
+		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
+		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
+		if enabled == false then
+			disabled_packages[plugin.name] = true
+			return
+		end
 	end
 
 	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then
