@@ -140,6 +140,11 @@ local function register_one(plugin)
 		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
 		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
 		if enabled == false then
+			-- Startup discovery should leave disabled packages inactive; never force deletion under loaded code.
+			local deleted, cause = xpcall(function()
+				vim.pack.del({ plugin.name })
+			end, debug.traceback)
+			assert(deleted, ("native disabled plugin uninstall failed: %s\n%s"):format(plugin.name, cause))
 			return
 		end
 	end

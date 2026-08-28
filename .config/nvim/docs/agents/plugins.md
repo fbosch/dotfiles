@@ -41,9 +41,9 @@ Use `opts = {}` for conventional `require(name).setup(opts)` initialization. Set
 
 Use ordered `dependencies` for runtime requirements. `init()` callbacks run once in dependency order before triggers are installed and before packages enter `runtimepath`; reserve them for boot-time globals, wrappers, or lifecycle listeners. Set `root = false` for libraries that activate only through a consumer, and `startup = true` only for packages that must load synchronously before initial buffer events. Triggered roots may use `condition(context)`; a false result leaves activation retryable. Startup roots may use a one-shot condition, while dependency-only declarations cannot be conditional. Startup and dependency-only declarations cannot also define triggers.
 
-Use `enabled()` for a one-shot startup predicate that controls whether a declaration is registered or passed to `vim.pack`. A false result excludes its package spec, initialization, triggers, keymaps, and setup entirely. Keep `condition(context)` for retryable runtime eligibility after a plugin has been installed and registered.
+Use `enabled()` for a one-shot startup predicate that controls whether a declaration is registered or passed to `vim.pack`. A false result removes an existing inactive package through `vim.pack.del()` and excludes its package spec, initialization, triggers, keymaps, and setup entirely. Deletion is intentionally non-forced so active plugin code is never removed underneath a running session. Keep `condition(context)` for retryable runtime eligibility after a plugin has been installed and registered.
 
-Disabling a declaration does not delete a package already on disk. Restart Neovim so the package is inactive, then remove that specific package with `:packdel <name>`; `:PackUpdate` only updates managed packages.
+`:PackUpdate` only updates managed packages; predicate-driven cleanup happens during registration before package activation.
 
 Native callback keys cannot overwrite an existing mapping unless that key explicitly sets `replace = true`. Reserve replacement for intentional overrides of known Neovim defaults.
 
