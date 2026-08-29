@@ -208,7 +208,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "5e92431aa7f5e618c2f6825f682df6d94f6e0a02",
+      "rev": "0ab2e4928dc867dfea3ff1da186e69f289d8a532",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
