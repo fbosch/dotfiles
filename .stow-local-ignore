@@ -13,6 +13,7 @@
 ^/.*\.md$
 ^/scripts$
 ^/docs$
+^/openspec$
 node_modules
 ^/design-system$
 \.backup
@@ -28,13 +29,12 @@ node_modules
 ^/devenv\.nix$
 ^/devenv\.yaml$
 ^/devenv\.lock$
+^/skills-lock\.json$
 ^/\.devenv
 ^/\.envrc
 ^/\.direnv$
 ^/lefthook\.yml$
 ^/tests$
-^/openspec$
-^/skills-lock.json$
 
 # Example files should not be stowed, only used as templates
 \.example$
