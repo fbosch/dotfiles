@@ -19,6 +19,8 @@ local state = placement.new()
 local acceptance_delivery_timeout_s = 1
 
 local monitors_by_name = {}
+local current_bars = {}
+local native_updates_ready = false
 local acceptance_socket_path = kit:socket_path("window-state.sock")
 
 local function log(message)
@@ -126,6 +128,11 @@ local function bars_for(waybar_visible)
 	return waybar_visible and predicted_waybar_layers() or visible_waybar_layers()
 end
 
+local function refresh_bars(waybar_visible)
+	current_bars = bars_for(waybar_visible)
+	return current_bars
+end
+
 local function accept_placement(value)
 	local response, err = kit:request(pip.acceptance.encode(value) .. "\n", {
 		path = acceptance_socket_path,
@@ -176,13 +183,19 @@ local function apply_commands(commands)
 end
 
 -- Lazy snapshot: IPC queries run only when the reducer actually reads a field.
-local function make_input(now, event, bars)
-	local cache = { monitors = monitors_by_name, bars = bars }
+local function make_input(now, event, bars, overrides)
+	overrides = overrides or {}
+	local cache = {
+		monitors = monitors_by_name,
+		bars = bars,
+		clients = overrides.clients,
+		active = overrides.active,
+	}
 	return setmetatable({ now = now, event = event }, {
 		__index = function(_, key)
-			if key == "clients" then
+			if key == "clients" and cache.clients == nil then
 				cache.clients = kit:clients()
-			elseif key == "active" then
+			elseif key == "active" and cache.active == nil then
 				cache.active = json.object(request("j/activewindow"))
 			end
 			return cache[key]
@@ -190,17 +203,25 @@ local function make_input(now, event, bars)
 	})
 end
 
-local function place(now, event, bars)
-	local _, commands = placement.place(state, make_input(now, event, bars))
+local function place(now, event, bars, overrides)
+	local _, commands = placement.place(state, make_input(now, event, bars, overrides))
 	apply_commands(commands)
 end
 
 local function handle_control(message)
+	if message == "interaction-updates-ready" then
+		native_updates_ready = true
+		return false
+	end
+
 	local action, address, direction = pip.control.decode(message)
 
 	-- Bars must reflect the visibility this command transitions to.
-	local bars = bars_for(action == "waybar-show" or (action ~= "waybar-hide" and state.waybar_visible))
-	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, bars)
+	local next_waybar_visible = action == "waybar-show" or (action ~= "waybar-hide" and state.waybar_visible)
+	if action == "waybar-show" or action == "waybar-hide" then
+		refresh_bars(next_waybar_visible)
+	end
+	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, current_bars)
 	return action == "quit"
 end
 
@@ -219,23 +240,96 @@ local function cleanup_control_socket()
 	end
 end
 
+local function finite_number(value)
+	value = tonumber(value)
+	if value == nil or value ~= value or value == math.huge or value == -math.huge then
+		return nil
+	end
+	return value
+end
+
+local function parse_interaction_update(line)
+	local address, kind, monitor, x, y, width, height =
+		line:match("^windowinteractionupdated>>([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+),([^,]+)$")
+	if not address or (kind ~= "move" and kind ~= "resize") then
+		return nil
+	end
+
+	x = finite_number(x)
+	y = finite_number(y)
+	width = finite_number(width)
+	height = finite_number(height)
+	if not x or not y or not width or not height or width <= 0 or height <= 0 then
+		return nil
+	end
+
+	if address:match("^0x") == nil then
+		address = "0x" .. address
+	end
+
+	return {
+		address = address,
+		kind = kind,
+		monitor = monitor,
+		x = x,
+		y = y,
+		width = width,
+		height = height,
+	}
+end
+
+local function apply_interaction_update(update, now)
+	native_updates_ready = true
+	if
+		update.kind ~= "move"
+		or not state.dragging
+		or update.address ~= state.dragging_address
+	then
+		return
+	end
+
+	local window = {
+		address = update.address,
+		monitor = update.monitor,
+		at = { update.x, update.y },
+		size = { update.width, update.height },
+		floating = true,
+		mapped = true,
+		hidden = false,
+		class = pip.class,
+		title = pip.title,
+		tags = {},
+	}
+
+	place(now, { type = "tick", native_interaction = true }, current_bars, { clients = { window }, active = window })
+end
+
 local function compositor_event(line, now)
 	local name = line:match("^(%w+)")
 	if name == nil then
 		return
 	end
+	if name == "windowinteractionupdated" then
+		local update = parse_interaction_update(line)
+		if update then
+			apply_interaction_update(update, now)
+		end
+		return
+	end
 	if name == "configreloaded" then
 		local _, geometry_changed = refresh_monitors({ force = true })
+		refresh_bars(state.waybar_visible)
 		place(
 			now,
 			{ type = geometry_changed and "monitorchange" or "configreload" },
-			geometry_changed and bars_for(state.waybar_visible) or nil
+			geometry_changed and current_bars or nil
 		)
 		return
 	end
 	if name:match("^monitoradded") or name == "monitorremoved" then
 		refresh_monitors({ force = true })
-		place(now, { type = "monitorchange" }, bars_for(state.waybar_visible))
+		refresh_bars(state.waybar_visible)
+		place(now, { type = "monitorchange" }, current_bars)
 		return
 	end
 
@@ -253,7 +347,8 @@ end
 local function run()
 	refresh_monitors()
 	state.waybar_visible = next(visible_waybar_layers()) ~= nil
-	place(socket.gettime(), { type = "startup" }, bars_for(state.waybar_visible))
+	refresh_bars(state.waybar_visible)
+	place(socket.gettime(), { type = "startup" }, current_bars)
 	event_socket = kit:connect_events({ read_timeout = 0 })
 	control_socket = kit:control_socket("pip-monitor.sock")
 
@@ -269,11 +364,13 @@ local function run()
 			timeout = timeout and math.min(timeout, delay) or delay
 		end
 
-		consider(state.next_observation_at)
+		if not state.dragging or not native_updates_ready or state.pending_acceptance then
+			consider(state.next_observation_at)
+		end
 		if state.pending_acceptance then
 			consider(state.pending_acceptance.deadline)
 		end
-		if state.dragging then
+		if state.dragging and not native_updates_ready then
 			timeout = timeout and math.min(timeout, placement.drag_interval_s) or placement.drag_interval_s
 		end
 		consider(state.reconcile_at)
@@ -299,8 +396,13 @@ local function run()
 		end
 
 		now = socket.gettime()
-		if placement.tick_due(state, now) then
-			place(now, { type = "tick" }, bars_for(state.waybar_visible))
+		local observation_due = state.next_observation_at ~= nil
+			and state.next_observation_at ~= math.huge
+			and now >= state.next_observation_at
+		local observation_enabled = not state.dragging or not native_updates_ready or state.pending_acceptance ~= nil
+		local reconcile_due = state.reconcile_at ~= nil and now >= state.reconcile_at
+		if (observation_enabled and observation_due) or reconcile_due then
+			place(now, { type = "tick" }, current_bars)
 		end
 	end
 end
