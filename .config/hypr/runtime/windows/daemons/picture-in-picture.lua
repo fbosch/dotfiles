@@ -216,12 +216,17 @@ local function handle_control(message)
 
 	local action, address, direction = pip.control.decode(message)
 
-	-- Bars must reflect the visibility this command transitions to.
+	-- Use the pre-transition layer geometry while applying show/hide policy,
+	-- then keep only the geometry for the resulting visibility state.
 	local next_waybar_visible = action == "waybar-show" or (action ~= "waybar-hide" and state.waybar_visible)
+	local transition_bars = current_bars
 	if action == "waybar-show" or action == "waybar-hide" then
-		refresh_bars(next_waybar_visible)
+		transition_bars = refresh_bars(next_waybar_visible)
 	end
-	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, current_bars)
+	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, transition_bars)
+	if action == "waybar-hide" then
+		current_bars = {}
+	end
 	return action == "quit"
 end
 
