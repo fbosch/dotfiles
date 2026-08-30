@@ -16,6 +16,7 @@ home_dir="$test_dir/home"
 event_server="$test_dir/event-server.lua"
 control="$repo_root/runtime/windows/daemons/window-capture/window-capturectl.sh"
 original_path="$PATH"
+export GRIM_LOG="$test_dir/grim.log"
 wrapper_pid=""
 event_server_pid=""
 reader_pid=""
@@ -87,7 +88,7 @@ cat > "$bin_dir/hyprctl" <<'SH'
 #!/usr/bin/env bash
 case "$*" in
   *'activewindow -j') printf '{}\n' ;;
-  *'clients -j') printf '%s\n' '[{"address":"0xfixture","mapped":true,"size":[100,100],"workspace":{"id":1}},{"address":"0xoffscreen","stableId":"offscreen-id","mapped":true,"size":[100,100],"workspace":{"id":10}}]' ;;
+  *'clients -j') printf '%s\n' '[{"address":"0xfixture","mapped":true,"size":[100,100],"workspace":{"id":1}},{"address":"0xvisible","stableId":"visible-id","mapped":true,"visible":true,"at":[10,20],"size":[100,100],"workspace":{"id":1}},{"address":"0xoffscreen","stableId":"offscreen-id","mapped":true,"visible":false,"at":[200,300],"size":[100,100],"workspace":{"id":10}}]' ;;
   *'monitors -j') printf '%s\n' '[{"activeWorkspace":{"id":1}}]' ;;
   *) exit 1 ;;
 esac
@@ -96,6 +97,7 @@ SH
 cat > "$bin_dir/grim" <<'SH'
 #!/usr/bin/env bash
 output="${!#}"
+printf '%s\n' "$*" >> "$GRIM_LOG"
 sleep 0.4
 printf 'fixture-image\n' > "$output"
 SH
@@ -109,6 +111,18 @@ HOME="$home_dir" \
   luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" \
   handle-event 'openwindow>>0xoffscreen,10,fixture,Offscreen'
 test -s "$capture_dir/offscreen-id.jpg"
+grep -F -- '-T offscreen-id' "$GRIM_LOG" >/dev/null
+
+sleep 0.11
+HOME="$home_dir" \
+  PATH="$bin_dir:$original_path" \
+  XDG_RUNTIME_DIR="$runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE=fixture \
+  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
+  luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" \
+  handle-event 'openwindow>>0xvisible,1,fixture,Visible'
+test -s "$capture_dir/visible-id.jpg"
+grep -F -- '-g 10,20 100x100' "$GRIM_LOG" >/dev/null
 
 wait_for_file() {
   local file="$1" description="$2"

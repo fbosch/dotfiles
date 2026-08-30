@@ -148,13 +148,26 @@ local function window_preview_fields(window)
 	return preview_id_for_window(window), window.mapped ~= false, width, height
 end
 
+local function capture_selector_for_window(window, preview_id, width, height)
+	local x = tonumber(window.at and window.at[1])
+	local y = tonumber(window.at and window.at[2])
+	if window.visible == true and x and y then
+		-- shortcut: Hyprland 0.56 offsets -T captures by the window's output position.
+		-- Retest foreign-toplevel capture after upgrading Hyprland, then remove this fallback.
+		local geometry = string.format("%d,%d %dx%d", x, y, width, height)
+		return "-g " .. command.arg(geometry)
+	end
+
+	return "-T " .. command.arg(preview_id)
+end
+
 local function capture_preview_for_window(window)
 	local preview_id, mapped, width, height = window_preview_fields(window)
 	if mapped == false or preview_id == "" then
 		return
 	end
 
-	capture_window_preview(preview_id, width, height)
+	capture_window_preview(preview_id, width, height, capture_selector_for_window(window, preview_id, width, height))
 end
 
 local function cleanup_stale_temp_files()
@@ -227,7 +240,7 @@ local function frame_is_too_dark(image_path)
 	return mean_brightness ~= nil and mean_brightness < black_frame_mean_threshold
 end
 
-function capture_window_preview(preview_id, width, height)
+function capture_window_preview(preview_id, width, height, capture_selector)
 	if preview_id == "" or width <= 0 or height <= 0 then
 		return
 	end
@@ -240,8 +253,7 @@ function capture_window_preview(preview_id, width, height)
 		tostring(jpeg_quality),
 		"-s",
 		command.arg(calculate_capture_scale(width, height)),
-		"-T",
-		command.arg(preview_id),
+		capture_selector,
 		command.arg(temp_output),
 		"2>/dev/null",
 	}, " ")
@@ -259,7 +271,7 @@ function capture_window_preview(preview_id, width, height)
 	os.rename(temp_output, output_path)
 end
 
-local function capture_window_preview_command(preview_id, width, height)
+local function capture_window_preview_command(preview_id, width, height, capture_selector)
 	local filename = preview_id .. ".jpg"
 	local temp_output = screenshot_dir .. "/.temp_" .. filename
 	local output_path = screenshot_dir .. "/" .. filename
@@ -268,8 +280,7 @@ local function capture_window_preview_command(preview_id, width, height)
 		tostring(jpeg_quality),
 		"-s",
 		command.arg(calculate_capture_scale(width, height)),
-		"-T",
-		command.arg(preview_id),
+		capture_selector,
 		command.arg(temp_output),
 		"2>/dev/null",
 	}, " ")
@@ -303,12 +314,17 @@ local function capture_window_preview_command(preview_id, width, height)
 	return table.concat(parts, "; ")
 end
 
-local function capture_window_preview_command_for_window(preview_id, width, height)
+local function capture_window_preview_command_for_window(window, preview_id, width, height)
 	if preview_id == "" or width <= 0 or height <= 0 then
 		return nil
 	end
 
-	return capture_window_preview_command(preview_id, width, height)
+	return capture_window_preview_command(
+		preview_id,
+		width,
+		height,
+		capture_selector_for_window(window, preview_id, width, height)
+	)
 end
 
 local function capture_window_preview_batch(commands)
@@ -381,7 +397,7 @@ local function capture_visible_workspace_previews(missing_only)
 		local preview_id, mapped, width, height = window_preview_fields(client)
 		if visible_workspaces[workspace_id] and mapped and preview_id ~= "" then
 			if not missing_only or not file_is_nonempty(screenshot_dir .. "/" .. preview_id .. ".jpg") then
-				local capture_command = capture_window_preview_command_for_window(preview_id, width, height)
+				local capture_command = capture_window_preview_command_for_window(client, preview_id, width, height)
 				if capture_command then
 					capture_commands[#capture_commands + 1] = capture_command
 				end
