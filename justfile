@@ -26,6 +26,17 @@ ags-types:
 install-fbb:
     bun install --frozen-lockfile --cwd .config/fbb
 
+# Install AGS dependencies and build its initial runtime bundle.
+[group('dependencies')]
+install-ags: _install-ags-dependencies ags-bundle
+
+_install-ags-dependencies:
+    bun install --frozen-lockfile --cwd .config/ags
+
+# Install all managed dependencies and build first-use artifacts.
+[group('dependencies')]
+install-all: install-ags install-fbb install-opencode install-opencode-plugins install-vicinae
+
 # Install OpenCode dependencies.
 [group('dependencies')]
 install-opencode:
@@ -35,6 +46,10 @@ install-opencode:
 [group('dependencies')]
 install-opencode-plugins:
     bun install --frozen-lockfile --cwd .config/opencode/plugins
+
+# Install dependencies and build all Vicinae extensions for first use.
+[group('dependencies')]
+install-vicinae: vicinae-build
 
 # Show Hyprland daemon status and matching process IDs.
 [group('desktop')]
