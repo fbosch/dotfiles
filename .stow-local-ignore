@@ -33,6 +33,8 @@ node_modules
 ^/\.direnv$
 ^/lefthook\.yml$
 ^/tests$
+^/openspec$
+^/skills-lock.json$
 
 # Example files should not be stowed, only used as templates
 \.example$
