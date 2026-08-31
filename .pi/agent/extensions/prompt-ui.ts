@@ -59,6 +59,27 @@ export function paintDockRow(
   return `${fittedRail}${backgroundAnsi}${backgroundContent}\u001b[49m${fittedRightBorder}`;
 }
 
+function backgroundToForeground(backgroundAnsi: string): string {
+  return backgroundAnsi.replace("\u001b[48;", "\u001b[38;");
+}
+
+function foregroundToBackground(foregroundAnsi: string): string {
+  return foregroundAnsi.replace("\u001b[38;", "\u001b[48;");
+}
+
+export function styleSelectedSuggestion(
+  line: string,
+  width: number,
+  selectedBackgroundAnsi: string,
+  selectedForegroundAnsi: string,
+): string {
+  const match = /^(\s*)→\s(.*)$/.exec(stripTerminalSequences(line));
+  if (match === null) return line;
+
+  const content = fitColumns(`${match[1]}${match[2]}`, "", width);
+  return `${selectedBackgroundAnsi}${selectedForegroundAnsi}${content}\u001b[39m\u001b[49m`;
+}
+
 export function paintDockBottomEdge(
   width: number,
   leftBorder: string,
@@ -77,7 +98,7 @@ export function paintDockBottomEdge(
     0,
     width - visibleWidth(fittedLeftBorder) - visibleWidth(fittedRightBorder),
   );
-  const backgroundForegroundAnsi = backgroundAnsi.replace("\u001b[48;", "\u001b[38;");
+  const backgroundForegroundAnsi = backgroundToForeground(backgroundAnsi);
 
   return `${fittedLeftBorder}${backgroundForegroundAnsi}${"▀".repeat(edgeWidth)}\u001b[39m${fittedRightBorder}`;
 }
@@ -218,6 +239,8 @@ export default function promptUi(pi: ExtensionAPI) {
         rail: string;
         rightBorder: string;
         backgroundAnsi: string;
+        selectedBackgroundAnsi: string;
+        selectedForegroundAnsi: string;
       };
       private readonly suggestionsOverlayOptions: OverlayOptions = {
         anchor: "bottom-left",
@@ -234,10 +257,28 @@ export default function promptUi(pi: ExtensionAPI) {
           rail: "",
           rightBorder: "",
           backgroundAnsi: "",
+          selectedBackgroundAnsi: "",
+          selectedForegroundAnsi: "",
           render(width) {
-            return this.lines.map((line) =>
-              paintDockRow(line, width, this.rail, this.backgroundAnsi, this.rightBorder),
+            const contentWidth = Math.max(
+              0,
+              width - visibleWidth(this.rail) - visibleWidth(this.rightBorder),
             );
+            return this.lines.map((line) => {
+              const styledLine = styleSelectedSuggestion(
+                line,
+                contentWidth,
+                this.selectedBackgroundAnsi,
+                this.selectedForegroundAnsi,
+              );
+              return paintDockRow(
+                styledLine,
+                width,
+                this.rail,
+                this.backgroundAnsi,
+                this.rightBorder,
+              );
+            });
           },
           invalidate() {},
         };
@@ -347,6 +388,10 @@ export default function promptUi(pi: ExtensionAPI) {
         this.suggestionsOverlay.rail = suggestionsRail;
         this.suggestionsOverlay.rightBorder = rightBorder;
         this.suggestionsOverlay.backgroundAnsi = backgroundAnsi;
+        this.suggestionsOverlay.selectedBackgroundAnsi = foregroundToBackground(
+          theme.getFgAnsi("accent"),
+        );
+        this.suggestionsOverlay.selectedForegroundAnsi = backgroundToForeground(backgroundAnsi);
 
         // Pi appends autocomplete to the editor render. Move only that tail into
         // a non-capturing overlay so it grows upward without moving the dock.
