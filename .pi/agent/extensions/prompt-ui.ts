@@ -17,7 +17,8 @@ type Color = (text: string) => string;
 
 const EDITOR_PADDING_X = 1;
 const DOCK_RAIL = "▌";
-const DOCK_RAIL_WIDTH = visibleWidth(DOCK_RAIL);
+const DOCK_RIGHT_BORDER = "▐";
+const DOCK_CHROME_WIDTH = visibleWidth(DOCK_RAIL) + visibleWidth(DOCK_RIGHT_BORDER);
 
 export function fitColumns(left: string, right: string, width: number): string {
   if (width <= 0) return "";
@@ -36,17 +37,49 @@ export function paintDockRow(
   width: number,
   rail: string,
   backgroundAnsi: string,
+  rightBorder = "",
 ): string {
   if (width <= 0) return "";
 
   const fittedRail = truncateToWidth(rail, width, "");
-  const contentWidth = Math.max(0, width - visibleWidth(fittedRail));
+  const fittedRightBorder = truncateToWidth(
+    rightBorder,
+    Math.max(0, width - visibleWidth(fittedRail)),
+    "",
+  );
+  const contentWidth = Math.max(
+    0,
+    width - visibleWidth(fittedRail) - visibleWidth(fittedRightBorder),
+  );
   const fittedContent = fitColumns(content, "", contentWidth);
   const backgroundContent = fittedContent
     .replaceAll("\u001b[0m", `\u001b[0m${backgroundAnsi}`)
     .replaceAll("\u001b[49m", `\u001b[49m${backgroundAnsi}`);
 
-  return `${fittedRail}${backgroundAnsi}${backgroundContent}\u001b[49m`;
+  return `${fittedRail}${backgroundAnsi}${backgroundContent}\u001b[49m${fittedRightBorder}`;
+}
+
+export function paintDockBottomEdge(
+  width: number,
+  leftBorder: string,
+  rightBorder: string,
+  backgroundAnsi: string,
+): string {
+  if (width <= 0) return "";
+
+  const fittedLeftBorder = truncateToWidth(leftBorder, width, "");
+  const fittedRightBorder = truncateToWidth(
+    rightBorder,
+    Math.max(0, width - visibleWidth(fittedLeftBorder)),
+    "",
+  );
+  const edgeWidth = Math.max(
+    0,
+    width - visibleWidth(fittedLeftBorder) - visibleWidth(fittedRightBorder),
+  );
+  const backgroundForegroundAnsi = backgroundAnsi.replace("\u001b[48;", "\u001b[38;");
+
+  return `${fittedLeftBorder}${backgroundForegroundAnsi}${"▀".repeat(edgeWidth)}\u001b[39m${fittedRightBorder}`;
 }
 
 function formatCwd(cwd: string): string {
@@ -180,10 +213,15 @@ export default function promptUi(pi: ExtensionAPI) {
 
     class PromptEditor extends CustomEditor {
       private readonly bindings: KeybindingsManager;
-      private readonly suggestionsOverlay: Component & { lines: string[] };
+      private readonly suggestionsOverlay: Component & {
+        lines: string[];
+        rail: string;
+        rightBorder: string;
+        backgroundAnsi: string;
+      };
       private readonly suggestionsOverlayOptions: OverlayOptions = {
         anchor: "bottom-left",
-        col: DOCK_RAIL_WIDTH,
+        col: 0,
         nonCapturing: true,
       };
       private suggestionsOverlayHandle: OverlayHandle | undefined;
@@ -193,8 +231,13 @@ export default function promptUi(pi: ExtensionAPI) {
         this.bindings = keybindings;
         this.suggestionsOverlay = {
           lines: [],
+          rail: "",
+          rightBorder: "",
+          backgroundAnsi: "",
           render(width) {
-            return this.lines.map((line) => fitColumns(line, "", width));
+            return this.lines.map((line) =>
+              paintDockRow(line, width, this.rail, this.backgroundAnsi, this.rightBorder),
+            );
           },
           invalidate() {},
         };
@@ -237,14 +280,14 @@ export default function promptUi(pi: ExtensionAPI) {
       }
 
       render(width: number): string[] {
-        if (width < 2) {
+        if (width <= DOCK_CHROME_WIDTH) {
           this.updateSuggestionsOverlay([], width, 0);
           return super.render(width);
         }
 
         const theme = ctx.ui.theme;
         const border = (text: string) => this.borderColor(text);
-        const editorWidth = width - 1;
+        const editorWidth = width - DOCK_CHROME_WIDTH;
         const { content, suggestions } = splitEditorLines(super.render(editorWidth), border);
         const branch = getBranch();
         const statuses = getStatuses()
@@ -268,11 +311,14 @@ export default function promptUi(pi: ExtensionAPI) {
         const location = `${formatCwd(ctx.cwd)}${branch ? ` (${branch})` : ""}`;
         const modelRight = theme.fg("muted", `${formatContext(ctx)} · ${location} `);
         const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
-        const rail = border(DOCK_RAIL);
+        const inputRail = border(DOCK_RAIL);
+        const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
+        const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
         const backgroundAnsi = theme.getBgAnsi("userMessageBg");
         const dockRows = ["", ...content, "", modelRow].map((line) =>
-          paintDockRow(line, width, rail, backgroundAnsi),
+          paintDockRow(line, width, inputRail, backgroundAnsi, rightBorder),
         );
+        const bottomEdge = paintDockBottomEdge(width, inputRail, rightBorder, backgroundAnsi);
         const interruptHint = keyHint(this.bindings, "app.interrupt", "interrupt");
         const statusText = statuses.join(" · ");
         const workingText = isWorking
@@ -291,11 +337,15 @@ export default function promptUi(pi: ExtensionAPI) {
           theme.fg("muted", `${hintRight} `),
           width,
         );
-        const promptLayout = [...dockRows, "", hints];
+        const promptLayout = [...dockRows, bottomEdge, hints];
+
+        this.suggestionsOverlay.rail = suggestionsRail;
+        this.suggestionsOverlay.rightBorder = rightBorder;
+        this.suggestionsOverlay.backgroundAnsi = backgroundAnsi;
 
         // Pi appends autocomplete to the editor render. Move only that tail into
         // a non-capturing overlay so it grows upward without moving the dock.
-        this.updateSuggestionsOverlay(suggestions, editorWidth, promptLayout.length);
+        this.updateSuggestionsOverlay(suggestions, width, promptLayout.length);
         return promptLayout;
       }
     }
