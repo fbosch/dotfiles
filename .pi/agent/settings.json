@@ -5,6 +5,7 @@
   "defaultModel": "gpt-5.6-sol",
   "hideThinkingBlock": false,
   "tuiMode": "fullscreen",
+  "fullscreenExitOutput": "resume-hint",
   "packages": [
     "npm:@gotgenes/pi-permission-system@29.0.0",
     "npm:@ff-labs/pi-fff@0.10.6"

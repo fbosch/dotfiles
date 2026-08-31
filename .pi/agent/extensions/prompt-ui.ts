@@ -12,6 +12,7 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { resolveCommandAlias } from "./command-aliases";
 import { PLAN_MODE_STATUS } from "./plan-mode";
 
 type Color = (text: string) => string;
@@ -295,6 +296,14 @@ export default function promptUi(pi: ExtensionAPI) {
       // Pi copies its default padding after the editor factory returns.
       setPaddingX(_padding: number): void {
         super.setPaddingX(EDITOR_PADDING_X);
+      }
+
+      handleInput(data: string): void {
+        super.handleInput(data);
+
+        const text = this.getText();
+        const alias = resolveCommandAlias(text);
+        if (alias !== text) this.setText(alias);
       }
 
       private updateSuggestionsOverlay(
