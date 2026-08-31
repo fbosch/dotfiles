@@ -344,22 +344,20 @@ Do not persist canary settings in the repository until the preceding phases
 pass.
 
 Pi mixes configuration with credentials, sessions, package caches, trust state,
-and editor locks under `~/.pi`. A folded Stow directory could place runtime
-state inside the dotfiles repository.
+and editor locks under `~/.pi`. This repository accepts Stow directory folding
+for Pi and keeps mutable or secret state out of Git through
+`.pi/agent/.gitignore`.
 
-Before managing `.pi/agent/*` with Stow:
+Before managing additional `.pi/agent/*` files with Stow:
 
-- Ensure `~/.pi` and `~/.pi/agent` are real directories, never directory
-  symlinks.
-- Update Home Manager activation in `/Users/fbb/nixos/modules/dotfiles.nix` to
-  create those directories before Stow.
-- Give the manual Stow path the same prerequisite.
+- Keep credential and runtime paths listed in `.pi/agent/.gitignore`.
+- Add new third-party package state to that ignore file before enabling the
+  package when its state is not declarative configuration.
 - Narrow `.stow-local-ignore` line 13 from all nested Markdown to root-only
   Markdown so managed Pi Markdown files can be linked.
-- Extend `test:stow` to assert that `.pi` and `.pi/agent` remain real
-  directories while managed files are individual symlinks.
-- Assert that credentials, trust state, package caches, sessions, logs, and IDE
-  lockfiles never resolve inside the repository.
+- Extend `test:stow` when a new managed Pi resource is added.
+- Verify ignored credentials and runtime files remain absent from Git diffs and
+  archives intended for sharing.
 
 Tracked Pi files may include only:
 
@@ -383,14 +381,14 @@ Never track:
 Acceptance:
 
 - `stow -n .` reports no conflict.
-- The Stow test proves runtime directories remain outside the repository.
+- The Stow test proves managed Pi configuration is deployed.
 - A fresh Pi start loads the managed settings and prompts.
-- No secret or runtime file appears in `git status`.
+- `git check-ignore` covers every credential and runtime path Pi creates.
+- No secret or runtime file appears in ordinary `git status` output.
 
 Rollback:
 
-- Unstow only the managed Pi files and leave runtime state under the real
-  directories.
+- Back up required runtime state, then unstow the Pi configuration.
 
 ## Phase 10: Port Only Demonstrated Workflows
 
@@ -449,8 +447,8 @@ changes, run:
 
 ```sh
 stow -n .
-devenv test test:stow
-devenv test test:fish
+devenv tasks run test:stow
+devenv tasks run test:fish
 ```
 
 For changes in `/Users/fbb/nixos`, identify the current host first and build its

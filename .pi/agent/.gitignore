@@ -1,0 +1,12 @@
+# Pi credentials and machine-local runtime state.
+/auth.json
+/auth-profiles/
+/trust.json
+/models-store.json
+/sessions/
+/npm/
+/git/
+/bin/
+/tools/
+/pi-debug.log
+/*.log

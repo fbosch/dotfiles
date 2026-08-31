@@ -116,6 +116,7 @@ in
         ".config/ags/scripts/generate-circular-avatar.sh"
         ".config/waybar/config"
         ".config/waybar/scripts/temperatures"
+        ".pi/agent/settings.json"
       )
       for deployment_path in "''${required_paths[@]}"; do
         if ! test -e "$target/$deployment_path"; then
