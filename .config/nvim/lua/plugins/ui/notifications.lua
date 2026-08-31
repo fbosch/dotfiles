@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	{
 		name = "nvim-notify",
 		src = "https://github.com/rcarriga/nvim-notify.git",
@@ -66,4 +66,4 @@ require("config.pack.registry").register({
 			},
 		},
 	},
-})
+}

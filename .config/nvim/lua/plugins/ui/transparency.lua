@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "transparent.nvim",
 	src = "https://github.com/xiyaowong/transparent.nvim.git",
 	dependencies = { "zenbones.nvim" },
@@ -14,4 +14,4 @@ require("config.pack.registry").register({
 			end,
 		})
 	end,
-})
+}

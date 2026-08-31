@@ -1,6 +1,4 @@
-local register = require("config.pack.registry").register
-
-register({
+return {
 	name = "helpview.nvim",
 	src = "https://github.com/OXY2DEV/helpview.nvim.git",
 	filetypes = { "help" },
@@ -8,4 +6,4 @@ register({
 		require("helpview.highlights").setup()
 		require("helpview").actions.attach(event.buf)
 	end,
-})
+}

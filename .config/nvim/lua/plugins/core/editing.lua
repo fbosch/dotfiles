@@ -1,6 +1,4 @@
-local register = require("config.pack.registry").register
-
-register({
+return {
 	{
 		name = "live-rename.nvim",
 		src = "https://github.com/saecki/live-rename.nvim.git",
@@ -64,7 +62,9 @@ register({
 		name = "vim-abolish",
 		src = "https://github.com/tpope/vim-abolish.git",
 		events = { "InsertEnter" },
-		setup = require("config.abbr").autofix_typos,
+		setup = function()
+			require("config.abbr").autofix_typos()
+		end,
 	},
 	{
 		name = "vim-unimpaired",
@@ -85,4 +85,4 @@ register({
 			require("matchparen.highlight").update(context.buf)
 		end,
 	},
-})
+}

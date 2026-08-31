@@ -1,6 +1,4 @@
-local register = require("config.pack.registry").register
-
-register({
+return {
 	{
 		name = "hlargs.nvim",
 		src = "https://github.com/m-demare/hlargs.nvim.git",
@@ -30,4 +28,4 @@ register({
 			})
 		end,
 	},
-})
+}

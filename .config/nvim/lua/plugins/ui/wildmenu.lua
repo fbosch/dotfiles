@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	{
 		name = "fzy-lua-native",
 		src = "https://github.com/romgrk/fzy-lua-native.git",
@@ -66,4 +66,4 @@ require("config.pack.registry").register({
 			vim.fn["wilder#main#start"]()
 		end,
 	},
-})
+}

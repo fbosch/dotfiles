@@ -1,5 +1,3 @@
-local register = require("config.pack.registry").register
-
 local function get_visual_selection()
 	local lines = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() })
 	if #lines == 0 then
@@ -9,7 +7,7 @@ local function get_visual_selection()
 	return vim.trim(table.concat(lines, " "))
 end
 
-register({
+return {
 	{
 		name = "numb.nvim",
 		src = "https://github.com/nacro90/numb.nvim.git",
@@ -146,4 +144,4 @@ register({
 			})
 		end,
 	},
-})
+}

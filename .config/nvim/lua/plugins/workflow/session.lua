@@ -1,6 +1,5 @@
 local git = require("utils.git")
 local session = require("utils.session")
-local register = require("config.pack.registry").register
 
 local function herdr_context()
 	local pane_id = vim.env.HERDR_PANE_ID
@@ -33,7 +32,7 @@ local should_persist_session = not (
 	or vim.fn.argc() > 0 -- opened specific file
 )
 
-register({
+return {
 	{
 		name = "mini.sessions",
 		src = "https://github.com/echasnovski/mini.sessions.git",
@@ -106,4 +105,4 @@ register({
 			})
 		end,
 	},
-})
+}

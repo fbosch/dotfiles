@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "conform.nvim",
 	src = "https://github.com/stevearc/conform.nvim.git",
 	filetypes = {
@@ -75,4 +75,4 @@ require("config.pack.registry").register({
 			end,
 		})
 	end,
-})
+}

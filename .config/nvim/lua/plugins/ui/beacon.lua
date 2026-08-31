@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "beacon.nvim",
 	src = "https://github.com/DanilaMihailov/beacon.nvim.git",
 	setup = function()
@@ -32,4 +32,4 @@ require("config.pack.registry").register({
 			return highlight_cursor()
 		end
 	end,
-})
+}

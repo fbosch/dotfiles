@@ -18,9 +18,10 @@ local function write_result(message)
 end
 
 function M.run()
-	require("config.pack.discovery").load()
-	local disabled_names = require("config.pack.registry").disabled_package_names()
-	local statuses = require("config.pack.disabled_sync").inspect_disabled_packages(disabled_names)
+	local inventory_module = require("config.pack.inventory")
+	inventory_module.register(require("config.pack.discovery").load())
+	local inventory = inventory_module.current()
+	local statuses = require("config.pack.disabled_sync").inspect_disabled_packages(inventory.disabled_names)
 
 	if #statuses == 0 then
 		write_result("Success  No Neovim packages are disabled in this environment.")

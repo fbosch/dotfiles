@@ -68,7 +68,7 @@ vim.wait(500, function()
 	return ok and config.loaded == true
 end)
 
-for name, spec in pairs(require("config.pack.registry").all()) do
+for name, spec in pairs(require("config.pack.inventory").current().enabled_by_name) do
 	for _, key in ipairs(spec.keys or {}) do
 		local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
 		for _, mode in ipairs(key_modes) do

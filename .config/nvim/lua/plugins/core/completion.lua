@@ -13,7 +13,7 @@ local function completion_enabled()
 	)
 end
 
-require("config.pack.registry").register({
+return {
 	{
 		name = "LuaSnip",
 		src = "https://github.com/L3MON4D3/LuaSnip.git",
@@ -88,4 +88,4 @@ require("config.pack.registry").register({
 			},
 		},
 	},
-})
+}

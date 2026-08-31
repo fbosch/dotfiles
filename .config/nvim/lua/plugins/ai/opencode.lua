@@ -1,5 +1,3 @@
-local register = require("config.pack.registry").register
-
 local function invoke_configured_mapping(lhs)
 	local mode = vim.fn.mode(1):sub(1, 1)
 	if mode == "v" or mode == "V" or mode == "\22" then
@@ -24,7 +22,7 @@ local function key(lhs, mode, desc)
 	}
 end
 
-register({
+return {
 	{
 		name = "opencode.nvim",
 		src = "https://github.com/NickvanDyke/opencode.nvim.git",
@@ -716,4 +714,4 @@ register({
 			end, { desc = "Code readability" })
 		end,
 	},
-})
+}

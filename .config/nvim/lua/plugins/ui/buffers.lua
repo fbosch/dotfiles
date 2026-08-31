@@ -60,12 +60,36 @@ local function buffer_index_keys()
 	return t
 end
 
-vim.g.barbar_auto_setup = false
-
-require("config.pack.registry").register({
+local declaration = {
 	name = "barbar.nvim",
 	src = "https://github.com/fbosch/barbar.nvim.git",
 	dependencies = { "nvim-web-devicons" },
+	init = function()
+		vim.g.barbar_auto_setup = false
+		local group = vim.api.nvim_create_augroup("LoadBarbarOnSecondBuffer", { clear = true })
+		vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
+			group = group,
+			callback = function()
+				local buffers = 0
+				for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+					if
+						vim.bo[buffer].buflisted
+						and vim.bo[buffer].buftype == ""
+						and vim.api.nvim_buf_get_name(buffer) ~= ""
+					then
+						buffers = buffers + 1
+					end
+				end
+
+				if buffers < 2 then
+					return
+				end
+
+				vim.api.nvim_del_augroup_by_id(group)
+				require("config.pack.loader").activate("barbar.nvim", { source = "second-buffer" })
+			end,
+		})
+	end,
 	commands = {
 		"BufferCloseAllButVisible",
 		"BufferGoto",
@@ -210,28 +234,6 @@ require("config.pack.registry").register({
 		assert(vim.o.showtabline == 2, "Barbar tabline was not initialized")
 		require("barbar.ui.render").update()
 	end,
-})
+}
 
-local group = vim.api.nvim_create_augroup("LoadBarbarOnSecondBuffer", { clear = true })
-vim.api.nvim_create_autocmd({ "BufAdd", "BufEnter" }, {
-	group = group,
-	callback = function()
-		local buffers = 0
-		for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-			if
-				vim.bo[buffer].buflisted
-				and vim.bo[buffer].buftype == ""
-				and vim.api.nvim_buf_get_name(buffer) ~= ""
-			then
-				buffers = buffers + 1
-			end
-		end
-
-		if buffers < 2 then
-			return
-		end
-
-		vim.api.nvim_del_augroup_by_id(group)
-		require("config.pack.loader").activate("barbar.nvim", { source = "second-buffer" })
-	end,
-})
+return declaration

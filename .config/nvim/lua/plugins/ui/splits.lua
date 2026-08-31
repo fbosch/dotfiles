@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	{
 		name = "bufresize.nvim",
 		src = "https://github.com/kwkarlwang/bufresize.nvim.git",
@@ -69,4 +69,4 @@ require("config.pack.registry").register({
 			end
 		end,
 	},
-})
+}

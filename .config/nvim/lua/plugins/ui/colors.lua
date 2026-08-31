@@ -12,7 +12,7 @@ local highlighter_filetypes = {
 	"xml",
 }
 
-require("config.pack.registry").register({
+return {
 	name = "ccc.nvim",
 	src = "https://github.com/uga-rosa/ccc.nvim.git",
 	filetypes = highlighter_filetypes,
@@ -62,4 +62,4 @@ require("config.pack.registry").register({
 			require("ccc.highlighter"):enable(0)
 		end
 	end,
-})
+}

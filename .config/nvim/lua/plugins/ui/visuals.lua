@@ -1,6 +1,4 @@
-local register = require("config.pack.registry").register
-
-register({
+return {
 	{
 		name = "todo-comments.nvim",
 		src = "https://github.com/folke/todo-comments.nvim.git",
@@ -209,4 +207,4 @@ register({
 			})
 		end,
 	},
-})
+}

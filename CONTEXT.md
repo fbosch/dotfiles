@@ -79,6 +79,11 @@ should use these terms; new concepts named during design work land here.
 
 ## Neovim package lifecycle
 
+- **lifecycle inventory** — process-local classification of package declarations
+  for the current machine. Selection is evaluated once, then the same enabled
+  and disabled state drives synchronization, activation, updates, and reporting.
+  Consumers receive detached snapshots so one lifecycle path cannot alter the
+  classification observed by another.
 - **disabled package synchronization** — native package lifecycle transaction
   that keeps declarations disabled for the current machine absent without
   discarding their shared lock entries, and restores re-enabled declarations to

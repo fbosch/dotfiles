@@ -7,11 +7,12 @@ if not vim.tbl_contains(vim.opt.packpath:get(), site) then
 end
 assert(vim.tbl_contains(vim.opt.packpath:get(), site), "native package site is missing from packpath")
 
-require("config.pack.discovery").load()
+local inventory_module = require("config.pack.inventory")
+inventory_module.register(require("config.pack.discovery").load())
 require("config.pack.build").register()
-local registry = require("config.pack.registry")
+local inventory = inventory_module.current()
 require("config.pack.disabled_sync").synchronize({
-	specs = registry.pack_specs(),
-	disabled_names = registry.disabled_package_names(),
+	specs = inventory.pack_specs,
+	disabled_names = inventory.disabled_names,
 })
-require("config.pack.loader").setup()
+require("config.pack.loader").setup(inventory)
