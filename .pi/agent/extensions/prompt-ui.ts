@@ -12,6 +12,7 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { PLAN_MODE_STATUS } from "./plan-mode";
 
 type Color = (text: string) => string;
 
@@ -327,13 +328,20 @@ export default function promptUi(pi: ExtensionAPI) {
         }
 
         const theme = ctx.ui.theme;
-        const border = (text: string) => this.borderColor(text);
-        const editorWidth = width - DOCK_CHROME_WIDTH;
-        const { content, suggestions } = splitEditorLines(super.render(editorWidth), border);
-        const branch = getBranch();
         const statuses = getStatuses()
           .map(sanitizeStatus)
           .filter((status) => status.length > 0);
+        const isPlanMode = statuses.includes(PLAN_MODE_STATUS);
+        const modeColor = isPlanMode
+          ? theme.getThinkingBorderColor("high")
+          : (text: string) => theme.fg("accent", text);
+        const border = isPlanMode ? modeColor : (text: string) => this.borderColor(text);
+        const editorBorder = (text: string) => this.borderColor(text);
+        const editorWidth = width - DOCK_CHROME_WIDTH;
+        // Pi renders its internal editor border with the thinking color, even in Plan mode.
+        const { content, suggestions } = splitEditorLines(super.render(editorWidth), editorBorder);
+        const branch = getBranch();
+        const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";
         const model = ctx.model;
         const thinkingLevel = pi.getThinkingLevel();
         const separator = theme.fg("dim", " · ");
@@ -341,7 +349,7 @@ export default function promptUi(pi: ExtensionAPI) {
           model === undefined
             ? theme.fg("muted", " No model")
             : [
-                theme.fg("accent", " Build"),
+                modeColor(` ${modeLabel}`),
                 separator,
                 theme.fg("text", model.name),
                 " ",
@@ -366,7 +374,7 @@ export default function promptUi(pi: ExtensionAPI) {
           backgroundAnsi,
         );
         const interruptHint = keyHint(this.bindings, "app.interrupt", "interrupt");
-        const statusText = statuses.join(" · ");
+        const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
         const workingText = isWorking
           ? [theme.fg("accent", "● working"), interruptHint].filter(Boolean).join("  ")
           : "";
