@@ -133,6 +133,22 @@ local function cleanup(sentinels)
 	return first_cause
 end
 
+function M.inspect_disabled_packages(disabled_names)
+	local _, names = validate_input({ specs = {}, disabled_names = disabled_names })
+	local statuses = {}
+	for _, name in ipairs(names) do
+		local path = package_path(name)
+		local stat, stat_error, stat_name = vim.uv.fs_lstat(path)
+		assert(stat ~= nil or stat_name == "ENOENT", ("native package stat failed:\n%s"):format(stat_error))
+		table.insert(statuses, {
+			name = name,
+			path = path,
+			installed = stat ~= nil,
+		})
+	end
+	return statuses
+end
+
 function M.synchronize(input)
 	local specs, disabled_names = validate_input(input)
 	local lock_plugins = read_lock_plugins()

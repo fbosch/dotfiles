@@ -33,6 +33,24 @@ local function write_lock(names)
 end
 
 do
+	local absent_name = "audit-absent.nvim"
+	local installed_name = "audit-installed.nvim"
+	vim.fn.mkdir(package_path(installed_name), "p")
+
+	local statuses = disabled_sync.inspect_disabled_packages({ installed_name, absent_name })
+	assert(#statuses == 2, "disabled package inspection omitted a package")
+	assert(statuses[1].name == absent_name, "disabled package inspection was not sorted")
+	assert(statuses[1].path == package_path(absent_name), "absent package path was incorrect")
+	assert(statuses[1].installed == false, "absent package was reported as installed")
+	assert(statuses[2].name == installed_name, "installed package inspection was not sorted")
+	assert(statuses[2].path == package_path(installed_name), "installed package path was incorrect")
+	assert(statuses[2].installed == true, "installed package was reported as absent")
+	assert(vim.uv.fs_lstat(package_path(installed_name)) ~= nil, "package inspection mutated installed state")
+
+	real_fs_rm(package_path(installed_name), { recursive = true, force = true })
+end
+
+do
 	local name = "lock-only-example.nvim"
 	write_lock({ name })
 	disabled_sync.synchronize({ specs = {}, disabled_names = { name } })
