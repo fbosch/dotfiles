@@ -17,6 +17,7 @@ event_server="$test_dir/event-server.lua"
 control="$repo_root/runtime/windows/daemons/window-capture/window-capturectl.sh"
 original_path="$PATH"
 export GRIM_LOG="$test_dir/grim.log"
+export GRIM_SLEEP=0
 wrapper_pid=""
 event_server_pid=""
 reader_pid=""
@@ -98,7 +99,7 @@ cat > "$bin_dir/grim" <<'SH'
 #!/usr/bin/env bash
 output="${!#}"
 printf '%s\n' "$*" >> "$GRIM_LOG"
-sleep 0.4
+sleep "$GRIM_SLEEP"
 printf 'fixture-image\n' > "$output"
 SH
 chmod +x "$bin_dir/hyprctl" "$bin_dir/grim"
@@ -114,7 +115,6 @@ test -s "$capture_dir/offscreen-id.jpg"
 grep -F -- '-T offscreen-id' "$GRIM_LOG" >/dev/null
 grep -F -- '-q 90' "$GRIM_LOG" >/dev/null
 
-sleep 0.11
 HOME="$home_dir" \
   PATH="$bin_dir:$original_path" \
   XDG_RUNTIME_DIR="$runtime_dir" \
@@ -124,6 +124,21 @@ HOME="$home_dir" \
   handle-event 'openwindow>>0xvisible,1,fixture,Visible'
 test -s "$capture_dir/visible-id.jpg"
 grep -F -- '-g 10,20 100x100' "$GRIM_LOG" >/dev/null
+
+# A worker must not overwrite a newer event marker and capture stale state.
+rm -f "$capture_dir/visible-id.jpg"
+: > "$GRIM_LOG"
+printf 'newer_workspace\n' > "$capture_dir/.workspace_change"
+printf 'older_workspace\tworkspacev2>>stale\n' > "$capture_dir/.pending_event"
+HOME="$home_dir" \
+  PATH="$bin_dir:$original_path" \
+  XDG_RUNTIME_DIR="$runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE=fixture \
+  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
+  luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" worker
+test ! -s "$GRIM_LOG"
+test ! -e "$capture_dir/visible-id.jpg"
+test "$(<"$capture_dir/.workspace_change")" = newer_workspace
 
 wait_for_file() {
   local file="$1" description="$2"
@@ -222,6 +237,7 @@ tab=$'\t'
 reader_pid="$!"
 
 # A delivered event must recover a worker marker whose recorded process is gone.
+export GRIM_SLEEP=0.4
 sleep 0.01 &
 stale_pid="$!"
 wait "$stale_pid"

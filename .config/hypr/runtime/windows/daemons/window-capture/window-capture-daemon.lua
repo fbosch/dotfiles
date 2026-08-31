@@ -35,14 +35,12 @@ local worker_lock_dir = kit:instance_path("window-capture-worker.lock.d")
 -- only the parent chain may be created with -p.
 local instance_runtime_dir = daemon_lock_dir:match("^(.*)/")
 command.ok("mkdir -p " .. command.arg(instance_runtime_dir) .. " >/dev/null 2>&1")
-local last_screenshot_file = screenshot_dir .. "/.last_screenshot"
 local last_event_file = screenshot_dir .. "/.last_event"
 local capture_lock_file = screenshot_dir .. "/.capture_lock"
 local workspace_change_file = screenshot_dir .. "/.workspace_change"
 local pending_event_file = screenshot_dir .. "/.pending_event"
 local last_healthcheck_file = screenshot_dir .. "/.last_healthcheck"
 
-local debounce_ms = 100
 local capture_delay_ms = 50
 local window_settle_delay_ms = 150
 local workspace_delay_ms = 100
@@ -50,7 +48,8 @@ local lock_stale_ms = 10000
 local worker_lock_initialization_grace_ms = 100
 local healthcheck_interval_ms = 5000
 local event_reconnect_delay_s = 0.5
-local event_read_timeout_s = 0.5
+-- Bounds recovery when an event is queued as the current worker exits.
+local event_read_timeout_s = 0.1
 local worker_shutdown_wait_ms = 500
 local temp_file_max_age_s = 30
 local grim_timeout_s = 2
@@ -429,16 +428,6 @@ local function maybe_run_healthcheck()
 end
 
 local function capture_screenshot(event_type, capture_id, event_payload)
-	local last_time = read_number(last_screenshot_file)
-	if last_time then
-		local elapsed = now_ms() - last_time
-		if elapsed < 0 then
-			remove_file(last_screenshot_file)
-		elseif elapsed < debounce_ms then
-			return
-		end
-	end
-
 	local delay_ms = capture_delay_ms
 	if event_type == "workspace" then
 		delay_ms = workspace_delay_ms
@@ -457,7 +446,6 @@ local function capture_screenshot(event_type, capture_id, event_payload)
 		end
 	end
 
-	write_file(last_screenshot_file, tostring(now_ms()))
 	if event_type == "activewindow" then
 		capture_active_window_preview()
 		capture_visible_workspace_previews(true)
@@ -544,7 +532,9 @@ local function handle_event(line, capture_id, worker_owned)
 		write_file(capture_lock_file, tostring(timestamp))
 	end
 	write_file(last_event_file, tostring(timestamp))
-	write_file(workspace_change_file, capture_id)
+	if worker_owned == false then
+		write_file(workspace_change_file, capture_id)
+	end
 	local ok, err = xpcall(function()
 		capture_screenshot(event_type, capture_id, event_payload)
 	end, debug.traceback)
@@ -830,7 +820,6 @@ mkdir(screenshot_dir)
 command.ok("find " .. command.arg(screenshot_dir) .. " -maxdepth 1 -name '.temp_*.jpg' -type f -delete 2>/dev/null")
 
 if mode == "refresh-once" then
-	remove_file(last_screenshot_file)
 	handle_event("workspacev2>>refresh-once", nil, false)
 elseif mode == "handle-event" then
 	handle_event(arg[2] or "", nil, false)

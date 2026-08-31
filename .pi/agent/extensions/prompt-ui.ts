@@ -4,28 +4,49 @@ import {
   type ExtensionContext,
   type KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import type { EditorTheme, TUI } from "@earendil-works/pi-tui";
+import type {
+  Component,
+  EditorTheme,
+  OverlayHandle,
+  OverlayOptions,
+  TUI,
+} from "@earendil-works/pi-tui";
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 type Color = (text: string) => string;
 
-function fitBorder(
-  left: string,
-  right: string,
+const EDITOR_PADDING_X = 1;
+const DOCK_RAIL = "▌";
+const DOCK_RAIL_WIDTH = visibleWidth(DOCK_RAIL);
+
+export function fitColumns(left: string, right: string, width: number): string {
+  if (width <= 0) return "";
+
+  const leftText = truncateToWidth(left, width, "");
+  const separatorWidth = leftText.length > 0 && right.length > 0 ? 1 : 0;
+  const rightWidth = Math.max(0, width - visibleWidth(leftText) - separatorWidth);
+  const rightText = truncateToWidth(right, rightWidth, "");
+  const gapWidth = Math.max(0, width - visibleWidth(leftText) - visibleWidth(rightText));
+
+  return `${leftText}${" ".repeat(gapWidth)}${rightText}`;
+}
+
+export function paintDockRow(
+  content: string,
   width: number,
-  border: Color,
-  fill: Color = border,
+  rail: string,
+  backgroundAnsi: string,
 ): string {
   if (width <= 0) return "";
-  if (width === 1) return border("─");
 
-  const contentWidth = width - 2;
-  const leftText = truncateToWidth(left, contentWidth, "");
-  const rightWidth = Math.max(0, contentWidth - visibleWidth(leftText) - 1);
-  const rightText = truncateToWidth(right, rightWidth, "");
-  const gapWidth = Math.max(0, contentWidth - visibleWidth(leftText) - visibleWidth(rightText));
+  const fittedRail = truncateToWidth(rail, width, "");
+  const contentWidth = Math.max(0, width - visibleWidth(fittedRail));
+  const fittedContent = fitColumns(content, "", contentWidth);
+  const backgroundContent = fittedContent
+    .replaceAll("\u001b[0m", `\u001b[0m${backgroundAnsi}`)
+    .replaceAll("\u001b[49m", `\u001b[49m${backgroundAnsi}`);
 
-  return `${border("─")}${leftText}${fill("─".repeat(gapWidth))}${rightText}${border("─")}`;
+  return `${fittedRail}${backgroundAnsi}${backgroundContent}\u001b[49m`;
 }
 
 function formatCwd(cwd: string): string {
@@ -42,9 +63,62 @@ function formatContext(ctx: ExtensionContext): string {
   return `ctx ${Math.round(usage.percent)}%`;
 }
 
-function formatModel(ctx: ExtensionContext, pi: ExtensionAPI): string {
-  if (ctx.model === undefined) return "no model";
-  return `${ctx.model.provider}/${ctx.model.id} · ${pi.getThinkingLevel()}`;
+function formatProvider(provider: string): string {
+  if (provider === "openai" || provider === "openai-codex") return "OpenAI";
+  return provider
+    .split("-")
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
+    .join(" ");
+}
+
+function formatKey(key: string): string {
+  return key === "escape" ? "esc" : key;
+}
+
+function keyHint(
+  keybindings: KeybindingsManager,
+  action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
+  description: string,
+): string {
+  const key = keybindings.getKeys(action)[0];
+  return key === undefined ? "" : `${formatKey(key)} ${description}`;
+}
+
+function sanitizeStatus(status: string): string {
+  return status
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
+}
+
+function scrollIndicator(line: string): string | undefined {
+  const match = /^─── ([↑↓]) (\d+) more(?: ─*)?$/.exec(stripTerminalSequences(line));
+  if (match === null) return undefined;
+  return `${match[1]} ${match[2]} more`;
+}
+
+export function splitEditorLines(
+  lines: readonly string[],
+  border: Color,
+): { content: string[]; suggestions: string[] } {
+  if (lines.length < 2) return { content: [...lines], suggestions: [] };
+
+  const bottomBorder = findBottomBorder(lines, border);
+  const editorLines = lines.slice(0, bottomBorder + 1);
+  const suggestions = lines.slice(bottomBorder + 1);
+  const content = editorLines.slice(1, -1);
+  const topIndicator = editorLines[0] === undefined ? undefined : scrollIndicator(editorLines[0]);
+  const bottomLine = editorLines[editorLines.length - 1];
+  const bottomIndicator = bottomLine === undefined ? undefined : scrollIndicator(bottomLine);
+
+  if (topIndicator !== undefined) content.unshift(topIndicator);
+  if (bottomIndicator !== undefined) content.push(bottomIndicator);
+
+  return { content, suggestions };
+}
+
+export function suggestionOverlayOffset(dockRowCount: number): number {
+  return -(Math.max(0, dockRowCount) + 1);
 }
 
 export function findBottomBorder(lines: readonly string[], border: Color): number {
@@ -54,7 +128,8 @@ export function findBottomBorder(lines: readonly string[], border: Color): numbe
 
     const plain = stripTerminalSequences(line);
     const isBorder = /^─+$/.test(plain) || /^─── [↑↓] \d+ more ─*$/.test(plain);
-    if (isBorder && line === border(plain)) return index;
+    const styledCells = [...plain].map(border).join("");
+    if (isBorder && (line === border(plain) || line === styledCells)) return index;
   }
 
   return lines.length - 1;
@@ -63,6 +138,7 @@ export function findBottomBorder(lines: readonly string[], border: Color): numbe
 export default function promptUi(pi: ExtensionAPI) {
   let isWorking = false;
   let activeTui: TUI | undefined;
+  let disposePromptEditor = () => {};
   let getBranch = (): string | null => null;
   let getStatuses = (): readonly string[] => [];
 
@@ -77,6 +153,8 @@ export default function promptUi(pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", () => {
+    disposePromptEditor();
+    disposePromptEditor = () => {};
     activeTui = undefined;
   });
 
@@ -101,34 +179,124 @@ export default function promptUi(pi: ExtensionAPI) {
     });
 
     class PromptEditor extends CustomEditor {
+      private readonly bindings: KeybindingsManager;
+      private readonly suggestionsOverlay: Component & { lines: string[] };
+      private readonly suggestionsOverlayOptions: OverlayOptions = {
+        anchor: "bottom-left",
+        col: DOCK_RAIL_WIDTH,
+        nonCapturing: true,
+      };
+      private suggestionsOverlayHandle: OverlayHandle | undefined;
+
       constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
-        super(tui, theme, keybindings);
+        super(tui, theme, keybindings, { paddingX: EDITOR_PADDING_X });
+        this.bindings = keybindings;
+        this.suggestionsOverlay = {
+          lines: [],
+          render(width) {
+            return this.lines.map((line) => fitColumns(line, "", width));
+          },
+          invalidate() {},
+        };
+        disposePromptEditor = () => this.dispose();
         activeTui = tui;
       }
 
+      dispose(): void {
+        this.suggestionsOverlayHandle?.hide();
+        this.suggestionsOverlayHandle = undefined;
+      }
+
+      // Pi copies its default padding after the editor factory returns.
+      setPaddingX(_padding: number): void {
+        super.setPaddingX(EDITOR_PADDING_X);
+      }
+
+      private updateSuggestionsOverlay(
+        suggestions: readonly string[],
+        width: number,
+        dockRowCount: number,
+      ): void {
+        this.suggestionsOverlay.lines = [...suggestions];
+        if (suggestions.length === 0) {
+          this.suggestionsOverlayHandle?.setHidden(true);
+          return;
+        }
+
+        this.suggestionsOverlayOptions.width = width;
+        this.suggestionsOverlayOptions.offsetY = suggestionOverlayOffset(dockRowCount);
+        if (this.suggestionsOverlayHandle === undefined) {
+          this.suggestionsOverlayHandle = this.tui.showOverlay(
+            this.suggestionsOverlay,
+            this.suggestionsOverlayOptions,
+          );
+          return;
+        }
+
+        this.suggestionsOverlayHandle.setHidden(false);
+      }
+
       render(width: number): string[] {
-        const lines = super.render(width);
-        if (lines.length < 2) return lines;
+        if (width < 2) {
+          this.updateSuggestionsOverlay([], width, 0);
+          return super.render(width);
+        }
 
         const theme = ctx.ui.theme;
         const border = (text: string) => this.borderColor(text);
-        const bottomBorder = findBottomBorder(lines, border);
-        const editorLines = lines.slice(0, bottomBorder + 1);
-        const suggestions = lines.slice(bottomBorder + 1);
+        const editorWidth = width - 1;
+        const { content, suggestions } = splitEditorLines(super.render(editorWidth), border);
         const branch = getBranch();
-        const statuses = getStatuses().filter((status) => status.length > 0);
-        const topLeft = isWorking ? theme.fg("accent", " ● working ") : "";
-        const topRight = statuses.length > 0 ? theme.fg("muted", ` ${statuses.join(" · ")} `) : "";
-        const bottomLeft = theme.fg("muted", ` ${formatModel(ctx, pi)} `);
+        const statuses = getStatuses()
+          .map(sanitizeStatus)
+          .filter((status) => status.length > 0);
+        const model = ctx.model;
+        const thinkingLevel = pi.getThinkingLevel();
+        const separator = theme.fg("dim", " · ");
+        const modelLeft =
+          model === undefined
+            ? theme.fg("muted", " No model")
+            : [
+                theme.fg("accent", " Build"),
+                separator,
+                theme.fg("text", model.name),
+                " ",
+                theme.fg("muted", formatProvider(model.provider)),
+                separator,
+                theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
+              ].join("");
         const location = `${formatCwd(ctx.cwd)}${branch ? ` (${branch})` : ""}`;
-        const bottomRight = theme.fg("muted", ` ${formatContext(ctx)} · ${location} `);
+        const modelRight = theme.fg("muted", `${formatContext(ctx)} · ${location} `);
+        const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
+        const rail = border(DOCK_RAIL);
+        const backgroundAnsi = theme.getBgAnsi("userMessageBg");
+        const dockRows = ["", ...content, "", modelRow].map((line) =>
+          paintDockRow(line, width, rail, backgroundAnsi),
+        );
+        const interruptHint = keyHint(this.bindings, "app.interrupt", "interrupt");
+        const statusText = statuses.join(" · ");
+        const workingText = isWorking
+          ? [theme.fg("accent", "● working"), interruptHint].filter(Boolean).join("  ")
+          : "";
+        const hintLeft = [workingText, statusText].filter(Boolean).join(" · ");
+        const hintRight = [
+          keyHint(this.bindings, "app.thinking.cycle", "thinking"),
+          keyHint(this.bindings, "app.model.select", "models"),
+          keyHint(this.bindings, "tui.input.tab", "complete"),
+        ]
+          .filter(Boolean)
+          .join("  ");
+        const hints = fitColumns(
+          theme.fg("muted", ` ${hintLeft}`),
+          theme.fg("muted", `${hintRight} `),
+          width,
+        );
+        const promptLayout = [...dockRows, "", hints];
 
-        editorLines[0] = fitBorder(topLeft, topRight, width, border);
-        editorLines[editorLines.length - 1] = fitBorder(bottomLeft, bottomRight, width, border);
-
-        // Pi has no autocomplete-placement option and appends suggestions after
-        // the editor. Move only that rendered tail so the bottom dock stays fixed.
-        return [...suggestions, ...editorLines];
+        // Pi appends autocomplete to the editor render. Move only that tail into
+        // a non-capturing overlay so it grows upward without moving the dock.
+        this.updateSuggestionsOverlay(suggestions, editorWidth, promptLayout.length);
+        return promptLayout;
       }
     }
 
