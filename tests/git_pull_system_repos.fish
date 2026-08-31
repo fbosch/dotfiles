@@ -127,6 +127,7 @@ function test_corporate_context_reaches_native_plugin_install
     git_pull_system_repos --yes
     assert_status 0 $status
     assert_log_contains install-fbb
+    assert_log_contains install-fish-libexec
     assert_log_absent install-opencode-plugins
     assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
 end
@@ -143,6 +144,7 @@ function test_clean_repositories_fast_forward
     assert_status master (command git -C "$HOME/dotfiles" branch --show-current)
     assert_log_contains stow
     assert_log_contains just
+    assert_log_contains install-fish-libexec
     assert_log_contains 'nvim --headless -i NONE +TSInstallMissing +qa'
     assert_log_contains herdr_link_plugins
 end

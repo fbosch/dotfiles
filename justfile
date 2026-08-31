@@ -26,6 +26,11 @@ ags-types:
 install-fbb:
     bun install --frozen-lockfile --cwd .config/fbb
 
+# Install dependencies for Fish Bun helpers.
+[group('dependencies')]
+install-fish-libexec:
+    bun install --frozen-lockfile --cwd .config/fish/libexec
+
 # Install AGS dependencies and build its initial runtime bundle.
 [group('dependencies')]
 install-ags: _install-ags-dependencies ags-bundle
@@ -35,7 +40,7 @@ _install-ags-dependencies:
 
 # Install all managed dependencies and build first-use artifacts.
 [group('dependencies')]
-install-all: install-ags install-fbb install-opencode install-opencode-plugins install-vicinae
+install-all: install-ags install-fbb install-fish-libexec install-opencode install-opencode-plugins install-vicinae
 
 # Install OpenCode dependencies.
 [group('dependencies')]
