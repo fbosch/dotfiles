@@ -318,7 +318,12 @@ export default function promptUi(pi: ExtensionAPI) {
         const dockRows = ["", ...content, "", modelRow].map((line) =>
           paintDockRow(line, width, inputRail, backgroundAnsi, rightBorder),
         );
-        const bottomEdge = paintDockBottomEdge(width, inputRail, rightBorder, backgroundAnsi);
+        const bottomEdge = paintDockBottomEdge(
+          width,
+          border("▘"),
+          theme.fg("borderMuted", "▝"),
+          backgroundAnsi,
+        );
         const interruptHint = keyHint(this.bindings, "app.interrupt", "interrupt");
         const statusText = statuses.join(" · ");
         const workingText = isWorking

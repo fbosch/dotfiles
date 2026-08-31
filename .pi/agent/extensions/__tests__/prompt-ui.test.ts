@@ -76,9 +76,9 @@ describe("prompt UI layout", () => {
   });
 
   test("renders a half-height bottom edge instead of a full padding row", () => {
-    const line = paintDockBottomEdge(8, "▌", "▐", "\u001b[48;5;236m");
+    const line = paintDockBottomEdge(8, "▘", "▝", "\u001b[48;5;236m");
 
-    expect(stripTerminalSequences(line)).toBe("▌▀▀▀▀▀▀▐");
+    expect(stripTerminalSequences(line)).toBe("▘▀▀▀▀▀▀▝");
     expect(line).toContain("\u001b[38;5;236m");
     expect(visibleWidth(line)).toBe(8);
   });
