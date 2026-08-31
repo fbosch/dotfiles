@@ -319,6 +319,22 @@ describe("picture-in-picture daemon adapter", function()
 		assert.same({ "quit" }, result.control_messages)
 	end)
 
+	it("keeps polling until the first native geometry update is delivered", function()
+		local result = run_daemon({
+			selected = { "control", "timeout", "control" },
+			control_messages = { "interaction-updates-ready", "quit" },
+			dragging = true,
+			dragging_address = "0x1",
+			next_observation_at = 10.1,
+		})
+
+		assert.equal("startup", result.reducer_inputs[1].event.type)
+		assert.equal("tick", result.reducer_inputs[2].event.type)
+		assert.equal("quit", result.reducer_inputs[3].event.action)
+		assert.is_true(math.abs(result.select_timeouts[2] - 0.1) < 0.000001)
+		assert.same({ "quit" }, result.control_messages)
+	end)
+
 	it("uses visible bar geometry for hide policy, then clears it for native updates", function()
 		local result = run_daemon({
 			selected = { "control", "event", "control" },

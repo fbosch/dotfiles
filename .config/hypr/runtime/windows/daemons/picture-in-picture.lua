@@ -210,7 +210,7 @@ end
 
 local function handle_control(message)
 	if message == "interaction-updates-ready" then
-		native_updates_ready = true
+		-- Capability is not delivery: keep polling until the first native update proves the stream works.
 		return false
 	end
 
@@ -223,7 +223,11 @@ local function handle_control(message)
 	if action == "waybar-show" or action == "waybar-hide" then
 		transition_bars = refresh_bars(next_waybar_visible)
 	end
-	place(socket.gettime(), { type = "control", action = action, address = address, direction = direction }, transition_bars)
+	place(
+		socket.gettime(),
+		{ type = "control", action = action, address = address, direction = direction },
+		transition_bars
+	)
 	if action == "waybar-hide" then
 		current_bars = {}
 	end
@@ -285,11 +289,7 @@ end
 
 local function apply_interaction_update(update, now)
 	native_updates_ready = true
-	if
-		update.kind ~= "move"
-		or not state.dragging
-		or update.address ~= state.dragging_address
-	then
+	if update.kind ~= "move" or not state.dragging or update.address ~= state.dragging_address then
 		return
 	end
 
