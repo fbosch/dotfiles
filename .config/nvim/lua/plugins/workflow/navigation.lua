@@ -1,5 +1,3 @@
-local register = require("config.pack.registry").register
-
 local function get_visual_selection()
 	local lines = vim.fn.getregion(vim.fn.getpos("v"), vim.fn.getpos("."), { type = vim.fn.mode() })
 	if #lines == 0 then
@@ -9,7 +7,13 @@ local function get_visual_selection()
 	return vim.trim(table.concat(lines, " "))
 end
 
-register({
+local function plug_mapping(mapping)
+	return function()
+		return mapping
+	end
+end
+
+return {
 	{
 		name = "numb.nvim",
 		src = "https://github.com/nacro90/numb.nvim.git",
@@ -130,13 +134,38 @@ register({
 	{
 		name = "leap.nvim",
 		src = "https://codeberg.org/andyg/leap.nvim",
-		startup = true,
+		keys = {
+			{
+				"s",
+				plug_mapping("<Plug>(leap-forward)"),
+				mode = { "n", "x", "o" },
+				desc = "Leap forward to",
+				expr = true,
+				silent = true,
+			},
+			{
+				"S",
+				plug_mapping("<Plug>(leap-backward)"),
+				mode = { "n", "o" },
+				desc = "Leap backward to",
+				expr = true,
+				silent = true,
+			},
+			{
+				"gs",
+				plug_mapping("<Plug>(leap-from-window)"),
+				mode = { "n", "x", "o" },
+				desc = "Leap from window",
+				expr = true,
+				silent = true,
+			},
+		},
 		setup = function()
 			vim.keymap.set({ "n", "x", "o" }, "s", "<Plug>(leap-forward)", {
 				desc = "Leap forward to",
 				silent = true,
 			})
-			vim.keymap.set({ "n", "x", "o" }, "S", "<Plug>(leap-backward)", {
+			vim.keymap.set({ "n", "o" }, "S", "<Plug>(leap-backward)", {
 				desc = "Leap backward to",
 				silent = true,
 			})
@@ -146,4 +175,4 @@ register({
 			})
 		end,
 	},
-})
+}

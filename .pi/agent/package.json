@@ -1,0 +1,24 @@
+{
+  "name": "pi-agent-config",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.0",
+  "trustedDependencies": [],
+  "scripts": {
+    "format": "biome format --write .",
+    "lint": "biome check .",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "audit": "fallow --only dead-code --fail-on-issues",
+    "check": "bun run lint && bun run test && bun run typecheck && bun run audit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.11",
+    "@earendil-works/pi-coding-agent": "0.84.4",
+    "@earendil-works/pi-tui": "0.84.4",
+    "@types/bun": "1.4.0",
+    "@types/node": "22.19.19",
+    "fallow": "3.21.0",
+    "typescript": "5.9.3"
+  }
+}

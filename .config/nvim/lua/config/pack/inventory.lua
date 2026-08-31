@@ -1,8 +1,14 @@
 local M = {}
 
-local plugins = {}
-local disabled_packages = {}
+local enabled_by_name = {}
+local disabled_by_name = {}
 local registered_names = {}
+
+local function sorted_keys(values)
+	local keys = vim.tbl_keys(values)
+	table.sort(keys)
+	return keys
+end
 
 local function valid_package_name(name)
 	return type(name) == "string"
@@ -159,59 +165,53 @@ local function register_one(plugin)
 		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
 		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
 		if enabled == false then
-			disabled_packages[plugin.name] = true
+			disabled_by_name[plugin.name] = true
 			return
 		end
 	end
 
-	if plugin.root ~= false and plugin.startup ~= true and has_triggers(plugin) == false then
-		plugin.events = { { "User", pattern = "PackReady" } }
+	local normalized = vim.deepcopy(plugin)
+	if normalized.root ~= false and normalized.startup ~= true and has_triggers(normalized) == false then
+		normalized.events = { { "User", pattern = "PackReady" } }
 	end
-	plugins[plugin.name] = plugin
+	enabled_by_name[normalized.name] = normalized
 end
 
-function M.register(spec)
-	if spec.name ~= nil then
-		register_one(spec)
+function M.register(declaration)
+	if declaration.name ~= nil then
+		register_one(declaration)
 		return
 	end
 
-	assert(vim.islist(spec) and #spec > 0, "native plugin registration must be a plugin or non-empty list")
-	for _, plugin in ipairs(spec) do
+	assert(
+		vim.islist(declaration) and #declaration > 0,
+		"native plugin registration must be a plugin or non-empty list"
+	)
+	for _, plugin in ipairs(declaration) do
 		register_one(plugin)
 	end
 end
 
-function M.get(name)
-	return plugins[name]
-end
+function M.current()
+	local enabled = vim.deepcopy(enabled_by_name)
+	local enabled_names = sorted_keys(enabled)
 
-function M.all()
-	return plugins
-end
-
-function M.pack_specs()
 	local specs = {}
-
-	for name, plugin in pairs(plugins) do
+	for _, name in ipairs(enabled_names) do
+		local plugin = enabled[name]
 		table.insert(specs, {
 			name = name,
 			src = plugin.src,
-			version = plugin.version,
+			version = vim.deepcopy(plugin.version),
 		})
 	end
 
-	table.sort(specs, function(left, right)
-		return left.name < right.name
-	end)
-
-	return specs
-end
-
-function M.disabled_package_names()
-	local names = vim.tbl_keys(disabled_packages)
-	table.sort(names)
-	return names
+	return {
+		enabled_by_name = enabled,
+		enabled_names = enabled_names,
+		pack_specs = specs,
+		disabled_names = sorted_keys(disabled_by_name),
+	}
 end
 
 return M

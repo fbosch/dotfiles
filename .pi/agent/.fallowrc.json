@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/fallow/schema.json",
+  "entry": [
+    "extensions/*.ts",
+    "extensions/*/index.ts"
+  ],
+  "ignoreDependencies": [
+    "@earendil-works/pi-coding-agent",
+    "@earendil-works/pi-tui"
+  ]
+}

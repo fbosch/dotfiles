@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "nvim-tree.lua",
 	src = "https://github.com/nvim-tree/nvim-tree.lua.git",
 	dependencies = {
@@ -146,4 +146,4 @@ require("config.pack.registry").register({
 		})
 		require("lsp-file-operations").setup()
 	end,
-})
+}

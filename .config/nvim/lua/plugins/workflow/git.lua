@@ -10,8 +10,6 @@ local function is_git_conflict_repo(context)
 	return vim.fs.root(path, { ".git" }) ~= nil
 end
 
-local register = require("config.pack.registry").register
-
 local gitsigns_options = {
 	current_line_blame = true,
 	current_line_blame_opts = {
@@ -121,7 +119,7 @@ local function list_git_conflicts()
 	vim.cmd("GitConflictListQf")
 end
 
-register({
+return {
 	{
 		name = "diffview.nvim",
 		src = "https://github.com/sindrets/diffview.nvim.git",
@@ -387,4 +385,4 @@ register({
 			end
 		end,
 	},
-})
+}

@@ -128,6 +128,13 @@ storybook:
 update-docs:
     pnpx docs-cache@latest sync
 
+# Report whether disabled Neovim packages remain installed.
+[group('nvim')]
+nvim-check-disabled-packages:
+    @XDG_CONFIG_HOME="$PWD/.config" nvim --headless -u NONE -i NONE \
+      '+lua require("config.pack.report").run()' \
+      '+qa'
+
 # Apply stow operations.
 [group('stow')]
 stow-apply:

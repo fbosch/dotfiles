@@ -9,7 +9,7 @@ local function upfind(start, name)
 	end
 end
 
-require("config.pack.registry").register({
+return {
 	{
 		name = "plenary.nvim",
 		src = "https://github.com/nvim-lua/plenary.nvim.git",
@@ -79,4 +79,4 @@ require("config.pack.registry").register({
 			vim.env.CI = vim.env.CI == "true" and "" or vim.env.CI
 		end,
 	},
-})
+}

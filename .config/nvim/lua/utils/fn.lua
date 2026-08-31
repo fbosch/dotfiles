@@ -66,6 +66,7 @@ end
 
 function M.require_dir_modules(dir)
 	local modules = {}
+	local module_names = {}
 	local require_prefix = M.infer_require_prefix(dir)
 	local files = vim.fn.globpath(dir, "*.lua", false, true)
 	table.sort(files)
@@ -74,9 +75,10 @@ function M.require_dir_modules(dir)
 		if fname ~= "init" then
 			local modname = require_prefix .. "." .. fname
 			table.insert(modules, require(modname))
+			table.insert(module_names, modname)
 		end
 	end
-	return modules
+	return modules, module_names
 end
 
 function M.switch(param, t)

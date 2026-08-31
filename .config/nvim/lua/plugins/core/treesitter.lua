@@ -1,83 +1,81 @@
-local register = require("config.pack.registry").register
-
-register({
-	name = "treewalker.nvim",
-	src = "https://github.com/aaronik/treewalker.nvim.git",
-	module = "treewalker",
-	commands = { "Treewalker" },
-	keys = {
-		{
-			"<C-k>",
-			function()
-				vim.cmd("Treewalker Up")
-			end,
-			mode = { "n", "x" },
-			desc = "Treewalker up",
-			silent = true,
+return {
+	{
+		name = "treewalker.nvim",
+		src = "https://github.com/aaronik/treewalker.nvim.git",
+		module = "treewalker",
+		commands = { "Treewalker" },
+		keys = {
+			{
+				"<C-k>",
+				function()
+					vim.cmd("Treewalker Up")
+				end,
+				mode = { "n", "x" },
+				desc = "Treewalker up",
+				silent = true,
+			},
+			{
+				"<C-j>",
+				function()
+					vim.cmd("Treewalker Down")
+				end,
+				mode = { "n", "x" },
+				desc = "Treewalker down",
+				silent = true,
+			},
+			{
+				"<C-A-k>",
+				function()
+					vim.cmd("Treewalker SwapUp")
+				end,
+				mode = { "n" },
+				desc = "Treewalker swap up",
+				silent = true,
+			},
+			{
+				"<C-A-j>",
+				function()
+					vim.cmd("Treewalker SwapDown")
+				end,
+				mode = { "n" },
+				desc = "Treewalker swap down",
+				silent = true,
+			},
+			{
+				"<C-A-h>",
+				function()
+					vim.cmd("Treewalker SwapLeft")
+				end,
+				mode = { "n" },
+				desc = "Treewalker swap left",
+				silent = true,
+			},
+			{
+				"<C-A-l>",
+				function()
+					vim.cmd("Treewalker SwapRight")
+				end,
+				mode = { "n" },
+				desc = "Treewalker swap right",
+				silent = true,
+			},
 		},
-		{
-			"<C-j>",
-			function()
-				vim.cmd("Treewalker Down")
-			end,
-			mode = { "n", "x" },
-			desc = "Treewalker down",
-			silent = true,
-		},
-		{
-			"<C-A-k>",
-			function()
-				vim.cmd("Treewalker SwapUp")
-			end,
-			mode = { "n" },
-			desc = "Treewalker swap up",
-			silent = true,
-		},
-		{
-			"<C-A-j>",
-			function()
-				vim.cmd("Treewalker SwapDown")
-			end,
-			mode = { "n" },
-			desc = "Treewalker swap down",
-			silent = true,
-		},
-		{
-			"<C-A-h>",
-			function()
-				vim.cmd("Treewalker SwapLeft")
-			end,
-			mode = { "n" },
-			desc = "Treewalker swap left",
-			silent = true,
-		},
-		{
-			"<C-A-l>",
-			function()
-				vim.cmd("Treewalker SwapRight")
-			end,
-			mode = { "n" },
-			desc = "Treewalker swap right",
-			silent = true,
-		},
+		opts = {},
 	},
-	opts = {},
-})
 
-register({
-	name = "nvim-ts-autotag",
-	src = "https://github.com/windwp/nvim-ts-autotag.git",
-	dependencies = { "nvim-treesitter" },
-	events = { "BufReadPre", "BufNewFile" },
-	opts = {},
-})
+	{
+		name = "nvim-ts-autotag",
+		src = "https://github.com/windwp/nvim-ts-autotag.git",
+		dependencies = { "nvim-treesitter" },
+		events = { "BufReadPre", "BufNewFile" },
+		opts = {},
+	},
 
-register({
 	{
 		name = "nvim-treesitter",
 		src = "https://github.com/nvim-treesitter/nvim-treesitter.git",
-		startup = true,
-		setup = function()
+		events = { "BufReadPre", "BufNewFile" },
+		setup = function(context)
 			local treesitter = require("nvim-treesitter")
 			treesitter.setup()
 
@@ -145,25 +143,36 @@ register({
 				end
 			end, { desc = "Install missing configured treesitter parsers" })
 
+			local function start_highlighter(args)
+				if vim.api.nvim_get_option_value("buftype", { buf = args.buf }) ~= "" then
+					pcall(vim.treesitter.stop, args.buf)
+					return
+				end
+
+				local filetype = vim.api.nvim_get_option_value("filetype", { buf = args.buf })
+				local lang = vim.treesitter.language.get_lang(filetype) or filetype
+				if has_parser(lang) == false then
+					pcall(vim.treesitter.stop, args.buf)
+					return
+				end
+
+				pcall(vim.treesitter.start, args.buf, lang)
+			end
+
 			local group = vim.api.nvim_create_augroup("TreesitterStart", { clear = true })
 			vim.api.nvim_create_autocmd("FileType", {
 				group = group,
-				callback = function(args)
-					if vim.api.nvim_get_option_value("buftype", { buf = args.buf }) ~= "" then
-						pcall(vim.treesitter.stop, args.buf)
-						return
-					end
-
-					local filetype = vim.api.nvim_get_option_value("filetype", { buf = args.buf })
-					local lang = vim.treesitter.language.get_lang(filetype) or filetype
-					if has_parser(lang) == false then
-						pcall(vim.treesitter.stop, args.buf)
-						return
-					end
-
-					pcall(vim.treesitter.start, args.buf, lang)
-				end,
+				callback = start_highlighter,
 			})
+
+			-- BufNewFile can set filetype before this lazy setup installs its listener.
+			if
+				type(context) == "table"
+				and context.buf
+				and vim.api.nvim_get_option_value("filetype", { buf = context.buf }) ~= ""
+			then
+				start_highlighter(context)
+			end
 		end,
 	},
 	{
@@ -184,4 +193,4 @@ register({
 			use_default_keymaps = false,
 		},
 	},
-})
+}

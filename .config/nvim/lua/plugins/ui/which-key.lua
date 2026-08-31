@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "which-key.nvim",
 	src = "https://github.com/folke/which-key.nvim.git",
 	events = { { "User", pattern = "PackReady" } },
@@ -38,4 +38,4 @@ require("config.pack.registry").register({
 			},
 		})
 	end,
-})
+}

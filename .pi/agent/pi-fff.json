@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/dmtrKovalenko/fff/c6013ba6a5918221b6c482486aca01acc0830825/packages/pi-fff/pi-fff.schema.json",
+  "mode": "tools-and-ui",
+  "enableFsRootScanning": false,
+  "enableHomeDirScanning": false,
+  "followSymlinks": false
+}

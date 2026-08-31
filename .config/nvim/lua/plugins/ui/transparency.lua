@@ -1,7 +1,8 @@
-require("config.pack.registry").register({
+return {
 	name = "transparent.nvim",
 	src = "https://github.com/xiyaowong/transparent.nvim.git",
 	dependencies = { "zenbones.nvim" },
+	-- Apply the colorscheme and transparency before the first screen to avoid a visible flash.
 	startup = true,
 	setup = function()
 		local colors = require("config.colors")
@@ -14,4 +15,4 @@ require("config.pack.registry").register({
 			end,
 		})
 	end,
-})
+}

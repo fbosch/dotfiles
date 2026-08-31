@@ -12,20 +12,21 @@ local function term_keymaps(mappings)
 	end
 end
 
-term_keymaps({
-	{ "<A-t>", "FTermToggle", "toggle floating terminal" },
-	{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
-	{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
-	{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
-	{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
-	{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
-	{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
-})
-
-require("config.pack.registry").register({
+return {
 	{
 		name = "FTerm.nvim",
 		src = "https://github.com/numtostr/FTerm.nvim.git",
+		init = function()
+			term_keymaps({
+				{ "<A-t>", "FTermToggle", "toggle floating terminal" },
+				{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
+				{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
+				{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
+				{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
+				{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
+				{ "<A-s>", "FTermScooter", "toggle floating terminal with scooter" },
+			})
+		end,
 		commands = {
 			"FTermOpen",
 			"FTermClose",
@@ -206,4 +207,4 @@ require("config.pack.registry").register({
 			end, { bang = true })
 		end,
 	},
-})
+}

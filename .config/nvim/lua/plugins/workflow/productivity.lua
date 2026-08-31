@@ -1,6 +1,4 @@
-local register = require("config.pack.registry").register
-
-register({
+return {
 	{
 		name = "checkmate.nvim",
 		src = "https://github.com/bngarren/checkmate.nvim.git",
@@ -40,4 +38,4 @@ register({
 			})
 		end,
 	},
-})
+}

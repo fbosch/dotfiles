@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "zenbones.nvim",
 	src = "https://github.com/mcchrish/zenbones.nvim.git",
 	root = false,
@@ -18,4 +18,4 @@ require("config.pack.registry").register({
 			vim.notify("Custom highlights (config.hls) not found", vim.log.levels.WARN)
 		end
 	end,
-})
+}

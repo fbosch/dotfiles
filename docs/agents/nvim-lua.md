@@ -31,18 +31,17 @@ return M
 
 ## Plugin Structure (`vim.pack`)
 
-- Files in `.config/nvim/lua/plugins/{category}/` are registration-only modules.
+- Files in `.config/nvim/lua/plugins/{category}/` are declaration-only modules.
 - Categories: `ai/`, `core/`, `lang/`, `misc/`, `ui/`, `workflow/`
+- Return declaration data; defer commands, keymaps, autocmds, and global mutation to declaration callbacks.
 
 Example spec:
 
 ```lua
-local register = require("config.pack.registry").register
-
-register({
+return {
   name = "plugin-name",
   src = "https://github.com/author/plugin-name.git",
   events = { "BufEnter" },
   opts = {},
-})
+}
 ```

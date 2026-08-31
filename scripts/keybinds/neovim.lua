@@ -48,8 +48,8 @@ local function runtime_record(map, mode, context)
 	}
 end
 
--- WhichKey defers setup until VimEnter, which does not occur naturally in a
--- headless process. Materialize it only inside this disposable child process.
+-- Materialize deferred mapping providers in this disposable child process;
+-- headless script execution does not naturally reach PackReady or VimEnter.
 local existing_vimenter = {}
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id then
@@ -57,7 +57,10 @@ for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	end
 end
 
-pcall(require("config.pack.loader").activate, "which-key.nvim", { source = "keybind-validator" })
+local loader = require("config.pack.loader")
+assert(loader.activate("vim-unimpaired", { source = "keybind-validator" }))
+assert(loader.is_loaded("vim-unimpaired"), "vim-unimpaired did not load for keybind validation")
+pcall(loader.activate, "which-key.nvim", { source = "keybind-validator" })
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id and not existing_vimenter[autocmd.id] and autocmd.callback then
 		pcall(autocmd.callback, { event = "VimEnter", id = autocmd.id, match = "" })
@@ -68,7 +71,7 @@ vim.wait(500, function()
 	return ok and config.loaded == true
 end)
 
-for name, spec in pairs(require("config.pack.registry").all()) do
+for name, spec in pairs(require("config.pack.inventory").current().enabled_by_name) do
 	for _, key in ipairs(spec.keys or {}) do
 		local key_modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
 		for _, mode in ipairs(key_modes) do

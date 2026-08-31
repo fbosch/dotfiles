@@ -124,6 +124,15 @@ in
         fi
       done
 
+      # Every tracked Pi resource is managed; derive coverage so new resources
+      # do not require another hand-maintained test entry.
+      while IFS= read -r -d "" deployment_path; do
+        if ! test -e "$target/$deployment_path"; then
+          printf 'Expected Stow deployment is missing: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
+      done < <(git ls-files -z -- ".pi")
+
       ignored_paths=(
         "scripts"
         "docs"
@@ -263,14 +272,46 @@ in
         -l .config/nvim/tests/opencode_session_restore.lua
     '';
 
-    "test:nvim-pack-registry-enabled".exec = ''
-      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
-        -l .config/nvim/tests/pack_registry_enabled.lua
+    "test:nvim-pack-inventory".exec = ''
+      XDG_CONFIG_HOME="$PWD/.config" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pack_inventory.lua
     '';
 
     "test:nvim-pack-loader".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/pack_loader.lua
+    '';
+
+    "test:nvim-pack-lazy-startup".exec = ''
+      # Avoid Neovim's /tmp -> /private/tmp canonicalization breaking globpath on copied config.
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        temp_parent="$(getconf DARWIN_USER_TEMP_DIR)"
+      else
+        temp_parent="''${TMPDIR:-/tmp}"
+      fi
+      test_root="$(mktemp -d "''${temp_parent%/}/nvim-pack-lazy.XXXXXX")"
+      trap 'rm -rf "$test_root"' EXIT
+      live_data_root="''${XDG_DATA_HOME:-$HOME/.local/share}/nvim"
+      mkdir -p "$test_root/config/nvim" "$test_root/data/nvim" "$test_root/cache"
+      cp -R "$PWD/.config/fbb" "$test_root/config/fbb"
+      cp -R "$PWD/.config/nvim/lua" "$test_root/config/nvim/lua"
+      cp "$PWD/.config/nvim/init.lua" "$test_root/config/nvim/init.lua"
+      cp "$PWD/.config/nvim/nvim-pack-lock.json" "$test_root/config/nvim/nvim-pack-lock.json"
+      env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID -u NVIM_APPNAME \
+        XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" \
+        XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+        PACK_LAZY_PLUGIN_SITE="$live_data_root/site" REPO_ROOT="$PWD" \
+        timeout --foreground 15s nvim --headless -i NONE \
+        --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')"
+      for initial_file in "$PWD/.config/nvim/tests/pack_loader.lua" "$test_root/new.lua"; do
+        rm -rf "$test_root/config/nvim/.sessions"
+        env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID -u NVIM_APPNAME \
+          XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" \
+          XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+          PACK_LAZY_PLUGIN_SITE="$live_data_root/site" PACK_LAZY_INITIAL_FILE=1 REPO_ROOT="$PWD" \
+          timeout --foreground 15s nvim --headless -i NONE \
+          --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')" "$initial_file"
+      done
     '';
 
     "test:nvim-pack-disabled-sync".exec = ''
@@ -313,8 +354,9 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:nvim-pack-disabled-sync"
+        "test:nvim-pack-lazy-startup"
         "test:nvim-pack-loader"
-        "test:nvim-pack-registry-enabled"
+        "test:nvim-pack-inventory"
         "test:vicinae"
         "test:runtime-shell"
         "test:lua"

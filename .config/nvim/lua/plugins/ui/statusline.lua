@@ -1,4 +1,4 @@
-require("config.pack.registry").register({
+return {
 	name = "lualine.nvim",
 	src = "https://github.com/nvim-lualine/lualine.nvim.git",
 	dependencies = { "nvim-web-devicons" },
@@ -99,4 +99,4 @@ require("config.pack.registry").register({
 			},
 		})
 	end,
-})
+}

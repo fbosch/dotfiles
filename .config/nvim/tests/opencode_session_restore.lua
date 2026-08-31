@@ -1,13 +1,4 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local registration
-
-package.preload["config.pack.registry"] = function()
-	return {
-		register = function(value)
-			registration = value
-		end,
-	}
-end
 
 local target = {
 	cwd = repo_root,
@@ -50,7 +41,7 @@ package.preload["snacks.terminal"] = function()
 	}
 end
 
-dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")
+local registration = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")
 assert(type(registration) == "table" and type(registration[1]) == "table", "opencode plugin was not registered")
 assert(
 	vim.iter(registration[1].keys):any(function(key)

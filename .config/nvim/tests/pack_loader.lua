@@ -67,26 +67,20 @@ vim.keymap.set = function(mode, lhs, callback, opts)
 end
 
 local function load_loader(plugins)
-	local registry = {
-		all = function()
-			return plugins
-		end,
-		get = function(name)
-			return plugins[name]
-		end,
+	local names = vim.tbl_keys(plugins)
+	table.sort(names)
+	local inventory = {
+		enabled_by_name = plugins,
+		enabled_names = names,
 	}
-	local previous_registry = package.loaded["config.pack.registry"]
-	package.loaded["config.pack.registry"] = registry
-	local loader = dofile(loader_path)
-	package.loaded["config.pack.registry"] = previous_registry
-	return loader
+	return dofile(loader_path), inventory
 end
 
 do
 	reset_host()
 	local order = {}
 	local context = { source = "test" }
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		["a-root.nvim"] = {
 			dependencies = { "z-dependency.nvim" },
 			init = function()
@@ -112,7 +106,7 @@ do
 		table.insert(order, "packadd:" .. name)
 	end
 
-	loader.setup()
+	loader.setup(inventory)
 	assert(vim.deep_equal(order, { "init:dependency", "init:root" }), "dependencies were not initialized first")
 	assert(loader.activate("a-root.nvim", context) == true, "root activation did not succeed")
 	assert(
@@ -137,7 +131,7 @@ do
 	local condition_calls = 0
 	local packadd_calls = 0
 	local setup_calls = 0
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		["conditional.nvim"] = {
 			condition = function(context)
 				condition_calls = condition_calls + 1
@@ -152,7 +146,7 @@ do
 	host.packadd = function()
 		packadd_calls = packadd_calls + 1
 	end
-	loader.setup()
+	loader.setup(inventory)
 
 	local activated, reason = loader.activate("conditional.nvim", { ready = false })
 	assert(activated == false and reason == "activation condition not met", "false condition was not retryable")
@@ -184,7 +178,7 @@ for _, failure in ipairs({
 			error(failure.cause)
 		end
 	end
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		[name] = plugin,
 	})
 	host.packadd = function()
@@ -193,7 +187,7 @@ for _, failure in ipairs({
 			error(failure.cause)
 		end
 	end
-	loader.setup()
+	loader.setup(inventory)
 
 	local first_ok, first_error = pcall(loader.activate, name, { source = "first" })
 	local second_ok, second_error = pcall(loader.activate, name, { source = "second" })
@@ -215,7 +209,7 @@ end
 do
 	reset_host()
 	local dependency_attempts = 0
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		["dependency-root.nvim"] = { dependencies = { "failing-dependency.nvim" } },
 		["failing-dependency.nvim"] = {
 			root = false,
@@ -225,7 +219,7 @@ do
 			end,
 		},
 	})
-	loader.setup()
+	loader.setup(inventory)
 
 	local first_ok, first_error = pcall(loader.activate, "dependency-root.nvim", { source = "first" })
 	local second_ok, second_error = pcall(loader.activate, "dependency-root.nvim", { source = "second" })
@@ -240,10 +234,10 @@ end
 
 do
 	reset_host()
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		["unknown-dependency.nvim"] = { dependencies = { "missing.nvim" } },
 	})
-	local ok, err = pcall(loader.setup)
+	local ok, err = pcall(loader.setup, inventory)
 	assert(ok == false, "unknown dependency was accepted")
 	assert(
 		tostring(err):find("unknown native dependency: unknown-dependency.nvim -> missing.nvim", 1, true) ~= nil,
@@ -253,11 +247,11 @@ end
 
 do
 	reset_host()
-	local loader = load_loader({
+	local loader, inventory = load_loader({
 		["cycle-a.nvim"] = { dependencies = { "cycle-b.nvim" } },
 		["cycle-b.nvim"] = { dependencies = { "cycle-a.nvim" } },
 	})
-	local ok, err = pcall(loader.setup)
+	local ok, err = pcall(loader.setup, inventory)
 	assert(ok == false, "dependency cycle was accepted")
 	assert(tostring(err):find("native dependency cycle:", 1, true) ~= nil, "unexpected dependency cycle error")
 	assert(tostring(err):find("cycle-a.nvim", 1, true) ~= nil, "dependency cycle omitted cycle-a.nvim")
@@ -266,8 +260,8 @@ end
 
 do
 	reset_host()
-	local loader = load_loader({})
-	loader.setup()
+	local loader, inventory = load_loader({})
+	loader.setup(inventory)
 
 	local vim_enter
 	for _, autocmd in pairs(host.autocmds) do

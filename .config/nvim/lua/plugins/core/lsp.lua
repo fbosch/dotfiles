@@ -189,7 +189,7 @@ local function enable_servers(capabilities)
 	end
 end
 
-require("config.pack.registry").register({
+return {
 	{
 		name = "nvim-lsp-file-operations",
 		src = "https://github.com/antosha417/nvim-lsp-file-operations.git",
@@ -259,4 +259,4 @@ require("config.pack.registry").register({
 			})
 		end,
 	},
-})
+}
