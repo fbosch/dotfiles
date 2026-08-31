@@ -57,8 +57,10 @@ for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	end
 end
 
-pcall(require("config.pack.loader").activate, "vim-unimpaired", { source = "keybind-validator" })
-pcall(require("config.pack.loader").activate, "which-key.nvim", { source = "keybind-validator" })
+local loader = require("config.pack.loader")
+assert(loader.activate("vim-unimpaired", { source = "keybind-validator" }))
+assert(loader.is_loaded("vim-unimpaired"), "vim-unimpaired did not load for keybind validation")
+pcall(loader.activate, "which-key.nvim", { source = "keybind-validator" })
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id and not existing_vimenter[autocmd.id] and autocmd.callback then
 		pcall(autocmd.callback, { event = "VimEnter", id = autocmd.id, match = "" })

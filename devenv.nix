@@ -116,6 +116,8 @@ in
         ".config/ags/scripts/generate-circular-avatar.sh"
         ".config/waybar/config"
         ".config/waybar/scripts/temperatures"
+        ".pi/agent/.gitignore"
+        ".pi/agent/extensions/pi-permission-system/config.json"
         ".pi/agent/settings.json"
       )
       for deployment_path in "''${required_paths[@]}"; do
@@ -275,10 +277,31 @@ in
     '';
 
     "test:nvim-pack-lazy-startup".exec = ''
-      test_root="$(mktemp -d)"
+      # Avoid Neovim's /tmp -> /private/tmp canonicalization breaking globpath on copied config.
+      if [[ "$(uname -s)" == "Darwin" ]]; then
+        temp_parent="$(getconf DARWIN_USER_TEMP_DIR)"
+      else
+        temp_parent="''${TMPDIR:-/tmp}"
+      fi
+      test_root="$(mktemp -d "''${temp_parent%/}/nvim-pack-lazy.XXXXXX")"
       trap 'rm -rf "$test_root"' EXIT
-      XDG_STATE_HOME="$test_root/state" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -i NONE \
+      mkdir -p "$test_root/config/nvim"
+      cp -R "$PWD/.config/fbb" "$test_root/config/fbb"
+      cp -R "$PWD/.config/nvim/lua" "$test_root/config/nvim/lua"
+      cp "$PWD/.config/nvim/init.lua" "$test_root/config/nvim/init.lua"
+      cp "$PWD/.config/nvim/nvim-pack-lock.json" "$test_root/config/nvim/nvim-pack-lock.json"
+      env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID \
+        XDG_CONFIG_HOME="$test_root/config" XDG_STATE_HOME="$test_root/state" REPO_ROOT="$PWD" \
+        timeout --foreground 15s nvim --headless -i NONE \
         --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')"
+      for initial_file in "$PWD/.config/nvim/tests/pack_loader.lua" "$test_root/new.lua"; do
+        rm -rf "$test_root/config/nvim/.sessions"
+        env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID \
+          XDG_CONFIG_HOME="$test_root/config" XDG_STATE_HOME="$test_root/state" \
+          PACK_LAZY_INITIAL_FILE=1 REPO_ROOT="$PWD" \
+          timeout --foreground 15s nvim --headless -i NONE \
+          --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')" "$initial_file"
+      done
     '';
 
     "test:nvim-pack-disabled-sync".exec = ''

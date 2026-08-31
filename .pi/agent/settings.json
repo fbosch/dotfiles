@@ -1,4 +1,8 @@
 {
   "lastChangelogVersion": "0.84.4",
-  "theme": "dark"
+  "theme": "dark",
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.5",
+  "hideThinkingBlock": false,
+  "packages": ["npm:@gotgenes/pi-permission-system@29.0.0"]
 }

@@ -175,6 +175,20 @@ Rollback:
 
 - Start Pi with `--no-extensions` or remove the two package entries.
 
+Permission-system canary outcome on 2026-08-31:
+
+- Installed and pinned `@gotgenes/pi-permission-system@29.0.0`.
+- Allowed a repository read and observational `git status` command.
+- Denied `~/.pi/agent/auth.json` through the cross-cutting path policy.
+- Asked before a repository write and an external-directory read; neither ran in
+  the non-interactive test.
+- Denied `rm -rf` through an explicit bash rule.
+- Asked before an otherwise allowed `git status` wrote through shell
+  redirection; the command did not run.
+- Kept permission review logs enabled for the canary and ignored their runtime
+  directory from Git.
+- FFF remains pending.
+
 ## Phase 4: Add MCP Incrementally
 
 Add `pi-mcp-adapter@2.31.0` with proxy-only discovery:

@@ -262,6 +262,9 @@ do
 	)
 	local leap = assert(current.enabled_by_name["leap.nvim"])
 	assert(leap.startup ~= true and #leap.keys == 3, "Leap is not key triggered")
+	for _, key in ipairs(leap.keys) do
+		assert(key.expr == true, "Leap key trigger does not preserve input state: " .. key[1])
+	end
 	local unimpaired = assert(current.enabled_by_name["vim-unimpaired"])
 	assert(
 		vim.deep_equal(unimpaired.events, { { "User", pattern = "PackReady" } }),
