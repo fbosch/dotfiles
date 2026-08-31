@@ -5,12 +5,14 @@ set -euo pipefail
 umask 077
 
 STATE_DIR="${XDG_RUNTIME_DIR:-/tmp}/hypr-night-light"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 OVERRIDE_FILE="$STATE_DIR/override"
 OVERRIDE_EXPIRY_FILE="$STATE_DIR/override-expiry"
 LOCK_FILE="$STATE_DIR/daemon.lock"
 TEMPERATURE_FILE="$STATE_DIR/temperature"
 HYPRSUNSET_OWNER_FILE="$STATE_DIR/hyprsunset-owner"
 RECOVERY_LOG_FILE="$STATE_DIR/last-recovery-log"
+LIFECYCLE_FILE="$STATE_DIR/daemon.lifecycle"
 HYPRSUNSET_SOCKET="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/.hyprsunset.sock"
 
 DAY_TEMP=6500
@@ -26,6 +28,13 @@ AUTO_SCHEDULE=true
 ENABLED=false
 
 mkdir -p "$STATE_DIR"
+
+# shellcheck disable=SC2034
+daemon_lifecycle_name="night-light"
+# shellcheck disable=SC2034
+daemon_lifecycle_file="$LIFECYCLE_FILE"
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/../lib/daemon-lifecycle.sh"
 
 atomic_write() {
   local target="$1" value="$2" temporary
@@ -362,6 +371,16 @@ next_boundary_epoch() {
   printf "%s" "$next"
 }
 
+cleanup_daemon() {
+  stop_owned_hyprsunset
+  if [[ -n "$lifecycle_signal" ]]; then
+    daemon_lifecycle_record_exit signal 0 "" "$lifecycle_signal"
+    return
+  fi
+
+  daemon_lifecycle_record_exit clean-exit 0 ""
+}
+
 run_daemon() {
   local sleep_for boundary now status
 
@@ -378,8 +397,11 @@ run_daemon() {
     return "$status"
   fi
 
-  trap stop_owned_hyprsunset EXIT
-  trap 'exit 0' INT TERM
+  lifecycle_signal=""
+  daemon_lifecycle_record_running ""
+  trap cleanup_daemon EXIT
+  trap 'lifecycle_signal=INT; exit 0' INT
+  trap 'lifecycle_signal=TERM; exit 0' TERM
 
   while true; do
     if [[ -f "$OVERRIDE_FILE" && ! -f "$OVERRIDE_EXPIRY_FILE" ]]; then

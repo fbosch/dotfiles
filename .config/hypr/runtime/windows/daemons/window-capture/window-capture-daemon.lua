@@ -56,7 +56,7 @@ local temp_file_max_age_s = 30
 local grim_timeout_s = 2
 local max_parallel_captures = 4
 local black_frame_mean_threshold = 10
-local jpeg_quality = 75
+local jpeg_quality = 90
 local preview_target_height = 180
 local preview_target_max_width = 320
 local command_cache = {}
@@ -631,6 +631,11 @@ local function acquire_worker_lock()
 		socket.sleep(worker_lock_initialization_grace_ms / 1000)
 		pid = worker_owner()
 		if pid == "" then
+			-- Only remove an ownerless directory; a concurrently published owner
+			-- makes rmdir fail and keeps that worker's lock intact.
+			if command.ok("rmdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null") then
+				return command.ok("mkdir " .. command.arg(worker_lock_dir) .. " 2>/dev/null")
+			end
 			return false
 		end
 	end

@@ -73,13 +73,17 @@ local function run_daemon(options)
 			if value == "waybar-config" then
 				return { position = "bottom", height = 30 }
 			end
+			if value == "layers" then
+				return options.waybar_layers or {}
+			end
 			return {}
 		end,
 	}
 
 	local state = {
 		waybar_visible = false,
-		dragging = false,
+		dragging = options.dragging == true,
+		dragging_address = options.dragging_address,
 		next_observation_at = options.next_observation_at or math.huge,
 		reconcile_at = options.reconcile_at,
 	}
@@ -91,7 +95,7 @@ local function run_daemon(options)
 			return { x = x, y = y, width = width, height = height }
 		end,
 		overlaps = function()
-			return false
+			return options.waybar_layers_overlap == true
 		end,
 		drag_interval_s = 0.1,
 		tick_due = function(_, current)
@@ -103,8 +107,11 @@ local function run_daemon(options)
 				monitors = input.monitors,
 				bars = input.bars,
 			}
-			if input.event.type == "startup" then
+			if input.event.type == "startup" or input.event.native_interaction then
 				captured.clients = input.clients
+			end
+			if input.event.native_interaction then
+				captured.active = input.active
 			end
 			reducer_inputs[#reducer_inputs + 1] = captured
 			if input.event.type == "tick" then
@@ -126,6 +133,8 @@ local function run_daemon(options)
 		end,
 	}
 	package.loaded["lib.picture_in_picture"] = {
+		class = "app.zen_browser.zen",
+		title = "Picture-in-Picture",
 		control = {
 			decode = function(message)
 				control_messages[#control_messages + 1] = message
@@ -286,6 +295,53 @@ describe("picture-in-picture daemon adapter", function()
 		)
 		assert.equal(1, result.event_closed)
 		assert.equal(1, result.control_closed)
+	end)
+
+	it("uses native geometry updates for drag previews without querying clients", function()
+		local result = run_daemon({
+			selected = { "control", "event", "control" },
+			control_messages = { "interaction-updates-ready", "quit" },
+			event_lines = { "windowinteractionupdated>>0x1,move,1,2960,1150,400,225" },
+			dragging = true,
+			dragging_address = "0x1",
+		})
+
+		assert.equal("startup", result.reducer_inputs[1].event.type)
+		assert.equal("tick", result.reducer_inputs[2].event.type)
+		assert.same({ 2960, 1150 }, result.reducer_inputs[2].active.at)
+		assert.same({ 400, 225 }, result.reducer_inputs[2].active.size)
+		assert.equal("1", result.reducer_inputs[2].active.monitor)
+		assert.equal("0x1", result.reducer_inputs[2].active.address)
+		assert.equal("quit", result.reducer_inputs[3].event.action)
+		assert.equal(1, result.client_queries)
+		assert.equal(0, result.active_queries)
+		assert.equal(0.1, result.select_timeouts[1])
+		assert.same({ "quit" }, result.control_messages)
+	end)
+
+	it("uses visible bar geometry for hide policy, then clears it for native updates", function()
+		local result = run_daemon({
+			selected = { "control", "event", "control" },
+			control_messages = { "waybar-hide", "quit" },
+			event_lines = { "windowinteractionupdated>>0x1,move,1,2960,1150,400,225" },
+			dragging = true,
+			dragging_address = "0x1",
+			waybar_layers_overlap = true,
+			waybar_layers = {
+				["DP-1"] = {
+					levels = {
+						top = {
+							{ namespace = "waybar", alpha = 1, x = 0, y = 70, w = 100, h = 30 },
+						},
+					},
+				},
+			},
+		})
+
+		assert.equal("waybar-hide", result.reducer_inputs[2].event.action)
+		assert.equal(1, #result.reducer_inputs[2].bars["DP-1"])
+		assert.equal("tick", result.reducer_inputs[3].event.type)
+		assert.same({}, result.reducer_inputs[3].bars)
 	end)
 
 	it("reconnects after an event socket closes and rate-limits a rejected placement acceptance", function()

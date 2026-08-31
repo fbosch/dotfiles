@@ -13,7 +13,7 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$bin_dir"
-for executable in bash awk date flock id mkdir mktemp nc; do
+for executable in bash awk date dirname flock id mkdir mktemp nc; do
   executable_path="$(command -v "$executable")"
   ln -s "$executable_path" "$bin_dir/$executable"
 done

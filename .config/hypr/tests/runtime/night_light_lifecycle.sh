@@ -217,6 +217,9 @@ assert_file_line_count "$state_dir/hyprsunset-owner" 1 'owned owner record'
 kill -TERM -- "-$daemon_pid"
 wait "$daemon_pid"
 unset daemon_pid
+grep -Fq 'state=exited' "$state_dir/daemon.lifecycle"
+grep -Fq 'reason=signal' "$state_dir/daemon.lifecycle"
+grep -Fq 'detail=TERM' "$state_dir/daemon.lifecycle"
 wait_for_pid_gone "$restarted_child_pid" 'owned child after daemon termination'
 [[ ! -e "$state_dir/hyprsunset-owner" ]] || {
   printf 'daemon termination left an owned child record\n' >&2

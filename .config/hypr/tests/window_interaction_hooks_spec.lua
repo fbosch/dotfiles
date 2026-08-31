@@ -19,6 +19,7 @@ describe("window interaction hooks adapter", function()
 	local deferred
 	local loaded_plugin
 	local rebind_calls
+	local supports_updates
 
 	before_each(function()
 		saved_modules = {}
@@ -35,6 +36,7 @@ describe("window interaction hooks adapter", function()
 		deferred = {}
 		loaded_plugin = nil
 		rebind_calls = 0
+		supports_updates = true
 
 		package.preload["lib.async"] = function()
 			return {
@@ -84,6 +86,9 @@ describe("window interaction hooks adapter", function()
 						rebind_calls = rebind_calls + 1
 						return true
 					end,
+					supports_updates = function()
+						return supports_updates
+					end,
 				},
 			},
 		}
@@ -105,13 +110,15 @@ describe("window interaction hooks adapter", function()
 		os.getenv = original_getenv
 	end)
 
-	it("loads the plugin and announces the event path", function()
+	it("loads the plugin and announces both event paths", function()
 		require("plugins.window_interaction_hooks")
 
 		assert.are.equal("/nix/store/window-interaction-hooks.so", loaded_plugin)
 		assert.are.equal(1, rebind_calls)
 		assert.matches("interaction%-hooks%-ready", dispatches[1])
 		assert.matches("/runtime/window%-state%.sock", dispatches[1])
+		assert.matches("interaction%-updates%-ready", dispatches[2])
+		assert.matches("/runtime/pip%-monitor%.sock", dispatches[2])
 		assert.is_function(handlers["window_interaction_hooks.finished"])
 		assert.is_function(handlers["hyprland.start"])
 	end)
@@ -143,7 +150,18 @@ describe("window interaction hooks adapter", function()
 		assert.are.equal(1000, deferred[1].delay_ms)
 
 		deferred[1].callback()
-		assert.matches("interaction%-hooks%-ready", dispatches[#dispatches])
+		assert.matches("interaction%-hooks%-ready", dispatches[#dispatches - 1])
+		assert.matches("interaction%-updates%-ready", dispatches[#dispatches])
+	end)
+
+	it("retains PiP polling when an older plugin lacks live updates", function()
+		hl.plugin.window_interaction_hooks.supports_updates = nil
+
+		require("plugins.window_interaction_hooks")
+
+		assert.are.equal(1, #dispatches)
+		assert.matches("interaction%-hooks%-ready", dispatches[1])
+		assert.is_nil(dispatches[2])
 	end)
 
 	it("keeps polling fallback when the plugin path is unavailable", function()

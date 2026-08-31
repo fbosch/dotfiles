@@ -84,6 +84,14 @@
             "baseUrl": "https://ha.corvus-corax.synology.me"
          }
       },
+      "@fbosch/local-wallpaper": {
+         "preferences": {
+            "fileExtensions": "png,jpg,jpeg,webp,jxl",
+            "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
+            "sortBy": "name",
+            "wallpapersDirectory": "/mnt/nas/photo/Wallpapers"
+         }
+      },
       "@fbosch/wallhaven": {
          "preferences": {
             "useUserSettings": true,
@@ -156,7 +164,7 @@
                "enabled": false
             },
             "io.github.Foldex.AdwSteamGtk": {
-               "enabled": false
+               "enabled": true
             },
             "mullvad-vpn": {
                "enabled": false
