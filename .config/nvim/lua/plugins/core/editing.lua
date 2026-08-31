@@ -69,7 +69,7 @@ return {
 	{
 		name = "vim-unimpaired",
 		src = "https://github.com/tpope/vim-unimpaired.git",
-		startup = true,
+		events = { { "User", pattern = "PackReady" } },
 	},
 	{
 		name = "matchparen.nvim",

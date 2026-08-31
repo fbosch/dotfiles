@@ -7,6 +7,12 @@ local function get_visual_selection()
 	return vim.trim(table.concat(lines, " "))
 end
 
+local function replay_plug_mapping(mapping)
+	return function()
+		vim.api.nvim_feedkeys(vim.keycode(mapping), "m", false)
+	end
+end
+
 return {
 	{
 		name = "numb.nvim",
@@ -128,7 +134,29 @@ return {
 	{
 		name = "leap.nvim",
 		src = "https://codeberg.org/andyg/leap.nvim",
-		startup = true,
+		keys = {
+			{
+				"s",
+				replay_plug_mapping("<Plug>(leap-forward)"),
+				mode = { "n", "x", "o" },
+				desc = "Leap forward to",
+				silent = true,
+			},
+			{
+				"S",
+				replay_plug_mapping("<Plug>(leap-backward)"),
+				mode = { "n", "x", "o" },
+				desc = "Leap backward to",
+				silent = true,
+			},
+			{
+				"gs",
+				replay_plug_mapping("<Plug>(leap-from-window)"),
+				mode = { "n", "x", "o" },
+				desc = "Leap from window",
+				silent = true,
+			},
+		},
 		setup = function()
 			vim.keymap.set({ "n", "x", "o" }, "s", "<Plug>(leap-forward)", {
 				desc = "Leap forward to",

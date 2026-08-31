@@ -37,6 +37,7 @@ return {
 		name = "mini.sessions",
 		src = "https://github.com/echasnovski/mini.sessions.git",
 		version = vim.version.range("*"),
+		-- Session restoration must register before VimEnter processes the initial argument list.
 		startup = true,
 		condition = function()
 			return should_persist_session

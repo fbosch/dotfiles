@@ -74,7 +74,7 @@ return {
 	{
 		name = "nvim-treesitter",
 		src = "https://github.com/nvim-treesitter/nvim-treesitter.git",
-		startup = true,
+		events = { "BufReadPre", "BufNewFile" },
 		setup = function()
 			local treesitter = require("nvim-treesitter")
 			treesitter.setup()

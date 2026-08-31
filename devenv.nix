@@ -274,6 +274,13 @@ in
         -l .config/nvim/tests/pack_loader.lua
     '';
 
+    "test:nvim-pack-lazy-startup".exec = ''
+      test_root="$(mktemp -d)"
+      trap 'rm -rf "$test_root"' EXIT
+      XDG_STATE_HOME="$test_root/state" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -i NONE \
+        --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')"
+    '';
+
     "test:nvim-pack-disabled-sync".exec = ''
       test_root="$(mktemp -d)"
       trap 'rm -rf "$test_root"' EXIT
@@ -314,6 +321,7 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:nvim-pack-disabled-sync"
+        "test:nvim-pack-lazy-startup"
         "test:nvim-pack-loader"
         "test:nvim-pack-inventory"
         "test:vicinae"

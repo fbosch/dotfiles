@@ -254,6 +254,28 @@ do
 		#current.enabled_names + #current.disabled_names == #declarations,
 		"collective registration lost a real declaration"
 	)
+
+	local treesitter = assert(current.enabled_by_name["nvim-treesitter"])
+	assert(
+		vim.deep_equal(treesitter.events, { "BufReadPre", "BufNewFile" }),
+		"Tree-sitter is not file-buffer triggered"
+	)
+	local leap = assert(current.enabled_by_name["leap.nvim"])
+	assert(leap.startup ~= true and #leap.keys == 3, "Leap is not key triggered")
+	local unimpaired = assert(current.enabled_by_name["vim-unimpaired"])
+	assert(
+		vim.deep_equal(unimpaired.events, { { "User", pattern = "PackReady" } }),
+		"vim-unimpaired is not post-start triggered"
+	)
+
+	local startup_names = {}
+	for name, declaration in pairs(current.enabled_by_name) do
+		if declaration.startup == true then
+			table.insert(startup_names, name)
+		end
+	end
+	table.sort(startup_names)
+	assert(vim.deep_equal(startup_names, { "mini.sessions", "transparent.nvim" }), "synchronous startup roots changed")
 end
 
 do

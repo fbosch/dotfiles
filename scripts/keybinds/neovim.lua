@@ -48,8 +48,8 @@ local function runtime_record(map, mode, context)
 	}
 end
 
--- WhichKey defers setup until VimEnter, which does not occur naturally in a
--- headless process. Materialize it only inside this disposable child process.
+-- Materialize deferred mapping providers in this disposable child process;
+-- headless script execution does not naturally reach PackReady or VimEnter.
 local existing_vimenter = {}
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id then
@@ -57,6 +57,7 @@ for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	end
 end
 
+pcall(require("config.pack.loader").activate, "vim-unimpaired", { source = "keybind-validator" })
 pcall(require("config.pack.loader").activate, "which-key.nvim", { source = "keybind-validator" })
 for _, autocmd in ipairs(vim.api.nvim_get_autocmds({ event = "VimEnter" })) do
 	if autocmd.id and not existing_vimenter[autocmd.id] and autocmd.callback then
