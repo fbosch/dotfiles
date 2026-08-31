@@ -112,6 +112,7 @@ HOME="$home_dir" \
   handle-event 'openwindow>>0xoffscreen,10,fixture,Offscreen'
 test -s "$capture_dir/offscreen-id.jpg"
 grep -F -- '-T offscreen-id' "$GRIM_LOG" >/dev/null
+grep -F -- '-q 90' "$GRIM_LOG" >/dev/null
 
 sleep 0.11
 HOME="$home_dir" \
@@ -297,6 +298,33 @@ reader_pid=""
 test ! -e "$reader_failed"
 stop_daemon
 wait_for_absent "$runtime_dir/hypr/fixture/window-capture-worker.lock.d" "worker lock cleanup"
+kill -TERM "$event_server_pid" >/dev/null 2>&1 || true
+wait "$event_server_pid" || true
+event_server_pid=""
+
+# An interrupted owner publication must not leave capture permanently blocked.
+mkdir "$runtime_dir/hypr/fixture/window-capture-worker.lock.d"
+ownerless_trigger="$test_dir/ownerless-trigger"
+ownerless_sent="$test_dir/ownerless-sent"
+start_event_server "$ownerless_trigger" "$ownerless_sent"
+start_daemon
+touch "$ownerless_trigger"
+wait_for_file "$ownerless_sent" "ownerless-lock event delivery"
+ownerless_recovered=0
+for _ in {1..300}; do
+  if [[ -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner" \
+    || ! -d "$runtime_dir/hypr/fixture/window-capture-worker.lock.d" ]]; then
+    ownerless_recovered=1
+    break
+  fi
+  sleep 0.01
+done
+if [[ "$ownerless_recovered" -ne 1 ]]; then
+  printf 'ownerless worker lock was not reclaimed\n' >&2
+  exit 1
+fi
+stop_daemon
+wait_for_absent "$runtime_dir/hypr/fixture/window-capture-worker.lock.d" "ownerless worker lock cleanup"
 kill -TERM "$event_server_pid" >/dev/null 2>&1 || true
 wait "$event_server_pid" || true
 event_server_pid=""

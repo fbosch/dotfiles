@@ -89,6 +89,7 @@ daemon_supervisor_shutdown_attempts=50
 daemon_supervisor_shutdown_interval=0.02
 daemon_supervisor_restart_attempts="\${FIXTURE_RESTART_ATTEMPTS:-100}"
 daemon_supervisor_cleanup_paths=""
+. "$repo_root/runtime/lib/daemon-lifecycle.sh"
 . "$repo_root/runtime/lib/daemon-supervisor.sh"
 daemon_supervisor_main "\$@" -- "$worker" "$socket_path" "$worker_lua" "$restart_delay_file"
 SH
@@ -115,6 +116,8 @@ supervisor_pid="$first_supervisor_pid"
 wait_for_health
 first_worker_pid="$(pgrep -P "$first_supervisor_pid")"
 [[ -n "$first_worker_pid" ]]
+grep -Fq 'state=running' "$lock_file.lifecycle"
+grep -Fq "child_pid=$first_worker_pid" "$lock_file.lifecycle"
 
 set +e
 invalid_output="$("$launcher" invalid 2>&1)"
@@ -165,6 +168,10 @@ kill -TERM "$first_supervisor_pid"
 wait "$first_supervisor_pid"
 supervisor_pid=""
 [[ ! -S "$socket_path" ]]
+grep -Fq 'state=exited' "$lock_file.lifecycle"
+grep -Fq 'reason=signal' "$lock_file.lifecycle"
+grep -Fq 'detail=TERM' "$lock_file.lifecycle"
+grep -Fq 'status=0' "$lock_file.lifecycle"
 if kill -0 "$concurrent_worker_pid" >/dev/null 2>&1; then
   printf 'daemon-supervisor test: worker %s survived supervisor shutdown\n' "$concurrent_worker_pid" >&2
   exit 1

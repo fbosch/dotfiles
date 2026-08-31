@@ -4,6 +4,8 @@ set -eu
 
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/hypr-ipc.sh"
+# shellcheck disable=SC1091
+. "${HOME}/.config/hypr/runtime/lib/daemon-lifecycle.sh"
 
 daemon="${HOME}/.config/hypr/runtime/desktop/waybar-monitor.lua"
 

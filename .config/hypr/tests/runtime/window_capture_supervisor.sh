@@ -61,6 +61,8 @@ for _ in {1..100}; do
 done
 test -r "$runtime_dir/worker.pid"
 test -r "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
+test -r "$runtime_dir/hypr/fixture/window-capture-daemon.lifecycle"
+grep -Fq 'state=running' "$runtime_dir/hypr/fixture/window-capture-daemon.lifecycle"
 read -r worker_pid < "$runtime_dir/worker.pid"
 read -r owner_pid _ < "$runtime_dir/hypr/fixture/window-capture-worker.lock.d/owner"
 test "$owner_pid" = "$worker_pid"
@@ -78,6 +80,9 @@ worker_exited() {
 kill -TERM "$wrapper_pid"
 wait "$wrapper_pid" || true
 wrapper_pid=""
+grep -Fq 'state=exited' "$runtime_dir/hypr/fixture/window-capture-daemon.lifecycle"
+grep -Fq 'reason=signal' "$runtime_dir/hypr/fixture/window-capture-daemon.lifecycle"
+grep -Fq 'detail=TERM' "$runtime_dir/hypr/fixture/window-capture-daemon.lifecycle"
 
 for _ in {1..100}; do
   if worker_exited; then

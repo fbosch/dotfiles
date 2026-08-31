@@ -132,6 +132,12 @@ singleton external process needs an explicit ownership mechanism.
 
 - Write daemon logs to stderr by default, prefixed with the daemon or feature name.
 - Log failures, retries, and recovery decisions. Keep normal transitions quiet.
+- Shell supervisors and persistent shell daemons should publish lifecycle state
+  with `runtime/lib/daemon-lifecycle.sh`. Keep each feature's signal and cleanup
+  semantics local; the helper only writes the atomic diagnostic record.
+- A stale `running` lifecycle record whose owner PID is absent indicates an
+  unobserved hard kill. An `exited` record identifies the observed signal,
+  child status, and last owned PID without recording window or clipboard data.
 - Use a separate runtime log only when external tool behavior or event volume
   requires an inspectable history.
 - Send desktop notifications only for user-actionable failures or explicit user

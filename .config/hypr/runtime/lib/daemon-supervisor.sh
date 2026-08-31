@@ -1,6 +1,6 @@
 #!/usr/bin/env dash
 
-# shellcheck disable=SC2154
+# shellcheck disable=SC2034,SC2154
 
 daemon_supervisor_restart_exit_status=75
 daemon_supervisor_restart_attempts="${daemon_supervisor_restart_attempts:-100}"
@@ -8,6 +8,7 @@ daemon_supervisor_restart_interval="${daemon_supervisor_restart_interval:-0.02}"
 daemon_supervisor_state_file="${daemon_supervisor_state_file:-${daemon_supervisor_lock_file}.state}"
 daemon_supervisor_restart_lock_file="${daemon_supervisor_restart_lock_file:-${daemon_supervisor_lock_file}.restart}"
 daemon_supervisor_restart_request_file="${daemon_supervisor_restart_request_file:-${daemon_supervisor_lock_file}.restart-request}"
+daemon_supervisor_lifecycle_file="${daemon_supervisor_lifecycle_file:-${daemon_supervisor_lock_file}.lifecycle}"
 
 daemon_supervisor_log() {
   printf '%s: %s\n' "$daemon_supervisor_name" "$1" >&2
@@ -137,10 +138,19 @@ daemon_supervisor_cleanup() {
   for cleanup_path in $daemon_supervisor_cleanup_paths; do
     rm -f "$cleanup_path"
   done
+
+  if [ "${daemon_supervisor_lifecycle_recorded:-0}" -eq 0 ]; then
+    if [ -n "${daemon_supervisor_shutdown_signal:-}" ]; then
+      daemon_lifecycle_record_exit signal 0 "${daemon_supervisor_last_child_pid:-}" "$daemon_supervisor_shutdown_signal"
+    else
+      daemon_lifecycle_record_exit clean-exit 0 "${daemon_supervisor_last_child_pid:-}"
+    fi
+  fi
 }
 
 # shellcheck disable=SC2329
 daemon_supervisor_request_shutdown() {
+  daemon_supervisor_shutdown_signal="$1"
   daemon_supervisor_shutdown_requested=1
   if [ -n "$daemon_supervisor_child_pid" ]; then
     daemon_supervisor_graceful_shutdown
@@ -160,6 +170,11 @@ daemon_supervise() {
 
   if ! command -v timeout >/dev/null 2>&1; then
     daemon_supervisor_log "timeout is required"
+    return 1
+  fi
+
+  if ! command -v daemon_lifecycle_record_running >/dev/null 2>&1; then
+    daemon_supervisor_log "daemon lifecycle helper is required"
     return 1
   fi
 
@@ -188,9 +203,15 @@ daemon_supervise() {
   rm -f "$daemon_supervisor_socket"
 
   daemon_supervisor_child_pid=""
+  daemon_supervisor_last_child_pid=""
   daemon_supervisor_shutdown_requested=0
+  daemon_supervisor_shutdown_signal=""
+  daemon_supervisor_lifecycle_recorded=0
+  daemon_lifecycle_name="$daemon_supervisor_name"
+  daemon_lifecycle_file="$daemon_supervisor_lifecycle_file"
   trap daemon_supervisor_cleanup EXIT
-  trap daemon_supervisor_request_shutdown INT TERM
+  trap 'daemon_supervisor_request_shutdown INT' INT
+  trap 'daemon_supervisor_request_shutdown TERM' TERM
 
   generation=0
   while true; do
@@ -200,8 +221,10 @@ daemon_supervise() {
 
     DAEMON_SUPERVISOR_RESTART_EXIT_STATUS="$daemon_supervisor_restart_exit_status" "$@" 9>&- &
     daemon_supervisor_child_pid="$!"
+    daemon_supervisor_last_child_pid="$daemon_supervisor_child_pid"
     generation=$((generation + 1))
     daemon_supervisor_publish_state "$generation" "$daemon_supervisor_child_pid"
+    daemon_lifecycle_record_running "$daemon_supervisor_child_pid"
 
     if ! daemon_supervisor_wait_for_health; then
       if [ "$daemon_supervisor_shutdown_requested" -eq 1 ]; then
@@ -209,6 +232,8 @@ daemon_supervise() {
       fi
 
       daemon_supervisor_log "daemon did not become healthy"
+      daemon_lifecycle_record_exit health-failure 1 "$daemon_supervisor_child_pid"
+      daemon_supervisor_lifecycle_recorded=1
       return 1
     fi
 
@@ -225,6 +250,8 @@ daemon_supervise() {
     fi
     daemon_supervisor_child_pid=""
     if [ "$status" -ne "$daemon_supervisor_restart_exit_status" ]; then
+      daemon_lifecycle_record_exit child-exit "$status" "$daemon_supervisor_last_child_pid"
+      daemon_supervisor_lifecycle_recorded=1
       return "$status"
     fi
 

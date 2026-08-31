@@ -194,7 +194,7 @@ run_case() {
   printf '%s\n' '#!/bin/sh' 'printf "%s\n" "$*" >> "$PRESENTATION_LOG"' > "$bin_dir/hyprctl"
   chmod +x "$bin_dir/wl-freeze" "$bin_dir/ps" "$bin_dir/hyprctl"
   if [[ "$freeze_mode" == missing ]]; then rm "$bin_dir/wl-freeze"; fi
-	for utility in bash dirname flock luajit mkdir rm sleep touch; do ln -s "$(command -v "$utility")" "$bin_dir/$utility"; done
+	for utility in bash date dirname flock luajit mkdir mv rm sleep touch; do ln -s "$(command -v "$utility")" "$bin_dir/$utility"; done
 	mkdir -p "$runtime_dir/hypr-profiles"
 	write_profile_state "$runtime_dir/hypr-profiles/state.json" "$resolved_profile"
 	touch "$case_dir/ready-query" "$case_dir/ready-event"
@@ -239,6 +239,9 @@ run_case() {
   wait "$watchdog_pid" || true
   watchdog_pid=""
   export PATH="$original_path"
+  assert_contains "$socket_dir/gaming-session-watchdog.lifecycle" 'state=exited'
+  assert_contains "$socket_dir/gaming-session-watchdog.lifecycle" 'reason=signal'
+  assert_contains "$socket_dir/gaming-session-watchdog.lifecycle" 'detail=TERM'
   if [[ ( "$clients_mode" == game || "$clients_mode" == late-game ) && "$freeze_mode" == missing ]]; then
 	assert_contains "$case_dir/err" 'gaming-session-watchdog: wl-freeze is unavailable; process freezing is disabled'
 	assert_contains "$case_dir/err" 'gaming-session-watchdog: event socket closed; retrying in 1s'

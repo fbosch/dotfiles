@@ -11,6 +11,8 @@ fi
 
 # shellcheck disable=SC1091
 . "$(dirname "$SCRIPT_PATH")/../lib/hypr-ipc.sh"
+# shellcheck disable=SC1091
+. "$(dirname "$SCRIPT_PATH")/../lib/daemon-lifecycle.sh"
 RUNTIME_DIR="$(hypr_instance_path "gamescope-clipboard-sync")"
 LOG_FILE="$RUNTIME_DIR/gamescope-clipboard-sync.log"
 LAST_VALUE_FILE="$RUNTIME_DIR/gamescope-wayland-last.txt"
@@ -57,6 +59,12 @@ fi
 
 LOCK_FILE="$RUNTIME_DIR/gamescope-clipboard-sync.lock"
 DISPLAY_CHECK_INTERVAL="${DISPLAY_CHECK_INTERVAL:-5}"
+# shellcheck disable=SC2034
+daemon_lifecycle_name="gamescope-clipboard-sync"
+# shellcheck disable=SC2034
+daemon_lifecycle_file="$RUNTIME_DIR/daemon.lifecycle"
+lifecycle_started=0
+lifecycle_signal=""
 
 mkdir -p "$RUNTIME_DIR"
 
@@ -75,9 +83,18 @@ cleanup() {
     kill -TERM "$watch_pid" 2>/dev/null || true
     wait "$watch_pid" 2>/dev/null || true
   fi
+  if [[ "$lifecycle_started" -eq 0 ]]; then
+    return
+  fi
+  if [[ -n "$lifecycle_signal" ]]; then
+    daemon_lifecycle_record_exit signal 0 "${watch_pid:-}" "$lifecycle_signal"
+  else
+    daemon_lifecycle_record_exit clean-exit 0 "${watch_pid:-}"
+  fi
 }
 trap cleanup EXIT
-trap 'exit 0' INT TERM
+trap 'lifecycle_signal=INT; exit 0' INT
+trap 'lifecycle_signal=TERM; exit 0' TERM
 
 if command -v wl-copy >/dev/null 2>&1; then
   :
@@ -101,6 +118,8 @@ else
 fi
 
 log "started pid=$$ wayland=${WAYLAND_DISPLAY:-unset} x11=${DISPLAY:-unset}"
+daemon_lifecycle_record_running ""
+lifecycle_started=1
 
 list_xwayland_displays() {
   declare -A displays=()
