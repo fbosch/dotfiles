@@ -1,14 +1,26 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-const COMMAND_ALIASES = new Map([["/exit", "/quit"]]);
+interface CommandAlias {
+  trigger: string;
+  target: string;
+  description: string;
+}
 
-export function resolveCommandAlias(input: string): string {
-  return COMMAND_ALIASES.get(input) ?? input;
+const COMMAND_ALIASES: readonly CommandAlias[] = [
+  {
+    trigger: "/exit",
+    target: "/quit",
+    description: "Quit pi",
+  },
+];
+
+export function getCommandAlias(input: string): CommandAlias | undefined {
+  return COMMAND_ALIASES.find((alias) => alias.trigger === input);
 }
 
 export default function commandAliases(pi: ExtensionAPI): void {
   pi.on("input", async (event, ctx) => {
-    if (resolveCommandAlias(event.text) === event.text) return;
+    if (getCommandAlias(event.text) === undefined) return;
 
     ctx.shutdown();
     return { action: "handled" };

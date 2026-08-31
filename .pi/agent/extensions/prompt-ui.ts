@@ -5,6 +5,8 @@ import {
   type KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import type {
+  AutocompleteItem,
+  AutocompleteProvider,
   Component,
   EditorTheme,
   OverlayHandle,
@@ -12,7 +14,7 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { resolveCommandAlias } from "./command-aliases";
+import { getCommandAlias } from "./command-aliases";
 import { PLAN_MODE_STATUS } from "./plan-mode";
 
 type Color = (text: string) => string;
@@ -298,12 +300,34 @@ export default function promptUi(pi: ExtensionAPI) {
         super.setPaddingX(EDITOR_PADDING_X);
       }
 
-      handleInput(data: string): void {
-        super.handleInput(data);
+      setAutocompleteProvider(provider: AutocompleteProvider): void {
+        super.setAutocompleteProvider({
+          triggerCharacters: provider.triggerCharacters,
+          getSuggestions: async (lines, cursorLine, cursorCol, options) => {
+            const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
+            const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
+            const alias = getCommandAlias(textBeforeCursor);
+            if (alias === undefined) return suggestions;
 
-        const text = this.getText();
-        const alias = resolveCommandAlias(text);
-        if (alias !== text) this.setText(alias);
+            const item: AutocompleteItem = {
+              value: alias.target.slice(1),
+              label: alias.target.slice(1),
+              description: alias.description,
+            };
+            if (suggestions === null) return { items: [item], prefix: textBeforeCursor };
+
+            return {
+              ...suggestions,
+              items: suggestions.items.some((suggestion) => suggestion.value === item.value)
+                ? suggestions.items
+                : [...suggestions.items, item],
+            };
+          },
+          applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+            provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
+          shouldTriggerFileCompletion: (lines, cursorLine, cursorCol) =>
+            provider.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? false,
+        });
       }
 
       private updateSuggestionsOverlay(
