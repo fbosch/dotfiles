@@ -169,7 +169,7 @@ Acceptance:
 - Secret reads are denied.
 - External reads prompt.
 - Writes and mutating shell commands prompt.
-- Denials and approvals are visible in the permission review log.
+- Representative allow, ask, and deny outcomes are verified directly.
 
 Rollback:
 
@@ -178,15 +178,19 @@ Rollback:
 Permission-system canary outcome on 2026-08-31:
 
 - Installed and pinned `@gotgenes/pi-permission-system@29.0.0`.
-- Allowed a repository read and observational `git status` command.
+- Allowed a repository read.
 - Denied `~/.pi/agent/auth.json` through the cross-cutting path policy.
 - Asked before a repository write and an external-directory read; neither ran in
   the non-interactive test.
-- Denied `rm -rf` through an explicit bash rule.
-- Asked before an otherwise allowed `git status` wrote through shell
-  redirection; the command did not run.
-- Kept permission review logs enabled for the canary and ignored their runtime
-  directory from Git.
+- Removed silent Bash allowances after adversarial testing found Git environment
+  variables and output options could hide execution or writes.
+- Configured all Bash commands to ask, with broad denials for `rm` and
+  `git reset` spellings.
+- Disabled permission review logs because command strings are stored unredacted.
+- Do not use session-wide approval: package v29 allows a session rule to
+  override a configured deny.
+- Treat the extension as a decision aid rather than a sandbox or immutable
+  authorization boundary.
 - FFF remains pending.
 
 ## Phase 4: Add MCP Incrementally

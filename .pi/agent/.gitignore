@@ -4,6 +4,7 @@
 /trust.json
 /models-store.json
 /sessions/
+/subagent-sessions/
 /npm/
 /git/
 /bin/

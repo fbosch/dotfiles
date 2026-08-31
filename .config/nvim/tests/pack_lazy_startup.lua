@@ -1,3 +1,8 @@
+local plugin_site = assert(vim.env.PACK_LAZY_PLUGIN_SITE)
+vim.opt.packpath:append(plugin_site)
+-- This test exercises activation from an installed read-only package site; synchronization has separate coverage.
+vim.pack.add = function() end
+
 local function verify_empty_startup()
 	local loader = require("config.pack.loader")
 	assert(loader.is_loaded("nvim-treesitter") == false, "Tree-sitter loaded before a file buffer")

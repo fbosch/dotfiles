@@ -285,20 +285,24 @@ in
       fi
       test_root="$(mktemp -d "''${temp_parent%/}/nvim-pack-lazy.XXXXXX")"
       trap 'rm -rf "$test_root"' EXIT
-      mkdir -p "$test_root/config/nvim"
+      live_data_root="''${XDG_DATA_HOME:-$HOME/.local/share}/nvim"
+      mkdir -p "$test_root/config/nvim" "$test_root/data/nvim" "$test_root/cache"
       cp -R "$PWD/.config/fbb" "$test_root/config/fbb"
       cp -R "$PWD/.config/nvim/lua" "$test_root/config/nvim/lua"
       cp "$PWD/.config/nvim/init.lua" "$test_root/config/nvim/init.lua"
       cp "$PWD/.config/nvim/nvim-pack-lock.json" "$test_root/config/nvim/nvim-pack-lock.json"
-      env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID \
-        XDG_CONFIG_HOME="$test_root/config" XDG_STATE_HOME="$test_root/state" REPO_ROOT="$PWD" \
+      env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID -u NVIM_APPNAME \
+        XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" \
+        XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+        PACK_LAZY_PLUGIN_SITE="$live_data_root/site" REPO_ROOT="$PWD" \
         timeout --foreground 15s nvim --headless -i NONE \
         --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')"
       for initial_file in "$PWD/.config/nvim/tests/pack_loader.lua" "$test_root/new.lua"; do
         rm -rf "$test_root/config/nvim/.sessions"
-        env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID \
-          XDG_CONFIG_HOME="$test_root/config" XDG_STATE_HOME="$test_root/state" \
-          PACK_LAZY_INITIAL_FILE=1 REPO_ROOT="$PWD" \
+        env -u GIT_EDITOR -u GIT_COMMIT -u NVIM_SESSION -u HERDR_ENV -u HERDR_PANE_ID -u NVIM_APPNAME \
+          XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" \
+          XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+          PACK_LAZY_PLUGIN_SITE="$live_data_root/site" PACK_LAZY_INITIAL_FILE=1 REPO_ROOT="$PWD" \
           timeout --foreground 15s nvim --headless -i NONE \
           --cmd "lua dofile('$PWD/.config/nvim/tests/pack_lazy_startup.lua')" "$initial_file"
       done
