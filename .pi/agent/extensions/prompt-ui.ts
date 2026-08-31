@@ -76,7 +76,7 @@ export function styleSelectedSuggestion(
   const match = /^(\s*)→\s(.*)$/.exec(stripTerminalSequences(line));
   if (match === null) return line;
 
-  const content = fitColumns(`${match[1]}${match[2]}`, "", width);
+  const content = fitColumns(`${match[1]}  ${match[2]}`, "", width);
   return `${selectedBackgroundAnsi}${selectedForegroundAnsi}${content}\u001b[39m\u001b[49m`;
 }
 
