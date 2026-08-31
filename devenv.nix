@@ -116,9 +116,6 @@ in
         ".config/ags/scripts/generate-circular-avatar.sh"
         ".config/waybar/config"
         ".config/waybar/scripts/temperatures"
-        ".pi/agent/.gitignore"
-        ".pi/agent/extensions/pi-permission-system/config.json"
-        ".pi/agent/settings.json"
       )
       for deployment_path in "''${required_paths[@]}"; do
         if ! test -e "$target/$deployment_path"; then
@@ -126,6 +123,15 @@ in
           exit 1
         fi
       done
+
+      # Every tracked Pi resource is managed; derive coverage so new resources
+      # do not require another hand-maintained test entry.
+      while IFS= read -r -d "" deployment_path; do
+        if ! test -e "$target/$deployment_path"; then
+          printf 'Expected Stow deployment is missing: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
+      done < <(git ls-files -z -- ".pi")
 
       ignored_paths=(
         "scripts"

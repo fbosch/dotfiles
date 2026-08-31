@@ -191,7 +191,25 @@ Permission-system canary outcome on 2026-08-31:
   override a configured deny.
 - Treat the extension as a decision aid rather than a sandbox or immutable
   authorization boundary.
-- FFF remains pending.
+
+FFF canary outcome on 2026-08-31:
+
+- Installed and pinned `@ff-labs/pi-fff@0.10.6`; its Node and Bun native
+  bindings resolved at the same version with zero reported npm vulnerabilities.
+- Added a commit-pinned schema and configured additive `tools-only` mode with
+  filesystem-root scanning, home-directory scanning, and symlink traversal
+  disabled.
+- Verified `fffind` and `ffgrep` search the workspace while Pi's built-in `find`
+  remains available.
+- Confirmed normal permission handling asks before workspace FFF calls, denies
+  an explicit `~/.pi/agent/auth.json` search, and asks before an external path.
+- Confirmed launches from the home directory and filesystem root refuse to
+  index.
+- Ignored Pi-local FFF databases under `~/.pi/agent/fff/`.
+- Package v0.10.6 does not register `fff-multi-grep` by default despite listing
+  it in the README. Its source gates the tool behind the undocumented
+  `PI_FFF_MULTIGREP=1` flag and describes it as slated for removal, so the
+  canary does not enable it.
 
 ## Phase 4: Add MCP Incrementally
 

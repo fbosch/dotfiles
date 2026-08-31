@@ -6,6 +6,7 @@
 /sessions/
 /subagent-sessions/
 /fff/
+/node_modules/
 /npm/
 /git/
 /bin/
