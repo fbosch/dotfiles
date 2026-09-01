@@ -22,8 +22,8 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## Commands
 
-- `stow .`
-- `stow -n .`
+- `just stow-apply`
+- `just stow-check`
 - Add and run tests through `devenv test`.
 
 ## OpenCode Plugins

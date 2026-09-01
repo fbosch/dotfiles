@@ -224,9 +224,19 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         return 1
     end
 
+    bash ~/dotfiles/scripts/secure-pi-agent-dir.sh
+    set -l command_status $status
+    if contains -- $command_status 130 143
+        return $command_status
+    end
+    if test $command_status -ne 0
+        printf '%sError%s    Failed to secure ~/.pi/agent before restowing dotfiles.\n' "$error" "$normal" >&2
+        return 1
+    end
+
     printf '%sWorking%s  Restowing ~/dotfiles...\n' "$working" "$normal" >&2
     stow -R -d ~/dotfiles -t ~ .
-    set -l command_status $status
+    set command_status $status
     if contains -- $command_status 130 143
         return $command_status
     end

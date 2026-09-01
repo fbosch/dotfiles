@@ -143,6 +143,7 @@ nvim-check-disabled-packages:
 # Apply stow operations.
 [group('stow')]
 stow-apply:
+    bash ./scripts/secure-pi-agent-dir.sh
     stow .
 
 # Migrate existing files into this repository after previewing a clean working tree.
@@ -158,6 +159,7 @@ stow-check:
 # Restow dotfiles.
 [group('stow')]
 stow-restow:
+    bash ./scripts/secure-pi-agent-dir.sh
     stow -R .
 
 # Validate the project devenv environment.

@@ -107,6 +107,12 @@ in
       trap 'rm -rf "$target"' EXIT
       source_status_before="$(git status --porcelain --untracked-files=all)"
 
+      bash ./scripts/secure-pi-agent-dir.sh "$target"
+      if [[ "$(stat -c '%a' "$target/.pi/agent")" != 700 ]]; then
+        printf '%s\n' 'Expected the deployed Pi agent directory to use mode 0700' >&2
+        exit 1
+      fi
+
       # Prevent directory folding from masking nested ignore behavior.
       mkdir -p "$target/.config/ags" "$target/.config/waybar"
       stow --dir "$PWD" --target "$target" --restow .

@@ -3,8 +3,8 @@
 ## Setup & Installation
 
 ```bash
-stow .                           # Apply dotfiles (creates symlinks from ~/)
-stow -n .                        # Dry-run to preview changes
+just stow-apply                  # Secure runtime directories and apply dotfiles
+just stow-check                  # Dry-run to preview changes
 ```
 
 On NixOS and nix-darwin, install system packages and bootstrap Home Manager from
@@ -45,5 +45,5 @@ nvim --headless +checkhealth +qa   # Validate setup
 ```bash
 fish -c "source ~/.config/fish/config.fish"  # Test fish config
 bat cache --build                            # Rebuild bat cache after theme changes
-stow -n .                                    # Preview stow changes before applying
+just stow-check                              # Preview stow changes before applying
 ```
