@@ -7,7 +7,11 @@ type ToggleHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 const buildModel = { provider: "openai-codex", id: "gpt-5.6-luna" };
 const planModel = { provider: "openai-codex", id: "gpt-5.6-sol" };
 
-function createHarness(options: { activeTools: string[]; idle?: boolean; planModelAvailable?: boolean }) {
+function createHarness(options: {
+  activeTools: string[];
+  idle?: boolean;
+  planModelAvailable?: boolean;
+}) {
   let activeTools = [...options.activeTools];
   let idle = options.idle ?? true;
   let toggle: ToggleHandler | undefined;
@@ -96,7 +100,15 @@ describe("plan mode", () => {
 
     expect(harness.selectedModels).toEqual([planModel]);
     expect(harness.thinkingLevels).toEqual(["high"]);
-    expect(harness.activeTools).toEqual(["read", "find", "grep", "ls", "skill", "fffind", "ffgrep"]);
+    expect(harness.activeTools).toEqual([
+      "read",
+      "find",
+      "grep",
+      "ls",
+      "skill",
+      "fffind",
+      "ffgrep",
+    ]);
     expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
   });
 
@@ -110,10 +122,7 @@ describe("plan mode", () => {
     expect(harness.selectedModels).toEqual([planModel, buildModel]);
     expect(harness.thinkingLevels).toEqual(["high", "xhigh"]);
     expect(harness.activeTools).toEqual(originalTools);
-    expect(harness.activeToolSets).toEqual([
-      ["read", "read"],
-      originalTools,
-    ]);
+    expect(harness.activeToolSets).toEqual([["read", "read"], originalTools]);
     expect(harness.statuses).toEqual([
       ["plan-mode", PLAN_MODE_STATUS],
       ["plan-mode", undefined],
@@ -148,7 +157,9 @@ describe("plan mode", () => {
     expect(harness.thinkingLevels).toEqual(["high"]);
     expect(harness.activeTools).toEqual(["read"]);
     expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
-    expect(harness.notifications).toEqual([["Wait for the current response to finish before switching modes.", "warning"]]);
+    expect(harness.notifications).toEqual([
+      ["Wait for the current response to finish before switching modes.", "warning"],
+    ]);
 
     harness.setIdle(true);
     await harness.toggle();

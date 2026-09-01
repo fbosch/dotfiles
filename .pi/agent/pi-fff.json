@@ -3,5 +3,5 @@
   "mode": "tools-and-ui",
   "enableFsRootScanning": false,
   "enableHomeDirScanning": false,
-  "followSymlinks": false
+  "followSymlinks": true
 }

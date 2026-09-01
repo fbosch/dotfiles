@@ -7,7 +7,6 @@
     "**/*.test.ts"
   ],
   "entry": [
-    "prompt-enhancements.tsx",
-    "typo-engine.bench.ts"
+    "prompt-enhancements.tsx"
   ]
 }

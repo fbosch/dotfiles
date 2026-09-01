@@ -10,11 +10,13 @@ import {
   getKeybindings,
   type TUI,
 } from "@earendil-works/pi-tui";
-import { parseTypoRules, typoRuleLengths } from "../../../../../.config/fbb/lib/typo-engine";
-import { PromptEditor, type PromptEditorState } from "../prompt-editor";
-import { correctedPromptForInput } from "../typo-correction";
+import { PromptEditor, type PromptEditorState } from "../../prompt-ui/prompt-editor";
+import { correctedPromptForInput } from "..";
+import { parseTypoRules, typoRuleLengths } from "../typo-engine";
 
-const rules = parseTypoRules("teh the\nsucces{,ful,fully} success{,ful,fully}");
+const rules = parseTypoRules(
+  "teh the\nrepositry repository\nsucces{,ful,fully} success{,ful,fully}",
+);
 const typoRules = { rules, lengths: typoRuleLengths(rules) };
 
 const identity = (text: string) => text;
@@ -87,6 +89,7 @@ describe("prompt typo correction", () => {
       applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
     };
     editor.setAutocompleteProvider(provider);
+    expect(correctedPromptForInput("@repositry", ".", typoRules)).toBe("@repository.");
 
     for (const character of "@repositry") editor.handleInput(character);
     await Bun.sleep(30);
@@ -96,5 +99,24 @@ describe("prompt typo correction", () => {
 
     expect(editor.getText()).toBe("@repositry.");
     expect(editor.isShowingAutocomplete()).toBeTrue();
+  });
+
+  test("delegates autocomplete tokens while suggestions are still pending", () => {
+    const editor = createEditor();
+    const provider: AutocompleteProvider = {
+      getSuggestions: async () => ({
+        items: [{ value: "repository", label: "repository" }],
+        prefix: "@repositry",
+      }),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    editor.setAutocompleteProvider(provider);
+
+    for (const character of "@repositry") editor.handleInput(character);
+    expect(editor.isShowingAutocomplete()).toBeFalse();
+
+    editor.handleInput(".");
+
+    expect(editor.getText()).toBe("@repositry.");
   });
 });

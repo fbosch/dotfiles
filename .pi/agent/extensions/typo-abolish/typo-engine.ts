@@ -1,0 +1,198 @@
+type TypoRule = {
+  from: string;
+  to: string;
+};
+
+function camelcase(word: string): string {
+  const normalized = word.replaceAll("-", "_");
+  if (!normalized.includes("_") && /[a-z]/.test(normalized)) {
+    return normalized.replace(/^./, (character) => character.toLowerCase());
+  }
+
+  return normalized
+    .toLowerCase()
+    .replace(/_(.)?/g, (_match, character: string | undefined) => character?.toUpperCase() ?? "");
+}
+
+function mixedcase(word: string): string {
+  return camelcase(word).replace(/^./, (character) => character.toUpperCase());
+}
+
+function splitComma(value: string): string[] {
+  return value.split(",");
+}
+
+function firstBrace(value: string): [string, string, string] | undefined {
+  const match = /^(.*?){(.*?)}(.*)$/.exec(value);
+  if (!match) return undefined;
+
+  const before = match[1];
+  const middle = match[2];
+  const after = match[3];
+  if (before === undefined || middle === undefined || after === undefined) return undefined;
+
+  return [before, middle, after];
+}
+
+function expandedReplacements(targets: string[], valueMiddle: string): string[] {
+  const replacements = splitComma(valueMiddle);
+  if (replacements.length === 1 && replacements[0] === "") return targets;
+
+  return replacements;
+}
+
+function expandEntry(key: string, value: string): [string, string][] | undefined {
+  const keyBrace = firstBrace(key);
+  if (!keyBrace) return undefined;
+
+  const [keyBefore, keyMiddle, keyAfter] = keyBrace;
+  const valueBrace = firstBrace(value);
+  const [valueBefore, valueMiddle, valueAfter] = valueBrace ?? [value, ",", ""];
+  const targets = splitComma(keyMiddle);
+  const replacements = expandedReplacements(targets, valueMiddle);
+  return targets.map((target, index) => [
+    `${keyBefore}${target}${keyAfter}`,
+    `${valueBefore}${replacements[index % replacements.length]}${valueAfter}`,
+  ]);
+}
+
+function expandOnce(dictionary: ReadonlyMap<string, string>): {
+  expanded: Map<string, string>;
+  shouldRecurse: boolean;
+} {
+  const expanded = new Map<string, string>();
+  let shouldRecurse = false;
+
+  for (const [key, value] of dictionary) {
+    const entries = expandEntry(key, value);
+    if (!entries) {
+      expanded.set(key, value);
+      continue;
+    }
+
+    shouldRecurse = true;
+    for (const [expandedKey, expandedValue] of entries) {
+      expanded.set(expandedKey, expandedValue);
+    }
+  }
+
+  return { expanded, shouldRecurse };
+}
+
+function expandBraces(dictionary: ReadonlyMap<string, string>): Map<string, string> {
+  const result = expandOnce(dictionary);
+  if (result.shouldRecurse) return expandBraces(result.expanded);
+
+  return result.expanded;
+}
+
+function parseTypoRule(line: string): TypoRule[] {
+  const match = /^(\S+)\s+(.+)$/.exec(line);
+  if (!match) return [];
+
+  const fromPattern = match[1];
+  const toPattern = match[2];
+  if (fromPattern === undefined || toPattern === undefined) return [];
+
+  const rules: TypoRule[] = [];
+  const expanded = expandBraces(new Map([[fromPattern, toPattern]]));
+
+  for (const [from, to] of expanded) {
+    rules.push({ from: mixedcase(from), to: mixedcase(to) });
+    rules.push({ from: from.toLowerCase(), to: to.toLowerCase() });
+    rules.push({ from: from.toUpperCase(), to: to.toUpperCase() });
+    rules.push({ from, to });
+  }
+
+  return rules;
+}
+
+function isTypoRuleLine(line: string): boolean {
+  return line !== "" && line.startsWith("#") === false;
+}
+
+export function parseTypoRules(text: string): Map<string, string> {
+  const rules = new Map<string, string>();
+
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (isTypoRuleLine(trimmed) === false) continue;
+
+    for (const rule of parseTypoRule(trimmed)) {
+      rules.set(rule.from, rule.to);
+    }
+  }
+
+  return rules;
+}
+
+export function typoRuleLengths(rules: ReadonlyMap<string, string>): Set<number> {
+  const lengths = new Set<number>();
+  for (const typo of rules.keys()) lengths.add(typo.length);
+
+  return lengths;
+}
+
+function ruleLengthAllows(
+  ruleLengths: ReadonlySet<number> | undefined,
+  wordStart: number,
+  wordEnd: number,
+): boolean {
+  if (ruleLengths === undefined) return true;
+
+  return ruleLengths.has(wordEnd - wordStart);
+}
+
+export function appendDelimiterAndCorrect(
+  input: string,
+  delimiter: string,
+  rules: ReadonlyMap<string, string>,
+  ruleLengths?: ReadonlySet<number>,
+): string {
+  const wordEnd = input.length;
+  const wordStart = completedWordStart(input, wordEnd);
+  if (wordStart === undefined) return input + delimiter;
+
+  if (ruleLengthAllows(ruleLengths, wordStart, wordEnd) === false) return input + delimiter;
+
+  const replacement = replacementForWord(input, wordStart, wordEnd, rules);
+  if (replacement === undefined) return input + delimiter;
+
+  return input.slice(0, wordStart) + replacement + delimiter;
+}
+
+function replacementForWord(
+  input: string,
+  wordStart: number,
+  wordEnd: number,
+  rules: ReadonlyMap<string, string>,
+): string | undefined {
+  const value = input.slice(wordStart, wordEnd);
+  const replacement = rules.get(value);
+  if (replacement === undefined || replacement === value) return undefined;
+
+  return replacement;
+}
+
+function completedWordStart(input: string, wordEnd: number): number | undefined {
+  let wordStart = wordEnd;
+  while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) wordStart -= 1;
+
+  if (wordStart === wordEnd || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
+    return undefined;
+  }
+
+  return wordStart;
+}
+
+function isAsciiLetter(code: number): boolean {
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isAsciiDigit(code: number): boolean {
+  return code >= 48 && code <= 57;
+}
+
+function isWordCharacter(code: number): boolean {
+  return isAsciiLetter(code) || isAsciiDigit(code) || code === 95 || code === 39;
+}

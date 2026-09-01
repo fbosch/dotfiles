@@ -57,7 +57,7 @@ Canary:
 - MCP: `pi-mcp-adapter@2.31.0` in proxy-only mode.
 - Auth profiles: vendor the audited `@nanstey/pi-auth-profiles@0.1.1` source
   locally as the baseline for later account-routing parity work.
-- Plan mode: `@narumitw/pi-plan-mode@0.56.0`, introduced after permissions.
+- Plan mode: the local `.pi/agent/extensions/plan-mode.ts` implementation.
 - Subagents: `@gotgenes/pi-subagents@21.0.3` as the sole implementation.
 - Neovim: `@ldelossa/pi-ide@0.2.5` as a partial IDE integration.
 - Handoff: `@nicknisi/pi-handoff@0.1.7`.
@@ -377,14 +377,18 @@ Phase 5 setup status on 2026-09-01:
 
 ## Phase 6: Add Plan Mode and One Subagent
 
-Canary `@narumitw/pi-plan-mode@0.56.0` with no `safeSubcommands` and no custom
-plan tools. Test direct writes, shell redirection, command chains, Git
-mutations, and build hooks.
+Canary the local `.pi/agent/extensions/plan-mode.ts` implementation. Plan mode
+keeps only its explicit read-only tool allowlist, so direct writes and all shell
+forms are unavailable rather than classified by command text.
 
 After plan mode passes, add `@gotgenes/pi-subagents@21.0.3` with
 `maxConcurrent: 1`. Start with one read-only `Explore` agent, an explicit tool
 allowlist, and restrictive permission frontmatter. Keep the permission extension
 loaded in children so approval requests can reach the parent UI.
+
+`maxConcurrent` limits background children only. Foreground children bypass the
+queue. With `abortAllOnInterrupt: true`, interrupt stops every running and queued
+child; the package has no interactive command for stopping one selected child.
 
 Do not port all 19 OpenCode agents. Pi skills already cover most specialization.
 Add another role only after a real task demonstrates that a dedicated agent
@@ -396,12 +400,38 @@ Acceptance:
 - Unknown shell forms fail closed.
 - The read-only child cannot write or run mutating commands.
 - Child approval requests reach the parent UI.
-- Interrupting a child settles or terminates it predictably.
+- Interrupting the parent settles every running and queued child predictably.
 
 Rollback:
 
 - Remove the subagent package before removing the permission package.
 - Keep plan mode only if its enforcement passed independently.
+
+Phase 6 setup status on 2026-09-01:
+
+- Added focused tests for the local plan mode. They cover the configured model
+  and thinking level, removal of `write`, `edit`, `bash`, PowerShell, and MCP
+  execution tools, exact restoration of the previous tool list, unavailable
+  models, and busy-session toggles.
+- Installed and pinned `@gotgenes/pi-subagents@21.0.3` with
+  `maxConcurrent: 1` and `abortAllOnInterrupt: true`.
+- Added one global `Explore` definition with only `read`, `grep`, `find`, `ls`,
+  `fffind`, and `ffgrep`. Its permission frontmatter denies every unnamed tool
+  and asks before external-directory access.
+- Confirmed a child asked to create a marker had no mutation tool and left the
+  filesystem unchanged. An external read produced a parent-side subagent
+  approval prompt and remained denied.
+- Confirmed two background children reach one running and one queued. Parent
+  interrupt clears both without an extension error.
+- Package installation exposed an npm reconciliation loop. Pi compared exact
+  settings pins against caret ranges written to its generated npm manifest, and
+  npm repeatedly changed the installed versions. The Stow symlink path also
+  accumulated repeated `dotfiles/dotfiles` prefixes in `package-lock.json`.
+- Set Pi's npm command to `npm --save-exact` and set
+  `PI_CODING_AGENT_DIR` to the canonical Stow source path. Rebuilt the ignored
+  package cache once. The lockfile fell from 62,871 to 1,336 lines, npm audits 57
+  packages with zero reported vulnerabilities, and three warm RPC starts took
+  1.07–1.14 seconds with no npm output or generated-file changes.
 
 ## Phase 7: Canary Neovim, Handoff, and Herdr
 

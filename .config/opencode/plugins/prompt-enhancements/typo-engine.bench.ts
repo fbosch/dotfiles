@@ -1,11 +1,6 @@
 import { readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import {
-  appendDelimiterAndCorrect,
-  correctCompletedWord,
-  parseTypoRules,
-  typoRuleLengths,
-} from "../../../fbb/lib/typo-engine.ts"
+import { appendDelimiterAndCorrect, correctCompletedWord, parseTypoRules, typoRuleLengths } from "./typo-engine"
 
 type BenchResult = {
   name: string

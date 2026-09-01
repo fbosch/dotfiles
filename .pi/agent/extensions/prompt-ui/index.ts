@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { loadTypoCorrectionRules } from "../typo-abolish";
 import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
-import { loadTypoCorrectionRules } from "./typo-correction";
 
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();

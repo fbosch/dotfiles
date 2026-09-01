@@ -8,6 +8,7 @@ import {
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
+import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
   AutocompleteOverlay,
   createAliasAutocompleteProvider,
@@ -20,7 +21,6 @@ import {
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
-import { correctedPromptForInput, type TypoCorrectionRules } from "./typo-correction";
 
 const EDITOR_PADDING_X = 1;
 const DOCK_RAIL = "▌";
@@ -163,6 +163,7 @@ export class PromptEditor extends CustomEditor {
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
   private readonly typoRules: TypoCorrectionRules;
+  private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
 
   constructor(
     tui: TUI,
@@ -191,7 +192,25 @@ export class PromptEditor extends CustomEditor {
   }
 
   setAutocompleteProvider(provider: AutocompleteProvider): void {
+    this.autocompleteTokenPrefixes = new Set([
+      "/",
+      "@",
+      "#",
+      ...(provider.triggerCharacters ?? []),
+    ]);
     super.setAutocompleteProvider(createAliasAutocompleteProvider(provider));
+  }
+
+  private hasAutocompleteTokenAtCursor(line: string, cursorCol: number): boolean {
+    let tokenStart = cursorCol;
+    while (tokenStart > 0) {
+      const character = line[tokenStart - 1];
+      if (character === " " || character === "\t") break;
+      tokenStart -= 1;
+    }
+
+    const prefix = line[tokenStart];
+    return prefix !== undefined && this.autocompleteTokenPrefixes.has(prefix);
   }
 
   handleInput(data: string): void {
@@ -200,7 +219,11 @@ export class PromptEditor extends CustomEditor {
     const lastLine = lines.at(-1) ?? "";
     const cursorIsAtEnd = cursor.line === lines.length - 1 && cursor.col === lastLine.length;
 
-    if (cursorIsAtEnd && this.isShowingAutocomplete() === false) {
+    if (
+      cursorIsAtEnd &&
+      this.isShowingAutocomplete() === false &&
+      this.hasAutocompleteTokenAtCursor(lastLine, cursor.col) === false
+    ) {
       const current = this.getText();
       const corrected = correctedPromptForInput(current, data, this.typoRules);
       // setText clears Pi's backing content for collapsed large-paste markers.
