@@ -182,6 +182,27 @@ describe("Just tools extension", () => {
     expect(result.content[0]).toMatchObject({ type: "text", text: "stdout:\nchecked\n" });
   });
 
+  test("includes recipe groups in discovery results", async () => {
+    const harness = createHarness(dump());
+    const ctx = context([]);
+    registerJustTools(harness.pi);
+
+    const loader = harness.tools.get("just_tools");
+    if (loader === undefined) throw new Error("loader tool missing");
+    const result = await loader.execute(
+      "loader",
+      { query: "shell checks" },
+      undefined,
+      undefined,
+      ctx,
+    );
+
+    expect(result.content[0]).toMatchObject({
+      type: "text",
+      text: "- just_shellcheck [group: validation]: Run shell checks.",
+    });
+  });
+
   test("requires reload when a registered recipe changes parameters", async () => {
     const harness = createHarness(dump());
     const ctx = context([]);

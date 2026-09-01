@@ -452,12 +452,14 @@ export function registerJustTools(
         const reloadRequired: string[] = [];
         const lines = matches.map((recipe) => {
           const registered = registerRecipeTool(recipe);
+          const groupLabel =
+            recipe.groups.length > 0 ? ` [group: ${recipe.groups.join(", ")}]` : "";
           if (registered.signature !== recipeSignature(recipe)) {
             reloadRequired.push(recipe.namepath);
-            return `- ${recipe.namepath}: parameters changed; run /reload`;
+            return `- ${recipe.namepath}${groupLabel}: parameters changed; run /reload`;
           }
           if (!activeTools.includes(registered.toolName)) added.push(registered.toolName);
-          return `- ${registered.toolName}: ${recipe.doc}`;
+          return `- ${registered.toolName}${groupLabel}: ${recipe.doc}`;
         });
 
         if (added.length > 0) pi.setActiveTools([...new Set([...activeTools, ...added])]);
