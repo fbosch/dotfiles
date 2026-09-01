@@ -27,7 +27,12 @@ hl.window_rule({ match = { class = "^(discord|com\\.discordapp\\.Discord)$" }, t
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calculator)$" }, float = true, persistent_size = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.Calendar)$" }, float = true, center = true, persistent_size = true })
 hl.window_rule({ match = { class = "^(org\\.gnome\\.TextEditor)$" }, float = true })
-hl.window_rule({ match = { class = "^(org\\.gnome\\.Loupe)$" }, float = true })
+hl.window_rule({
+	match = { class = "^(org\\.gnome\\.Loupe)$" },
+	float = true,
+	size = "1000 700",
+	persistent_size = true,
+})
 
 -- Plexamp
 hl.window_rule({ match = { class = "Plexamp" }, float = true, size = "360 620" })
