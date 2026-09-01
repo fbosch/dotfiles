@@ -20,7 +20,6 @@
     {
       "source": "npm:pi-mcp-adapter@2.31.0",
       "skills": []
-    },
-    "npm:@narumitw/pi-usage@0.59.0"
+    }
   ]
 }

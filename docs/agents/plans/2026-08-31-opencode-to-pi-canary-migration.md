@@ -57,7 +57,6 @@ Canary:
 - MCP: `pi-mcp-adapter@2.31.0` in proxy-only mode.
 - Auth profiles: vendor the audited `@nanstey/pi-auth-profiles@0.1.1` source
   locally as the baseline for later account-routing parity work.
-- Usage identity: `@narumitw/pi-usage@0.59.0`, introduced after profiles.
 - Plan mode: `@narumitw/pi-plan-mode@0.56.0`, introduced after permissions.
 - Subagents: `@gotgenes/pi-subagents@21.0.3` as the sole implementation.
 - Neovim: `@ldelossa/pi-ide@0.2.5` as a partial IDE integration.
@@ -86,6 +85,8 @@ Reject:
   can be bypassed.
 - Web tools: `pi-web-kit@0.2.4` because it is outdated and duplicates retained
   tools.
+- Usage identity: `@narumitw/pi-usage@0.59.0`. The existing WezTerm status
+  already shows every named account's usage and reset state through `ocma`.
 
 Do not install two permission engines, two subagent managers, or two IDE
 integrations together. Their overlapping hooks make enforcement and failure
@@ -319,16 +320,9 @@ Vendor the `@nanstey/pi-auth-profiles@0.1.1` extension locally under
 `.pi/agent/extensions/auth-profiles/`. Do not install the npm package alongside
 the local copy.
 
-Add after manual profile switching passes:
-
-```text
-@narumitw/pi-usage@0.59.0
-```
-
-Create two isolated profiles through Pi. Switch them manually and verify that
-`/usage` follows the active runtime account using known quota or reset values.
-The extension intentionally does not expose an account name. Do not add
-repository profile mappings during this phase.
+Create two isolated profiles through Pi and switch them manually. Use the
+existing WezTerm Codex status to compare known quota or reset values for the
+same profile alias. Do not add repository profile mappings during this phase.
 
 This phase intentionally defers behavior implemented by
 `.config/opencode/plugins/openai-account-selector/selection.ts`:
@@ -343,8 +337,8 @@ Acceptance:
 
 - Credentials remain isolated by profile.
 - Switching profiles changes the real provider account.
-- `/usage` follows the active profile without leaking cached state from the
-  previous account.
+- The selected Pi profile corresponds to the manually verified account with the
+  same alias in the WezTerm Codex status.
 - Restarting Pi preserves the documented profile selection.
 
 Rollback:
@@ -367,23 +361,19 @@ Phase 5 setup status on 2026-09-01:
   restart persistence still require direct verification.
 - Published the active profile through Pi's extension-status API. The custom
   prompt renders the profile and refreshes immediately after a profile rebind.
-- Installed and pinned `@narumitw/pi-usage@0.59.0`. npm reported zero
-  vulnerabilities and no new install script was approved. Its resolved UI
-  dependency is `@narumitw/pi-tui-kit@0.49.3`.
-- Confirmed a session using the named `fbb` profile queries Codex usage through
-  the rebound runtime credential and publishes a usage status. The package did
-  not create `pi-usage.json`; its usage cache remains process-local and keyed by
-  a credential fingerprint.
-- The extension reads resolved runtime authentication and automatically queries
-  the provider's validated official usage endpoint. This in-process network
-  request is not mediated by the permission-system prompt. `/fast` payload
-  rewriting and reset redemption remain disabled and unexercised.
-- Confirmed `pi --no-extensions` starts without a usage status. The three named
-  credential files remain mode `0600` inside a mode `0700` directory.
-- Named-profile switching and cache-isolation testing through `/usage` remain
-  pending. Codex reset redemption also remains outside the canary because the
-  local profile owner does not yet implement the package's ephemeral OAuth
-  credential-source protocol.
+- Canary-installed `@narumitw/pi-usage@0.59.0`, which resolved
+  `@narumitw/pi-tui-kit@0.49.3`, with zero reported npm vulnerabilities and no
+  newly approved install script.
+- Confirmed named-profile usage queries work, but the package menu replaces the
+  editor through `ctx.ui.custom()` without overlay options. The prompt's
+  non-capturing autocomplete overlay remains mounted, causing the two interfaces
+  to overlap.
+- Removed the package instead of maintaining a local UI fork. Its automatic
+  provider polling and prompt status duplicate `.config/wezterm/status/codex.lua`,
+  which already renders all `ocma` profiles, quota windows, reset countdowns,
+  and reset credits.
+- The package created no `pi-usage.json`. The three named credential files
+  remain mode `0600` inside a mode `0700` directory.
 
 ## Phase 6: Add Plan Mode and One Subagent
 
