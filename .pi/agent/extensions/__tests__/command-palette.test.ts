@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
+  default as commandPalette,
   filterPaletteSections,
   rootItems,
   rootSections,
@@ -53,6 +54,37 @@ describe("command palette context view", () => {
       ["/context usage", { expandPromptTemplates: true }],
       ["/context injections", { expandPromptTemplates: true }],
     ]);
+  });
+});
+
+describe("command palette session switching", () => {
+  test("dispatches the shortcut through the command context", async () => {
+    let shortcutHandler: (() => Promise<void> | void) | undefined;
+    const sentMessages: Array<[string, { expandPromptTemplates?: boolean } | undefined]> = [];
+    const pi = {
+      registerShortcut: (_shortcut: string, options: { handler: () => Promise<void> | void }) => {
+        shortcutHandler = options.handler;
+      },
+      registerCommand: () => {},
+      sendUserMessage: (
+        message: string,
+        options: { expandPromptTemplates?: boolean } | undefined,
+      ) => {
+        sentMessages.push([message, options]);
+      },
+    } as unknown as ExtensionAPI;
+
+    commandPalette(pi);
+    await shortcutHandler?.();
+
+    expect(sentMessages).toEqual([["/palette", { expandPromptTemplates: true }]]);
+  });
+
+  test("offers live session actions in a command context", () => {
+    const context = { newSession: () => {} } as unknown as ExtensionContext;
+    const pi = { getCommands: () => [] } as unknown as ExtensionAPI;
+
+    expect(rootItems(context, pi).map((item) => item.id)).toContain("resume-session");
   });
 });
 

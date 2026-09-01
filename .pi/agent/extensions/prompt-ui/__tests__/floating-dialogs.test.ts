@@ -4,7 +4,12 @@ import type {
   KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  stripTerminalSequences,
+  type TUI,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { installFloatingDialogs } from "../floating-dialogs";
 import { modalSelectedRow } from "../modal-frame";
 
@@ -17,8 +22,9 @@ function createUI() {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
     bold: (text: string) => text,
+    getBgAnsi: () => "\u001b[48;2;34;34;34m",
     inverse: (text: string) => text,
-  } as Theme;
+  } as unknown as Theme;
   const tui = {
     terminal: { columns: 120, rows: 40 },
     requestRender: () => {},
@@ -87,18 +93,32 @@ describe("floating extension dialogs", () => {
     expect(inputDialog).toContain("Enter submit · Esc close");
   });
 
-  test("preserves explicit custom component placement", async () => {
-    const { calls, ui } = createUI();
+  test("renders explicit inline components in the prompt dock", async () => {
+    const { calls, components, ui } = createUI();
     installFloatingDialogs(ui);
+    let handledInput = "";
 
     await ui.custom(
       (_tui, _theme, _keybindings, done) => {
-        done(undefined);
-        return { render: () => [], invalidate: () => {} };
+        return {
+          render: () => ["Permission required"],
+          handleInput: (data) => {
+            handledInput = data;
+            done(undefined);
+          },
+          invalidate: () => {},
+        };
       },
       { overlay: false },
     );
 
     expect(calls).toEqual([{ overlay: false }]);
+    expect(handledInput).toBe("\r");
+    const rendered = components[0]?.render(28) ?? [];
+    const plain = rendered.map(stripTerminalSequences);
+    expect(plain[1]).toContain(" Permission required");
+    expect(plain.at(-1)).toBe(`▘${"▀".repeat(26)}▝`);
+    expect(rendered.every((line) => visibleWidth(line) === 28)).toBe(true);
+    expect(rendered[1]).toContain("\u001b[48;2;34;34;34m");
   });
 });

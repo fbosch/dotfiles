@@ -1,5 +1,6 @@
 import type { ExtensionUIContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
+  type Component,
   getKeybindings,
   Input,
   type SelectItem,
@@ -7,6 +8,13 @@ import {
   Spacer,
   type TUI,
 } from "@earendil-works/pi-tui";
+import {
+  DOCK_CHROME_WIDTH,
+  DOCK_RAIL,
+  DOCK_RIGHT_BORDER,
+  paintDockBottomEdge,
+  paintDockRow,
+} from "./dock-rendering";
 import {
   MODAL_FIXED_ROWS,
   MODAL_MAX_VISIBLE_ITEMS,
@@ -22,6 +30,52 @@ const FLOATING_DIALOG_OVERLAY = {
 };
 
 const installedContexts = new WeakSet<ExtensionUIContext>();
+const INLINE_DIALOG_PADDING_X = 1;
+
+class InlineDockDialog implements Component {
+  constructor(
+    private readonly component: Component & { dispose?(): void },
+    private readonly theme: Theme,
+  ) {}
+
+  render(width: number): string[] {
+    const minimumWidth = DOCK_CHROME_WIDTH + INLINE_DIALOG_PADDING_X * 2;
+    if (width <= minimumWidth) return this.component.render(width);
+
+    const contentWidth = width - minimumWidth;
+    const backgroundAnsi = this.theme.getBgAnsi("userMessageBg");
+    const rail = this.theme.fg("warning", DOCK_RAIL);
+    const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
+    const content = this.component
+      .render(contentWidth)
+      .map((line) => `${" ".repeat(INLINE_DIALOG_PADDING_X)}${line}`);
+    const rows = ["", ...content, ""].map((line) =>
+      paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
+    );
+
+    return [
+      ...rows,
+      paintDockBottomEdge(
+        width,
+        this.theme.fg("warning", "▘"),
+        this.theme.fg("borderMuted", "▝"),
+        backgroundAnsi,
+      ),
+    ];
+  }
+
+  handleInput(data: string): void {
+    this.component.handleInput?.(data);
+  }
+
+  invalidate(): void {
+    this.component.invalidate();
+  }
+
+  dispose(): void {
+    this.component.dispose?.();
+  }
+}
 
 class FloatingSelectDialog extends ModalFrame {
   private readonly input = new Input();
@@ -166,17 +220,21 @@ export function installFloatingDialogs(ui: ExtensionUIContext): void {
   installedContexts.add(ui);
 
   const originalCustom = ui.custom.bind(ui);
-  ui.custom = (factory, options) =>
-    originalCustom(
-      factory,
-      options?.overlay === false
-        ? options
-        : {
-            ...options,
-            overlay: true,
-            overlayOptions: options?.overlayOptions ?? FLOATING_DIALOG_OVERLAY,
-          },
-    );
+  ui.custom = (factory, options) => {
+    if (options?.overlay === false) {
+      return originalCustom(
+        async (tui, theme, keybindings, done) =>
+          new InlineDockDialog(await factory(tui, theme, keybindings, done), theme),
+        options,
+      );
+    }
+
+    return originalCustom(factory, {
+      ...options,
+      overlay: true,
+      overlayOptions: options?.overlayOptions ?? FLOATING_DIALOG_OVERLAY,
+    });
+  };
 
   ui.select = (title, options, dialogOptions) => {
     if (dialogOptions?.signal?.aborted) return Promise.resolve(undefined);

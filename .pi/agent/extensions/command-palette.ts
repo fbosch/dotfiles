@@ -723,7 +723,8 @@ async function showPalette(ctx: ExtensionContext, pi: ExtensionAPI) {
 export default function commandPalette(pi: ExtensionAPI) {
   pi.registerShortcut("ctrl+p", {
     description: "Open command palette",
-    handler: async (ctx) => showPalette(ctx, pi),
+    // Shortcut contexts cannot replace sessions; dispatch through the command to get one that can.
+    handler: () => pi.sendUserMessage("/palette", { expandPromptTemplates: true }),
   });
 
   pi.registerCommand("palette", {

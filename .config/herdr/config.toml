@@ -49,6 +49,10 @@ opencode = [
   ["state_icon", "workspace", "tab"],
   ["$opencode_session_title"],
 ]
+pi = [
+  ["state_icon", "workspace", "tab"],
+  ["$pi_session_title"],
+]
 
 [experimental]
 pane_history = true

@@ -6,7 +6,6 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { visibleWidth } from "@earendil-works/pi-tui";
 import { formatAnsiReferenceMentions } from "../../lib/reference-mentions";
 import {
   type AgentMention,
@@ -30,6 +29,9 @@ import {
 import { contextIndicator } from "./context-health";
 import {
   backgroundToForeground,
+  DOCK_CHROME_WIDTH,
+  DOCK_RAIL,
+  DOCK_RIGHT_BORDER,
   fitColumns,
   foregroundToBackground,
   paintDockBottomEdge,
@@ -40,9 +42,6 @@ import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
-const DOCK_RAIL = "▌";
-const DOCK_RIGHT_BORDER = "▐";
-const DOCK_CHROME_WIDTH = visibleWidth(DOCK_RAIL) + visibleWidth(DOCK_RIGHT_BORDER);
 
 export interface PromptEditorState {
   isWorking(): boolean;

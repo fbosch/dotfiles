@@ -1,5 +1,9 @@
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
+export const DOCK_RAIL = "▌";
+export const DOCK_RIGHT_BORDER = "▐";
+export const DOCK_CHROME_WIDTH = visibleWidth(DOCK_RAIL) + visibleWidth(DOCK_RIGHT_BORDER);
+
 export function fitColumns(left: string, right: string, width: number): string {
   if (width <= 0) return "";
 

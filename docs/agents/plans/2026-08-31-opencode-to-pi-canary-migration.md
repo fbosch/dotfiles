@@ -1,14 +1,20 @@
-# OpenCode to Pi Canary Migration
+# OpenCode to Pi Migration
+
+## Status
+
+The canary completed on 2026-09-01. Pi is now the target for a step-by-step full
+migration from OpenCode.
+
+Canary completion closes the evaluation stage; it does not claim feature
+parity. Each remaining OpenCode capability moves independently after its Pi
+replacement passes an observable workflow. OpenCode remains available until
+the corresponding capability is migrated and verified.
 
 ## Purpose
 
-Run Pi alongside OpenCode, validate it on representative work, and promote it
-only after the workflows and safeguards that matter have passed observable
-gates.
-
-This is a selective migration. It does not attempt to reproduce every OpenCode
-agent, command, plugin, or TUI feature. OpenCode remains installed, configured,
-and usable throughout the canary.
+Preserve the completed canary evidence and guide the remaining migration in
+small, reversible slices. Each slice ports one usable workflow or capability,
+validates its behavior, and identifies the OpenCode dependency it can retire.
 
 ## Decisions
 
@@ -607,9 +613,11 @@ Rollback:
 
 - Remove the individual prompt template. OpenCode commands remain unchanged.
 
-## Promotion Gate
+## Canary Completion
 
-Pi may become the default interactive agent only after all of these pass:
+The canary established enough confidence to continue with a full migration.
+The original promotion criteria remain useful as validation targets, but they
+no longer form one all-or-nothing gate:
 
 - At least five representative tasks across two repositories.
 - Zero unapproved filesystem or Git mutations.
@@ -621,9 +629,9 @@ Pi may become the default interactive agent only after all of these pass:
 - Handoff and resume preserve enough context to continue work.
 - OpenCode remains callable without configuration rollback.
 
-Changing Fish aliases, Worktrunk launch behavior, Neovim session ownership, or
-the default agent command is outside the canary. Those changes require a
-separate promotion plan.
+Fish aliases, Worktrunk launch behavior, Neovim session ownership, and the
+default agent command are now eligible as later migration slices. Change each
+only after its Pi replacement is independently verified.
 
 ## Validation Path
 
@@ -640,7 +648,7 @@ For changes in `/Users/fbb/nixos`, identify the current host first and build its
 configuration without switching it. Run repository formatting and linting only
 for touched Nix files before a broader host build.
 
-Record these observations for every canary package:
+Record these observations for every migrated package or capability:
 
 - Startup: the package loads at the pinned version without warnings.
 - Authority: the tools and filesystem paths available to the package.
@@ -657,6 +665,7 @@ Record these observations for every canary package:
 - Keep package configuration inert during diagnosis rather than deleting state.
 - Remove the Nix `pi` package only if the binary itself must be withdrawn.
 
-The package audit behind this plan was static source and documentation review.
-Runtime compatibility remains unverified until each canary phase is executed
-locally.
+The package audit behind this plan began as static source and documentation
+review. The recorded canary outcomes are runtime evidence for the completed
+phases. Every remaining migration slice still requires its own runtime
+validation before the corresponding OpenCode path is retired.
