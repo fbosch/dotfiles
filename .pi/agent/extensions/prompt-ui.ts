@@ -301,10 +301,14 @@ export default function promptUi(pi: ExtensionAPI) {
       }
 
       setAutocompleteProvider(provider: AutocompleteProvider): void {
-        super.setAutocompleteProvider({
-          triggerCharacters: provider.triggerCharacters,
+        const aliasProvider: AutocompleteProvider = {
           getSuggestions: async (lines, cursorLine, cursorCol, options) => {
-            const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
+            const suggestions = await provider.getSuggestions(
+              lines,
+              cursorLine,
+              cursorCol,
+              options,
+            );
             const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
             const alias = getCommandAlias(textBeforeCursor);
             if (alias === undefined) return suggestions;
@@ -318,16 +322,24 @@ export default function promptUi(pi: ExtensionAPI) {
 
             return {
               ...suggestions,
-              items: suggestions.items.some((suggestion) => suggestion.value === item.value)
-                ? suggestions.items
-                : [...suggestions.items, item],
+              items: [
+                item,
+                ...suggestions.items.filter((suggestion) => suggestion.value !== item.value),
+              ],
             };
           },
           applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
             provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
-          shouldTriggerFileCompletion: (lines, cursorLine, cursorCol) =>
-            provider.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? false,
-        });
+        };
+        if (provider.triggerCharacters !== undefined) {
+          aliasProvider.triggerCharacters = provider.triggerCharacters;
+        }
+        if (provider.shouldTriggerFileCompletion !== undefined) {
+          aliasProvider.shouldTriggerFileCompletion = (lines, cursorLine, cursorCol) =>
+            provider.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? false;
+        }
+
+        super.setAutocompleteProvider(aliasProvider);
       }
 
       private updateSuggestionsOverlay(
