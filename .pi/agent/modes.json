@@ -2,11 +2,13 @@
   "build": {
     "model": "openai-codex/gpt-5.6-luna",
     "prompt": "./prompts/build.txt",
-    "thinkingLevel": "xhigh"
+    "thinkingLevel": "xhigh",
+    "color": "#66A5AD"
   },
   "plan": {
     "model": "openai-codex/gpt-5.6-sol",
     "prompt": "./prompts/plan.txt",
-    "thinkingLevel": "high"
+    "thinkingLevel": "high",
+    "color": "#B279A7"
   }
 }

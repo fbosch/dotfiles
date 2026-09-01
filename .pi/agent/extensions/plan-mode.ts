@@ -6,13 +6,14 @@ export const PLAN_MODE_STATUS = "Plan";
 const PLAN_MODE_TOOLS = new Set(["read", "find", "grep", "ls", "skill", "fffind", "ffgrep"]);
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
-type ModeName = "build" | "plan";
+export type ModeName = "build" | "plan";
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 interface ModeConfig {
   model: string;
   prompt: string;
   thinkingLevel: ThinkingLevel;
+  color: string;
 }
 
 const THINKING_LEVELS: ReadonlySet<string> = new Set([
@@ -33,12 +34,16 @@ function isThinkingLevel(value: unknown): value is ThinkingLevel {
   return typeof value === "string" && THINKING_LEVELS.has(value);
 }
 
+function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
 function loadModeConfig(name: ModeName, value: unknown): ModeConfig {
   if (isRecord(value) === false) {
     throw new Error(`Mode config must be an object: ${name}`);
   }
 
-  const { model, prompt, thinkingLevel } = value;
+  const { model, prompt, thinkingLevel, color } = value;
 
   if (typeof model !== "string") {
     throw new Error(`Mode model must use provider/model format: ${name}.model`);
@@ -57,7 +62,11 @@ function loadModeConfig(name: ModeName, value: unknown): ModeConfig {
     throw new Error(`Invalid thinking level: ${name}.thinkingLevel`);
   }
 
-  return { model, prompt, thinkingLevel };
+  if (isHexColor(color) === false) {
+    throw new Error(`Mode color must be a six-digit hex color: ${name}.color`);
+  }
+
+  return { model, prompt, thinkingLevel, color };
 }
 
 function loadModes(): Record<ModeName, ModeConfig> {
@@ -93,6 +102,10 @@ const MODE_PROMPTS: Record<ModeName, string> = {
   build: loadPrompt(MODES.build.prompt),
   plan: loadPrompt(MODES.plan.prompt),
 };
+
+export function getModeColor(name: ModeName): string {
+  return MODES[name].color;
+}
 
 export default function planMode(pi: ExtensionAPI): void {
   let enabled = false;
