@@ -4,19 +4,95 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 export const PLAN_MODE_STATUS = "Plan";
 
 const PLAN_MODE_TOOLS = new Set(["read", "find", "grep", "ls", "skill", "fffind", "ffgrep"]);
+const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
-function loadPrompt(filename: string): string {
-  const prompt = readFileSync(new URL(`../prompts/${filename}`, import.meta.url), "utf8").trim();
+type ModeName = "build" | "plan";
+type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
+
+interface ModeConfig {
+  model: string;
+  prompt: string;
+  thinkingLevel: ThinkingLevel;
+}
+
+const THINKING_LEVELS: ReadonlySet<string> = new Set([
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isThinkingLevel(value: unknown): value is ThinkingLevel {
+  return typeof value === "string" && THINKING_LEVELS.has(value);
+}
+
+function loadModeConfig(name: ModeName, value: unknown): ModeConfig {
+  if (isRecord(value) === false) {
+    throw new Error(`Mode config must be an object: ${name}`);
+  }
+
+  const { model, prompt, thinkingLevel } = value;
+
+  if (typeof model !== "string") {
+    throw new Error(`Mode model must use provider/model format: ${name}.model`);
+  }
+
+  const modelSeparator = model.indexOf("/");
+  if (modelSeparator <= 0 || modelSeparator === model.length - 1) {
+    throw new Error(`Mode model must use provider/model format: ${name}.model`);
+  }
+
+  if (typeof prompt !== "string" || prompt.length === 0) {
+    throw new Error(`Mode prompt path must be a non-empty string: ${name}.prompt`);
+  }
+
+  if (isThinkingLevel(thinkingLevel) === false) {
+    throw new Error(`Invalid thinking level: ${name}.thinkingLevel`);
+  }
+
+  return { model, prompt, thinkingLevel };
+}
+
+function loadModes(): Record<ModeName, ModeConfig> {
+  const config: unknown = JSON.parse(readFileSync(CONFIG_URL, "utf8"));
+
+  if (isRecord(config) === false) {
+    throw new Error("Mode config must be an object");
+  }
+
+  return {
+    build: loadModeConfig("build", config.build),
+    plan: loadModeConfig("plan", config.plan),
+  };
+}
+
+function loadPrompt(path: string): string {
+  const prompt = readFileSync(new URL(path, CONFIG_URL), "utf8").trim();
 
   if (prompt.length === 0) {
-    throw new Error(`Mode prompt is empty: ${filename}`);
+    throw new Error(`Mode prompt is empty: ${path}`);
   }
 
   return prompt;
 }
 
-const BUILD_MODE_PROMPT = loadPrompt("build.txt");
-const PLAN_MODE_PROMPT = loadPrompt("plan.txt");
+function parseModel(value: string): [provider: string, model: string] {
+  const separator = value.indexOf("/");
+  return [value.slice(0, separator), value.slice(separator + 1)];
+}
+
+const MODES = loadModes();
+const MODE_PROMPTS: Record<ModeName, string> = {
+  build: loadPrompt(MODES.build.prompt),
+  plan: loadPrompt(MODES.plan.prompt),
+};
 
 export default function planMode(pi: ExtensionAPI): void {
   let enabled = false;
@@ -26,13 +102,34 @@ export default function planMode(pi: ExtensionAPI): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
   }
 
-  function toggle(ctx: ExtensionContext): void {
+  async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
+    const mode = MODES[name];
+    const [provider, modelId] = parseModel(mode.model);
+    const model = ctx.modelRegistry.find(provider, modelId);
+
+    if (model === undefined) {
+      ctx.ui.notify(`Configured ${name} model is unavailable: ${mode.model}`, "error");
+      return false;
+    }
+
+    if ((await pi.setModel(model)) === false) {
+      ctx.ui.notify(`No authentication available for ${name} model: ${mode.model}`, "error");
+      return false;
+    }
+
+    pi.setThinkingLevel(mode.thinkingLevel);
+    return true;
+  }
+
+  async function toggle(ctx: ExtensionContext): Promise<void> {
     if (ctx.isIdle() === false) {
       ctx.ui.notify("Wait for the current response to finish before switching modes.", "warning");
       return;
     }
 
     if (enabled) {
+      if ((await selectModeModel("build", ctx)) === false) return;
+
       pi.setActiveTools(toolsBeforePlanMode ?? pi.getActiveTools());
       toolsBeforePlanMode = undefined;
       enabled = false;
@@ -40,11 +137,17 @@ export default function planMode(pi: ExtensionAPI): void {
       return;
     }
 
+    if ((await selectModeModel("plan", ctx)) === false) return;
+
     toolsBeforePlanMode = pi.getActiveTools();
     pi.setActiveTools(toolsBeforePlanMode.filter((name) => PLAN_MODE_TOOLS.has(name)));
     enabled = true;
     updateStatus(ctx);
   }
+
+  pi.on("session_start", async (_event, ctx) => {
+    await selectModeModel("build", ctx);
+  });
 
   pi.registerCommand("plan", {
     description: "Toggle read-only plan mode",
@@ -57,7 +160,7 @@ export default function planMode(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event) => {
-    const modePrompt = enabled ? PLAN_MODE_PROMPT : BUILD_MODE_PROMPT;
+    const modePrompt = MODE_PROMPTS[enabled ? "plan" : "build"];
 
     return {
       systemPrompt: `${event.systemPrompt}\n\n${modePrompt}`,

@@ -79,8 +79,8 @@ describe("auth profile prompt status", () => {
     await profileCommand?.("use work", ctx);
     expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));
-    expect(JSON.parse(await readFile(join(projectDir, ".pi", "settings.json"), "utf8"))).toEqual({
-      authProfile: "work",
-    });
+    const projectSettings = await readFile(join(projectDir, ".pi", "settings.json"), "utf8");
+    expect(projectSettings).toBe('{\n  "authProfile": "work"\n}\n');
+    expect(JSON.parse(projectSettings)).toEqual({ authProfile: "work" });
   });
 });

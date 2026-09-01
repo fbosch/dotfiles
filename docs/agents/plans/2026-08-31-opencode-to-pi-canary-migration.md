@@ -337,7 +337,6 @@ This phase intentionally defers behavior implemented by
 - Usage-aware selection.
 - Exclusion after a failed account.
 - Automatic quota failover.
-- A persistent selected-profile indicator.
 
 Acceptance:
 
@@ -356,15 +355,18 @@ Phase 5 setup status on 2026-09-01:
 
 - Vendored the `0.1.1` extension source and MIT license under
   `.pi/agent/extensions/auth-profiles/`, with its npm integrity recorded in the
-  source header. Local changes are limited to formatting and type-safety guards.
+  source header.
 - Kept the npm package out of `settings.json`; Pi discovers the managed local
   extension directly.
 - Confirmed Pi `0.84.4` starts an offline RPC session with the extension loaded,
   binds the built-in default credential store, and handles `/profile` without an
   extension error.
-- No profile credentials or project profile selection were created. Two-profile
-  login, switching, restart persistence, account verification, and `/usage`
-  isolation remain pending.
+- Added `fbb`, `jpb`, and `ct` profile credential files through Pi and selected
+  `fbb` for the dotfiles repository. Credential isolation, account identity, and
+  restart persistence still require direct verification.
+- Published the active profile through Pi's extension-status API. The custom
+  prompt renders the profile and refreshes immediately after a profile rebind.
+- `/usage` account verification and cache-isolation testing remain pending.
 
 ## Phase 6: Add Plan Mode and One Subagent
 

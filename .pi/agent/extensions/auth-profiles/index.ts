@@ -1,7 +1,8 @@
 /**
  * Vendored from @nanstey/pi-auth-profiles@0.1.1.
  * npm integrity: sha512-AMg/Xl5KVcuLTs2ig+dQx27Q3iKRd3+vae07yIfNzpf1dCcyQ7V8a3EKwvWrbwhTQjK6/+Z63wNgaeI1W4auYA==
- * Local changes: repository formatting, type-safety guards, and active-profile status publishing.
+ * Local changes: repository formatting, type-safety guards, active-profile status publishing,
+ * and repository-compatible JSON indentation.
  * License: MIT; see LICENSE in this directory.
  */
 
@@ -152,7 +153,7 @@ function updateJsonFile(path: string, update: (data: Record<string, unknown>) =>
   }
   update(data);
   mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(data, null, "\t")}\n`);
+  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
 export default function authProfiles(pi: ExtensionAPI): void {

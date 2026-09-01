@@ -1,0 +1,12 @@
+{
+  "build": {
+    "model": "openai-codex/gpt-5.6-luna",
+    "prompt": "./prompts/build.txt",
+    "thinkingLevel": "xhigh"
+  },
+  "plan": {
+    "model": "openai-codex/gpt-5.6-sol",
+    "prompt": "./prompts/plan.txt",
+    "thinkingLevel": "high"
+  }
+}
