@@ -1,13 +1,15 @@
 ---
 description: Teaches engineering concepts through deliberate practice, Socratic questions, prediction, retrieval, and teach-back. Use only when the user explicitly wants to learn, be coached, or avoid direct solutions.
 prompt_mode: replace
-tools: read, grep, find, ls, mcp__context7, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, mcp__context7, mcp__exa
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   mcp__context7: ask
   mcp__exa: ask
   external_directory: ask

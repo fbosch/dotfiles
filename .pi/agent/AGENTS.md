@@ -37,6 +37,9 @@ understood in the parent session.
 - Give every child the user intent, known context, exact scope, edit authority,
   validation requirement, and expected final output. Children do not inherit
   the parent conversation unless `inherit_context` is explicitly enabled.
+- Prefer `fffind` for file discovery and `ffgrep` for identifier or literal
+  search. Use Pi's built-in `find` and `grep` as fallbacks, then read the source
+  once the relevant paths are known.
 - Use the fewest children needed. Children cannot spawn other children; the
   parent owns decomposition, sequencing, and integration.
 - Use a foreground child for one result that blocks the next parent action. Use

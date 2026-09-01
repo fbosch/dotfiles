@@ -1,13 +1,15 @@
 ---
 description: Writes, runs, and diagnoses tests including unit, integration, edge case, coverage, and regression suites. Use when adding tests, improving coverage, running relevant test suites, or investigating test failures.
 prompt_mode: replace
-tools: read, grep, find, ls, write, edit, bash
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   write: allow
   edit: allow
   bash: ask

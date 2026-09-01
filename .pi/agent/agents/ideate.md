@@ -1,13 +1,15 @@
 ---
 description: Spitballs ideas, alternatives, and directions within a given scope. Use before converging on a spec or implementation.
 prompt_mode: replace
-tools: read, grep, find, ls, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, mcp__exa
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   mcp__exa: ask
   external_directory: ask
 ---

@@ -1,13 +1,15 @@
 ---
 description: Reviews code for quality, security vulnerabilities, and best practices. Use after code changes, before merging PRs, or when auditing existing code.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

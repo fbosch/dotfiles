@@ -382,7 +382,7 @@ Phase 5 setup status on 2026-09-01:
 - The package created no `pi-usage.json`. The three named credential files
   remain mode `0600` inside a mode `0700` directory.
 
-## Phase 6: Add Plan Mode and One Subagent
+## Phase 6: Add Plan Mode and Subagents
 
 Canary the local `.pi/agent/extensions/plan-mode.ts` implementation. Plan mode
 keeps only its explicit read-only tool allowlist, so direct writes and all shell
@@ -435,8 +435,9 @@ Phase 6 setup status on 2026-09-01:
 - Added Pi definitions for all 19 tracked OpenCode agent files while retaining
   the existing `explore` definition. Pi-specific frontmatter replaces OpenCode
   modes, temperature, tool names, and permission syntax. Read-only roles omit
-  mutation tools; shell and MCP access remains approval-gated. `commit` and
-  `tutor` are callable children rather than selectable primary modes.
+  mutation tools; repository search roles can use FFF; shell and MCP access
+  remains approval-gated. `commit` and `tutor` are callable children rather
+  than selectable primary modes.
 - Added `$PI_CODING_AGENT_DIR/AGENTS.md` with Pi-native routing guidance. It
   keeps orchestration in the parent, treats `maxConcurrent: 1` as a real
   admission limit, resumes parent-mediated questions by child ID, and requires

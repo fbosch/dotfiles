@@ -1,13 +1,15 @@
 ---
 description: Refactors code to improve quality without changing behavior. Use when code has duplication, poor naming, complex logic, or readability issues.
 prompt_mode: replace
-tools: read, grep, find, ls, write, edit, bash
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   write: allow
   edit: allow
   bash: ask

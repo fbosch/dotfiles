@@ -2,13 +2,15 @@
 description: Fast, cost-efficient execution for well-scoped tasks and command workflows.
 prompt_mode: replace
 max_turns: 12
-tools: read, grep, find, ls, write, edit, bash
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   write: allow
   edit: allow
   bash: ask

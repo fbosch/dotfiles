@@ -1,13 +1,15 @@
 ---
 description: Runs bounded, read-only post-change validation and reports evidence. Use after edits when targeted checks need execution without test design, debugging, or code review.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

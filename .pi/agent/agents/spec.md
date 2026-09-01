@@ -1,13 +1,15 @@
 ---
 description: Turns an ambiguous request into an explicit contract — scope, interfaces, invariants, and failure behavior. Use before implementing any new feature, API, CLI command, or config format.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

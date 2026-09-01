@@ -1,13 +1,15 @@
 ---
 description: Decomposes rough ideas, specs, and issue text into a structured backlog plan. Use before creating Linear issues or starting implementation.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

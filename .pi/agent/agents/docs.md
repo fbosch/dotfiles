@@ -2,15 +2,18 @@
 description: Writes and maintains documentation including READMEs, API docs, and inline comments. Use when creating new docs, updating existing documentation, or improving the clarity of existing content.
 prompt_mode: replace
 max_turns: 6
-tools: read, grep, find, ls, write, edit
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   write: allow
   edit: allow
+  bash: ask
   external_directory: ask
 ---
 

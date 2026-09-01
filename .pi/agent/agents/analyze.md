@@ -1,13 +1,15 @@
 ---
 description: Traces how specific code works - data flow, call chains, state transitions, and component interactions. Use when you need precise file:line documentation of an existing implementation before making changes.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

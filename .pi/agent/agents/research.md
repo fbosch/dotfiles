@@ -1,13 +1,15 @@
 ---
 description: Gathers information from docs, web, and codebases without making changes
 prompt_mode: replace
-tools: read, grep, find, ls, bash, mcp__context7, mcp__github, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, bash, mcp__context7, mcp__github, mcp__exa
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   mcp__context7: ask
   mcp__github: ask

@@ -1,13 +1,15 @@
 ---
 description: Actively tries to break a proposed design or implementation — failure modes, malicious inputs, stress cases. Use after spec.md, before merging risky changes, or for parsers, CLIs, config loaders, auth, and infra.
 prompt_mode: replace
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   bash: ask
   external_directory: ask
 ---

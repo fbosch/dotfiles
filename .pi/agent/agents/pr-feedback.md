@@ -2,13 +2,15 @@
 description: Triage GitHub PR review feedback, validate claims against the code, apply confirmed fixes, and resolve explicitly approved threads.
 prompt_mode: replace
 max_turns: 24
-tools: read, grep, find, ls, write, edit, bash, mcp__github
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, mcp__github
 permission:
   "*": deny
   read: allow
   grep: allow
   find: allow
   ls: allow
+  fffind: allow
+  ffgrep: allow
   write: allow
   edit: allow
   bash: ask
