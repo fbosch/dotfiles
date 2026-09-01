@@ -1,5 +1,4 @@
 import {
-  DynamicBorder,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type ExtensionContext,
@@ -7,7 +6,6 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
-  Box,
   type Component,
   getKeybindings,
   Input,
@@ -15,10 +13,16 @@ import {
   SelectList,
   Spacer,
   sliceByColumn,
-  Text,
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
+import {
+  MODAL_FIXED_ROWS,
+  MODAL_MAX_VISIBLE_ITEMS,
+  MODAL_WIDTH,
+  ModalFrame,
+  modalSelectListTheme,
+} from "./prompt-ui/modal-frame";
 
 type PaletteAction = () => Promise<void> | void;
 
@@ -51,23 +55,10 @@ interface PaletteLevel {
   sections?: PaletteSection[];
 }
 
-const PALETTE_WIDTH = 72;
-const MAX_VISIBLE_ITEMS = 15;
 const MAX_VISIBLE_ROOT_ROWS = 24;
-const PALETTE_FIXED_ROWS = 10;
 
 function isCommandContext(ctx: ExtensionContext): ctx is ExtensionCommandContext {
   return "newSession" in ctx;
-}
-
-function selectListTheme(theme: Theme) {
-  return {
-    selectedPrefix: (text: string) => theme.fg("accent", text),
-    selectedText: (text: string) => theme.fg("accent", text),
-    description: (text: string) => theme.fg("muted", text),
-    scrollInfo: (text: string) => theme.fg("muted", text),
-    noMatch: (text: string) => theme.fg("muted", text),
-  };
 }
 
 function truncatePlainText(text: string, maxWidth: number, pad = false): string {
@@ -277,10 +268,9 @@ export function filterPaletteSections(sections: PaletteSection[], query: string)
     .filter((section) => section.items.length > 0);
 }
 
-class CommandPalette extends Box {
+class CommandPalette extends ModalFrame {
   private readonly levels: PaletteLevel[] = [];
   private readonly tui: TUI;
-  private readonly theme: Theme;
   private readonly done: (action: PaletteAction | null) => void;
   private focusedState = false;
 
@@ -290,9 +280,8 @@ class CommandPalette extends Box {
     sections: PaletteSection[],
     done: (action: PaletteAction | null) => void,
   ) {
-    super(1, 0, (text) => theme.bg("selectedBg", text));
+    super(theme);
     this.tui = tui;
-    this.theme = theme;
     this.done = done;
     this.pushLevel(
       "Commands",
@@ -373,8 +362,8 @@ class CommandPalette extends Box {
         label: item.label,
         description: item.description,
       })),
-      Math.max(1, Math.min(MAX_VISIBLE_ITEMS, this.tui.terminal.rows - PALETTE_FIXED_ROWS - 1)),
-      selectListTheme(this.theme),
+      Math.max(1, Math.min(MODAL_MAX_VISIBLE_ITEMS, this.tui.terminal.rows - MODAL_FIXED_ROWS - 1)),
+      modalSelectListTheme(this.theme),
       { minPrimaryColumnWidth: 18, maxPrimaryColumnWidth: 32 },
     );
     list.onSelect = (selected) => void this.select(selected);
@@ -394,7 +383,7 @@ class CommandPalette extends Box {
     }));
     const list = new SectionedSelectList(
       filteredSections,
-      Math.max(1, Math.min(MAX_VISIBLE_ROOT_ROWS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
+      Math.max(1, Math.min(MAX_VISIBLE_ROOT_ROWS, this.tui.terminal.rows - MODAL_FIXED_ROWS)),
       sectionedSelectListTheme(this.theme),
     );
     list.onSelect = (selected) => void this.select(selected);
@@ -433,23 +422,12 @@ class CommandPalette extends Box {
     const level = this.currentLevel();
     if (!level) return;
 
-    this.clear();
-    const border = () => new DynamicBorder((text) => this.theme.fg("borderAccent", text));
     const breadcrumb = this.levels.map(({ title }) => title).join("  ›  ");
-
-    this.addChild(border());
-    this.addChild(new Spacer(1));
-    this.addChild(new Text(this.theme.bold(this.theme.fg("accent", breadcrumb)), 0, 0));
-    this.addChild(new Spacer(1));
-    this.addChild(level.input);
-    this.addChild(new Spacer(1));
-    this.addChild(level.list);
-    this.addChild(new Spacer(1));
-    this.addChild(
-      new Text(this.theme.fg("dim", "  ↑↓ navigate · Enter select · Esc back or close"), 0, 0),
+    this.setFrame(
+      breadcrumb,
+      [level.input, new Spacer(1), level.list],
+      "  ↑↓ navigate · Enter select · Esc back or close",
     );
-    this.addChild(new Spacer(1));
-    this.addChild(border());
   }
 }
 
@@ -731,7 +709,7 @@ async function showPalette(ctx: ExtensionContext, pi: ExtensionAPI) {
       overlay: true,
       overlayOptions: {
         anchor: "center",
-        width: PALETTE_WIDTH,
+        width: MODAL_WIDTH,
         nonCapturing: true,
       },
       onHandle: (handle) => handle.focus(),

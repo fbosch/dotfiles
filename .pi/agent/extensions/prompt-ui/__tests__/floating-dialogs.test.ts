@@ -1,19 +1,22 @@
 import { describe, expect, test } from "bun:test";
-import {
-  type ExtensionUIContext,
-  initTheme,
-  type KeybindingsManager,
-  type Theme,
+import type {
+  ExtensionUIContext,
+  KeybindingsManager,
+  Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import { type Component, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import { installFloatingDialogs } from "../floating-dialogs";
 
 type CustomOptions = Parameters<ExtensionUIContext["custom"]>[1];
 
-initTheme("dark");
-
 function createUI() {
   const calls: CustomOptions[] = [];
+  const components: Component[] = [];
+  const theme = {
+    fg: (_color: string, text: string) => text,
+    bg: (_color: string, text: string) => text,
+    bold: (text: string) => text,
+  } as Theme;
   const tui = {
     terminal: { columns: 120, rows: 40 },
     requestRender: () => {},
@@ -32,7 +35,8 @@ function createUI() {
     const result = new Promise<T>((resolve) => {
       finish = resolve;
     });
-    const component = await factory(tui, {} as Theme, {} as KeybindingsManager, finish);
+    const component = await factory(tui, theme, {} as KeybindingsManager, finish);
+    components.push(component);
     component.handleInput?.("\r");
     return result;
   };
@@ -42,12 +46,12 @@ function createUI() {
     setToolsExpanded: () => {},
   } as unknown as ExtensionUIContext;
 
-  return { calls, ui };
+  return { calls, components, ui };
 }
 
 describe("floating extension dialogs", () => {
-  test("opens shared select and input primitives as overlays", async () => {
-    const { calls, ui } = createUI();
+  test("opens shared select and input primitives with the palette UI", async () => {
+    const { calls, components, ui } = createUI();
     installFloatingDialogs(ui);
 
     await ui.select("Settings", ["First", "Second"]);
@@ -56,13 +60,20 @@ describe("floating extension dialogs", () => {
     expect(calls).toEqual([
       {
         overlay: true,
-        overlayOptions: { anchor: "center", width: 72, maxHeight: "80%", margin: 1 },
+        overlayOptions: { anchor: "center", width: 72, margin: 1 },
       },
       {
         overlay: true,
-        overlayOptions: { anchor: "center", width: 72, maxHeight: "80%", margin: 1 },
+        overlayOptions: { anchor: "center", width: 72, margin: 1 },
       },
     ]);
+    const selectDialog = stripTerminalSequences(components[0]?.render(68).join("\n") ?? "");
+    const inputDialog = stripTerminalSequences(components[1]?.render(68).join("\n") ?? "");
+    expect(selectDialog).toContain("Settings");
+    expect(selectDialog).toContain("→ First");
+    expect(selectDialog).toContain("↑↓ navigate · Enter select · Esc close");
+    expect(inputDialog).toContain("Value");
+    expect(inputDialog).toContain("Enter submit · Esc close");
   });
 
   test("preserves explicit custom component placement", async () => {
@@ -77,11 +88,6 @@ describe("floating extension dialogs", () => {
       { overlay: false },
     );
 
-    expect(calls).toEqual([
-      {
-        overlay: false,
-        overlayOptions: { anchor: "center", width: 72, maxHeight: "80%", margin: 1 },
-      },
-    ]);
+    expect(calls).toEqual([{ overlay: false }]);
   });
 });
