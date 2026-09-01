@@ -26,7 +26,14 @@ function firstBrace(value: string): [string, string, string] | undefined {
     return undefined
   }
 
-  return [match[1], match[2], match[3]]
+  const before = match[1]
+  const middle = match[2]
+  const after = match[3]
+  if (before === undefined || middle === undefined || after === undefined) {
+    return undefined
+  }
+
+  return [before, middle, after]
 }
 
 function expandedReplacements(targets: string[], valueMiddle: string): string[] {
@@ -90,8 +97,14 @@ function parseTypoRule(line: string): TypoRule[] {
     return []
   }
 
+  const fromPattern = match[1]
+  const toPattern = match[2]
+  if (fromPattern === undefined || toPattern === undefined) {
+    return []
+  }
+
   const rules: TypoRule[] = []
-  const expanded = expandBraces(new Map([[match[1], match[2]]]))
+  const expanded = expandBraces(new Map([[fromPattern, toPattern]]))
 
   for (const [from, to] of expanded) {
     rules.push({ from: mixedcase(from), to: mixedcase(to) })

@@ -1,8 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
+import { loadTypoCorrectionRules } from "./typo-correction";
 
 export default function promptUi(pi: ExtensionAPI): void {
+  const typoRules = loadTypoCorrectionRules();
   let isWorking = false;
   let activeTui: TUI | undefined;
   let disposePromptEditor = () => {};
@@ -52,7 +54,7 @@ export default function promptUi(pi: ExtensionAPI): void {
     });
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-      const editor = new PromptEditor(tui, theme, keybindings, pi, ctx, state);
+      const editor = new PromptEditor(tui, theme, keybindings, pi, ctx, state, typoRules);
       disposePromptEditor = () => editor.dispose();
       activeTui = tui;
       return editor;

@@ -20,6 +20,7 @@ import {
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
+import { correctedPromptForInput, type TypoCorrectionRules } from "./typo-correction";
 
 const EDITOR_PADDING_X = 1;
 const DOCK_RAIL = "▌";
@@ -161,6 +162,7 @@ export class PromptEditor extends CustomEditor {
   private readonly ctx: ExtensionContext;
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
+  private readonly typoRules: TypoCorrectionRules;
 
   constructor(
     tui: TUI,
@@ -169,11 +171,13 @@ export class PromptEditor extends CustomEditor {
     pi: ExtensionAPI,
     ctx: ExtensionContext,
     state: PromptEditorState,
+    typoRules: TypoCorrectionRules,
   ) {
     super(tui, theme, keybindings, { paddingX: EDITOR_PADDING_X });
     this.pi = pi;
     this.ctx = ctx;
     this.promptState = state;
+    this.typoRules = typoRules;
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
 
@@ -188,6 +192,26 @@ export class PromptEditor extends CustomEditor {
 
   setAutocompleteProvider(provider: AutocompleteProvider): void {
     super.setAutocompleteProvider(createAliasAutocompleteProvider(provider));
+  }
+
+  handleInput(data: string): void {
+    const lines = this.getLines();
+    const cursor = this.getCursor();
+    const lastLine = lines.at(-1) ?? "";
+    const cursorIsAtEnd = cursor.line === lines.length - 1 && cursor.col === lastLine.length;
+
+    if (cursorIsAtEnd && this.isShowingAutocomplete() === false) {
+      const current = this.getText();
+      const corrected = correctedPromptForInput(current, data, this.typoRules);
+      // setText clears Pi's backing content for collapsed large-paste markers.
+      const hasExpandedPaste = corrected !== undefined && this.getExpandedText() !== current;
+      if (corrected !== undefined && hasExpandedPaste === false) {
+        this.setText(corrected);
+        return;
+      }
+    }
+
+    super.handleInput(data);
   }
 
   render(width: number): string[] {

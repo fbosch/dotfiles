@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { appendDelimiterAndCorrect, parseTypoRules } from "../typo-engine"
+import { appendDelimiterAndCorrect, parseTypoRules } from "../../../../fbb/lib/typo-engine.ts"
 
 const vimAbolishPath = `${process.env.HOME}/.local/share/nvim/lazy/vim-abolish`
 

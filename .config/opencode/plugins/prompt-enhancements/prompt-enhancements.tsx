@@ -1,8 +1,8 @@
 /** @jsxImportSource @opentui/solid */
 import type { TuiPlugin, TuiPluginApi, TuiPluginModule } from "@opencode-ai/plugin/tui"
 import type { JSX } from "solid-js"
+import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "../../../fbb/lib/typo-engine.ts"
 import { colorNativeUsage, type Renderable } from "./native-usage-color"
-import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "./typo-engine"
 
 declare const Bun: {
   file(path: string): {

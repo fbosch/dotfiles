@@ -1,6 +1,7 @@
 {
 	"$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
 	"entry": [
+		"lib/typo-engine.ts",
 		"lib/opencode-multi-auth/index.ts",
 		"lib/opencode-multi-auth/__tests__/**/*.test.ts"
 	],

@@ -10,6 +10,8 @@ set -gx NVIM_INIT $HOME/.config/nvim/init.lua
 set -gx NH_FLAKE $HOME/nixos
 set -gx NH_OS_FLAKE $HOME/nixos
 set -gx AGENT_BROWSER_ENGINE lightpanda
+# Keep npm's generated Pi package lock anchored to the canonical Stow source path.
+set -gx PI_CODING_AGENT_DIR "$HOME/dotfiles/.pi/agent"
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
 set -x RIPGREP_CONFIG_PATH "$HOME/.config/.ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH

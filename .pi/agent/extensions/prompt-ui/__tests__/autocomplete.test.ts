@@ -46,7 +46,7 @@ describe("prompt autocomplete", () => {
     });
   });
 
-  test("fills the selected suggestion and replaces Pi's focus arrow with spacing", () => {
+  test("fills the selected suggestion without Pi's focus marker padding", () => {
     const selected = "\u001b[36m → /ado-pbi  Fetch backlog item\u001b[39m";
     const line = styleSelectedSuggestion(
       selected,
@@ -55,9 +55,18 @@ describe("prompt autocomplete", () => {
       "\u001b[38;2;30;30;36m",
     );
 
-    expect(stripTerminalSequences(line)).toBe("   /ado-pbi  Fetch backlog item     ");
+    expect(stripTerminalSequences(line)).toBe(" /ado-pbi  Fetch backlog item       ");
     expect(line).toContain("\u001b[48;2;138;190;183m");
     expect(line).toContain("\u001b[38;2;30;30;36m");
     expect(visibleWidth(line)).toBe(36);
+  });
+
+  test("removes leading padding from unselected suggestions while preserving styling", () => {
+    const suggestion = "  model\u001b[90m  Select model\u001b[39m";
+
+    const line = styleSelectedSuggestion(suggestion, 36, "unused", "unused");
+
+    expect(stripTerminalSequences(line)).toBe(" model  Select model");
+    expect(line).toContain("\u001b[90m");
   });
 });

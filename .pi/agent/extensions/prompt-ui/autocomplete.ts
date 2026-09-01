@@ -6,7 +6,7 @@ import type {
   OverlayOptions,
   TUI,
 } from "@earendil-works/pi-tui";
-import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { getCommandAlias } from "../command-aliases";
 import { fitColumns, paintDockRow } from "./dock-rendering";
 
@@ -30,10 +30,15 @@ export function styleSelectedSuggestion(
   selectedBackgroundAnsi: string,
   selectedForegroundAnsi: string,
 ): string {
-  const match = /^(\s*)→\s(.*)$/.exec(stripTerminalSequences(line));
-  if (match === null) return line;
+  const plain = stripTerminalSequences(line);
+  const match = /^\s*→\s+(.*)$/.exec(plain);
+  if (match === null) {
+    const leadingWidth = plain.length - plain.trimStart().length;
+    const paddingToRemove = Math.max(0, leadingWidth - 1);
+    return sliceByColumn(line, paddingToRemove, visibleWidth(line) - paddingToRemove, true);
+  }
 
-  const content = fitColumns(`${match[1]}  ${match[2]}`, "", width);
+  const content = fitColumns(` ${match[1] ?? ""}`, "", width);
   return `${selectedBackgroundAnsi}${selectedForegroundAnsi}${content}\u001b[39m\u001b[49m`;
 }
 
