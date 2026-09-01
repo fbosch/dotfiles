@@ -32,6 +32,12 @@ export interface PromptEditorState {
   getStatuses(): readonly string[];
 }
 
+interface PromptKeybindings {
+  getKeys(
+    action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
+  ): string[];
+}
+
 function formatCwd(cwd: string): string {
   const home = process.env.HOME;
   if (home === undefined) return cwd;
@@ -59,7 +65,7 @@ function formatKey(key: string): string {
 }
 
 function keyHint(
-  keybindings: KeybindingsManager,
+  keybindings: PromptKeybindings,
   action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
   description: string,
 ): string {
@@ -76,7 +82,7 @@ function sanitizeStatus(status: string): string {
 
 export function renderPromptHints(
   theme: Theme,
-  keybindings: KeybindingsManager,
+  keybindings: PromptKeybindings,
   promptState: PromptEditorState,
   width: number,
 ): string {

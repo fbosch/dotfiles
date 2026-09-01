@@ -34,14 +34,14 @@ export default function promptUi(pi: ExtensionAPI): void {
     if (!ctx.hasUI) return;
 
     ctx.ui.setWorkingVisible(false);
-    ctx.ui.setFooter((tui, _theme, footerData) => {
+    ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();
       getBranch = () => footerData.getGitBranch();
       getStatuses = () => [...footerData.getExtensionStatuses().values()];
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
-        render: (width) => [renderPromptHints(ctx.ui.theme, keybindings, state, width)],
+        render: (width) => [renderPromptHints(theme, keybindings, state, width)],
         invalidate: () => tui.requestRender(),
         dispose: () => {
           unsubscribe();
