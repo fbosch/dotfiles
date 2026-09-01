@@ -21,10 +21,11 @@ describe("formatFile", () => {
       const filePath = join(sourceDirectory, "example.ts");
       await mkdir(sourceDirectory);
       await writeFile(filePath, "const value=1");
-      const calls: Array<{ command: string; args: string[]; cwd: string | undefined }> = [];
+      const calls: Array<{ command: string; args: readonly string[]; cwd: string | undefined }> =
+        [];
       const execute: FormatterExecutor = async (command, args, options) => {
         calls.push({ command, args, cwd: options.cwd });
-        return { stdout: "", stderr: "", code: 0, killed: false };
+        return { kind: "success" };
       };
       const settings: ResolvedFormatterSettings = {
         timeoutMs: 1_000,
@@ -121,8 +122,13 @@ describe("formatFile", () => {
         execute: async (command) => {
           calls.push(command);
           return command === "first"
-            ? { stdout: "", stderr: "invalid input", code: 2, killed: false }
-            : { stdout: "", stderr: "", code: 0, killed: false };
+            ? {
+                kind: "exit_error",
+                exitCode: 2,
+                signal: null,
+                stderr: "invalid input",
+              }
+            : { kind: "success" };
         },
         filePath,
         settings,
@@ -132,6 +138,56 @@ describe("formatFile", () => {
       expect(warnings).toEqual([
         `Formatter lua: first failed for ${filePath} (exit code 2): invalid input`,
       ]);
+    });
+  });
+
+  test("tries the next available formatter after a process startup failure", async () => {
+    await temporaryProject(async (directory) => {
+      const filePath = join(directory, "example.ts");
+      await writeFile(filePath, "const value=1");
+      const calls: string[] = [];
+      const settings: ResolvedFormatterSettings = {
+        timeoutMs: 1_000,
+        warnings: [],
+        rules: [
+          {
+            id: "web",
+            mode: "first_available",
+            extensions: [".ts"],
+            fileNames: [],
+            commands: [
+              {
+                command: "broken",
+                args: ["$FILE"],
+                requireRootMarker: false,
+                rootMarkers: [],
+              },
+              {
+                command: "fallback",
+                args: ["$FILE"],
+                requireRootMarker: false,
+                rootMarkers: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      const warnings = await formatFile({
+        commandAvailable: async () => true,
+        cwd: directory,
+        execute: async (command) => {
+          calls.push(command);
+          return command === "broken"
+            ? { kind: "spawn_error", message: "missing interpreter" }
+            : { kind: "success" };
+        },
+        filePath,
+        settings,
+      });
+
+      expect(calls).toEqual(["broken", "fallback"]);
+      expect(warnings).toEqual([]);
     });
   });
 });

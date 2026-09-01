@@ -102,26 +102,13 @@
         ]
       },
       "mdx": {
-        "mode": "first_available",
+        "mode": "pipeline",
         "files": {
           "extensions": [
             ".mdx"
           ]
         },
         "commands": [
-          {
-            "command": "biome",
-            "args": [
-              "format",
-              "--write",
-              "$FILE"
-            ],
-            "requireRootMarker": true,
-            "rootMarkers": [
-              "biome.json",
-              "biome.jsonc"
-            ]
-          },
           {
             "command": "prettier",
             "args": [

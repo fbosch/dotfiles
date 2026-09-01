@@ -513,7 +513,7 @@ async function askInline(
   if (isAborted(signal)) return undefined;
 
   return ctx.ui.custom<AskAnswer[] | undefined>(
-    (tui, theme, _keybindings, done) => {
+    (tui, theme, keybindings, done) => {
       let finished = false;
       const finish = (answers: AskAnswer[] | undefined) => {
         if (finished) return;
@@ -530,6 +530,7 @@ async function askInline(
         context,
         mode,
         options,
+        keybindings,
         () => tui.requestRender(),
         finish,
       );
@@ -538,6 +539,13 @@ async function askInline(
     },
     { overlay: false },
   );
+}
+
+function displayKey(key: string): string {
+  if (key === "up") return "↑";
+  if (key === "down") return "↓";
+  if (key === "escape") return "esc";
+  return key;
 }
 
 function isAborted(signal: AbortSignal | undefined): boolean {

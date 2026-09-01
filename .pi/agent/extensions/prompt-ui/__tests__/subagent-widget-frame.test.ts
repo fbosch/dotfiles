@@ -49,7 +49,7 @@ describe("subagent widget frame", () => {
     const widget: WidgetComponent = {
       render: (width) => {
         renderedWidth = width;
-        return ["● Agents", "└─ ⠋ Plan  Designing prompt seam"];
+        return ["● Agents", "└─ ⠋ Plan  Designing prompt seam with extra output"];
       },
       invalidate: () => {
         invalidations += 1;
@@ -74,6 +74,7 @@ describe("subagent widget frame", () => {
     expect(plain[0]).toBe(" ".repeat(32));
     expect(plain[1]).toContain("  ● Agents");
     expect(plain[2]).toContain("  └─ ⠋ Plan");
+    expect(plain[2]).not.toContain("extra output");
     expect(plain.some((line) => line.includes("▌") || line.includes("▐"))).toBe(false);
     expect(plain.at(-1)).toBe("▀".repeat(32));
     expect(rendered.slice(0, -1).every((line) => line.includes("\u001b[48;2;34;34;34m"))).toBe(

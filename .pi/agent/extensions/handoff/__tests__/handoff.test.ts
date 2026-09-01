@@ -11,6 +11,7 @@ import {
 import {
   buildHandoffDraft,
   findHandoffState,
+  formatTranscript,
   HANDOFF_STATE_TYPE,
   type HandoffState,
   parseHandoffPayload,
@@ -138,6 +139,26 @@ test("handoff history excludes thinking, tool arguments, and tool results", asyn
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
+});
+
+test("formats large transcripts within the output budget", () => {
+  const entries = Array.from({ length: 500 }, (_, index) => ({
+    type: "message" as const,
+    id: `message-${index}`,
+    parentId: index === 0 ? null : `message-${index - 1}`,
+    timestamp: new Date(index).toISOString(),
+    message: {
+      role: "user" as const,
+      content: `${index}:${"x".repeat(60 * 1024)}`,
+      timestamp: index,
+    },
+  }));
+
+  const transcript = formatTranscript(entries, 500);
+  expect(Buffer.byteLength(transcript, "utf8")).toBeLessThanOrEqual(256 * 1024);
+  expect(transcript).toContain("499:");
+  expect(transcript).not.toContain("0:");
+  expect(transcript).toContain("truncated");
 });
 
 test("creates a parent-linked session with an editable unsubmitted draft", async () => {

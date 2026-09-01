@@ -34,6 +34,12 @@ function catalogFixture() {
     source: "/repo/justfile",
     aliases: {
       check: { name: "check", target: "shellcheck" },
+      publish: { name: "publish", target: "publish" },
+      private_check: {
+        name: "private-check",
+        target: "shellcheck",
+        attributes: ["private"],
+      },
     },
     recipes: {
       shellcheck: {
@@ -55,7 +61,7 @@ function catalogFixture() {
     },
     modules: {
       release: {
-        modulePath: "release",
+        module_path: "release",
         source: "/repo/release.just",
         aliases: {},
         recipes: {
@@ -85,6 +91,7 @@ describe("Just catalog", () => {
       groups: ["validation"],
       source: "/repo/justfile",
     });
+    expect(recipes[0]?.aliases).toEqual(["publish"]);
   });
 
   test("creates named schemas and preserves Just parameter order", () => {
@@ -96,18 +103,45 @@ describe("Just catalog", () => {
           doc: "Test targets.",
           private: false,
           attributes: [],
-          parameters: [parameter("mode", "singular", "fast"), parameter("targets", "plus")],
+          parameters: [parameter("mode"), parameter("targets", "plus")],
         },
       },
     });
     if (recipe === undefined) throw new Error("fixture recipe missing");
 
     const schema = createRecipeParametersSchema(recipe);
-    expect((schema as { required?: string[] }).required).toEqual(["targets"]);
+    expect((schema as { required?: string[] }).required).toEqual(["mode", "targets"]);
     expect(
       buildRecipeArguments(recipe, { mode: "full", targets: ["unit", "integration"] }),
     ).toEqual(["full", "unit", "integration"]);
-    expect(buildRecipeArguments(recipe, { targets: ["unit"] })).toEqual(["unit"]);
+  });
+
+  test("rejects later defaults when an earlier positional default is omitted", () => {
+    const [recipe] = parseJustCatalog({
+      recipes: {
+        deploy: {
+          name: "deploy",
+          namepath: "deploy",
+          doc: "Deploy an artifact.",
+          private: false,
+          attributes: [],
+          parameters: [
+            parameter("environment", "singular", "staging"),
+            parameter("tag", "singular", "latest"),
+          ],
+        },
+      },
+    });
+    if (recipe === undefined) throw new Error("fixture recipe missing");
+
+    expect(buildRecipeArguments(recipe, {})).toEqual([]);
+    expect(buildRecipeArguments(recipe, { environment: "production", tag: "v2" })).toEqual([
+      "production",
+      "v2",
+    ]);
+    expect(() => buildRecipeArguments(recipe, { tag: "v2" })).toThrow(
+      "cannot be supplied while earlier optional parameter `environment` is omitted",
+    );
   });
 
   test("falls back to raw arguments for advanced Just options", () => {
@@ -138,6 +172,39 @@ describe("Just catalog", () => {
     ]);
     expect(searchRecipes(recipes, "publish", 5)[0]?.namepath).toBe("release::publish");
     expect(searchRecipes(recipes, "check", 5)[0]?.namepath).toBe("shellcheck");
+  });
+
+  test("omits ambiguous aliases instead of attaching them to the wrong module", () => {
+    const recipes = parseJustCatalog({
+      aliases: { ship: { name: "ship", target: "publish" } },
+      recipes: {
+        publish: {
+          name: "publish",
+          namepath: "publish",
+          doc: "Publish from root.",
+          private: false,
+          attributes: [],
+          parameters: [],
+        },
+      },
+      modules: {
+        release: {
+          module_path: "release",
+          recipes: {
+            publish: {
+              name: "publish",
+              namepath: "release::publish",
+              doc: "Publish a release.",
+              private: false,
+              attributes: [],
+              parameters: [],
+            },
+          },
+        },
+      },
+    });
+
+    expect(recipes.every((recipe) => recipe.aliases.length === 0)).toBe(true);
   });
 
   test("allocates readable names and resolves collisions", () => {

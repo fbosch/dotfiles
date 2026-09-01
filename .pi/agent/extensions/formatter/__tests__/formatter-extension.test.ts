@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { link, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -16,11 +16,15 @@ type ToolResultHandler = (
   context: ExtensionContext,
 ) => Promise<unknown> | unknown;
 
-test("serializes formatter runs for concurrent mutations to the same file", async () => {
+test("serializes formatter runs through filesystem aliases of the same file", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-formatter-extension-"));
   try {
     const filePath = join(directory, "example.ts");
+    const aliasPath = join(directory, "alias.ts");
+    const hardLinkPath = join(directory, "hard-link.ts");
     await writeFile(filePath, "const value=1");
+    await symlink(filePath, aliasPath);
+    await link(filePath, hardLinkPath);
     const settings: ResolvedFormatterSettings = {
       timeoutMs: 1_000,
       warnings: [],
@@ -59,28 +63,28 @@ test("serializes formatter runs for concurrent mutations to the same file", asyn
         if (event === "session_start") sessionStart = handler as SessionStartHandler;
         if (event === "tool_result") toolResult = handler as ToolResultHandler;
       },
-      async exec() {
-        executionCount += 1;
-        markExecutionStarted?.();
-        activeExecutions += 1;
-        maximumActiveExecutions = Math.max(maximumActiveExecutions, activeExecutions);
-        if (executionCount === 1) await firstExecution;
-        activeExecutions -= 1;
-        return { stdout: "", stderr: "", code: 0, killed: false };
-      },
     } as unknown as ExtensionAPI;
+    const execute = async () => {
+      executionCount += 1;
+      markExecutionStarted?.();
+      activeExecutions += 1;
+      maximumActiveExecutions = Math.max(maximumActiveExecutions, activeExecutions);
+      if (executionCount === 1) await firstExecution;
+      activeExecutions -= 1;
+      return { kind: "success" } as const;
+    };
     const context = {
       cwd: directory,
       isProjectTrusted: () => true,
       signal: undefined,
       ui: { notify() {} },
     } as unknown as ExtensionContext;
-    const event = (toolCallId: string): ToolResultEvent =>
+    const event = (toolCallId: string, path: string): ToolResultEvent =>
       ({
         type: "tool_result",
         toolCallId,
         toolName: "write",
-        input: { path: filePath, content: "const value=1" },
+        input: { path, content: "const value=1" },
         content: [{ type: "text", text: "wrote file" }],
         details: undefined,
         isError: false,
@@ -88,6 +92,7 @@ test("serializes formatter runs for concurrent mutations to the same file", asyn
 
     createFormatterExtension({
       commandAvailable: async () => true,
+      execute,
       readSettings: () => settings,
     })(pi);
     if (sessionStart === undefined || toolResult === undefined) {
@@ -95,14 +100,15 @@ test("serializes formatter runs for concurrent mutations to the same file", asyn
     }
     await sessionStart({} as never, context);
 
-    const first = toolResult(event("first"), context);
-    const second = toolResult(event("second"), context);
+    const first = toolResult(event("first", filePath), context);
+    const second = toolResult(event("second", aliasPath), context);
+    const third = toolResult(event("third", hardLinkPath), context);
     await executionStarted;
     expect(executionCount).toBe(1);
 
     releaseFirstExecution?.();
-    await Promise.all([first, second]);
-    expect(executionCount).toBe(2);
+    await Promise.all([first, second, third]);
+    expect(executionCount).toBe(3);
     expect(maximumActiveExecutions).toBe(1);
   } finally {
     await rm(directory, { recursive: true, force: true });

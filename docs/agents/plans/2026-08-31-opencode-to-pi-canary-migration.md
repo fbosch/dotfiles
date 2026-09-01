@@ -66,7 +66,9 @@ Canary:
 - Plan mode: the local `.pi/agent/extensions/plan-mode.ts` implementation.
 - Subagents: `@gotgenes/pi-subagents@21.0.3` as the sole implementation.
 - Neovim: `@ldelossa/pi-ide@0.2.5` as a partial IDE integration.
-- Handoff: `@nicknisi/pi-handoff@0.1.7`.
+- Handoff: the local `.pi/agent/extensions/handoff/` implementation. Existing
+  packages either auto-submit the continuation or lack bounded transcript
+  recovery and selected-file context.
 - Herdr: `@ogulcancelik/pi-herdr@0.4.0` as an additive integration.
 
 Hold:
@@ -479,7 +481,11 @@ Test:
 - Sibling worktrees.
 - Reconnection after resume and Herdr pane restoration.
 
-Add `@nicknisi/pi-handoff@0.1.7` only after basic Pi session behavior is stable.
+Add the local `.pi/agent/extensions/handoff/` implementation only after basic
+Pi session behavior is stable. Preserve the OpenCode workflow: generate a
+focused continuation, create a parent-linked session, leave an editable draft
+unsubmitted, load retained selected files on submission, and expose bounded
+source-transcript recovery through `read_session`.
 Add `@ogulcancelik/pi-herdr@0.4.0` as model-callable terminal control, not as a
 replacement for lifecycle reporting.
 
@@ -506,6 +512,31 @@ Rollback:
 
 - Disable the Pi extension and its Neovim companion independently.
 - Continue using the existing OpenCode Neovim and Herdr integrations.
+
+Handoff implementation status on 2026-09-01:
+
+- Added a local Pi-native `/handoff` command with an optional goal. It uses the
+  active model because Pi command registration has no per-command model field.
+- Generation receives only bounded visible conversation text. Assistant
+  thinking, tool arguments, and tool-result bodies are excluded before the
+  provider request.
+- The target is linked through Pi's `parentSession`, receives the generated
+  prompt through `setEditorText()`, and contains no submitted user message.
+- Persisted handoff state restores an unconsumed original draft into an empty
+  editor after resume or reload without overwriting edits or triggering a turn.
+- Model-selected project-relative files remain visible in the draft and are
+  read through bounded, no-follow file handles only when the matching draft is
+  submitted. Removed references are not loaded.
+- Added `read_session` with immediate-parent and pinned-branch authorization,
+  a 500-message limit, a 32 MiB source limit, and a 256 KiB output limit. It
+  parses the parent JSONL without repairing or migrating the source file.
+- Seven focused Bun tests pass with 36 assertions. They cover malformed model
+  output, sensitive-history exclusion, settled source capture, parent linkage,
+  no automatic submission, one-shot file context, immutable transcript reads,
+  authorization, draft restoration, and maximum transcript output.
+- Pi loads the extension in an isolated RPC process, and the Stow dry run
+  passes. A live TUI handoff with the configured provider remains required
+  before retiring OpenCode's handoff path.
 
 ## Phase 8: Keep Direnv Tool-Scoped
 

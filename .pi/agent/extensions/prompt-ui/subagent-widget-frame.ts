@@ -3,7 +3,7 @@ import type {
   ExtensionWidgetOptions,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import { type Component, type TUI, truncateToWidth } from "@earendil-works/pi-tui";
 import { paintDockBottomEdge, paintDockRow } from "./dock-rendering";
 
 const AGENT_WIDGET_KEY = "agents";
@@ -41,9 +41,11 @@ class SubagentWidgetFrame implements Component {
     const paddingX = width >= AGENT_WIDGET_PADDING_X * 2 + 1 ? AGENT_WIDGET_PADDING_X : 0;
     const contentWidth = width - paddingX * 2;
     const backgroundAnsi = this.theme.getBgAnsi("toolPendingBg");
+    // pi-subagents currently renders against the terminal width, so clip its
+    // output here before adding the panel inset.
     const content = this.component
       .render(contentWidth)
-      .map((line) => `${" ".repeat(paddingX)}${line}`);
+      .map((line) => `${" ".repeat(paddingX)}${truncateToWidth(line, contentWidth, "")}`);
     const rows = ["", ...content, ""].map((line) =>
       paintDockRow(line, width, "", backgroundAnsi, ""),
     );

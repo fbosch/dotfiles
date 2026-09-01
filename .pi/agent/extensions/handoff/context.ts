@@ -273,7 +273,11 @@ function messageText(entry: SessionEntry): string | undefined {
   for (const block of content) {
     if (isRecord(block) === false) continue;
     if (block.type === "text" && typeof block.text === "string") parts.push(block.text);
-    if (message.role === "assistant" && block.type === "toolCall" && typeof block.name === "string") {
+    if (
+      message.role === "assistant" &&
+      block.type === "toolCall" &&
+      typeof block.name === "string"
+    ) {
       parts.push(`[Tool: ${block.name}]`);
     }
     if (message.role === "user" && block.type === "image") parts.push("[Attached image]");
@@ -315,9 +319,14 @@ export function serializeHandoffHistory(entries: readonly SessionEntry[]): strin
 export function formatTranscript(entries: readonly SessionEntry[], limit: number): string {
   const sections: string[] = [];
   let truncated = false;
+  let totalBytes = 0;
+  const footerBudget = 128;
+  const contentBudget = MAX_TRANSCRIPT_BYTES - footerBudget;
+
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    if (entry === undefined || entry.type !== "message" || isRecord(entry.message) === false) continue;
+    if (entry === undefined || entry.type !== "message" || isRecord(entry.message) === false)
+      continue;
     if (entry.message.role !== "user" && entry.message.role !== "assistant") continue;
     const text = messageText(entry);
     if (text === undefined || text.length === 0) continue;
@@ -326,21 +335,20 @@ export function formatTranscript(entries: readonly SessionEntry[], limit: number
       break;
     }
     const heading = entry.message.role === "user" ? "## User" : "## Assistant";
-    sections.push(`${heading}\n${text}`);
+    const section = `${heading}\n${text}`;
+    const separatorBytes = sections.length === 0 ? 0 : 2;
+    const sectionBytes = byteLength(section);
+    if (totalBytes + separatorBytes + sectionBytes > contentBudget) {
+      if (sections.length === 0) {
+        sections.push(`${truncateUtf8(section, contentBudget - 24)}\n[Message truncated]`);
+      }
+      truncated = true;
+      break;
+    }
+    sections.push(section);
+    totalBytes += separatorBytes + sectionBytes;
   }
   sections.reverse();
-  const footerBudget = 128;
-  while (
-    sections.length > 1 &&
-    byteLength(sections.join("\n\n")) > MAX_TRANSCRIPT_BYTES - footerBudget
-  ) {
-    sections = sections.slice(1);
-    truncated = true;
-  }
-  if (sections[0] !== undefined && byteLength(sections[0]) > MAX_TRANSCRIPT_BYTES - footerBudget) {
-    sections[0] = `${truncateUtf8(sections[0], MAX_TRANSCRIPT_BYTES - footerBudget - 24)}\n[Message truncated]`;
-    truncated = true;
-  }
 
   if (sections.length === 0) return "Session has no user or assistant messages.";
   const footer = truncated
@@ -360,7 +368,10 @@ function isSessionEntry(value: unknown): value is SessionEntry {
   );
 }
 
-function pinnedBranch(entries: readonly SessionEntry[], leafId: string): SessionEntry[] | undefined {
+function pinnedBranch(
+  entries: readonly SessionEntry[],
+  leafId: string,
+): SessionEntry[] | undefined {
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   if (byId.size !== entries.length) return undefined;
 

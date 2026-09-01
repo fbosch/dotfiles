@@ -1,16 +1,14 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { basename, delimiter, dirname, extname, isAbsolute, resolve } from "node:path";
-import type { ExecOptions, ExecResult } from "@earendil-works/pi-coding-agent";
+import type { FormatterExecutionResult } from "./command-runner";
 import type { FormatterCommand, FormatterRule, ResolvedFormatterSettings } from "./settings";
-
-const MAX_STDERR_CHARACTERS = 4_000;
 
 export type FormatterExecutor = (
   command: string,
-  args: string[],
-  options: ExecOptions,
-) => Promise<ExecResult>;
+  args: readonly string[],
+  options: { readonly cwd: string; readonly signal?: AbortSignal; readonly timeoutMs: number },
+) => Promise<FormatterExecutionResult>;
 
 export type CommandAvailability = (command: string, cwd: string) => Promise<boolean>;
 
@@ -26,6 +24,11 @@ interface FormatFileOptions {
 interface ResolvedCommand {
   readonly command: FormatterCommand;
   readonly cwd: string;
+}
+
+interface CommandOutcome {
+  readonly startupFailed: boolean;
+  readonly warning?: string;
 }
 
 function matchesRule(rule: FormatterRule, filePath: string): boolean {
@@ -67,8 +70,9 @@ async function findFormatterRoot(
 export async function commandAvailable(command: string, cwd: string): Promise<boolean> {
   if (isAbsolute(command) || command.includes("/")) {
     try {
-      await access(resolve(cwd, command), constants.X_OK);
-      return true;
+      const candidate = resolve(cwd, command);
+      await access(candidate, constants.X_OK);
+      return (await stat(candidate)).isFile();
     } catch {
       return false;
     }
@@ -78,8 +82,9 @@ export async function commandAvailable(command: string, cwd: string): Promise<bo
   if (path === undefined) return false;
   for (const directory of path.split(delimiter)) {
     try {
-      await access(resolve(directory || cwd, command), constants.X_OK);
-      return true;
+      const candidate = resolve(cwd, directory, command);
+      await access(candidate, constants.X_OK);
+      if ((await stat(candidate)).isFile()) return true;
     } catch {
       // Continue through PATH entries.
     }
@@ -104,18 +109,23 @@ function failureMessage(
   rule: FormatterRule,
   command: FormatterCommand,
   filePath: string,
-  result: ExecResult,
-  timeoutMs: number,
-  signal: AbortSignal | undefined,
+  result: FormatterExecutionResult,
 ): string | undefined {
-  if (result.killed) {
-    const reason = signal?.aborted ? "cancelled" : `timed out after ${timeoutMs}ms`;
-    return `Formatter ${rule.id}: ${command.command} ${reason} for ${filePath}`;
+  if (result.kind === "success") return undefined;
+  if (result.kind === "spawn_error") {
+    return `Formatter ${rule.id}: unable to start ${command.command} for ${filePath}: ${result.message}`;
   }
-  if (result.code === 0) return undefined;
-
-  const stderr = result.stderr.trim().slice(-MAX_STDERR_CHARACTERS);
-  return `Formatter ${rule.id}: ${command.command} failed for ${filePath} (exit code ${result.code})${stderr === "" ? "" : `: ${stderr}`}`;
+  if (result.kind === "timeout") {
+    return `Formatter ${rule.id}: ${command.command} timed out after ${result.timeoutMs}ms for ${filePath}${result.stderr === "" ? "" : `: ${result.stderr}`}`;
+  }
+  if (result.kind === "cancelled") {
+    return `Formatter ${rule.id}: ${command.command} cancelled for ${filePath}${result.stderr === "" ? "" : `: ${result.stderr}`}`;
+  }
+  const status =
+    result.exitCode === null
+      ? `signal ${result.signal ?? "unknown"}`
+      : `exit code ${result.exitCode}`;
+  return `Formatter ${rule.id}: ${command.command} failed for ${filePath} (${status})${result.stderr === "" ? "" : `: ${result.stderr}`}`;
 }
 
 async function runCommand(
@@ -123,27 +133,27 @@ async function runCommand(
   resolvedCommand: ResolvedCommand,
   filePath: string,
   options: FormatFileOptions,
-): Promise<string | undefined> {
+): Promise<CommandOutcome> {
   const args = resolvedCommand.command.args.map((argument) =>
     argument.replaceAll("$FILE", filePath),
   );
   try {
     const result = await options.execute(resolvedCommand.command.command, args, {
       cwd: resolvedCommand.cwd,
-      timeout: options.settings.timeoutMs,
+      timeoutMs: options.settings.timeoutMs,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
-    return failureMessage(
-      rule,
-      resolvedCommand.command,
-      filePath,
-      result,
-      options.settings.timeoutMs,
-      options.signal,
-    );
+    const warning = failureMessage(rule, resolvedCommand.command, filePath, result);
+    return {
+      startupFailed: result.kind === "spawn_error",
+      ...(warning === undefined ? {} : { warning }),
+    };
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);
-    return `Formatter ${rule.id}: unable to start ${resolvedCommand.command.command} for ${filePath}: ${message}`;
+    return {
+      startupFailed: true,
+      warning: `Formatter ${rule.id}: unable to start ${resolvedCommand.command.command} for ${filePath}: ${message}`,
+    };
   }
 }
 
@@ -157,13 +167,19 @@ async function formatWithRule(
   const isAvailable = options.commandAvailable ?? commandAvailable;
 
   if (rule.mode === "first_available") {
+    const startupWarnings: string[] = [];
     for (const resolvedCommand of resolvedCommands) {
       if ((await isAvailable(resolvedCommand.command.command, resolvedCommand.cwd)) === false) {
         continue;
       }
-      const warning = await runCommand(rule, resolvedCommand, filePath, options);
-      return warning === undefined ? [] : [warning];
+      const outcome = await runCommand(rule, resolvedCommand, filePath, options);
+      if (outcome.startupFailed) {
+        if (outcome.warning !== undefined) startupWarnings.push(outcome.warning);
+        continue;
+      }
+      return outcome.warning === undefined ? [] : [outcome.warning];
     }
+    if (startupWarnings.length > 0) return startupWarnings;
     return [
       `Formatter ${rule.id}: no configured command is available (${resolvedCommands.map(({ command }) => command.command).join(", ")})`,
     ];
@@ -177,8 +193,8 @@ async function formatWithRule(
       );
       continue;
     }
-    const warning = await runCommand(rule, resolvedCommand, filePath, options);
-    if (warning !== undefined) warnings.push(warning);
+    const outcome = await runCommand(rule, resolvedCommand, filePath, options);
+    if (outcome.warning !== undefined) warnings.push(outcome.warning);
   }
   return warnings;
 }

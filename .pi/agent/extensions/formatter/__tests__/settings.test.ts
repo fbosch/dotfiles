@@ -83,4 +83,16 @@ describe("resolveFormatterSettings", () => {
     expect(settings.rules).toEqual([]);
     expect(settings.warnings).toEqual(["global formatter.rules.lua.stopAfterFirst: unknown field"]);
   });
+
+  test("rejects timeout values beyond the runtime timer limit", () => {
+    const settings = resolveFormatterSettings(
+      { formatter: { timeoutMs: 300_001, rules: { lua: luaRule } } },
+      {},
+    );
+
+    expect(settings.timeoutMs).toBe(30_000);
+    expect(settings.warnings).toEqual([
+      "global formatter.timeoutMs: expected an integer between 1 and 300000",
+    ]);
+  });
 });

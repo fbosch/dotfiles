@@ -1,3 +1,4 @@
+import { realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   type ExtensionContext,
@@ -8,21 +9,49 @@ import {
   SettingsManager,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
-import { type CommandAvailability, formatFile } from "./format-file";
-import { type ResolvedFormatterSettings, resolveFormatterSettings } from "./settings";
+import { runFormatterCommand } from "./command-runner";
+import { type CommandAvailability, type FormatterExecutor, formatFile } from "./format-file";
+import {
+  DEFAULT_FORMATTER_TIMEOUT_MS,
+  type ResolvedFormatterSettings,
+  resolveFormatterSettings,
+} from "./settings";
 
 type SettingsLoader = (context: ExtensionContext) => ResolvedFormatterSettings;
 
 interface FormatterExtensionDependencies {
   readonly commandAvailable?: CommandAvailability;
+  readonly execute?: FormatterExecutor;
   readonly readSettings?: SettingsLoader;
 }
 
-function loadSettings(context: ExtensionContext): ResolvedFormatterSettings {
-  const manager = SettingsManager.create(context.cwd, getAgentDir(), {
-    projectTrusted: context.isProjectTrusted(),
+export function loadFormatterSettings(
+  context: ExtensionContext,
+  agentDirectory = getAgentDir(),
+): ResolvedFormatterSettings {
+  if (context.isProjectTrusted() === false) {
+    return { rules: [], timeoutMs: DEFAULT_FORMATTER_TIMEOUT_MS, warnings: [] };
+  }
+  const manager = SettingsManager.create(context.cwd, agentDirectory, {
+    projectTrusted: true,
   });
-  return resolveFormatterSettings(manager.getGlobalSettings(), manager.getProjectSettings());
+  const settings = resolveFormatterSettings(
+    manager.getGlobalSettings(),
+    manager.getProjectSettings(),
+  );
+  const errors = manager.drainErrors();
+  if (errors.length === 0) return settings;
+  return {
+    rules: [],
+    timeoutMs: settings.timeoutMs,
+    warnings: [
+      ...settings.warnings,
+      ...errors.map(
+        ({ error, path, scope }) =>
+          `${scope} settings${path === undefined ? "" : ` (${path})`}: ${error.message}`,
+      ),
+    ],
+  };
 }
 
 function mutationPath(event: ToolResultEvent): string | undefined {
@@ -40,21 +69,29 @@ export function createFormatterExtension(
     let settings: ResolvedFormatterSettings | undefined;
     const fileQueues = new Map<string, Promise<void>>();
 
-    function serialize<T>(path: string, operation: () => Promise<T>): Promise<T> {
-      const previous = fileQueues.get(path) ?? Promise.resolve();
-      const current = previous.catch(() => undefined).then(operation);
+    function serialize<T>(keys: readonly string[], operation: () => Promise<T>): Promise<T> {
+      const uniqueKeys = [...new Set(keys)];
+      const previous = uniqueKeys.flatMap((key) => {
+        const queued = fileQueues.get(key);
+        return queued === undefined ? [] : [queued];
+      });
+      const current = Promise.all(previous.map((queued) => queued.catch(() => undefined))).then(
+        operation,
+      );
       const settled = current.then(
         () => undefined,
         () => undefined,
       );
-      fileQueues.set(path, settled);
+      for (const key of uniqueKeys) fileQueues.set(key, settled);
       return current.finally(() => {
-        if (fileQueues.get(path) === settled) fileQueues.delete(path);
+        for (const key of uniqueKeys) {
+          if (fileQueues.get(key) === settled) fileQueues.delete(key);
+        }
       });
     }
 
     pi.on("session_start", (_event, context) => {
-      settings = (dependencies.readSettings ?? loadSettings)(context);
+      settings = (dependencies.readSettings ?? loadFormatterSettings)(context);
       if (settings.warnings.length > 0) {
         context.ui.notify(`Formatter settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
       }
@@ -65,18 +102,25 @@ export function createFormatterExtension(
       const currentSettings = settings;
       if (path === undefined || currentSettings === undefined) return undefined;
       const filePath = resolve(context.cwd, path);
+      const queuePath = await realpath(filePath).catch(() => filePath);
+      const identity = await stat(filePath)
+        .then(({ dev, ino }) => `inode:${dev}:${ino}`)
+        .catch(() => undefined);
 
-      const warnings = await serialize(filePath, () =>
-        formatFile({
-          cwd: context.cwd,
-          execute: (command, args, options) => pi.exec(command, args, options),
-          filePath,
-          settings: currentSettings,
-          ...(dependencies.commandAvailable === undefined
-            ? {}
-            : { commandAvailable: dependencies.commandAvailable }),
-          ...(context.signal === undefined ? {} : { signal: context.signal }),
-        }),
+      const warnings = await serialize(
+        identity === undefined ? [`path:${queuePath}`] : [`path:${queuePath}`, identity],
+        () =>
+          formatFile({
+            cwd: context.cwd,
+            // Pi 0.84.4's executor can leave timed-out children alive and buffer unbounded output.
+            execute: dependencies.execute ?? runFormatterCommand,
+            filePath,
+            settings: currentSettings,
+            ...(dependencies.commandAvailable === undefined
+              ? {}
+              : { commandAvailable: dependencies.commandAvailable }),
+            ...(context.signal === undefined ? {} : { signal: context.signal }),
+          }),
       );
       if (warnings.length === 0) return undefined;
       return {

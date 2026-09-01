@@ -35,10 +35,11 @@ export interface JustRecipe {
 interface JustAlias {
   name: string;
   target: string;
+  modulePath?: string;
 }
 
 interface CatalogScope {
-  modulePath?: string;
+  module_path?: string;
   source?: string;
   recipes?: unknown;
   aliases?: unknown;
@@ -107,10 +108,18 @@ function parseAliases(value: unknown, modulePath: string | undefined): JustAlias
   return Object.values(value).flatMap((candidate) => {
     if (!isRecord(candidate)) return [];
     if (typeof candidate.name !== "string" || typeof candidate.target !== "string") return [];
+    const privateAlias =
+      candidate.name.startsWith("_") ||
+      (Array.isArray(candidate.attributes) &&
+        candidate.attributes.some(
+          (attribute) => attribute === "private" || (isRecord(attribute) && "private" in attribute),
+        ));
+    if (privateAlias) return [];
     return [
       {
         name: scopedName(modulePath, candidate.name),
-        target: scopedName(modulePath, candidate.target),
+        target: candidate.target,
+        ...(modulePath === undefined ? {} : { modulePath }),
       },
     ];
   });
@@ -125,7 +134,7 @@ function collectScope(
   if (!isRecord(value)) return;
 
   const scope = value as CatalogScope;
-  const modulePath = optionalString(scope.modulePath) ?? inheritedModulePath;
+  const modulePath = optionalString(scope.module_path) ?? inheritedModulePath;
   const source = optionalString(scope.source);
 
   if (isRecord(scope.recipes)) {
@@ -165,9 +174,18 @@ export function parseJustCatalog(value: unknown): JustRecipe[] {
 
   const aliasesByTarget = new Map<string, JustAlias[]>();
   for (const alias of aliases) {
-    const targetAliases = aliasesByTarget.get(alias.target) ?? [];
+    const target = alias.target.includes("::")
+      ? recipes.find((recipe) => recipe.namepath === alias.target)
+      : recipes.filter((recipe) => recipe.name === alias.target).at(0);
+    const ambiguousTarget =
+      alias.target.includes("::") === false &&
+      recipes.filter((recipe) => recipe.name === alias.target).length !== 1;
+    if (ambiguousTarget) continue;
+    if (target === undefined) continue;
+
+    const targetAliases = aliasesByTarget.get(target.namepath) ?? [];
     targetAliases.push(alias);
-    aliasesByTarget.set(alias.target, targetAliases);
+    aliasesByTarget.set(target.namepath, targetAliases);
   }
   return recipes
     .map((recipe) => ({
@@ -257,11 +275,20 @@ export function buildRecipeArguments(recipe: JustRecipe, value: unknown): string
   }
 
   const arguments_: string[] = [];
+  let omittedOptionalParameter: string | undefined;
   for (const parameter of recipe.parameters) {
     const parameterValue = input[parameter.name];
     if (parameterValue === undefined) {
-      if (parameter.kind === "star" || hasDefault(parameter)) continue;
+      if (parameter.kind === "star" || hasDefault(parameter)) {
+        omittedOptionalParameter ??= parameter.name;
+        continue;
+      }
       throw new Error(`Missing required Just recipe parameter \`${parameter.name}\``);
+    }
+    if (omittedOptionalParameter !== undefined) {
+      throw new Error(
+        `Just recipe parameter \`${parameter.name}\` cannot be supplied while earlier optional parameter \`${omittedOptionalParameter}\` is omitted`,
+      );
     }
 
     if (parameter.kind === "singular") {

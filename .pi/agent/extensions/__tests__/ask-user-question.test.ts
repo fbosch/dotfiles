@@ -59,6 +59,12 @@ function createContext(options: {
 function createInlineContext(
   interact: (component: Component, rendered: string[]) => void,
 ): ExtensionContext {
+  const resolvedBindings = {
+    "tui.select.up": ["up", "ctrl+k"],
+    "tui.select.down": ["down", "ctrl+j"],
+    "tui.select.confirm": ["enter"],
+    "tui.select.cancel": ["escape"],
+  } as const;
   return {
     hasUI: true,
     mode: "tui",
@@ -77,7 +83,11 @@ function createInlineContext(
           const component = factory(
             { requestRender: () => undefined },
             { fg: (_color, text) => text },
-            {},
+            {
+              matches: (data: string, binding: keyof typeof resolvedBindings) =>
+                resolvedBindings[binding].some((key) => key === data),
+              getKeys: (binding: keyof typeof resolvedBindings) => resolvedBindings[binding],
+            },
             resolve,
           );
           interact(component, component.render(80));
@@ -168,9 +178,12 @@ describe("ask_user_question", () => {
         expect(rendered).toContain("Choose one");
         expect(rendered).toContain("▶ (1) Red");
         expect(rendered).toContain("      Cooler");
-        expect(rendered).toContain("↑/↓ move · 1–9 choose · enter select · esc cancel");
+        expect(rendered).toContain(
+          "↑/ctrl+k ↓/ctrl+j move · 1–9 choose · enter select · esc cancel",
+        );
         expect(component.render(24).every((line) => visibleWidth(line) <= 24)).toBe(true);
-        component.handleInput?.("2");
+        component.handleInput?.("ctrl+j");
+        component.handleInput?.("enter");
       }),
     );
 
@@ -217,7 +230,7 @@ describe("ask_user_question", () => {
         const rendered = component.render(80);
         expect(rendered.some((line) => line.includes("(s) Submit · 2 selections"))).toBe(true);
         expect(rendered).toContain(
-          "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel",
+          "↑/ctrl+k ↓/ctrl+j move · space/enter toggle · 1–9 toggle · s submit · esc cancel",
         );
         component.handleInput?.("s");
       }),

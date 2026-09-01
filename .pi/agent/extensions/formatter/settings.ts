@@ -1,4 +1,5 @@
-const DEFAULT_TIMEOUT_MS = 30_000;
+export const DEFAULT_FORMATTER_TIMEOUT_MS = 30_000;
+const MAX_TIMEOUT_MS = 300_000;
 
 export type FormatterMode = "first_available" | "pipeline";
 
@@ -194,10 +195,16 @@ function parseFormatterLayer(document: unknown, scope: "global" | "project"): Pa
   ];
   let timeoutMs: number | undefined;
   if (formatter.timeoutMs !== undefined) {
-    if (Number.isSafeInteger(formatter.timeoutMs) && Number(formatter.timeoutMs) > 0) {
+    if (
+      Number.isSafeInteger(formatter.timeoutMs) &&
+      Number(formatter.timeoutMs) > 0 &&
+      Number(formatter.timeoutMs) <= MAX_TIMEOUT_MS
+    ) {
       timeoutMs = Number(formatter.timeoutMs);
     } else {
-      warnings.push(`${scope} formatter.timeoutMs: expected a positive integer`);
+      warnings.push(
+        `${scope} formatter.timeoutMs: expected an integer between 1 and ${MAX_TIMEOUT_MS}`,
+      );
     }
   }
 
@@ -244,7 +251,7 @@ export function resolveFormatterSettings(
 
   return {
     rules: [...rules.values()],
-    timeoutMs: projectLayer.timeoutMs ?? globalLayer.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    timeoutMs: projectLayer.timeoutMs ?? globalLayer.timeoutMs ?? DEFAULT_FORMATTER_TIMEOUT_MS,
     warnings: [...globalLayer.warnings, ...projectLayer.warnings],
   };
 }
