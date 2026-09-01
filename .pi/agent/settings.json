@@ -5,7 +5,14 @@
   "defaultModel": "gpt-5.6-sol",
   "hideThinkingBlock": true,
   "tuiMode": "fullscreen",
-  "selectorOverlayWidth": 120,
+  "selectorOverlayWidth": 72,
+  "selectorOverlayWidths": {
+    "model": 100,
+    "scoped-models": 120,
+    "fork": 120,
+    "tree": 120,
+    "session": 120
+  },
   "fullscreenExitOutput": "resume-hint",
   "packages": [
     "npm:@gotgenes/pi-permission-system@29.0.0",

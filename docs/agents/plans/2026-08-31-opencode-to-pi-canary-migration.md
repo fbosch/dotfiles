@@ -55,7 +55,8 @@ Canary:
 - Permissions: `@gotgenes/pi-permission-system@29.0.0`, introduced first.
 - Search: `@ff-labs/pi-fff@0.10.6` in additive `tools-and-ui` mode.
 - MCP: `pi-mcp-adapter@2.31.0` in proxy-only mode.
-- Auth profiles: `@nanstey/pi-auth-profiles@0.1.1`.
+- Auth profiles: vendor the audited `@nanstey/pi-auth-profiles@0.1.1` source
+  locally as the baseline for later account-routing parity work.
 - Usage identity: `@narumitw/pi-usage@0.59.0`, introduced after profiles.
 - Plan mode: `@narumitw/pi-plan-mode@0.56.0`, introduced after permissions.
 - Subagents: `@gotgenes/pi-subagents@21.0.3` as the sole implementation.
@@ -314,10 +315,13 @@ MCP parity canary outcome on 2026-09-01:
 
 ## Phase 5: Canary Manual Auth Profiles
 
-Add:
+Vendor the `@nanstey/pi-auth-profiles@0.1.1` extension locally under
+`.pi/agent/extensions/auth-profiles/`. Do not install the npm package alongside
+the local copy.
+
+Add after manual profile switching passes:
 
 ```text
-@nanstey/pi-auth-profiles@0.1.1
 @narumitw/pi-usage@0.59.0
 ```
 
@@ -347,6 +351,20 @@ Rollback:
 
 - Return to Pi's first-party single credential.
 - Keep OpenCode as the path for automatic repository routing and failover.
+
+Phase 5 setup status on 2026-09-01:
+
+- Vendored the `0.1.1` extension source and MIT license under
+  `.pi/agent/extensions/auth-profiles/`, with its npm integrity recorded in the
+  source header. Local changes are limited to formatting and type-safety guards.
+- Kept the npm package out of `settings.json`; Pi discovers the managed local
+  extension directly.
+- Confirmed Pi `0.84.4` starts an offline RPC session with the extension loaded,
+  binds the built-in default credential store, and handles `/profile` without an
+  extension error.
+- No profile credentials or project profile selection were created. Two-profile
+  login, switching, restart persistence, account verification, and `/usage`
+  isolation remain pending.
 
 ## Phase 6: Add Plan Mode and One Subagent
 
