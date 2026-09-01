@@ -40,7 +40,7 @@ Scope: fetch unresolved GitHub review threads for a specified PR/review/discussi
 - Use approved `mcp__github` as the sole source for PR and thread metadata.
 - Use it for a selected resolution only after the parent has explicitly approved it.
 - Pi children cannot ask interactive questions. At every original decision point, return `Parent approval required:` followed by the exact choice needed, then stop.
-- Apply available writing guidance to resolution comments and summaries.
+- Load and apply the `writing-clearly` skill to resolution comments and summaries.
 
 ## Workflow
 

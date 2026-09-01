@@ -130,7 +130,7 @@ export class SectionedSelectList implements Component {
     }
 
     const rows = this.rows();
-    const showScrollInfo = rows.length > this.maxVisibleRows;
+    const showScrollInfo = this.maxVisibleRows > 1 && rows.length > this.maxVisibleRows;
     const contentRows = Math.max(1, this.maxVisibleRows - (showScrollInfo ? 1 : 0));
     const selectedRowIndex = rows.findIndex(
       (row) => row.kind === "item" && row.itemIndex === this.selectedIndex,
@@ -156,6 +156,8 @@ export class SectionedSelectList implements Component {
           ? [{ kind: "header", label: firstSectionRow.sectionLabel }, ...sectionRows]
           : sectionRows;
     }
+
+    while (visibleRows.length > 0 && visibleRows.at(-1)?.kind !== "item") visibleRows.pop();
 
     const lines = visibleRows.map((row) => this.renderRow(row, width));
     if (showScrollInfo) {

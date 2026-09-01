@@ -1,14 +1,25 @@
+import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
-import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
-import { type Terminal, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import {
-  installClickableSubagentSessions,
+  type ExtensionUIContext,
+  type KeybindingsManager,
+  type Theme,
+  ToolExecutionComponent,
+} from "@earendil-works/pi-coding-agent";
+import {
+  type Component,
+  type Terminal,
+  Text,
+  type TUI,
+  TuiAltScreen,
+} from "@earendil-works/pi-tui";
+import {
   installSubagentSessionUrlHandler,
   installSubagentToolLinks,
   linkSubagentToolBlock,
+  openSubagentSession,
   parseSubagentSessionUrl,
   type SubagentSessionTarget,
   subagentSessionUrl,
@@ -21,12 +32,16 @@ const target: SubagentSessionTarget = {
   displayName: "Explore",
   description: "Survey repository context",
 };
-function createToolExecution(toolName = "subagent"): ToolExecutionComponent {
+function createToolExecution(
+  toolName = "subagent",
+  agentId: string | null = target.agentId,
+): ToolExecutionComponent {
   return Object.assign(Object.create(ToolExecutionComponent.prototype), {
     toolName,
+    toolCallId: "tool-call-1",
     result: {
       details: {
-        agentId: target.agentId,
+        ...(agentId === null ? {} : { agentId }),
         displayName: target.displayName,
         description: target.description,
       },
@@ -73,8 +88,27 @@ class TestTerminal implements Terminal {
 describe("subagent session links", () => {
   test("round-trips an exact subagent target through the internal URL", () => {
     expect(parseSubagentSessionUrl(subagentSessionUrl(target))).toEqual(target);
+    expect(parseSubagentSessionUrl(subagentSessionUrl({ ...target, agentId: ".." }))).toEqual({
+      ...target,
+      agentId: "..",
+    });
     expect(parseSubagentSessionUrl("https://example.com")).toBeUndefined();
     expect(parseSubagentSessionUrl("pi-action://subagents/session/%ZZ")).toBeUndefined();
+    expect(
+      parseSubagentSessionUrl(
+        "pi-action://subagents/session?id=%ZZ&name=Explore&description=Survey",
+      ),
+    ).toBeUndefined();
+    expect(
+      parseSubagentSessionUrl(
+        "pi-action://evil@subagents/session?id=one&name=Explore&description=Survey",
+      ),
+    ).toBeUndefined();
+    expect(
+      parseSubagentSessionUrl(
+        "pi-action://subagents/session?id=one&id=two&name=Explore&description=Survey",
+      ),
+    ).toBeUndefined();
   });
 
   test("links the complete subagent block without replacing nested links", () => {
@@ -101,6 +135,33 @@ describe("subagent session links", () => {
     restoreRender();
   });
 
+  test("links a running subagent through its originating tool call", () => {
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    globals[serviceKey] = {
+      manager: {
+        listAgents: () => [{ id: target.agentId, toolCallId: "tool-call-1" }],
+      },
+    };
+    const restoreRender = stubToolRender([
+      "▸ Explore  Survey repository context",
+      "  ⎿  thinking…",
+    ]);
+    const uninstall = installSubagentToolLinks();
+
+    try {
+      expect(createToolExecution("subagent", null).render(80).join("\n")).toContain(
+        subagentSessionUrl(target),
+      );
+    } finally {
+      uninstall();
+      restoreRender();
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
+  });
+
   test("replaces and cleans up a legacy tool-render patch after reload", () => {
     const prototype = ToolExecutionComponent.prototype as typeof ToolExecutionComponent.prototype &
       Record<symbol, unknown>;
@@ -120,6 +181,39 @@ describe("subagent session links", () => {
 
     expect(prototype.render).toBe(originalRender);
     prototype.render = nativeRender;
+  });
+
+  test("removes the previous Text prototype patch after reload", () => {
+    const prototype = Text.prototype as typeof Text.prototype & Record<symbol, unknown>;
+    const originalRender = prototype.render;
+    prototype.render = function legacyRender(width: number): string[] {
+      return originalRender.call(this, width);
+    };
+    prototype[toolRenderPatch] = { version: 1, originalRender };
+
+    const uninstall = installSubagentToolLinks();
+
+    expect(prototype.render).toBe(originalRender);
+    expect(prototype[toolRenderPatch]).toBeUndefined();
+    uninstall();
+  });
+
+  test("does not clear a newer tool-render patch during stale cleanup", () => {
+    const prototype = ToolExecutionComponent.prototype as typeof ToolExecutionComponent.prototype &
+      Record<symbol, unknown>;
+    const originalRender = prototype.render;
+    const uninstall = installSubagentToolLinks();
+    const newerRender = () => ["newer"];
+    const newerState = { version: 999 };
+    prototype.render = newerRender;
+    prototype[toolRenderPatch] = newerState;
+
+    uninstall();
+
+    expect(prototype.render).toBe(newerRender);
+    expect(prototype[toolRenderPatch]).toBe(newerState);
+    prototype.render = originalRender;
+    prototype[toolRenderPatch] = undefined;
   });
 
   test("leaves unrelated tool components unchanged", () => {
@@ -174,10 +268,37 @@ describe("subagent session links", () => {
     expect(opened).toEqual(["session", "https://example.com"]);
   });
 
+  test("restores the previous URL handler when a newer installation is disposed", () => {
+    const calls: string[] = [];
+    const tui = { mode: "fullscreen", openUrl: () => {} } as unknown as TUI;
+    const uninstallFirst = installSubagentSessionUrlHandler(tui, () => calls.push("first"));
+    const uninstallSecond = installSubagentSessionUrlHandler(tui, () => calls.push("second"));
+    const openUrl = (tui as TUI & { openUrl: (url: string) => void }).openUrl;
+
+    openUrl(subagentSessionUrl(target));
+    uninstallSecond();
+    openUrl(subagentSessionUrl(target));
+    uninstallFirst();
+
+    expect(calls).toEqual(["second", "first"]);
+  });
+
+  test("does not clear a newer URL patch during stale cleanup", () => {
+    const tui = { mode: "fullscreen", openUrl: () => {} } as unknown as TUI;
+    const patchableTui = tui as TUI & Record<symbol, unknown> & { openUrl: (url: string) => void };
+    const uninstall = installSubagentSessionUrlHandler(tui, () => {});
+    const newerOpenUrl = () => {};
+    const newerState = { version: 999 };
+    patchableTui.openUrl = newerOpenUrl;
+    patchableTui[tuiUrlPatch] = newerState;
+
+    uninstall();
+
+    expect(patchableTui.openUrl).toBe(newerOpenUrl);
+    expect(patchableTui[tuiUrlPatch]).toBe(newerState);
+  });
+
   test("opens the clicked transcript directly without invoking a picker", async () => {
-    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
-    const globals = globalThis as Record<symbol, unknown>;
-    const previousService = globals[serviceKey];
     const directory = mkdtempSync(join(tmpdir(), "subagent-session-links-"));
     const outputFile = join(directory, "session.jsonl");
     writeFileSync(
@@ -191,40 +312,115 @@ describe("subagent session links", () => {
       })}\n`,
     );
     const requestedIds: string[] = [];
-    globals[serviceKey] = {
+    const service = {
       getRecord: (id: string) => {
         requestedIds.push(id);
-        return { outputFile };
+        return { outputFile, status: "running" };
       },
     };
-    let customCalls = 0;
+    let overlay: Component | undefined;
+    let overlayOptions: unknown;
+    const notifications: Array<[string, string]> = [];
     const ui = {
-      custom: async () => {
-        customCalls += 1;
+      custom: async (
+        factory: Parameters<ExtensionUIContext["custom"]>[0],
+        options?: Parameters<ExtensionUIContext["custom"]>[1],
+      ) => {
+        overlayOptions = options;
+        overlay = await factory(
+          {
+            terminal: { columns: 80, rows: 24 },
+            requestRender: () => {},
+          } as unknown as TUI,
+          {} as Theme,
+          {} as KeybindingsManager,
+          () => {},
+        );
         return undefined;
       },
-      notify: () => {},
+      notify: (message: string, level: string) => notifications.push([message, level]),
     };
-    const tui = { mode: "fullscreen", openUrl: () => {} } as unknown as TUI;
-    const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<
-      typeof installClickableSubagentSessions
-    >[1];
-    const restoreRender = stubToolRender(["▸ Explore  Survey repository context", "  ⎿  Done"]);
-    const uninstall = installClickableSubagentSessions(tui, ctx);
+    const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
 
     try {
-      (tui as TUI & { openUrl: (url: string) => void }).openUrl(subagentSessionUrl(target));
-      await Bun.sleep(0);
+      await openSubagentSession(target, service, ctx);
 
       expect(requestedIds).toEqual([target.agentId]);
-      expect(customCalls).toBe(1);
+      expect(typeof overlay?.render).toBe("function");
+      expect(overlayOptions).toEqual({
+        overlay: true,
+        overlayOptions: { anchor: "center", width: "90%", maxHeight: "70%" },
+      });
+      expect(notifications).toEqual([
+        ["Opening the current transcript snapshot. Reopen it to refresh.", "info"],
+      ]);
     } finally {
-      uninstall();
-      restoreRender();
       rmSync(directory, { recursive: true, force: true });
-      if (previousService === undefined) delete globals[serviceKey];
-      else globals[serviceKey] = previousService;
     }
+  });
+
+  test("opens a ready running session with live transcript updates", async () => {
+    let subscriptions = 0;
+    const liveRecord = {
+      id: target.agentId,
+      status: "running",
+      agentMessages: [],
+      activeTools: new Map<string, string>(),
+      responseText: "",
+      isSessionReady: () => true,
+      subscribeToUpdates: () => {
+        subscriptions += 1;
+        return () => {};
+      },
+      getToolDefinition: () => undefined,
+    };
+    const service = {
+      getRecord: () => ({ status: "running" }),
+      manager: {
+        getRecord: () => liveRecord,
+        listAgents: () => [liveRecord],
+      },
+    };
+    const notifications: string[] = [];
+    const ui = {
+      custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => {
+        await factory(
+          {
+            terminal: { columns: 80, rows: 24 },
+            requestRender: () => {},
+          } as unknown as TUI,
+          {} as Theme,
+          {} as KeybindingsManager,
+          () => {},
+        );
+        return undefined;
+      },
+      notify: (message: string) => notifications.push(message),
+    };
+    const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
+
+    await openSubagentSession(target, service, ctx);
+
+    expect(subscriptions).toBe(1);
+    expect(notifications).toEqual([]);
+  });
+
+  test("distinguishes missing sessions from sessions that are not ready", async () => {
+    const notifications: string[] = [];
+    const ctx = {
+      ui: {
+        notify: (message: string) => notifications.push(message),
+      },
+      cwd: process.cwd(),
+    } as unknown as Parameters<typeof openSubagentSession>[2];
+
+    await openSubagentSession(target, { getRecord: () => undefined }, ctx);
+    await openSubagentSession(target, { getRecord: () => ({ status: "queued" }) }, ctx);
+
+    expect(notifications).toEqual([
+      "The selected subagent session is no longer available.",
+      "The selected subagent session is not ready yet.",
+    ]);
   });
 
   test("opens the exact session from an actual fullscreen mouse click", () => {

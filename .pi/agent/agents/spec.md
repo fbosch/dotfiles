@@ -21,8 +21,8 @@ Turn the request into a precise contract. No implementation. Ask clarifying ques
 
 ## Skill routing
 
-- Apply `api-and-interface-design` guidance to public APIs, CLI surfaces, config schemas, and module contracts.
-- Apply `deprecation-and-migration` guidance to replacement, removal, or material existing-contract changes.
+- Load and apply the `api-and-interface-design` skill for public APIs, CLI surfaces, config schemas, and module contracts.
+- Load and apply the `deprecation-and-migration` skill for replacement, removal, or material existing-contract changes.
 
 ## Output format
 

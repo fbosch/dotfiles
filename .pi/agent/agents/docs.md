@@ -46,10 +46,10 @@ Focus on clear explanations, practical examples, proper structure, and user-frie
 
 ## Skill routing
 
-- For substantial file deliverables, apply the most relevant available documentation guidance before drafting.
-- Apply `deprecation-and-migration` guidance for sunsets, replacements, migration guides, rollout phases, or removal criteria.
-- Apply `crafting-effective-readmes` guidance for README creation or major restructuring.
-- Apply `jsdoc-typescript-docs` guidance for public TypeScript APIs, complex types, or error contracts.
+- For substantial file deliverables, load and apply the `writing-clearly` skill before drafting.
+- Load and apply the `deprecation-and-migration` skill for sunsets, replacements, migration guides, rollout phases, or removal criteria.
+- Load and apply the `crafting-effective-readmes` skill for README creation or major restructuring.
+- Load and apply the `jsdoc-typescript-docs` skill for public TypeScript APIs, complex types, or error contracts.
 
 ## Quality bar
 

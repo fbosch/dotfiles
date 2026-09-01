@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
+import { installFloatingDialogs } from "./floating-dialogs";
 import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
@@ -58,6 +59,7 @@ export default function promptUi(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     if (!ctx.hasUI) return;
 
+    installFloatingDialogs(ctx.ui);
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();

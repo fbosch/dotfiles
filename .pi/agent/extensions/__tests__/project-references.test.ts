@@ -12,6 +12,7 @@ import type {
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
 import projectReferences, {
   appendProjectReferences,
+  assertNoAgentMentionCollisions,
   createReferenceAutocompleteProvider,
   formatProjectReferences,
   loadProjectReferences,
@@ -85,6 +86,17 @@ describe("project references", () => {
     );
   });
 
+  test("rejects aliases that collide with agent mentions", () => {
+    const external = temporaryDirectory();
+
+    expect(() =>
+      assertNoAgentMentionCollisions(
+        [{ name: "plan", path: external, description: "Planning material" }],
+        [{ name: "Plan", description: "Creates implementation plans" }],
+      ),
+    ).toThrow('Project reference "plan" conflicts with agent mention @Plan.');
+  });
+
   test("formats escaped reference metadata and appends it once", () => {
     const references = [{ name: "docs", path: "/tmp/a&b", description: "Docs <current>" }];
     const formatted = formatProjectReferences(references);
@@ -137,11 +149,50 @@ describe("project references", () => {
     ).toBe(nativeSuggestions);
   });
 
+  test("preserves prototype methods and native precedence when providers are class-based", async () => {
+    const nativeItem = { value: "@nixos", label: "native @nixos" };
+    class ClassProvider {
+      triggerCharacters = ["#"];
+
+      async getSuggestions() {
+        return { items: [nativeItem], prefix: "@ni" };
+      }
+
+      applyCompletion() {
+        return { lines: ["native completion"], cursorLine: 0, cursorCol: 17 };
+      }
+
+      shouldTriggerFileCompletion() {
+        return true;
+      }
+    }
+    const wrapped = createReferenceAutocompleteProvider(
+      new ClassProvider() as AutocompleteProvider,
+      [{ name: "nixos", path: "/home/fbb/nixos", description: "Personal configuration" }],
+    );
+    const suggestions = await wrapped.getSuggestions(["inspect @ni"], 0, 11, {
+      signal: AbortSignal.timeout(1_000),
+    });
+
+    expect(suggestions?.items).toEqual([nativeItem]);
+    expect(wrapped.applyCompletion(["@ni"], 0, 3, nativeItem, "@ni")).toEqual({
+      lines: ["native completion"],
+      cursorLine: 0,
+      cursorCol: 17,
+    });
+    expect(wrapped.shouldTriggerFileCompletion?.(["@ni"], 0, 3)).toBe(true);
+  });
+
   test("injects trusted references through the extension lifecycle", () => {
     const cwd = temporaryDirectory();
-    mkdirSync(join(cwd, "docs"));
+    mkdirSync(join(cwd, "reference-material"));
     writeProjectSettings(cwd, {
-      references: { docs: { path: "docs", description: "Project documentation" } },
+      references: {
+        "reference-material": {
+          path: "reference-material",
+          description: "Project documentation",
+        },
+      },
     });
     let sessionStart:
       | ((event: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>)
@@ -178,7 +229,7 @@ describe("project references", () => {
       } as BeforeAgentStartEvent,
       {} as ExtensionContext,
     );
-    expect(result?.systemPrompt).toContain("<name>docs</name>");
-    expect(result?.systemPrompt).toContain(realpathSync(join(cwd, "docs")));
+    expect(result?.systemPrompt).toContain("<name>reference-material</name>");
+    expect(result?.systemPrompt).toContain(realpathSync(join(cwd, "reference-material")));
   });
 });

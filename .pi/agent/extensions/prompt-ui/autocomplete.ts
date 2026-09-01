@@ -9,6 +9,7 @@ import type {
 import { sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { AgentMention } from "../agent-mentions";
 import { getCommandAlias } from "../command-aliases";
+import { createReferenceAutocompleteProvider, type ProjectReference } from "../project-references";
 import { fitColumns, paintDockRow } from "./dock-rendering";
 
 type Color = (text: string) => string;
@@ -152,6 +153,20 @@ export function createAliasAutocompleteProvider(
   }
 
   return aliasProvider;
+}
+
+export function createPromptAutocompleteProvider(
+  provider: AutocompleteProvider,
+  agentMentions: readonly AgentMention[],
+  projectReferences: readonly ProjectReference[],
+  formatAgentMention: AgentMentionFormatter,
+): AutocompleteProvider {
+  const aliasProvider = createAliasAutocompleteProvider(
+    provider,
+    agentMentions,
+    formatAgentMention,
+  );
+  return createReferenceAutocompleteProvider(aliasProvider, projectReferences);
 }
 
 export class AutocompleteOverlay {

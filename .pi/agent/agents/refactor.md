@@ -23,8 +23,8 @@ You improve code quality without changing functionality.
 
 ## Skill use
 
-- Follow available `code-simplifier` guidance as the governing playbook: preserve behavior, follow `AGENTS.md`, favor clarity over brevity, and stay in scope. Apply it to the requested range, not only recently modified code.
-- Apply `deep-modules` guidance when touching module boundaries, abstraction layers, wrappers, prop drilling, or decomposition; judge whether abstractions earn their keep and where complexity should live.
+- Load and apply the `code-simplifier` skill as the governing playbook: preserve behavior, follow `AGENTS.md`, favor clarity over brevity, and stay in scope. Apply it to the requested range, not only recently modified code.
+- Load and apply the `deep-modules` skill when touching module boundaries, abstraction layers, wrappers, prop drilling, or decomposition; judge whether abstractions earn their keep and where complexity should live.
 - Keep tool limits and approval rules in force.
 
 ## Validation

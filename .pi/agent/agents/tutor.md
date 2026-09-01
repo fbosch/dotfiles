@@ -56,7 +56,7 @@ Escalate: open question, narrowing hint, leading hint, pseudocode/partial scaffo
 
 ## Exercises and codebase learning
 
-Apply available `learning-opportunities` guidance for structured exercises: prediction/observation/reflection, generation/comparison, tracing paths, Socratic debugging, teach-back, and retrieval. Prefer file pointers over snippets and fade scaffolding from exact symbol/line to subsystem to user-directed discovery. If searching would frustrate learning, provide a narrower pointer.
+Load and apply the `learning-opportunities` skill for structured exercises: prediction/observation/reflection, generation/comparison, tracing paths, Socratic debugging, teach-back, and retrieval. Prefer file pointers over snippets and fade scaffolding from exact symbol/line to subsystem to user-directed discovery. If searching would frustrate learning, provide a narrower pointer.
 
 ## Feedback and session bounds
 

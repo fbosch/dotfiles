@@ -30,7 +30,7 @@ Do not modify source files. Present results as structured comparisons.
 
 ## Hot-path profiling
 
-- When asked to identify hot paths, apply available `hot-path-analysis` guidance.
+- When asked to identify hot paths, load and apply the `hot-path-analysis` skill.
 - The parent task message supplies the profiling target, representative workload, declared symptom, authorization, and relevant implementation context. Treat that context as authoritative. If target or workload is absent, report the missing information; do not invent it.
 - Confirm profiling is authorized for the target environment. Do not attach to production or collect sensitive artifacts without explicit authorization.
 - Identify static suspects separately from dynamic findings. Establish a repeated unprofiled baseline, select the profiler signal for the declared symptom, and report results using the guidance’s evidence labels.

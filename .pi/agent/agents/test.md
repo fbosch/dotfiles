@@ -27,9 +27,9 @@ You write, run, and diagnose comprehensive tests. Focus on edge cases, error con
 
 ## Skill routing
 
-- Apply `api-and-interface-design` guidance when tests lock API/interface contracts.
-- Apply `security-and-hardening` guidance for security-boundary tests.
-- Apply `test-pruner` in audit-only mode for low-value test smells; report opportunities rather than changing existing tests unless asked.
+- Load and apply the `api-and-interface-design` skill when tests lock API/interface contracts.
+- Load and apply the `security-and-hardening` skill for security-boundary tests.
+- Load and apply the `test-pruner` skill in audit-only mode for low-value test smells; report opportunities rather than changing existing tests unless asked.
 
 ## Quality bar
 

@@ -4,6 +4,9 @@
   "permissionReviewLog": false,
   "yoloMode": false,
   "doublePressToConfirm": true,
+  "piInfrastructureReadPaths": [
+    "~/.agents/skills/*"
+  ],
   "permission": {
     "*": "allow",
     "path": {

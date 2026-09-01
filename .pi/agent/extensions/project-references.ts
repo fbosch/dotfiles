@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
+import { type AgentMention, loadAgentMentions } from "./agent-mentions";
 
 export const PROJECT_REFERENCES_START = "<available_references>";
 export const PROJECT_REFERENCES_END = "</available_references>";
@@ -92,6 +93,23 @@ export function loadProjectReferences(
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
+export function assertNoAgentMentionCollisions(
+  references: readonly ProjectReference[],
+  agentMentions: readonly AgentMention[],
+): void {
+  const agentsByName = new Map(
+    agentMentions.map((mention) => [mention.name.toLowerCase(), mention.name]),
+  );
+  for (const reference of references) {
+    const agentName = agentsByName.get(reference.name.toLowerCase());
+    if (agentName !== undefined) {
+      throw new Error(
+        `Project reference "${reference.name}" conflicts with agent mention @${agentName}.`,
+      );
+    }
+  }
+}
+
 function escapeXml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -133,9 +151,7 @@ export function createReferenceAutocompleteProvider(
   provider: AutocompleteProvider,
   references: readonly ProjectReference[],
 ): AutocompleteProvider {
-  return {
-    ...provider,
-    triggerCharacters: [...new Set([...(provider.triggerCharacters ?? []), "@"])],
+  const referenceProvider: AutocompleteProvider = {
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {
       const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
       const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
@@ -155,18 +171,26 @@ export function createReferenceAutocompleteProvider(
         );
       if (referenceItems.length === 0) return suggestions;
 
+      const existingItems = suggestions?.items ?? [];
+      const existingValues = new Set(existingItems.map((item) => item.value));
+
       return {
         items: [
-          ...referenceItems,
-          ...(suggestions?.items.filter(
-            (suggestion) =>
-              referenceItems.some((reference) => reference.value === suggestion.value) === false,
-          ) ?? []),
+          ...referenceItems.filter((reference) => existingValues.has(reference.value) === false),
+          ...existingItems,
         ],
         prefix,
       };
     },
+    applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+      provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
   };
+  referenceProvider.triggerCharacters = [...new Set([...(provider.triggerCharacters ?? []), "@"])];
+  if (provider.shouldTriggerFileCompletion !== undefined) {
+    referenceProvider.shouldTriggerFileCompletion = (lines, cursorLine, cursorCol) =>
+      provider.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? false;
+  }
+  return referenceProvider;
 }
 
 export default function projectReferences(pi: ExtensionAPI): void {
@@ -175,16 +199,11 @@ export default function projectReferences(pi: ExtensionAPI): void {
   pi.on("session_start", (_event, ctx) => {
     try {
       references = loadProjectReferences(ctx.cwd, ctx.isProjectTrusted());
+      assertNoAgentMentionCollisions(references, loadAgentMentions(ctx.cwd));
     } catch (error) {
       references = [];
       ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       return;
-    }
-
-    if (references.length > 0 && ctx.hasUI) {
-      ctx.ui.addAutocompleteProvider((provider) =>
-        createReferenceAutocompleteProvider(provider, references),
-      );
     }
   });
 

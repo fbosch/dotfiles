@@ -1,6 +1,7 @@
 ---
 name: learning-opportunities
 description: Offer optional 10-15 minute deliberate learning exercises during AI-assisted coding. Use when the user asks for a learning opportunity, deliberate practice, retrieval check-in, prediction exercise, teach-back, or when substantial work created a good moment to offer learning. Do not use for ordinary implementation unless the user explicitly wants learning.
+disable-model-invocation: true
 ---
 
 # Learning Opportunities

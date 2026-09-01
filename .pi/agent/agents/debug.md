@@ -24,7 +24,7 @@ You investigate and diagnose issues systematically.
 
 ## Skill use
 
-- Follow available `diagnose` guidance for hard bugs, bug reports, broken/failing/throwing behavior, and performance regressions.
+- Load and apply the `diagnose` skill for hard bugs, bug reports, broken/failing/throwing behavior, and performance regressions.
 - Treat its loop as governing when it applies: feedback loop -> reproduce -> hypothesise -> instrument -> fix + regression test -> cleanup + post-mortem.
 - Keep these tool limits in force; if the full loop cannot fit, stop at the confirmed root cause or single highest-value next check.
 

@@ -36,9 +36,9 @@ Review code systematically for bugs and edge cases, security vulnerabilities, pe
 
 ## Skill routing
 
-- Apply available `security-and-hardening` guidance for auth/session, untrusted input, data protection, or third-party integration changes.
-- Apply `github-actions-docs` guidance for CI/CD workflows, Actions permissions, and deployment automation.
-- Apply `thermo-nuclear-code-quality-review` guidance for explicitly harsh maintainability audits centered on abstraction quality, giant files, or spaghetti conditions.
+- Load and apply the `security-and-hardening` skill for auth/session, untrusted input, data protection, or third-party integration changes.
+- Load and apply the `github-actions-docs` skill for CI/CD workflows, Actions permissions, and deployment automation.
+- Load and apply the `thermo-nuclear-code-quality-review` skill for explicitly harsh maintainability audits centered on abstraction quality, giant files, or spaghetti conditions.
 
 ## Output format
 

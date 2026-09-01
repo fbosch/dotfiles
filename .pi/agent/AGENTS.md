@@ -32,6 +32,10 @@
   only for explicit persisted data or external consumers.
 - Read the narrowest useful evidence and references. Stop expanding context
   when more investigation will not change the next action.
+- When a prompt or agent definition references a named skill, read
+  `~/.agents/skills/<skill-name>/SKILL.md` fully even when it is absent from
+  the advertised skills catalogue. Treat its directory as the skill root and
+  resolve relative paths there.
 - Run the smallest relevant validation for changed behavior. Never weaken,
   suppress, or narrow checks to force a pass.
 - Measure performance rather than guessing. Establish a baseline when the

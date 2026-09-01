@@ -194,6 +194,21 @@ describe("sectioned command palette", () => {
     expect(lines.some((line) => line.includes("[header]  First"))).toBeFalse();
   });
 
+  test("does not render structural or status rows outside the row budget", () => {
+    const sections = [
+      { label: "First", items: [{ value: "first", label: "One" }] },
+      { label: "Second", items: [{ value: "second", label: "Two" }] },
+      { label: "Third", items: [{ value: "third", label: "Three" }] },
+    ];
+    const oneRowList = new SectionedSelectList(sections, 1, plainTheme);
+    const fiveRowList = new SectionedSelectList(sections, 5, plainTheme);
+
+    expect(oneRowList.render(40)).toHaveLength(1);
+    const fiveRows = fiveRowList.render(40);
+    expect(fiveRows).toHaveLength(3);
+    expect(fiveRows.some((line) => line.includes("[header]  Second"))).toBeFalse();
+  });
+
   test("applies selected styling after wide-text truncation", () => {
     const selectedTheme = {
       ...plainTheme,

@@ -5,16 +5,24 @@ import {
   type Theme,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, hyperlink, type MarkdownTheme, type TUI } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  hyperlink,
+  type MarkdownTheme,
+  Text,
+  type TUI,
+} from "@earendil-works/pi-tui";
 
-export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session/";
+export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
 
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
 const OSC8_OPEN = "\u001b]8;";
-const PATCH_VERSION = 2;
+const PATCH_VERSION = 3;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
+// shortcut: pi-subagents exposes records but not its transcript renderer. Reuse the
+// pinned package modules until its public API can open a transcript by agent ID.
 const SESSION_NAVIGATION_MODULE = new URL(
   "../../npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigation.ts",
   import.meta.url,
@@ -40,10 +48,12 @@ interface ToolRenderPatchState {
 
 interface TuiUrlPatchState {
   version: typeof PATCH_VERSION;
-  openSession: (target: SubagentSessionTarget) => void;
+  registrations: Array<{
+    owner: symbol;
+    openSession: (target: SubagentSessionTarget) => void;
+  }>;
   originalOpenUrl?: (url: string) => void;
   patchedOpenUrl: (url: string) => void;
-  references: number;
 }
 
 interface SubagentToolDetails {
@@ -56,9 +66,11 @@ interface SubagentToolDetails {
 // Pi or pi-subagents exposes a supported renderer or direct-transcript action.
 interface PatchableToolExecution {
   toolName?: unknown;
+  toolCallId?: unknown;
   result?: { details?: SubagentToolDetails };
 }
 type PatchableToolPrototype = typeof ToolExecutionComponent.prototype & Record<symbol, unknown>;
+type PatchableTextPrototype = typeof Text.prototype & Record<symbol, unknown>;
 type PatchableTui = TUI &
   Record<symbol, unknown> & {
     openUrl?: (url: string) => void;
@@ -83,21 +95,47 @@ function isCurrentPatchState(value: unknown): value is { version: typeof PATCH_V
 }
 
 export function subagentSessionUrl(target: SubagentSessionTarget): string {
-  const url = new URL(`${SUBAGENT_SESSION_URL_PREFIX}${encodeURIComponent(target.agentId)}`);
+  const url = new URL(SUBAGENT_SESSION_URL_PREFIX);
+  url.searchParams.set("id", target.agentId);
   url.searchParams.set("name", target.displayName);
   url.searchParams.set("description", target.description);
   return url.toString();
 }
 
 export function parseSubagentSessionUrl(url: string): SubagentSessionTarget | undefined {
-  if (url.startsWith(SUBAGENT_SESSION_URL_PREFIX) === false) return undefined;
-
   try {
+    const query = url.split("?", 2)[1]?.split("#", 1)[0] ?? "";
+    if (/%(?![\dA-Fa-f]{2})/.test(query)) return undefined;
+
     const parsed = new URL(url);
-    const agentId = decodeURIComponent(parsed.pathname.slice("/session/".length));
+    if (
+      parsed.protocol !== "pi-action:" ||
+      parsed.hostname !== "subagents" ||
+      parsed.pathname !== "/session" ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      parsed.port !== "" ||
+      parsed.hash !== ""
+    ) {
+      return undefined;
+    }
+
+    const parameters = [...parsed.searchParams.keys()];
+    if (
+      parameters.length !== 3 ||
+      parsed.searchParams.getAll("id").length !== 1 ||
+      parsed.searchParams.getAll("name").length !== 1 ||
+      parsed.searchParams.getAll("description").length !== 1
+    ) {
+      return undefined;
+    }
+
+    const agentId = parsed.searchParams.get("id");
     const displayName = parsed.searchParams.get("name");
     const description = parsed.searchParams.get("description");
-    if (agentId.length === 0 || displayName === null || description === null) return undefined;
+    if (agentId === null || agentId.length === 0 || displayName === null || description === null) {
+      return undefined;
+    }
     return { agentId, displayName, description };
   } catch {
     return undefined;
@@ -112,21 +150,31 @@ function subagentTarget(component: PatchableToolExecution): SubagentSessionTarge
   if (component.toolName !== "subagent") return undefined;
 
   const details = component.result?.details;
-  if (
-    typeof details?.agentId !== "string" ||
-    typeof details.displayName !== "string" ||
-    typeof details.description !== "string"
-  ) {
+  const agentId =
+    typeof details?.agentId === "string"
+      ? details.agentId
+      : resolveRunningAgentId(component.toolCallId);
+  const displayName = details?.displayName;
+  const description = details?.description;
+  if (agentId === undefined || typeof displayName !== "string" || typeof description !== "string") {
     return undefined;
   }
   return {
-    agentId: details.agentId,
-    displayName: details.displayName,
-    description: details.description,
+    agentId,
+    displayName,
+    description,
   };
 }
 
+function resolveRunningAgentId(toolCallId: unknown): string | undefined {
+  if (typeof toolCallId !== "string") return undefined;
+  return getSubagentsService()
+    ?.manager?.listAgents()
+    .find((record) => record.toolCallId === toolCallId)?.id;
+}
+
 export function installSubagentToolLinks(): () => void {
+  restoreLegacyTextToolRenderPatch();
   const prototype = ToolExecutionComponent.prototype as PatchableToolPrototype;
   const installedState = prototype[TOOL_RENDER_PATCH];
   if (isCurrentPatchState(installedState)) {
@@ -155,6 +203,16 @@ export function installSubagentToolLinks(): () => void {
   return once(() => uninstallToolRenderPatch(prototype, state));
 }
 
+function restoreLegacyTextToolRenderPatch(): void {
+  const prototype = Text.prototype as PatchableTextPrototype;
+  const installedState = prototype[TOOL_RENDER_PATCH];
+  if (typeof installedState !== "object" || installedState === null) return;
+  if ("originalRender" in installedState && typeof installedState.originalRender === "function") {
+    prototype.render = installedState.originalRender as typeof prototype.render;
+  }
+  prototype[TOOL_RENDER_PATCH] = undefined;
+}
+
 function restoreLegacyToolRenderPatch(
   prototype: PatchableToolPrototype,
   installedState: unknown,
@@ -173,7 +231,7 @@ function uninstallToolRenderPatch(
   state.references -= 1;
   if (state.references > 0) return;
   if (prototype.render === state.patchedRender) prototype.render = state.originalRender;
-  prototype[TOOL_RENDER_PATCH] = undefined;
+  if (prototype[TOOL_RENDER_PATCH] === state) prototype[TOOL_RENDER_PATCH] = undefined;
 }
 
 export function installSubagentSessionUrlHandler(
@@ -183,26 +241,25 @@ export function installSubagentSessionUrlHandler(
   if (tui.mode !== "fullscreen") return () => {};
 
   const patchableTui = tui as PatchableTui;
+  const registration = { owner: Symbol(), openSession };
   const installedState = patchableTui[TUI_URL_PATCH];
   if (isCurrentPatchState(installedState)) {
     const existing = installedState as TuiUrlPatchState;
-    existing.openSession = openSession;
-    existing.references += 1;
-    return once(() => uninstallTuiUrlPatch(patchableTui, existing));
+    existing.registrations.push(registration);
+    return once(() => uninstallTuiUrlPatch(patchableTui, existing, registration.owner));
   }
   restoreLegacyTuiUrlPatch(patchableTui, installedState);
 
   const state: TuiUrlPatchState = {
     version: PATCH_VERSION,
-    openSession,
+    registrations: [registration],
     ...(patchableTui.openUrl === undefined ? {} : { originalOpenUrl: patchableTui.openUrl }),
     patchedOpenUrl: () => {},
-    references: 1,
   };
   state.patchedOpenUrl = (url) => {
     const target = parseSubagentSessionUrl(url);
     if (target !== undefined) {
-      state.openSession(target);
+      state.registrations.at(-1)?.openSession(target);
       return;
     }
 
@@ -211,7 +268,7 @@ export function installSubagentSessionUrlHandler(
   patchableTui[TUI_URL_PATCH] = state;
   // TuiAltScreen reads this field at mouse release; Pi has no internal-action link API.
   patchableTui.openUrl = state.patchedOpenUrl;
-  return once(() => uninstallTuiUrlPatch(patchableTui, state));
+  return once(() => uninstallTuiUrlPatch(patchableTui, state, registration.owner));
 }
 
 function restoreLegacyTuiUrlPatch(patchableTui: PatchableTui, installedState: unknown): void {
@@ -225,11 +282,22 @@ function restoreLegacyTuiUrlPatch(patchableTui: PatchableTui, installedState: un
 }
 
 interface SubagentsService {
-  getRecord(id: string): { outputFile?: string } | undefined;
+  getRecord(id: string): { outputFile?: string; status: string } | undefined;
+  manager?: {
+    getRecord(id: string): InternalSubagentRecord | undefined;
+    listAgents(): InternalSubagentRecord[];
+  };
+}
+
+interface InternalSubagentRecord {
+  id: string;
+  toolCallId?: string;
+  isSessionReady(): boolean;
 }
 
 interface SessionNavigationModule {
   fileSnapshotSource(outputFile: string, readFile: (path: string) => string): unknown;
+  liveSource(record: InternalSubagentRecord): unknown;
 }
 
 interface SessionNavigatorModule {
@@ -265,20 +333,38 @@ async function loadSessionNavigator(): Promise<{
   };
 }
 
-async function openSubagentSession(
+export async function openSubagentSession(
   target: SubagentSessionTarget,
   service: SubagentsService,
   ctx: ExtensionContext,
 ): Promise<void> {
-  const outputFile = service.getRecord(target.agentId)?.outputFile;
-  if (outputFile === undefined) {
+  const record = service.getRecord(target.agentId);
+  if (record === undefined) {
+    ctx.ui.notify("The selected subagent session is no longer available.", "warning");
+    return;
+  }
+
+  const liveRecord = service.manager?.getRecord(target.agentId);
+  const hasLiveSession = liveRecord?.isSessionReady() === true;
+  const outputFile = record.outputFile;
+  if (hasLiveSession === false && outputFile === undefined) {
     ctx.ui.notify("The selected subagent session is not ready yet.", "warning");
     return;
   }
 
+  if (hasLiveSession === false && (record.status === "queued" || record.status === "running")) {
+    ctx.ui.notify("Opening the current transcript snapshot. Reopen it to refresh.", "info");
+  }
+
   try {
     const { navigation, navigator } = await loadSessionNavigator();
-    const source = navigation.fileSnapshotSource(outputFile, (path) => readFileSync(path, "utf8"));
+    let source: unknown;
+    if (hasLiveSession) {
+      source = navigation.liveSource(liveRecord);
+    } else {
+      if (outputFile === undefined) return;
+      source = navigation.fileSnapshotSource(outputFile, (path) => readFileSync(path, "utf8"));
+    }
     const markdownTheme = getMarkdownTheme();
     await ctx.ui.custom<undefined>(
       (tui, theme, _keybindings, done) =>
@@ -304,9 +390,14 @@ async function openSubagentSession(
   }
 }
 
-function uninstallTuiUrlPatch(patchableTui: PatchableTui, state: TuiUrlPatchState): void {
-  state.references -= 1;
-  if (state.references > 0) return;
+function uninstallTuiUrlPatch(
+  patchableTui: PatchableTui,
+  state: TuiUrlPatchState,
+  owner: symbol,
+): void {
+  const index = state.registrations.findIndex((registration) => registration.owner === owner);
+  if (index >= 0) state.registrations.splice(index, 1);
+  if (state.registrations.length > 0) return;
   if (patchableTui.openUrl === state.patchedOpenUrl) {
     if (state.originalOpenUrl === undefined) {
       delete patchableTui.openUrl;
@@ -314,13 +405,10 @@ function uninstallTuiUrlPatch(patchableTui: PatchableTui, state: TuiUrlPatchStat
       patchableTui.openUrl = state.originalOpenUrl;
     }
   }
-  patchableTui[TUI_URL_PATCH] = undefined;
+  if (patchableTui[TUI_URL_PATCH] === state) patchableTui[TUI_URL_PATCH] = undefined;
 }
 
-export function installClickableSubagentSessions(
-  tui: TUI,
-  ctx: ExtensionContext,
-): () => void {
+export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext): () => void {
   if (tui.mode !== "fullscreen") return () => {};
 
   const uninstallToolLinks = installSubagentToolLinks();

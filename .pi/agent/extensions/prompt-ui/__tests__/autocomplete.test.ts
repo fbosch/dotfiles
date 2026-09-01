@@ -6,6 +6,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   createAliasAutocompleteProvider,
+  createPromptAutocompleteProvider,
   findBottomBorder,
   splitEditorLines,
   styleSelectedSuggestion,
@@ -104,5 +105,27 @@ describe("prompt autocomplete", () => {
         { value: "@example.ts", label: "example.ts" },
       ],
     });
+  });
+
+  test("offers named references when FFF returns fuzzy file suggestions", async () => {
+    const fffProvider: AutocompleteProvider = {
+      getSuggestions: async () => ({
+        items: [{ value: "@nix-run.md", label: "nix-run.md" }],
+        prefix: "@nixos",
+      }),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const autocomplete = createPromptAutocompleteProvider(
+      fffProvider,
+      [],
+      [{ name: "nixos", path: "/home/fbb/nixos", description: "Personal configuration" }],
+      (_mention, text) => text,
+    );
+
+    const suggestions = await autocomplete.getSuggestions(["inspect @nixos"], 0, 14, {
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestions?.items.map((item) => item.value)).toEqual(["@nixos", "@nix-run.md"]);
   });
 });

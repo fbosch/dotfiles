@@ -38,5 +38,5 @@ Assume the design is wrong until proven resilient. Every issue must have a concr
 
 ## Skill routing
 
-- When findings involve application security controls (input validation, authn/authz, secret handling, transport/storage safety), apply the available `security-and-hardening` guidance and map each top risk to concrete hardening actions.
+- When findings involve application security controls (input validation, authn/authz, secret handling, transport/storage safety), load and apply the `security-and-hardening` skill and map each top risk to concrete hardening actions.
 - Keep this agent focused on break scenarios and reproducers; use that guidance to refine mitigation specifics.

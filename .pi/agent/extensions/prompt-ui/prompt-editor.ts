@@ -15,10 +15,15 @@ import {
   pathShadowsAgentMention,
 } from "../agent-mentions";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
+import {
+  assertNoAgentMentionCollisions,
+  loadProjectReferences,
+  type ProjectReference,
+} from "../project-references";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
   AutocompleteOverlay,
-  createAliasAutocompleteProvider,
+  createPromptAutocompleteProvider,
   splitEditorLines,
 } from "./autocomplete";
 import { contextIndicator } from "./context-health";
@@ -134,6 +139,7 @@ export class PromptEditor extends CustomEditor {
   private readonly disposeSubagentSessionLinks: () => void;
   private readonly typoRules: TypoCorrectionRules;
   private readonly agentMentions: readonly AgentMention[];
+  private readonly projectReferences: readonly ProjectReference[];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
 
   constructor(
@@ -157,6 +163,16 @@ export class PromptEditor extends CustomEditor {
     this.agentMentions = knownAgentMentions.filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
     );
+    this.projectReferences = [];
+    if (typeof this.ctx.isProjectTrusted === "function" && this.ctx.isProjectTrusted()) {
+      try {
+        const projectReferences = loadProjectReferences(this.ctx.cwd, true);
+        assertNoAgentMentionCollisions(projectReferences, knownAgentMentions);
+        this.projectReferences = projectReferences;
+      } catch {
+        // The project-references extension reports the same configuration error during startup.
+      }
+    }
     this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
@@ -179,10 +195,14 @@ export class PromptEditor extends CustomEditor {
       ...(provider.triggerCharacters ?? []),
     ]);
     super.setAutocompleteProvider(
-      createAliasAutocompleteProvider(provider, this.agentMentions, (mention, text) =>
-        mention.color === undefined
-          ? this.ctx.ui.theme.fg("accent", text)
-          : colorizeHex(this.ctx.ui.theme, mention.color)(text),
+      createPromptAutocompleteProvider(
+        provider,
+        this.agentMentions,
+        this.projectReferences,
+        (mention, text) =>
+          mention.color === undefined
+            ? this.ctx.ui.theme.fg("accent", text)
+            : colorizeHex(this.ctx.ui.theme, mention.color)(text),
       ),
     );
   }
