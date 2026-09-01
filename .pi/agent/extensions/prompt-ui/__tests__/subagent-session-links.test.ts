@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { TUI } from "@earendil-works/pi-tui";
+import { Text, type TUI } from "@earendil-works/pi-tui";
 import {
   installSubagentSessionsUrlHandler,
+  installSubagentToolTitleLinks,
   isSubagentToolTitle,
   linkSubagentToolBlock,
   SUBAGENT_SESSIONS_URL,
@@ -25,6 +26,14 @@ describe("subagent session links", () => {
     expect(linked[0]).toContain(SUBAGENT_SESSIONS_URL);
     expect(linked[1]).toContain(SUBAGENT_SESSIONS_URL);
     expect(linked[2]).toBe(fileLink);
+  });
+
+  test("links subagent title components rendered by pi-subagents", () => {
+    installSubagentToolTitleLinks([...agentNames]);
+
+    const rendered = new Text("› explore  Survey repository context", 0, 0).render(80);
+
+    expect(rendered[0]).toContain(SUBAGENT_SESSIONS_URL);
   });
 
   test("leaves unrelated tool blocks unchanged", () => {

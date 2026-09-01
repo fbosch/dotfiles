@@ -1,0 +1,110 @@
+import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
+
+const AGENT_DIR = new URL("../../", import.meta.url);
+const REPO_ROOT = new URL("../../../../", import.meta.url);
+
+const AGENT_NAMES = [
+  ["adversarial", "adversarial"],
+  ["analyze", "analyze"],
+  ["backlog-planning", "backlog-planning"],
+  ["benchmark", "benchmark"],
+  ["commit", "commit"],
+  ["debug", "debug"],
+  ["docs", "docs"],
+  ["explore", "explore"],
+  ["general-purpose", "general"],
+  ["ideate", "ideate"],
+  ["lookup", "lookup"],
+  ["patterns", "patterns"],
+  ["pr-feedback", "pr-feedback"],
+  ["quick", "quick"],
+  ["refactor", "refactor"],
+  ["research", "research"],
+  ["review", "review"],
+  ["spec", "spec"],
+  ["test", "test"],
+  ["tutor", "tutor"],
+  ["validate", "validate"],
+] as const;
+
+interface OpenCodeAgentConfig {
+  model?: string;
+  reasoningEffort?: string;
+}
+
+interface OpenCodeConfig {
+  model: string;
+  agent: Record<string, OpenCodeAgentConfig>;
+}
+
+interface PiSettings {
+  defaultProvider: string;
+  defaultModel: string;
+  compactionModel: {
+    model: string;
+    thinkingLevel: string;
+  };
+}
+
+interface PiModes {
+  build: {
+    model: string;
+    thinkingLevel: string;
+  };
+  plan: {
+    model: string;
+    thinkingLevel: string;
+  };
+}
+
+function readJson<T>(url: URL): T {
+  return JSON.parse(readFileSync(url, "utf8")) as T;
+}
+
+function toPiModel(model: string): string {
+  return model.replace(/^openai\//, "openai-codex/");
+}
+
+function toPiThinking(level: string | undefined): string | undefined {
+  return level === "none" ? "off" : level;
+}
+
+function required(value: string | undefined, setting: string): string {
+  if (value === undefined) throw new Error(`Missing OpenCode model setting: ${setting}`);
+  return value;
+}
+
+describe("Pi model settings", () => {
+  const openCode = readJson<OpenCodeConfig>(new URL(".config/opencode/opencode.jsonc", REPO_ROOT));
+  const settings = readJson<PiSettings>(new URL("settings.json", AGENT_DIR));
+  const modes = readJson<PiModes>(new URL("modes.json", AGENT_DIR));
+
+  test("matches primary, build, plan, and compaction settings", () => {
+    expect(`${settings.defaultProvider}/${settings.defaultModel}`).toBe(toPiModel(openCode.model));
+    expect(modes.build.model).toBe(toPiModel(openCode.model));
+    expect(modes.build.thinkingLevel).toBe(
+      required(openCode.agent.build?.reasoningEffort, "agent.build.reasoningEffort"),
+    );
+    expect(modes.plan.model).toBe(toPiModel(openCode.agent.plan?.model ?? openCode.model));
+    expect(modes.plan.thinkingLevel).toBe(
+      required(openCode.agent.plan?.reasoningEffort, "agent.plan.reasoningEffort"),
+    );
+    expect(settings.compactionModel.model).toBe(
+      toPiModel(openCode.agent.compaction?.model ?? openCode.model),
+    );
+    expect(settings.compactionModel.thinkingLevel).toBe(
+      required(openCode.agent.compaction?.reasoningEffort, "agent.compaction.reasoningEffort"),
+    );
+  });
+
+  test.each(AGENT_NAMES)("matches the %s subagent", (piName, openCodeName) => {
+    const source = openCode.agent[openCodeName];
+    const content = readFileSync(new URL(`agents/${piName}.md`, AGENT_DIR), "utf8");
+    const { frontmatter } = parseFrontmatter(content);
+
+    expect(frontmatter.model).toBe(toPiModel(source?.model ?? openCode.model));
+    expect(frontmatter.thinking).toBe(toPiThinking(source?.reasoningEffort));
+  });
+});

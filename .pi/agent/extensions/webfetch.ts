@@ -250,6 +250,10 @@ async function requestPinnedUrl(
   if (address === undefined) throw new Error(`No validated address available for ${url.hostname}`);
   const family = isIP(address);
   if (family !== 4 && family !== 6) throw new Error(`Invalid resolved address: ${address}`);
+  const records = addresses.map((candidate) => ({ address: candidate, family: isIP(candidate) }));
+  if (records.some((record) => record.family !== 4 && record.family !== 6)) {
+    throw new Error(`Invalid resolved address for ${url.hostname}`);
+  }
 
   const request = url.protocol === "https:" ? httpsRequest : httpRequest;
   return new Promise((resolve, reject) => {
@@ -257,26 +261,36 @@ async function requestPinnedUrl(
       url,
       {
         method: "GET",
+        agent: false,
         headers: { ...headers, "Accept-Encoding": "identity", Connection: "close" },
         signal,
         lookup: (_hostname, options, callback) => {
           if (typeof options === "object" && options.all === true) {
-            callback(null, [{ address, family }]);
+            callback(null, records);
             return;
           }
           callback(null, address, family);
         },
       },
       (incoming) => {
-        const body = Readable.toWeb(incoming) as unknown as ReadableStream<Uint8Array>;
-        const statusText = incoming.statusMessage;
-        resolve(
-          new Response(body, {
-            status: incoming.statusCode ?? 500,
-            ...(statusText === undefined ? {} : { statusText }),
-            headers: responseHeaders(incoming.headers),
-          }),
-        );
+        try {
+          const status = incoming.statusCode ?? 500;
+          const hasNoBody = status === 204 || status === 205 || status === 304;
+          const body = hasNoBody
+            ? null
+            : (Readable.toWeb(incoming) as unknown as ReadableStream<Uint8Array>);
+          const statusText = incoming.statusMessage;
+          resolve(
+            new Response(body, {
+              status,
+              ...(statusText === undefined ? {} : { statusText }),
+              headers: responseHeaders(incoming.headers),
+            }),
+          );
+        } catch (error) {
+          incoming.destroy();
+          reject(error);
+        }
       },
     );
     outgoing.once("error", reject);
@@ -365,9 +379,16 @@ async function readBoundedBody(response: Response): Promise<Uint8Array> {
   return bytes;
 }
 
-function sanitizeText(value: string): string {
+function assertBeforeDeadline(deadline: number): void {
+  if (performance.now() > deadline) throw new Error("Request timed out");
+}
+
+function sanitizeText(value: string, deadline = Number.POSITIVE_INFINITY): string {
   let result = "";
+  let processed = 0;
   for (const character of value) {
+    processed += character.length;
+    if (processed % 4096 === 0) assertBeforeDeadline(deadline);
     const codePoint = character.codePointAt(0) ?? 0;
     const allowedWhitespace = codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd;
     if (codePoint < 0x20 && !allowedWhitespace) continue;
@@ -460,10 +481,15 @@ function parseTag(raw: string): HtmlTagToken | undefined {
   return { kind: "tag", name: trimmed.slice(nameStart, nameEnd).toLowerCase(), closing, raw };
 }
 
-function tokenizeHtml(html: string, consume: (token: HtmlToken) => void): void {
+function tokenizeHtml(
+  html: string,
+  consume: (token: HtmlToken) => void,
+  deadline = Number.POSITIVE_INFINITY,
+): void {
   const lowercase = html.toLowerCase();
   let position = 0;
   while (position < html.length) {
+    assertBeforeDeadline(deadline);
     const tagStart = html.indexOf("<", position);
     if (tagStart < 0) {
       consume({ kind: "text", text: html.slice(position) });
@@ -496,6 +522,13 @@ function tokenizeHtml(html: string, consume: (token: HtmlToken) => void): void {
 
     if (!token.closing && SKIPPED_HTML_ELEMENTS.has(token.name)) {
       const closingStart = lowercase.indexOf(`</${token.name}`, tagEnd + 1);
+      if (closingStart < 0 && token.name === "head") {
+        const bodyStart = lowercase.indexOf("<body", tagEnd + 1);
+        if (bodyStart >= 0) {
+          position = bodyStart;
+          continue;
+        }
+      }
       if (closingStart < 0) return;
       const closingEnd = findTagEnd(html, closingStart + 2 + token.name.length);
       if (closingEnd < 0) return;
@@ -508,8 +541,8 @@ function tokenizeHtml(html: string, consume: (token: HtmlToken) => void): void {
   }
 }
 
-function normalizedText(value: string): string {
-  return sanitizeText(decodeHtmlEntities(value)).replace(/\s+/g, " ");
+function normalizedText(value: string, deadline: number): string {
+  return sanitizeText(decodeHtmlEntities(value), deadline).replace(/\s+/g, " ");
 }
 
 function normalizeRenderedText(value: string): string {
@@ -558,7 +591,7 @@ function resolvedLink(raw: string, baseUrl: URL): string | undefined {
   }
 }
 
-export function htmlToText(html: string): string {
+export function htmlToText(html: string, deadline = Number.POSITIVE_INFINITY): string {
   let output = "";
   const blockElements = new Set([
     "address",
@@ -577,20 +610,28 @@ export function htmlToText(html: string): string {
     "ul",
     "ol",
   ]);
-  tokenizeHtml(html, (token) => {
-    if (token.kind === "text") {
-      output += normalizedText(token.text);
-      return;
-    }
-    if (token.name === "br") output += "\n";
-    if (token.closing && (blockElements.has(token.name) || /^h[1-6]$/.test(token.name))) {
-      output += "\n";
-    }
-  });
+  tokenizeHtml(
+    html,
+    (token) => {
+      if (token.kind === "text") {
+        output += normalizedText(token.text, deadline);
+        return;
+      }
+      if (token.name === "br") output += "\n";
+      if (token.closing && (blockElements.has(token.name) || /^h[1-6]$/.test(token.name))) {
+        output += "\n";
+      }
+    },
+    deadline,
+  );
   return normalizeRenderedText(output);
 }
 
-export function htmlToMarkdown(html: string, baseUrl = new URL("https://invalid.example")): string {
+export function htmlToMarkdown(
+  html: string,
+  baseUrl = new URL("https://invalid.example"),
+  deadline = Number.POSITIVE_INFINITY,
+): string {
   let output = "";
   let preformatted = false;
   const links: Array<string | undefined> = [];
@@ -611,45 +652,49 @@ export function htmlToMarkdown(html: string, baseUrl = new URL("https://invalid.
     "ol",
   ]);
 
-  tokenizeHtml(html, (token) => {
-    if (token.kind === "text") {
-      output += preformatted
-        ? sanitizeText(decodeHtmlEntities(token.text))
-        : normalizedText(token.text);
-      return;
-    }
-
-    const { name, closing } = token;
-    if (/^h[1-6]$/.test(name)) {
-      output += closing ? "\n\n" : `\n\n${"#".repeat(Number(name[1]))} `;
-      return;
-    }
-    if (name === "a") {
-      if (!closing) {
-        const link = resolvedLink(token.raw, baseUrl);
-        links.push(link);
-        if (link !== undefined) output += "[";
-      } else {
-        const link = links.pop();
-        if (link !== undefined) output += `](${link})`;
+  tokenizeHtml(
+    html,
+    (token) => {
+      if (token.kind === "text") {
+        output += preformatted
+          ? sanitizeText(decodeHtmlEntities(token.text), deadline)
+          : normalizedText(token.text, deadline);
+        return;
       }
-      return;
-    }
-    if (name === "pre") {
-      preformatted = !closing;
-      output += closing ? "\n````\n\n" : "\n\n````\n";
-      return;
-    }
-    if (name === "code" && !preformatted) output += "`";
-    if (name === "strong" || name === "b") output += "**";
-    if (name === "em" || name === "i") output += "*";
-    if (name === "del" || name === "s") output += "~~";
-    if (name === "blockquote") output += closing ? "\n\n" : "\n\n> ";
-    if (name === "li" && !closing) output += "\n- ";
-    if (name === "br") output += "\n";
-    if (name === "hr") output += "\n\n---\n\n";
-    if (blocks.has(name)) output += "\n\n";
-  });
+
+      const { name, closing } = token;
+      if (/^h[1-6]$/.test(name)) {
+        output += closing ? "\n\n" : `\n\n${"#".repeat(Number(name[1]))} `;
+        return;
+      }
+      if (name === "a") {
+        if (!closing) {
+          const link = resolvedLink(token.raw, baseUrl);
+          links.push(link);
+          if (link !== undefined) output += "[";
+        } else {
+          const link = links.pop();
+          if (link !== undefined) output += `](${link})`;
+        }
+        return;
+      }
+      if (name === "pre") {
+        preformatted = !closing;
+        output += closing ? "\n````\n\n" : "\n\n````\n";
+        return;
+      }
+      if (name === "code" && !preformatted) output += "`";
+      if (name === "strong" || name === "b") output += "**";
+      if (name === "em" || name === "i") output += "*";
+      if (name === "del" || name === "s") output += "~~";
+      if (name === "blockquote") output += closing ? "\n\n" : "\n\n> ";
+      if (name === "li" && !closing) output += "\n- ";
+      if (name === "br") output += "\n";
+      if (name === "hr") output += "\n\n---\n\n";
+      if (blocks.has(name)) output += "\n\n";
+    },
+    deadline,
+  );
 
   return output
     .split("\n")
@@ -685,6 +730,14 @@ function isTextContentType(contentType: string): boolean {
   );
 }
 
+function truncateAtCodePoint(value: string, maxCharacters: number): string {
+  let end = Math.min(value.length, maxCharacters);
+  const last = value.charCodeAt(end - 1);
+  const next = value.charCodeAt(end);
+  if (last >= 0xd800 && last <= 0xdbff && next >= 0xdc00 && next <= 0xdfff) end -= 1;
+  return value.slice(0, end);
+}
+
 export async function fetchWebContent(
   params: WebFetchParams,
   signal?: AbortSignal,
@@ -692,6 +745,7 @@ export async function fetchWebContent(
 ) {
   const format = params.format ?? "markdown";
   const timeout = Math.min(params.timeout ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS);
+  const deadline = performance.now() + timeout * 1_000;
   const signalWithTimeout = responseSignal(signal, timeout);
   const requestFn = dependencies.requestFn ?? requestPinnedUrl;
   const resolveHostname = dependencies.resolveHostname ?? defaultResolveHostname;
@@ -745,16 +799,18 @@ export async function fetchWebContent(
   } catch {
     decoder = new TextDecoder();
   }
-  const raw = sanitizeText(decoder.decode(bytes));
+  const raw = sanitizeText(decoder.decode(bytes), deadline);
+  assertBeforeDeadline(deadline);
   const isHtml = contentType === "text/html" || contentType === "application/xhtml+xml";
   const text =
     format === "html"
       ? raw
       : format === "text" && isHtml
-        ? htmlToText(raw)
+        ? htmlToText(raw, deadline)
         : format === "markdown" && isHtml
-          ? htmlToMarkdown(raw, url)
+          ? htmlToMarkdown(raw, url, deadline)
           : raw;
+  assertBeforeDeadline(deadline);
 
   if (text.length <= MAX_TEXT_CHARACTERS) {
     return { content: [{ type: "text" as const, text }], details };
@@ -765,7 +821,7 @@ export async function fetchWebContent(
     content: [
       {
         type: "text" as const,
-        text: `${text.slice(0, MAX_TEXT_CHARACTERS)}\n\n[Truncated after ${MAX_TEXT_CHARACTERS} characters]`,
+        text: `${truncateAtCodePoint(text, MAX_TEXT_CHARACTERS)}\n\n[Truncated after ${MAX_TEXT_CHARACTERS} characters]`,
       },
     ],
     details,
@@ -785,7 +841,7 @@ export default function webFetchExtension(pi: ExtensionAPI): void {
         "Prefer markdown unless raw HTML or plain text is specifically required.",
       ],
       parameters: WebFetchParamsSchema,
-      executionMode: "parallel",
+      executionMode: "sequential",
 
       async execute(_toolCallId, params, signal) {
         return fetchWebContent(params, signal);

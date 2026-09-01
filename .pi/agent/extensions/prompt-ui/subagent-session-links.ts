@@ -1,9 +1,5 @@
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  ToolExecutionComponent,
-} from "@earendil-works/pi-coding-agent";
-import { hyperlink, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { hyperlink, stripTerminalSequences, Text, type TUI } from "@earendil-works/pi-tui";
 
 export const SUBAGENT_SESSIONS_URL = "pi-action://subagents/sessions";
 
@@ -14,7 +10,7 @@ const TOOL_CALL_PREFIX = "› ";
 
 interface ToolRenderPatchState {
   agentNames: Set<string>;
-  originalRender: (this: ToolExecutionComponent, width: number) => string[];
+  originalRender: (this: Text, width: number) => string[];
 }
 
 interface TuiUrlPatchState {
@@ -22,7 +18,7 @@ interface TuiUrlPatchState {
   originalOpenUrl?: (url: string) => void;
 }
 
-type PatchableToolPrototype = typeof ToolExecutionComponent.prototype & Record<symbol, unknown>;
+type PatchableTextPrototype = typeof Text.prototype & Record<symbol, unknown>;
 type PatchableTui = TUI &
   Record<symbol, unknown> & {
     openUrl?: (url: string) => void;
@@ -51,8 +47,8 @@ export function linkSubagentToolBlock(
   );
 }
 
-function installToolRenderPatch(agentNames: readonly string[]): void {
-  const prototype = ToolExecutionComponent.prototype as PatchableToolPrototype;
+export function installSubagentToolTitleLinks(agentNames: readonly string[]): void {
+  const prototype = Text.prototype as PatchableTextPrototype;
   const existing = prototype[TOOL_RENDER_PATCH] as ToolRenderPatchState | undefined;
   if (existing !== undefined) {
     existing.agentNames = normalizedAgentNames(agentNames);
@@ -64,7 +60,7 @@ function installToolRenderPatch(agentNames: readonly string[]): void {
     originalRender: prototype.render,
   };
   prototype[TOOL_RENDER_PATCH] = state;
-  prototype.render = function renderClickableSubagentTool(width: number): string[] {
+  prototype.render = function renderClickableSubagentTitle(width: number): string[] {
     return linkSubagentToolBlock(state.originalRender.call(this, width), state.agentNames);
   };
 }
@@ -102,7 +98,7 @@ export function installClickableSubagentSessions(
   ctx: ExtensionContext,
   agentNames: readonly string[],
 ): void {
-  installToolRenderPatch(agentNames);
+  installSubagentToolTitleLinks(agentNames);
   installSubagentSessionsUrlHandler(tui, () => {
     try {
       pi.sendUserMessage("/subagents:sessions", { expandPromptTemplates: true });

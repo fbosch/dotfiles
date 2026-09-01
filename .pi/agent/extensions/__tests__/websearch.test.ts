@@ -13,11 +13,15 @@ describe("websearch", () => {
     expect(() => selectWebSearchProvider("session", "paralell")).toThrow(
       "Invalid web search provider",
     );
-    expect(selectProviderForSearch({ query: "topic", type: "deep" }, "session")).toBe("exa");
+    expect(selectProviderForSearch({ query: "topic", numResults: 2 }, "session")).toBe("exa");
   });
 
   test("parses JSON and server-sent event MCP responses", () => {
-    const payload = { result: { content: [{ type: "text", text: "search result" }] } };
+    const payload = {
+      jsonrpc: "2.0",
+      id: 1,
+      result: { content: [{ type: "text", text: "search result" }] },
+    };
     expect(parseMcpResponse(JSON.stringify(payload))).toBe("search result");
     expect(parseMcpResponse(`event: message\ndata: ${JSON.stringify(payload)}\n\n`)).toBe(
       "search result",
@@ -29,9 +33,16 @@ describe("websearch", () => {
     ).toBe("split");
     expect(() =>
       parseMcpResponse(
-        JSON.stringify({ result: { isError: true, content: [{ type: "text", text: "failed" }] } }),
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { isError: true, content: [{ type: "text", text: "failed" }] },
+        }),
       ),
     ).toThrow("failed");
+    expect(() =>
+      parseMcpResponse(JSON.stringify({ result: { content: [{ type: "text", text: "no id" }] } })),
+    ).toThrow("no readable result");
   });
 
   test("calls Exa using the OpenCode search contract", async () => {
@@ -41,12 +52,17 @@ describe("websearch", () => {
       requestUrl = String(input);
       requestBody = JSON.parse(String(init?.body));
       return new Response(
-        JSON.stringify({ result: { content: [{ type: "text", text: "result" }] } }),
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { content: [{ type: "text", text: "result" }] },
+        }),
+        { headers: { "Content-Type": "application/json" } },
       );
     };
 
     const result = await searchWeb(
-      { query: "current topic", type: "deep", numResults: 4, livecrawl: "preferred" },
+      { query: "current topic", numResults: 4 },
       { provider: "exa", sessionId: "session-1", fetchFn },
     );
 
@@ -58,9 +74,7 @@ describe("websearch", () => {
         name: "web_search_exa",
         arguments: {
           query: "current topic",
-          type: "deep",
           numResults: 4,
-          livecrawl: "preferred",
         },
       },
     });
@@ -71,7 +85,8 @@ describe("websearch", () => {
     const fetchFn = async (_input: string | URL | Request, init?: RequestInit) => {
       requestBody = JSON.parse(String(init?.body));
       return new Response(
-        `data: ${JSON.stringify({ result: { content: [{ type: "text", text: "parallel" }] } })}\n`,
+        `data: ${JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "parallel" }] } })}\n`,
+        { headers: { "Content-Type": "text/event-stream" } },
       );
     };
 
@@ -127,5 +142,51 @@ describe("websearch", () => {
     await expect(
       searchWeb({ query: "large" }, { provider: "exa", sessionId: "session", fetchFn }),
     ).rejects.toThrow("response too large");
+  });
+
+  test("processes each server-sent event once", async () => {
+    const encoder = new TextEncoder();
+    const fetchFn = async () => {
+      let event = 0;
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (event < 8_000) {
+              event += 1;
+              controller.enqueue(encoder.encode("data: {}\n\n"));
+              return;
+            }
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "done" }] } })}\n\n`,
+              ),
+            );
+            controller.close();
+          },
+        }),
+        { headers: { "Content-Type": "text/event-stream" } },
+      );
+    };
+
+    await expect(
+      searchWeb({ query: "events" }, { provider: "parallel", sessionId: "session", fetchFn }),
+    ).resolves.toBe("done");
+  });
+
+  test("rejects unsupported provider response types", async () => {
+    const fetchFn = async () => {
+      return new Response(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          result: { content: [{ type: "text", text: "wrong media type" }] },
+        }),
+        { headers: { "Content-Type": "text/html" } },
+      );
+    };
+
+    await expect(
+      searchWeb({ query: "media" }, { provider: "exa", sessionId: "session", fetchFn }),
+    ).rejects.toThrow("Unsupported web search response type");
   });
 });

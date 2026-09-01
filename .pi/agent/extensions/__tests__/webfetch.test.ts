@@ -62,6 +62,9 @@ describe("webfetch", () => {
     expect(htmlToText(html)).toBe("First line\nSecond line");
     expect(htmlToText('<p title="1 > 0">Hello</p>')).toBe("Hello");
     expect(htmlToText("<script>secret()")).toBe("");
+    expect(htmlToText("<html><head><title>x</title><body><p>Hello</p></body></html>")).toBe(
+      "Hello",
+    );
     expect(htmlToMarkdown("<h2>Heading</h2><ul><li>One</li><li>Two</li></ul>")).toBe(
       "## Heading\n\n- One\n- Two",
     );
@@ -138,5 +141,22 @@ describe("webfetch", () => {
   test("converts hostile unclosed tags in linear time", () => {
     const html = '<a href="https://example.com">'.repeat(32_000);
     expect(htmlToMarkdown(html)).toHaveLength(32_000);
+  });
+
+  test("truncates text without splitting a Unicode code point", async () => {
+    const requestFn = async () => {
+      return new Response(`a${"😀".repeat(100_001)}`, {
+        headers: { "Content-Type": "text/plain" },
+      });
+    };
+    const result = await fetchWebContent({ url: "https://example.com" }, undefined, {
+      requestFn,
+      resolveHostname: PUBLIC_ADDRESSES,
+    });
+    const text = result.content[0]?.type === "text" ? result.content[0].text : "";
+    const truncated = text.split("\n\n[Truncated", 1)[0] ?? "";
+    const lastCodeUnit = truncated.charCodeAt(truncated.length - 1);
+    expect(lastCodeUnit < 0xd800 || lastCodeUnit > 0xdbff).toBe(true);
+    expect(result.details.truncated).toBe(true);
   });
 });

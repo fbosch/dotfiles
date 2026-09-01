@@ -11,15 +11,10 @@ const SEARCH_TIMEOUT_MS = 25_000;
 const MAX_SEARCH_RESPONSE_SIZE = 1024 * 1024;
 
 export type WebSearchProvider = "exa" | "parallel";
-export type WebSearchType = "auto" | "fast" | "deep";
-export type LiveCrawlMode = "fallback" | "preferred";
 
 export interface WebSearchParams {
   query: string;
   numResults?: number;
-  livecrawl?: LiveCrawlMode;
-  type?: WebSearchType;
-  contextMaxCharacters?: number;
 }
 
 interface WebSearchDetails {
@@ -57,33 +52,6 @@ const WebSearchParamsSchema = {
       maximum: 100,
       description: "Number of results to return (default: 8).",
     },
-    livecrawl: {
-      "~kind": "Union" as const,
-      "~optional": true as const,
-      anyOf: [
-        { "~kind": "Literal" as const, const: "fallback" as const, type: "string" as const },
-        { "~kind": "Literal" as const, const: "preferred" as const, type: "string" as const },
-      ],
-      description: "Use live crawling as a fallback or prefer it over cached content.",
-    },
-    type: {
-      "~kind": "Union" as const,
-      "~optional": true as const,
-      anyOf: [
-        { "~kind": "Literal" as const, const: "auto" as const, type: "string" as const },
-        { "~kind": "Literal" as const, const: "fast" as const, type: "string" as const },
-        { "~kind": "Literal" as const, const: "deep" as const, type: "string" as const },
-      ],
-      description: "Search depth: auto, fast, or deep.",
-    },
-    contextMaxCharacters: {
-      "~kind": "Number" as const,
-      "~optional": true as const,
-      type: "number" as const,
-      minimum: 1,
-      maximum: 100_000,
-      description: "Maximum result context characters (default: 10000).",
-    },
   },
 };
 
@@ -111,14 +79,15 @@ export function selectProviderForSearch(
   params: WebSearchParams,
   sessionId: string,
 ): WebSearchProvider {
-  if (
-    params.numResults !== undefined ||
-    params.livecrawl !== undefined ||
-    params.type !== undefined ||
-    params.contextMaxCharacters !== undefined
-  ) {
-    return "exa";
+  const override = process.env.PI_WEBSEARCH_PROVIDER ?? process.env.OPENCODE_WEBSEARCH_PROVIDER;
+  if (override !== undefined && override.length > 0) {
+    const provider = selectWebSearchProvider(sessionId, override);
+    if (provider === "parallel" && params.numResults !== undefined) {
+      throw new Error("Parallel web search does not support numResults");
+    }
+    return provider;
   }
+  if (params.numResults !== undefined) return "exa";
   return selectWebSearchProvider(sessionId);
 }
 
@@ -131,8 +100,7 @@ function parseMcpPayload(value: unknown, expectedId = 1): string | undefined {
     error?: { message?: unknown };
     result?: { content?: unknown; isError?: unknown };
   };
-  if (envelope.jsonrpc !== undefined && envelope.jsonrpc !== "2.0") return undefined;
-  if (envelope.id !== undefined && envelope.id !== expectedId) return undefined;
+  if (envelope.jsonrpc !== "2.0" || envelope.id !== expectedId) return undefined;
   if (envelope.error !== undefined) {
     const message = envelope.error.message;
     throw new Error(
@@ -145,7 +113,7 @@ function parseMcpPayload(value: unknown, expectedId = 1): string | undefined {
   for (const item of envelope.result.content) {
     if (typeof item !== "object" || item === null) continue;
     const content = item as { type?: unknown; text?: unknown };
-    if (content.type !== undefined && content.type !== "text") continue;
+    if (content.type !== "text") continue;
     if (typeof content.text === "string" && content.text.length > 0) texts.push(content.text);
   }
   if (texts.length === 0) return undefined;
@@ -163,23 +131,34 @@ function parseJsonPayload(value: string): string | undefined {
   }
 }
 
+function parseSseEvent(event: string): string | undefined {
+  const data = event
+    .split(/\r?\n/)
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  return data.length === 0 ? undefined : parseJsonPayload(data);
+}
+
 export function parseMcpResponse(body: string): string {
   const direct = parseJsonPayload(body.trim());
   if (direct !== undefined) return direct;
 
   const events = body.replace(/\r\n/g, "\n").split("\n\n");
   for (const event of events) {
-    const data = event
-      .split("\n")
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trimStart())
-      .join("\n");
-    if (data.length === 0) continue;
-    const text = parseJsonPayload(data);
+    const text = parseSseEvent(event);
     if (text !== undefined) return text;
   }
 
   throw new Error("Web search provider returned no readable result");
+}
+
+function eventBoundary(buffer: string): { index: number; length: number } | undefined {
+  const lf = buffer.indexOf("\n\n");
+  const crlf = buffer.indexOf("\r\n\r\n");
+  if (lf < 0 && crlf < 0) return undefined;
+  if (lf >= 0 && (crlf < 0 || lf < crlf)) return { index: lf, length: 2 };
+  return { index: crlf, length: 4 };
 }
 
 async function readBoundedResponse(response: Response): Promise<string> {
@@ -190,11 +169,15 @@ async function readBoundedResponse(response: Response): Promise<string> {
   }
   if (response.body === null) return "";
 
+  const mediaType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  const isEventStream = mediaType === "text/event-stream";
+  if (response.ok && mediaType !== "application/json" && !isEventStream) {
+    await response.body?.cancel();
+    throw new Error(`Unsupported web search response type: ${mediaType ?? "missing"}`);
+  }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  const isEventStream =
-    response.headers.get("content-type")?.includes("text/event-stream") === true;
-  let body = "";
+  let buffer = "";
   let bytes = 0;
 
   while (true) {
@@ -205,27 +188,29 @@ async function readBoundedResponse(response: Response): Promise<string> {
       await reader.cancel();
       throw new Error("Web search response too large");
     }
-    body += decoder.decode(value, { stream: true });
+    buffer += decoder.decode(value, { stream: true });
 
-    if (response.ok && isEventStream && /\r?\n\r?\n/.test(body)) {
-      try {
-        const result = parseMcpResponse(body);
+    if (!response.ok || !isEventStream) continue;
+    let boundary = eventBoundary(buffer);
+    while (boundary !== undefined) {
+      const event = buffer.slice(0, boundary.index);
+      buffer = buffer.slice(boundary.index + boundary.length);
+      const result = parseSseEvent(event);
+      if (result !== undefined) {
         await reader.cancel();
         return result;
-      } catch (error) {
-        if (
-          !(error instanceof Error) ||
-          error.message !== "Web search provider returned no readable result"
-        ) {
-          throw error;
-        }
       }
+      boundary = eventBoundary(buffer);
     }
   }
 
-  body += decoder.decode();
-  if (response.ok && isEventStream) return parseMcpResponse(body);
-  return body;
+  buffer += decoder.decode();
+  if (response.ok && isEventStream) {
+    const result = parseSseEvent(buffer);
+    if (result !== undefined) return result;
+    throw new Error("Web search provider returned no readable result");
+  }
+  return buffer;
 }
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
@@ -247,12 +232,7 @@ export async function searchWeb(params: WebSearchParams, options: SearchOptions)
       }
     : {
         query: params.query,
-        type: params.type ?? "auto",
         numResults: params.numResults ?? 8,
-        livecrawl: params.livecrawl ?? "fallback",
-        ...(params.contextMaxCharacters === undefined
-          ? {}
-          : { contextMaxCharacters: params.contextMaxCharacters }),
       };
 
   const headers: Record<string, string> = {
@@ -284,7 +264,8 @@ export async function searchWeb(params: WebSearchParams, options: SearchOptions)
   if (!response.ok) {
     throw new Error(`Web search provider returned HTTP ${response.status}: ${body.slice(0, 300)}`);
   }
-  if (response.headers.get("content-type")?.includes("text/event-stream") === true) return body;
+  const mediaType = response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase();
+  if (mediaType === "text/event-stream") return body;
   return parseMcpResponse(body);
 }
 
@@ -305,7 +286,7 @@ export default function webSearchExtension(pi: ExtensionAPI): void {
         `Use ${new Date().getFullYear()} in queries for recent or current information.`,
       ],
       parameters: WebSearchParamsSchema,
-      executionMode: "parallel",
+      executionMode: "sequential",
 
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const query = params.query.trim();
