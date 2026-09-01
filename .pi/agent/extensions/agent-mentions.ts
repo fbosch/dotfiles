@@ -3,9 +3,9 @@ import { basename, join, resolve } from "node:path";
 import {
   type ExtensionAPI,
   type ExtensionContext,
-  type Theme,
   getAgentDir,
   parseFrontmatter,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
 import { hexForegroundAnsi } from "./prompt-ui/terminal-color";
 

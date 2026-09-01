@@ -35,8 +35,7 @@
       "source": "npm:pi-mcp-adapter@2.31.0",
       "skills": []
     },
-    "npm:@gotgenes/pi-subagents@21.0.3",
-    "npm:pi-command-palette@0.2.2"
+    "npm:@gotgenes/pi-subagents@21.0.3"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0

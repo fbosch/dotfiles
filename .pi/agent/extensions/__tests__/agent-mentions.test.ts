@@ -107,9 +107,9 @@ describe("agent mentions", () => {
       getFgAnsi: (color: string) => `<${color}>`,
     } as Theme;
 
-    expect(
-      agentMentionForegroundAnsi(theme, { name: "Explore", description: "Explore" }),
-    ).toBe("<accent>");
+    expect(agentMentionForegroundAnsi(theme, { name: "Explore", description: "Explore" })).toBe(
+      "<accent>",
+    );
   });
 
   test("preserves cursor escapes inside a colorized input mention", () => {
