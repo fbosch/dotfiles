@@ -20,7 +20,10 @@ const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
 const TERMINAL_WRITE_PATCH = Symbol.for("dotfiles:pi-subagent-session-terminal-filter");
 const OSC8_OPEN = "\u001b]8;";
-const OSC8_SEQUENCE = /\u001b]8;[^;]*;([^\u0007\u001b]*)(?:\u0007|\u001b\\)/g;
+const OSC8_SEQUENCE = new RegExp(
+  `${OSC8_OPEN}[^;]*;([^\\u0007\\u001b]*)(?:\\u0007|\\u001b\\\\)`,
+  "g",
+);
 const PATCH_VERSION = 4;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
@@ -339,6 +342,60 @@ function restoreLegacyTuiUrlPatch(patchableTui: PatchableTui, installedState: un
   patchableTui[TUI_URL_PATCH] = undefined;
 }
 
+export function installSubagentTerminalLinkFilter(tui: TUI): () => void {
+  if (tui.mode !== "fullscreen") return () => {};
+
+  const terminal = tui.terminal as PatchableTerminal;
+  const owner = Symbol();
+  const installedState = terminal[TERMINAL_WRITE_PATCH];
+  if (isCurrentPatchState(installedState)) {
+    const existing = installedState as TerminalWritePatchState;
+    existing.owners.push(owner);
+    return once(() => uninstallTerminalWritePatch(terminal, existing, owner));
+  }
+  restoreLegacyTerminalWritePatch(terminal, installedState);
+
+  const originalWrite = terminal.write;
+  const state: TerminalWritePatchState = {
+    version: PATCH_VERSION,
+    owners: [owner],
+    internalLinkOpen: false,
+    originalWrite,
+    patchedWrite: originalWrite,
+  };
+  state.patchedWrite = function writeWithoutInternalLinks(data: string): void {
+    state.originalWrite.call(terminal, stripSubagentSessionLinks(data, state));
+  };
+  terminal[TERMINAL_WRITE_PATCH] = state;
+  // Keep OSC-8 in TuiAltScreen's frame for hit-testing, but hide internal links from
+  // the terminal so it cannot apply native hyperlink hover styling.
+  terminal.write = state.patchedWrite;
+  return once(() => uninstallTerminalWritePatch(terminal, state, owner));
+}
+
+function restoreLegacyTerminalWritePatch(
+  terminal: PatchableTerminal,
+  installedState: unknown,
+): void {
+  if (typeof installedState !== "object" || installedState === null) return;
+  if ("originalWrite" in installedState && typeof installedState.originalWrite === "function") {
+    terminal.write = installedState.originalWrite as Terminal["write"];
+  }
+  terminal[TERMINAL_WRITE_PATCH] = undefined;
+}
+
+function uninstallTerminalWritePatch(
+  terminal: PatchableTerminal,
+  state: TerminalWritePatchState,
+  owner: symbol,
+): void {
+  const index = state.owners.indexOf(owner);
+  if (index >= 0) state.owners.splice(index, 1);
+  if (state.owners.length > 0) return;
+  if (terminal.write === state.patchedWrite) terminal.write = state.originalWrite;
+  if (terminal[TERMINAL_WRITE_PATCH] === state) terminal[TERMINAL_WRITE_PATCH] = undefined;
+}
+
 interface SubagentsService {
   getRecord(id: string): { outputFile?: string; status: string } | undefined;
   manager?: {
@@ -479,7 +536,9 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
 
     void openSubagentSession(target, service, ctx);
   });
+  const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
   return () => {
+    uninstallTerminalFilter();
     uninstallUrlHandler();
     uninstallToolLinks();
   };

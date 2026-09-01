@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  hyperlink,
   type Terminal,
   Text,
   type TUI,
@@ -17,6 +18,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   installSubagentSessionUrlHandler,
+  installSubagentTerminalLinkFilter,
   installSubagentToolLinks,
   linkSubagentToolBlock,
   openSubagentSession,
@@ -64,7 +66,12 @@ class TestTerminal implements Terminal {
   readonly columns = 80;
   readonly rows = 10;
   readonly kittyProtocolActive = false;
+  readonly writes: string[] = [];
   private onInput: ((data: string) => void) | undefined;
+
+  get output(): string {
+    return this.writes.join("");
+  }
 
   start(onInput: (data: string) => void): void {
     this.onInput = onInput;
@@ -76,7 +83,9 @@ class TestTerminal implements Terminal {
 
   stop(): void {}
   async drainInput(): Promise<void> {}
-  write(): void {}
+  write(data: string): void {
+    this.writes.push(data);
+  }
   moveBy(): void {}
   hideCursor(): void {}
   showCursor(): void {}
@@ -255,6 +264,25 @@ describe("subagent session links", () => {
     const restoredOpenUrl = (tui as TUI & { openUrl: (url: string) => void }).openUrl;
     restoredOpenUrl("https://after-uninstall.example.com");
     expect(opened).toEqual(["https://example.com", "https://after-uninstall.example.com"]);
+  });
+
+  test("hides only internal links from the terminal and restores writes on uninstall", () => {
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
+    const internalUrl = subagentSessionUrl(target);
+    const externalUrl = "https://example.com";
+    const uninstall = installSubagentTerminalLinkFilter(tui);
+
+    terminal.write(`${hyperlink("session", internalUrl)} ${hyperlink("external", externalUrl)}`);
+
+    expect(terminal.output).toContain("session");
+    expect(terminal.output).not.toContain(internalUrl);
+    expect(terminal.output).toContain(externalUrl);
+
+    uninstall();
+    terminal.writes.length = 0;
+    terminal.write(hyperlink("session", internalUrl));
+    expect(terminal.output).toContain(internalUrl);
   });
 
   test("replaces a legacy URL patch after reload", () => {
@@ -439,6 +467,7 @@ describe("subagent session links", () => {
     const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (session) => {
       openedSessions.push(session);
     });
+    const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
     const component = createToolExecution();
     const linkedLine = component
       .render(80)
@@ -448,12 +477,14 @@ describe("subagent session links", () => {
     try {
       tui.start();
       tui.renderNow();
+      expect(terminal.output).not.toContain(subagentSessionUrl(target));
       terminal.send(`\u001b[<0;2;${linkedLine + 1}M`);
       terminal.send(`\u001b[<0;2;${linkedLine + 1}m`);
 
       expect(openedSessions).toEqual([target]);
     } finally {
       tui.stop();
+      uninstallTerminalFilter();
       uninstallUrlHandler();
       uninstallToolLinks();
       restoreRender();
