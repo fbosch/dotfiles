@@ -1,12 +1,10 @@
 import { randomUUID } from "node:crypto";
 import {
   BorderedLoader,
-  convertToLlm,
   defineTool,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type SessionEntry,
-  serializeConversation,
 } from "@earendil-works/pi-coding-agent";
 import {
   buildHandoffDraft,
@@ -17,10 +15,13 @@ import {
   type HandoffState,
   parseHandoffPayload,
   readSourceSession,
+  serializeHandoffHistory,
   sourceReference,
 } from "./context";
 
 const MAX_GOAL_BYTES = 4 * 1024;
+const HANDOFF_TIMEOUT_MS = 2 * 60 * 1000;
+const HANDOFF_MAX_TOKENS = 16 * 1024;
 
 const HANDOFF_SYSTEM_PROMPT = `You are creating a handoff message for another coding agent with no access to this conversation.
 
@@ -60,35 +61,19 @@ interface GenerationOutcome {
 export type HandoffGenerator = (
   ctx: ExtensionCommandContext,
   goal: string,
+  entries: readonly SessionEntry[],
 ) => Promise<HandoffPayload | undefined>;
-
-function entryToMessage(entry: SessionEntry) {
-  if (entry.type === "message") return entry.message;
-  if (entry.type !== "compaction") return undefined;
-  return {
-    role: "compactionSummary" as const,
-    summary: entry.summary,
-    tokensBefore: entry.tokensBefore,
-    timestamp: new Date(entry.timestamp).getTime(),
-  };
-}
-
-function conversationText(ctx: ExtensionCommandContext): string {
-  const messages = ctx.sessionManager
-    .buildContextEntries()
-    .map(entryToMessage)
-    .filter((message) => message !== undefined);
-  if (messages.length === 0) throw new Error("No conversation to hand off.");
-  return serializeConversation(convertToLlm(messages));
-}
 
 async function generatePayload(
   ctx: ExtensionCommandContext,
   goal: string,
+  entries: readonly SessionEntry[],
   signal: AbortSignal,
 ): Promise<HandoffPayload> {
   const model = ctx.model;
   if (model === undefined) throw new Error("No model selected.");
+  const history = serializeHandoffHistory(entries);
+  if (history.length === 0) throw new Error("No conversation to hand off.");
 
   const direction =
     goal.length > 0 ? goal : "Continue the current conversation in its natural direction.";
@@ -102,14 +87,21 @@ async function generatePayload(
           content: [
             {
               type: "text",
-              text: `## Conversation History\n\n${conversationText(ctx)}\n\n## Next-session direction\n\n${direction}`,
+              text: `## Conversation History\n\n${history}\n\n## Next-session direction\n\n${direction}`,
             },
           ],
           timestamp: Date.now(),
         },
       ],
     },
-    { signal, cacheRetention: "none", sessionId: randomUUID() },
+    {
+      signal,
+      cacheRetention: "none",
+      maxRetries: 1,
+      maxTokens: HANDOFF_MAX_TOKENS,
+      sessionId: randomUUID(),
+      timeoutMs: HANDOFF_TIMEOUT_MS,
+    },
   );
   if (response.stopReason !== "stop") throw new Error("Handoff generation did not complete.");
 
@@ -120,7 +112,7 @@ async function generatePayload(
   return parseHandoffPayload(text);
 }
 
-const generateWithLoader: HandoffGenerator = async (ctx, goal) => {
+const generateWithLoader: HandoffGenerator = async (ctx, goal, entries) => {
   const outcome = await ctx.ui.custom<GenerationOutcome>((tui, theme, _keybindings, done) => {
     const loader = new BorderedLoader(tui, theme, "Generating handoff prompt...");
     let settled = false;
@@ -130,7 +122,7 @@ const generateWithLoader: HandoffGenerator = async (ctx, goal) => {
       done(result);
     };
     loader.onAbort = () => finish({ status: "cancelled" });
-    void generatePayload(ctx, goal, loader.signal)
+    void generatePayload(ctx, goal, entries, loader.signal)
       .then((payload) => finish({ status: "success", payload }))
       .catch(() => finish({ status: "error" }));
     return loader;
@@ -165,13 +157,6 @@ async function executeHandoff(
     return;
   }
 
-  const sourceSessionFile = ctx.sessionManager.getSessionFile();
-  const sourceLeafId = ctx.sessionManager.getLeafId();
-  if (sourceSessionFile === undefined || sourceLeafId === null) {
-    ctx.ui.notify("No persisted conversation to hand off", "error");
-    return;
-  }
-
   const goal = args.trim();
   if (goalByteLength(goal) > MAX_GOAL_BYTES) {
     ctx.ui.notify("Handoff goal is too large", "error");
@@ -179,22 +164,31 @@ async function executeHandoff(
   }
 
   await ctx.waitForIdle();
-  const payload = await generate(ctx, goal);
+  const sourceSessionFile = ctx.sessionManager.getSessionFile();
+  const sourceSessionId = ctx.sessionManager.getSessionId();
+  const sourceLeafId = ctx.sessionManager.getLeafId();
+  const sourceEntries = ctx.sessionManager.buildContextEntries();
+  if (sourceSessionFile === undefined || sourceLeafId === null || sourceEntries.length === 0) {
+    ctx.ui.notify("No persisted conversation to hand off", "error");
+    return;
+  }
+  const payload = await generate(ctx, goal, sourceEntries);
   if (payload === undefined) return;
 
-  const sourceSessionId = ctx.sessionManager.getSessionId();
+  const draft = buildHandoffDraft(payload, sourceSessionId);
   const state: HandoffState = {
     version: 1,
     sourceSessionId,
     sourceLeafId,
     files: payload.files,
+    draft,
     consumed: false,
   };
-  const draft = buildHandoffDraft(payload, sourceSessionId);
   const result = await ctx.newSession({
     parentSession: sourceSessionFile,
-    setup: async (sessionManager) => {
+    setup: (sessionManager) => {
       sessionManager.appendCustomEntry(HANDOFF_STATE_TYPE, state);
+      return Promise.resolve();
     },
     withSession: async (replacementCtx) => {
       replacementCtx.ui.setEditorText(draft);
@@ -247,14 +241,28 @@ export function createHandoffExtension(
       }),
     );
 
-    pi.on("before_agent_start", async (event, ctx) => {
-      const handoff = findHandoffState(ctx.sessionManager.getEntries());
-      if (handoff === undefined || handoff.consumed) return;
+    pi.on("session_start", (event, ctx) => {
+      if (event.reason !== "startup" && event.reason !== "resume" && event.reason !== "reload") {
+        return;
+      }
+      const handoff = findHandoffState(ctx.sessionManager.getBranch());
+      if (handoff === undefined || handoff.consumed || ctx.ui.getEditorText().length > 0) return;
+      ctx.ui.setEditorText(handoff.draft);
+    });
 
-      pi.appendEntry(HANDOFF_STATE_TYPE, { ...handoff, consumed: true });
+    pi.on("before_agent_start", async (event, ctx) => {
+      const handoff = findHandoffState(ctx.sessionManager.getBranch());
+      if (handoff === undefined || handoff.consumed) return;
       if (event.prompt.includes(sourceReference(handoff.sourceSessionId)) === false) return;
 
-      const content = await buildSelectedFileContext(ctx.cwd, handoff.files, event.prompt);
+      let content: string | undefined;
+      try {
+        content = await buildSelectedFileContext(ctx.cwd, handoff.files, event.prompt);
+      } catch {
+        ctx.ui.notify("Could not load handoff file context", "warning");
+        return;
+      }
+      pi.appendEntry(HANDOFF_STATE_TYPE, { ...handoff, consumed: true });
       if (content === undefined) return;
       return {
         message: {

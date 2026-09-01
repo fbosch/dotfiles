@@ -4,13 +4,7 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
-import {
-  DOCK_CHROME_WIDTH,
-  DOCK_RAIL,
-  DOCK_RIGHT_BORDER,
-  paintDockBottomEdge,
-  paintDockRow,
-} from "./dock-rendering";
+import { paintDockBottomEdge, paintDockRow } from "./dock-rendering";
 
 const AGENT_WIDGET_KEY = "agents";
 const AGENT_WIDGET_PADDING_X = 2;
@@ -42,30 +36,19 @@ class SubagentWidgetFrame implements Component {
   ) {}
 
   render(width: number): string[] {
-    if (width <= DOCK_CHROME_WIDTH) return this.component.render(width);
+    if (width <= 0) return this.component.render(width);
 
-    const availableWidth = width - DOCK_CHROME_WIDTH;
-    const paddingX = availableWidth >= AGENT_WIDGET_PADDING_X * 2 + 1 ? AGENT_WIDGET_PADDING_X : 0;
-    const contentWidth = availableWidth - paddingX * 2;
+    const paddingX = width >= AGENT_WIDGET_PADDING_X * 2 + 1 ? AGENT_WIDGET_PADDING_X : 0;
+    const contentWidth = width - paddingX * 2;
     const backgroundAnsi = this.theme.getBgAnsi("toolPendingBg");
-    const rail = this.theme.fg("accent", DOCK_RAIL);
-    const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
     const content = this.component
       .render(contentWidth)
       .map((line) => `${" ".repeat(paddingX)}${line}`);
     const rows = ["", ...content, ""].map((line) =>
-      paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
+      paintDockRow(line, width, "", backgroundAnsi, ""),
     );
 
-    return [
-      ...rows,
-      paintDockBottomEdge(
-        width,
-        this.theme.fg("accent", "▘"),
-        this.theme.fg("borderMuted", "▝"),
-        backgroundAnsi,
-      ),
-    ];
+    return [...rows, paintDockBottomEdge(width, "", "", backgroundAnsi)];
   }
 
   invalidate(): void {

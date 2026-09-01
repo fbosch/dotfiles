@@ -2,6 +2,7 @@ import {
   defineTool,
   type ExtensionAPI,
   type ExtensionContext,
+  type KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
@@ -178,6 +179,8 @@ interface QuestionPromptTheme {
   fg(color: string, text: string): string;
 }
 
+type QuestionPromptKeybindings = Pick<KeybindingsManager, "getKeys" | "matches">;
+
 type QuestionPromptStep = "choices" | "input";
 type QuestionChoiceKind = "option" | "other" | "submit";
 
@@ -205,6 +208,7 @@ class QuestionPromptComponent implements Component {
     private readonly context: string | undefined,
     private readonly mode: AskUserQuestionMode,
     private readonly options: AskOption[],
+    private readonly keybindings: QuestionPromptKeybindings,
     private readonly requestRender: () => void,
     private readonly done: (answers: AskAnswer[] | undefined) => void,
   ) {
@@ -255,8 +259,8 @@ class QuestionPromptComponent implements Component {
         this.theme.fg(
           "muted",
           this.mode === "multi-select"
-            ? "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel"
-            : "↑/↓ move · 1–9 choose · enter select · esc cancel",
+            ? `${this.navigationHint()} · space/${this.keyHint("tui.select.confirm")} toggle · 1–9 toggle · s submit · ${this.keyHint("tui.select.cancel")} cancel`
+            : `${this.navigationHint()} · 1–9 choose · ${this.keyHint("tui.select.confirm")} select · ${this.keyHint("tui.select.cancel")} cancel`,
         ),
         width,
       ),
@@ -289,19 +293,32 @@ class QuestionPromptComponent implements Component {
       this.submitChoices();
       return;
     }
-    if (matchesKey(data, "up") || matchesKey(data, "k")) {
+    if (this.keybindings.matches(data, "tui.select.up") || matchesKey(data, "k")) {
       this.moveHighlight(-1);
       return;
     }
-    if (matchesKey(data, "down") || matchesKey(data, "j")) {
+    if (this.keybindings.matches(data, "tui.select.down") || matchesKey(data, "j")) {
       this.moveHighlight(1);
       return;
     }
-    if (matchesKey(data, "enter") || (this.mode === "multi-select" && matchesKey(data, "space"))) {
+    if (
+      this.keybindings.matches(data, "tui.select.confirm") ||
+      (this.mode === "multi-select" && matchesKey(data, "space"))
+    ) {
       this.chooseHighlighted();
       return;
     }
-    if (matchesKey(data, "escape")) this.done(undefined);
+    if (this.keybindings.matches(data, "tui.select.cancel")) this.done(undefined);
+  }
+
+  private navigationHint(): string {
+    const up = this.keybindings.getKeys("tui.select.up").map(displayKey).join("/");
+    const down = this.keybindings.getKeys("tui.select.down").map(displayKey).join("/");
+    return `${up} ${down} move`;
+  }
+
+  private keyHint(binding: "tui.select.cancel" | "tui.select.confirm"): string {
+    return this.keybindings.getKeys(binding).map(displayKey).join("/");
   }
 
   private createInput(value = ""): Input {

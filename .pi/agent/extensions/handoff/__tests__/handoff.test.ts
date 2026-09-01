@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -14,6 +14,7 @@ import {
   HANDOFF_STATE_TYPE,
   type HandoffState,
   parseHandoffPayload,
+  serializeHandoffHistory,
   sourceReference,
 } from "../context";
 import { createHandoffExtension } from "../index";
@@ -63,7 +64,11 @@ function appendConversation(manager: SessionManager): void {
   });
 }
 
-function handoffState(source: SessionManager, files: string[] = []): HandoffState {
+function handoffState(
+  source: SessionManager,
+  files: string[] = [],
+  draft = buildHandoffDraft({ prompt: "Continue.", files }, source.getSessionId()),
+): HandoffState {
   const sourceLeafId = source.getLeafId();
   if (sourceLeafId === null) throw new Error("source session has no leaf");
   return {
@@ -71,16 +76,68 @@ function handoffState(source: SessionManager, files: string[] = []): HandoffStat
     sourceSessionId: source.getSessionId(),
     sourceLeafId,
     files,
+    draft,
     consumed: false,
   };
 }
 
-test("parses bounded model output and rejects unsafe file paths", () => {
+test("parses bounded model output and rejects malformed file lists", () => {
   const payload = parseHandoffPayload(`\`\`\`json
-{"prompt":"Continue the work.","files":["src/main.ts","src/main.ts","../secret","/etc/passwd","C:\\\\secret"]}
+{"prompt":"Continue the work.","files":["src/main.ts"]}
 \`\`\``);
 
   expect(payload).toEqual({ prompt: "Continue the work.", files: ["src/main.ts"] });
+  expect(() =>
+    parseHandoffPayload(
+      '{"prompt":"Continue.","files":["../secret","/etc/passwd","C:secret","\\\\server\\share"]}',
+    ),
+  ).toThrow();
+  expect(() => parseHandoffPayload('{"prompt":"Continue.","files":"src/main.ts"}')).toThrow();
+});
+
+test("handoff history excludes thinking, tool arguments, and tool results", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-handoff-history-"));
+  const source = SessionManager.create(directory, join(directory, "sessions"));
+  source.appendMessage({ role: "user", content: "Visible request", timestamp: Date.now() });
+  source.appendMessage({
+    role: "assistant",
+    content: [
+      { type: "thinking", thinking: "THINKING_SECRET" },
+      { type: "text", text: "Visible answer" },
+      {
+        type: "toolCall",
+        id: "call-secret",
+        name: "read",
+        arguments: { token: "ARGUMENT_SECRET" },
+      },
+    ],
+    api: "openai-responses",
+    provider: "openai-codex",
+    model: "test-model",
+    usage,
+    stopReason: "toolUse",
+    timestamp: Date.now(),
+  });
+  source.appendMessage({
+    role: "toolResult",
+    toolCallId: "call-secret",
+    toolName: "read",
+    content: [{ type: "text", text: "TOOL_RESULT_SECRET" }],
+    isError: false,
+    timestamp: Date.now(),
+  });
+
+  try {
+    const history = serializeHandoffHistory(source.buildContextEntries());
+    expect(history).toContain("Visible request");
+    expect(history).toContain("Visible answer");
+    expect(history).toContain("[Tool: read]");
+    expect(history).not.toContain("THINKING_SECRET");
+    expect(history).not.toContain("ARGUMENT_SECRET");
+    expect(history).not.toContain("TOOL_RESULT_SECRET");
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
 });
 
 test("creates a parent-linked session with an editable unsubmitted draft", async () => {
@@ -97,6 +154,7 @@ test("creates a parent-linked session with an editable unsubmitted draft", async
   let sentMessages = 0;
   let target: SessionManager | undefined;
   let receivedGoal: string | undefined;
+  let generatedEntryCount = 0;
   const pi = {
     registerCommand: (_name: string, options: { handler: CommandHandler }) => {
       command = options.handler;
@@ -106,8 +164,9 @@ test("creates a parent-linked session with an editable unsubmitted draft", async
     appendEntry: () => {},
   } as unknown as ExtensionAPI;
   createHandoffExtension({
-    generate: async (_ctx, goal) => {
+    generate: async (_ctx, goal, entries) => {
       receivedGoal = goal;
+      generatedEntryCount = entries.length;
       return { prompt: "Continue the implementation.", files: ["src/main.ts"] };
     },
   })(pi);
@@ -116,7 +175,9 @@ test("creates a parent-linked session with an editable unsubmitted draft", async
     mode: "tui",
     model: { id: "test-model" },
     sessionManager: source,
-    waitForIdle: async () => {},
+    waitForIdle: async () => {
+      source.appendMessage({ role: "user", content: "Settled update", timestamp: Date.now() });
+    },
     ui: { notify: () => {} },
     newSession: async (options: {
       parentSession?: string;
@@ -147,16 +208,16 @@ test("creates a parent-linked session with an editable unsubmitted draft", async
     await command?.("", context);
 
     expect(receivedGoal).toBe("");
+    expect(generatedEntryCount).toBe(source.buildContextEntries().length);
     expect(target?.getHeader()?.parentSession).toBe(sourceFile);
+    const draft = buildHandoffDraft(
+      { prompt: "Continue the implementation.", files: ["src/main.ts"] },
+      source.getSessionId(),
+    );
     expect(target === undefined ? undefined : findHandoffState(target.getEntries())).toEqual(
-      handoffState(source, ["src/main.ts"]),
+      handoffState(source, ["src/main.ts"], draft),
     );
-    expect(editorText).toBe(
-      buildHandoffDraft(
-        { prompt: "Continue the implementation.", files: ["src/main.ts"] },
-        source.getSessionId(),
-      ),
-    );
+    expect(editorText).toBe(draft);
     expect(target?.getEntries().filter((entry) => entry.type === "message")).toHaveLength(0);
     expect(sentMessages).toBe(0);
   } finally {
@@ -191,6 +252,10 @@ test("injects retained selected files once when the draft is submitted", async (
   const prompt = `${sourceReference(source.getSessionId())}\n\n@notes.txt\n\nContinue.`;
 
   try {
+    const unrelated = await beforeAgentStart?.({ prompt: "Unrelated prompt" }, context);
+    expect(unrelated).toBeUndefined();
+    expect(findHandoffState(target.getEntries())?.consumed).toBeFalse();
+
     const first = (await beforeAgentStart?.({ prompt }, context)) as
       | { message?: { content: string; display: boolean } }
       | undefined;
@@ -216,6 +281,8 @@ test("read_session is restricted to the pinned parent branch", async () => {
   if (sourceFile === undefined) throw new Error("source session is not persisted");
   const target = SessionManager.create(directory, sessionDirectory, { parentSession: sourceFile });
   target.appendCustomEntry(HANDOFF_STATE_TYPE, handoffState(source));
+  const sourceBefore = (await readFile(sourceFile, "utf8")).replace(/\n$/u, "");
+  await writeFile(sourceFile, sourceBefore);
 
   let tool: CapturedTool | undefined;
   const pi = {
@@ -250,6 +317,57 @@ test("read_session is restricted to the pinned parent branch", async () => {
     expect(success?.content[0]?.text).toContain("[Tool: read]");
     expect(mismatch?.details.code).toBe("SOURCE_MISMATCH");
     expect(mismatch?.content[0]?.text).not.toContain(sourceFile);
+    expect(await readFile(sourceFile, "utf8")).toBe(sourceBefore);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test("restores an unconsumed draft on resume without submitting it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-handoff-resume-"));
+  const sessionDirectory = join(directory, "sessions");
+  await mkdir(sessionDirectory);
+  const source = SessionManager.create(directory, sessionDirectory);
+  appendConversation(source);
+  const sourceFile = source.getSessionFile();
+  if (sourceFile === undefined) throw new Error("source session is not persisted");
+  const target = SessionManager.create(directory, sessionDirectory, { parentSession: sourceFile });
+  const state = handoffState(source, ["notes.txt"]);
+  target.appendCustomEntry(HANDOFF_STATE_TYPE, state);
+
+  let sessionStart: ((event: { reason: string }, ctx: ExtensionContext) => void) | undefined;
+  let editorText = "";
+  let sentMessages = 0;
+  const pi = {
+    registerCommand: () => {},
+    registerTool: () => {},
+    on: (event: string, handler: (event: { reason: string }, ctx: ExtensionContext) => void) => {
+      if (event === "session_start") sessionStart = handler;
+    },
+    appendEntry: () => {},
+    sendUserMessage: () => {
+      sentMessages += 1;
+    },
+  } as unknown as ExtensionAPI;
+  createHandoffExtension()(pi);
+  const context = {
+    sessionManager: target,
+    ui: {
+      getEditorText: () => editorText,
+      setEditorText: (text: string) => {
+        editorText = text;
+      },
+    },
+  } as unknown as ExtensionContext;
+
+  try {
+    sessionStart?.({ reason: "resume" }, context);
+    expect(editorText).toBe(state.draft);
+    expect(sentMessages).toBe(0);
+
+    editorText = "Edited draft";
+    sessionStart?.({ reason: "reload" }, context);
+    expect(editorText).toBe("Edited draft");
   } finally {
     await rm(directory, { force: true, recursive: true });
   }
