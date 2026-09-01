@@ -53,7 +53,7 @@ baseline.
 Canary:
 
 - Permissions: `@gotgenes/pi-permission-system@29.0.0`, introduced first.
-- Search: `@ff-labs/pi-fff@0.10.6` in additive `tools-only` mode.
+- Search: `@ff-labs/pi-fff@0.10.6` in additive `tools-and-ui` mode.
 - MCP: `pi-mcp-adapter@2.31.0` in proxy-only mode.
 - Auth profiles: `@nanstey/pi-auth-profiles@0.1.1`.
 - Usage identity: `@narumitw/pi-usage@0.59.0`, introduced after profiles.
@@ -172,7 +172,7 @@ Configure FFF with:
 
 ```json
 {
-  "mode": "tools-only",
+  "mode": "tools-and-ui",
   "enableFsRootScanning": false,
   "enableHomeDirScanning": false,
   "followSymlinks": false
@@ -184,6 +184,7 @@ Do not use FFF `override` mode during the canary.
 Acceptance:
 
 - Workspace searches work without replacing Pi's built-in search tools.
+- `@` file autocomplete uses FFF's fuzzy, frecency-ranked index.
 - Secret reads are denied.
 - External reads prompt.
 - Writes and mutating shell commands prompt.
@@ -214,7 +215,7 @@ FFF canary outcome on 2026-08-31:
 
 - Installed and pinned `@ff-labs/pi-fff@0.10.6`; its Node and Bun native
   bindings resolved at the same version with zero reported npm vulnerabilities.
-- Added a commit-pinned schema and configured additive `tools-only` mode with
+- Added a commit-pinned schema and configured additive `tools-and-ui` mode with
   filesystem-root scanning, home-directory scanning, and symlink traversal
   disabled.
 - Verified `fffind` and `ffgrep` search the workspace while Pi's built-in `find`
