@@ -35,10 +35,12 @@ const target: SubagentSessionTarget = {
 function createToolExecution(
   toolName = "subagent",
   agentId: string | null = target.agentId,
+  tui?: TUI,
 ): ToolExecutionComponent {
   return Object.assign(Object.create(ToolExecutionComponent.prototype), {
     toolName,
     toolCallId: "tool-call-1",
+    ...(tui === undefined ? {} : { ui: tui }),
     result: {
       details: {
         ...(agentId === null ? {} : { agentId }),
@@ -139,19 +141,24 @@ describe("subagent session links", () => {
     const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
     const globals = globalThis as Record<symbol, unknown>;
     const previousService = globals[serviceKey];
-    globals[serviceKey] = {
+    const parentService = {
       manager: {
         listAgents: () => [{ id: target.agentId, toolCallId: "tool-call-1" }],
       },
     };
+    const parentTui = {} as TUI;
     const restoreRender = stubToolRender([
       "▸ Explore  Survey repository context",
       "  ⎿  thinking…",
     ]);
-    const uninstall = installSubagentToolLinks();
+    const uninstall = installSubagentToolLinks(
+      parentTui,
+      parentService as Parameters<typeof installSubagentToolLinks>[1],
+    );
+    globals[serviceKey] = { manager: { listAgents: () => [] } };
 
     try {
-      expect(createToolExecution("subagent", null).render(80).join("\n")).toContain(
+      expect(createToolExecution("subagent", null, parentTui).render(80).join("\n")).toContain(
         subagentSessionUrl(target),
       );
     } finally {

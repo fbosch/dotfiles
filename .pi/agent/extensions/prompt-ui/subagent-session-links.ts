@@ -18,7 +18,7 @@ export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
 const OSC8_OPEN = "\u001b]8;";
-const PATCH_VERSION = 3;
+const PATCH_VERSION = 4;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
 // shortcut: pi-subagents exposes records but not its transcript renderer. Reuse the
@@ -43,7 +43,11 @@ interface ToolRenderPatchState {
   linkLines: typeof linkSubagentToolBlock;
   originalRender: (this: ToolExecutionComponent, width: number) => string[];
   patchedRender: (this: ToolExecutionComponent, width: number) => string[];
-  references: number;
+  registrations: Array<{
+    owner: symbol;
+    tui?: TUI;
+    service?: SubagentsService;
+  }>;
 }
 
 interface TuiUrlPatchState {
@@ -67,6 +71,7 @@ interface SubagentToolDetails {
 interface PatchableToolExecution {
   toolName?: unknown;
   toolCallId?: unknown;
+  ui?: unknown;
   result?: { details?: SubagentToolDetails };
 }
 type PatchableToolPrototype = typeof ToolExecutionComponent.prototype & Record<symbol, unknown>;
@@ -146,14 +151,17 @@ export function linkSubagentToolBlock(lines: readonly string[], url: string): st
   return lines.map((line) => (line.includes(OSC8_OPEN) ? line : hyperlink(line, url)));
 }
 
-function subagentTarget(component: PatchableToolExecution): SubagentSessionTarget | undefined {
+function subagentTarget(
+  component: PatchableToolExecution,
+  service: SubagentsService | undefined,
+): SubagentSessionTarget | undefined {
   if (component.toolName !== "subagent") return undefined;
 
   const details = component.result?.details;
   const agentId =
     typeof details?.agentId === "string"
       ? details.agentId
-      : resolveRunningAgentId(component.toolCallId);
+      : resolveRunningAgentId(component.toolCallId, service);
   const displayName = details?.displayName;
   const description = details?.description;
   if (agentId === undefined || typeof displayName !== "string" || typeof description !== "string") {
@@ -166,22 +174,40 @@ function subagentTarget(component: PatchableToolExecution): SubagentSessionTarge
   };
 }
 
-function resolveRunningAgentId(toolCallId: unknown): string | undefined {
-  if (typeof toolCallId !== "string") return undefined;
-  return getSubagentsService()
-    ?.manager?.listAgents()
-    .find((record) => record.toolCallId === toolCallId)?.id;
+function resolveRunningAgentId(
+  toolCallId: unknown,
+  service: SubagentsService | undefined,
+): string | undefined {
+  if (typeof toolCallId !== "string" || service === undefined) return undefined;
+  return service.manager?.listAgents().find((record) => record.toolCallId === toolCallId)?.id;
 }
 
-export function installSubagentToolLinks(): () => void {
+function serviceForTui(
+  registrations: ToolRenderPatchState["registrations"],
+  tui: unknown,
+): SubagentsService | undefined {
+  for (let index = registrations.length - 1; index >= 0; index -= 1) {
+    const registration = registrations[index];
+    if (registration === undefined) continue;
+    if (registration.tui === tui) return registration.service;
+  }
+  return undefined;
+}
+
+export function installSubagentToolLinks(tui?: TUI, service?: SubagentsService): () => void {
   restoreLegacyTextToolRenderPatch();
   const prototype = ToolExecutionComponent.prototype as PatchableToolPrototype;
+  const registration: ToolRenderPatchState["registrations"][number] = {
+    owner: Symbol(),
+    ...(tui === undefined ? {} : { tui }),
+    ...(service === undefined ? {} : { service }),
+  };
   const installedState = prototype[TOOL_RENDER_PATCH];
   if (isCurrentPatchState(installedState)) {
     const existing = installedState as ToolRenderPatchState;
     existing.linkLines = linkSubagentToolBlock;
-    existing.references += 1;
-    return once(() => uninstallToolRenderPatch(prototype, existing));
+    existing.registrations.push(registration);
+    return once(() => uninstallToolRenderPatch(prototype, existing, registration.owner));
   }
   restoreLegacyToolRenderPatch(prototype, installedState);
 
@@ -191,16 +217,17 @@ export function installSubagentToolLinks(): () => void {
     linkLines: linkSubagentToolBlock,
     originalRender,
     patchedRender: originalRender,
-    references: 1,
+    registrations: [registration],
   };
   state.patchedRender = function renderClickableSubagentTitle(width: number): string[] {
     const lines = state.originalRender.call(this, width);
-    const target = subagentTarget(this as unknown as PatchableToolExecution);
+    const component = this as unknown as PatchableToolExecution;
+    const target = subagentTarget(component, serviceForTui(state.registrations, component.ui));
     return target === undefined ? lines : state.linkLines(lines, subagentSessionUrl(target));
   };
   prototype[TOOL_RENDER_PATCH] = state;
   prototype.render = state.patchedRender;
-  return once(() => uninstallToolRenderPatch(prototype, state));
+  return once(() => uninstallToolRenderPatch(prototype, state, registration.owner));
 }
 
 function restoreLegacyTextToolRenderPatch(): void {
@@ -227,9 +254,11 @@ function restoreLegacyToolRenderPatch(
 function uninstallToolRenderPatch(
   prototype: PatchableToolPrototype,
   state: ToolRenderPatchState,
+  owner: symbol,
 ): void {
-  state.references -= 1;
-  if (state.references > 0) return;
+  const index = state.registrations.findIndex((registration) => registration.owner === owner);
+  if (index >= 0) state.registrations.splice(index, 1);
+  if (state.registrations.length > 0) return;
   if (prototype.render === state.patchedRender) prototype.render = state.originalRender;
   if (prototype[TOOL_RENDER_PATCH] === state) prototype[TOOL_RENDER_PATCH] = undefined;
 }
@@ -411,9 +440,9 @@ function uninstallTuiUrlPatch(
 export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext): () => void {
   if (tui.mode !== "fullscreen") return () => {};
 
-  const uninstallToolLinks = installSubagentToolLinks();
+  const service = getSubagentsService();
+  const uninstallToolLinks = installSubagentToolLinks(tui, service);
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
-    const service = getSubagentsService();
     if (service === undefined) {
       ctx.ui.notify("Could not access subagent sessions.", "error");
       return;
