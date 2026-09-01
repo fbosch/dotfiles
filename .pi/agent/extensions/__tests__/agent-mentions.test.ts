@@ -47,7 +47,7 @@ describe("agent mentions", () => {
     );
     writeFileSync(
       join(cwd, ".pi", "agents", "review.md"),
-      '---\ndescription: Project reviewer\ncolor: "#123456"\n---\nReview this project.',
+      '---\ndescription: Project reviewer\ndisplay_name: Code Review\ncolor: "#123456"\n---\nReview this project.',
     );
     writeFileSync(join(cwd, ".pi", "agents", "Plan.md"), "---\nenabled: false\n---\nDisabled.");
 
@@ -57,6 +57,7 @@ describe("agent mentions", () => {
       "Project reviewer",
     );
     expect(mentions.find((mention) => mention.name === "review")?.color).toBe("#123456");
+    expect(mentions.find((mention) => mention.name === "review")?.displayName).toBe("Code Review");
     expect(mentions.some((mention) => mention.name === "Plan")).toBeFalse();
     expect(mentions.some((mention) => mention.name === "general-purpose")).toBeTrue();
   });

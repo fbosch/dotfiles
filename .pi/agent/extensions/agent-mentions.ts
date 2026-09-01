@@ -13,6 +13,7 @@ export interface AgentMention {
   name: string;
   description: string;
   color?: string;
+  displayName?: string;
 }
 
 const BUILTIN_AGENT_MENTIONS: readonly AgentMention[] = [
@@ -68,10 +69,15 @@ function loadAgentDirectory(directory: string, mentions: Map<string, AgentMentio
         typeof frontmatter.color === "string" && /^#[0-9a-f]{6}$/i.test(frontmatter.color)
           ? frontmatter.color
           : undefined;
+      const displayName =
+        typeof frontmatter.display_name === "string" && frontmatter.display_name.trim().length > 0
+          ? frontmatter.display_name.trim()
+          : undefined;
       mentions.set(name.toLowerCase(), {
         name,
         description,
         ...(color === undefined ? {} : { color }),
+        ...(displayName === undefined ? {} : { displayName }),
       });
     } catch {}
   }

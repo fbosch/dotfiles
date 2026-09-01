@@ -127,6 +127,7 @@ export class PromptEditor extends CustomEditor {
   private readonly ctx: ExtensionContext;
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
+  private readonly disposeSubagentSessionLinks: () => void;
   private readonly typoRules: TypoCorrectionRules;
   private readonly agentMentions: readonly AgentMention[];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
@@ -148,19 +149,23 @@ export class PromptEditor extends CustomEditor {
     this.ctx = ctx;
     this.promptState = state;
     this.typoRules = typoRules;
-    this.agentMentions = loadAgentMentions(this.ctx.cwd).filter(
+    const knownAgentMentions = loadAgentMentions(this.ctx.cwd);
+    this.agentMentions = knownAgentMentions.filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
     );
-    installClickableSubagentSessions(
+    this.disposeSubagentSessionLinks = installClickableSubagentSessions(
       tui,
       pi,
       ctx,
-      this.agentMentions.map((mention) => mention.name),
+      knownAgentMentions.flatMap((mention) =>
+        mention.displayName === undefined ? [mention.name] : [mention.name, mention.displayName],
+      ),
     );
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
 
   dispose(): void {
+    this.disposeSubagentSessionLinks();
     this.autocompleteOverlay.dispose();
   }
 

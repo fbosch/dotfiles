@@ -4,6 +4,7 @@ import {
   installSubagentSessionsUrlHandler,
   installSubagentToolTitleLinks,
   isSubagentToolTitle,
+  isSubagentToolTitleSource,
   linkSubagentToolBlock,
   SUBAGENT_SESSIONS_URL,
 } from "../subagent-session-links";
@@ -14,6 +15,8 @@ describe("subagent session links", () => {
   test("recognizes only known subagent tool titles", () => {
     expect(isSubagentToolTitle("› explore  Survey repository context", agentNames)).toBeTrue();
     expect(isSubagentToolTitle("› read  AGENTS.md", agentNames)).toBeFalse();
+    expect(isSubagentToolTitleSource("  › explore  Quoted output", agentNames)).toBeFalse();
+    expect(isSubagentToolTitleSource("› explore  First\nsecond", agentNames)).toBeFalse();
   });
 
   test("links the complete subagent block without replacing nested links", () => {
@@ -29,11 +32,12 @@ describe("subagent session links", () => {
   });
 
   test("links subagent title components rendered by pi-subagents", () => {
-    installSubagentToolTitleLinks([...agentNames]);
+    const uninstall = installSubagentToolTitleLinks([...agentNames]);
 
     const rendered = new Text("› explore  Survey repository context", 0, 0).render(80);
 
     expect(rendered[0]).toContain(SUBAGENT_SESSIONS_URL);
+    uninstall();
   });
 
   test("leaves unrelated tool blocks unchanged", () => {
@@ -50,7 +54,7 @@ describe("subagent session links", () => {
       openUrl: (url: string) => opened.push(url),
     } as unknown as TUI;
 
-    installSubagentSessionsUrlHandler(tui, () => {
+    const uninstall = installSubagentSessionsUrlHandler(tui, () => {
       sessionPickerOpens += 1;
     });
     const openUrl = (tui as TUI & { openUrl: (url: string) => void }).openUrl;
@@ -59,5 +63,9 @@ describe("subagent session links", () => {
 
     expect(sessionPickerOpens).toBe(1);
     expect(opened).toEqual(["https://example.com"]);
+    uninstall();
+    const restoredOpenUrl = (tui as TUI & { openUrl: (url: string) => void }).openUrl;
+    restoredOpenUrl("https://after-uninstall.example.com");
+    expect(opened).toEqual(["https://example.com", "https://after-uninstall.example.com"]);
   });
 });
