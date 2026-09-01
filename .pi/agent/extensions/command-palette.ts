@@ -276,6 +276,33 @@ function commandItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
   }));
 }
 
+function contextViewItems(pi: ExtensionAPI): PaletteItem[] {
+  return [
+    {
+      id: "context:usage",
+      label: "Context Usage",
+      description: "Visualize context and token usage",
+      action: () => {
+        pi.sendUserMessage("/context usage", { expandPromptTemplates: true });
+      },
+    },
+    {
+      id: "context:injections",
+      label: "Context Injections",
+      description: "Inspect prompts, tools, and extension injections",
+      action: () => {
+        pi.sendUserMessage("/context injections", { expandPromptTemplates: true });
+      },
+    },
+  ];
+}
+
+function hasContextView(pi: ExtensionAPI): boolean {
+  return pi
+    .getCommands()
+    .some((command) => command.name === "context" && command.source === "extension");
+}
+
 async function sessionItems(ctx: ExtensionCommandContext): Promise<PaletteItem[]> {
   const sessions = await SessionManager.list(ctx.cwd);
   return sessions
@@ -291,7 +318,7 @@ async function sessionItems(ctx: ExtensionCommandContext): Promise<PaletteItem[]
     }));
 }
 
-function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
+export function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
   const items: PaletteItem[] = [
     {
       id: "model",
@@ -311,6 +338,16 @@ function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
       description: "Compact the current context",
       action: () => ctx.compact(),
     },
+    ...(hasContextView(pi)
+      ? [
+          {
+            id: "context",
+            label: "Inspect Context",
+            description: "View context usage and injected instructions",
+            children: () => contextViewItems(pi),
+          },
+        ]
+      : []),
     {
       id: "tools",
       label: "Toggle Tool",

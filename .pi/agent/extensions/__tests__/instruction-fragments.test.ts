@@ -147,12 +147,12 @@ describe("instruction fragments", () => {
     const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
     expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
     expect(systemPrompt).toContain("# Subagent Routing");
-    expect(systemPrompt).toContain("# Pi Code Search");
+    expect(systemPrompt).toContain("# Code Search");
 
     activeTools = ["read"];
     const childSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
     expect(childSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(childSystemPrompt).toContain("# Pi Code Search");
+    expect(childSystemPrompt).toContain("# Code Search");
     expect(childSystemPrompt).not.toContain("# Subagent Routing");
   });
 });

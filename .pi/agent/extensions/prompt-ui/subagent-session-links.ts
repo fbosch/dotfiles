@@ -7,7 +7,7 @@ const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
 const OSC8_OPEN = "\u001b]8;";
 const PATCH_VERSION = 1;
-const TOOL_CALL_PREFIX = "› ";
+const TOOL_CALL_PREFIX = "▸ ";
 
 interface ToolRenderPatchState {
   version: typeof PATCH_VERSION;
