@@ -92,6 +92,7 @@ describe("plan mode", () => {
         "skill",
         "fffind",
         "ffgrep",
+        "ask_user_question",
         "custom",
       ],
     });
@@ -108,6 +109,7 @@ describe("plan mode", () => {
       "skill",
       "fffind",
       "ffgrep",
+      "ask_user_question",
     ]);
     expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
   });

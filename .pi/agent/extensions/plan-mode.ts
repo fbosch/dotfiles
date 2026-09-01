@@ -3,7 +3,16 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 export const PLAN_MODE_STATUS = "Plan";
 
-const PLAN_MODE_TOOLS = new Set(["read", "find", "grep", "ls", "skill", "fffind", "ffgrep"]);
+const PLAN_MODE_TOOLS = new Set([
+  "read",
+  "find",
+  "grep",
+  "ls",
+  "skill",
+  "fffind",
+  "ffgrep",
+  "ask_user_question",
+]);
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
 export type ModeName = "build" | "plan";

@@ -14,6 +14,7 @@ import {
   createAliasAutocompleteProvider,
   splitEditorLines,
 } from "./autocomplete";
+import { contextHealthColor } from "./context-health";
 import {
   backgroundToForeground,
   fitColumns,
@@ -96,10 +97,14 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
-function formatContext(ctx: ExtensionContext): string {
+function renderContext(theme: Theme, ctx: ExtensionContext): string {
   const usage = ctx.getContextUsage();
-  if (usage?.percent === null || usage?.percent === undefined) return "ctx ?";
-  return `ctx ${Math.round(usage.percent)}%`;
+  if (usage?.percent === null || usage?.percent === undefined) {
+    return theme.fg("muted", "ctx ?");
+  }
+
+  const percent = Math.round(usage.percent);
+  return theme.fg(contextHealthColor(percent), `ctx ${percent}%`);
 }
 
 function formatProvider(provider: string): string {
@@ -272,7 +277,7 @@ export class PromptEditor extends CustomEditor {
             theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
           ].join("");
     const location = `${formatCwd(this.ctx.cwd)}${branch ? ` (${branch})` : ""}`;
-    const modelRight = theme.fg("muted", `${formatContext(this.ctx)} · ${location} `);
+    const modelRight = `${renderContext(theme, this.ctx)}${theme.fg("muted", ` · ${location} `)}`;
     const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
     const inputRail = modeColor(DOCK_RAIL);
     const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);

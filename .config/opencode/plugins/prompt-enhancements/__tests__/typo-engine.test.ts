@@ -4,8 +4,6 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { appendDelimiterAndCorrect, parseTypoRules } from "../typo-engine"
 
-const vimAbolishPath = `${process.env.HOME}/.local/share/nvim/lazy/vim-abolish`
-
 const abolishSpecRules = [
   "foo bar",
   "alot a lot",
@@ -45,8 +43,8 @@ async function vimAbolishRules(rules: string[]) {
   await Bun.write(
     scriptPath,
     `
-vim.opt.runtimepath:append(${JSON.stringify(vimAbolishPath)})
-vim.cmd("runtime plugin/abolish.vim")
+vim.cmd("packadd vim-abolish")
+assert(vim.fn.exists(":Abolish") == 2, "vim-abolish is not available in Neovim's package path")
 
 for _, line in ipairs(vim.json.decode(${JSON.stringify(JSON.stringify(rules))})) do
   vim.cmd("Abolish " .. line)
