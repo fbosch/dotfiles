@@ -34,26 +34,6 @@
       "directTools": true,
       "exposeResources": false
     },
-    "exa": {
-      "command": "podman",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--read-only",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "-e",
-        "EXA_API_KEY",
-        "docker.io/mcp/exa@sha256:d88edd571d982faa22eba1bff35e39b4d72c0aa51584e3c90c255e684626aaf8"
-      ],
-      "env": {
-        "EXA_API_KEY": "${EXA_API_KEY}"
-      },
-      "lifecycle": "lazy",
-      "directTools": false,
-      "exposeResources": false
-    },
     "serena": {
       "command": "podman",
       "args": [

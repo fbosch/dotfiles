@@ -4,7 +4,7 @@ description: Gathers information from docs, web, and codebases without making ch
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep, bash, websearch, webfetch, mcp__context7, mcp__github, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, bash, websearch, webfetch, mcp__context7, mcp__github
 permission:
   "*": deny
   read: allow
@@ -18,7 +18,6 @@ permission:
   webfetch: ask
   mcp__context7: ask
   mcp__github: ask
-  mcp__exa: ask
   external_directory: ask
 ---
 
@@ -38,7 +37,6 @@ You are in research mode. Gather, synthesize, and present information clearly wi
 3. **GitHub**: use approved `mcp__github` to browse issues, PRs, releases, and discussions. Do not clone a repository unless the parent explicitly authorizes a shell command.
 4. **Web search**: use approved `websearch` for current information and source discovery.
 5. **Web fetch**: open authoritative result URLs with approved `webfetch` before making material claims.
-6. **Exa**: use approved `mcp__exa` when its technical search or code context is specifically useful.
 
 ## Lookup delegation
 

@@ -6,9 +6,11 @@ export const SUBAGENT_SESSIONS_URL = "pi-action://subagents/sessions";
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
 const OSC8_OPEN = "\u001b]8;";
+const PATCH_VERSION = 1;
 const TOOL_CALL_PREFIX = "› ";
 
 interface ToolRenderPatchState {
+  version: typeof PATCH_VERSION;
   agentNames: Set<string>;
   linkLines: typeof linkSubagentToolBlock;
   originalRender: (this: Text, width: number) => string[];
@@ -17,6 +19,7 @@ interface ToolRenderPatchState {
 }
 
 interface TuiUrlPatchState {
+  version: typeof PATCH_VERSION;
   openSessions: () => void;
   originalOpenUrl?: (url: string) => void;
   patchedOpenUrl: (url: string) => void;
@@ -40,6 +43,15 @@ function once(dispose: () => void): () => void {
     disposed = true;
     dispose();
   };
+}
+
+function isCurrentPatchState(value: unknown): value is { version: typeof PATCH_VERSION } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "version" in value &&
+    value.version === PATCH_VERSION
+  );
 }
 
 export function isSubagentToolTitle(line: string, agentNames: ReadonlySet<string>): boolean {
@@ -67,16 +79,19 @@ export function linkSubagentToolBlock(
 
 export function installSubagentToolTitleLinks(agentNames: readonly string[]): () => void {
   const prototype = Text.prototype as PatchableTextPrototype;
-  const existing = prototype[TOOL_RENDER_PATCH] as ToolRenderPatchState | undefined;
-  if (existing !== undefined) {
+  const installedState = prototype[TOOL_RENDER_PATCH];
+  if (isCurrentPatchState(installedState)) {
+    const existing = installedState as ToolRenderPatchState;
     existing.agentNames = normalizedAgentNames(agentNames);
     existing.linkLines = linkSubagentToolBlock;
     existing.references += 1;
     return once(() => uninstallToolRenderPatch(prototype, existing));
   }
+  restoreLegacyToolRenderPatch(prototype, installedState);
 
   const originalRender = prototype.render;
   const state: ToolRenderPatchState = {
+    version: PATCH_VERSION,
     agentNames: normalizedAgentNames(agentNames),
     linkLines: linkSubagentToolBlock,
     originalRender,
@@ -96,6 +111,17 @@ export function installSubagentToolTitleLinks(agentNames: readonly string[]): ()
   return once(() => uninstallToolRenderPatch(prototype, state));
 }
 
+function restoreLegacyToolRenderPatch(
+  prototype: PatchableTextPrototype,
+  installedState: unknown,
+): void {
+  if (typeof installedState !== "object" || installedState === null) return;
+  if ("originalRender" in installedState && typeof installedState.originalRender === "function") {
+    prototype.render = installedState.originalRender as typeof prototype.render;
+  }
+  prototype[TOOL_RENDER_PATCH] = undefined;
+}
+
 function uninstallToolRenderPatch(
   prototype: PatchableTextPrototype,
   state: ToolRenderPatchState,
@@ -110,18 +136,19 @@ export function installSubagentSessionsUrlHandler(tui: TUI, openSessions: () => 
   if (tui.mode !== "fullscreen") return () => {};
 
   const patchableTui = tui as PatchableTui;
-  const existing = patchableTui[TUI_URL_PATCH] as TuiUrlPatchState | undefined;
-  if (existing !== undefined) {
+  const installedState = patchableTui[TUI_URL_PATCH];
+  if (isCurrentPatchState(installedState)) {
+    const existing = installedState as TuiUrlPatchState;
     existing.openSessions = openSessions;
     existing.references += 1;
     return once(() => uninstallTuiUrlPatch(patchableTui, existing));
   }
+  restoreLegacyTuiUrlPatch(patchableTui, installedState);
 
   const state: TuiUrlPatchState = {
+    version: PATCH_VERSION,
     openSessions,
-    ...(patchableTui.openUrl === undefined
-      ? {}
-      : { originalOpenUrl: patchableTui.openUrl.bind(tui) }),
+    ...(patchableTui.openUrl === undefined ? {} : { originalOpenUrl: patchableTui.openUrl }),
     patchedOpenUrl: () => {},
     references: 1,
   };
@@ -131,12 +158,22 @@ export function installSubagentSessionsUrlHandler(tui: TUI, openSessions: () => 
       return;
     }
 
-    state.originalOpenUrl?.(url);
+    state.originalOpenUrl?.call(patchableTui, url);
   };
   patchableTui[TUI_URL_PATCH] = state;
   // TuiAltScreen reads this field at mouse release; Pi has no internal-action link API.
   patchableTui.openUrl = state.patchedOpenUrl;
   return once(() => uninstallTuiUrlPatch(patchableTui, state));
+}
+
+function restoreLegacyTuiUrlPatch(patchableTui: PatchableTui, installedState: unknown): void {
+  if (typeof installedState !== "object" || installedState === null) return;
+  if ("originalOpenUrl" in installedState && typeof installedState.originalOpenUrl === "function") {
+    patchableTui.openUrl = installedState.originalOpenUrl as (url: string) => void;
+  } else {
+    delete patchableTui.openUrl;
+  }
+  patchableTui[TUI_URL_PATCH] = undefined;
 }
 
 function uninstallTuiUrlPatch(patchableTui: PatchableTui, state: TuiUrlPatchState): void {

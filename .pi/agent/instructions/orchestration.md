@@ -44,8 +44,6 @@ understood in the parent session.
   parent owns decomposition, sequencing, and integration.
 - Use a foreground child for one result that blocks the next parent action. Use
   background execution only when the parent has independent work to continue.
-- `maxConcurrent: 1` serializes background children. Never use foreground runs
-  to evade that resource limit.
 - Resume the same child by its agent ID when continuing its work. Start a new
   child for a distinct question or deliverable.
 - If a child returns `Parent approval required:` or `Parent handoff required:`,

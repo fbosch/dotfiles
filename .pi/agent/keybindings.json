@@ -2,7 +2,9 @@
   "app.model.cycleForward": [],
   "app.models.toggleProvider": [],
   "app.session.togglePath": [],
-  "tui.input.tab": [],
+  "tui.input.tab": [
+    "ctrl+y"
+  ],
   "tui.select.up": [
     "up",
     "ctrl+k"

@@ -4,7 +4,7 @@ description: Teaches engineering concepts through deliberate practice, Socratic 
 prompt_mode: replace
 model: openai-codex/gpt-5.6-terra
 thinking: medium
-tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7
 permission:
   "*": deny
   read: allow
@@ -16,7 +16,6 @@ permission:
   websearch: ask
   webfetch: ask
   mcp__context7: ask
-  mcp__exa: ask
   external_directory: ask
 ---
 
