@@ -45,7 +45,7 @@ function shellSingleQuote(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-function containsUnsafeNumber(text: string): boolean {
+function containsLossyNumber(text: string): boolean {
   let inString = false;
   let escaped = false;
 
@@ -77,6 +77,7 @@ function containsUnsafeNumber(text: string): boolean {
     const value = Number(token);
     if (
       Number.isFinite(value) === false ||
+      JSON.stringify(value) !== token ||
       (Number.isInteger(value) && Number.isSafeInteger(value) === false)
     ) {
       return true;
@@ -85,6 +86,10 @@ function containsUnsafeNumber(text: string): boolean {
   }
 
   return false;
+}
+
+function isShellWordBoundary(character: string | undefined): boolean {
+  return character === undefined || /[\s|&;()<>]/.test(character);
 }
 
 export function createToonTransformer(
@@ -119,26 +124,64 @@ export function createToonTransformer(
     return converted?.toon === text ? converted.json : undefined;
   }
 
-  function jsonForForwardedText(text: string): string | undefined {
-    return cachedJson(text);
-  }
-
-  function replaceHeredocs(command: string): string {
-    return command.replace(
-      /(<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\2[^\n]*\n)([\s\S]*?)(\n\3(?:\n|$))/g,
-      (match, prefix: string, _quote: string, _marker: string, body: string, suffix: string) => {
-        const json = jsonForForwardedText(body.trim());
-        return json === undefined ? match : `${prefix}${json}${suffix}`;
-      },
-    );
-  }
-
   function replaceQuotedPayloads(command: string): string {
-    // Double-quoted and concatenated shell words require a real shell parser to decode safely.
-    return command.replace(/'([^']*)'/g, (match, body: string) => {
-      const json = jsonForForwardedText(body);
-      return json === undefined ? match : shellSingleQuote(json);
-    });
+    // Without a full shell parser, nested double-quoted or backtick syntax cannot be rewritten safely.
+    if (command.includes('"') || command.includes("`")) return command;
+
+    let cursor = 0;
+    let index = 0;
+    let replaced = "";
+
+    while (index < command.length) {
+      const character = command[index];
+      if (character === "\\") {
+        index += 2;
+        continue;
+      }
+
+      if (character === "#" && isShellWordBoundary(command[index - 1])) {
+        const newline = command.indexOf("\n", index + 1);
+        index = newline === -1 ? command.length : newline + 1;
+        continue;
+      }
+
+      if (character === '"' || character === "`") {
+        const delimiter = character;
+        index += 1;
+        while (index < command.length) {
+          if (command[index] === "\\") {
+            index += 2;
+            continue;
+          }
+          if (command[index] === delimiter) {
+            index += 1;
+            break;
+          }
+          index += 1;
+        }
+        continue;
+      }
+
+      if (character !== "'") {
+        index += 1;
+        continue;
+      }
+
+      const closingQuote = command.indexOf("'", index + 1);
+      if (closingQuote === -1) break;
+      const startsWord = isShellWordBoundary(command[index - 1]);
+      const endsWord = isShellWordBoundary(command[closingQuote + 1]);
+      if (startsWord && endsWord) {
+        const json = cachedJson(command.slice(index + 1, closingQuote));
+        if (json !== undefined) {
+          replaced += command.slice(cursor, index) + shellSingleQuote(json);
+          cursor = closingQuote + 1;
+        }
+      }
+      index = closingQuote + 1;
+    }
+
+    return replaced + command.slice(cursor);
   }
 
   return {
@@ -148,8 +191,7 @@ export function createToonTransformer(
     },
 
     restoreCommand(command: string): string {
-      const withHeredocs = replaceHeredocs(command);
-      return replaceQuotedPayloads(withHeredocs);
+      return replaceQuotedPayloads(command);
     },
 
     transformResult(
@@ -163,7 +205,7 @@ export function createToonTransformer(
 
       const json = content.text.trim();
       if (json.length < MIN_JSON_LENGTH || looksLikeJson(json) === false) return undefined;
-      if (Buffer.byteLength(json) > MAX_JSON_BYTES || containsUnsafeNumber(json)) return undefined;
+      if (Buffer.byteLength(json) > MAX_JSON_BYTES || containsLossyNumber(json)) return undefined;
 
       let parsed: unknown;
       try {

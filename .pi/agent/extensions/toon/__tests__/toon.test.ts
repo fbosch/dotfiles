@@ -64,18 +64,25 @@ describe("TOON transformer", () => {
     ).toBeUndefined();
   });
 
-  test("leaves unsafe integers and oversized output unchanged", () => {
+  test("leaves lossy numbers and oversized output unchanged", () => {
     const transformer = createToonTransformer("bash");
     const unsafeIntegerJson = JSON.stringify({
       users: Array.from({ length: 30 }, () => ({ id: 1 })),
     }).replace('"id":1', '"id":9007199254740993');
     const oversizedJson = JSON.stringify({ value: "x".repeat(1_000_000) });
+    const lossyDecimals = ["0.10000000000000001", "1e-324", "-0"];
 
     expect(
       transformer.transformResult(
         resultEvent({ content: [{ type: "text", text: unsafeIntegerJson }] }),
       ),
     ).toBeUndefined();
+    for (const number of lossyDecimals) {
+      const json = LONG_JSON.replace('"id":1', `"id":${number}`);
+      expect(
+        transformer.transformResult(resultEvent({ content: [{ type: "text", text: json }] })),
+      ).toBeUndefined();
+    }
     expect(
       transformer.transformResult(
         resultEvent({ content: [{ type: "text", text: oversizedJson }] }),
@@ -88,7 +95,7 @@ describe("TOON transformer", () => {
     expect(transformer.transformResult(resultEvent())).toBeUndefined();
   });
 
-  test("restores compacted output in quoted Bash arguments and heredocs", () => {
+  test("restores compacted output in a standalone single-quoted Bash argument", () => {
     const transformer = createToonTransformer("bash");
     const content = transformer.transformResult(resultEvent());
     if (content?.[0]?.type !== "text") throw new Error("Expected compacted text content");
@@ -96,9 +103,6 @@ describe("TOON transformer", () => {
 
     expect(transformer.restoreCommand(`printf '%s' '${toon}' | jq .`)).toBe(
       `printf '%s' '${LONG_JSON}' | jq .`,
-    );
-    expect(transformer.restoreCommand(`jq . <<'JSON'\n${toon}\nJSON`)).toBe(
-      `jq . <<'JSON'\n${LONG_JSON}\nJSON`,
     );
   });
 
@@ -112,6 +116,36 @@ describe("TOON transformer", () => {
     );
     if (content?.[0]?.type !== "text") throw new Error("Expected compacted text content");
     const command = `printf '%s' 'prefix${content[0].text}suffix'`;
+
+    expect(transformer.restoreCommand(command)).toBe(command);
+  });
+
+  test("does not rewrite quote-like text inside a double-quoted shell word", () => {
+    const transformer = createToonTransformer("bash");
+    const hostileJson = JSON.stringify({
+      rows: Array.from({ length: 30 }, () => ({ value: "; printf PWNED; #" })),
+    });
+    const content = transformer.transformResult(
+      resultEvent({ content: [{ type: "text", text: hostileJson }] }),
+    );
+    if (content?.[0]?.type !== "text") throw new Error("Expected compacted text content");
+    const command = `bash -c "printf '%s' '${content[0].text}'"`;
+
+    expect(transformer.restoreCommand(command)).toBe(command);
+  });
+
+  test("does not rewrite quote-like text inside a shell comment", () => {
+    const transformer = createToonTransformer("bash");
+    const prettyJson = JSON.stringify(
+      { values: Array.from({ length: 40 }, () => "$(printf COMMENT_PWNED)") },
+      undefined,
+      2,
+    );
+    const content = transformer.transformResult(
+      resultEvent({ content: [{ type: "text", text: prettyJson }] }),
+    );
+    if (content?.[0]?.type !== "text") throw new Error("Expected compacted text content");
+    const command = `# '${content[0].text}'\nprintf 'SAFE\\n'`;
 
     expect(transformer.restoreCommand(command)).toBe(command);
   });
