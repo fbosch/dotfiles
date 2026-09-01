@@ -325,9 +325,10 @@ Add after manual profile switching passes:
 @narumitw/pi-usage@0.59.0
 ```
 
-Create two isolated profiles through Pi. Switch them manually and verify the
-actual account with `/usage`. Do not add repository profile mappings during this
-phase.
+Create two isolated profiles through Pi. Switch them manually and verify that
+`/usage` follows the active runtime account using known quota or reset values.
+The extension intentionally does not expose an account name. Do not add
+repository profile mappings during this phase.
 
 This phase intentionally defers behavior implemented by
 `.config/opencode/plugins/openai-account-selector/selection.ts`:
@@ -366,7 +367,23 @@ Phase 5 setup status on 2026-09-01:
   restart persistence still require direct verification.
 - Published the active profile through Pi's extension-status API. The custom
   prompt renders the profile and refreshes immediately after a profile rebind.
-- `/usage` account verification and cache-isolation testing remain pending.
+- Installed and pinned `@narumitw/pi-usage@0.59.0`. npm reported zero
+  vulnerabilities and no new install script was approved. Its resolved UI
+  dependency is `@narumitw/pi-tui-kit@0.49.3`.
+- Confirmed a session using the named `fbb` profile queries Codex usage through
+  the rebound runtime credential and publishes a usage status. The package did
+  not create `pi-usage.json`; its usage cache remains process-local and keyed by
+  a credential fingerprint.
+- The extension reads resolved runtime authentication and automatically queries
+  the provider's validated official usage endpoint. This in-process network
+  request is not mediated by the permission-system prompt. `/fast` payload
+  rewriting and reset redemption remain disabled and unexercised.
+- Confirmed `pi --no-extensions` starts without a usage status. The three named
+  credential files remain mode `0600` inside a mode `0700` directory.
+- Named-profile switching and cache-isolation testing through `/usage` remain
+  pending. Codex reset redemption also remains outside the canary because the
+  local profile owner does not yet implement the package's ephemeral OAuth
+  credential-source protocol.
 
 ## Phase 6: Add Plan Mode and One Subagent
 

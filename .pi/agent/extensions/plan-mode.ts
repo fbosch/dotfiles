@@ -102,13 +102,16 @@ export default function planMode(pi: ExtensionAPI): void {
     build: MODES.build.model,
     plan: MODES.plan.model,
   };
+  const modeThinkingLevels: Record<ModeName, ThinkingLevel> = {
+    build: MODES.build.thinkingLevel,
+    plan: MODES.plan.thinkingLevel,
+  };
 
   function updateStatus(ctx: ExtensionContext): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
   }
 
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
-    const mode = MODES[name];
     const modelReference = modeModels[name];
     const [provider, modelId] = parseModel(modelReference);
     const model = ctx.modelRegistry.find(provider, modelId);
@@ -128,7 +131,6 @@ export default function planMode(pi: ExtensionAPI): void {
       selectingModeModel = false;
     }
 
-    pi.setThinkingLevel(mode.thinkingLevel);
     return true;
   }
 
@@ -145,6 +147,7 @@ export default function planMode(pi: ExtensionAPI): void {
       toolsBeforePlanMode = undefined;
       enabled = false;
       updateStatus(ctx);
+      pi.setThinkingLevel(modeThinkingLevels.build);
       return;
     }
 
@@ -154,10 +157,13 @@ export default function planMode(pi: ExtensionAPI): void {
     pi.setActiveTools(toolsBeforePlanMode.filter((name) => PLAN_MODE_TOOLS.has(name)));
     enabled = true;
     updateStatus(ctx);
+    pi.setThinkingLevel(modeThinkingLevels.plan);
   }
 
   pi.on("session_start", async (_event, ctx) => {
-    await selectModeModel("build", ctx);
+    if ((await selectModeModel("build", ctx)) === false) return;
+
+    pi.setThinkingLevel(modeThinkingLevels.build);
   });
 
   pi.on("model_select", (event) => {
@@ -165,6 +171,13 @@ export default function planMode(pi: ExtensionAPI): void {
 
     const mode: ModeName = enabled ? "plan" : "build";
     modeModels[mode] = `${event.model.provider}/${event.model.id}`;
+  });
+
+  pi.on("thinking_level_select", (event) => {
+    if (selectingModeModel) return;
+
+    const mode: ModeName = enabled ? "plan" : "build";
+    modeThinkingLevels[mode] = event.level;
   });
 
   pi.registerCommand("plan", {
