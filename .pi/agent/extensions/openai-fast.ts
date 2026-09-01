@@ -42,12 +42,23 @@ function loadFastModelMap(): ReadonlyMap<string, string> {
 
 const FAST_MODELS = loadFastModelMap();
 
+export interface FastModelRequest {
+  modelId: string;
+  serviceTier: string;
+}
+
+export function resolveFastModelRequest(modelId: string): FastModelRequest | undefined {
+  const baseModelId = FAST_MODELS.get(modelId);
+  if (baseModelId === undefined) return undefined;
+  return { modelId: baseModelId, serviceTier: FAST_SERVICE_TIER };
+}
+
 export function applyFastServiceTier(
   payload: unknown,
   fastModelId: string,
 ): Record<string, unknown> {
-  const baseModelId = FAST_MODELS.get(fastModelId);
-  if (baseModelId === undefined) {
+  const request = resolveFastModelRequest(fastModelId);
+  if (request === undefined) {
     throw new Error(`Unsupported OpenAI Codex fast model: ${fastModelId}`);
   }
 
@@ -57,8 +68,8 @@ export function applyFastServiceTier(
 
   return {
     ...payload,
-    model: baseModelId,
-    service_tier: FAST_SERVICE_TIER,
+    model: request.modelId,
+    service_tier: request.serviceTier,
   };
 }
 

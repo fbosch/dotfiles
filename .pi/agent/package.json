@@ -20,5 +20,9 @@
     "@types/node": "22.19.19",
     "fallow": "3.21.0",
     "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@toon-format/toon": "2.1.0",
+    "vscode-languageserver-protocol": "3.18.2"
   }
 }

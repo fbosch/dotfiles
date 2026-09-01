@@ -3,6 +3,7 @@ import {
   applyFastServiceTier,
   applyFastServiceTierForPayload,
   buildFastModelMap,
+  resolveFastModelRequest,
 } from "../openai-fast";
 
 describe("OpenAI fast models", () => {
@@ -19,6 +20,10 @@ describe("OpenAI fast models", () => {
   });
 
   test("rewrites an alias request to the base model and priority tier", () => {
+    expect(resolveFastModelRequest("gpt-5.6-luna-fast")).toEqual({
+      modelId: "gpt-5.6-luna",
+      serviceTier: "priority",
+    });
     expect(
       applyFastServiceTier({ model: "gpt-5.6-luna-fast", stream: true }, "gpt-5.6-luna-fast"),
     ).toEqual({
@@ -42,6 +47,7 @@ describe("OpenAI fast models", () => {
   });
 
   test("leaves standard and unrelated requests unchanged", () => {
+    expect(resolveFastModelRequest("gpt-5.6-luna")).toBeUndefined();
     expect(applyFastServiceTierForPayload({ model: "gpt-5.6-luna" })).toBeUndefined();
     expect(applyFastServiceTierForPayload({ model: "claude-sonnet-5" })).toBeUndefined();
     expect(applyFastServiceTierForPayload("invalid")).toBeUndefined();

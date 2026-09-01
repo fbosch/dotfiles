@@ -6,6 +6,7 @@ import {
   type ExtensionCommandContext,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import { resolveFastModelRequest } from "../openai-fast";
 import {
   buildHandoffDraft,
   buildSelectedFileContext,
@@ -56,6 +57,7 @@ const ReadSessionParameters = {
 interface GenerationOutcome {
   status: "success" | "cancelled" | "error";
   payload?: HandoffPayload;
+  error?: string;
 }
 
 export type HandoffGenerator = (
@@ -63,6 +65,13 @@ export type HandoffGenerator = (
   goal: string,
   entries: readonly SessionEntry[],
 ) => Promise<HandoffPayload | undefined>;
+
+export function generationFailureReason(error: unknown): string {
+  if (error instanceof Error === false) return "Unknown generation error.";
+  const message = error.message.replaceAll(/\s+/gu, " ").trim();
+  if (message.length === 0) return "Unknown generation error.";
+  return message.length <= 240 ? message : `${message.slice(0, 237)}...`;
+}
 
 async function generatePayload(
   ctx: ExtensionCommandContext,
@@ -72,13 +81,16 @@ async function generatePayload(
 ): Promise<HandoffPayload> {
   const model = ctx.model;
   if (model === undefined) throw new Error("No model selected.");
+  const fastRequest =
+    model.provider === "openai-codex" ? resolveFastModelRequest(model.id) : undefined;
+  const requestModel = fastRequest === undefined ? model : { ...model, id: fastRequest.modelId };
   const history = serializeHandoffHistory(entries);
   if (history.length === 0) throw new Error("No conversation to hand off.");
 
   const direction =
     goal.length > 0 ? goal : "Continue the current conversation in its natural direction.";
   const response = await ctx.modelRegistry.complete(
-    model,
+    requestModel,
     {
       systemPrompt: HANDOFF_SYSTEM_PROMPT,
       messages: [
@@ -99,11 +111,21 @@ async function generatePayload(
       cacheRetention: "none",
       maxRetries: 1,
       maxTokens: HANDOFF_MAX_TOKENS,
+      ...(fastRequest === undefined
+        ? {}
+        : { samplingParams: { service_tier: fastRequest.serviceTier } }),
       sessionId: randomUUID(),
       timeoutMs: HANDOFF_TIMEOUT_MS,
     },
   );
-  if (response.stopReason !== "stop") throw new Error("Handoff generation did not complete.");
+  if (response.stopReason !== "stop") {
+    const detail = response.errorMessage?.trim();
+    throw new Error(
+      detail
+        ? `Handoff generation stopped with ${response.stopReason}: ${detail}`
+        : `Handoff generation stopped with ${response.stopReason}.`,
+    );
+  }
 
   const text = response.content
     .filter((part): part is { type: "text"; text: string } => part.type === "text")
@@ -124,7 +146,9 @@ const generateWithLoader: HandoffGenerator = async (ctx, goal, entries) => {
     loader.onAbort = () => finish({ status: "cancelled" });
     void generatePayload(ctx, goal, entries, loader.signal)
       .then((payload) => finish({ status: "success", payload }))
-      .catch(() => finish({ status: "error" }));
+      .catch((error: unknown) =>
+        finish({ status: "error", error: generationFailureReason(error) }),
+      );
     return loader;
   });
 
@@ -133,7 +157,10 @@ const generateWithLoader: HandoffGenerator = async (ctx, goal, entries) => {
     return undefined;
   }
   if (outcome.status === "error" || outcome.payload === undefined) {
-    ctx.ui.notify("Could not generate a valid handoff prompt.", "error");
+    ctx.ui.notify(
+      `Could not generate a valid handoff prompt: ${outcome.error ?? "Unknown generation error."}`,
+      "error",
+    );
     return undefined;
   }
   return outcome.payload;

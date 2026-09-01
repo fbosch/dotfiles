@@ -18,7 +18,7 @@ import {
   serializeHandoffHistory,
   sourceReference,
 } from "../context";
-import { createHandoffExtension } from "../index";
+import { createHandoffExtension, generationFailureReason } from "../index";
 
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 type BeforeAgentStartHandler = (
@@ -94,6 +94,14 @@ test("parses bounded model output and rejects malformed file lists", () => {
     ),
   ).toThrow();
   expect(() => parseHandoffPayload('{"prompt":"Continue.","files":"src/main.ts"}')).toThrow();
+});
+
+test("reports bounded generation failures without multiline output", () => {
+  expect(generationFailureReason(new Error("invalid\nmodel response"))).toBe(
+    "invalid model response",
+  );
+  expect(generationFailureReason(new Error("x".repeat(500)))).toHaveLength(240);
+  expect(generationFailureReason("failure")).toBe("Unknown generation error.");
 });
 
 test("handoff history excludes thinking, tool arguments, and tool results", async () => {

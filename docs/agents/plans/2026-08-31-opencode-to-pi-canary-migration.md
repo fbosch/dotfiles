@@ -530,13 +530,16 @@ Handoff implementation status on 2026-09-01:
 - Added `read_session` with immediate-parent and pinned-branch authorization,
   a 500-message limit, a 32 MiB source limit, and a 256 KiB output limit. It
   parses the parent JSONL without repairing or migrating the source file.
-- Seven focused Bun tests pass with 36 assertions. They cover malformed model
+- Eight focused Bun tests pass with 39 assertions. They cover malformed model
   output, sensitive-history exclusion, settled source capture, parent linkage,
   no automatic submission, one-shot file context, immutable transcript reads,
   authorization, draft restoration, and maximum transcript output.
 - Pi loads the extension in an isolated RPC process, and the Stow dry run
-  passes. A live TUI handoff with the configured provider remains required
-  before retiring OpenCode's handoff path.
+  passes. A live TUI handoff with the configured `gpt-5.6-luna-fast` alias
+  created a parent-linked session with the generated prompt and retained file
+  references as an editable, unsubmitted draft. Direct extension completions
+  now share the fast-model resolver used by normal provider requests, so the
+  provider receives the base model ID with `service_tier: priority`.
 
 ## Phase 8: Keep Direnv Tool-Scoped
 

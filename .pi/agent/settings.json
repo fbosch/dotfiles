@@ -19,7 +19,7 @@
     "--save-exact"
   ],
   "compactionModel": {
-    "model": "openai-codex/gpt-5.6-luna-fast",
+    "model": "openai-codex/gpt-5.6-luna",
     "thinkingLevel": "low",
     "reasons": [
       "manual",
@@ -167,6 +167,180 @@
               "$FILE"
             ]
           }
+        ]
+      }
+    }
+  },
+  "lsp": {
+    "timeouts": {
+      "startupMs": 10000,
+      "requestMs": 10000,
+      "diagnosticsMs": 5000,
+      "shutdownMs": 2000
+    },
+    "servers": {
+      "cssls": {
+        "command": "vscode-css-language-server",
+        "args": [
+          "--stdio"
+        ],
+        "languages": [
+          {
+            "languageId": "css",
+            "extensions": [
+              ".css"
+            ]
+          },
+          {
+            "languageId": "scss",
+            "extensions": [
+              ".scss"
+            ]
+          },
+          {
+            "languageId": "less",
+            "extensions": [
+              ".less"
+            ]
+          }
+        ],
+        "rootMarkers": [
+          "package.json",
+          ".git"
+        ],
+        "initializationOptions": {
+          "provideFormatter": false
+        },
+        "settings": {
+          "css": {
+            "lint": {
+              "unknownAtRules": "ignore"
+            }
+          }
+        }
+      },
+      "html": {
+        "command": "vscode-html-language-server",
+        "args": [
+          "--stdio"
+        ],
+        "languages": [
+          {
+            "languageId": "html",
+            "extensions": [
+              ".html"
+            ]
+          }
+        ],
+        "rootMarkers": [
+          "package.json",
+          ".git"
+        ],
+        "initializationOptions": {
+          "provideFormatter": false,
+          "embeddedLanguages": {
+            "css": true,
+            "javascript": true
+          }
+        }
+      },
+      "lua_ls": {
+        "command": "lua-language-server",
+        "languages": [
+          {
+            "languageId": "lua",
+            "extensions": [
+              ".lua"
+            ]
+          }
+        ],
+        "rootMarkers": [
+          ".luarc.json",
+          ".luarc.jsonc",
+          ".git"
+        ],
+        "settings": {
+          "Lua": {
+            "runtime": {
+              "version": "LuaJIT"
+            },
+            "diagnostics": {
+              "globals": [
+                "vim",
+                "use"
+              ]
+            },
+            "workspace": {
+              "checkThirdParty": false
+            }
+          }
+        }
+      },
+      "marksman": {
+        "command": "marksman",
+        "args": [
+          "server"
+        ],
+        "languages": [
+          {
+            "languageId": "markdown",
+            "extensions": [
+              ".md"
+            ]
+          },
+          {
+            "languageId": "markdown.mdx",
+            "extensions": [
+              ".mdx"
+            ]
+          }
+        ],
+        "rootMarkers": [
+          ".marksman.toml",
+          ".git"
+        ]
+      },
+      "tsgo": {
+        "command": "tsgo",
+        "args": [
+          "--lsp",
+          "--stdio"
+        ],
+        "languages": [
+          {
+            "languageId": "javascript",
+            "extensions": [
+              ".js"
+            ]
+          },
+          {
+            "languageId": "javascriptreact",
+            "extensions": [
+              ".jsx"
+            ]
+          },
+          {
+            "languageId": "typescript",
+            "extensions": [
+              ".ts"
+            ]
+          },
+          {
+            "languageId": "typescriptreact",
+            "extensions": [
+              ".tsx"
+            ]
+          }
+        ],
+        "rootMarkers": [
+          "tsconfig.json",
+          "jsconfig.json",
+          "package.json",
+          "pnpm-lock.yaml",
+          "yarn.lock",
+          "package-lock.json",
+          "bun.lock",
+          ".git"
         ]
       }
     }
