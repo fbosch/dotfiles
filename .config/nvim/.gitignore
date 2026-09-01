@@ -1,0 +1,4 @@
+# Neovim local data.
+/.sessions/
+/.undo/
+/nvim/

@@ -11,31 +11,8 @@ storybook-static
 .devenv
 .direnv
 
-# Vicinae extensions use pnpm workspace (ignore npm lock files)
-.config/vicinae/extensions/*/package-lock.json
-
-# editor and tool state files
-.config/lazygit/state.yml
-.config/nodemon*
-.config/TabNine/
-.config/github-copilot/
-.config/configstore/
-.config/raycast/
-.config/broot/
-.config/neofetch/
-.config/zed/
-.config/go
-.config/waybar/scripts/update-checker
+# Cursor keeps this state outside the managed configuration tree.
 .cursor/.agent-tools
-.config/codex/**/*(!config.toml)
-.config/codex/config.toml
-.config/gtk-4.0/gtk.css
-.config/gtk-4.0/**/*
-.config/gtk-3.0/**/*
-.config/opencode/package-lock.json
-.config/herdr/release-notes.json
-# use /commands/ instead
-.config/opencode/command/**
 
 # agent skills, codex ignored as selected for default skills.sh, symlinking is handled manually 
 .codex/**
@@ -44,39 +21,8 @@ storybook-static
 # Herdr publishes its skill from the repository root; keep only its skill entry point.
 .agents/skills/herdr/**
 !.agents/skills/herdr/SKILL.md
-# Herdr runtime state contains machine-specific layouts and agent sessions.
-.config/herdr/plugins.json
-.config/herdr/session.json
-.config/herdr/session-history.json
 __pycache__
 .ruff_cache
-
-# window state rules (auto-generated)
-.config/hypr/window-state-rules.conf
-.config/hypr/lua/rules/window-state.lua
-.config/hypr/rules/window-state.lua
-
-# Neovim local data
-.config/nvim/.sessions/
-.config/nvim/.undo/
-.config/nvim/.backup/
-.config/nvim/nvim/
-
-# Fish shell state (ignore all generated/variable data, not main config)
-.config/fish/fish_variables*
-.config/fish/completions/
-.config/fish/conf.d/
-
-# Hyprland machine-specific configs (use .example files as templates)
-.config/hypr/monitors.conf
-.config/hypr/hyprpaper.conf
-.config/hypr/benchmarks/results/
-
-# AGS generated types (regenerate with: ags types)
-.config/ags/@girs/
-
-# AGS bundled output (regenerate with: ags bundle config.tsx config.js --gtk 4)
-.config/ags/config.js
 
 # Other
 **/.backup/

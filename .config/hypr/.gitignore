@@ -1,0 +1,9 @@
+# Hyprland machine-specific configuration.
+/monitors.conf
+/hyprpaper.conf
+/benchmarks/results/
+
+# Generated window-state rules.
+/window-state-rules.conf
+/lua/rules/window-state.lua
+/rules/window-state.lua

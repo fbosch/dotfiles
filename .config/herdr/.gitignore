@@ -1,0 +1,5 @@
+# Herdr machine-local runtime state.
+/plugins.json
+/release-notes.json
+/session.json
+/session-history.json

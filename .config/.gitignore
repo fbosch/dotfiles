@@ -1,0 +1,14 @@
+# Editor and tool state stored directly under .config.
+/nodemon*
+/TabNine/
+/github-copilot/
+/configstore/
+/raycast/
+/broot/
+/neofetch/
+/zed/
+/go
+
+# GTK application state.
+/gtk-4.0/
+/gtk-3.0/

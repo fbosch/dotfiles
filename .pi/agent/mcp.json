@@ -2,9 +2,19 @@
   "settings": {
     "directTools": false,
     "hostConfigDiscovery": "off",
-    "scriptMode": false
+    "scriptMode": false,
+    "mcpFooterStatus": "off",
+    "requestTimeoutMs": 30000
   },
   "mcpServers": {
+    "github": {
+      "command": "gh",
+      "args": ["mcp"],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "approveTools": true
+    },
     "context7": {
       "command": "podman",
       "args": [
@@ -21,6 +31,118 @@
       "lifecycle": "lazy",
       "directTools": false,
       "exposeResources": false
+    },
+    "exa": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "-e",
+        "EXA_API_KEY",
+        "docker.io/mcp/exa@sha256:d88edd571d982faa22eba1bff35e39b4d72c0aa51584e3c90c255e684626aaf8"
+      ],
+      "env": {
+        "EXA_API_KEY": "${EXA_API_KEY}"
+      },
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false
+    },
+    "serena": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "-v",
+        "${PWD}:/workspace:Z",
+        "-v",
+        "pi-serena:/workspaces/serena/config",
+        "-e",
+        "SERENA_DOCKER=1",
+        "ghcr.io/oraios/serena@sha256:6c9459e4246a39c9deaa4f23fb05a526ac6e237b24c8e84a927a098fa1ab6730",
+        "serena",
+        "start-mcp-server",
+        "--project",
+        "/workspace",
+        "--context",
+        "agent",
+        "--open-web-dashboard",
+        "False"
+      ],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "approveTools": true
+    },
+    "ast-grep": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--read-only",
+        "--network=none",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--tmpfs",
+        "/tmp:rw,noexec,nosuid,size=64m",
+        "-v",
+        "${PWD}:/src:ro,Z",
+        "docker.io/mcp/ast-grep@sha256:5fc3f2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72"
+      ],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false
+    },
+    "chrome-devtools": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--init",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "--tmpfs",
+        "/tmp:rw,nosuid,nodev,size=1g",
+        "--tmpfs",
+        "/root/.npm:rw,nosuid,nodev,size=256m",
+        "-e",
+        "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=true",
+        "-e",
+        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=true",
+        "mcr.microsoft.com/playwright@sha256:3bed4b1a12f2338642f3d8cba28e291deef3c66bd4a964bbeb3e57bbff511dbd",
+        "npx",
+        "-y",
+        "chrome-devtools-mcp@1.2.0",
+        "--headless",
+        "--isolated",
+        "--no-usage-statistics",
+        "--no-performance-crux",
+        "--executable-path=/ms-playwright/chromium-1200/chrome-linux64/chrome",
+        "--chrome-arg=--no-sandbox"
+      ],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "approveTools": true
+    },
+    "shared-todo": {
+      "url": "http://192.168.1.46:8092/mcp",
+      "protocolVersion": "auto",
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "approveTools": true
     }
   }
 }

@@ -1,0 +1,2 @@
+# Extensions use a pnpm workspace; ignore per-extension npm lock files.
+/*/package-lock.json

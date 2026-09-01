@@ -1,0 +1,3 @@
+# Codex machine-local state; skills are managed as symlinks.
+/**/*(!config.toml)
+/config.toml
