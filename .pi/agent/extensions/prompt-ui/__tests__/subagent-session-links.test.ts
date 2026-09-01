@@ -1,14 +1,15 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, test } from "bun:test";
-import { type ExtensionUIContext, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
 import { type Terminal, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
 import {
-  armDirectSubagentSessionSelection,
-  findSubagentSessionOption,
+  installClickableSubagentSessions,
   installSubagentSessionUrlHandler,
   installSubagentToolLinks,
   linkSubagentToolBlock,
   parseSubagentSessionUrl,
-  type SubagentSessionRecord,
   type SubagentSessionTarget,
   subagentSessionUrl,
 } from "../subagent-session-links";
@@ -20,16 +21,6 @@ const target: SubagentSessionTarget = {
   displayName: "Explore",
   description: "Survey repository context",
 };
-const records: SubagentSessionRecord[] = [
-  {
-    id: target.agentId,
-    type: "explore",
-    description: target.description,
-    status: "completed",
-    toolUses: 3,
-  },
-];
-
 function createToolExecution(toolName = "subagent"): ToolExecutionComponent {
   return Object.assign(Object.create(ToolExecutionComponent.prototype), {
     toolName,
@@ -183,27 +174,57 @@ describe("subagent session links", () => {
     expect(opened).toEqual(["session", "https://example.com"]);
   });
 
-  test("selects the clicked session without showing the session picker", async () => {
-    const options = [
-      "Explore (Survey repository context) · 3 tools · completed · 4.0s",
-      "Review (Review changes) · 1 tools · completed · 2.0s",
-    ];
-    expect(findSubagentSessionOption(target, records, options)).toBe(options[0]);
-
-    let originalSelectCalls = 0;
+  test("opens the clicked transcript directly without invoking a picker", async () => {
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    const directory = mkdtempSync(join(tmpdir(), "subagent-session-links-"));
+    const outputFile = join(directory, "session.jsonl");
+    writeFileSync(
+      outputFile,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: target.agentId,
+        timestamp: "2026-09-01T00:00:00.000Z",
+        cwd: process.cwd(),
+      })}\n`,
+    );
+    const requestedIds: string[] = [];
+    globals[serviceKey] = {
+      getRecord: (id: string) => {
+        requestedIds.push(id);
+        return { outputFile };
+      },
+    };
+    let customCalls = 0;
     const ui = {
-      select: async () => {
-        originalSelectCalls += 1;
+      custom: async () => {
+        customCalls += 1;
         return undefined;
       },
-    } as unknown as ExtensionUIContext;
-    const cancel = armDirectSubagentSessionSelection(ui, target, () => records);
+      notify: () => {},
+    };
+    const tui = { mode: "fullscreen", openUrl: () => {} } as unknown as TUI;
+    const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<
+      typeof installClickableSubagentSessions
+    >[1];
+    const restoreRender = stubToolRender(["▸ Explore  Survey repository context", "  ⎿  Done"]);
+    const uninstall = installClickableSubagentSessions(tui, ctx);
 
-    expect(await ui.select("Subagent sessions", options)).toBe(options[0]);
-    expect(originalSelectCalls).toBe(0);
-    await ui.select("Another selector", options);
-    expect(originalSelectCalls).toBe(1);
-    cancel();
+    try {
+      (tui as TUI & { openUrl: (url: string) => void }).openUrl(subagentSessionUrl(target));
+      await Bun.sleep(0);
+
+      expect(requestedIds).toEqual([target.agentId]);
+      expect(customCalls).toBe(1);
+    } finally {
+      uninstall();
+      restoreRender();
+      rmSync(directory, { recursive: true, force: true });
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
   });
 
   test("opens the exact session from an actual fullscreen mouse click", () => {

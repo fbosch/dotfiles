@@ -77,7 +77,6 @@
       "/tmp/*": "allow",
       "~/.config/opencode/**": "allow",
       "/Users/fbb/.config/opencode/**": "allow",
-      "/home/fbb/**": "allow",
       "/nix/store/**": "allow",
       "/dev/shm/opencode-window-screenshots/": "allow"
     }

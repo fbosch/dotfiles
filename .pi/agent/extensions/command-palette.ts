@@ -14,9 +14,9 @@ import {
   type SelectItem,
   SelectList,
   Spacer,
+  sliceByColumn,
   Text,
   type TUI,
-  truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
 
@@ -54,7 +54,7 @@ interface PaletteLevel {
 const PALETTE_WIDTH = 72;
 const MAX_VISIBLE_ITEMS = 15;
 const MAX_VISIBLE_ROOT_ROWS = 24;
-const PALETTE_FIXED_ROWS = 9;
+const PALETTE_FIXED_ROWS = 10;
 
 function isCommandContext(ctx: ExtensionContext): ctx is ExtensionCommandContext {
   return "newSession" in ctx;
@@ -68,6 +68,19 @@ function selectListTheme(theme: Theme) {
     scrollInfo: (text: string) => theme.fg("muted", text),
     noMatch: (text: string) => theme.fg("muted", text),
   };
+}
+
+function truncatePlainText(text: string, maxWidth: number, pad = false): string {
+  if (maxWidth <= 0) return "";
+
+  const textWidth = visibleWidth(text);
+  if (textWidth <= maxWidth) {
+    return pad ? text + " ".repeat(maxWidth - textWidth) : text;
+  }
+
+  const prefix = sliceByColumn(text, 0, Math.max(0, maxWidth - 1), true);
+  const truncated = `${prefix}…`;
+  return pad ? truncated + " ".repeat(maxWidth - visibleWidth(truncated)) : truncated;
 }
 
 interface SectionedSelectItem extends SelectItem {
@@ -117,30 +130,35 @@ export class SectionedSelectList implements Component {
     }
 
     const rows = this.rows();
+    const showScrollInfo = rows.length > this.maxVisibleRows;
+    const contentRows = Math.max(1, this.maxVisibleRows - (showScrollInfo ? 1 : 0));
     const selectedRowIndex = rows.findIndex(
       (row) => row.kind === "item" && row.itemIndex === this.selectedIndex,
     );
-    const maxStart = Math.max(0, rows.length - this.maxVisibleRows);
-    const start = Math.max(
-      0,
-      Math.min(selectedRowIndex - Math.floor(this.maxVisibleRows / 2), maxStart),
-    );
-    let visibleRows = rows.slice(start, start + this.maxVisibleRows);
-    const firstRow = visibleRows[0];
+    const maxStart = Math.max(0, rows.length - contentRows);
+    const start = Math.max(0, Math.min(selectedRowIndex - Math.floor(contentRows / 2), maxStart));
+    let visibleRows = rows.slice(start, start + contentRows);
+    while (visibleRows[0]?.kind === "spacer") visibleRows.shift();
 
-    if (firstRow?.kind === "item") {
+    if (visibleRows[0]?.kind === "item" && contentRows > 1) {
       const selectedVisibleIndex = visibleRows.findIndex(
         (row) => row.kind === "item" && row.itemIndex === this.selectedIndex,
       );
       const sectionRows =
         selectedVisibleIndex === visibleRows.length - 1
           ? visibleRows.slice(1)
-          : visibleRows.slice(0, this.maxVisibleRows - 1);
-      visibleRows = [{ kind: "header", label: firstRow.sectionLabel }, ...sectionRows];
+          : visibleRows.slice(0, contentRows - 1);
+      while (sectionRows[0]?.kind === "spacer") sectionRows.shift();
+
+      const firstSectionRow = sectionRows[0];
+      visibleRows =
+        firstSectionRow?.kind === "item"
+          ? [{ kind: "header", label: firstSectionRow.sectionLabel }, ...sectionRows]
+          : sectionRows;
     }
 
     const lines = visibleRows.map((row) => this.renderRow(row, width));
-    if (start > 0 || start + this.maxVisibleRows < rows.length) {
+    if (showScrollInfo) {
       lines.push(this.theme.scrollInfo(`  (${this.selectedIndex + 1}/${this.items.length})`));
     }
     return lines;
@@ -192,7 +210,7 @@ export class SectionedSelectList implements Component {
   private renderRow(row: SectionedRow, width: number): string {
     if (row.kind === "spacer") return "";
     if (row.kind === "header") {
-      return this.theme.header(truncateToWidth(`  ${row.label}`, width, "…"));
+      return this.theme.header(truncatePlainText(`  ${row.label}`, width));
     }
 
     return this.renderItem(row.item, row.itemIndex === this.selectedIndex, width);
@@ -206,21 +224,20 @@ export class SectionedSelectList implements Component {
     const contentWidth = Math.max(1, width - visibleWidth(prefix) - shortcutWidth - shortcutGap);
 
     if (selected) {
-      const content = truncateToWidth(
+      const content = truncatePlainText(
         `${item.label}${item.description ? `  ${item.description}` : ""}`,
         contentWidth,
-        "…",
         true,
       );
       const line = `${prefix}${content}${" ".repeat(shortcutGap)}${shortcut}`;
-      return this.theme.selected(truncateToWidth(line, width, "", true));
+      return this.theme.selected(line);
     }
 
-    const label = truncateToWidth(item.label, contentWidth, "…");
+    const label = truncatePlainText(item.label, contentWidth);
     const descriptionWidth = contentWidth - visibleWidth(label) - 2;
     const description =
       item.description && descriptionWidth > 8
-        ? this.theme.description(`  ${truncateToWidth(item.description, descriptionWidth, "…")}`)
+        ? this.theme.description(`  ${truncatePlainText(item.description, descriptionWidth)}`)
         : "";
     const content = `${this.theme.label(label)}${description}`;
     const spacing = " ".repeat(
@@ -354,7 +371,7 @@ class CommandPalette extends Box {
         label: item.label,
         description: item.description,
       })),
-      Math.max(5, Math.min(MAX_VISIBLE_ITEMS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
+      Math.max(1, Math.min(MAX_VISIBLE_ITEMS, this.tui.terminal.rows - PALETTE_FIXED_ROWS - 1)),
       selectListTheme(this.theme),
       { minPrimaryColumnWidth: 18, maxPrimaryColumnWidth: 32 },
     );
@@ -375,7 +392,7 @@ class CommandPalette extends Box {
     }));
     const list = new SectionedSelectList(
       filteredSections,
-      Math.max(7, Math.min(MAX_VISIBLE_ROOT_ROWS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
+      Math.max(1, Math.min(MAX_VISIBLE_ROOT_ROWS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
       sectionedSelectListTheme(this.theme),
     );
     list.onSelect = (selected) => void this.select(selected);

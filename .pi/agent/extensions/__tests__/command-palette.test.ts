@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   filterPaletteSections,
   rootItems,
@@ -165,5 +166,60 @@ describe("sectioned command palette", () => {
 
     const selectedRow = list.render(40)[1];
     expect(selectedRow).toEndWith("ctrl+n");
+  });
+
+  test("keeps scrolling within the row budget and avoids orphaned headers", () => {
+    const list = new SectionedSelectList(
+      [
+        {
+          label: "First",
+          items: [
+            { value: "first:1", label: "One" },
+            { value: "first:2", label: "Two" },
+          ],
+        },
+        { label: "Second", items: [{ value: "second", label: "Three" }] },
+        { label: "Third", items: [{ value: "third", label: "Four" }] },
+      ],
+      5,
+      plainTheme,
+    );
+
+    for (let index = 0; index < 3; index += 1) list.handleInput("\u001b[B");
+    const lines = list.render(40);
+
+    expect(lines.length).toBeLessThanOrEqual(5);
+    expect(lines.some((line) => line.includes("[header]  Third"))).toBeTrue();
+    expect(lines.some((line) => line.includes("[selected]› Four"))).toBeTrue();
+    expect(lines.some((line) => line.includes("[header]  First"))).toBeFalse();
+  });
+
+  test("applies selected styling after wide-text truncation", () => {
+    const selectedTheme = {
+      ...plainTheme,
+      selected: (text: string) => `\u001b[44m${text}\u001b[0m`,
+    };
+    const list = new SectionedSelectList(
+      [
+        {
+          label: "Session",
+          items: [
+            {
+              value: "wide",
+              label: "非常に長いセッション名",
+              description: "Long description",
+              shortcut: "ctrl+n",
+            },
+          ],
+        },
+      ],
+      5,
+      selectedTheme,
+    );
+
+    const selectedRow = list.render(24)[1] ?? "";
+    expect(visibleWidth(selectedRow)).toBe(24);
+    expect(selectedRow.split("\u001b[0m")).toHaveLength(2);
+    expect(selectedRow).toEndWith("ctrl+n\u001b[0m");
   });
 });

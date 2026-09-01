@@ -1,0 +1,9 @@
+{
+  "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/pi-permission-system-v29.0.0/packages/pi-permission-system/schemas/permissions.schema.json",
+  "permission": {
+    "external_directory_read": {
+      "~/nixos": "allow",
+      "~/nixos/**": "allow"
+    }
+  }
+}

@@ -113,8 +113,8 @@ export function renderPromptHints(
         .join("  ")
     : "";
   const branch = promptState.getBranch();
-  const location = `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`;
-  const hintLeft = [location, workingText, statusText].filter(Boolean).join(" · ");
+  const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
+  const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
   const hintRight = [
     keyHint(keybindings, "app.thinking.cycle", "thinking"),
     keyHint(keybindings, "app.model.select", "models"),
@@ -157,7 +157,7 @@ export class PromptEditor extends CustomEditor {
     this.agentMentions = knownAgentMentions.filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
     );
-    this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, pi, ctx);
+    this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
 

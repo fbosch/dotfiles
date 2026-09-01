@@ -1,3 +1,9 @@
 {
-  "authProfile": "fbb"
+  "authProfile": "fbb",
+  "references": {
+    "nixos": {
+      "path": "~/nixos",
+      "description": "Personal nixos configuration"
+    }
+  }
 }

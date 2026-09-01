@@ -2,6 +2,5 @@
   "provider": "openai-codex",
   "model": "gpt-5.6-luna",
   "reasoning": "off",
-  "temperature": 0,
   "automatic": true
 }

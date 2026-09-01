@@ -63,6 +63,7 @@ interface AutoSessionNameConfig {
   provider: string;
   model: string;
   reasoning: string;
+  temperature?: number;
 }
 
 function readJson<T>(url: URL): T {
@@ -114,6 +115,11 @@ describe("Pi model settings", () => {
       toPiModel(title?.model ?? openCode.model),
     );
     expect(autoSessionName.reasoning).toBe(toPiThinking(title?.reasoningEffort));
+  });
+
+  test("omits the unsupported Codex title temperature", () => {
+    expect(autoSessionName.provider).toBe("openai-codex");
+    expect(autoSessionName.temperature).toBeUndefined();
   });
 
   test.each(AGENT_NAMES)("matches the %s subagent", (piName, openCodeName) => {

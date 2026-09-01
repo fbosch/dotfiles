@@ -1,31 +1,33 @@
+import { readFileSync } from "node:fs";
 import {
-  type ExtensionAPI,
   type ExtensionContext,
-  type ExtensionUIContext,
+  getMarkdownTheme,
+  type Theme,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent";
-import { hyperlink, type TUI } from "@earendil-works/pi-tui";
+import { type Component, hyperlink, type MarkdownTheme, type TUI } from "@earendil-works/pi-tui";
 
 export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session/";
 
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
-const UI_SELECT_PATCH = Symbol.for("dotfiles:pi-subagent-session-direct-select");
 const OSC8_OPEN = "\u001b]8;";
 const PATCH_VERSION = 2;
+const OVERLAY_HEIGHT = "70%";
+const OVERLAY_WIDTH = "90%";
+const SESSION_NAVIGATION_MODULE = new URL(
+  "../../npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigation.ts",
+  import.meta.url,
+).href;
+const SESSION_NAVIGATOR_MODULE = new URL(
+  "../../npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts",
+  import.meta.url,
+).href;
 
 export interface SubagentSessionTarget {
   agentId: string;
   displayName: string;
   description: string;
-}
-
-export interface SubagentSessionRecord {
-  id: string;
-  type: string;
-  description: string;
-  status: string;
-  toolUses: number;
 }
 
 interface ToolRenderPatchState {
@@ -44,20 +46,14 @@ interface TuiUrlPatchState {
   references: number;
 }
 
-interface DirectSelectPatchState {
-  version: typeof PATCH_VERSION;
-  target: SubagentSessionTarget;
-  getRecords: () => readonly SubagentSessionRecord[];
-  originalSelect: ExtensionUIContext["select"];
-  patchedSelect: ExtensionUIContext["select"];
-}
-
 interface SubagentToolDetails {
   agentId?: unknown;
   displayName?: unknown;
   description?: unknown;
 }
 
+// shortcut: Pi has no tool-result link hook. Read the component's runtime fields until
+// Pi or pi-subagents exposes a supported renderer or direct-transcript action.
 interface PatchableToolExecution {
   toolName?: unknown;
   result?: { details?: SubagentToolDetails };
@@ -67,7 +63,6 @@ type PatchableTui = TUI &
   Record<symbol, unknown> & {
     openUrl?: (url: string) => void;
   };
-type PatchableUI = ExtensionUIContext & Record<symbol, unknown>;
 
 function once(dispose: () => void): () => void {
   let disposed = false;
@@ -229,86 +224,84 @@ function restoreLegacyTuiUrlPatch(patchableTui: PatchableTui, installedState: un
   patchableTui[TUI_URL_PATCH] = undefined;
 }
 
-export function findSubagentSessionOption(
-  target: SubagentSessionTarget,
-  records: readonly SubagentSessionRecord[],
-  options: readonly string[],
-): string | undefined {
-  const record = records.find((candidate) => candidate.id === target.agentId);
-  if (record === undefined) return undefined;
-
-  const labelPrefix = `${target.displayName} (${target.description}) · `;
-  const statusPrefix = `${labelPrefix}${record.toolUses} tools · ${record.status} · `;
-  const statusMatch = options.find((option) => option.startsWith(statusPrefix));
-  if (statusMatch !== undefined) return statusMatch;
-
-  const matchingOptions = options.filter((option) => option.startsWith(labelPrefix));
-  const matchingRecords = records.filter(
-    (candidate) => candidate.type === record.type && candidate.description === record.description,
-  );
-  const occurrence = matchingRecords.findIndex((candidate) => candidate.id === target.agentId);
-  return occurrence < 0 ? undefined : matchingOptions[occurrence];
-}
-
-function restoreDirectSelectPatch(ui: PatchableUI, state: DirectSelectPatchState): void {
-  if (ui.select === state.patchedSelect) ui.select = state.originalSelect;
-  ui[UI_SELECT_PATCH] = undefined;
-}
-
-function restoreLegacyDirectSelectPatch(ui: PatchableUI, installedState: unknown): void {
-  if (typeof installedState !== "object" || installedState === null) return;
-  if ("originalSelect" in installedState && typeof installedState.originalSelect === "function") {
-    ui.select = installedState.originalSelect as ExtensionUIContext["select"];
-  }
-  ui[UI_SELECT_PATCH] = undefined;
-}
-
-export function armDirectSubagentSessionSelection(
-  ui: ExtensionUIContext,
-  target: SubagentSessionTarget,
-  getRecords: () => readonly SubagentSessionRecord[],
-): () => void {
-  const patchableUi = ui as PatchableUI;
-  const installedState = patchableUi[UI_SELECT_PATCH];
-  if (isCurrentPatchState(installedState)) {
-    const existing = installedState as DirectSelectPatchState;
-    existing.target = target;
-    existing.getRecords = getRecords;
-    return once(() => restoreDirectSelectPatch(patchableUi, existing));
-  }
-  restoreLegacyDirectSelectPatch(patchableUi, installedState);
-
-  const state: DirectSelectPatchState = {
-    version: PATCH_VERSION,
-    target,
-    getRecords,
-    originalSelect: patchableUi.select,
-    patchedSelect: patchableUi.select,
-  };
-  state.patchedSelect = async (title, options, opts) => {
-    if (title !== "Subagent sessions") {
-      return state.originalSelect.call(patchableUi, title, options, opts);
-    }
-
-    restoreDirectSelectPatch(patchableUi, state);
-    const option = findSubagentSessionOption(state.target, state.getRecords(), options);
-    if (option === undefined) {
-      patchableUi.notify("The selected subagent session is no longer available.", "warning");
-    }
-    return option;
-  };
-  patchableUi[UI_SELECT_PATCH] = state;
-  patchableUi.select = state.patchedSelect;
-  return once(() => restoreDirectSelectPatch(patchableUi, state));
-}
-
 interface SubagentsService {
-  listAgents(): SubagentSessionRecord[];
+  getRecord(id: string): { outputFile?: string } | undefined;
+}
+
+interface SessionNavigationModule {
+  fileSnapshotSource(outputFile: string, readFile: (path: string) => string): unknown;
+}
+
+interface SessionNavigatorModule {
+  TranscriptOverlay: new (options: {
+    tui: TUI;
+    theme: Theme;
+    source: unknown;
+    done: (result: undefined) => void;
+    cwd: string;
+    markdownTheme: MarkdownTheme;
+  }) => Component & { dispose?(): void };
 }
 
 function getSubagentsService(): SubagentsService | undefined {
+  // pi-subagents documents this Symbol.for key as its cross-extension service contract.
+  // Importing the accessor is not viable here because Pi keeps package dependencies in
+  // its isolated package cache rather than this local extension's module-resolution tree.
   const key = Symbol.for("@gotgenes/pi-subagents:service");
   return (globalThis as Record<symbol, unknown>)[key] as SubagentsService | undefined;
+}
+
+async function loadSessionNavigator(): Promise<{
+  navigation: SessionNavigationModule;
+  navigator: SessionNavigatorModule;
+}> {
+  const [navigation, navigator] = await Promise.all([
+    import(SESSION_NAVIGATION_MODULE),
+    import(SESSION_NAVIGATOR_MODULE),
+  ]);
+  return {
+    navigation: navigation as unknown as SessionNavigationModule,
+    navigator: navigator as unknown as SessionNavigatorModule,
+  };
+}
+
+async function openSubagentSession(
+  target: SubagentSessionTarget,
+  service: SubagentsService,
+  ctx: ExtensionContext,
+): Promise<void> {
+  const outputFile = service.getRecord(target.agentId)?.outputFile;
+  if (outputFile === undefined) {
+    ctx.ui.notify("The selected subagent session is not ready yet.", "warning");
+    return;
+  }
+
+  try {
+    const { navigation, navigator } = await loadSessionNavigator();
+    const source = navigation.fileSnapshotSource(outputFile, (path) => readFileSync(path, "utf8"));
+    const markdownTheme = getMarkdownTheme();
+    await ctx.ui.custom<undefined>(
+      (tui, theme, _keybindings, done) =>
+        new navigator.TranscriptOverlay({
+          tui,
+          theme,
+          source,
+          done,
+          cwd: ctx.cwd,
+          markdownTheme,
+        }),
+      {
+        overlay: true,
+        overlayOptions: {
+          anchor: "center",
+          width: OVERLAY_WIDTH,
+          maxHeight: OVERLAY_HEIGHT,
+        },
+      },
+    );
+  } catch {
+    ctx.ui.notify("Could not read the selected subagent session.", "error");
+  }
 }
 
 function uninstallTuiUrlPatch(patchableTui: PatchableTui, state: TuiUrlPatchState): void {
@@ -326,13 +319,11 @@ function uninstallTuiUrlPatch(patchableTui: PatchableTui, state: TuiUrlPatchStat
 
 export function installClickableSubagentSessions(
   tui: TUI,
-  pi: ExtensionAPI,
   ctx: ExtensionContext,
 ): () => void {
   if (tui.mode !== "fullscreen") return () => {};
 
   const uninstallToolLinks = installSubagentToolLinks();
-  let cancelDirectSelection = () => {};
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
     const service = getSubagentsService();
     if (service === undefined) {
@@ -340,20 +331,9 @@ export function installClickableSubagentSessions(
       return;
     }
 
-    cancelDirectSelection();
-    cancelDirectSelection = armDirectSubagentSessionSelection(ctx.ui, target, () =>
-      service.listAgents(),
-    );
-    try {
-      pi.sendUserMessage("/subagents:sessions", { expandPromptTemplates: true });
-    } catch (error) {
-      cancelDirectSelection();
-      const message = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(`Could not open subagent session: ${message}`, "error");
-    }
+    void openSubagentSession(target, service, ctx);
   });
   return () => {
-    cancelDirectSelection();
     uninstallUrlHandler();
     uninstallToolLinks();
   };

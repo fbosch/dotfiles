@@ -41,7 +41,7 @@
     "customMessageText": "text",
     "customMessageLabel": "purple",
     "toolPendingBg": "backgroundElement",
-    "toolSuccessBg": "diffAddedBg",
+    "toolSuccessBg": "backgroundElement",
     "toolErrorBg": "diffRemovedBg",
     "toolTitle": "text",
     "toolOutput": "gray",
