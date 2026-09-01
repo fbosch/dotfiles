@@ -5,10 +5,14 @@ export const MODAL_WIDTH = 72;
 export const MODAL_MAX_VISIBLE_ITEMS = 15;
 export const MODAL_FIXED_ROWS = 10;
 
+export function modalSelectedRow(theme: Theme, text: string): string {
+  return theme.inverse(theme.fg("accent", text));
+}
+
 export function modalSelectListTheme(theme: Theme) {
   return {
     selectedPrefix: (text: string) => theme.fg("accent", text),
-    selectedText: (text: string) => theme.fg("accent", text),
+    selectedText: (text: string) => modalSelectedRow(theme, text),
     description: (text: string) => theme.fg("muted", text),
     scrollInfo: (text: string) => theme.fg("muted", text),
     noMatch: (text: string) => theme.fg("muted", text),

@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { formatAnsiReferenceMentions } from "../../lib/reference-mentions";
 import {
   type AgentMention,
   agentMentionForegroundAnsi,
@@ -260,11 +261,20 @@ export class PromptEditor extends CustomEditor {
     const editorWidth = width - DOCK_CHROME_WIDTH;
     // Pi renders its internal editor border with the thinking color, even in Plan mode.
     const { content, suggestions } = splitEditorLines(super.render(editorWidth), editorBorder);
-    const coloredContent = content.map((line) =>
-      formatAnsiAgentMentions(line, this.agentMentions, this.ctx.cwd, (mention) =>
-        agentMentionForegroundAnsi(theme, mention),
-      ),
-    );
+    const coloredContent = content.map((line) => {
+      const coloredAgents = formatAnsiAgentMentions(
+        line,
+        this.agentMentions,
+        this.ctx.cwd,
+        (mention) => agentMentionForegroundAnsi(theme, mention),
+      );
+      return formatAnsiReferenceMentions(
+        coloredAgents,
+        this.projectReferences,
+        this.ctx.cwd,
+        theme.getFgAnsi("warning"),
+      );
+    });
     const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";
     const model = this.ctx.model;
     const thinkingLevel = this.pi.getThinkingLevel();

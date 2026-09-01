@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { type Component, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import { installFloatingDialogs } from "../floating-dialogs";
+import { modalSelectedRow } from "../modal-frame";
 
 type CustomOptions = Parameters<ExtensionUIContext["custom"]>[1];
 
@@ -16,6 +17,7 @@ function createUI() {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
     bold: (text: string) => text,
+    inverse: (text: string) => text,
   } as Theme;
   const tui = {
     terminal: { columns: 120, rows: 40 },
@@ -50,6 +52,15 @@ function createUI() {
 }
 
 describe("floating extension dialogs", () => {
+  test("renders selected rows as inverse accent bars", () => {
+    const theme = {
+      fg: (color: string, text: string) => `[${color}]${text}`,
+      inverse: (text: string) => `[inverse]${text}`,
+    } as Theme;
+
+    expect(modalSelectedRow(theme, "Selected item")).toBe("[inverse][accent]Selected item");
+  });
+
   test("opens shared select and input primitives with the palette UI", async () => {
     const { calls, components, ui } = createUI();
     installFloatingDialogs(ui);

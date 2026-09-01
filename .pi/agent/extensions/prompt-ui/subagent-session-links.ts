@@ -9,6 +9,7 @@ import {
   type Component,
   hyperlink,
   type MarkdownTheme,
+  type Terminal,
   Text,
   type TUI,
 } from "@earendil-works/pi-tui";
@@ -17,7 +18,9 @@ export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
 
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
+const TERMINAL_WRITE_PATCH = Symbol.for("dotfiles:pi-subagent-session-terminal-filter");
 const OSC8_OPEN = "\u001b]8;";
+const OSC8_SEQUENCE = /\u001b]8;[^;]*;([^\u0007\u001b]*)(?:\u0007|\u001b\\)/g;
 const PATCH_VERSION = 4;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
@@ -60,6 +63,14 @@ interface TuiUrlPatchState {
   patchedOpenUrl: (url: string) => void;
 }
 
+interface TerminalWritePatchState {
+  version: typeof PATCH_VERSION;
+  owners: symbol[];
+  internalLinkOpen: boolean;
+  originalWrite: Terminal["write"];
+  patchedWrite: Terminal["write"];
+}
+
 interface SubagentToolDetails {
   agentId?: unknown;
   displayName?: unknown;
@@ -76,6 +87,7 @@ interface PatchableToolExecution {
 }
 type PatchableToolPrototype = typeof ToolExecutionComponent.prototype & Record<symbol, unknown>;
 type PatchableTextPrototype = typeof Text.prototype & Record<symbol, unknown>;
+type PatchableTerminal = Terminal & Record<symbol, unknown>;
 type PatchableTui = TUI &
   Record<symbol, unknown> & {
     openUrl?: (url: string) => void;
@@ -149,6 +161,23 @@ export function parseSubagentSessionUrl(url: string): SubagentSessionTarget | un
 
 export function linkSubagentToolBlock(lines: readonly string[], url: string): string[] {
   return lines.map((line) => (line.includes(OSC8_OPEN) ? line : hyperlink(line, url)));
+}
+
+function stripSubagentSessionLinks(
+  data: string,
+  state: Pick<TerminalWritePatchState, "internalLinkOpen">,
+): string {
+  return data.replace(OSC8_SEQUENCE, (sequence, url: string) => {
+    if (url.startsWith(SUBAGENT_SESSION_URL_PREFIX)) {
+      state.internalLinkOpen = true;
+      return "";
+    }
+    if (url.length === 0 && state.internalLinkOpen) {
+      state.internalLinkOpen = false;
+      return "";
+    }
+    return sequence;
+  });
 }
 
 function subagentTarget(

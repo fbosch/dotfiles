@@ -21,6 +21,7 @@ import {
   MODAL_MAX_VISIBLE_ITEMS,
   MODAL_WIDTH,
   ModalFrame,
+  modalSelectedRow,
   modalSelectListTheme,
 } from "./prompt-ui/modal-frame";
 
@@ -246,7 +247,7 @@ function sectionedSelectListTheme(theme: Theme): SectionedSelectListTheme {
     label: (text) => theme.fg("text", text),
     description: (text) => theme.fg("muted", text),
     shortcut: (text) => theme.fg("dim", text),
-    selected: (text) => theme.bg("selectedBg", theme.fg("text", text)),
+    selected: (text) => modalSelectedRow(theme, text),
     scrollInfo: (text) => theme.fg("muted", text),
     noMatch: (text) => theme.fg("muted", text),
   };

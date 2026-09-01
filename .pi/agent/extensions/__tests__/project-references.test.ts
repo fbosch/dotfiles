@@ -9,7 +9,13 @@ import type {
   ExtensionContext,
   SessionStartEvent,
 } from "@earendil-works/pi-coding-agent";
+import { UserMessageComponent } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
+import {
+  loadThemeFromPath,
+  setThemeInstance,
+  theme,
+} from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import projectReferences, {
   appendProjectReferences,
   assertNoAgentMentionCollisions,
@@ -203,20 +209,28 @@ describe("project references", () => {
           ctx: ExtensionContext,
         ) => BeforeAgentStartEventResult | undefined)
       | undefined;
+    let sessionShutdown: (() => void) | undefined;
     const pi = {
       on(event: string, handler: typeof sessionStart | typeof beforeAgentStart) {
         if (event === "session_start") sessionStart = handler as typeof sessionStart;
         if (event === "before_agent_start") beforeAgentStart = handler as typeof beforeAgentStart;
+        if (event === "session_shutdown") sessionShutdown = handler as () => void;
       },
     } as unknown as ExtensionAPI;
     projectReferences(pi);
+    setThemeInstance(
+      loadThemeFromPath(join(import.meta.dir, "..", "..", "themes", "zenwritten-dark.json")),
+    );
     sessionStart?.(
       {} as SessionStartEvent,
       {
         cwd,
         hasUI: false,
         isProjectTrusted: () => true,
-        ui: { notify: () => {} },
+        ui: {
+          notify: () => {},
+          theme,
+        },
       } as unknown as ExtensionContext,
     );
 
@@ -231,5 +245,9 @@ describe("project references", () => {
     );
     expect(result?.systemPrompt).toContain("<name>reference-material</name>");
     expect(result?.systemPrompt).toContain(realpathSync(join(cwd, "reference-material")));
+    expect(new UserMessageComponent("Inspect @reference-material").render(80).join("\n")).toContain(
+      `${theme.getFgAnsi("warning")}@reference-material`,
+    );
+    sessionShutdown?.();
   });
 });

@@ -1,8 +1,13 @@
 import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  UserMessageComponent,
+} from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
+import { formatAnsiReferenceMentions } from "../lib/reference-mentions";
 import { type AgentMention, loadAgentMentions } from "./agent-mentions";
 
 export const PROJECT_REFERENCES_START = "<available_references>";
@@ -15,6 +20,63 @@ export interface ProjectReference {
 }
 
 const REFERENCE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const USER_MESSAGE_RENDER_PATCH = Symbol.for("dotfiles:pi-reference-mention-colors");
+
+interface UserMessageReferenceColors {
+  cwd: string;
+  references: readonly ProjectReference[];
+  foregroundAnsi: string;
+  restoreAnsi: string;
+}
+
+type UserMessageRender = (this: UserMessageComponent, width: number) => string[];
+
+interface UserMessageRenderPatchState {
+  originalRender: UserMessageRender;
+  registrations: Map<symbol, () => UserMessageReferenceColors | undefined>;
+}
+
+function installUserMessageReferenceColors(
+  getColors: () => UserMessageReferenceColors | undefined,
+): () => void {
+  const prototype = UserMessageComponent.prototype as UserMessageComponent &
+    Record<symbol, unknown>;
+  let state = prototype[USER_MESSAGE_RENDER_PATCH] as UserMessageRenderPatchState | undefined;
+  if (state === undefined) {
+    const originalRender = prototype.render as UserMessageRender;
+    state = { originalRender, registrations: new Map() };
+    const patchState = state;
+    prototype[USER_MESSAGE_RENDER_PATCH] = state;
+    prototype.render = function renderWithReferenceColors(width: number): string[] {
+      const lines = originalRender.call(this, width);
+      const activeColors = [...patchState.registrations.values()]
+        .reverse()
+        .map((getRegistrationColors) => getRegistrationColors())
+        .find((colors) => colors !== undefined);
+      if (activeColors === undefined) return lines;
+
+      return lines.map((line) =>
+        formatAnsiReferenceMentions(
+          line,
+          activeColors.references,
+          activeColors.cwd,
+          activeColors.foregroundAnsi,
+          activeColors.restoreAnsi,
+        ),
+      );
+    };
+  }
+
+  const patchState = state;
+  const owner = Symbol("project-references");
+  patchState.registrations.set(owner, getColors);
+  return () => {
+    patchState.registrations.delete(owner);
+    if (patchState.registrations.size > 0) return;
+    prototype.render = patchState.originalRender;
+    delete prototype[USER_MESSAGE_RENDER_PATCH];
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
@@ -195,8 +257,19 @@ export function createReferenceAutocompleteProvider(
 
 export default function projectReferences(pi: ExtensionAPI): void {
   let references: ProjectReference[] = [];
+  let activeContext: ExtensionContext | undefined;
+  const disposeUserMessageColors = installUserMessageReferenceColors(() => {
+    if (activeContext === undefined) return undefined;
+    return {
+      cwd: activeContext.cwd,
+      references,
+      foregroundAnsi: activeContext.ui.theme.getFgAnsi("warning"),
+      restoreAnsi: activeContext.ui.theme.getFgAnsi("userMessageText"),
+    };
+  });
 
   pi.on("session_start", (_event, ctx) => {
+    activeContext = ctx;
     try {
       references = loadProjectReferences(ctx.cwd, ctx.isProjectTrusted());
       assertNoAgentMentionCollisions(references, loadAgentMentions(ctx.cwd));
@@ -205,6 +278,10 @@ export default function projectReferences(pi: ExtensionAPI): void {
       ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       return;
     }
+  });
+  pi.on("session_shutdown", () => {
+    activeContext = undefined;
+    disposeUserMessageColors();
   });
 
   pi.on("before_agent_start", (event) => ({
