@@ -24,6 +24,7 @@ import {
 } from "./dock-rendering";
 
 const EDITOR_PADDING_X = 1;
+const AUTOCOMPLETE_MAX_VISIBLE = 10;
 const DOCK_RAIL = "▌";
 const DOCK_RIGHT_BORDER = "▐";
 const DOCK_CHROME_WIDTH = visibleWidth(DOCK_RAIL) + visibleWidth(DOCK_RIGHT_BORDER);
@@ -178,7 +179,10 @@ export class PromptEditor extends CustomEditor {
     state: PromptEditorState,
     typoRules: TypoCorrectionRules,
   ) {
-    super(tui, theme, keybindings, { paddingX: EDITOR_PADDING_X });
+    super(tui, theme, keybindings, {
+      paddingX: EDITOR_PADDING_X,
+      autocompleteMaxVisible: AUTOCOMPLETE_MAX_VISIBLE,
+    });
     this.pi = pi;
     this.ctx = ctx;
     this.promptState = state;

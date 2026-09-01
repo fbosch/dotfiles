@@ -205,5 +205,6 @@ describe("ask_user_question", () => {
     if (finishFirstPrompt === undefined) throw new Error("First prompt did not open");
     finishFirstPrompt("answer");
     expect((await firstResult).details.status).toBe("answered");
+    expect(promptCount).toBe(1);
   });
 });

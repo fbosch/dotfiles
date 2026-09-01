@@ -53,6 +53,12 @@ function createEditor(): PromptEditor {
 }
 
 describe("prompt typo correction", () => {
+  test("allows ten visible autocomplete suggestions", () => {
+    const editor = createEditor();
+
+    expect(editor.getAutocompleteMaxVisible()).toBe(10);
+  });
+
   test("corrects the completed word when a delimiter is typed", () => {
     for (const delimiter of [" ", ".", ",", "!", "?", ":", ";"]) {
       expect(correctedPromptForInput("fix teh", delimiter, typoRules)).toBe(`fix the${delimiter}`);
