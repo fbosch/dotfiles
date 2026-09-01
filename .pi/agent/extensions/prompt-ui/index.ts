@@ -3,30 +3,50 @@ import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
 
+const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
+const WORKING_PULSE_INTERVAL_MS = 120;
+
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();
   let isWorking = false;
+  let workingPulseIndex = 0;
+  let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
   let activeTui: TUI | undefined;
   let disposePromptEditor = () => {};
   let getBranch = (): string | null => null;
   let getStatuses = (): readonly string[] => [];
   const state: PromptEditorState = {
     isWorking: () => isWorking,
+    getWorkingMarker: () => WORKING_PULSE_FRAMES[workingPulseIndex] ?? WORKING_PULSE_FRAMES[0],
     getBranch: () => getBranch(),
     getStatuses: () => getStatuses(),
   };
 
+  const stopWorkingPulse = () => {
+    if (workingPulseTimer === undefined) return;
+    clearInterval(workingPulseTimer);
+    workingPulseTimer = undefined;
+  };
+
   pi.on("agent_start", () => {
+    stopWorkingPulse();
     isWorking = true;
+    workingPulseIndex = 0;
+    workingPulseTimer = setInterval(() => {
+      workingPulseIndex = (workingPulseIndex + 1) % WORKING_PULSE_FRAMES.length;
+      activeTui?.requestRender();
+    }, WORKING_PULSE_INTERVAL_MS);
     activeTui?.requestRender();
   });
 
   pi.on("agent_settled", () => {
     isWorking = false;
+    stopWorkingPulse();
     activeTui?.requestRender();
   });
 
   pi.on("session_shutdown", () => {
+    stopWorkingPulse();
     disposePromptEditor();
     disposePromptEditor = () => {};
     activeTui = undefined;

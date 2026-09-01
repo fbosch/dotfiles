@@ -80,6 +80,13 @@ Hold:
 Reject:
 
 - Neovim prompt bridge: `pi-nvim@0.2.4`.
+- Interactive subagents: `amosblomqvist/pi-interactive-subagents@3.7.2`. It
+  collides with the selected package's `subagent` tool, launches unbounded tmux
+  subprocesses, targets the upstream `@mariozechner/pi-*` package namespace,
+  and does not provide the parent-session identity required for permission
+  forwarding. Restricted children also omit the permission extension. Its
+  visible-pane and child-question UX remains useful prior art, but it cannot run
+  beside or replace the selected implementation safely.
 - Direnv: `pi-direnv@0.1.0` because it mutates process-wide environment.
 - Azure DevOps: `@patimweb/pi-azure-devops@2.0.1` because target-specific safety
   can be bypassed.
@@ -390,9 +397,11 @@ loaded in children so approval requests can reach the parent UI.
 queue. With `abortAllOnInterrupt: true`, interrupt stops every running and queued
 child; the package has no interactive command for stopping one selected child.
 
-Do not port all 19 OpenCode agents. Pi skills already cover most specialization.
-Add another role only after a real task demonstrates that a dedicated agent
-improves the result or feedback loop.
+After the one-agent safety canary passes, port the 19 tracked OpenCode agent
+definitions as Pi-native roles. Translate their tool and permission contracts;
+do not copy unsupported OpenCode frontmatter or assume primary-agent behavior
+exists in Pi. Keep role selection demand-driven even though every definition is
+available.
 
 Acceptance:
 
@@ -423,6 +432,20 @@ Phase 6 setup status on 2026-09-01:
   approval prompt and remained denied.
 - Confirmed two background children reach one running and one queued. Parent
   interrupt clears both without an extension error.
+- Added Pi definitions for all 19 tracked OpenCode agent files while retaining
+  the existing `explore` definition. Pi-specific frontmatter replaces OpenCode
+  modes, temperature, tool names, and permission syntax. Read-only roles omit
+  mutation tools; shell and MCP access remains approval-gated. `commit` and
+  `tutor` are callable children rather than selectable primary modes.
+- Added `$PI_CODING_AGENT_DIR/AGENTS.md` with Pi-native routing guidance. It
+  keeps orchestration in the parent, treats `maxConcurrent: 1` as a real
+  admission limit, resumes parent-mediated questions by child ID, and requires
+  direct integration validation of delegated work.
+- Rejected `amosblomqvist/pi-interactive-subagents@3.7.2` for the canary after
+  source review. It registers a conflicting `subagent` tool, has no concurrency
+  queue, requires tmux, cannot run under Herdr, and does not implement the
+  permission-system child convention. Do not install it beside
+  `@gotgenes/pi-subagents`.
 - Package installation exposed an npm reconciliation loop. Pi compared exact
   settings pins against caret ranges written to its generated npm manifest, and
   npm repeatedly changed the installed versions. The Stow symlink path also

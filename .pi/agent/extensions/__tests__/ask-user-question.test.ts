@@ -39,16 +39,16 @@ function registerQuestionTool(): RegisteredQuestionTool {
 
 function createContext(options: {
   selections?: string[];
-  editorAnswers?: Array<string | undefined>;
+  inputAnswers?: Array<string | undefined>;
   hasUI?: boolean;
 }): ExtensionContext {
   const selections = [...(options.selections ?? [])];
-  const editorAnswers = [...(options.editorAnswers ?? [])];
+  const inputAnswers = [...(options.inputAnswers ?? [])];
 
   return {
     hasUI: options.hasUI ?? true,
     ui: {
-      editor: async () => editorAnswers.shift(),
+      input: async () => inputAnswers.shift(),
       notify: () => undefined,
       select: async () => selections.shift(),
     },
@@ -62,7 +62,7 @@ describe("ask_user_question", () => {
       { question: "What should this be called?" },
       undefined,
       undefined,
-      createContext({ editorAnswers: ["  clear name  "] }),
+      createContext({ inputAnswers: ["  clear name  "] }),
     );
 
     expect(result.content[0]?.text).toBe("User answered: clear name");
@@ -127,5 +127,83 @@ describe("ask_user_question", () => {
     );
 
     expect(result.details.status).toBe("unavailable");
+  });
+
+  test("cancels an active free-form prompt", async () => {
+    const controller = new AbortController();
+    let markPromptStarted: () => void = () => {};
+    const promptStarted = new Promise<void>((resolve) => {
+      markPromptStarted = resolve;
+    });
+    const context = {
+      hasUI: true,
+      ui: {
+        input: async (_title: string, _placeholder: string, options: { signal?: AbortSignal }) => {
+          markPromptStarted();
+          return new Promise<string | undefined>((resolve) => {
+            options.signal?.addEventListener("abort", () => resolve(undefined), { once: true });
+          });
+        },
+      },
+    } as unknown as ExtensionContext;
+    const resultPromise = registerQuestionTool().execute(
+      "call-5",
+      { question: "Can you answer?" },
+      controller.signal,
+      undefined,
+      context,
+    );
+
+    await promptStarted;
+    controller.abort();
+
+    expect((await resultPromise).details.status).toBe("cancelled");
+  });
+
+  test("cancels while waiting for another question without opening a second prompt", async () => {
+    let finishFirstPrompt: ((answer: string) => void) | undefined;
+    let promptCount = 0;
+    let markFirstPromptStarted: () => void = () => {};
+    const firstPromptStarted = new Promise<void>((resolve) => {
+      markFirstPromptStarted = resolve;
+    });
+    const context = {
+      hasUI: true,
+      ui: {
+        input: async () => {
+          promptCount += 1;
+          markFirstPromptStarted();
+          return new Promise<string>((resolve) => {
+            finishFirstPrompt = resolve;
+          });
+        },
+      },
+    } as unknown as ExtensionContext;
+    const tool = registerQuestionTool();
+    const firstResult = tool.execute(
+      "call-6",
+      { question: "First question" },
+      undefined,
+      undefined,
+      context,
+    );
+    await firstPromptStarted;
+
+    const controller = new AbortController();
+    const secondResult = tool.execute(
+      "call-7",
+      { question: "Second question" },
+      controller.signal,
+      undefined,
+      context,
+    );
+    controller.abort();
+
+    expect((await secondResult).details.status).toBe("cancelled");
+    expect(promptCount).toBe(1);
+
+    if (finishFirstPrompt === undefined) throw new Error("First prompt did not open");
+    finishFirstPrompt("answer");
+    expect((await firstResult).details.status).toBe("answered");
   });
 });

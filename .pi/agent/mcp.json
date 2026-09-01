@@ -13,7 +13,7 @@
         "mcp"
       ],
       "lifecycle": "lazy",
-      "directTools": false,
+      "directTools": true,
       "exposeResources": false,
       "approveTools": true
     },
@@ -31,7 +31,7 @@
         "docker.io/mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836"
       ],
       "lifecycle": "lazy",
-      "directTools": false,
+      "directTools": true,
       "exposeResources": false
     },
     "exa": {
@@ -101,7 +101,7 @@
         "docker.io/mcp/ast-grep@sha256:5fc3f2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72"
       ],
       "lifecycle": "lazy",
-      "directTools": false,
+      "directTools": true,
       "exposeResources": false
     },
     "chrome-devtools": {

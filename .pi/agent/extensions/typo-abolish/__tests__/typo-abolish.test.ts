@@ -35,6 +35,7 @@ const tui = {
 } as unknown as TUI;
 const state: PromptEditorState = {
   isWorking: () => false,
+  getWorkingMarker: () => "●",
   getBranch: () => null,
   getStatuses: () => [],
 };

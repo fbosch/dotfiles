@@ -14,7 +14,7 @@ import {
   createAliasAutocompleteProvider,
   splitEditorLines,
 } from "./autocomplete";
-import { contextHealthColor } from "./context-health";
+import { contextIndicator } from "./context-health";
 import {
   backgroundToForeground,
   fitColumns,
@@ -30,6 +30,7 @@ const DOCK_CHROME_WIDTH = visibleWidth(DOCK_RAIL) + visibleWidth(DOCK_RIGHT_BORD
 
 export interface PromptEditorState {
   isWorking(): boolean;
+  getWorkingMarker(): string;
   getBranch(): string | null;
   getStatuses(): readonly string[];
 }
@@ -99,12 +100,8 @@ function formatCwd(cwd: string): string {
 
 function renderContext(theme: Theme, ctx: ExtensionContext): string {
   const usage = ctx.getContextUsage();
-  if (usage?.percent === null || usage?.percent === undefined) {
-    return theme.fg("muted", "ctx ?");
-  }
-
-  const percent = Math.round(usage.percent);
-  return theme.fg(contextHealthColor(percent), `ctx ${percent}%`);
+  const indicator = contextIndicator(usage?.tokens, usage?.percent);
+  return theme.fg(indicator.color, indicator.text);
 }
 
 function formatProvider(provider: string): string {
@@ -148,7 +145,9 @@ export function renderPromptHints(
   const interruptHint = keyHint(keybindings, "app.interrupt", "interrupt");
   const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
   const workingText = promptState.isWorking()
-    ? [theme.fg("accent", "● working"), interruptHint].filter(Boolean).join("  ")
+    ? [theme.fg("accent", `${promptState.getWorkingMarker()} working`), interruptHint]
+        .filter(Boolean)
+        .join("  ")
     : "";
   const hintLeft = [workingText, statusText].filter(Boolean).join(" · ");
   const hintRight = [

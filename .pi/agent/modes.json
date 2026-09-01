@@ -9,6 +9,16 @@
     "model": "openai-codex/gpt-5.6-sol",
     "prompt": "./prompts/plan.txt",
     "thinkingLevel": "high",
-    "color": "#B279A7"
+    "color": "#B279A7",
+    "allowedTools": [
+      "read",
+      "find",
+      "grep",
+      "ls",
+      "skill",
+      "fffind",
+      "ffgrep",
+      "ask_user_question"
+    ]
   }
 }

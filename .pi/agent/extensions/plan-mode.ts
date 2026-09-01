@@ -3,16 +3,6 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 export const PLAN_MODE_STATUS = "Plan";
 
-const PLAN_MODE_TOOLS = new Set([
-  "read",
-  "find",
-  "grep",
-  "ls",
-  "skill",
-  "fffind",
-  "ffgrep",
-  "ask_user_question",
-]);
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
 export type ModeName = "build" | "plan";
@@ -23,6 +13,15 @@ interface ModeConfig {
   prompt: string;
   thinkingLevel: ThinkingLevel;
   color: string;
+}
+
+interface PlanModeConfig extends ModeConfig {
+  allowedTools: ReadonlySet<string>;
+}
+
+interface ModesConfig {
+  build: ModeConfig;
+  plan: PlanModeConfig;
 }
 
 const THINKING_LEVELS: ReadonlySet<string> = new Set([
@@ -47,11 +46,7 @@ function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
 
-function loadModeConfig(name: ModeName, value: unknown): ModeConfig {
-  if (isRecord(value) === false) {
-    throw new Error(`Mode config must be an object: ${name}`);
-  }
-
+function loadModeConfig(name: ModeName, value: Record<string, unknown>): ModeConfig {
   const { model, prompt, thinkingLevel, color } = value;
 
   if (typeof model !== "string") {
@@ -78,16 +73,51 @@ function loadModeConfig(name: ModeName, value: unknown): ModeConfig {
   return { model, prompt, thinkingLevel, color };
 }
 
-function loadModes(): Record<ModeName, ModeConfig> {
+function loadModeObject(name: ModeName, value: unknown): Record<string, unknown> {
+  if (isRecord(value) === false) {
+    throw new Error(`Mode config must be an object: ${name}`);
+  }
+
+  return value;
+}
+
+function loadAllowedTools(value: unknown): ReadonlySet<string> {
+  if (Array.isArray(value) === false || value.length === 0) {
+    throw new Error("Mode allowed tools must be a non-empty array: plan.allowedTools");
+  }
+
+  const tools = value.map((tool) => {
+    if (typeof tool !== "string" || tool.length === 0 || tool.trim() !== tool) {
+      throw new Error("Mode tool names must be non-empty strings: plan.allowedTools");
+    }
+
+    return tool;
+  });
+  const allowedTools = new Set(tools);
+
+  if (allowedTools.size !== tools.length) {
+    throw new Error("Mode tool names must be unique: plan.allowedTools");
+  }
+
+  return allowedTools;
+}
+
+function loadModes(): ModesConfig {
   const config: unknown = JSON.parse(readFileSync(CONFIG_URL, "utf8"));
 
   if (isRecord(config) === false) {
     throw new Error("Mode config must be an object");
   }
 
+  const build = loadModeObject("build", config.build);
+  const plan = loadModeObject("plan", config.plan);
+
   return {
-    build: loadModeConfig("build", config.build),
-    plan: loadModeConfig("plan", config.plan),
+    build: loadModeConfig("build", build),
+    plan: {
+      ...loadModeConfig("plan", plan),
+      allowedTools: loadAllowedTools(plan.allowedTools),
+    },
   };
 }
 
@@ -176,7 +206,7 @@ export default function planMode(pi: ExtensionAPI): void {
     if ((await selectModeModel("plan", ctx)) === false) return;
 
     toolsBeforePlanMode = pi.getActiveTools();
-    pi.setActiveTools(toolsBeforePlanMode.filter((name) => PLAN_MODE_TOOLS.has(name)));
+    pi.setActiveTools(toolsBeforePlanMode.filter((name) => MODES.plan.allowedTools.has(name)));
     enabled = true;
     updateStatus(ctx);
     pi.setThinkingLevel(modeThinkingLevels.plan);

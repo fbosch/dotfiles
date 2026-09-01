@@ -105,7 +105,7 @@ const AskUserQuestionParams = {
 };
 
 interface SharedUILock {
-  withLock<T>(operation: () => T | Promise<T>): Promise<T>;
+  withLock<T>(operation: () => T | Promise<T>, signal?: AbortSignal): Promise<T | undefined>;
 }
 
 const sharedGlobal = globalThis as typeof globalThis & {
@@ -117,13 +117,47 @@ function getSharedUILock(): SharedUILock {
 
   let chain = Promise.resolve();
   const lock: SharedUILock = {
-    withLock<T>(operation: () => T | Promise<T>): Promise<T> {
+    withLock<T>(operation: () => T | Promise<T>, signal?: AbortSignal): Promise<T | undefined> {
       const previous = chain;
       let release: () => void = () => {};
       chain = new Promise<void>((resolve) => {
         release = resolve;
       });
-      return previous.then(operation).finally(release);
+
+      return new Promise<T | undefined>((resolve, reject) => {
+        let started = false;
+        let cancelled = signal?.aborted === true;
+        const handleAbort = () => {
+          cancelled = true;
+          if (started === false) resolve(undefined);
+        };
+        const cleanup = () => signal?.removeEventListener("abort", handleAbort);
+
+        if (cancelled) {
+          resolve(undefined);
+        } else {
+          signal?.addEventListener("abort", handleAbort, { once: true });
+        }
+
+        void previous.then(async () => {
+          started = true;
+          if (cancelled) {
+            cleanup();
+            release();
+            return;
+          }
+
+          try {
+            const result = await operation();
+            resolve(signal?.aborted === true ? undefined : result);
+          } catch (error) {
+            reject(error);
+          } finally {
+            cleanup();
+            release();
+          }
+        });
+      });
     },
   };
 
@@ -132,6 +166,10 @@ function getSharedUILock(): SharedUILock {
 }
 
 const sharedUILock = getSharedUILock();
+
+function isAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
+}
 
 function normalizeOptions(
   options: Array<{ label: string; value?: string; description?: string }> | undefined,
@@ -240,9 +278,9 @@ async function askSingleChoice(
   const displayedOptions = options.map((option, index) => optionLabel(option, index));
   const dialogOptions = signal === undefined ? undefined : { signal };
 
-  while (signal?.aborted !== true) {
+  while (isAborted(signal) === false) {
     const selected = await ctx.ui.select(title, [...displayedOptions, customLabel], dialogOptions);
-    if (selected === undefined) return undefined;
+    if (selected === undefined || isAborted(signal)) return undefined;
 
     const selectedIndex = displayedOptions.indexOf(selected);
     if (selectedIndex >= 0) {
@@ -256,7 +294,12 @@ async function askSingleChoice(
       };
     }
 
-    const customAnswer = await ctx.ui.editor(`${title}\n\nWrite your custom answer:`);
+    const customAnswer = await ctx.ui.input(
+      `${title}\n\nWrite your custom answer:`,
+      "Type your answer",
+      dialogOptions,
+    );
+    if (isAborted(signal)) return undefined;
     if (customAnswer === undefined) continue;
 
     const trimmed = customAnswer.trim();
@@ -278,7 +321,7 @@ async function askMultipleChoice(
   let customAnswer: OtherAnswer | undefined;
   const dialogOptions = signal === undefined ? undefined : { signal };
 
-  while (signal?.aborted !== true) {
+  while (isAborted(signal) === false) {
     const displayedOptions = options.map((option, index) =>
       optionLabel(option, index, selectedOptions.has(index)),
     );
@@ -293,7 +336,7 @@ async function askMultipleChoice(
       dialogOptions,
     );
 
-    if (selected === undefined) return undefined;
+    if (selected === undefined || isAborted(signal)) return undefined;
     if (selected === submitDisplay) {
       if (answerCount === 0) {
         ctx.ui.notify("Select at least one answer before submitting.", "warning");
@@ -308,10 +351,12 @@ async function askMultipleChoice(
     }
 
     if (selected === customDisplay) {
-      const answer = await ctx.ui.editor(
+      const answer = await ctx.ui.input(
         `${title}\n\nCustom answer (submit an empty value to clear it):`,
-        customAnswer?.label,
+        customAnswer?.label ?? "Type your answer",
+        dialogOptions,
       );
+      if (isAborted(signal)) return undefined;
       if (answer === undefined) continue;
 
       const trimmed = answer.trim();
@@ -367,14 +412,17 @@ export default function askUserQuestion(pi: ExtensionAPI): void {
               ? "multi-select"
               : "single-select";
 
-        if (signal?.aborted === true) return cancelledResult(params.question, mode, context);
+        if (isAborted(signal)) return cancelledResult(params.question, mode, context);
         if (ctx.hasUI === false) return unavailableResult(params.question, mode, context);
 
-        return sharedUILock.withLock(async () => {
+        const result = await sharedUILock.withLock(async () => {
           const title = questionTitle(params.question, context);
           if (mode === "text") {
-            const answer = await ctx.ui.editor(title);
-            if (answer === undefined) return cancelledResult(params.question, mode, context);
+            const dialogOptions = signal === undefined ? undefined : { signal };
+            const answer = await ctx.ui.input(title, "Type your answer", dialogOptions);
+            if (answer === undefined || isAborted(signal)) {
+              return cancelledResult(params.question, mode, context);
+            }
 
             const trimmed = answer.trim();
             return answeredResult(
@@ -394,7 +442,9 @@ export default function askUserQuestion(pi: ExtensionAPI): void {
           const answers = await askMultipleChoice(ctx, title, options, signal);
           if (answers === undefined) return cancelledResult(params.question, mode, context);
           return answeredResult(params.question, mode, answers, context);
-        });
+        }, signal);
+
+        return result ?? cancelledResult(params.question, mode, context);
       },
 
       renderCall(args, theme) {
