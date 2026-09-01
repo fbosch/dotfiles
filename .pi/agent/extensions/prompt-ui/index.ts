@@ -5,6 +5,7 @@ import { PromptEditor, type PromptEditorState, renderPromptHints } from "./promp
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
+const PROFILE_STATUS_KEY = "auth-profile";
 
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();
@@ -14,11 +15,13 @@ export default function promptUi(pi: ExtensionAPI): void {
   let activeTui: TUI | undefined;
   let disposePromptEditor = () => {};
   let getBranch = (): string | null => null;
+  let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
   const state: PromptEditorState = {
     isWorking: () => isWorking,
     getWorkingMarker: () => WORKING_PULSE_FRAMES[workingPulseIndex] ?? WORKING_PULSE_FRAMES[0],
     getBranch: () => getBranch(),
+    getProfileName: () => getProfileName(),
     getStatuses: () => getStatuses(),
   };
 
@@ -59,15 +62,20 @@ export default function promptUi(pi: ExtensionAPI): void {
     ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();
       getBranch = () => footerData.getGitBranch();
-      getStatuses = () => [...footerData.getExtensionStatuses().values()];
+      getProfileName = () => footerData.getExtensionStatuses().get(PROFILE_STATUS_KEY);
+      getStatuses = () =>
+        [...footerData.getExtensionStatuses().entries()]
+          .filter(([key]) => key !== PROFILE_STATUS_KEY)
+          .map(([, status]) => status);
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
-        render: (width) => [renderPromptHints(theme, keybindings, state, width)],
+        render: (width) => [renderPromptHints(theme, keybindings, state, ctx.cwd, width)],
         invalidate: () => tui.requestRender(),
         dispose: () => {
           unsubscribe();
           getBranch = () => null;
+          getProfileName = () => undefined;
           getStatuses = () => [];
         },
       };

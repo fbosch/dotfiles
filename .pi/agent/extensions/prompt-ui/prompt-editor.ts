@@ -42,6 +42,7 @@ export interface PromptEditorState {
   isWorking(): boolean;
   getWorkingMarker(): string;
   getBranch(): string | null;
+  getProfileName(): string | undefined;
   getStatuses(): readonly string[];
 }
 
@@ -97,6 +98,7 @@ export function renderPromptHints(
   theme: Theme,
   keybindings: PromptKeybindings,
   promptState: PromptEditorState,
+  cwd: string,
   width: number,
 ): string {
   const statuses = promptState
@@ -110,7 +112,9 @@ export function renderPromptHints(
         .filter(Boolean)
         .join("  ")
     : "";
-  const hintLeft = [workingText, statusText].filter(Boolean).join(" · ");
+  const branch = promptState.getBranch();
+  const location = `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`;
+  const hintLeft = [location, workingText, statusText].filter(Boolean).join(" · ");
   const hintRight = [
     keyHint(keybindings, "app.thinking.cycle", "thinking"),
     keyHint(keybindings, "app.model.select", "models"),
@@ -153,14 +157,7 @@ export class PromptEditor extends CustomEditor {
     this.agentMentions = knownAgentMentions.filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
     );
-    this.disposeSubagentSessionLinks = installClickableSubagentSessions(
-      tui,
-      pi,
-      ctx,
-      knownAgentMentions.flatMap((mention) =>
-        mention.displayName === undefined ? [mention.name] : [mention.name, mention.displayName],
-      ),
-    );
+    this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, pi, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
 
@@ -248,7 +245,6 @@ export class PromptEditor extends CustomEditor {
         agentMentionForegroundAnsi(theme, mention),
       ),
     );
-    const branch = this.promptState.getBranch();
     const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";
     const model = this.ctx.model;
     const thinkingLevel = this.pi.getThinkingLevel();
@@ -265,8 +261,12 @@ export class PromptEditor extends CustomEditor {
             separator,
             theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
           ].join("");
-    const location = `${formatCwd(this.ctx.cwd)}${branch ? ` (${branch})` : ""}`;
-    const modelRight = `${renderContext(theme, this.ctx)}${theme.fg("muted", ` · ${location} `)}`;
+    const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
+    const modelRight = [
+      renderContext(theme, this.ctx),
+      profileName.length > 0 ? `${separator}${theme.fg("muted", profileName)}` : "",
+      " ",
+    ].join("");
     const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
     const inputRail = modeColor(DOCK_RAIL);
     const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);

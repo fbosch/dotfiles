@@ -59,6 +59,12 @@ interface PiModes {
   };
 }
 
+interface AutoSessionNameConfig {
+  provider: string;
+  model: string;
+  reasoning: string;
+}
+
 function readJson<T>(url: URL): T {
   return JSON.parse(readFileSync(url, "utf8")) as T;
 }
@@ -80,6 +86,9 @@ describe("Pi model settings", () => {
   const openCode = readJson<OpenCodeConfig>(new URL(".config/opencode/opencode.jsonc", REPO_ROOT));
   const settings = readJson<PiSettings>(new URL("settings.json", AGENT_DIR));
   const modes = readJson<PiModes>(new URL("modes.json", AGENT_DIR));
+  const autoSessionName = readJson<AutoSessionNameConfig>(
+    new URL("extensions/auto-session-name.json", AGENT_DIR),
+  );
 
   test("matches primary, build, plan, and compaction settings", () => {
     expect(`${settings.defaultProvider}/${settings.defaultModel}`).toBe(toPiModel(openCode.model));
@@ -97,6 +106,14 @@ describe("Pi model settings", () => {
     expect(settings.compactionModel.thinkingLevel).toBe(
       required(openCode.agent.compaction?.reasoningEffort, "agent.compaction.reasoningEffort"),
     );
+  });
+
+  test("matches the automatic session title settings", () => {
+    const title = openCode.agent.title;
+    expect(`${autoSessionName.provider}/${autoSessionName.model}`).toBe(
+      toPiModel(title?.model ?? openCode.model),
+    );
+    expect(autoSessionName.reasoning).toBe(toPiThinking(title?.reasoningEffort));
   });
 
   test.each(AGENT_NAMES)("matches the %s subagent", (piName, openCodeName) => {

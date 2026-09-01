@@ -501,28 +501,27 @@ Rollback:
 - Disable the Pi extension and its Neovim companion independently.
 - Continue using the existing OpenCode Neovim and Herdr integrations.
 
-## Phase 8: Keep Direnv Process-Scoped
+## Phase 8: Keep Direnv Tool-Scoped
 
 Do not install `pi-direnv@0.1.0`. It mutates `process.env`, does not restore a
 baseline, and can carry stale or secret values into later sessions.
 
-Start a fresh Pi process from each project's direnv-activated shell. Do not
-reuse that process across projects with different environments.
-
-Rebuild session-scoped environment injection only if this operating rule becomes
-a measured problem. A replacement must preserve the current OpenCode invariant:
-environments are keyed by session and applied only to tool subprocesses.
+Load the nearest allowed `.envrc` inside the repository from
+`.pi/agent/extensions/direnv/`. Override Pi's built-in `bash` tool with its
+supported `spawnHook`, and apply the exported values only to that subprocess.
+Do not mutate the Pi process environment.
 
 Acceptance:
 
-- Moving between repositories with different `.envrc` files never reuses the
-  same Pi process.
-- Environment values from one repository are absent from a fresh process started
-  in another.
+- Repository tools on the exported `PATH` are available to agent `bash` calls.
+- Removed variables are absent from agent `bash` calls.
+- Direnv values do not enter `process.env` or provider requests.
+- A blocked `.envrc` produces a warning and leaves the built-in `bash` tool in
+  place.
 
 Rollback:
 
-- No package state exists to remove.
+- Remove `.pi/agent/extensions/direnv/`; no package state exists to remove.
 
 ## Phase 9: Persist Proven Configuration Safely
 

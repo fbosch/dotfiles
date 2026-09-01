@@ -8,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   Box,
+  type Component,
   getKeybindings,
   Input,
   type SelectItem,
@@ -15,27 +16,44 @@ import {
   Spacer,
   Text,
   type TUI,
+  truncateToWidth,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 
 type PaletteAction = () => Promise<void> | void;
 
-interface PaletteItem {
+export interface PaletteItem {
   id: string;
   label: string;
   description: string;
+  shortcut?: string;
   action?: PaletteAction;
   children?: () => PaletteItem[] | Promise<PaletteItem[]>;
+}
+
+export interface PaletteSection {
+  id: string;
+  label: string;
+  items: PaletteItem[];
+}
+
+interface PaletteList extends Component {
+  onSelect?: (item: SelectItem) => void;
+  onCancel?: () => void;
+  handleInput(data: string): void;
 }
 
 interface PaletteLevel {
   title: string;
   items: PaletteItem[];
   input: Input;
-  list: SelectList;
+  list: PaletteList;
+  sections?: PaletteSection[];
 }
 
 const PALETTE_WIDTH = 72;
 const MAX_VISIBLE_ITEMS = 15;
+const MAX_VISIBLE_ROOT_ROWS = 24;
 const PALETTE_FIXED_ROWS = 9;
 
 function isCommandContext(ctx: ExtensionContext): ctx is ExtensionCommandContext {
@@ -52,6 +70,194 @@ function selectListTheme(theme: Theme) {
   };
 }
 
+interface SectionedSelectItem extends SelectItem {
+  shortcut?: string;
+}
+
+interface SectionedSelectSection {
+  label: string;
+  items: SectionedSelectItem[];
+}
+
+interface SectionedSelectListTheme {
+  header: (text: string) => string;
+  label: (text: string) => string;
+  description: (text: string) => string;
+  shortcut: (text: string) => string;
+  selected: (text: string) => string;
+  scrollInfo: (text: string) => string;
+  noMatch: (text: string) => string;
+}
+
+type SectionedRow =
+  | { kind: "spacer" }
+  | { kind: "header"; label: string }
+  | { kind: "item"; item: SectionedSelectItem; itemIndex: number; sectionLabel: string };
+
+export class SectionedSelectList implements Component {
+  onSelect?: (item: SelectItem) => void;
+  onCancel?: () => void;
+
+  private readonly items: SectionedSelectItem[];
+  private selectedIndex = 0;
+
+  constructor(
+    private readonly sections: SectionedSelectSection[],
+    private readonly maxVisibleRows: number,
+    private readonly theme: SectionedSelectListTheme,
+  ) {
+    this.items = sections.flatMap((section) => section.items);
+  }
+
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    if (this.items.length === 0) {
+      return [this.theme.noMatch("  No matching commands")];
+    }
+
+    const rows = this.rows();
+    const selectedRowIndex = rows.findIndex(
+      (row) => row.kind === "item" && row.itemIndex === this.selectedIndex,
+    );
+    const maxStart = Math.max(0, rows.length - this.maxVisibleRows);
+    const start = Math.max(
+      0,
+      Math.min(selectedRowIndex - Math.floor(this.maxVisibleRows / 2), maxStart),
+    );
+    let visibleRows = rows.slice(start, start + this.maxVisibleRows);
+    const firstRow = visibleRows[0];
+
+    if (firstRow?.kind === "item") {
+      const selectedVisibleIndex = visibleRows.findIndex(
+        (row) => row.kind === "item" && row.itemIndex === this.selectedIndex,
+      );
+      const sectionRows =
+        selectedVisibleIndex === visibleRows.length - 1
+          ? visibleRows.slice(1)
+          : visibleRows.slice(0, this.maxVisibleRows - 1);
+      visibleRows = [{ kind: "header", label: firstRow.sectionLabel }, ...sectionRows];
+    }
+
+    const lines = visibleRows.map((row) => this.renderRow(row, width));
+    if (start > 0 || start + this.maxVisibleRows < rows.length) {
+      lines.push(this.theme.scrollInfo(`  (${this.selectedIndex + 1}/${this.items.length})`));
+    }
+    return lines;
+  }
+
+  handleInput(data: string): void {
+    const keybindings = getKeybindings();
+    if (keybindings.matches(data, "tui.select.up")) {
+      this.moveSelection(-1);
+      return;
+    }
+    if (keybindings.matches(data, "tui.select.down")) {
+      this.moveSelection(1);
+      return;
+    }
+    if (keybindings.matches(data, "tui.select.confirm")) {
+      const selectedItem = this.items[this.selectedIndex];
+      if (selectedItem) this.onSelect?.(selectedItem);
+      return;
+    }
+    if (keybindings.matches(data, "tui.select.cancel")) this.onCancel?.();
+  }
+
+  getSelectedItem(): SelectItem | null {
+    return this.items[this.selectedIndex] ?? null;
+  }
+
+  private moveSelection(offset: number): void {
+    if (this.items.length === 0) return;
+    this.selectedIndex = (this.selectedIndex + offset + this.items.length) % this.items.length;
+  }
+
+  private rows(): SectionedRow[] {
+    const rows: SectionedRow[] = [];
+    let itemIndex = 0;
+
+    for (const [sectionIndex, section] of this.sections.entries()) {
+      if (sectionIndex > 0) rows.push({ kind: "spacer" });
+      rows.push({ kind: "header", label: section.label });
+      for (const item of section.items) {
+        rows.push({ kind: "item", item, itemIndex, sectionLabel: section.label });
+        itemIndex += 1;
+      }
+    }
+
+    return rows;
+  }
+
+  private renderRow(row: SectionedRow, width: number): string {
+    if (row.kind === "spacer") return "";
+    if (row.kind === "header") {
+      return this.theme.header(truncateToWidth(`  ${row.label}`, width, "…"));
+    }
+
+    return this.renderItem(row.item, row.itemIndex === this.selectedIndex, width);
+  }
+
+  private renderItem(item: SectionedSelectItem, selected: boolean, width: number): string {
+    const prefix = selected ? "› " : "  ";
+    const shortcut = item.shortcut ?? "";
+    const shortcutWidth = visibleWidth(shortcut);
+    const shortcutGap = shortcutWidth > 0 ? 2 : 0;
+    const contentWidth = Math.max(1, width - visibleWidth(prefix) - shortcutWidth - shortcutGap);
+
+    if (selected) {
+      const content = truncateToWidth(
+        `${item.label}${item.description ? `  ${item.description}` : ""}`,
+        contentWidth,
+        "…",
+        true,
+      );
+      const line = `${prefix}${content}${" ".repeat(shortcutGap)}${shortcut}`;
+      return this.theme.selected(truncateToWidth(line, width, "", true));
+    }
+
+    const label = truncateToWidth(item.label, contentWidth, "…");
+    const descriptionWidth = contentWidth - visibleWidth(label) - 2;
+    const description =
+      item.description && descriptionWidth > 8
+        ? this.theme.description(`  ${truncateToWidth(item.description, descriptionWidth, "…")}`)
+        : "";
+    const content = `${this.theme.label(label)}${description}`;
+    const spacing = " ".repeat(
+      Math.max(0, width - visibleWidth(prefix) - visibleWidth(content) - shortcutWidth),
+    );
+    return `${prefix}${content}${spacing}${this.theme.shortcut(shortcut)}`;
+  }
+}
+
+function sectionedSelectListTheme(theme: Theme): SectionedSelectListTheme {
+  return {
+    header: (text) => theme.bold(theme.fg("accent", text)),
+    label: (text) => theme.fg("text", text),
+    description: (text) => theme.fg("muted", text),
+    shortcut: (text) => theme.fg("dim", text),
+    selected: (text) => theme.bg("selectedBg", theme.fg("text", text)),
+    scrollInfo: (text) => theme.fg("muted", text),
+    noMatch: (text) => theme.fg("muted", text),
+  };
+}
+
+export function filterPaletteSections(sections: PaletteSection[], query: string): PaletteSection[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (normalizedQuery === "") return sections;
+
+  return sections
+    .map((section) => {
+      const items = section.label.toLowerCase().includes(normalizedQuery)
+        ? section.items
+        : section.items.filter((item) =>
+            `${item.label} ${item.description}`.toLowerCase().includes(normalizedQuery),
+          );
+      return { ...section, items };
+    })
+    .filter((section) => section.items.length > 0);
+}
+
 class CommandPalette extends Box {
   private readonly levels: PaletteLevel[] = [];
   private readonly tui: TUI;
@@ -62,14 +268,18 @@ class CommandPalette extends Box {
   constructor(
     tui: TUI,
     theme: Theme,
-    items: PaletteItem[],
+    sections: PaletteSection[],
     done: (action: PaletteAction | null) => void,
   ) {
     super(1, 0, (text) => theme.bg("selectedBg", text));
     this.tui = tui;
     this.theme = theme;
     this.done = done;
-    this.pushLevel("Command Palette", items);
+    this.pushLevel(
+      "Commands",
+      sections.flatMap((section) => section.items),
+      sections,
+    );
   }
 
   get focused(): boolean {
@@ -106,7 +316,9 @@ class CommandPalette extends Box {
     level.input.handleInput(data);
     if (level.input.getValue() === previousQuery) return;
 
-    level.list = this.createList(level.items, level.input.getValue());
+    level.list = level.sections
+      ? this.createSectionedList(level.sections, level.input.getValue())
+      : this.createList(level.items, level.input.getValue());
     this.renderLevel();
     this.tui.requestRender();
   }
@@ -115,14 +327,15 @@ class CommandPalette extends Box {
     return this.levels.at(-1);
   }
 
-  private pushLevel(title: string, items: PaletteItem[]): void {
+  private pushLevel(title: string, items: PaletteItem[], sections?: PaletteSection[]): void {
     const input = new Input();
     input.focused = this.focusedState;
     const level: PaletteLevel = {
       title,
       items,
       input,
-      list: this.createList(items),
+      list: sections ? this.createSectionedList(sections) : this.createList(items),
+      ...(sections ? { sections } : {}),
     };
     this.levels.push(level);
     this.renderLevel();
@@ -144,6 +357,26 @@ class CommandPalette extends Box {
       Math.max(5, Math.min(MAX_VISIBLE_ITEMS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
       selectListTheme(this.theme),
       { minPrimaryColumnWidth: 18, maxPrimaryColumnWidth: 32 },
+    );
+    list.onSelect = (selected) => void this.select(selected);
+    list.onCancel = () => this.cancel();
+    return list;
+  }
+
+  private createSectionedList(sections: PaletteSection[], query = ""): SectionedSelectList {
+    const filteredSections = filterPaletteSections(sections, query).map((section) => ({
+      label: section.label,
+      items: section.items.map((item) => ({
+        value: item.id,
+        label: item.label,
+        description: item.description,
+        ...(item.shortcut ? { shortcut: item.shortcut } : {}),
+      })),
+    }));
+    const list = new SectionedSelectList(
+      filteredSections,
+      Math.max(7, Math.min(MAX_VISIBLE_ROOT_ROWS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
+      sectionedSelectListTheme(this.theme),
     );
     list.onSelect = (selected) => void this.select(selected);
     list.onCancel = () => this.cancel();
@@ -318,53 +551,19 @@ async function sessionItems(ctx: ExtensionCommandContext): Promise<PaletteItem[]
     }));
 }
 
-export function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
-  const items: PaletteItem[] = [
-    {
-      id: "model",
-      label: "Switch Model",
-      description: "Choose from available models",
-      children: () => modelItems(ctx, pi),
-    },
-    {
-      id: "thinking",
-      label: "Set Thinking Level",
-      description: "Change reasoning depth",
-      children: () => thinkingItems(ctx, pi),
-    },
+export function rootSections(ctx: ExtensionContext, pi: ExtensionAPI): PaletteSection[] {
+  const switchModel: PaletteItem = {
+    id: "model",
+    label: "Switch Model",
+    description: "Choose from available models",
+    children: () => modelItems(ctx, pi),
+  };
+  const session: PaletteItem[] = [
     {
       id: "compact",
       label: "Compact Session",
       description: "Compact the current context",
       action: () => ctx.compact(),
-    },
-    ...(hasContextView(pi)
-      ? [
-          {
-            id: "context",
-            label: "Inspect Context",
-            description: "View context usage and injected instructions",
-            children: () => contextViewItems(pi),
-          },
-        ]
-      : []),
-    {
-      id: "tools",
-      label: "Toggle Tool",
-      description: "Enable or disable a tool",
-      children: () => toolItems(pi),
-    },
-    {
-      id: "theme",
-      label: "Select Theme",
-      description: "Switch the active theme",
-      children: () => themeItems(ctx),
-    },
-    {
-      id: "tool-output",
-      label: "Toggle Tool Output",
-      description: "Expand or collapse tool results",
-      action: () => ctx.ui.setToolsExpanded(ctx.ui.getToolsExpanded() === false),
     },
     {
       id: "session-info",
@@ -376,60 +575,139 @@ export function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[
         ctx.ui.notify(`${sessionName ?? "Unnamed session"}\n${sessionId}`, "info");
       },
     },
-    {
-      id: "commands",
-      label: "Insert Command",
-      description: "Place an available slash command in the prompt",
-      children: () => commandItems(ctx, pi),
-    },
   ];
+  let newSession: PaletteItem | undefined;
 
-  if (isCommandContext(ctx) === false) return items;
-
-  items.splice(
-    2,
-    0,
-    {
+  if (isCommandContext(ctx)) {
+    newSession = {
       id: "new-session",
       label: "New Session",
       description: "Start a fresh session",
       action: async () => {
         await ctx.newSession();
       },
-    },
-    {
-      id: "fork-session",
-      label: "Fork Session",
-      description: "Start a linked session",
-      action: async () => {
-        const parentSession = ctx.sessionManager.getSessionFile();
-        await ctx.newSession(parentSession ? { parentSession } : {});
+    };
+    session.unshift(
+      newSession,
+      {
+        id: "fork-session",
+        label: "Fork Session",
+        description: "Start a linked session",
+        action: async () => {
+          const parentSession = ctx.sessionManager.getSessionFile();
+          await ctx.newSession(parentSession ? { parentSession } : {});
+        },
       },
+      {
+        id: "resume-session",
+        label: "Resume Session",
+        description: "Switch to a recent session",
+        children: () => sessionItems(ctx),
+      },
+    );
+    session.push({
+      id: "reload",
+      label: "Reload",
+      description: "Reload extensions and configuration",
+      action: async () => {
+        await ctx.reload();
+      },
+    });
+  }
+
+  const sections: PaletteSection[] = [
+    {
+      id: "suggested",
+      label: "Suggested",
+      items: [...(newSession ? [newSession] : []), switchModel],
+    },
+    { id: "session", label: "Session", items: session },
+    {
+      id: "model",
+      label: "Model",
+      items: [
+        switchModel,
+        {
+          id: "thinking",
+          label: "Set Thinking Level",
+          description: "Change reasoning depth",
+          children: () => thinkingItems(ctx, pi),
+        },
+      ],
+    },
+    ...(hasContextView(pi)
+      ? [
+          {
+            id: "context",
+            label: "Context",
+            items: [
+              {
+                id: "context",
+                label: "Inspect Context",
+                description: "View context usage and injected instructions",
+                children: () => contextViewItems(pi),
+              },
+            ],
+          },
+        ]
+      : []),
+    {
+      id: "tools",
+      label: "Tools",
+      items: [
+        {
+          id: "tools",
+          label: "Toggle Tool",
+          description: "Enable or disable a tool",
+          children: () => toolItems(pi),
+        },
+        {
+          id: "tool-output",
+          label: "Toggle Tool Output",
+          description: "Expand or collapse tool results",
+          action: () => ctx.ui.setToolsExpanded(ctx.ui.getToolsExpanded() === false),
+        },
+      ],
     },
     {
-      id: "resume-session",
-      label: "Resume Session",
-      description: "Switch to a recent session",
-      children: () => sessionItems(ctx),
+      id: "appearance",
+      label: "Appearance",
+      items: [
+        {
+          id: "theme",
+          label: "Select Theme",
+          description: "Switch the active theme",
+          children: () => themeItems(ctx),
+        },
+      ],
     },
-  );
-  items.push({
-    id: "reload",
-    label: "Reload",
-    description: "Reload extensions and configuration",
-    action: async () => {
-      await ctx.reload();
+    {
+      id: "commands",
+      label: "Commands",
+      items: [
+        {
+          id: "commands",
+          label: "Insert Command",
+          description: "Place an available slash command in the prompt",
+          children: () => commandItems(ctx, pi),
+        },
+      ],
     },
-  });
+  ];
 
-  return items;
+  return sections;
+}
+
+export function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
+  const items = rootSections(ctx, pi).flatMap((section) => section.items);
+  return [...new Map(items.map((item) => [item.id, item])).values()];
 }
 
 async function showPalette(ctx: ExtensionContext, pi: ExtensionAPI) {
   if (ctx.mode !== "tui") return;
 
   const action = await ctx.ui.custom<PaletteAction | null>(
-    (tui, theme, _keybindings, done) => new CommandPalette(tui, theme, rootItems(ctx, pi), done),
+    (tui, theme, _keybindings, done) => new CommandPalette(tui, theme, rootSections(ctx, pi), done),
     {
       overlay: true,
       overlayOptions: {
