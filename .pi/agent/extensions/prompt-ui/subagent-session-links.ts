@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import {
+  type AgentToolResult,
   type ExtensionContext,
   getMarkdownTheme,
   type Theme,
+  type ToolDefinition,
   ToolExecutionComponent,
+  truncateLine,
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
@@ -13,6 +16,7 @@ import {
   Text,
   type TUI,
 } from "@earendil-works/pi-tui";
+import { Type } from "typebox";
 
 export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
 
@@ -27,6 +31,9 @@ const OSC8_SEQUENCE = new RegExp(
 const PATCH_VERSION = 4;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
+const TRANSCRIPT_TOOL_PREVIEW_LINES = 5;
+const TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS = 500;
+const TRANSCRIPT_TOOL_PARAMETERS = Type.Object({});
 // shortcut: pi-subagents exposes records but not its transcript renderer. Reuse the
 // pinned package modules until its public API can open a transcript by agent ID.
 const SESSION_NAVIGATION_MODULE = new URL(
@@ -410,20 +417,106 @@ interface InternalSubagentRecord {
   isSessionReady(): boolean;
 }
 
+export interface SubagentTranscriptSource {
+  getMessages(): readonly unknown[];
+  subscribe(onChange: (event?: unknown) => void): (() => void) | undefined;
+  streaming(): unknown;
+  getToolDefinition(name: string): ToolDefinition | undefined;
+}
+
 interface SessionNavigationModule {
-  fileSnapshotSource(outputFile: string, readFile: (path: string) => string): unknown;
-  liveSource(record: InternalSubagentRecord): unknown;
+  fileSnapshotSource(
+    outputFile: string,
+    readFile: (path: string) => string,
+  ): SubagentTranscriptSource;
+  liveSource(record: InternalSubagentRecord): SubagentTranscriptSource;
 }
 
 interface SessionNavigatorModule {
   TranscriptOverlay: new (options: {
     tui: TUI;
     theme: Theme;
-    source: unknown;
+    source: SubagentTranscriptSource;
     done: (result: undefined) => void;
     cwd: string;
     markdownTheme: MarkdownTheme;
   }) => Component & { dispose?(): void };
+}
+
+function compactToolArguments(args: object): string {
+  const serialized = JSON.stringify(args);
+  if (serialized === undefined || serialized === "{}") return "";
+  return truncateLine(serialized, TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS).text;
+}
+
+function compactToolOutput(result: AgentToolResult<unknown>, theme: Theme): string {
+  const output = result.content
+    .filter((content) => content.type === "text")
+    .map((content) => content.text)
+    .join("\n");
+  if (output.length === 0) {
+    return result.content.some((content) => content.type === "image")
+      ? theme.fg("muted", "[image output omitted]")
+      : "";
+  }
+
+  const lines = output.split("\n");
+  const visibleLines = lines
+    .slice(0, TRANSCRIPT_TOOL_PREVIEW_LINES)
+    .map((line) =>
+      theme.fg("toolOutput", truncateLine(line, TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS).text),
+    );
+  const remaining = lines.length - visibleLines.length;
+  if (remaining > 0) {
+    visibleLines.push(theme.fg("muted", `... (${remaining} more lines)`));
+  }
+  return visibleLines.join("\n");
+}
+
+function createCompactTranscriptToolDefinition(
+  name: string,
+): ToolDefinition<typeof TRANSCRIPT_TOOL_PARAMETERS> {
+  return {
+    name,
+    label: name,
+    description: "Read-only transcript preview",
+    parameters: TRANSCRIPT_TOOL_PARAMETERS,
+    async execute() {
+      throw new Error("Transcript previews cannot execute tools.");
+    },
+    renderCall(args, theme) {
+      const argumentsText = compactToolArguments(args);
+      const title = theme.fg("toolTitle", theme.bold(name));
+      return new Text(
+        argumentsText.length === 0 ? title : `${title} ${theme.fg("muted", argumentsText)}`,
+        0,
+        0,
+      );
+    },
+    renderResult(result, _options, theme) {
+      return new Text(compactToolOutput(result, theme), 0, 0);
+    },
+  };
+}
+
+// pi-subagents expands live tools and snapshots have no renderer, so both paths
+// need a bounded definition before TranscriptContent builds the overlay.
+export function compactSubagentTranscriptSource(
+  source: SubagentTranscriptSource,
+): SubagentTranscriptSource {
+  const definitions = new Map<string, ToolDefinition>();
+  return {
+    getMessages: () => source.getMessages(),
+    subscribe: (onChange) => source.subscribe(onChange),
+    streaming: () => source.streaming(),
+    getToolDefinition: (name) => {
+      const existing = definitions.get(name);
+      if (existing !== undefined) return existing;
+      const definition = createCompactTranscriptToolDefinition(name);
+      definitions.set(name, definition);
+      return definition;
+    },
+  };
 }
 
 function getSubagentsService(): SubagentsService | undefined {
@@ -473,13 +566,14 @@ export async function openSubagentSession(
 
   try {
     const { navigation, navigator } = await loadSessionNavigator();
-    let source: unknown;
+    let source: SubagentTranscriptSource;
     if (hasLiveSession) {
       source = navigation.liveSource(liveRecord);
     } else {
       if (outputFile === undefined) return;
       source = navigation.fileSnapshotSource(outputFile, (path) => readFileSync(path, "utf8"));
     }
+    source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
     await ctx.ui.custom<undefined>(
       (tui, theme, _keybindings, done) =>

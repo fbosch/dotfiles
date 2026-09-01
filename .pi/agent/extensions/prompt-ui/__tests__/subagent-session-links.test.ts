@@ -17,6 +17,7 @@ import {
   TuiAltScreen,
 } from "@earendil-works/pi-tui";
 import {
+  compactSubagentTranscriptSource,
   installSubagentSessionUrlHandler,
   installSubagentTerminalLinkFilter,
   installSubagentToolLinks,
@@ -331,6 +332,51 @@ describe("subagent session links", () => {
 
     expect(patchableTui.openUrl).toBe(newerOpenUrl);
     expect(patchableTui[tuiUrlPatch]).toBe(newerState);
+  });
+
+  test("bounds tool output even when the transcript requests expanded rendering", () => {
+    const source = compactSubagentTranscriptSource({
+      getMessages: () => [],
+      subscribe: () => undefined,
+      streaming: () => undefined,
+      getToolDefinition: () => undefined,
+    });
+    const definition = source.getToolDefinition("read");
+    const renderResult = definition?.renderResult;
+    if (renderResult === undefined) throw new Error("Missing compact transcript renderer");
+
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+    } as Theme;
+    const context: Parameters<typeof renderResult>[3] = {
+      args: {},
+      toolCallId: "tool-call-1",
+      invalidate: () => {},
+      lastComponent: undefined,
+      state: {},
+      cwd: process.cwd(),
+      executionStarted: true,
+      argsComplete: true,
+      isPartial: false,
+      expanded: true,
+      showImages: false,
+      isError: false,
+    };
+    const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
+
+    const rendered = renderResult(
+      { content: [{ type: "text", text: output }], details: {} },
+      { expanded: true, isPartial: false },
+      theme,
+      context,
+    )
+      .render(80)
+      .join("\n");
+
+    expect(rendered).toContain("line 5");
+    expect(rendered).not.toContain("line 6");
+    expect(rendered).toContain("... (3 more lines)");
   });
 
   test("opens the clicked transcript directly without invoking a picker", async () => {

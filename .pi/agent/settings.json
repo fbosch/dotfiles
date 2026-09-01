@@ -54,12 +54,57 @@
             ".jsx",
             ".json",
             ".jsonc",
-            ".md",
-            ".mdx",
             ".ts",
-            ".tsx",
+            ".tsx"
+          ]
+        },
+        "commands": [
+          {
+            "command": "biome",
+            "args": [
+              "format",
+              "--write",
+              "$FILE"
+            ],
+            "requireRootMarker": true,
+            "rootMarkers": [
+              "biome.json",
+              "biome.jsonc"
+            ]
+          },
+          {
+            "command": "prettier",
+            "args": [
+              "--write",
+              "$FILE"
+            ]
+          }
+        ]
+      },
+      "markdown": {
+        "mode": "pipeline",
+        "files": {
+          "extensions": [
+            ".md",
             ".yaml",
             ".yml"
+          ]
+        },
+        "commands": [
+          {
+            "command": "prettier",
+            "args": [
+              "--write",
+              "$FILE"
+            ]
+          }
+        ]
+      },
+      "mdx": {
+        "mode": "first_available",
+        "files": {
+          "extensions": [
+            ".mdx"
           ]
         },
         "commands": [

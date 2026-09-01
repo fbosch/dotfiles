@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import askUserQuestion, { type AskUserQuestionResultDetails } from "../ask-user-question";
 
 interface QuestionParams {
@@ -51,6 +52,37 @@ function createContext(options: {
       input: async () => inputAnswers.shift(),
       notify: () => undefined,
       select: async () => selections.shift(),
+    },
+  } as unknown as ExtensionContext;
+}
+
+function createInlineContext(
+  interact: (component: Component, rendered: string[]) => void,
+): ExtensionContext {
+  return {
+    hasUI: true,
+    mode: "tui",
+    ui: {
+      custom: async (
+        factory: (
+          tui: { requestRender(): void },
+          theme: { fg(color: string, text: string): string },
+          keybindings: object,
+          done: (value: unknown) => void,
+        ) => Component,
+        options: { overlay?: boolean },
+      ) => {
+        expect(options).toEqual({ overlay: false });
+        return new Promise((resolve) => {
+          const component = factory(
+            { requestRender: () => undefined },
+            { fg: (_color, text) => text },
+            {},
+            resolve,
+          );
+          interact(component, component.render(80));
+        });
+      },
     },
   } as unknown as ExtensionContext;
 }
@@ -108,6 +140,82 @@ describe("ask_user_question", () => {
       undefined,
       createContext({
         selections: ["[ ] 2. Blue", "[ ] 1. Red", "Submit (2 selected)"],
+      }),
+    );
+
+    expect(result.details.answers).toEqual([
+      { type: "option", label: "Red", value: "red", index: 1 },
+      { type: "option", label: "Blue", value: "blue", index: 2 },
+    ]);
+  });
+
+  test("renders single-select questions as an inline permission-style prompt", async () => {
+    const result = await registerQuestionTool().execute(
+      "call-inline-1",
+      {
+        question: "Choose a color",
+        details: "This controls the accent.",
+        options: [
+          { label: "Red", value: "red" },
+          { label: "Blue", value: "blue", description: "Cooler" },
+        ],
+      },
+      undefined,
+      undefined,
+      createInlineContext((component, rendered) => {
+        expect(rendered).toContain("Choose a color");
+        expect(rendered).toContain("This controls the accent.");
+        expect(rendered).toContain("▶ 1. Red");
+        expect(rendered).toContain("↑/↓ move · enter select · esc cancel");
+        component.handleInput?.("j");
+        component.handleInput?.("\r");
+      }),
+    );
+
+    expect(result.details.answers).toEqual([
+      { type: "option", label: "Blue", value: "blue", index: 2 },
+    ]);
+  });
+
+  test("collects free-form input from the inline prompt", async () => {
+    const result = await registerQuestionTool().execute(
+      "call-inline-text",
+      { question: "What should this be called?" },
+      undefined,
+      undefined,
+      createInlineContext((component, rendered) => {
+        expect(rendered).toContain("Answer:");
+        expect(rendered).toContain("enter submit · esc cancel");
+        for (const character of "clear name") component.handleInput?.(character);
+        component.handleInput?.("\r");
+      }),
+    );
+
+    expect(result.details.answers).toEqual([
+      { type: "text", label: "clear name", value: "clear name" },
+    ]);
+  });
+
+  test("toggles and submits multiple choices from the inline prompt", async () => {
+    const result = await registerQuestionTool().execute(
+      "call-inline-2",
+      {
+        question: "Choose colors",
+        options: [
+          { label: "Red", value: "red" },
+          { label: "Blue", value: "blue" },
+        ],
+        multiSelect: true,
+      },
+      undefined,
+      undefined,
+      createInlineContext((component) => {
+        component.handleInput?.("\r");
+        component.handleInput?.("j");
+        component.handleInput?.("\r");
+        component.handleInput?.("j");
+        component.handleInput?.("j");
+        component.handleInput?.("\r");
       }),
     );
 

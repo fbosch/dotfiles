@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import {
   type ExtensionContext,
   type ExtensionFactory,
@@ -63,12 +64,13 @@ export function createFormatterExtension(
       const path = mutationPath(event);
       const currentSettings = settings;
       if (path === undefined || currentSettings === undefined) return undefined;
+      const filePath = resolve(context.cwd, path);
 
-      const warnings = await serialize(path, () =>
+      const warnings = await serialize(filePath, () =>
         formatFile({
           cwd: context.cwd,
           execute: (command, args, options) => pi.exec(command, args, options),
-          filePath: path,
+          filePath,
           settings: currentSettings,
           ...(dependencies.commandAvailable === undefined
             ? {}

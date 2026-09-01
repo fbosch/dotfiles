@@ -3,7 +3,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { type Component, Input, matchesKey, Text, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 interface AskOption {
   label: string;
@@ -166,6 +166,258 @@ function getSharedUILock(): SharedUILock {
 }
 
 const sharedUILock = getSharedUILock();
+
+interface QuestionPromptTheme {
+  fg(color: string, text: string): string;
+}
+
+type QuestionPromptStep = "choices" | "input";
+
+class QuestionPromptComponent implements Component {
+  private highlightedIndex = 0;
+  private readonly selectedOptions = new Map<number, OptionAnswer>();
+  private customAnswer: OtherAnswer | undefined;
+  private step: QuestionPromptStep;
+  private input: Input;
+  private error: string | undefined;
+
+  constructor(
+    private readonly theme: QuestionPromptTheme,
+    private readonly question: string,
+    private readonly context: string | undefined,
+    private readonly mode: AskUserQuestionMode,
+    private readonly options: AskOption[],
+    private readonly requestRender: () => void,
+    private readonly done: (answers: AskAnswer[] | undefined) => void,
+  ) {
+    this.step = mode === "text" ? "input" : "choices";
+    this.input = this.createInput();
+  }
+
+  invalidate(): void {
+    // Rendering is derived directly from the current prompt state.
+  }
+
+  render(width: number): string[] {
+    const lines = this.renderHeader(width);
+    if (this.step === "input") {
+      const label = this.mode === "text" ? "Answer:" : "Custom answer:";
+      lines.push(label, ...this.input.render(width));
+      if (this.error !== undefined) lines.push(this.theme.fg("error", this.error));
+      lines.push("");
+      lines.push(
+        this.theme.fg(
+          "muted",
+          this.mode === "text" ? "enter submit · esc cancel" : "enter save · esc back",
+        ),
+      );
+      return lines;
+    }
+
+    const rows = this.choiceRows();
+    for (const [index, row] of rows.entries()) {
+      const marker = index === this.highlightedIndex ? "▶" : " ";
+      const text = `${marker} ${row}`;
+      const painted = index === this.highlightedIndex ? this.theme.fg("accent", text) : text;
+      lines.push(...wrapTextWithAnsi(painted, width));
+    }
+    if (this.error !== undefined) lines.push(this.theme.fg("error", this.error));
+    lines.push("");
+    lines.push(
+      this.theme.fg(
+        "muted",
+        this.mode === "multi-select"
+          ? "↑/↓ move · enter toggle · esc cancel"
+          : "↑/↓ move · enter select · esc cancel",
+      ),
+    );
+    return lines;
+  }
+
+  handleInput(data: string): void {
+    if (this.step === "input") {
+      this.input.handleInput(data);
+      this.requestRender();
+      return;
+    }
+    if (matchesKey(data, "up") || matchesKey(data, "k")) {
+      this.moveHighlight(-1);
+      return;
+    }
+    if (matchesKey(data, "down") || matchesKey(data, "j")) {
+      this.moveHighlight(1);
+      return;
+    }
+    if (matchesKey(data, "enter")) {
+      this.chooseHighlighted();
+      return;
+    }
+    if (matchesKey(data, "escape")) this.done(undefined);
+  }
+
+  private createInput(value = ""): Input {
+    const input = new Input();
+    input.focused = true;
+    input.setValue(value);
+    input.onSubmit = (answer) => this.submitInput(answer);
+    input.onEscape = () => this.cancelInput();
+    return input;
+  }
+
+  private renderHeader(width: number): string[] {
+    const lines = wrapTextWithAnsi(this.theme.fg("accent", this.question), width);
+    if (this.context !== undefined) {
+      lines.push("", ...wrapTextWithAnsi(this.context, width));
+    }
+    lines.push("");
+    return lines;
+  }
+
+  private choiceRows(): string[] {
+    const rows = this.options.map((option, index) => {
+      const description = option.description === undefined ? "" : ` — ${option.description}`;
+      const checked =
+        this.mode === "multi-select" ? (this.selectedOptions.has(index) ? "[x] " : "[ ] ") : "";
+      return `${checked}${index + 1}. ${option.label}${description}`;
+    });
+    const custom = this.customAnswer === undefined ? "" : ` — ${this.customAnswer.label}`;
+    const checked =
+      this.mode === "multi-select" ? (this.customAnswer === undefined ? "[ ] " : "[x] ") : "";
+    rows.push(`${checked}${otherLabel(this.options)}${custom}`);
+    if (this.mode === "multi-select") {
+      rows.push(`Submit (${this.answerCount()} selected)`);
+    }
+    return rows;
+  }
+
+  private moveHighlight(direction: -1 | 1): void {
+    const count = this.choiceRows().length;
+    this.highlightedIndex = (this.highlightedIndex + direction + count) % count;
+    this.error = undefined;
+    this.requestRender();
+  }
+
+  private chooseHighlighted(): void {
+    this.error = undefined;
+    if (this.highlightedIndex < this.options.length) {
+      this.chooseOption(this.highlightedIndex);
+      return;
+    }
+    if (this.highlightedIndex === this.options.length) {
+      this.step = "input";
+      this.input = this.createInput(this.customAnswer?.label);
+      this.requestRender();
+      return;
+    }
+    if (this.answerCount() === 0) {
+      this.error = "Select at least one answer before submitting.";
+      this.requestRender();
+      return;
+    }
+
+    const answers: AskAnswer[] = [...this.selectedOptions.values()].sort(
+      (left, right) => left.index - right.index,
+    );
+    if (this.customAnswer !== undefined) answers.push(this.customAnswer);
+    this.done(answers);
+  }
+
+  private chooseOption(index: number): void {
+    const option = this.options[index];
+    if (option === undefined) return;
+    const answer: OptionAnswer = {
+      type: "option",
+      label: option.label,
+      value: option.value,
+      index: index + 1,
+    };
+    if (this.mode === "single-select") {
+      this.done([answer]);
+      return;
+    }
+    if (this.selectedOptions.has(index)) {
+      this.selectedOptions.delete(index);
+    } else {
+      this.selectedOptions.set(index, answer);
+    }
+    this.requestRender();
+  }
+
+  private submitInput(answer: string): void {
+    const trimmed = answer.trim();
+    if (this.mode === "text") {
+      this.done([{ type: "text", label: trimmed, value: trimmed }]);
+      return;
+    }
+    if (this.mode === "single-select" && trimmed.length === 0) {
+      this.error = "Enter a custom answer or press escape to return to the choices.";
+      this.requestRender();
+      return;
+    }
+
+    this.customAnswer =
+      trimmed.length === 0 ? undefined : { type: "other", label: trimmed, value: trimmed };
+    if (this.mode === "single-select") {
+      this.done(this.customAnswer === undefined ? undefined : [this.customAnswer]);
+      return;
+    }
+    this.step = "choices";
+    this.error = undefined;
+    this.requestRender();
+  }
+
+  private cancelInput(): void {
+    if (this.mode === "text") {
+      this.done(undefined);
+      return;
+    }
+    this.step = "choices";
+    this.error = undefined;
+    this.requestRender();
+  }
+
+  private answerCount(): number {
+    return this.selectedOptions.size + (this.customAnswer === undefined ? 0 : 1);
+  }
+}
+
+async function askInline(
+  ctx: ExtensionContext,
+  question: string,
+  context: string | undefined,
+  mode: AskUserQuestionMode,
+  options: AskOption[],
+  signal: AbortSignal | undefined,
+): Promise<AskAnswer[] | undefined> {
+  if (isAborted(signal)) return undefined;
+
+  return ctx.ui.custom<AskAnswer[] | undefined>(
+    (tui, theme, _keybindings, done) => {
+      let finished = false;
+      const finish = (answers: AskAnswer[] | undefined) => {
+        if (finished) return;
+        finished = true;
+        signal?.removeEventListener("abort", handleAbort);
+        done(answers);
+      };
+      const handleAbort = () => finish(undefined);
+      signal?.addEventListener("abort", handleAbort, { once: true });
+
+      const component = new QuestionPromptComponent(
+        theme,
+        question,
+        context,
+        mode,
+        options,
+        () => tui.requestRender(),
+        finish,
+      );
+      if (signal?.aborted === true) queueMicrotask(handleAbort);
+      return component;
+    },
+    { overlay: false },
+  );
+}
 
 function isAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
@@ -416,6 +668,12 @@ export default function askUserQuestion(pi: ExtensionAPI): void {
         if (ctx.hasUI === false) return unavailableResult(params.question, mode, context);
 
         const result = await sharedUILock.withLock(async () => {
+          if (ctx.mode === "tui") {
+            const answers = await askInline(ctx, params.question, context, mode, options, signal);
+            if (answers === undefined) return cancelledResult(params.question, mode, context);
+            return answeredResult(params.question, mode, answers, context);
+          }
+
           const title = questionTitle(params.question, context);
           if (mode === "text") {
             const dialogOptions = signal === undefined ? undefined : { signal };
