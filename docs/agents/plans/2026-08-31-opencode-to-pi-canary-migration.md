@@ -244,15 +244,17 @@ Add `pi-mcp-adapter@2.31.0` with proxy-only discovery:
 ```
 
 Start with one pinned, read-only MCP server. Do not import the complete OpenCode
-Toolbox configuration. Add Context7, Exa, GitHub, ast-grep, Serena, and
-chrome-devtools separately only after each preceding server passes.
+Toolbox configuration. Add Context7, Exa, GitHub, ast-grep, Serena,
+chrome-devtools, and shared-todo separately only after each preceding server
+passes.
 
 Keep FFF as a Pi package rather than exposing a second FFF implementation
 through MCP.
 
 Acceptance:
 
-- The model sees one MCP proxy tool rather than every server tool.
+- The model sees only adapter proxy schemas rather than every underlying server
+  tool schema.
 - The server starts lazily.
 - Read-only calls work.
 - Mutating MCP tools remain approval-gated.
@@ -262,23 +264,46 @@ Rollback:
 
 - Remove the adapter package or the individual server declaration.
 
-Context7 MCP canary outcome on 2026-09-01:
+MCP parity canary outcome on 2026-09-01:
 
 - Installed and pinned `pi-mcp-adapter@2.31.0` with package skills disabled.
   npm reported zero vulnerabilities and no additional install scripts were
   approved.
-- Configured `directTools: false`, `hostConfigDiscovery: "off"`, and
-  `scriptMode: false`. Pi exposed one MCP tool, `mcp`, and did not expose
-  `mcpScript` or individual server tools.
-- Added only Context7, running under rootless Podman with a read-only
+- Configured `directTools: false`, `hostConfigDiscovery: "off"`,
+  `scriptMode: false`, and `mcpFooterStatus: "off"`. Pi exposes the global
+  `mcp` proxy plus one lightweight namespace proxy per cached server; it does
+  not expose `mcpScript` or any individual server tool schema.
+- Started with only Context7, running under rootless Podman with a read-only
   filesystem, all capabilities dropped, and `no-new-privileges`.
 - Pinned the multi-architecture Context7 image to
   `sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836`.
   Cosign verified the image against Docker's MCP public key and transparency
   log.
-- Confirmed the merged adapter configuration contains only the Context7 server
-  and keeps host-specific discovery off.
-- Confirmed an idle Pi session does not start the lazy Context7 container.
+- Added GitHub, Context7, Exa, Serena, ast-grep, Chrome DevTools, and shared-todo.
+  The merged configuration contains only these seven explicit servers and keeps
+  host-specific discovery off.
+- Pinned Exa and ast-grep to Cosign-verified Docker MCP index digests. Pinned
+  Serena to its stable `v1.7.0` image digest and Playwright to its `v1.57.0`
+  image digest. GitHub remains supplied by the Nix-managed `gh 2.98.0`, whose
+  bundled MCP server reports `1.10.1`.
+- Confirmed all seven servers connect lazily and cache 112 tool definitions:
+  GitHub 44, Context7 2, Exa 2, Serena 29, ast-grep 1, Chrome DevTools 29, and
+  shared-todo 5.
+- Confirmed an ast-grep structural search succeeds against the read-only
+  workspace mount.
+- Confirmed GitHub and the other mutation-capable servers remain protected by
+  adapter-level approval in addition to Pi's outer permission prompt.
+- Exa catalog discovery works, but execution remains blocked until
+  `EXA_API_KEY` is present in the Pi process environment.
+- Chrome DevTools retains OpenCode's exact `chrome-devtools-mcp@1.2.0` behavior.
+  Its package is exact-version pinned, but it is fetched into an ephemeral
+  container at startup and its Puppeteer version does not officially match the
+  pinned Playwright Chromium revision.
+- Kept FFF as Pi's native package instead of duplicating its MCP server. Kept
+  the OpenCode socket-bound Neovim MCP and hidden `ai_pointer_exa` duplicate out
+  of Pi; they are not portable shared MCP capabilities.
+- Confirmed an idle Pi session starts no additional MCP containers. Containers
+  started for metadata discovery stop when the session exits.
 - Confirmed normal headless use fails closed with `approval required` before an
   MCP call runs.
 - Loaded only the adapter for functional isolation and resolved Bun to

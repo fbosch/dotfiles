@@ -9,7 +9,9 @@
   "mcpServers": {
     "github": {
       "command": "gh",
-      "args": ["mcp"],
+      "args": [
+        "mcp"
+      ],
       "lifecycle": "lazy",
       "directTools": false,
       "exposeResources": false,
