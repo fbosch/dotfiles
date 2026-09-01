@@ -1,7 +1,7 @@
 /**
  * Vendored from @nanstey/pi-auth-profiles@0.1.1.
  * npm integrity: sha512-AMg/Xl5KVcuLTs2ig+dQx27Q3iKRd3+vae07yIfNzpf1dCcyQ7V8a3EKwvWrbwhTQjK6/+Z63wNgaeI1W4auYA==
- * Local changes: repository formatting and type-safety guards only.
+ * Local changes: repository formatting, type-safety guards, and active-profile status publishing.
  * License: MIT; see LICENSE in this directory.
  */
 
@@ -34,6 +34,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_PROFILE = "default";
+const PROFILE_STATUS_KEY = "auth-profile";
 
 const profilesDir = () => join(getAgentDir(), "auth-profiles");
 const globalConfigPath = () => join(getAgentDir(), "auth-profiles.json");
@@ -158,11 +159,12 @@ export default function authProfiles(pi: ExtensionAPI): void {
   let activeProfile = DEFAULT_PROFILE;
 
   const rebind = async (
-    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">,
+    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "ui">,
   ) => {
     const { profile, source } = resolveProfile(ctx);
     const path = await bindProfile(ctx, profile);
     activeProfile = profile;
+    ctx.ui.setStatus(PROFILE_STATUS_KEY, profile);
     return { profile, source, path };
   };
 

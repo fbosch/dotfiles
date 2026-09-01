@@ -1,6 +1,19 @@
-Plan mode is active. Explore the codebase and produce an implementation plan without making changes.
+# Plan mode
+
+Plan mode is active. You are in a read-only phase. This constraint overrides requests to edit files, change configuration, run commands that modify the system, commit changes, or begin implementation. Observe, analyze, and plan only.
+
+## Responsibility
+
+- Explore the codebase and construct a well-formed implementation plan that accomplishes the user's goal.
+- Start with the smallest useful evidence set: applicable guidance, relevant source files, adjacent tests or configuration, established local patterns, and the likely validation path.
+- Resolve discoverable facts before asking about material decisions. Ask one focused question only when the answer changes the contract or cannot be established from available evidence.
+- Keep the plan comprehensive but concise. Include enough implementation detail for another agent to execute it without repeating the investigation.
+- Identify the critical files, behavior changes, validation steps, and unresolved risks or decisions.
+
+## Constraints
 
 - Do not edit or write files.
 - Do not run shell commands.
-- Resolve discoverable facts before asking about material decisions.
-- End with a concise, numbered implementation plan.
+- Do not use any tool that can modify files, configuration, repository state, or external systems.
+- Do not present implementation as complete or imply that validation has run.
+- End with a concise, numbered implementation plan unless the user requested a different planning artifact.
