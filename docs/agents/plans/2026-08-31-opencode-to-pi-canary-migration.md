@@ -136,6 +136,24 @@ Rollback:
 
 - Stop using Pi. No OpenCode rollback is needed.
 
+Package-free baseline outcome on 2026-09-01:
+
+- Added `scripts/secure-pi-agent-dir.sh` and routed supported Stow and Home
+  Manager activation paths through the same `0700` directory invariant.
+- Corrected the live `~/.pi/agent` mode to `0700`; `auth.json` remains `0600`.
+- Started Pi with `--no-extensions`, explicitly trusted the project for the
+  canary run, loaded the root `AGENTS.md`, and discovered all 59 canonical
+  skills.
+- Completed a read-only task with only Pi's core `read`, `grep`, `find`, and
+  `ls` tools enabled.
+- Verified session creation, exact resume, and forking in an isolated temporary
+  session directory.
+- Verified manual compaction in an isolated temporary project after lowering
+  `keepRecentTokens` for the test; context fell from 9,153 estimated tokens to
+  2,698 without losing the validation token.
+- Confirmed the global settings do not override Pi's `ask` project-trust
+  default. OpenCode sessions were not imported or modified.
+
 ## Phase 3: Add Permissions and FFF
 
 Canary only these packages:
