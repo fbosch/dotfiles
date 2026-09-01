@@ -1,10 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { parseMcpResponse, searchWeb, selectWebSearchProvider } from "../websearch";
+import {
+  parseMcpResponse,
+  searchWeb,
+  selectProviderForSearch,
+  selectWebSearchProvider,
+} from "../websearch";
 
 describe("websearch", () => {
   test("honors an explicit provider override", () => {
     expect(selectWebSearchProvider("session", "exa")).toBe("exa");
     expect(selectWebSearchProvider("session", "parallel")).toBe("parallel");
+    expect(() => selectWebSearchProvider("session", "paralell")).toThrow(
+      "Invalid web search provider",
+    );
+    expect(selectProviderForSearch({ query: "topic", type: "deep" }, "session")).toBe("exa");
   });
 
   test("parses JSON and server-sent event MCP responses", () => {
@@ -13,6 +22,16 @@ describe("websearch", () => {
     expect(parseMcpResponse(`event: message\ndata: ${JSON.stringify(payload)}\n\n`)).toBe(
       "search result",
     );
+    expect(
+      parseMcpResponse(
+        'data: {"jsonrpc":"2.0",\ndata: "id":1,"result":{"content":[{"type":"text","text":"split"}]}}\n\n',
+      ),
+    ).toBe("split");
+    expect(() =>
+      parseMcpResponse(
+        JSON.stringify({ result: { isError: true, content: [{ type: "text", text: "failed" }] } }),
+      ),
+    ).toThrow("failed");
   });
 
   test("calls Exa using the OpenCode search contract", async () => {
@@ -78,5 +97,35 @@ describe("websearch", () => {
         },
       },
     });
+  });
+
+  test("returns a complete event-stream result without waiting for EOF", async () => {
+    const encoder = new TextEncoder();
+    const fetchFn = async () => {
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              `data: ${JSON.stringify({ jsonrpc: "2.0", id: 1, result: { content: [{ type: "text", text: "streamed" }] } })}\n\n`,
+            ),
+          );
+        },
+      });
+      return new Response(body, { headers: { "Content-Type": "text/event-stream" } });
+    };
+
+    await expect(
+      searchWeb({ query: "stream" }, { provider: "parallel", sessionId: "session", fetchFn }),
+    ).resolves.toBe("streamed");
+  });
+
+  test("rejects oversized provider responses", async () => {
+    const fetchFn = async () => {
+      return new Response("small", { headers: { "Content-Length": String(2 * 1024 * 1024) } });
+    };
+
+    await expect(
+      searchWeb({ query: "large" }, { provider: "exa", sessionId: "session", fetchFn }),
+    ).rejects.toThrow("response too large");
   });
 });

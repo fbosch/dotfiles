@@ -2,6 +2,8 @@
 color: "#b7d6f5"
 description: Triage GitHub PR review feedback, validate claims against the code, apply confirmed fixes, and resolve explicitly approved threads.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 max_turns: 24
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, mcp__github
 permission:

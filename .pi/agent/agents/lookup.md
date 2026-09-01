@@ -2,6 +2,8 @@
 color: "#5B9BD5"
 description: Quickly retrieves narrow, source-backed online references without making changes
 prompt_mode: replace
+model: openai-codex/gpt-5.6-luna
+thinking: low
 tools: websearch, webfetch, mcp__context7, mcp__exa
 permission:
   "*": deny

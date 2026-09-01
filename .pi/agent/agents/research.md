@@ -2,6 +2,8 @@
 color: "#ae87ed"
 description: Gathers information from docs, web, and codebases without making changes
 prompt_mode: replace
+model: openai-codex/gpt-5.6-sol
+thinking: high
 tools: read, grep, find, ls, fffind, ffgrep, bash, websearch, webfetch, mcp__context7, mcp__github, mcp__exa
 permission:
   "*": deny

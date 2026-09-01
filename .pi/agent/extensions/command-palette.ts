@@ -7,7 +7,7 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
-  Container,
+  Box,
   getKeybindings,
   Input,
   type SelectItem,
@@ -35,7 +35,8 @@ interface PaletteLevel {
 }
 
 const PALETTE_WIDTH = 72;
-const MAX_VISIBLE_ITEMS = 10;
+const MAX_VISIBLE_ITEMS = 15;
+const PALETTE_FIXED_ROWS = 9;
 
 function isCommandContext(ctx: ExtensionContext): ctx is ExtensionCommandContext {
   return "newSession" in ctx;
@@ -51,7 +52,7 @@ function selectListTheme(theme: Theme) {
   };
 }
 
-class CommandPalette extends Container {
+class CommandPalette extends Box {
   private readonly levels: PaletteLevel[] = [];
   private readonly tui: TUI;
   private readonly theme: Theme;
@@ -64,7 +65,7 @@ class CommandPalette extends Container {
     items: PaletteItem[],
     done: (action: PaletteAction | null) => void,
   ) {
-    super();
+    super(1, 0, (text) => theme.bg("selectedBg", text));
     this.tui = tui;
     this.theme = theme;
     this.done = done;
@@ -140,7 +141,7 @@ class CommandPalette extends Container {
         label: item.label,
         description: item.description,
       })),
-      MAX_VISIBLE_ITEMS,
+      Math.max(5, Math.min(MAX_VISIBLE_ITEMS, this.tui.terminal.rows - PALETTE_FIXED_ROWS)),
       selectListTheme(this.theme),
       { minPrimaryColumnWidth: 18, maxPrimaryColumnWidth: 32 },
     );
@@ -252,6 +253,29 @@ function toolItems(pi: ExtensionAPI): PaletteItem[] {
   });
 }
 
+function themeItems(ctx: ExtensionContext): PaletteItem[] {
+  return ctx.ui.getAllThemes().map(({ name }) => ({
+    id: `theme:${name}`,
+    label: name,
+    description: "Apply theme",
+    action: () => {
+      const result = ctx.ui.setTheme(name);
+      if (result.success === false) {
+        ctx.ui.notify(result.error ?? `Could not apply ${name}`, "warning");
+      }
+    },
+  }));
+}
+
+function commandItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
+  return pi.getCommands().map((command) => ({
+    id: `command:${command.name}`,
+    label: `/${command.name}`,
+    description: command.description ?? command.source,
+    action: () => ctx.ui.setEditorText(`/${command.name} `),
+  }));
+}
+
 async function sessionItems(ctx: ExtensionCommandContext): Promise<PaletteItem[]> {
   const sessions = await SessionManager.list(ctx.cwd);
   return sessions
@@ -292,6 +316,34 @@ function rootItems(ctx: ExtensionContext, pi: ExtensionAPI): PaletteItem[] {
       label: "Toggle Tool",
       description: "Enable or disable a tool",
       children: () => toolItems(pi),
+    },
+    {
+      id: "theme",
+      label: "Select Theme",
+      description: "Switch the active theme",
+      children: () => themeItems(ctx),
+    },
+    {
+      id: "tool-output",
+      label: "Toggle Tool Output",
+      description: "Expand or collapse tool results",
+      action: () => ctx.ui.setToolsExpanded(ctx.ui.getToolsExpanded() === false),
+    },
+    {
+      id: "session-info",
+      label: "Session Info",
+      description: "Show the current session name and ID",
+      action: () => {
+        const sessionId = ctx.sessionManager.getSessionId();
+        const sessionName = ctx.sessionManager.getSessionName();
+        ctx.ui.notify(`${sessionName ?? "Unnamed session"}\n${sessionId}`, "info");
+      },
+    },
+    {
+      id: "commands",
+      label: "Insert Command",
+      description: "Place an available slash command in the prompt",
+      children: () => commandItems(ctx, pi),
     },
   ];
 
@@ -344,9 +396,8 @@ async function showPalette(ctx: ExtensionContext, pi: ExtensionAPI) {
     {
       overlay: true,
       overlayOptions: {
-        anchor: "top-center",
+        anchor: "center",
         width: PALETTE_WIDTH,
-        margin: { top: 3 },
         nonCapturing: true,
       },
       onHandle: (handle) => handle.focus(),

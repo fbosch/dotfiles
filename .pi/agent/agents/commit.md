@@ -1,6 +1,8 @@
 ---
 description: Minimal agent for commit message generation — no provider system prompt, no tools
 prompt_mode: replace
+model: openai-codex/gpt-5.6-luna-fast
+thinking: off
 tools: none
 permission:
   "*": deny

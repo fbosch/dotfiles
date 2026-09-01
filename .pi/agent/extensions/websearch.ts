@@ -8,6 +8,7 @@ import { Text } from "@earendil-works/pi-tui";
 const EXA_URL = "https://mcp.exa.ai/mcp";
 const PARALLEL_URL = "https://search.parallel.ai/mcp";
 const SEARCH_TIMEOUT_MS = 25_000;
+const MAX_SEARCH_RESPONSE_SIZE = 1024 * 1024;
 
 export type WebSearchProvider = "exa" | "parallel";
 export type WebSearchType = "auto" | "fast" | "deep";
@@ -45,6 +46,7 @@ const WebSearchParamsSchema = {
       "~kind": "String" as const,
       type: "string" as const,
       minLength: 1,
+      maxLength: 10_000,
       description: "Web search query.",
     },
     numResults: {
@@ -99,16 +101,38 @@ export function selectWebSearchProvider(
   override = process.env.PI_WEBSEARCH_PROVIDER ?? process.env.OPENCODE_WEBSEARCH_PROVIDER,
 ): WebSearchProvider {
   if (override === "exa" || override === "parallel") return override;
+  if (override !== undefined && override.length > 0) {
+    throw new Error(`Invalid web search provider: ${override}`);
+  }
   return stableParity(sessionId) % 2 === 0 ? "exa" : "parallel";
 }
 
-function parseMcpPayload(value: unknown): string | undefined {
+export function selectProviderForSearch(
+  params: WebSearchParams,
+  sessionId: string,
+): WebSearchProvider {
+  if (
+    params.numResults !== undefined ||
+    params.livecrawl !== undefined ||
+    params.type !== undefined ||
+    params.contextMaxCharacters !== undefined
+  ) {
+    return "exa";
+  }
+  return selectWebSearchProvider(sessionId);
+}
+
+function parseMcpPayload(value: unknown, expectedId = 1): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
 
   const envelope = value as {
+    jsonrpc?: unknown;
+    id?: unknown;
     error?: { message?: unknown };
-    result?: { content?: unknown };
+    result?: { content?: unknown; isError?: unknown };
   };
+  if (envelope.jsonrpc !== undefined && envelope.jsonrpc !== "2.0") return undefined;
+  if (envelope.id !== undefined && envelope.id !== expectedId) return undefined;
   if (envelope.error !== undefined) {
     const message = envelope.error.message;
     throw new Error(
@@ -117,12 +141,17 @@ function parseMcpPayload(value: unknown): string | undefined {
   }
 
   if (!Array.isArray(envelope.result?.content)) return undefined;
+  const texts: string[] = [];
   for (const item of envelope.result.content) {
     if (typeof item !== "object" || item === null) continue;
-    const text = (item as { text?: unknown }).text;
-    if (typeof text === "string" && text.length > 0) return text;
+    const content = item as { type?: unknown; text?: unknown };
+    if (content.type !== undefined && content.type !== "text") continue;
+    if (typeof content.text === "string" && content.text.length > 0) texts.push(content.text);
   }
-  return undefined;
+  if (texts.length === 0) return undefined;
+  const text = texts.join("\n\n");
+  if (envelope.result.isError === true) throw new Error(text);
+  return text;
 }
 
 function parseJsonPayload(value: string): string | undefined {
@@ -138,13 +167,65 @@ export function parseMcpResponse(body: string): string {
   const direct = parseJsonPayload(body.trim());
   if (direct !== undefined) return direct;
 
-  for (const line of body.split("\n")) {
-    if (!line.startsWith("data:")) continue;
-    const text = parseJsonPayload(line.slice(5).trim());
+  const events = body.replace(/\r\n/g, "\n").split("\n\n");
+  for (const event of events) {
+    const data = event
+      .split("\n")
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trimStart())
+      .join("\n");
+    if (data.length === 0) continue;
+    const text = parseJsonPayload(data);
     if (text !== undefined) return text;
   }
 
   throw new Error("Web search provider returned no readable result");
+}
+
+async function readBoundedResponse(response: Response): Promise<string> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_SEARCH_RESPONSE_SIZE) {
+    await response.body?.cancel();
+    throw new Error("Web search response too large");
+  }
+  if (response.body === null) return "";
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const isEventStream =
+    response.headers.get("content-type")?.includes("text/event-stream") === true;
+  let body = "";
+  let bytes = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    bytes += value.byteLength;
+    if (bytes > MAX_SEARCH_RESPONSE_SIZE) {
+      await reader.cancel();
+      throw new Error("Web search response too large");
+    }
+    body += decoder.decode(value, { stream: true });
+
+    if (response.ok && isEventStream && /\r?\n\r?\n/.test(body)) {
+      try {
+        const result = parseMcpResponse(body);
+        await reader.cancel();
+        return result;
+      } catch (error) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== "Web search provider returned no readable result"
+        ) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  body += decoder.decode();
+  if (response.ok && isEventStream) return parseMcpResponse(body);
+  return body;
 }
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
@@ -182,6 +263,9 @@ export async function searchWeb(params: WebSearchParams, options: SearchOptions)
   if (isParallel && process.env.PARALLEL_API_KEY !== undefined) {
     headers.Authorization = `Bearer ${process.env.PARALLEL_API_KEY}`;
   }
+  if (!isParallel && process.env.EXA_API_KEY !== undefined) {
+    headers["x-api-key"] = process.env.EXA_API_KEY;
+  }
 
   const response = await fetchFn(url, {
     method: "POST",
@@ -193,12 +277,14 @@ export async function searchWeb(params: WebSearchParams, options: SearchOptions)
       params: { name: toolName, arguments: args },
     }),
     signal: requestSignal(options.signal),
+    redirect: "manual",
   });
 
-  const body = await response.text();
+  const body = await readBoundedResponse(response);
   if (!response.ok) {
     throw new Error(`Web search provider returned HTTP ${response.status}: ${body.slice(0, 300)}`);
   }
+  if (response.headers.get("content-type")?.includes("text/event-stream") === true) return body;
   return parseMcpResponse(body);
 }
 
@@ -226,7 +312,7 @@ export default function webSearchExtension(pi: ExtensionAPI): void {
         if (query.length === 0) throw new Error("Web search query must not be empty");
 
         const sessionId = ctx.sessionManager.getSessionId();
-        const provider = selectWebSearchProvider(sessionId);
+        const provider = selectProviderForSearch(params, sessionId);
         const currentModelName = modelName(ctx);
         const result = await searchWeb(
           { ...params, query },

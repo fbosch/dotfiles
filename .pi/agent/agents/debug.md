@@ -2,6 +2,8 @@
 color: "#de7681"
 description: Investigates and diagnoses bugs, errors, and unexpected behavior using bash and file inspection. Use when a bug needs root cause analysis, when logs need examination, or when system state needs to be inspected.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, mcp__chrome_devtools
 permission:
   "*": deny

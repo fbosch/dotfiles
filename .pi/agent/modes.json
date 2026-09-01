@@ -1,6 +1,6 @@
 {
   "build": {
-    "model": "openai-codex/gpt-5.6-luna",
+    "model": "openai-codex/gpt-5.6-luna-fast",
     "prompt": "./prompts/build.txt",
     "thinkingLevel": "xhigh",
     "color": "#66A5AD"

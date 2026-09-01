@@ -2,6 +2,8 @@
 color: "#96bd78"
 description: Writes, runs, and diagnoses tests including unit, integration, edge case, coverage, and regression suites. Use when adding tests, improving coverage, running relevant test suites, or investigating test failures.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny

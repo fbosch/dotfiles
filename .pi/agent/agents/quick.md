@@ -2,6 +2,8 @@
 color: "#e5d784"
 description: Fast, cost-efficient execution for well-scoped tasks and command workflows.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-luna-fast
+thinking: low
 max_turns: 12
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:

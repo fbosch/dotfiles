@@ -2,6 +2,8 @@
 color: "#8ed8c1"
 description: Decomposes rough ideas, specs, and issue text into a structured backlog plan. Use before creating Linear issues or starting implementation.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny

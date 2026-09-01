@@ -2,6 +2,8 @@
 color: "#e36435"
 description: Actively tries to break a proposed design or implementation — failure modes, malicious inputs, stress cases. Use after spec.md, before merging risky changes, or for parsers, CLIs, config loaders, auth, and infra.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-sol
+thinking: high
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny

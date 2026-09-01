@@ -4,7 +4,7 @@ import planMode, { PLAN_MODE_STATUS } from "../plan-mode";
 
 type ToggleHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 
-const buildModel = { provider: "openai-codex", id: "gpt-5.6-luna" };
+const buildModel = { provider: "openai-codex", id: "gpt-5.6-luna-fast" };
 const planModel = { provider: "openai-codex", id: "gpt-5.6-sol" };
 
 function createHarness(options: {

@@ -1,11 +1,15 @@
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
+import { Readable } from "node:stream";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 120;
 const MAX_RESPONSE_SIZE = 5 * 1024 * 1024;
+const MAX_TEXT_CHARACTERS = 200_000;
 const MAX_REDIRECTS = 10;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const SUPPORTED_IMAGE_TYPES = new Set(["image/gif", "image/jpeg", "image/png", "image/webp"]);
@@ -22,12 +26,23 @@ interface WebFetchDetails {
   url: string;
   contentType: string;
   bytes: number;
+  truncated: boolean;
 }
 
-type FetchFunction = (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+interface ValidatedUrl {
+  url: URL;
+  addresses: readonly string[];
+}
+
+type RequestFunction = (
+  url: URL,
+  addresses: readonly string[],
+  headers: Record<string, string>,
+  signal: AbortSignal,
+) => Promise<Response>;
 
 interface FetchDependencies {
-  fetchFn?: FetchFunction;
+  requestFn?: RequestFunction;
   resolveHostname?: (hostname: string) => Promise<readonly string[]>;
 }
 
@@ -92,15 +107,60 @@ function isBlockedIpv4(address: string): boolean {
 }
 
 function isBlockedIpv6(address: string): boolean {
-  const normalized = address.toLowerCase().split("%")[0] ?? "";
-  if (normalized === "::" || normalized === "::1" || normalized.startsWith("::ffff:")) {
+  const words = parseIpv6(address);
+  if (words === undefined) return true;
+  const [first = 0, second = 0, third = 0, fourth = 0, fifth = 0, sixth = 0] = words;
+
+  if (words.every((word) => word === 0)) return true;
+  if (words.slice(0, 7).every((word) => word === 0) && words[7] === 1) return true;
+  if ((first & 0xfe00) === 0xfc00) return true;
+  if ((first & 0xffc0) === 0xfe80 || (first & 0xffc0) === 0xfec0) return true;
+  if ((first & 0xff00) === 0xff00) return true;
+  if (first === 0x100 && second === 0 && third === 0 && fourth === 0) return true;
+  if (first === 0x2001 && (second === 0x2 || second === 0xdb8)) return true;
+  if (first === 0x2002) return true;
+  if (first === 0x64 && second === 0xff9b && third === 0 && fourth === 0 && fifth === 0) {
     return true;
   }
-  if (normalized.startsWith("::")) return true;
-  if (/^f[cd]/.test(normalized) || /^fe[89ab]/.test(normalized)) return true;
-  if (normalized.startsWith("ff")) return true;
-  if (normalized.startsWith("100:")) return true;
-  return normalized.startsWith("2001:2:") || normalized.startsWith("2001:db8:");
+  if (first === 0x64 && second === 0xff9b && third === 1) return true;
+
+  const isMappedIpv4 = words.slice(0, 5).every((word) => word === 0) && sixth === 0xffff;
+  const isCompatibleIpv4 = words.slice(0, 6).every((word) => word === 0);
+  if (!isMappedIpv4 && !isCompatibleIpv4) return false;
+  const high = words[6] ?? 0;
+  const low = words[7] ?? 0;
+  const ipv4 = `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
+  return isBlockedIpv4(ipv4);
+}
+
+function parseIpv6(address: string): number[] | undefined {
+  let normalized = (address.toLowerCase().split("%")[0] ?? "").replace(/^\[|\]$/g, "");
+  const ipv4Match = normalized.match(/(\d+\.\d+\.\d+\.\d+)$/);
+  if (ipv4Match !== null) {
+    const octets = parseIpv4(ipv4Match[1] ?? "");
+    if (octets === undefined) return undefined;
+    const [a = 0, b = 0, c = 0, d = 0] = octets;
+    normalized = normalized.replace(ipv4Match[1] ?? "", `${(a << 8) | b}:${(c << 8) | d}`);
+  }
+
+  const halves = normalized.split("::");
+  if (halves.length > 2) return undefined;
+  const left = halves[0]?.length === 0 ? [] : (halves[0]?.split(":") ?? []);
+  const right = halves[1]?.length === 0 ? [] : (halves[1]?.split(":") ?? []);
+  const missing = 8 - left.length - right.length;
+  if ((halves.length === 1 && missing !== 0) || (halves.length === 2 && missing < 1))
+    return undefined;
+
+  const groups = [...left, ...Array.from({ length: missing }, () => "0"), ...right];
+  const words = groups.map((group) => Number.parseInt(group, 16));
+  if (
+    words.length !== 8 ||
+    groups.some((group) => !/^[\da-f]{1,4}$/i.test(group)) ||
+    words.some((word) => !Number.isInteger(word) || word < 0 || word > 0xffff)
+  ) {
+    return undefined;
+  }
+  return words;
 }
 
 export function isBlockedAddress(address: string): boolean {
@@ -118,7 +178,8 @@ async function defaultResolveHostname(hostname: string): Promise<readonly string
 async function assertPublicUrl(
   value: string | URL,
   resolveHostname: (hostname: string) => Promise<readonly string[]>,
-): Promise<URL> {
+  signal: AbortSignal,
+): Promise<ValidatedUrl> {
   const url = value instanceof URL ? value : new URL(value);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("URL must start with http:// or https://");
@@ -140,13 +201,13 @@ async function assertPublicUrl(
   if (isIP(hostname) !== 0) {
     if (isBlockedAddress(hostname))
       throw new Error("Private or reserved IP addresses are not allowed");
-    return url;
+    return { url, addresses: [hostname] };
   }
   if (!hostname.includes(".")) throw new Error("Single-label hostnames are not allowed");
 
   let addresses: readonly string[];
   try {
-    addresses = await resolveHostname(hostname);
+    addresses = await raceWithAbort(resolveHostname(hostname), signal);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Could not resolve ${hostname}: ${message}`);
@@ -155,7 +216,72 @@ async function assertPublicUrl(
   if (addresses.some(isBlockedAddress)) {
     throw new Error("URL resolves to a private or reserved IP address");
   }
-  return url;
+  return { url, addresses };
+}
+
+function raceWithAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    operation.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
+
+function responseHeaders(headers: Record<string, string | string[] | undefined>): Headers {
+  const result = new Headers();
+  for (const [name, value] of Object.entries(headers)) {
+    if (Array.isArray(value)) {
+      for (const item of value) result.append(name, item);
+      continue;
+    }
+    if (value !== undefined) result.set(name, value);
+  }
+  return result;
+}
+
+async function requestPinnedUrl(
+  url: URL,
+  addresses: readonly string[],
+  headers: Record<string, string>,
+  signal: AbortSignal,
+): Promise<Response> {
+  const address = addresses[0];
+  if (address === undefined) throw new Error(`No validated address available for ${url.hostname}`);
+  const family = isIP(address);
+  if (family !== 4 && family !== 6) throw new Error(`Invalid resolved address: ${address}`);
+
+  const request = url.protocol === "https:" ? httpsRequest : httpRequest;
+  return new Promise((resolve, reject) => {
+    const outgoing = request(
+      url,
+      {
+        method: "GET",
+        headers: { ...headers, "Accept-Encoding": "identity", Connection: "close" },
+        signal,
+        lookup: (_hostname, options, callback) => {
+          if (typeof options === "object" && options.all === true) {
+            callback(null, [{ address, family }]);
+            return;
+          }
+          callback(null, address, family);
+        },
+      },
+      (incoming) => {
+        const body = Readable.toWeb(incoming) as unknown as ReadableStream<Uint8Array>;
+        const statusText = incoming.statusMessage;
+        resolve(
+          new Response(body, {
+            status: incoming.statusCode ?? 500,
+            ...(statusText === undefined ? {} : { statusText }),
+            headers: responseHeaders(incoming.headers),
+          }),
+        );
+      },
+    );
+    outgoing.once("error", reject);
+    outgoing.end();
+  });
 }
 
 function acceptHeader(format: WebFetchFormat): string {
@@ -172,22 +298,24 @@ async function fetchWithRedirects(
   initialUrl: URL,
   format: WebFetchFormat,
   signal: AbortSignal,
-  fetchFn: FetchFunction,
+  requestFn: RequestFunction,
   resolveHostname: (hostname: string) => Promise<readonly string[]>,
 ): Promise<{ response: Response; url: URL }> {
   let url = initialUrl;
   for (let redirectCount = 0; redirectCount <= MAX_REDIRECTS; redirectCount++) {
-    url = await assertPublicUrl(url, resolveHostname);
-    const response = await fetchFn(url, {
-      redirect: "manual",
-      signal,
-      headers: {
+    const validated = await assertPublicUrl(url, resolveHostname, signal);
+    url = validated.url;
+    const response = await requestFn(
+      url,
+      validated.addresses,
+      {
         Accept: acceptHeader(format),
         "Accept-Language": "en-US,en;q=0.9",
         "User-Agent":
           "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/143.0.0.0 Safari/537.36",
       },
-    });
+      signal,
+    );
 
     if (!REDIRECT_STATUSES.has(response.status)) return { response, url };
     const location = response.headers.get("location");
@@ -196,7 +324,11 @@ async function fetchWithRedirects(
       throw new Error(`HTTP ${response.status} redirect had no Location header`);
     if (redirectCount === MAX_REDIRECTS)
       throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
-    url = new URL(location, url);
+    const redirectUrl = new URL(location, url);
+    if (url.protocol === "https:" && redirectUrl.protocol === "http:") {
+      throw new Error("HTTPS redirects to HTTP are not allowed");
+    }
+    url = redirectUrl;
   }
 
   throw new Error(`Too many redirects (max ${MAX_REDIRECTS})`);
@@ -233,6 +365,19 @@ async function readBoundedBody(response: Response): Promise<Uint8Array> {
   return bytes;
 }
 
+function sanitizeText(value: string): string {
+  let result = "";
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    const allowedWhitespace = codePoint === 0x9 || codePoint === 0xa || codePoint === 0xd;
+    if (codePoint < 0x20 && !allowedWhitespace) continue;
+    if (codePoint >= 0x7f && codePoint <= 0x9f) continue;
+    if (codePoint >= 0xd800 && codePoint <= 0xdfff) continue;
+    result += character;
+  }
+  return result;
+}
+
 function decodeHtmlEntities(value: string): string {
   const entities: Record<string, string> = {
     amp: "&",
@@ -248,107 +393,270 @@ function decodeHtmlEntities(value: string): string {
       if (!entity.startsWith("#")) return entities[entity.toLowerCase()] ?? match;
       const hexadecimal = entity[1]?.toLowerCase() === "x";
       const codePoint = Number.parseInt(entity.slice(hexadecimal ? 2 : 1), hexadecimal ? 16 : 10);
-      if (!Number.isFinite(codePoint) || codePoint > 0x10ffff) return match;
+      if (
+        !Number.isFinite(codePoint) ||
+        codePoint > 0x10ffff ||
+        (codePoint >= 0xd800 && codePoint <= 0xdfff) ||
+        (codePoint < 0x20 && codePoint !== 0x9 && codePoint !== 0xa && codePoint !== 0xd) ||
+        (codePoint >= 0x7f && codePoint <= 0x9f)
+      ) {
+        return "";
+      }
       return String.fromCodePoint(codePoint);
     },
   );
 }
 
-function removeNonContentHtml(html: string): string {
-  return html
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(
-      /<(script|style|noscript|iframe|object|embed|svg|template)\b[^>]*>[\s\S]*?<\/\1>/gi,
-      "",
-    )
-    .replace(/<(meta|link)\b[^>]*\/?\s*>/gi, "");
+interface HtmlTagToken {
+  kind: "tag";
+  name: string;
+  closing: boolean;
+  raw: string;
 }
 
-function stripTags(value: string): string {
-  return decodeHtmlEntities(value.replace(/<[^>]*>/g, ""));
+interface HtmlTextToken {
+  kind: "text";
+  text: string;
 }
 
-export function htmlToText(html: string): string {
-  return decodeHtmlEntities(
-    removeNonContentHtml(html)
-      .replace(/<br\b[^>]*>/gi, "\n")
-      .replace(
-        /<\/(address|article|aside|blockquote|div|footer|h[1-6]|header|li|main|nav|p|section|tr|ul|ol)>/gi,
-        "\n",
-      )
-      .replace(/<[^>]*>/g, ""),
-  )
-    .replace(/[ \t]+/g, " ")
-    .replace(/ *\n */g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+type HtmlToken = HtmlTagToken | HtmlTextToken;
+
+const SKIPPED_HTML_ELEMENTS = new Set([
+  "embed",
+  "head",
+  "iframe",
+  "noscript",
+  "object",
+  "script",
+  "style",
+  "svg",
+  "template",
+]);
+
+function findTagEnd(html: string, start: number): number {
+  let quote: '"' | "'" | undefined;
+  for (let index = start; index < html.length; index++) {
+    const character = html[index];
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === ">") return index;
+  }
+  return -1;
 }
 
-function markdownLink(label: string, href: string, baseUrl: URL): string {
-  const text = stripTags(label).trim();
-  if (text.length === 0) return "";
-  try {
-    const url = new URL(decodeHtmlEntities(href), baseUrl);
-    if (url.protocol !== "http:" && url.protocol !== "https:") return text;
-    return `[${text}](${url.toString()})`;
-  } catch {
-    return text;
+function parseTag(raw: string): HtmlTagToken | undefined {
+  const trimmed = raw.trim();
+  const closing = trimmed.startsWith("/");
+  const nameStart = closing ? 1 : 0;
+  let nameEnd = nameStart;
+  while (nameEnd < trimmed.length && /[\da-z-]/i.test(trimmed[nameEnd] ?? "")) nameEnd += 1;
+  if (nameEnd === nameStart) return undefined;
+  return { kind: "tag", name: trimmed.slice(nameStart, nameEnd).toLowerCase(), closing, raw };
+}
+
+function tokenizeHtml(html: string, consume: (token: HtmlToken) => void): void {
+  const lowercase = html.toLowerCase();
+  let position = 0;
+  while (position < html.length) {
+    const tagStart = html.indexOf("<", position);
+    if (tagStart < 0) {
+      consume({ kind: "text", text: html.slice(position) });
+      return;
+    }
+    if (tagStart > position) consume({ kind: "text", text: html.slice(position, tagStart) });
+
+    if (html.startsWith("<!--", tagStart)) {
+      const commentEnd = html.indexOf("-->", tagStart + 4);
+      if (commentEnd < 0) return;
+      position = commentEnd + 3;
+      continue;
+    }
+
+    const tagEnd = findTagEnd(html, tagStart + 1);
+    if (tagEnd < 0) {
+      consume({ kind: "text", text: html.slice(tagStart) });
+      return;
+    }
+
+    const token = parseTag(html.slice(tagStart + 1, tagEnd));
+    if (token === undefined) {
+      const raw = html.slice(tagStart + 1, tagEnd).trimStart();
+      if (!raw.startsWith("!") && !raw.startsWith("?")) {
+        consume({ kind: "text", text: html.slice(tagStart, tagEnd + 1) });
+      }
+      position = tagEnd + 1;
+      continue;
+    }
+
+    if (!token.closing && SKIPPED_HTML_ELEMENTS.has(token.name)) {
+      const closingStart = lowercase.indexOf(`</${token.name}`, tagEnd + 1);
+      if (closingStart < 0) return;
+      const closingEnd = findTagEnd(html, closingStart + 2 + token.name.length);
+      if (closingEnd < 0) return;
+      position = closingEnd + 1;
+      continue;
+    }
+
+    consume(token);
+    position = tagEnd + 1;
   }
 }
 
-export function htmlToMarkdown(html: string, baseUrl = new URL("https://invalid.example")): string {
-  const preformatted: string[] = [];
-  let markdown = removeNonContentHtml(html).replace(
-    /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi,
-    (_match, content: string) => {
-      const index = preformatted.push(stripTags(content).trim()) - 1;
-      return `\n\nPIWEBFETCHPRE${index}TOKEN\n\n`;
-    },
-  );
+function normalizedText(value: string): string {
+  return sanitizeText(decodeHtmlEntities(value)).replace(/\s+/g, " ");
+}
 
-  markdown = markdown
-    .replace(/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi, (_match, level: string, content: string) => {
-      return `\n\n${"#".repeat(Number(level))} ${stripTags(content).trim()}\n\n`;
-    })
-    .replace(
-      /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi,
-      (_match, href: string, label: string) => {
-        return markdownLink(label, href, baseUrl);
-      },
-    )
-    .replace(/<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi, "**$2**")
-    .replace(/<(em|i)\b[^>]*>([\s\S]*?)<\/\1>/gi, "*$2*")
-    .replace(/<(del|s)\b[^>]*>([\s\S]*?)<\/\1>/gi, "~~$2~~")
-    .replace(/<code\b[^>]*>([\s\S]*?)<\/code>/gi, (_match, content: string) => {
-      return `\`${stripTags(content).trim()}\``;
-    })
-    .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, (_match, content: string) => {
-      return `\n- ${stripTags(content).trim()}`;
-    })
-    .replace(/<blockquote\b[^>]*>([\s\S]*?)<\/blockquote>/gi, (_match, content: string) => {
-      return `\n\n${stripTags(content)
-        .trim()
-        .split("\n")
-        .map((line) => `> ${line}`)
-        .join("\n")}\n\n`;
-    })
-    .replace(/<hr\b[^>]*>/gi, "\n\n---\n\n")
-    .replace(/<br\b[^>]*>/gi, "\n")
-    .replace(
-      /<\/(address|article|aside|div|footer|header|main|nav|p|section|table|tr|ul|ol)>/gi,
-      "\n\n",
-    )
-    .replace(/<[^>]*>/g, "");
-
-  markdown = decodeHtmlEntities(markdown)
+function normalizeRenderedText(value: string): string {
+  return value
     .replace(/[ \t]+/g, " ")
     .replace(/ *\n */g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
 
-  return markdown.replace(/PIWEBFETCHPRE(\d+)TOKEN/g, (_match, index: string) => {
-    return `\n\n\`\`\`\n${preformatted[Number(index)] ?? ""}\n\`\`\`\n\n`;
+function attributeValue(raw: string, attributeName: string): string | undefined {
+  let position = 0;
+  while (position < raw.length) {
+    while (position < raw.length && /[\s/]/.test(raw[position] ?? "")) position += 1;
+    const nameStart = position;
+    while (position < raw.length && /[^\s=/>]/.test(raw[position] ?? "")) position += 1;
+    const name = raw.slice(nameStart, position).toLowerCase();
+    while (position < raw.length && /\s/.test(raw[position] ?? "")) position += 1;
+    if (raw[position] !== "=") continue;
+    position += 1;
+    while (position < raw.length && /\s/.test(raw[position] ?? "")) position += 1;
+
+    const quote = raw[position] === '"' || raw[position] === "'" ? raw[position] : undefined;
+    if (quote !== undefined) position += 1;
+    const valueStart = position;
+    if (quote === undefined) {
+      while (position < raw.length && /[^\s>]/.test(raw[position] ?? "")) position += 1;
+    } else {
+      while (position < raw.length && raw[position] !== quote) position += 1;
+    }
+    const value = raw.slice(valueStart, position);
+    if (quote !== undefined && raw[position] === quote) position += 1;
+    if (name === attributeName) return value;
+  }
+  return undefined;
+}
+
+function resolvedLink(raw: string, baseUrl: URL): string | undefined {
+  const href = attributeValue(raw, "href");
+  if (href === undefined) return undefined;
+  try {
+    const url = new URL(decodeHtmlEntities(href), baseUrl);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function htmlToText(html: string): string {
+  let output = "";
+  const blockElements = new Set([
+    "address",
+    "article",
+    "aside",
+    "blockquote",
+    "div",
+    "footer",
+    "header",
+    "li",
+    "main",
+    "nav",
+    "p",
+    "section",
+    "tr",
+    "ul",
+    "ol",
+  ]);
+  tokenizeHtml(html, (token) => {
+    if (token.kind === "text") {
+      output += normalizedText(token.text);
+      return;
+    }
+    if (token.name === "br") output += "\n";
+    if (token.closing && (blockElements.has(token.name) || /^h[1-6]$/.test(token.name))) {
+      output += "\n";
+    }
   });
+  return normalizeRenderedText(output);
+}
+
+export function htmlToMarkdown(html: string, baseUrl = new URL("https://invalid.example")): string {
+  let output = "";
+  let preformatted = false;
+  const links: Array<string | undefined> = [];
+  const blocks = new Set([
+    "address",
+    "article",
+    "aside",
+    "div",
+    "footer",
+    "header",
+    "main",
+    "nav",
+    "p",
+    "section",
+    "table",
+    "tr",
+    "ul",
+    "ol",
+  ]);
+
+  tokenizeHtml(html, (token) => {
+    if (token.kind === "text") {
+      output += preformatted
+        ? sanitizeText(decodeHtmlEntities(token.text))
+        : normalizedText(token.text);
+      return;
+    }
+
+    const { name, closing } = token;
+    if (/^h[1-6]$/.test(name)) {
+      output += closing ? "\n\n" : `\n\n${"#".repeat(Number(name[1]))} `;
+      return;
+    }
+    if (name === "a") {
+      if (!closing) {
+        const link = resolvedLink(token.raw, baseUrl);
+        links.push(link);
+        if (link !== undefined) output += "[";
+      } else {
+        const link = links.pop();
+        if (link !== undefined) output += `](${link})`;
+      }
+      return;
+    }
+    if (name === "pre") {
+      preformatted = !closing;
+      output += closing ? "\n````\n\n" : "\n\n````\n";
+      return;
+    }
+    if (name === "code" && !preformatted) output += "`";
+    if (name === "strong" || name === "b") output += "**";
+    if (name === "em" || name === "i") output += "*";
+    if (name === "del" || name === "s") output += "~~";
+    if (name === "blockquote") output += closing ? "\n\n" : "\n\n> ";
+    if (name === "li" && !closing) output += "\n- ";
+    if (name === "br") output += "\n";
+    if (name === "hr") output += "\n\n---\n\n";
+    if (blocks.has(name)) output += "\n\n";
+  });
+
+  return output
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function responseSignal(signal: AbortSignal | undefined, timeoutSeconds: number): AbortSignal {
@@ -358,6 +666,11 @@ function responseSignal(signal: AbortSignal | undefined, timeoutSeconds: number)
 
 function contentTypeOf(response: Response): string {
   return response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() ?? "";
+}
+
+function charsetOf(response: Response): string {
+  const contentType = response.headers.get("content-type") ?? "";
+  return contentType.match(/(?:^|;)\s*charset\s*=\s*["']?([^;"'\s]+)/i)?.[1] ?? "utf-8";
 }
 
 function isTextContentType(contentType: string): boolean {
@@ -379,14 +692,15 @@ export async function fetchWebContent(
 ) {
   const format = params.format ?? "markdown";
   const timeout = Math.min(params.timeout ?? DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS);
-  const fetchFn = dependencies.fetchFn ?? fetch;
+  const signalWithTimeout = responseSignal(signal, timeout);
+  const requestFn = dependencies.requestFn ?? requestPinnedUrl;
   const resolveHostname = dependencies.resolveHostname ?? defaultResolveHostname;
-  const initialUrl = await assertPublicUrl(params.url, resolveHostname);
+  const initialUrl = new URL(params.url);
   const { response, url } = await fetchWithRedirects(
     initialUrl,
     format,
-    responseSignal(signal, timeout),
-    fetchFn,
+    signalWithTimeout,
+    requestFn,
     resolveHostname,
   );
 
@@ -396,8 +710,17 @@ export async function fetchWebContent(
   }
 
   const contentType = contentTypeOf(response);
+  if (!SUPPORTED_IMAGE_TYPES.has(contentType) && !isTextContentType(contentType)) {
+    await response.body?.cancel();
+    throw new Error(`Unsupported content type: ${contentType || "unknown"}`);
+  }
   const bytes = await readBoundedBody(response);
-  const details: WebFetchDetails = { url: url.toString(), contentType, bytes: bytes.byteLength };
+  const details: WebFetchDetails = {
+    url: url.toString(),
+    contentType,
+    bytes: bytes.byteLength,
+    truncated: false,
+  };
 
   if (SUPPORTED_IMAGE_TYPES.has(contentType)) {
     return {
@@ -416,7 +739,13 @@ export async function fetchWebContent(
     throw new Error(`Unsupported content type: ${contentType || "unknown"}`);
   }
 
-  const raw = new TextDecoder().decode(bytes);
+  let decoder: TextDecoder;
+  try {
+    decoder = new TextDecoder(charsetOf(response));
+  } catch {
+    decoder = new TextDecoder();
+  }
+  const raw = sanitizeText(decoder.decode(bytes));
   const isHtml = contentType === "text/html" || contentType === "application/xhtml+xml";
   const text =
     format === "html"
@@ -427,8 +756,18 @@ export async function fetchWebContent(
           ? htmlToMarkdown(raw, url)
           : raw;
 
+  if (text.length <= MAX_TEXT_CHARACTERS) {
+    return { content: [{ type: "text" as const, text }], details };
+  }
+
+  details.truncated = true;
   return {
-    content: [{ type: "text" as const, text }],
+    content: [
+      {
+        type: "text" as const,
+        text: `${text.slice(0, MAX_TEXT_CHARACTERS)}\n\n[Truncated after ${MAX_TEXT_CHARACTERS} characters]`,
+      },
+    ],
     details,
   };
 }

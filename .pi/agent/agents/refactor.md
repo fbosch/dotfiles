@@ -2,6 +2,8 @@
 color: "#aae373"
 description: Refactors code to improve quality without changing behavior. Use when code has duplication, poor naming, complex logic, or readability issues.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny

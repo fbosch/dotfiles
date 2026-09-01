@@ -51,10 +51,17 @@ interface CodeRow {
 }
 
 interface CodeBlockDescriptor {
+  icon: string;
   isDiff: boolean;
   label: string;
   language?: string;
-  path?: string;
+}
+
+interface HunkHeader {
+  oldCount: number;
+  oldStart: number;
+  newCount: number;
+  newStart: number;
 }
 
 type CodeBlockTheme = Pick<Theme, "fg" | "getBgAnsi">;
@@ -112,6 +119,33 @@ const LANGUAGE_LABELS: Readonly<Record<string, string>> = {
   xml: "XML",
   yaml: "YAML",
 };
+
+const LANGUAGE_ICONS: Readonly<Record<string, string>> = {
+  bash: "",
+  c: "",
+  cpp: "",
+  csharp: "󰌛",
+  css: "",
+  diff: "",
+  dockerfile: "󰡨",
+  go: "",
+  html: "",
+  java: "",
+  javascript: "",
+  json: "",
+  lua: "",
+  markdown: "",
+  php: "",
+  python: "",
+  ruby: "",
+  rust: "",
+  sql: "",
+  typescript: "",
+  xml: "󰗀",
+  yaml: "",
+};
+
+const GENERIC_FILE_ICON = "󰈙";
 
 const EXTENSION_LANGUAGES: Readonly<Record<string, string>> = {
   c: "c",
@@ -177,44 +211,118 @@ function languageFromPath(path: string | undefined): string | undefined {
 }
 
 function diffPath(code: string): string | undefined {
+  let oldPath: string | undefined;
   for (const line of code.split("\n")) {
-    const match = /^\+\+\+\s+(?:b\/)?(.+)$/.exec(line);
-    if (match?.[1] && match[1] !== "/dev/null") return match[1];
+    if (parseHunkHeader(line)) break;
+
+    const newMatch = /^\+\+\+\s+(?:b\/)?(.+)$/.exec(line);
+    if (newMatch?.[1] && newMatch[1] !== "/dev/null") return newMatch[1];
+
+    const oldMatch = /^---\s+(?:a\/)?(.+)$/.exec(line);
+    if (oldMatch?.[1] && oldMatch[1] !== "/dev/null") oldPath = oldMatch[1];
+  }
+
+  return oldPath;
+}
+
+function isFilePath(value: string | undefined): value is string {
+  if (!value || value.includes("://")) return false;
+  const fileName = value.split(/[\\/]/).pop();
+  return (
+    fileName === "Dockerfile" || fileName === "Makefile" || /\.[A-Za-z0-9]+$/.test(fileName ?? "")
+  );
+}
+
+function pathFromFenceInfo(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const attribute = /(?:^|\s)(?:file|filename|title)=(?:"([^"]+)"|'([^']+)'|(\S+))(?=\s|$)/.exec(
+    value,
+  );
+  const candidate = attribute ? (attribute[1] ?? attribute[2] ?? attribute[3]) : value;
+  return isFilePath(candidate) ? candidate : undefined;
+}
+
+function pathFromLeadingComment(code: string): string | undefined {
+  const firstLine = code.split("\n").find((line) => line.trim().length > 0);
+  if (!firstLine) return undefined;
+
+  const patterns = [
+    /^\s*\/\/\s*(.+?)\s*$/,
+    /^\s*#\s*(.+?)\s*$/,
+    /^\s*--\s*(.+?)\s*$/,
+    /^\s*\/\*\s*(.+?)\s*\*\/\s*$/,
+    /^\s*<!--\s*(.+?)\s*-->\s*$/,
+  ];
+  for (const pattern of patterns) {
+    const candidate = pattern.exec(firstLine)?.[1]?.trim();
+    if (isFilePath(candidate)) return candidate;
   }
 
   return undefined;
 }
 
-function looksLikePath(value: string | undefined): boolean {
-  return value?.includes("/") === true || value?.includes(".") === true;
+export function associateFilenamesWithCodeFences(markdown: string): string {
+  const lines = markdown.split("\n");
+  const transformed: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    const path = /^\s*`\s*([^`]+?)\s*`\s*$/.exec(line)?.[1]?.trim();
+    if (!isFilePath(path)) {
+      transformed.push(line);
+      continue;
+    }
+
+    let fenceIndex = index + 1;
+    while (lines[fenceIndex]?.trim() === "") fenceIndex += 1;
+    const fence = /^(\s*)(`{3,}|~{3,})(.*)$/.exec(lines[fenceIndex] ?? "");
+    if (!fence) {
+      transformed.push(line);
+      continue;
+    }
+
+    const indentation = fence[1] ?? "";
+    const marker = fence[2] ?? "```";
+    const info = fence[3]?.trim() || languageFromPath(path) || "text";
+    transformed.push(`${indentation}${marker}${info} filename=${JSON.stringify(path)}`);
+    index = fenceIndex;
+  }
+
+  return transformed.join("\n");
 }
 
 function describeCodeBlock(code: string, fenceInfo: string | undefined): CodeBlockDescriptor {
-  const [rawLanguage, extraInfo] = fenceInfo?.trim().split(/\s+/, 2) ?? [];
+  const info = /^(\S+)(?:\s+(.+))?$/.exec(fenceInfo?.trim() ?? "");
+  const rawLanguage = info?.[1];
+  const extraInfo = info?.[2]?.trim();
   const explicitLanguage = normaliseLanguage(rawLanguage);
   const isDiff = explicitLanguage === "diff";
-  const path = isDiff ? (looksLikePath(extraInfo) ? extraInfo : diffPath(code)) : extraInfo;
+  const explicitPath = pathFromFenceInfo(extraInfo);
+  const path = isDiff
+    ? (explicitPath ?? diffPath(code))
+    : (explicitPath ?? pathFromLeadingComment(code));
   const language = isDiff
-    ? looksLikePath(extraInfo)
-      ? languageFromPath(extraInfo)
+    ? explicitPath
+      ? languageFromPath(explicitPath)
       : (normaliseLanguage(extraInfo) ?? languageFromPath(path))
     : (explicitLanguage ?? languageFromPath(path));
   const languageLabel = LANGUAGE_LABELS[language ?? ""] ?? language ?? "Code";
+  const icon = LANGUAGE_ICONS[language ?? ""] ?? (isDiff ? LANGUAGE_ICONS.diff : GENERIC_FILE_ICON);
 
   if (isDiff) {
     return {
+      icon,
       isDiff,
-      label: path ? `Diff ${path}` : "Diff",
+      label: path ?? "Diff",
       ...(language ? { language } : {}),
-      ...(path ? { path } : {}),
     };
   }
 
   return {
+    icon,
     isDiff,
-    label: path ? `${languageLabel} ${path}` : languageLabel,
+    label: path ?? languageLabel,
     ...(language ? { language } : {}),
-    ...(path ? { path } : {}),
   };
 }
 
@@ -233,35 +341,121 @@ function codeRows(code: string): CodeRow[] {
   }));
 }
 
+function parseHunkHeader(line: string): HunkHeader | undefined {
+  const match = /^@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/.exec(line);
+  if (!match) return undefined;
+
+  return {
+    oldStart: Number(match[1]),
+    oldCount: Number(match[2] ?? 1),
+    newStart: Number(match[3]),
+    newCount: Number(match[4] ?? 1),
+  };
+}
+
+function splitDiffSections(code: string): string[] {
+  const sections: string[][] = [];
+  let current: string[] = [];
+  let hasFileHeader = false;
+  let oldLinesRemaining = 0;
+  let newLinesRemaining = 0;
+  let inHunk = false;
+
+  const lines = sourceLines(code);
+  for (const [index, line] of lines.entries()) {
+    const startsFileHeader =
+      inHunk === false && line.startsWith("--- ") && lines[index + 1]?.startsWith("+++ ");
+    if (
+      current.length > 0 &&
+      (line.startsWith("diff --git ") || (startsFileHeader && hasFileHeader))
+    ) {
+      sections.push(current);
+      current = [];
+      hasFileHeader = false;
+      oldLinesRemaining = 0;
+      newLinesRemaining = 0;
+      inHunk = false;
+    }
+    current.push(line);
+
+    if (startsFileHeader) hasFileHeader = true;
+    const hunk = parseHunkHeader(line);
+    if (hunk) {
+      oldLinesRemaining = hunk.oldCount;
+      newLinesRemaining = hunk.newCount;
+      inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
+      continue;
+    }
+    if (inHunk === false || line === "\\ No newline at end of file") continue;
+
+    if (line.startsWith("+")) newLinesRemaining -= 1;
+    else if (line.startsWith("-")) oldLinesRemaining -= 1;
+    else {
+      oldLinesRemaining -= 1;
+      newLinesRemaining -= 1;
+    }
+    inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
+  }
+
+  if (current.length > 0) sections.push(current);
+  return sections.map((section) => section.join("\n"));
+}
+
+function isDiffMetadata(line: string): boolean {
+  return (
+    line.startsWith("diff --git ") ||
+    line.startsWith("index ") ||
+    line.startsWith("--- ") ||
+    line.startsWith("+++ ") ||
+    line.startsWith("new file mode ") ||
+    line.startsWith("deleted file mode ") ||
+    line.startsWith("old mode ") ||
+    line.startsWith("new mode ") ||
+    line.startsWith("similarity index ") ||
+    line.startsWith("dissimilarity index ") ||
+    line.startsWith("rename from ") ||
+    line.startsWith("rename to ") ||
+    line.startsWith("copy from ") ||
+    line.startsWith("copy to ") ||
+    line.startsWith("Binary files ") ||
+    line === "GIT binary patch"
+  );
+}
+
 function diffRows(code: string): CodeRow[] {
   const rows: CodeRow[] = [];
   let oldLine = 1;
   let newLine = 1;
+  let oldLinesRemaining = 0;
+  let newLinesRemaining = 0;
+  let inHunk = false;
 
   for (const line of sourceLines(code)) {
-    const hunk = /^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/.exec(line);
+    const hunk = parseHunkHeader(line);
     if (hunk) {
-      oldLine = Number(hunk[1]);
-      newLine = Number(hunk[2]);
+      oldLine = hunk.oldStart;
+      oldLinesRemaining = hunk.oldCount;
+      newLine = hunk.newStart;
+      newLinesRemaining = hunk.newCount;
+      inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
       continue;
     }
-    if (
-      line.startsWith("diff --git ") ||
-      line.startsWith("index ") ||
-      line.startsWith("--- ") ||
-      line.startsWith("+++ ") ||
-      line === "\\ No newline at end of file"
-    ) {
+    if (line === "\\ No newline at end of file") continue;
+    if (inHunk === false && isDiffMetadata(line)) {
       continue;
     }
     if (line.startsWith("+")) {
       rows.push({ content: line.slice(1), kind: "added", lineNumber: newLine, sign: "+" });
       newLine += 1;
+      newLinesRemaining -= 1;
+      inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
       continue;
     }
     if (line.startsWith("-")) {
       rows.push({ content: line.slice(1), kind: "removed", lineNumber: oldLine, sign: "-" });
       oldLine += 1;
+      oldLinesRemaining -= 1;
+      inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
       continue;
     }
 
@@ -273,6 +467,9 @@ function diffRows(code: string): CodeRow[] {
     });
     oldLine += 1;
     newLine += 1;
+    oldLinesRemaining -= 1;
+    newLinesRemaining -= 1;
+    inHunk = oldLinesRemaining > 0 || newLinesRemaining > 0;
   }
 
   return rows.length > 0 ? rows : codeRows("");
@@ -333,15 +530,36 @@ export function renderCodeBlock(
   activeTheme = resolveActiveTheme(),
 ): string[] {
   const code = token.text ?? "";
-  const descriptor = describeCodeBlock(code, token.lang);
+  const isDiff = normaliseLanguage(token.lang?.trim().split(/\s+/, 1)[0]) === "diff";
+  const sections = isDiff ? splitDiffSections(code) : [code];
+  const lines: string[] = [];
+
+  for (const [sectionIndex, section] of sections.entries()) {
+    if (sectionIndex > 0) lines.push("");
+    lines.push(...renderCodePanel(component, section, token.lang, width, activeTheme));
+  }
+
+  if (nextTokenType && nextTokenType !== "space") lines.push("");
+  return lines;
+}
+
+function renderCodePanel(
+  component: CodeBlockComponent,
+  code: string,
+  fenceInfo: string | undefined,
+  width: number,
+  activeTheme: CodeBlockTheme | undefined,
+): string[] {
+  const descriptor = describeCodeBlock(code, fenceInfo);
   const rows = descriptor.isDiff ? diffRows(code) : codeRows(code);
   const highlightedRows = highlightRows(component, rows, descriptor.language);
   const maxLineNumber = Math.max(...rows.map((row) => row.lineNumber));
   const numberWidth = Math.max(3, String(maxLineNumber).length);
-  const gutterWidth = numberWidth + 2;
+  const gutterWidth = width > numberWidth + 2 ? numberWidth + 2 : 0;
   const contentWidth = Math.max(1, width - gutterWidth);
   const headerBackground = activeTheme?.getBgAnsi("customMessageBg") ?? "";
-  const header = activeTheme?.fg("accent", descriptor.label) ?? descriptor.label;
+  const headerText = `${descriptor.icon} ${descriptor.label}`;
+  const header = activeTheme?.fg("accent", headerText) ?? headerText;
   const lines = [
     paintBackground("", width, headerBackground),
     paintBackground(`  ${header}`, width, headerBackground),
@@ -356,13 +574,16 @@ export function renderCodeBlock(
 
     for (const [visualIndex, visualLine] of visualLines.entries()) {
       const gutter =
-        visualIndex === 0 ? renderGutter(row, numberWidth, activeTheme) : " ".repeat(gutterWidth);
+        gutterWidth === 0
+          ? ""
+          : visualIndex === 0
+            ? renderGutter(row, numberWidth, activeTheme)
+            : " ".repeat(gutterWidth);
       lines.push(paintBackground(`${gutter}${visualLine}`, width, background));
     }
   }
 
   lines.push(paintBackground("", width, activeTheme?.getBgAnsi("userMessageBg") ?? ""));
-  if (nextTokenType && nextTokenType !== "space") lines.push("");
   return lines;
 }
 
@@ -403,6 +624,7 @@ export function installCodeBlockRenderer(): CodeBlockPatch {
 
 export default function codeBlocks(pi: ExtensionAPI): void {
   const patch = installCodeBlockRenderer();
+  pi.registerMarkdownTransformer((markdown) => associateFilenamesWithCodeFences(markdown));
 
   pi.on("session_start", (_event, ctx) => {
     resolveActiveTheme = () => ctx.ui.theme;

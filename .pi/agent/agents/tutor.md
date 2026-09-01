@@ -2,6 +2,8 @@
 color: "#4fb477"
 description: Teaches engineering concepts through deliberate practice, Socratic questions, prediction, retrieval, and teach-back. Use only when the user explicitly wants to learn, be coached, or avoid direct solutions.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__exa
 permission:
   "*": deny

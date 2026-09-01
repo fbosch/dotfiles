@@ -2,6 +2,8 @@
 color: "#a4c0c9"
 description: Writes and maintains documentation including READMEs, API docs, and inline comments. Use when creating new docs, updating existing documentation, or improving the clarity of existing content.
 prompt_mode: replace
+model: openai-codex/gpt-5.6-terra
+thinking: medium
 max_turns: 6
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:

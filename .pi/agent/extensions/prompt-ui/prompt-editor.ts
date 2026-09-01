@@ -29,6 +29,7 @@ import {
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
+import { installClickableSubagentSessions } from "./subagent-session-links";
 import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
@@ -149,6 +150,12 @@ export class PromptEditor extends CustomEditor {
     this.typoRules = typoRules;
     this.agentMentions = loadAgentMentions(this.ctx.cwd).filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
+    );
+    installClickableSubagentSessions(
+      tui,
+      pi,
+      ctx,
+      this.agentMentions.map((mention) => mention.name),
     );
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
