@@ -28,7 +28,7 @@ understood in the parent session.
 | `test`             | Test design, implementation, execution, and failure diagnosis                              |
 | `tutor`            | User-requested coaching and deliberate practice; relay each interaction through the parent |
 | `validate`         | Bounded, read-only post-change checks and evidence                                         |
-| `general-purpose`  | Complex implementation or mixed work that does not fit a narrower role                     |
+| `general`          | Complex implementation or mixed work that does not fit a narrower role                     |
 
 ## Delegation Rules
 
@@ -72,4 +72,4 @@ understood in the parent session.
   investigation or tradeoff analysis.
 - Use `quick` only when scope and acceptance criteria are explicit. Route
   substantial documentation to `docs`, contracts to `spec`, and mixed or
-  cross-cutting implementation to `general-purpose`.
+  cross-cutting implementation to `general`.

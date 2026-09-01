@@ -14,7 +14,7 @@ const AGENT_NAMES = [
   ["debug", "debug"],
   ["docs", "docs"],
   ["explore", "explore"],
-  ["general-purpose", "general"],
+  ["general", "general"],
   ["ideate", "ideate"],
   ["lookup", "lookup"],
   ["patterns", "patterns"],

@@ -18,7 +18,7 @@ export interface AgentMention {
 
 const BUILTIN_AGENT_MENTIONS: readonly AgentMention[] = [
   {
-    name: "general-purpose",
+    name: "general",
     description: "General-purpose agent for complex, multi-step tasks",
   },
   {

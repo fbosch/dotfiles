@@ -172,6 +172,17 @@ interface QuestionPromptTheme {
 }
 
 type QuestionPromptStep = "choices" | "input";
+type QuestionChoiceKind = "option" | "other" | "submit";
+
+interface QuestionChoiceRow {
+  kind: QuestionChoiceKind;
+  hotkey?: string;
+  label: string;
+  description?: string;
+  selected: boolean;
+}
+
+const OPTION_HOTKEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"] as const;
 
 class QuestionPromptComponent implements Component {
   private highlightedIndex = 0;
@@ -215,11 +226,13 @@ class QuestionPromptComponent implements Component {
     }
 
     const rows = this.choiceRows();
+    lines.push(
+      this.theme.fg("muted", this.mode === "multi-select" ? "Choose one or more" : "Choose one"),
+      "",
+    );
     for (const [index, row] of rows.entries()) {
-      const marker = index === this.highlightedIndex ? "▶" : " ";
-      const text = `${marker} ${row}`;
-      const painted = index === this.highlightedIndex ? this.theme.fg("accent", text) : text;
-      lines.push(...wrapTextWithAnsi(painted, width));
+      if (row.kind === "submit") lines.push("");
+      lines.push(...this.renderChoiceRow(row, index === this.highlightedIndex, width));
     }
     if (this.error !== undefined) lines.push(this.theme.fg("error", this.error));
     lines.push("");
@@ -227,8 +240,8 @@ class QuestionPromptComponent implements Component {
       this.theme.fg(
         "muted",
         this.mode === "multi-select"
-          ? "↑/↓ move · enter toggle · esc cancel"
-          : "↑/↓ move · enter select · esc cancel",
+          ? "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel"
+          : "↑/↓ move · 1–9 choose · enter select · esc cancel",
       ),
     );
     return lines;
@@ -240,6 +253,25 @@ class QuestionPromptComponent implements Component {
       this.requestRender();
       return;
     }
+    const optionIndex = OPTION_HOTKEYS.findIndex(
+      (hotkey, index) => index < this.options.length && matchesKey(data, hotkey),
+    );
+    if (optionIndex >= 0) {
+      this.highlightedIndex = optionIndex;
+      this.error = undefined;
+      this.chooseOption(optionIndex);
+      return;
+    }
+    if (matchesKey(data, "o")) {
+      this.highlightedIndex = this.options.length;
+      this.openCustomAnswer();
+      return;
+    }
+    if (this.mode === "multi-select" && matchesKey(data, "s")) {
+      this.highlightedIndex = this.choiceRows().length - 1;
+      this.submitChoices();
+      return;
+    }
     if (matchesKey(data, "up") || matchesKey(data, "k")) {
       this.moveHighlight(-1);
       return;
@@ -248,7 +280,7 @@ class QuestionPromptComponent implements Component {
       this.moveHighlight(1);
       return;
     }
-    if (matchesKey(data, "enter")) {
+    if (matchesKey(data, "enter") || (this.mode === "multi-select" && matchesKey(data, "space"))) {
       this.chooseHighlighted();
       return;
     }
@@ -273,21 +305,54 @@ class QuestionPromptComponent implements Component {
     return lines;
   }
 
-  private choiceRows(): string[] {
-    const rows = this.options.map((option, index) => {
-      const description = option.description === undefined ? "" : ` — ${option.description}`;
-      const checked =
-        this.mode === "multi-select" ? (this.selectedOptions.has(index) ? "[x] " : "[ ] ") : "";
-      return `${checked}${index + 1}. ${option.label}${description}`;
+  private choiceRows(): QuestionChoiceRow[] {
+    const rows: QuestionChoiceRow[] = this.options.map((option, index) => {
+      return {
+        kind: "option",
+        ...(OPTION_HOTKEYS[index] === undefined ? {} : { hotkey: OPTION_HOTKEYS[index] }),
+        label: option.label,
+        ...(option.description === undefined ? {} : { description: option.description }),
+        selected: this.selectedOptions.has(index),
+      };
     });
-    const custom = this.customAnswer === undefined ? "" : ` — ${this.customAnswer.label}`;
-    const checked =
-      this.mode === "multi-select" ? (this.customAnswer === undefined ? "[ ] " : "[x] ") : "";
-    rows.push(`${checked}${otherLabel(this.options)}${custom}`);
+    rows.push({
+      kind: "other",
+      hotkey: "o",
+      label: otherLabel(this.options),
+      ...(this.customAnswer === undefined ? {} : { description: this.customAnswer.label }),
+      selected: this.customAnswer !== undefined,
+    });
     if (this.mode === "multi-select") {
-      rows.push(`Submit (${this.answerCount()} selected)`);
+      const count = this.answerCount();
+      rows.push({
+        kind: "submit",
+        hotkey: "s",
+        label: `Submit · ${count} ${count === 1 ? "selection" : "selections"}`,
+        selected: false,
+      });
     }
     return rows;
+  }
+
+  private renderChoiceRow(row: QuestionChoiceRow, highlighted: boolean, width: number): string[] {
+    const marker = highlighted ? this.theme.fg("accent", "▶") : " ";
+    const hotkey = row.hotkey === undefined ? "   " : this.theme.fg("muted", `(${row.hotkey})`);
+    const checkbox =
+      this.mode === "multi-select" && row.kind !== "submit"
+        ? `${this.theme.fg(row.selected ? "success" : "muted", row.selected ? "[x]" : "[ ]")} `
+        : "";
+    const label =
+      row.kind === "submit"
+        ? this.theme.fg("success", row.label)
+        : highlighted
+          ? this.theme.fg("accent", row.label)
+          : row.label;
+    const lines = wrapTextWithAnsi(`${marker} ${hotkey} ${checkbox}${label}`, width);
+    if (row.description !== undefined) {
+      const indent = this.mode === "multi-select" ? "          " : "      ";
+      lines.push(...wrapTextWithAnsi(this.theme.fg("muted", `${indent}${row.description}`), width));
+    }
+    return lines;
   }
 
   private moveHighlight(direction: -1 | 1): void {
@@ -304,11 +369,21 @@ class QuestionPromptComponent implements Component {
       return;
     }
     if (this.highlightedIndex === this.options.length) {
-      this.step = "input";
-      this.input = this.createInput(this.customAnswer?.label);
-      this.requestRender();
+      this.openCustomAnswer();
       return;
     }
+    this.submitChoices();
+  }
+
+  private openCustomAnswer(): void {
+    this.error = undefined;
+    this.step = "input";
+    this.input = this.createInput(this.customAnswer?.label);
+    this.requestRender();
+  }
+
+  private submitChoices(): void {
+    this.error = undefined;
     if (this.answerCount() === 0) {
       this.error = "Select at least one answer before submitting.";
       this.requestRender();

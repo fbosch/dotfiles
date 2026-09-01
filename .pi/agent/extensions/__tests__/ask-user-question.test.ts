@@ -165,10 +165,11 @@ describe("ask_user_question", () => {
       createInlineContext((component, rendered) => {
         expect(rendered).toContain("Choose a color");
         expect(rendered).toContain("This controls the accent.");
-        expect(rendered).toContain("▶ 1. Red");
-        expect(rendered).toContain("↑/↓ move · enter select · esc cancel");
-        component.handleInput?.("j");
-        component.handleInput?.("\r");
+        expect(rendered).toContain("Choose one");
+        expect(rendered).toContain("▶ (1) Red");
+        expect(rendered).toContain("      Cooler");
+        expect(rendered).toContain("↑/↓ move · 1–9 choose · enter select · esc cancel");
+        component.handleInput?.("2");
       }),
     );
 
@@ -210,12 +211,14 @@ describe("ask_user_question", () => {
       undefined,
       undefined,
       createInlineContext((component) => {
-        component.handleInput?.("\r");
-        component.handleInput?.("j");
-        component.handleInput?.("\r");
-        component.handleInput?.("j");
-        component.handleInput?.("j");
-        component.handleInput?.("\r");
+        component.handleInput?.("1");
+        component.handleInput?.("2");
+        const rendered = component.render(80);
+        expect(rendered.some((line) => line.includes("(s) Submit · 2 selections"))).toBe(true);
+        expect(rendered).toContain(
+          "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel",
+        );
+        component.handleInput?.("s");
       }),
     );
 

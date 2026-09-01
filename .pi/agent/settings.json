@@ -37,7 +37,8 @@
       "skills": []
     },
     "npm:@gotgenes/pi-subagents@21.0.3",
-    "npm:pi-context-view@0.5.0"
+    "npm:pi-context-view@0.5.0",
+    "npm:@juicesharp/rpiv-todo@2.8.0"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
