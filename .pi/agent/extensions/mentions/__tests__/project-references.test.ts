@@ -15,7 +15,7 @@ import {
   loadThemeFromPath,
   setThemeInstance,
   theme,
-} from "../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+} from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import projectReferences, {
   appendProjectReferences,
   assertNoAgentMentionCollisions,

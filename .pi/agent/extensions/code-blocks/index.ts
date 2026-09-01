@@ -12,7 +12,7 @@ import {
   LANGUAGE_LABELS,
   languageFromPath,
   normaliseLanguage,
-} from "../lib/code-languages";
+} from "./code-languages";
 
 interface MarkdownToken {
   type: string;

@@ -7,9 +7,12 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import type { AgentMention } from "../agent-mentions";
+import type { AgentMention } from "../mentions/agent-mentions";
 import { getCommandAlias } from "../command-aliases";
-import { createReferenceAutocompleteProvider, type ProjectReference } from "../project-references";
+import {
+  createReferenceAutocompleteProvider,
+  type ProjectReference,
+} from "../mentions/project-references";
 import { fitColumns, paintDockRow } from "./dock-rendering";
 
 type Color = (text: string) => string;

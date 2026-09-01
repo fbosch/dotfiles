@@ -24,7 +24,7 @@ import {
   ModalFrame,
   modalSelectedRow,
   modalSelectListTheme,
-} from "./prompt-ui/modal-frame";
+} from "../prompt-ui/modal-frame";
 
 type PaletteAction = () => Promise<void> | void;
 

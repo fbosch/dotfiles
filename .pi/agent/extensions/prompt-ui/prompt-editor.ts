@@ -6,20 +6,20 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { formatAnsiReferenceMentions } from "../../lib/reference-mentions";
+import { formatAnsiReferenceMentions } from "../mentions/reference-mentions";
 import {
   type AgentMention,
   agentMentionForegroundAnsi,
   formatAnsiAgentMentions,
   loadAgentMentions,
   pathShadowsAgentMention,
-} from "../agent-mentions";
+} from "../mentions/agent-mentions";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import {
   assertNoAgentMentionCollisions,
   loadProjectReferences,
   type ProjectReference,
-} from "../project-references";
+} from "../mentions/project-references";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
   AutocompleteOverlay,

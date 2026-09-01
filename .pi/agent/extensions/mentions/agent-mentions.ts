@@ -7,7 +7,7 @@ import {
   parseFrontmatter,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { hexForegroundAnsi } from "./prompt-ui/terminal-color";
+import { hexForegroundAnsi } from "../prompt-ui/terminal-color";
 
 export interface AgentMention {
   name: string;

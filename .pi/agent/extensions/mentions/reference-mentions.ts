@@ -1,8 +1,8 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import type { ProjectReference } from "../extensions/project-references";
-import { formatAnsiTextRanges } from "./ansi-text-ranges";
+import { formatAnsiTextRanges } from "../../lib/ansi-text-ranges";
+import type { ProjectReference } from "./project-references";
 
 const REFERENCE_MENTION_PATTERN = /(^|\s)(@(?:"[^"]+"|[^\s]+))(?=\s|$)/g;
 
