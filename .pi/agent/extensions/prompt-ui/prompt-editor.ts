@@ -3,6 +3,7 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   type KeybindingsManager,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -73,10 +74,36 @@ function sanitizeStatus(status: string): string {
     .trim();
 }
 
+export function renderPromptHints(
+  theme: Theme,
+  keybindings: KeybindingsManager,
+  promptState: PromptEditorState,
+  width: number,
+): string {
+  const statuses = promptState
+    .getStatuses()
+    .map(sanitizeStatus)
+    .filter((status) => status.length > 0);
+  const interruptHint = keyHint(keybindings, "app.interrupt", "interrupt");
+  const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
+  const workingText = promptState.isWorking()
+    ? [theme.fg("accent", "● working"), interruptHint].filter(Boolean).join("  ")
+    : "";
+  const hintLeft = [workingText, statusText].filter(Boolean).join(" · ");
+  const hintRight = [
+    keyHint(keybindings, "app.thinking.cycle", "thinking"),
+    keyHint(keybindings, "app.model.select", "models"),
+    keyHint(keybindings, "tui.input.tab", "complete"),
+  ]
+    .filter(Boolean)
+    .join("  ");
+
+  return fitColumns(theme.fg("muted", ` ${hintLeft}`), theme.fg("muted", `${hintRight} `), width);
+}
+
 export class PromptEditor extends CustomEditor {
   private readonly pi: ExtensionAPI;
   private readonly ctx: ExtensionContext;
-  private readonly bindings: KeybindingsManager;
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
 
@@ -91,7 +118,6 @@ export class PromptEditor extends CustomEditor {
     super(tui, theme, keybindings, { paddingX: EDITOR_PADDING_X });
     this.pi = pi;
     this.ctx = ctx;
-    this.bindings = keybindings;
     this.promptState = state;
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
@@ -161,25 +187,7 @@ export class PromptEditor extends CustomEditor {
       theme.fg("borderMuted", "▝"),
       backgroundAnsi,
     );
-    const interruptHint = keyHint(this.bindings, "app.interrupt", "interrupt");
-    const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
-    const workingText = this.promptState.isWorking()
-      ? [theme.fg("accent", "● working"), interruptHint].filter(Boolean).join("  ")
-      : "";
-    const hintLeft = [workingText, statusText].filter(Boolean).join(" · ");
-    const hintRight = [
-      keyHint(this.bindings, "app.thinking.cycle", "thinking"),
-      keyHint(this.bindings, "app.model.select", "models"),
-      keyHint(this.bindings, "tui.input.tab", "complete"),
-    ]
-      .filter(Boolean)
-      .join("  ");
-    const hints = fitColumns(
-      theme.fg("muted", ` ${hintLeft}`),
-      theme.fg("muted", `${hintRight} `),
-      width,
-    );
-    const promptLayout = [...dockRows, bottomEdge, hints];
+    const promptLayout = [...dockRows, bottomEdge];
 
     this.autocompleteOverlay.update(suggestions, width, promptLayout.length, {
       rail: suggestionsRail,

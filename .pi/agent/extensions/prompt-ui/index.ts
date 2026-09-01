@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
-import { PromptEditor, type PromptEditorState } from "./prompt-editor";
+import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
 
 export default function promptUi(pi: ExtensionAPI): void {
   let isWorking = false;
@@ -35,12 +35,13 @@ export default function promptUi(pi: ExtensionAPI): void {
 
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter((tui, _theme, footerData) => {
+      const keybindings = getKeybindings();
       getBranch = () => footerData.getGitBranch();
       getStatuses = () => [...footerData.getExtensionStatuses().values()];
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
-        render: () => [],
+        render: (width) => [renderPromptHints(ctx.ui.theme, keybindings, state, width)],
         invalidate: () => tui.requestRender(),
         dispose: () => {
           unsubscribe();

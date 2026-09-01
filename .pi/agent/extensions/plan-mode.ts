@@ -96,7 +96,12 @@ const MODE_PROMPTS: Record<ModeName, string> = {
 
 export default function planMode(pi: ExtensionAPI): void {
   let enabled = false;
+  let selectingModeModel = false;
   let toolsBeforePlanMode: string[] | undefined;
+  const modeModels: Record<ModeName, string> = {
+    build: MODES.build.model,
+    plan: MODES.plan.model,
+  };
 
   function updateStatus(ctx: ExtensionContext): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
@@ -104,17 +109,23 @@ export default function planMode(pi: ExtensionAPI): void {
 
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
     const mode = MODES[name];
-    const [provider, modelId] = parseModel(mode.model);
+    const modelReference = modeModels[name];
+    const [provider, modelId] = parseModel(modelReference);
     const model = ctx.modelRegistry.find(provider, modelId);
 
     if (model === undefined) {
-      ctx.ui.notify(`Configured ${name} model is unavailable: ${mode.model}`, "error");
+      ctx.ui.notify(`Configured ${name} model is unavailable: ${modelReference}`, "error");
       return false;
     }
 
-    if ((await pi.setModel(model)) === false) {
-      ctx.ui.notify(`No authentication available for ${name} model: ${mode.model}`, "error");
-      return false;
+    selectingModeModel = true;
+    try {
+      if ((await pi.setModel(model)) === false) {
+        ctx.ui.notify(`No authentication available for ${name} model: ${modelReference}`, "error");
+        return false;
+      }
+    } finally {
+      selectingModeModel = false;
     }
 
     pi.setThinkingLevel(mode.thinkingLevel);
@@ -147,6 +158,13 @@ export default function planMode(pi: ExtensionAPI): void {
 
   pi.on("session_start", async (_event, ctx) => {
     await selectModeModel("build", ctx);
+  });
+
+  pi.on("model_select", (event) => {
+    if (selectingModeModel) return;
+
+    const mode: ModeName = enabled ? "plan" : "build";
+    modeModels[mode] = `${event.model.provider}/${event.model.id}`;
   });
 
   pi.registerCommand("plan", {
