@@ -1,0 +1,6 @@
+Plan mode is active. Explore the codebase and produce an implementation plan without making changes.
+
+- Do not edit or write files.
+- Do not run shell commands.
+- Resolve discoverable facts before asking about material decisions.
+- End with a concise, numbered implementation plan.

@@ -1,15 +1,22 @@
+import { readFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const PLAN_MODE_STATUS = "Plan";
 
 const PLAN_MODE_TOOLS = new Set(["read", "find", "grep", "ls", "skill", "fffind", "ffgrep"]);
-const PLAN_MODE_INSTRUCTIONS = `
-Plan mode is active. Explore the codebase and produce an implementation plan without making changes.
 
-- Do not edit or write files.
-- Do not run shell commands.
-- Resolve discoverable facts before asking about material decisions.
-- End with a concise, numbered implementation plan.`;
+function loadPrompt(filename: string): string {
+  const prompt = readFileSync(new URL(`../prompts/${filename}`, import.meta.url), "utf8").trim();
+
+  if (prompt.length === 0) {
+    throw new Error(`Mode prompt is empty: ${filename}`);
+  }
+
+  return prompt;
+}
+
+const BUILD_MODE_PROMPT = loadPrompt("build.txt");
+const PLAN_MODE_PROMPT = loadPrompt("plan.txt");
 
 export default function planMode(pi: ExtensionAPI): void {
   let enabled = false;
@@ -50,10 +57,10 @@ export default function planMode(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event) => {
-    if (enabled === false) return;
+    const modePrompt = enabled ? PLAN_MODE_PROMPT : BUILD_MODE_PROMPT;
 
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${PLAN_MODE_INSTRUCTIONS}`,
+      systemPrompt: `${event.systemPrompt}\n\n${modePrompt}`,
     };
   });
 }
