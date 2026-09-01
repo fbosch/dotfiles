@@ -2,11 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
 import { Markdown, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import {
-  associateFilenamesWithCodeFences,
-  installCodeBlockRenderer,
-  renderCodeBlock,
-} from "../code-blocks";
+import { associateFilenamesWithCodeFences, installCodeBlockRenderer, renderCodeBlock } from "..";
 
 const FOREGROUND = "\u001b[38;2;187;187;187m";
 const FOREGROUND_RESET = "\u001b[39m";

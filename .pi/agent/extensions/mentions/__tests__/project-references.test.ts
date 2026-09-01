@@ -219,7 +219,7 @@ describe("project references", () => {
     } as unknown as ExtensionAPI;
     projectReferences(pi);
     setThemeInstance(
-      loadThemeFromPath(join(import.meta.dir, "..", "..", "themes", "zenwritten-dark.json")),
+      loadThemeFromPath(join(import.meta.dir, "..", "..", "..", "themes", "zenwritten-dark.json")),
     );
     sessionStart?.(
       {} as SessionStartEvent,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { fetchWebContent, htmlToMarkdown, htmlToText, isBlockedAddress } from "../webfetch";
+import { fetchWebContent, htmlToMarkdown, htmlToText, isBlockedAddress } from "..";
 
 const PUBLIC_ADDRESSES = async () => ["93.184.216.34"];
 

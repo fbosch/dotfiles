@@ -7,8 +7,8 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import type { AgentMention } from "../mentions/agent-mentions";
 import { getCommandAlias } from "../command-aliases";
+import type { AgentMention } from "../mentions/agent-mentions";
 import {
   createReferenceAutocompleteProvider,
   type ProjectReference,

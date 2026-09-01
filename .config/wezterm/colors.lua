@@ -27,7 +27,7 @@ return function(config)
 			},
 			width = "100%",
 			height = "100%",
-			opacity = 0.97,
+			opacity = 0.975,
 		},
 		{
 			source = {
@@ -37,7 +37,7 @@ return function(config)
 			height = "1cell",
 			repeat_x = "Repeat",
 			repeat_y = "Repeat",
-			opacity = 0.75,
+			opacity = 0.66,
 		},
 	}
 	if is_hyprland == false then

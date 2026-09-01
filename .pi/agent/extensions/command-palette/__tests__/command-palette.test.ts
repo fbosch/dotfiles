@@ -8,7 +8,7 @@ import {
   rootItems,
   rootSections,
   SectionedSelectList,
-} from "../command-palette";
+} from "..";
 
 function createHarness(contextCommandAvailable: boolean) {
   const sentMessages: Array<[string, { expandPromptTemplates?: boolean } | undefined]> = [];

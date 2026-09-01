@@ -7,8 +7,8 @@ import {
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
-import { formatAnsiReferenceMentions } from "./reference-mentions";
 import { type AgentMention, loadAgentMentions } from "./agent-mentions";
+import { formatAnsiReferenceMentions } from "./reference-mentions";
 
 export const PROJECT_REFERENCES_START = "<available_references>";
 export const PROJECT_REFERENCES_END = "</available_references>";

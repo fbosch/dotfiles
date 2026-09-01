@@ -3,6 +3,12 @@
 Domain vocabulary for this dotfiles repository. Architecture reviews and agents
 should use these terms; new concepts named during design work land here.
 
+## Pi prompt
+
+- **prompt mention** — recognized `@name` token in user input that resolves to
+  either an agent invocation or a project reference. Both roles share one
+  case-insensitive name space.
+
 ## Hyprland runtime
 
 - **daemon kit** — `runtime/lib/daemon.lua`. Deep module owning the Hypr IPC
