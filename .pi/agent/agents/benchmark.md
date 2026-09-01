@@ -1,4 +1,5 @@
 ---
+color: "#f2d066"
 description: Runs performance benchmarks, profiles code, and compares before/after results. Use when measuring performance, identifying bottlenecks, or validating optimizations.
 prompt_mode: replace
 tools: read, grep, find, ls, fffind, ffgrep, bash

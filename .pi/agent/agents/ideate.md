@@ -1,7 +1,8 @@
 ---
+color: "#78b456"
 description: Spitballs ideas, alternatives, and directions within a given scope. Use before converging on a spec or implementation.
 prompt_mode: replace
-tools: read, grep, find, ls, fffind, ffgrep, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__exa
 permission:
   "*": deny
   read: allow
@@ -10,6 +11,8 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
+  websearch: ask
+  webfetch: ask
   mcp__exa: ask
   external_directory: ask
 ---

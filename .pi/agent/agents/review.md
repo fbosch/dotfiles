@@ -1,4 +1,5 @@
 ---
+color: "#a8d0e6"
 description: Reviews code for quality, security vulnerabilities, and best practices. Use after code changes, before merging PRs, or when auditing existing code.
 prompt_mode: replace
 tools: read, grep, find, ls, fffind, ffgrep, bash

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import {
+  type AutocompleteProvider,
+  stripTerminalSequences,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
+import {
+  createAliasAutocompleteProvider,
   findBottomBorder,
   splitEditorLines,
   styleSelectedSuggestion,
@@ -68,5 +73,36 @@ describe("prompt autocomplete", () => {
 
     expect(stripTerminalSequences(line)).toBe(" model  Select model");
     expect(line).toContain("\u001b[90m");
+  });
+
+  test("offers matching agents before file suggestions", async () => {
+    const provider: AutocompleteProvider = {
+      getSuggestions: async () => ({
+        items: [{ value: "@example.ts", label: "example.ts" }],
+        prefix: "@ex",
+      }),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const autocomplete = createAliasAutocompleteProvider(
+      provider,
+      [{ name: "explore", description: "Read-only codebase explorer", color: "#80a9c8" }],
+      (mention, text) => `${mention.color}:${text}`,
+    );
+
+    const suggestions = await autocomplete.getSuggestions(["ask @ex"], 0, 7, {
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestions).toEqual({
+      prefix: "@ex",
+      items: [
+        {
+          value: "@explore",
+          label: "#80a9c8:@explore",
+          description: "Agent · Read-only codebase explorer",
+        },
+        { value: "@example.ts", label: "example.ts" },
+      ],
+    });
   });
 });

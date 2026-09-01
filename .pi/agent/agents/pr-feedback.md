@@ -1,4 +1,5 @@
 ---
+color: "#b7d6f5"
 description: Triage GitHub PR review feedback, validate claims against the code, apply confirmed fixes, and resolve explicitly approved threads.
 prompt_mode: replace
 max_turns: 24

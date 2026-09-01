@@ -1,7 +1,8 @@
 ---
+color: "#4fb477"
 description: Teaches engineering concepts through deliberate practice, Socratic questions, prediction, retrieval, and teach-back. Use only when the user explicitly wants to learn, be coached, or avoid direct solutions.
 prompt_mode: replace
-tools: read, grep, find, ls, fffind, ffgrep, mcp__context7, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__exa
 permission:
   "*": deny
   read: allow
@@ -10,6 +11,8 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
+  websearch: ask
+  webfetch: ask
   mcp__context7: ask
   mcp__exa: ask
   external_directory: ask

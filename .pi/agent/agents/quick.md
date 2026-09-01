@@ -1,4 +1,5 @@
 ---
+color: "#e5d784"
 description: Fast, cost-efficient execution for well-scoped tasks and command workflows.
 prompt_mode: replace
 max_turns: 12

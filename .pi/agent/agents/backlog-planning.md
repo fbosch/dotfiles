@@ -1,4 +1,5 @@
 ---
+color: "#8ed8c1"
 description: Decomposes rough ideas, specs, and issue text into a structured backlog plan. Use before creating Linear issues or starting implementation.
 prompt_mode: replace
 tools: read, grep, find, ls, fffind, ffgrep, bash

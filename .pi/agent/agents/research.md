@@ -1,7 +1,8 @@
 ---
+color: "#ae87ed"
 description: Gathers information from docs, web, and codebases without making changes
 prompt_mode: replace
-tools: read, grep, find, ls, fffind, ffgrep, bash, mcp__context7, mcp__github, mcp__exa
+tools: read, grep, find, ls, fffind, ffgrep, bash, websearch, webfetch, mcp__context7, mcp__github, mcp__exa
 permission:
   "*": deny
   read: allow
@@ -11,6 +12,8 @@ permission:
   fffind: allow
   ffgrep: allow
   bash: ask
+  websearch: ask
+  webfetch: ask
   mcp__context7: ask
   mcp__github: ask
   mcp__exa: ask
@@ -31,8 +34,9 @@ You are in research mode. Gather, synthesize, and present information clearly wi
 1. **Local first**: check `/docs`, README, AGENTS.md, and relevant source files.
 2. **Context7**: use approved `mcp__context7` for targeted version-aware library/framework docs.
 3. **GitHub**: use approved `mcp__github` to browse issues, PRs, releases, and discussions. Do not clone a repository unless the parent explicitly authorizes a shell command.
-4. **Exa**: use approved `mcp__exa` for technical search and code examples.
-5. Open specific authoritative URLs surfaced by those sources before making material claims. If unavailable, report the gap.
+4. **Web search**: use approved `websearch` for current information and source discovery.
+5. **Web fetch**: open authoritative result URLs with approved `webfetch` before making material claims.
+6. **Exa**: use approved `mcp__exa` when its technical search or code context is specifically useful.
 
 ## Lookup delegation
 

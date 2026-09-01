@@ -7,10 +7,12 @@ import type {
   TUI,
 } from "@earendil-works/pi-tui";
 import { sliceByColumn, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import type { AgentMention } from "../agent-mentions";
 import { getCommandAlias } from "../command-aliases";
 import { fitColumns, paintDockRow } from "./dock-rendering";
 
 type Color = (text: string) => string;
+type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
 
 interface AutocompleteOverlayStyle {
   rail: string;
@@ -88,11 +90,41 @@ export function findBottomBorder(lines: readonly string[], border: Color): numbe
 
 export function createAliasAutocompleteProvider(
   provider: AutocompleteProvider,
+  agentMentions: readonly AgentMention[] = [],
+  formatAgentMention: AgentMentionFormatter = (_mention, text) => text,
 ): AutocompleteProvider {
   const aliasProvider: AutocompleteProvider = {
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {
       const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
       const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
+      const agentPrefix = /(?:^|\s)(@[a-z0-9-]*)$/i.exec(textBeforeCursor)?.[1];
+      const matchingAgents =
+        agentPrefix === undefined
+          ? []
+          : agentMentions
+              .filter((mention) =>
+                mention.name.toLowerCase().startsWith(agentPrefix.slice(1).toLowerCase()),
+              )
+              .map(
+                (mention): AutocompleteItem => ({
+                  value: `@${mention.name}`,
+                  label: formatAgentMention(mention, `@${mention.name}`),
+                  description: `Agent · ${mention.description}`,
+                }),
+              );
+      if (matchingAgents.length > 0 && agentPrefix !== undefined) {
+        return {
+          items: [
+            ...matchingAgents,
+            ...(suggestions?.items.filter(
+              (suggestion) =>
+                matchingAgents.some((agent) => agent.value === suggestion.value) === false,
+            ) ?? []),
+          ],
+          prefix: agentPrefix,
+        };
+      }
+
       const alias = getCommandAlias(textBeforeCursor);
       if (alias === undefined) return suggestions;
 

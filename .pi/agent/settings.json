@@ -36,7 +36,8 @@
       "skills": []
     },
     "npm:@gotgenes/pi-subagents@21.0.3",
-    "npm:pi-colours@0.1.0"
+    "npm:pi-command-palette@0.2.2"
   ],
+  "autocompleteMaxVisible": 10,
   "editorPaddingX": 0
 }

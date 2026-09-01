@@ -1,4 +1,4 @@
 {
-  "maxConcurrent": 1,
+  "maxConcurrent": 6,
   "abortAllOnInterrupt": true
 }

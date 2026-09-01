@@ -1,4 +1,5 @@
 ---
+color: "#aac6af"
 description: Finds existing implementations, usage examples, and conventions in the codebase. Use when you need concrete examples to model new work after or to understand how a pattern is currently applied.
 prompt_mode: replace
 tools: read, grep, find, ls, fffind, ffgrep, bash

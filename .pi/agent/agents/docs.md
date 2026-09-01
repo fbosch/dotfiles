@@ -1,4 +1,5 @@
 ---
+color: "#a4c0c9"
 description: Writes and maintains documentation including READMEs, API docs, and inline comments. Use when creating new docs, updating existing documentation, or improving the clarity of existing content.
 prompt_mode: replace
 max_turns: 6

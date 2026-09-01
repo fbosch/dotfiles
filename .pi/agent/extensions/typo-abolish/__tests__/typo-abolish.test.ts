@@ -46,7 +46,7 @@ function createEditor(): PromptEditor {
     theme,
     getKeybindings() as unknown as KeybindingsManager,
     {} as ExtensionAPI,
-    {} as ExtensionContext,
+    { cwd: process.cwd() } as ExtensionContext,
     state,
     typoRules,
   );

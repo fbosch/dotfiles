@@ -7,6 +7,13 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import {
+  type AgentMention,
+  agentMentionForegroundAnsi,
+  formatAnsiAgentMentions,
+  loadAgentMentions,
+  pathShadowsAgentMention,
+} from "../agent-mentions";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
@@ -22,6 +29,7 @@ import {
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
+import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
@@ -40,55 +48,6 @@ interface PromptKeybindings {
   getKeys(
     action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
   ): string[];
-}
-
-interface RgbColor {
-  r: number;
-  g: number;
-  b: number;
-}
-
-function parseHexColor(value: string): RgbColor {
-  return {
-    r: Number.parseInt(value.slice(1, 3), 16),
-    g: Number.parseInt(value.slice(3, 5), 16),
-    b: Number.parseInt(value.slice(5, 7), 16),
-  };
-}
-
-function colorDistance(left: RgbColor, right: RgbColor): number {
-  return (left.r - right.r) ** 2 + (left.g - right.g) ** 2 + (left.b - right.b) ** 2;
-}
-
-function rgbToAnsi256(color: RgbColor): number {
-  const cubeChannel = (channel: number): number =>
-    channel < 48 ? 0 : channel < 115 ? 1 : Math.round((channel - 55) / 40);
-  const cube = {
-    r: [0, 95, 135, 175, 215, 255][cubeChannel(color.r)] ?? 0,
-    g: [0, 95, 135, 175, 215, 255][cubeChannel(color.g)] ?? 0,
-    b: [0, 95, 135, 175, 215, 255][cubeChannel(color.b)] ?? 0,
-  };
-  const cubeIndex =
-    16 + 36 * cubeChannel(color.r) + 6 * cubeChannel(color.g) + cubeChannel(color.b);
-  const gray = Math.round((color.r + color.g + color.b) / 3);
-  const grayChannel = Math.min(23, Math.max(0, Math.round((gray - 8) / 10)));
-  const grayValue = 8 + grayChannel * 10;
-  const grayIndex = 232 + grayChannel;
-
-  return colorDistance(color, cube) <=
-    colorDistance(color, { r: grayValue, g: grayValue, b: grayValue })
-    ? cubeIndex
-    : grayIndex;
-}
-
-function colorizeHex(theme: Theme, value: string): (text: string) => string {
-  const color = parseHexColor(value);
-  const ansi =
-    theme.getColorMode() === "truecolor"
-      ? `\u001b[38;2;${color.r};${color.g};${color.b}m`
-      : `\u001b[38;5;${rgbToAnsi256(color)}m`;
-
-  return (text) => `${ansi}${text}\u001b[39m`;
 }
 
 function formatCwd(cwd: string): string {
@@ -168,6 +127,7 @@ export class PromptEditor extends CustomEditor {
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
   private readonly typoRules: TypoCorrectionRules;
+  private readonly agentMentions: readonly AgentMention[];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
 
   constructor(
@@ -187,6 +147,9 @@ export class PromptEditor extends CustomEditor {
     this.ctx = ctx;
     this.promptState = state;
     this.typoRules = typoRules;
+    this.agentMentions = loadAgentMentions(this.ctx.cwd).filter(
+      (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
+    );
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
   }
 
@@ -206,7 +169,13 @@ export class PromptEditor extends CustomEditor {
       "#",
       ...(provider.triggerCharacters ?? []),
     ]);
-    super.setAutocompleteProvider(createAliasAutocompleteProvider(provider));
+    super.setAutocompleteProvider(
+      createAliasAutocompleteProvider(provider, this.agentMentions, (mention, text) =>
+        mention.color === undefined
+          ? this.ctx.ui.theme.fg("accent", text)
+          : colorizeHex(this.ctx.ui.theme, mention.color)(text),
+      ),
+    );
   }
 
   private hasAutocompleteTokenAtCursor(line: string, cursorCol: number): boolean {
@@ -262,6 +231,11 @@ export class PromptEditor extends CustomEditor {
     const editorWidth = width - DOCK_CHROME_WIDTH;
     // Pi renders its internal editor border with the thinking color, even in Plan mode.
     const { content, suggestions } = splitEditorLines(super.render(editorWidth), editorBorder);
+    const coloredContent = content.map((line) =>
+      formatAnsiAgentMentions(line, this.agentMentions, this.ctx.cwd, (mention) =>
+        agentMentionForegroundAnsi(theme, mention),
+      ),
+    );
     const branch = this.promptState.getBranch();
     const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";
     const model = this.ctx.model;
@@ -286,7 +260,7 @@ export class PromptEditor extends CustomEditor {
     const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
     const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
     const backgroundAnsi = theme.getBgAnsi("userMessageBg");
-    const dockRows = ["", ...content, "", modelRow].map((line) =>
+    const dockRows = ["", ...coloredContent, "", modelRow].map((line) =>
       paintDockRow(line, width, inputRail, backgroundAnsi, rightBorder),
     );
     const bottomEdge = paintDockBottomEdge(
