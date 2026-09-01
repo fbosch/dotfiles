@@ -3,7 +3,14 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, Input, matchesKey, Text, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  Input,
+  matchesKey,
+  Text,
+  visibleWidth,
+  wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 
 interface AskOption {
   label: string;
@@ -214,12 +221,17 @@ class QuestionPromptComponent implements Component {
     if (this.step === "input") {
       const label = this.mode === "text" ? "Answer:" : "Custom answer:";
       lines.push(label, ...this.input.render(width));
-      if (this.error !== undefined) lines.push(this.theme.fg("error", this.error));
+      if (this.error !== undefined) {
+        lines.push(...wrapTextWithAnsi(this.theme.fg("error", this.error), width));
+      }
       lines.push("");
       lines.push(
-        this.theme.fg(
-          "muted",
-          this.mode === "text" ? "enter submit · esc cancel" : "enter save · esc back",
+        ...wrapTextWithAnsi(
+          this.theme.fg(
+            "muted",
+            this.mode === "text" ? "enter submit · esc cancel" : "enter save · esc back",
+          ),
+          width,
         ),
       );
       return lines;
@@ -234,14 +246,19 @@ class QuestionPromptComponent implements Component {
       if (row.kind === "submit") lines.push("");
       lines.push(...this.renderChoiceRow(row, index === this.highlightedIndex, width));
     }
-    if (this.error !== undefined) lines.push(this.theme.fg("error", this.error));
+    if (this.error !== undefined) {
+      lines.push(...wrapTextWithAnsi(this.theme.fg("error", this.error), width));
+    }
     lines.push("");
     lines.push(
-      this.theme.fg(
-        "muted",
-        this.mode === "multi-select"
-          ? "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel"
-          : "↑/↓ move · 1–9 choose · enter select · esc cancel",
+      ...wrapTextWithAnsi(
+        this.theme.fg(
+          "muted",
+          this.mode === "multi-select"
+            ? "↑/↓ move · space/enter toggle · 1–9 toggle · s submit · esc cancel"
+            : "↑/↓ move · 1–9 choose · enter select · esc cancel",
+        ),
+        width,
       ),
     );
     return lines;
@@ -347,10 +364,22 @@ class QuestionPromptComponent implements Component {
         : highlighted
           ? this.theme.fg("accent", row.label)
           : row.label;
-    const lines = wrapTextWithAnsi(`${marker} ${hotkey} ${checkbox}${label}`, width);
+    const prefix = `${marker} ${hotkey} ${checkbox}`;
+    const prefixWidth = visibleWidth(prefix);
+    const lines =
+      width <= prefixWidth
+        ? wrapTextWithAnsi(`${prefix}${label}`, Math.max(1, width))
+        : wrapTextWithAnsi(label, width - prefixWidth).map(
+            (line, index) => `${index === 0 ? prefix : " ".repeat(prefixWidth)}${line}`,
+          );
     if (row.description !== undefined) {
       const indent = this.mode === "multi-select" ? "          " : "      ";
-      lines.push(...wrapTextWithAnsi(this.theme.fg("muted", `${indent}${row.description}`), width));
+      const description = this.theme.fg("muted", row.description);
+      lines.push(
+        ...(width <= indent.length
+          ? wrapTextWithAnsi(description, Math.max(1, width))
+          : wrapTextWithAnsi(description, width - indent.length).map((line) => `${indent}${line}`)),
+      );
     }
     return lines;
   }

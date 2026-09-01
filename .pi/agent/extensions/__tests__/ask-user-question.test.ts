@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Component } from "@earendil-works/pi-tui";
+import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import askUserQuestion, { type AskUserQuestionResultDetails } from "../ask-user-question";
 
 interface QuestionParams {
@@ -169,6 +169,7 @@ describe("ask_user_question", () => {
         expect(rendered).toContain("▶ (1) Red");
         expect(rendered).toContain("      Cooler");
         expect(rendered).toContain("↑/↓ move · 1–9 choose · enter select · esc cancel");
+        expect(component.render(24).every((line) => visibleWidth(line) <= 24)).toBe(true);
         component.handleInput?.("2");
       }),
     );

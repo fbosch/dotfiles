@@ -3,6 +3,7 @@ import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
 import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
+import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
@@ -15,6 +16,7 @@ export default function promptUi(pi: ExtensionAPI): void {
   let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
   let activeTui: TUI | undefined;
   let disposePromptEditor = () => {};
+  let disposeSubagentWidgetFrame = () => {};
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
@@ -53,6 +55,8 @@ export default function promptUi(pi: ExtensionAPI): void {
     stopWorkingPulse();
     disposePromptEditor();
     disposePromptEditor = () => {};
+    disposeSubagentWidgetFrame();
+    disposeSubagentWidgetFrame = () => {};
     activeTui = undefined;
   });
 
@@ -60,6 +64,8 @@ export default function promptUi(pi: ExtensionAPI): void {
     if (!ctx.hasUI) return;
 
     installFloatingDialogs(ctx.ui);
+    disposeSubagentWidgetFrame();
+    disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui);
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();

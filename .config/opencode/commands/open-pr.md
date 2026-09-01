@@ -12,7 +12,7 @@ PR BODY POLICY (authoritative for body content only):
 
 TONE POLICY (authoritative for voice and phrasing only):
 
-@~/.config/opencode/TONE.md
+@~/.config/fbb/TONE.md
 
 Follow this precedence order:
 
