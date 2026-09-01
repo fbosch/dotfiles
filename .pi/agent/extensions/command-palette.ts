@@ -11,6 +11,7 @@ import {
   Input,
   type SelectItem,
   SelectList,
+  type SelectListLayoutOptions,
   Spacer,
   sliceByColumn,
   type TUI,
@@ -57,6 +58,13 @@ interface PaletteLevel {
 }
 
 const MAX_VISIBLE_ROOT_ROWS = 24;
+
+// pi-tui's default truncation emits a full ANSI reset, which clears the modal background.
+export const PALETTE_LIST_LAYOUT = {
+  minPrimaryColumnWidth: 18,
+  maxPrimaryColumnWidth: 32,
+  truncatePrimary: ({ text, maxWidth }) => truncatePlainText(text, maxWidth),
+} satisfies SelectListLayoutOptions;
 
 function isCommandContext(ctx: ExtensionContext): ctx is ExtensionCommandContext {
   return "newSession" in ctx;
@@ -365,7 +373,7 @@ class CommandPalette extends ModalFrame {
       })),
       Math.max(1, Math.min(MODAL_MAX_VISIBLE_ITEMS, this.tui.terminal.rows - MODAL_FIXED_ROWS - 1)),
       modalSelectListTheme(this.theme),
-      { minPrimaryColumnWidth: 18, maxPrimaryColumnWidth: 32 },
+      PALETTE_LIST_LAYOUT,
     );
     list.onSelect = (selected) => void this.select(selected);
     list.onCancel = () => this.cancel();

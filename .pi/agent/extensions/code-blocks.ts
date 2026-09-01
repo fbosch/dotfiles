@@ -445,6 +445,7 @@ function renderCodePanel(
     paintBackground("", width, headerBackground),
     paintBackground(`  ${header}`, width, headerBackground),
     paintBackground("", width, headerBackground),
+    paintBackground("", width, activeTheme?.getBgAnsi("userMessageBg") ?? ""),
   ];
 
   for (const [index, row] of rows.entries()) {

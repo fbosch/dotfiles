@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { visibleWidth } from "@earendil-works/pi-tui";
+import { SelectList, visibleWidth } from "@earendil-works/pi-tui";
 import {
   default as commandPalette,
   filterPaletteSections,
+  PALETTE_LIST_LAYOUT,
   rootItems,
   rootSections,
   SectionedSelectList,
@@ -85,6 +86,30 @@ describe("command palette session switching", () => {
     const pi = { getCommands: () => [] } as unknown as ExtensionAPI;
 
     expect(rootItems(context, pi).map((item) => item.id)).toContain("resume-session");
+  });
+
+  test("does not reset the modal background after truncating submenu labels", () => {
+    const passthroughTheme = {
+      selectedPrefix: (text: string) => text,
+      selectedText: (text: string) => text,
+      description: (text: string) => text,
+      scrollInfo: (text: string) => text,
+      noMatch: (text: string) => text,
+    };
+    const list = new SelectList(
+      [
+        {
+          value: "session",
+          label: "Validate Herdr Pi Session Identity",
+          description: "9/1/2026, 2:43:38 PM",
+        },
+      ],
+      5,
+      passthroughTheme,
+      PALETTE_LIST_LAYOUT,
+    );
+
+    expect(list.render(68)[0]).not.toContain("\u001b[0m");
   });
 });
 

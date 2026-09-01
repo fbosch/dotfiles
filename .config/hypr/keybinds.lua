@@ -115,7 +115,7 @@ bind.register(main("G"), focus_gaming_workspace)
 bind.register(main("SHIFT + G"), window_workspace.move_to_gaming_workspace)
 
 -- Capture
-bind.register("CTRL + SHIFT + C", "bash ~/.config/hypr/runtime/capture/screenshot.sh area")
+bind.register("CTRL + SHIFT + C", "bash ~/.config/hypr/runtime/capture/screenshot.sh clipboard")
 bind.register("PRINT", "bash ~/.config/hypr/runtime/capture/screenshot.sh screen", {
 	non_consuming = true,
 	ignore_mods = true,

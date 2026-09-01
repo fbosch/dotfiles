@@ -6,6 +6,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  CURSOR_MARKER,
   stripTerminalSequences,
   type TUI,
   visibleWidth,
@@ -14,10 +15,11 @@ import { installFloatingDialogs } from "../floating-dialogs";
 import { modalSelectedRow } from "../modal-frame";
 
 type CustomOptions = Parameters<ExtensionUIContext["custom"]>[1];
+type DialogComponent = Component & { dispose?(): void };
 
 function createUI() {
   const calls: CustomOptions[] = [];
-  const components: Component[] = [];
+  const components: DialogComponent[] = [];
   const theme = {
     fg: (_color: string, text: string) => text,
     bg: (_color: string, text: string) => text,
@@ -35,7 +37,7 @@ function createUI() {
       theme: Theme,
       keybindings: KeybindingsManager,
       done: (result: T) => void,
-    ) => Component | Promise<Component>,
+    ) => DialogComponent | Promise<DialogComponent>,
     options?: CustomOptions,
   ): Promise<T> => {
     calls.push(options);
@@ -46,7 +48,9 @@ function createUI() {
     const component = await factory(tui, theme, {} as KeybindingsManager, finish);
     components.push(component);
     component.handleInput?.("\r");
-    return result;
+    const value = await result;
+    component.dispose?.();
+    return value;
   };
   const ui = {
     custom,
@@ -97,28 +101,51 @@ describe("floating extension dialogs", () => {
     const { calls, components, ui } = createUI();
     installFloatingDialogs(ui);
     let handledInput = "";
+    let disposeCount = 0;
+    let innerFocused = false;
 
-    await ui.custom(
+    const result = await ui.custom(
       (_tui, _theme, _keybindings, done) => {
         return {
-          render: () => ["Permission required"],
+          get focused() {
+            return innerFocused;
+          },
+          set focused(focused: boolean) {
+            innerFocused = focused;
+          },
+          wantsKeyRelease: true,
+          render: () => [`Permission required${CURSOR_MARKER}`],
           handleInput: (data) => {
             handledInput = data;
-            done(undefined);
+            done("approved");
           },
           invalidate: () => {},
+          dispose: () => {
+            disposeCount += 1;
+          },
         };
       },
       { overlay: false },
     );
 
     expect(calls).toEqual([{ overlay: false }]);
+    expect(result).toBe("approved");
     expect(handledInput).toBe("\r");
+    expect(disposeCount).toBe(1);
+    const dock = components[0] as Component & { focused: boolean };
+    expect(dock.wantsKeyRelease).toBe(true);
+    dock.focused = true;
+    expect(innerFocused).toBe(true);
     const rendered = components[0]?.render(28) ?? [];
     const plain = rendered.map(stripTerminalSequences);
     expect(plain[1]).toContain(" Permission required");
     expect(plain.at(-1)).toBe(`▘${"▀".repeat(26)}▝`);
     expect(rendered.every((line) => visibleWidth(line) === 28)).toBe(true);
     expect(rendered[1]).toContain("\u001b[48;2;34;34;34m");
+    expect(rendered[1]).toContain(CURSOR_MARKER);
+
+    const narrow = components[0]?.render(3) ?? [];
+    expect(narrow.map(stripTerminalSequences).at(-1)).toBe("▘▀▝");
+    expect(narrow.every((line) => visibleWidth(line) === 3)).toBe(true);
   });
 });

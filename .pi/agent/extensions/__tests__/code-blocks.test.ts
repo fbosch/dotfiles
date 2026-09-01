@@ -62,6 +62,7 @@ describe("code block rendering", () => {
       "                            ",
       "   TypeScript              ",
       "                            ",
+      "                            ",
       "  1  const answer = 42;     ",
       "  2  return answer;         ",
       "                            ",
@@ -78,7 +79,7 @@ describe("code block rendering", () => {
       undefined,
       blockTheme,
     );
-    const body = plain(lines).slice(3, -1);
+    const body = plain(lines).slice(4, -1);
 
     expect(body.length).toBeGreaterThan(1);
     expect(body[0]?.startsWith("  1  ")).toBe(true);
@@ -107,12 +108,12 @@ describe("code block rendering", () => {
     const rendered = plain(lines);
 
     expect(rendered[1]?.trim()).toBe(" example.ts");
-    expect(rendered[3]?.startsWith(" 10  const stable = true;")).toBe(true);
-    expect(rendered[4]?.startsWith(" 11- const oldValue = 1;")).toBe(true);
-    expect(rendered[5]?.startsWith(" 11+ const newValue = 2;")).toBe(true);
-    expect(rendered[6]?.startsWith(" 12+ return newValue;")).toBe(true);
-    expect(lines[4]).toContain(BACKGROUNDS.toolErrorBg);
-    expect(lines[5]).toContain(BACKGROUNDS.toolSuccessBg);
+    expect(rendered[4]?.startsWith(" 10  const stable = true;")).toBe(true);
+    expect(rendered[5]?.startsWith(" 11- const oldValue = 1;")).toBe(true);
+    expect(rendered[6]?.startsWith(" 11+ const newValue = 2;")).toBe(true);
+    expect(rendered[7]?.startsWith(" 12+ return newValue;")).toBe(true);
+    expect(lines[5]).toContain(BACKGROUNDS.toolErrorBg);
+    expect(lines[6]).toContain(BACKGROUNDS.toolSuccessBg);
   });
 
   test("keeps header-like source lines inside a diff hunk", () => {
@@ -126,8 +127,8 @@ describe("code block rendering", () => {
     const rendered = plain(lines);
 
     expect(rendered[1]?.trim()).toBe(" Diff");
-    expect(rendered[3]?.startsWith("  1- -- old")).toBe(true);
-    expect(rendered[4]?.startsWith("  1+ ++ new")).toBe(true);
+    expect(rendered[4]?.startsWith("  1- -- old")).toBe(true);
+    expect(rendered[5]?.startsWith("  1+ ++ new")).toBe(true);
   });
 
   test("uses the old path for deleted files and omits file metadata from source rows", () => {
@@ -150,7 +151,7 @@ describe("code block rendering", () => {
     const rendered = plain(lines);
 
     expect(rendered[1]?.trim()).toBe(" old.ts");
-    expect(rendered[3]?.startsWith("  8- export const oldValue = 1;")).toBe(true);
+    expect(rendered[4]?.startsWith("  8- export const oldValue = 1;")).toBe(true);
     expect(rendered.some((line) => line.includes("deleted file mode"))).toBe(false);
   });
 
@@ -223,7 +224,7 @@ describe("code block rendering", () => {
       blockTheme,
     );
 
-    expect(plain(lines)[3]).toBe("x    ");
+    expect(plain(lines)[4]).toBe("x    ");
     expect(lines.every((line) => visibleWidth(line) === 5)).toBe(true);
   });
 
@@ -249,7 +250,7 @@ describe("code block rendering", () => {
     );
 
     expect(plain(lines)[1]?.trim()).toBe(" agents.ts");
-    expect(plain(lines)[3]?.includes("// agents.ts")).toBe(true);
+    expect(plain(lines)[4]?.includes("// agents.ts")).toBe(true);
   });
 
   test("moves a standalone path into the following fence metadata", () => {
@@ -303,8 +304,8 @@ describe("code block rendering", () => {
       blockTheme,
     );
 
-    expect(lines[3]).toContain(`\u001b[0m${BACKGROUNDS.userMessageBg}plain`);
-    expect(lines[3]).toContain(`\u001b[49m${BACKGROUNDS.userMessageBg}background`);
+    expect(lines[4]).toContain(`\u001b[0m${BACKGROUNDS.userMessageBg}plain`);
+    expect(lines[4]).toContain(`\u001b[49m${BACKGROUNDS.userMessageBg}background`);
   });
 
   test("integrates with Pi's Markdown lexer without displaying fences", () => {

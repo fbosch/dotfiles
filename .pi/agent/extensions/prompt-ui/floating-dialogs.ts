@@ -36,19 +36,36 @@ class InlineDockDialog implements Component {
   constructor(
     private readonly component: Component & { dispose?(): void },
     private readonly theme: Theme,
-  ) {}
+  ) {
+    if ("focused" in component) {
+      const focusable = component as Component & { focused: boolean };
+      Object.defineProperty(this, "focused", {
+        get: () => focusable.focused,
+        set: (focused: boolean) => {
+          focusable.focused = focused;
+        },
+      });
+    }
+    if (component.wantsKeyRelease !== undefined) {
+      Object.defineProperty(this, "wantsKeyRelease", {
+        get: () => component.wantsKeyRelease,
+      });
+    }
+  }
 
   render(width: number): string[] {
-    const minimumWidth = DOCK_CHROME_WIDTH + INLINE_DIALOG_PADDING_X * 2;
-    if (width <= minimumWidth) return this.component.render(width);
+    if (width <= DOCK_CHROME_WIDTH) return this.component.render(width);
 
-    const contentWidth = width - minimumWidth;
+    const availableWidth = width - DOCK_CHROME_WIDTH;
+    const paddingX =
+      availableWidth >= INLINE_DIALOG_PADDING_X * 2 + 1 ? INLINE_DIALOG_PADDING_X : 0;
+    const contentWidth = availableWidth - paddingX * 2;
     const backgroundAnsi = this.theme.getBgAnsi("userMessageBg");
     const rail = this.theme.fg("warning", DOCK_RAIL);
     const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
     const content = this.component
       .render(contentWidth)
-      .map((line) => `${" ".repeat(INLINE_DIALOG_PADDING_X)}${line}`);
+      .map((line) => `${" ".repeat(paddingX)}${line}`);
     const rows = ["", ...content, ""].map((line) =>
       paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
     );

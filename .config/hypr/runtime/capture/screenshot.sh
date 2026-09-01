@@ -15,6 +15,10 @@ case "$mode" in
         target="area"
         label="Selection"
         ;;
+    clipboard)
+        target="area"
+        label="Selection"
+        ;;
     screen)
         # Capture the currently focused output (monitor with the pointer).
         target="output"
@@ -196,7 +200,11 @@ if command -v notify-send >/dev/null 2>&1; then
     (
         # Get file size for display
         file_size=$(du -h "${file}" | cut -f1)
-        
+        message="${label} screenshot saved (${file_size})"
+        if [[ "${mode}" == "clipboard" ]]; then
+            message="${label} screenshot copied to clipboard (${file_size})"
+        fi
+
         # Use HTML img tag in body to show larger preview
         # Default action (clicking notification) opens the screenshot
         # Using Nerd Font icons:  = image,  = folder,  = trash
@@ -211,8 +219,8 @@ if command -v notify-send >/dev/null 2>&1; then
             --action="folder=   Open" \
             --action="delete=   Delete" \
             "Screenshot Captured" \
-            "<img src=\"${file}\"/>${label} screenshot saved (${file_size})") || true
-        
+            "<img src=\"${file}\"/>${message}") || true
+
         case "${action}" in
             default|open)
                 if command -v xdg-open >/dev/null 2>&1; then
