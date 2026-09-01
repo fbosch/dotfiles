@@ -1,0 +1,26 @@
+{
+  "settings": {
+    "directTools": false,
+    "hostConfigDiscovery": "off",
+    "scriptMode": false
+  },
+  "mcpServers": {
+    "context7": {
+      "command": "podman",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges",
+        "-e",
+        "MCP_TRANSPORT=stdio",
+        "docker.io/mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836"
+      ],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false
+    }
+  }
+}

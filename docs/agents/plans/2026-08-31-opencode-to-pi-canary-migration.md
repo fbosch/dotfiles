@@ -262,6 +262,31 @@ Rollback:
 
 - Remove the adapter package or the individual server declaration.
 
+Context7 MCP canary outcome on 2026-09-01:
+
+- Installed and pinned `pi-mcp-adapter@2.31.0` with package skills disabled.
+  npm reported zero vulnerabilities and no additional install scripts were
+  approved.
+- Configured `directTools: false`, `hostConfigDiscovery: "off"`, and
+  `scriptMode: false`. Pi exposed one MCP tool, `mcp`, and did not expose
+  `mcpScript` or individual server tools.
+- Added only Context7, running under rootless Podman with a read-only
+  filesystem, all capabilities dropped, and `no-new-privileges`.
+- Pinned the multi-architecture Context7 image to
+  `sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836`.
+  Cosign verified the image against Docker's MCP public key and transparency
+  log.
+- Confirmed the merged adapter configuration contains only the Context7 server
+  and keeps host-specific discovery off.
+- Confirmed an idle Pi session does not start the lazy Context7 container.
+- Confirmed normal headless use fails closed with `approval required` before an
+  MCP call runs.
+- Loaded only the adapter for functional isolation and resolved Bun to
+  `/oven-sh/bun` through Context7. The container stopped after the session.
+- Ignored adapter metadata and onboarding state under `~/.pi/agent`; neither
+  contains declarative configuration.
+- Confirmed `pi --no-extensions` starts without the `mcp` tool.
+
 ## Phase 5: Canary Manual Auth Profiles
 
 Add:
