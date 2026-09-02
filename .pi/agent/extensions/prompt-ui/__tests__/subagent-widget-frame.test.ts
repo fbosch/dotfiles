@@ -165,6 +165,24 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
+  test("does not render a frame when the wrapped widget is empty", () => {
+    const { calls, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => [],
+      invalidate: () => {},
+    };
+    const uninstall = installSubagentWidgetFrame(ui);
+    ui.setWidget("rpiv-todos", () => widget, { placement: "aboveEditor" });
+
+    const factory = calls[0]?.content;
+    expect(typeof factory).toBe("function");
+    if (typeof factory !== "function") throw new Error("Expected a widget factory");
+    const framed = factory(tui, theme);
+
+    expect(framed.render(32)).toEqual([]);
+    uninstall();
+  });
+
   test("leaves other widgets and static content unchanged", () => {
     const { calls, ui } = createUI();
     const factory: WidgetFactory = () => ({ render: () => ["other"], invalidate: () => {} });

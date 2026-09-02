@@ -1,24 +1,45 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import {
+  access as fsAccess,
+  readFile as fsReadFile,
+  mkdtemp,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   BorderedLoader,
+  createEditToolDefinition,
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   defineTool,
+  type EditOperations,
+  type EditToolDetails,
   type ExecOptions,
   type ExecResult,
   type ExtensionAPI,
+  type ExtensionContext,
   formatSize,
   keyHint,
   type Theme,
+  type ThemeColor,
+  type ToolDefinition,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
-import { type Component, Text, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import {
+  Box,
+  type Component,
+  Container,
+  Spacer,
+  Text,
+  wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 
 const COMMAND_TIMEOUT_MS = 60_000;
+const EDIT_COMMAND_TIMEOUT_MS = 10_000;
 const DEFAULT_CONTEXT_LINES = 3;
 const DEFAULT_WIDTH = 120;
 const MIN_WIDTH = 40;
@@ -110,6 +131,18 @@ export type GitDiffRunner = (
   signal?: AbortSignal,
 ) => Promise<DifftasticResult>;
 
+export interface DifftasticEditRequest {
+  readonly newContent: string;
+  readonly oldContent: string;
+  readonly path: string;
+}
+
+export type EditDiffRunner = (
+  request: DifftasticEditRequest,
+  cwd: string,
+  signal?: AbortSignal,
+) => Promise<DifftasticDetails>;
+
 interface RunOptions {
   readonly columns?: number;
   readonly signal?: AbortSignal;
@@ -185,6 +218,53 @@ function stripSgr(value: string): string {
   return value
     .split(ESCAPE)
     .map((part, index) => (index === 0 ? part : part.replace(SGR_SUFFIX_PATTERN, "")))
+    .join("");
+}
+
+function themeColorForDifftasticCode(code: number): ThemeColor | undefined {
+  switch (code) {
+    case 31:
+    case 91:
+      return "toolDiffRemoved";
+    case 32:
+    case 92:
+      return "toolDiffAdded";
+    case 33:
+    case 93:
+      return "accent";
+    case 34:
+    case 94:
+      return "syntaxComment";
+    case 35:
+    case 95:
+      return "syntaxString";
+    default:
+      return undefined;
+  }
+}
+
+function remapSgr(suffix: string, theme: Pick<Theme, "getFgAnsi">): string {
+  const codes = suffix
+    .slice(1, -1)
+    .split(";")
+    .map((value) => Number(value));
+  return codes
+    .map((code) => {
+      const color = themeColorForDifftasticCode(code);
+      return color === undefined ? `${ESCAPE}[${code}m` : theme.getFgAnsi(color);
+    })
+    .join("");
+}
+
+export function remapDifftasticColors(value: string, theme: Pick<Theme, "getFgAnsi">): string {
+  return sanitizeTerminalOutput(value)
+    .split(ESCAPE)
+    .map((part, index) => {
+      if (index === 0) return part;
+      const suffix = SGR_SUFFIX_PATTERN.exec(part)?.[0];
+      if (suffix === undefined) return part;
+      return `${remapSgr(suffix, theme)}${part.slice(suffix.length)}`;
+    })
     .join("");
 }
 
@@ -389,6 +469,105 @@ export async function runDifftasticGitDiff(
   return { content: sections.join("\n\n"), details };
 }
 
+function editTempFileName(path: string, prefix: string): string {
+  const fileName = basename(path).replace(/[^\p{L}\p{N}._-]/gu, "_");
+  return `${prefix}-${fileName || "file"}`;
+}
+
+function editDiffOutputPath(
+  output: string,
+  oldPath: string,
+  newPath: string,
+  path: string,
+): string {
+  return output.replaceAll(oldPath, `${path} (before)`).replaceAll(newPath, path);
+}
+
+export async function runDifftasticEditDiff(
+  execute: GitDiffExecutor,
+  request: DifftasticEditRequest,
+  cwd: string,
+  options: RunOptions = {},
+): Promise<DifftasticDetails> {
+  const width = effectiveWidth(options.columns);
+  const display = width >= SIDE_BY_SIDE_MIN_WIDTH ? "side-by-side" : "inline";
+  const directory = await mkdtemp(join(tmpdir(), "pi-difftastic-edit-"));
+  const oldPath = join(directory, editTempFileName(request.path, "before"));
+  const newPath = join(directory, editTempFileName(request.path, "after"));
+
+  try {
+    await writeFile(oldPath, request.oldContent, "utf8");
+    await writeFile(newPath, request.newContent, "utf8");
+    options.signal?.throwIfAborted();
+
+    let result: ExecResult;
+    try {
+      result = await execute(
+        "difft",
+        [
+          `--display=${display}`,
+          "--color=always",
+          `--width=${width}`,
+          `--context=${DEFAULT_CONTEXT_LINES}`,
+          oldPath,
+          newPath,
+        ],
+        {
+          cwd,
+          timeout: EDIT_COMMAND_TIMEOUT_MS,
+          ...(options.signal === undefined ? {} : { signal: options.signal }),
+        },
+      );
+    } catch (error) {
+      if (options.signal?.aborted === true) throw new Error("Structural edit diff was cancelled");
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not render structural edit diff: ${diagnostic(message)}`);
+    }
+
+    if (result.killed) {
+      if (options.signal?.aborted === true) throw new Error("Structural edit diff was cancelled");
+      throw new Error(
+        `Could not render structural edit diff: timed out after ${EDIT_COMMAND_TIMEOUT_MS / 1_000} seconds`,
+      );
+    }
+    if (result.code !== 0) {
+      throw new Error(
+        `Could not render structural edit diff:\n${diagnostic(result.stderr || result.stdout)}`,
+      );
+    }
+
+    const output = editDiffOutputPath(result.stdout, oldPath, newPath, request.path);
+    const bounded = boundDiffOutput(output);
+    const noChanges = bounded.plain.trim() === "";
+    const warningText = result.stderr.trim() === "" ? undefined : diagnostic(result.stderr);
+    let fullOutputPath: string | undefined;
+    let saveWarning: string | undefined;
+    if (bounded.truncation !== undefined) {
+      try {
+        const writer = options.writeFullOutput ?? writeFullOutput;
+        fullOutputPath = await writer(stripSgr(sanitizeTerminalOutput(output)));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        saveWarning = `Could not save the full diff: ${diagnostic(message)}`;
+      }
+    }
+
+    const warning = [warningText, saveWarning].filter((value) => value !== undefined).join("\n");
+    return {
+      display,
+      noChanges,
+      output: bounded.ansi,
+      scope: "edit changes",
+      width,
+      ...(bounded.truncation === undefined ? {} : { truncation: bounded.truncation }),
+      ...(fullOutputPath === undefined ? {} : { fullOutputPath }),
+      ...(warning === "" ? {} : { warning }),
+    };
+  } finally {
+    await rm(directory, { force: true, recursive: true }).catch(() => undefined);
+  }
+}
+
 export function renderDiffLines(lines: readonly string[], width: number): string[] {
   const availableWidth = Math.max(1, width);
   return lines.flatMap((line) => {
@@ -419,7 +598,7 @@ function detailLines(value: string): string[] {
 }
 
 function diffComponent(details: DifftasticDetails, expanded: boolean, theme: Theme): Component {
-  const lines = sourceLines(details.output);
+  const lines = sourceLines(remapDifftasticColors(details.output, theme));
   if (details.noChanges) {
     const output = [statusLine(theme, "Info", `No ${details.scope}.`)];
     if (details.warning !== undefined) {
@@ -452,18 +631,299 @@ function diffComponent(details: DifftasticDetails, expanded: boolean, theme: The
   return new DiffOutputComponent(output);
 }
 
+type NativeEditDefinition = ReturnType<typeof createEditToolDefinition>;
+type NativeEditRenderCall = NonNullable<NativeEditDefinition["renderCall"]>;
+type NativeEditInput = Parameters<NativeEditDefinition["execute"]>[1];
+type NativeEditState = Parameters<NativeEditRenderCall>[2]["state"];
+
+type DifftasticEditDetails = EditToolDetails & {
+  readonly difftastic?: DifftasticDetails;
+};
+
+interface DifftasticEditState {
+  preview: DifftasticDetails | undefined;
+  previewController: AbortController | undefined;
+  previewKey: string | undefined;
+  previewPending: boolean;
+}
+
+type DifftasticEditRenderState = NativeEditState & DifftasticEditState;
+type DifftasticEditToolDefinition = ToolDefinition<
+  NativeEditDefinition["parameters"],
+  DifftasticEditDetails | undefined,
+  DifftasticEditRenderState
+>;
+
+function renderableEditInput(args: unknown): NativeEditInput | undefined {
+  if (args === null || typeof args !== "object") return undefined;
+  const record = args as Record<string, unknown>;
+  const path = typeof record.path === "string" ? record.path : record.file_path;
+  if (typeof path !== "string") return undefined;
+
+  if (
+    Array.isArray(record.edits) &&
+    record.edits.every(
+      (edit): edit is { oldText: string; newText: string } =>
+        edit !== null &&
+        typeof edit === "object" &&
+        typeof (edit as Record<string, unknown>).oldText === "string" &&
+        typeof (edit as Record<string, unknown>).newText === "string",
+    )
+  ) {
+    return { path, edits: record.edits };
+  }
+
+  if (typeof record.oldText === "string" && typeof record.newText === "string") {
+    return { path, edits: [{ oldText: record.oldText, newText: record.newText }] };
+  }
+
+  return undefined;
+}
+
+async function simulateEdit(
+  cwd: string,
+  input: NativeEditInput,
+  signal: AbortSignal,
+): Promise<DifftasticEditRequest> {
+  let oldContent: Buffer | undefined;
+  let newContent: string | undefined;
+  const operations: EditOperations = {
+    access: (path) => fsAccess(path, constants.R_OK | constants.W_OK),
+    readFile: async (path) => {
+      const content = await fsReadFile(path);
+      oldContent = content;
+      return content;
+    },
+    writeFile: async (_path, content) => {
+      newContent = content;
+    },
+  };
+  const previewTool = createEditToolDefinition(cwd, { operations });
+
+  // The built-in edit executor currently ignores its context; renderCall has no ExtensionContext.
+  // Keep this simulation delegated to Pi so matching and line-ending behavior stay identical.
+  await previewTool.execute("difftastic-preview", input, signal, undefined, {
+    cwd,
+  } as ExtensionContext);
+  if (oldContent === undefined || newContent === undefined) {
+    throw new Error("Pi did not return enough data to render the edit preview");
+  }
+
+  return {
+    newContent,
+    oldContent: oldContent.toString("utf8"),
+    path: input.path,
+  };
+}
+
+function editDifftasticState(state: NativeEditState): DifftasticEditRenderState {
+  return state as DifftasticEditRenderState;
+}
+
+function replaceEditPreview(
+  component: Component,
+  details: DifftasticDetails,
+  expanded: boolean,
+  theme: Theme,
+): Component {
+  if (!(component instanceof Box)) return component;
+  const header = component.children[0];
+  component.clear();
+  if (header !== undefined) component.addChild(header);
+  component.addChild(new Spacer(1));
+  component.addChild(diffComponent(details, expanded, theme));
+  component.setBgFn((text) => theme.bg("toolSuccessBg", text));
+  return component;
+}
+
+function renderEditDifftasticResult(
+  result: { content: Array<{ type: string; text?: string }> },
+  details: DifftasticDetails,
+  expanded: boolean,
+  theme: Theme,
+): Component {
+  const component = new Container();
+  const summary = result.content
+    .filter((item) => item.type === "text")
+    .map((item) => item.text ?? "")
+    .join("\n");
+  if (summary !== "") {
+    component.addChild(new Spacer(1));
+    component.addChild(new Text(theme.fg("success", summary), 1, 0));
+  }
+  component.addChild(new Spacer(1));
+  component.addChild(diffComponent(details, expanded, theme));
+  return component;
+}
+
+function createDifftasticEditTool(
+  cwd: string,
+  runEdit: EditDiffRunner,
+  previewControllers: Set<AbortController>,
+): ToolDefinition<
+  NativeEditDefinition["parameters"],
+  DifftasticEditDetails | undefined,
+  DifftasticEditRenderState
+> {
+  const nativeEdit = createEditToolDefinition(cwd);
+  const nativeRenderCall = nativeEdit.renderCall;
+  const nativeRenderResult = nativeEdit.renderResult;
+  if (nativeRenderCall === undefined || nativeRenderResult === undefined) {
+    throw new Error("Pi's built-in edit tool does not expose renderers");
+  }
+
+  const execute: DifftasticEditToolDefinition["execute"] = async (
+    toolCallId,
+    input,
+    signal,
+    onUpdate,
+    ctx,
+  ) => {
+    let oldContent: Buffer | undefined;
+    let newContent: string | undefined;
+    const operations: EditOperations = {
+      access: (path) => fsAccess(path, constants.R_OK | constants.W_OK),
+      readFile: async (path) => {
+        const content = await fsReadFile(path);
+        oldContent = content;
+        return content;
+      },
+      writeFile: async (path, content) => {
+        await writeFile(path, content, "utf8");
+        newContent = content;
+      },
+    };
+    const delegatedEdit = createEditToolDefinition(cwd, { operations });
+    const result = await delegatedEdit.execute(toolCallId, input, signal, onUpdate, ctx);
+
+    if (result.details !== undefined && oldContent !== undefined && newContent !== undefined) {
+      try {
+        const difftastic = await runEdit(
+          {
+            newContent,
+            oldContent: oldContent.toString("utf8"),
+            path: input.path,
+          },
+          cwd,
+          signal,
+        );
+        return {
+          ...result,
+          details: { ...result.details, difftastic },
+        };
+      } catch {
+        // Difftastic is presentation-only. Preserve the successful native edit result if it fails.
+      }
+    }
+
+    return result;
+  };
+
+  const renderCall: NonNullable<
+    ToolDefinition<
+      NativeEditDefinition["parameters"],
+      DifftasticEditDetails | undefined,
+      DifftasticEditRenderState
+    >["renderCall"]
+  > = (args, theme, context) => {
+    const state = editDifftasticState(context.state);
+    const input = renderableEditInput(args);
+    const key = input === undefined ? undefined : JSON.stringify(input);
+    if (state.previewKey !== key) {
+      const previousController = state.previewController;
+      previousController?.abort();
+      if (previousController !== undefined) previewControllers.delete(previousController);
+      state.previewController = undefined;
+      state.preview = undefined;
+      state.previewKey = key;
+      state.previewPending = false;
+    }
+
+    if (
+      context.argsComplete &&
+      input !== undefined &&
+      !state.previewPending &&
+      state.preview === undefined
+    ) {
+      const controller = new AbortController();
+      const requestKey = key;
+      state.previewController = controller;
+      state.previewPending = true;
+      previewControllers.add(controller);
+      void simulateEdit(context.cwd, input, controller.signal)
+        .then((request) => runEdit(request, context.cwd, controller.signal))
+        .then(
+          (details) => {
+            previewControllers.delete(controller);
+            if (
+              state.previewKey !== requestKey ||
+              controller.signal.aborted ||
+              state.previewController !== controller
+            ) {
+              return;
+            }
+            state.preview = details;
+            state.previewPending = false;
+            state.previewController = undefined;
+            context.invalidate();
+          },
+          () => {
+            previewControllers.delete(controller);
+            if (
+              state.previewKey !== requestKey ||
+              controller.signal.aborted ||
+              state.previewController !== controller
+            ) {
+              return;
+            }
+            state.previewPending = false;
+            state.previewController = undefined;
+            context.invalidate();
+          },
+        );
+    }
+
+    const nativeComponent = nativeRenderCall(args, theme, context);
+    return state.preview === undefined
+      ? nativeComponent
+      : replaceEditPreview(nativeComponent, state.preview, context.expanded, theme);
+  };
+
+  const renderResult: NonNullable<
+    ToolDefinition<
+      NativeEditDefinition["parameters"],
+      DifftasticEditDetails | undefined,
+      DifftasticEditRenderState
+    >["renderResult"]
+  > = (result, options, theme, context) => {
+    if (!context.isError && result.details?.difftastic !== undefined) {
+      return renderEditDifftasticResult(result, result.details.difftastic, options.expanded, theme);
+    }
+    return nativeRenderResult(result, options, theme, context);
+  };
+
+  return {
+    ...nativeEdit,
+    execute,
+    renderCall,
+    renderResult,
+  };
+}
+
 function commandHelp(): string {
   return [
     "Usage: /difft",
     "",
     "Show unstaged working-tree changes using Difftastic.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
+    "Use `pi --difftastic-edits` to use Difftastic for edit previews.",
   ].join("\n");
 }
 
 interface DifftasticExtensionDependencies {
   readonly columns?: () => number | undefined;
   readonly run?: GitDiffRunner;
+  readonly runEdit?: EditDiffRunner;
 }
 
 export function registerDifftasticExtension(
@@ -482,6 +942,36 @@ export function registerDifftasticExtension(
           ...(signal === undefined ? {} : { signal }),
         },
       ));
+  const runEdit: EditDiffRunner =
+    dependencies.runEdit ??
+    ((request, cwd, signal) =>
+      runDifftasticEditDiff(
+        (command, args, options) => pi.exec(command, args, options),
+        request,
+        cwd,
+        {
+          columns: dependencies.columns?.() ?? process.stdout.columns,
+          ...(signal === undefined ? {} : { signal }),
+        },
+      ));
+
+  pi.registerFlag("difftastic-edits", {
+    description: "Use Difftastic for edit previews",
+    type: "boolean",
+    default: false,
+  });
+
+  const previewControllers = new Set<AbortController>();
+  pi.on("session_shutdown", () => {
+    for (const controller of previewControllers) controller.abort();
+    previewControllers.clear();
+  });
+
+  pi.on("session_start", (_event, ctx) => {
+    if (pi.getFlag("difftastic-edits") === true) {
+      pi.registerTool(createDifftasticEditTool(ctx.cwd, runEdit, previewControllers));
+    }
+  });
 
   pi.registerEntryRenderer<DifftasticDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
     const details = entry.data;

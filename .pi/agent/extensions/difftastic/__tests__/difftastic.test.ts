@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   ExecOptions,
   ExtensionAPI,
@@ -14,7 +17,9 @@ import {
   type DifftasticDetails,
   type DifftasticResult,
   registerDifftasticExtension,
+  remapDifftasticColors,
   renderDiffLines,
+  runDifftasticEditDiff,
   runDifftasticGitDiff,
   sanitizeTerminalOutput,
 } from "..";
@@ -103,6 +108,18 @@ describe("Difftastic output handling", () => {
     expect(sanitizeTerminalOutput(input)).toBe("\u001b[31mred\u001b[0msafe");
   });
 
+  test("maps Difftastic colors to Pi theme roles", () => {
+    const theme = {
+      getFgAnsi: (color: string) => `<${color}>`,
+    } as Theme;
+    const output =
+      "\u001b[91;1mremoved\u001b[0m \u001b[92madded\u001b[39m \u001b[95mstring\u001b[0m";
+
+    expect(remapDifftasticColors(output, theme)).toBe(
+      "<toolDiffRemoved>\u001b[1mremoved\u001b[0m <toolDiffAdded>added\u001b[39m <syntaxString>string\u001b[0m",
+    );
+  });
+
   test("bounds output by complete lines", () => {
     const output = Array.from({ length: 2_001 }, (_, index) => `line ${index + 1}`).join("\n");
     const bounded = boundDiffOutput(output);
@@ -159,6 +176,42 @@ describe("Difftastic execution", () => {
     expect(result.content).toBe("1 old    1 new");
     expect(result.details.output).toContain("\u001b[31m");
     expect(result.details.scope).toBe("working tree against HEAD");
+  });
+
+  test("renders an edit diff from temporary before and after files", async () => {
+    let executed: { command: string; args: string[]; options: ExecOptions } | undefined;
+    const result = await runDifftasticEditDiff(
+      async (command, args, options) => {
+        executed = { command, args, options };
+        return {
+          stdout: `\u001b[91m${args[5]}\u001b[0m\n`,
+          stderr: "",
+          code: 0,
+          killed: false,
+        };
+      },
+      {
+        newContent: "const value = 2;\n",
+        oldContent: "const value = 1;\n",
+        path: "src/example.ts",
+      },
+      "/repo",
+      { columns: 120 },
+    );
+
+    expect(executed).toMatchObject({
+      command: "difft",
+      options: { cwd: "/repo", timeout: 10_000 },
+    });
+    expect(executed?.args.slice(0, 4)).toEqual([
+      "--display=side-by-side",
+      "--color=always",
+      "--width=116",
+      "--context=3",
+    ]);
+    expect(result.output).toContain("src/example.ts");
+    expect(result.output).not.toContain("pi-difftastic-edit-");
+    expect(result.scope).toBe("edit changes");
   });
 
   test("reports Git and Difftastic failures without terminal controls", async () => {
@@ -223,6 +276,8 @@ describe("Difftastic extension", () => {
       | undefined;
     const pi = {
       registerEntryRenderer: () => {},
+      registerFlag: () => {},
+      on: () => {},
       registerTool(definition: ToolDefinition) {
         tool = definition;
       },
@@ -247,10 +302,112 @@ describe("Difftastic extension", () => {
     expect(toolResult.content[0]).toEqual({ type: "text", text: diffResult.content });
   });
 
+  test("opts into Difftastic edit execution previews with the startup flag", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-difftastic-test-"));
+    const filePath = join(root, "sample.ts");
+    await writeFile(filePath, "const value = 1;\n", "utf8");
+
+    const tools = new Map<string, ToolDefinition>();
+    let sessionStart: ((event: unknown, context: ExtensionContext) => void) | undefined;
+    let registeredFlag: string | undefined;
+    const editDetails: DifftasticDetails = {
+      ...details,
+      output: "\u001b[91m1 const value = 1;\u001b[0m\n\u001b[92m1 const value = 2;\u001b[0m",
+      scope: "edit changes",
+    };
+    let editRun: { oldContent: string; newContent: string; path: string } | undefined;
+    let failEditDiff = false;
+    const pi = {
+      registerEntryRenderer: () => {},
+      registerFlag(name: string) {
+        registeredFlag = name;
+      },
+      on(_event: string, handler: (event: unknown, context: ExtensionContext) => void) {
+        sessionStart = handler;
+      },
+      registerTool(definition: ToolDefinition) {
+        tools.set(definition.name, definition);
+      },
+      registerCommand: () => {},
+      getFlag: () => true,
+    } as unknown as ExtensionAPI;
+
+    try {
+      registerDifftasticExtension(pi, {
+        run: async () => diffResult,
+        runEdit: async (request) => {
+          editRun = request;
+          if (failEditDiff) throw new Error("difft is unavailable");
+          return editDetails;
+        },
+      });
+      sessionStart?.({ type: "session_start" }, { cwd: root } as ExtensionContext);
+
+      const editTool = tools.get("edit");
+      if (editTool === undefined) throw new Error("edit override was not registered");
+      const result = await editTool.execute(
+        "edit-1",
+        { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
+        undefined,
+        undefined,
+        { cwd: root } as ExtensionContext,
+      );
+
+      expect(registeredFlag).toBe("difftastic-edits");
+      expect(editRun).toEqual({
+        oldContent: "const value = 1;\n",
+        newContent: "const value = 2;\n",
+        path: "sample.ts",
+      });
+      expect(await readFile(filePath, "utf8")).toBe("const value = 2;\n");
+      expect(result.details).toMatchObject({ difftastic: editDetails });
+
+      const renderResult = editTool.renderResult;
+      if (renderResult === undefined) throw new Error("edit result renderer was not registered");
+      const theme = {
+        bg: (_color: string, text: string) => text,
+        bold: (text: string) => text,
+        fg: (_color: string, text: string) => text,
+        getFgAnsi: (color: string) => `<${color}>`,
+      } as Theme;
+      const rendered = renderResult(result, { expanded: true, isPartial: false }, theme, {
+        args: { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
+        argsComplete: true,
+        cwd: root,
+        executionStarted: true,
+        expanded: true,
+        invalidate: () => {},
+        isError: false,
+        isPartial: false,
+        lastComponent: undefined,
+        showImages: false,
+        state: {},
+        toolCallId: "edit-1",
+      } as Parameters<typeof renderResult>[3]);
+
+      expect(rendered.render(120).join("\n")).toContain("const value = 2;");
+
+      failEditDiff = true;
+      const fallbackResult = await editTool.execute(
+        "edit-2",
+        { path: "sample.ts", edits: [{ oldText: "2", newText: "3" }] },
+        undefined,
+        undefined,
+        { cwd: root } as ExtensionContext,
+      );
+      expect(await readFile(filePath, "utf8")).toBe("const value = 3;\n");
+      expect(fallbackResult.details).not.toHaveProperty("difftastic");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   test("compacts multiple paths in the tool call header", () => {
     let tool: ToolDefinition | undefined;
     const pi = {
       registerEntryRenderer: () => {},
+      registerFlag: () => {},
+      on: () => {},
       registerTool(definition: ToolDefinition) {
         tool = definition;
       },
@@ -298,6 +455,8 @@ describe("Difftastic extension", () => {
     let runs = 0;
     const pi = {
       registerEntryRenderer: () => {},
+      registerFlag: () => {},
+      on: () => {},
       registerTool: () => {},
       registerCommand(
         _name: string,
@@ -329,7 +488,7 @@ describe("Difftastic extension", () => {
     expect(notifications).toEqual([
       {
         message:
-          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.",
+          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nUse `pi --difftastic-edits` to use Difftastic for edit previews.",
         level: "info",
       },
     ]);

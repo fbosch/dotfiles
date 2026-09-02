@@ -20,6 +20,9 @@ export interface ProjectReference {
 }
 
 const REFERENCE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const DOCS_CACHE_INVALID_NAME_PATTERN = /[<>:"/\\|?*]/;
+const DOCS_CACHE_TRAILING_DOT_SPACE_PATTERN = /[.\s]+$/u;
+const DOCS_CACHE_RESERVED_NAMES = new Set([".", "..", "CON", "PRN", "AUX", "NUL", "COM1", "LPT1"]);
 const USER_MESSAGE_RENDER_PATCH = Symbol.for("dotfiles:pi-reference-mention-colors");
 
 interface UserMessageReferenceColors {
@@ -98,13 +101,7 @@ function resolveReferencePath(cwd: string, configuredPath: string, home: string)
   return canonicalPath;
 }
 
-export function loadProjectReferences(
-  cwd: string,
-  projectTrusted: boolean,
-  home = homedir(),
-): ProjectReference[] {
-  if (projectTrusted === false) return [];
-
+function loadConfiguredProjectReferences(cwd: string, home: string): ProjectReference[] {
   const settingsPath = join(cwd, ".pi", "settings.json");
   if (existsSync(settingsPath) === false) return [];
 
@@ -126,33 +123,120 @@ export function loadProjectReferences(
     throw new Error(`Project references must contain an object: ${settingsPath}`);
   }
 
-  return Object.entries(configuredReferences)
-    .map(([name, value]): ProjectReference => {
-      if (REFERENCE_NAME_PATTERN.test(name) === false) {
-        throw new Error(`Invalid project reference name: ${name}`);
-      }
-      if (isRecord(value) === false) {
-        throw new Error(`Project reference "${name}" must contain an object.`);
-      }
+  return Object.entries(configuredReferences).map(([name, value]): ProjectReference => {
+    if (REFERENCE_NAME_PATTERN.test(name) === false) {
+      throw new Error(`Invalid project reference name: ${name}`);
+    }
+    if (isRecord(value) === false) {
+      throw new Error(`Project reference "${name}" must contain an object.`);
+    }
 
-      const path = typeof value.path === "string" ? value.path.trim() : "";
-      const description = typeof value.description === "string" ? value.description.trim() : "";
-      if (path.length === 0) {
-        throw new Error(`Project reference "${name}" requires a path.`);
-      }
-      if (description.length === 0) {
-        throw new Error(`Project reference "${name}" requires a description.`);
-      }
+    const path = typeof value.path === "string" ? value.path.trim() : "";
+    const description = typeof value.description === "string" ? value.description.trim() : "";
+    if (path.length === 0) {
+      throw new Error(`Project reference "${name}" requires a path.`);
+    }
+    if (description.length === 0) {
+      throw new Error(`Project reference "${name}" requires a description.`);
+    }
 
-      try {
-        return { name, path: resolveReferencePath(cwd, path, home), description };
-      } catch (error) {
-        throw new Error(
-          `Cannot resolve project reference "${name}" (${path}): ${error instanceof Error ? error.message : String(error)}`,
-        );
-      }
-    })
-    .sort((left, right) => left.name.localeCompare(right.name));
+    try {
+      return { name, path: resolveReferencePath(cwd, path, home), description };
+    } catch (error) {
+      throw new Error(
+        `Cannot resolve project reference "${name}" (${path}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  });
+}
+
+function repositoryLabel(repo: string): string {
+  const sshMatch = repo.match(/^[^@]+@[^:]+:(.+)$/);
+  const value = sshMatch?.[1] ?? repo.replace(/^https?:\/\/[^/]+\//, "");
+  return value.replace(/\.git$/i, "").replace(/^\/+/, "");
+}
+
+function isDocsCacheReferenceName(name: string): boolean {
+  if (
+    name.length === 0 ||
+    name.length > 200 ||
+    name.trim().length === 0 ||
+    DOCS_CACHE_TRAILING_DOT_SPACE_PATTERN.test(name) ||
+    DOCS_CACHE_INVALID_NAME_PATTERN.test(name) ||
+    DOCS_CACHE_RESERVED_NAMES.has(name.toUpperCase())
+  ) {
+    return false;
+  }
+
+  return [...name].every((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && codePoint > 0x1f && codePoint !== 0x7f;
+  });
+}
+
+export function loadDocsCacheReferences(cwd: string): ProjectReference[] {
+  const lockPath = join(cwd, "docs-lock.json");
+  if (existsSync(lockPath) === false) return [];
+
+  let lock: unknown;
+  try {
+    lock = JSON.parse(readFileSync(lockPath, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `Cannot load docs-cache references from ${lockPath}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (isRecord(lock) === false || lock.version !== 1 || isRecord(lock.sources) === false) {
+    throw new Error(`Invalid docs-cache lock file: ${lockPath}`);
+  }
+
+  return Object.entries(lock.sources).map(([name, value]): ProjectReference => {
+    if (isDocsCacheReferenceName(name) === false) {
+      throw new Error(`Invalid docs-cache reference name: ${name}`);
+    }
+    if (isRecord(value) === false || typeof value.repo !== "string" || value.repo.trim() === "") {
+      throw new Error(`Docs-cache source "${name}" requires a repository.`);
+    }
+
+    // The lock format omits cacheDir, so lock-only discovery follows docs-cache's default layout.
+    const path = resolve(cwd, ".docs", name);
+    const description = `Use for documentation from ${repositoryLabel(value.repo.trim())}.${
+      existsSync(join(path, "TOC.md")) ? " Start with TOC.md." : ""
+    }`;
+    return { name, path, description };
+  });
+}
+
+function assertNoReferenceCollisions(
+  configuredReferences: readonly ProjectReference[],
+  docsCacheReferences: readonly ProjectReference[],
+): void {
+  const configuredNames = new Map(
+    configuredReferences.map((reference) => [reference.name.toLowerCase(), reference.name]),
+  );
+  for (const reference of docsCacheReferences) {
+    const configuredName = configuredNames.get(reference.name.toLowerCase());
+    if (configuredName !== undefined) {
+      throw new Error(
+        `Docs-cache reference "${reference.name}" conflicts with project reference "${configuredName}".`,
+      );
+    }
+  }
+}
+
+export function loadProjectReferences(
+  cwd: string,
+  projectTrusted: boolean,
+  home = homedir(),
+): ProjectReference[] {
+  if (projectTrusted === false) return [];
+
+  const configuredReferences = loadConfiguredProjectReferences(cwd, home);
+  const docsCacheReferences = loadDocsCacheReferences(cwd);
+  assertNoReferenceCollisions(configuredReferences, docsCacheReferences);
+  return [...configuredReferences, ...docsCacheReferences].sort((left, right) =>
+    left.name.localeCompare(right.name),
+  );
 }
 
 export function assertNoAgentMentionCollisions(
@@ -217,20 +301,22 @@ export function createReferenceAutocompleteProvider(
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {
       const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
       const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
-      const prefix = /(?:^|\s)(@[A-Za-z0-9._-]*)$/.exec(textBeforeCursor)?.[1];
-      if (prefix === undefined) return suggestions;
+      const quotedMatch = /(?:^|\s)(@"([^"]*)$)/u.exec(textBeforeCursor);
+      const plainMatch = /(?:^|\s)(@([^\s"]*)$)/u.exec(textBeforeCursor);
+      const prefix = quotedMatch?.[1] ?? plainMatch?.[1];
+      const query = quotedMatch?.[2] ?? plainMatch?.[2];
+      if (prefix === undefined || query === undefined) return suggestions;
 
       const referenceItems = references
-        .filter((reference) =>
-          reference.name.toLowerCase().startsWith(prefix.slice(1).toLowerCase()),
-        )
-        .map(
-          (reference): AutocompleteItem => ({
-            value: `@${reference.name}`,
-            label: `@${reference.name}`,
+        .filter((reference) => reference.name.toLowerCase().startsWith(query.toLowerCase()))
+        .map((reference): AutocompleteItem => {
+          const value = /\s/u.test(reference.name) ? `@"${reference.name}"` : `@${reference.name}`;
+          return {
+            value,
+            label: value,
             description: `Reference · ${reference.description}`,
-          }),
-        );
+          };
+        });
       if (referenceItems.length === 0) return suggestions;
 
       const existingItems = suggestions?.items ?? [];

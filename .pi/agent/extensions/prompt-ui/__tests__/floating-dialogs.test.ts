@@ -138,6 +138,7 @@ describe("floating extension dialogs", () => {
     expect(innerFocused).toBe(true);
     const rendered = components[0]?.render(28) ?? [];
     const plain = rendered.map(stripTerminalSequences);
+    expect(plain).toHaveLength(3);
     expect(plain[1]).toContain(" Permission required");
     expect(plain.at(-1)).toBe(`▘${"▀".repeat(26)}▝`);
     expect(rendered.every((line) => visibleWidth(line) === 28)).toBe(true);

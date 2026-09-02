@@ -38,6 +38,13 @@ function writeProjectSettings(cwd: string, settings: unknown): void {
   writeFileSync(join(cwd, ".pi", "settings.json"), `${JSON.stringify(settings)}\n`);
 }
 
+function writeDocsLock(cwd: string, sources: Record<string, { repo: string }>): void {
+  writeFileSync(
+    join(cwd, "docs-lock.json"),
+    `${JSON.stringify({ version: 1, toolVersion: "0.7.0", sources })}\n`,
+  );
+}
+
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
@@ -73,11 +80,70 @@ describe("project references", () => {
     ]);
   });
 
-  test("ignores project settings until the project is trusted", () => {
+  test("loads docs-cache aliases from the lock without project settings", () => {
+    const cwd = temporaryDirectory();
+    mkdirSync(join(cwd, ".docs", "framework"), { recursive: true });
+    writeFileSync(join(cwd, ".docs", "framework", "TOC.md"), "# Docs\n");
+    writeDocsLock(cwd, {
+      "missing-docs": { repo: "git@github.com:owner/missing.git" },
+      framework: { repo: "https://github.com/framework/core.git" },
+    });
+
+    expect(loadProjectReferences(cwd, true)).toEqual([
+      {
+        name: "framework",
+        path: join(cwd, ".docs", "framework"),
+        description: "Use for documentation from framework/core. Start with TOC.md.",
+      },
+      {
+        name: "missing-docs",
+        path: join(cwd, ".docs", "missing-docs"),
+        description: "Use for documentation from owner/missing.",
+      },
+    ]);
+  });
+
+  test("loads and completes Unicode docs-cache aliases", async () => {
+    const cwd = temporaryDirectory();
+    writeDocsLock(cwd, {
+      "Låneportalen-Wiki": { repo: "https://github.com/owner/loan-portal.git" },
+    });
+
+    const references = loadProjectReferences(cwd, true);
+    expect(references[0]?.name).toBe("Låneportalen-Wiki");
+
+    const provider = {
+      getSuggestions: async () => null,
+      applyCompletion: () => ({ lines: [""], cursorLine: 0, cursorCol: 0 }),
+    } as AutocompleteProvider;
+    const wrapped = createReferenceAutocompleteProvider(provider, references);
+    const prompt = "inspect @Lå";
+    const suggestions = await wrapped.getSuggestions([prompt], 0, prompt.length, {
+      signal: AbortSignal.timeout(1_000),
+    });
+
+    expect(suggestions?.items.map((item) => item.value)).toEqual(["@Låneportalen-Wiki"]);
+  });
+
+  test("ignores project settings and docs locks until the project is trusted", () => {
     const cwd = temporaryDirectory();
     writeProjectSettings(cwd, { references: "invalid" });
+    writeFileSync(join(cwd, "docs-lock.json"), "invalid\n");
 
     expect(loadProjectReferences(cwd, false)).toEqual([]);
+  });
+
+  test("rejects aliases shared by project settings and docs-cache", () => {
+    const cwd = temporaryDirectory();
+    mkdirSync(join(cwd, "docs"));
+    writeProjectSettings(cwd, {
+      references: { docs: { path: "docs", description: "Project documentation" } },
+    });
+    writeDocsLock(cwd, { docs: { repo: "https://github.com/owner/docs.git" } });
+
+    expect(() => loadProjectReferences(cwd, true)).toThrow(
+      'Docs-cache reference "docs" conflicts with project reference "docs".',
+    );
   });
 
   test("rejects malformed entries and paths that are not directories", () => {
@@ -189,16 +255,11 @@ describe("project references", () => {
     expect(wrapped.shouldTriggerFileCompletion?.(["@ni"], 0, 3)).toBe(true);
   });
 
-  test("injects trusted references through the extension lifecycle", () => {
+  test("injects trusted docs-cache references through the extension lifecycle", () => {
     const cwd = temporaryDirectory();
-    mkdirSync(join(cwd, "reference-material"));
-    writeProjectSettings(cwd, {
-      references: {
-        "reference-material": {
-          path: "reference-material",
-          description: "Project documentation",
-        },
-      },
+    mkdirSync(join(cwd, ".docs", "reference-material"), { recursive: true });
+    writeDocsLock(cwd, {
+      "reference-material": { repo: "https://github.com/owner/reference-material.git" },
     });
     let sessionStart:
       | ((event: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>)
@@ -244,7 +305,7 @@ describe("project references", () => {
       {} as ExtensionContext,
     );
     expect(result?.systemPrompt).toContain("<name>reference-material</name>");
-    expect(result?.systemPrompt).toContain(realpathSync(join(cwd, "reference-material")));
+    expect(result?.systemPrompt).toContain(join(cwd, ".docs", "reference-material"));
     expect(new UserMessageComponent("Inspect @reference-material").render(80).join("\n")).toContain(
       `${theme.getFgAnsi("warning")}@reference-material`,
     );

@@ -66,7 +66,7 @@ class InlineDockDialog implements Component {
     const content = this.component
       .render(contentWidth)
       .map((line) => `${" ".repeat(paddingX)}${line}`);
-    const rows = ["", ...content, ""].map((line) =>
+    const rows = ["", ...content].map((line) =>
       paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
     );
 

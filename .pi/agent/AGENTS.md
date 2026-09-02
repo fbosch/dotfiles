@@ -32,6 +32,14 @@
   only for explicit persisted data or external consumers.
 - Read the narrowest useful evidence and references. Stop expanding context
   when more investigation will not change the next action.
+- Before adding or selecting a dependency, library, or development tool, read
+  `~/.pi/agent/references/library-preferences.md`. If the file lists multiple
+  suitable options and the repository does not establish one, ask the user
+  when available or return the choice to the caller before adding an option.
+- Before changing behavior, APIs, config formats, data handling, or validation
+  paths, read `~/.pi/agent/references/compatibility.md`.
+- Before running or reporting validation, read
+  `~/.pi/agent/references/validation.md`.
 - When a prompt or agent definition references a named skill, read
   `~/.agents/skills/<skill-name>/SKILL.md` fully even when it is absent from
   the advertised skills catalogue. Treat its directory as the skill root and
