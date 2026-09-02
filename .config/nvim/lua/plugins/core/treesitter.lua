@@ -74,8 +74,8 @@ return {
 	{
 		name = "nvim-treesitter",
 		src = "https://github.com/nvim-treesitter/nvim-treesitter.git",
-		events = { "BufReadPre", "BufNewFile" },
-		setup = function(context)
+		startup = true,
+		setup = function()
 			local treesitter = require("nvim-treesitter")
 			treesitter.setup()
 
@@ -164,15 +164,6 @@ return {
 				group = group,
 				callback = start_highlighter,
 			})
-
-			-- BufNewFile can set filetype before this lazy setup installs its listener.
-			if
-				type(context) == "table"
-				and context.buf
-				and vim.api.nvim_get_option_value("filetype", { buf = context.buf }) ~= ""
-			then
-				start_highlighter(context)
-			end
 		end,
 	},
 	{

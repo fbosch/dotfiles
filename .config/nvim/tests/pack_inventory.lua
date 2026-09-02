@@ -256,10 +256,8 @@ do
 	)
 
 	local treesitter = assert(current.enabled_by_name["nvim-treesitter"])
-	assert(
-		vim.deep_equal(treesitter.events, { "BufReadPre", "BufNewFile" }),
-		"Tree-sitter is not file-buffer triggered"
-	)
+	assert(treesitter.startup == true, "Tree-sitter is not startup-loaded")
+	assert(treesitter.events == nil, "Tree-sitter still has lazy-load events")
 	local leap = assert(current.enabled_by_name["leap.nvim"])
 	assert(leap.startup ~= true and #leap.keys == 3, "Leap is not key triggered")
 	for _, key in ipairs(leap.keys) do
@@ -278,7 +276,10 @@ do
 		end
 	end
 	table.sort(startup_names)
-	assert(vim.deep_equal(startup_names, { "mini.sessions", "transparent.nvim" }), "synchronous startup roots changed")
+	assert(
+		vim.deep_equal(startup_names, { "mini.sessions", "nvim-treesitter", "transparent.nvim" }),
+		"synchronous startup roots changed"
+	)
 end
 
 do

@@ -5,7 +5,7 @@ vim.pack.add = function() end
 
 local function verify_empty_startup()
 	local loader = require("config.pack.loader")
-	assert(loader.is_loaded("nvim-treesitter") == false, "Tree-sitter loaded before a file buffer")
+	assert(loader.is_loaded("nvim-treesitter"), "Tree-sitter was not loaded at startup")
 	assert(loader.is_loaded("leap.nvim") == false, "Leap loaded before its first key")
 	assert(loader.is_loaded("vim-unimpaired"), "vim-unimpaired was not ready after PackReady")
 	assert(loader.is_loaded("mini.sessions"), "session lifecycle was not ready before VimEnter")
@@ -39,7 +39,7 @@ end
 local function verify_first_file()
 	local loader = require("config.pack.loader")
 	local buffer = vim.api.nvim_get_current_buf()
-	assert(loader.is_loaded("nvim-treesitter"), "first file did not activate Tree-sitter")
+	assert(loader.is_loaded("nvim-treesitter"), "Tree-sitter was not loaded at startup")
 	assert(vim.bo[buffer].filetype == "lua", "first file did not receive its Lua filetype")
 	assert(vim.treesitter.highlighter.active[buffer] ~= nil, "first file did not start Tree-sitter highlighting")
 end
