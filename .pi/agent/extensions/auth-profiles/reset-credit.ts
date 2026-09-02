@@ -4,7 +4,9 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { runAskUserQuestion } from "../ask-user-question";
+import { cachedResetCreditStatusForAccount } from "./usage-status";
 import {
+  accountIdFor,
   DEFAULT_PROFILE,
   listProfiles,
   normalizeName,
@@ -234,8 +236,11 @@ function creditLabel(credit: ResetCredit, now: number): string {
   return `${name} (expires in ${durationUntil(credit.expiresAt, now)})`;
 }
 
-function profileLabel(profile: string, credits: ResetCredits): string {
-  return `${profile} (${credits.credits.filter((credit) => credit.status === "available").length} available)`;
+function cachedProfileLabel(profile: string, cachePath: string): string {
+  const accountId = accountIdFor(profile);
+  const cached = accountId ? cachedResetCreditStatusForAccount(accountId, cachePath) : undefined;
+  if (cached === undefined) return `${profile} (availability unknown)`;
+  return `${profile} (${cached.availableCount} cached)`;
 }
 
 function usageCachePath(): string {
@@ -289,49 +294,30 @@ function availableCredits(data: ResetCredits): ResetCredit[] {
   return data.credits.filter((credit) => credit.status === "available");
 }
 
-function summarizeErrors(errors: string[]): string {
-  if (errors.length === 0) return "";
-  return `\nUnavailable profiles: ${errors.join(", ")}.`;
-}
-
 async function chooseProfile(
   profiles: string[],
   ctx: ExtensionCommandContext,
   resolveCredential: ResolveCredential,
   fetchFn: FetchFn,
+  cachePath: string,
 ): Promise<{ profile: string; credential: ResetCredential; credits: ResetCredits } | undefined> {
-  const available: Array<{ profile: string; credential: ResetCredential; credits: ResetCredits }> =
-    [];
-  const errors: string[] = [];
-  for (const profile of profiles) {
-    try {
-      const result = await requestProfileCredits(profile, ctx, resolveCredential, fetchFn);
-      if (availableCredits(result.credits).length > 0) {
-        available.push({ profile, ...result });
-      }
-    } catch {
-      errors.push(profile);
-    }
-  }
-
-  if (available.length === 0) {
-    ctx.ui.notify(
-      `No named Pi profiles have an available reset credit.${summarizeErrors(errors)}`,
-      "warning",
-    );
-    return undefined;
-  }
-
   const selected = await askQuestion(
     ctx,
     "Select a Pi auth profile",
-    available.map(({ profile, credits }) => ({
-      label: profileLabel(profile, credits),
+    profiles.map((profile) => ({
+      label: cachedProfileLabel(profile, cachePath),
       value: profile,
     })),
-    "Only profiles with an available reset credit are shown.",
+    "Cached availability is only a hint; credits are checked after selection.",
   );
-  return selected === undefined ? undefined : available.find(({ profile }) => profile === selected);
+  if (selected === undefined) return undefined;
+
+  const result = await requestProfileCredits(selected, ctx, resolveCredential, fetchFn);
+  if (availableCredits(result.credits).length === 0) {
+    ctx.ui.notify(`No reset credits are currently available for profile ${selected}.`, "warning");
+    return undefined;
+  }
+  return { profile: selected, ...result };
 }
 
 export function registerResetCreditCommand(
@@ -381,22 +367,17 @@ export function registerResetCreditCommand(
 
       const fetchFn = options.fetchFn ?? fetch;
       try {
-        const selected = await chooseProfile(profiles, ctx, options.resolveCredential, fetchFn);
-        if (!selected) return;
-
-        const fresh = await requestProfileCredits(
-          selected.profile,
+        const selected = await chooseProfile(
+          profiles,
           ctx,
           options.resolveCredential,
           fetchFn,
-          selected.credential,
+          options.cachePath ?? usageCachePath(),
         );
-        let selectedCredential = fresh.credential;
-        const credits = availableCredits(fresh.credits);
-        if (credits.length === 0) {
-          ctx.ui.notify(`No reset credits remain for profile ${selected.profile}.`, "warning");
-          return;
-        }
+        if (!selected) return;
+
+        let selectedCredential = selected.credential;
+        const credits = availableCredits(selected.credits);
         const now = (options.now ?? Date.now)();
         const creditSelection = await askQuestion(
           ctx,

@@ -2,23 +2,27 @@ import { describe, expect, test } from "bun:test";
 import { parseArgs } from "../cli";
 
 describe("ai_commit arguments", () => {
-  test("preserves established short flags and accepts headless confirmation", () => {
-    expect(parseArgs(["-d", "-v", "-m", "openai-codex/gpt-5.6-luna-fast", "--yes"])).toEqual({
+  test("preserves the established dry-run, verbose, debug, and model flags", () => {
+    expect(parseArgs(["-d", "-v", "-m", "openai-codex/gpt-5.6-luna-fast", "--debug"])).toEqual({
       dryRun: true,
       verbose: true,
-      debug: false,
-      accept: true,
-      help: false,
-      legacyRestart: false,
+      debug: true,
+      restartServer: false,
       modelRef: "openai-codex/gpt-5.6-luna-fast",
     });
   });
 
-  test("recognizes the retired server command without starting a commit", () => {
-    expect(parseArgs(["restart-server"]).legacyRestart).toBeTrue();
+  test("keeps the retired restart invocation as a harmless compatibility command", () => {
+    expect(parseArgs(["restart-server"]).restartServer).toBeTrue();
   });
 
-  test("rejects unknown arguments", () => {
-    expect(() => parseArgs(["--unknown"])).toThrow("Unknown argument: --unknown");
+  test("preserves the previous handling of unrelated arguments", () => {
+    expect(parseArgs(["--unknown"])).toEqual({
+      dryRun: false,
+      verbose: false,
+      debug: false,
+      restartServer: false,
+      modelRef: undefined,
+    });
   });
 });

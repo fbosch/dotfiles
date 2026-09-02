@@ -80,6 +80,17 @@ export function providersIn(profile: string, agentDir = getAgentDir()): string[]
   return Object.keys(readJsonFile(authPathFor(profile, agentDir)) ?? {});
 }
 
+export function accountIdFor(profile: string, agentDir = getAgentDir()): string | undefined {
+  const provider = readJsonFile(authPathFor(profile, agentDir))?.["openai-codex"];
+  if (typeof provider !== "object" || provider === null || Array.isArray(provider)) {
+    return undefined;
+  }
+  const accountId = (provider as Record<string, unknown>).accountId;
+  return typeof accountId === "string" && /^[A-Za-z0-9._-]{1,200}$/.test(accountId)
+    ? accountId
+    : undefined;
+}
+
 export function updateJsonFile(
   path: string,
   update: (data: Record<string, unknown>) => void,

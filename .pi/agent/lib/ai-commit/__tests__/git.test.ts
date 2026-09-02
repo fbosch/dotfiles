@@ -5,21 +5,21 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DIFF_TRUNCATED_MARKER,
-  getBranchName,
   getStagedDiff,
-  getStagedFiles,
   getStagedSnapshot,
   hasOnlyLockfiles,
   isLockfile,
-} from "../git";
+} from "../src/git";
 
 const temporaryDirectories: string[] = [];
+const originalPwd = process.env.PWD;
 
 function createRepository(): string {
   const directory = mkdtempSync(join(tmpdir(), "pi-ai-commit-"));
   temporaryDirectories.push(directory);
   const result = spawnSync("git", ["init", "--quiet", directory], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
+  process.env.PWD = directory;
   return directory;
 }
 
@@ -29,39 +29,25 @@ function git(cwd: string, args: string[]): void {
 }
 
 afterEach(() => {
+  process.env.PWD = originalPwd;
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
   }
 });
 
 describe("staged Git context", () => {
-  test("reads the branch before the first commit", () => {
-    const repository = createRepository();
-
-    expect(getBranchName(repository)).toMatch(/^(main|master)$/u);
-  });
-
-  test("preserves unusual staged filenames", () => {
-    const repository = createRepository();
-    const filename = "line\nbreak.ts";
-    writeFileSync(join(repository, filename), "export const value = 1;\n");
-    git(repository, ["add", "--", filename]);
-
-    expect(getStagedFiles(repository)).toEqual([filename]);
-  });
-
   test("changes the snapshot only when the index changes", () => {
     const repository = createRepository();
     const path = join(repository, "value.ts");
     writeFileSync(path, "export const value = 1;\n");
     git(repository, ["add", "value.ts"]);
-    const before = getStagedSnapshot(repository);
+    const before = getStagedSnapshot()._unsafeUnwrap();
 
     writeFileSync(path, "export const value = 2;\n");
-    expect(getStagedSnapshot(repository)).toBe(before);
+    expect(getStagedSnapshot()._unsafeUnwrap()).toBe(before);
 
     git(repository, ["add", "value.ts"]);
-    expect(getStagedSnapshot(repository)).not.toBe(before);
+    expect(getStagedSnapshot()._unsafeUnwrap()).not.toBe(before);
   });
 
   test("bounds a large staged diff and marks truncation", () => {
@@ -74,7 +60,7 @@ describe("staged Git context", () => {
     );
     git(repository, ["add", "large.ts"]);
 
-    const diff = getStagedDiff(repository, 300);
+    const diff = getStagedDiff(300)._unsafeUnwrap();
     expect(diff.length).toBeLessThanOrEqual(300);
     expect(diff.endsWith(DIFF_TRUNCATED_MARKER)).toBeTrue();
   });

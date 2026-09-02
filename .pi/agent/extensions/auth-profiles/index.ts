@@ -9,6 +9,7 @@
 
 import { existsSync } from "node:fs";
 import {
+  accountIdFor,
   authPathFor,
   DEFAULT_PROFILE,
   globalConfigPath,
@@ -18,7 +19,6 @@ import {
   projectSettingsPath,
   providersIn,
   publishWezTermChange,
-  readJsonFile,
   resolveProfile,
   updateJsonFile,
 } from "./profile-store";
@@ -118,16 +118,7 @@ export default function authProfiles(pi: ExtensionAPI): void {
 
     try {
       const resolved = await ctx.modelRegistry.getProviderAuth("openai-codex");
-      const stored = readJsonFile(authPathFor(profile))?.["openai-codex"];
-      const storedRecord =
-        typeof stored === "object" && stored !== null && !Array.isArray(stored)
-          ? (stored as Record<string, unknown>)
-          : undefined;
-      const accountId =
-        typeof storedRecord?.accountId === "string" &&
-        /^[A-Za-z0-9._-]{1,200}$/.test(storedRecord.accountId)
-          ? storedRecord.accountId
-          : undefined;
+      const accountId = accountIdFor(profile);
       const accessToken = resolved?.auth.apiKey;
       if (typeof accessToken !== "string" || accessToken.length === 0 || accountId === undefined) {
         throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);

@@ -60,6 +60,10 @@ type ResetCreditsSnapshot = {
   urgency: Urgency;
 };
 
+export type CachedResetCreditStatus = ResetCreditsSnapshot & {
+  checkedAt: number;
+};
+
 type CachedAccount = {
   credentialKey: string;
   usage?: UsageSnapshot;
@@ -338,6 +342,18 @@ function writeUsageCache(path: string, cache: UsageCache): void {
 function defaultCachePath(): string {
   const cacheHome = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
   return join(cacheHome, "fbb", "pi-auth-profiles-usage.json");
+}
+
+export function cachedResetCreditStatusForAccount(
+  accountId: string,
+  cachePath = defaultCachePath(),
+): CachedResetCreditStatus | undefined {
+  const cached = readUsageCache(cachePath).accounts[accountCredentialKey(accountId)];
+  if (cached?.resetCredits === undefined || cached.resetCreditsCheckedAt === undefined) {
+    return undefined;
+  }
+  // This is only a profile-picker hint; the selected profile is fetched again before mutation.
+  return { ...cached.resetCredits, checkedAt: cached.resetCreditsCheckedAt };
 }
 
 async function refreshAccount(

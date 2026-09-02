@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import { registerResetCreditCommand } from "../reset-credit";
 
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
@@ -20,10 +22,36 @@ async function setupProfiles(): Promise<{ agentDir: string; cachePath: string }>
   temporaryDirectories.push(root);
   const agentDir = join(root, "agent");
   await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
-  await writeFile(join(agentDir, "auth-profiles", "personal.json"), "{}\n");
-  await writeFile(join(agentDir, "auth-profiles", "work.json"), "{}\n");
+  await writeFile(
+    join(agentDir, "auth-profiles", "personal.json"),
+    '{"openai-codex":{"accountId":"personal-account"}}\n',
+  );
+  await writeFile(
+    join(agentDir, "auth-profiles", "work.json"),
+    '{"openai-codex":{"accountId":"work-account"}}\n',
+  );
   process.env.PI_CODING_AGENT_DIR = agentDir;
   return { agentDir, cachePath: join(root, "cache.json") };
+}
+
+function cachedCredits(entries: Array<[string, number]>): string {
+  const accounts = Object.fromEntries(
+    entries.map(([accountId, availableCount]) => {
+      const credentialKey = createHash("sha256").update(accountId).digest("hex");
+      return [
+        credentialKey,
+        {
+          credentialKey,
+          resetCredits: { availableCount, urgency: "soon" },
+          resetCreditsCheckedAt: now,
+        },
+      ];
+    }),
+  );
+  return JSON.stringify({
+    schema: "fbb.pi-auth-profiles-usage-cache/v1",
+    accounts,
+  });
 }
 
 function resetCredits(availableCount: number, id: string, title: string): Response {
@@ -43,12 +71,22 @@ function resetCredits(availableCount: number, id: string, title: string): Respon
   });
 }
 
-function commandHarness(selections: string[], confirmation?: string) {
+type InlineQuestionFactory = (
+  tui: { requestRender(): void },
+  theme: { fg(color: string, text: string): string },
+  keybindings: {
+    matches(data: string, binding: string): boolean;
+    getKeys(binding: string): string[];
+  },
+  done: (value: unknown) => void,
+) => Component;
+
+function commandHarness(selections: string[], confirmation?: string, onQuestion?: () => void) {
   let handler: ((args: string, ctx: ExtensionCommandContext) => Promise<void>) | undefined;
   const notifications: string[] = [];
-  const inputTitles: string[] = [];
-  const selectOptions: string[][] = [];
-  let inputCalls = 0;
+  const questionRenders: string[][] = [];
+  let popupSelectCalls = 0;
+  let popupInputCalls = 0;
   const pi = {
     registerCommand: (_name: string, command: { handler: typeof handler }) => {
       handler = command.handler;
@@ -56,16 +94,65 @@ function commandHarness(selections: string[], confirmation?: string) {
   } as unknown as ExtensionAPI;
   const ctx = {
     hasUI: true,
+    mode: "tui",
     isIdle: () => true,
     ui: {
-      select: async (_title: string, options: string[]) => {
-        selectOptions.push(options);
-        return selections.shift();
+      custom: async (factory: InlineQuestionFactory, options: { overlay?: boolean }) => {
+        expect(options).toEqual({ overlay: false });
+        const target = selections.shift() ?? confirmation;
+        onQuestion?.();
+        return new Promise((resolve) => {
+          const component = factory(
+            { requestRender: () => undefined },
+            { fg: (_color, text) => text },
+            {
+              matches: (data, binding) =>
+                binding === "tui.select.up"
+                  ? data === "up" || data === "ctrl+k"
+                  : binding === "tui.select.down"
+                    ? data === "down" || data === "ctrl+j"
+                    : binding === "tui.select.confirm"
+                      ? data === "enter" || data === "\\r"
+                      : data === "escape",
+              getKeys: (binding) =>
+                binding === "tui.select.up"
+                  ? ["up"]
+                  : binding === "tui.select.down"
+                    ? ["down"]
+                    : binding === "tui.select.confirm"
+                      ? ["enter"]
+                      : ["escape"],
+            },
+            resolve,
+          );
+          const rendered = () => component.render(200).join("\n");
+          questionRenders.push(component.render(200));
+          if (rendered().includes("Answer:")) {
+            for (const character of target ?? "") component.handleInput?.(character);
+            component.handleInput?.("\r");
+            return;
+          }
+          for (let attempt = 0; attempt < 10; attempt += 1) {
+            const current = rendered();
+            const targetIsHighlighted =
+              target !== undefined &&
+              current.split("\n").some((line) => line.includes(target) && line.includes("▶"));
+            if (targetIsHighlighted) {
+              component.handleInput?.("enter");
+              return;
+            }
+            component.handleInput?.("down");
+          }
+          component.handleInput?.("escape");
+        });
       },
-      input: async (title: string) => {
-        inputCalls += 1;
-        inputTitles.push(title);
-        return confirmation;
+      select: async () => {
+        popupSelectCalls += 1;
+        return undefined;
+      },
+      input: async () => {
+        popupInputCalls += 1;
+        return undefined;
       },
       notify: (message: string) => notifications.push(message),
     },
@@ -75,23 +162,38 @@ function commandHarness(selections: string[], confirmation?: string) {
     ctx,
     getHandler: () => handler,
     notifications,
-    inputTitles,
-    selectOptions,
-    getInputCalls: () => inputCalls,
+    questionRenders,
+    getPopupSelectCalls: () => popupSelectCalls,
+    getPopupInputCalls: () => popupInputCalls,
   };
 }
 
 describe("/reset-credit", () => {
   test("dry-run previews a selected profile and credit without prompting or consuming", async () => {
     const { cachePath } = await setupProfiles();
+    await writeFile(
+      cachePath,
+      cachedCredits([
+        ["personal-account", 0],
+        ["work-account", 1],
+      ]),
+    );
+    let questionShown = false;
     const requests: string[] = [];
     const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       requests.push(String(input));
+      expect(questionShown).toBe(true);
       const token = new Headers(init?.headers).get("authorization");
       if (token?.startsWith("Bearer personal-")) return resetCredits(0, "unused", "Unused");
       return resetCredits(1, "opaque-work-credit", "Work reset");
     };
-    const harness = commandHarness(["work (1 available)", "Work reset (expires in 6h)"]);
+    const harness = commandHarness(
+      ["work (1 cached)", "Work reset (expires in 6h)"],
+      undefined,
+      () => {
+        questionShown = true;
+      },
+    );
     registerResetCreditCommand(harness.pi, {
       cachePath,
       fetchFn,
@@ -104,10 +206,12 @@ describe("/reset-credit", () => {
 
     await harness.getHandler()?.("--dry-run", harness.ctx);
 
-    expect(requests).toHaveLength(3);
-    expect(harness.selectOptions[0]).toEqual(["work (1 available)"]);
-    expect(harness.selectOptions[0]).not.toContain("default");
-    expect(harness.getInputCalls()).toBe(0);
+    expect(requests).toHaveLength(1);
+    expect(questionShown).toBe(true);
+    expect(harness.questionRenders[0]?.join("\n")).toContain("work (1 cached)");
+    expect(harness.questionRenders[0]?.join("\n")).not.toContain("default");
+    expect(harness.getPopupSelectCalls()).toBe(0);
+    expect(harness.getPopupInputCalls()).toBe(0);
     expect(harness.notifications).toEqual([
       "Profile: work\nCredit: Work reset (expires in 6h)\nEffect: reset the account's current usage windows.",
       "Dry run: no reset credit was consumed.",
@@ -128,7 +232,7 @@ describe("/reset-credit", () => {
       if (token?.startsWith("Bearer personal-")) return resetCredits(0, "unused", "Unused");
       return resetCredits(1, "opaque-work-credit", "Work reset");
     };
-    const harness = commandHarness(["work (1 available)", "Work reset (expires in 6h)"]);
+    const harness = commandHarness(["work (availability unknown)", "Work reset (expires in 6h)"]);
     registerResetCreditCommand(harness.pi, {
       fetchFn,
       now: () => now,
@@ -142,7 +246,7 @@ describe("/reset-credit", () => {
 
     expect(workCredentialResolutions).toBe(2);
     expect(workRequests).toBe(3);
-    expect(harness.getInputCalls()).toBe(0);
+    expect(harness.getPopupInputCalls()).toBe(0);
   });
 
   test("revalidates and consumes only after exact CONSUME confirmation", async () => {
@@ -178,8 +282,9 @@ describe("/reset-credit", () => {
       credit_id: "opaque-work-credit",
       redeem_request_id: expect.any(String),
     });
-    expect(harness.getInputCalls()).toBe(1);
-    expect(harness.inputTitles[0]).toContain("Type CONSUME");
+    expect(harness.getPopupSelectCalls()).toBe(0);
+    expect(harness.getPopupInputCalls()).toBe(0);
+    expect(harness.questionRenders[2]?.join("\n")).toContain("Type CONSUME");
     expect(harness.notifications.at(-1)).toBe(
       "Reset credit consumed for work; 2 usage windows reset.",
     );
@@ -188,14 +293,8 @@ describe("/reset-credit", () => {
 
   test("rejects malformed reset-credit responses without mutating anything", async () => {
     const { cachePath } = await setupProfiles();
-    let selectCalls = 0;
     const fetchFn = async (): Promise<Response> => Response.json({ available_count: "1" });
     const harness = commandHarness([]);
-    const originalSelect = harness.ctx.ui.select;
-    harness.ctx.ui.select = async (...args: Parameters<typeof originalSelect>) => {
-      selectCalls += 1;
-      return originalSelect(...args);
-    };
     registerResetCreditCommand(harness.pi, {
       cachePath,
       fetchFn,
@@ -207,7 +306,8 @@ describe("/reset-credit", () => {
 
     await harness.getHandler()?.("", harness.ctx);
 
-    expect(selectCalls).toBe(0);
+    expect(harness.getPopupSelectCalls()).toBe(0);
+    expect(harness.getPopupInputCalls()).toBe(0);
     expect(harness.notifications[0]).toBe(
       "No named Pi profiles have an available reset credit.\nUnavailable profiles: personal, work.",
     );
@@ -240,6 +340,8 @@ describe("/reset-credit", () => {
     await harness.getHandler()?.("", harness.ctx);
 
     expect(consumed).toBe(false);
+    expect(harness.getPopupSelectCalls()).toBe(0);
+    expect(harness.getPopupInputCalls()).toBe(0);
     expect(harness.notifications.at(-1)).toBe("Cancelled: no reset credit was consumed.");
   });
 });

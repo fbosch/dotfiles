@@ -42,10 +42,7 @@ export function styleBlock(text: string): void {
   style(lines.join("\n"));
 }
 
-export async function withSpinner<T>(
-  label: string,
-  fn: () => Promise<T>,
-): Promise<T> {
+export async function withSpinner<T>(label: string, fn: () => Promise<T>): Promise<T> {
   if (stderr.isTTY === false) {
     return fn();
   }
@@ -63,10 +60,7 @@ export async function withSpinner<T>(
   }
 }
 
-export async function choose(
-  header: string,
-  options: string[],
-): Promise<string | null> {
+export async function choose(header: string, options: string[]): Promise<string | null> {
   if (options.length === 0) {
     return null;
   }
@@ -81,13 +75,10 @@ export async function choose(
     return null;
   }
 
-  return choice;
+  return choice ?? null;
 }
 
-export async function input(
-  value: string,
-  prompt = "Commit message:",
-): Promise<string | null> {
+export async function input(value: string, prompt = "Commit message:"): Promise<string | null> {
   const answer = await text({
     message: prompt,
     initialValue: value,

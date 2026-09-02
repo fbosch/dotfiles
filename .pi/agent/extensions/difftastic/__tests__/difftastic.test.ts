@@ -328,6 +328,78 @@ describe("Difftastic extension", () => {
     expect(rendered.slice(1).every((line) => visibleWidth(line) <= 24)).toBeTrue();
   });
 
+  test("rerenders full structural context when a diff is expanded", async () => {
+    let tool: ToolDefinition | undefined;
+    const requests: Array<{ context?: number }> = [];
+    const compactDetails: DifftasticDetails = {
+      ...details,
+      output: "sample.ts --- TypeScript\n1 old    1 new",
+    };
+    const fullDetails: DifftasticDetails = {
+      ...compactDetails,
+      output: "sample.ts --- TypeScript\n1 old    1 new\nunchanged line",
+    };
+    const pi = {
+      registerEntryRenderer: () => {},
+      registerFlag: () => {},
+      on: () => {},
+      registerTool(definition: ToolDefinition) {
+        tool = definition;
+      },
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+    registerDifftasticExtension(pi, {
+      run: async (request) => {
+        requests.push(request);
+        return request.context === 2_000
+          ? { content: "full", details: fullDetails }
+          : { content: "compact", details: compactDetails };
+      },
+    });
+
+    if (tool === undefined || tool.renderResult === undefined) {
+      throw new Error("git_diff renderer was not registered");
+    }
+    const theme = {
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+      getFgAnsi: (color: string) => `<${color}>`,
+    } as Theme;
+    const result = {
+      content: [{ type: "text" as const, text: "compact" }],
+      details: compactDetails,
+    };
+    const context = {
+      args: {},
+      argsComplete: true,
+      cwd: "/repo",
+      executionStarted: true,
+      expanded: true,
+      invalidate: () => {},
+      isError: false,
+      isPartial: false,
+      lastComponent: undefined,
+      showImages: false,
+      state: {},
+      toolCallId: "diff-1",
+    } as Parameters<typeof tool.renderResult>[3];
+
+    const initial = tool.renderResult(result, { expanded: true, isPartial: false }, theme, context);
+    expect(initial.render(120).join("\n")).toContain("1 old    1 new");
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const expanded = tool.renderResult(
+      result,
+      { expanded: true, isPartial: false },
+      theme,
+      context,
+    );
+
+    expect(requests).toEqual([{ context: 2_000 }]);
+    expect(expanded.render(120).join("\n")).toContain("unchanged line");
+    expect(expanded.render(120).join("\n")).not.toContain("..\n");
+  });
+
   test("enables Difftastic edit previews from the settings option", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-difftastic-test-"));
     const filePath = join(root, "sample.ts");

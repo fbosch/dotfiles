@@ -4,20 +4,20 @@ import { basename } from "node:path";
 import process from "node:process";
 import pc from "picocolors";
 import { match } from "ts-pattern";
-
+import { listPiCommitModels } from "./pi-model";
+import { type GenerateError, generateCommit } from "./src/generate";
 import {
   commit,
-  getBranchName,
   type GitError,
-  getRepoRoot,
+  getBranchName,
   getRemoteOriginUrl,
+  getRepoRoot,
   getStagedDiff,
   getStagedFiles,
   getStagedSnapshot,
   hasOnlyLockfiles,
   isInGitRepo,
 } from "./src/git";
-import { generateCommit, type GenerateError } from "./src/generate";
 import {
   choose,
   copyCommitCommandToClipboard,
@@ -30,12 +30,12 @@ import {
 type Args = {
   dryRun: boolean;
   verbose: boolean;
-  modelRef?: string;
+  modelRef: string | undefined;
   debug: boolean;
   restartServer: boolean;
 };
 
-function parseArgs(argv: string[]): Args {
+export function parseArgs(argv: string[]): Args {
   let modelRef: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -76,10 +76,10 @@ function getModelRef(cliValue?: string): string | null {
   return null;
 }
 
-function getFallbackModels(): string[] {
+async function getFallbackModels(): Promise<string[]> {
   const raw = process.env.AI_COMMIT_FALLBACK_MODELS;
   if (typeof raw !== "string" || raw.length === 0) {
-    return [];
+    return listPiCommitModels(process.cwd());
   }
 
   try {
@@ -138,7 +138,14 @@ function shouldSuggestAnotherModel(error: GenerateError): boolean {
 }
 
 async function selectFallbackModel(currentModelRef: string | null): Promise<string | null> {
-  const options = getFallbackModels().filter((model) => model !== currentModelRef);
+  let options: string[];
+  try {
+    options = (await getFallbackModels()).filter((model) => model !== currentModelRef);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    style(` Failed to load alternate Pi models: ${message}`, 3);
+    return null;
+  }
   if (options.length === 0) {
     style(" No alternate Pi models are configured", 3);
     return null;
@@ -156,18 +163,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
 
   if (args.restartServer) {
-    try {
-      await withSpinner("Restarting commit server...", () => restartServer());
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      style(` Failed to restart commit server: ${message}`, 1);
-      process.exit(1);
-    }
-
-    style(
-      ` Commit server ready at http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}`,
-      2,
-    );
+    style(" Pi commit backend does not use a persistent server", 3);
     return;
   }
 
@@ -188,6 +184,14 @@ async function main(): Promise<void> {
     style(" No staged changes to commit", 1);
     process.exit(1);
   }
+
+  const stagedSnapshotResult = getStagedSnapshot();
+  if (stagedSnapshotResult.isErr()) {
+    style(" Failed to read staged snapshot", 1);
+    style(` ${formatGitError(stagedSnapshotResult.error)}`, 1);
+    process.exit(1);
+  }
+  const stagedSnapshot = stagedSnapshotResult.value;
 
   const branchResult = getBranchName();
   if (args.verbose && branchResult.isErr()) {
@@ -218,7 +222,7 @@ async function main(): Promise<void> {
       style(` Remote: ${remoteOrigin}`);
     }
     style(` Branch: ${branch}`);
-    style(` Model: ${modelRef ?? "commit agent default"}`);
+    style(` Model: ${modelRef ?? "Pi default"}`);
   }
 
   let commitMsg = "";
@@ -247,27 +251,10 @@ async function main(): Promise<void> {
       stagedFiles,
       stagedDiff,
     };
-    let hasStartedServer = false;
-
-    if ((await isServerReachable()) === false) {
-      try {
-        await startServer();
-        hasStartedServer = true;
-      } catch {
-        // Let the normal generate path surface the real error if startup fails.
-      }
-    } else if (await isServerOutdated()) {
-      try {
-        await withSpinner("Updating commit server...", () => restartServer());
-        hasStartedServer = true;
-      } catch {
-        // Let the normal generate path surface the real error if restart fails.
-      }
-    }
 
     while (true) {
       const generatedAttempt = await withSpinner(
-        `Analyzing staged diff with ${modelRef ?? "commit agent"}...`,
+        `Analyzing staged diff with ${modelRef ?? "Pi default"}...`,
         () =>
           generateCommit(context, modelRef, { debug: args.debug }).match(
             (value) => ({ ok: true as const, value }),
@@ -279,12 +266,7 @@ async function main(): Promise<void> {
         if (generatedAttempt.error.kind === "timeout") {
           style(" Timed out generating commit message", 1);
 
-          const action = await choose("Timed out", [
-            "Retry",
-            "Restart commit server and retry",
-            "Retry with another model",
-            "Cancel",
-          ]);
+          const action = await choose("Timed out", ["Retry", "Retry with another model", "Cancel"]);
 
           if (action === null || action === "Cancel") {
             exitCancelled("Commit cancelled");
@@ -297,16 +279,6 @@ async function main(): Promise<void> {
             }
 
             modelRef = selectedModel;
-          }
-
-          if (action === "Restart commit server and retry") {
-            try {
-              await withSpinner("Restarting commit server...", () => restartServer());
-              hasStartedServer = true;
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
-              reportGenerateError({ kind: "connection", message });
-            }
           }
 
           continue;
@@ -332,18 +304,6 @@ async function main(): Promise<void> {
             style(` Model: ${modelRef}`);
           }
 
-          continue;
-        }
-
-        if (hasStartedServer === false && shouldStartServer(generatedAttempt.error)) {
-          try {
-            await startServer();
-          } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            reportGenerateError({ kind: "connection", message });
-          }
-
-          hasStartedServer = true;
           continue;
         }
 
@@ -381,11 +341,10 @@ async function main(): Promise<void> {
     exitCancelled("Commit cancelled (empty message)");
   }
 
-  copyCommitCommandToClipboard(finalMessage);
-
   if (args.dryRun) {
+    copyCommitCommandToClipboard(finalMessage);
     style(" Dry run - would execute:", 6);
-    style(`  git commit -m \"${finalMessage}\"`, 2);
+    style(`  git commit -m "${finalMessage}"`, 2);
     style(" Staged files:", 6);
     for (const file of stagedFiles) {
       style(`  ${file}`);
@@ -393,6 +352,19 @@ async function main(): Promise<void> {
     return;
   }
 
+  const currentSnapshotResult = getStagedSnapshot();
+  if (currentSnapshotResult.isErr()) {
+    style(" Failed to verify staged snapshot", 1);
+    style(` ${formatGitError(currentSnapshotResult.error)}`, 1);
+    process.exit(1);
+  }
+  if (currentSnapshotResult.value !== stagedSnapshot) {
+    style(" Staged changes changed while preparing the commit message", 1);
+    style(" Review the index and run ai_commit again", 3);
+    process.exit(1);
+  }
+
+  copyCommitCommandToClipboard(finalMessage);
   const commitResult = commit(finalMessage);
   if (commitResult.isErr()) {
     style(" Commit failed", 1);
@@ -404,12 +376,14 @@ async function main(): Promise<void> {
   style(" Commit successful!", 2);
 }
 
-main()
-  .then(() => {
-    process.exit(0);
-  })
-  .catch((error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    style(` Failed with unexpected error: ${message}`, 1);
-    process.exit(1);
-  });
+if (import.meta.main) {
+  main()
+    .then(() => {
+      process.exit(0);
+    })
+    .catch((error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      style(` Failed with unexpected error: ${message}`, 1);
+      process.exit(1);
+    });
+}

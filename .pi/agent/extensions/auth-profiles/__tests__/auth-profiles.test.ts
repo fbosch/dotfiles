@@ -7,12 +7,23 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import type { Component } from "@earendil-works/pi-tui";
 import authProfiles from "../index";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type ProfileCommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
 type ResetCreditCommandHandler = ProfileCommandHandler;
+
+type InlineQuestionFactory = (
+  tui: { requestRender(): void },
+  theme: { fg(color: string, text: string): string },
+  keybindings: {
+    matches(data: string, binding: string): boolean;
+    getKeys(binding: string): string[];
+  },
+  done: (value: unknown) => void,
+) => Component;
 
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 const temporaryDirectories: string[] = [];
@@ -132,6 +143,7 @@ describe("auth profile prompt status", () => {
       auth: { apiKey: `access:${runtime.credentials.store.path}` },
     });
     const selections = ["work (1 available)"];
+    let questionIndex = 0;
     const ctx = {
       cwd: projectDir,
       isProjectTrusted: () => true,
@@ -142,11 +154,60 @@ describe("auth profile prompt status", () => {
       ui: {
         notify: () => undefined,
         setStatus: () => undefined,
-        select: async (_title: string, options: string[]) => {
-          const selection = selections.shift();
-          return selection ?? options[0];
+        custom: async (factory: InlineQuestionFactory, options: { overlay?: boolean }) => {
+          expect(options).toEqual({ overlay: false });
+          const target = questionIndex++ === 0 ? selections.shift() : undefined;
+          return new Promise((resolve) => {
+            const component = factory(
+              { requestRender: () => undefined },
+              { fg: (_color, text) => text },
+              {
+                matches: (data, binding) =>
+                  binding === "tui.select.up"
+                    ? data === "up" || data === "ctrl+k"
+                    : binding === "tui.select.down"
+                      ? data === "down" || data === "ctrl+j"
+                      : binding === "tui.select.confirm"
+                        ? data === "enter" || data === "\r"
+                        : data === "escape",
+                getKeys: (binding) =>
+                  binding === "tui.select.up"
+                    ? ["up"]
+                    : binding === "tui.select.down"
+                      ? ["down"]
+                      : binding === "tui.select.confirm"
+                        ? ["enter"]
+                        : ["escape"],
+              },
+              resolve,
+            );
+            const rendered = () => component.render(200).join("\n");
+            if (rendered().includes("Answer:")) {
+              for (const character of "CONSUME") component.handleInput?.(character);
+              component.handleInput?.("\r");
+              return;
+            }
+            if (target !== undefined) {
+              for (let attempt = 0; attempt < 10; attempt += 1) {
+                const targetIsHighlighted = rendered()
+                  .split("\n")
+                  .some((line) => line.includes(target) && line.includes("▶"));
+                if (targetIsHighlighted) {
+                  component.handleInput?.("enter");
+                  return;
+                }
+                component.handleInput?.("down");
+              }
+            }
+            component.handleInput?.("enter");
+          });
         },
-        input: async () => "CONSUME",
+        select: async () => {
+          throw new Error("reset-credit used popup select instead of ask_user_question");
+        },
+        input: async () => {
+          throw new Error("reset-credit used popup input instead of ask_user_question");
+        },
       },
     } as unknown as ExtensionCommandContext;
     const originalFetch = globalThis.fetch;

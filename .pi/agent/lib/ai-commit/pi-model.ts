@@ -36,10 +36,11 @@ function projectIsTrusted(cwd: string, agentDir: string): boolean {
   return globalSettings.getDefaultProjectTrust() === "always";
 }
 
-export async function createPiCommitModel(
-  cwd: string,
-  requestedModelRef: string | null,
-): Promise<PiCommitModel> {
+async function createConfiguredRuntime(cwd: string): Promise<{
+  runtime: ModelRuntime;
+  settings: SettingsManager;
+  profile: string;
+}> {
   const agentDir = getAgentDir();
   const trusted = projectIsTrusted(cwd, agentDir);
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted: trusted });
@@ -54,7 +55,19 @@ export async function createPiCommitModel(
     authPath: authPathFor(profile, agentDir),
     modelsPath: join(agentDir, "models.json"),
   });
+  return { runtime, settings, profile };
+}
 
+export async function listPiCommitModels(cwd: string): Promise<string[]> {
+  const { runtime } = await createConfiguredRuntime(cwd);
+  return (await runtime.getAvailable()).map((model) => `${model.provider}/${model.id}`);
+}
+
+export async function createPiCommitModel(
+  cwd: string,
+  requestedModelRef: string | null,
+): Promise<PiCommitModel> {
+  const { runtime, settings, profile } = await createConfiguredRuntime(cwd);
   const defaultProvider = settings.getDefaultProvider();
   const defaultModel = settings.getDefaultModel();
   const modelReference =

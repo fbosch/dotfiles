@@ -42,6 +42,8 @@ import { Type } from "typebox";
 
 const COMMAND_TIMEOUT_MS = 60_000;
 const EDIT_COMMAND_TIMEOUT_MS = 10_000;
+// Keep expansion within the renderer's existing bounded-output contract.
+const FULL_CONTEXT_LINES = DEFAULT_MAX_LINES;
 const DEFAULT_CONTEXT_LINES = 3;
 const DEFAULT_WIDTH = 120;
 const MIN_WIDTH = 40;
@@ -121,6 +123,13 @@ export interface DifftasticResult {
   readonly details: DifftasticDetails;
 }
 
+interface GitDiffRenderState {
+  expandedController: AbortController | undefined;
+  expandedDetails: DifftasticDetails | null | undefined;
+  expandedKey: string | undefined;
+  expandedPending: boolean;
+}
+
 export type GitDiffExecutor = (
   command: string,
   args: string[],
@@ -134,6 +143,7 @@ export type GitDiffRunner = (
 ) => Promise<DifftasticResult>;
 
 export interface DifftasticEditRequest {
+  readonly context?: number;
   readonly newContent: string;
   readonly oldContent: string;
   readonly path: string;
@@ -517,7 +527,7 @@ export async function runDifftasticEditDiff(
           `--display=${display}`,
           "--color=always",
           `--width=${width}`,
-          `--context=${DEFAULT_CONTEXT_LINES}`,
+          `--context=${request.context ?? DEFAULT_CONTEXT_LINES}`,
           oldPath,
           newPath,
         ],
@@ -608,7 +618,12 @@ function detailLines(value: string): string[] {
   return [first, ...lines.slice(1).map((line) => `  ${line}`)];
 }
 
-function diffComponent(details: DifftasticDetails, expanded: boolean, theme: Theme): Component {
+function diffComponent(
+  details: DifftasticDetails,
+  expanded: boolean,
+  theme: Theme,
+  loading = false,
+): Component {
   const lines = sourceLines(remapDifftasticColors(details.output, theme));
   if (details.noChanges) {
     const output = [statusLine(theme, "Info", `No ${details.scope}.`)];
@@ -630,6 +645,9 @@ function diffComponent(details: DifftasticDetails, expanded: boolean, theme: The
       ),
     );
   }
+  if (loading) {
+    output.push("", statusLine(theme, "Info", "Rendering full diff..."));
+  }
   if (details.truncation !== undefined) {
     output.push("", statusLine(theme, "Warning", "Diff output was truncated."));
     if (details.fullOutputPath !== undefined) {
@@ -642,6 +660,70 @@ function diffComponent(details: DifftasticDetails, expanded: boolean, theme: The
   return new DiffOutputComponent(output);
 }
 
+function renderExpandedGitDiff(
+  details: DifftasticDetails,
+  request: GitDiffRequest,
+  cwd: string,
+  state: GitDiffRenderState,
+  run: GitDiffRunner,
+  expansionControllers: Set<AbortController>,
+  invalidate: () => void,
+): DifftasticDetails {
+  if (details.noChanges) return details;
+
+  const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
+  const requestKey = JSON.stringify(expandedRequest);
+  if (state.expandedKey !== requestKey) {
+    state.expandedController?.abort();
+    if (state.expandedController !== undefined) {
+      expansionControllers.delete(state.expandedController);
+    }
+    state.expandedController = undefined;
+    state.expandedDetails = undefined;
+    state.expandedKey = requestKey;
+    state.expandedPending = false;
+  }
+
+  if (!state.expandedPending && state.expandedDetails === undefined) {
+    const controller = new AbortController();
+    state.expandedController = controller;
+    state.expandedPending = true;
+    expansionControllers.add(controller);
+    void run(expandedRequest, cwd, controller.signal).then(
+      (expandedResult) => {
+        expansionControllers.delete(controller);
+        if (
+          state.expandedKey !== requestKey ||
+          state.expandedController !== controller ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        state.expandedDetails = expandedResult.details;
+        state.expandedPending = false;
+        state.expandedController = undefined;
+        invalidate();
+      },
+      () => {
+        expansionControllers.delete(controller);
+        if (
+          state.expandedKey !== requestKey ||
+          state.expandedController !== controller ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        state.expandedDetails = null;
+        state.expandedPending = false;
+        state.expandedController = undefined;
+        invalidate();
+      },
+    );
+  }
+
+  return state.expandedDetails ?? details;
+}
+
 type NativeEditDefinition = ReturnType<typeof createEditToolDefinition>;
 type NativeEditRenderCall = NonNullable<NativeEditDefinition["renderCall"]>;
 type NativeEditInput = Parameters<NativeEditDefinition["execute"]>[1];
@@ -652,10 +734,15 @@ type DifftasticEditDetails = EditToolDetails & {
 };
 
 interface DifftasticEditState {
+  expandedPreview: DifftasticDetails | null | undefined;
+  expandedPreviewController: AbortController | undefined;
+  expandedPreviewKey: string | undefined;
+  expandedPreviewPending: boolean;
   preview: DifftasticDetails | undefined;
   previewController: AbortController | undefined;
   previewKey: string | undefined;
   previewPending: boolean;
+  previewRequest: DifftasticEditRequest | undefined;
 }
 
 type DifftasticEditRenderState = NativeEditState & DifftasticEditState;
@@ -736,15 +823,80 @@ function replaceEditPreview(
   details: DifftasticDetails,
   expanded: boolean,
   theme: Theme,
+  loading = false,
 ): Component {
   if (!(component instanceof Box)) return component;
   const header = component.children[0];
   component.clear();
   if (header !== undefined) component.addChild(header);
   component.addChild(new Spacer(1));
-  component.addChild(diffComponent(details, expanded, theme));
+  component.addChild(diffComponent(details, expanded, theme, loading));
   component.setBgFn((text) => theme.bg("toolSuccessBg", text));
   return component;
+}
+
+function renderExpandedEditPreview(
+  details: DifftasticDetails,
+  request: DifftasticEditRequest,
+  cwd: string,
+  state: DifftasticEditState,
+  runEdit: EditDiffRunner,
+  expansionControllers: Set<AbortController>,
+  invalidate: () => void,
+): DifftasticDetails {
+  if (details.noChanges) return details;
+
+  const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
+  const requestKey = JSON.stringify(expandedRequest);
+  if (state.expandedPreviewKey !== requestKey) {
+    state.expandedPreviewController?.abort();
+    if (state.expandedPreviewController !== undefined) {
+      expansionControllers.delete(state.expandedPreviewController);
+    }
+    state.expandedPreviewController = undefined;
+    state.expandedPreview = undefined;
+    state.expandedPreviewKey = requestKey;
+    state.expandedPreviewPending = false;
+  }
+
+  if (!state.expandedPreviewPending && state.expandedPreview === undefined) {
+    const controller = new AbortController();
+    state.expandedPreviewController = controller;
+    state.expandedPreviewPending = true;
+    expansionControllers.add(controller);
+    void runEdit(expandedRequest, cwd, controller.signal).then(
+      (expandedDetails) => {
+        expansionControllers.delete(controller);
+        if (
+          state.expandedPreviewKey !== requestKey ||
+          state.expandedPreviewController !== controller ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        state.expandedPreview = expandedDetails;
+        state.expandedPreviewPending = false;
+        state.expandedPreviewController = undefined;
+        invalidate();
+      },
+      () => {
+        expansionControllers.delete(controller);
+        if (
+          state.expandedPreviewKey !== requestKey ||
+          state.expandedPreviewController !== controller ||
+          controller.signal.aborted
+        ) {
+          return;
+        }
+        state.expandedPreview = null;
+        state.expandedPreviewPending = false;
+        state.expandedPreviewController = undefined;
+        invalidate();
+      },
+    );
+  }
+
+  return state.expandedPreview ?? details;
 }
 
 function renderEditDifftasticResult(
@@ -846,8 +998,17 @@ function createDifftasticEditTool(
       if (previousController !== undefined) previewControllers.delete(previousController);
       state.previewController = undefined;
       state.preview = undefined;
+      state.previewRequest = undefined;
       state.previewKey = key;
       state.previewPending = false;
+      state.expandedPreviewController?.abort();
+      if (state.expandedPreviewController !== undefined) {
+        previewControllers.delete(state.expandedPreviewController);
+      }
+      state.expandedPreviewController = undefined;
+      state.expandedPreview = undefined;
+      state.expandedPreviewKey = undefined;
+      state.expandedPreviewPending = false;
     }
 
     if (
@@ -862,9 +1023,14 @@ function createDifftasticEditTool(
       state.previewPending = true;
       previewControllers.add(controller);
       void simulateEdit(context.cwd, input, controller.signal)
-        .then((request) => runEdit(request, context.cwd, controller.signal))
+        .then((request) =>
+          runEdit(request, context.cwd, controller.signal).then((details) => ({
+            details,
+            request,
+          })),
+        )
         .then(
-          (details) => {
+          ({ details, request }) => {
             previewControllers.delete(controller);
             if (
               state.previewKey !== requestKey ||
@@ -874,6 +1040,7 @@ function createDifftasticEditTool(
               return;
             }
             state.preview = details;
+            state.previewRequest = request;
             state.previewPending = false;
             state.previewController = undefined;
             context.invalidate();
@@ -895,9 +1062,27 @@ function createDifftasticEditTool(
     }
 
     const nativeComponent = nativeRenderCall(args, theme, context);
-    return state.preview === undefined
+    const preview =
+      context.expanded && state.preview !== undefined && state.previewRequest !== undefined
+        ? renderExpandedEditPreview(
+            state.preview,
+            state.previewRequest,
+            context.cwd,
+            state,
+            runEdit,
+            previewControllers,
+            context.invalidate,
+          )
+        : state.preview;
+    return preview === undefined
       ? nativeComponent
-      : replaceEditPreview(nativeComponent, state.preview, context.expanded, theme);
+      : replaceEditPreview(
+          nativeComponent,
+          preview,
+          context.expanded,
+          theme,
+          context.expanded && state.expandedPreviewPending,
+        );
   };
 
   const renderResult: NonNullable<
@@ -909,13 +1094,27 @@ function createDifftasticEditTool(
   > = (result, options, theme, context) => {
     const difftastic = result.details?.difftastic;
     if (!context.isError && difftastic !== undefined) {
+      const expandedDifftastic =
+        options.expanded &&
+        context.state.preview !== undefined &&
+        context.state.previewRequest !== undefined
+          ? renderExpandedEditPreview(
+              context.state.preview,
+              context.state.previewRequest,
+              context.cwd,
+              context.state,
+              runEdit,
+              previewControllers,
+              context.invalidate,
+            )
+          : difftastic;
       if (context.state.preview?.output === difftastic.output) {
         const component =
           context.lastComponent instanceof Container ? context.lastComponent : new Container();
         component.clear();
         return component;
       }
-      return renderEditDifftasticResult(result, difftastic, options.expanded, theme);
+      return renderEditDifftasticResult(result, expandedDifftastic, options.expanded, theme);
     }
     return nativeRenderResult(result, options, theme, context);
   };
@@ -987,10 +1186,13 @@ export function registerDifftasticExtension(
       ));
 
   const previewControllers = new Set<AbortController>();
+  const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? editPreviewsEnabled;
   pi.on("session_shutdown", () => {
     for (const controller of previewControllers) controller.abort();
+    for (const controller of expansionControllers) controller.abort();
     previewControllers.clear();
+    expansionControllers.clear();
   });
 
   pi.on("session_start", (_event, ctx) => {
@@ -1007,7 +1209,7 @@ export function registerDifftasticExtension(
   });
 
   pi.registerTool(
-    defineTool<typeof GitDiffParameters, DifftasticDetails>({
+    defineTool<typeof GitDiffParameters, DifftasticDetails, GitDiffRenderState>({
       name: "git_diff",
       label: "Difftastic Git diff",
       description:
@@ -1042,10 +1244,23 @@ export function registerDifftasticExtension(
         return new Text(parts.join(" "), 0, 0);
       },
 
-      renderResult(result, { expanded }, theme) {
+      renderResult(result, { expanded }, theme, context) {
+        const details = expanded
+          ? renderExpandedGitDiff(
+              result.details,
+              context.args,
+              context.cwd,
+              context.state,
+              run,
+              expansionControllers,
+              context.invalidate,
+            )
+          : result.details;
         const component = new Container();
         component.addChild(new Spacer(1));
-        component.addChild(diffComponent(result.details, expanded, theme));
+        component.addChild(
+          diffComponent(details, expanded, theme, expanded && context.state.expandedPending),
+        );
         return component;
       },
     }),

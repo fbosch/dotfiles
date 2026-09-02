@@ -1,4 +1,4 @@
-import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
+import { type SpawnSyncOptionsWithStringEncoding, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { err, ok, type Result } from "neverthrow";
 
