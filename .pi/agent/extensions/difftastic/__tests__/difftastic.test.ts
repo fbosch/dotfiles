@@ -302,14 +302,13 @@ describe("Difftastic extension", () => {
     expect(toolResult.content[0]).toEqual({ type: "text", text: diffResult.content });
   });
 
-  test("opts into Difftastic edit execution previews with the startup flag", async () => {
+  test("enables Difftastic edit previews from the settings option", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-difftastic-test-"));
     const filePath = join(root, "sample.ts");
     await writeFile(filePath, "const value = 1;\n", "utf8");
 
     const tools = new Map<string, ToolDefinition>();
     let sessionStart: ((event: unknown, context: ExtensionContext) => void) | undefined;
-    let registeredFlag: string | undefined;
     const editDetails: DifftasticDetails = {
       ...details,
       output: "\u001b[91m1 const value = 1;\u001b[0m\n\u001b[92m1 const value = 2;\u001b[0m",
@@ -319,9 +318,6 @@ describe("Difftastic extension", () => {
     let failEditDiff = false;
     const pi = {
       registerEntryRenderer: () => {},
-      registerFlag(name: string) {
-        registeredFlag = name;
-      },
       on(_event: string, handler: (event: unknown, context: ExtensionContext) => void) {
         sessionStart = handler;
       },
@@ -329,11 +325,11 @@ describe("Difftastic extension", () => {
         tools.set(definition.name, definition);
       },
       registerCommand: () => {},
-      getFlag: () => true,
     } as unknown as ExtensionAPI;
 
     try {
       registerDifftasticExtension(pi, {
+        editPreviews: () => true,
         run: async () => diffResult,
         runEdit: async (request) => {
           editRun = request;
@@ -353,7 +349,6 @@ describe("Difftastic extension", () => {
         { cwd: root } as ExtensionContext,
       );
 
-      expect(registeredFlag).toBe("difftastic-edits");
       expect(editRun).toEqual({
         oldContent: "const value = 1;\n",
         newContent: "const value = 2;\n",
@@ -488,7 +483,7 @@ describe("Difftastic extension", () => {
     expect(notifications).toEqual([
       {
         message:
-          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nUse `pi --difftastic-edits` to use Difftastic for edit previews.",
+          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `difftasticEditPreviews` to true in ~/.pi/agent/settings.json to use Difftastic for edit previews.",
         level: "info",
       },
     ]);

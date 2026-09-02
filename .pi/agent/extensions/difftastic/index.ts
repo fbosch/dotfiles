@@ -22,7 +22,9 @@ import {
   type ExtensionAPI,
   type ExtensionContext,
   formatSize,
+  getAgentDir,
   keyHint,
+  SettingsManager,
   type Theme,
   type ThemeColor,
   type ToolDefinition,
@@ -916,14 +918,27 @@ function commandHelp(): string {
     "",
     "Show unstaged working-tree changes using Difftastic.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
-    "Use `pi --difftastic-edits` to use Difftastic for edit previews.",
+    "Set `difftasticEditPreviews` to true in ~/.pi/agent/settings.json to use Difftastic for edit previews.",
   ].join("\n");
 }
 
 interface DifftasticExtensionDependencies {
   readonly columns?: () => number | undefined;
+  readonly editPreviews?: (context: ExtensionContext) => boolean;
   readonly run?: GitDiffRunner;
   readonly runEdit?: EditDiffRunner;
+}
+
+interface DifftasticSettings {
+  readonly difftasticEditPreviews?: boolean;
+}
+
+function editPreviewsEnabled(context: ExtensionContext): boolean {
+  const settings = SettingsManager.create(
+    context.cwd,
+    getAgentDir(),
+  ).getGlobalSettings() as DifftasticSettings;
+  return settings.difftasticEditPreviews === true;
 }
 
 export function registerDifftasticExtension(
@@ -955,20 +970,15 @@ export function registerDifftasticExtension(
         },
       ));
 
-  pi.registerFlag("difftastic-edits", {
-    description: "Use Difftastic for edit previews",
-    type: "boolean",
-    default: false,
-  });
-
   const previewControllers = new Set<AbortController>();
+  const shouldUseEditPreviews = dependencies.editPreviews ?? editPreviewsEnabled;
   pi.on("session_shutdown", () => {
     for (const controller of previewControllers) controller.abort();
     previewControllers.clear();
   });
 
   pi.on("session_start", (_event, ctx) => {
-    if (pi.getFlag("difftastic-edits") === true) {
+    if (shouldUseEditPreviews(ctx)) {
       pi.registerTool(createDifftasticEditTool(ctx.cwd, runEdit, previewControllers));
     }
   });

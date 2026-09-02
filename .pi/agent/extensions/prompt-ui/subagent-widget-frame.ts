@@ -64,6 +64,9 @@ class WidgetFrame implements Component {
     // The underlying widget may render against the terminal width, so clip its
     // output here before adding the panel inset.
     const renderedContent = this.component.render(contentWidth);
+    // The todo widget can be asked to render after its list empties, before
+    // the host removes the old widget slot; do not leave its frame behind.
+    if (renderedContent.length === 0) return [];
     // The todo widget provides a full trailing spacer; consume it so the dock
     // edge below is the only bottom spacing and remains half-height.
     const contentToRender =
