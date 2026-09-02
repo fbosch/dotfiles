@@ -7,7 +7,7 @@ thinking: low
 tools: websearch, webfetch, mcp__context7
 permission:
   "*": deny
-  websearch: ask
+  websearch: allow
   webfetch: ask
   mcp__context7: ask
 ---

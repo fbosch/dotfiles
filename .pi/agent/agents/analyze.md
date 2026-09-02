@@ -13,8 +13,11 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash: ask
+  bash:
+    "*": ask
+  path_write: deny
   external_directory: ask
+  external_directory_write: deny
 ---
 
 You analyze existing code paths and explain how they work.

@@ -15,7 +15,8 @@ permission:
   ffgrep: allow
   write: allow
   edit: allow
-  bash: ask
+  bash:
+    "*": ask
   external_directory: ask
 ---
 

@@ -6,8 +6,10 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   createAliasAutocompleteProvider,
+  createPathDisplayAutocompleteProvider,
   createPromptAutocompleteProvider,
   findBottomBorder,
+  formatPathMatches,
   splitEditorLines,
   styleSelectedSuggestion,
   suggestionOverlayOffset,
@@ -53,7 +55,7 @@ describe("prompt autocomplete", () => {
   });
 
   test("fills the selected suggestion without Pi's focus marker padding", () => {
-    const selected = "\u001b[36m → /ado-pbi  Fetch backlog item\u001b[39m";
+    const selected = "\u001b[36m → /ado-\u001b[1mpbi\u001b[22m  Fetch backlog item\u001b[39m";
     const line = styleSelectedSuggestion(
       selected,
       36,
@@ -64,6 +66,7 @@ describe("prompt autocomplete", () => {
     expect(stripTerminalSequences(line)).toBe(" /ado-pbi  Fetch backlog item       ");
     expect(line).toContain("\u001b[48;2;138;190;183m");
     expect(line).toContain("\u001b[38;2;30;30;36m");
+    expect(line).toContain("\u001b[1mpbi\u001b[22m");
     expect(visibleWidth(line)).toBe(36);
   });
 
@@ -74,6 +77,47 @@ describe("prompt autocomplete", () => {
 
     expect(stripTerminalSequences(line)).toBe(" model  Select model");
     expect(line).toContain("\u001b[90m");
+  });
+
+  test("highlights path query characters in sequence", () => {
+    const formatted = formatPathMatches("docs/agents/plans/change.md", "dap", (text) => {
+      return `<${text}>`;
+    });
+
+    expect(formatted).toBe("<d>ocs/<a>gents/<p>lans/change.md");
+  });
+
+  test("shows one highlighted full path while preserving the original completion item", async () => {
+    const fileItem = {
+      value: "@.pi/agent/extensions/prompt-ui/autocomplete.ts",
+      label: "autocomplete.ts",
+      description: ".pi/agent/extensions/prompt-ui/autocomplete.ts",
+    };
+    let appliedItem: typeof fileItem | undefined;
+    const provider: AutocompleteProvider = {
+      getSuggestions: async () => ({ items: [fileItem], prefix: "@.pi/" }),
+      applyCompletion: (lines, cursorLine, cursorCol, item) => {
+        appliedItem = item as typeof fileItem;
+        return { lines, cursorLine, cursorCol };
+      },
+    };
+    const autocomplete = createPathDisplayAutocompleteProvider(
+      provider,
+      (text) => `\u001b[1m${text}\u001b[22m`,
+    );
+
+    const suggestions = await autocomplete.getSuggestions(["@.pi/"], 0, 5, {
+      signal: new AbortController().signal,
+    });
+    const suggestion = suggestions?.items[0];
+
+    expect(suggestion).toEqual({
+      value: fileItem.value,
+      label: "\u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
+    });
+    if (suggestion === undefined) throw new Error("Expected a path suggestion");
+    autocomplete.applyCompletion(["@.pi/"], 0, 5, suggestion, "@.pi/");
+    expect(appliedItem).toBe(fileItem);
   });
 
   test("offers matching agents before file suggestions", async () => {

@@ -13,7 +13,8 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash: ask
+  bash:
+    "*": ask
   external_directory: ask
 ---
 

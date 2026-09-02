@@ -1,11 +1,11 @@
-import { readFileSync, realpathSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 
 export const INSTRUCTION_FRAGMENTS_START = "<global_instruction_fragments>";
 export const INSTRUCTION_FRAGMENTS_END = "</global_instruction_fragments>";
 
-export type InstructionFragmentApplicability = "always" | "subagent";
+export type InstructionFragmentApplicability = "always" | "orchestrator";
 
 export interface InstructionFragmentConfig {
   path: string;
@@ -16,31 +16,89 @@ export interface LoadedInstructionFragment extends InstructionFragmentConfig {
   content: string;
 }
 
-const INSTRUCTION_FRAGMENT_CONFIG = [
-  { path: "orchestration.md", applies: "subagent" },
-  { path: "code-search.md", applies: "always" },
-] as const satisfies readonly InstructionFragmentConfig[];
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && Array.isArray(value) === false;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function instructionFragmentPath(value: unknown, path: string): string {
+  if (isNonEmptyString(value)) return value;
+  throw new Error(`${path}: expected a non-empty string`);
+}
+
+function parseInstructionFragmentConfig(value: unknown): InstructionFragmentConfig[] {
+  if (Array.isArray(value) === false) {
+    throw new Error("settings instructionFragments: expected an array");
+  }
+
+  return value.map((entry, index) => {
+    const path = `settings instructionFragments[${index}]`;
+    if (typeof entry === "string") {
+      return { path: instructionFragmentPath(entry, path), applies: "always" };
+    }
+    if (isRecord(entry) === false) {
+      throw new Error(`${path}: expected a path string or object`);
+    }
+
+    const unknownFields = Object.keys(entry).filter(
+      (field) => field !== "path" && field !== "applies",
+    );
+    if (unknownFields.length > 0) {
+      throw new Error(`${path}.${unknownFields[0]}: unknown field`);
+    }
+
+    const fragmentPath = instructionFragmentPath(entry.path, `${path}.path`);
+    const applies = entry.applies ?? "always";
+    if (applies !== "always" && applies !== "orchestrator") {
+      throw new Error(`${path}.applies: expected always or orchestrator`);
+    }
+
+    return { path: fragmentPath, applies };
+  });
+}
+
+function discoverInstructionFragmentConfig(
+  directory: string,
+  basePath = "",
+): InstructionFragmentConfig[] {
+  return readdirSync(directory, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .flatMap((entry) => {
+      const path = basePath === "" ? entry.name : join(basePath, entry.name);
+      const entryPath = join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        return discoverInstructionFragmentConfig(entryPath, path);
+      }
+      if (entry.isFile() === false || entry.name.endsWith(".md") === false) return [];
+      return [{ path, applies: "always" }];
+    });
+}
 
 function pathEscapesDirectory(directory: string, path: string): boolean {
   const relativePath = relative(directory, path);
   return relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath);
 }
 
-export function loadInstructionFragments(
+function loadInstructionFragmentsFromPaths(
   instructionsDirectory: string,
   fragmentConfig: readonly InstructionFragmentConfig[],
+  allowExternalPaths: boolean,
 ): LoadedInstructionFragment[] {
   const resolvedDirectory = realpathSync(instructionsDirectory);
   const loadedPaths = new Set<string>();
 
   return fragmentConfig.map((fragment) => {
     const requestedPath = resolve(resolvedDirectory, fragment.path);
-    if (pathEscapesDirectory(resolvedDirectory, requestedPath)) {
+    if (!allowExternalPaths && pathEscapesDirectory(resolvedDirectory, requestedPath)) {
       throw new Error(`Instruction fragment escapes its directory: ${fragment.path}`);
     }
 
     const resolvedPath = realpathSync(requestedPath);
-    if (pathEscapesDirectory(resolvedDirectory, resolvedPath)) {
+    if (!allowExternalPaths && pathEscapesDirectory(resolvedDirectory, resolvedPath)) {
       throw new Error(`Instruction fragment symlink escapes its directory: ${fragment.path}`);
     }
 
@@ -69,13 +127,58 @@ export function loadInstructionFragments(
   });
 }
 
+export function loadInstructionFragments(
+  instructionsDirectory: string,
+  fragmentConfig: readonly InstructionFragmentConfig[],
+): LoadedInstructionFragment[] {
+  return loadInstructionFragmentsFromPaths(instructionsDirectory, fragmentConfig, false);
+}
+
+export function loadConfiguredInstructionFragments(
+  instructionsDirectory: string,
+  fragmentConfig: readonly InstructionFragmentConfig[],
+): LoadedInstructionFragment[] {
+  return loadInstructionFragmentsFromPaths(instructionsDirectory, fragmentConfig, true);
+}
+
+export function loadGlobalInstructionFragments(
+  agentDirectory = getAgentDir(),
+  cwd = process.cwd(),
+): LoadedInstructionFragment[] {
+  const settings = SettingsManager.create(cwd, agentDirectory, { projectTrusted: false });
+  const errors = settings.drainErrors();
+  if (errors.length > 0) {
+    throw new Error(
+      errors
+        .map(
+          ({ error, path, scope }) =>
+            `${scope} settings${path === undefined ? "" : ` (${path})`}: ${error.message}`,
+        )
+        .join("\n"),
+    );
+  }
+
+  const instructionsDirectory = join(agentDirectory, "instructions");
+  const globalSettings = settings.getGlobalSettings();
+  const configuredFragments = isRecord(globalSettings)
+    ? globalSettings.instructionFragments
+    : undefined;
+  const fragmentConfig =
+    configuredFragments === undefined
+      ? discoverInstructionFragmentConfig(instructionsDirectory)
+      : parseInstructionFragmentConfig(configuredFragments);
+
+  return loadConfiguredInstructionFragments(instructionsDirectory, fragmentConfig);
+}
+
 export function instructionFragmentsForTools(
   fragments: readonly LoadedInstructionFragment[],
   activeTools: readonly string[],
 ): string {
-  const hasSubagent = activeTools.includes("subagent");
+  // Pi exposes tool capabilities rather than agent roles; the subagent tool identifies the orchestrator.
+  const hasSubagentTool = activeTools.includes("subagent");
   return fragments
-    .filter((fragment) => fragment.applies === "always" || hasSubagent)
+    .filter((fragment) => fragment.applies === "always" || hasSubagentTool)
     .map((fragment) => fragment.content)
     .join("\n\n");
 }
@@ -92,10 +195,7 @@ export function appendInstructionFragments(systemPrompt: string, fragments: stri
 }
 
 // Load one coherent snapshot per extension generation; /reload imports a fresh generation.
-const GLOBAL_INSTRUCTION_FRAGMENTS = loadInstructionFragments(
-  join(getAgentDir(), "instructions"),
-  INSTRUCTION_FRAGMENT_CONFIG,
-);
+const GLOBAL_INSTRUCTION_FRAGMENTS = loadGlobalInstructionFragments();
 
 export default function instructionFragments(pi: ExtensionAPI): void {
   pi.on("before_agent_start", (event) => {

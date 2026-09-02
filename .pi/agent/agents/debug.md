@@ -15,7 +15,8 @@ permission:
   ffgrep: allow
   write: allow
   edit: allow
-  bash: ask
+  bash:
+    "*": ask
   mcp__chrome_devtools: ask
   external_directory: ask
 ---

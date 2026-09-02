@@ -13,6 +13,7 @@ import instructionFragments, {
   INSTRUCTION_FRAGMENTS_END,
   INSTRUCTION_FRAGMENTS_START,
   instructionFragmentsForTools,
+  loadGlobalInstructionFragments,
   loadInstructionFragments,
 } from "../instruction-fragments";
 
@@ -44,12 +45,52 @@ describe("instruction fragments", () => {
 
     const fragments = loadInstructionFragments(directory, [
       { path: "first.md", applies: "always" },
-      { path: "second.md", applies: "subagent" },
+      { path: "second.md", applies: "orchestrator" },
     ]);
 
     expect(fragments.map((fragment) => fragment.content)).toEqual([
       "First instruction.",
       "Second instruction.",
+    ]);
+  });
+
+  test("discovers Markdown fragments recursively when not configured", () => {
+    const root = temporaryDirectory();
+    const agentDirectory = join(root, "agent");
+    const instructionsDirectory = join(agentDirectory, "instructions");
+    mkdirSync(join(instructionsDirectory, "nested"), { recursive: true });
+    writeFileSync(join(agentDirectory, "settings.json"), "{}\n");
+    writeFileSync(join(instructionsDirectory, "second.md"), "Second instruction.\n");
+    writeFileSync(join(instructionsDirectory, "nested", "first.md"), "First instruction.\n");
+    writeFileSync(join(instructionsDirectory, "ignored.txt"), "Not an instruction.\n");
+
+    const fragments = loadGlobalInstructionFragments(agentDirectory, root);
+
+    expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
+      { path: "nested/first.md", applies: "always", content: "First instruction." },
+      { path: "second.md", applies: "always", content: "Second instruction." },
+    ]);
+  });
+
+  test("loads configured paths and preserves their applicability", () => {
+    const root = temporaryDirectory();
+    const agentDirectory = join(root, "agent");
+    const instructionsDirectory = join(agentDirectory, "instructions");
+    mkdirSync(instructionsDirectory, { recursive: true });
+    writeFileSync(
+      join(agentDirectory, "settings.json"),
+      `${JSON.stringify({
+        instructionFragments: ["second.md", { path: "first.md", applies: "orchestrator" }],
+      })}\n`,
+    );
+    writeFileSync(join(instructionsDirectory, "second.md"), "Second instruction.\n");
+    writeFileSync(join(instructionsDirectory, "first.md"), "First instruction.\n");
+
+    const fragments = loadGlobalInstructionFragments(agentDirectory, root);
+
+    expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
+      { path: "second.md", applies: "always", content: "Second instruction." },
+      { path: "first.md", applies: "orchestrator", content: "First instruction." },
     ]);
   });
 
@@ -68,7 +109,7 @@ describe("instruction fragments", () => {
     expect(() =>
       loadInstructionFragments(directory, [
         { path: "valid.md", applies: "always" },
-        { path: "valid.md", applies: "subagent" },
+        { path: "valid.md", applies: "orchestrator" },
       ]),
     ).toThrow("Duplicate instruction fragment: valid.md");
     expect(() =>
@@ -101,9 +142,9 @@ describe("instruction fragments", () => {
     ).toThrow("Instruction fragment contains a reserved marker: marked.md");
   });
 
-  test("selects always-on fragments and adds subagent fragments when available", () => {
+  test("selects always-on fragments and adds orchestrator fragments when available", () => {
     const fragments = [
-      { path: "orchestration.md", applies: "subagent" as const, content: "Routing." },
+      { path: "orchestration.md", applies: "orchestrator" as const, content: "Routing." },
       { path: "code-search.md", applies: "always" as const, content: "Search." },
     ];
 
@@ -122,7 +163,7 @@ describe("instruction fragments", () => {
     expect(appendInstructionFragments(appended, "Routing instructions.")).toBe(appended);
   });
 
-  test("injects always-on fragments and limits routing to subagent-capable sessions", () => {
+  test("injects always-on fragments and limits routing to sessions with the subagent tool", () => {
     let handler:
       | ((
           event: BeforeAgentStartEvent,

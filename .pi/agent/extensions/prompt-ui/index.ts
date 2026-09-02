@@ -65,7 +65,7 @@ export default function promptUi(pi: ExtensionAPI): void {
 
     installFloatingDialogs(ctx.ui);
     disposeSubagentWidgetFrame();
-    disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui);
+    disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui, { cwd: ctx.cwd });
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();

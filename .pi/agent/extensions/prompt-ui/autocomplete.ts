@@ -17,6 +17,7 @@ import { fitColumns, paintDockRow } from "./dock-rendering";
 
 type Color = (text: string) => string;
 type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
+type MatchFormatter = (text: string) => string;
 
 interface AutocompleteOverlayStyle {
   rail: string;
@@ -28,6 +29,14 @@ interface AutocompleteOverlayStyle {
 
 interface AutocompleteOverlayComponent extends Component, AutocompleteOverlayStyle {
   lines: string[];
+}
+
+function preserveBold(text: string): string {
+  return stripTerminalSequences(
+    text.replaceAll("\u001b[1m", "\ufff0").replaceAll("\u001b[22m", "\ufff1"),
+  )
+    .replaceAll("\ufff0", "\u001b[1m")
+    .replaceAll("\ufff1", "\u001b[22m");
 }
 
 export function styleSelectedSuggestion(
@@ -44,8 +53,132 @@ export function styleSelectedSuggestion(
     return sliceByColumn(line, paddingToRemove, visibleWidth(line) - paddingToRemove, true);
   }
 
-  const content = fitColumns(` ${match[1] ?? ""}`, "", width);
-  return `${selectedBackgroundAnsi}${selectedForegroundAnsi}${content}\u001b[39m\u001b[49m`;
+  const suggestion = match[1] ?? "";
+  const suggestionStart = match[0].length - suggestion.length;
+  const styledSuggestion = preserveBold(
+    sliceByColumn(line, suggestionStart, visibleWidth(line) - suggestionStart, true),
+  );
+  const content = fitColumns(` ${styledSuggestion}`, "", width);
+  return `${selectedBackgroundAnsi}${selectedForegroundAnsi}${content}\u001b[22m\u001b[39m\u001b[49m`;
+}
+
+export function formatPathMatches(
+  path: string,
+  query: string,
+  formatMatch: MatchFormatter,
+): string {
+  const pathCharacters = [...path];
+  const queryCharacters = [...query.replaceAll("\\", "/")];
+  if (queryCharacters.length === 0) return path;
+
+  const matchedIndexes: number[] = [];
+  let pathIndex = 0;
+  for (const queryCharacter of queryCharacters) {
+    while (
+      pathIndex < pathCharacters.length &&
+      pathCharacters[pathIndex]?.toLowerCase() !== queryCharacter.toLowerCase()
+    ) {
+      pathIndex += 1;
+    }
+    if (pathIndex === pathCharacters.length) return path;
+    matchedIndexes.push(pathIndex);
+    pathIndex += 1;
+  }
+
+  let formatted = "";
+  let previousEnd = 0;
+  for (let index = 0; index < matchedIndexes.length; ) {
+    const runStart = matchedIndexes[index];
+    if (runStart === undefined) break;
+
+    let runEnd = runStart + 1;
+    index += 1;
+    while (matchedIndexes[index] === runEnd) {
+      runEnd += 1;
+      index += 1;
+    }
+
+    formatted += pathCharacters.slice(previousEnd, runStart).join("");
+    formatted += formatMatch(pathCharacters.slice(runStart, runEnd).join(""));
+    previousEnd = runEnd;
+  }
+
+  return formatted + pathCharacters.slice(previousEnd).join("");
+}
+
+function pathQuery(prefix: string): string | undefined {
+  if (prefix.startsWith("@") === false) return undefined;
+
+  let query = prefix.slice(1);
+  if (query.startsWith('"')) query = query.slice(1);
+  if (query.endsWith('"')) query = query.slice(0, -1);
+  return query;
+}
+
+function normalizePath(path: string): string {
+  return path.replaceAll("\\", "/").replace(/\/$/, "");
+}
+
+function normalizedCompletionPath(value: string): string {
+  let path = value.startsWith("@") ? value.slice(1) : value;
+  if (path.startsWith('"')) path = path.slice(1);
+  if (path.endsWith('"')) path = path.slice(0, -1);
+  return normalizePath(path);
+}
+
+export function createPathDisplayAutocompleteProvider(
+  provider: AutocompleteProvider,
+  formatMatch: MatchFormatter,
+): AutocompleteProvider {
+  const originalItems = new WeakMap<AutocompleteItem, AutocompleteItem>();
+  const pathProvider: AutocompleteProvider = {
+    getSuggestions: async (lines, cursorLine, cursorCol, options) => {
+      const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
+      const query = suggestions === null ? undefined : pathQuery(suggestions.prefix);
+      if (suggestions === null || query === undefined) return suggestions;
+
+      return {
+        ...suggestions,
+        items: suggestions.items.map((item) => {
+          if (
+            item.description === undefined ||
+            normalizedCompletionPath(item.value) !== normalizePath(item.description)
+          ) {
+            return item;
+          }
+
+          const displayPath =
+            item.label.endsWith("/") && item.description.endsWith("/") === false
+              ? `${item.description}/`
+              : item.description;
+          const formattedItem: AutocompleteItem = {
+            ...item,
+            label: formatPathMatches(displayPath, query, formatMatch),
+          };
+          delete formattedItem.description;
+          originalItems.set(formattedItem, item);
+          return formattedItem;
+        }),
+      };
+    },
+    applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+      provider.applyCompletion(
+        lines,
+        cursorLine,
+        cursorCol,
+        originalItems.get(item) ?? item,
+        prefix,
+      ),
+  };
+  if (provider.triggerCharacters !== undefined) {
+    pathProvider.triggerCharacters = provider.triggerCharacters;
+  }
+  if (provider.shouldTriggerFileCompletion !== undefined) {
+    pathProvider.shouldTriggerFileCompletion = (lines, cursorLine, cursorCol) =>
+      provider.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? false;
+  }
+
+  return pathProvider;
 }
 
 function scrollIndicator(line: string): string | undefined {
@@ -163,9 +296,11 @@ export function createPromptAutocompleteProvider(
   agentMentions: readonly AgentMention[],
   projectReferences: readonly ProjectReference[],
   formatAgentMention: AgentMentionFormatter,
+  formatPathMatch: MatchFormatter = (text) => text,
 ): AutocompleteProvider {
+  const pathProvider = createPathDisplayAutocompleteProvider(provider, formatPathMatch);
   const aliasProvider = createAliasAutocompleteProvider(
-    provider,
+    pathProvider,
     agentMentions,
     formatAgentMention,
   );

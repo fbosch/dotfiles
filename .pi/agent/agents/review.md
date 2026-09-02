@@ -13,8 +13,11 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash: ask
+  bash:
+    "*": ask
+  path_write: deny
   external_directory: ask
+  external_directory_write: deny
 ---
 
 Review code systematically for bugs and edge cases, security vulnerabilities, performance issues, best practices, and maintainability. For complex or security-critical reviews, reason deeply. Provide constructive feedback without changes.

@@ -52,9 +52,7 @@ export interface PromptEditorState {
 }
 
 interface PromptKeybindings {
-  getKeys(
-    action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
-  ): string[];
+  getKeys(action: "app.interrupt"): string[];
 }
 
 function formatCwd(cwd: string): string {
@@ -85,7 +83,7 @@ function formatKey(key: string): string {
 
 function keyHint(
   keybindings: PromptKeybindings,
-  action: "app.interrupt" | "app.model.select" | "app.thinking.cycle" | "tui.input.tab",
+  action: "app.interrupt",
   description: string,
 ): string {
   const key = keybindings.getKeys(action)[0];
@@ -120,15 +118,7 @@ export function renderPromptHints(
   const branch = promptState.getBranch();
   const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
-  const hintRight = [
-    keyHint(keybindings, "app.thinking.cycle", "thinking"),
-    keyHint(keybindings, "app.model.select", "models"),
-    keyHint(keybindings, "tui.input.tab", "complete"),
-  ]
-    .filter(Boolean)
-    .join("  ");
-
-  return fitColumns(theme.fg("muted", ` ${hintLeft}`), theme.fg("muted", `${hintRight} `), width);
+  return fitColumns(theme.fg("muted", ` ${hintLeft}`), "", width);
 }
 
 export class PromptEditor extends CustomEditor {
@@ -203,6 +193,7 @@ export class PromptEditor extends CustomEditor {
           mention.color === undefined
             ? this.ctx.ui.theme.fg("accent", text)
             : colorizeHex(this.ctx.ui.theme, mention.color)(text),
+        (text) => this.ctx.ui.theme.bold(text),
       ),
     );
   }

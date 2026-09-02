@@ -10,7 +10,7 @@ import {
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { installSubagentWidgetFrame } from "../subagent-widget-frame";
+import { colorizeSubagentWidgetLine, installSubagentWidgetFrame } from "../subagent-widget-frame";
 
 type WidgetComponent = Component & { dispose?(): void };
 type WidgetFactory = (tui: TUI, theme: Theme) => WidgetComponent;
@@ -37,10 +37,47 @@ function createUI() {
 const theme = {
   fg: (_color: string, text: string) => text,
   getBgAnsi: () => "\u001b[48;2;34;34;34m",
+  getColorMode: () => "truecolor",
 } as unknown as Theme;
 const tui = { terminal: { columns: 80 }, requestRender: () => {} } as unknown as TUI;
 
 describe("subagent widget frame", () => {
+  test("colorizes configured agent names without touching activity lines", () => {
+    const colors = new Map([["Review", "#a8d0e6"]]);
+    const header = "└─ ⠋ \u001b[1mReview\u001b[22m  Reviewing code";
+    const activity = "│    ⎿  Review the findings";
+
+    const coloredHeader = colorizeSubagentWidgetLine(header, colors, theme);
+    const coloredActivity = colorizeSubagentWidgetLine(activity, colors, theme);
+
+    expect(coloredHeader).toContain("\u001b[38;2;168;208;230mReview\u001b[39m");
+    expect(stripTerminalSequences(coloredHeader)).toBe("└─ ⠋ Review  Reviewing code");
+    expect(coloredActivity).toBe(activity);
+  });
+
+  test("applies colors through the installed widget wrapper", () => {
+    const { calls, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => ["└─ ⠋ \u001b[1mReview\u001b[22m  Reviewing code"],
+      invalidate: () => {},
+    };
+    const uninstall = installSubagentWidgetFrame(ui, {
+      agentColors: new Map([["Review", "#a8d0e6"]]),
+    });
+
+    ui.setWidget("agents", () => widget, { placement: "aboveEditor" });
+
+    const factory = calls[0]?.content;
+    expect(typeof factory).toBe("function");
+    if (typeof factory !== "function") throw new Error("Expected a widget factory");
+    const framed = factory(tui, theme);
+
+    expect(framed.render(80).some((line) => line.includes("\u001b[38;2;168;208;230mReview"))).toBe(
+      true,
+    );
+    uninstall();
+  });
+
   test("renders the agents widget as a padded full-width dock", () => {
     const { calls, ui } = createUI();
     let renderedWidth = 0;

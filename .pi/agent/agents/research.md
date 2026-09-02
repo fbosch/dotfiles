@@ -13,7 +13,10 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash: ask
+  bash:
+    "*": ask
+  path_write: deny
+  external_directory_write: deny
   websearch: ask
   webfetch: ask
   mcp__context7: ask

@@ -3,9 +3,10 @@
   "debugLog": false,
   "permissionReviewLog": false,
   "yoloMode": false,
-  "doublePressToConfirm": true,
+  "doublePressToConfirm": false,
   "piInfrastructureReadPaths": [
-    "~/.agents/skills/*"
+    "~/.agents/skills/*",
+    "/nix/store"
   ],
   "permission": {
     "*": "allow",
@@ -53,7 +54,6 @@
       "rm *": "ask",
       "sudo *": "deny",
       "chmod *": "ask",
-      "chmod +x *": "allow",
       "chown *": "ask",
       "git push*": "ask",
       "git stash drop*": "ask",
@@ -68,7 +68,13 @@
       "git switch*": "ask",
       "git clean*": "ask",
       "git restore*": "ask",
-      "gh api*": "allow",
+      "git status --short": "allow",
+      "git status --short -- *": "allow",
+      "git diff -- *": "allow",
+      "git diff --check": "allow",
+      "git diff --check -- *": "allow",
+      "git diff --stat": "allow",
+      "git diff --stat -- *": "allow",
       "gh api * --method DELETE*": "ask",
       "gh api * --method=DELETE*": "ask",
       "gh api * -X DELETE*": "ask",
@@ -80,7 +86,6 @@
       "/tmp/*": "allow",
       "~/.config/opencode/**": "allow",
       "/Users/fbb/.config/opencode/**": "allow",
-      "/nix/store/**": "allow",
       "/dev/shm/opencode-window-screenshots/": "allow"
     }
   }

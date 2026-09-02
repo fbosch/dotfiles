@@ -16,7 +16,8 @@ permission:
   ffgrep: allow
   write: allow
   edit: allow
-  bash: ask
+  bash:
+    "*": ask
   mcp__github: ask
   external_directory: ask
 ---

@@ -13,8 +13,11 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash: ask
+  bash:
+    "*": ask
+  path_write: deny
   external_directory: ask
+  external_directory_write: deny
 ---
 
 Turn the request into a precise contract. No implementation. Ask clarifying questions only where requirements are genuinely ambiguous; Pi children cannot ask interactively, so return the one material question for the parent and stop. Otherwise proceed with explicit assumptions. Do not advance to planning or implementation when contract-shaping ambiguity remains; mark readiness explicitly.

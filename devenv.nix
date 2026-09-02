@@ -107,19 +107,40 @@ in
       trap 'rm -rf "$target"' EXIT
       source_status_before="$(git status --porcelain --untracked-files=all)"
 
-      # Prevent directory folding from masking nested ignore behavior.
-      mkdir -p "$target/.config/ags" "$target/.config/waybar"
+      bash ./scripts/secure-pi-agent-dir.sh "$target"
+      mkdir -p "$target/.pi/agent/npm"
+      printf '%s\n' target-runtime > "$target/.pi/agent/trust.json"
+      printf '%s\n' target-runtime > "$target/.pi/agent/npm/package.json"
       stow --dir "$PWD" --target "$target" --restow .
 
-      if [[ ! -L "$target/.pi" ]]; then
-        printf '%s\n' 'Expected Stow to deploy .pi as a directory symlink' >&2
+      if [[ -L "$target/.pi" ]]; then
+        printf '%s\n' 'Expected the Pi runtime root to remain a real directory' >&2
         exit 1
       fi
-      bash ./scripts/secure-pi-agent-dir.sh "$target"
       if [[ "$(stat -c '%a' "$target/.pi/agent")" != 700 ]]; then
         printf '%s\n' 'Expected the deployed Pi agent directory to use mode 0700' >&2
         exit 1
       fi
+      if [[ "$(<"$target/.pi/agent/trust.json")" != target-runtime ]] \
+        || [[ "$(<"$target/.pi/agent/npm/package.json")" != target-runtime ]]; then
+        printf '%s\n' 'Expected Stow to preserve existing Pi runtime state' >&2
+        exit 1
+      fi
+
+      pi_runtime_paths=(
+        ".pi/agent/.fallow"
+        ".pi/agent/auth-profiles"
+        ".pi/agent/auth.json"
+        ".pi/agent/mcp-cache.json"
+        ".pi/agent/models-store.json"
+        ".pi/agent/sessions"
+      )
+      for deployment_path in "''${pi_runtime_paths[@]}"; do
+        if test -e "$target/$deployment_path" || test -L "$target/$deployment_path"; then
+          printf 'Pi runtime path was deployed: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
+      done
 
       required_paths=(
         ".config/ags/config-bundled.tsx"
@@ -143,6 +164,16 @@ in
         fi
       done < <(git ls-files -z -- ".pi")
 
+      while IFS= read -r -d "" deployment_path; do
+        case "$deployment_path" in
+          ".pi/agent/trust.json"|".pi/agent/npm/"*) continue ;;
+        esac
+        if test -e "$target/$deployment_path" || test -L "$target/$deployment_path"; then
+          printf 'Git-ignored path was deployed: %s\n' "$deployment_path" >&2
+          exit 1
+        fi
+      done < <(git ls-files --others --ignored --exclude-standard -z)
+
       ignored_paths=(
         "scripts"
         "docs"
@@ -150,6 +181,8 @@ in
         "justfile"
         "lefthook.yml"
         ".codex"
+        ".config/opencode/package-lock.json"
+        ".config/opencode/scripts/__pycache__"
         ".github"
         "tests"
       )
