@@ -55,7 +55,15 @@ export async function findServerRoot(
   filePath: string,
   markers: readonly string[],
 ): Promise<string | undefined> {
-  let directory = dirname(filePath);
+  let canonicalFilePath: string;
+  try {
+    canonicalFilePath = await realpath(filePath);
+  } catch {
+    return undefined;
+  }
+  if (containedBy(projectRoot, canonicalFilePath) === false) return undefined;
+
+  let directory = dirname(canonicalFilePath);
   for (;;) {
     for (const marker of markers) {
       try {

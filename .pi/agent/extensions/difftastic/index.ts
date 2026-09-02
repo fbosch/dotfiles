@@ -485,6 +485,13 @@ function editDiffOutputPath(
   return output.replaceAll(oldPath, `${path} (before)`).replaceAll(newPath, path);
 }
 
+function removeDifftasticFileHeader(output: string): string {
+  const [firstLine, ...remainingLines] = output.split("\n");
+  return firstLine !== undefined && stripSgr(firstLine).includes(" --- ")
+    ? remainingLines.join("\n")
+    : output;
+}
+
 export async function runDifftasticEditDiff(
   execute: GitDiffExecutor,
   request: DifftasticEditRequest,
@@ -538,7 +545,9 @@ export async function runDifftasticEditDiff(
       );
     }
 
-    const output = editDiffOutputPath(result.stdout, oldPath, newPath, request.path);
+    const output = removeDifftasticFileHeader(
+      editDiffOutputPath(result.stdout, oldPath, newPath, request.path),
+    );
     const bounded = boundDiffOutput(output);
     const noChanges = bounded.plain.trim() === "";
     const warningText = result.stderr.trim() === "" ? undefined : diagnostic(result.stderr);

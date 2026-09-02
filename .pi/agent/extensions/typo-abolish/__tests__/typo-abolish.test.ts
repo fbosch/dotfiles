@@ -37,6 +37,7 @@ const state: PromptEditorState = {
   isWorking: () => false,
   getWorkingMarker: () => "●",
   getBranch: () => null,
+  getProfileName: () => undefined,
   getStatuses: () => [],
 };
 

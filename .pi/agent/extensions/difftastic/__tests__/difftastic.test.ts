@@ -184,7 +184,7 @@ describe("Difftastic execution", () => {
       async (command, args, options) => {
         executed = { command, args, options };
         return {
-          stdout: `\u001b[91m${args[5]}\u001b[0m\n`,
+          stdout: `\u001b[1m\u001b[91m${args[5]}\u001b[0m --- TypeScript\n\u001b[91m1 old\u001b[0m    \u001b[92m1 new\u001b[0m\n`,
           stderr: "",
           code: 0,
           killed: false,
@@ -209,7 +209,8 @@ describe("Difftastic execution", () => {
       "--width=116",
       "--context=3",
     ]);
-    expect(result.output).toContain("src/example.ts");
+    expect(result.output).toContain("1 old");
+    expect(result.output).not.toContain("src/example.ts --- TypeScript");
     expect(result.output).not.toContain("pi-difftastic-edit-");
     expect(result.scope).toBe("edit changes");
   });

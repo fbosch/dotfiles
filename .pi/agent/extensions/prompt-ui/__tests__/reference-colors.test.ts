@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -17,6 +18,7 @@ const tui = {
   terminal: { rows: 40, columns: 120 },
   requestRender() {},
 } as unknown as TUI;
+const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 const state: PromptEditorState = {
   isWorking: () => false,
   getWorkingMarker: () => "●",
@@ -36,7 +38,7 @@ describe("prompt reference colors", () => {
       getKeybindings() as unknown as KeybindingsManager,
       { getThinkingLevel: () => "xhigh" } as ExtensionAPI,
       {
-        cwd: "/home/fbb/dotfiles",
+        cwd: REPO_ROOT,
         isProjectTrusted: () => true,
         getContextUsage: () => undefined,
         ui: { theme },

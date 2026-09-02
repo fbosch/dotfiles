@@ -16,7 +16,7 @@ test("finds the nearest server root without walking above the project", async ()
     const root = await canonicalProjectRoot(directory);
 
     expect(await findServerRoot(root, filePath, ["package.json"])).toBe(
-      join(directory, "packages", "app"),
+      join(root, "packages", "app"),
     );
   } finally {
     await rm(directory, { recursive: true, force: true });

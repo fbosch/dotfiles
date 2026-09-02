@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { authPathFor, listProfiles, normalizeName, resolveProfile } from "./index";
+import { authPathFor, listProfiles, normalizeName, resolveProfile } from "./profile-store";
 
 const OUTPUT_SCHEMA = "fbb.pi-auth-profiles-usage/v1";
 const CACHE_SCHEMA = "fbb.pi-auth-profiles-usage-cache/v1";

@@ -59,7 +59,7 @@ describe("agent mentions", () => {
     expect(mentions.find((mention) => mention.name === "review")?.color).toBe("#123456");
     expect(mentions.find((mention) => mention.name === "review")?.displayName).toBe("Code Review");
     expect(mentions.some((mention) => mention.name === "Plan")).toBeFalse();
-    expect(mentions.some((mention) => mention.name === "general-purpose")).toBeTrue();
+    expect(mentions.some((mention) => mention.name === "general")).toBeTrue();
   });
 
   test("matches known agents case-insensitively and only once", () => {

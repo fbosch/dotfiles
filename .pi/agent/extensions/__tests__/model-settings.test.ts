@@ -78,9 +78,15 @@ function toPiThinking(level: string | undefined): string | undefined {
   return level === "none" ? "off" : level;
 }
 
-function required(value: string | undefined, setting: string): string {
-  if (value === undefined) throw new Error(`Missing OpenCode model setting: ${setting}`);
+function required(value: unknown, setting: string): string {
+  if (typeof value !== "string") throw new Error(`Missing string setting: ${setting}`);
   return value;
+}
+
+function requiredThinking(value: unknown, setting: string): string {
+  const thinking = toPiThinking(typeof value === "string" ? value : undefined);
+  if (thinking === undefined) throw new Error(`Missing reasoning setting: ${setting}`);
+  return thinking;
 }
 
 describe("Pi model settings", () => {
@@ -114,7 +120,9 @@ describe("Pi model settings", () => {
     expect(`${autoSessionName.provider}/${autoSessionName.model}`).toBe(
       toPiModel(title?.model ?? openCode.model),
     );
-    expect(autoSessionName.reasoning).toBe(toPiThinking(title?.reasoningEffort));
+    expect(autoSessionName.reasoning).toBe(
+      requiredThinking(title?.reasoningEffort, "agent.title.reasoningEffort"),
+    );
   });
 
   test("omits the unsupported Codex title temperature", () => {
@@ -127,7 +135,11 @@ describe("Pi model settings", () => {
     const content = readFileSync(new URL(`agents/${piName}.md`, AGENT_DIR), "utf8");
     const { frontmatter } = parseFrontmatter(content);
 
-    expect(frontmatter.model).toBe(toPiModel(source?.model ?? openCode.model));
-    expect(frontmatter.thinking).toBe(toPiThinking(source?.reasoningEffort));
+    expect(required(frontmatter.model, `agents/${piName}.md model`)).toBe(
+      toPiModel(source?.model ?? openCode.model),
+    );
+    expect(requiredThinking(frontmatter.thinking, `agents/${piName}.md thinking`)).toBe(
+      requiredThinking(source?.reasoningEffort, `agent.${openCodeName}.reasoningEffort`),
+    );
   });
 });

@@ -7,8 +7,21 @@
  * License: MIT; see LICENSE in this directory.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync } from "node:fs";
+import {
+  DEFAULT_PROFILE,
+  PROFILE_STATUS_KEY,
+  authPathFor,
+  globalConfigPath,
+  listProfiles,
+  normalizeName,
+  projectSettingsPath,
+  providersIn,
+  publishWezTermChange,
+  resolveProfile,
+  updateJsonFile,
+} from "./profile-store";
+import { registerResetCreditCommand } from "./reset-credit";
 /**
  * auth-profiles — per-project OAuth/API-key credential profiles for pi.
  *
@@ -33,63 +46,6 @@ import { join } from "node:path";
  *   /profile clear           remove this project's profile setting
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
-
-const DEFAULT_PROFILE = "default";
-const PROFILE_STATUS_KEY = "auth-profile";
-const WEZTERM_PROFILE_USER_VAR = "pi_profile_changed";
-
-const profilesDir = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles");
-const globalConfigPath = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles.json");
-const projectSettingsPath = (cwd: string) => join(cwd, ".pi", "settings.json");
-
-export function normalizeName(name: string): string {
-  const trimmed = (name ?? "").trim();
-  if (!trimmed) return DEFAULT_PROFILE;
-  if (trimmed !== DEFAULT_PROFILE && !/^[A-Za-z0-9._-]+$/.test(trimmed)) {
-    throw new Error(
-      `Invalid profile name "${trimmed}". Use letters, numbers, dots, underscores, and dashes.`,
-    );
-  }
-  if (trimmed === "." || trimmed === "..") {
-    throw new Error(`Invalid profile name "${trimmed}".`);
-  }
-  return trimmed;
-}
-
-export function authPathFor(profile: string, agentDir = getAgentDir()): string {
-  return profile === DEFAULT_PROFILE
-    ? join(agentDir, "auth.json")
-    : join(profilesDir(agentDir), `${profile}.json`);
-}
-
-function readJsonFile(path: string): Record<string, unknown> | undefined {
-  try {
-    return JSON.parse(readFileSync(path, "utf8"));
-  } catch {
-    return undefined;
-  }
-}
-
-export function resolveProfile(
-  ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
-  agentDir = getAgentDir(),
-): {
-  profile: string;
-  source: string;
-} {
-  if (ctx.isProjectTrusted()) {
-    const project = readJsonFile(projectSettingsPath(ctx.cwd))?.authProfile;
-    if (typeof project === "string" && project.trim()) {
-      return { profile: normalizeName(project), source: "project" };
-    }
-  }
-  const global = readJsonFile(globalConfigPath(agentDir))?.defaultProfile;
-  if (typeof global === "string" && global.trim()) {
-    return { profile: normalizeName(global), source: "global default" };
-  }
-  return { profile: DEFAULT_PROFILE, source: "built-in default" };
-}
 
 type InternalAuthStorage = {
   constructor: { create(path?: string): InternalAuthStorage };
@@ -131,44 +87,6 @@ async function bindProfile(
   return path;
 }
 
-export function listProfiles(agentDir = getAgentDir()): string[] {
-  const names = [DEFAULT_PROFILE];
-  if (existsSync(profilesDir(agentDir))) {
-    for (const file of readdirSync(profilesDir(agentDir)).sort()) {
-      if (file.endsWith(".json") && !file.endsWith(".lock")) {
-        names.push(file.slice(0, -".json".length));
-      }
-    }
-  }
-  return names;
-}
-
-function providersIn(profile: string): string[] {
-  return Object.keys(readJsonFile(authPathFor(profile)) ?? {});
-}
-
-function publishProfileChange(ctx: Pick<ExtensionContext, "mode">, profile: string): void {
-  if (ctx.mode !== "tui" || !process.stdout.isTTY) return;
-
-  const encoded = Buffer.from(profile).toString("base64");
-  const sequence = `\u001b]1337;SetUserVar=${WEZTERM_PROFILE_USER_VAR}=${encoded}\u0007`;
-  process.stdout.write(process.env.TMUX ? `\u001bPtmux;\u001b${sequence}\u001b\\` : sequence);
-}
-
-function updateJsonFile(path: string, update: (data: Record<string, unknown>) => void): void {
-  let data: Record<string, unknown> = {};
-  if (existsSync(path)) {
-    const parsed = readJsonFile(path);
-    if (parsed === undefined) {
-      throw new Error(`${path} exists but is not valid JSON; not overwriting it.`);
-    }
-    data = parsed;
-  }
-  update(data);
-  mkdirSync(join(path, ".."), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
-}
-
 export default function authProfiles(pi: ExtensionAPI): void {
   let activeProfile = DEFAULT_PROFILE;
 
@@ -179,7 +97,7 @@ export default function authProfiles(pi: ExtensionAPI): void {
     const path = await bindProfile(ctx, profile);
     activeProfile = profile;
     ctx.ui.setStatus(PROFILE_STATUS_KEY, profile);
-    publishProfileChange(ctx, profile);
+    publishWezTermChange(ctx, "profile", profile);
     return { profile, source, path };
   };
 
@@ -285,4 +203,6 @@ export default function authProfiles(pi: ExtensionAPI): void {
       }
     },
   });
+
+  registerResetCreditCommand(pi);
 }
