@@ -1,395 +1,415 @@
 #!/usr/bin/env bun
 
 import { basename } from "node:path";
+import process from "node:process";
+import pc from "picocolors";
+import { match } from "ts-pattern";
+
 import {
   commit,
-  GitCommandError,
   getBranchName,
+  type GitError,
   getRepoRoot,
+  getRemoteOriginUrl,
   getStagedDiff,
   getStagedFiles,
   getStagedSnapshot,
   hasOnlyLockfiles,
   isInGitRepo,
-} from "./git";
-import { type GeneratedCommit, type GenerateError, generateCommitWithPi } from "./index";
+} from "./src/git";
+import { generateCommit, type GenerateError } from "./src/generate";
 import {
   choose,
   copyCommitCommandToClipboard,
-  formatCommitCommand,
-  InteractiveInputError,
   input,
-  PromptInterruptedError,
-  status,
-  writeResult,
-} from "./ui";
+  style,
+  styleBlock,
+  withSpinner,
+} from "./src/ui";
 
-interface Args {
+type Args = {
   dryRun: boolean;
   verbose: boolean;
-  debug: boolean;
-  accept: boolean;
-  help: boolean;
-  legacyRestart: boolean;
   modelRef?: string;
-}
+  debug: boolean;
+  restartServer: boolean;
+};
 
-class CliInputError extends Error {}
-
-const HELP = `Generate and optionally commit a conventional commit message from staged changes.
-
-Usage:
-  ai_commit [options]
-
-Options:
-  -d, --dry          Show the commit without creating it
-  -m, --model MODEL  Override the configured Pi model
-  -y, --yes          Accept the generated message without prompting
-  -v, --verbose      Show resolved repository and model details
-      --debug        Include bounded model-response details in parse errors
-  -h, --help         Show this help
-
-Environment:
-  AI_COMMIT_MODEL             Pi model reference used when --model is absent
-  AI_COMMIT_FALLBACK_MODELS   JSON object with a models string array
-  AI_COMMIT_TIMEOUT_MS        Model timeout in milliseconds, minimum 5000
-
-The active Pi auth profile and default model are used unless overridden.`;
-
-export function parseArgs(argv: readonly string[]): Args {
-  const args: Args = {
-    dryRun: false,
-    verbose: false,
-    debug: false,
-    accept: false,
-    help: false,
-    legacyRestart: false,
-  };
+function parseArgs(argv: string[]): Args {
+  let modelRef: string | undefined;
 
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index];
-    switch (value) {
-      case "-d":
-      case "--dry":
-        args.dryRun = true;
-        break;
-      case "-v":
-      case "--verbose":
-        args.verbose = true;
-        break;
-      case "--debug":
-        args.debug = true;
-        break;
-      case "-y":
-      case "--yes":
-        args.accept = true;
-        break;
-      case "-h":
-      case "--help":
-        args.help = true;
-        break;
-      case "restart":
-      case "restart-server":
-      case "--restart":
-      case "--restart-server":
-        args.legacyRestart = true;
-        break;
-      case "-m":
-      case "--model": {
-        const modelRef = argv[index + 1]?.trim();
-        if (modelRef === undefined || modelRef.length === 0) {
-          throw new CliInputError(`${value} requires a Pi model reference`);
-        }
-        args.modelRef = modelRef;
-        index += 1;
-        break;
-      }
-      default:
-        if (value?.startsWith("--model=") === true) {
-          const modelRef = value.slice("--model=".length).trim();
-          if (modelRef.length === 0)
-            throw new CliInputError("--model requires a Pi model reference");
-          args.modelRef = modelRef;
-          break;
-        }
-        throw new CliInputError(`Unknown argument: ${value ?? ""}`);
+    if ((value === "--model" || value === "-m") && typeof argv[index + 1] === "string") {
+      modelRef = argv[index + 1]?.trim();
+      index += 1;
     }
   }
 
-  return args;
+  return {
+    dryRun: argv.includes("--dry") || argv.includes("-d"),
+    verbose: argv.includes("--verbose") || argv.includes("-v"),
+    modelRef: modelRef && modelRef.length > 0 ? modelRef : undefined,
+    debug: argv.includes("--debug"),
+    restartServer:
+      argv.includes("--restart-server") ||
+      argv.includes("--restart") ||
+      argv[0] === "restart-server" ||
+      argv[0] === "restart",
+  };
 }
 
-function configuredModelRef(args: Args): string | null {
-  if (args.modelRef !== undefined) return args.modelRef;
-  const value = process.env.AI_COMMIT_MODEL?.trim();
-  return value === undefined || value.length === 0 ? null : value;
+function exitCancelled(message: string): never {
+  style(` ${message}`, 1);
+  process.exit(2);
 }
 
-function fallbackModels(): string[] {
+function getModelRef(cliValue?: string): string | null {
+  if (typeof cliValue === "string" && cliValue.trim().length > 0) {
+    return cliValue.trim();
+  }
+
+  const value = process.env.AI_COMMIT_MODEL;
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+  return null;
+}
+
+function getFallbackModels(): string[] {
   const raw = process.env.AI_COMMIT_FALLBACK_MODELS;
-  if (raw === undefined || raw.length === 0) return [];
+  if (typeof raw !== "string" || raw.length === 0) {
+    return [];
+  }
 
   try {
-    const value: unknown = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     if (
-      typeof value !== "object" ||
-      value === null ||
-      Array.isArray(value) ||
-      Array.isArray((value as { models?: unknown }).models) === false
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !Array.isArray((parsed as { models?: unknown }).models)
     ) {
       return [];
     }
-    return (value as { models: unknown[] }).models.filter(
-      (model): model is string => typeof model === "string" && model.trim().length > 0,
+
+    return (parsed as { models: unknown[] }).models.filter(
+      (model): model is string => typeof model === "string" && model.length > 0,
     );
   } catch {
     return [];
   }
 }
 
-function isGenerateError(error: unknown): error is GenerateError {
-  if (typeof error !== "object" || error === null || !("kind" in error) || !("message" in error)) {
-    return false;
-  }
-  return (
-    typeof error.message === "string" &&
-    ["connection", "timeout", "session", "parse", "sdk"].includes(String(error.kind))
-  );
+function formatGitError(error: GitError): string {
+  const detail = error.stderr.length > 0 ? error.stderr : "git command failed";
+  return `${error.command}: ${detail}`;
 }
 
 function formatGenerateError(error: GenerateError): string {
-  switch (error.kind) {
-    case "connection":
-      return `Connection error: ${error.message}`;
-    case "timeout":
-      return `Timeout: ${error.message}`;
-    case "session":
-      return `Session error: ${error.message}`;
-    case "parse":
-      return `Parse error: ${error.message}`;
-    case "sdk":
-      return `SDK error: ${error.message}`;
+  return match(error)
+    .with({ kind: "connection" }, ({ message }) => `Connection error: ${message}`)
+    .with({ kind: "timeout" }, ({ message }) => `Timeout: ${message}`)
+    .with({ kind: "session" }, ({ message }) => `Session error: ${message}`)
+    .with({ kind: "sdk" }, ({ message }) => `SDK error: ${message}`)
+    .with({ kind: "parse" }, ({ message }) => `Parse error: ${message}`)
+    .exhaustive();
+}
+
+function reportGenerateError(error: GenerateError): never {
+  style(` Failed to generate commit message: ${formatGenerateError(error)}`, 1);
+  if (error.kind === "parse" && typeof error.debug === "string" && error.debug.length > 0) {
+    style(` Debug: ${error.debug}`, 3);
   }
+  process.exit(1);
 }
 
 function shouldSuggestAnotherModel(error: GenerateError): boolean {
-  if (error.kind !== "sdk") return false;
+  if (error.kind !== "sdk") {
+    return false;
+  }
+
   const message = error.message.toLowerCase();
-  return ["model is not supported", "unsupported model", "model not found"].some((value) =>
-    message.includes(value),
-  );
+  return [
+    "model is not supported",
+    "not supported when using codex with a chatgpt account",
+    "unsupported model",
+    "model not found",
+  ].some((value) => message.includes(value));
 }
 
 async function selectFallbackModel(currentModelRef: string | null): Promise<string | null> {
-  const models = fallbackModels().filter((model) => model !== currentModelRef);
-  if (models.length === 0) {
-    status("Warning", "No alternate Pi models are configured. Use --model to select one.");
+  const options = getFallbackModels().filter((model) => model !== currentModelRef);
+  if (options.length === 0) {
+    style(" No alternate Pi models are configured", 3);
     return null;
   }
-  return (await choose("Select a Pi model", models)) ?? null;
+
+  const selected = await choose("Select a model", options);
+  if (selected === null) {
+    return null;
+  }
+
+  return options.includes(selected) ? selected : null;
 }
 
-async function generateMessage(
-  repoRoot: string,
-  branch: string,
-  stagedFiles: readonly string[],
-  stagedDiff: string,
-  initialModelRef: string | null,
-  args: Args,
-): Promise<GeneratedCommit | null> {
-  let modelRef = initialModelRef;
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
 
-  while (true) {
-    status("Working", `Analyzing staged changes with ${modelRef ?? "the default Pi model"}...`);
-    let generated: GeneratedCommit;
+  if (args.restartServer) {
     try {
-      generated = await generateCommitWithPi(
-        repoRoot,
-        { branch, stagedFiles, stagedDiff },
-        modelRef,
-        { debug: args.debug },
-      );
+      await withSpinner("Restarting commit server...", () => restartServer());
     } catch (error) {
-      if (isGenerateError(error) === false) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      style(` Failed to restart commit server: ${message}`, 1);
+      process.exit(1);
+    }
 
-      if (error.kind === "timeout") {
-        status("Error", "Timed out generating the commit message.");
-        if (args.accept) throw error;
-        const options = ["Retry", "Retry with another model", "Cancel"];
-        const action = await choose("Choose the next action", options);
-        if (action === "Retry") continue;
-        if (action === "Retry with another model") {
-          const selected = await selectFallbackModel(modelRef);
-          if (selected !== null) {
-            modelRef = selected;
-            continue;
-          }
-        }
-        return null;
+    style(
+      ` Commit server ready at http://${OPENCODE_SERVER_HOST}:${String(OPENCODE_SERVER_PORT)}`,
+      2,
+    );
+    return;
+  }
+
+  if (!isInGitRepo()) {
+    style(" Not in a git repository", 1);
+    process.exit(1);
+  }
+
+  const stagedFilesResult = getStagedFiles();
+  if (stagedFilesResult.isErr()) {
+    style(" Failed to read staged files", 1);
+    style(` ${formatGitError(stagedFilesResult.error)}`, 1);
+    process.exit(1);
+  }
+
+  const stagedFiles = stagedFilesResult.value;
+  if (stagedFiles.length === 0) {
+    style(" No staged changes to commit", 1);
+    process.exit(1);
+  }
+
+  const branchResult = getBranchName();
+  if (args.verbose && branchResult.isErr()) {
+    style(` Could not read branch: ${formatGitError(branchResult.error)}`, 3);
+  }
+  const branch = branchResult.unwrapOr("");
+
+  const repoRootResult = getRepoRoot();
+  if (repoRootResult.isErr()) {
+    style(" Failed to read repository root", 1);
+    style(` ${formatGitError(repoRootResult.error)}`, 1);
+    process.exit(1);
+  }
+  const repoRoot = repoRootResult.value;
+  const repoName = basename(repoRoot);
+
+  const remoteOriginResult = getRemoteOriginUrl();
+  if (args.verbose && remoteOriginResult.isErr()) {
+    style(` Could not read remote.origin.url: ${formatGitError(remoteOriginResult.error)}`, 3);
+  }
+  const remoteOrigin = remoteOriginResult.unwrapOr("");
+
+  let modelRef = getModelRef(args.modelRef);
+
+  if (args.verbose) {
+    style(` Repo: ${repoName} (${repoRoot})`);
+    if (remoteOrigin.length > 0) {
+      style(` Remote: ${remoteOrigin}`);
+    }
+    style(` Branch: ${branch}`);
+    style(` Model: ${modelRef ?? "commit agent default"}`);
+  }
+
+  let commitMsg = "";
+
+  if (hasOnlyLockfiles(stagedFiles)) {
+    commitMsg = "chore(deps): update lock file";
+  } else {
+    const stagedDiffResult = getStagedDiff();
+    if (stagedDiffResult.isErr()) {
+      style(" Failed to read staged diff", 1);
+      style(` ${formatGitError(stagedDiffResult.error)}`, 1);
+      process.exit(1);
+    }
+
+    const stagedDiff = stagedDiffResult.value;
+    if (stagedDiff.length === 0) {
+      style(" Empty staged diff after lockfile filters", 3);
+      process.exit(1);
+    }
+
+    const context = {
+      repoRoot,
+      repoName,
+      remoteOrigin,
+      branch,
+      stagedFiles,
+      stagedDiff,
+    };
+    let hasStartedServer = false;
+
+    if ((await isServerReachable()) === false) {
+      try {
+        await startServer();
+        hasStartedServer = true;
+      } catch {
+        // Let the normal generate path surface the real error if startup fails.
       }
+    } else if (await isServerOutdated()) {
+      try {
+        await withSpinner("Updating commit server...", () => restartServer());
+        hasStartedServer = true;
+      } catch {
+        // Let the normal generate path surface the real error if restart fails.
+      }
+    }
 
-      if (shouldSuggestAnotherModel(error) && args.accept === false) {
-        status("Warning", `The selected model failed: ${error.message}`);
-        const selected = await selectFallbackModel(modelRef);
-        if (selected !== null) {
-          modelRef = selected;
+    while (true) {
+      const generatedAttempt = await withSpinner(
+        `Analyzing staged diff with ${modelRef ?? "commit agent"}...`,
+        () =>
+          generateCommit(context, modelRef, { debug: args.debug }).match(
+            (value) => ({ ok: true as const, value }),
+            (error) => ({ ok: false as const, error }),
+          ),
+      );
+
+      if (generatedAttempt.ok === false) {
+        if (generatedAttempt.error.kind === "timeout") {
+          style(" Timed out generating commit message", 1);
+
+          const action = await choose("Timed out", [
+            "Retry",
+            "Restart commit server and retry",
+            "Retry with another model",
+            "Cancel",
+          ]);
+
+          if (action === null || action === "Cancel") {
+            exitCancelled("Commit cancelled");
+          }
+
+          if (action === "Retry with another model") {
+            const selectedModel = await selectFallbackModel(modelRef);
+            if (selectedModel === null) {
+              exitCancelled("Commit cancelled");
+            }
+
+            modelRef = selectedModel;
+          }
+
+          if (action === "Restart commit server and retry") {
+            try {
+              await withSpinner("Restarting commit server...", () => restartServer());
+              hasStartedServer = true;
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              reportGenerateError({ kind: "connection", message });
+            }
+          }
+
           continue;
         }
-        return null;
+
+        if (shouldSuggestAnotherModel(generatedAttempt.error)) {
+          style(` Model failed: ${generatedAttempt.error.message}`, 3);
+
+          const action = await choose("Try another model?", ["Retry with another model", "Cancel"]);
+
+          if (action === null || action === "Cancel") {
+            exitCancelled("Commit cancelled");
+          }
+
+          const selectedModel = await selectFallbackModel(modelRef);
+          if (selectedModel === null) {
+            exitCancelled("Commit cancelled");
+          }
+
+          modelRef = selectedModel;
+
+          if (args.verbose) {
+            style(` Model: ${modelRef}`);
+          }
+
+          continue;
+        }
+
+        if (hasStartedServer === false && shouldStartServer(generatedAttempt.error)) {
+          try {
+            await startServer();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            reportGenerateError({ kind: "connection", message });
+          }
+
+          hasStartedServer = true;
+          continue;
+        }
+
+        reportGenerateError(generatedAttempt.error);
       }
 
-      status("Error", `Failed to generate the commit message. ${formatGenerateError(error)}`);
-      if (error.kind === "parse" && args.debug && error.debug !== undefined) {
-        status("Info", error.debug);
+      const generated = generatedAttempt.value;
+
+      commitMsg = generated.message;
+      if (generated.overLimit === false) {
+        break;
       }
-      throw error;
-    }
 
-    if (generated.overLimit === false) return generated;
-    status(
-      "Warning",
-      `Generated message is ${generated.message.length} characters; the limit is 50.`,
-    );
-    if (args.accept) {
-      throw new Error("Generated message exceeds 50 characters; rerun without --yes to edit it");
-    }
+      style(` Message is ${commitMsg.length} chars (over 50)`, 3);
+      style(`  ${commitMsg}`, 208);
 
-    const action = await choose("Choose the next action", [
-      "Edit current message",
-      "Retry",
-      "Cancel",
-    ]);
-    if (action === "Edit current message") return generated;
-    if (action !== "Retry") return null;
+      const action = await choose("Pick an action", ["Edit current message", "Retry", "Cancel"]);
+      if (action === null || action === "Cancel") {
+        exitCancelled("Commit cancelled");
+      }
+
+      if (action === "Edit current message") {
+        break;
+      }
+    }
   }
+
+  const edited = await input(commitMsg, pc.dim("Edit commit message or press Enter to accept:"));
+  if (edited === null) {
+    exitCancelled("Commit cancelled");
+  }
+
+  const finalMessage = edited.trim();
+  if (finalMessage.length === 0) {
+    exitCancelled("Commit cancelled (empty message)");
+  }
+
+  copyCommitCommandToClipboard(finalMessage);
+
+  if (args.dryRun) {
+    style(" Dry run - would execute:", 6);
+    style(`  git commit -m \"${finalMessage}\"`, 2);
+    style(" Staged files:", 6);
+    for (const file of stagedFiles) {
+      style(`  ${file}`);
+    }
+    return;
+  }
+
+  const commitResult = commit(finalMessage);
+  if (commitResult.isErr()) {
+    style(" Commit failed", 1);
+    styleBlock(commitResult.error.stderr);
+    process.exit(1);
+  }
+
+  styleBlock(commitResult.value);
+  style(" Commit successful!", 2);
 }
 
-function printDryRun(message: string, stagedFiles: readonly string[]): void {
-  writeResult(`Dry run\n  Command  ${formatCommitCommand(message)}\n  Staged files`);
-  for (const file of stagedFiles) writeResult(`    - ${file}`);
-}
-
-export async function runCli(argv: readonly string[] = process.argv.slice(2)): Promise<number> {
-  let args: Args;
-  try {
-    args = parseArgs(argv);
-  } catch (error) {
-    status("Error", error instanceof Error ? error.message : String(error));
-    process.stderr.write("  Run `ai_commit --help` for usage.\n");
-    return 2;
-  }
-
-  if (args.help) {
-    writeResult(HELP);
-    return 0;
-  }
-  if (args.legacyRestart) {
-    status("Info", "The Pi commit backend has no persistent server to restart.");
-    return 0;
-  }
-
-  const cwd = process.cwd();
-  if (isInGitRepo(cwd) === false) {
-    status("Error", "The current directory is not in a Git repository.");
-    return 1;
-  }
-
-  try {
-    const repoRoot = getRepoRoot(cwd);
-    const stagedFiles = getStagedFiles(repoRoot);
-    if (stagedFiles.length === 0) {
-      status("Info", "No staged changes found.");
-      return 1;
-    }
-
-    const stagedSnapshot = getStagedSnapshot(repoRoot);
-    const branch = getBranchName(repoRoot);
-    const modelRef = configuredModelRef(args);
-
-    if (args.verbose) {
-      status("Info", `Repository: ${basename(repoRoot)} (${repoRoot})`);
-      status("Info", `Branch: ${branch}`);
-      status("Info", `Model: ${modelRef ?? "Pi default"}`);
-    }
-
-    let generated: GeneratedCommit;
-    if (hasOnlyLockfiles(stagedFiles)) {
-      generated = {
-        type: "chore",
-        scope: "deps",
-        subject: "update lock file",
-        message: "chore(deps): update lock file",
-        overLimit: false,
-      };
-    } else {
-      const stagedDiff = getStagedDiff(repoRoot);
-      if (stagedDiff.length === 0) {
-        status("Error", "The staged diff is empty after lockfile and whitespace filtering.");
-        return 1;
-      }
-      const result = await generateMessage(
-        repoRoot,
-        branch,
-        stagedFiles,
-        stagedDiff,
-        modelRef,
-        args,
-      );
-      if (result === null) {
-        status("Info", "Commit cancelled.");
-        return 2;
-      }
-      generated = result;
-    }
-
-    let finalMessage = generated.message;
-    if (args.accept === false) {
-      const edited = await input("Edit the commit message", finalMessage);
-      if (edited === undefined || edited.trim().length === 0) {
-        status("Info", "Commit cancelled.");
-        return 2;
-      }
-      finalMessage = edited.trim();
-    }
-
-    if (args.dryRun) {
-      copyCommitCommandToClipboard(finalMessage);
-      printDryRun(finalMessage, stagedFiles);
-      return 0;
-    }
-
-    if (getStagedSnapshot(repoRoot) !== stagedSnapshot) {
-      status("Error", "The staged changes changed while the commit message was being prepared.");
-      process.stderr.write("  Review the index and run `ai_commit` again.\n");
-      return 1;
-    }
-
-    copyCommitCommandToClipboard(finalMessage);
-    const output = commit(repoRoot, finalMessage);
-    if (output.length > 0) writeResult(output);
-    status("Success", `Created commit ${JSON.stringify(finalMessage)}.`);
-    return 0;
-  } catch (error) {
-    if (error instanceof PromptInterruptedError) return 130;
-    if (error instanceof InteractiveInputError) {
-      status("Error", error.message);
-      return 2;
-    }
-    if (error instanceof GitCommandError) {
-      status("Error", error.message);
-      return 1;
-    }
-    if (isGenerateError(error)) {
-      if (error.kind !== "parse" || args.debug === false || error.debug === undefined) {
-        status("Error", formatGenerateError(error));
-      }
-      return 1;
-    }
-    status("Error", error instanceof Error ? error.message : String(error));
-    return 1;
-  }
-}
-
-if (import.meta.main) {
-  process.exitCode = await runCli();
-}
+main()
+  .then(() => {
+    process.exit(0);
+  })
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    style(` Failed with unexpected error: ${message}`, 1);
+    process.exit(1);
+  });

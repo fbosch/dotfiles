@@ -52,7 +52,6 @@ class WidgetFrame implements Component {
     private readonly theme: Theme,
     private readonly agentColors: AgentWidgetColors,
     private readonly colorizeLines: boolean,
-    private readonly addBottomPadding: boolean,
   ) {}
 
   render(width: number): string[] {
@@ -67,21 +66,16 @@ class WidgetFrame implements Component {
     // The todo widget can be asked to render after its list empties, before
     // the host removes the old widget slot; do not leave its frame behind.
     if (renderedContent.length === 0) return [];
-    // The todo widget provides a full trailing spacer; consume it so the dock
-    // edge below is the only bottom spacing and remains half-height.
+    // A widget may provide a full trailing spacer; consume it so the dock edge
+    // below is the only bottom spacing and remains half-height.
     const contentToRender =
-      !this.addBottomPadding && renderedContent.at(-1) === ""
-        ? renderedContent.slice(0, -1)
-        : renderedContent;
+      renderedContent.at(-1) === "" ? renderedContent.slice(0, -1) : renderedContent;
     const content = contentToRender
       .map((line) =>
         this.colorizeLines ? colorizeSubagentWidgetLine(line, this.agentColors, this.theme) : line,
       )
       .map((line) => `${" ".repeat(paddingX)}${truncateToWidth(line, contentWidth, "")}`);
-    const bottomPadding = this.addBottomPadding ? [""] : [];
-    const rows = ["", ...content, ...bottomPadding].map((line) =>
-      paintDockRow(line, width, "", backgroundAnsi, ""),
-    );
+    const rows = ["", ...content].map((line) => paintDockRow(line, width, "", backgroundAnsi, ""));
 
     return [...rows, paintDockBottomEdge(width, "", "", backgroundAnsi)];
   }
@@ -99,10 +93,8 @@ function frameWidget(
   factory: WidgetFactory,
   agentColors: AgentWidgetColors,
   colorizeLines: boolean,
-  addBottomPadding: boolean,
 ): WidgetFactory {
-  return (tui, theme) =>
-    new WidgetFrame(factory(tui, theme), theme, agentColors, colorizeLines, addBottomPadding);
+  return (tui, theme) => new WidgetFrame(factory(tui, theme), theme, agentColors, colorizeLines);
 }
 
 export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
@@ -186,7 +178,7 @@ export function installSubagentWidgetFrame(
     options.agentColors ??
     loadAgentWidgetColors(options.cwd ?? process.cwd(), options.agentDirectory ?? getAgentDir());
   const wrap = (key: string, factory: WidgetFactory) =>
-    frameWidget(factory, agentColors, key === AGENT_WIDGET_KEY, key !== TODO_WIDGET_KEY);
+    frameWidget(factory, agentColors, key === AGENT_WIDGET_KEY);
   const owner = Symbol();
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {

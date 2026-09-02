@@ -78,7 +78,7 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
-  test("renders the agents widget as a padded full-width dock", () => {
+  test("renders the agents widget with a half-height bottom edge", () => {
     const { calls, ui } = createUI();
     let renderedWidth = 0;
     let invalidations = 0;
@@ -107,7 +107,7 @@ describe("subagent widget frame", () => {
     const plain = rendered.map(stripTerminalSequences);
 
     expect(renderedWidth).toBe(28);
-    expect(plain).toHaveLength(5);
+    expect(plain).toHaveLength(4);
     expect(plain[0]).toBe(" ".repeat(32));
     expect(plain[1]).toContain("  ● Agents");
     expect(plain[2]).toContain("  └─ ⠋ Plan");

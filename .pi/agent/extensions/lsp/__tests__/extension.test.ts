@@ -11,14 +11,23 @@ import type { ResolvedLspSettings } from "../settings";
 
 type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | unknown;
 
-test("appends diagnostics from the finalized post-format tool result", async () => {
+test("only appends post-format LSP output when diagnostics are present", async () => {
   const handlers = new Map<string, Handler>();
   let formatted = false;
   let diagnosticsObservedFormatting = false;
+  let diagnosticCount = 0;
   const fakeManager = {
     diagnostics: async () => {
       diagnosticsObservedFormatting = formatted;
-      return { matched: true, text: "LSP diagnostics: none", warnings: [] };
+      return {
+        diagnosticCount,
+        matched: true,
+        text:
+          diagnosticCount === 0
+            ? "LSP diagnostics: none"
+            : "example.ts:1:1-1:2 [error] broken (fake)",
+        warnings: [],
+      };
     },
     shutdown: async () => {},
     status: () => "ready",
@@ -69,14 +78,25 @@ test("appends diagnostics from the finalized post-format tool result", async () 
       timestamp: Date.now(),
     },
   } as MessageEndEvent;
-  const result = (await handlers.get("message_end")?.(messageEnd as never, context)) as {
-    message: { content: Array<{ text: string }> };
-  };
+  const cleanResult = await handlers.get("message_end")?.(messageEnd as never, context);
 
   expect(diagnosticsObservedFormatting).toBeTrue();
-  expect(result.message.content.map(({ text }) => text)).toEqual([
+  expect(cleanResult).toBeUndefined();
+
+  diagnosticCount = 1;
+  const diagnosticToolResult = { ...toolResult, toolCallId: "call-2" };
+  await handlers.get("tool_result")?.(diagnosticToolResult as never, context);
+  const diagnosticResult = (await handlers.get("message_end")?.(
+    {
+      ...messageEnd,
+      message: { ...messageEnd.message, toolCallId: "call-2" },
+    } as never,
+    context,
+  )) as { message: { content: Array<{ text: string }> } };
+
+  expect(diagnosticResult.message.content.map(({ text }) => text)).toEqual([
     "formatter complete",
-    "LSP diagnostics after formatting:\nLSP diagnostics: none",
+    "LSP diagnostics after formatting:\nexample.ts:1:1-1:2 [error] broken (fake)",
   ]);
 });
 

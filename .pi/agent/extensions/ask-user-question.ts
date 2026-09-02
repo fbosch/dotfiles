@@ -39,6 +39,14 @@ interface OtherAnswer {
 }
 
 type AskAnswer = TextAnswer | OptionAnswer | OtherAnswer;
+
+export interface AskUserQuestionInput {
+  question: string;
+  details?: string;
+  options?: Array<{ label: string; value?: string; description?: string }>;
+  multiSelect?: boolean;
+}
+
 type AskUserQuestionStatus = "answered" | "cancelled" | "unavailable";
 type AskUserQuestionMode = "text" | "single-select" | "multi-select";
 
@@ -767,6 +775,61 @@ async function askMultipleChoice(
   return undefined;
 }
 
+export async function runAskUserQuestion(
+  params: AskUserQuestionInput,
+  signal: AbortSignal | undefined,
+  ctx: ExtensionContext,
+): Promise<
+  | ReturnType<typeof answeredResult>
+  | ReturnType<typeof cancelledResult>
+  | ReturnType<typeof unavailableResult>
+> {
+  const options = normalizeOptions(params.options);
+  const context = params.details?.trim() || undefined;
+  const mode: AskUserQuestionMode =
+    options.length === 0 ? "text" : params.multiSelect === true ? "multi-select" : "single-select";
+
+  if (isAborted(signal)) return cancelledResult(params.question, mode, context);
+  if (ctx.hasUI === false) return unavailableResult(params.question, mode, context);
+
+  const result = await sharedUILock.withLock(async () => {
+    if (ctx.mode === "tui") {
+      const answers = await askInline(ctx, params.question, context, mode, options, signal);
+      if (answers === undefined) return cancelledResult(params.question, mode, context);
+      return answeredResult(params.question, mode, answers, context);
+    }
+
+    const title = questionTitle(params.question, context);
+    if (mode === "text") {
+      const dialogOptions = signal === undefined ? undefined : { signal };
+      const answer = await ctx.ui.input(title, "Type your answer", dialogOptions);
+      if (answer === undefined || isAborted(signal)) {
+        return cancelledResult(params.question, mode, context);
+      }
+
+      const trimmed = answer.trim();
+      return answeredResult(
+        params.question,
+        mode,
+        [{ type: "text", label: trimmed, value: trimmed }],
+        context,
+      );
+    }
+
+    if (mode === "single-select") {
+      const answer = await askSingleChoice(ctx, title, options, signal);
+      if (answer === undefined) return cancelledResult(params.question, mode, context);
+      return answeredResult(params.question, mode, [answer], context);
+    }
+
+    const answers = await askMultipleChoice(ctx, title, options, signal);
+    if (answers === undefined) return cancelledResult(params.question, mode, context);
+    return answeredResult(params.question, mode, answers, context);
+  }, signal);
+
+  return result ?? cancelledResult(params.question, mode, context);
+}
+
 export default function askUserQuestion(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof AskUserQuestionParams, AskUserQuestionResultDetails>({
@@ -784,54 +847,7 @@ export default function askUserQuestion(pi: ExtensionAPI): void {
       executionMode: "sequential",
 
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-        const options = normalizeOptions(params.options);
-        const context = params.details?.trim() || undefined;
-        const mode: AskUserQuestionMode =
-          options.length === 0
-            ? "text"
-            : params.multiSelect === true
-              ? "multi-select"
-              : "single-select";
-
-        if (isAborted(signal)) return cancelledResult(params.question, mode, context);
-        if (ctx.hasUI === false) return unavailableResult(params.question, mode, context);
-
-        const result = await sharedUILock.withLock(async () => {
-          if (ctx.mode === "tui") {
-            const answers = await askInline(ctx, params.question, context, mode, options, signal);
-            if (answers === undefined) return cancelledResult(params.question, mode, context);
-            return answeredResult(params.question, mode, answers, context);
-          }
-
-          const title = questionTitle(params.question, context);
-          if (mode === "text") {
-            const dialogOptions = signal === undefined ? undefined : { signal };
-            const answer = await ctx.ui.input(title, "Type your answer", dialogOptions);
-            if (answer === undefined || isAborted(signal)) {
-              return cancelledResult(params.question, mode, context);
-            }
-
-            const trimmed = answer.trim();
-            return answeredResult(
-              params.question,
-              mode,
-              [{ type: "text", label: trimmed, value: trimmed }],
-              context,
-            );
-          }
-
-          if (mode === "single-select") {
-            const answer = await askSingleChoice(ctx, title, options, signal);
-            if (answer === undefined) return cancelledResult(params.question, mode, context);
-            return answeredResult(params.question, mode, [answer], context);
-          }
-
-          const answers = await askMultipleChoice(ctx, title, options, signal);
-          if (answers === undefined) return cancelledResult(params.question, mode, context);
-          return answeredResult(params.question, mode, answers, context);
-        }, signal);
-
-        return result ?? cancelledResult(params.question, mode, context);
+        return runAskUserQuestion(params, signal, ctx);
       },
 
       renderCall(args, theme) {

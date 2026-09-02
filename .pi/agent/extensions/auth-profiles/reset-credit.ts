@@ -3,6 +3,7 @@ import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
+import { runAskUserQuestion } from "../ask-user-question";
 import {
   DEFAULT_PROFILE,
   listProfiles,
@@ -51,6 +52,31 @@ type ResetCreditCommandOptions = {
 type CommandOptions = {
   dryRun: boolean;
 };
+
+type QuestionOption = {
+  label: string;
+  value: string;
+  description?: string;
+};
+
+async function askQuestion(
+  ctx: ExtensionCommandContext,
+  question: string,
+  options?: QuestionOption[],
+  details?: string,
+): Promise<string | undefined> {
+  const result = await runAskUserQuestion(
+    {
+      question,
+      ...(details === undefined ? {} : { details }),
+      ...(options === undefined ? {} : { options }),
+    },
+    ctx.signal,
+    ctx,
+  );
+  if (result.details.status !== "answered") return undefined;
+  return result.details.answers[0]?.value;
+}
 
 class CommandInputError extends Error {}
 
@@ -296,15 +322,16 @@ async function chooseProfile(
     return undefined;
   }
 
-  const selected = await ctx.ui.select(
+  const selected = await askQuestion(
+    ctx,
     "Select a Pi auth profile",
-    available.map(({ profile, credits }) => profileLabel(profile, credits)),
+    available.map(({ profile, credits }) => ({
+      label: profileLabel(profile, credits),
+      value: profile,
+    })),
+    "Only profiles with an available reset credit are shown.",
   );
-  if (selected === undefined) return undefined;
-  const index = available.findIndex(
-    ({ profile, credits }) => selected === profileLabel(profile, credits),
-  );
-  return index === -1 ? undefined : available[index];
+  return selected === undefined ? undefined : available.find(({ profile }) => profile === selected);
 }
 
 export function registerResetCreditCommand(
@@ -313,6 +340,10 @@ export function registerResetCreditCommand(
 ): void {
   pi.registerCommand("reset-credit", {
     description: "Select and consume a Pi auth-profile reset credit",
+    getArgumentCompletions: (prefix) =>
+      "--dry-run".startsWith(prefix)
+        ? [{ value: "--dry-run", label: "--dry-run (preview only)" }]
+        : [],
     handler: async (args, ctx) => {
       if (ctx.hasUI === false) {
         ctx.ui.notify("/reset-credit requires Pi's interactive UI.", "error");
@@ -367,30 +398,34 @@ export function registerResetCreditCommand(
           return;
         }
         const now = (options.now ?? Date.now)();
-        const creditSelection = await ctx.ui.select(
+        const creditSelection = await askQuestion(
+          ctx,
           `Select a reset credit for ${selected.profile}`,
-          credits.map((credit) => creditLabel(credit, now)),
+          credits.map((credit) => ({
+            label: creditLabel(credit, now),
+            value: credit.id,
+          })),
+          "The credit ID is kept private and is not displayed.",
         );
         if (creditSelection === undefined) return;
-        const creditIndex = credits.findIndex(
-          (credit) => creditLabel(credit, now) === creditSelection,
-        );
-        const credit = credits[creditIndex];
+        const credit = credits.find((candidate) => candidate.id === creditSelection);
         if (!credit) return;
 
         const preview =
           `Profile: ${selected.profile}\n` +
           `Credit: ${creditLabel(credit, now)}\n` +
           "Effect: reset the account's current usage windows.";
-        ctx.ui.notify(preview, commandOptions.dryRun ? "info" : "warning");
         if (commandOptions.dryRun) {
+          ctx.ui.notify(preview, "info");
           ctx.ui.notify("Dry run: no reset credit was consumed.", "info");
           return;
         }
 
-        const confirmation = await ctx.ui.input(
+        const confirmation = await askQuestion(
+          ctx,
           `Type CONSUME to consume the selected credit for ${selected.profile}`,
-          "CONSUME",
+          undefined,
+          preview,
         );
         if (confirmation !== "CONSUME") {
           ctx.ui.notify("Cancelled: no reset credit was consumed.", "info");

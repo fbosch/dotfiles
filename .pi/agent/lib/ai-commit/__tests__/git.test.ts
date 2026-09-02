@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   DIFF_TRUNCATED_MARKER,
+  getBranchName,
   getStagedDiff,
   getStagedFiles,
   getStagedSnapshot,
@@ -34,6 +35,12 @@ afterEach(() => {
 });
 
 describe("staged Git context", () => {
+  test("reads the branch before the first commit", () => {
+    const repository = createRepository();
+
+    expect(getBranchName(repository)).toMatch(/^(main|master)$/u);
+  });
+
   test("preserves unusual staged filenames", () => {
     const repository = createRepository();
     const filename = "line\nbreak.ts";

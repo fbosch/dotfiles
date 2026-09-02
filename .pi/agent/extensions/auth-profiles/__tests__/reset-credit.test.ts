@@ -119,7 +119,7 @@ describe("/reset-credit", () => {
     await setupProfiles();
     let workCredentialResolutions = 0;
     let workRequests = 0;
-    const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
+    const fetchFn = async (_input: string | URL, init?: RequestInit): Promise<Response> => {
       const token = new Headers(init?.headers).get("authorization");
       if (token?.startsWith("Bearer work-")) {
         workRequests += 1;
@@ -141,7 +141,7 @@ describe("/reset-credit", () => {
     await harness.getHandler()?.("--dry-run", harness.ctx);
 
     expect(workCredentialResolutions).toBe(2);
-    expect(workRequests).toBe(2);
+    expect(workRequests).toBe(3);
     expect(harness.getInputCalls()).toBe(0);
   });
 
