@@ -4,6 +4,7 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
+  Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
@@ -30,6 +31,15 @@ const diffResult: DifftasticResult = {
   content: "sample.ts --- TypeScript\n1 old    1 new",
   details,
 };
+
+async function rejection(promise: Promise<unknown>): Promise<Error> {
+  try {
+    await promise;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  throw new Error("Expected operation to reject");
+}
 
 describe("Difftastic Git invocation", () => {
   test("uses a side-by-side external diff for a wide terminal", () => {
@@ -102,6 +112,13 @@ describe("Difftastic output handling", () => {
     expect(bounded.plain).not.toContain("line 2001");
   });
 
+  test("bounds output by UTF-8 bytes as well as lines", () => {
+    const bounded = boundDiffOutput(Array.from({ length: 600 }, () => "ø".repeat(100)).join("\n"));
+
+    expect(bounded.truncation).toBeDefined();
+    expect(Buffer.byteLength(bounded.plain, "utf8")).toBeLessThanOrEqual(50 * 1024);
+  });
+
   test("wraps rendered lines without exceeding the available width", () => {
     const lines = renderDiffLines(["\u001b[31m123456789\u001b[0m"], 4);
 
@@ -129,14 +146,23 @@ describe("Difftastic execution", () => {
     );
 
     expect(executions).toHaveLength(1);
-    expect(executions[0]).toMatchObject({ command: "git", options: { cwd: "/repo" } });
+    expect(executions[0]).toMatchObject({
+      command: "env",
+      options: { cwd: "/repo", timeout: 60_000 },
+    });
+    expect(executions[0]?.args.slice(0, 4)).toEqual([
+      "-u",
+      "GIT_EXTERNAL_DIFF",
+      "git",
+      "--no-pager",
+    ]);
     expect(result.content).toBe("1 old    1 new");
     expect(result.details.output).toContain("\u001b[31m");
     expect(result.details.scope).toBe("working tree against HEAD");
   });
 
   test("reports Git and Difftastic failures without terminal controls", async () => {
-    await expect(
+    const error = await rejection(
       runDifftasticGitDiff(
         async () => ({
           stdout: "",
@@ -147,17 +173,54 @@ describe("Difftastic execution", () => {
         {},
         "/repo",
       ),
-    ).rejects.toThrow("Could not render structural Git diff:\nerror: cannot run difft");
+    );
+
+    expect(error.message).toBe("Could not render structural Git diff:\nerror: cannot run difft");
+  });
+
+  test("reports cancellation distinctly", async () => {
+    const controller = new AbortController();
+    controller.abort();
+
+    const error = await rejection(
+      runDifftasticGitDiff(
+        async () => ({ stdout: "", stderr: "", code: 1, killed: true }),
+        {},
+        "/repo",
+        { signal: controller.signal },
+      ),
+    );
+
+    expect(error.message).toBe("Structural Git diff was cancelled");
+  });
+
+  test("keeps a truncated diff when saving the full output fails", async () => {
+    const output = Array.from({ length: 2_001 }, (_, index) => `line ${index + 1}`).join("\n");
+    const result = await runDifftasticGitDiff(
+      async () => ({ stdout: output, stderr: "", code: 0, killed: false }),
+      {},
+      "/repo",
+      {
+        writeFullOutput: async () => {
+          throw new Error("read-only temporary directory");
+        },
+      },
+    );
+
+    expect(result.details.truncation).toBeDefined();
+    expect(result.details.warning).toBe(
+      "Could not save the full diff: read-only temporary directory",
+    );
+    expect(result.content).toContain("Full output could not be saved.");
   });
 });
 
 describe("Difftastic extension", () => {
-  test("registers the tool and appends command output to the transcript", async () => {
+  test("registers the model tool and interactive command", async () => {
     let tool: ToolDefinition | undefined;
     let commandHandler:
       | ((args: string, context: ExtensionCommandContext) => Promise<void> | void)
       | undefined;
-    const entries: Array<{ type: string; data: DifftasticDetails }> = [];
     const pi = {
       registerEntryRenderer: () => {},
       registerTool(definition: ToolDefinition) {
@@ -171,9 +234,7 @@ describe("Difftastic extension", () => {
       ) {
         if (name === "difft") commandHandler = command.handler;
       },
-      appendEntry(type: string, data: DifftasticDetails) {
-        entries.push({ type, data });
-      },
+      appendEntry: () => {},
     } as unknown as ExtensionAPI;
     registerDifftasticExtension(pi, { run: async () => diffResult });
 
@@ -181,15 +242,52 @@ describe("Difftastic extension", () => {
     const toolResult = await tool.execute("diff-1", {}, undefined, undefined, {
       cwd: "/repo",
     } as ExtensionContext);
-    if (commandHandler === undefined) throw new Error("/difft command was not registered");
-    await commandHandler("", {
-      cwd: "/repo",
-      ui: { notify: () => {} },
-    } as unknown as ExtensionCommandContext);
-
+    expect(commandHandler).toBeDefined();
     expect(tool.name).toBe("git_diff");
     expect(toolResult.content[0]).toEqual({ type: "text", text: diffResult.content });
-    expect(entries).toEqual([{ type: "difftastic-git-diff", data: details }]);
+  });
+
+  test("compacts multiple paths in the tool call header", () => {
+    let tool: ToolDefinition | undefined;
+    const pi = {
+      registerEntryRenderer: () => {},
+      registerTool(definition: ToolDefinition) {
+        tool = definition;
+      },
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+    registerDifftasticExtension(pi, { run: async () => diffResult });
+
+    const renderCall = tool?.renderCall;
+    if (renderCall === undefined) throw new Error("git_diff call renderer was not registered");
+    const args = {
+      paths: [
+        ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts",
+        ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts",
+      ],
+    };
+    const theme = {
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    } as Theme;
+    const context: Parameters<typeof renderCall>[2] = {
+      args,
+      argsComplete: true,
+      cwd: "/repo",
+      executionStarted: false,
+      expanded: false,
+      invalidate: () => {},
+      isError: false,
+      isPartial: false,
+      lastComponent: undefined,
+      showImages: false,
+      state: {},
+      toolCallId: "diff-1",
+    };
+
+    const rendered = renderCall(args, theme, context).render(147).join("\n").trim();
+
+    expect(rendered).toBe("git diff -- 2 paths");
   });
 
   test("shows command help without executing a diff", async () => {

@@ -136,6 +136,29 @@ describe("subagent session links", () => {
     expect(linked[2]).toBe(fileLink);
   });
 
+  test("colorizes inline subagent tool headers from agent metadata", () => {
+    const color = "\u001b[38;2;91;155;213m";
+    const tui = {} as TUI;
+    const restoreRender = stubToolRender([
+      "▸ lookup  Look up Worktrunk Pi plugin",
+      "  ⎿  thinking…",
+    ]);
+    const uninstall = installSubagentToolLinks(tui, undefined, {
+      theme: { getColorMode: () => "truecolor" } as unknown as Theme,
+      agentColors: new Map([["lookup", "#5B9BD5"]]),
+    });
+
+    try {
+      const rendered = createToolExecution("subagent", target.agentId, tui).render(80);
+
+      expect(rendered[0]).toContain(`${color}lookup\u001b[39m`);
+      expect(rendered[1]).not.toContain(color);
+    } finally {
+      uninstall();
+      restoreRender();
+    }
+  });
+
   test("links subagent tool components by their exact result identity", () => {
     const restoreRender = stubToolRender(["▸ Explore  Survey repository context", "  ⎿  Done"]);
     const uninstall = installSubagentToolLinks();

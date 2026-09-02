@@ -126,13 +126,52 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
-  test("leaves other widgets and static agent content unchanged", () => {
+  test("does not add bottom padding to the todo widget dock", () => {
     const { calls, ui } = createUI();
-    const factory: WidgetFactory = () => ({ render: () => ["todo"], invalidate: () => {} });
+    let renderedWidth = 0;
+    const widget: WidgetComponent = {
+      render: (width) => {
+        renderedWidth = width;
+        return ["○ Todos (0/1)", "└─ ○ Review this task with extra output", ""];
+      },
+      invalidate: () => {},
+    };
+
+    const uninstall = installSubagentWidgetFrame(ui, {
+      agentColors: new Map([["Review", "#a8d0e6"]]),
+    });
+    ui.setWidget("rpiv-todos", () => widget, { placement: "aboveEditor" });
+
+    const factory = calls[0]?.content;
+    expect(typeof factory).toBe("function");
+    if (typeof factory !== "function") throw new Error("Expected a widget factory");
+    const framed = factory(tui, theme);
+    const rendered = framed.render(32);
+    const plain = rendered.map(stripTerminalSequences);
+
+    expect(renderedWidth).toBe(28);
+    expect(plain).toHaveLength(4);
+    expect(plain[0]).toBe(" ".repeat(32));
+    expect(plain[1]).toContain("  ○ Todos");
+    expect(plain[2]).toContain("  └─ ○ Review this task");
+    expect(plain[2]).not.toContain("extra output");
+    expect(rendered.some((line) => line.includes("\u001b[38;2;168;208;230mReview"))).toBe(false);
+    expect(rendered.slice(0, -1).every((line) => line.includes("\u001b[48;2;34;34;34m"))).toBe(
+      true,
+    );
+    expect(plain.at(-1)).toBe("▀".repeat(32));
+    expect(rendered.every((line) => visibleWidth(line) === 32)).toBe(true);
+
+    uninstall();
+  });
+
+  test("leaves other widgets and static content unchanged", () => {
+    const { calls, ui } = createUI();
+    const factory: WidgetFactory = () => ({ render: () => ["other"], invalidate: () => {} });
     const staticContent = ["agent"];
     const uninstall = installSubagentWidgetFrame(ui);
 
-    ui.setWidget("todo", factory);
+    ui.setWidget("other", factory);
     ui.setWidget("agents", staticContent);
 
     expect(calls[0]?.content).toBe(factory);

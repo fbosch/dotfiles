@@ -81,12 +81,11 @@
       "gh api * -XDELETE*": "ask"
     },
     "skill": "allow",
-    "external_directory": {
+    "external_directory_read": {
       "*": "ask",
-      "/tmp/*": "allow",
-      "~/.config/opencode/**": "allow",
-      "/Users/fbb/.config/opencode/**": "allow",
-      "/dev/shm/opencode-window-screenshots/": "allow"
-    }
+      "~/.config/opencode/*": "allow",
+      "/dev/shm/opencode-window-screenshots/*": "allow"
+    },
+    "external_directory_write": "ask"
   }
 }

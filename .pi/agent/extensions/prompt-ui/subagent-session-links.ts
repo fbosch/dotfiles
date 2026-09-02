@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import {
   type AgentToolResult,
   type ExtensionContext,
+  getAgentDir,
   getMarkdownTheme,
   type Theme,
   type ToolDefinition,
@@ -17,6 +18,11 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import {
+  type AgentWidgetColors,
+  colorizeSubagentToolLine,
+  loadAgentWidgetColors,
+} from "./subagent-widget-frame";
 
 export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
 
@@ -28,7 +34,7 @@ const OSC8_SEQUENCE = new RegExp(
   `${OSC8_OPEN}[^;]*;([^\\u0007\\u001b]*)(?:\\u0007|\\u001b\\\\)`,
   "g",
 );
-const PATCH_VERSION = 4;
+const PATCH_VERSION = 5;
 const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
 const TRANSCRIPT_TOOL_PREVIEW_LINES = 5;
@@ -60,6 +66,8 @@ interface ToolRenderPatchState {
     owner: symbol;
     tui?: TUI;
     service?: SubagentsService;
+    theme?: Theme;
+    agentColors?: AgentWidgetColors;
   }>;
 }
 
@@ -87,11 +95,17 @@ interface SubagentToolDetails {
   description?: unknown;
 }
 
+interface SubagentToolLinkOptions {
+  theme?: Theme;
+  agentColors?: AgentWidgetColors;
+}
+
 // shortcut: Pi has no tool-result link hook. Read the component's runtime fields until
 // Pi or pi-subagents exposes a supported renderer or direct-transcript action.
 interface PatchableToolExecution {
   toolName?: unknown;
   toolCallId?: unknown;
+  args?: Record<string, unknown>;
   ui?: unknown;
   result?: { details?: SubagentToolDetails };
 }
@@ -221,25 +235,31 @@ function resolveRunningAgentId(
   return service.manager?.listAgents().find((record) => record.toolCallId === toolCallId)?.id;
 }
 
-function serviceForTui(
+function registrationForTui(
   registrations: ToolRenderPatchState["registrations"],
   tui: unknown,
-): SubagentsService | undefined {
+): ToolRenderPatchState["registrations"][number] | undefined {
   for (let index = registrations.length - 1; index >= 0; index -= 1) {
     const registration = registrations[index];
     if (registration === undefined) continue;
-    if (registration.tui === tui) return registration.service;
+    if (registration.tui === tui) return registration;
   }
   return undefined;
 }
 
-export function installSubagentToolLinks(tui?: TUI, service?: SubagentsService): () => void {
+export function installSubagentToolLinks(
+  tui?: TUI,
+  service?: SubagentsService,
+  options: SubagentToolLinkOptions = {},
+): () => void {
   restoreLegacyTextToolRenderPatch();
   const prototype = ToolExecutionComponent.prototype as PatchableToolPrototype;
   const registration: ToolRenderPatchState["registrations"][number] = {
     owner: Symbol(),
     ...(tui === undefined ? {} : { tui }),
     ...(service === undefined ? {} : { service }),
+    ...(options.theme === undefined ? {} : { theme: options.theme }),
+    ...(options.agentColors === undefined ? {} : { agentColors: options.agentColors }),
   };
   const installedState = prototype[TOOL_RENDER_PATCH];
   if (isCurrentPatchState(installedState)) {
@@ -261,8 +281,17 @@ export function installSubagentToolLinks(tui?: TUI, service?: SubagentsService):
   state.patchedRender = function renderClickableSubagentTitle(width: number): string[] {
     const lines = state.originalRender.call(this, width);
     const component = this as unknown as PatchableToolExecution;
-    const target = subagentTarget(component, serviceForTui(state.registrations, component.ui));
-    return target === undefined ? lines : state.linkLines(lines, subagentSessionUrl(target));
+    const registration = registrationForTui(state.registrations, component.ui);
+    const theme = registration?.theme;
+    const agentColors = registration?.agentColors;
+    const coloredLines =
+      component.toolName === "subagent" && theme !== undefined && agentColors !== undefined
+        ? lines.map((line) => colorizeSubagentToolLine(line, agentColors, theme))
+        : lines;
+    const target = subagentTarget(component, registration?.service);
+    return target === undefined
+      ? coloredLines
+      : state.linkLines(coloredLines, subagentSessionUrl(target));
   };
   prototype[TOOL_RENDER_PATCH] = state;
   prototype.render = state.patchedRender;
@@ -621,7 +650,10 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
   if (tui.mode !== "fullscreen") return () => {};
 
   const service = getSubagentsService();
-  const uninstallToolLinks = installSubagentToolLinks(tui, service);
+  const uninstallToolLinks = installSubagentToolLinks(tui, service, {
+    theme: ctx.ui.theme,
+    agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir()),
+  });
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
     if (service === undefined) {
       ctx.ui.notify("Could not access subagent sessions.", "error");

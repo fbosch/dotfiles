@@ -15,7 +15,6 @@ permission:
   ffgrep: allow
   bash:
     "*": ask
-  path_write: deny
   external_directory_write: deny
   websearch: ask
   webfetch: ask

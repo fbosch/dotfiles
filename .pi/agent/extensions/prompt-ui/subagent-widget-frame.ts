@@ -15,7 +15,9 @@ import { paintDockBottomEdge, paintDockRow } from "./dock-rendering";
 import { colorizeHex } from "./terminal-color";
 
 const AGENT_WIDGET_KEY = "agents";
-const AGENT_WIDGET_PADDING_X = 2;
+const TODO_WIDGET_KEY = "rpiv-todos";
+const FRAMED_WIDGET_KEYS = new Set([AGENT_WIDGET_KEY, TODO_WIDGET_KEY]);
+const WIDGET_PADDING_X = 2;
 const AGENT_WIDGET_PATCH = Symbol.for("dotfiles:pi-subagent-widget-frame");
 const PATCH_VERSION = 1;
 
@@ -41,29 +43,40 @@ interface WidgetPatchState {
   owners: symbol[];
   originalSetWidget: SetWidget;
   patchedSetWidget: SetWidget;
-  wrap: (factory: WidgetFactory) => WidgetFactory;
+  wrap: (key: string, factory: WidgetFactory) => WidgetFactory;
 }
 
-class SubagentWidgetFrame implements Component {
+class WidgetFrame implements Component {
   constructor(
     private readonly component: WidgetComponent,
     private readonly theme: Theme,
     private readonly agentColors: AgentWidgetColors,
+    private readonly colorizeLines: boolean,
+    private readonly addBottomPadding: boolean,
   ) {}
 
   render(width: number): string[] {
     if (width <= 0) return this.component.render(width);
 
-    const paddingX = width >= AGENT_WIDGET_PADDING_X * 2 + 1 ? AGENT_WIDGET_PADDING_X : 0;
+    const paddingX = width >= WIDGET_PADDING_X * 2 + 1 ? WIDGET_PADDING_X : 0;
     const contentWidth = width - paddingX * 2;
     const backgroundAnsi = this.theme.getBgAnsi("toolPendingBg");
-    // pi-subagents currently renders against the terminal width, so clip its
+    // The underlying widget may render against the terminal width, so clip its
     // output here before adding the panel inset.
-    const content = this.component
-      .render(contentWidth)
-      .map((line) => colorizeSubagentWidgetLine(line, this.agentColors, this.theme))
+    const renderedContent = this.component.render(contentWidth);
+    // The todo widget provides a full trailing spacer; consume it so the dock
+    // edge below is the only bottom spacing and remains half-height.
+    const contentToRender =
+      !this.addBottomPadding && renderedContent.at(-1) === ""
+        ? renderedContent.slice(0, -1)
+        : renderedContent;
+    const content = contentToRender
+      .map((line) =>
+        this.colorizeLines ? colorizeSubagentWidgetLine(line, this.agentColors, this.theme) : line,
+      )
       .map((line) => `${" ".repeat(paddingX)}${truncateToWidth(line, contentWidth, "")}`);
-    const rows = ["", ...content, ""].map((line) =>
+    const bottomPadding = this.addBottomPadding ? [""] : [];
+    const rows = ["", ...content, ...bottomPadding].map((line) =>
       paintDockRow(line, width, "", backgroundAnsi, ""),
     );
 
@@ -79,14 +92,17 @@ class SubagentWidgetFrame implements Component {
   }
 }
 
-function frameSubagentWidget(
+function frameWidget(
   factory: WidgetFactory,
   agentColors: AgentWidgetColors,
+  colorizeLines: boolean,
+  addBottomPadding: boolean,
 ): WidgetFactory {
-  return (tui, theme) => new SubagentWidgetFrame(factory(tui, theme), theme, agentColors);
+  return (tui, theme) =>
+    new WidgetFrame(factory(tui, theme), theme, agentColors, colorizeLines, addBottomPadding);
 }
 
-function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
+export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
   const colors = new Map<string, string>();
   for (const mention of loadAgentMentions(cwd, agentDirectory)) {
     if (mention.color === undefined) continue;
@@ -97,13 +113,14 @@ function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidget
 }
 
 /** Apply explicit agent colors to header lines while preserving the widget's own styling. */
-export function colorizeSubagentWidgetLine(
+function colorizeAgentHeaderLine(
   line: string,
   agentColors: AgentWidgetColors,
   theme: Theme,
+  headerPattern: RegExp,
 ): string {
   const plainLine = stripTerminalSequences(line).trimStart();
-  const headerPrefix = /^(?:├─|└─)\s+\S+\s+/.exec(plainLine)?.[0];
+  const headerPrefix = headerPattern.exec(plainLine)?.[0];
   if (headerPrefix === undefined) return line;
 
   const headerText = plainLine.slice(headerPrefix.length);
@@ -122,6 +139,22 @@ export function colorizeSubagentWidgetLine(
     return `${line.slice(0, start)}${colorizeHex(theme, color)(name)}${line.slice(start + name.length)}`;
   }
   return line;
+}
+
+export function colorizeSubagentWidgetLine(
+  line: string,
+  agentColors: AgentWidgetColors,
+  theme: Theme,
+): string {
+  return colorizeAgentHeaderLine(line, agentColors, theme, /^(?:├─|└─)\s+\S+\s+/);
+}
+
+export function colorizeSubagentToolLine(
+  line: string,
+  agentColors: AgentWidgetColors,
+  theme: Theme,
+): string {
+  return colorizeAgentHeaderLine(line, agentColors, theme, /^▸\s+/);
 }
 
 function isCurrentPatchState(value: unknown): value is WidgetPatchState {
@@ -149,7 +182,8 @@ export function installSubagentWidgetFrame(
   const agentColors =
     options.agentColors ??
     loadAgentWidgetColors(options.cwd ?? process.cwd(), options.agentDirectory ?? getAgentDir());
-  const wrap = (factory: WidgetFactory) => frameSubagentWidget(factory, agentColors);
+  const wrap = (key: string, factory: WidgetFactory) =>
+    frameWidget(factory, agentColors, key === AGENT_WIDGET_KEY, key !== TODO_WIDGET_KEY);
   const owner = Symbol();
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {
@@ -168,7 +202,9 @@ export function installSubagentWidgetFrame(
   };
   state.patchedSetWidget = (key, content, options) => {
     const framedContent =
-      key === AGENT_WIDGET_KEY && typeof content === "function" ? state.wrap(content) : content;
+      FRAMED_WIDGET_KEYS.has(key) && typeof content === "function"
+        ? state.wrap(key, content)
+        : content;
     state.originalSetWidget.call(ui, key, framedContent, options);
   };
 

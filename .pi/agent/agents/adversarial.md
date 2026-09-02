@@ -16,6 +16,7 @@ permission:
   bash:
     "*": ask
   external_directory: ask
+  external_directory_write: deny
 ---
 
 Assume the design is wrong until proven resilient. Every issue must have a concrete reproducer and a mitigation — no generic warnings.

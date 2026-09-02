@@ -2,11 +2,11 @@ local wezterm = require("wezterm")
 local palette = require("theme")
 
 package.path = wezterm.config_dir .. "/../fbb/lua/?.lua;" .. package.path
-local ocma = require("fbb.ocma")
+local pi_auth_profiles = require("fbb.pi_auth_profiles")
 
 local unpack_args = table.unpack or unpack
 local refresh_interval_seconds = 10
-local codex_status = { checked_at = 0, accounts = {} }
+local profile_status = { checked_at = 0, cwd = nil, accounts = {} }
 local command_search_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.
 	"/etc/profiles/per-user/" .. (os.getenv("USER") or "") .. "/bin",
@@ -23,6 +23,37 @@ local function run_command(command, args)
 		"-c",
 		string.format("PATH=%q; export PATH; %s", command_search_path, command_line),
 	})
+end
+
+local function pane_cwd(pane)
+	if pane == nil then
+		return nil
+	end
+
+	local cwd_ok, cwd = pcall(function()
+		return pane:get_current_working_dir()
+	end)
+	if not cwd_ok or cwd == nil then
+		return nil
+	end
+
+	local scheme_ok, scheme = pcall(function()
+		return cwd.scheme
+	end)
+	if scheme_ok and scheme ~= nil and scheme ~= "file" then
+		return nil
+	end
+
+	local path_ok, file_path = pcall(function()
+		return cwd.file_path
+	end)
+	if path_ok and type(file_path) == "string" and file_path ~= "" then
+		return file_path
+	end
+	if type(cwd) == "string" then
+		return cwd:match("^file://[^/]*(/.*)$")
+	end
+	return nil
 end
 
 local function usage_color(remaining)
@@ -76,18 +107,19 @@ local function superscript_duration(value)
 	return superscript:gsub("[dhms]", superscript_units)
 end
 
-local function get_accounts()
-	if os.time() - codex_status.checked_at < refresh_interval_seconds then
-		return codex_status.accounts
+local function get_accounts(cwd)
+	if profile_status.cwd == cwd and os.time() - profile_status.checked_at < refresh_interval_seconds then
+		return profile_status.accounts
 	end
 
-	codex_status.checked_at = os.time()
-	local accounts = ocma.list(run_command, wezterm.json_parse)
+	profile_status.checked_at = os.time()
+	profile_status.cwd = cwd
+	local accounts = pi_auth_profiles.list(run_command, wezterm.json_parse, cwd)
 	if accounts then
-		codex_status.accounts = accounts
+		profile_status.accounts = accounts
 	end
 
-	return codex_status.accounts
+	return profile_status.accounts
 end
 
 local function append_usage(items, windows)
@@ -112,8 +144,8 @@ local function append_usage(items, windows)
 	end
 end
 
-local function append(items)
-	local accounts = get_accounts()
+local function append(items, pane)
+	local accounts = get_accounts(pane_cwd(pane))
 	if #accounts == 0 then
 		return
 	end
@@ -143,12 +175,8 @@ local function append(items)
 end
 
 local function handle_user_var(name)
-	if name == "codex_profile_changed" then
-		codex_status.checked_at = 0
-		return true
-	end
-	if name == "codex_reset_refreshed" then
-		codex_status.checked_at = 0
+	if name == "pi_profile_changed" then
+		profile_status.checked_at = 0
 		return true
 	end
 	return false

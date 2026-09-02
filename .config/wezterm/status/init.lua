@@ -44,7 +44,7 @@ local function status_width(items)
 	return width
 end
 
-local function update_right_status(window)
+local function update_right_status(window, active_pane)
 	local waiting_count = 0
 	local init_notice = agent_deck.consume_init_notice and agent_deck.consume_init_notice() or nil
 	if init_notice then
@@ -58,6 +58,9 @@ local function update_right_status(window)
 				for _, pane in ipairs(tab:panes()) do
 					agent_deck.update_pane(pane)
 				end
+			end
+			if active_pane == nil then
+				active_pane = mux_window:active_pane()
 			end
 		end
 
@@ -76,7 +79,7 @@ local function update_right_status(window)
 		{ Text = waiting_count > 0 and "▏" or "" },
 	}
 
-	codex.append(status)
+	codex.append(status, active_pane)
 
 	table.insert(status, { Foreground = color_gray })
 	table.insert(status, { Text = date })
@@ -107,9 +110,9 @@ return function()
 	if not is_windows then
 		wezterm.on("window-config-reloaded", update_right_status)
 		wezterm.on("update-right-status", update_right_status)
-		wezterm.on("user-var-changed", function(window, _, name)
+		wezterm.on("user-var-changed", function(window, pane, name)
 			if codex.handle_user_var(name) then
-				update_right_status(window)
+				update_right_status(window, pane)
 			end
 		end)
 	end

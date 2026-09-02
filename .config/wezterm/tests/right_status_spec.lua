@@ -3,8 +3,7 @@ package.path = package.path .. ";./.config/wezterm/?.lua" .. ";./.config/wezterm
 local registered_events = {}
 local mock_used_percent = 57
 local mock_credit_count = 2
-local mock_ocma_failure = false
-local mock_ocma_warning = false
+local mock_usage_failure = false
 local mock_profile_alias = "ct"
 
 package.loaded.wezterm = {
@@ -50,32 +49,27 @@ package.loaded.wezterm = {
 			}
 		end
 
-		if content == "ocma-list" then
+		if content == "pi-auth-profile-usage" then
 			return {
-				data = {
-					profiles = {
-						{
-							alias = mock_profile_alias,
-							active = true,
-							resetCredits = {
-								availableCount = mock_credit_count,
-								urgency = "urgent",
-							},
-							usage = {
-								primary = {
-									remainingPercent = 100 - math.floor(mock_used_percent),
-									resetAfterSeconds = 3 * 60 * 60,
-								},
-							},
+				schema = "fbb.pi-auth-profiles-usage/v1",
+				profiles = {
+					{
+						profileLabel = mock_profile_alias,
+						active = true,
+						availableCount = mock_credit_count,
+						urgency = "urgent",
+						usage = {
+							{ remaining = 100 - math.floor(mock_used_percent), resetsIn = "3h" },
 						},
-						{
-							alias = "kk",
-							active = false,
-							resetCredits = { availableCount = 1, urgency = "later" },
-							usage = {
-								primary = { remainingPercent = 71, resetAfterSeconds = 2 * 60 * 60 },
-								secondary = { remainingPercent = 94, resetAfterSeconds = 5 * 24 * 60 * 60 },
-							},
+					},
+					{
+						profileLabel = "kk",
+						active = false,
+						availableCount = 1,
+						urgency = "later",
+						usage = {
+							{ remaining = 71, resetsIn = "2h" },
+							{ remaining = 94, resetsIn = "5d" },
 						},
 					},
 				},
@@ -116,10 +110,13 @@ package.loaded.wezterm = {
 	end,
 	run_child_process = function(argv)
 		if argv[1] == "/bin/sh" then
-			if mock_ocma_failure then
-				return false, "", "simulated registry failure"
+			if not argv[3]:find("--agent-dir", 1, true) then
+				error("Pi usage command must pass the canonical agent directory")
 			end
-			return mock_ocma_warning == false, "ocma-list", ""
+			if mock_usage_failure then
+				return false, "", "simulated usage failure"
+			end
+			return true, "pi-auth-profile-usage", ""
 		end
 		return true, "herdr-agents", ""
 	end,
@@ -189,6 +186,15 @@ os.date = function(format)
 	return original_os_date(format)
 end
 
+local active_pane = {
+	get_current_working_dir = function()
+		return { scheme = "file", file_path = "/Users/fbb/dotfiles" }
+	end,
+	get_user_vars = function()
+		return { first_login = "09:00:00" }
+	end,
+}
+
 local window = {
 	mux_window = function()
 		return {
@@ -196,11 +202,7 @@ local window = {
 				return {}
 			end,
 			active_pane = function()
-				return {
-					get_user_vars = function()
-						return { first_login = "09:00:00" }
-					end,
-				}
+				return active_pane
 			end,
 		}
 	end,
@@ -235,35 +237,34 @@ for _, case in ipairs({
 }) do
 	mock_used_percent = case.used
 	captured_status = nil
-	user_var_changed(window, nil, "codex_profile_changed")
+	user_var_changed(window, active_pane, "pi_profile_changed")
 	assert_eq(find_text(captured_status, case.remaining .. "%"), true, "usage percentage renders")
 end
 
 captured_status = nil
-user_var_changed(window, nil, "codex_profile_changed")
+user_var_changed(window, active_pane, "pi_profile_changed")
 assert_eq(type(captured_status), "table", "profile change rerenders status")
 
 mock_credit_count = 1
 captured_status = nil
-user_var_changed(window, nil, "codex_reset_refreshed")
-assert_eq(find_text(captured_status, "¹"), true, "reset redemption refreshes credit count")
+user_var_changed(window, active_pane, "pi_profile_changed")
+assert_eq(find_text(captured_status, "¹"), true, "profile refresh updates credit count")
 
 mock_credit_count = 0
 captured_status = nil
 update_status(window)
 assert_eq(find_text(captured_status, "⁰"), false, "zero reset credits omitted")
 
-mock_ocma_warning = true
-mock_profile_alias = "warning-profile"
+mock_profile_alias = "renamed-profile"
 captured_status = nil
-user_var_changed(window, nil, "codex_profile_changed")
-assert_eq(find_text(captured_status, "warning-profile"), true, "warning OCMA output renders profiles")
+user_var_changed(window, active_pane, "pi_profile_changed")
+assert_eq(find_text(captured_status, "renamed-profile"), true, "profile refresh renders Pi profile")
 
-mock_ocma_failure = true
+mock_usage_failure = true
 captured_status = nil
-user_var_changed(window, nil, "codex_reset_refreshed")
-assert_eq(type(captured_status), "table", "status handles OCMA failure")
-assert_eq(find_text(captured_status, "warning-profile"), true, "status retains cached accounts on OCMA failure")
+user_var_changed(window, active_pane, "pi_profile_changed")
+assert_eq(type(captured_status), "table", "status handles Pi usage failure")
+assert_eq(find_text(captured_status, "renamed-profile"), true, "status retains cached Pi profiles on failure")
 
 captured_status = nil
 update_status({

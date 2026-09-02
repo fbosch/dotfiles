@@ -2,7 +2,8 @@
  * Vendored from @nanstey/pi-auth-profiles@0.1.1.
  * npm integrity: sha512-AMg/Xl5KVcuLTs2ig+dQx27Q3iKRd3+vae07yIfNzpf1dCcyQ7V8a3EKwvWrbwhTQjK6/+Z63wNgaeI1W4auYA==
  * Local changes: repository formatting, type-safety guards, active-profile status publishing,
- * and repository-compatible JSON indentation.
+ * WezTerm status invalidation, a usage-status data source, and repository-compatible JSON
+ * indentation.
  * License: MIT; see LICENSE in this directory.
  */
 
@@ -36,12 +37,13 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 const DEFAULT_PROFILE = "default";
 const PROFILE_STATUS_KEY = "auth-profile";
+const WEZTERM_PROFILE_USER_VAR = "pi_profile_changed";
 
-const profilesDir = () => join(getAgentDir(), "auth-profiles");
-const globalConfigPath = () => join(getAgentDir(), "auth-profiles.json");
+const profilesDir = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles");
+const globalConfigPath = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles.json");
 const projectSettingsPath = (cwd: string) => join(cwd, ".pi", "settings.json");
 
-function normalizeName(name: string): string {
+export function normalizeName(name: string): string {
   const trimmed = (name ?? "").trim();
   if (!trimmed) return DEFAULT_PROFILE;
   if (trimmed !== DEFAULT_PROFILE && !/^[A-Za-z0-9._-]+$/.test(trimmed)) {
@@ -55,10 +57,10 @@ function normalizeName(name: string): string {
   return trimmed;
 }
 
-function authPathFor(profile: string): string {
+export function authPathFor(profile: string, agentDir = getAgentDir()): string {
   return profile === DEFAULT_PROFILE
-    ? join(getAgentDir(), "auth.json")
-    : join(profilesDir(), `${profile}.json`);
+    ? join(agentDir, "auth.json")
+    : join(profilesDir(agentDir), `${profile}.json`);
 }
 
 function readJsonFile(path: string): Record<string, unknown> | undefined {
@@ -69,7 +71,10 @@ function readJsonFile(path: string): Record<string, unknown> | undefined {
   }
 }
 
-function resolveProfile(ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">): {
+export function resolveProfile(
+  ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
+  agentDir = getAgentDir(),
+): {
   profile: string;
   source: string;
 } {
@@ -79,7 +84,7 @@ function resolveProfile(ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">)
       return { profile: normalizeName(project), source: "project" };
     }
   }
-  const global = readJsonFile(globalConfigPath())?.defaultProfile;
+  const global = readJsonFile(globalConfigPath(agentDir))?.defaultProfile;
   if (typeof global === "string" && global.trim()) {
     return { profile: normalizeName(global), source: "global default" };
   }
@@ -126,10 +131,10 @@ async function bindProfile(
   return path;
 }
 
-function listProfiles(): string[] {
+export function listProfiles(agentDir = getAgentDir()): string[] {
   const names = [DEFAULT_PROFILE];
-  if (existsSync(profilesDir())) {
-    for (const file of readdirSync(profilesDir()).sort()) {
+  if (existsSync(profilesDir(agentDir))) {
+    for (const file of readdirSync(profilesDir(agentDir)).sort()) {
       if (file.endsWith(".json") && !file.endsWith(".lock")) {
         names.push(file.slice(0, -".json".length));
       }
@@ -140,6 +145,14 @@ function listProfiles(): string[] {
 
 function providersIn(profile: string): string[] {
   return Object.keys(readJsonFile(authPathFor(profile)) ?? {});
+}
+
+function publishProfileChange(ctx: Pick<ExtensionContext, "mode">, profile: string): void {
+  if (ctx.mode !== "tui" || !process.stdout.isTTY) return;
+
+  const encoded = Buffer.from(profile).toString("base64");
+  const sequence = `\u001b]1337;SetUserVar=${WEZTERM_PROFILE_USER_VAR}=${encoded}\u0007`;
+  process.stdout.write(process.env.TMUX ? `\u001bPtmux;\u001b${sequence}\u001b\\` : sequence);
 }
 
 function updateJsonFile(path: string, update: (data: Record<string, unknown>) => void): void {
@@ -160,12 +173,13 @@ export default function authProfiles(pi: ExtensionAPI): void {
   let activeProfile = DEFAULT_PROFILE;
 
   const rebind = async (
-    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "ui">,
+    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
   ) => {
     const { profile, source } = resolveProfile(ctx);
     const path = await bindProfile(ctx, profile);
     activeProfile = profile;
     ctx.ui.setStatus(PROFILE_STATUS_KEY, profile);
+    publishProfileChange(ctx, profile);
     return { profile, source, path };
   };
 

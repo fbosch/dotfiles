@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
+  BorderedLoader,
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
   defineTool,
@@ -127,6 +128,11 @@ interface GitInvocation {
   readonly scope: string;
   readonly width: number;
 }
+
+type DiffCommandOutcome =
+  | { readonly status: "cancelled" }
+  | { readonly message: string; readonly status: "error" }
+  | { readonly result: DifftasticResult; readonly status: "success" };
 
 function printableCharacter(value: string): boolean {
   return /^\P{C}$/u.test(value);
@@ -321,7 +327,7 @@ export async function runDifftasticGitDiff(
   const invocation = buildGitInvocation(request, options.columns);
   let result: ExecResult;
   try {
-    result = await execute("git", invocation.args, {
+    result = await execute("env", ["-u", "GIT_EXTERNAL_DIFF", "git", ...invocation.args], {
       cwd,
       timeout: COMMAND_TIMEOUT_MS,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -511,8 +517,11 @@ export function registerDifftasticExtension(
           parts.push(theme.fg("accent", safeInput(args.revision, "Git revision")));
         }
         if (args.paths !== undefined && args.paths.length > 0) {
-          const paths = args.paths.map((path) => safeInput(path, "Git pathspec"));
-          parts.push(theme.fg("muted", `-- ${paths.join(" ")}`));
+          const pathSummary =
+            args.paths.length === 1
+              ? safeInput(args.paths[0] ?? "", "Git pathspec")
+              : `${args.paths.length} paths`;
+          parts.push(theme.fg("muted", `-- ${pathSummary}`));
         }
         return new Text(parts.join(" "), 0, 0);
       },
@@ -536,13 +545,43 @@ export function registerDifftasticExtension(
         return;
       }
 
-      try {
-        const result = await run({}, ctx.cwd);
-        pi.appendEntry<DifftasticDetails>(ENTRY_TYPE, result.details);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        ctx.ui.notify(message, "error");
+      if (ctx.mode !== "tui") {
+        ctx.ui.notify("/difft requires interactive mode.", "error");
+        return;
       }
+
+      const outcome = await ctx.ui.custom<DiffCommandOutcome>((tui, theme, _keybindings, done) => {
+        const loader = new BorderedLoader(tui, theme, "Rendering structural Git diff...");
+        let settled = false;
+        const finish = (result: DiffCommandOutcome) => {
+          if (settled) return;
+          settled = true;
+          done(result);
+        };
+        loader.onAbort = () => finish({ status: "cancelled" });
+        run({}, ctx.cwd, loader.signal).then(
+          (result) => finish({ result, status: "success" }),
+          (error: unknown) => {
+            if (loader.signal.aborted) {
+              finish({ status: "cancelled" });
+              return;
+            }
+            const message = error instanceof Error ? error.message : String(error);
+            finish({ message: diagnostic(message), status: "error" });
+          },
+        );
+        return loader;
+      });
+
+      if (outcome.status === "cancelled") {
+        ctx.ui.notify("Difftastic diff cancelled.", "info");
+        return;
+      }
+      if (outcome.status === "error") {
+        ctx.ui.notify(outcome.message, "error");
+        return;
+      }
+      pi.appendEntry<DifftasticDetails>(ENTRY_TYPE, outcome.result.details);
     },
   });
 }
