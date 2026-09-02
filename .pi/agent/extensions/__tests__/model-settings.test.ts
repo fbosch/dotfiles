@@ -101,7 +101,7 @@ describe("Pi model settings", () => {
     new URL("extensions/auto-session-name.json", AGENT_DIR),
   );
 
-  test("matches primary, build, plan, compaction, and commit message settings", () => {
+  test("matches primary, build, plan, and compaction settings", () => {
     expect(`${settings.defaultProvider}/${settings.defaultModel}`).toBe(toPiModel(openCode.model));
     expect(modes.build.model).toBe(toPiModel(openCode.model));
     expect(modes.build.thinkingLevel).toBe(
@@ -117,6 +117,9 @@ describe("Pi model settings", () => {
     expect(settings.compactionModel.thinkingLevel).toBe(
       required(openCode.agent.compaction?.reasoningEffort, "agent.compaction.reasoningEffort"),
     );
+  });
+
+  test("matches the commit message model setting", () => {
     expect(settings.commitMessageModel.model).toBe(
       toPiModel(openCode.agent.commit?.model ?? openCode.model),
     );

@@ -396,12 +396,6 @@ export function registerResetCreditCommand(
           `Profile: ${selected.profile}\n` +
           `Credit: ${creditLabel(credit, now)}\n` +
           "Effect: reset the account's current usage windows.";
-        if (commandOptions.dryRun) {
-          ctx.ui.notify(preview, "info");
-          ctx.ui.notify("Dry run: no reset credit was consumed.", "info");
-          return;
-        }
-
         const confirmation = await askQuestion(
           ctx,
           `Type CONSUME to consume the selected credit for ${selected.profile}`,
@@ -429,6 +423,12 @@ export function registerResetCreditCommand(
             "That reset credit is no longer available; nothing was consumed.",
             "warning",
           );
+          return;
+        }
+
+        if (commandOptions.dryRun) {
+          ctx.ui.notify(preview, "info");
+          ctx.ui.notify("Dry run: no reset credit was consumed.", "info");
           return;
         }
 

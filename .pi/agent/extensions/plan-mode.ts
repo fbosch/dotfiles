@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 export const PLAN_MODE_STATUS = "Plan";
 
+const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
 export type ModeName = "build" | "plan";
@@ -22,6 +23,11 @@ interface PlanModeConfig extends ModeConfig {
 interface ModesConfig {
   build: ModeConfig;
   plan: PlanModeConfig;
+}
+
+interface PersistedModeModels {
+  sessionId: string;
+  models: Partial<Record<ModeName, string>>;
 }
 
 const THINKING_LEVELS: ReadonlySet<string> = new Set([
@@ -46,15 +52,17 @@ function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
 }
 
+function isModelReference(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+
+  const separator = value.indexOf("/");
+  return separator > 0 && separator < value.length - 1;
+}
+
 function loadModeConfig(name: ModeName, value: Record<string, unknown>): ModeConfig {
   const { model, prompt, thinkingLevel, color } = value;
 
-  if (typeof model !== "string") {
-    throw new Error(`Mode model must use provider/model format: ${name}.model`);
-  }
-
-  const modelSeparator = model.indexOf("/");
-  if (modelSeparator <= 0 || modelSeparator === model.length - 1) {
+  if (isModelReference(model) === false) {
     throw new Error(`Mode model must use provider/model format: ${name}.model`);
   }
 
@@ -137,6 +145,8 @@ function parseModel(value: string): [provider: string, model: string] {
 }
 
 const MODES = loadModes();
+type ModeConfigLoader = () => ModesConfig;
+
 const MODE_PROMPTS: Record<ModeName, string> = {
   build: loadPrompt(MODES.build.prompt),
   plan: loadPrompt(MODES.plan.prompt),
@@ -146,14 +156,48 @@ export function getModeColor(name: ModeName): string {
   return MODES[name].color;
 }
 
-export default function planMode(pi: ExtensionAPI): void {
+export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader = loadModes): void {
   let enabled = false;
   let selectingModeModel = false;
   let toolsBeforePlanMode: string[] | undefined;
-  const modeModels: Record<ModeName, string> = {
+  const configuredModeModels: Record<ModeName, string> = {
     build: MODES.build.model,
     plan: MODES.plan.model,
   };
+  const modeModelOverrides: Partial<Record<ModeName, string>> = {};
+
+  function refreshModeModels(): void {
+    const modes = readModes();
+    configuredModeModels.build = modes.build.model;
+    configuredModeModels.plan = modes.plan.model;
+  }
+
+  function restoreModeModels(ctx: ExtensionContext): void {
+    const sessionId = ctx.sessionManager.getHeader()?.id;
+    if (sessionId === undefined) return;
+
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type !== "custom" || entry.customType !== MODE_MODELS_ENTRY_TYPE) continue;
+      // Forks copy custom entries, so restore only state owned by the current session header.
+      if (isRecord(entry.data) === false || entry.data.sessionId !== sessionId) continue;
+      if (isRecord(entry.data.models) === false) continue;
+
+      for (const name of ["build", "plan"] as const) {
+        const model = entry.data.models[name];
+        if (isModelReference(model)) modeModelOverrides[name] = model;
+      }
+    }
+  }
+
+  function persistModeModels(ctx: ExtensionContext): void {
+    const sessionId = ctx.sessionManager.getHeader()?.id;
+    if (sessionId === undefined) return;
+
+    pi.appendEntry<PersistedModeModels>(MODE_MODELS_ENTRY_TYPE, {
+      sessionId,
+      models: { ...modeModelOverrides },
+    });
+  }
   const modeThinkingLevels: Record<ModeName, ThinkingLevel> = {
     build: MODES.build.thinkingLevel,
     plan: MODES.plan.thinkingLevel,
@@ -164,7 +208,7 @@ export default function planMode(pi: ExtensionAPI): void {
   }
 
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
-    const modelReference = modeModels[name];
+    const modelReference = modeModelOverrides[name] ?? configuredModeModels[name];
     const [provider, modelId] = parseModel(modelReference);
     const model = ctx.modelRegistry.find(provider, modelId);
 
@@ -192,6 +236,8 @@ export default function planMode(pi: ExtensionAPI): void {
       return;
     }
 
+    refreshModeModels();
+
     if (enabled) {
       if ((await selectModeModel("build", ctx)) === false) return;
 
@@ -213,16 +259,18 @@ export default function planMode(pi: ExtensionAPI): void {
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    restoreModeModels(ctx);
     if ((await selectModeModel("build", ctx)) === false) return;
 
     pi.setThinkingLevel(modeThinkingLevels.build);
   });
 
-  pi.on("model_select", (event) => {
-    if (selectingModeModel) return;
+  pi.on("model_select", (event, ctx) => {
+    if (selectingModeModel || event.source === "restore") return;
 
     const mode: ModeName = enabled ? "plan" : "build";
-    modeModels[mode] = `${event.model.provider}/${event.model.id}`;
+    modeModelOverrides[mode] = `${event.model.provider}/${event.model.id}`;
+    persistModeModels(ctx);
   });
 
   pi.on("thinking_level_select", (event) => {

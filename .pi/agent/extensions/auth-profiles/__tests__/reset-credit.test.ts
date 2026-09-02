@@ -169,7 +169,7 @@ function commandHarness(selections: string[], confirmation?: string, onQuestion?
 }
 
 describe("/reset-credit", () => {
-  test("dry-run previews a selected profile and credit without prompting or consuming", async () => {
+  test("dry-run previews a selected profile and confirms without consuming", async () => {
     const { cachePath } = await setupProfiles();
     await writeFile(
       cachePath,
@@ -189,7 +189,7 @@ describe("/reset-credit", () => {
     };
     const harness = commandHarness(
       ["work (1 cached)", "Work reset (expires in 6h)"],
-      undefined,
+      "CONSUME",
       () => {
         questionShown = true;
       },
@@ -209,12 +209,14 @@ describe("/reset-credit", () => {
 
     await harness.getHandler()?.("--dry-run", harness.ctx);
 
-    expect(requests).toHaveLength(1);
+    expect(requests).toHaveLength(2);
+    expect(requests.some((request) => request.endsWith("/consume"))).toBe(false);
     expect(questionShown).toBe(true);
     expect(harness.questionRenders[0]?.join("\n")).toContain("work (1 cached)");
     expect(harness.questionRenders[0]?.join("\n")).not.toContain("default");
     expect(harness.getPopupSelectCalls()).toBe(0);
     expect(harness.getPopupInputCalls()).toBe(0);
+    expect(harness.questionRenders[2]?.join("\n")).toContain("Type CONSUME");
     expect(harness.notifications).toEqual([
       "Profile: work\nCredit: Work reset (expires in 6h)\nEffect: reset the account's current usage windows.",
       "Dry run: no reset credit was consumed.",
@@ -235,7 +237,10 @@ describe("/reset-credit", () => {
       if (token?.startsWith("Bearer personal-")) return resetCredits(0, "unused", "Unused");
       return resetCredits(1, "opaque-work-credit", "Work reset");
     };
-    const harness = commandHarness(["work (availability unknown)", "Work reset (expires in 6h)"]);
+    const harness = commandHarness(
+      ["work (availability unknown)", "Work reset (expires in 6h)"],
+      "CONSUME",
+    );
     registerResetCreditCommand(harness.pi, {
       fetchFn,
       now: () => now,
@@ -248,7 +253,7 @@ describe("/reset-credit", () => {
     await harness.getHandler()?.("--dry-run", harness.ctx);
 
     expect(workCredentialResolutions).toBe(2);
-    expect(workRequests).toBe(2);
+    expect(workRequests).toBe(3);
     expect(harness.getPopupInputCalls()).toBe(0);
   });
 

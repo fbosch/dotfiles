@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { constants } from "node:fs";
 import {
   access as fsAccess,
@@ -25,7 +26,6 @@ import {
   getAgentDir,
   keyHint,
   type Theme,
-  type ThemeColor,
   type ToolDefinition,
   withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
@@ -45,13 +45,14 @@ const EDIT_COMMAND_TIMEOUT_MS = 10_000;
 // Keep expansion within the renderer's existing bounded-output contract.
 const FULL_CONTEXT_LINES = DEFAULT_MAX_LINES;
 const DEFAULT_CONTEXT_LINES = 3;
+const DEFAULT_SYNTAX_THEME = "Zenwritten Dark";
 const DEFAULT_WIDTH = 120;
 const MIN_WIDTH = 40;
 const MAX_WIDTH = 240;
 const SIDE_BY_SIDE_MIN_WIDTH = 96;
 const COLLAPSED_LINES = 24;
 const MAX_PATHS = 100;
-const ENTRY_TYPE = "difftastic-git-diff";
+const ENTRY_TYPE = "delta-git-diff";
 const ESCAPE = "\u001b";
 const SGR_SUFFIX_PATTERN = /^\[[0-9;]*m/;
 const ESCAPE_SUFFIX_PATTERN = /^\[[0-?]*[ -/]*[@-~]/;
@@ -107,7 +108,7 @@ interface DiffTruncation {
   readonly totalLines: number;
 }
 
-export interface DifftasticDetails {
+export interface DeltaDetails {
   readonly display: "side-by-side" | "inline";
   readonly fullOutputPath?: string;
   readonly noChanges: boolean;
@@ -118,14 +119,14 @@ export interface DifftasticDetails {
   readonly width: number;
 }
 
-export interface DifftasticResult {
+export interface DeltaResult {
   readonly content: string;
-  readonly details: DifftasticDetails;
+  readonly details: DeltaDetails;
 }
 
 interface GitDiffRenderState {
   expandedController: AbortController | undefined;
-  expandedDetails: DifftasticDetails | null | undefined;
+  expandedDetails: DeltaDetails | null | undefined;
   expandedKey: string | undefined;
   expandedPending: boolean;
 }
@@ -136,13 +137,19 @@ export type GitDiffExecutor = (
   options: ExecOptions,
 ) => Promise<ExecResult>;
 
+export type DeltaExecutor = (
+  args: readonly string[],
+  input: string | undefined,
+  options: ExecOptions,
+) => Promise<ExecResult>;
+
 export type GitDiffRunner = (
   request: GitDiffRequest,
   cwd: string,
   signal?: AbortSignal,
-) => Promise<DifftasticResult>;
+) => Promise<DeltaResult>;
 
-export interface DifftasticEditRequest {
+export interface DeltaEditRequest {
   readonly context?: number;
   readonly newContent: string;
   readonly oldContent: string;
@@ -150,14 +157,16 @@ export interface DifftasticEditRequest {
 }
 
 export type EditDiffRunner = (
-  request: DifftasticEditRequest,
+  request: DeltaEditRequest,
   cwd: string,
   signal?: AbortSignal,
-) => Promise<DifftasticDetails>;
+) => Promise<DeltaDetails>;
 
 interface RunOptions {
   readonly columns?: number;
+  readonly executeDelta?: DeltaExecutor;
   readonly signal?: AbortSignal;
+  readonly syntaxTheme?: string;
   readonly writeFullOutput?: (output: string) => Promise<string>;
 }
 
@@ -177,13 +186,13 @@ interface GitInvocation {
 type DiffCommandOutcome =
   | { readonly status: "cancelled" }
   | { readonly message: string; readonly status: "error" }
-  | { readonly result: DifftasticResult; readonly status: "success" };
+  | { readonly result: DeltaResult; readonly status: "success" };
 
 function printableCharacter(value: string): boolean {
   return /^\P{C}$/u.test(value);
 }
 
-/** Preserve Difftastic SGR colors while rejecting source-derived terminal control sequences. */
+/** Preserve Delta SGR colors while rejecting source-derived terminal control sequences. */
 export function sanitizeTerminalOutput(value: string): string {
   const normalized = value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
   let output = "";
@@ -230,53 +239,6 @@ function stripSgr(value: string): string {
   return value
     .split(ESCAPE)
     .map((part, index) => (index === 0 ? part : part.replace(SGR_SUFFIX_PATTERN, "")))
-    .join("");
-}
-
-function themeColorForDifftasticCode(code: number): ThemeColor | undefined {
-  switch (code) {
-    case 31:
-    case 91:
-      return "toolDiffRemoved";
-    case 32:
-    case 92:
-      return "toolDiffAdded";
-    case 33:
-    case 93:
-      return "accent";
-    case 34:
-    case 94:
-      return "syntaxComment";
-    case 35:
-    case 95:
-      return "syntaxString";
-    default:
-      return undefined;
-  }
-}
-
-function remapSgr(suffix: string, theme: Pick<Theme, "getFgAnsi">): string {
-  const codes = suffix
-    .slice(1, -1)
-    .split(";")
-    .map((value) => Number(value));
-  return codes
-    .map((code) => {
-      const color = themeColorForDifftasticCode(code);
-      return color === undefined ? `${ESCAPE}[${code}m` : theme.getFgAnsi(color);
-    })
-    .join("");
-}
-
-export function remapDifftasticColors(value: string, theme: Pick<Theme, "getFgAnsi">): string {
-  return sanitizeTerminalOutput(value)
-    .split(ESCAPE)
-    .map((part, index) => {
-      if (index === 0) return part;
-      const suffix = SGR_SUFFIX_PATTERN.exec(part)?.[0];
-      if (suffix === undefined) return part;
-      return `${remapSgr(suffix, theme)}${part.slice(suffix.length)}`;
-    })
     .join("");
 }
 
@@ -374,14 +336,7 @@ export function buildGitInvocation(
   const context = request.context ?? DEFAULT_CONTEXT_LINES;
   const revision = normalizedRevision(request.revision);
   const paths = normalizedPaths(request.paths);
-  const externalDiff = [
-    "difft",
-    `--display=${display}`,
-    "--color=always",
-    `--width=${width}`,
-    `--context=${context}`,
-  ].join(" ");
-  const args = ["--no-pager", "-c", `diff.external=${externalDiff}`, "diff"];
+  const args = ["--no-pager", "diff", "--no-ext-diff", "--no-color", `--unified=${context}`];
   if (request.staged === true) args.push("--cached");
   if (revision !== undefined) args.push(revision);
   if (paths.length > 0) args.push("--", ...paths);
@@ -389,8 +344,95 @@ export function buildGitInvocation(
   return { args, display, scope: describeScope(request), width };
 }
 
+interface DeltaInvocationOptions {
+  readonly context?: number;
+  readonly edit?: boolean;
+  readonly syntaxTheme?: string;
+}
+
+export function buildDeltaInvocation(
+  display: "side-by-side" | "inline",
+  width: number,
+  options: DeltaInvocationOptions = {},
+): string[] {
+  const syntaxTheme = safeInput(options.syntaxTheme ?? DEFAULT_SYNTAX_THEME, "Delta syntax theme");
+  const args = [
+    "--no-gitconfig",
+    "--paging=never",
+    "--dark",
+    `--width=${width}`,
+    "--line-numbers",
+    "--line-fill-method=spaces",
+    "--commit-decoration-style=omit",
+    "--file-decoration-style=omit",
+    "--hunk-header-style=omit",
+    "--hunk-header-decoration-style=omit",
+    `--syntax-theme=${syntaxTheme}`,
+  ];
+  if (options.edit === true) {
+    args.push("--file-style=omit", `--diff-args=-U${options.context ?? DEFAULT_CONTEXT_LINES}`);
+  } else {
+    args.push("--file-style=bold");
+  }
+  if (display === "side-by-side") args.push("--side-by-side");
+  return args;
+}
+
+export async function executeDeltaProcess(
+  args: readonly string[],
+  input: string | undefined,
+  options: ExecOptions,
+): Promise<ExecResult> {
+  if (options.signal?.aborted === true) {
+    return { code: 1, killed: true, stderr: "", stdout: "" };
+  }
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("delta", [...args], { cwd: options.cwd, stdio: "pipe" });
+    let killed = false;
+    let stderr = "";
+    let stdout = "";
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    const stop = () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      killed = true;
+      child.kill("SIGTERM");
+      forceKillTimer = setTimeout(() => child.kill("SIGKILL"), 250);
+    };
+    const cleanup = () => {
+      if (timeout !== undefined) clearTimeout(timeout);
+      if (forceKillTimer !== undefined) clearTimeout(forceKillTimer);
+      options.signal?.removeEventListener("abort", stop);
+    };
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.stdin.on("error", () => undefined);
+    child.once("error", (error) => {
+      cleanup();
+      reject(error);
+    });
+    child.once("close", (code) => {
+      cleanup();
+      resolve({ code: code ?? 1, killed, stderr, stdout });
+    });
+
+    options.signal?.addEventListener("abort", stop, { once: true });
+    if (options.timeout !== undefined) timeout = setTimeout(stop, options.timeout);
+    child.stdin.end(input);
+  });
+}
+
 async function writeFullOutput(output: string): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "pi-difftastic-"));
+  const directory = await mkdtemp(join(tmpdir(), "pi-delta-"));
   const path = join(directory, "diff.txt");
   await withFileMutationQueue(path, () => writeFile(path, output, "utf8"));
   return path;
@@ -410,55 +452,105 @@ function truncationNotice(truncation: DiffTruncation, fullOutputPath?: string): 
     : `${summary} Full output saved to: ${fullOutputPath}]`;
 }
 
-export async function runDifftasticGitDiff(
-  execute: GitDiffExecutor,
+export async function runDeltaGitDiff(
+  executeGit: GitDiffExecutor,
   request: GitDiffRequest,
   cwd: string,
   options: RunOptions = {},
-): Promise<DifftasticResult> {
+): Promise<DeltaResult> {
   const invocation = buildGitInvocation(request, options.columns);
-  let result: ExecResult;
+  let gitResult: ExecResult;
   try {
-    result = await execute("env", ["-u", "GIT_EXTERNAL_DIFF", "git", ...invocation.args], {
+    gitResult = await executeGit("env", ["-u", "GIT_EXTERNAL_DIFF", "git", ...invocation.args], {
       cwd,
       timeout: COMMAND_TIMEOUT_MS,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error) {
-    if (options.signal?.aborted === true) throw new Error("Structural Git diff was cancelled");
+    if (options.signal?.aborted === true) throw new Error("Git diff was cancelled");
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not run structural Git diff: ${diagnostic(message)}`);
+    throw new Error(`Could not run Git diff: ${diagnostic(message)}`);
   }
 
-  if (result.killed) {
-    if (options.signal?.aborted === true) throw new Error("Structural Git diff was cancelled");
-    throw new Error(`Structural Git diff timed out after ${COMMAND_TIMEOUT_MS / 1_000} seconds`);
+  if (gitResult.killed) {
+    if (options.signal?.aborted === true) throw new Error("Git diff was cancelled");
+    throw new Error(`Git diff timed out after ${COMMAND_TIMEOUT_MS / 1_000} seconds`);
   }
-  if (result.code !== 0) {
+  if (gitResult.code !== 0) {
     throw new Error(
-      `Could not render structural Git diff:\n${diagnostic(result.stderr || result.stdout)}`,
+      `Could not read Git diff:\n${diagnostic(gitResult.stderr || gitResult.stdout)}`,
     );
   }
 
-  const normalizedOutput = mergeDifftasticHunkHeaders(result.stdout);
-  const bounded = boundDiffOutput(normalizedOutput);
-  const noChanges = bounded.plain.trim() === "";
-  const warningText = result.stderr.trim() === "" ? undefined : diagnostic(result.stderr);
+  const noChanges = gitResult.stdout.trim() === "";
+  const gitWarning = gitResult.stderr.trim() === "" ? undefined : diagnostic(gitResult.stderr);
+  if (noChanges) {
+    return {
+      content:
+        gitWarning === undefined
+          ? `No ${invocation.scope}.`
+          : `No ${invocation.scope}.\n\n${gitWarning}`,
+      details: {
+        display: invocation.display,
+        noChanges: true,
+        output: "",
+        scope: invocation.scope,
+        width: invocation.width,
+        ...(gitWarning === undefined ? {} : { warning: gitWarning }),
+      },
+    };
+  }
+
+  const executeDelta = options.executeDelta ?? executeDeltaProcess;
+  let deltaResult: ExecResult;
+  try {
+    deltaResult = await executeDelta(
+      buildDeltaInvocation(invocation.display, invocation.width, {
+        ...(options.syntaxTheme === undefined ? {} : { syntaxTheme: options.syntaxTheme }),
+      }),
+      gitResult.stdout,
+      {
+        cwd,
+        timeout: COMMAND_TIMEOUT_MS,
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
+      },
+    );
+  } catch (error) {
+    if (options.signal?.aborted === true) throw new Error("Delta Git diff was cancelled");
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not run Delta: ${diagnostic(message)}`);
+  }
+
+  if (deltaResult.killed) {
+    if (options.signal?.aborted === true) throw new Error("Delta Git diff was cancelled");
+    throw new Error(`Delta timed out after ${COMMAND_TIMEOUT_MS / 1_000} seconds`);
+  }
+  if (deltaResult.code !== 0) {
+    throw new Error(
+      `Could not render Git diff with Delta:\n${diagnostic(deltaResult.stderr || deltaResult.stdout)}`,
+    );
+  }
+
+  const bounded = boundDiffOutput(deltaResult.stdout);
+  const deltaWarning =
+    deltaResult.stderr.trim() === "" ? undefined : diagnostic(deltaResult.stderr);
   let fullOutputPath: string | undefined;
   let saveWarning: string | undefined;
   if (bounded.truncation !== undefined) {
     try {
       const writer = options.writeFullOutput ?? writeFullOutput;
-      fullOutputPath = await writer(stripSgr(sanitizeTerminalOutput(normalizedOutput)));
+      fullOutputPath = await writer(stripSgr(sanitizeTerminalOutput(deltaResult.stdout)));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       saveWarning = `Could not save the full diff: ${diagnostic(message)}`;
     }
   }
-  const warning = [warningText, saveWarning].filter((value) => value !== undefined).join("\n");
-  const details: DifftasticDetails = {
+  const warning = [gitWarning, deltaWarning, saveWarning]
+    .filter((value) => value !== undefined)
+    .join("\n");
+  const details: DeltaDetails = {
     display: invocation.display,
-    noChanges,
+    noChanges: false,
     output: bounded.ansi,
     scope: invocation.scope,
     width: invocation.width,
@@ -466,13 +558,6 @@ export async function runDifftasticGitDiff(
     ...(fullOutputPath === undefined ? {} : { fullOutputPath }),
     ...(warning === "" ? {} : { warning }),
   };
-
-  if (noChanges) {
-    return {
-      content: warning === "" ? `No ${invocation.scope}.` : `No ${invocation.scope}.\n\n${warning}`,
-      details,
-    };
-  }
 
   const sections = [bounded.plain];
   if (bounded.truncation !== undefined) {
@@ -487,71 +572,22 @@ function editTempFileName(path: string, prefix: string): string {
   return `${prefix}-${fileName || "file"}`;
 }
 
-function editDiffOutputPath(
-  output: string,
-  oldPath: string,
-  newPath: string,
-  path: string,
-): string {
-  return output.replaceAll(oldPath, `${path} (before)`).replaceAll(newPath, path);
+function trimBlankOutputLines(output: string): string {
+  const lines = output.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
+  while (lines.length > 0 && stripSgr(lines[0] ?? "").trim() === "") lines.shift();
+  while (lines.length > 0 && stripSgr(lines.at(-1) ?? "").trim() === "") lines.pop();
+  return lines.join("\n");
 }
 
-function mergeDifftasticHunkHeaders(output: string): string {
-  const lines = output.split("\n");
-  const normalized: string[] = [];
-  let previousPath: string | undefined;
-  for (const line of lines) {
-    const plainLine = stripSgr(line).trimEnd();
-    const match = /^(.*) --- \d+\/\d+ --- /.exec(plainLine);
-    if (match === null) {
-      normalized.push(line);
-      continue;
-    }
-
-    const path = match[1] ?? "";
-    if (path !== previousPath) {
-      previousPath = path;
-      normalized.push(line);
-      continue;
-    }
-    while (normalized.at(-1) === "") normalized.pop();
-    normalized.push("...");
-  }
-  return normalized.join("\n");
-}
-
-function removeDifftasticFileHeaders(output: string, path: string): string {
-  const lines = output.split("\n");
-  const normalized: string[] = [];
-  let headerSeen = false;
-  for (const line of lines) {
-    const plainLine = stripSgr(line).trimEnd();
-    const isHeader =
-      plainLine.startsWith(`${path} --- `) || plainLine.startsWith(`${path} (before) --- `);
-    if (!isHeader) {
-      normalized.push(line);
-      continue;
-    }
-
-    if (!headerSeen) {
-      headerSeen = true;
-      continue;
-    }
-    while (normalized.at(-1) === "") normalized.pop();
-    normalized.push("...");
-  }
-  return normalized.join("\n");
-}
-
-export async function runDifftasticEditDiff(
-  execute: GitDiffExecutor,
-  request: DifftasticEditRequest,
+export async function runDeltaEditDiff(
+  executeDelta: DeltaExecutor,
+  request: DeltaEditRequest,
   cwd: string,
   options: RunOptions = {},
-): Promise<DifftasticDetails> {
+): Promise<DeltaDetails> {
   const width = effectiveWidth(options.columns);
   const display = width >= SIDE_BY_SIDE_MIN_WIDTH ? "side-by-side" : "inline";
-  const directory = await mkdtemp(join(tmpdir(), "pi-difftastic-edit-"));
+  const directory = await mkdtemp(join(tmpdir(), "pi-delta-edit-"));
   const oldPath = join(directory, editTempFileName(request.path, "before"));
   const newPath = join(directory, editTempFileName(request.path, "after"));
 
@@ -562,16 +598,17 @@ export async function runDifftasticEditDiff(
 
     let result: ExecResult;
     try {
-      result = await execute(
-        "difft",
+      result = await executeDelta(
         [
-          `--display=${display}`,
-          "--color=always",
-          `--width=${width}`,
-          `--context=${request.context ?? DEFAULT_CONTEXT_LINES}`,
+          ...buildDeltaInvocation(display, width, {
+            edit: true,
+            ...(request.context === undefined ? {} : { context: request.context }),
+            ...(options.syntaxTheme === undefined ? {} : { syntaxTheme: options.syntaxTheme }),
+          }),
           oldPath,
           newPath,
         ],
+        undefined,
         {
           cwd,
           timeout: EDIT_COMMAND_TIMEOUT_MS,
@@ -579,27 +616,25 @@ export async function runDifftasticEditDiff(
         },
       );
     } catch (error) {
-      if (options.signal?.aborted === true) throw new Error("Structural edit diff was cancelled");
+      if (options.signal?.aborted === true) throw new Error("Delta edit preview was cancelled");
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Could not render structural edit diff: ${diagnostic(message)}`);
+      throw new Error(`Could not run Delta edit preview: ${diagnostic(message)}`);
     }
 
     if (result.killed) {
-      if (options.signal?.aborted === true) throw new Error("Structural edit diff was cancelled");
+      if (options.signal?.aborted === true) throw new Error("Delta edit preview was cancelled");
       throw new Error(
-        `Could not render structural edit diff: timed out after ${EDIT_COMMAND_TIMEOUT_MS / 1_000} seconds`,
+        `Delta edit preview timed out after ${EDIT_COMMAND_TIMEOUT_MS / 1_000} seconds`,
       );
     }
-    if (result.code !== 0) {
+    // Delta forwards `git diff --no-index` status 1 when the compared files differ.
+    if (result.code > 1 || (result.code === 1 && result.stdout.trim() === "")) {
       throw new Error(
-        `Could not render structural edit diff:\n${diagnostic(result.stderr || result.stdout)}`,
+        `Could not render edit preview with Delta:\n${diagnostic(result.stderr || result.stdout)}`,
       );
     }
 
-    const output = removeDifftasticFileHeaders(
-      editDiffOutputPath(result.stdout, oldPath, newPath, request.path),
-      request.path,
-    );
+    const output = trimBlankOutputLines(result.stdout);
     const bounded = boundDiffOutput(output);
     const noChanges = bounded.plain.trim() === "";
     const warningText = result.stderr.trim() === "" ? undefined : diagnostic(result.stderr);
@@ -661,12 +696,12 @@ function detailLines(value: string): string[] {
 }
 
 function diffComponent(
-  details: DifftasticDetails,
+  details: DeltaDetails,
   expanded: boolean,
   theme: Theme,
   loading = false,
 ): Component {
-  const lines = sourceLines(remapDifftasticColors(details.output, theme));
+  const lines = sourceLines(sanitizeTerminalOutput(details.output));
   if (details.noChanges) {
     const output = [statusLine(theme, "Info", `No ${details.scope}.`)];
     if (details.warning !== undefined) {
@@ -703,14 +738,14 @@ function diffComponent(
 }
 
 function renderExpandedGitDiff(
-  details: DifftasticDetails,
+  details: DeltaDetails,
   request: GitDiffRequest,
   cwd: string,
   state: GitDiffRenderState,
   run: GitDiffRunner,
   expansionControllers: Set<AbortController>,
   invalidate: () => void,
-): DifftasticDetails {
+): DeltaDetails {
   if (details.noChanges) return details;
 
   const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
@@ -771,27 +806,27 @@ type NativeEditRenderCall = NonNullable<NativeEditDefinition["renderCall"]>;
 type NativeEditInput = Parameters<NativeEditDefinition["execute"]>[1];
 type NativeEditState = Parameters<NativeEditRenderCall>[2]["state"];
 
-type DifftasticEditDetails = EditToolDetails & {
-  readonly difftastic?: DifftasticDetails;
+type DeltaEditDetails = EditToolDetails & {
+  readonly delta?: DeltaDetails;
 };
 
-interface DifftasticEditState {
-  expandedPreview: DifftasticDetails | null | undefined;
+interface DeltaEditState {
+  expandedPreview: DeltaDetails | null | undefined;
   expandedPreviewController: AbortController | undefined;
   expandedPreviewKey: string | undefined;
   expandedPreviewPending: boolean;
-  preview: DifftasticDetails | undefined;
+  preview: DeltaDetails | undefined;
   previewController: AbortController | undefined;
   previewKey: string | undefined;
   previewPending: boolean;
-  previewRequest: DifftasticEditRequest | undefined;
+  previewRequest: DeltaEditRequest | undefined;
 }
 
-type DifftasticEditRenderState = NativeEditState & DifftasticEditState;
-type DifftasticEditToolDefinition = ToolDefinition<
+type DeltaEditRenderState = NativeEditState & DeltaEditState;
+type DeltaEditToolDefinition = ToolDefinition<
   NativeEditDefinition["parameters"],
-  DifftasticEditDetails | undefined,
-  DifftasticEditRenderState
+  DeltaEditDetails | undefined,
+  DeltaEditRenderState
 >;
 
 function renderableEditInput(args: unknown): NativeEditInput | undefined {
@@ -824,7 +859,7 @@ async function simulateEdit(
   cwd: string,
   input: NativeEditInput,
   signal: AbortSignal,
-): Promise<DifftasticEditRequest> {
+): Promise<DeltaEditRequest> {
   let oldContent: Buffer | undefined;
   let newContent: string | undefined;
   const operations: EditOperations = {
@@ -842,7 +877,7 @@ async function simulateEdit(
 
   // The built-in edit executor currently ignores its context; renderCall has no ExtensionContext.
   // Keep this simulation delegated to Pi so matching and line-ending behavior stay identical.
-  await previewTool.execute("difftastic-preview", input, signal, undefined, {
+  await previewTool.execute("delta-preview", input, signal, undefined, {
     cwd,
   } as ExtensionContext);
   if (oldContent === undefined || newContent === undefined) {
@@ -856,13 +891,13 @@ async function simulateEdit(
   };
 }
 
-function editDifftasticState(state: NativeEditState): DifftasticEditRenderState {
-  return state as DifftasticEditRenderState;
+function editDeltaState(state: NativeEditState): DeltaEditRenderState {
+  return state as DeltaEditRenderState;
 }
 
 function replaceEditPreview(
   component: Component,
-  details: DifftasticDetails,
+  details: DeltaDetails,
   expanded: boolean,
   theme: Theme,
   loading = false,
@@ -878,14 +913,14 @@ function replaceEditPreview(
 }
 
 function renderExpandedEditPreview(
-  details: DifftasticDetails,
-  request: DifftasticEditRequest,
+  details: DeltaDetails,
+  request: DeltaEditRequest,
   cwd: string,
-  state: DifftasticEditState,
+  state: DeltaEditState,
   runEdit: EditDiffRunner,
   expansionControllers: Set<AbortController>,
   invalidate: () => void,
-): DifftasticDetails {
+): DeltaDetails {
   if (details.noChanges) return details;
 
   const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
@@ -941,9 +976,9 @@ function renderExpandedEditPreview(
   return state.expandedPreview ?? details;
 }
 
-function renderEditDifftasticResult(
+function renderEditDeltaResult(
   result: { content: Array<{ type: string; text?: string }> },
-  details: DifftasticDetails,
+  details: DeltaDetails,
   expanded: boolean,
   theme: Theme,
 ): Component {
@@ -961,14 +996,14 @@ function renderEditDifftasticResult(
   return component;
 }
 
-function createDifftasticEditTool(
+function createDeltaEditTool(
   cwd: string,
   runEdit: EditDiffRunner,
   previewControllers: Set<AbortController>,
 ): ToolDefinition<
   NativeEditDefinition["parameters"],
-  DifftasticEditDetails | undefined,
-  DifftasticEditRenderState
+  DeltaEditDetails | undefined,
+  DeltaEditRenderState
 > {
   const nativeEdit = createEditToolDefinition(cwd);
   const nativeRenderCall = nativeEdit.renderCall;
@@ -977,7 +1012,7 @@ function createDifftasticEditTool(
     throw new Error("Pi's built-in edit tool does not expose renderers");
   }
 
-  const execute: DifftasticEditToolDefinition["execute"] = async (
+  const execute: DeltaEditToolDefinition["execute"] = async (
     toolCallId,
     input,
     signal,
@@ -1003,7 +1038,7 @@ function createDifftasticEditTool(
 
     if (result.details !== undefined && oldContent !== undefined && newContent !== undefined) {
       try {
-        const difftastic = await runEdit(
+        const delta = await runEdit(
           {
             newContent,
             oldContent: oldContent.toString("utf8"),
@@ -1014,10 +1049,10 @@ function createDifftasticEditTool(
         );
         return {
           ...result,
-          details: { ...result.details, difftastic },
+          details: { ...result.details, delta },
         };
       } catch {
-        // Difftastic is presentation-only. Preserve the successful native edit result if it fails.
+        // Delta is presentation-only. Preserve the successful native edit result if it fails.
       }
     }
 
@@ -1027,11 +1062,11 @@ function createDifftasticEditTool(
   const renderCall: NonNullable<
     ToolDefinition<
       NativeEditDefinition["parameters"],
-      DifftasticEditDetails | undefined,
-      DifftasticEditRenderState
+      DeltaEditDetails | undefined,
+      DeltaEditRenderState
     >["renderCall"]
   > = (args, theme, context) => {
-    const state = editDifftasticState(context.state);
+    const state = editDeltaState(context.state);
     const input = renderableEditInput(args);
     const key = input === undefined ? undefined : JSON.stringify(input);
     if (state.previewKey !== key) {
@@ -1130,13 +1165,13 @@ function createDifftasticEditTool(
   const renderResult: NonNullable<
     ToolDefinition<
       NativeEditDefinition["parameters"],
-      DifftasticEditDetails | undefined,
-      DifftasticEditRenderState
+      DeltaEditDetails | undefined,
+      DeltaEditRenderState
     >["renderResult"]
   > = (result, options, theme, context) => {
-    const difftastic = result.details?.difftastic;
-    if (!context.isError && difftastic !== undefined) {
-      const expandedDifftastic =
+    const delta = result.details?.delta;
+    if (!context.isError && delta !== undefined) {
+      const expandedDelta =
         options.expanded &&
         context.state.preview !== undefined &&
         context.state.previewRequest !== undefined
@@ -1149,14 +1184,14 @@ function createDifftasticEditTool(
               previewControllers,
               context.invalidate,
             )
-          : difftastic;
-      if (context.state.preview?.output === difftastic.output) {
+          : delta;
+      if (context.state.preview?.output === delta.output) {
         const component =
           context.lastComponent instanceof Container ? context.lastComponent : new Container();
         component.clear();
         return component;
       }
-      return renderEditDifftasticResult(result, expandedDifftastic, options.expanded, theme);
+      return renderEditDeltaResult(result, expandedDelta, options.expanded, theme);
     }
     return nativeRenderResult(result, options, theme, context);
   };
@@ -1171,80 +1206,82 @@ function createDifftasticEditTool(
 
 function commandHelp(): string {
   return [
-    "Usage: /difft",
+    "Usage: /delta",
     "",
-    "Show unstaged working-tree changes using Difftastic.",
+    "Show unstaged working-tree changes using Delta.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
-    "Set `editPreviews` to true in ~/.pi/agent/difftastic.json to use Difftastic for edit previews.",
+    "Set `editPreviews` to true in ~/.pi/agent/delta.json to use Delta for edit previews.",
   ].join("\n");
 }
 
-interface DifftasticExtensionDependencies {
+interface DeltaExtensionDependencies {
   readonly columns?: () => number | undefined;
+  readonly config?: DeltaConfig;
   readonly editPreviews?: (context: ExtensionContext) => boolean;
+  readonly executeDelta?: DeltaExecutor;
   readonly run?: GitDiffRunner;
   readonly runEdit?: EditDiffRunner;
 }
 
-interface DifftasticConfig {
+export interface DeltaConfig {
   readonly editPreviews?: boolean;
+  readonly syntaxTheme?: string;
 }
 
-export function loadDifftasticEditPreviews(agentDirectory = getAgentDir()): boolean {
-  const value = readJsonConfig(globalExtensionConfigPath("difftastic", agentDirectory));
-  if (value === undefined) return false;
+export function loadDeltaConfig(agentDirectory = getAgentDir()): DeltaConfig {
+  const value = readJsonConfig(globalExtensionConfigPath("delta", agentDirectory));
+  if (value === undefined) return {};
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("difftastic config: expected an object");
+    throw new Error("delta config: expected an object");
   }
 
   const config = value as Record<string, unknown>;
-  const unknownField = Object.keys(config).find((field) => field !== "editPreviews");
+  const knownFields = new Set(["editPreviews", "syntaxTheme"]);
+  const unknownField = Object.keys(config).find((field) => !knownFields.has(field));
   if (unknownField !== undefined) {
-    throw new Error(`difftastic config.${unknownField}: unknown field`);
+    throw new Error(`delta config.${unknownField}: unknown field`);
   }
   if (config.editPreviews !== undefined && typeof config.editPreviews !== "boolean") {
-    throw new Error("difftastic config.editPreviews: expected a boolean");
+    throw new Error("delta config.editPreviews: expected a boolean");
+  }
+  if (config.syntaxTheme !== undefined) {
+    if (typeof config.syntaxTheme !== "string" || config.syntaxTheme.trim() === "") {
+      throw new Error("delta config.syntaxTheme: expected a non-empty string");
+    }
+    safeInput(config.syntaxTheme, "delta config.syntaxTheme");
   }
 
-  return (config as DifftasticConfig).editPreviews === true;
+  return config as DeltaConfig;
 }
 
-function editPreviewsEnabled(_context: ExtensionContext): boolean {
-  return loadDifftasticEditPreviews();
-}
-
-export function registerDifftasticExtension(
+export function registerDeltaExtension(
   pi: ExtensionAPI,
-  dependencies: DifftasticExtensionDependencies = {},
+  dependencies: DeltaExtensionDependencies = {},
 ): void {
+  const config = dependencies.config ?? loadDeltaConfig();
+  const executeDelta = dependencies.executeDelta ?? executeDeltaProcess;
+  const syntaxTheme = config.syntaxTheme ?? DEFAULT_SYNTAX_THEME;
   const run: GitDiffRunner =
     dependencies.run ??
     ((request, cwd, signal) =>
-      runDifftasticGitDiff(
-        (command, args, options) => pi.exec(command, args, options),
-        request,
-        cwd,
-        {
-          columns: dependencies.columns?.() ?? process.stdout.columns,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      ));
+      runDeltaGitDiff((command, args, options) => pi.exec(command, args, options), request, cwd, {
+        columns: dependencies.columns?.() ?? process.stdout.columns,
+        executeDelta,
+        ...(signal === undefined ? {} : { signal }),
+        syntaxTheme,
+      }));
   const runEdit: EditDiffRunner =
     dependencies.runEdit ??
     ((request, cwd, signal) =>
-      runDifftasticEditDiff(
-        (command, args, options) => pi.exec(command, args, options),
-        request,
-        cwd,
-        {
-          columns: dependencies.columns?.() ?? process.stdout.columns,
-          ...(signal === undefined ? {} : { signal }),
-        },
-      ));
+      runDeltaEditDiff(executeDelta, request, cwd, {
+        columns: dependencies.columns?.() ?? process.stdout.columns,
+        ...(signal === undefined ? {} : { signal }),
+        syntaxTheme,
+      }));
 
   const previewControllers = new Set<AbortController>();
   const expansionControllers = new Set<AbortController>();
-  const shouldUseEditPreviews = dependencies.editPreviews ?? editPreviewsEnabled;
+  const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
   pi.on("session_shutdown", () => {
     for (const controller of previewControllers) controller.abort();
     for (const controller of expansionControllers) controller.abort();
@@ -1254,24 +1291,24 @@ export function registerDifftasticExtension(
 
   pi.on("session_start", (_event, ctx) => {
     if (shouldUseEditPreviews(ctx)) {
-      pi.registerTool(createDifftasticEditTool(ctx.cwd, runEdit, previewControllers));
+      pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
     }
   });
 
-  pi.registerEntryRenderer<DifftasticDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
+  pi.registerEntryRenderer<DeltaDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
     const details = entry.data;
     return details === undefined
-      ? new Text(theme.fg("warning", "Difftastic diff data is unavailable."), 0, 0)
+      ? new Text(theme.fg("warning", "Delta diff data is unavailable."), 0, 0)
       : diffComponent(details, expanded, theme);
   });
 
   pi.registerTool(
-    defineTool<typeof GitDiffParameters, DifftasticDetails, GitDiffRenderState>({
+    defineTool<typeof GitDiffParameters, DeltaDetails, GitDiffRenderState>({
       name: "git_diff",
-      label: "Difftastic Git diff",
+      label: "Delta Git diff",
       description:
-        "Render a read-only structural Git diff with Difftastic. Supports unstaged or staged changes, one revision/range, and optional pathspecs. Untracked files are excluded. Output is truncated to 2000 lines or 50KB; full truncated output is saved to a temporary file.",
-      promptSnippet: "Render structural Git diffs with Difftastic",
+        "Render a read-only syntax-highlighted Git diff with Delta. Supports unstaged or staged changes, one revision/range, and optional pathspecs. Untracked files are excluded. Output is truncated to 2000 lines or 50KB; full truncated output is saved to a temporary file.",
+      promptSnippet: "Render syntax-highlighted Git diffs with Delta",
       promptGuidelines: [
         "Use git_diff instead of bash when visually inspecting textual Git changes; use git status for summaries and git diff --check for validation.",
       ],
@@ -1323,8 +1360,8 @@ export function registerDifftasticExtension(
     }),
   );
 
-  pi.registerCommand("difft", {
-    description: "Show the unstaged structural Git diff",
+  pi.registerCommand("delta", {
+    description: "Show the unstaged syntax-highlighted Git diff",
     handler: async (args, ctx) => {
       const input = args.trim();
       if (input === "-h" || input === "--help") {
@@ -1337,12 +1374,12 @@ export function registerDifftasticExtension(
       }
 
       if (ctx.mode !== "tui") {
-        ctx.ui.notify("/difft requires interactive mode.", "error");
+        ctx.ui.notify("/delta requires interactive mode.", "error");
         return;
       }
 
       const outcome = await ctx.ui.custom<DiffCommandOutcome>((tui, theme, _keybindings, done) => {
-        const loader = new BorderedLoader(tui, theme, "Rendering structural Git diff...");
+        const loader = new BorderedLoader(tui, theme, "Rendering Git diff with Delta...");
         let settled = false;
         const finish = (result: DiffCommandOutcome) => {
           if (settled) return;
@@ -1365,18 +1402,18 @@ export function registerDifftasticExtension(
       });
 
       if (outcome.status === "cancelled") {
-        ctx.ui.notify("Difftastic diff cancelled.", "info");
+        ctx.ui.notify("Delta diff cancelled.", "info");
         return;
       }
       if (outcome.status === "error") {
         ctx.ui.notify(outcome.message, "error");
         return;
       }
-      pi.appendEntry<DifftasticDetails>(ENTRY_TYPE, outcome.result.details);
+      pi.appendEntry<DeltaDetails>(ENTRY_TYPE, outcome.result.details);
     },
   });
 }
 
-export default function difftasticExtension(pi: ExtensionAPI): void {
-  registerDifftasticExtension(pi);
+export default function deltaExtension(pi: ExtensionAPI): void {
+  registerDeltaExtension(pi);
 }

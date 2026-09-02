@@ -13,19 +13,19 @@ import type {
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   boundDiffOutput,
+  buildDeltaInvocation,
   buildGitInvocation,
-  type DifftasticDetails,
-  type DifftasticResult,
-  loadDifftasticEditPreviews,
-  registerDifftasticExtension,
-  remapDifftasticColors,
+  type DeltaDetails,
+  type DeltaResult,
+  loadDeltaConfig,
+  registerDeltaExtension,
   renderDiffLines,
-  runDifftasticEditDiff,
-  runDifftasticGitDiff,
+  runDeltaEditDiff,
+  runDeltaGitDiff,
   sanitizeTerminalOutput,
 } from "..";
 
-const details: DifftasticDetails = {
+const details: DeltaDetails = {
   display: "side-by-side",
   noChanges: false,
   output: "sample.ts --- TypeScript\n1 old    1 new",
@@ -33,16 +33,33 @@ const details: DifftasticDetails = {
   width: 116,
 };
 
-const diffResult: DifftasticResult = {
+const diffResult: DeltaResult = {
   content: "sample.ts --- TypeScript\n1 old    1 new",
   details,
 };
 
-test("loads edit preview settings from the dedicated config file", async () => {
-  const root = await mkdtemp(join(tmpdir(), "pi-difftastic-config-"));
+test("loads edit preview and syntax theme settings from the dedicated config file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-delta-config-"));
   try {
-    await writeFile(join(root, "difftastic.json"), '{"editPreviews":true}', "utf8");
-    expect(loadDifftasticEditPreviews(root)).toBeTrue();
+    await writeFile(
+      join(root, "delta.json"),
+      '{"editPreviews":true,"syntaxTheme":"Zenwritten Dark"}',
+      "utf8",
+    );
+    expect(loadDeltaConfig(root)).toEqual({
+      editPreviews: true,
+      syntaxTheme: "Zenwritten Dark",
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects unknown Delta config fields", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-delta-config-invalid-"));
+  try {
+    await writeFile(join(root, "delta.json"), '{"decorateHeaders":true}', "utf8");
+    expect(() => loadDeltaConfig(root)).toThrow("delta config.decorateHeaders: unknown field");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -57,27 +74,38 @@ async function rejection(promise: Promise<unknown>): Promise<Error> {
   throw new Error("Expected operation to reject");
 }
 
-describe("Difftastic Git invocation", () => {
-  test("uses a side-by-side external diff for a wide terminal", () => {
+describe("Delta Git invocation", () => {
+  test("uses a side-by-side unified diff for a wide terminal", () => {
     expect(buildGitInvocation({}, 120)).toEqual({
-      args: [
-        "--no-pager",
-        "-c",
-        "diff.external=difft --display=side-by-side --color=always --width=116 --context=3",
-        "diff",
-      ],
+      args: ["--no-pager", "diff", "--no-ext-diff", "--no-color", "--unified=3"],
       display: "side-by-side",
       scope: "unstaged changes",
       width: 116,
     });
   });
 
-  test("uses inline output when the terminal is narrow", () => {
+  test("uses inline Delta output when the terminal is narrow", () => {
     const invocation = buildGitInvocation({ display: "auto" }, 80);
+    const deltaArgs = buildDeltaInvocation(invocation.display, invocation.width);
 
     expect(invocation.display).toBe("inline");
     expect(invocation.width).toBe(76);
-    expect(invocation.args[2]).toContain("--display=inline");
+    expect(deltaArgs).not.toContain("--side-by-side");
+  });
+
+  test("omits Delta header decorations and duplicate edit file labels", () => {
+    const deltaArgs = buildDeltaInvocation("side-by-side", 116, {
+      context: 8,
+      edit: true,
+      syntaxTheme: "Zenwritten Dark",
+    });
+
+    expect(deltaArgs).toContain("--side-by-side");
+    expect(deltaArgs).toContain("--file-style=omit");
+    expect(deltaArgs).toContain("--file-decoration-style=omit");
+    expect(deltaArgs).toContain("--hunk-header-style=omit");
+    expect(deltaArgs).toContain("--hunk-header-decoration-style=omit");
+    expect(deltaArgs).toContain("--diff-args=-U8");
   });
 
   test("places revisions before safely separated pathspecs", () => {
@@ -93,9 +121,10 @@ describe("Difftastic Git invocation", () => {
 
     expect(invocation.args).toEqual([
       "--no-pager",
-      "-c",
-      "diff.external=difft --display=side-by-side --color=always --width=136 --context=8",
       "diff",
+      "--no-ext-diff",
+      "--no-color",
+      "--unified=8",
       "--cached",
       "HEAD~1",
       "--",
@@ -112,23 +141,17 @@ describe("Difftastic Git invocation", () => {
   });
 });
 
-describe("Difftastic output handling", () => {
+describe("Delta output handling", () => {
   test("keeps SGR styling and removes other terminal controls", () => {
     const input = "\u001b[31mred\u001b[0m\u001b]2;forged title\u0007safe\u001b[2J\u202e";
 
     expect(sanitizeTerminalOutput(input)).toBe("\u001b[31mred\u001b[0msafe");
   });
 
-  test("maps Difftastic colors to Pi theme roles", () => {
-    const theme = {
-      getFgAnsi: (color: string) => `<${color}>`,
-    } as Theme;
-    const output =
-      "\u001b[91;1mremoved\u001b[0m \u001b[92madded\u001b[39m \u001b[95mstring\u001b[0m";
+  test("preserves Delta truecolor syntax highlighting", () => {
+    const output = "\u001b[38;2;200;100;50mconst\u001b[0m value";
 
-    expect(remapDifftasticColors(output, theme)).toBe(
-      "<toolDiffRemoved>\u001b[1mremoved\u001b[0m <toolDiffAdded>added\u001b[39m <syntaxString>string\u001b[0m",
-    );
+    expect(sanitizeTerminalOutput(output)).toBe(output);
   });
 
   test("bounds output by complete lines", () => {
@@ -155,80 +178,92 @@ describe("Difftastic output handling", () => {
   });
 });
 
-describe("Difftastic execution", () => {
-  test("runs Git without a pager and returns plain model content", async () => {
-    const executions: Array<{ command: string; args: string[]; options: ExecOptions }> = [];
-    const result = await runDifftasticGitDiff(
+describe("Delta execution", () => {
+  test("pipes a pager-free unified Git diff through Delta", async () => {
+    const gitExecutions: Array<{ command: string; args: string[]; options: ExecOptions }> = [];
+    const deltaExecutions: Array<{
+      args: readonly string[];
+      input: string | undefined;
+      options: ExecOptions;
+    }> = [];
+    const unifiedDiff = "diff --git a/sample.ts b/sample.ts\n-old\n+new\n";
+    const result = await runDeltaGitDiff(
       async (command, args, options) => {
-        executions.push({ command, args, options });
-        return {
-          stdout: "\u001b[31m1 old\u001b[0m    \u001b[32m1 new\u001b[0m\n",
-          stderr: "",
-          code: 0,
-          killed: false,
-        };
+        gitExecutions.push({ command, args, options });
+        return { stdout: unifiedDiff, stderr: "", code: 0, killed: false };
       },
       { revision: "HEAD" },
       "/repo",
-      { columns: 120 },
+      {
+        columns: 120,
+        executeDelta: async (args, input, options) => {
+          deltaExecutions.push({ args, input, options });
+          return {
+            stdout: "\u001b[31m1 old\u001b[0m    \u001b[32m1 new\u001b[0m\n",
+            stderr: "",
+            code: 0,
+            killed: false,
+          };
+        },
+      },
     );
 
-    expect(executions).toHaveLength(1);
-    expect(executions[0]).toMatchObject({
+    expect(gitExecutions).toHaveLength(1);
+    expect(gitExecutions[0]).toMatchObject({
       command: "env",
       options: { cwd: "/repo", timeout: 60_000 },
     });
-    expect(executions[0]?.args.slice(0, 4)).toEqual([
+    expect(gitExecutions[0]?.args.slice(0, 4)).toEqual([
       "-u",
       "GIT_EXTERNAL_DIFF",
       "git",
       "--no-pager",
     ]);
+    expect(deltaExecutions).toHaveLength(1);
+    expect(deltaExecutions[0]?.input).toBe(unifiedDiff);
+    expect(deltaExecutions[0]?.args).toContain("--no-gitconfig");
+    expect(deltaExecutions[0]?.args).toContain("--side-by-side");
     expect(result.content).toBe("1 old    1 new");
     expect(result.details.output).toContain("\u001b[31m");
     expect(result.details.scope).toBe("working tree against HEAD");
   });
 
-  test("merges repeated Git hunk headers for the same file", async () => {
-    const result = await runDifftasticGitDiff(
-      async () => ({
-        stdout: [
-          "sample.ts --- 1/2 --- TypeScript",
-          "1 old    1 new",
-          "",
-          "sample.ts --- 2/2 --- TypeScript",
-          "2 old    2 new",
-        ].join("\n"),
-        stderr: "",
-        code: 0,
-        killed: false,
-      }),
+  test("does not invoke Delta for an empty Git diff", async () => {
+    let deltaRuns = 0;
+    const result = await runDeltaGitDiff(
+      async () => ({ stdout: "", stderr: "", code: 0, killed: false }),
       {},
       "/repo",
+      {
+        executeDelta: async () => {
+          deltaRuns += 1;
+          return { stdout: "", stderr: "", code: 0, killed: false };
+        },
+      },
     );
 
-    expect(result.details.output).toContain("...\n2 old");
-    expect(result.details.output).not.toContain("sample.ts --- 2/2");
+    expect(deltaRuns).toBe(0);
+    expect(result.content).toBe("No unstaged changes.");
+    expect(result.details.noChanges).toBeTrue();
   });
 
   test("renders an edit diff from temporary before and after files", async () => {
-    let executed: { command: string; args: string[]; options: ExecOptions } | undefined;
-    const result = await runDifftasticEditDiff(
-      async (command, args, options) => {
-        executed = { command, args, options };
+    let executed:
+      | { args: readonly string[]; input: string | undefined; options: ExecOptions }
+      | undefined;
+    let comparedContent: string[] = [];
+    const result = await runDeltaEditDiff(
+      async (args, input, options) => {
+        executed = { args, input, options };
+        comparedContent = await Promise.all([
+          readFile(args.at(-2) ?? "", "utf8"),
+          readFile(args.at(-1) ?? "", "utf8"),
+        ]);
         return {
-          stdout: [
-            `\u001b[1m\u001b[91m${args[5]}\u001b[0m --- 1/3 --- TypeScript`,
-            "\u001b[91m1 old\u001b[0m    \u001b[92m1 new\u001b[0m",
-            "",
-            `${args[5]} --- 2/3 --- TypeScript`,
-            "2 old    2 new",
-            "",
-            `${args[5]} --- 3/3 --- TypeScript`,
-            "3 old    3 new",
-          ].join("\n"),
+          stdout:
+            "\n\u001b[91m1 const value = 1;\u001b[0m    \u001b[92m1 const value = 2;\u001b[0m\n",
           stderr: "",
-          code: 0,
+          code: 1,
           killed: false,
         };
       },
@@ -241,30 +276,23 @@ describe("Difftastic execution", () => {
       { columns: 120 },
     );
 
-    expect(executed).toMatchObject({
-      command: "difft",
-      options: { cwd: "/repo", timeout: 10_000 },
-    });
-    expect(executed?.args.slice(0, 4)).toEqual([
-      "--display=side-by-side",
-      "--color=always",
-      "--width=116",
-      "--context=3",
-    ]);
-    expect(result.output).toContain("1 old");
-    expect(result.output).toContain("...\n2 old");
-    expect(result.output).toContain("...\n3 old");
-    expect(result.output).not.toContain("src/example.ts ---");
-    expect(result.output).not.toContain("pi-difftastic-edit-");
+    expect(executed?.input).toBeUndefined();
+    expect(executed?.options).toMatchObject({ cwd: "/repo", timeout: 10_000 });
+    expect(executed?.args).toContain("--side-by-side");
+    expect(executed?.args).toContain("--file-style=omit");
+    expect(executed?.args).toContain("--diff-args=-U3");
+    expect(comparedContent).toEqual(["const value = 1;\n", "const value = 2;\n"]);
+    expect(result.output).toStartWith("\u001b[91m1 const value");
+    expect(result.output).not.toContain("pi-delta-edit-");
     expect(result.scope).toBe("edit changes");
   });
 
-  test("reports Git and Difftastic failures without terminal controls", async () => {
+  test("reports Git failures without terminal controls", async () => {
     const error = await rejection(
-      runDifftasticGitDiff(
+      runDeltaGitDiff(
         async () => ({
           stdout: "",
-          stderr: "\u001b[31merror: cannot run difft\u001b[0m",
+          stderr: "\u001b[31mfatal: invalid revision\u001b[0m",
           code: 128,
           killed: false,
         }),
@@ -273,7 +301,29 @@ describe("Difftastic execution", () => {
       ),
     );
 
-    expect(error.message).toBe("Could not render structural Git diff:\nerror: cannot run difft");
+    expect(error.message).toBe("Could not read Git diff:\nfatal: invalid revision");
+  });
+
+  test("reports Delta failures without terminal controls", async () => {
+    const error = await rejection(
+      runDeltaGitDiff(
+        async () => ({ stdout: "diff --git a/a b/a\n", stderr: "", code: 0, killed: false }),
+        {},
+        "/repo",
+        {
+          executeDelta: async () => ({
+            stdout: "",
+            stderr: "\u001b[31merror: unknown syntax theme\u001b[0m",
+            code: 2,
+            killed: false,
+          }),
+        },
+      ),
+    );
+
+    expect(error.message).toBe(
+      "Could not render Git diff with Delta:\nerror: unknown syntax theme",
+    );
   });
 
   test("reports cancellation distinctly", async () => {
@@ -281,7 +331,7 @@ describe("Difftastic execution", () => {
     controller.abort();
 
     const error = await rejection(
-      runDifftasticGitDiff(
+      runDeltaGitDiff(
         async () => ({ stdout: "", stderr: "", code: 1, killed: true }),
         {},
         "/repo",
@@ -289,16 +339,17 @@ describe("Difftastic execution", () => {
       ),
     );
 
-    expect(error.message).toBe("Structural Git diff was cancelled");
+    expect(error.message).toBe("Git diff was cancelled");
   });
 
   test("keeps a truncated diff when saving the full output fails", async () => {
     const output = Array.from({ length: 2_001 }, (_, index) => `line ${index + 1}`).join("\n");
-    const result = await runDifftasticGitDiff(
+    const result = await runDeltaGitDiff(
       async () => ({ stdout: output, stderr: "", code: 0, killed: false }),
       {},
       "/repo",
       {
+        executeDelta: async () => ({ stdout: output, stderr: "", code: 0, killed: false }),
         writeFullOutput: async () => {
           throw new Error("read-only temporary directory");
         },
@@ -313,7 +364,7 @@ describe("Difftastic execution", () => {
   });
 });
 
-describe("Difftastic extension", () => {
+describe("Delta extension", () => {
   test("registers the model tool and interactive command", async () => {
     let tool: ToolDefinition | undefined;
     let commandHandler:
@@ -332,11 +383,11 @@ describe("Difftastic extension", () => {
           handler: (args: string, context: ExtensionCommandContext) => Promise<void> | void;
         },
       ) {
-        if (name === "difft") commandHandler = command.handler;
+        if (name === "delta") commandHandler = command.handler;
       },
       appendEntry: () => {},
     } as unknown as ExtensionAPI;
-    registerDifftasticExtension(pi, { run: async () => diffResult });
+    registerDeltaExtension(pi, { run: async () => diffResult });
 
     if (tool === undefined) throw new Error("git_diff tool was not registered");
     const toolResult = await tool.execute("diff-1", {}, undefined, undefined, {
@@ -372,14 +423,14 @@ describe("Difftastic extension", () => {
     expect(rendered.slice(1).every((line) => visibleWidth(line) <= 24)).toBeTrue();
   });
 
-  test("rerenders full structural context when a diff is expanded", async () => {
+  test("rerenders full unified context when a diff is expanded", async () => {
     let tool: ToolDefinition | undefined;
     const requests: Array<{ context?: number }> = [];
-    const compactDetails: DifftasticDetails = {
+    const compactDetails: DeltaDetails = {
       ...details,
       output: "sample.ts --- TypeScript\n1 old    1 new",
     };
-    const fullDetails: DifftasticDetails = {
+    const fullDetails: DeltaDetails = {
       ...compactDetails,
       output: "sample.ts --- TypeScript\n1 old    1 new\nunchanged line",
     };
@@ -392,7 +443,7 @@ describe("Difftastic extension", () => {
       },
       registerCommand: () => {},
     } as unknown as ExtensionAPI;
-    registerDifftasticExtension(pi, {
+    registerDeltaExtension(pi, {
       run: async (request) => {
         requests.push(request);
         return request.context === 2_000
@@ -444,14 +495,14 @@ describe("Difftastic extension", () => {
     expect(expanded.render(120).join("\n")).not.toContain("..\n");
   });
 
-  test("enables Difftastic edit previews from the settings option", async () => {
-    const root = await mkdtemp(join(tmpdir(), "pi-difftastic-test-"));
+  test("enables Delta edit previews from the dedicated config option", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-delta-test-"));
     const filePath = join(root, "sample.ts");
     await writeFile(filePath, "const value = 1;\n", "utf8");
 
     const tools = new Map<string, ToolDefinition>();
     let sessionStart: ((event: unknown, context: ExtensionContext) => void) | undefined;
-    const editDetails: DifftasticDetails = {
+    const editDetails: DeltaDetails = {
       ...details,
       output: "\u001b[91m1 const value = 1;\u001b[0m\n\u001b[92m1 const value = 2;\u001b[0m",
       scope: "edit changes",
@@ -470,12 +521,12 @@ describe("Difftastic extension", () => {
     } as unknown as ExtensionAPI;
 
     try {
-      registerDifftasticExtension(pi, {
+      registerDeltaExtension(pi, {
         editPreviews: () => true,
         run: async () => diffResult,
         runEdit: async (request) => {
           editRun = request;
-          if (failEditDiff) throw new Error("difft is unavailable");
+          if (failEditDiff) throw new Error("delta is unavailable");
           return editDetails;
         },
       });
@@ -497,7 +548,7 @@ describe("Difftastic extension", () => {
         path: "sample.ts",
       });
       expect(await readFile(filePath, "utf8")).toBe("const value = 2;\n");
-      expect(result.details).toMatchObject({ difftastic: editDetails });
+      expect(result.details).toMatchObject({ delta: editDetails });
 
       const renderResult = editTool.renderResult;
       if (renderResult === undefined) throw new Error("edit result renderer was not registered");
@@ -549,7 +600,7 @@ describe("Difftastic extension", () => {
         { cwd: root } as ExtensionContext,
       );
       expect(await readFile(filePath, "utf8")).toBe("const value = 3;\n");
-      expect(fallbackResult.details).not.toHaveProperty("difftastic");
+      expect(fallbackResult.details).not.toHaveProperty("delta");
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -566,7 +617,7 @@ describe("Difftastic extension", () => {
       },
       registerCommand: () => {},
     } as unknown as ExtensionAPI;
-    registerDifftasticExtension(pi, { run: async () => diffResult });
+    registerDeltaExtension(pi, { run: async () => diffResult });
 
     const renderCall = tool?.renderCall;
     if (renderCall === undefined) throw new Error("git_diff call renderer was not registered");
@@ -621,14 +672,14 @@ describe("Difftastic extension", () => {
       },
       appendEntry: () => {},
     } as unknown as ExtensionAPI;
-    registerDifftasticExtension(pi, {
+    registerDeltaExtension(pi, {
       run: async () => {
         runs += 1;
         return diffResult;
       },
     });
 
-    if (commandHandler === undefined) throw new Error("/difft command was not registered");
+    if (commandHandler === undefined) throw new Error("/delta command was not registered");
     await commandHandler("--help", {
       ui: {
         notify(message: string, level: string) {
@@ -641,7 +692,7 @@ describe("Difftastic extension", () => {
     expect(notifications).toEqual([
       {
         message:
-          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `editPreviews` to true in ~/.pi/agent/difftastic.json to use Difftastic for edit previews.",
+          "Usage: /delta\n\nShow unstaged working-tree changes using Delta.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `editPreviews` to true in ~/.pi/agent/delta.json to use Delta for edit previews.",
         level: "info",
       },
     ]);
