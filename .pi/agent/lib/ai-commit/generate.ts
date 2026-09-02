@@ -3,12 +3,18 @@ const FILE_SUMMARY_MAX_FILES = 8;
 const WORK_ITEM_PATTERNS = [
   /\bAB#(\d+)\b/iu,
   /\b#(\d+)\b/u,
-  /(?:^|[\/_-])(\d{4,})(?=$|[\/_-])/u,
+  /(?:^|[/_-])(\d{4,})(?=$|[/_-])/u,
   /\b(\d{4,})\b/u,
 ];
 const WORK_ITEM_SCOPE_PATTERN = /^AB#\d+$/u;
 const MODULE_SCOPE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/u;
-const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/u;
+
+function containsControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0);
+    return codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f);
+  });
+}
 
 export const COMMIT_TYPES = [
   "feat",
@@ -103,7 +109,7 @@ function normalizeCommit(value: unknown): ParseResult {
   const scope = value.scope.trim();
   if (
     scope.length === 0 ||
-    CONTROL_CHARACTER_PATTERN.test(scope) ||
+    containsControlCharacter(scope) ||
     (WORK_ITEM_SCOPE_PATTERN.test(scope) === false && MODULE_SCOPE_PATTERN.test(scope) === false)
   ) {
     return {
@@ -113,7 +119,7 @@ function normalizeCommit(value: unknown): ParseResult {
   }
 
   const subject = cleanSubject(value.subject.toLowerCase());
-  if (subject.length === 0 || CONTROL_CHARACTER_PATTERN.test(subject)) {
+  if (subject.length === 0 || containsControlCharacter(subject)) {
     return {
       ok: false,
       error: {

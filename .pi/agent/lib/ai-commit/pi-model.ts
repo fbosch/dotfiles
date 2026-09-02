@@ -6,7 +6,7 @@ import {
   resolveCliModel,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { authPathFor, resolveProfile } from "../../extensions/auth-profiles";
+import { authPathFor, resolveProfile } from "../../extensions/auth-profiles/profile-store";
 import { resolveFastModelRequest } from "../../extensions/openai-fast";
 import { COMMIT_SYSTEM_PROMPT, type CompleteCommitPrompt } from "./generate";
 

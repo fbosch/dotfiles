@@ -907,8 +907,15 @@ function createDifftasticEditTool(
       DifftasticEditRenderState
     >["renderResult"]
   > = (result, options, theme, context) => {
-    if (!context.isError && result.details?.difftastic !== undefined) {
-      return renderEditDifftasticResult(result, result.details.difftastic, options.expanded, theme);
+    const difftastic = result.details?.difftastic;
+    if (!context.isError && difftastic !== undefined) {
+      if (context.state.preview?.output === difftastic.output) {
+        const component =
+          context.lastComponent instanceof Container ? context.lastComponent : new Container();
+        component.clear();
+        return component;
+      }
+      return renderEditDifftasticResult(result, difftastic, options.expanded, theme);
     }
     return nativeRenderResult(result, options, theme, context);
   };
@@ -1036,7 +1043,10 @@ export function registerDifftasticExtension(
       },
 
       renderResult(result, { expanded }, theme) {
-        return diffComponent(result.details, expanded, theme);
+        const component = new Container();
+        component.addChild(new Spacer(1));
+        component.addChild(diffComponent(result.details, expanded, theme));
+        return component;
       },
     }),
   );

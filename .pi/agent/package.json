@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@toon-format/toon": "2.1.0",
+    "ts-pattern": "^5.9.0",
     "vscode-languageserver-protocol": "3.18.2"
   }
 }

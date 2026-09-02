@@ -41,6 +41,7 @@ interface MatchResult {
 }
 
 export interface LspOperationResult {
+  readonly diagnosticCount?: number;
   readonly matched: boolean;
   readonly text: string;
   readonly warnings: readonly string[];
@@ -124,6 +125,7 @@ export class LspServerManager {
       }
     }
     return {
+      diagnosticCount: diagnostics.length,
       matched: result.matches.length > 0,
       text: renderDiagnostics(this.projectRoot, diagnostics),
       warnings,

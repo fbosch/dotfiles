@@ -2,7 +2,8 @@
   "$schema": "./node_modules/fallow/schema.json",
   "entry": [
     "extensions/*.ts",
-    "extensions/*/index.ts"
+    "extensions/*/index.ts",
+    "lib/ai-commit/cli.ts"
   ],
   "ignoreDependencies": [
     "@earendil-works/pi-coding-agent",

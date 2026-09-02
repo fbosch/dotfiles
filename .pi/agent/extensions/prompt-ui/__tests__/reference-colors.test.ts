@@ -46,10 +46,10 @@ describe("prompt reference colors", () => {
       state,
       { rules: new Map(), lengths: new Set() },
     );
-    editor.setText("check this @.pi/agent/extensions/mentions/project-references.ts");
+    editor.setText("check this @.pi/agent/extensions/mentions/project-references/index.ts");
 
     expect(editor.render(100).join("\n")).toContain(
-      `${theme.getFgAnsi("warning")}@.pi/agent/extensions/mentions/project-references.ts`,
+      `${theme.getFgAnsi("warning")}@.pi/agent/extensions/mentions/project-references/index.ts`,
     );
     editor.dispose();
   });

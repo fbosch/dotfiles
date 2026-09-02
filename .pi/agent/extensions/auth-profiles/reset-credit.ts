@@ -1,12 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { rmSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import {
   DEFAULT_PROFILE,
-  authPathFor,
   listProfiles,
   normalizeName,
   publishWezTermChange,
-  readJsonFile,
 } from "./profile-store";
 
 const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
@@ -53,6 +54,12 @@ type CommandOptions = {
 
 class CommandInputError extends Error {}
 
+class ResetCreditRequestError extends Error {
+  constructor(readonly status: number) {
+    super(`reset credit request failed with ${status}`);
+  }
+}
+
 function parseCommandOptions(args: string): CommandOptions {
   const tokens = args.trim() ? args.trim().split(/\s+/) : [];
   let dryRun = false;
@@ -72,8 +79,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function boundedText(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
-  const text = value
-    .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+  const text = [...value]
+    .map((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? " " : character;
+    })
+    .join("")
     .replace(/\s+/g, " ")
     .trim();
   return text ? text.slice(0, maxLength) : null;
@@ -96,8 +107,11 @@ function parseResetCredits(payload: unknown): ResetCredits {
   const credits = Array.isArray(payload.credits)
     ? payload.credits.flatMap((value): ResetCredit[] => {
         if (!isRecord(value)) return [];
-        const id = boundedText(value.id, 512);
-        if (!id) return [];
+        const id =
+          typeof value.id === "string" && value.id.length > 0 && value.id.length <= 512
+            ? value.id
+            : undefined;
+        if (id === undefined) return [];
         return [
           {
             id,
@@ -150,9 +164,32 @@ async function requestResetCredits(
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`reset credit request failed with ${response.status}`);
+    throw new ResetCreditRequestError(response.status);
   }
   return parseResetCredits(await readBoundedJson(response));
+}
+
+async function requestProfileCredits(
+  profile: string,
+  ctx: ExtensionCommandContext,
+  resolveCredential: ResolveCredential,
+  fetchFn: FetchFn,
+  credential?: ResetCredential,
+): Promise<{ credential: ResetCredential; credits: ResetCredits }> {
+  const initialCredential = credential ?? (await resolveCredential(profile, ctx));
+  try {
+    return {
+      credential: initialCredential,
+      credits: await requestResetCredits(initialCredential, fetchFn),
+    };
+  } catch (error) {
+    if (!(error instanceof ResetCreditRequestError) || error.status !== 401) throw error;
+    const refreshedCredential = await resolveCredential(profile, ctx);
+    return {
+      credential: refreshedCredential,
+      credits: await requestResetCredits(refreshedCredential, fetchFn),
+    };
+  }
 }
 
 function durationUntil(expiresAt: string | null, now: number): string {
@@ -176,14 +213,13 @@ function profileLabel(profile: string, credits: ResetCredits): string {
 }
 
 function usageCachePath(): string {
-  const cacheHome = process.env.XDG_CACHE_HOME || `${process.env.HOME ?? ""}/.cache`;
-  return `${cacheHome}/${USAGE_CACHE_DIR}/${USAGE_CACHE_PATH}`;
+  const cacheHome = process.env.XDG_CACHE_HOME || `${homedir()}/.cache`;
+  return join(cacheHome, USAGE_CACHE_DIR, USAGE_CACHE_PATH);
 }
 
 function invalidateUsageCache(path: string): void {
   try {
-    const fs = require("node:fs") as typeof import("node:fs");
-    fs.rmSync(path, { force: true });
+    rmSync(path, { force: true });
   } catch {
     // A stale status snapshot is harmless; the reset response remains authoritative.
   }
@@ -235,6 +271,7 @@ function summarizeErrors(errors: string[]): string {
 async function chooseProfile(
   profiles: string[],
   ctx: ExtensionCommandContext,
+  resolveCredential: ResolveCredential,
   fetchFn: FetchFn,
 ): Promise<{ profile: string; credential: ResetCredential; credits: ResetCredits } | undefined> {
   const available: Array<{ profile: string; credential: ResetCredential; credits: ResetCredits }> =
@@ -242,9 +279,10 @@ async function chooseProfile(
   const errors: string[] = [];
   for (const profile of profiles) {
     try {
-      const credential = await ctx.resolveCredential(profile, ctx);
-      const credits = await requestResetCredits(credential, fetchFn);
-      if (availableCredits(credits).length > 0) available.push({ profile, credential, credits });
+      const result = await requestProfileCredits(profile, ctx, resolveCredential, fetchFn);
+      if (availableCredits(result.credits).length > 0) {
+        available.push({ profile, ...result });
+      }
     } catch {
       errors.push(profile);
     }
@@ -312,18 +350,18 @@ export function registerResetCreditCommand(
 
       const fetchFn = options.fetchFn ?? fetch;
       try {
-        const selected = await chooseProfile(
-          profiles,
-          {
-            ...ctx,
-            resolveCredential: options.resolveCredential,
-          } as ExtensionCommandContext & { resolveCredential: ResolveCredential },
-          fetchFn,
-        );
+        const selected = await chooseProfile(profiles, ctx, options.resolveCredential, fetchFn);
         if (!selected) return;
 
-        const fresh = await requestResetCredits(selected.credential, fetchFn);
-        const credits = availableCredits(fresh);
+        const fresh = await requestProfileCredits(
+          selected.profile,
+          ctx,
+          options.resolveCredential,
+          fetchFn,
+          selected.credential,
+        );
+        let selectedCredential = fresh.credential;
+        const credits = availableCredits(fresh.credits);
         if (credits.length === 0) {
           ctx.ui.notify(`No reset credits remain for profile ${selected.profile}.`, "warning");
           return;
@@ -359,8 +397,15 @@ export function registerResetCreditCommand(
           return;
         }
 
-        const final = await requestResetCredits(selected.credential, fetchFn);
-        const stillAvailable = final.credits.find(
+        const final = await requestProfileCredits(
+          selected.profile,
+          ctx,
+          options.resolveCredential,
+          fetchFn,
+          selectedCredential,
+        );
+        selectedCredential = final.credential;
+        const stillAvailable = final.credits.credits.find(
           (candidate) => candidate.id === credit.id && candidate.status === "available",
         );
         if (!stillAvailable) {
@@ -373,7 +418,7 @@ export function registerResetCreditCommand(
 
         let result: { code: string | null; windowsReset: number | null };
         try {
-          result = await consumeResetCredit(selected.credential, credit.id, fetchFn);
+          result = await consumeResetCredit(selectedCredential, credit.id, fetchFn);
         } catch (error) {
           ctx.ui.notify(
             `${error instanceof Error ? error.message : String(error)}\nConsumption may have reached the server; inspect /reset-credit before retrying.`,

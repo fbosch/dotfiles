@@ -15,10 +15,10 @@ import {
 } from "../mentions/agent-mentions";
 import {
   assertNoAgentMentionCollisions,
+  formatAnsiReferenceMentions,
   loadProjectReferences,
   type ProjectReference,
 } from "../mentions/project-references";
-import { formatAnsiReferenceMentions } from "../mentions/reference-mentions";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {

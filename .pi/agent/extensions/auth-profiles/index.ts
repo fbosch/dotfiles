@@ -9,19 +9,23 @@
 
 import { existsSync } from "node:fs";
 import {
-  DEFAULT_PROFILE,
-  PROFILE_STATUS_KEY,
   authPathFor,
+  DEFAULT_PROFILE,
   globalConfigPath,
   listProfiles,
   normalizeName,
+  PROFILE_STATUS_KEY,
   projectSettingsPath,
   providersIn,
   publishWezTermChange,
+  readJsonFile,
   resolveProfile,
   updateJsonFile,
 } from "./profile-store";
 import { registerResetCreditCommand } from "./reset-credit";
+
+export { authPathFor, resolveProfile } from "./profile-store";
+
 /**
  * auth-profiles — per-project OAuth/API-key credential profiles for pi.
  *
@@ -44,6 +48,7 @@ import { registerResetCreditCommand } from "./reset-credit";
  *   /profile use <name>      set this project's profile (writes .pi/settings.json)
  *   /profile default <name>  set the global fallback profile
  *   /profile clear           remove this project's profile setting
+ *   /reset-credit [--dry-run] select and consume an earned reset credit
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
@@ -99,6 +104,40 @@ export default function authProfiles(pi: ExtensionAPI): void {
     ctx.ui.setStatus(PROFILE_STATUS_KEY, profile);
     publishWezTermChange(ctx, "profile", profile);
     return { profile, source, path };
+  };
+
+  const resolveProfileCredential = async (
+    profile: string,
+    ctx: ExtensionContext,
+  ): Promise<{ accessToken: string; accountId: string }> => {
+    const previousProfile = activeProfile;
+    const profileWasSwitched = previousProfile !== profile;
+    if (profileWasSwitched) {
+      await bindProfile(ctx, profile);
+    }
+
+    try {
+      const resolved = await ctx.modelRegistry.getProviderAuth("openai-codex");
+      const stored = readJsonFile(authPathFor(profile))?.["openai-codex"];
+      const storedRecord =
+        typeof stored === "object" && stored !== null && !Array.isArray(stored)
+          ? (stored as Record<string, unknown>)
+          : undefined;
+      const accountId =
+        typeof storedRecord?.accountId === "string" &&
+        /^[A-Za-z0-9._-]{1,200}$/.test(storedRecord.accountId)
+          ? storedRecord.accountId
+          : undefined;
+      const accessToken = resolved?.auth.apiKey;
+      if (typeof accessToken !== "string" || accessToken.length === 0 || accountId === undefined) {
+        throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
+      }
+      return { accessToken, accountId };
+    } finally {
+      if (profileWasSwitched) {
+        await bindProfile(ctx, previousProfile);
+      }
+    }
   };
 
   pi.on("session_start", async (_event, ctx) => {
@@ -204,5 +243,5 @@ export default function authProfiles(pi: ExtensionAPI): void {
     },
   });
 
-  registerResetCreditCommand(pi);
+  registerResetCreditCommand(pi, { resolveCredential: resolveProfileCredential });
 }

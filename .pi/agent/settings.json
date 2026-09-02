@@ -20,7 +20,7 @@
     "--save-exact"
   ],
   "compactionModel": {
-    "model": "openai-codex/gpt-5.6-luna-fast",
+    "model": "openai-codex/gpt-5.6-luna",
     "thinkingLevel": "low",
     "reasons": [
       "manual",

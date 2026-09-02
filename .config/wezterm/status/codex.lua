@@ -175,7 +175,7 @@ local function append(items, pane)
 end
 
 local function handle_user_var(name)
-	if name == "pi_profile_changed" then
+	if name == "pi_profile_changed" or name == "pi_usage_changed" then
 		profile_status.checked_at = 0
 		return true
 	end

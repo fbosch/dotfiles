@@ -247,8 +247,8 @@ assert_eq(type(captured_status), "table", "profile change rerenders status")
 
 mock_credit_count = 1
 captured_status = nil
-user_var_changed(window, active_pane, "pi_profile_changed")
-assert_eq(find_text(captured_status, "¹"), true, "profile refresh updates credit count")
+user_var_changed(window, active_pane, "pi_usage_changed")
+assert_eq(find_text(captured_status, "¹"), true, "usage refresh updates credit count")
 
 mock_credit_count = 0
 captured_status = nil

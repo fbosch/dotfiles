@@ -10,6 +10,7 @@ import {
   SettingsManager,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
+import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { type LspOperationResult, LspServerManager } from "./server-manager";
 import { DEFAULT_LSP_TIMEOUTS, type ResolvedLspSettings, resolveLspSettings } from "./settings";
@@ -143,32 +144,33 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           executionMode: "sequential",
 
           async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-            if (ctx.isProjectTrusted() === false || manager === undefined) {
+            const activeManager = manager;
+            if (ctx.isProjectTrusted() === false || activeManager === undefined) {
               throw new Error("LSP integration is unavailable until the project is trusted");
             }
             if (params.operation === "status") {
               return {
-                content: [{ type: "text", text: manager.status() }],
+                content: [{ type: "text", text: activeManager.status() }],
                 details: { operation: params.operation, warnings: [] },
               };
             }
 
-            let result: LspOperationResult;
-            if (params.operation === "diagnostics") {
-              result = await manager.diagnostics(params.path, signal);
-            } else if (params.operation === "hover") {
-              result = await manager.hover(params.path, params.line, params.column, signal);
-            } else if (params.operation === "goto_definition") {
-              result = await manager.definition(params.path, params.line, params.column, signal);
-            } else {
-              result = await manager.references(
-                params.path,
-                params.line,
-                params.column,
-                params.includeDeclaration ?? true,
-                signal,
-              );
-            }
+            const result: LspOperationResult = await match(params)
+              .with({ operation: "diagnostics" }, ({ path }) =>
+                activeManager.diagnostics(path, signal),
+              )
+              .with({ operation: "hover" }, ({ path, line, column }) =>
+                activeManager.hover(path, line, column, signal),
+              )
+              .with({ operation: "goto_definition" }, ({ path, line, column }) =>
+                activeManager.definition(path, line, column, signal),
+              )
+              .with(
+                { operation: "find_references" },
+                ({ path, line, column, includeDeclaration }) =>
+                  activeManager.references(path, line, column, includeDeclaration ?? true, signal),
+              )
+              .exhaustive();
             assertMatched(result);
             return {
               content: [{ type: "text", text: resultText(result) }],
@@ -200,6 +202,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       if (path === undefined) return;
       pendingMutations.delete(event.message.toolCallId);
       const result = await manager.diagnostics(path, context.signal, true);
+      if (result.diagnosticCount === 0 && result.warnings.length === 0) return;
       if (result.matched === false && result.warnings.length === 0) return;
       return {
         message: {

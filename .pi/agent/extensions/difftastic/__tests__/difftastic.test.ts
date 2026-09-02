@@ -301,6 +301,31 @@ describe("Difftastic extension", () => {
     expect(commandHandler).toBeDefined();
     expect(tool.name).toBe("git_diff");
     expect(toolResult.content[0]).toEqual({ type: "text", text: diffResult.content });
+
+    const renderResult = tool.renderResult;
+    if (renderResult === undefined) throw new Error("git_diff result renderer was not registered");
+    const theme = {
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+      getFgAnsi: (color: string) => `<${color}>`,
+    } as Theme;
+    const rendered = renderResult(toolResult, { expanded: false, isPartial: false }, theme, {
+      args: {},
+      argsComplete: true,
+      cwd: "/repo",
+      executionStarted: true,
+      expanded: false,
+      invalidate: () => {},
+      isError: false,
+      isPartial: false,
+      lastComponent: undefined,
+      showImages: false,
+      state: {},
+      toolCallId: "diff-1",
+    }).render(24);
+
+    expect(rendered[0]).toBe("");
+    expect(rendered.slice(1).every((line) => visibleWidth(line) <= 24)).toBeTrue();
   });
 
   test("enables Difftastic edit previews from the settings option", async () => {
@@ -382,6 +407,22 @@ describe("Difftastic extension", () => {
       } as Parameters<typeof renderResult>[3]);
 
       expect(rendered.render(120).join("\n")).toContain("const value = 2;");
+
+      const deduplicated = renderResult(result, { expanded: true, isPartial: false }, theme, {
+        args: { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
+        argsComplete: true,
+        cwd: root,
+        executionStarted: true,
+        expanded: true,
+        invalidate: () => {},
+        isError: false,
+        isPartial: false,
+        lastComponent: rendered,
+        showImages: false,
+        state: { preview: editDetails },
+        toolCallId: "edit-1",
+      } as Parameters<typeof renderResult>[3]);
+      expect(deduplicated.render(120)).toEqual([]);
 
       failEditDiff = true;
       const fallbackResult = await editTool.execute(

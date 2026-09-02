@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import {
   buildCommitPrompt,
   detectWorkItemScope,
+  type GitContext,
   generateCommit,
   parseAndValidateCommit,
-  type GitContext,
 } from "../generate";
 
 const context: GitContext = {

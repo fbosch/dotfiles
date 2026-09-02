@@ -1,8 +1,8 @@
 import {
-  generateCommit,
   type GeneratedCommit,
   type GenerateOptions,
   type GitContext,
+  generateCommit,
 } from "./generate";
 import { createPiCommitModel } from "./pi-model";
 

@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { basename, delimiter, dirname, extname, isAbsolute, resolve } from "node:path";
+import { match } from "ts-pattern";
 import type { FormatterExecutionResult } from "./command-runner";
 import type { FormatterCommand, FormatterRule, ResolvedFormatterSettings } from "./settings";
 
@@ -111,21 +112,28 @@ function failureMessage(
   filePath: string,
   result: FormatterExecutionResult,
 ): string | undefined {
-  if (result.kind === "success") return undefined;
-  if (result.kind === "spawn_error") {
-    return `Formatter ${rule.id}: unable to start ${command.command} for ${filePath}: ${result.message}`;
-  }
-  if (result.kind === "timeout") {
-    return `Formatter ${rule.id}: ${command.command} timed out after ${result.timeoutMs}ms for ${filePath}${result.stderr === "" ? "" : `: ${result.stderr}`}`;
-  }
-  if (result.kind === "cancelled") {
-    return `Formatter ${rule.id}: ${command.command} cancelled for ${filePath}${result.stderr === "" ? "" : `: ${result.stderr}`}`;
-  }
-  const status =
-    result.exitCode === null
-      ? `signal ${result.signal ?? "unknown"}`
-      : `exit code ${result.exitCode}`;
-  return `Formatter ${rule.id}: ${command.command} failed for ${filePath} (${status})${result.stderr === "" ? "" : `: ${result.stderr}`}`;
+  return match(result)
+    .with({ kind: "success" }, () => undefined)
+    .with(
+      { kind: "spawn_error" },
+      ({ message }) =>
+        `Formatter ${rule.id}: unable to start ${command.command} for ${filePath}: ${message}`,
+    )
+    .with(
+      { kind: "timeout" },
+      ({ stderr, timeoutMs }) =>
+        `Formatter ${rule.id}: ${command.command} timed out after ${timeoutMs}ms for ${filePath}${stderr === "" ? "" : `: ${stderr}`}`,
+    )
+    .with(
+      { kind: "cancelled" },
+      ({ stderr }) =>
+        `Formatter ${rule.id}: ${command.command} cancelled for ${filePath}${stderr === "" ? "" : `: ${stderr}`}`,
+    )
+    .with({ kind: "exit_error" }, ({ exitCode, signal, stderr }) => {
+      const status = exitCode === null ? `signal ${signal ?? "unknown"}` : `exit code ${exitCode}`;
+      return `Formatter ${rule.id}: ${command.command} failed for ${filePath} (${status})${stderr === "" ? "" : `: ${stderr}`}`;
+    })
+    .exhaustive();
 }
 
 async function runCommand(

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { formatAnsiReferenceMentions, formatReferenceMentions } from "../reference-mentions";
+import { formatAnsiReferenceMentions, formatReferenceMentions } from "../project-references";
 
 const temporaryDirectories: string[] = [];
 
