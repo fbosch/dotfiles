@@ -1,121 +1,65 @@
-import { randomUUID } from "node:crypto";
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  getAgentDir,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const PERMISSION_SYSTEM_STATUS_KEY = "pi-permission-system";
 export const YOLO_STATUS_TEXT = "󱚝 yolo";
-const PERMISSION_SYSTEM_CONFIG_DIRECTORY = "pi-permission-system";
+
+const YOLO_MODE_ENTRY_TYPE = "yolo-mode";
+const SESSION_YOLO_AUTHORIZER = "session-yolo";
+const PERMISSIONS_READY_CHANNEL = "permissions:ready";
+// shortcut: Pi isolates npm package module roots, so use the pinned package
+// source URL for its documented service accessor until local extensions share
+// the package resolution root.
+const PERMISSION_SERVICE_MODULE_URL = new URL(
+  "../npm/node_modules/@gotgenes/pi-permission-system/src/service.ts",
+  import.meta.url,
+).href;
+
+interface PersistedYoloMode {
+  sessionId: string;
+  enabled: boolean;
+}
+
+type SessionYoloVerdict = { kind: "allow" } | { kind: "defer" };
+
+type SessionYoloAuthorizer = (...args: never[]) => Promise<SessionYoloVerdict>;
+
+interface SessionYoloPermissions {
+  registerAuthorizer(name: string, authorize: SessionYoloAuthorizer): () => void;
+}
+
+interface PermissionSystemServiceModule {
+  getPermissionsService(sessionId: string): SessionYoloPermissions | undefined;
+}
 
 export interface YoloModeToggleResult {
   enabled: boolean;
-  configPath: string;
-}
-
-export function permissionSystemConfigPath(agentDirectory = getAgentDir()): string {
-  return join(agentDirectory, "extensions", PERMISSION_SYSTEM_CONFIG_DIRECTORY, "config.json");
-}
-
-function stripJsonComments(input: string): string {
-  let output = "";
-  let inString = false;
-  let escaped = false;
-
-  for (let index = 0; index < input.length; index += 1) {
-    const character = input[index];
-    const nextCharacter = input[index + 1];
-
-    if (inString) {
-      output += character;
-      if (escaped) {
-        escaped = false;
-      } else if (character === "\\") {
-        escaped = true;
-      } else if (character === '"') {
-        inString = false;
-      }
-      continue;
-    }
-
-    if (character === '"') {
-      inString = true;
-      output += character;
-      continue;
-    }
-
-    if (character === "/" && nextCharacter === "/") {
-      index += 2;
-      while (index < input.length && input[index] !== "\n") index += 1;
-      if (index < input.length) output += "\n";
-      continue;
-    }
-
-    if (character === "/" && nextCharacter === "*") {
-      index += 2;
-      while (index < input.length && !(input[index] === "*" && input[index + 1] === "/")) {
-        if (input[index] === "\n") output += "\n";
-        index += 1;
-      }
-      index += 1;
-      continue;
-    }
-
-    output += character;
-  }
-
-  return output;
+  sessionId: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
-function readConfig(configPath: string): Record<string, unknown> {
-  let raw: string;
-  try {
-    raw = readFileSync(configPath, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
-    throw new Error(
-      `Cannot load permission-system config from ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stripJsonComments(raw)) as unknown;
-  } catch (error) {
-    throw new Error(
-      `Cannot load permission-system config from ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  }
-
-  if (isRecord(parsed) === false) {
-    throw new Error(`Permission-system config at ${configPath} must contain a JSON object.`);
-  }
-
-  return parsed;
+function getSessionId(ctx: Pick<ExtensionContext, "sessionManager">): string | undefined {
+  return ctx.sessionManager.getHeader()?.id;
 }
 
-export function isYoloModeEnabled(agentDirectory = getAgentDir()): boolean {
-  try {
-    return readConfig(permissionSystemConfigPath(agentDirectory)).yoloMode === true;
-  } catch {
-    // A config that cannot be read must never cause an approval to be granted.
-    return false;
+function restoreYoloMode(ctx: Pick<ExtensionContext, "sessionManager">): boolean {
+  const sessionId = getSessionId(ctx);
+  if (sessionId === undefined) return false;
+
+  let enabled = false;
+  for (const entry of ctx.sessionManager.getEntries()) {
+    if (entry.type !== "custom" || entry.customType !== YOLO_MODE_ENTRY_TYPE) continue;
+    if (isRecord(entry.data) === false || entry.data.sessionId !== sessionId) continue;
+    if (typeof entry.data.enabled !== "boolean") continue;
+    enabled = entry.data.enabled;
   }
+  return enabled;
+}
+
+export function isYoloModeEnabled(ctx?: Pick<ExtensionContext, "sessionManager">): boolean {
+  return ctx === undefined ? false : restoreYoloMode(ctx);
 }
 
 function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): void {
@@ -125,56 +69,87 @@ function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): voi
   );
 }
 
-function writeConfig(configPath: string, config: Record<string, unknown>): void {
-  const temporaryPath = `${configPath}.${process.pid}.${randomUUID()}.tmp`;
-  let mode = 0o600;
-  try {
-    mode = statSync(configPath).mode & 0o777;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-
-  try {
-    mkdirSync(dirname(configPath), { recursive: true });
-    writeFileSync(temporaryPath, `${JSON.stringify(config, null, 2)}\n`, {
-      encoding: "utf8",
-      mode,
-    });
-    renameSync(temporaryPath, configPath);
-  } catch (error) {
-    throw new Error(
-      `Failed to save permission-system config at ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  } finally {
-    try {
-      if (existsSync(temporaryPath)) unlinkSync(temporaryPath);
-    } catch {
-      // The successful rename already removed the temporary file.
-    }
-  }
+function readySessionId(value: unknown): string | undefined {
+  if (isRecord(value) === false || typeof value.sessionId !== "string") return undefined;
+  return value.sessionId;
 }
 
-export function toggleYoloMode(agentDirectory = getAgentDir()): YoloModeToggleResult {
-  const configPath = permissionSystemConfigPath(agentDirectory);
-  const config = readConfig(configPath);
-  const current = config.yoloMode;
-  if (current !== undefined && typeof current !== "boolean") {
-    throw new Error(`Permission-system config field 'yoloMode' must be a boolean.`);
+async function registerSessionYoloAuthorizer(
+  sessionId: string,
+  enabled: () => boolean,
+): Promise<() => void> {
+  const serviceModule = (await import(
+    PERMISSION_SERVICE_MODULE_URL
+  )) as PermissionSystemServiceModule;
+  const permissions = serviceModule.getPermissionsService(sessionId);
+  if (permissions === undefined) {
+    throw new Error(`Permission service is unavailable for session '${sessionId}'.`);
   }
 
-  const enabled = current !== true;
-  config.yoloMode = enabled;
-  writeConfig(configPath, config);
-  return { enabled, configPath };
+  return permissions.registerAuthorizer(SESSION_YOLO_AUTHORIZER, async () =>
+    enabled() ? { kind: "allow" } : { kind: "defer" },
+  );
 }
 
-export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
+export function registerYoloCommand(pi: ExtensionAPI): void {
+  let enabled = false;
+  let activeContext: ExtensionContext | undefined;
+  let disposeAuthorizer: (() => void) | undefined;
+  let registrationInFlight = false;
+  let lifecycleGeneration = 0;
+
   pi.on("session_start", (_event, ctx) => {
-    setYoloStatus(ctx, isYoloModeEnabled(agentDirectory));
+    lifecycleGeneration += 1;
+    registrationInFlight = false;
+    activeContext = ctx;
+    enabled = isYoloModeEnabled(ctx);
+    setYoloStatus(ctx, enabled);
+  });
+
+  pi.events.on(PERMISSIONS_READY_CHANNEL, (value: unknown) => {
+    const sessionId = readySessionId(value);
+    const activeSessionId = activeContext === undefined ? undefined : getSessionId(activeContext);
+    if (sessionId === undefined || sessionId !== activeSessionId) return;
+
+    // The permission package refreshes its plain status during session_start;
+    // republish ours after its lifecycle event and register the session link.
+    if (activeContext !== undefined) setYoloStatus(activeContext, enabled);
+    if (disposeAuthorizer !== undefined || registrationInFlight) return;
+
+    const generation = lifecycleGeneration;
+    registrationInFlight = true;
+    void registerSessionYoloAuthorizer(sessionId, () => enabled)
+      .then((dispose) => {
+        if (generation !== lifecycleGeneration) {
+          dispose();
+          return;
+        }
+        disposeAuthorizer = dispose;
+      })
+      .catch((error: unknown) => {
+        if (generation === lifecycleGeneration) {
+          activeContext?.ui.notify(
+            `Could not register session YOLO authorization: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+        }
+      })
+      .finally(() => {
+        if (generation === lifecycleGeneration) registrationInFlight = false;
+      });
+  });
+
+  pi.on("session_shutdown", () => {
+    lifecycleGeneration += 1;
+    registrationInFlight = false;
+    disposeAuthorizer?.();
+    disposeAuthorizer = undefined;
+    activeContext = undefined;
+    enabled = false;
   });
 
   pi.registerCommand("yolo", {
-    description: "Toggle global YOLO mode for permission checks",
+    description: "Toggle YOLO mode for the current session",
     handler: async (args, ctx) => {
       if (args.trim() !== "") {
         ctx.ui.notify("Usage: /yolo", "warning");
@@ -182,15 +157,25 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
       }
 
       try {
-        const result = toggleYoloMode(agentDirectory);
-        setYoloStatus(ctx, result.enabled);
+        const sessionId = getSessionId(ctx);
+        if (sessionId === undefined) {
+          ctx.ui.notify("Cannot toggle YOLO without an active session.", "error");
+          return;
+        }
+
+        const nextEnabled = !enabled;
+        pi.appendEntry<PersistedYoloMode>(YOLO_MODE_ENTRY_TYPE, {
+          sessionId,
+          enabled: nextEnabled,
+        });
+        enabled = nextEnabled;
+        setYoloStatus(ctx, enabled);
         ctx.ui.notify(
-          result.enabled
-            ? "Global YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."
-            : "Global YOLO mode disabled. Ask-state permission checks and MCP tool approvals prompt when required.",
-          result.enabled ? "warning" : "info",
+          enabled
+            ? "Session YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."
+            : "Session YOLO mode disabled. Ask-state permission checks and MCP tool approvals prompt when required.",
+          enabled ? "warning" : "info",
         );
-        return;
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
       }
@@ -199,5 +184,5 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
 }
 
 export default function yoloMode(pi: ExtensionAPI): void {
-  registerYoloCommand(pi, getAgentDir());
+  registerYoloCommand(pi);
 }

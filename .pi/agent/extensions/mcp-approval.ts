@@ -19,7 +19,7 @@ export interface McpToolApprovalRequest {
 }
 
 export interface McpApprovalRoutingDependencies {
-  isYoloModeEnabled(): boolean;
+  isYoloModeEnabled(ctx?: ExtensionContext): boolean;
 }
 
 const defaultDependencies: McpApprovalRoutingDependencies = {
@@ -84,7 +84,7 @@ function routeApprovalRequest(
   dependencies: McpApprovalRoutingDependencies,
 ): boolean {
   if (!isMcpToolApprovalRequest(value)) return false;
-  if (dependencies.isYoloModeEnabled()) {
+  if (dependencies.isYoloModeEnabled(ctx)) {
     // Keep approvals uncached so disabling YOLO affects the next request.
     return value.claim(() => "allow_once");
   }

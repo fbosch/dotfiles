@@ -2,8 +2,11 @@
   "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/pi-permission-system-v29.0.0/packages/pi-permission-system/schemas/permissions.schema.json",
   "debugLog": false,
   "permissionReviewLog": false,
-  "yoloMode": true,
+  "yoloMode": false,
   "doublePressToConfirm": false,
+  "authorizerChain": [
+    "session-yolo"
+  ],
   "piInfrastructureReadPaths": [
     "~/.agents/skills/*",
     "/nix/store"
