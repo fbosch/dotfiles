@@ -40,7 +40,7 @@ _install-ags-dependencies:
 
 # Install all managed dependencies and build first-use artifacts.
 [group('dependencies')]
-install-all: install-ags install-fbb install-fish-libexec install-opencode install-opencode-plugins install-vicinae
+install-all: install-ags install-fbb install-fish-libexec install-opencode install-opencode-plugins install-pi install-vicinae
 
 # Install OpenCode dependencies.
 [group('dependencies')]
@@ -51,6 +51,11 @@ install-opencode:
 [group('dependencies')]
 install-opencode-plugins:
     bun install --frozen-lockfile --cwd .config/opencode/plugins
+
+# Install Pi extension dependencies.
+[group('dependencies')]
+install-pi:
+    bun install --frozen-lockfile --cwd .pi/agent
 
 # Install dependencies and build all Vicinae extensions for first use.
 [group('dependencies')]
