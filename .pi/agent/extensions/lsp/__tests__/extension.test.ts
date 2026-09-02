@@ -79,3 +79,48 @@ test("appends diagnostics from the finalized post-format tool result", async () 
     "LSP diagnostics after formatting:\nLSP diagnostics: none",
   ]);
 });
+
+test("warms LSP diagnostics once after a successful native file read", async () => {
+  const handlers = new Map<string, Handler>();
+  const warmedPaths: string[] = [];
+  const fakeManager = {
+    warm: async (path: string) => {
+      warmedPaths.push(path);
+    },
+    shutdown: async () => {},
+    status: () => "ready",
+  } as unknown as LspServerManager;
+  const settings: ResolvedLspSettings = {
+    servers: [],
+    timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+    warnings: [],
+  };
+  const pi = {
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    registerTool() {},
+  } as unknown as ExtensionAPI;
+  const context = {
+    cwd: "/project",
+    isProjectTrusted: () => true,
+    signal: undefined,
+    ui: { notify() {} },
+  } as unknown as ExtensionContext;
+  createLspExtension({ createManager: async () => fakeManager, readSettings: () => settings })(pi);
+  await handlers.get("session_start")?.({} as never, context);
+
+  const readResult = {
+    type: "tool_result",
+    toolCallId: "read-1",
+    toolName: "read",
+    input: { path: "src/example.ts" },
+    content: [{ type: "text", text: "source" }],
+    details: undefined,
+    isError: false,
+  } as ToolResultEvent;
+  expect(await handlers.get("tool_result")?.(readResult as never, context)).toBeUndefined();
+  await handlers.get("tool_result")?.({ ...readResult, toolCallId: "read-2" } as never, context);
+
+  expect(warmedPaths).toEqual(["src/example.ts"]);
+});

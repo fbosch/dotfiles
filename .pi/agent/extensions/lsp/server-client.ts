@@ -143,6 +143,7 @@ export class LspServerClient {
     Set<(params: PublishDiagnosticsParams) => void>
   >();
   private readonly documents = new Map<string, OpenDocument>();
+  private readonly warmups = new Map<string, Promise<void>>();
   private capabilities: InitializeResult["capabilities"] | undefined;
   private error: string | undefined;
   private exited = false;
@@ -330,11 +331,29 @@ export class LspServerClient {
     }
   }
 
+  async warm(document: ProjectFile): Promise<void> {
+    const uri = pathToFileURL(document.canonicalPath).href;
+    const existing = this.warmups.get(uri);
+    if (existing !== undefined) return existing;
+    const warming = (async () => {
+      await this.synchronize(document);
+      if (this.capabilities?.diagnosticProvider) return;
+      await new Promise((resolve) => setTimeout(resolve, PUSH_SERVER_WARMUP_MS));
+    })();
+    this.warmups.set(uri, warming);
+    try {
+      await warming;
+    } finally {
+      if (this.warmups.get(uri) === warming) this.warmups.delete(uri);
+    }
+  }
+
   async freshDiagnostics(
     document: ProjectFile,
     signal: AbortSignal | undefined,
   ): Promise<readonly Diagnostic[]> {
     const uri = pathToFileURL(document.canonicalPath).href;
+    await this.warmups.get(uri);
     if (this.capabilities?.diagnosticProvider) {
       await this.synchronize(document);
       const report = await this.request<DocumentDiagnosticReport>(
@@ -473,6 +492,7 @@ export class LspServerClient {
     this.state = "stopped";
     this.documents.clear();
     this.diagnostics.clear();
+    this.warmups.clear();
   }
 
   private assertReady(): void {

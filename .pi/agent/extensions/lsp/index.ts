@@ -1,9 +1,11 @@
+import { resolve } from "node:path";
 import {
   defineTool,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
   isEditToolResult,
+  isReadToolResult,
   isWriteToolResult,
   SettingsManager,
   type ToolResultEvent,
@@ -64,6 +66,12 @@ function mutationPath(event: ToolResultEvent): string | undefined {
   return typeof path === "string" ? path : undefined;
 }
 
+function readPath(event: ToolResultEvent): string | undefined {
+  if (event.isError || isReadToolResult(event) === false) return undefined;
+  const path = event.input.path;
+  return typeof path === "string" ? path : undefined;
+}
+
 export function loadLspSettings(
   context: ExtensionContext,
   agentDirectory = getAgentDir(),
@@ -104,6 +112,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     let manager: LspServerManager | undefined;
     let toolRegistered = false;
     const pendingMutations = new Map<string, string>();
+    const warmedPaths = new Set<string>();
 
     pi.on("session_start", async (_event, context) => {
       const settings = (dependencies.readSettings ?? loadLspSettings)(context);
@@ -172,8 +181,16 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
 
     pi.on("tool_result", (event, context) => {
       if (context.isProjectTrusted() === false) return;
-      const path = mutationPath(event);
-      if (path !== undefined) pendingMutations.set(event.toolCallId, path);
+      const path = readPath(event);
+      if (path !== undefined && manager !== undefined) {
+        const key = resolve(context.cwd, path);
+        if (warmedPaths.has(key) === false) {
+          warmedPaths.add(key);
+          void manager.warm(path).catch(() => undefined);
+        }
+      }
+      const changedPath = mutationPath(event);
+      if (changedPath !== undefined) pendingMutations.set(event.toolCallId, changedPath);
     });
 
     // Final tool-result messages are emitted only after every tool_result middleware has settled.
@@ -197,6 +214,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
 
     pi.on("session_shutdown", async () => {
       pendingMutations.clear();
+      warmedPaths.clear();
       const current = manager;
       manager = undefined;
       await current?.shutdown();
