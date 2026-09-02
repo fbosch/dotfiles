@@ -12,9 +12,14 @@ should use these terms; new concepts named during design work land here.
 ## Pi permissions
 
 - **MCP approval routing** — resolution of an uncached MCP tool invocation
-  before execution. YOLO mode grants one invocation; otherwise an interactive
-  user may allow once, allow the same invocation for the session, or deny. When
-  no local decision is available, the configured MCP fallback applies.
+  before execution. Session YOLO mode grants one invocation; otherwise an
+  interactive user may allow once, allow the same invocation for the session,
+  or deny. When no local decision is available, the configured MCP fallback
+  applies.
+- **session YOLO mode** — per-session approval intent that becomes effective
+  only after permission routing is ready. Resuming the same session restores
+  it; new, forked, and cloned sessions start disabled, path-sensitive asks still
+  prompt, and explicit denies still block.
 
 ## Hyprland runtime
 

@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { runAskUserQuestion } from "./ask-user-question";
-import { isYoloModeEnabled } from "./yolo";
+import { isYoloEffectiveStateEvent, YOLO_EFFECTIVE_STATE_CHANNEL } from "./yolo";
 
 // Pi packages have isolated module roots, so local extensions consume the
 // adapter's broker contract structurally through the shared event bus.
@@ -17,14 +17,6 @@ export interface McpToolApprovalRequest {
   signal?: AbortSignal;
   claim(handler: McpToolApprovalHandler): boolean;
 }
-
-export interface McpApprovalRoutingDependencies {
-  isYoloModeEnabled(ctx?: ExtensionContext): boolean;
-}
-
-const defaultDependencies: McpApprovalRoutingDependencies = {
-  isYoloModeEnabled,
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -81,10 +73,10 @@ function decisionFromAnswer(
 function routeApprovalRequest(
   value: unknown,
   ctx: ExtensionContext | undefined,
-  dependencies: McpApprovalRoutingDependencies,
+  yoloEnabled: boolean,
 ): boolean {
   if (!isMcpToolApprovalRequest(value)) return false;
-  if (dependencies.isYoloModeEnabled(ctx)) {
+  if (yoloEnabled) {
     // Keep approvals uncached so disabling YOLO affects the next request.
     return value.claim(() => "allow_once");
   }
@@ -114,20 +106,27 @@ function routeApprovalRequest(
   });
 }
 
-export function registerMcpApprovalRouting(
-  pi: ExtensionAPI,
-  dependencies: McpApprovalRoutingDependencies = defaultDependencies,
-): void {
+export function registerMcpApprovalRouting(pi: ExtensionAPI): void {
   let activeContext: ExtensionContext | undefined;
+  let activeSessionId: string | undefined;
+  let yoloEnabled = false;
 
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
+    activeSessionId = ctx.sessionManager.getHeader()?.id;
+    yoloEnabled = false;
   });
   pi.on("session_shutdown", () => {
     activeContext = undefined;
+    activeSessionId = undefined;
+    yoloEnabled = false;
+  });
+  pi.events.on(YOLO_EFFECTIVE_STATE_CHANNEL, (value) => {
+    if (!isYoloEffectiveStateEvent(value) || value.sessionId !== activeSessionId) return;
+    yoloEnabled = value.effectiveEnabled;
   });
   pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
-    routeApprovalRequest(value, activeContext, dependencies);
+    routeApprovalRequest(value, activeContext, yoloEnabled);
   });
 }
 

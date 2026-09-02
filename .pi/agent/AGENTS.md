@@ -63,6 +63,14 @@
 - Treat `wt remove` as destructive. Inspect with `wt list` or `wt status` before
   changing worktrees.
 
+## Task tracking
+
+- Use `todo` for tasks with three or more steps or an explicit task list.
+- Mark exactly one task `in_progress` before starting it.
+- Mark it `completed` immediately after its acceptance checks pass.
+- Keep tasks in progress when blocked or validation fails; record blockers separately.
+- Before finishing, run `todo list` and reconcile statuses with the actual work.
+
 ## Implementation
 
 - First decide whether the requirement needs code. Prefer native features,

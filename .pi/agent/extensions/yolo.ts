@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 
 export const PERMISSION_SYSTEM_STATUS_KEY = "pi-permission-system";
 export const YOLO_STATUS_TEXT = "󱚝 yolo";
+export const YOLO_EFFECTIVE_STATE_CHANNEL = "pi-yolo:effective-state";
 
 const YOLO_MODE_ENTRY_TYPE = "yolo-mode";
 const SESSION_YOLO_AUTHORIZER = "session-yolo";
@@ -14,13 +15,18 @@ const PERMISSION_SERVICE_MODULE_URL = new URL(
   import.meta.url,
 ).href;
 
+export interface YoloEffectiveStateEvent {
+  sessionId: string;
+  effectiveEnabled: boolean;
+}
+
 interface PersistedYoloMode {
   sessionId: string;
   enabled: boolean;
 }
 
+type SessionYoloRegistrationState = "not_ready" | "registering" | "registered" | "failed";
 type SessionYoloVerdict = { kind: "allow" } | { kind: "defer" };
-
 type SessionYoloAuthorizer = (...args: never[]) => Promise<SessionYoloVerdict>;
 
 interface SessionYoloPermissions {
@@ -31,11 +37,6 @@ interface PermissionSystemServiceModule {
   getPermissionsService(sessionId: string): SessionYoloPermissions | undefined;
 }
 
-export interface YoloModeToggleResult {
-  enabled: boolean;
-  sessionId: string;
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
@@ -44,7 +45,7 @@ function getSessionId(ctx: Pick<ExtensionContext, "sessionManager">): string | u
   return ctx.sessionManager.getHeader()?.id;
 }
 
-function restoreYoloMode(ctx: Pick<ExtensionContext, "sessionManager">): boolean {
+function restoreRequestedYoloMode(ctx: Pick<ExtensionContext, "sessionManager">): boolean {
   const sessionId = getSessionId(ctx);
   if (sessionId === undefined) return false;
 
@@ -58,8 +59,13 @@ function restoreYoloMode(ctx: Pick<ExtensionContext, "sessionManager">): boolean
   return enabled;
 }
 
-export function isYoloModeEnabled(ctx?: Pick<ExtensionContext, "sessionManager">): boolean {
-  return ctx === undefined ? false : restoreYoloMode(ctx);
+export function isYoloEffectiveStateEvent(value: unknown): value is YoloEffectiveStateEvent {
+  return (
+    isRecord(value) &&
+    typeof value.sessionId === "string" &&
+    value.sessionId.length > 0 &&
+    typeof value.effectiveEnabled === "boolean"
+  );
 }
 
 function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): void {
@@ -69,14 +75,26 @@ function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): voi
   );
 }
 
+function publishEffectiveYoloState(
+  pi: ExtensionAPI,
+  ctx: Pick<ExtensionContext, "sessionManager" | "ui">,
+  effectiveEnabled: boolean,
+): void {
+  const sessionId = getSessionId(ctx);
+  if (sessionId !== undefined) {
+    pi.events.emit(YOLO_EFFECTIVE_STATE_CHANNEL, { sessionId, effectiveEnabled });
+  }
+  setYoloStatus(ctx, effectiveEnabled);
+}
+
 function readySessionId(value: unknown): string | undefined {
   if (isRecord(value) === false || typeof value.sessionId !== "string") return undefined;
-  return value.sessionId;
+  return value.sessionId.length > 0 ? value.sessionId : undefined;
 }
 
 async function registerSessionYoloAuthorizer(
   sessionId: string,
-  enabled: () => boolean,
+  effectiveEnabled: () => boolean,
 ): Promise<() => void> {
   const serviceModule = (await import(
     PERMISSION_SERVICE_MODULE_URL
@@ -87,65 +105,85 @@ async function registerSessionYoloAuthorizer(
   }
 
   return permissions.registerAuthorizer(SESSION_YOLO_AUTHORIZER, async () =>
-    enabled() ? { kind: "allow" } : { kind: "defer" },
+    effectiveEnabled() ? { kind: "allow" } : { kind: "defer" },
   );
 }
 
+function unavailableEnableMessage(registrationState: SessionYoloRegistrationState): string {
+  if (registrationState === "registering") {
+    return "Cannot enable session YOLO while permission-system registration is pending.";
+  }
+  if (registrationState === "failed") {
+    return "Cannot enable session YOLO because permission-system registration failed.";
+  }
+  return "Cannot enable session YOLO before permission-system is ready.";
+}
+
 export function registerYoloCommand(pi: ExtensionAPI): void {
-  let enabled = false;
+  let requestedEnabled = false;
+  let registrationState: SessionYoloRegistrationState = "not_ready";
   let activeContext: ExtensionContext | undefined;
+  let activeSessionId: string | undefined;
   let disposeAuthorizer: (() => void) | undefined;
-  let registrationInFlight = false;
   let lifecycleGeneration = 0;
+
+  const isEffective = () => registrationState === "registered" && requestedEnabled;
 
   pi.on("session_start", (_event, ctx) => {
     lifecycleGeneration += 1;
-    registrationInFlight = false;
+    registrationState = "not_ready";
+    if (activeContext !== undefined) publishEffectiveYoloState(pi, activeContext, false);
+    disposeAuthorizer?.();
+    disposeAuthorizer = undefined;
+
     activeContext = ctx;
-    enabled = isYoloModeEnabled(ctx);
-    setYoloStatus(ctx, enabled);
+    activeSessionId = getSessionId(ctx);
+    requestedEnabled = restoreRequestedYoloMode(ctx);
+    publishEffectiveYoloState(pi, ctx, false);
   });
 
-  pi.events.on(PERMISSIONS_READY_CHANNEL, (value: unknown) => {
+  const disposeReadyListener = pi.events.on(PERMISSIONS_READY_CHANNEL, (value: unknown) => {
     const sessionId = readySessionId(value);
-    const activeSessionId = activeContext === undefined ? undefined : getSessionId(activeContext);
     if (sessionId === undefined || sessionId !== activeSessionId) return;
-
-    // The permission package refreshes its plain status during session_start;
-    // republish ours after its lifecycle event and register the session link.
-    if (activeContext !== undefined) setYoloStatus(activeContext, enabled);
-    if (disposeAuthorizer !== undefined || registrationInFlight) return;
+    if (registrationState === "registered" || registrationState === "registering") return;
 
     const generation = lifecycleGeneration;
-    registrationInFlight = true;
-    void registerSessionYoloAuthorizer(sessionId, () => enabled)
+    registrationState = "registering";
+    if (activeContext !== undefined) publishEffectiveYoloState(pi, activeContext, false);
+
+    void registerSessionYoloAuthorizer(sessionId, isEffective)
       .then((dispose) => {
-        if (generation !== lifecycleGeneration) {
+        if (generation !== lifecycleGeneration || sessionId !== activeSessionId) {
           dispose();
           return;
         }
         disposeAuthorizer = dispose;
-      })
-      .catch((error: unknown) => {
-        if (generation === lifecycleGeneration) {
-          activeContext?.ui.notify(
-            `Could not register session YOLO authorization: ${error instanceof Error ? error.message : String(error)}`,
-            "error",
-          );
+        registrationState = "registered";
+        if (activeContext !== undefined) {
+          publishEffectiveYoloState(pi, activeContext, isEffective());
         }
       })
-      .finally(() => {
-        if (generation === lifecycleGeneration) registrationInFlight = false;
+      .catch((error: unknown) => {
+        if (generation !== lifecycleGeneration || sessionId !== activeSessionId) return;
+        registrationState = "failed";
+        if (activeContext !== undefined) publishEffectiveYoloState(pi, activeContext, false);
+        activeContext?.ui.notify(
+          `Could not register session YOLO authorization: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
       });
   });
 
   pi.on("session_shutdown", () => {
     lifecycleGeneration += 1;
-    registrationInFlight = false;
+    registrationState = "not_ready";
+    if (activeContext !== undefined) publishEffectiveYoloState(pi, activeContext, false);
     disposeAuthorizer?.();
     disposeAuthorizer = undefined;
+    disposeReadyListener();
     activeContext = undefined;
-    enabled = false;
+    activeSessionId = undefined;
+    requestedEnabled = false;
   });
 
   pi.registerCommand("yolo", {
@@ -158,23 +196,28 @@ export function registerYoloCommand(pi: ExtensionAPI): void {
 
       try {
         const sessionId = getSessionId(ctx);
-        if (sessionId === undefined) {
-          ctx.ui.notify("Cannot toggle YOLO without an active session.", "error");
+        if (sessionId === undefined || sessionId !== activeSessionId) {
+          ctx.ui.notify("Cannot toggle YOLO without the active session.", "error");
           return;
         }
 
-        const nextEnabled = !enabled;
+        const nextRequestedEnabled = !requestedEnabled;
+        if (nextRequestedEnabled && registrationState !== "registered") {
+          ctx.ui.notify(unavailableEnableMessage(registrationState), "error");
+          return;
+        }
+
         pi.appendEntry<PersistedYoloMode>(YOLO_MODE_ENTRY_TYPE, {
           sessionId,
-          enabled: nextEnabled,
+          enabled: nextRequestedEnabled,
         });
-        enabled = nextEnabled;
-        setYoloStatus(ctx, enabled);
+        requestedEnabled = nextRequestedEnabled;
+        publishEffectiveYoloState(pi, ctx, isEffective());
         ctx.ui.notify(
-          enabled
-            ? "Session YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."
-            : "Session YOLO mode disabled. Ask-state permission checks and MCP tool approvals prompt when required.",
-          enabled ? "warning" : "info",
+          requestedEnabled
+            ? "Session YOLO mode enabled. Ordinary ask-state permission checks and MCP tool approvals are auto-approved. Path-sensitive asks and explicit denies still block."
+            : "Session YOLO mode disabled. Permission checks and MCP tool approvals prompt when required.",
+          requestedEnabled ? "warning" : "info",
         );
       } catch (error) {
         ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");

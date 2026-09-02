@@ -5,12 +5,14 @@ import { join } from "node:path";
 import {
   type ExtensionUIContext,
   type KeybindingsManager,
+  type TerminalInputHandler,
   type Theme,
   ToolExecutionComponent,
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
   hyperlink,
+  type OverlayHandle,
   type Terminal,
   Text,
   type TUI,
@@ -451,9 +453,10 @@ describe("subagent session links", () => {
 
       expect(requestedIds).toEqual([target.agentId]);
       expect(typeof overlay?.render).toBe("function");
-      expect(overlayOptions).toEqual({
+      expect(overlayOptions).toMatchObject({
         overlay: true,
         overlayOptions: { anchor: "center", width: "90%", maxHeight: "70%" },
+        onHandle: expect.any(Function),
       });
       expect(notifications).toEqual([
         ["Opening the current transcript snapshot. Reopen it to refresh.", "info"],
@@ -461,6 +464,73 @@ describe("subagent session links", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  test("closes the transcript before a non-overlay prompt can consume Escape", async () => {
+    const liveRecord = {
+      id: target.agentId,
+      status: "running",
+      agentMessages: [],
+      activeTools: new Map<string, string>(),
+      responseText: "",
+      isSessionReady: () => true,
+      subscribeToUpdates: () => () => {},
+      getToolDefinition: () => undefined,
+    };
+    const service = {
+      getRecord: () => ({ status: "running" }),
+      manager: {
+        getRecord: () => liveRecord,
+        listAgents: () => [liveRecord],
+      },
+    };
+    let terminalInputHandler: TerminalInputHandler | undefined;
+    let inputHandlerRemoved = false;
+    let transcriptClosed = false;
+    const ui = {
+      onTerminalInput: (handler: TerminalInputHandler) => {
+        terminalInputHandler = handler;
+        return () => {
+          inputHandlerRemoved = true;
+          terminalInputHandler = undefined;
+        };
+      },
+      custom: async (
+        factory: Parameters<ExtensionUIContext["custom"]>[0],
+        options?: Parameters<ExtensionUIContext["custom"]>[1],
+      ) => {
+        await factory(
+          {
+            terminal: { columns: 80, rows: 24 },
+            requestRender: () => {},
+          } as unknown as TUI,
+          {} as Theme,
+          {} as KeybindingsManager,
+          () => {
+            transcriptClosed = true;
+          },
+        );
+        const handle: OverlayHandle = {
+          hide: () => {},
+          setHidden: () => {},
+          isHidden: () => false,
+          focus: () => {},
+          unfocus: () => {},
+          isFocused: () => false,
+        };
+        options?.onHandle?.(handle);
+
+        expect(terminalInputHandler?.("\u001b")).toEqual({ consume: true });
+        return undefined;
+      },
+      notify: () => {},
+    };
+    const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
+
+    await openSubagentSession(target, service, ctx);
+
+    expect(transcriptClosed).toBe(true);
+    expect(inputHandlerRemoved).toBe(true);
   });
 
   test("opens a ready running session with live transcript updates", async () => {

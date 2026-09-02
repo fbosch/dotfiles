@@ -12,7 +12,9 @@ import {
 import {
   type Component,
   hyperlink,
+  isKeyRelease,
   type MarkdownTheme,
+  matchesKey,
   type Terminal,
   Text,
   type TUI,
@@ -593,6 +595,27 @@ export async function openSubagentSession(
     ctx.ui.notify("Opening the current transcript snapshot. Reopen it to refresh.", "info");
   }
 
+  let overlayComponent: Component | undefined;
+  let overlayHandle: { isFocused(): boolean } | undefined;
+  // A non-overlay prompt can temporarily steal focus from this inspection overlay;
+  // consume Escape here so it closes the overlay instead of cancelling the prompt.
+  const removeEscapeHandler =
+    typeof ctx.ui.onTerminalInput === "function"
+      ? ctx.ui.onTerminalInput((data) => {
+          if (
+            overlayComponent === undefined ||
+            overlayHandle?.isFocused() !== false ||
+            isKeyRelease(data) ||
+            matchesKey(data, "escape") === false
+          ) {
+            return undefined;
+          }
+
+          overlayComponent.handleInput?.(data);
+          return { consume: true };
+        })
+      : undefined;
+
   try {
     const { navigation, navigator } = await loadSessionNavigator();
     let source: SubagentTranscriptSource;
@@ -605,15 +628,17 @@ export async function openSubagentSession(
     source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
     await ctx.ui.custom<undefined>(
-      (tui, theme, _keybindings, done) =>
-        new navigator.TranscriptOverlay({
+      (tui, theme, _keybindings, done) => {
+        overlayComponent = new navigator.TranscriptOverlay({
           tui,
           theme,
           source,
           done,
           cwd: ctx.cwd,
           markdownTheme,
-        }),
+        });
+        return overlayComponent;
+      },
       {
         overlay: true,
         overlayOptions: {
@@ -621,10 +646,15 @@ export async function openSubagentSession(
           width: OVERLAY_WIDTH,
           maxHeight: OVERLAY_HEIGHT,
         },
+        onHandle: (handle) => {
+          overlayHandle = handle;
+        },
       },
     );
   } catch {
     ctx.ui.notify("Could not read the selected subagent session.", "error");
+  } finally {
+    removeEscapeHandler?.();
   }
 }
 

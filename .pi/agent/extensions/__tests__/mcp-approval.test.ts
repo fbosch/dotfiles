@@ -1,54 +1,53 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
-  type McpApprovalRoutingDependencies,
   type McpToolApprovalDecision,
   type McpToolApprovalRequest,
   registerMcpApprovalRouting,
 } from "../mcp-approval";
+import { YOLO_EFFECTIVE_STATE_CHANNEL } from "../yolo";
+
+const MCP_APPROVAL_CHANNEL = "pi-mcp-adapter:tool-approval-request";
 
 type ApprovalHandler = () => McpToolApprovalDecision | Promise<McpToolApprovalDecision>;
 type EventHandler = (value: unknown) => void;
 type LifecycleHandler = (...args: unknown[]) => void;
 
 interface RoutingHarness {
-  eventName: string;
-  listenerCount: number;
-  emit(value: unknown): void;
+  emitApproval(value: unknown): void;
+  emitYoloState(value: unknown): void;
+  listenerCount(name: string): number;
   start(ctx: ExtensionContext): void;
   shutdown(): void;
 }
 
-function createRoutingHarness(
-  dependencies: McpApprovalRoutingDependencies = { isYoloModeEnabled: () => false },
-): RoutingHarness {
+function createRoutingHarness(): RoutingHarness {
   const lifecycleHandlers = new Map<string, LifecycleHandler>();
-  const eventHandlers: Array<{ name: string; handler: EventHandler }> = [];
+  const eventHandlers = new Map<string, EventHandler[]>();
   const pi = {
     on(name: string, handler: LifecycleHandler) {
       lifecycleHandlers.set(name, handler);
     },
     events: {
       on(name: string, handler: EventHandler) {
-        eventHandlers.push({ name, handler });
+        const handlers = eventHandlers.get(name) ?? [];
+        handlers.push(handler);
+        eventHandlers.set(name, handlers);
         return () => undefined;
       },
     },
   } as unknown as ExtensionAPI;
 
-  registerMcpApprovalRouting(pi, dependencies);
+  registerMcpApprovalRouting(pi);
+
+  const emit = (name: string, value: unknown) => {
+    for (const handler of eventHandlers.get(name) ?? []) handler(value);
+  };
 
   return {
-    get eventName() {
-      return eventHandlers[0]?.name ?? "";
-    },
-    get listenerCount() {
-      return eventHandlers.length;
-    },
-    emit(value) {
-      if (eventHandlers.length === 0) throw new Error("MCP approval event was not registered");
-      for (const { handler } of eventHandlers) handler(value);
-    },
+    emitApproval: (value) => emit(MCP_APPROVAL_CHANNEL, value),
+    emitYoloState: (value) => emit(YOLO_EFFECTIVE_STATE_CHANNEL, value),
+    listenerCount: (name) => eventHandlers.get(name)?.length ?? 0,
     start(ctx) {
       lifecycleHandlers.get("session_start")?.({}, ctx);
     },
@@ -96,6 +95,8 @@ function createApprovalRequest(
 
 function createSelectContext(
   select: (title: string, options: string[]) => Promise<string | undefined>,
+  sessionId = "mcp-session",
+  entries: unknown[] = [],
 ): ExtensionContext {
   return {
     hasUI: true,
@@ -105,31 +106,92 @@ function createSelectContext(
       notify: () => undefined,
       select,
     },
+    sessionManager: {
+      getHeader: () => ({ id: sessionId }),
+      getEntries: () => entries,
+    },
   } as unknown as ExtensionContext;
 }
 
 describe("MCP approval routing", () => {
-  test("registers one broker listener and gives YOLO precedence over UI", async () => {
+  test("uses one broker listener and ignores effective state before session start", async () => {
     let prompts = 0;
-    const harness = createRoutingHarness({ isYoloModeEnabled: () => true });
-    const headlessApproval = createApprovalRequest();
-    harness.emit(headlessApproval.request);
-
+    const harness = createRoutingHarness();
+    harness.emitYoloState({ sessionId: "mcp-yolo", effectiveEnabled: true });
     harness.start(
       createSelectContext(async () => {
         prompts += 1;
         return "3. Deny";
-      }),
+      }, "mcp-yolo"),
     );
-    const interactiveApproval = createApprovalRequest();
-    harness.emit(interactiveApproval.request);
+    const beforeRegistration = createApprovalRequest();
+    harness.emitApproval(beforeRegistration.request);
 
-    expect(harness.eventName).toBe("pi-mcp-adapter:tool-approval-request");
-    expect(harness.listenerCount).toBe(1);
-    expect(headlessApproval.claimCount()).toBe(1);
-    expect(await headlessApproval.decision()).toBe("allow_once");
-    expect(await interactiveApproval.decision()).toBe("allow_once");
-    expect(prompts).toBe(0);
+    expect(harness.listenerCount(MCP_APPROVAL_CHANNEL)).toBe(1);
+    expect(harness.listenerCount(YOLO_EFFECTIVE_STATE_CHANNEL)).toBe(1);
+    expect(await beforeRegistration.decision()).toBe("deny");
+
+    harness.emitYoloState({ sessionId: "mcp-yolo", effectiveEnabled: true });
+    const afterRegistration = createApprovalRequest();
+    harness.emitApproval(afterRegistration.request);
+    expect(await afterRegistration.decision()).toBe("allow_once");
+    expect(prompts).toBe(1);
+  });
+
+  test("applies effective state changes only to the matching active session", async () => {
+    let prompts = 0;
+    const harness = createRoutingHarness();
+    harness.start(
+      createSelectContext(async (_title, options) => {
+        prompts += 1;
+        return options[1];
+      }, "mcp-active"),
+    );
+    harness.emitYoloState({ sessionId: "other-session", effectiveEnabled: true });
+    harness.emitYoloState({ sessionId: "mcp-active", effectiveEnabled: "true" });
+    const promptedApproval = createApprovalRequest();
+    harness.emitApproval(promptedApproval.request);
+
+    expect(await promptedApproval.decision()).toBe("allow_for_session");
+    expect(prompts).toBe(1);
+
+    harness.emitYoloState({ sessionId: "mcp-active", effectiveEnabled: true });
+    const yoloApproval = createApprovalRequest();
+    harness.emitApproval(yoloApproval.request);
+    expect(await yoloApproval.decision()).toBe("allow_once");
+
+    harness.emitYoloState({ sessionId: "mcp-active", effectiveEnabled: false });
+    const promptedAgain = createApprovalRequest();
+    harness.emitApproval(promptedAgain.request);
+    expect(await promptedAgain.decision()).toBe("allow_for_session");
+    expect(prompts).toBe(2);
+  });
+
+  test("does not treat persisted requested state as effective", async () => {
+    let prompts = 0;
+    const harness = createRoutingHarness();
+    harness.start(
+      createSelectContext(
+        async (_title, options) => {
+          prompts += 1;
+          return options[2];
+        },
+        "mcp-persisted",
+        [
+          {
+            type: "custom",
+            customType: "yolo-mode",
+            data: { sessionId: "mcp-persisted", enabled: true },
+          },
+        ],
+      ),
+    );
+    const approval = createApprovalRequest();
+
+    harness.emitApproval(approval.request);
+
+    expect(await approval.decision()).toBe("deny");
+    expect(prompts).toBe(1);
   });
 
   test("routes an interactive request through the question prompt", async () => {
@@ -145,7 +207,7 @@ describe("MCP approval routing", () => {
     });
     harness.start(context);
 
-    harness.emit(approval.request);
+    harness.emitApproval(approval.request);
 
     expect(approval.claimCount()).toBe(1);
     expect(await approval.decision()).toBe("allow_for_session");
@@ -157,14 +219,40 @@ describe("MCP approval routing", () => {
   test("leaves fallback ownership to the adapter without an active UI", () => {
     const harness = createRoutingHarness();
     const beforeStart = createApprovalRequest();
-    harness.emit(beforeStart.request);
+    harness.emitApproval(beforeStart.request);
     expect(beforeStart.claimCount()).toBe(0);
 
-    harness.start({ hasUI: true } as ExtensionContext);
+    harness.start({
+      hasUI: false,
+      sessionManager: { getHeader: () => ({ id: "headless" }) },
+    } as ExtensionContext);
+    const headless = createApprovalRequest();
+    harness.emitApproval(headless.request);
+    expect(headless.claimCount()).toBe(0);
+
     harness.shutdown();
     const afterShutdown = createApprovalRequest();
-    harness.emit(afterShutdown.request);
+    harness.emitApproval(afterShutdown.request);
     expect(afterShutdown.claimCount()).toBe(0);
+  });
+
+  test("clears effective state on shutdown", async () => {
+    let prompts = 0;
+    const context = createSelectContext(async (_title, options) => {
+      prompts += 1;
+      return options[2];
+    }, "mcp-reload");
+    const harness = createRoutingHarness();
+    harness.start(context);
+    harness.emitYoloState({ sessionId: "mcp-reload", effectiveEnabled: true });
+    harness.shutdown();
+    harness.start(context);
+    const approval = createApprovalRequest();
+
+    harness.emitApproval(approval.request);
+
+    expect(await approval.decision()).toBe("deny");
+    expect(prompts).toBe(1);
   });
 
   test("denies when the user cancels the approval prompt", async () => {
@@ -172,7 +260,7 @@ describe("MCP approval routing", () => {
     harness.start(createSelectContext(async () => undefined));
     const approval = createApprovalRequest();
 
-    harness.emit(approval.request);
+    harness.emitApproval(approval.request);
 
     expect(await approval.decision()).toBe("deny");
   });
@@ -190,7 +278,7 @@ describe("MCP approval routing", () => {
     );
     const approval = createApprovalRequest({ args });
 
-    harness.emit(approval.request);
+    harness.emitApproval(approval.request);
 
     expect(await approval.decision()).toBe("deny");
     expect(prompts).toBe(0);
