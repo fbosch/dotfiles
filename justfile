@@ -55,7 +55,7 @@ install-opencode-plugins:
 # Install Pi extension dependencies.
 [group('dependencies')]
 install-pi:
-    bun install --frozen-lockfile --cwd .pi/agent
+    bun install --frozen-lockfile --cwd "$HOME/.pi/agent"
 
 # Install dependencies and build all Vicinae extensions for first use.
 [group('dependencies')]
