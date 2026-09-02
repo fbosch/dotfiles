@@ -7,11 +7,11 @@ import {
   isEditToolResult,
   isReadToolResult,
   isWriteToolResult,
-  SettingsManager,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
+import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import { type LspOperationResult, LspServerManager } from "./server-manager";
 import { DEFAULT_LSP_TIMEOUTS, type ResolvedLspSettings, resolveLspSettings } from "./settings";
 
@@ -80,21 +80,16 @@ export function loadLspSettings(
   if (context.isProjectTrusted() === false) {
     return { servers: [], timeouts: DEFAULT_LSP_TIMEOUTS, warnings: [] };
   }
-  const manager = SettingsManager.create(context.cwd, agentDirectory, { projectTrusted: true });
-  const settings = resolveLspSettings(manager.getGlobalSettings(), manager.getProjectSettings());
-  const errors = manager.drainErrors();
-  if (errors.length === 0) return settings;
-  return {
-    servers: [],
-    timeouts: settings.timeouts,
-    warnings: [
-      ...settings.warnings,
-      ...errors.map(
-        ({ error, path, scope }) =>
-          `${scope} settings${path === undefined ? "" : ` (${path})`}: ${error.message}`,
-      ),
-    ],
-  };
+  try {
+    const config = loadExtensionConfigLayers("lsp", context, agentDirectory);
+    return resolveLspSettings(config.global, config.project);
+  } catch (error) {
+    return {
+      servers: [],
+      timeouts: DEFAULT_LSP_TIMEOUTS,
+      warnings: [error instanceof Error ? error.message : String(error)],
+    };
+  }
 }
 
 function resultText(result: LspOperationResult): string {

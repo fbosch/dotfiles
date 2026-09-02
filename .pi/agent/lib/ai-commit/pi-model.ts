@@ -8,6 +8,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { authPathFor, resolveProfile } from "../../extensions/auth-profiles/profile-store";
 import { resolveFastModelRequest } from "../../extensions/openai-fast";
+import {
+  type CommitMessageModelConfig,
+  resolveCommitMessageModelConfig,
+  type ThinkingLevel,
+} from "./config";
 import { COMMIT_SYSTEM_PROMPT, type CompleteCommitPrompt } from "./generate";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
@@ -18,6 +23,7 @@ export interface PiCommitModel {
   complete: CompleteCommitPrompt;
   modelRef: string;
   profile: string;
+  thinkingLevel?: ThinkingLevel;
 }
 
 function commandTimeoutMs(): number {
@@ -58,6 +64,13 @@ async function createConfiguredRuntime(cwd: string): Promise<{
   return { runtime, settings, profile };
 }
 
+function commitMessageModelConfig(settings: SettingsManager): CommitMessageModelConfig | null {
+  return resolveCommitMessageModelConfig(
+    settings.getGlobalSettings(),
+    settings.isProjectTrusted() ? settings.getProjectSettings() : undefined,
+  );
+}
+
 function selectAvailableDefault<T extends { provider: string; id: string }>(
   settings: SettingsManager,
   availableModels: readonly T[],
@@ -75,16 +88,23 @@ function selectAvailableDefault<T extends { provider: string; id: string }>(
 async function resolveModelSelection(cwd: string, requestedModelRef: string | null) {
   const { runtime, settings, profile } = await createConfiguredRuntime(cwd);
   const availableModels = await runtime.getAvailable();
+  const config = commitMessageModelConfig(settings);
+  const modelReference = requestedModelRef ?? config?.model;
   let selectedModel = selectAvailableDefault(settings, availableModels);
 
-  if (requestedModelRef !== null) {
-    const resolved = resolveCliModel({ cliModel: requestedModelRef, modelRuntime: runtime });
+  if (modelReference !== undefined) {
+    const resolved = resolveCliModel({ cliModel: modelReference, modelRuntime: runtime });
     if (resolved.error !== undefined) throw new Error(resolved.error);
     selectedModel = resolved.model;
   }
 
   if (selectedModel === undefined) throw new Error("No authenticated Pi model is available");
-  return { runtime, profile, selectedModel };
+  return {
+    runtime,
+    profile,
+    selectedModel,
+    thinkingLevel: requestedModelRef === null ? config?.thinkingLevel : undefined,
+  };
 }
 
 export async function getPiCommitModelOptions(
@@ -93,10 +113,11 @@ export async function getPiCommitModelOptions(
 ): Promise<{ selectedModelRef: string | null; availableModelRefs: string[] }> {
   const { runtime, settings } = await createConfiguredRuntime(cwd);
   const availableModels = await runtime.getAvailable();
+  const modelReference = requestedModelRef ?? commitMessageModelConfig(settings)?.model;
   const selectedModel =
-    requestedModelRef === null
+    modelReference === undefined
       ? selectAvailableDefault(settings, availableModels)
-      : resolveCliModel({ cliModel: requestedModelRef, modelRuntime: runtime }).model;
+      : resolveCliModel({ cliModel: modelReference, modelRuntime: runtime }).model;
 
   return {
     selectedModelRef:
@@ -111,7 +132,10 @@ export async function createPiCommitModel(
   cwd: string,
   requestedModelRef: string | null,
 ): Promise<PiCommitModel> {
-  const { runtime, profile, selectedModel } = await resolveModelSelection(cwd, requestedModelRef);
+  const { runtime, profile, selectedModel, thinkingLevel } = await resolveModelSelection(
+    cwd,
+    requestedModelRef,
+  );
   const fastRequest =
     selectedModel.provider === "openai-codex"
       ? resolveFastModelRequest(selectedModel.id)
@@ -123,31 +147,47 @@ export async function createPiCommitModel(
   return {
     modelRef: `${selectedModel.provider}/${selectedModel.id}`,
     profile,
+    ...(thinkingLevel === undefined ? {} : { thinkingLevel }),
     complete: async (prompt) => {
-      const response = await runtime.complete(
-        requestModel,
-        {
-          systemPrompt: COMMIT_SYSTEM_PROMPT,
-          messages: [
-            {
-              role: "user",
-              content: [{ type: "text", text: prompt }],
-              timestamp: Date.now(),
-            },
-          ],
-        },
-        {
-          signal: AbortSignal.timeout(timeoutMs),
-          cacheRetention: "none",
-          maxRetries: 1,
-          maxTokens: MAX_RESPONSE_TOKENS,
-          timeoutMs,
-          sessionId: crypto.randomUUID(),
-          ...(fastRequest === undefined
-            ? {}
-            : { samplingParams: { service_tier: fastRequest.serviceTier } }),
-        },
-      );
+      const context = {
+        systemPrompt: COMMIT_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: "user" as const,
+            content: [{ type: "text" as const, text: prompt }],
+            timestamp: Date.now(),
+          },
+        ],
+      };
+      const options = {
+        signal: AbortSignal.timeout(timeoutMs),
+        cacheRetention: "none" as const,
+        maxRetries: 1,
+        maxTokens: MAX_RESPONSE_TOKENS,
+        timeoutMs,
+        sessionId: crypto.randomUUID(),
+        ...(fastRequest === undefined
+          ? {}
+          : { samplingParams: { service_tier: fastRequest.serviceTier } }),
+      };
+      const response = await (async () => {
+        if (thinkingLevel === undefined) {
+          return runtime.complete(requestModel, context, options);
+        }
+        if (requestModel.api === "openai-codex-responses") {
+          return runtime.complete(requestModel, context, {
+            ...options,
+            reasoningEffort: thinkingLevel === "off" ? "none" : thinkingLevel,
+          });
+        }
+        if (thinkingLevel === "off") {
+          return runtime.complete(requestModel, context, options);
+        }
+        return runtime.completeSimple(requestModel, context, {
+          ...options,
+          reasoning: thinkingLevel,
+        });
+      })();
 
       if (response.stopReason !== "stop") {
         const detail = response.errorMessage?.trim();

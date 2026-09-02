@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { loadFormatterSettings } from "../index";
 
-test("disables formatting when trusted project settings cannot be parsed", async () => {
+test("disables formatting when trusted project config cannot be parsed", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-formatter-settings-"));
   try {
     const agentDirectory = join(root, "agent");
@@ -13,20 +13,18 @@ test("disables formatting when trusted project settings cannot be parsed", async
     await mkdir(join(projectDirectory, ".pi"), { recursive: true });
     await mkdir(agentDirectory);
     await writeFile(
-      join(agentDirectory, "settings.json"),
+      join(agentDirectory, "formatter.json"),
       JSON.stringify({
-        formatter: {
-          rules: {
-            typescript: {
-              mode: "pipeline",
-              files: { extensions: [".ts"] },
-              commands: [{ command: "biome", args: ["format", "--write", "$FILE"] }],
-            },
+        rules: {
+          typescript: {
+            mode: "pipeline",
+            files: { extensions: [".ts"] },
+            commands: [{ command: "biome", args: ["format", "--write", "$FILE"] }],
           },
         },
       }),
     );
-    await writeFile(join(projectDirectory, ".pi", "settings.json"), '{"formatter":');
+    await writeFile(join(projectDirectory, ".pi", "formatter.json"), '{"rules":');
     const context = {
       cwd: projectDirectory,
       isProjectTrusted: () => true,
@@ -36,7 +34,55 @@ test("disables formatting when trusted project settings cannot be parsed", async
 
     expect(settings.rules).toEqual([]);
     expect(settings.warnings).toHaveLength(1);
-    expect(settings.warnings[0]).toContain("project settings");
+    expect(settings.warnings[0]).toContain(".pi/formatter.json");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("loads global and trusted project formatter config files", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-formatter-config-"));
+  try {
+    const agentDirectory = join(root, "agent");
+    const projectDirectory = join(root, "project");
+    await mkdir(join(projectDirectory, ".pi"), { recursive: true });
+    await mkdir(agentDirectory);
+    await writeFile(
+      join(agentDirectory, "formatter.json"),
+      JSON.stringify({
+        timeoutMs: 1_000,
+        rules: {
+          global: {
+            mode: "pipeline",
+            files: { extensions: [".md"] },
+            commands: [{ command: "prettier", args: ["--write", "$FILE"] }],
+          },
+        },
+      }),
+    );
+    await writeFile(
+      join(projectDirectory, ".pi", "formatter.json"),
+      JSON.stringify({
+        timeoutMs: 2_000,
+        rules: {
+          project: {
+            mode: "pipeline",
+            files: { extensions: [".lua"] },
+            commands: [{ command: "stylua", args: ["$FILE"] }],
+          },
+        },
+      }),
+    );
+    const context = {
+      cwd: projectDirectory,
+      isProjectTrusted: () => true,
+    } as unknown as ExtensionContext;
+
+    const settings = loadFormatterSettings(context, agentDirectory);
+
+    expect(settings.rules.map(({ id }) => id)).toEqual(["global", "project"]);
+    expect(settings.timeoutMs).toBe(2_000);
+    expect(settings.warnings).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -50,15 +96,13 @@ test("disables global formatters until the project is trusted", async () => {
     await mkdir(agentDirectory);
     await mkdir(projectDirectory);
     await writeFile(
-      join(agentDirectory, "settings.json"),
+      join(agentDirectory, "formatter.json"),
       JSON.stringify({
-        formatter: {
-          rules: {
-            markdown: {
-              mode: "pipeline",
-              files: { extensions: [".md"] },
-              commands: [{ command: "prettier", args: ["--write", "$FILE"] }],
-            },
+        rules: {
+          markdown: {
+            mode: "pipeline",
+            files: { extensions: [".md"] },
+            commands: [{ command: "prettier", args: ["--write", "$FILE"] }],
           },
         },
       }),

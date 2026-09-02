@@ -390,6 +390,7 @@ async function main(): Promise<void> {
 
   requireUnchangedStagedSnapshot(stagedSnapshot);
 
+  copyCommitCommandToClipboard(finalMessage);
   const commitResult = commit(finalMessage, stagedSnapshot);
   if (commitResult.isErr()) {
     if (commitResult.error.kind === "staged-index-changed") exitStagedIndexChanged();
@@ -404,7 +405,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  copyCommitCommandToClipboard(finalMessage);
   styleBlock(commitResult.value);
   style(" Commit successful!", 2);
 }

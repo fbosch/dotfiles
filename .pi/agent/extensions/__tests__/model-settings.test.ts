@@ -46,6 +46,10 @@ interface PiSettings {
     model: string;
     thinkingLevel: string;
   };
+  commitMessageModel: {
+    model: string;
+    thinkingLevel: string;
+  };
 }
 
 interface PiModes {
@@ -97,7 +101,7 @@ describe("Pi model settings", () => {
     new URL("extensions/auto-session-name.json", AGENT_DIR),
   );
 
-  test("matches primary, build, plan, and compaction settings", () => {
+  test("matches primary, build, plan, compaction, and commit message settings", () => {
     expect(`${settings.defaultProvider}/${settings.defaultModel}`).toBe(toPiModel(openCode.model));
     expect(modes.build.model).toBe(toPiModel(openCode.model));
     expect(modes.build.thinkingLevel).toBe(
@@ -112,6 +116,12 @@ describe("Pi model settings", () => {
     );
     expect(settings.compactionModel.thinkingLevel).toBe(
       required(openCode.agent.compaction?.reasoningEffort, "agent.compaction.reasoningEffort"),
+    );
+    expect(settings.commitMessageModel.model).toBe(
+      toPiModel(openCode.agent.commit?.model ?? openCode.model),
+    );
+    expect(settings.commitMessageModel.thinkingLevel).toBe(
+      requiredThinking(openCode.agent.commit?.reasoningEffort, "agent.commit.reasoningEffort"),
     );
   });
 

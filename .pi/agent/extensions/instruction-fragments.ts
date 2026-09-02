@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { globalExtensionConfigPath, readJsonConfig } from "../lib/extension-config";
 
 export const INSTRUCTION_FRAGMENTS_START = "<global_instruction_fragments>";
 export const INSTRUCTION_FRAGMENTS_END = "</global_instruction_fragments>";
@@ -31,11 +32,11 @@ function instructionFragmentPath(value: unknown, path: string): string {
 
 function parseInstructionFragmentConfig(value: unknown): InstructionFragmentConfig[] {
   if (Array.isArray(value) === false) {
-    throw new Error("settings instructionFragments: expected an array");
+    throw new Error("instruction-fragments config: expected an array");
   }
 
   return value.map((entry, index) => {
-    const path = `settings instructionFragments[${index}]`;
+    const path = `instruction-fragments config[${index}]`;
     if (typeof entry === "string") {
       return { path: instructionFragmentPath(entry, path), applies: "always" };
     }
@@ -143,26 +144,11 @@ export function loadConfiguredInstructionFragments(
 
 export function loadGlobalInstructionFragments(
   agentDirectory = getAgentDir(),
-  cwd = process.cwd(),
 ): LoadedInstructionFragment[] {
-  const settings = SettingsManager.create(cwd, agentDirectory, { projectTrusted: false });
-  const errors = settings.drainErrors();
-  if (errors.length > 0) {
-    throw new Error(
-      errors
-        .map(
-          ({ error, path, scope }) =>
-            `${scope} settings${path === undefined ? "" : ` (${path})`}: ${error.message}`,
-        )
-        .join("\n"),
-    );
-  }
-
   const instructionsDirectory = join(agentDirectory, "instructions");
-  const globalSettings = settings.getGlobalSettings();
-  const configuredFragments = isRecord(globalSettings)
-    ? globalSettings.instructionFragments
-    : undefined;
+  const configuredFragments = readJsonConfig(
+    globalExtensionConfigPath("instruction-fragments", agentDirectory),
+  );
   const fragmentConfig =
     configuredFragments === undefined
       ? discoverInstructionFragmentConfig(instructionsDirectory)

@@ -10,16 +10,12 @@ const luaServer = {
 test("merges server definitions by ID and lets projects disable global servers", () => {
   const settings = resolveLspSettings(
     {
-      lsp: {
-        servers: { lua_ls: luaServer, marksman: { ...luaServer, command: "marksman" } },
-        timeouts: { requestMs: 2_000 },
-      },
+      servers: { lua_ls: luaServer, marksman: { ...luaServer, command: "marksman" } },
+      timeouts: { requestMs: 2_000 },
     },
     {
-      lsp: {
-        servers: { marksman: null },
-        timeouts: { diagnosticsMs: 1_000 },
-      },
+      servers: { marksman: null },
+      timeouts: { diagnosticsMs: 1_000 },
     },
   );
 
@@ -30,10 +26,7 @@ test("merges server definitions by ID and lets projects disable global servers",
 });
 
 test("fails closed when an active settings layer has an unknown field", () => {
-  const settings = resolveLspSettings(
-    { lsp: { servers: { lua_ls: luaServer } } },
-    { lsp: { autoInstall: true } },
-  );
+  const settings = resolveLspSettings({ servers: { lua_ls: luaServer } }, { autoInstall: true });
 
   expect(settings.servers).toEqual([]);
   expect(settings.warnings).toEqual(["project lsp.autoInstall: unknown field"]);
@@ -42,9 +35,7 @@ test("fails closed when an active settings layer has an unknown field", () => {
 test("rejects commands that bypass PATH resolution", () => {
   const settings = resolveLspSettings(
     {
-      lsp: {
-        servers: { lua_ls: { ...luaServer, command: "./lua-language-server" } },
-      },
+      servers: { lua_ls: { ...luaServer, command: "./lua-language-server" } },
     },
     {},
   );

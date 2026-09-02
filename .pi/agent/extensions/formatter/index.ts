@@ -6,9 +6,9 @@ import {
   getAgentDir,
   isEditToolResult,
   isWriteToolResult,
-  SettingsManager,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
+import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import { runFormatterCommand } from "./command-runner";
 import { type CommandAvailability, type FormatterExecutor, formatFile } from "./format-file";
 import {
@@ -32,26 +32,16 @@ export function loadFormatterSettings(
   if (context.isProjectTrusted() === false) {
     return { rules: [], timeoutMs: DEFAULT_FORMATTER_TIMEOUT_MS, warnings: [] };
   }
-  const manager = SettingsManager.create(context.cwd, agentDirectory, {
-    projectTrusted: true,
-  });
-  const settings = resolveFormatterSettings(
-    manager.getGlobalSettings(),
-    manager.getProjectSettings(),
-  );
-  const errors = manager.drainErrors();
-  if (errors.length === 0) return settings;
-  return {
-    rules: [],
-    timeoutMs: settings.timeoutMs,
-    warnings: [
-      ...settings.warnings,
-      ...errors.map(
-        ({ error, path, scope }) =>
-          `${scope} settings${path === undefined ? "" : ` (${path})`}: ${error.message}`,
-      ),
-    ],
-  };
+  try {
+    const config = loadExtensionConfigLayers("formatter", context, agentDirectory);
+    return resolveFormatterSettings(config.global, config.project);
+  } catch (error) {
+    return {
+      rules: [],
+      timeoutMs: DEFAULT_FORMATTER_TIMEOUT_MS,
+      warnings: [error instanceof Error ? error.message : String(error)],
+    };
+  }
 }
 
 function mutationPath(event: ToolResultEvent): string | undefined {

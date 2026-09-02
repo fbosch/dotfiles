@@ -1,0 +1,129 @@
+{
+  "timeoutMs": 30000,
+  "rules": {
+    "web": {
+      "mode": "first_available",
+      "files": {
+        "extensions": [
+          ".css",
+          ".html",
+          ".js",
+          ".jsx",
+          ".json",
+          ".jsonc",
+          ".ts",
+          ".tsx"
+        ]
+      },
+      "commands": [
+        {
+          "command": "biome",
+          "args": [
+            "format",
+            "--write",
+            "$FILE"
+          ],
+          "requireRootMarker": true,
+          "rootMarkers": [
+            "biome.json",
+            "biome.jsonc"
+          ]
+        },
+        {
+          "command": "prettier",
+          "args": [
+            "--write",
+            "$FILE"
+          ]
+        }
+      ]
+    },
+    "markdown": {
+      "mode": "pipeline",
+      "files": {
+        "extensions": [
+          ".md",
+          ".yaml",
+          ".yml"
+        ]
+      },
+      "commands": [
+        {
+          "command": "prettier",
+          "args": [
+            "--write",
+            "$FILE"
+          ]
+        }
+      ]
+    },
+    "mdx": {
+      "mode": "pipeline",
+      "files": {
+        "extensions": [
+          ".mdx"
+        ]
+      },
+      "commands": [
+        {
+          "command": "prettier",
+          "args": [
+            "--write",
+            "$FILE"
+          ]
+        }
+      ]
+    },
+    "fish": {
+      "mode": "pipeline",
+      "files": {
+        "extensions": [
+          ".fish"
+        ]
+      },
+      "commands": [
+        {
+          "command": "fish_indent",
+          "args": [
+            "--write",
+            "$FILE"
+          ]
+        }
+      ]
+    },
+    "lua": {
+      "mode": "pipeline",
+      "files": {
+        "extensions": [
+          ".lua"
+        ]
+      },
+      "commands": [
+        {
+          "command": "stylua",
+          "args": [
+            "--search-parent-directories",
+            "--respect-ignores",
+            "$FILE"
+          ]
+        }
+      ]
+    },
+    "nix": {
+      "mode": "pipeline",
+      "files": {
+        "extensions": [
+          ".nix"
+        ]
+      },
+      "commands": [
+        {
+          "command": "nixfmt",
+          "args": [
+            "$FILE"
+          ]
+        }
+      ]
+    }
+  }
+}

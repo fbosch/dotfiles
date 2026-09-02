@@ -189,19 +189,16 @@ function parseTimeouts(
 }
 
 function parseLayer(document: unknown, scope: "global" | "project"): ParsedLayer {
+  if (document === undefined) return { servers: new Map(), timeouts: {}, warnings: [] };
   if (isObject(document) === false) {
     return {
       servers: new Map(),
       timeouts: {},
-      warnings: [`${scope} settings: expected an object`],
+      warnings: [`${scope} lsp: expected an object`],
     };
   }
-  const lsp = document.lsp;
-  if (lsp === undefined) return { servers: new Map(), timeouts: {}, warnings: [] };
-  if (isObject(lsp) === false) {
-    return { servers: new Map(), timeouts: {}, warnings: [`${scope} lsp: expected an object`] };
-  }
 
+  const lsp = document;
   const warnings = [...unknownFields(lsp, new Set(["servers", "timeouts"]), `${scope} lsp`)];
   const timeouts = parseTimeouts(lsp.timeouts, scope, warnings);
   const servers = new Map<string, LspServerSettings | null>();

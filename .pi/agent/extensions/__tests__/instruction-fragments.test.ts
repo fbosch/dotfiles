@@ -59,12 +59,11 @@ describe("instruction fragments", () => {
     const agentDirectory = join(root, "agent");
     const instructionsDirectory = join(agentDirectory, "instructions");
     mkdirSync(join(instructionsDirectory, "nested"), { recursive: true });
-    writeFileSync(join(agentDirectory, "settings.json"), "{}\n");
     writeFileSync(join(instructionsDirectory, "second.md"), "Second instruction.\n");
     writeFileSync(join(instructionsDirectory, "nested", "first.md"), "First instruction.\n");
     writeFileSync(join(instructionsDirectory, "ignored.txt"), "Not an instruction.\n");
 
-    const fragments = loadGlobalInstructionFragments(agentDirectory, root);
+    const fragments = loadGlobalInstructionFragments(agentDirectory);
 
     expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
       { path: "nested/first.md", applies: "always", content: "First instruction." },
@@ -78,15 +77,13 @@ describe("instruction fragments", () => {
     const instructionsDirectory = join(agentDirectory, "instructions");
     mkdirSync(instructionsDirectory, { recursive: true });
     writeFileSync(
-      join(agentDirectory, "settings.json"),
-      `${JSON.stringify({
-        instructionFragments: ["second.md", { path: "first.md", applies: "orchestrator" }],
-      })}\n`,
+      join(agentDirectory, "instruction-fragments.json"),
+      `${JSON.stringify(["second.md", { path: "first.md", applies: "orchestrator" }])}\n`,
     );
     writeFileSync(join(instructionsDirectory, "second.md"), "Second instruction.\n");
     writeFileSync(join(instructionsDirectory, "first.md"), "First instruction.\n");
 
-    const fragments = loadGlobalInstructionFragments(agentDirectory, root);
+    const fragments = loadGlobalInstructionFragments(agentDirectory);
 
     expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
       { path: "second.md", applies: "always", content: "Second instruction." },

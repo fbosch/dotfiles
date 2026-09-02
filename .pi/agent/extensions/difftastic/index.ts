@@ -24,7 +24,6 @@ import {
   formatSize,
   getAgentDir,
   keyHint,
-  SettingsManager,
   type Theme,
   type ThemeColor,
   type ToolDefinition,
@@ -39,6 +38,7 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { globalExtensionConfigPath, readJsonConfig } from "../../lib/extension-config";
 
 const COMMAND_TIMEOUT_MS = 60_000;
 const EDIT_COMMAND_TIMEOUT_MS = 10_000;
@@ -440,7 +440,8 @@ export async function runDifftasticGitDiff(
     );
   }
 
-  const bounded = boundDiffOutput(result.stdout);
+  const normalizedOutput = mergeDifftasticHunkHeaders(result.stdout);
+  const bounded = boundDiffOutput(normalizedOutput);
   const noChanges = bounded.plain.trim() === "";
   const warningText = result.stderr.trim() === "" ? undefined : diagnostic(result.stderr);
   let fullOutputPath: string | undefined;
@@ -448,7 +449,7 @@ export async function runDifftasticGitDiff(
   if (bounded.truncation !== undefined) {
     try {
       const writer = options.writeFullOutput ?? writeFullOutput;
-      fullOutputPath = await writer(stripSgr(sanitizeTerminalOutput(result.stdout)));
+      fullOutputPath = await writer(stripSgr(sanitizeTerminalOutput(normalizedOutput)));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       saveWarning = `Could not save the full diff: ${diagnostic(message)}`;
@@ -495,11 +496,51 @@ function editDiffOutputPath(
   return output.replaceAll(oldPath, `${path} (before)`).replaceAll(newPath, path);
 }
 
-function removeDifftasticFileHeader(output: string): string {
-  const [firstLine, ...remainingLines] = output.split("\n");
-  return firstLine !== undefined && stripSgr(firstLine).includes(" --- ")
-    ? remainingLines.join("\n")
-    : output;
+function mergeDifftasticHunkHeaders(output: string): string {
+  const lines = output.split("\n");
+  const normalized: string[] = [];
+  let previousPath: string | undefined;
+  for (const line of lines) {
+    const plainLine = stripSgr(line).trimEnd();
+    const match = /^(.*) --- \d+\/\d+ --- /.exec(plainLine);
+    if (match === null) {
+      normalized.push(line);
+      continue;
+    }
+
+    const path = match[1] ?? "";
+    if (path !== previousPath) {
+      previousPath = path;
+      normalized.push(line);
+      continue;
+    }
+    while (normalized.at(-1) === "") normalized.pop();
+    normalized.push("...");
+  }
+  return normalized.join("\n");
+}
+
+function removeDifftasticFileHeaders(output: string, path: string): string {
+  const lines = output.split("\n");
+  const normalized: string[] = [];
+  let headerSeen = false;
+  for (const line of lines) {
+    const plainLine = stripSgr(line).trimEnd();
+    const isHeader =
+      plainLine.startsWith(`${path} --- `) || plainLine.startsWith(`${path} (before) --- `);
+    if (!isHeader) {
+      normalized.push(line);
+      continue;
+    }
+
+    if (!headerSeen) {
+      headerSeen = true;
+      continue;
+    }
+    while (normalized.at(-1) === "") normalized.pop();
+    normalized.push("...");
+  }
+  return normalized.join("\n");
 }
 
 export async function runDifftasticEditDiff(
@@ -555,8 +596,9 @@ export async function runDifftasticEditDiff(
       );
     }
 
-    const output = removeDifftasticFileHeader(
+    const output = removeDifftasticFileHeaders(
       editDiffOutputPath(result.stdout, oldPath, newPath, request.path),
+      request.path,
     );
     const bounded = boundDiffOutput(output);
     const noChanges = bounded.plain.trim() === "";
@@ -1133,7 +1175,7 @@ function commandHelp(): string {
     "",
     "Show unstaged working-tree changes using Difftastic.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
-    "Set `difftasticEditPreviews` to true in ~/.pi/agent/settings.json to use Difftastic for edit previews.",
+    "Set `editPreviews` to true in ~/.pi/agent/difftastic.json to use Difftastic for edit previews.",
   ].join("\n");
 }
 
@@ -1144,16 +1186,31 @@ interface DifftasticExtensionDependencies {
   readonly runEdit?: EditDiffRunner;
 }
 
-interface DifftasticSettings {
-  readonly difftasticEditPreviews?: boolean;
+interface DifftasticConfig {
+  readonly editPreviews?: boolean;
 }
 
-function editPreviewsEnabled(context: ExtensionContext): boolean {
-  const settings = SettingsManager.create(
-    context.cwd,
-    getAgentDir(),
-  ).getGlobalSettings() as DifftasticSettings;
-  return settings.difftasticEditPreviews === true;
+export function loadDifftasticEditPreviews(agentDirectory = getAgentDir()): boolean {
+  const value = readJsonConfig(globalExtensionConfigPath("difftastic", agentDirectory));
+  if (value === undefined) return false;
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new Error("difftastic config: expected an object");
+  }
+
+  const config = value as Record<string, unknown>;
+  const unknownField = Object.keys(config).find((field) => field !== "editPreviews");
+  if (unknownField !== undefined) {
+    throw new Error(`difftastic config.${unknownField}: unknown field`);
+  }
+  if (config.editPreviews !== undefined && typeof config.editPreviews !== "boolean") {
+    throw new Error("difftastic config.editPreviews: expected a boolean");
+  }
+
+  return (config as DifftasticConfig).editPreviews === true;
+}
+
+function editPreviewsEnabled(_context: ExtensionContext): boolean {
+  return loadDifftasticEditPreviews();
 }
 
 export function registerDifftasticExtension(

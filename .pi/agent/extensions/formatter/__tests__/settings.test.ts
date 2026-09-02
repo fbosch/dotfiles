@@ -11,28 +11,24 @@ describe("resolveFormatterSettings", () => {
   test("merges trusted project rules by ID and preserves rule order", () => {
     const settings = resolveFormatterSettings(
       {
-        formatter: {
-          timeoutMs: 1_000,
-          rules: {
-            web: {
-              mode: "first_available",
-              files: { extensions: [".ts"] },
-              commands: [{ command: "biome", args: ["format", "--write", "$FILE"] }],
-            },
-            lua: luaRule,
+        timeoutMs: 1_000,
+        rules: {
+          web: {
+            mode: "first_available",
+            files: { extensions: [".ts"] },
+            commands: [{ command: "biome", args: ["format", "--write", "$FILE"] }],
           },
+          lua: luaRule,
         },
       },
       {
-        formatter: {
-          timeoutMs: 2_000,
-          rules: {
-            web: null,
-            nix: {
-              mode: "pipeline",
-              files: { extensions: [".nix"] },
-              commands: [{ command: "nixfmt", args: ["$FILE"] }],
-            },
+        timeoutMs: 2_000,
+        rules: {
+          web: null,
+          nix: {
+            mode: "pipeline",
+            files: { extensions: [".nix"] },
+            commands: [{ command: "nixfmt", args: ["$FILE"] }],
           },
         },
       },
@@ -45,15 +41,13 @@ describe("resolveFormatterSettings", () => {
 
   test("quarantines an invalid project replacement instead of using the global rule", () => {
     const settings = resolveFormatterSettings(
-      { formatter: { rules: { lua: luaRule } } },
+      { rules: { lua: luaRule } },
       {
-        formatter: {
-          rules: {
-            lua: {
-              mode: "pipeline",
-              files: { extensions: [".lua"] },
-              commands: [{ command: "stylua", args: ["--check"] }],
-            },
+        rules: {
+          lua: {
+            mode: "pipeline",
+            files: { extensions: [".lua"] },
+            commands: [{ command: "stylua", args: ["--check"] }],
           },
         },
       },
@@ -68,12 +62,10 @@ describe("resolveFormatterSettings", () => {
   test("rejects unknown fields so misspelled behavior cannot be ignored", () => {
     const settings = resolveFormatterSettings(
       {
-        formatter: {
-          rules: {
-            lua: {
-              ...luaRule,
-              stopAfterFirst: true,
-            },
+        rules: {
+          lua: {
+            ...luaRule,
+            stopAfterFirst: true,
           },
         },
       },
@@ -85,10 +77,7 @@ describe("resolveFormatterSettings", () => {
   });
 
   test("rejects timeout values beyond the runtime timer limit", () => {
-    const settings = resolveFormatterSettings(
-      { formatter: { timeoutMs: 300_001, rules: { lua: luaRule } } },
-      {},
-    );
+    const settings = resolveFormatterSettings({ timeoutMs: 300_001, rules: { lua: luaRule } }, {});
 
     expect(settings.timeoutMs).toBe(30_000);
     expect(settings.warnings).toEqual([

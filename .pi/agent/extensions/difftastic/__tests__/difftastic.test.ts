@@ -16,6 +16,7 @@ import {
   buildGitInvocation,
   type DifftasticDetails,
   type DifftasticResult,
+  loadDifftasticEditPreviews,
   registerDifftasticExtension,
   remapDifftasticColors,
   renderDiffLines,
@@ -36,6 +37,16 @@ const diffResult: DifftasticResult = {
   content: "sample.ts --- TypeScript\n1 old    1 new",
   details,
 };
+
+test("loads edit preview settings from the dedicated config file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "pi-difftastic-config-"));
+  try {
+    await writeFile(join(root, "difftastic.json"), '{"editPreviews":true}', "utf8");
+    expect(loadDifftasticEditPreviews(root)).toBeTrue();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 async function rejection(promise: Promise<unknown>): Promise<Error> {
   try {
@@ -178,13 +189,44 @@ describe("Difftastic execution", () => {
     expect(result.details.scope).toBe("working tree against HEAD");
   });
 
+  test("merges repeated Git hunk headers for the same file", async () => {
+    const result = await runDifftasticGitDiff(
+      async () => ({
+        stdout: [
+          "sample.ts --- 1/2 --- TypeScript",
+          "1 old    1 new",
+          "",
+          "sample.ts --- 2/2 --- TypeScript",
+          "2 old    2 new",
+        ].join("\n"),
+        stderr: "",
+        code: 0,
+        killed: false,
+      }),
+      {},
+      "/repo",
+    );
+
+    expect(result.details.output).toContain("...\n2 old");
+    expect(result.details.output).not.toContain("sample.ts --- 2/2");
+  });
+
   test("renders an edit diff from temporary before and after files", async () => {
     let executed: { command: string; args: string[]; options: ExecOptions } | undefined;
     const result = await runDifftasticEditDiff(
       async (command, args, options) => {
         executed = { command, args, options };
         return {
-          stdout: `\u001b[1m\u001b[91m${args[5]}\u001b[0m --- TypeScript\n\u001b[91m1 old\u001b[0m    \u001b[92m1 new\u001b[0m\n`,
+          stdout: [
+            `\u001b[1m\u001b[91m${args[5]}\u001b[0m --- 1/3 --- TypeScript`,
+            "\u001b[91m1 old\u001b[0m    \u001b[92m1 new\u001b[0m",
+            "",
+            `${args[5]} --- 2/3 --- TypeScript`,
+            "2 old    2 new",
+            "",
+            `${args[5]} --- 3/3 --- TypeScript`,
+            "3 old    3 new",
+          ].join("\n"),
           stderr: "",
           code: 0,
           killed: false,
@@ -210,7 +252,9 @@ describe("Difftastic execution", () => {
       "--context=3",
     ]);
     expect(result.output).toContain("1 old");
-    expect(result.output).not.toContain("src/example.ts --- TypeScript");
+    expect(result.output).toContain("...\n2 old");
+    expect(result.output).toContain("...\n3 old");
+    expect(result.output).not.toContain("src/example.ts ---");
     expect(result.output).not.toContain("pi-difftastic-edit-");
     expect(result.scope).toBe("edit changes");
   });
@@ -597,7 +641,7 @@ describe("Difftastic extension", () => {
     expect(notifications).toEqual([
       {
         message:
-          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `difftasticEditPreviews` to true in ~/.pi/agent/settings.json to use Difftastic for edit previews.",
+          "Usage: /difft\n\nShow unstaged working-tree changes using Difftastic.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `editPreviews` to true in ~/.pi/agent/difftastic.json to use Difftastic for edit previews.",
         level: "info",
       },
     ]);

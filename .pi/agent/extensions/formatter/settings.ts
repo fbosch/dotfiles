@@ -180,16 +180,12 @@ function parseRule(
 }
 
 function parseFormatterLayer(document: unknown, scope: "global" | "project"): ParsedFormatterLayer {
+  if (document === undefined) return { rules: new Map(), warnings: [] };
   if (isObject(document) === false) {
-    return { rules: new Map(), warnings: [`${scope} settings: expected an object`] };
-  }
-
-  const formatter = document.formatter;
-  if (formatter === undefined) return { rules: new Map(), warnings: [] };
-  if (isObject(formatter) === false) {
     return { rules: new Map(), warnings: [`${scope} formatter: expected an object`] };
   }
 
+  const formatter = document;
   const warnings = [
     ...unknownFields(formatter, new Set(["rules", "timeoutMs"]), `${scope} formatter`),
   ];

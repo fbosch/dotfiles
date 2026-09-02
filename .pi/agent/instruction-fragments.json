@@ -1,0 +1,10 @@
+[
+  {
+    "path": "orchestration.md",
+    "applies": "orchestrator"
+  },
+  {
+    "path": "code-search.md",
+    "applies": "always"
+  }
+]
