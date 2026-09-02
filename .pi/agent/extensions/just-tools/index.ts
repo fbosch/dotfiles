@@ -6,6 +6,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { runAskUserQuestion } from "../ask-user-question";
 import {
   allocateRecipeToolName,
   buildRecipeArguments,
@@ -368,13 +369,25 @@ export function registerJustTools(
             throw new Error(`Just recipe \`${recipe.namepath}\` requires interactive confirmation`);
           }
 
-          const confirmed = await ctx.ui.confirm(
-            "Run Just recipe?",
-            confirmationMessage(currentRecipe, arguments_, ctx.cwd),
-            signal === undefined ? undefined : { signal },
+          const confirmation = await runAskUserQuestion(
+            {
+              question: "Run Just recipe?",
+              details: confirmationMessage(currentRecipe, arguments_, ctx.cwd),
+              options: [
+                { label: "Yes", value: "yes" },
+                { label: "No", value: "no" },
+              ],
+            },
+            signal,
+            ctx,
+            { includeOther: false },
           );
-          if (confirmed === false)
+          if (
+            confirmation.details.status !== "answered" ||
+            confirmation.details.answers[0]?.value !== "yes"
+          ) {
             throw new Error(`Just recipe \`${recipe.namepath}\` was declined`);
+          }
 
           const confirmedRecipes = await discoverJustRecipes(pi, ctx.cwd, signal);
           const confirmedRecipe = confirmedRecipes.find(

@@ -135,12 +135,14 @@ function context(
   return {
     cwd: "/repo",
     hasUI: true,
+    mode: "rpc",
     isProjectTrusted: () => true,
     ui: {
-      async confirm(_title: string, message: string) {
-        confirmations.push(message);
+      async select(title: string, options: string[]) {
+        confirmations.push(title);
+        expect(options).toEqual(["1. Yes", "2. No"]);
         onConfirm?.();
-        return confirmed;
+        return confirmed ? "1. Yes" : "2. No";
       },
     },
   } as unknown as ExtensionContext;

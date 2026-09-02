@@ -56,6 +56,8 @@
   location and naming convention.
 - Capture the smallest useful screenshot region unless the user requests a
   full-screen image.
+- Use `xdg-open <path>` when the user should see a generated file, report, or
+  HTML page. Use browser tools only when inspection or interaction is required.
 - Use `wt` for worktree operations. Do not run mutating `git worktree` commands
   directly; if `wt` is unavailable, use only read-only `git worktree list`.
 - Treat `wt remove` as destructive. Inspect with `wt list` or `wt status` before

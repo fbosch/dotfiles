@@ -9,6 +9,13 @@ should use these terms; new concepts named during design work land here.
   either an agent invocation or a project reference. Both roles share one
   case-insensitive name space.
 
+## Pi permissions
+
+- **MCP approval routing** — resolution of an uncached MCP tool invocation
+  before execution. YOLO mode grants one invocation; otherwise an interactive
+  user may allow once, allow the same invocation for the session, or deny. When
+  no local decision is available, the configured MCP fallback applies.
+
 ## Hyprland runtime
 
 - **daemon kit** — `runtime/lib/daemon.lua`. Deep module owning the Hypr IPC
