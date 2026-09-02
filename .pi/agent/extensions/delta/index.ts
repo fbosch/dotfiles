@@ -35,6 +35,7 @@ import {
   Container,
   Spacer,
   Text,
+  visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
@@ -59,7 +60,11 @@ const SGR_PATTERN = new RegExp(`${ESCAPE}\\[([0-9;]*)m`, "g");
 const ESCAPE_SUFFIX_PATTERN = /^\[[0-?]*[ -/]*[@-~]/;
 const DELTA_ADDED_COLOR = 28;
 const DELTA_REMOVED_COLOR = 88;
-const NON_BACKGROUND_RESET_CODES = [22, 23, 24, 25, 27, 28, 29, 39, 54, 55, 59];
+const DELTA_GUTTER_COLOR = 34;
+const ZENWRITTEN_ADDED_BACKGROUND = "#232D1A";
+const ZENWRITTEN_REMOVED_BACKGROUND = "#3E2225";
+const ERASE_TO_LINE_END = `${ESCAPE}[0K`;
+const LINE_FILL_MARKER = "␛pi-delta-fill␛";
 
 const DisplayMode = StringEnum(["auto", "side-by-side", "inline"] as const);
 
@@ -255,48 +260,60 @@ function sgr(codes: readonly number[]): string {
   return codes.length === 0 ? "" : `${ESCAPE}[${codes.join(";")}m`;
 }
 
-/** Keep Pi's tool background active while translating Delta's diff markers to theme colors. */
-export function applyDiffTheme(value: string, theme: Theme): string {
-  return sanitizeTerminalOutput(value).replace(SGR_PATTERN, (_sequence, parameters: string) => {
-    const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
-    const output: string[] = [];
-    let pending: number[] = [];
-    const flush = () => {
-      if (pending.length === 0) return;
-      output.push(sgr(pending));
-      pending = [];
-    };
+/** Preserve Delta's line tints while restoring Pi's tool background after style resets. */
+export function applyDiffTheme(
+  value: string,
+  theme: Pick<Theme, "getBgAnsi" | "getFgAnsi">,
+): string {
+  const withFillMarkers = value.replaceAll(ERASE_TO_LINE_END, LINE_FILL_MARKER);
+  return sanitizeTerminalOutput(withFillMarkers).replace(
+    SGR_PATTERN,
+    (_sequence, parameters: string) => {
+      const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
+      const output: string[] = [];
+      let pending: number[] = [];
+      const flush = () => {
+        if (pending.length === 0) return;
+        output.push(sgr(pending));
+        pending = [];
+      };
 
-    for (let index = 0; index < codes.length; ) {
-      const code = codes[index] ?? 0;
-      if (code === 38 || code === 48) {
-        const mode = codes[index + 1];
-        const length = mode === 2 ? 5 : mode === 5 ? 3 : 1;
-        const group = codes.slice(index, index + length);
-        if (code === 38 && mode === 5 && group[2] === DELTA_ADDED_COLOR) {
-          flush();
-          output.push(theme.getFgAnsi("toolDiffAdded"));
-        } else if (code === 38 && mode === 5 && group[2] === DELTA_REMOVED_COLOR) {
-          flush();
-          output.push(theme.getFgAnsi("toolDiffRemoved"));
-        } else if (code === 38) {
-          pending.push(...group);
+      for (let index = 0; index < codes.length; ) {
+        const code = codes[index] ?? 0;
+        if (code === 38 || code === 48) {
+          const mode = codes[index + 1];
+          const length = mode === 2 ? 5 : mode === 5 ? 3 : 1;
+          const group = codes.slice(index, index + length);
+          if (code === 38 && mode === 5 && group[2] === DELTA_ADDED_COLOR) {
+            flush();
+            output.push(theme.getFgAnsi("toolDiffAdded"));
+          } else if (code === 38 && mode === 5 && group[2] === DELTA_REMOVED_COLOR) {
+            flush();
+            output.push(theme.getFgAnsi("toolDiffRemoved"));
+          } else {
+            pending.push(...group);
+          }
+          index += length;
+          continue;
         }
-        index += length;
-        continue;
+
+        if (code === DELTA_GUTTER_COLOR) {
+          flush();
+          output.push(theme.getFgAnsi("toolDiffContext"));
+        } else {
+          pending.push(code);
+        }
+        if (code === 0) {
+          flush();
+          output.push(theme.getBgAnsi("toolSuccessBg"));
+        }
+        index += 1;
       }
 
-      if (code === 0) {
-        pending.push(...NON_BACKGROUND_RESET_CODES);
-      } else if (!((code >= 40 && code <= 49) || (code >= 100 && code <= 107))) {
-        pending.push(code);
-      }
-      index += 1;
-    }
-
-    flush();
-    return output.join("");
-  });
+      flush();
+      return output.join("");
+    },
+  );
 }
 
 export function boundDiffOutput(value: string): BoundedOutput {
@@ -417,10 +434,10 @@ export function buildDeltaInvocation(
     "--line-fill-method=spaces",
     `--line-numbers-minus-style=${DELTA_REMOVED_COLOR}`,
     `--line-numbers-plus-style=${DELTA_ADDED_COLOR}`,
-    "--minus-style=syntax",
-    "--minus-emph-style=syntax",
-    "--plus-style=syntax",
-    "--plus-emph-style=syntax",
+    `--minus-style=syntax "${ZENWRITTEN_REMOVED_BACKGROUND}"`,
+    `--minus-emph-style=syntax "${ZENWRITTEN_REMOVED_BACKGROUND}"`,
+    `--plus-style=syntax "${ZENWRITTEN_ADDED_BACKGROUND}"`,
+    `--plus-emph-style=syntax "${ZENWRITTEN_ADDED_BACKGROUND}"`,
     "--commit-decoration-style=omit",
     "--file-decoration-style=omit",
     "--hunk-header-style=omit",
@@ -727,7 +744,12 @@ export async function runDeltaEditDiff(
 export function renderDiffLines(lines: readonly string[], width: number): string[] {
   const availableWidth = Math.max(1, width);
   return lines.flatMap((line) => {
-    const wrapped = wrapTextWithAnsi(line, availableWidth);
+    const parts = line.split(LINE_FILL_MARKER);
+    let filled = parts.shift() ?? "";
+    for (const part of parts) {
+      filled += " ".repeat(Math.max(0, availableWidth - visibleWidth(filled))) + part;
+    }
+    const wrapped = wrapTextWithAnsi(filled, availableWidth);
     return wrapped.length === 0 ? [""] : wrapped;
   });
 }

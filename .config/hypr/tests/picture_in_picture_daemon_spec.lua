@@ -107,14 +107,22 @@ local function run_daemon(options)
 				monitors = input.monitors,
 				bars = input.bars,
 			}
-			if input.event.type == "startup" or input.event.native_interaction then
+			if
+				input.event.type == "startup"
+				or input.event.native_interaction
+				or (input.event.type == "tick" and options.capture_tick_clients)
+			then
 				captured.clients = input.clients
 			end
 			if input.event.native_interaction then
 				captured.active = input.active
 			end
 			reducer_inputs[#reducer_inputs + 1] = captured
-			if input.event.type == "tick" then
+			if input.event.type == "control" and input.event.action == "drag-start" then
+				state.dragging = true
+				state.dragging_address = input.event.address
+				state.next_observation_at = input.now
+			elseif input.event.type == "tick" then
 				state.next_observation_at = math.huge
 				state.reconcile_at = nil
 			end
@@ -140,6 +148,9 @@ local function run_daemon(options)
 				control_messages[#control_messages + 1] = message
 				if message == "move left 0xbeef" then
 					return "move", "0xbeef", "left"
+				end
+				if message == "drag-start 0x1" then
+					return "drag-start", "0x1"
 				end
 				return message
 			end,
@@ -333,6 +344,24 @@ describe("picture-in-picture daemon adapter", function()
 		assert.equal("quit", result.reducer_inputs[3].event.action)
 		assert.is_true(math.abs(result.select_timeouts[2] - 0.1) < 0.000001)
 		assert.same({ "quit" }, result.control_messages)
+	end)
+
+	it("resumes polling when a new drag has not delivered native geometry", function()
+		local result = run_daemon({
+			selected = { "event", "control", "control" },
+			event_lines = { "windowinteractionupdated>>0x1,move,1,2960,1150,400,225" },
+			control_messages = { "drag-start 0x1", "quit" },
+			dragging = true,
+			dragging_address = "0x1",
+			capture_tick_clients = true,
+		})
+
+		assert.is_true(result.reducer_inputs[2].event.native_interaction)
+		assert.equal("drag-start", result.reducer_inputs[3].event.action)
+		assert.equal("tick", result.reducer_inputs[4].event.type)
+		assert.same({ address = "0x1" }, result.reducer_inputs[4].clients[1])
+		assert.equal("quit", result.reducer_inputs[5].event.action)
+		assert.equal(2, result.client_queries)
 	end)
 
 	it("uses visible bar geometry for hide policy, then clears it for native updates", function()

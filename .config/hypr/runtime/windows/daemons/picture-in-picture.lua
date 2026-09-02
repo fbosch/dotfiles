@@ -215,6 +215,10 @@ local function handle_control(message)
 	end
 
 	local action, address, direction = pip.control.decode(message)
+	if action == "drag-start" then
+		-- Native update delivery is interaction-scoped; each drag must prove its own stream before polling stops.
+		native_updates_ready = false
+	end
 
 	-- Use the pre-transition layer geometry while applying show/hide policy,
 	-- then keep only the geometry for the resulting visibility state.

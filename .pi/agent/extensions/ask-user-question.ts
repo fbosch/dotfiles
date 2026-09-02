@@ -12,6 +12,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { isYoloModeEnabled } from "./yolo";
 
 interface AskOption {
   label: string;
@@ -46,6 +47,24 @@ export interface AskUserQuestionInput {
   options?: Array<{ label: string; value?: string; description?: string }>;
   multiSelect?: boolean;
 }
+
+export interface AskUserQuestionRuntimeOptions {
+  includeOther?: boolean;
+}
+
+export type McpToolApprovalDecision = "allow_once" | "allow_for_session" | "deny" | "abstain";
+
+export interface McpToolApprovalRequest {
+  serverName: string;
+  originalToolName: string;
+  args: Record<string, unknown>;
+  signal?: AbortSignal;
+  claim(handler: () => McpToolApprovalDecision | Promise<McpToolApprovalDecision>): boolean;
+}
+
+// Claim the adapter's broker event synchronously so this extension owns the
+// approval UI without modifying the adapter's authorization logic.
+const MCP_TOOL_APPROVAL_REQUEST_EVENT = "pi-mcp-adapter:tool-approval-request";
 
 type AskUserQuestionStatus = "answered" | "cancelled" | "unavailable";
 type AskUserQuestionMode = "text" | "single-select" | "multi-select";
@@ -216,6 +235,7 @@ class QuestionPromptComponent implements Component {
     private readonly context: string | undefined,
     private readonly mode: AskUserQuestionMode,
     private readonly options: AskOption[],
+    private readonly includeOther: boolean,
     private readonly keybindings: QuestionPromptKeybindings,
     private readonly requestRender: () => void,
     private readonly done: (answers: AskAnswer[] | undefined) => void,
@@ -291,7 +311,7 @@ class QuestionPromptComponent implements Component {
       this.chooseOption(optionIndex);
       return;
     }
-    if (matchesKey(data, "o")) {
+    if (this.includeOther && matchesKey(data, "o")) {
       this.highlightedIndex = this.options.length;
       this.openCustomAnswer();
       return;
@@ -357,13 +377,15 @@ class QuestionPromptComponent implements Component {
         selected: this.selectedOptions.has(index),
       };
     });
-    rows.push({
-      kind: "other",
-      hotkey: "o",
-      label: otherLabel(this.options),
-      ...(this.customAnswer === undefined ? {} : { description: this.customAnswer.label }),
-      selected: this.customAnswer !== undefined,
-    });
+    if (this.includeOther) {
+      rows.push({
+        kind: "other",
+        hotkey: "o",
+        label: otherLabel(this.options),
+        ...(this.customAnswer === undefined ? {} : { description: this.customAnswer.label }),
+        selected: this.customAnswer !== undefined,
+      });
+    }
     if (this.mode === "multi-select") {
       const count = this.answerCount();
       rows.push({
@@ -422,7 +444,7 @@ class QuestionPromptComponent implements Component {
       this.chooseOption(this.highlightedIndex);
       return;
     }
-    if (this.highlightedIndex === this.options.length) {
+    if (this.includeOther && this.highlightedIndex === this.options.length) {
       this.openCustomAnswer();
       return;
     }
@@ -516,6 +538,7 @@ async function askInline(
   context: string | undefined,
   mode: AskUserQuestionMode,
   options: AskOption[],
+  includeOther: boolean,
   signal: AbortSignal | undefined,
 ): Promise<AskAnswer[] | undefined> {
   if (isAborted(signal)) return undefined;
@@ -538,6 +561,7 @@ async function askInline(
         context,
         mode,
         options,
+        includeOther,
         keybindings,
         () => tui.requestRender(),
         finish,
@@ -661,14 +685,16 @@ async function askSingleChoice(
   ctx: ExtensionContext,
   title: string,
   options: AskOption[],
+  includeOther: boolean,
   signal: AbortSignal | undefined,
 ): Promise<AskAnswer | undefined> {
   const customLabel = otherLabel(options);
   const displayedOptions = options.map((option, index) => optionLabel(option, index));
+  const choices = includeOther ? [...displayedOptions, customLabel] : displayedOptions;
   const dialogOptions = signal === undefined ? undefined : { signal };
 
   while (isAborted(signal) === false) {
-    const selected = await ctx.ui.select(title, [...displayedOptions, customLabel], dialogOptions);
+    const selected = await ctx.ui.select(title, choices, dialogOptions);
     if (selected === undefined || isAborted(signal)) return undefined;
 
     const selectedIndex = displayedOptions.indexOf(selected);
@@ -682,6 +708,8 @@ async function askSingleChoice(
         index: selectedIndex + 1,
       };
     }
+
+    if (!includeOther || selected !== customLabel) return undefined;
 
     const customAnswer = await ctx.ui.input(
       `${title}\n\nWrite your custom answer:`,
@@ -704,6 +732,7 @@ async function askMultipleChoice(
   ctx: ExtensionContext,
   title: string,
   options: AskOption[],
+  includeOther: boolean,
   signal: AbortSignal | undefined,
 ): Promise<AskAnswer[] | undefined> {
   const selectedOptions = new Map<number, OptionAnswer>();
@@ -719,11 +748,10 @@ async function askMultipleChoice(
     }`;
     const answerCount = selectedOptions.size + (customAnswer === undefined ? 0 : 1);
     const submitDisplay = `Submit (${answerCount} selected)`;
-    const selected = await ctx.ui.select(
-      title,
-      [...displayedOptions, customDisplay, submitDisplay],
-      dialogOptions,
-    );
+    const choices = includeOther
+      ? [...displayedOptions, customDisplay, submitDisplay]
+      : [...displayedOptions, submitDisplay];
+    const selected = await ctx.ui.select(title, choices, dialogOptions);
 
     if (selected === undefined || isAborted(signal)) return undefined;
     if (selected === submitDisplay) {
@@ -739,7 +767,7 @@ async function askMultipleChoice(
       return answers;
     }
 
-    if (selected === customDisplay) {
+    if (includeOther && selected === customDisplay) {
       const answer = await ctx.ui.input(
         `${title}\n\nCustom answer (submit an empty value to clear it):`,
         customAnswer?.label ?? "Type your answer",
@@ -779,6 +807,7 @@ export async function runAskUserQuestion(
   params: AskUserQuestionInput,
   signal: AbortSignal | undefined,
   ctx: ExtensionContext,
+  runtimeOptions: AskUserQuestionRuntimeOptions = {},
 ): Promise<
   | ReturnType<typeof answeredResult>
   | ReturnType<typeof cancelledResult>
@@ -786,6 +815,7 @@ export async function runAskUserQuestion(
 > {
   const options = normalizeOptions(params.options);
   const context = params.details?.trim() || undefined;
+  const includeOther = runtimeOptions.includeOther ?? true;
   const mode: AskUserQuestionMode =
     options.length === 0 ? "text" : params.multiSelect === true ? "multi-select" : "single-select";
 
@@ -794,7 +824,15 @@ export async function runAskUserQuestion(
 
   const result = await sharedUILock.withLock(async () => {
     if (ctx.mode === "tui") {
-      const answers = await askInline(ctx, params.question, context, mode, options, signal);
+      const answers = await askInline(
+        ctx,
+        params.question,
+        context,
+        mode,
+        options,
+        includeOther,
+        signal,
+      );
       if (answers === undefined) return cancelledResult(params.question, mode, context);
       return answeredResult(params.question, mode, answers, context);
     }
@@ -817,12 +855,12 @@ export async function runAskUserQuestion(
     }
 
     if (mode === "single-select") {
-      const answer = await askSingleChoice(ctx, title, options, signal);
+      const answer = await askSingleChoice(ctx, title, options, includeOther, signal);
       if (answer === undefined) return cancelledResult(params.question, mode, context);
       return answeredResult(params.question, mode, [answer], context);
     }
 
-    const answers = await askMultipleChoice(ctx, title, options, signal);
+    const answers = await askMultipleChoice(ctx, title, options, includeOther, signal);
     if (answers === undefined) return cancelledResult(params.question, mode, context);
     return answeredResult(params.question, mode, answers, context);
   }, signal);
@@ -830,7 +868,108 @@ export async function runAskUserQuestion(
   return result ?? cancelledResult(params.question, mode, context);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isMcpToolApprovalRequest(value: unknown): value is McpToolApprovalRequest {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.serverName === "string" &&
+    typeof value.originalToolName === "string" &&
+    isRecord(value.args) &&
+    typeof value.claim === "function" &&
+    (value.signal === undefined || value.signal instanceof AbortSignal)
+  );
+}
+
+function sanitizeMcpDisplayText(value: string, preserveLayout: boolean): string {
+  return [...value]
+    .map((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      if (preserveLayout && (character === "\n" || character === "\t")) return character;
+      return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? " " : character;
+    })
+    .join("");
+}
+
+function formatMcpArguments(args: Record<string, unknown>): string | undefined {
+  try {
+    const serialized = JSON.stringify(args, null, 2);
+    if (serialized === undefined) return undefined;
+    const sanitized = sanitizeMcpDisplayText(serialized, true);
+    return sanitized.length > 500 ? `${sanitized.slice(0, 500)}...` : sanitized;
+  } catch {
+    return undefined;
+  }
+}
+
+function decisionFromAnswer(
+  result: Awaited<ReturnType<typeof runAskUserQuestion>>,
+): McpToolApprovalDecision {
+  if (result.details.status !== "answered") return "deny";
+  const answer = result.details.answers[0];
+  if (answer?.type !== "option") return "deny";
+  if (
+    answer.value === "allow_once" ||
+    answer.value === "allow_for_session" ||
+    answer.value === "deny"
+  ) {
+    return answer.value;
+  }
+  return "deny";
+}
+
+export function handleMcpToolApprovalRequest(
+  value: unknown,
+  ctx: ExtensionContext | undefined,
+): boolean {
+  // Abstain so the YOLO broker can win regardless of global extension discovery order.
+  if (!isMcpToolApprovalRequest(value) || ctx?.hasUI !== true || isYoloModeEnabled()) return false;
+
+  const request = value;
+  const serverName = sanitizeMcpDisplayText(request.serverName, false);
+  const toolName = sanitizeMcpDisplayText(request.originalToolName, false);
+  const details = formatMcpArguments(request.args);
+  return request.claim(async () => {
+    if (details === undefined) return "deny";
+
+    const result = await runAskUserQuestion(
+      {
+        question: `MCP: ${serverName} wants to run ${toolName}`,
+        details: `Arguments:\n${details}`,
+        options: [
+          { label: "Allow once", value: "allow_once" },
+          { label: "Allow for session", value: "allow_for_session" },
+          { label: "Deny", value: "deny" },
+        ],
+      },
+      request.signal,
+      ctx,
+      { includeOther: false },
+    );
+    return decisionFromAnswer(result);
+  });
+}
+
+function registerMcpApprovalBridge(pi: ExtensionAPI): void {
+  // The adapter event carries the request but not Pi's ExtensionContext.
+  let activeContext: ExtensionContext | undefined;
+
+  pi.on("session_start", (_event, ctx) => {
+    activeContext = ctx;
+  });
+  pi.on("session_shutdown", () => {
+    activeContext = undefined;
+  });
+  pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
+    handleMcpToolApprovalRequest(value, activeContext);
+  });
+}
+
 export default function askUserQuestion(pi: ExtensionAPI): void {
+  registerMcpApprovalBridge(pi);
+
   pi.registerTool(
     defineTool<typeof AskUserQuestionParams, AskUserQuestionResultDetails>({
       name: "ask_user_question",

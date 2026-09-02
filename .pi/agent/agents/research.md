@@ -4,7 +4,7 @@ description: Gathers information from docs, web, and codebases without making ch
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep, bash, websearch, webfetch, mcp__context7, mcp__github
+tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__github
 permission:
   "*": deny
   read: allow
@@ -13,8 +13,7 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash:
-    "*": ask
+  bash: deny
   external_directory_write: deny
   websearch: ask
   webfetch: ask

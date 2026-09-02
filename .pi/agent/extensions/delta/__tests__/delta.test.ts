@@ -94,7 +94,7 @@ describe("Delta Git invocation", () => {
     expect(deltaArgs).not.toContain("--side-by-side");
   });
 
-  test("uses undecorated, background-free Delta styles", () => {
+  test("uses undecorated Delta styles with uniform Zenwritten line backgrounds", () => {
     const deltaArgs = buildDeltaInvocation("side-by-side", 116, {
       context: 8,
       edit: true,
@@ -108,10 +108,10 @@ describe("Delta Git invocation", () => {
     expect(deltaArgs).toContain("--hunk-header-decoration-style=omit");
     expect(deltaArgs).toContain("--line-numbers-minus-style=88");
     expect(deltaArgs).toContain("--line-numbers-plus-style=28");
-    expect(deltaArgs).toContain("--minus-style=syntax");
-    expect(deltaArgs).toContain("--minus-emph-style=syntax");
-    expect(deltaArgs).toContain("--plus-style=syntax");
-    expect(deltaArgs).toContain("--plus-emph-style=syntax");
+    expect(deltaArgs).toContain('--minus-style=syntax "#3E2225"');
+    expect(deltaArgs).toContain('--minus-emph-style=syntax "#3E2225"');
+    expect(deltaArgs).toContain('--plus-style=syntax "#232D1A"');
+    expect(deltaArgs).toContain('--plus-emph-style=syntax "#232D1A"');
     expect(deltaArgs).toContain("--diff-args=-U8");
   });
 
@@ -161,19 +161,30 @@ describe("Delta output handling", () => {
     expect(sanitizeTerminalOutput(output)).toBe(output);
   });
 
-  test("keeps the tool background solid and uses Pi's diff colors", () => {
+  test("fills changed lines with uniform backgrounds and uses Pi's diff colors", () => {
     const theme = {
-      getFgAnsi: (color: string) =>
-        color === "toolDiffAdded" ? "\u001b[38;2;129;155;105m" : "\u001b[38;2;222;110;124m",
-    } as Theme;
-    const output =
-      "\u001b[48;2;0;40;0;38;5;28madded\u001b[0m " + "\u001b[48;2;63;0;1;38;5;88mremoved\u001b[0m";
+      getBgAnsi: () => "\u001b[48;2;34;34;34m",
+      getFgAnsi: (color: string) => {
+        if (color === "toolDiffAdded") return "\u001b[38;2;129;155;105m";
+        if (color === "toolDiffRemoved") return "\u001b[38;2;222;110;124m";
+        return "\u001b[38;2;104;104;104m";
+      },
+    };
+    const output = [
+      "\u001b[34m│\u001b[48;2;35;45;26;38;5;28madded\u001b[0m\u001b[48;2;35;45;26m\u001b[0K\u001b[0m",
+      "\u001b[34m│\u001b[48;2;62;34;37;38;5;88mremoved\u001b[0m\u001b[48;2;62;34;37m\u001b[0K\u001b[0m",
+    ].join("\n");
     const themed = applyDiffTheme(output, theme);
+    const rendered = renderDiffLines(themed.split("\n"), 12);
 
+    expect(themed).toContain("\u001b[48;2;35;45;26m");
+    expect(themed).toContain("\u001b[48;2;62;34;37m");
+    expect(themed).toContain("\u001b[38;2;104;104;104m│");
     expect(themed).toContain("\u001b[38;2;129;155;105madded");
     expect(themed).toContain("\u001b[38;2;222;110;124mremoved");
-    expect(themed).not.toContain("\u001b[0m");
-    expect(themed).not.toContain("48;2");
+    expect(themed).toContain("\u001b[0m\u001b[48;2;34;34;34m");
+    expect(rendered).toHaveLength(2);
+    expect(rendered.every((line) => visibleWidth(line) === 12)).toBeTrue();
   });
 
   test("bounds output by complete lines", () => {
@@ -578,8 +589,9 @@ describe("Delta extension", () => {
         bg: (_color: string, text: string) => text,
         bold: (text: string) => text,
         fg: (_color: string, text: string) => text,
+        getBgAnsi: () => "\u001b[48;2;34;34;34m",
         getFgAnsi: (color: string) => `<${color}>`,
-      } as Theme;
+      } as unknown as Theme;
       const rendered = renderResult(result, { expanded: true, isPartial: false }, theme, {
         args: { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
         argsComplete: true,

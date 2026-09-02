@@ -4,7 +4,7 @@ description: Finds existing implementations, usage examples, and conventions in 
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: low
-tools: read, grep, find, ls, fffind, ffgrep, bash
+tools: read, grep, find, ls, fffind, ffgrep
 permission:
   "*": deny
   read: allow
@@ -13,8 +13,7 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  bash:
-    "*": ask
+  bash: deny
   external_directory: ask
   external_directory_write: deny
 ---

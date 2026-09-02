@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
-import askUserQuestion, { type AskUserQuestionResultDetails } from "../ask-user-question";
+import askUserQuestion, {
+  type AskUserQuestionResultDetails,
+  handleMcpToolApprovalRequest,
+  type McpToolApprovalDecision,
+  type McpToolApprovalRequest,
+} from "../ask-user-question";
 
 interface QuestionParams {
   question: string;
@@ -14,6 +19,8 @@ interface QuestionResult {
   content: Array<{ type: "text"; text: string }>;
   details: AskUserQuestionResultDetails;
 }
+
+type ApprovalHandler = () => McpToolApprovalDecision | Promise<McpToolApprovalDecision>;
 
 interface RegisteredQuestionTool {
   execute(
@@ -30,6 +37,12 @@ function registerQuestionTool(): RegisteredQuestionTool {
   const pi = {
     registerTool(tool: unknown) {
       registeredTool = tool as RegisteredQuestionTool;
+    },
+    on() {},
+    events: {
+      on() {
+        return () => undefined;
+      },
     },
   } as unknown as ExtensionAPI;
 
@@ -190,6 +203,39 @@ describe("ask_user_question", () => {
     expect(result.details.answers).toEqual([
       { type: "option", label: "Blue", value: "blue", index: 2 },
     ]);
+  });
+
+  test("routes MCP approval through the inline prompt", async () => {
+    let approvalHandler: ApprovalHandler | undefined;
+    const request: McpToolApprovalRequest = {
+      serverName: "github",
+      originalToolName: "search_code",
+      args: { query: "repo:hyprwm/Hyprland dragThresholdReached" },
+      claim(handler: ApprovalHandler) {
+        approvalHandler = handler;
+        return true;
+      },
+    };
+
+    expect(
+      handleMcpToolApprovalRequest(
+        request,
+        createInlineContext((component, rendered) => {
+          expect(rendered).toContain("MCP: github wants to run search_code");
+          expect(rendered).toContain("Arguments:");
+          expect(rendered).toContain("▶ (1) Allow once");
+          expect(rendered.some((line) => line.includes("(2) Allow for session"))).toBe(true);
+          expect(rendered.some((line) => line.includes("(3) Deny"))).toBe(true);
+          expect(rendered.some((line) => line.includes("Other"))).toBe(false);
+          component.handleInput?.("o");
+          expect(component.render(80)).not.toContain("Custom answer:");
+          component.handleInput?.("2");
+        }),
+      ),
+    ).toBe(true);
+
+    if (approvalHandler === undefined) throw new Error("MCP approval handler was not claimed");
+    expect(await approvalHandler()).toBe("allow_for_session");
   });
 
   test("collects free-form input from the inline prompt", async () => {

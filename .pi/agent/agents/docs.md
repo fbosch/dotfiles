@@ -5,7 +5,7 @@ prompt_mode: replace
 model: openai-codex/gpt-5.6-terra
 thinking: medium
 max_turns: 6
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
+tools: read, grep, find, ls, fffind, ffgrep, write, edit
 permission:
   "*": deny
   read: allow
@@ -16,8 +16,7 @@ permission:
   ffgrep: allow
   write: allow
   edit: allow
-  bash:
-    "*": ask
+  bash: deny
   external_directory: ask
 ---
 
