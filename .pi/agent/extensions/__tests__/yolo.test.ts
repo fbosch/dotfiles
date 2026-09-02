@@ -104,6 +104,9 @@ describe("YOLO mode", () => {
       ui: {
         notify: (message: string, level: string) => notifications.push([message, level]),
         setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
+        theme: {
+          fg: (color: string, value: string) => `${color}:${value}`,
+        },
       },
       reload: async () => {
         reloads += 1;
@@ -113,7 +116,7 @@ describe("YOLO mode", () => {
     await handler("", context);
 
     expect(commandName).toBe("yolo");
-    expect(statuses).toEqual([["pi-permission-system", "yolo"]]);
+    expect(statuses).toEqual([["pi-permission-system", "error:yolo"]]);
     expect(reloads).toBe(0);
     expect(notifications).toEqual([
       [

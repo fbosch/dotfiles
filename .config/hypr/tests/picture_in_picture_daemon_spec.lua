@@ -63,6 +63,12 @@ local function run_daemon(options)
 		end,
 	}
 	package.loaded["lib.json"] = {
+		array = function(value)
+			if value == "plugins" then
+				return options.plugins or {}
+			end
+			return {}
+		end,
 		encode = function(value)
 			if type(value) == "table" then
 				return string.format('{"x":%d,"y":%d,"action":%q}', value.x, value.y, value.action)
@@ -107,11 +113,7 @@ local function run_daemon(options)
 				monitors = input.monitors,
 				bars = input.bars,
 			}
-			if
-				input.event.type == "startup"
-				or input.event.native_interaction
-				or (input.event.type == "tick" and options.capture_tick_clients)
-			then
+			if input.event.type == "startup" or input.event.native_interaction then
 				captured.clients = input.clients
 			end
 			if input.event.native_interaction then
@@ -206,6 +208,9 @@ local function run_daemon(options)
 				end,
 				request = function(_, message, request_options)
 					requests[#requests + 1] = { message = message, options = request_options }
+					if message == "j/plugin list" then
+						return "plugins"
+					end
 					if message:match("^accept ") then
 						return options.acceptance_response or "ok\n"
 					end
@@ -330,38 +335,32 @@ describe("picture-in-picture daemon adapter", function()
 		assert.same({ "quit" }, result.control_messages)
 	end)
 
-	it("keeps polling until the first native geometry update is delivered", function()
+	it("keeps native-only delivery across drag interactions when the plugin is loaded", function()
 		local result = run_daemon({
-			selected = { "control", "timeout", "control" },
-			control_messages = { "interaction-updates-ready", "quit" },
-			dragging = true,
-			dragging_address = "0x1",
-			next_observation_at = 10.1,
+			selected = { "control", "control" },
+			control_messages = { "drag-start 0x1", "quit" },
+			plugins = { { name = "window-interaction-hooks" } },
 		})
 
 		assert.equal("startup", result.reducer_inputs[1].event.type)
-		assert.equal("tick", result.reducer_inputs[2].event.type)
+		assert.equal("drag-start", result.reducer_inputs[2].event.action)
 		assert.equal("quit", result.reducer_inputs[3].event.action)
-		assert.is_true(math.abs(result.select_timeouts[2] - 0.1) < 0.000001)
-		assert.same({ "quit" }, result.control_messages)
+		assert.equal(1, result.client_queries)
+		assert.same({}, result.select_timeouts)
+		assert.same({ "drag-start 0x1", "quit" }, result.control_messages)
 	end)
 
-	it("resumes polling when a new drag has not delivered native geometry", function()
+	it("retains drag polling when the interaction plugin is unavailable", function()
 		local result = run_daemon({
-			selected = { "event", "control", "control" },
-			event_lines = { "windowinteractionupdated>>0x1,move,1,2960,1150,400,225" },
+			selected = { "control", "control" },
 			control_messages = { "drag-start 0x1", "quit" },
-			dragging = true,
-			dragging_address = "0x1",
-			capture_tick_clients = true,
 		})
 
-		assert.is_true(result.reducer_inputs[2].event.native_interaction)
-		assert.equal("drag-start", result.reducer_inputs[3].event.action)
-		assert.equal("tick", result.reducer_inputs[4].event.type)
-		assert.same({ address = "0x1" }, result.reducer_inputs[4].clients[1])
-		assert.equal("quit", result.reducer_inputs[5].event.action)
-		assert.equal(2, result.client_queries)
+		assert.equal("startup", result.reducer_inputs[1].event.type)
+		assert.equal("drag-start", result.reducer_inputs[2].event.action)
+		assert.equal("tick", result.reducer_inputs[3].event.type)
+		assert.equal("quit", result.reducer_inputs[4].event.action)
+		assert.equal(0.1, result.select_timeouts[1])
 	end)
 
 	it("uses visible bar geometry for hide policy, then clears it for native updates", function()

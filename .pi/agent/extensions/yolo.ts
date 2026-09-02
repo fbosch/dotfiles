@@ -202,7 +202,10 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
 
       try {
         const result = toggleYoloMode(agentDirectory);
-        ctx.ui.setStatus(PERMISSION_SYSTEM_STATUS_KEY, result.enabled ? "yolo" : undefined);
+        ctx.ui.setStatus(
+          PERMISSION_SYSTEM_STATUS_KEY,
+          result.enabled ? ctx.ui.theme.fg("error", "yolo") : undefined,
+        );
         ctx.ui.notify(
           result.enabled
             ? "Global YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."

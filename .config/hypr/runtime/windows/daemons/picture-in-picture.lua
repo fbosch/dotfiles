@@ -33,6 +33,15 @@ local function request(message)
 	return kit:request(message) or ""
 end
 
+local function native_interaction_updates_available()
+	for _, plugin in ipairs(json.array(request("j/plugin list"))) do
+		if plugin.name == "window-interaction-hooks" then
+			return true
+		end
+	end
+	return false
+end
+
 local function monitor_geometry_changed(previous, current)
 	for name, monitor in pairs(current) do
 		local old = previous[name]
@@ -210,15 +219,11 @@ end
 
 local function handle_control(message)
 	if message == "interaction-updates-ready" then
-		-- Capability is not delivery: keep polling until the first native update proves the stream works.
+		native_updates_ready = true
 		return false
 	end
 
 	local action, address, direction = pip.control.decode(message)
-	if action == "drag-start" then
-		-- Native update delivery is interaction-scoped; each drag must prove its own stream before polling stops.
-		native_updates_ready = false
-	end
 
 	-- Use the pre-transition layer geometry while applying show/hide policy,
 	-- then keep only the geometry for the resulting visibility state.
@@ -355,6 +360,7 @@ end
 
 local function run()
 	refresh_monitors()
+	native_updates_ready = native_interaction_updates_available()
 	state.waybar_visible = next(visible_waybar_layers()) ~= nil
 	refresh_bars(state.waybar_visible)
 	place(socket.gettime(), { type = "startup" }, current_bars)
