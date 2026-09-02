@@ -381,12 +381,17 @@ async function main(): Promise<void> {
       style(` Message is ${commitMsg.length} chars (over 50)`, 3);
       style(`  ${commitMsg}`, 208);
 
-      const action = await choose("Pick an action", ["Edit current message", "Retry", "Cancel"]);
+      const action = await choose("Pick an action", [
+        "Edit current message",
+        "Proceed",
+        "Retry",
+        "Cancel",
+      ]);
       if (action === null || action === "Cancel") {
         exitCancelled("Commit cancelled");
       }
 
-      if (action === "Edit current message") {
+      if (action === "Edit current message" || action === "Proceed") {
         break;
       }
     }

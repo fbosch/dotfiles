@@ -2,15 +2,15 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import {
-  handleMcpToolApprovalRequest,
-  permissionSystemConfigPath,
-  registerYoloCommand,
-  toggleYoloMode,
-} from "../yolo";
+import type {
+  ExtensionAPI,
+  ExtensionCommandContext,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { permissionSystemConfigPath, registerYoloCommand, toggleYoloMode } from "../yolo";
 
 type YoloCommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => void;
 
 const temporaryDirectories: string[] = [];
 
@@ -29,19 +29,24 @@ async function temporaryAgentDirectory(): Promise<string> {
 function captureCommand(agentDirectory: string): {
   handler: YoloCommandHandler;
   commandName: string;
+  sessionStart: SessionStartHandler | undefined;
 } {
   let handler: YoloCommandHandler | undefined;
   let commandName = "";
+  let sessionStart: SessionStartHandler | undefined;
   const pi = {
     registerCommand(name: string, command: { handler: YoloCommandHandler }) {
       commandName = name;
       handler = command.handler;
     },
+    on(name: string, candidate: SessionStartHandler) {
+      if (name === "session_start") sessionStart = candidate;
+    },
   } as unknown as ExtensionAPI;
 
   registerYoloCommand(pi, agentDirectory);
   if (handler === undefined) throw new Error("YOLO command was not registered");
-  return { handler, commandName };
+  return { handler, commandName, sessionStart };
 }
 
 describe("YOLO mode", () => {
@@ -68,30 +73,26 @@ describe("YOLO mode", () => {
     expect(JSON.parse(await readFile(configPath, "utf8")).yoloMode).toBeFalse();
   });
 
-  test("auto-approves MCP tool runs only while YOLO mode is enabled", async () => {
+  test("restores the enabled status on session start", async () => {
     const agentDirectory = await temporaryAgentDirectory();
-    let approvalHandler: (() => "allow_once" | Promise<"allow_once">) | undefined;
-    const request = {
-      serverName: "github",
-      originalToolName: "delete_issue",
-      args: { issue: 42 },
-      claim(handler: () => "allow_once" | Promise<"allow_once">) {
-        approvalHandler = handler;
-        return true;
+    await writeFile(permissionSystemConfigPath(agentDirectory), JSON.stringify({ yoloMode: true }));
+    const { sessionStart } = captureCommand(agentDirectory);
+    if (sessionStart === undefined)
+      throw new Error("YOLO session-start handler was not registered");
+
+    const statuses: Array<[string, string | undefined]> = [];
+    const context = {
+      ui: {
+        setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
+        theme: {
+          fg: (color: string, value: string) => `${color}:${value}`,
+        },
       },
-    };
+    } as unknown as ExtensionContext;
 
-    expect(handleMcpToolApprovalRequest(request, agentDirectory)).toBe(false);
-    expect(approvalHandler).toBeUndefined();
+    sessionStart({}, context);
 
-    await writeFile(
-      permissionSystemConfigPath(agentDirectory),
-      JSON.stringify({ yoloMode: true, permission: { "*": "deny" } }),
-    );
-
-    expect(handleMcpToolApprovalRequest(request, agentDirectory)).toBe(true);
-    if (approvalHandler === undefined) throw new Error("MCP approval was not claimed");
-    expect(await approvalHandler()).toBe("allow_once");
+    expect(statuses).toEqual([["pi-permission-system", "error:󱚝 yolo"]]);
   });
 
   test("reports the new state without reloading the UI", async () => {
@@ -116,7 +117,7 @@ describe("YOLO mode", () => {
     await handler("", context);
 
     expect(commandName).toBe("yolo");
-    expect(statuses).toEqual([["pi-permission-system", "error:yolo"]]);
+    expect(statuses).toEqual([["pi-permission-system", "error:󱚝 yolo"]]);
     expect(reloads).toBe(0);
     expect(notifications).toEqual([
       [

@@ -12,7 +12,6 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import { isYoloModeEnabled } from "./yolo";
 
 interface AskOption {
   label: string;
@@ -51,20 +50,6 @@ export interface AskUserQuestionInput {
 export interface AskUserQuestionRuntimeOptions {
   includeOther?: boolean;
 }
-
-export type McpToolApprovalDecision = "allow_once" | "allow_for_session" | "deny" | "abstain";
-
-export interface McpToolApprovalRequest {
-  serverName: string;
-  originalToolName: string;
-  args: Record<string, unknown>;
-  signal?: AbortSignal;
-  claim(handler: () => McpToolApprovalDecision | Promise<McpToolApprovalDecision>): boolean;
-}
-
-// Claim the adapter's broker event synchronously so this extension owns the
-// approval UI without modifying the adapter's authorization logic.
-const MCP_TOOL_APPROVAL_REQUEST_EVENT = "pi-mcp-adapter:tool-approval-request";
 
 type AskUserQuestionStatus = "answered" | "cancelled" | "unavailable";
 type AskUserQuestionMode = "text" | "single-select" | "multi-select";
@@ -868,108 +853,7 @@ export async function runAskUserQuestion(
   return result ?? cancelledResult(params.question, mode, context);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isMcpToolApprovalRequest(value: unknown): value is McpToolApprovalRequest {
-  if (!isRecord(value)) return false;
-  return (
-    typeof value.serverName === "string" &&
-    typeof value.originalToolName === "string" &&
-    isRecord(value.args) &&
-    typeof value.claim === "function" &&
-    (value.signal === undefined || value.signal instanceof AbortSignal)
-  );
-}
-
-function sanitizeMcpDisplayText(value: string, preserveLayout: boolean): string {
-  return [...value]
-    .map((character) => {
-      const code = character.codePointAt(0) ?? 0;
-      if (preserveLayout && (character === "\n" || character === "\t")) return character;
-      return code <= 0x1f || (code >= 0x7f && code <= 0x9f) ? " " : character;
-    })
-    .join("");
-}
-
-function formatMcpArguments(args: Record<string, unknown>): string | undefined {
-  try {
-    const serialized = JSON.stringify(args, null, 2);
-    if (serialized === undefined) return undefined;
-    const sanitized = sanitizeMcpDisplayText(serialized, true);
-    return sanitized.length > 500 ? `${sanitized.slice(0, 500)}...` : sanitized;
-  } catch {
-    return undefined;
-  }
-}
-
-function decisionFromAnswer(
-  result: Awaited<ReturnType<typeof runAskUserQuestion>>,
-): McpToolApprovalDecision {
-  if (result.details.status !== "answered") return "deny";
-  const answer = result.details.answers[0];
-  if (answer?.type !== "option") return "deny";
-  if (
-    answer.value === "allow_once" ||
-    answer.value === "allow_for_session" ||
-    answer.value === "deny"
-  ) {
-    return answer.value;
-  }
-  return "deny";
-}
-
-export function handleMcpToolApprovalRequest(
-  value: unknown,
-  ctx: ExtensionContext | undefined,
-): boolean {
-  // Abstain so the YOLO broker can win regardless of global extension discovery order.
-  if (!isMcpToolApprovalRequest(value) || ctx?.hasUI !== true || isYoloModeEnabled()) return false;
-
-  const request = value;
-  const serverName = sanitizeMcpDisplayText(request.serverName, false);
-  const toolName = sanitizeMcpDisplayText(request.originalToolName, false);
-  const details = formatMcpArguments(request.args);
-  return request.claim(async () => {
-    if (details === undefined) return "deny";
-
-    const result = await runAskUserQuestion(
-      {
-        question: `MCP: ${serverName} wants to run ${toolName}`,
-        details: `Arguments:\n${details}`,
-        options: [
-          { label: "Allow once", value: "allow_once" },
-          { label: "Allow for session", value: "allow_for_session" },
-          { label: "Deny", value: "deny" },
-        ],
-      },
-      request.signal,
-      ctx,
-      { includeOther: false },
-    );
-    return decisionFromAnswer(result);
-  });
-}
-
-function registerMcpApprovalBridge(pi: ExtensionAPI): void {
-  // The adapter event carries the request but not Pi's ExtensionContext.
-  let activeContext: ExtensionContext | undefined;
-
-  pi.on("session_start", (_event, ctx) => {
-    activeContext = ctx;
-  });
-  pi.on("session_shutdown", () => {
-    activeContext = undefined;
-  });
-  pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
-    handleMcpToolApprovalRequest(value, activeContext);
-  });
-}
-
 export default function askUserQuestion(pi: ExtensionAPI): void {
-  registerMcpApprovalBridge(pi);
-
   pi.registerTool(
     defineTool<typeof AskUserQuestionParams, AskUserQuestionResultDetails>({
       name: "ask_user_question",

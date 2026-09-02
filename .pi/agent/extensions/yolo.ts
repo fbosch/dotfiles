@@ -9,20 +9,15 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
-import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  getAgentDir,
+} from "@earendil-works/pi-coding-agent";
 
-const PERMISSION_SYSTEM_STATUS_KEY = "pi-permission-system";
+export const PERMISSION_SYSTEM_STATUS_KEY = "pi-permission-system";
+export const YOLO_STATUS_TEXT = "󱚝 yolo";
 const PERMISSION_SYSTEM_CONFIG_DIRECTORY = "pi-permission-system";
-const MCP_TOOL_APPROVAL_REQUEST_EVENT = "pi-mcp-adapter:tool-approval-request";
-
-type McpToolApprovalDecision = "allow_once" | "allow_for_session" | "deny" | "abstain";
-
-type McpToolApprovalRequest = {
-  serverName: string;
-  originalToolName: string;
-  args: Record<string, unknown>;
-  claim(handler: () => McpToolApprovalDecision | Promise<McpToolApprovalDecision>): boolean;
-};
 
 export interface YoloModeToggleResult {
   enabled: boolean;
@@ -123,6 +118,13 @@ export function isYoloModeEnabled(agentDirectory = getAgentDir()): boolean {
   }
 }
 
+function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): void {
+  ctx.ui.setStatus(
+    PERMISSION_SYSTEM_STATUS_KEY,
+    enabled ? ctx.ui.theme.fg("error", YOLO_STATUS_TEXT) : undefined,
+  );
+}
+
 function writeConfig(configPath: string, config: Record<string, unknown>): void {
   const temporaryPath = `${configPath}.${process.pid}.${randomUUID()}.tmp`;
   let mode = 0o600;
@@ -166,32 +168,11 @@ export function toggleYoloMode(agentDirectory = getAgentDir()): YoloModeToggleRe
   return { enabled, configPath };
 }
 
-function isMcpToolApprovalRequest(value: unknown): value is McpToolApprovalRequest {
-  return (
-    isRecord(value) &&
-    typeof value.serverName === "string" &&
-    typeof value.originalToolName === "string" &&
-    isRecord(value.args) &&
-    typeof value.claim === "function"
-  );
-}
-
-export function handleMcpToolApprovalRequest(
-  value: unknown,
-  agentDirectory = getAgentDir(),
-): boolean {
-  if (!isMcpToolApprovalRequest(value) || !isYoloModeEnabled(agentDirectory)) return false;
-  // Do not populate the adapter's session cache; the live toggle covers each request.
-  return value.claim(() => "allow_once");
-}
-
-export function registerYoloApprovalBridge(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
-  pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
-    handleMcpToolApprovalRequest(value, agentDirectory);
-  });
-}
-
 export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
+  pi.on("session_start", (_event, ctx) => {
+    setYoloStatus(ctx, isYoloModeEnabled(agentDirectory));
+  });
+
   pi.registerCommand("yolo", {
     description: "Toggle global YOLO mode for permission checks",
     handler: async (args, ctx) => {
@@ -202,10 +183,7 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
 
       try {
         const result = toggleYoloMode(agentDirectory);
-        ctx.ui.setStatus(
-          PERMISSION_SYSTEM_STATUS_KEY,
-          result.enabled ? ctx.ui.theme.fg("error", "yolo") : undefined,
-        );
+        setYoloStatus(ctx, result.enabled);
         ctx.ui.notify(
           result.enabled
             ? "Global YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."
@@ -221,7 +199,5 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
 }
 
 export default function yoloMode(pi: ExtensionAPI): void {
-  const agentDirectory = getAgentDir();
-  registerYoloCommand(pi, agentDirectory);
-  registerYoloApprovalBridge(pi, agentDirectory);
+  registerYoloCommand(pi, getAgentDir());
 }

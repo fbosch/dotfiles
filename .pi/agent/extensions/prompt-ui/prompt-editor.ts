@@ -21,6 +21,7 @@ import {
 } from "../mentions/project-references";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
+import { PERMISSION_SYSTEM_STATUS_KEY, YOLO_STATUS_TEXT } from "../yolo";
 import {
   AutocompleteOverlay,
   createPromptAutocompleteProvider,
@@ -95,6 +96,11 @@ function sanitizeStatus(status: string): string {
     .replace(/[\r\n\t]/g, " ")
     .replace(/ +/g, " ")
     .trim();
+}
+
+export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
+  if (key !== PERMISSION_SYSTEM_STATUS_KEY) return status;
+  return theme.fg("error", YOLO_STATUS_TEXT);
 }
 
 export function renderPromptHints(

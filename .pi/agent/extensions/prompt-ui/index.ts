@@ -2,7 +2,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
-import { PromptEditor, type PromptEditorState, renderPromptHints } from "./prompt-editor";
+import {
+  PromptEditor,
+  type PromptEditorState,
+  renderFooterStatus,
+  renderPromptHints,
+} from "./prompt-editor";
 import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
@@ -74,7 +79,8 @@ export default function promptUi(pi: ExtensionAPI): void {
       getStatuses = () =>
         [...footerData.getExtensionStatuses().entries()]
           .filter(([key]) => key !== PROFILE_STATUS_KEY)
-          .map(([, status]) => status);
+          // The permission package republishes this shared key as plain text on startup.
+          .map(([key, status]) => renderFooterStatus(theme, key, status));
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
