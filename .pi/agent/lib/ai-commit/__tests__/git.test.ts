@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  commit,
   DIFF_TRUNCATED_MARKER,
   getStagedDiff,
   getStagedSnapshot,
@@ -26,6 +27,12 @@ function createRepository(): string {
 function git(cwd: string, args: string[]): void {
   const result = spawnSync("git", args, { cwd, encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
+}
+
+function gitOutput(cwd: string, args: string[]): string {
+  const result = spawnSync("git", args, { cwd, encoding: "utf8" });
+  if (result.status !== 0) throw new Error(result.stderr);
+  return result.stdout.trim();
 }
 
 afterEach(() => {
@@ -63,6 +70,46 @@ describe("staged Git context", () => {
     const diff = getStagedDiff(300)._unsafeUnwrap();
     expect(diff.length).toBeLessThanOrEqual(300);
     expect(diff.endsWith(DIFF_TRUNCATED_MARKER)).toBeTrue();
+  });
+
+  test("synchronizes index updates made by commit hooks", () => {
+    const repository = createRepository();
+    git(repository, ["config", "user.name", "Pi Test"]);
+    git(repository, ["config", "user.email", "pi-test@example.invalid"]);
+    writeFileSync(join(repository, "verified.txt"), "verified\n");
+    writeFileSync(join(repository, "hooked.txt"), "hooked\n");
+    git(repository, ["add", "verified.txt"]);
+    const snapshot = getStagedSnapshot()._unsafeUnwrap();
+
+    const hookPath = join(repository, ".git", "hooks", "pre-commit");
+    writeFileSync(hookPath, "#!/bin/sh\ngit add hooked.txt\n");
+    chmodSync(hookPath, 0o755);
+
+    expect(commit("test: hook update", snapshot).isOk()).toBeTrue();
+    expect(gitOutput(repository, ["show", "--pretty=format:", "--name-only", "HEAD"])).toBe(
+      "hooked.txt\nverified.txt",
+    );
+    expect(gitOutput(repository, ["diff", "--cached", "--name-only"])).toBe("");
+  });
+
+  test("does not commit changes staged after the verified snapshot", () => {
+    const repository = createRepository();
+    git(repository, ["config", "user.name", "Pi Test"]);
+    git(repository, ["config", "user.email", "pi-test@example.invalid"]);
+    writeFileSync(join(repository, "verified.txt"), "verified\n");
+    writeFileSync(join(repository, "late.txt"), "late\n");
+    git(repository, ["add", "verified.txt"]);
+    const snapshot = getStagedSnapshot()._unsafeUnwrap();
+
+    const hookPath = join(repository, ".git", "hooks", "pre-commit");
+    writeFileSync(hookPath, "#!/bin/sh\nunset GIT_INDEX_FILE\ngit add late.txt\n");
+    chmodSync(hookPath, 0o755);
+
+    expect(commit("test: verified snapshot", snapshot).isOk()).toBeTrue();
+    expect(gitOutput(repository, ["show", "--pretty=format:", "--name-only", "HEAD"])).toBe(
+      "verified.txt",
+    );
+    expect(gitOutput(repository, ["diff", "--cached", "--name-only"])).toBe("late.txt");
   });
 });
 

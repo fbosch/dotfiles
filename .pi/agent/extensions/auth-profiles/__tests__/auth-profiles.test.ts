@@ -142,7 +142,7 @@ describe("auth profile prompt status", () => {
     const getProviderAuth = async () => ({
       auth: { apiKey: `access:${runtime.credentials.store.path}` },
     });
-    const selections = ["work (1 available)"];
+    const selections = ["work (availability unknown)"];
     let questionIndex = 0;
     const ctx = {
       cwd: projectDir,

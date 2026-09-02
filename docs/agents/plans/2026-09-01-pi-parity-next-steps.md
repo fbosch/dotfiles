@@ -13,7 +13,9 @@ Add Pi command or prompt equivalents for:
 - `.config/opencode/commands/rmslop.md`
 
 Keep each port independent and preserve the source command's inputs, output
-contract, and safety constraints.
+contract, and safety constraints. The production `ai_commit` shell workflow is
+already Pi-backed; `/commit-msg` remains here because no production caller used
+it and its prompt contract is a separate migration slice.
 
 Complete when each command is discoverable in Pi and passes a focused live
 workflow without relying on OpenCode.

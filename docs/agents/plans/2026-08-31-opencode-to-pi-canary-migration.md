@@ -626,6 +626,18 @@ Start with prompt-only workflows such as:
 - `plan-tasks`.
 - `rmslop`.
 
+The production `ai_commit` shell workflow is a separate path and was ported on
+2026-09-02. Fish aliases and Lazygit's Ctrl-A binding now call the Pi-owned CLI
+under `.pi/agent/lib/ai-commit/`. It retains the Clack interaction, lockfile
+bypass, model fallback, dry run, and commit behavior while using direct,
+tool-free Pi model completion. The OpenCode implementation remains unchanged
+for rollback.
+
+Validation covered 17 focused tests, a live Pi-backed interactive dry run, a
+real staged-only lockfile commit, cancellation, commit-hook index updates, and
+refusal when the staged index changed while the message was prepared. The
+separate `commit-msg` prompt template remains pending.
+
 Pi prompt templates already support `$ARGUMENTS`, positional arguments,
 defaults, slicing, and argument hints.
 

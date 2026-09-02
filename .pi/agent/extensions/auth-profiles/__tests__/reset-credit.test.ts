@@ -198,10 +198,13 @@ describe("/reset-credit", () => {
       cachePath,
       fetchFn,
       now: () => now,
-      resolveCredential: async (profile) => ({
-        accessToken: `${profile}-access`,
-        accountId: `${profile}-account`,
-      }),
+      resolveCredential: async (profile) => {
+        expect(questionShown).toBe(true);
+        return {
+          accessToken: `${profile}-access`,
+          accountId: `${profile}-account`,
+        };
+      },
     });
 
     await harness.getHandler()?.("--dry-run", harness.ctx);
@@ -245,7 +248,7 @@ describe("/reset-credit", () => {
     await harness.getHandler()?.("--dry-run", harness.ctx);
 
     expect(workCredentialResolutions).toBe(2);
-    expect(workRequests).toBe(3);
+    expect(workRequests).toBe(2);
     expect(harness.getPopupInputCalls()).toBe(0);
   });
 
@@ -263,7 +266,10 @@ describe("/reset-credit", () => {
       if (token?.startsWith("Bearer personal-")) return resetCredits(0, "unused", "Unused");
       return resetCredits(1, "opaque-work-credit", "Work reset");
     };
-    const harness = commandHarness(["work (1 available)", "Work reset (expires in 6h)"], "CONSUME");
+    const harness = commandHarness(
+      ["work (availability unknown)", "Work reset (expires in 6h)"],
+      "CONSUME",
+    );
     registerResetCreditCommand(harness.pi, {
       cachePath,
       fetchFn,
@@ -294,7 +300,7 @@ describe("/reset-credit", () => {
   test("rejects malformed reset-credit responses without mutating anything", async () => {
     const { cachePath } = await setupProfiles();
     const fetchFn = async (): Promise<Response> => Response.json({ available_count: "1" });
-    const harness = commandHarness([]);
+    const harness = commandHarness(["personal (availability unknown)"]);
     registerResetCreditCommand(harness.pi, {
       cachePath,
       fetchFn,
@@ -308,9 +314,7 @@ describe("/reset-credit", () => {
 
     expect(harness.getPopupSelectCalls()).toBe(0);
     expect(harness.getPopupInputCalls()).toBe(0);
-    expect(harness.notifications[0]).toBe(
-      "No named Pi profiles have an available reset credit.\nUnavailable profiles: personal, work.",
-    );
+    expect(harness.notifications[0]).toBe("reset credit response has an unexpected shape");
   });
 
   test("does not consume when confirmation is not exactly CONSUME", async () => {
@@ -324,7 +328,7 @@ describe("/reset-credit", () => {
       return resetCredits(1, "opaque-work-credit", "Work reset");
     };
     const harness = commandHarness(
-      ["personal (1 available)", "Work reset (expires in 6h)"],
+      ["personal (availability unknown)", "Work reset (expires in 6h)"],
       "consume",
     );
     registerResetCreditCommand(harness.pi, {

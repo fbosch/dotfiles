@@ -58,37 +58,60 @@ async function createConfiguredRuntime(cwd: string): Promise<{
   return { runtime, settings, profile };
 }
 
-export async function listPiCommitModels(cwd: string): Promise<string[]> {
-  const { runtime } = await createConfiguredRuntime(cwd);
-  return (await runtime.getAvailable()).map((model) => `${model.provider}/${model.id}`);
+function selectAvailableDefault<T extends { provider: string; id: string }>(
+  settings: SettingsManager,
+  availableModels: readonly T[],
+): T | undefined {
+  const defaultProvider = settings.getDefaultProvider();
+  const defaultModel = settings.getDefaultModel();
+  if (defaultProvider === undefined || defaultModel === undefined) return availableModels[0];
+  return (
+    availableModels.find(
+      (model) => model.provider === defaultProvider && model.id === defaultModel,
+    ) ?? availableModels[0]
+  );
+}
+
+async function resolveModelSelection(cwd: string, requestedModelRef: string | null) {
+  const { runtime, settings, profile } = await createConfiguredRuntime(cwd);
+  const availableModels = await runtime.getAvailable();
+  let selectedModel = selectAvailableDefault(settings, availableModels);
+
+  if (requestedModelRef !== null) {
+    const resolved = resolveCliModel({ cliModel: requestedModelRef, modelRuntime: runtime });
+    if (resolved.error !== undefined) throw new Error(resolved.error);
+    selectedModel = resolved.model;
+  }
+
+  if (selectedModel === undefined) throw new Error("No authenticated Pi model is available");
+  return { runtime, profile, selectedModel };
+}
+
+export async function getPiCommitModelOptions(
+  cwd: string,
+  requestedModelRef: string | null,
+): Promise<{ selectedModelRef: string | null; availableModelRefs: string[] }> {
+  const { runtime, settings } = await createConfiguredRuntime(cwd);
+  const availableModels = await runtime.getAvailable();
+  const selectedModel =
+    requestedModelRef === null
+      ? selectAvailableDefault(settings, availableModels)
+      : resolveCliModel({ cliModel: requestedModelRef, modelRuntime: runtime }).model;
+
+  return {
+    selectedModelRef:
+      selectedModel === undefined ? null : `${selectedModel.provider}/${selectedModel.id}`,
+    availableModelRefs: [
+      ...new Set(availableModels.map((model) => `${model.provider}/${model.id}`)),
+    ],
+  };
 }
 
 export async function createPiCommitModel(
   cwd: string,
   requestedModelRef: string | null,
 ): Promise<PiCommitModel> {
-  const { runtime, settings, profile } = await createConfiguredRuntime(cwd);
-  const defaultProvider = settings.getDefaultProvider();
-  const defaultModel = settings.getDefaultModel();
-  const modelReference =
-    requestedModelRef ??
-    (defaultProvider !== undefined && defaultModel !== undefined
-      ? `${defaultProvider}/${defaultModel}`
-      : undefined);
-
-  const resolved = resolveCliModel({
-    ...(modelReference === undefined ? {} : { cliModel: modelReference }),
-    modelRuntime: runtime,
-  });
-  let model = resolved.model;
-  if (resolved.error !== undefined) throw new Error(resolved.error);
-
-  if (model === undefined) {
-    model = (await runtime.getAvailable())[0];
-  }
-  if (model === undefined) throw new Error("No authenticated Pi model is available");
-
-  const selectedModel = model;
+  const { runtime, profile, selectedModel } = await resolveModelSelection(cwd, requestedModelRef);
   const fastRequest =
     selectedModel.provider === "openai-codex"
       ? resolveFastModelRequest(selectedModel.id)

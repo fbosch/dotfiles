@@ -4,7 +4,7 @@ import { basename } from "node:path";
 import process from "node:process";
 import pc from "picocolors";
 import { match } from "ts-pattern";
-import { listPiCommitModels } from "./pi-model";
+import { getPiCommitModelOptions } from "./pi-model";
 import { type GenerateError, generateCommit } from "./src/generate";
 import {
   commit,
@@ -76,33 +76,65 @@ function getModelRef(cliValue?: string): string | null {
   return null;
 }
 
-async function getFallbackModels(): Promise<string[]> {
-  const raw = process.env.AI_COMMIT_FALLBACK_MODELS;
-  if (typeof raw !== "string" || raw.length === 0) {
-    return listPiCommitModels(process.cwd());
-  }
+function normalizeAvailableModelRef(modelRef: string, availableModelRefs: string[]): string {
+  if (availableModelRefs.includes(modelRef)) return modelRef;
+  const matches = availableModelRefs.filter((available) => available.endsWith(`/${modelRef}`));
+  return matches.length === 1 ? (matches[0] ?? modelRef) : modelRef;
+}
 
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed !== "object" ||
-      parsed === null ||
-      !Array.isArray((parsed as { models?: unknown }).models)
-    ) {
+async function getFallbackModels(
+  repoRoot: string,
+  currentModelRef: string | null,
+): Promise<string[]> {
+  const piOptions = await getPiCommitModelOptions(repoRoot, currentModelRef);
+  const raw = process.env.AI_COMMIT_FALLBACK_MODELS;
+  let models = piOptions.availableModelRefs;
+
+  if (typeof raw === "string" && raw.length > 0) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !Array.isArray((parsed as { models?: unknown }).models)
+      ) {
+        return [];
+      }
+
+      models = (parsed as { models: unknown[] }).models.filter(
+        (model): model is string => typeof model === "string" && model.length > 0,
+      );
+    } catch {
       return [];
     }
-
-    return (parsed as { models: unknown[] }).models.filter(
-      (model): model is string => typeof model === "string" && model.length > 0,
-    );
-  } catch {
-    return [];
   }
+
+  return [
+    ...new Set(
+      models.map((model) => normalizeAvailableModelRef(model, piOptions.availableModelRefs)),
+    ),
+  ].filter((model) => model !== piOptions.selectedModelRef);
 }
 
 function formatGitError(error: GitError): string {
   const detail = error.stderr.length > 0 ? error.stderr : "git command failed";
   return `${error.command}: ${detail}`;
+}
+
+function exitStagedIndexChanged(): never {
+  style(" Staged changes changed while preparing the commit message", 1);
+  style(" Review the index and run ai_commit again", 3);
+  process.exit(1);
+}
+
+function requireUnchangedStagedSnapshot(expectedSnapshot: string): void {
+  const currentSnapshotResult = getStagedSnapshot();
+  if (currentSnapshotResult.isErr()) {
+    style(" Failed to verify staged snapshot", 1);
+    style(` ${formatGitError(currentSnapshotResult.error)}`, 1);
+    process.exit(1);
+  }
+  if (currentSnapshotResult.value !== expectedSnapshot) exitStagedIndexChanged();
 }
 
 function formatGenerateError(error: GenerateError): string {
@@ -137,10 +169,13 @@ function shouldSuggestAnotherModel(error: GenerateError): boolean {
   ].some((value) => message.includes(value));
 }
 
-async function selectFallbackModel(currentModelRef: string | null): Promise<string | null> {
+async function selectFallbackModel(
+  repoRoot: string,
+  currentModelRef: string | null,
+): Promise<string | null> {
   let options: string[];
   try {
-    options = (await getFallbackModels()).filter((model) => model !== currentModelRef);
+    options = await getFallbackModels(repoRoot, currentModelRef);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     style(` Failed to load alternate Pi models: ${message}`, 3);
@@ -172,6 +207,14 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const stagedSnapshotResult = getStagedSnapshot();
+  if (stagedSnapshotResult.isErr()) {
+    style(" Failed to read staged snapshot", 1);
+    style(` ${formatGitError(stagedSnapshotResult.error)}`, 1);
+    process.exit(1);
+  }
+  const stagedSnapshot = stagedSnapshotResult.value;
+
   const stagedFilesResult = getStagedFiles();
   if (stagedFilesResult.isErr()) {
     style(" Failed to read staged files", 1);
@@ -184,14 +227,6 @@ async function main(): Promise<void> {
     style(" No staged changes to commit", 1);
     process.exit(1);
   }
-
-  const stagedSnapshotResult = getStagedSnapshot();
-  if (stagedSnapshotResult.isErr()) {
-    style(" Failed to read staged snapshot", 1);
-    style(` ${formatGitError(stagedSnapshotResult.error)}`, 1);
-    process.exit(1);
-  }
-  const stagedSnapshot = stagedSnapshotResult.value;
 
   const branchResult = getBranchName();
   if (args.verbose && branchResult.isErr()) {
@@ -238,6 +273,7 @@ async function main(): Promise<void> {
     }
 
     const stagedDiff = stagedDiffResult.value;
+    requireUnchangedStagedSnapshot(stagedSnapshot);
     if (stagedDiff.length === 0) {
       style(" Empty staged diff after lockfile filters", 3);
       process.exit(1);
@@ -273,7 +309,7 @@ async function main(): Promise<void> {
           }
 
           if (action === "Retry with another model") {
-            const selectedModel = await selectFallbackModel(modelRef);
+            const selectedModel = await selectFallbackModel(repoRoot, modelRef);
             if (selectedModel === null) {
               exitCancelled("Commit cancelled");
             }
@@ -293,7 +329,7 @@ async function main(): Promise<void> {
             exitCancelled("Commit cancelled");
           }
 
-          const selectedModel = await selectFallbackModel(modelRef);
+          const selectedModel = await selectFallbackModel(repoRoot, modelRef);
           if (selectedModel === null) {
             exitCancelled("Commit cancelled");
           }
@@ -352,26 +388,23 @@ async function main(): Promise<void> {
     return;
   }
 
-  const currentSnapshotResult = getStagedSnapshot();
-  if (currentSnapshotResult.isErr()) {
-    style(" Failed to verify staged snapshot", 1);
-    style(` ${formatGitError(currentSnapshotResult.error)}`, 1);
-    process.exit(1);
-  }
-  if (currentSnapshotResult.value !== stagedSnapshot) {
-    style(" Staged changes changed while preparing the commit message", 1);
-    style(" Review the index and run ai_commit again", 3);
-    process.exit(1);
-  }
+  requireUnchangedStagedSnapshot(stagedSnapshot);
 
-  copyCommitCommandToClipboard(finalMessage);
-  const commitResult = commit(finalMessage);
+  const commitResult = commit(finalMessage, stagedSnapshot);
   if (commitResult.isErr()) {
+    if (commitResult.error.kind === "staged-index-changed") exitStagedIndexChanged();
+    if (commitResult.error.kind === "index-sync-failed") {
+      styleBlock(commitResult.error.commitOutput);
+      style(" Commit created, but failed to synchronize the Git index", 1);
+      styleBlock(commitResult.error.message);
+      process.exit(1);
+    }
     style(" Commit failed", 1);
     styleBlock(commitResult.error.stderr);
     process.exit(1);
   }
 
+  copyCommitCommandToClipboard(finalMessage);
   styleBlock(commitResult.value);
   style(" Commit successful!", 2);
 }

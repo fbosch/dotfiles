@@ -4,7 +4,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { runAskUserQuestion } from "../ask-user-question";
-import { cachedResetCreditStatusForAccount } from "./usage-status";
 import {
   accountIdFor,
   DEFAULT_PROFILE,
@@ -12,6 +11,7 @@ import {
   normalizeName,
   publishWezTermChange,
 } from "./profile-store";
+import { cachedResetCreditStatusForAccount } from "./usage-status-service";
 
 const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
 const REQUEST_TIMEOUT_MS = 10_000;

@@ -1,5 +1,7 @@
 import { type SpawnSyncOptionsWithStringEncoding, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { closeSync, copyFileSync, openSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 import { err, ok, type Result } from "neverthrow";
 
 type RunGitOptions = Omit<SpawnSyncOptionsWithStringEncoding, "encoding">;
@@ -29,6 +31,11 @@ export type GitError = {
   stderr: string;
 };
 
+export type CommitError =
+  | GitError
+  | { kind: "staged-index-changed" }
+  | { kind: "index-sync-failed"; commitOutput: string; message: string };
+
 export type PreviousCommitInfo = {
   subject: string;
   isMerge: boolean;
@@ -48,8 +55,8 @@ function runGit(args: string[], options?: RunGitOptions): CmdResult {
   };
 }
 
-function gitResult(args: string[]): Result<string, GitError> {
-  const result = runGit(args);
+function gitResult(args: string[], options?: RunGitOptions): Result<string, GitError> {
+  const result = runGit(args, options);
   if (result.status === 0) {
     return ok(result.stdout);
   }
@@ -109,15 +116,15 @@ export function getStagedFiles(): Result<string[], GitError> {
   });
 }
 
+function getStagedSnapshotWithOptions(options?: RunGitOptions): Result<string, GitError> {
+  return gitResult(
+    ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv"],
+    options,
+  ).map((diff) => createHash("sha256").update(diff).digest("hex"));
+}
+
 export function getStagedSnapshot(): Result<string, GitError> {
-  return gitResult([
-    "diff",
-    "--cached",
-    "--binary",
-    "--full-index",
-    "--no-ext-diff",
-    "--no-textconv",
-  ]).map((diff) => createHash("sha256").update(diff).digest("hex"));
+  return getStagedSnapshotWithOptions();
 }
 
 export function getStagedDiff(maxChars = DEFAULT_STAGED_DIFF_MAX_CHARS): Result<string, GitError> {
@@ -339,17 +346,91 @@ export function hasOnlyLockfiles(paths: string[]): boolean {
   return paths.every(isLockfile);
 }
 
-export function commit(message: string): Result<string, GitError> {
-  const result = runGit(["commit", "-m", message]);
-  const output = [result.stderr, result.stdout].filter((part) => part.length > 0).join("\n");
+function hashIndex(indexPath: string): string {
+  return createHash("sha256").update(readFileSync(indexPath)).digest("hex");
+}
 
-  if (result.status === 0) {
-    return ok(output);
+function resolveIndexPath(): Result<string, GitError> {
+  return gitResult(["rev-parse", "--git-path", "index"]).map((indexPath) =>
+    isAbsolute(indexPath) ? indexPath : resolve(process.env.PWD ?? process.cwd(), indexPath),
+  );
+}
+
+function syncCommittedIndex(
+  indexPath: string,
+  temporaryIndexPath: string,
+  originalHash: string,
+): Result<void, Error> {
+  const lockPath = `${indexPath}.lock`;
+  let ownsLock = false;
+  try {
+    const lock = openSync(lockPath, "wx");
+    ownsLock = true;
+    closeSync(lock);
+
+    if (hashIndex(indexPath) !== originalHash) return ok();
+    copyFileSync(temporaryIndexPath, lockPath);
+    renameSync(lockPath, indexPath);
+    ownsLock = false;
+    return ok();
+  } catch (error) {
+    return err(error instanceof Error ? error : new Error(String(error)));
+  } finally {
+    if (ownsLock) rmSync(lockPath, { force: true });
   }
+}
 
-  return err({
-    kind: "git",
-    command: `git commit -m ${JSON.stringify(message)}`,
-    stderr: output.length > 0 ? output : "git commit failed",
-  });
+export function commit(message: string, expectedSnapshot: string): Result<string, CommitError> {
+  const indexPathResult = resolveIndexPath();
+  if (indexPathResult.isErr()) return err(indexPathResult.error);
+
+  const indexPath = indexPathResult.value;
+  const temporaryIndexPath = `${indexPath}.ai-commit-${process.pid}-${randomUUID()}`;
+  const temporaryEnvironment = { ...process.env, GIT_INDEX_FILE: temporaryIndexPath };
+
+  try {
+    const originalHash = hashIndex(indexPath);
+    copyFileSync(indexPath, temporaryIndexPath);
+
+    const temporarySnapshot = getStagedSnapshotWithOptions({ env: temporaryEnvironment });
+    const currentSnapshot = getStagedSnapshot();
+    if (
+      temporarySnapshot.isErr() ||
+      currentSnapshot.isErr() ||
+      temporarySnapshot.value !== expectedSnapshot ||
+      currentSnapshot.value !== expectedSnapshot ||
+      hashIndex(indexPath) !== originalHash
+    ) {
+      return err({ kind: "staged-index-changed" });
+    }
+
+    const result = runGit(["commit", "-m", message], { env: temporaryEnvironment });
+    const output = [result.stderr, result.stdout].filter((part) => part.length > 0).join("\n");
+    if (result.status !== 0) {
+      return err({
+        kind: "git",
+        command: `git commit -m ${JSON.stringify(message)}`,
+        stderr: output.length > 0 ? output : "git commit failed",
+      });
+    }
+
+    const syncResult = syncCommittedIndex(indexPath, temporaryIndexPath, originalHash);
+    if (syncResult.isErr()) {
+      return err({
+        kind: "index-sync-failed",
+        commitOutput: output,
+        message: syncResult.error.message,
+      });
+    }
+    return ok(output);
+  } catch (error) {
+    return err({
+      kind: "git",
+      command: `git commit -m ${JSON.stringify(message)}`,
+      stderr: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    rmSync(temporaryIndexPath, { force: true });
+    rmSync(`${temporaryIndexPath}.lock`, { force: true });
+  }
 }
