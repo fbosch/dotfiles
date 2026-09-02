@@ -437,7 +437,7 @@ describe("Delta extension", () => {
       fg: (_color: string, text: string) => text,
       getFgAnsi: (color: string) => `<${color}>`,
     } as Theme;
-    const rendered = renderResult(toolResult, { expanded: false, isPartial: false }, theme, {
+    const context: Parameters<typeof renderResult>[3] = {
       args: {},
       argsComplete: true,
       cwd: "/repo",
@@ -450,10 +450,29 @@ describe("Delta extension", () => {
       showImages: false,
       state: {},
       toolCallId: "diff-1",
-    }).render(24);
+    };
+    const rendered = renderResult(
+      toolResult,
+      { expanded: false, isPartial: false },
+      theme,
+      context,
+    ).render(24);
 
     expect(rendered[0]).toBe("");
     expect(rendered.slice(1).every((line) => visibleWidth(line) <= 24)).toBeTrue();
+
+    const emptyResult = {
+      content: [{ type: "text" as const, text: "No unstaged changes." }],
+      details: { ...details, noChanges: true, output: "" },
+    };
+    const emptyRendered = renderResult(
+      emptyResult,
+      { expanded: false, isPartial: false },
+      theme,
+      context,
+    ).render(24);
+
+    expect(emptyRendered).toEqual([""]);
   });
 
   test("rerenders full unified context when a diff is expanded", async () => {

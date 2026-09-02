@@ -783,9 +783,9 @@ function diffComponent(
 ): Component {
   const lines = sourceLines(applyDiffTheme(details.output, theme));
   if (details.noChanges) {
-    const output = [statusLine(theme, "Info", `No ${details.scope}.`)];
+    const output: string[] = [];
     if (details.warning !== undefined) {
-      output.push("", ...detailLines(statusLine(theme, "Warning", details.warning)));
+      output.push(...detailLines(statusLine(theme, "Warning", details.warning)));
     }
     return new DiffOutputComponent(output);
   }

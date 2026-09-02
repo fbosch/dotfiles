@@ -7,6 +7,7 @@
   ],
   "ignoreDependencies": [
     "@earendil-works/pi-coding-agent",
-    "@earendil-works/pi-tui"
+    "@earendil-works/pi-tui",
+    "@gotgenes/pi-permission-system"
   ]
 }

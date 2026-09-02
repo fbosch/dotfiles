@@ -31,6 +31,10 @@ interface YoloHarness {
   permissionsReady(value: unknown): void;
 }
 
+interface HarnessOptions {
+  appendError?: Error;
+}
+
 interface PublishedPermissionService {
   registrations(): number;
   registeredName(): string;
@@ -59,7 +63,10 @@ function createContext(
   } as unknown as ExtensionContext;
 }
 
-function createHarness(initialEntries: PersistedEntry[] = []): YoloHarness {
+function createHarness(
+  initialEntries: PersistedEntry[] = [],
+  options: HarnessOptions = {},
+): YoloHarness {
   let handler: YoloCommandHandler | undefined;
   let commandName = "";
   let sessionStart: SessionStartHandler | undefined;
@@ -88,6 +95,7 @@ function createHarness(initialEntries: PersistedEntry[] = []): YoloHarness {
       },
     },
     appendEntry(customType: string, data: unknown) {
+      if (options.appendError !== undefined) throw options.appendError;
       entries.push({ type: "custom", customType, data });
     },
   } as unknown as ExtensionAPI;
@@ -305,6 +313,24 @@ describe("session YOLO mode", () => {
     expect(effectiveStates(harness, sessionId)).toEqual([false, false]);
   });
 
+  test("keeps requested and effective state disabled when persistence fails", async () => {
+    const sessionId = "yolo-persistence-failure";
+    const harness = createHarness([], { appendError: new Error("session write failed") });
+    const permissions = await publishPermissionService(sessionId);
+    const notifications: Array<[string, string]> = [];
+    const context = createContext(sessionId, harness.entries, [], notifications);
+    harness.sessionStart({}, context);
+    harness.permissionsReady({ sessionId });
+    await settleRegistration();
+
+    await harness.handler("", context as ExtensionCommandContext);
+
+    expect(harness.entries).toEqual([]);
+    expect(await permissions.verdict()).toEqual({ kind: "defer" });
+    expect(effectiveStates(harness, sessionId).at(-1)).toBeFalse();
+    expect(notifications.at(-1)).toEqual(["session write failed", "error"]);
+  });
+
   test("ignores malformed readiness and persisted state", async () => {
     const sessionId = "yolo-malformed";
     const harness = createHarness([
@@ -347,12 +373,19 @@ describe("session YOLO mode", () => {
     expect(permissions.disposed()).toBeTrue();
   });
 
-  test("keeps global YOLO config disabled and links only the session authorizer", async () => {
-    const config = JSON.parse(
-      await readFile(new URL("../pi-permission-system/config.json", import.meta.url), "utf8"),
-    ) as Record<string, unknown>;
+  test("keeps active configs free of global YOLO state", async () => {
+    const [globalText, projectText] = await Promise.all([
+      readFile(new URL("../pi-permission-system/config.json", import.meta.url), "utf8"),
+      readFile(
+        new URL("../../../extensions/pi-permission-system/config.json", import.meta.url),
+        "utf8",
+      ),
+    ]);
+    const globalConfig = JSON.parse(globalText) as Record<string, unknown>;
+    const projectConfig = JSON.parse(projectText) as Record<string, unknown>;
 
-    expect("yoloMode" in config).toBeFalse();
-    expect(config.authorizerChain).toEqual(["session-yolo"]);
+    expect("yoloMode" in globalConfig).toBeFalse();
+    expect("yoloMode" in projectConfig).toBeFalse();
+    expect(globalConfig.authorizerChain).toEqual(["session-yolo"]);
   });
 });

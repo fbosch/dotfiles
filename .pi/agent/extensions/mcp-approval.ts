@@ -121,6 +121,8 @@ export function registerMcpApprovalRouting(pi: ExtensionAPI): void {
     activeSessionId = undefined;
     yoloEnabled = false;
   });
+  // The shared bus is trusted in-process; exact session matching prevents
+  // lifecycle bleed but is not an authentication boundary between extensions.
   pi.events.on(YOLO_EFFECTIVE_STATE_CHANNEL, (value) => {
     if (!isYoloEffectiveStateEvent(value) || value.sessionId !== activeSessionId) return;
     yoloEnabled = value.effectiveEnabled;
