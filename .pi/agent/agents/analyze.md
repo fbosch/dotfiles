@@ -15,6 +15,10 @@ permission:
   ffgrep: allow
   bash:
     "*": ask
+    "git status *": allow
+    "git diff *": allow
+    "git log *": allow
+    "git show *": allow
   external_directory: ask
   external_directory_write: deny
 ---

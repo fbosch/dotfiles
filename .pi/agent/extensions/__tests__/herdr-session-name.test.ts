@@ -51,7 +51,8 @@ test("reports Pi session names and clears them through lifecycle events", async 
     } as unknown as ExtensionAPI;
 
     herdrSessionName(pi);
-    await handlers.session_start?.({}, { mode: "tui" });
+    await handlers.session_start?.({}, { mode: "rpc" });
+    await handlers.agent_start?.({}, { mode: "tui" });
     await handlers.session_info_changed?.({ name: "Renamed session" });
     await handlers.session_info_changed?.({});
 

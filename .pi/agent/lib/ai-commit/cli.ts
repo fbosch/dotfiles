@@ -76,6 +76,25 @@ function getModelRef(cliValue?: string): string | null {
   return null;
 }
 
+async function resolveDisplayModelRef(
+  repoRoot: string,
+  requestedModelRef: string | null,
+): Promise<string | null> {
+  try {
+    return (
+      (await getPiCommitModelOptions(repoRoot, requestedModelRef)).selectedModelRef ??
+      requestedModelRef
+    );
+  } catch {
+    // Keep model lookup informational; generation owns the user-facing error.
+    return requestedModelRef;
+  }
+}
+
+function modelLabel(modelRef: string | null): string {
+  return modelRef ?? "unavailable";
+}
+
 function normalizeAvailableModelRef(modelRef: string, availableModelRefs: string[]): string {
   if (availableModelRefs.includes(modelRef)) return modelRef;
   const matches = availableModelRefs.filter((available) => available.endsWith(`/${modelRef}`));
@@ -250,6 +269,10 @@ async function main(): Promise<void> {
   const remoteOrigin = remoteOriginResult.unwrapOr("");
 
   let modelRef = getModelRef(args.modelRef);
+  let displayModelRef = modelRef;
+  if (hasOnlyLockfiles(stagedFiles) === false) {
+    displayModelRef = await resolveDisplayModelRef(repoRoot, modelRef);
+  }
 
   if (args.verbose) {
     style(` Repo: ${repoName} (${repoRoot})`);
@@ -257,7 +280,7 @@ async function main(): Promise<void> {
       style(` Remote: ${remoteOrigin}`);
     }
     style(` Branch: ${branch}`);
-    style(` Model: ${modelRef ?? "Pi default"}`);
+    style(` Model: ${modelLabel(displayModelRef)}`);
   }
 
   let commitMsg = "";
@@ -290,7 +313,7 @@ async function main(): Promise<void> {
 
     while (true) {
       const generatedAttempt = await withSpinner(
-        `Analyzing staged diff with ${modelRef ?? "Pi default"}...`,
+        `Analyzing staged diff with ${modelLabel(displayModelRef)}...`,
         () =>
           generateCommit(context, modelRef, { debug: args.debug }).match(
             (value) => ({ ok: true as const, value }),
@@ -315,6 +338,7 @@ async function main(): Promise<void> {
             }
 
             modelRef = selectedModel;
+            displayModelRef = selectedModel;
           }
 
           continue;
@@ -335,6 +359,7 @@ async function main(): Promise<void> {
           }
 
           modelRef = selectedModel;
+          displayModelRef = selectedModel;
 
           if (args.verbose) {
             style(` Model: ${modelRef}`);

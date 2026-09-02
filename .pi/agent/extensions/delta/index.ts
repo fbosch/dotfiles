@@ -55,7 +55,11 @@ const MAX_PATHS = 100;
 const ENTRY_TYPE = "delta-git-diff";
 const ESCAPE = "\u001b";
 const SGR_SUFFIX_PATTERN = /^\[[0-9;]*m/;
+const SGR_PATTERN = new RegExp(`${ESCAPE}\\[([0-9;]*)m`, "g");
 const ESCAPE_SUFFIX_PATTERN = /^\[[0-?]*[ -/]*[@-~]/;
+const DELTA_ADDED_COLOR = 28;
+const DELTA_REMOVED_COLOR = 88;
+const NON_BACKGROUND_RESET_CODES = [22, 23, 24, 25, 27, 28, 29, 39, 54, 55, 59];
 
 const DisplayMode = StringEnum(["auto", "side-by-side", "inline"] as const);
 
@@ -247,6 +251,54 @@ function sourceLines(value: string): string[] {
   return withoutTrailingNewlines === "" ? [] : withoutTrailingNewlines.split("\n");
 }
 
+function sgr(codes: readonly number[]): string {
+  return codes.length === 0 ? "" : `${ESCAPE}[${codes.join(";")}m`;
+}
+
+/** Keep Pi's tool background active while translating Delta's diff markers to theme colors. */
+export function applyDiffTheme(value: string, theme: Theme): string {
+  return sanitizeTerminalOutput(value).replace(SGR_PATTERN, (_sequence, parameters: string) => {
+    const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
+    const output: string[] = [];
+    let pending: number[] = [];
+    const flush = () => {
+      if (pending.length === 0) return;
+      output.push(sgr(pending));
+      pending = [];
+    };
+
+    for (let index = 0; index < codes.length; ) {
+      const code = codes[index] ?? 0;
+      if (code === 38 || code === 48) {
+        const mode = codes[index + 1];
+        const length = mode === 2 ? 5 : mode === 5 ? 3 : 1;
+        const group = codes.slice(index, index + length);
+        if (code === 38 && mode === 5 && group[2] === DELTA_ADDED_COLOR) {
+          flush();
+          output.push(theme.getFgAnsi("toolDiffAdded"));
+        } else if (code === 38 && mode === 5 && group[2] === DELTA_REMOVED_COLOR) {
+          flush();
+          output.push(theme.getFgAnsi("toolDiffRemoved"));
+        } else if (code === 38) {
+          pending.push(...group);
+        }
+        index += length;
+        continue;
+      }
+
+      if (code === 0) {
+        pending.push(...NON_BACKGROUND_RESET_CODES);
+      } else if (!((code >= 40 && code <= 49) || (code >= 100 && code <= 107))) {
+        pending.push(code);
+      }
+      index += 1;
+    }
+
+    flush();
+    return output.join("");
+  });
+}
+
 export function boundDiffOutput(value: string): BoundedOutput {
   const sanitized = sanitizeTerminalOutput(value);
   const lines = sourceLines(sanitized);
@@ -363,6 +415,12 @@ export function buildDeltaInvocation(
     `--width=${width}`,
     "--line-numbers",
     "--line-fill-method=spaces",
+    `--line-numbers-minus-style=${DELTA_REMOVED_COLOR}`,
+    `--line-numbers-plus-style=${DELTA_ADDED_COLOR}`,
+    "--minus-style=syntax",
+    "--minus-emph-style=syntax",
+    "--plus-style=syntax",
+    "--plus-emph-style=syntax",
     "--commit-decoration-style=omit",
     "--file-decoration-style=omit",
     "--hunk-header-style=omit",
@@ -701,7 +759,7 @@ function diffComponent(
   theme: Theme,
   loading = false,
 ): Component {
-  const lines = sourceLines(sanitizeTerminalOutput(details.output));
+  const lines = sourceLines(applyDiffTheme(details.output, theme));
   if (details.noChanges) {
     const output = [statusLine(theme, "Info", `No ${details.scope}.`)];
     if (details.warning !== undefined) {
@@ -1329,10 +1387,7 @@ export function registerDeltaExtension(
           parts.push(theme.fg("accent", safeInput(args.revision, "Git revision")));
         }
         if (args.paths !== undefined && args.paths.length > 0) {
-          const pathSummary =
-            args.paths.length === 1
-              ? safeInput(args.paths[0] ?? "", "Git pathspec")
-              : `${args.paths.length} paths`;
+          const pathSummary = `${args.paths.length} ${args.paths.length === 1 ? "path" : "paths"}`;
           parts.push(theme.fg("muted", `-- ${pathSummary}`));
         }
         return new Text(parts.join(" "), 0, 0);

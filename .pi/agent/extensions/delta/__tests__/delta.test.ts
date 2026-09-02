@@ -12,6 +12,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
+  applyDiffTheme,
   boundDiffOutput,
   buildDeltaInvocation,
   buildGitInvocation,
@@ -93,7 +94,7 @@ describe("Delta Git invocation", () => {
     expect(deltaArgs).not.toContain("--side-by-side");
   });
 
-  test("omits Delta header decorations and duplicate edit file labels", () => {
+  test("uses undecorated, background-free Delta styles", () => {
     const deltaArgs = buildDeltaInvocation("side-by-side", 116, {
       context: 8,
       edit: true,
@@ -105,6 +106,12 @@ describe("Delta Git invocation", () => {
     expect(deltaArgs).toContain("--file-decoration-style=omit");
     expect(deltaArgs).toContain("--hunk-header-style=omit");
     expect(deltaArgs).toContain("--hunk-header-decoration-style=omit");
+    expect(deltaArgs).toContain("--line-numbers-minus-style=88");
+    expect(deltaArgs).toContain("--line-numbers-plus-style=28");
+    expect(deltaArgs).toContain("--minus-style=syntax");
+    expect(deltaArgs).toContain("--minus-emph-style=syntax");
+    expect(deltaArgs).toContain("--plus-style=syntax");
+    expect(deltaArgs).toContain("--plus-emph-style=syntax");
     expect(deltaArgs).toContain("--diff-args=-U8");
   });
 
@@ -152,6 +159,21 @@ describe("Delta output handling", () => {
     const output = "\u001b[38;2;200;100;50mconst\u001b[0m value";
 
     expect(sanitizeTerminalOutput(output)).toBe(output);
+  });
+
+  test("keeps the tool background solid and uses Pi's diff colors", () => {
+    const theme = {
+      getFgAnsi: (color: string) =>
+        color === "toolDiffAdded" ? "\u001b[38;2;129;155;105m" : "\u001b[38;2;222;110;124m",
+    } as Theme;
+    const output =
+      "\u001b[48;2;0;40;0;38;5;28madded\u001b[0m " + "\u001b[48;2;63;0;1;38;5;88mremoved\u001b[0m";
+    const themed = applyDiffTheme(output, theme);
+
+    expect(themed).toContain("\u001b[38;2;129;155;105madded");
+    expect(themed).toContain("\u001b[38;2;222;110;124mremoved");
+    expect(themed).not.toContain("\u001b[0m");
+    expect(themed).not.toContain("48;2");
   });
 
   test("bounds output by complete lines", () => {
@@ -604,6 +626,47 @@ describe("Delta extension", () => {
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  test("shows a path count instead of repeating a single filename", () => {
+    let tool: ToolDefinition | undefined;
+    const pi = {
+      registerEntryRenderer: () => {},
+      registerFlag: () => {},
+      on: () => {},
+      registerTool(definition: ToolDefinition) {
+        tool = definition;
+      },
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+    registerDeltaExtension(pi, { run: async () => diffResult });
+
+    const renderCall = tool?.renderCall;
+    if (renderCall === undefined) throw new Error("git_diff call renderer was not registered");
+    const args = { paths: [".pi/agent/lib/ai-commit/cli.ts"] };
+    const theme = {
+      bold: (text: string) => text,
+      fg: (_color: string, text: string) => text,
+    } as Theme;
+    const context: Parameters<typeof renderCall>[2] = {
+      args,
+      argsComplete: true,
+      cwd: "/repo",
+      executionStarted: false,
+      expanded: false,
+      invalidate: () => {},
+      isError: false,
+      isPartial: false,
+      lastComponent: undefined,
+      showImages: false,
+      state: {},
+      toolCallId: "diff-1",
+    };
+
+    const rendered = renderCall(args, theme, context).render(80).join("\n").trim();
+
+    expect(rendered).toBe("git diff -- 1 path");
+    expect(rendered).not.toContain("cli.ts");
   });
 
   test("compacts multiple paths in the tool call header", () => {

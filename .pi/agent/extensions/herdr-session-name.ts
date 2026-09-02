@@ -84,6 +84,12 @@ export default function herdrSessionName(pi: ExtensionAPI): void {
     tuiSession = true;
     return integration.reportName(pi.getSessionName());
   });
+  pi.on("agent_start", (_event, ctx) => {
+    // Retry when startup handlers were delayed by the managed Herdr lifecycle reporter.
+    if (ctx.mode !== "tui" || tuiSession) return;
+    tuiSession = true;
+    return integration.reportName(pi.getSessionName());
+  });
   pi.on("session_info_changed", (event) => {
     if (!tuiSession) return;
     return integration.reportName(event.name);

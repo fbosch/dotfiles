@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCommitPrompt,
+  COMMIT_SYSTEM_PROMPT,
   detectWorkItemScope,
   type GitContext,
   generateCommit,
@@ -75,6 +76,32 @@ describe("commit parsing", () => {
       ok: false,
       error: { kind: "parse", message: "Generated scope is empty or malformed" },
     });
+  });
+
+  test("counts the conventional prefix in the 50-character limit", () => {
+    const atLimit = parseAndValidateCommit(
+      JSON.stringify({ type: "fix", scope: "agent", subject: "a".repeat(38) }),
+      context,
+    );
+    const overLimit = parseAndValidateCommit(
+      JSON.stringify({ type: "fix", scope: "agent", subject: "a".repeat(39) }),
+      context,
+    );
+
+    expect(atLimit).toMatchObject({ ok: true, value: { overLimit: false } });
+    expect(overLimit).toMatchObject({ ok: true, value: { overLimit: true } });
+  });
+
+  test("tells the model that the prefix consumes the message budget", () => {
+    const prompt = buildCommitPrompt(context);
+
+    expect(COMMIT_SYSTEM_PROMPT).toContain(
+      "Count every character in the type(scope): prefix, including its trailing space",
+    );
+    expect(prompt).toContain(
+      "including every character in the type(scope): prefix and its trailing space",
+    );
+    expect(prompt).toContain("Never treat 50 characters as the subject-only budget");
   });
 
   test("marks a complete over-limit message for the interactive workflow", () => {
