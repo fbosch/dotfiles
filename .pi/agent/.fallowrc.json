@@ -6,8 +6,20 @@
     "lib/ai-commit/cli.ts"
   ],
   "ignoreDependencies": [
+    "@earendil-works/pi-ai",
     "@earendil-works/pi-coding-agent",
     "@earendil-works/pi-tui",
-    "@gotgenes/pi-permission-system"
+    "@ff-labs/pi-fff",
+    "@gotgenes/pi-permission-system",
+    "@gotgenes/pi-subagents",
+    "@juicesharp/rpiv-todo",
+    "@narumitw/pi-btw",
+    "pi-auto-session-name",
+    "pi-command-palette",
+    "pi-compaction-model",
+    "pi-context-view",
+    "pi-mcp-adapter",
+    "pi-worktrunk",
+    "typebox"
   ]
 }

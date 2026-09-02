@@ -9,6 +9,7 @@ import {
   isYoloEffectiveStateEvent,
   registerYoloCommand,
   YOLO_EFFECTIVE_STATE_CHANNEL,
+  YOLO_STATUS_KEY,
   YOLO_STATUS_TEXT,
 } from "../yolo";
 
@@ -190,7 +191,7 @@ describe("session YOLO mode", () => {
     expect(harness.commandName).toBe("yolo");
     expect(harness.entries).toEqual([]);
     expect(effectiveStates(harness, "yolo-not-ready")).toEqual([false]);
-    expect(statuses).toEqual([["pi-permission-system", undefined]]);
+    expect(statuses).toEqual([[YOLO_STATUS_KEY, undefined]]);
     expect(notifications).toEqual([
       ["Cannot enable session YOLO before permission-system is ready.", "error"],
     ]);
@@ -238,11 +239,11 @@ describe("session YOLO mode", () => {
       },
     ]);
     expect(statuses).toEqual([
-      ["pi-permission-system", undefined],
-      ["pi-permission-system", undefined],
-      ["pi-permission-system", `error:${YOLO_STATUS_TEXT}`],
-      ["pi-permission-system", undefined],
-      ["pi-permission-system", `error:${YOLO_STATUS_TEXT}`],
+      [YOLO_STATUS_KEY, undefined],
+      [YOLO_STATUS_KEY, undefined],
+      [YOLO_STATUS_KEY, `error:${YOLO_STATUS_TEXT}`],
+      [YOLO_STATUS_KEY, undefined],
+      [YOLO_STATUS_KEY, `error:${YOLO_STATUS_TEXT}`],
     ]);
     expect(notifications.map(([message]) => message)).toEqual([
       "Session YOLO mode disabled. Permission checks and MCP tool approvals prompt when required.",

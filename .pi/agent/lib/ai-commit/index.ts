@@ -7,13 +7,6 @@ import {
 import { createPiCommitModel } from "./pi-model";
 
 export type { GeneratedCommit, GenerateError, GenerateOptions, GitContext } from "./generate";
-export {
-  buildCommitPrompt,
-  detectWorkItemScope,
-  extractWorkItemId,
-  parseAndValidateCommit,
-} from "./generate";
-
 export async function generateCommitWithPi(
   cwd: string,
   context: GitContext,

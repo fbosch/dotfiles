@@ -3,9 +3,11 @@ import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
+  MCP_STATUS_KEY,
   PromptEditor,
   type PromptEditorState,
   renderFooterStatus,
+  renderMcpFooterStatus,
   renderPromptHints,
 } from "./prompt-editor";
 import { installSubagentWidgetFrame } from "./subagent-widget-frame";
@@ -13,6 +15,35 @@ import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
 const PROFILE_STATUS_KEY = "auth-profile";
+// The MCP adapter publishes this versioned snapshot on Pi's shared event bus.
+const MCP_STATUS_EVENT = "pi-mcp-adapter/status/v1";
+
+type McpFooterSnapshot = {
+  connectedCount: number;
+  hasFailure: boolean;
+};
+
+function readMcpFooterSnapshot(value: unknown): McpFooterSnapshot | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+
+  const snapshot = value as Record<string, unknown>;
+  const connectedCount = snapshot.connectedCount;
+  if (
+    snapshot.version !== 1 ||
+    typeof connectedCount !== "number" ||
+    !Number.isInteger(connectedCount) ||
+    connectedCount < 0 ||
+    !Array.isArray(snapshot.servers)
+  ) {
+    return undefined;
+  }
+
+  const hasFailure = snapshot.servers.some((server) => {
+    if (typeof server !== "object" || server === null) return false;
+    return (server as Record<string, unknown>).status === "failed";
+  });
+  return { connectedCount, hasFailure };
+}
 
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();
@@ -25,6 +56,14 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
+  let getMcpStatus = (): string => "";
+  let mcpFooterSnapshot: McpFooterSnapshot | undefined;
+  let unsubscribeMcpStatus = () => {};
+  const resetMcpFooterSnapshot = () => {
+    unsubscribeMcpStatus();
+    unsubscribeMcpStatus = () => {};
+    mcpFooterSnapshot = undefined;
+  };
   const state: PromptEditorState = {
     isWorking: () => isWorking,
     getWorkingMarker: () => WORKING_PULSE_FRAMES[workingPulseIndex] ?? WORKING_PULSE_FRAMES[0],
@@ -58,6 +97,7 @@ export default function promptUi(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", () => {
     stopWorkingPulse();
+    resetMcpFooterSnapshot();
     disposePromptEditor();
     disposePromptEditor = () => {};
     disposeSubagentWidgetFrame();
@@ -66,7 +106,15 @@ export default function promptUi(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", (_event, ctx) => {
+    resetMcpFooterSnapshot();
     if (!ctx.hasUI) return;
+
+    unsubscribeMcpStatus = pi.events.on(MCP_STATUS_EVENT, (value) => {
+      const snapshot = readMcpFooterSnapshot(value);
+      if (snapshot === undefined) return;
+      mcpFooterSnapshot = snapshot;
+      activeTui?.requestRender();
+    });
 
     installFloatingDialogs(ctx.ui);
     disposeSubagentWidgetFrame();
@@ -78,19 +126,29 @@ export default function promptUi(pi: ExtensionAPI): void {
       getProfileName = () => footerData.getExtensionStatuses().get(PROFILE_STATUS_KEY);
       getStatuses = () =>
         [...footerData.getExtensionStatuses().entries()]
-          .filter(([key]) => key !== PROFILE_STATUS_KEY)
-          // The permission package republishes this shared key as plain text on startup.
+          .filter(([key]) => key !== PROFILE_STATUS_KEY && key !== MCP_STATUS_KEY)
           .map(([key, status]) => renderFooterStatus(theme, key, status));
+      getMcpStatus = () => {
+        const snapshot = mcpFooterSnapshot;
+        if (snapshot !== undefined) {
+          return renderMcpFooterStatus(theme, snapshot.connectedCount, snapshot.hasFailure);
+        }
+        const status = footerData.getExtensionStatuses().get(MCP_STATUS_KEY);
+        return status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status);
+      };
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
-        render: (width) => [renderPromptHints(theme, keybindings, state, ctx.cwd, width)],
+        render: (width) => [
+          renderPromptHints(theme, keybindings, state, ctx.cwd, width, getMcpStatus()),
+        ],
         invalidate: () => tui.requestRender(),
         dispose: () => {
           unsubscribe();
           getBranch = () => null;
           getProfileName = () => undefined;
           getStatuses = () => [];
+          getMcpStatus = () => "";
         },
       };
     });

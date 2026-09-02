@@ -542,6 +542,12 @@ function hasContextView(pi: ExtensionAPI): boolean {
     .some((command) => command.name === "context" && command.source === "extension");
 }
 
+function hasMcpCommand(pi: ExtensionAPI): boolean {
+  return pi
+    .getCommands()
+    .some((command) => command.name === "mcp" && command.source === "extension");
+}
+
 async function sessionItems(ctx: ExtensionCommandContext): Promise<PaletteItem[]> {
   const sessions = await SessionManager.list(ctx.cwd);
   return sessions
@@ -652,6 +658,22 @@ export function rootSections(ctx: ExtensionContext, pi: ExtensionAPI): PaletteSe
                 label: "Inspect Context",
                 description: "View context usage and injected instructions",
                 children: () => contextViewItems(pi),
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(hasMcpCommand(pi)
+      ? [
+          {
+            id: "mcp",
+            label: "MCP",
+            items: [
+              {
+                id: "mcp",
+                label: "Manage MCP Servers",
+                description: "View server status and configure direct tools",
+                action: () => pi.sendUserMessage("/mcp", { expandPromptTemplates: true }),
               },
             ],
           },

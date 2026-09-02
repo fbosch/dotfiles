@@ -1,6 +1,7 @@
 ---
 name: cli-ux
 description: Design, implement, refactor, or review line-oriented command-line interfaces across any language or renderer. Use when changing commands, flags, help, prompts, confirmations, progress, errors, warnings, results, lists, tables, output layout, colors, stdout/stderr, machine formats, TTY behavior, non-interactive behavior, destructive actions, streams, wrappers, or CLI compatibility. Do not use for internal refactors with no observable CLI change or for full-screen terminal UIs.
+disable-model-invocation: true
 ---
 
 # CLI UX

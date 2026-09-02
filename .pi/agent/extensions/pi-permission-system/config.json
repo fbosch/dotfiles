@@ -89,6 +89,5 @@
       "/dev/shm/opencode-window-screenshots/*": "allow"
     },
     "external_directory_write": "ask"
-  },
-  "yoloMode": true
+  }
 }

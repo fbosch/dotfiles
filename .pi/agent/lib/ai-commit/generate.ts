@@ -16,7 +16,7 @@ function containsControlCharacter(value: string): boolean {
   });
 }
 
-export const COMMIT_TYPES = [
+const COMMIT_TYPES = [
   "feat",
   "fix",
   "docs",
@@ -188,7 +188,7 @@ function parseCommitText(text: string, options: GenerateOptions): ParseResult {
   };
 }
 
-export function extractWorkItemId(text: string): string | undefined {
+function extractWorkItemId(text: string): string | undefined {
   const input = text.trim();
   if (input.length === 0) return undefined;
 

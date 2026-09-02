@@ -5,7 +5,12 @@ import {
   type KeybindingsManager,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { AutocompleteProvider, EditorTheme, TUI } from "@earendil-works/pi-tui";
+import {
+  type AutocompleteProvider,
+  type EditorTheme,
+  stripTerminalSequences,
+  type TUI,
+} from "@earendil-works/pi-tui";
 import {
   type AgentMention,
   agentMentionForegroundAnsi,
@@ -21,7 +26,7 @@ import {
 } from "../mentions/project-references";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
-import { PERMISSION_SYSTEM_STATUS_KEY, YOLO_STATUS_TEXT } from "../yolo";
+import { YOLO_STATUS_KEY, YOLO_STATUS_TEXT } from "../yolo";
 import {
   AutocompleteOverlay,
   createPromptAutocompleteProvider,
@@ -43,6 +48,7 @@ import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
+export const MCP_STATUS_KEY = "mcp";
 
 export interface PromptEditorState {
   isWorking(): boolean;
@@ -98,17 +104,32 @@ function sanitizeStatus(status: string): string {
     .trim();
 }
 
+export function renderMcpFooterStatus(
+  theme: Pick<Theme, "fg">,
+  connectedCount: number,
+  hasFailure = false,
+): string {
+  if (connectedCount <= 0) return "";
+
+  const iconColor = hasFailure ? "error" : "success";
+  return `${theme.fg(iconColor, "⊙")} ${theme.fg("text", `${connectedCount} MCP`)}`;
+}
+
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
-  if (key !== PERMISSION_SYSTEM_STATUS_KEY) return status;
-  return theme.fg("error", YOLO_STATUS_TEXT);
+  if (key === YOLO_STATUS_KEY) return theme.fg("error", YOLO_STATUS_TEXT);
+  if (key !== MCP_STATUS_KEY) return status;
+
+  const compactStatus = /^MCP (\d+)\/\d+$/.exec(stripTerminalSequences(status));
+  return compactStatus === null ? "" : renderMcpFooterStatus(theme, Number(compactStatus[1]));
 }
 
 export function renderPromptHints(
-  theme: Theme,
+  theme: Pick<Theme, "fg">,
   keybindings: PromptKeybindings,
   promptState: PromptEditorState,
   cwd: string,
   width: number,
+  rightStatus = "",
 ): string {
   const statuses = promptState
     .getStatuses()
@@ -124,7 +145,8 @@ export function renderPromptHints(
   const branch = promptState.getBranch();
   const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
-  return fitColumns(theme.fg("muted", ` ${hintLeft}`), "", width);
+  const hintRight = sanitizeStatus(rightStatus);
+  return fitColumns(theme.fg("muted", ` ${hintLeft}`), hintRight, width);
 }
 
 export class PromptEditor extends CustomEditor {

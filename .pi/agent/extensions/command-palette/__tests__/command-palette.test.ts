@@ -58,6 +58,39 @@ describe("command palette context view", () => {
   });
 });
 
+describe("command palette MCP actions", () => {
+  test("omits MCP server management when the adapter command is unavailable", () => {
+    const { items } = createHarness(false);
+
+    expect(items.some((item) => item.id === "mcp")).toBeFalse();
+  });
+
+  test("offers MCP server management when the adapter command is available", async () => {
+    const sentMessages: Array<[string, { expandPromptTemplates?: boolean } | undefined]> = [];
+    const pi = {
+      getCommands: () => [
+        {
+          name: "mcp",
+          source: "extension",
+          sourceInfo: { source: "package" },
+        },
+      ],
+      sendUserMessage: (
+        message: string,
+        options: { expandPromptTemplates?: boolean } | undefined,
+      ) => {
+        sentMessages.push([message, options]);
+      },
+    } as unknown as ExtensionAPI;
+
+    const item = rootItems({} as ExtensionContext, pi).find((candidate) => candidate.id === "mcp");
+
+    expect(item?.label).toBe("Manage MCP Servers");
+    await item?.action?.();
+    expect(sentMessages).toEqual([["/mcp", { expandPromptTemplates: true }]]);
+  });
+});
+
 describe("command palette session switching", () => {
   test("dispatches the shortcut through the command context", async () => {
     let shortcutHandler: (() => Promise<void> | void) | undefined;

@@ -3,7 +3,7 @@
     "directTools": false,
     "hostConfigDiscovery": "off",
     "scriptMode": false,
-    "mcpFooterStatus": "off",
+    "mcpFooterStatus": "compact",
     "requestTimeoutMs": 30000
   },
   "mcpServers": {

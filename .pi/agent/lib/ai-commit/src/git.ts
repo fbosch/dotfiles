@@ -21,7 +21,7 @@ type CompressedDiffFileBlock = {
   parts: string[];
 };
 
-export const DEFAULT_STAGED_DIFF_MAX_CHARS = 6000;
+const DEFAULT_STAGED_DIFF_MAX_CHARS = 6000;
 export const DIFF_TRUNCATED_MARKER = "\n\n[Diff truncated]\n";
 const DIFF_FILE_HEADER_PREFIX = "diff --git ";
 
@@ -35,11 +35,6 @@ export type CommitError =
   | GitError
   | { kind: "staged-index-changed" }
   | { kind: "index-sync-failed"; commitOutput: string; message: string };
-
-export type PreviousCommitInfo = {
-  subject: string;
-  isMerge: boolean;
-};
 
 function runGit(args: string[], options?: RunGitOptions): CmdResult {
   const result = spawnSync("git", args, {
@@ -82,25 +77,6 @@ export function getRepoRoot(): Result<string, GitError> {
 
 export function getRemoteOriginUrl(): Result<string, GitError> {
   return gitResult(["config", "--get", "remote.origin.url"]);
-}
-
-export function getPreviousCommitSubject(): Result<string, GitError> {
-  return gitResult(["log", "-1", "--pretty=format:%s"]);
-}
-
-export function getPreviousCommitInfo(): Result<PreviousCommitInfo, GitError> {
-  return gitResult(["show", "-s", "--format=%s%n%P", "HEAD"]).map((stdout) => {
-    const [subjectLine = "", parentLine = ""] = stdout.split("\n");
-    const parentCount = parentLine
-      .split(/\s+/u)
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0).length;
-
-    return {
-      subject: subjectLine.trim(),
-      isMerge: parentCount >= 2,
-    };
-  });
 }
 
 export function getStagedFiles(): Result<string[], GitError> {

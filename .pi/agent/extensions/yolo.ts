@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export const PERMISSION_SYSTEM_STATUS_KEY = "pi-permission-system";
+export const YOLO_STATUS_KEY = "session-yolo";
 export const YOLO_STATUS_TEXT = "󱚝 yolo";
 export const YOLO_EFFECTIVE_STATE_CHANNEL = "pi-yolo:effective-state";
 
@@ -70,7 +70,7 @@ export function isYoloEffectiveStateEvent(value: unknown): value is YoloEffectiv
 
 function setYoloStatus(ctx: Pick<ExtensionContext, "ui">, enabled: boolean): void {
   ctx.ui.setStatus(
-    PERMISSION_SYSTEM_STATUS_KEY,
+    YOLO_STATUS_KEY,
     enabled ? ctx.ui.theme.fg("error", YOLO_STATUS_TEXT) : undefined,
   );
 }
