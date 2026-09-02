@@ -10,8 +10,9 @@ function herdr_link_plugins --description "Link local Herdr plugins from this do
     end
 
     for plugin_id in neovim-sessions worktrunk-lifecycle
-        set -l plugin_root (path resolve "$config_home/herdr/plugins/$plugin_id")
-        set -l manifest "$plugin_root/herdr-plugin.toml"
+        # Resolve the manifest so Herdr and Stow agree on the plugin root.
+        set -l manifest (path resolve "$config_home/herdr/plugins/$plugin_id/herdr-plugin.toml")
+        set -l plugin_root (path dirname "$manifest")
         if not test -f "$manifest"
             printf 'Missing Herdr plugin manifest: %s\n' "$manifest" >&2
             return 1

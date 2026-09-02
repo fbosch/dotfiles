@@ -247,11 +247,11 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
     end
 
     if set -q CORPORATE
-        printf '%sWorking%s  Installing shared FBB and Fish helper dependencies...\n' "$working" "$normal" >&2
-        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec
+        printf '%sWorking%s  Installing shared FBB, Pi, and Fish helper dependencies...\n' "$working" "$normal" >&2
+        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-pi
     else
-        printf '%sWorking%s  Installing OpenCode and Fish helper dependencies...\n' "$working" "$normal" >&2
-        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins
+        printf '%sWorking%s  Installing Pi, OpenCode, and Fish helper dependencies...\n' "$working" "$normal" >&2
+        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins install-pi
     end
     set command_status $status
     if contains -- $command_status 130 143
@@ -260,9 +260,9 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
     if test $command_status -ne 0
         printf '%sError%s    Failed to install dependencies.\n' "$error" "$normal" >&2
         if set -q CORPORATE
-            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec` to diagnose the failure.\n' >&2
+            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-pi` to diagnose the failure.\n' >&2
         else
-            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins` to diagnose the failure.\n' >&2
+            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins install-pi` to diagnose the failure.\n' >&2
         end
         return 1
     end

@@ -68,6 +68,11 @@ function initialize_repo
     command git -C "$seed" config user.email test@example.com
     command git -C "$seed" config user.name Test
     printf '%s\n' initial > "$seed/$name.txt"
+    if test "$name" = dotfiles
+        command mkdir -p "$seed/scripts"
+        printf '%s\n' '#!/usr/bin/env bash' 'set -euo pipefail' 'install -d -m 0700 "${1:-$HOME}/.pi/agent"' > "$seed/scripts/secure-pi-agent-dir.sh"
+        command chmod +x "$seed/scripts/secure-pi-agent-dir.sh"
+    end
     command git -C "$seed" add .
     command git -C "$seed" commit -m initial >/dev/null
     command git -C "$seed" remote add origin "$remote"
@@ -128,6 +133,7 @@ function test_corporate_context_reaches_native_plugin_install
     assert_status 0 $status
     assert_log_contains install-fbb
     assert_log_contains install-fish-libexec
+    assert_log_contains install-pi
     assert_log_absent install-opencode-plugins
     assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
 end
@@ -145,6 +151,7 @@ function test_clean_repositories_fast_forward
     assert_log_contains stow
     assert_log_contains just
     assert_log_contains install-fish-libexec
+    assert_log_contains install-pi
     assert_log_contains 'nvim --headless -i NONE +TSInstallMissing +qa'
     assert_log_contains herdr_link_plugins
 end
