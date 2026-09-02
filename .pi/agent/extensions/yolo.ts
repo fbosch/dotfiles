@@ -193,7 +193,7 @@ export function registerYoloApprovalBridge(pi: ExtensionAPI, agentDirectory = ge
 
 export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
   pi.registerCommand("yolo", {
-    description: "Toggle permission-system YOLO mode",
+    description: "Toggle global YOLO mode for permission checks",
     handler: async (args, ctx) => {
       if (args.trim() !== "") {
         ctx.ui.notify("Usage: /yolo", "warning");
@@ -205,8 +205,8 @@ export function registerYoloCommand(pi: ExtensionAPI, agentDirectory = getAgentD
         ctx.ui.setStatus(PERMISSION_SYSTEM_STATUS_KEY, result.enabled ? "yolo" : undefined);
         ctx.ui.notify(
           result.enabled
-            ? "Global YOLO mode enabled. Ask-state permission checks will be auto-approved; explicit denies still block."
-            : "Global YOLO mode disabled. Ask-state permission checks will prompt again.",
+            ? "Global YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block."
+            : "Global YOLO mode disabled. Ask-state permission checks and MCP tool approvals prompt when required.",
           result.enabled ? "warning" : "info",
         );
         return;

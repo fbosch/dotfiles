@@ -102,6 +102,64 @@ describe("Hyprland extension", () => {
     }
   });
 
+  test("captures an active window using its compositor geometry", async () => {
+    const { pi, getTool } = captureRegistration();
+    const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+    let outputPath: string | undefined;
+    const client = {
+      address: "0x1234",
+      stableId: "18000008",
+      mapped: true,
+      monitor: 1,
+      class: "kitty",
+      initialClass: "kitty",
+      title: "Fixture",
+      visible: true,
+      at: [10, 20],
+      size: [300, 200],
+    };
+    const commandRunner: HyprlandCommandRunner = async (command, args, cwd) => {
+      calls.push({ command, args, cwd });
+      if (command === "hyprctl") {
+        const request = args[0];
+        const response =
+          request === "activewindow"
+            ? client
+            : request === "clients"
+              ? [client]
+              : request === "monitors"
+                ? [{ x: 0, y: 0, width: 1920, height: 1080, name: "DP-1", focused: true, id: 1 }]
+                : {};
+        return { stdout: JSON.stringify(response), stderr: "", exitCode: 0 };
+      }
+
+      outputPath = args.at(-1);
+      if (outputPath === undefined) throw new Error("grim output path is missing");
+      await writeFile(outputPath, Buffer.from("fixture-png"));
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool();
+    if (tool === undefined) throw new Error("Hyprland tool was not registered");
+
+    try {
+      const result = await tool.execute("call-1", { mode: "window" }, undefined, undefined, {
+        cwd: "/tmp",
+      } as ExtensionContext);
+
+      const grimCall = calls.find(({ command }) => command === "grim");
+      expect(grimCall).toMatchObject({ command: "grim", cwd: "/tmp" });
+      expect(grimCall?.args.slice(0, -1)).toEqual(["-g", "10,20 300x200"]);
+      expect(result.details).toMatchObject({
+        method: "window",
+        geometry: { x: 10, y: 20, width: 300, height: 200 },
+      });
+    } finally {
+      if (outputPath !== undefined) await rm(outputPath, { force: true });
+    }
+  });
+
   test("reports missing capture commands as tool failures", async () => {
     let tool: ToolDefinition | undefined;
     const pi = {

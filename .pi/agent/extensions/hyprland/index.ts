@@ -46,6 +46,7 @@ type WindowInfo = {
   stableId: string;
   address: string;
   monitor: number | null;
+  position: [number, number] | null;
   size: [number, number] | null;
   visible: boolean;
   mapped: boolean;
@@ -163,6 +164,7 @@ function parseWindow(value: unknown): WindowInfo | null {
     return null;
   }
 
+  const position = numberArray(input.at);
   const size = numberArray(input.size);
   return {
     className: stringValue(input.class),
@@ -171,6 +173,10 @@ function parseWindow(value: unknown): WindowInfo | null {
     stableId: stringValue(input.stableId),
     address: stringValue(input.address),
     monitor: numberValue(input.monitor),
+    position:
+      position.length >= 2 && position[0] !== undefined && position[1] !== undefined
+        ? [position[0], position[1]]
+        : null,
     size:
       size.length >= 2 && size[0] !== undefined && size[1] !== undefined
         ? [size[0], size[1]]
@@ -564,19 +570,31 @@ async function captureWindow(
     return "No mapped window matched the hint.";
   }
 
-  const target = windowTarget(window);
-  if (target === "") {
-    return "Active window has no stableId or address.";
+  const position = window.position;
+  const size = window.size;
+  if (position === null || size === null || size[0] <= 0 || size[1] <= 0) {
+    return "Window has no usable geometry.";
   }
 
+  const target = windowTarget(window);
+  const geometry = { x: position[0], y: position[1], width: size[0], height: size[1] };
+  const region = `${geometry.x},${geometry.y} ${geometry.width}x${geometry.height}`;
   const path = await outputPath(format);
   const error = await grim(
-    [...grimFormatArgs(format), "-T", target, path],
+    [...grimFormatArgs(format), "-g", region, path],
     cwd,
     runCommand,
     signal,
   );
-  return error ?? { path, method: "window", target, window };
+  return (
+    error ?? {
+      path,
+      method: "window",
+      ...(target === "" ? {} : { target }),
+      geometry,
+      window,
+    }
+  );
 }
 
 async function captureRegion(

@@ -117,7 +117,7 @@ describe("YOLO mode", () => {
     expect(reloads).toBe(0);
     expect(notifications).toEqual([
       [
-        "Global YOLO mode enabled. Ask-state permission checks will be auto-approved; explicit denies still block.",
+        "Global YOLO mode enabled. Ask-state permission checks and MCP tool approvals are auto-approved. Explicit denies still block.",
         "warning",
       ],
     ]);
