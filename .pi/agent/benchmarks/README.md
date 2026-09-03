@@ -31,6 +31,7 @@ Use environment variables to change the sample policy or output path:
 ```bash
 PI_BENCHMARK_WARMUPS=5 \
 PI_BENCHMARK_RUNS=20 \
+PI_BENCHMARK_TIMEOUT=30s \
 PI_BENCHMARK_OUTPUT_DIR=/tmp/pi-startup-baseline \
 just pi-benchmark
 ```
@@ -50,6 +51,10 @@ Results default to `$XDG_STATE_HOME/dotfiles/pi-benchmarks/`. When
   and context files. It still uses the current settings and package resolver.
 - `pty-control` runs `true` through the same pseudo-terminal launcher. It
   reports launcher overhead and is not subtracted from Pi latency.
+
+Every preflight, warmup, and measured sample is bounded by
+`PI_BENCHMARK_TIMEOUT` (default: `30s`). The timeout must be a positive duration
+accepted by `timeout` or `gtimeout`.
 
 Use the `full` median from `summary.json` as the baseline. Compare results only
 when the Pi version, machine, target, run counts, and `setupFingerprint` match

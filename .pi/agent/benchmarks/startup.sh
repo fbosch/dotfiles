@@ -48,10 +48,23 @@ require_command hyperfine
 require_command jq
 require_command script
 
+timeout_bin=""
+for candidate in timeout gtimeout; do
+  candidate_path="$(command -v "$candidate" || true)"
+  if [[ -n "$candidate_path" ]]; then
+    timeout_bin="$candidate_path"
+    break
+  fi
+done
+[[ -n "$timeout_bin" ]] || fail "required command not found: timeout or gtimeout"
+
 runs="${PI_BENCHMARK_RUNS:-20}"
 warmups="${PI_BENCHMARK_WARMUPS:-5}"
+sample_timeout="${PI_BENCHMARK_TIMEOUT:-30s}"
 require_positive_integer PI_BENCHMARK_RUNS "$runs"
 require_positive_integer PI_BENCHMARK_WARMUPS "$warmups"
+[[ "$sample_timeout" =~ ^[1-9][0-9]*(s|m|h|d)?$ ]] \
+  || fail "PI_BENCHMARK_TIMEOUT must be a positive timeout duration (for example, 30s)"
 
 benchmark_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 agent_dir="$(cd "$benchmark_dir/.." && pwd -P)"
@@ -246,7 +259,13 @@ export PI_BENCHMARK_REPO_ROOT="$repo_root"
 export PI_BENCHMARK_STATE_HOME="$fixture_state"
 export PI_BENCHMARK_TMPDIR="$fixture_tmp"
 
+run_sample() {
+  local scenario="$1"
+  "$timeout_bin" --kill-after=2s "$sample_timeout" bash "$sample_script" "$scenario"
+}
+
 printf 'Pi %s startup benchmark: %s\n' "$pi_version" "$output_dir"
+printf 'Per-sample timeout: %s\n' "$sample_timeout"
 printf 'Preparing isolated warm-cache fixture...\n'
 external_source_manifest_before="$manifest_dir/external-source-before.tsv"
 external_source_manifest_after="$manifest_dir/external-source-after.tsv"
@@ -259,8 +278,8 @@ write_external_source_manifest "$external_source_manifest_before"
 write_fixture_manifest "$fixture_source_manifest"
 external_source_fingerprint="$(git hash-object "$external_source_manifest_before")"
 fixture_source_fingerprint="$(git hash-object "$fixture_source_manifest")"
-if ! bash "$sample_script" full; then
-  fail "preflight startup failed"
+if ! run_sample full; then
+  fail "preflight startup failed or exceeded $sample_timeout"
 fi
 
 warmup_scenarios=(pty-control full)
@@ -269,10 +288,13 @@ if [[ "$target" == breakdown ]]; then
 fi
 for scenario in "${warmup_scenarios[@]}"; do
   for ((iteration = 1; iteration <= warmups; iteration += 1)); do
-    bash "$sample_script" "$scenario"
+    if ! run_sample "$scenario"; then
+      fail "warmup '$scenario' failed or exceeded $sample_timeout"
+    fi
   done
 done
 
+printf 'Fingerprinting linked dependencies before measurement...\n'
 write_dependency_manifest "$dependency_manifest_before"
 write_fixture_manifest "$fixture_manifest_before"
 dependency_fingerprint="$(git hash-object "$dependency_manifest_before")"
@@ -317,6 +339,7 @@ jq -n \
   --arg dependencyFingerprint "$dependency_fingerprint" \
   --argjson runs "$runs" \
   --argjson warmups "$warmups" \
+  --arg sampleTimeout "$sample_timeout" \
   --argjson localExtensionModuleCount "$local_extension_module_count" \
   --argjson packageCount "$package_count" \
   '{
@@ -346,7 +369,7 @@ jq -n \
       localExtensionModuleCount: $localExtensionModuleCount,
       packageCount: $packageCount
     },
-    repetitions: { runs: $runs, warmups: $warmups },
+    repetitions: { runs: $runs, warmups: $warmups, sampleTimeout: $sampleTimeout },
     piStartupBenchmarkDrainMs: 150,
     isolation: {
       offline: "Pi-managed startup network operations disabled",
@@ -384,18 +407,24 @@ jq -n \
     }
   }' >"$output_dir/metadata.json"
 
-printf -v pty_control_command 'bash %q %q' "$sample_script" pty-control
-printf -v full_command 'bash %q %q' "$sample_script" full
-printf -v no_extensions_command 'bash %q %q' "$sample_script" no-extensions
-printf -v minimal_resources_command 'bash %q %q' "$sample_script" minimal-resources
+printf -v pty_control_command '%q --kill-after=2s %q bash %q %q' \
+  "$timeout_bin" "$sample_timeout" "$sample_script" pty-control
+printf -v full_command '%q --kill-after=2s %q bash %q %q' \
+  "$timeout_bin" "$sample_timeout" "$sample_script" full
+printf -v no_extensions_command '%q --kill-after=2s %q bash %q %q' \
+  "$timeout_bin" "$sample_timeout" "$sample_script" no-extensions
+printf -v minimal_resources_command '%q --kill-after=2s %q bash %q %q' \
+  "$timeout_bin" "$sample_timeout" "$sample_script" minimal-resources
 
-hyperfine \
+if ! hyperfine \
   --shell=bash \
   --style basic \
   --runs "$runs" \
   --export-json "$output_dir/pty-control.json" \
   --export-markdown "$output_dir/pty-control.md" \
-  --command-name pty-control "$pty_control_command"
+  --command-name pty-control "$pty_control_command"; then
+  fail "pty-control benchmark failed or exceeded $sample_timeout"
+fi
 
 startup_commands=(
   --shell=bash
@@ -411,9 +440,13 @@ if [[ "$target" == breakdown ]]; then
     --command-name minimal-resources "$minimal_resources_command"
   )
 fi
-hyperfine "${startup_commands[@]}"
+if ! hyperfine "${startup_commands[@]}"; then
+  fail "startup benchmark failed or exceeded $sample_timeout"
+fi
 
+printf 'Validating fixture fingerprints after measurement...\n'
 write_fixture_manifest "$fixture_manifest_after"
+printf 'Validating linked dependency fingerprint after measurement...\n'
 write_dependency_manifest "$dependency_manifest_after"
 write_external_source_manifest "$external_source_manifest_after"
 if ! cmp -s "$fixture_manifest_before" "$fixture_manifest_after"; then

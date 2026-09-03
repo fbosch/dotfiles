@@ -746,12 +746,20 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
       .then(async () => {
         if (disposed) return;
         const currentService = getSubagentsService();
-        if (currentService === undefined) {
+        const candidateServices =
+          service === currentService ? [service] : [service, currentService];
+        const targetService =
+          candidateServices.find(
+            (candidate) => lookupSubagentRecord(candidate, target.agentId) !== undefined,
+          ) ??
+          currentService ??
+          service;
+        if (targetService === undefined) {
           ctx.ui.notify("Could not access subagent sessions.", "error");
           return;
         }
 
-        await openSubagentSession(target, currentService, ctx, tui, abortController.signal);
+        await openSubagentSession(target, targetService, ctx, tui, abortController.signal);
       })
       .catch(() => {
         if (!disposed) ctx.ui.notify("Could not open the selected subagent session.", "error");

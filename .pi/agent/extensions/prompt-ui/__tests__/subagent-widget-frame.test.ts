@@ -114,7 +114,7 @@ describe("subagent widget frame", () => {
     const rendered = factory(tui, theme).render(80);
 
     expect(rendered[2]).toContain("pi-action://subagents/session?id=agent-1");
-    expect(rendered[3]).not.toContain("pi-action://subagents/session");
+    expect(rendered[3]).toContain("pi-action://subagents/session?id=agent-1");
     uninstall();
   });
 
@@ -211,7 +211,9 @@ describe("subagent widget frame", () => {
 
     expect(linked[1]).toContain("id=finished");
     expect(linked[2]).toContain("id=running-newer");
+    expect(linked[3]).toContain("id=running-newer");
     expect(linked[4]).toContain("id=running-older");
+    expect(linked[5]).toContain("id=running-older");
     expect(linked[6]).not.toContain("pi-action://subagents/session");
   });
 
@@ -388,16 +390,46 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
-  test("shares one patch across owners and restores the original method", () => {
-    const { originalSetWidget, ui } = createUI();
-    const uninstallFirst = installSubagentWidgetFrame(ui);
+  test("restores the previous owner's wrapper when the newest owner is removed", () => {
+    const { calls, originalSetWidget, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => ["● Agents", "└─ ⠋ explore  Inspect owner · 1.0s", "     ⎿  thinking…"],
+      invalidate: () => {},
+    };
+    const record = (id: string) => [
+      {
+        id,
+        type: "explore",
+        description: "Inspect owner",
+        status: "running",
+        isBackground: true,
+      },
+    ];
+    const uninstallFirst = installSubagentWidgetFrame(ui, {
+      agentColors: new Map(),
+      agentDisplayNames: new Map([["explore", "explore"]]),
+      getSubagents: () => record("first-owner"),
+    });
     const patchedSetWidget = ui.setWidget;
-    const uninstallSecond = installSubagentWidgetFrame(ui);
+    const uninstallSecond = installSubagentWidgetFrame(ui, {
+      agentColors: new Map(),
+      agentDisplayNames: new Map([["explore", "explore"]]),
+      getSubagents: () => record("second-owner"),
+    });
 
-    expect(ui.setWidget).toBe(patchedSetWidget);
-    uninstallFirst();
-    expect(ui.setWidget).toBe(patchedSetWidget);
+    ui.setWidget("agents", () => widget);
+    const secondFactory = calls.at(-1)?.content;
+    if (typeof secondFactory !== "function") throw new Error("Expected a widget factory");
+    expect(secondFactory(tui, theme).render(80)[2]).toContain("id=second-owner");
+
     uninstallSecond();
+    ui.setWidget("agents", () => widget);
+    const firstFactory = calls.at(-1)?.content;
+    if (typeof firstFactory !== "function") throw new Error("Expected a widget factory");
+    expect(firstFactory(tui, theme).render(80)[2]).toContain("id=first-owner");
+    expect(ui.setWidget).toBe(patchedSetWidget);
+
+    uninstallFirst();
     expect(ui.setWidget).toBe(originalSetWidget);
   });
 });

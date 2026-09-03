@@ -810,6 +810,48 @@ describe("subagent session links", () => {
     }
   });
 
+  test("uses the captured service after its global publication is removed", async () => {
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    let recordLookups = 0;
+    globals[serviceKey] = {
+      getRecord: () => {
+        recordLookups += 1;
+        return undefined;
+      },
+      listAgents: () => [],
+    };
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
+    const notifications: Array<[string, string]> = [];
+    const ctx = {
+      cwd: process.cwd(),
+      ui: {
+        theme: {} as Theme,
+        notify: (message: string, level: string) => notifications.push([message, level]),
+      },
+    } as unknown as Parameters<typeof installClickableSubagentSessions>[1];
+    const uninstall = installClickableSubagentSessions(tui, ctx);
+    delete globals[serviceKey];
+
+    try {
+      (tui as unknown as TUI & { openUrl: (url: string) => void }).openUrl(
+        subagentSessionUrl(target),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(recordLookups).toBeGreaterThan(0);
+      expect(notifications).toEqual([
+        ["The selected subagent session is no longer available.", "warning"],
+      ]);
+    } finally {
+      uninstall();
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
+  });
+
   test("serializes transcript clicks and closes the active overlay on disposal", async () => {
     const directory = mkdtempSync(join(tmpdir(), "subagent-session-disposal-"));
     const outputFile = join(directory, "session.jsonl");
@@ -913,14 +955,16 @@ describe("subagent session links", () => {
       openedSessions.push(session);
     });
     const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
-    const linkedLine = component
+    const linkedLines = component
       .render(80)
-      .findIndex((line) => line.includes(subagentSessionUrl(widgetTarget)));
+      .flatMap((line, index) => (line.includes(subagentSessionUrl(widgetTarget)) ? [index] : []));
+    const linkedLine = linkedLines.at(-1) ?? -1;
     tui.addChild(component);
 
     try {
       tui.start();
       tui.renderNow();
+      expect(linkedLines).toHaveLength(2);
       expect(linkedLine).toBeGreaterThan(-1);
       expect(terminal.output).not.toContain(subagentSessionUrl(widgetTarget));
       terminal.send(`\u001b[<0;4;${linkedLine + 1}M`);

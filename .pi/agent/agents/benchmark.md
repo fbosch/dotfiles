@@ -4,6 +4,7 @@ description: Runs performance benchmarks, profiles code, and compares before/aft
 prompt_mode: replace
 model: openai-codex/gpt-5.6-terra
 thinking: medium
+max_turns: 16
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny

@@ -273,8 +273,8 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         set --function --export CORPORATE 1
     end
     nvim --headless -i NONE '+TSInstallMissing' '+qa'
-    printf '\n' >&2
     set command_status $status
+    printf '\n' >&2
     if contains -- $command_status 130 143
         return $command_status
     end

@@ -26,7 +26,7 @@ const SUBAGENTS_SERVICE_KEY = Symbol.for("@gotgenes/pi-subagents:service");
 const AGENT_HEADER_PATTERN = /^(?:├─|└─)\s+\S+\s+/;
 const AGENT_ACTIVITY_PATTERN = /^\s*(?:│\s*)?⎿\s/;
 const DESCRIPTION_MATCH_CHARS = 12;
-const PATCH_VERSION = 1;
+const PATCH_VERSION = 2;
 
 type WidgetComponent = Component & { dispose?(): void };
 type WidgetFactory = (tui: TUI, theme: Theme) => WidgetComponent;
@@ -65,10 +65,12 @@ type PatchableUI = ExtensionUIContext &
 
 interface WidgetPatchState {
   version: typeof PATCH_VERSION;
-  owners: symbol[];
+  registrations: Array<{
+    owner: symbol;
+    wrap: (key: string, factory: WidgetFactory) => WidgetFactory;
+  }>;
   originalSetWidget: SetWidget;
   patchedSetWidget: SetWidget;
-  wrap: (key: string, factory: WidgetFactory) => WidgetFactory;
 }
 
 class WidgetFrame implements Component {
@@ -170,11 +172,33 @@ export function loadAgentWidgetDisplayNames(
   );
 }
 
-function widgetSubagents(): readonly WidgetSubagentRecord[] {
-  const service = (globalThis as Record<symbol, unknown>)[SUBAGENTS_SERVICE_KEY] as
+function publishedWidgetSubagentsService(): WidgetSubagentsService | undefined {
+  return (globalThis as Record<symbol, unknown>)[SUBAGENTS_SERVICE_KEY] as
     | WidgetSubagentsService
     | undefined;
-  return service?.listAgents() ?? [];
+}
+
+function widgetSubagents(
+  capturedService: WidgetSubagentsService | undefined,
+): readonly WidgetSubagentRecord[] {
+  const records: WidgetSubagentRecord[] = [];
+  const seenIds = new Set<string>();
+  const currentService = publishedWidgetSubagentsService();
+  const services =
+    capturedService === currentService ? [capturedService] : [capturedService, currentService];
+  for (const service of services) {
+    if (service === undefined) continue;
+    try {
+      for (const record of service.listAgents()) {
+        if (seenIds.has(record.id)) continue;
+        seenIds.add(record.id);
+        records.push(record);
+      }
+    } catch {
+      // Another observed service generation can still identify the rendered row.
+    }
+  }
+  return records;
 }
 
 function widgetTarget(
@@ -234,10 +258,12 @@ export function linkSubagentWidgetLines(
   );
   const running = records.filter((record) => record.isBackground && record.status === "running");
 
-  return lines.map((line, lineIndex) => {
+  const linked = [...lines];
+  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+    const line = lines[lineIndex] ?? "";
     const plainLine = stripTerminalSequences(line).trimStart();
     const prefix = AGENT_HEADER_PATTERN.exec(plainLine)?.[0];
-    if (prefix === undefined) return line;
+    if (prefix === undefined) continue;
     const isRunning = AGENT_ACTIVITY_PATTERN.test(
       stripTerminalSequences(lines[lineIndex + 1] ?? ""),
     );
@@ -250,11 +276,17 @@ export function linkSubagentWidgetLines(
       displayNames,
       isRunning,
     );
-    if (candidateIndex === undefined) return line;
+    if (candidateIndex === undefined) continue;
     const [record] = candidates.splice(candidateIndex, 1);
-    if (record === undefined) return line;
-    return hyperlink(line, subagentSessionUrl(widgetTarget(record, displayNames)));
-  });
+    if (record === undefined) continue;
+    const url = subagentSessionUrl(widgetTarget(record, displayNames));
+    linked[lineIndex] = hyperlink(line, url);
+    const activityLine = lines[lineIndex + 1];
+    if (isRunning && activityLine !== undefined) {
+      linked[lineIndex + 1] = hyperlink(activityLine, url);
+    }
+  }
+  return linked;
 }
 
 /** Apply explicit agent colors to header lines while preserving the widget's own styling. */
@@ -311,10 +343,21 @@ function isCurrentPatchState(value: unknown): value is WidgetPatchState {
   );
 }
 
+function restoreLegacyWidgetPatch(ui: PatchableUI, installedState: unknown): void {
+  if (typeof installedState !== "object" || installedState === null) return;
+  if (
+    "originalSetWidget" in installedState &&
+    typeof installedState.originalSetWidget === "function"
+  ) {
+    ui.setWidget = installedState.originalSetWidget as SetWidget;
+  }
+  ui[AGENT_WIDGET_PATCH] = undefined;
+}
+
 function uninstallWidgetPatch(ui: PatchableUI, state: WidgetPatchState, owner: symbol): void {
-  const index = state.owners.indexOf(owner);
-  if (index >= 0) state.owners.splice(index, 1);
-  if (state.owners.length > 0) return;
+  const index = state.registrations.findIndex((registration) => registration.owner === owner);
+  if (index >= 0) state.registrations.splice(index, 1);
+  if (state.registrations.length > 0) return;
   if (ui.setWidget === state.patchedSetWidget) ui.setWidget = state.originalSetWidget;
   if (ui[AGENT_WIDGET_PATCH] === state) ui[AGENT_WIDGET_PATCH] = undefined;
 }
@@ -329,7 +372,8 @@ export function installSubagentWidgetFrame(
   const agentColors = options.agentColors ?? loadAgentWidgetColors(cwd, agentDirectory);
   const agentDisplayNames =
     options.agentDisplayNames ?? loadAgentWidgetDisplayNames(cwd, agentDirectory);
-  const getSubagents = options.getSubagents ?? widgetSubagents;
+  const capturedService = publishedWidgetSubagentsService();
+  const getSubagents = options.getSubagents ?? (() => widgetSubagents(capturedService));
   const sessionId = options.sessionId ?? cwd;
   const wrap = (key: string, factory: WidgetFactory) =>
     frameWidget(
@@ -340,31 +384,31 @@ export function installSubagentWidgetFrame(
       sessionId,
       key === AGENT_WIDGET_KEY,
     );
-  const owner = Symbol();
+  const registration = { owner: Symbol(), wrap };
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {
-    installedState.wrap = wrap;
-    installedState.owners.push(owner);
-    return () => uninstallWidgetPatch(ui, installedState, owner);
+    installedState.registrations.push(registration);
+    return () => uninstallWidgetPatch(ui, installedState, registration.owner);
   }
+  restoreLegacyWidgetPatch(ui, installedState);
 
   const originalSetWidget = ui.setWidget;
   const state: WidgetPatchState = {
     version: PATCH_VERSION,
-    owners: [owner],
+    registrations: [registration],
     originalSetWidget,
     patchedSetWidget: originalSetWidget,
-    wrap,
   };
   state.patchedSetWidget = (key, content, options) => {
+    const activeWrap = state.registrations.at(-1)?.wrap;
     const framedContent =
-      FRAMED_WIDGET_KEYS.has(key) && typeof content === "function"
-        ? state.wrap(key, content)
+      FRAMED_WIDGET_KEYS.has(key) && typeof content === "function" && activeWrap !== undefined
+        ? activeWrap(key, content)
         : content;
     state.originalSetWidget.call(ui, key, framedContent, options);
   };
 
   ui[AGENT_WIDGET_PATCH] = state;
   ui.setWidget = state.patchedSetWidget;
-  return () => uninstallWidgetPatch(ui, state, owner);
+  return () => uninstallWidgetPatch(ui, state, registration.owner);
 }
