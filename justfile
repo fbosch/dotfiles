@@ -128,6 +128,11 @@ build-storybook:
 bun-benchmark $target="runtime":
     bash scripts/benchmark-bun.sh "$target"
 
+# Record warm-cache Pi startup timings. Target: full or breakdown.
+[group('development')]
+pi-benchmark $target="breakdown":
+    bun run --cwd .pi/agent benchmark:startup "$target"
+
 # Run Storybook for the design system.
 [group('development')]
 storybook:

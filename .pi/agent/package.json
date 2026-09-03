@@ -10,6 +10,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "audit": "fallow --only dead-code --fail-on-issues",
+    "benchmark:startup": "bash benchmarks/startup.sh",
     "check": "bun run lint && bun run test && bun run typecheck && bun run audit"
   },
   "devDependencies": {

@@ -2,10 +2,10 @@ import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-c
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import { detectQuickReplies, extractVisibleAssistantProse, type QuickReply } from "./classifier";
 
-export const QUICK_REPLY_SHORTCUTS = ["ctrl+1", "ctrl+2", "ctrl+3"] as const;
+export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3"] as const;
 
 const WIDGET_KEY = "quick-replies";
-const REPLY_GAP = "   ";
+const REPLY_GAP = "  ";
 
 type ShortcutStyle = "full" | "short" | "numeric";
 
@@ -239,15 +239,17 @@ function renderLayout(layout: ReplyLayout, theme: Theme): string {
   return layout.replies
     .map((reply, index) => {
       const shortcut = formatShortcut(QUICK_REPLY_SHORTCUTS[index] ?? "", layout.shortcutStyle);
-      const label = index === 0 ? theme.fg("accent", reply.label) : theme.fg("text", reply.label);
-      return `${theme.fg("dim", shortcut)} ${label}`;
+      const shortcutColor = index === 0 ? "accent" : "muted";
+      const labelColor = index === 0 ? "accent" : "text";
+      const keycap = theme.fg(shortcutColor, `‹${shortcut}›`);
+      return `${keycap} ${theme.fg(labelColor, reply.label)}`;
     })
     .join(REPLY_GAP);
 }
 
 function formatShortcut(shortcut: string, style: ShortcutStyle): string {
-  const display = shortcut.replace("ctrl", "Ctrl");
-  if (style === "full") return `[${display}]`;
-  if (style === "short") return display;
-  return display.at(-1) ?? "";
+  const display = shortcut.charAt(0).toUpperCase() + shortcut.slice(1);
+  if (style === "full") return display;
+  const digit = display.at(-1) ?? "";
+  return style === "short" ? `A${digit}` : digit;
 }

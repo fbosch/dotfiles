@@ -12,6 +12,7 @@ type WidgetFactory = (tui: never, theme: Theme) => Component;
 
 const theme = {
   fg: (_color: string, text: string) => text,
+  bg: (_color: string, text: string) => text,
 } as Theme;
 
 function createHarness(
@@ -288,11 +289,15 @@ describe("quick reply widget", () => {
     { label: "Explain first", message: "Explain first" },
   ];
 
+  test("uses unbound alternative-digit shortcuts", () => {
+    expect(QUICK_REPLY_SHORTCUTS).toEqual(["alt+1", "alt+2", "alt+3"]);
+  });
+
   test("uses the preferred full layout when it fits", () => {
     const rendered = renderQuickReplyLine(permissionReplies, 100, theme);
 
     expect(stripTerminalSequences(rendered?.line ?? "")).toBe(
-      "[Ctrl+1] Go ahead   [Ctrl+2] Not now   [Ctrl+3] Explain first",
+      "‹Alt+1› Go ahead  ‹Alt+2› Not now  ‹Alt+3› Explain first",
     );
     expect(rendered?.visibleReplyCount).toBe(3);
   });
@@ -300,15 +305,30 @@ describe("quick reply widget", () => {
   test("removes the third reply and shortens hints at narrower widths", () => {
     const rendered = renderQuickReplyLine(permissionReplies, 40, theme);
 
-    expect(stripTerminalSequences(rendered?.line ?? "")).toBe("Ctrl+1 Go ahead   Ctrl+2 Not now");
+    expect(stripTerminalSequences(rendered?.line ?? "")).toBe("‹A1› Go ahead  ‹A2› Not now");
     expect(rendered?.visibleReplyCount).toBe(2);
   });
 
   test("falls back to numeric hints without wrapping", () => {
     const rendered = renderQuickReplyLine(permissionReplies, 25, theme);
 
-    expect(stripTerminalSequences(rendered?.line ?? "")).toBe("1 Go ahead   2 Not now");
+    expect(stripTerminalSequences(rendered?.line ?? "")).toBe("‹1› Go ahead  ‹2› Not now");
     expect(visibleWidth(rendered?.line ?? "")).toBeLessThanOrEqual(25);
+  });
+
+  test("avoids full-cell backgrounds around outlined keycaps", () => {
+    const backgrounds: string[] = [];
+    const trackingTheme = {
+      ...theme,
+      bg: (color: string, text: string) => {
+        backgrounds.push(color);
+        return text;
+      },
+    } as Theme;
+
+    renderQuickReplyLine(permissionReplies, 100, trackingTheme);
+
+    expect(backgrounds).toEqual([]);
   });
 
   test("hides instead of truncating a reply message", () => {

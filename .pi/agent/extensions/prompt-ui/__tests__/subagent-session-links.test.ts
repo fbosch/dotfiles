@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type ExtensionUIContext,
-  type KeybindingsManager,
   type TerminalInputHandler,
   type Theme,
   ToolExecutionComponent,
@@ -64,6 +63,46 @@ function stubToolRender(lines: string[]): () => void {
   prototype.render = () => [...lines];
   return () => {
     prototype.render = originalRender;
+  };
+}
+
+function createClosingOverlayTui(
+  options: { focused?: boolean; onShow?: (component: Component) => void } = {},
+) {
+  let component: Component | undefined;
+  let overlayOptions: Parameters<TUI["showOverlay"]>[1];
+  let hidden = false;
+  const handle: OverlayHandle = {
+    hide: () => {
+      hidden = true;
+    },
+    setHidden: () => {},
+    isHidden: () => hidden,
+    focus: () => {},
+    unfocus: () => {},
+    isFocused: () => options.focused ?? true,
+  };
+  const tui = {
+    mode: "fullscreen",
+    terminal: { columns: 80, rows: 24 },
+    requestRender: () => {},
+    showOverlay(nextComponent: Component, nextOptions: Parameters<TUI["showOverlay"]>[1]) {
+      component = nextComponent;
+      overlayOptions = nextOptions;
+      queueMicrotask(() =>
+        options.onShow === undefined
+          ? nextComponent.handleInput?.("\u001b")
+          : options.onShow(nextComponent),
+      );
+      return handle;
+    },
+  } as unknown as TUI;
+
+  return {
+    tui,
+    getComponent: () => component,
+    getOptions: () => overlayOptions,
+    isHidden: () => hidden,
   };
 }
 
@@ -426,24 +465,13 @@ describe("subagent session links", () => {
         return { outputFile, status: "running" };
       },
     };
-    let overlay: Component | undefined;
-    let overlayOptions: unknown;
+    const overlay = createClosingOverlayTui();
     const notifications: Array<[string, string]> = [];
+    let customPromptCalls = 0;
     const ui = {
-      custom: async (
-        factory: Parameters<ExtensionUIContext["custom"]>[0],
-        options?: Parameters<ExtensionUIContext["custom"]>[1],
-      ) => {
-        overlayOptions = options;
-        overlay = await factory(
-          {
-            terminal: { columns: 80, rows: 24 },
-            requestRender: () => {},
-          } as unknown as TUI,
-          {} as Theme,
-          {} as KeybindingsManager,
-          () => {},
-        );
+      theme: {} as Theme,
+      custom: async () => {
+        customPromptCalls += 1;
         return undefined;
       },
       notify: (message: string, level: string) => notifications.push([message, level]),
@@ -451,15 +479,17 @@ describe("subagent session links", () => {
     const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
 
     try {
-      await openSubagentSession(target, service, ctx);
+      await openSubagentSession(target, service, ctx, overlay.tui);
 
       expect(requestedIds).toEqual([target.agentId]);
-      expect(typeof overlay?.render).toBe("function");
-      expect(overlayOptions).toMatchObject({
-        overlay: true,
-        overlayOptions: { anchor: "center", width: "90%", maxHeight: "70%" },
-        onHandle: expect.any(Function),
+      expect(typeof overlay.getComponent()?.render).toBe("function");
+      expect(overlay.getOptions()).toEqual({
+        anchor: "center",
+        width: "90%",
+        maxHeight: "70%",
       });
+      expect(overlay.isHidden()).toBe(true);
+      expect(customPromptCalls).toBe(0);
       expect(notifications).toEqual([
         ["Opening the current transcript snapshot. Reopen it to refresh.", "info"],
       ]);
@@ -488,8 +518,14 @@ describe("subagent session links", () => {
     };
     let terminalInputHandler: TerminalInputHandler | undefined;
     let inputHandlerRemoved = false;
-    let transcriptClosed = false;
+    const overlay = createClosingOverlayTui({
+      focused: false,
+      onShow: () => {
+        expect(terminalInputHandler?.("\u001b")).toEqual({ consume: true });
+      },
+    });
     const ui = {
+      theme: {} as Theme,
       onTerminalInput: (handler: TerminalInputHandler) => {
         terminalInputHandler = handler;
         return () => {
@@ -497,46 +533,19 @@ describe("subagent session links", () => {
           terminalInputHandler = undefined;
         };
       },
-      custom: async (
-        factory: Parameters<ExtensionUIContext["custom"]>[0],
-        options?: Parameters<ExtensionUIContext["custom"]>[1],
-      ) => {
-        await factory(
-          {
-            terminal: { columns: 80, rows: 24 },
-            requestRender: () => {},
-          } as unknown as TUI,
-          {} as Theme,
-          {} as KeybindingsManager,
-          () => {
-            transcriptClosed = true;
-          },
-        );
-        const handle: OverlayHandle = {
-          hide: () => {},
-          setHidden: () => {},
-          isHidden: () => false,
-          focus: () => {},
-          unfocus: () => {},
-          isFocused: () => false,
-        };
-        options?.onHandle?.(handle);
-
-        expect(terminalInputHandler?.("\u001b")).toEqual({ consume: true });
-        return undefined;
-      },
       notify: () => {},
     };
     const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
 
-    await openSubagentSession(target, service, ctx);
+    await openSubagentSession(target, service, ctx, overlay.tui);
 
-    expect(transcriptClosed).toBe(true);
+    expect(overlay.isHidden()).toBe(true);
     expect(inputHandlerRemoved).toBe(true);
   });
 
   test("opens a ready running session with live transcript updates", async () => {
     let subscriptions = 0;
+    let unsubscriptions = 0;
     const liveRecord = {
       id: target.agentId,
       status: "running",
@@ -546,7 +555,9 @@ describe("subagent session links", () => {
       isSessionReady: () => true,
       subscribeToUpdates: () => {
         subscriptions += 1;
-        return () => {};
+        return () => {
+          unsubscriptions += 1;
+        };
       },
       getToolDefinition: () => undefined,
     };
@@ -557,28 +568,61 @@ describe("subagent session links", () => {
         listAgents: () => [liveRecord],
       },
     };
+    const overlay = createClosingOverlayTui();
     const notifications: string[] = [];
     const ui = {
-      custom: async (factory: Parameters<ExtensionUIContext["custom"]>[0]) => {
-        await factory(
-          {
-            terminal: { columns: 80, rows: 24 },
-            requestRender: () => {},
-          } as unknown as TUI,
-          {} as Theme,
-          {} as KeybindingsManager,
-          () => {},
-        );
-        return undefined;
-      },
+      theme: {} as Theme,
       notify: (message: string) => notifications.push(message),
     };
     const ctx = { ui, cwd: process.cwd() } as unknown as Parameters<typeof openSubagentSession>[2];
 
-    await openSubagentSession(target, service, ctx);
+    await openSubagentSession(target, service, ctx, overlay.tui);
 
     expect(subscriptions).toBe(1);
+    expect(unsubscriptions).toBe(1);
+    expect(overlay.isHidden()).toBe(true);
     expect(notifications).toEqual([]);
+  });
+
+  test("aborts and disposes a mounted transcript during session cleanup", async () => {
+    let resolveMounted = () => {};
+    const mounted = new Promise<void>((resolve) => {
+      resolveMounted = resolve;
+    });
+    let unsubscriptions = 0;
+    const liveRecord = {
+      id: target.agentId,
+      status: "running",
+      agentMessages: [],
+      activeTools: new Map<string, string>(),
+      responseText: "",
+      isSessionReady: () => true,
+      subscribeToUpdates: () => () => {
+        unsubscriptions += 1;
+      },
+      getToolDefinition: () => undefined,
+    };
+    const service = {
+      getRecord: () => ({ status: "running" }),
+      manager: {
+        getRecord: () => liveRecord,
+        listAgents: () => [liveRecord],
+      },
+    };
+    const overlay = createClosingOverlayTui({ onShow: resolveMounted });
+    const ctx = {
+      ui: { theme: {} as Theme, notify: () => {} },
+      cwd: process.cwd(),
+    } as unknown as Parameters<typeof openSubagentSession>[2];
+    const abortController = new AbortController();
+
+    const opening = openSubagentSession(target, service, ctx, overlay.tui, abortController.signal);
+    await mounted;
+    abortController.abort();
+    await opening;
+
+    expect(overlay.isHidden()).toBe(true);
+    expect(unsubscriptions).toBe(1);
   });
 
   test("distinguishes missing sessions from sessions that are not ready", async () => {
@@ -590,8 +634,9 @@ describe("subagent session links", () => {
       cwd: process.cwd(),
     } as unknown as Parameters<typeof openSubagentSession>[2];
 
-    await openSubagentSession(target, { getRecord: () => undefined }, ctx);
-    await openSubagentSession(target, { getRecord: () => ({ status: "queued" }) }, ctx);
+    const tui = {} as TUI;
+    await openSubagentSession(target, { getRecord: () => undefined }, ctx, tui);
+    await openSubagentSession(target, { getRecord: () => ({ status: "queued" }) }, ctx, tui);
 
     expect(notifications).toEqual([
       "The selected subagent session is no longer available.",
@@ -599,7 +644,7 @@ describe("subagent session links", () => {
     ]);
   });
 
-  test("resolves a service published after the click handler is installed", () => {
+  test("resolves a service published after the click handler is installed", async () => {
     const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
     const globals = globalThis as Record<symbol, unknown>;
     const previousService = globals[serviceKey];
@@ -624,11 +669,69 @@ describe("subagent session links", () => {
       (tui as unknown as TUI & { openUrl: (url: string) => void }).openUrl(
         subagentSessionUrl(target),
       );
+      await new Promise((resolve) => setTimeout(resolve, 0));
       expect(notifications).toEqual([
         ["The selected subagent session is no longer available.", "warning"],
       ]);
     } finally {
       uninstall();
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
+  });
+
+  test("serializes transcript clicks and closes the active overlay on disposal", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "subagent-session-disposal-"));
+    const outputFile = join(directory, "session.jsonl");
+    writeFileSync(
+      outputFile,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: target.agentId,
+        timestamp: "2026-09-01T00:00:00.000Z",
+        cwd: process.cwd(),
+      })}\n`,
+    );
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    globals[serviceKey] = {
+      getRecord: () => ({ outputFile, status: "running" }),
+      listAgents: () => [],
+    };
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
+    let mountCount = 0;
+    const originalShowOverlay = tui.showOverlay.bind(tui);
+    tui.showOverlay = (component, options) => {
+      mountCount += 1;
+      return originalShowOverlay(component, options);
+    };
+    const ctx = {
+      cwd: process.cwd(),
+      ui: { theme: {} as Theme, notify: () => {} },
+    } as unknown as Parameters<typeof installClickableSubagentSessions>[1];
+    const uninstall = installClickableSubagentSessions(tui, ctx);
+    const openUrl = (tui as unknown as TUI & { openUrl: (url: string) => void }).openUrl;
+
+    try {
+      openUrl(subagentSessionUrl(target));
+      openUrl(subagentSessionUrl(target));
+      for (let attempt = 0; attempt < 100 && mountCount === 0; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+
+      expect(mountCount).toBe(1);
+      expect(tui.hasOverlay()).toBe(true);
+      uninstall();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(tui.hasOverlay()).toBe(false);
+      expect(mountCount).toBe(1);
+    } finally {
+      uninstall();
+      rmSync(directory, { recursive: true, force: true });
       if (previousService === undefined) delete globals[serviceKey];
       else globals[serviceKey] = previousService;
     }

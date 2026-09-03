@@ -15,6 +15,7 @@ import {
   isKeyRelease,
   type MarkdownTheme,
   matchesKey,
+  type OverlayHandle,
   type Terminal,
   Text,
   type TUI,
@@ -391,6 +392,8 @@ function uninstallTerminalWritePatch(
   if (terminal[TERMINAL_WRITE_PATCH] === state) terminal[TERMINAL_WRITE_PATCH] = undefined;
 }
 
+type DisposableComponent = Component & { dispose?(): void };
+
 interface SubagentsService {
   getRecord(id: string): { outputFile?: string; status: string } | undefined;
   manager?: {
@@ -533,48 +536,55 @@ export async function openSubagentSession(
   target: SubagentSessionTarget,
   service: SubagentsService,
   ctx: ExtensionContext,
+  tui: TUI,
+  signal?: AbortSignal,
 ): Promise<void> {
-  const record = service.getRecord(target.agentId);
-  if (record === undefined) {
-    ctx.ui.notify("The selected subagent session is no longer available.", "warning");
-    return;
-  }
+  if (signal?.aborted) return;
 
-  const liveRecord = service.manager?.getRecord(target.agentId);
-  const hasLiveSession = liveRecord?.isSessionReady() === true;
-  const outputFile = record.outputFile;
-  if (hasLiveSession === false && outputFile === undefined) {
-    ctx.ui.notify("The selected subagent session is not ready yet.", "warning");
-    return;
-  }
-
-  if (hasLiveSession === false && (record.status === "queued" || record.status === "running")) {
-    ctx.ui.notify("Opening the current transcript snapshot. Reopen it to refresh.", "info");
-  }
-
-  let overlayComponent: Component | undefined;
-  let overlayHandle: { isFocused(): boolean } | undefined;
-  // A non-overlay prompt can temporarily steal focus from this inspection overlay;
-  // consume Escape here so it closes the overlay instead of cancelling the prompt.
-  const removeEscapeHandler =
-    typeof ctx.ui.onTerminalInput === "function"
-      ? ctx.ui.onTerminalInput((data) => {
-          if (
-            overlayComponent === undefined ||
-            overlayHandle?.isFocused() !== false ||
-            isKeyRelease(data) ||
-            matchesKey(data, "escape") === false
-          ) {
-            return undefined;
-          }
-
-          overlayComponent.handleInput?.(data);
-          return { consume: true };
-        })
-      : undefined;
-
+  let removeEscapeHandler: (() => void) | undefined;
   try {
+    const record = service.getRecord(target.agentId);
+    if (record === undefined) {
+      ctx.ui.notify("The selected subagent session is no longer available.", "warning");
+      return;
+    }
+
+    const liveRecord = service.manager?.getRecord(target.agentId);
+    const hasLiveSession = liveRecord?.isSessionReady() === true;
+    const outputFile = record.outputFile;
+    if (hasLiveSession === false && outputFile === undefined) {
+      ctx.ui.notify("The selected subagent session is not ready yet.", "warning");
+      return;
+    }
+
+    if (hasLiveSession === false && (record.status === "queued" || record.status === "running")) {
+      ctx.ui.notify("Opening the current transcript snapshot. Reopen it to refresh.", "info");
+    }
+
+    let overlayComponent: DisposableComponent | undefined;
+    let overlayHandle: OverlayHandle | undefined;
+    // A non-overlay prompt can temporarily steal focus from this inspection overlay;
+    // consume Escape here so it closes the overlay instead of cancelling the prompt.
+    removeEscapeHandler =
+      typeof ctx.ui.onTerminalInput === "function"
+        ? ctx.ui.onTerminalInput((data) => {
+            if (
+              overlayComponent === undefined ||
+              overlayHandle?.isFocused() !== false ||
+              isKeyRelease(data) ||
+              matchesKey(data, "escape") === false
+            ) {
+              return undefined;
+            }
+
+            overlayComponent.handleInput?.(data);
+            return { consume: true };
+          })
+        : undefined;
+
     const { navigation, navigator } = await loadSessionNavigator();
+    if (signal?.aborted) return;
+
     let source: SubagentTranscriptSource;
     if (hasLiveSession) {
       source = navigation.liveSource(liveRecord);
@@ -584,32 +594,57 @@ export async function openSubagentSession(
     }
     source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
-    await ctx.ui.custom<undefined>(
-      (tui, theme, _keybindings, done) => {
+    // Transcript inspection is user navigation, not a blocking agent prompt. Mount it
+    // directly so Pi does not emit ui_prompt events that Herdr interprets as attention.
+    await new Promise<void>((resolve, reject) => {
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        signal?.removeEventListener("abort", close);
+        overlayHandle?.hide();
+        try {
+          overlayComponent?.dispose?.();
+        } catch {}
+        resolve();
+      };
+
+      signal?.addEventListener("abort", close, { once: true });
+      if (signal?.aborted) {
+        close();
+        return;
+      }
+
+      try {
         overlayComponent = new navigator.TranscriptOverlay({
           tui,
-          theme,
+          theme: ctx.ui.theme,
           source,
-          done,
+          done: close,
           cwd: ctx.cwd,
           markdownTheme,
         });
-        return overlayComponent;
-      },
-      {
-        overlay: true,
-        overlayOptions: {
+        if (closed) {
+          overlayComponent.dispose?.();
+          return;
+        }
+        overlayHandle = tui.showOverlay(overlayComponent, {
           anchor: "center",
           width: OVERLAY_WIDTH,
           maxHeight: OVERLAY_HEIGHT,
-        },
-        onHandle: (handle) => {
-          overlayHandle = handle;
-        },
-      },
-    );
+        });
+      } catch (error) {
+        signal?.removeEventListener("abort", close);
+        try {
+          overlayComponent?.dispose?.();
+        } catch {}
+        reject(error);
+      }
+    });
   } catch {
-    ctx.ui.notify("Could not read the selected subagent session.", "error");
+    if (!signal?.aborted) {
+      ctx.ui.notify("Could not read the selected subagent session.", "error");
+    }
   } finally {
     removeEscapeHandler?.();
   }
@@ -636,22 +671,34 @@ function uninstallTuiUrlPatch(
 export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext): () => void {
   if (tui.mode !== "fullscreen") return () => {};
 
+  const abortController = new AbortController();
+  let disposed = false;
+  let openChain = Promise.resolve();
   const service = getSubagentsService();
   const uninstallToolLinks = installSubagentToolLinks(tui, service, {
     theme: ctx.ui.theme,
     agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir()),
   });
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
-    const currentService = getSubagentsService();
-    if (currentService === undefined) {
-      ctx.ui.notify("Could not access subagent sessions.", "error");
-      return;
-    }
+    openChain = openChain
+      .then(async () => {
+        if (disposed) return;
+        const currentService = getSubagentsService();
+        if (currentService === undefined) {
+          ctx.ui.notify("Could not access subagent sessions.", "error");
+          return;
+        }
 
-    void openSubagentSession(target, currentService, ctx);
+        await openSubagentSession(target, currentService, ctx, tui, abortController.signal);
+      })
+      .catch(() => {
+        if (!disposed) ctx.ui.notify("Could not open the selected subagent session.", "error");
+      });
   });
   const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
   return () => {
+    disposed = true;
+    abortController.abort();
     uninstallTerminalFilter();
     uninstallUrlHandler();
     uninstallToolLinks();
