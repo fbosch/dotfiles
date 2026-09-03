@@ -187,7 +187,7 @@ describe("quick replies lifecycle", () => {
       assistantText: "Implemented the feature. All focused tests pass.",
     });
     expect(harness.widgetActive).toBe(true);
-    expect(harness.renderWidget()).toHaveLength(3);
+    expect(harness.renderWidget()).toHaveLength(2);
   });
 
   test("uses raw user input instead of expanded skill content", async () => {
@@ -421,23 +421,21 @@ describe("quick reply widget", () => {
 
   test("renders compact suggestions with vertical spacing", () => {
     const rendered = renderQuickReplyPanel(fiveReplies, 120, theme);
-    const firstLine = stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd();
+    const firstLine = stripTerminalSequences(rendered?.lines[0] ?? "").trimEnd();
 
     expect(firstLine).toBe("   Alt+1  One   Alt+2  Two   Alt+3  Three   Alt+4  Four   Alt+5  Five");
     expect(rendered?.visibleReplyCount).toBe(5);
-    expect(stripTerminalSequences(rendered?.lines[0] ?? "").trim()).toBe("");
-    expect(rendered?.lines).toHaveLength(3);
-    expect(rendered?.lines[0]).toBe("");
+    expect(rendered?.lines).toHaveLength(2);
     expect(rendered?.lines.at(-1)).toBe("");
   });
 
   test("shortens key hints before adding rows", () => {
     const rendered = renderQuickReplyPanel(fiveReplies, 60, theme);
 
-    expect(stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd()).toBe(
+    expect(stripTerminalSequences(rendered?.lines[0] ?? "").trimEnd()).toBe(
       "   A1  One   A2  Two   A3  Three   A4  Four   A5  Five",
     );
-    expect(rendered?.lines).toHaveLength(3);
+    expect(rendered?.lines).toHaveLength(2);
   });
 
   test("wraps full keycaps on narrow terminals", () => {
@@ -445,7 +443,6 @@ describe("quick reply widget", () => {
     const plain = rendered?.lines.map((line) => stripTerminalSequences(line).trimEnd());
 
     expect(plain?.slice(0, -1)).toEqual([
-      "",
       "   Alt+1  One   Alt+2  Two   Alt+3  Three",
       "   Alt+4  Four   Alt+5  Five",
     ]);
@@ -456,7 +453,7 @@ describe("quick reply widget", () => {
   test("explains command confirmation without changing the command label", () => {
     const rendered = renderQuickReplyPanel([{ label: "/hotkeys", message: "/hotkeys" }], 60, theme);
 
-    expect(stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd()).toBe(
+    expect(stripTerminalSequences(rendered?.lines[0] ?? "").trimEnd()).toBe(
       "  command · Enter to run   Alt+1  /hotkeys",
     );
   });
@@ -468,7 +465,7 @@ describe("quick reply widget", () => {
     } as unknown as Theme;
 
     const rendered = renderQuickReplyPanel(fiveReplies.slice(0, 1), 200, colorTheme);
-    const line = rendered?.lines[1] ?? "";
+    const line = rendered?.lines[0] ?? "";
 
     expect(line).toContain("[muted:Alt][dim:+][accent:1]");
   });

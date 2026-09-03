@@ -99,7 +99,7 @@ export function renderQuickReplyPanel(
 
   if (content === undefined) return undefined;
 
-  const lines = ["", ...content.map((line) => `${" ".repeat(paddingX)}${line}`), ""];
+  const lines = [...content.map((line) => `${" ".repeat(paddingX)}${line}`), ""];
   return { lines, visibleReplyCount: replies.length };
 }
 

@@ -14,6 +14,7 @@ import {
   summarizeFileChange,
   type TrackedFile,
 } from "./model";
+import { type FileChangesSettings, loadFileChangesSettings } from "./settings";
 import { FileChangesWidget } from "./widget";
 
 const BASELINE_ENTRY = "file-changes:baseline";
@@ -27,6 +28,7 @@ type ReadTextFile = (absolutePath: string) => Promise<FileContent>;
 interface PendingSnapshot extends FileBaseline {}
 
 interface FileChangesDependencies {
+  readonly readSettings?: () => FileChangesSettings;
   readonly readTextFile?: ReadTextFile;
 }
 
@@ -78,10 +80,16 @@ export function createFileChangesExtension(
     const baselines = new Map<string, FileBaseline>();
     const pendingSnapshots = new Map<string, PendingSnapshot>();
     const trackedFiles = new Map<string, TrackedFile>();
+    let hideFileChanges = false;
     let showWidget = true;
 
     function updateUi(ctx: ExtensionContext): void {
       if (!ctx.hasUI) return;
+
+      if (hideFileChanges) {
+        clearUi(ctx);
+        return;
+      }
 
       ctx.ui.setStatus(UI_KEY, formatChangesStatus(trackedFiles.values()));
       if (ctx.mode !== "tui") return;
@@ -177,7 +185,14 @@ export function createFileChangesExtension(
         if (action === "" || action === "show" || action === "hide") {
           showWidget = action === "show" || (action === "" && !showWidget);
           updateUi(ctx);
-          report(ctx, showWidget ? "Changes shown" : "Changes hidden");
+          report(
+            ctx,
+            hideFileChanges
+              ? "Changes hidden by the global hideFileChanges setting"
+              : showWidget
+                ? "Changes shown"
+                : "Changes hidden",
+          );
           return;
         }
 
@@ -185,7 +200,14 @@ export function createFileChangesExtension(
       },
     });
 
-    pi.on("session_start", async (_event, ctx) => rebuildFromSession(ctx));
+    pi.on("session_start", async (_event, ctx) => {
+      const settings = (dependencies.readSettings ?? loadFileChangesSettings)();
+      hideFileChanges = settings.hideFileChanges;
+      if (settings.warnings.length > 0) {
+        ctx.ui.notify(`File changes settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
+      }
+      await rebuildFromSession(ctx);
+    });
     pi.on("session_tree", async (_event, ctx) => rebuildFromSession(ctx));
     pi.on("session_shutdown", (_event, ctx) => clearUi(ctx));
 
