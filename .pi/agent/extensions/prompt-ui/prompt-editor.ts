@@ -383,13 +383,13 @@ export class PromptEditor extends CustomEditor {
         ? theme.fg("muted", " No model")
         : [
             modeColor(` ${modeLabel}`),
-            isYoloMode ? `${separator}${theme.fg("error", YOLO_STATUS_TEXT)}` : "",
             separator,
             theme.fg("text", model.name),
             " ",
             theme.fg("muted", formatProvider(model.provider)),
             separator,
             theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
+            isYoloMode ? `${separator}${theme.fg("error", YOLO_STATUS_TEXT)}` : "",
           ].join("");
     const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
     const modelRight = [

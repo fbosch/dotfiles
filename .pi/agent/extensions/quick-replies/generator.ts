@@ -20,6 +20,8 @@ export type QuickReplyGenerator = (
   signal: AbortSignal,
 ) => Promise<QuickReply[]>;
 
+// Reusing one short-lived session lets pi-ai keep its Codex WebSocket warm without carrying conversation state.
+const QUICK_REPLY_SESSION_ID = randomUUID();
 const MAX_SOURCE_CHARS = 32_000;
 const MAX_USER_CHARS = 4_000;
 const MAX_ASSISTANT_CHARS = 8_000;
@@ -178,11 +180,11 @@ export const generateQuickReplies: QuickReplyGenerator = async (ctx, input, sign
   const requestModel = fastRequest === undefined ? model : { ...model, id: fastRequest.modelId };
   const requestOptions = {
     signal,
-    cacheRetention: "none" as const,
+    cacheRetention: "short" as const,
     maxRetries: 0,
     maxTokens: MAX_RESPONSE_TOKENS,
     timeoutMs: REQUEST_TIMEOUT_MS,
-    sessionId: randomUUID(),
+    sessionId: QUICK_REPLY_SESSION_ID,
     ...(fastRequest === undefined
       ? {}
       : { samplingParams: { service_tier: fastRequest.serviceTier } }),

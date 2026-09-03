@@ -114,6 +114,7 @@ async function createDefaultManager(
   cwd: string,
   settings: ResolvedLspSettings,
 ): Promise<LspServerManager> {
+  // Keep protocol client modules off Pi's startup path until the first LSP operation.
   const { LspServerManager } = await import("./server-manager");
   return LspServerManager.create(cwd, settings);
 }
@@ -124,13 +125,16 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     let mutationSequence = 0;
     let settings: ResolvedLspSettings | undefined;
     let settingsCwd: string | undefined;
+    let settingsTrusted: boolean | undefined;
     const pendingMutations = new Map<string, PendingMutation>();
     const warmedPaths = new Set<string>();
 
     const settingsFor = (context: ExtensionContext): ResolvedLspSettings => {
-      if (settings === undefined || settingsCwd !== context.cwd) {
+      const trusted = context.isProjectTrusted();
+      if (settings === undefined || settingsCwd !== context.cwd || settingsTrusted !== trusted) {
         settings = (dependencies.readSettings ?? loadLspSettings)(context);
         settingsCwd = context.cwd;
+        settingsTrusted = trusted;
       }
       return settings;
     };
@@ -284,6 +288,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       warmedPaths.clear();
       settings = undefined;
       settingsCwd = undefined;
+      settingsTrusted = undefined;
       const pending = managerPromise;
       managerPromise = undefined;
       const manager = await pending?.catch(() => undefined);

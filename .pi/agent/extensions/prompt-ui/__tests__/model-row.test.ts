@@ -21,7 +21,7 @@ const tui = {
 } as unknown as TUI;
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 
-test("renders YOLO beside the execution mode in the model row", () => {
+test("renders YOLO after the thinking level in the model row", () => {
   setThemeInstance(
     loadThemeFromPath(new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname),
   );
@@ -52,7 +52,7 @@ test("renders YOLO beside the execution mode in the model row", () => {
 
   const rendered = editor.render(100).join("\n");
   expect(stripTerminalSequences(rendered)).toContain(
-    `Build · ${YOLO_STATUS_TEXT} · Test OpenAI · xhigh`,
+    `Build · Test OpenAI · xhigh · ${YOLO_STATUS_TEXT}`,
   );
   expect(rendered).toContain(`${theme.getFgAnsi("error")}${YOLO_STATUS_TEXT}`);
   editor.dispose();

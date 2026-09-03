@@ -223,7 +223,7 @@ describe("quick reply response validation", () => {
 });
 
 describe("quick reply model generation", () => {
-  test("uses the configured fast model with bounded no-retry options", async () => {
+  test("uses bounded no-retry options and reuses one short-lived model session", async () => {
     const calls: Array<{ model: unknown; context: unknown; options: unknown }> = [];
     const model = {
       provider: "openai-codex",
@@ -249,14 +249,13 @@ describe("quick reply model generation", () => {
       },
     } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
 
-    const replies = await generateQuickReplies(
-      ctx,
-      { userText: "Improve the extension", assistantText: "The change is complete." },
-      new AbortController().signal,
-    );
+    const input = { userText: "Improve the extension", assistantText: "The change is complete." };
+    const replies = await generateQuickReplies(ctx, input, new AbortController().signal);
+    const nextReplies = await generateQuickReplies(ctx, input, new AbortController().signal);
 
     expect(replies).toEqual([reply(1), reply(2)]);
-    expect(calls).toHaveLength(1);
+    expect(nextReplies).toEqual(replies);
+    expect(calls).toHaveLength(2);
     expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
     expect(calls[0]?.context).toMatchObject({
       systemPrompt: expect.stringMatching(
@@ -265,13 +264,16 @@ describe("quick reply model generation", () => {
       messages: [{ role: "user" }],
     });
     expect(calls[0]?.options).toMatchObject({
-      cacheRetention: "none",
+      cacheRetention: "short",
       maxRetries: 0,
       maxTokens: 384,
       timeoutMs: 3_000,
       reasoningEffort: "none",
       samplingParams: { service_tier: "priority" },
     });
+    const sessionIds = calls.map((call) => (call.options as { sessionId?: unknown }).sessionId);
+    expect(typeof sessionIds[0]).toBe("string");
+    expect(new Set(sessionIds).size).toBe(1);
   });
 
   test("does not call the model for unsafe or already-aborted input", async () => {
