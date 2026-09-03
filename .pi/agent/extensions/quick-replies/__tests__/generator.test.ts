@@ -126,6 +126,10 @@ describe("quick reply input", () => {
       assistantText: "/compact",
       reply: { label: "/compact", message: "/compact" },
     },
+    {
+      assistantText: "/model openai-codex/gpt-5.6-luna",
+      reply: { label: "/model", message: "/model openai-codex/gpt-5.6-luna" },
+    },
   ])("returns only an explicit final slash command: $assistantText", ({ assistantText, reply }) => {
     expect(getDeterministicQuickReplies({ userText: "Update it", assistantText })).toEqual([reply]);
     expect(isSlashCommand(reply.message)).toBe(true);

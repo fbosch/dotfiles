@@ -186,6 +186,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
 
       invalidateSettledState(ctx);
       if (isSlashCommand(reply.message)) {
+        // Built-in commands only dispatch through interactive input; Enter remains explicit confirmation.
         ctx.ui.setEditorText(reply.message);
         return;
       }

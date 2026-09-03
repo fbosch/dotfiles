@@ -88,6 +88,9 @@ function createHarness(
     isIdle: () => idle,
     ui: {
       getEditorText: () => editorText,
+      setEditorText: (value: string) => {
+        editorText = value;
+      },
       setWidget: (_key: string, content: unknown) => {
         widget =
           typeof content === "function"

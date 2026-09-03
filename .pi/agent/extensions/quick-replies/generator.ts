@@ -41,7 +41,6 @@ const LATIN_CHARACTER = /\p{Script=Latin}/u;
 const CYRILLIC_OR_GREEK_CHARACTER = /[\p{Script=Cyrillic}\p{Script=Greek}]/u;
 const VAGUE_AUTHORIZATION =
   /^(?:yes|yeah|yep|ok(?:ay)?|sure|proceed|continue|go ahead|do it|approve it|authorize it|sounds good|ja|fortsæt|gør det|kør)[.!]?$/i;
-const DIRECT_SLASH_COMMAND = /^(\/[A-Za-z0-9][A-Za-z0-9:_-]*)$/u;
 const SLASH_COMMAND = /^\/[A-Za-z0-9][A-Za-z0-9:_-]*(?: \S(?:[^\r\n]*\S)?)?$/u;
 const SLASH_COMMAND_DIRECTIVE =
   /^(?:[-*]\s+)?(?:run|use|enter|type)\s+(?:`(\/[A-Za-z0-9][A-Za-z0-9:_-]*(?: [^`\n]+)?)`|(\/[A-Za-z0-9][A-Za-z0-9:_-]*))(?:\s+(?:now|to\b[^\n]*))?[.!]?$/iu;
@@ -148,8 +147,8 @@ export function getDeterministicQuickReplies(input: QuickReplyInput): QuickReply
     .at(-1);
   if (lastLine === undefined) return [];
 
-  const match = DIRECT_SLASH_COMMAND.exec(lastLine) ?? SLASH_COMMAND_DIRECTIVE.exec(lastLine);
-  const message = match?.[1] ?? match?.[2];
+  const match = SLASH_COMMAND_DIRECTIVE.exec(lastLine);
+  const message = isSlashCommand(lastLine) ? lastLine : (match?.[1] ?? match?.[2]);
   if (message === undefined || !isSlashCommand(message)) return [];
 
   const label = message.split(" ", 1)[0];
