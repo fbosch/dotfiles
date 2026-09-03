@@ -1,6 +1,5 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
-import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
 import {
   extractVisibleAssistantProse,
   generateQuickReplies,
@@ -14,6 +13,7 @@ export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5
 const WIDGET_KEY = "quick-replies";
 const REPLY_GAP = "  ";
 const PANEL_PADDING_X = 2;
+const KEYCAP_BACKGROUND = "selectedBg";
 const MIN_GENERATED_REPLIES = 1;
 const MAX_GENERATED_REPLIES = QUICK_REPLY_SHORTCUTS.length;
 
@@ -99,12 +99,7 @@ export function renderQuickReplyPanel(
 
   if (content === undefined) return undefined;
 
-  const background = theme.getBgAnsi("toolPendingBg");
-  const lines = [
-    paintDockRow("", width, "", background),
-    ...content.map((line) => paintDockRow(`${" ".repeat(paddingX)}${line}`, width, "", background)),
-  ];
-  lines.push(paintDockBottomEdge(width, "", "", background));
+  const lines = ["", ...content.map((line) => `${" ".repeat(paddingX)}${line}`), ""];
   return { lines, visibleReplyCount: replies.length };
 }
 
@@ -398,5 +393,5 @@ function renderShortcut(shortcut: string, style: ShortcutStyle, theme: Theme): s
     style === "full" ? theme.fg("dim", "+") : "",
     theme.fg("accent", digit),
   ].join("");
-  return `${theme.fg("dim", "‹")}${chord}${theme.fg("dim", "›")}`;
+  return theme.bg(KEYCAP_BACKGROUND, ` ${theme.bold(chord)} `);
 }

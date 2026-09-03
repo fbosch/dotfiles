@@ -1,6 +1,6 @@
 ---
 name: hypr-debug
-description: Diagnose and fix Hyprland runtime problems in this dotfiles repo. Use when behavior is wrong despite valid config, including layer-shell stacking/input issues, missing keybind effects, monitor/workspace anomalies, window-rule mismatches, startup race failures, and regressions after reload on Hyprland v0.52.0.
+description: Diagnose and fix Hyprland runtime problems in this dotfiles repo. Use when behavior is wrong despite valid config, including layer-shell stacking/input issues, missing keybind effects, monitor/workspace anomalies, window-rule mismatches, startup race failures, and regressions after reload against the locally recorded Hyprland version and current runtime.
 ---
 
 # Hypr Debug
@@ -8,7 +8,7 @@ description: Diagnose and fix Hyprland runtime problems in this dotfiles repo. U
 ## Scope
 
 Treat `.config/hypr/docs/agents/` as the canonical local reference for this repo.
-Target Hyprland version: `0.52.0`.
+Use `.config/hypr/docs/agents/version.md` as the documentation baseline and confirm the current runtime with `hyprctl version` before relying on version-specific behavior.
 
 This skill is for runtime diagnosis and correction, not broad config redesign.
 

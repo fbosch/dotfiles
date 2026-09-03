@@ -62,6 +62,9 @@ __pycache__
 ^/lefthook\.yml$
 ^/tests$
 
+# Keep project-local Pi skills in the repository; Pi discovers them from the project root.
+^/\.pi/skills$
+
 # Pi machine-local state and generated dependencies
 ^/\.pi/agent/auth\.json$
 ^/\.pi/agent/auth-profiles$
