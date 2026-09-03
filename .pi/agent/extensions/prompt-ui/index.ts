@@ -3,6 +3,7 @@ import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
+  FILE_CHANGES_STATUS_KEY,
   MCP_STATUS_KEY,
   PromptEditor,
   type PromptEditorState,
@@ -57,6 +58,7 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
   let getMcpStatus = (): string => "";
+  let getFileChangesStatus = (): string => "";
   let mcpFooterSnapshot: McpFooterSnapshot | undefined;
   let unsubscribeMcpStatus = () => {};
   const resetMcpFooterSnapshot = () => {
@@ -129,7 +131,12 @@ export default function promptUi(pi: ExtensionAPI): void {
       getProfileName = () => footerData.getExtensionStatuses().get(PROFILE_STATUS_KEY);
       getStatuses = () =>
         [...footerData.getExtensionStatuses().entries()]
-          .filter(([key]) => key !== PROFILE_STATUS_KEY && key !== MCP_STATUS_KEY)
+          .filter(
+            ([key]) =>
+              key !== PROFILE_STATUS_KEY &&
+              key !== FILE_CHANGES_STATUS_KEY &&
+              key !== MCP_STATUS_KEY,
+          )
           .map(([key, status]) => renderFooterStatus(theme, key, status));
       getMcpStatus = () => {
         const snapshot = mcpFooterSnapshot;
@@ -139,11 +146,25 @@ export default function promptUi(pi: ExtensionAPI): void {
         const status = footerData.getExtensionStatuses().get(MCP_STATUS_KEY);
         return status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status);
       };
+      getFileChangesStatus = () => {
+        const status = footerData.getExtensionStatuses().get(FILE_CHANGES_STATUS_KEY);
+        return status === undefined
+          ? ""
+          : renderFooterStatus(theme, FILE_CHANGES_STATUS_KEY, status);
+      };
       const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
 
       return {
         render: (width) => [
-          renderPromptHints(theme, keybindings, state, ctx.cwd, width, getMcpStatus()),
+          renderPromptHints(
+            theme,
+            keybindings,
+            state,
+            ctx.cwd,
+            width,
+            getMcpStatus(),
+            getFileChangesStatus(),
+          ),
         ],
         invalidate: () => tui.requestRender(),
         dispose: () => {
@@ -152,6 +173,7 @@ export default function promptUi(pi: ExtensionAPI): void {
           getProfileName = () => undefined;
           getStatuses = () => [];
           getMcpStatus = () => "";
+          getFileChangesStatus = () => "";
         },
       };
     });

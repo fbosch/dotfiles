@@ -11,13 +11,55 @@ import type { ResolvedLspSettings } from "../settings";
 
 type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | unknown;
 
-test("only appends post-format LSP output when diagnostics are present", async () => {
+interface SentMessage {
+  readonly content: string;
+  readonly customType: string;
+  readonly display: boolean;
+}
+
+function mutationResult(toolCallId: string, path = "example.ts"): ToolResultEvent {
+  return {
+    type: "tool_result",
+    toolCallId,
+    toolName: "write",
+    input: { path, content: "updated" },
+    content: [{ type: "text", text: "write complete" }],
+    details: undefined,
+    isError: false,
+  } as ToolResultEvent;
+}
+
+function mutationMessage(toolCallId: string): MessageEndEvent {
+  return {
+    type: "message_end",
+    message: {
+      role: "toolResult",
+      toolCallId,
+      toolName: "write",
+      content: [{ type: "text", text: "formatter complete" }],
+      isError: false,
+      timestamp: Date.now(),
+    },
+  } as MessageEndEvent;
+}
+
+function turnEnd(...toolCallIds: string[]) {
+  return {
+    toolResults: toolCallIds.map((toolCallId) => mutationMessage(toolCallId).message),
+  };
+}
+
+test("starts diagnostics after formatting and only reports non-clean results", async () => {
   const handlers = new Map<string, Handler>();
+  const deliveryModes: Array<string | undefined> = [];
+  const sentMessages: SentMessage[] = [];
   let formatted = false;
   let diagnosticsObservedFormatting = false;
   let diagnosticCount = 0;
+  let diagnosticCalls = 0;
   const fakeManager = {
     diagnostics: async () => {
+      diagnosticCalls += 1;
       diagnosticsObservedFormatting = formatted;
       return {
         diagnosticCount,
@@ -42,6 +84,10 @@ test("only appends post-format LSP output when diagnostics are present", async (
       handlers.set(event, handler);
     },
     registerTool() {},
+    sendMessage(message: SentMessage, options?: { deliverAs?: string }) {
+      sentMessages.push(message);
+      deliveryModes.push(options?.deliverAs);
+    },
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -49,69 +95,47 @@ test("only appends post-format LSP output when diagnostics are present", async (
     signal: undefined,
     ui: { notify() {} },
   } as unknown as ExtensionContext;
-  createLspExtension({
-    createManager: async () => fakeManager,
-    diagnosticsDebounceMs: 0,
-    readSettings: () => settings,
-  })(pi);
+  createLspExtension({ createManager: async () => fakeManager, readSettings: () => settings })(pi);
   await handlers.get("session_start")?.({} as never, context);
 
-  const toolResult = {
-    type: "tool_result",
-    toolCallId: "call-1",
-    toolName: "write",
-    input: { path: "example.ts", content: "formatted" },
-    content: [{ type: "text", text: "write complete" }],
-    details: undefined,
-    isError: false,
-  } as ToolResultEvent;
-  await handlers.get("tool_result")?.(toolResult as never, context);
+  await handlers.get("tool_result")?.(mutationResult("call-1") as never, context);
   formatted = true;
-
-  const messageEnd = {
-    type: "message_end",
-    message: {
-      role: "toolResult",
-      toolCallId: "call-1",
-      toolName: "write",
-      content: [{ type: "text", text: "formatter complete" }],
-      isError: false,
-      timestamp: Date.now(),
-    },
-  } as MessageEndEvent;
-  const cleanResult = await handlers.get("message_end")?.(messageEnd as never, context);
-
+  expect(
+    await handlers.get("message_end")?.(mutationMessage("call-1") as never, context),
+  ).toBeUndefined();
+  expect(diagnosticCalls).toBe(1);
   expect(diagnosticsObservedFormatting).toBeTrue();
-  expect(cleanResult).toBeUndefined();
+  await handlers.get("turn_end")?.(turnEnd("call-1") as never, context);
+  expect(sentMessages).toEqual([]);
 
   diagnosticCount = 1;
-  const diagnosticToolResult = { ...toolResult, toolCallId: "call-2" };
-  await handlers.get("tool_result")?.(diagnosticToolResult as never, context);
-  const diagnosticResult = (await handlers.get("message_end")?.(
-    {
-      ...messageEnd,
-      message: { ...messageEnd.message, toolCallId: "call-2" },
-    } as never,
-    context,
-  )) as { message: { content: Array<{ text: string }> } };
+  await handlers.get("tool_result")?.(mutationResult("call-2") as never, context);
+  await handlers.get("message_end")?.(mutationMessage("call-2") as never, context);
+  expect(diagnosticCalls).toBe(2);
+  await handlers.get("turn_end")?.(turnEnd("call-2") as never, context);
 
-  expect(diagnosticResult.message.content.map(({ text }) => text)).toEqual([
-    "formatter complete",
-    "LSP diagnostics after formatting:\nexample.ts:1:1-1:2 [error] broken (fake)",
+  expect(sentMessages).toEqual([
+    {
+      content: "Automatic LSP diagnostics after edits:\nexample.ts:1:1-1:2 [error] broken (fake)",
+      customType: "lsp-diagnostics",
+      display: true,
+    },
   ]);
+  expect(deliveryModes).toEqual(["steer"]);
 });
 
-test("coalesces automatic diagnostics for rapid edits to the same file", async () => {
+test("reports only the latest immediate diagnostic result per file and turn", async () => {
   const handlers = new Map<string, Handler>();
-  let diagnosticCalls = 0;
+  const diagnosticCalls: string[] = [];
+  const sentMessages: SentMessage[] = [];
   let promptGuidelines: readonly string[] = [];
   const fakeManager = {
-    diagnostics: async () => {
-      diagnosticCalls += 1;
+    diagnostics: async (path: string) => {
+      diagnosticCalls.push(path);
       return {
         diagnosticCount: 1,
         matched: true,
-        text: "example.ts:1:1-1:2 [error] broken (fake)",
+        text: `${path} diagnostic ${diagnosticCalls.length}`,
         warnings: [],
       };
     },
@@ -130,6 +154,9 @@ test("coalesces automatic diagnostics for rapid edits to the same file", async (
     registerTool(definition: { promptGuidelines?: readonly string[] }) {
       promptGuidelines = definition.promptGuidelines ?? [];
     },
+    sendMessage(message: SentMessage) {
+      sentMessages.push(message);
+    },
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -137,59 +164,30 @@ test("coalesces automatic diagnostics for rapid edits to the same file", async (
     signal: undefined,
     ui: { notify() {} },
   } as unknown as ExtensionContext;
-  createLspExtension({
-    createManager: async () => fakeManager,
-    diagnosticsDebounceMs: 10,
-    readSettings: () => settings,
-  })(pi);
+  createLspExtension({ createManager: async () => fakeManager, readSettings: () => settings })(pi);
   await handlers.get("session_start")?.({} as never, context);
 
-  const toolResult = (toolCallId: string, path = "example.ts") =>
-    ({
-      type: "tool_result",
-      toolCallId,
-      toolName: "write",
-      input: { path, content: "updated" },
-      content: [{ type: "text", text: "write complete" }],
-      details: undefined,
-      isError: false,
-    }) as ToolResultEvent;
-  const messageEnd = (toolCallId: string) =>
-    ({
-      type: "message_end",
-      message: {
-        role: "toolResult",
-        toolCallId,
-        toolName: "write",
-        content: [{ type: "text", text: "write complete" }],
-        isError: false,
-        timestamp: Date.now(),
-      },
-    }) as MessageEndEvent;
+  for (const [toolCallId, path] of [
+    ["call-1", "example.ts"],
+    ["call-2", "example.ts"],
+    ["call-3", "other.ts"],
+  ] as const) {
+    await handlers.get("tool_result")?.(mutationResult(toolCallId, path) as never, context);
+    await handlers.get("message_end")?.(mutationMessage(toolCallId) as never, context);
+  }
 
-  await handlers.get("tool_result")?.(toolResult("call-1") as never, context);
-  await handlers.get("tool_result")?.(toolResult("call-2") as never, context);
-  const [first, second] = await Promise.all([
-    handlers.get("message_end")?.(messageEnd("call-1") as never, context),
-    handlers.get("message_end")?.(messageEnd("call-2") as never, context),
-  ]);
+  expect(diagnosticCalls).toEqual(["example.ts", "example.ts", "other.ts"]);
+  expect(sentMessages).toEqual([]);
+  await handlers.get("turn_end")?.(turnEnd("call-1", "call-2", "call-3") as never, context);
 
-  expect(first).toBeUndefined();
-  expect(
-    (second as { message: { content: Array<{ type: string; text: string }> } }).message.content,
-  ).toEqual([
-    { type: "text", text: "write complete" },
+  expect(sentMessages).toEqual([
     {
-      type: "text",
-      text: "LSP diagnostics after formatting:\nexample.ts:1:1-1:2 [error] broken (fake)",
+      content:
+        "Automatic LSP diagnostics after edits:\nexample.ts diagnostic 2\n\nother.ts diagnostic 3",
+      customType: "lsp-diagnostics",
+      display: true,
     },
   ]);
-
-  await handlers.get("tool_result")?.(toolResult("call-3", "other.ts") as never, context);
-  const otherFile = await handlers.get("message_end")?.(messageEnd("call-3") as never, context);
-
-  expect(otherFile).toBeDefined();
-  expect(diagnosticCalls).toBe(2);
   expect(promptGuidelines.some((guideline) => guideline.includes("diagnostic"))).toBeFalse();
 });
 

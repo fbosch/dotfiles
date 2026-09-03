@@ -60,6 +60,15 @@ When instructions conflict, use this priority order:
 - Prefer active voice when the actor matters. Keep passive voice when the actor is unknown, irrelevant, or would distract from the subject.
 - Keep one idea per sentence. Split dense sentences when readers must backtrack to parse them, and remove clauses that do not support the sentence's main point.
 
+## Stock Phrases
+
+Treat stock phrases as diagnostic signals, not banned strings. Delete or rewrite them when they only announce, intensify, narrate, or disguise the point; keep them when context gives them a necessary job.
+
+- Announcement openers: "Here's the thing", "Let me be clear", and "The truth is".
+- Performative emphasis: "Full stop", "Let that sink in", and "Make no mistake".
+- Meta-commentary: "Plot twist", "Let me walk you through", and "As we'll see".
+- Vague business jargon: "lean into", "double down", "circle back", and "deep dive".
+
 ## Structure and Presentation
 
 - Let the material determine the number and shape of sections. Avoid mechanically balanced outlines and lists that repeat the same sentence pattern.
@@ -121,6 +130,7 @@ Before returning prose, verify:
 - Each citation supports the exact claim attached to it.
 - The prose sounds practical, direct, and low-ceremony per `TONE.md`.
 - No marketing tone, consultant polish, or generic enthusiasm remains.
+- Stock phrases and business jargon remain only where they do more than announce, intensify, narrate, or disguise the point.
 - No unsupported agreement, optimism, reassurance, or false balance remains.
 - No em dashes remain, and listed jargon has been replaced unless it carries a precise domain meaning.
 - Lists, headings, punctuation, and sentence rhythm follow the material rather than a repeated template.

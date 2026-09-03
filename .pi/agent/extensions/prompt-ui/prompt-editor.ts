@@ -10,6 +10,7 @@ import {
   type EditorTheme,
   stripTerminalSequences,
   type TUI,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
   type AgentMention,
@@ -48,6 +49,7 @@ import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
+export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
 
 export interface PromptEditorState {
@@ -117,7 +119,7 @@ export function renderMcpFooterStatus(
 
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
   if (key === YOLO_STATUS_KEY) return theme.fg("error", YOLO_STATUS_TEXT);
-  if (key === "file-changes") {
+  if (key === FILE_CHANGES_STATUS_KEY) {
     const match = /^(\d+ files?)(?: (\+\d+))?(?: (-\d+))?$/.exec(stripTerminalSequences(status));
     if (match === null) return status;
 
@@ -143,7 +145,8 @@ export function renderPromptHints(
   promptState: PromptEditorState,
   cwd: string,
   width: number,
-  rightStatus = "",
+  primaryRightStatus = "",
+  secondaryRightStatus = "",
 ): string {
   const statuses = promptState
     .getStatuses()
@@ -159,8 +162,16 @@ export function renderPromptHints(
   const branch = promptState.getBranch();
   const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
-  const hintRight = sanitizeStatus(rightStatus);
-  return fitColumns(theme.fg("muted", ` ${hintLeft}`), hintRight, width);
+  const renderedLeft = theme.fg("muted", ` ${hintLeft}`);
+  const primaryRight = sanitizeStatus(primaryRightStatus);
+  const secondaryRight = sanitizeStatus(secondaryRightStatus);
+  const combinedRight = [secondaryRight, primaryRight].filter(Boolean).join(" · ");
+  const rightWidth = Math.max(0, width - visibleWidth(renderedLeft) - 1);
+  const hintRight =
+    primaryRight && secondaryRight && visibleWidth(combinedRight) > rightWidth
+      ? primaryRight
+      : combinedRight;
+  return fitColumns(renderedLeft, hintRight, width);
 }
 
 export class PromptEditor extends CustomEditor {

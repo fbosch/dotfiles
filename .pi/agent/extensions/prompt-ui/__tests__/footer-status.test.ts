@@ -53,24 +53,46 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
-  test("keeps MCP status right-aligned and other statuses on the left", () => {
+  test("keeps file changes and MCP together on the right", () => {
     const state = {
       ...promptState,
       getStatuses: () => ["permission status"],
     };
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
+    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
     const line = renderPromptHints(
       ansiTheme,
       keybindings,
       state,
       "~/dotfiles",
-      50,
-      renderMcpFooterStatus(ansiTheme, 2),
+      60,
+      mcpStatus,
+      fileStatus,
     );
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).toContain("permission status");
+    expect(plainLine.endsWith("2 files +40 -25 · ⊙ 2 MCP")).toBe(true);
+    expect(visibleWidth(line)).toBe(60);
+  });
+
+  test("drops file changes before MCP when the footer narrows", () => {
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
+    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
+    const line = renderPromptHints(
+      ansiTheme,
+      keybindings,
+      promptState,
+      "~/dotfiles",
+      25,
+      mcpStatus,
+      fileStatus,
+    );
+    const plainLine = stripTerminalSequences(line);
+
+    expect(plainLine).not.toContain("2 files");
     expect(plainLine.endsWith("⊙ 2 MCP")).toBe(true);
-    expect(visibleWidth(line)).toBe(50);
+    expect(visibleWidth(line)).toBe(25);
   });
 
   test("preserves unrelated status text", () => {
