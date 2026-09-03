@@ -12,7 +12,12 @@ import {
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
-import type { LspOperationResult, LspServerManager } from "./server-manager";
+import type {
+  DiagnosticVerdict,
+  LspDiagnosticEvidence,
+  LspOperationResult,
+  LspServerManager,
+} from "./server-manager";
 import { DEFAULT_LSP_TIMEOUTS, type ResolvedLspSettings, resolveLspSettings } from "./settings";
 
 const PositionFields = {
@@ -48,7 +53,10 @@ const LspParameters = Type.Union([
 type LspInput = Static<typeof LspParameters>;
 
 interface LspToolDetails {
+  readonly diagnosticEvidence?: readonly LspDiagnosticEvidence[];
+  readonly diagnosticVerdict?: DiagnosticVerdict;
   readonly operation: LspInput["operation"];
+  readonly unconfirmedServers?: readonly string[];
   readonly warnings: readonly string[];
 }
 
@@ -169,7 +177,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
         name: "lsp",
         label: "Language Server",
         description:
-          "Query configured project language servers for diagnostics, hover information, definitions, references, or server status. Paths are project-relative and positions are one-based.",
+          "Query configured project language servers for diagnostics, hover information, definitions, references, or server status. Diagnostic results separate LSP-native evidence, missing evidence, and the extension's aggregate verdict. Paths are project-relative and positions are one-based.",
         promptSnippet: "Query persistent language servers for project code intelligence",
         promptGuidelines: [
           "Use lsp for hover, definitions, or references when semantic navigation is more precise than text search.",
@@ -199,10 +207,22 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
               manager.references(path, line, column, includeDeclaration ?? true, signal),
             )
             .exhaustive();
-          assertMatched(result);
+          if (params.operation !== "diagnostics") assertMatched(result);
+          const diagnosticDetails =
+            result.diagnosticVerdict === undefined
+              ? {}
+              : {
+                  diagnosticEvidence: result.diagnosticEvidence ?? [],
+                  diagnosticVerdict: result.diagnosticVerdict,
+                  unconfirmedServers: result.unconfirmedServers ?? [],
+                };
           return {
             content: [{ type: "text", text: resultText(result) }],
-            details: { operation: params.operation, warnings: result.warnings },
+            details: {
+              ...diagnosticDetails,
+              operation: params.operation,
+              warnings: result.warnings,
+            },
           };
         },
       }),
@@ -265,8 +285,15 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           [...latestByFile.values()].map(async ({ diagnostics }) => {
             if (diagnostics === undefined) return undefined;
             const result = await diagnostics;
-            if (result.diagnosticCount === 0 && result.warnings.length === 0) return undefined;
-            if (result.matched === false && result.warnings.length === 0) return undefined;
+            if (
+              result.diagnosticVerdict === "clean" ||
+              result.diagnosticVerdict === "unconfirmed"
+            ) {
+              return undefined;
+            }
+            if (result.diagnosticVerdict === "unavailable" && result.warnings.length === 0) {
+              return undefined;
+            }
             return resultText(result);
           }),
         )

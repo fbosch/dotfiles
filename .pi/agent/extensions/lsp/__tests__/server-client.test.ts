@@ -28,7 +28,9 @@ test("initializes, synchronizes, queries, and shuts down a persistent server", a
     { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
   );
   try {
-    expect(await client.freshDiagnostics(document, undefined)).toHaveLength(1);
+    const observation = await client.freshDiagnostics(document, undefined);
+    expect(observation.kind).toBe("push-publication");
+    expect(observation.diagnostics).toHaveLength(1);
     expect(await client.hover(document, { line: 0, character: 0 }, undefined)).toEqual({
       contents: { kind: "plaintext", value: "fake hover" },
     });
@@ -46,7 +48,39 @@ test("initializes, synchronizes, queries, and shuts down a persistent server", a
   expect(client.status().state).toBe("stopped");
 });
 
-test("treats omitted clean push diagnostics as clean", async () => {
+test("confirms an explicit empty push diagnostic publication", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-explicit-clean-push-client-"));
+  const path = join(directory, "example.lua");
+  await writeFile(path, "value");
+  const document: ProjectFile = {
+    canonicalPath: path,
+    languageId: "lua",
+    path,
+    text: "value",
+  };
+  const client = await LspServerClient.start(
+    {
+      args: [join(import.meta.dir, "fixtures", "fake-server.ts")],
+      command: process.execPath,
+      id: "fake-explicit-clean-push",
+      languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+      rootMarkers: [".git"],
+    },
+    directory,
+    { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+  );
+  try {
+    expect(await client.freshDiagnostics(document, undefined)).toEqual({
+      diagnostics: [],
+      kind: "push-publication",
+    });
+  } finally {
+    await client.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("records push silence without treating it as LSP-native evidence", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-lsp-clean-push-client-"));
   const path = join(directory, "example.lua");
   await writeFile(path, "value");
@@ -68,8 +102,15 @@ test("treats omitted clean push diagnostics as clean", async () => {
     { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
   );
   try {
-    expect(await client.freshDiagnostics(document, undefined)).toEqual([]);
-    expect(await client.freshDiagnostics(document, undefined)).toEqual([]);
+    expect(await client.freshDiagnostics(document, undefined)).toEqual({
+      diagnostics: [],
+      kind: "push-silence",
+    });
+    expect(await client.freshDiagnostics(document, undefined)).toEqual({
+      diagnostics: [],
+      kind: "push-silence",
+    });
+    expect(client.status().unconfirmedDocuments).toBe(1);
   } finally {
     await client.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -99,12 +140,20 @@ test("pulls diagnostics and answers server configuration requests", async () => 
     { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
   );
   try {
-    expect(await client.freshDiagnostics(document, undefined)).toHaveLength(1);
+    const observation = await client.freshDiagnostics(document, undefined);
+    expect(observation.kind).toBe("pull-report");
+    expect(observation.reportKind).toBe("full");
+    expect(observation.diagnostics).toHaveLength(1);
     expect(await client.hover(document, { line: 0, character: 0 }, undefined)).toEqual({
       contents: {
         kind: "plaintext",
         value: '[{"globals":["vim"]},null,{"lua":{"diagnostics":{"globals":["vim"]}}}]',
       },
+    });
+    expect(await client.freshDiagnostics({ ...document, text: "value" }, undefined)).toEqual({
+      diagnostics: [],
+      kind: "pull-report",
+      reportKind: "full",
     });
   } finally {
     await client.shutdown();

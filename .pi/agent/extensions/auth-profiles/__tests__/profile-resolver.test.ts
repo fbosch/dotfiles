@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +42,7 @@ afterEach(async () => {
 });
 
 describe("auth profile precedence", () => {
-  test("resolves project, repository, and host profiles in order", async () => {
+  test("resolves repository and host profiles without project-level pins", async () => {
     const { agentDir, projectDir } = await temporaryFixture({
       defaultProfile: "ct",
       hostDefaults: { "rvn-pc": ["fbb", "jpb", "ct"] },
@@ -58,12 +58,6 @@ describe("auth profile precedence", () => {
     const trusted = { cwd: projectDir, isProjectTrusted: () => true };
 
     await writeFile(join(projectDir, ".pi", "settings.json"), '{"authProfile":"ct"}\n');
-    expect(await resolveProfile(trusted, options)).toMatchObject({
-      profile: "ct",
-      source: "project",
-    });
-
-    await unlink(join(projectDir, ".pi", "settings.json"));
     const repositoryResolution = await resolveProfile(trusted, options);
     expect(repositoryResolution).toMatchObject({
       profile: "jpb",

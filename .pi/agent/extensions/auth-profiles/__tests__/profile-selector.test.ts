@@ -22,14 +22,17 @@ async function fixture(config: Record<string, unknown>) {
   return { agentDir, projectDir };
 }
 
-function usage(profiles: Array<{ profileLabel: string; remaining?: number }>): UsageStatusPayload {
+function usage(
+  profiles: Array<{ profileLabel: string; remaining?: number; resetCredits?: number }>,
+): UsageStatusPayload {
   return {
     schema: "fbb.pi-auth-profiles-usage/v1",
-    profiles: profiles.map(({ profileLabel, remaining }) => ({
+    profiles: profiles.map(({ profileLabel, remaining, resetCredits }) => ({
       profileLabel,
       active: false,
       urgency: "unknown",
       usage: remaining === undefined ? [] : [{ remaining }],
+      ...(resetCredits === undefined ? {} : { availableCount: resetCredits }),
     })),
     diagnostics: [],
   };
@@ -99,12 +102,11 @@ describe("automatic auth profile selection", () => {
     });
   });
 
-  test("does not override an explicit trusted project profile", async () => {
+  test("ignores the retired project-level profile setting", async () => {
     const { agentDir, projectDir } = await fixture({
       hostDefaults: { "rvn-pc": ["fbb", "jpb"] },
     });
     await writeFile(join(projectDir, ".pi", "settings.json"), '{"authProfile":"ct"}\n');
-    let collectedUsage = false;
 
     const selection = await selectProfile(
       { cwd: projectDir, isProjectTrusted: () => true },
@@ -113,15 +115,77 @@ describe("automatic auth profile selection", () => {
         env: {},
         hostname: () => "rvn-pc",
         platform: "linux",
-        usageCollector: async () => {
-          collectedUsage = true;
-          return usage([]);
+        usageCollector: async () =>
+          usage([
+            { profileLabel: "fbb", remaining: 0 },
+            { profileLabel: "jpb", remaining: 60 },
+          ]),
+      },
+    );
+
+    expect(selection).toMatchObject({
+      profile: "jpb",
+      profileOrder: ["fbb", "jpb", "default"],
+      source: "host default",
+    });
+  });
+
+  test("uses a session preference as the starting point but skips it at zero quota", async () => {
+    const { agentDir, projectDir } = await fixture({
+      hostDefaults: { "rvn-pc": ["fbb", "jpb", "ct"] },
+    });
+
+    const selection = await selectProfile(
+      { cwd: projectDir, isProjectTrusted: () => false },
+      {
+        agentDir,
+        env: {},
+        hostname: () => "rvn-pc",
+        platform: "linux",
+        preferredProfile: "jpb",
+        usageCollector: async (options) => {
+          expect(options.includeResetCredits).toBe(false);
+          expect(options.profileLabels).toEqual(["jpb", "ct", "default", "fbb"]);
+          return usage([
+            { profileLabel: "jpb", remaining: 0, resetCredits: 2 },
+            { profileLabel: "ct", remaining: 70 },
+            { profileLabel: "fbb", remaining: 90 },
+          ]);
         },
       },
     );
 
-    expect(selection).toMatchObject({ profile: "ct", profileOrder: ["ct"], source: "project" });
-    expect(collectedUsage).toBe(false);
+    expect(selection).toMatchObject({
+      profile: "ct",
+      profileOrder: ["jpb", "ct", "default", "fbb"],
+      fallbackFrom: "jpb",
+      fallbackReason: "confirmed usage",
+      source: "session",
+    });
+  });
+
+  test("does not use an unconfirmed fallback after observing zero quota", async () => {
+    const { agentDir, projectDir } = await fixture({
+      hostDefaults: { "rvn-pc": ["fbb", "jpb"] },
+    });
+
+    const selection = await selectProfile(
+      { cwd: projectDir, isProjectTrusted: () => false },
+      {
+        agentDir,
+        env: {},
+        hostname: () => "rvn-pc",
+        platform: "linux",
+        usageCollector: async () =>
+          usage([{ profileLabel: "fbb", remaining: 0, resetCredits: 1 }, { profileLabel: "jpb" }]),
+      },
+    );
+
+    expect(selection).toMatchObject({
+      profile: "fbb",
+      selectionWarning: "fbb is exhausted; no alternate profile has confirmed usage",
+    });
+    expect(selection.fallbackReason).toBeUndefined();
   });
 
   test("requires confirmed usage when rotating away from an exhausted profile", async () => {

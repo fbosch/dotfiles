@@ -9,7 +9,7 @@ import {
   readProjectFile,
 } from "./paths";
 import { toProtocolPosition } from "./positions";
-import { type ClientStatus, LspServerClient } from "./server-client";
+import { type ClientStatus, type DiagnosticObservation, LspServerClient } from "./server-client";
 import type { LspServerSettings, ResolvedLspSettings } from "./settings";
 
 const MAX_INSTANCES = 16;
@@ -33,11 +33,102 @@ interface MatchResult {
   readonly warnings: readonly string[];
 }
 
+export type DiagnosticVerdict = "issues" | "clean" | "unconfirmed" | "partial" | "unavailable";
+
+export type LspDiagnosticEvidence =
+  | {
+      readonly kind: "pull-report";
+      readonly reportKind: "full" | "unchanged";
+      readonly serverId: string;
+    }
+  | {
+      readonly kind: "push-publication";
+      readonly serverId: string;
+    };
+
 export interface LspOperationResult {
   readonly diagnosticCount?: number;
+  readonly diagnosticEvidence?: readonly LspDiagnosticEvidence[];
+  readonly diagnosticVerdict?: DiagnosticVerdict;
   readonly matched: boolean;
   readonly text: string;
+  readonly unconfirmedServers?: readonly string[];
   readonly warnings: readonly string[];
+}
+
+interface ServerDiagnosticResult {
+  readonly diagnostics: readonly ReturnType<typeof diagnosticRow>[];
+  readonly evidence: LspDiagnosticEvidence | undefined;
+  readonly observationKind: DiagnosticObservation["kind"];
+  readonly serverId: string;
+}
+
+function diagnosticRow(
+  diagnostic: Parameters<typeof renderDiagnostics>[1][number]["diagnostic"],
+  document: ProjectFile,
+  serverId: string,
+) {
+  return {
+    diagnostic,
+    path: document.canonicalPath,
+    serverId,
+    text: document.text,
+  };
+}
+
+function nativeDiagnosticEvidence(
+  observation: DiagnosticObservation,
+  serverId: string,
+): LspDiagnosticEvidence | undefined {
+  if (observation.kind === "pull-report") {
+    return { kind: observation.kind, reportKind: observation.reportKind, serverId };
+  }
+  if (observation.kind === "push-publication") return { kind: observation.kind, serverId };
+  return undefined;
+}
+
+function diagnosticVerdict(
+  results: readonly ServerDiagnosticResult[],
+  warningCount: number,
+): DiagnosticVerdict {
+  if (results.length === 0) return "unavailable";
+  const diagnosticCount = results.reduce((count, result) => count + result.diagnostics.length, 0);
+  const hasPushSilence = results.some((result) => result.observationKind === "push-silence");
+  if (warningCount > 0 || (diagnosticCount > 0 && hasPushSilence)) return "partial";
+  if (diagnosticCount > 0) return "issues";
+  return hasPushSilence ? "unconfirmed" : "clean";
+}
+
+function evidenceLabel(evidence: LspDiagnosticEvidence): string {
+  if (evidence.kind === "pull-report") {
+    return `${evidence.serverId}=textDocument/diagnostic ${evidence.reportKind} report`;
+  }
+  return `${evidence.serverId}=textDocument/publishDiagnostics notification`;
+}
+
+function diagnosticText(
+  projectRoot: string,
+  results: readonly ServerDiagnosticResult[],
+  verdict: DiagnosticVerdict,
+): string {
+  const diagnostics = results.flatMap((result) => result.diagnostics);
+  const evidence = results.flatMap((result) =>
+    result.evidence === undefined ? [] : [result.evidence],
+  );
+  const unconfirmedServers = results
+    .filter((result) => result.observationKind === "push-silence")
+    .map((result) => result.serverId);
+  const sections = [
+    `LSP extension verdict: ${verdict}`,
+    `LSP-native evidence: ${evidence.length === 0 ? "none" : evidence.map(evidenceLabel).join(", ")}`,
+  ];
+  if (unconfirmedServers.length > 0) {
+    sections.push(
+      `Missing LSP-native evidence: ${unconfirmedServers.join(", ")} sent no textDocument/publishDiagnostics notification within the bounded wait`,
+    );
+  }
+  if (diagnostics.length > 0) sections.push(renderDiagnostics(projectRoot, diagnostics));
+  return sections.join("\n");
 }
 
 function normalizedDefinition(
@@ -108,9 +199,14 @@ export class LspServerManager {
         root: record.root,
         serverId: record.server.id,
         state: record.error === undefined ? "starting" : "failed",
+        unconfirmedDocuments: 0,
         ...(record.error === undefined ? {} : { error: record.error }),
       };
-      return `${status.serverId}: ${status.state} at ${status.root} (${status.documents} documents)${status.error === undefined ? "" : `: ${status.error}`}`;
+      const unconfirmed =
+        status.unconfirmedDocuments === 0
+          ? ""
+          : `, ${status.unconfirmedDocuments} unconfirmed diagnostics`;
+      return `${status.serverId}: ${status.state} at ${status.root} (${status.documents} documents${unconfirmed})${status.error === undefined ? "" : `: ${status.error}`}`;
     });
     return [...configured, ...active].join("\n") || "No LSP servers configured";
   }
@@ -127,20 +223,34 @@ export class LspServerManager {
   ): Promise<LspOperationResult> {
     const result = await this.matches(path, allowAbsolute, signal);
     const operation = await runMatched(result.matches, signal, async (match) => {
-      const items = await match.client.freshDiagnostics(match.document, signal);
-      return items.map((diagnostic) => ({
-        diagnostic,
-        path: match.document.canonicalPath,
+      const observation = await match.client.freshDiagnostics(match.document, signal);
+      return {
+        diagnostics: observation.diagnostics.map((diagnostic) =>
+          diagnosticRow(diagnostic, match.document, match.server.id),
+        ),
+        evidence: nativeDiagnosticEvidence(observation, match.server.id),
+        observationKind: observation.kind,
         serverId: match.server.id,
-        text: match.document.text,
-      }));
+      } satisfies ServerDiagnosticResult;
     });
-    const diagnostics = operation.values.flat();
+    const warnings = [...result.warnings, ...operation.warnings];
+    const verdict = diagnosticVerdict(operation.values, warnings.length);
+    const diagnosticCount = operation.values.reduce(
+      (count, observation) => count + observation.diagnostics.length,
+      0,
+    );
     return {
-      diagnosticCount: diagnostics.length,
+      diagnosticCount,
+      diagnosticEvidence: operation.values.flatMap((observation) =>
+        observation.evidence === undefined ? [] : [observation.evidence],
+      ),
+      diagnosticVerdict: verdict,
       matched: result.matches.length > 0,
-      text: renderDiagnostics(this.projectRoot, diagnostics),
-      warnings: [...result.warnings, ...operation.warnings],
+      text: diagnosticText(this.projectRoot, operation.values, verdict),
+      unconfirmedServers: operation.values
+        .filter((observation) => observation.observationKind === "push-silence")
+        .map((observation) => observation.serverId),
+      warnings,
     };
   }
 

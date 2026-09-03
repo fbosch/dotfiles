@@ -59,7 +59,23 @@ export interface ClientStatus {
   readonly serverId: string;
   readonly state: "failed" | "ready" | "starting" | "stopped" | "stopping";
   readonly stderr?: string;
+  readonly unconfirmedDocuments: number;
 }
+
+export type DiagnosticObservation =
+  | {
+      readonly diagnostics: readonly Diagnostic[];
+      readonly kind: "pull-report";
+      readonly reportKind: "full" | "unchanged";
+    }
+  | {
+      readonly diagnostics: readonly Diagnostic[];
+      readonly kind: "push-publication";
+    }
+  | {
+      readonly diagnostics: readonly [];
+      readonly kind: "push-silence";
+    };
 
 function noOpLogger() {
   return {
@@ -138,6 +154,7 @@ export class LspServerClient {
   private readonly connection: ProtocolConnection;
   private readonly spawned: Promise<void>;
   private readonly diagnostics = new Map<string, PublishDiagnosticsParams>();
+  private readonly unconfirmedUris = new Set<string>();
   private readonly diagnosticWaiters = new Map<
     string,
     Set<(params: PublishDiagnosticsParams) => void>
@@ -172,6 +189,7 @@ export class LspServerClient {
       const version = this.documents.get(params.uri)?.version;
       if (params.version !== undefined && version !== undefined && params.version < version) return;
       this.diagnostics.set(params.uri, params);
+      this.unconfirmedUris.delete(params.uri);
       const waiters = this.diagnosticWaiters.get(params.uri);
       if (waiters === undefined) return;
       this.diagnosticWaiters.delete(params.uri);
@@ -285,6 +303,7 @@ export class LspServerClient {
       state: this.state,
       ...(this.error === undefined ? {} : { error: this.error }),
       ...(this.stderr.trim() === "" ? {} : { stderr: this.stderr.trim() }),
+      unconfirmedDocuments: this.unconfirmedUris.size,
     };
   }
 
@@ -301,6 +320,7 @@ export class LspServerClient {
     const synchronization = this.synchronizationSettings();
     if (open === undefined) {
       this.diagnostics.delete(uri);
+      this.unconfirmedUris.delete(uri);
       if (synchronization.openClose) {
         this.connection.sendNotification(DidOpenTextDocumentNotification.type, {
           textDocument: {
@@ -315,6 +335,7 @@ export class LspServerClient {
     } else if (open.text !== document.text) {
       const version = open.version + 1;
       this.diagnostics.delete(uri);
+      this.unconfirmedUris.delete(uri);
       this.documents.set(uri, { ...open, text: document.text, version });
       if (synchronization.change !== 0) {
         this.connection.sendNotification(DidChangeTextDocumentNotification.type, {
@@ -340,8 +361,8 @@ export class LspServerClient {
       if (this.capabilities?.diagnosticProvider) return;
       await new Promise((resolve) => setTimeout(resolve, PUSH_SERVER_WARMUP_MS));
       if (this.diagnostics.has(uri) || this.documents.get(uri)?.text !== document.text) return;
-      // nil and some other push-only servers omit an empty publication for clean documents.
-      this.diagnostics.set(uri, { diagnostics: [], uri });
+      // Silence is not an LSP diagnostic result; retain it separately from publications.
+      this.unconfirmedUris.add(uri);
     })();
     this.warmups.set(uri, warming);
     try {
@@ -354,7 +375,7 @@ export class LspServerClient {
   async freshDiagnostics(
     document: ProjectFile,
     signal: AbortSignal | undefined,
-  ): Promise<readonly Diagnostic[]> {
+  ): Promise<DiagnosticObservation> {
     const uri = pathToFileURL(document.canonicalPath).href;
     await this.warmups.get(uri);
     if (this.capabilities?.diagnosticProvider) {
@@ -368,13 +389,23 @@ export class LspServerClient {
       );
       if (report.kind === "full") {
         this.diagnostics.set(uri, { diagnostics: report.items, uri });
-        return report.items;
+        this.unconfirmedUris.delete(uri);
+        return { diagnostics: report.items, kind: "pull-report", reportKind: "full" };
       }
-      return this.diagnostics.get(uri)?.diagnostics ?? [];
+      return {
+        diagnostics: this.diagnostics.get(uri)?.diagnostics ?? [],
+        kind: "pull-report",
+        reportKind: "unchanged",
+      };
     }
     const open = this.documents.get(uri);
     const cached = this.diagnostics.get(uri);
-    if (open?.text === document.text && cached !== undefined) return cached.diagnostics;
+    if (open?.text === document.text && cached !== undefined) {
+      return { diagnostics: cached.diagnostics, kind: "push-publication" };
+    }
+    if (open?.text === document.text && this.unconfirmedUris.has(uri)) {
+      return { diagnostics: [], kind: "push-silence" };
+    }
 
     const wasOpen = open !== undefined;
     const initial = this.waitForPushDiagnostics(uri, signal, INITIAL_DIAGNOSTICS_WAIT_MS);
@@ -382,10 +413,14 @@ export class LspServerClient {
     try {
       await this.synchronize(document);
       let published = await initial;
-      if (published !== undefined) return published.diagnostics;
+      if (published !== undefined) {
+        return { diagnostics: published.diagnostics, kind: "push-publication" };
+      }
 
       const current = this.diagnostics.get(uri);
-      if (current !== undefined) return current.diagnostics;
+      if (current !== undefined) {
+        return { diagnostics: current.diagnostics, kind: "push-publication" };
+      }
       if (wasOpen === false) {
         // Push-only servers such as Lua LS may need a warmed-up document change first.
         await abortableDelay(
@@ -395,23 +430,29 @@ export class LspServerClient {
         );
       }
       const warmed = this.diagnostics.get(uri);
-      if (warmed !== undefined) return warmed.diagnostics;
+      if (warmed !== undefined) {
+        return { diagnostics: warmed.diagnostics, kind: "push-publication" };
+      }
       pulsed = this.pulseDocument(document);
       if (pulsed) {
         published = await this.waitForPushDiagnostics(uri, signal, INITIAL_DIAGNOSTICS_WAIT_MS);
         if (published !== undefined) {
           await this.synchronize(document);
           pulsed = false;
-          return published.diagnostics;
+          return { diagnostics: published.diagnostics, kind: "push-publication" };
         }
       }
 
       const diagnostics = this.diagnostics.get(uri);
-      if (diagnostics !== undefined) return diagnostics.diagnostics;
-      // nil does not publish an empty set for clean documents; absence after the bounded
-      // push window is therefore the clean result for this synchronization.
-      this.diagnostics.set(uri, { diagnostics: [], uri });
-      return [];
+      if (diagnostics !== undefined) {
+        return { diagnostics: diagnostics.diagnostics, kind: "push-publication" };
+      }
+      if (pulsed) {
+        await this.synchronize(document);
+        pulsed = false;
+      }
+      this.unconfirmedUris.add(uri);
+      return { diagnostics: [], kind: "push-silence" };
     } finally {
       if (pulsed) await this.synchronize(document);
     }
@@ -492,6 +533,7 @@ export class LspServerClient {
     this.state = "stopped";
     this.documents.clear();
     this.diagnostics.clear();
+    this.unconfirmedUris.clear();
     this.warmups.clear();
   }
 

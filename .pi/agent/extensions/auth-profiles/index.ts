@@ -7,7 +7,6 @@
  * License: MIT; see LICENSE in this directory.
  */
 
-import { existsSync } from "node:fs";
 import type { GitRunner } from "./profile-resolver";
 import {
   codexUsageLimitResetAt,
@@ -23,32 +22,33 @@ import {
   listProfiles,
   normalizeName,
   PROFILE_STATUS_KEY,
-  projectSettingsPath,
   providersIn,
   publishWezTermChange,
   updateJsonFile,
 } from "./profile-store";
 import { registerResetCreditCommand } from "./reset-credit";
+import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
 
 export { resolveProfile } from "./profile-resolver";
 export { authPathFor } from "./profile-store";
 
 /**
- * auth-profiles — per-project OAuth/API-key credential profiles for pi.
+ * auth-profiles — routed OAuth/API-key credential profiles for pi.
  *
  * Profiles are separate credential files:
  *   default        -> ~/.pi/agent/auth.json
  *   <name>         -> ~/.pi/agent/auth-profiles/<name>.json
  *
  * Profile selection order:
- *   1. "authProfile" in <cwd>/.pi/settings.json   (only when the project is trusted)
- *   2. repository preferences                      (only when the project is trusted)
+ *   1. current session override
+ *   2. repository preferences (only when the project is trusted)
  *   3. host defaults
  *   4. global default
  *   5. "default"
  *
- * Explicit project profiles are pinned. Automatic selections choose the first
- * profile with confirmed Codex usage, then rotate on confirmed quota headers.
+ * A session override changes the starting point without disabling usage checks.
+ * New sessions start from automatic routing, and exhausted profiles rotate to the
+ * next account with confirmed Codex usage without redeeming reset credits.
  *
  * The extension rebinds the live AuthStorage backend at session_start and on
  * /profile changes, so the built-in /login, /logout, and OAuth token refresh
@@ -57,9 +57,9 @@ export { authPathFor } from "./profile-store";
  * Commands:
  *   /profile                 show the active profile
  *   /profile list            list profiles and their providers
- *   /profile use <name>      set this project's profile (writes .pi/settings.json)
+ *   /profile use <name>      prefer a profile in the current session
  *   /profile default <name>  set the global fallback profile
- *   /profile clear           remove this project's profile setting
+ *   /profile clear           restore automatic selection in this session
  *   /reset-credit [--dry-run] select and consume an earned reset credit
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -68,8 +68,10 @@ type InternalAuthStorage = {
   constructor: { create(path?: string): InternalAuthStorage };
 };
 
+type InternalCredentials = { store?: InternalAuthStorage };
+
 type InternalRuntime = {
-  credentials?: { store?: InternalAuthStorage };
+  credentials?: InternalCredentials;
 };
 
 type AuthProfileDependencies = {
@@ -77,31 +79,53 @@ type AuthProfileDependencies = {
   selectProfile?: typeof selectProfile;
 };
 
+function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
+  credentials: InternalCredentials;
+  store: InternalAuthStorage;
+} {
+  // Pi no longer exposes its file-auth backend to extensions. Reuse the active
+  // store's factory so Pi retains its own locking, permissions, and reload logic.
+  const runtime = (ctx.modelRegistry as unknown as { runtime?: InternalRuntime }).runtime;
+  const credentials = runtime?.credentials;
+  const store = credentials?.store;
+  if (credentials === undefined || store === undefined) {
+    throw new Error(
+      "Auth profiles is incompatible with this version of pi: credential storage cannot be switched.",
+    );
+  }
+  return { credentials, store };
+}
+
 /** Point the session's live credential store at the profile's file. */
 async function bindProfile(
   ctx: Pick<ExtensionContext, "modelRegistry">,
   profile: string,
 ): Promise<string> {
   const path = authPathFor(profile);
-  // Pi no longer exposes its file-auth backend to extensions. Reuse the active
-  // store's factory so Pi retains its own locking, permissions, and reload logic.
-  const runtime = (ctx.modelRegistry as unknown as { runtime?: InternalRuntime }).runtime;
-  const store = runtime?.credentials?.store;
-  const create = store?.constructor?.create;
-  if (
-    runtime === undefined ||
-    runtime.credentials === undefined ||
-    store === undefined ||
-    typeof create !== "function"
-  ) {
+  const { credentials, store } = credentialStoreBinding(ctx);
+  const create = store.constructor?.create;
+  if (typeof create !== "function") {
     throw new Error(
       "Auth profiles is incompatible with this version of pi: credential storage cannot be switched.",
     );
   }
-  runtime.credentials.store = create.call(store.constructor, path);
 
-  // Keep provider availability in sync with the newly selected credential file.
-  await ctx.modelRegistry.refresh({ allowNetwork: false });
+  credentials.store = create.call(store.constructor, path);
+  try {
+    // Keep provider availability in sync with the newly selected credential file.
+    await ctx.modelRegistry.refresh({ allowNetwork: false });
+  } catch (switchError) {
+    credentials.store = store;
+    try {
+      await ctx.modelRegistry.refresh({ allowNetwork: false });
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [switchError, rollbackError],
+        `Could not switch auth profile to ${profile} or refresh the restored profile.`,
+      );
+    }
+    throw switchError;
+  }
   return path;
 }
 
@@ -122,10 +146,11 @@ export default function authProfiles(
   const chooseProfile = dependencies.selectProfile ?? selectProfile;
   const now = dependencies.now ?? Date.now;
   let activeProfile = DEFAULT_PROFILE;
+  let sessionProfile: string | undefined;
   let activeSelection: ProfileSelection | undefined;
   const exhaustedUntil = new Map<string, number>();
   let fallbackPromise: Promise<void> | undefined;
-  let usageLimitHandledForTurn = false;
+  let lastProviderResponseProfile: string | undefined;
   const runGit: GitRunner = async (cwd, args) => {
     const result = await pi.exec("git", ["-C", cwd, ...args], { timeout: 2_000 });
     if (result.code !== 0) return undefined;
@@ -147,7 +172,40 @@ export default function authProfiles(
 
   const rebind = async (
     ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
-  ) => activate(ctx, await chooseProfile(ctx, { runGit }));
+  ) =>
+    activate(
+      ctx,
+      await chooseProfile(ctx, {
+        ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
+        runGit,
+      }),
+    );
+
+  const changeSessionProfile = async (
+    ctx: Pick<
+      ExtensionContext,
+      "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "sessionManager" | "ui"
+    >,
+    profile: string | undefined,
+  ) => {
+    const previousProfile = sessionProfile;
+    persistSessionProfile(pi, ctx, profile);
+    sessionProfile = profile;
+    try {
+      return await rebind(ctx);
+    } catch (switchError) {
+      sessionProfile = previousProfile;
+      try {
+        persistSessionProfile(pi, ctx, previousProfile);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [switchError, rollbackError],
+          "Could not change or restore the session auth profile preference.",
+        );
+      }
+      throw switchError;
+    }
+  };
 
   const resolveProfileCredential = async (
     profile: string,
@@ -155,6 +213,7 @@ export default function authProfiles(
   ): Promise<{ accessToken: string; accountId: string }> => {
     const previousProfile = activeProfile;
     const profileWasSwitched = previousProfile !== profile;
+    const originalStore = credentialStoreBinding(ctx).store;
     if (profileWasSwitched) {
       await bindProfile(ctx, profile);
     }
@@ -169,12 +228,15 @@ export default function authProfiles(
       return { accessToken, accountId };
     } finally {
       if (profileWasSwitched) {
-        await bindProfile(ctx, previousProfile);
+        const { credentials } = credentialStoreBinding(ctx);
+        credentials.store = originalStore;
+        await ctx.modelRegistry.refresh({ allowNetwork: false });
       }
     }
   };
 
   pi.on("session_start", async (_event, ctx) => {
+    sessionProfile = restoreSessionProfile(ctx);
     const resolution = await rebind(ctx);
     if (resolution.selectionWarning) {
       ctx.ui.notify(
@@ -193,9 +255,9 @@ export default function authProfiles(
   const rotateAfterExhaustion = async (
     ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
     resetAt: number,
+    exhaustedProfile = activeProfile,
   ): Promise<void> => {
     const currentTime = now();
-    const exhaustedProfile = activeProfile;
     if ((exhaustedUntil.get(exhaustedProfile) ?? 0) > currentTime) {
       await fallbackPromise;
       return;
@@ -204,6 +266,7 @@ export default function authProfiles(
     for (const [profile, expiry] of exhaustedUntil) {
       if (expiry <= currentTime) exhaustedUntil.delete(profile);
     }
+    if (activeProfile !== exhaustedProfile) return;
 
     if (fallbackPromise === undefined) {
       let operation: Promise<void>;
@@ -213,6 +276,7 @@ export default function authProfiles(
             allowUnconfirmedFallback: false,
             excludedProfiles: new Set(exhaustedUntil.keys()),
             forceUsageRefresh: true,
+            ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
             runGit,
           });
           if (
@@ -249,7 +313,7 @@ export default function authProfiles(
   };
 
   pi.on("turn_start", () => {
-    usageLimitHandledForTurn = false;
+    lastProviderResponseProfile = undefined;
   });
 
   pi.on("before_provider_headers", async () => {
@@ -257,27 +321,20 @@ export default function authProfiles(
   });
 
   pi.on("after_provider_response", async (event, ctx) => {
-    if (
-      usageLimitHandledForTurn ||
-      ctx.model?.provider !== "openai-codex" ||
-      activeSelection?.source === "project"
-    ) {
-      return;
-    }
+    if (ctx.model?.provider !== "openai-codex") return;
 
+    const responseProfile = activeProfile;
+    lastProviderResponseProfile = responseProfile;
     const resetAt = codexUsageLimitResetAt(event.headers, now());
     if (resetAt === undefined) return;
-    usageLimitHandledForTurn = true;
 
-    const rotation = rotateAfterExhaustion(ctx, resetAt);
+    const rotation = rotateAfterExhaustion(ctx, resetAt, responseProfile);
     // Successful responses must remain consumable while selection runs.
     if (event.status >= 400) await rotation;
   });
 
   pi.on("message_end", async (event, ctx) => {
     if (
-      usageLimitHandledForTurn ||
-      activeSelection?.source === "project" ||
       ctx.model?.provider !== "openai-codex" ||
       event.message.role !== "assistant" ||
       event.message.stopReason !== "error"
@@ -287,8 +344,9 @@ export default function authProfiles(
 
     const resetAt = codexUsageLimitResetAtFromMessage(event.message.errorMessage, now());
     if (resetAt === undefined) return;
-    usageLimitHandledForTurn = true;
-    await rotateAfterExhaustion(ctx, resetAt);
+    const responseProfile = lastProviderResponseProfile ?? activeProfile;
+    lastProviderResponseProfile = undefined;
+    await rotateAfterExhaustion(ctx, resetAt, responseProfile);
   });
 
   pi.registerCommand("profile", {
@@ -332,7 +390,7 @@ export default function authProfiles(
                 `Repository: ${repository}\n` +
                 `Repository order: ${repositoryPreferences}\n` +
                 `Host order: ${hostPreferences}\n` +
-                `Automatic order: ${resolution.profileOrder.join(", ")}\n` +
+                `Effective order: ${resolution.profileOrder.join(", ")}\n` +
                 `File: ${authPathFor(resolution.profile)}\n` +
                 `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}` +
                 warning,
@@ -352,19 +410,9 @@ export default function authProfiles(
           case "use": {
             if (!rawName) return ctx.ui.notify(usage, "warning");
             const profile = normalizeName(rawName);
-            if (!ctx.isProjectTrusted()) {
-              ctx.ui.notify(
-                "Project is not trusted; cannot set a project auth profile here.",
-                "error",
-              );
-              return;
-            }
-            updateJsonFile(projectSettingsPath(ctx.cwd), (settings) => {
-              settings.authProfile = profile;
-            });
-            const { path } = await rebind(ctx);
+            const { path } = await changeSessionProfile(ctx, profile);
             ctx.ui.notify(
-              `Project auth profile set to ${profile}. /login now saves to ${path}`,
+              `Session auth profile preference set to ${profile}. Active profile: ${activeProfile}. /login now saves to ${path}`,
               "info",
             );
             return;
@@ -383,15 +431,9 @@ export default function authProfiles(
             return;
           }
           case "clear": {
-            const path = projectSettingsPath(ctx.cwd);
-            if (existsSync(path)) {
-              updateJsonFile(path, (settings) => {
-                delete settings.authProfile;
-              });
-            }
-            const resolution = await rebind(ctx);
+            const resolution = await changeSessionProfile(ctx, undefined);
             ctx.ui.notify(
-              `Project auth profile cleared. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
+              `Session auth profile cleared. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
               "info",
             );
             return;

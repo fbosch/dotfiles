@@ -30,6 +30,7 @@ export type ProfileSelectionOptions = ResolveProfileOptions & {
   fetchFn?: FetchFn;
   forceUsageRefresh?: boolean;
   now?: () => number;
+  preferredProfile?: string;
   usageCollector?: UsageCollector;
 };
 
@@ -47,6 +48,28 @@ function withFallback(
     profile,
     ...(profile === resolution.profile ? {} : { fallbackFrom: resolution.profile }),
     fallbackReason,
+  };
+}
+
+function preferProfile(
+  resolution: ProfileResolution,
+  preferredProfile: string | undefined,
+): ProfileResolution {
+  if (preferredProfile === undefined) return resolution;
+
+  const startIndex = resolution.profileOrder.indexOf(preferredProfile);
+  const profileOrder =
+    startIndex < 0
+      ? [preferredProfile, ...resolution.profileOrder]
+      : [
+          ...resolution.profileOrder.slice(startIndex),
+          ...resolution.profileOrder.slice(0, startIndex),
+        ];
+  return {
+    ...resolution,
+    profile: preferredProfile,
+    profileOrder,
+    source: "session",
   };
 }
 
@@ -69,6 +92,11 @@ function hasConfirmedUsage(payload: UsageStatusPayload, profile: string): boolea
     status.usage.length > 0 &&
     status.usage.every((window) => window.remaining > 0)
   );
+}
+
+function hasConfirmedExhaustion(payload: UsageStatusPayload, profile: string): boolean {
+  const status = payload.profiles.find((candidate) => candidate.profileLabel === profile);
+  return status?.usage.some((window) => window.remaining <= 0) === true;
 }
 
 function hasFallbackCredential(payload: UsageStatusPayload, profile: string): boolean {
@@ -99,8 +127,9 @@ export async function selectProfile(
   ctx: ProfileContext,
   options: ProfileSelectionOptions = {},
 ): Promise<ProfileSelection> {
-  const resolution = await resolveProfile(ctx, options);
-  if (resolution.source === "project" || resolution.profileOrder.length < 2) return resolution;
+  const automatic = await resolveProfile(ctx, options);
+  const resolution = preferProfile(automatic, options.preferredProfile);
+  if (resolution.profileOrder.length < 2) return resolution;
 
   const eligibleProfiles = resolution.profileOrder.filter(
     (profile) => options.excludedProfiles?.has(profile) !== true,
@@ -127,7 +156,8 @@ export async function selectProfile(
   const confirmed = eligibleProfiles.find((profile) => hasConfirmedUsage(usage, profile));
   if (confirmed !== undefined) return withFallback(resolution, confirmed, "confirmed usage");
 
-  if (options.allowUnconfirmedFallback !== false) {
+  const selectedProfileIsExhausted = hasConfirmedExhaustion(usage, resolution.profile);
+  if (options.allowUnconfirmedFallback !== false && selectedProfileIsExhausted === false) {
     const credentialFallback = eligibleProfiles.find((profile) =>
       hasFallbackCredential(usage, profile),
     );
@@ -136,7 +166,12 @@ export async function selectProfile(
     }
   }
 
-  return resolution;
+  return selectedProfileIsExhausted
+    ? {
+        ...resolution,
+        selectionWarning: `${resolution.profile} is exhausted; no alternate profile has confirmed usage`,
+      }
+    : resolution;
 }
 
 function finiteHeaderNumber(value: string | undefined): number | undefined {

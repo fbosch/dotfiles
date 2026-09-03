@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -65,7 +65,12 @@ describe("auth profile prompt status", () => {
     let sessionStart: SessionStartHandler | undefined;
     let profileCommand: ProfileCommandHandler | undefined;
     let resetCreditCommand: ResetCreditCommandHandler | undefined;
+    let activeSessionId = "session-1";
+    const sessionEntries: Array<{ type: "custom"; customType: string; data: unknown }> = [];
     const pi = {
+      appendEntry(customType: string, data: unknown) {
+        sessionEntries.push({ type: "custom", customType, data });
+      },
       exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
       on(event: string, handler: SessionStartHandler) {
         if (event === "session_start") sessionStart = handler;
@@ -78,18 +83,27 @@ describe("auth profile prompt status", () => {
     authProfiles(pi);
 
     const statuses: Array<[string, string | undefined]> = [];
+    let failNextModelRefresh = false;
     let modelRefreshes = 0;
     const runtime = {
       credentials: { store: new FakeAuthStore() },
     };
     const ctx = {
       cwd: projectDir,
-      isProjectTrusted: () => true,
+      isProjectTrusted: () => false,
       modelRegistry: {
         runtime,
         refresh: async () => {
           modelRefreshes += 1;
+          if (failNextModelRefresh) {
+            failNextModelRefresh = false;
+            throw new Error("model refresh failed");
+          }
         },
+      },
+      sessionManager: {
+        getEntries: () => sessionEntries,
+        getHeader: () => ({ id: activeSessionId }),
       },
       ui: {
         notify: () => undefined,
@@ -109,12 +123,43 @@ describe("auth profile prompt status", () => {
     expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));
     expect(modelRefreshes).toBe(2);
-    const projectSettings = await readFile(join(projectDir, ".pi", "settings.json"), "utf8");
-    expect(projectSettings).toBe('{\n  "authProfile": "work"\n}\n');
-    expect(JSON.parse(projectSettings)).toEqual({ authProfile: "work" });
+    expect(sessionEntries).toEqual([
+      {
+        type: "custom",
+        customType: "auth-profile-override",
+        data: { profile: "work", sessionId: "session-1" },
+      },
+    ]);
+
+    await sessionStart?.({}, ctx);
+    expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
+
+    await profileCommand?.("clear", ctx);
+    expect(statuses.at(-1)).toEqual(["auth-profile", "default"]);
+    expect(sessionEntries.at(-1)).toEqual({
+      type: "custom",
+      customType: "auth-profile-override",
+      data: { profile: null, sessionId: "session-1" },
+    });
+
+    activeSessionId = "session-2";
+    await sessionStart?.({}, ctx);
+    expect(statuses.at(-1)).toEqual(["auth-profile", "default"]);
+    expect(modelRefreshes).toBe(5);
+
+    failNextModelRefresh = true;
+    await profileCommand?.("use work", ctx);
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
+    expect(statuses.at(-1)).toEqual(["auth-profile", "default"]);
+    expect(sessionEntries.at(-1)).toEqual({
+      type: "custom",
+      customType: "auth-profile-override",
+      data: { profile: null, sessionId: "session-2" },
+    });
+    expect(modelRefreshes).toBe(7);
   });
 
-  test("switches to the next profile after confirmed Codex exhaustion", async () => {
+  test("switches a session-preferred profile after confirmed Codex exhaustion", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-fallback-"));
     temporaryDirectories.push(root);
     const agentDir = join(root, "agent");
@@ -124,10 +169,10 @@ describe("auth profile prompt status", () => {
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
     const baseSelection = {
-      profileOrder: ["fbb", "jpb", "default"],
-      source: "host default" as const,
+      profileOrder: ["fbb", "jpb", "ct", "default"],
+      source: "session" as const,
       host: { name: "rvn-pc", source: "system hostname" as const },
-      hostPreferences: ["fbb", "jpb"],
+      hostPreferences: ["fbb", "jpb", "ct"],
       repositoryPreferences: [],
     };
     let releaseRotation: (() => void) | undefined;
@@ -142,13 +187,19 @@ describe("auth profile prompt status", () => {
         fallbackFrom: "fbb",
         fallbackReason: "confirmed usage",
       },
+      {
+        ...baseSelection,
+        profile: "ct",
+        fallbackFrom: "jpb",
+        fallbackReason: "confirmed usage",
+      },
     ];
     const chooseProfile = async (
       _ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
-      options: { excludedProfiles?: ReadonlySet<string> } = {},
+      options: { excludedProfiles?: ReadonlySet<string>; preferredProfile?: string } = {},
     ): Promise<ProfileSelection> => {
-      if (selections.length === 1) {
-        expect(options.excludedProfiles).toEqual(new Set(["fbb"]));
+      expect(options.preferredProfile).toBe("fbb");
+      if (options.excludedProfiles?.size === 1 && options.excludedProfiles.has("fbb")) {
         await rotationGate;
       }
       const selection = selections.shift();
@@ -188,6 +239,16 @@ describe("auth profile prompt status", () => {
       mode: "tui",
       model: { provider: "openai-codex" },
       modelRegistry: { runtime, refresh: async () => undefined },
+      sessionManager: {
+        getEntries: () => [
+          {
+            type: "custom",
+            customType: "auth-profile-override",
+            data: { profile: "fbb", sessionId: "fallback-session" },
+          },
+        ],
+        getHeader: () => ({ id: "fallback-session" }),
+      },
       ui: {
         notify: (message: string) => notifications.push(message),
         setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
@@ -221,6 +282,20 @@ describe("auth profile prompt status", () => {
     ]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "jpb.json"));
     expect(notifications.at(-1)).toBe("fbb exhausted; switched to jpb. Retry the request.");
+
+    await providerResponse?.(
+      {
+        status: 429,
+        headers: {
+          "x-codex-primary-reset-after-seconds": "40",
+          "x-codex-primary-used-percent": "100",
+        },
+      },
+      ctx,
+    );
+    expect(statuses.at(-1)).toEqual(["auth-profile", "ct"]);
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "ct.json"));
+    expect(notifications.at(-1)).toBe("jpb exhausted; switched to ct. Retry the request.");
   });
 
   test("reset-credit resolves a named profile and restores the active store", async () => {
@@ -253,8 +328,9 @@ describe("auth profile prompt status", () => {
     } as unknown as ExtensionAPI;
     authProfiles(pi);
 
+    const originalStore = new FakeAuthStore();
     const runtime = {
-      credentials: { store: new FakeAuthStore() },
+      credentials: { store: originalStore },
     };
     const fetchRequests: Array<{
       url: string;
@@ -360,7 +436,7 @@ describe("auth profile prompt status", () => {
       globalThis.fetch = originalFetch;
     }
 
-    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
+    expect(runtime.credentials.store).toBe(originalStore);
     expect(fetchRequests.filter((request) => request.url.endsWith("/consume"))).toEqual([
       {
         url: "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume",

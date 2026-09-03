@@ -4,13 +4,7 @@ import { hostname as systemHostname } from "node:os";
 import { basename, resolve as resolvePath } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import {
-  DEFAULT_PROFILE,
-  globalConfigPath,
-  normalizeName,
-  projectSettingsPath,
-  readJsonFile,
-} from "./profile-store";
+import { DEFAULT_PROFILE, globalConfigPath, normalizeName } from "./profile-store";
 
 const GIT_TIMEOUT_MS = 2_000;
 const GIT_MAX_OUTPUT_BYTES = 64 * 1024;
@@ -42,7 +36,7 @@ export type AuthProfilesConfig = {
 export type ProfileResolution = {
   profile: string;
   profileOrder: string[];
-  source: "project" | "repository" | "host default" | "global default" | "built-in default";
+  source: "session" | "repository" | "host default" | "global default" | "built-in default";
   host: HostIdentity;
   hostPreferences: string[];
   repository?: RepositoryIdentity;
@@ -301,21 +295,6 @@ export async function resolveProfile(
   const host = resolveHostIdentity(options);
   const hostPreferences = config.hostDefaults[host.name] ?? [];
   const projectTrusted = ctx.isProjectTrusted();
-
-  if (projectTrusted) {
-    const project = readJsonFile(projectSettingsPath(ctx.cwd))?.authProfile;
-    if (typeof project === "string" && project.trim() !== "") {
-      const profile = normalizeName(project);
-      return {
-        profile,
-        profileOrder: [profile],
-        source: "project",
-        host,
-        hostPreferences,
-        repositoryPreferences: [],
-      };
-    }
-  }
 
   let repository: RepositoryIdentity | undefined;
   let repositoryPreferences: string[] = [];

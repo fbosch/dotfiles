@@ -11,7 +11,6 @@ const WEZTERM_USAGE_USER_VAR = "pi_usage_changed";
 
 const profilesDir = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles");
 export const globalConfigPath = (agentDir = getAgentDir()) => join(agentDir, "auth-profiles.json");
-export const projectSettingsPath = (cwd: string) => join(cwd, ".pi", "settings.json");
 
 export function normalizeName(name: string): string {
   const trimmed = (name ?? "").trim();

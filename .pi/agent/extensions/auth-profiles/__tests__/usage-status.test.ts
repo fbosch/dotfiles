@@ -150,11 +150,15 @@ describe("auth profile usage status", () => {
       accountId: "account-work",
     });
 
+    const requestedUrls: string[] = [];
     const payload = await collectUsageStatus({
       activeProfile: "work",
       agentDir,
       cachePath: root,
-      fetchFn: async () => usageResponse(20, 0),
+      fetchFn: async (input) => {
+        requestedUrls.push(String(input));
+        return usageResponse(20, 0);
+      },
       includeResetCredits: false,
       now: () => now,
     });
@@ -164,6 +168,7 @@ describe("auth profile usage status", () => {
       profileLabel: "work",
       usage: [{ remaining: 80 }],
     });
+    expect(requestedUrls).toEqual(["https://chatgpt.com/backend-api/wham/usage"]);
     expect(payload.diagnostics).toContainEqual({
       profileLabel: "cache",
       code: "usage-cache-write-failed",

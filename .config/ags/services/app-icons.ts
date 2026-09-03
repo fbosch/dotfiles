@@ -501,18 +501,18 @@ function loadWaybarTitleRewrites(): readonly WaybarTitleRewrite[] {
 		const rewrite = taskbar ? getObjectContents(taskbar, "rewrite") : null;
 		waybarTitleRewritesCache = rewrite ? parseWaybarTitleRewrites(rewrite) : [];
 		return waybarTitleRewritesCache;
-	} catch {
+	} catch (error) {
+		console.error("Failed to load Waybar taskbar title rewrites:", error);
 		waybarTitleRewritesCache = [];
 		return waybarTitleRewritesCache;
 	}
 }
 
 function getObjectContents(text: string, key: string): string | null {
-	const keyIndex = text.indexOf(`"${key}"`);
-	if (keyIndex === -1) return null;
+	const match = new RegExp(`"${key}"\\s*:\\s*\\{`).exec(text);
+	if (!match) return null;
 
-	const start = text.indexOf("{", keyIndex + key.length + 2);
-	if (start === -1) return null;
+	const start = match.index + match[0].length - 1;
 
 	let depth = 0;
 	let inString = false;

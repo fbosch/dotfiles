@@ -11,6 +11,7 @@ import {
 import { PreviewCache } from "@/components/window-switcher/preview-cache";
 import { createRequestHandler } from "@/components/window-switcher/request-handler";
 import { DisplayMode } from "@/components/window-switcher/styles";
+import { rewriteWaybarTaskbarTitle } from "@/services/app-icons";
 import {
 	SortMode,
 	WindowRepository,
@@ -23,6 +24,15 @@ const windows: WindowInfo[] = [
 	{ address: "0x2", class: "Two", title: "Window Two", workspace: "2" },
 	{ address: "0x3", class: "Three", title: "Window Three", workspace: "3" },
 ];
+
+test("Window Switcher loads Waybar taskbar title rewrites", () => {
+	assert(
+		rewriteWaybarTaskbarTitle(
+			"Baldur's Gate 3 (3440x1391) - (Vulkan) - (6 + 6 WT)",
+		) === "Baldur's Gate 3",
+		"Waybar title rewrite was not applied",
+	);
+});
 
 test("Window Switcher dispatches every request action", async () => {
 	const calls: string[] = [];
