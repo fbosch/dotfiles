@@ -13,8 +13,8 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
-  websearch: ask
-  webfetch: ask
+  websearch: allow
+  webfetch: allow
   mcp__context7: ask
   external_directory: ask
 ---

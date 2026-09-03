@@ -14,6 +14,7 @@ import {
 import { loadAgentMentions } from "../mentions/agent-mentions";
 import { paintDockBottomEdge, paintDockRow } from "./dock-rendering";
 import { type SubagentSessionTarget, subagentSessionUrl } from "./subagent-session-target";
+import { rememberSubagentTranscriptRecord } from "./subagent-transcript-records";
 import { colorizeHex } from "./terminal-color";
 
 const AGENT_WIDGET_KEY = "agents";
@@ -41,6 +42,7 @@ export interface WidgetSubagentRecord {
   status: string;
   isBackground: boolean;
   completedAt?: number;
+  outputFile?: string;
 }
 
 interface WidgetSubagentsService {
@@ -103,6 +105,7 @@ class WidgetFrame implements Component {
       let subagents: readonly WidgetSubagentRecord[] = [];
       try {
         subagents = this.getSubagents();
+        for (const record of subagents) rememberSubagentTranscriptRecord(record);
       } catch {
         // Keep the prompt usable if the optional cross-extension service is reloading.
       }

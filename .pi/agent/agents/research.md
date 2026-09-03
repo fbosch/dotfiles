@@ -15,8 +15,8 @@ permission:
   ffgrep: allow
   bash: deny
   external_directory_write: deny
-  websearch: ask
-  webfetch: ask
+  websearch: allow
+  webfetch: allow
   mcp__context7: ask
   mcp__github: ask
   external_directory: ask

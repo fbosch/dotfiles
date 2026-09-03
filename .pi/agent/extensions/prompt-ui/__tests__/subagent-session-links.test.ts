@@ -625,6 +625,79 @@ describe("subagent session links", () => {
     expect(unsubscriptions).toBe(1);
   });
 
+  test("opens a widget transcript snapshot after the publishing service is replaced", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "stale-subagent-session-"));
+    const outputFile = join(directory, "session.jsonl");
+    const staleTarget = {
+      agentId: "stale-agent-123",
+      displayName: "explore",
+      description: "Inspect stale service handling",
+    };
+    writeFileSync(
+      outputFile,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: staleTarget.agentId,
+        timestamp: "2026-09-03T00:00:00.000Z",
+        cwd: process.cwd(),
+      })}\n`,
+    );
+    const staleRecord = {
+      id: staleTarget.agentId,
+      type: staleTarget.displayName,
+      description: staleTarget.description,
+      status: "running",
+      isBackground: true,
+      outputFile,
+    };
+    let widgetFactory: ((tui: TUI, theme: Theme) => Component) | undefined;
+    const widgetUi = {
+      setWidget(_key: string, content: typeof widgetFactory): void {
+        widgetFactory = content;
+      },
+    } as unknown as ExtensionUIContext;
+    const uninstallWidgetFrame = installSubagentWidgetFrame(widgetUi, {
+      getSubagents: () => [staleRecord],
+    });
+    widgetUi.setWidget("agents", () => ({
+      render: () => [
+        "● Agents",
+        "└─ ⠋ explore  Inspect stale service handling · 1 tool use · 2.0s",
+        "     ⎿  thinking…",
+      ],
+      invalidate: () => {},
+    }));
+    const overlay = createClosingOverlayTui();
+    const notifications: Array<[string, string]> = [];
+    const ctx = {
+      cwd: process.cwd(),
+      ui: {
+        theme: {} as Theme,
+        notify: (message: string, level: string) => notifications.push([message, level]),
+      },
+    } as unknown as Parameters<typeof openSubagentSession>[2];
+
+    try {
+      if (widgetFactory === undefined) throw new Error("Expected a widget factory");
+      widgetFactory(overlay.tui, {
+        fg: (_color: string, text: string) => text,
+        getBgAnsi: () => "",
+      } as unknown as Theme).render(80);
+
+      await openSubagentSession(staleTarget, { getRecord: () => undefined }, ctx, overlay.tui);
+
+      expect(typeof overlay.getComponent()?.render).toBe("function");
+      expect(overlay.isHidden()).toBe(true);
+      expect(notifications).toEqual([
+        ["Opening the current transcript snapshot. Reopen it to refresh.", "info"],
+      ]);
+    } finally {
+      uninstallWidgetFrame();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("distinguishes missing sessions from sessions that are not ready", async () => {
     const notifications: string[] = [];
     const ctx = {

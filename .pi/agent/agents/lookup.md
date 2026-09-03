@@ -8,7 +8,7 @@ tools: websearch, webfetch, mcp__context7
 permission:
   "*": deny
   websearch: allow
-  webfetch: ask
+  webfetch: allow
   mcp__context7: ask
 ---
 

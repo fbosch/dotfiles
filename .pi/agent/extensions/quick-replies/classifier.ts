@@ -11,6 +11,7 @@ const MAX_PROSE_LENGTH = 32_000;
 const MAX_QUESTION_LENGTH = 240;
 const MIN_INTENT_SCORE = 5;
 const MIN_SCORE_MARGIN = 2;
+const CONTEXT_WORD_SEGMENTER = new Intl.Segmenter("en", { granularity: "word" });
 const OPEN_QUESTION = /^(?:who|what|when|where|why|how|which)\b/i;
 const ALTERNATIVE_CHOICE =
   /\b(?:either|or|versus|vs\.?|choose|which)\b|\b(?:yes|no)\s*\/\s*(?:yes|no)\b/i;
@@ -358,7 +359,11 @@ function extractContextKeywords(text: string): Set<string> {
     "you",
     "your",
   ]);
-  const words = text.toLowerCase().match(/[a-z][a-z'-]*/g) ?? [];
+  const words: string[] = [];
+  for (const part of CONTEXT_WORD_SEGMENTER.segment(text)) {
+    if (part.isWordLike) words.push(part.segment.toLocaleLowerCase("en"));
+  }
+
   return new Set(words.map(normalizeContextKeyword).filter((word) => !stopWords.has(word)));
 }
 

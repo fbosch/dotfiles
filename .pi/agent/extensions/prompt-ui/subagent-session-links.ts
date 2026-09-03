@@ -32,6 +32,10 @@ import {
   colorizeSubagentToolLine,
   loadAgentWidgetColors,
 } from "./subagent-widget-frame";
+import {
+  rememberedSubagentTranscriptRecord,
+  rememberSubagentTranscriptRecord,
+} from "./subagent-transcript-records";
 
 export type { SubagentSessionTarget } from "./subagent-session-target";
 export {
@@ -180,6 +184,8 @@ function subagentTarget(
   if (agentId === undefined || typeof displayName !== "string" || typeof description !== "string") {
     return undefined;
   }
+  const record = lookupSubagentRecord(service, agentId);
+  if (record !== undefined) rememberSubagentTranscriptRecord({ id: agentId, ...record });
   return {
     agentId,
     displayName,
@@ -408,6 +414,17 @@ interface InternalSubagentRecord {
   isSessionReady(): boolean;
 }
 
+function lookupSubagentRecord(
+  service: SubagentsService | undefined,
+  id: string,
+): { outputFile?: string; status: string } | undefined {
+  try {
+    return service?.getRecord(id);
+  } catch {
+    return undefined;
+  }
+}
+
 export interface SubagentTranscriptSource {
   getMessages(): readonly unknown[];
   subscribe(onChange: (event?: unknown) => void): (() => void) | undefined;
@@ -543,13 +560,15 @@ export async function openSubagentSession(
 
   let removeEscapeHandler: (() => void) | undefined;
   try {
-    const record = service.getRecord(target.agentId);
+    const currentRecord = lookupSubagentRecord(service, target.agentId);
+    const record = currentRecord ?? rememberedSubagentTranscriptRecord(target.agentId);
     if (record === undefined) {
       ctx.ui.notify("The selected subagent session is no longer available.", "warning");
       return;
     }
 
-    const liveRecord = service.manager?.getRecord(target.agentId);
+    const liveRecord =
+      currentRecord === undefined ? undefined : service.manager?.getRecord(target.agentId);
     const hasLiveSession = liveRecord?.isSessionReady() === true;
     const outputFile = record.outputFile;
     if (hasLiveSession === false && outputFile === undefined) {

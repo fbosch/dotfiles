@@ -275,6 +275,8 @@ const negativeCases = [
   "Should I go ahead with the patch?",
   "This action cannot be undone.\n\nShould I proceed?",
   "Do not run this command.\n\nShould I proceed?",
+  "The API client must not be modified.\n\nShould I review the API-client?",
+  "設定 must not be changed.\n\nShould I review the 設定?",
 ];
 
 describe("quick reply classifier", () => {
