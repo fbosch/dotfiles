@@ -6,12 +6,14 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  hyperlink,
   stripTerminalSequences,
   type TUI,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import { loadAgentMentions } from "../mentions/agent-mentions";
 import { paintDockBottomEdge, paintDockRow } from "./dock-rendering";
+import { type SubagentSessionTarget, subagentSessionUrl } from "./subagent-session-target";
 import { colorizeHex } from "./terminal-color";
 
 const AGENT_WIDGET_KEY = "agents";
@@ -19,6 +21,10 @@ const TODO_WIDGET_KEY = "rpiv-todos";
 const FRAMED_WIDGET_KEYS = new Set([AGENT_WIDGET_KEY, TODO_WIDGET_KEY]);
 const WIDGET_PADDING_X = 2;
 const AGENT_WIDGET_PATCH = Symbol.for("dotfiles:pi-subagent-widget-frame");
+const SUBAGENTS_SERVICE_KEY = Symbol.for("@gotgenes/pi-subagents:service");
+const AGENT_HEADER_PATTERN = /^(?:├─|└─)\s+\S+\s+/;
+const AGENT_ACTIVITY_PATTERN = /^\s*(?:│\s*)?⎿\s/;
+const DESCRIPTION_MATCH_CHARS = 12;
 const PATCH_VERSION = 1;
 
 type WidgetComponent = Component & { dispose?(): void };
@@ -26,11 +32,27 @@ type WidgetFactory = (tui: TUI, theme: Theme) => WidgetComponent;
 type WidgetContent = string[] | WidgetFactory | undefined;
 type SetWidget = (key: string, content: WidgetContent, options?: ExtensionWidgetOptions) => void;
 export type AgentWidgetColors = ReadonlyMap<string, string>;
+export type AgentWidgetDisplayNames = ReadonlyMap<string, string>;
+
+export interface WidgetSubagentRecord {
+  id: string;
+  type: string;
+  description: string;
+  status: string;
+  isBackground: boolean;
+  completedAt?: number;
+}
+
+interface WidgetSubagentsService {
+  listAgents(): WidgetSubagentRecord[];
+}
 
 export interface SubagentWidgetFrameOptions {
   cwd?: string;
   agentDirectory?: string;
   agentColors?: AgentWidgetColors;
+  agentDisplayNames?: AgentWidgetDisplayNames;
+  getSubagents?: () => readonly WidgetSubagentRecord[];
 }
 
 type PatchableUI = ExtensionUIContext &
@@ -51,6 +73,8 @@ class WidgetFrame implements Component {
     private readonly component: WidgetComponent,
     private readonly theme: Theme,
     private readonly agentColors: AgentWidgetColors,
+    private readonly agentDisplayNames: AgentWidgetDisplayNames,
+    private readonly getSubagents: () => readonly WidgetSubagentRecord[],
     private readonly colorizeLines: boolean,
   ) {}
 
@@ -70,11 +94,21 @@ class WidgetFrame implements Component {
     // below is the only bottom spacing and remains half-height.
     const contentToRender =
       renderedContent.at(-1) === "" ? renderedContent.slice(0, -1) : renderedContent;
-    const content = contentToRender
+    let content = contentToRender
       .map((line) =>
         this.colorizeLines ? colorizeSubagentWidgetLine(line, this.agentColors, this.theme) : line,
       )
-      .map((line) => `${" ".repeat(paddingX)}${truncateToWidth(line, contentWidth, "")}`);
+      .map((line) => truncateToWidth(line, contentWidth, ""));
+    if (this.colorizeLines) {
+      let subagents: readonly WidgetSubagentRecord[] = [];
+      try {
+        subagents = this.getSubagents();
+      } catch {
+        // Keep the prompt usable if the optional cross-extension service is reloading.
+      }
+      content = linkSubagentWidgetLines(content, subagents, this.agentDisplayNames);
+    }
+    content = content.map((line) => `${" ".repeat(paddingX)}${line}`);
     const rows = ["", ...content].map((line) => paintDockRow(line, width, "", backgroundAnsi, ""));
 
     return [...rows, paintDockBottomEdge(width, "", "", backgroundAnsi)];
@@ -92,9 +126,19 @@ class WidgetFrame implements Component {
 function frameWidget(
   factory: WidgetFactory,
   agentColors: AgentWidgetColors,
+  agentDisplayNames: AgentWidgetDisplayNames,
+  getSubagents: () => readonly WidgetSubagentRecord[],
   colorizeLines: boolean,
 ): WidgetFactory {
-  return (tui, theme) => new WidgetFrame(factory(tui, theme), theme, agentColors, colorizeLines);
+  return (tui, theme) =>
+    new WidgetFrame(
+      factory(tui, theme),
+      theme,
+      agentColors,
+      agentDisplayNames,
+      getSubagents,
+      colorizeLines,
+    );
 }
 
 export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
@@ -105,6 +149,105 @@ export function loadAgentWidgetColors(cwd: string, agentDirectory: string): Agen
     if (mention.displayName !== undefined) colors.set(mention.displayName, mention.color);
   }
   return colors;
+}
+
+export function loadAgentWidgetDisplayNames(
+  cwd: string,
+  agentDirectory: string,
+): AgentWidgetDisplayNames {
+  return new Map(
+    loadAgentMentions(cwd, agentDirectory).map((mention) => [
+      mention.name.toLowerCase(),
+      mention.displayName ?? mention.name,
+    ]),
+  );
+}
+
+function widgetSubagents(): readonly WidgetSubagentRecord[] {
+  const service = (globalThis as Record<symbol, unknown>)[SUBAGENTS_SERVICE_KEY] as
+    | WidgetSubagentsService
+    | undefined;
+  return service?.listAgents() ?? [];
+}
+
+function widgetTarget(
+  record: WidgetSubagentRecord,
+  displayNames: AgentWidgetDisplayNames,
+): SubagentSessionTarget {
+  return {
+    agentId: record.id,
+    displayName: displayNames.get(record.type.toLowerCase()) ?? record.type,
+    description: record.description,
+  };
+}
+
+function matchingRecordIndex(
+  records: readonly WidgetSubagentRecord[],
+  header: string,
+  displayNames: AgentWidgetDisplayNames,
+  allowOrderFallback: boolean,
+): number | undefined {
+  const nameMatches = records.flatMap((record, index) => {
+    const name = displayNames.get(record.type.toLowerCase()) ?? record.type;
+    const nextCharacter = header[name.length];
+    return header.startsWith(name) && (nextCharacter === undefined || /\s/.test(nextCharacter))
+      ? [index]
+      : [];
+  });
+  const fullDescriptionMatches = nameMatches.filter((index) => {
+    const description = records[index]?.description ?? "";
+    return description.length > 0 && header.includes(description);
+  });
+  if (fullDescriptionMatches.length === 1) return fullDescriptionMatches[0];
+
+  const descriptionMatches = nameMatches.filter((index) => {
+    const description = records[index]?.description ?? "";
+    const prefixLength = Math.min(description.length, DESCRIPTION_MATCH_CHARS);
+    return prefixLength > 0 && header.includes(description.slice(0, prefixLength));
+  });
+  if (descriptionMatches.length === 1) return descriptionMatches[0];
+  if (allowOrderFallback && descriptionMatches.length > 0) return descriptionMatches[0];
+  if (nameMatches.length === 1) return nameMatches[0];
+  return allowOrderFallback ? nameMatches[0] : undefined;
+}
+
+export function linkSubagentWidgetLines(
+  lines: readonly string[],
+  records: readonly WidgetSubagentRecord[],
+  displayNames: AgentWidgetDisplayNames,
+): string[] {
+  // Queued agents render as one aggregate row with no identity, so only rows that
+  // can be mapped to one session receive links.
+  const finished = records.filter(
+    (record) =>
+      record.isBackground &&
+      record.completedAt !== undefined &&
+      record.status !== "running" &&
+      record.status !== "queued",
+  );
+  const running = records.filter((record) => record.isBackground && record.status === "running");
+
+  return lines.map((line, lineIndex) => {
+    const plainLine = stripTerminalSequences(line).trimStart();
+    const prefix = AGENT_HEADER_PATTERN.exec(plainLine)?.[0];
+    if (prefix === undefined) return line;
+    const isRunning = AGENT_ACTIVITY_PATTERN.test(
+      stripTerminalSequences(lines[lineIndex + 1] ?? ""),
+    );
+    const candidates = isRunning ? running : finished;
+    // Running rows preserve service order. Completed records can outlive the widget,
+    // so ambiguous completed rows stay unlinked instead of opening the wrong session.
+    const candidateIndex = matchingRecordIndex(
+      candidates,
+      plainLine.slice(prefix.length),
+      displayNames,
+      isRunning,
+    );
+    if (candidateIndex === undefined) return line;
+    const [record] = candidates.splice(candidateIndex, 1);
+    if (record === undefined) return line;
+    return hyperlink(line, subagentSessionUrl(widgetTarget(record, displayNames)));
+  });
 }
 
 /** Apply explicit agent colors to header lines while preserving the widget's own styling. */
@@ -174,11 +317,14 @@ export function installSubagentWidgetFrame(
   options: SubagentWidgetFrameOptions = {},
 ): () => void {
   const ui = uiContext as PatchableUI;
-  const agentColors =
-    options.agentColors ??
-    loadAgentWidgetColors(options.cwd ?? process.cwd(), options.agentDirectory ?? getAgentDir());
+  const cwd = options.cwd ?? process.cwd();
+  const agentDirectory = options.agentDirectory ?? getAgentDir();
+  const agentColors = options.agentColors ?? loadAgentWidgetColors(cwd, agentDirectory);
+  const agentDisplayNames =
+    options.agentDisplayNames ?? loadAgentWidgetDisplayNames(cwd, agentDirectory);
+  const getSubagents = options.getSubagents ?? widgetSubagents;
   const wrap = (key: string, factory: WidgetFactory) =>
-    frameWidget(factory, agentColors, key === AGENT_WIDGET_KEY);
+    frameWidget(factory, agentColors, agentDisplayNames, getSubagents, key === AGENT_WIDGET_KEY);
   const owner = Symbol();
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {

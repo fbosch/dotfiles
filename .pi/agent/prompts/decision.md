@@ -1,6 +1,9 @@
 ---
 description: Create a concise architecture decision record in docs/adr/
 argument-hint: "<short decision statement>"
+agent: general
+inherit_context: true
+usage: "Usage: /decision <short decision statement>"
 ---
 
 Create an architecture decision record for this topic:

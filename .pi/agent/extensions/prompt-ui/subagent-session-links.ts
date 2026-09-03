@@ -21,12 +21,23 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import {
+  parseSubagentSessionUrl,
+  SUBAGENT_SESSION_URL_PREFIX,
+  type SubagentSessionTarget,
+  subagentSessionUrl,
+} from "./subagent-session-target";
+import {
   type AgentWidgetColors,
   colorizeSubagentToolLine,
   loadAgentWidgetColors,
 } from "./subagent-widget-frame";
 
-export const SUBAGENT_SESSION_URL_PREFIX = "pi-action://subagents/session";
+export type { SubagentSessionTarget } from "./subagent-session-target";
+export {
+  parseSubagentSessionUrl,
+  SUBAGENT_SESSION_URL_PREFIX,
+  subagentSessionUrl,
+} from "./subagent-session-target";
 
 const TOOL_RENDER_PATCH = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const TUI_URL_PATCH = Symbol.for("dotfiles:pi-subagent-session-url-handler");
@@ -52,12 +63,6 @@ const SESSION_NAVIGATOR_MODULE = new URL(
   "../../npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts",
   import.meta.url,
 ).href;
-
-export interface SubagentSessionTarget {
-  agentId: string;
-  displayName: string;
-  description: string;
-}
 
 interface ToolRenderPatchState {
   version: typeof PATCH_VERSION;
@@ -135,54 +140,6 @@ function isCurrentPatchState(value: unknown): value is { version: typeof PATCH_V
     "version" in value &&
     value.version === PATCH_VERSION
   );
-}
-
-export function subagentSessionUrl(target: SubagentSessionTarget): string {
-  const url = new URL(SUBAGENT_SESSION_URL_PREFIX);
-  url.searchParams.set("id", target.agentId);
-  url.searchParams.set("name", target.displayName);
-  url.searchParams.set("description", target.description);
-  return url.toString();
-}
-
-export function parseSubagentSessionUrl(url: string): SubagentSessionTarget | undefined {
-  try {
-    const query = url.split("?", 2)[1]?.split("#", 1)[0] ?? "";
-    if (/%(?![\dA-Fa-f]{2})/.test(query)) return undefined;
-
-    const parsed = new URL(url);
-    if (
-      parsed.protocol !== "pi-action:" ||
-      parsed.hostname !== "subagents" ||
-      parsed.pathname !== "/session" ||
-      parsed.username !== "" ||
-      parsed.password !== "" ||
-      parsed.port !== "" ||
-      parsed.hash !== ""
-    ) {
-      return undefined;
-    }
-
-    const parameters = [...parsed.searchParams.keys()];
-    if (
-      parameters.length !== 3 ||
-      parsed.searchParams.getAll("id").length !== 1 ||
-      parsed.searchParams.getAll("name").length !== 1 ||
-      parsed.searchParams.getAll("description").length !== 1
-    ) {
-      return undefined;
-    }
-
-    const agentId = parsed.searchParams.get("id");
-    const displayName = parsed.searchParams.get("name");
-    const description = parsed.searchParams.get("description");
-    if (agentId === null || agentId.length === 0 || displayName === null || description === null) {
-      return undefined;
-    }
-    return { agentId, displayName, description };
-  } catch {
-    return undefined;
-  }
 }
 
 export function linkSubagentToolBlock(lines: readonly string[], url: string): string[] {
@@ -685,12 +642,13 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
     agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir()),
   });
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
-    if (service === undefined) {
+    const currentService = getSubagentsService();
+    if (currentService === undefined) {
       ctx.ui.notify("Could not access subagent sessions.", "error");
       return;
     }
 
-    void openSubagentSession(target, service, ctx);
+    void openSubagentSession(target, currentService, ctx);
   });
   const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
   return () => {

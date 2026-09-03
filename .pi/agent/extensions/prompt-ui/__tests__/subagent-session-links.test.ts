@@ -20,6 +20,7 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   compactSubagentTranscriptSource,
+  installClickableSubagentSessions,
   installSubagentSessionUrlHandler,
   installSubagentTerminalLinkFilter,
   installSubagentToolLinks,
@@ -29,6 +30,7 @@ import {
   type SubagentSessionTarget,
   subagentSessionUrl,
 } from "../subagent-session-links";
+import { installSubagentWidgetFrame } from "../subagent-widget-frame";
 
 const toolRenderPatch = Symbol.for("dotfiles:pi-subagent-session-tool-links");
 const tuiUrlPatch = Symbol.for("dotfiles:pi-subagent-session-url-handler");
@@ -595,6 +597,109 @@ describe("subagent session links", () => {
       "The selected subagent session is no longer available.",
       "The selected subagent session is not ready yet.",
     ]);
+  });
+
+  test("resolves a service published after the click handler is installed", () => {
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    delete globals[serviceKey];
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
+    const notifications: Array<[string, string]> = [];
+    const ctx = {
+      cwd: process.cwd(),
+      ui: {
+        theme: {} as Theme,
+        notify: (message: string, level: string) => notifications.push([message, level]),
+      },
+    } as unknown as Parameters<typeof installClickableSubagentSessions>[1];
+    const uninstall = installClickableSubagentSessions(tui, ctx);
+    globals[serviceKey] = {
+      getRecord: () => undefined,
+      listAgents: () => [],
+    };
+
+    try {
+      (tui as unknown as TUI & { openUrl: (url: string) => void }).openUrl(
+        subagentSessionUrl(target),
+      );
+      expect(notifications).toEqual([
+        ["The selected subagent session is no longer available.", "warning"],
+      ]);
+    } finally {
+      uninstall();
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
+  });
+
+  test("opens a service-spawned session from an actual widget click", () => {
+    const terminal = new TestTerminal();
+    const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
+    const widgetTarget: SubagentSessionTarget = {
+      agentId: "agent-1",
+      displayName: "general",
+      description: "Create an ADR",
+    };
+    let widgetFactory: ((tui: TUI, theme: Theme) => Component) | undefined;
+    const widgetUi = {
+      setWidget(_key: string, content: undefined | ((tui: TUI, theme: Theme) => Component)): void {
+        widgetFactory = content;
+      },
+    } as unknown as ExtensionUIContext;
+    const uninstallWidgetFrame = installSubagentWidgetFrame(widgetUi, {
+      agentColors: new Map(),
+      agentDisplayNames: new Map([["general", "general"]]),
+      getSubagents: () => [
+        {
+          id: widgetTarget.agentId,
+          type: "general",
+          description: widgetTarget.description,
+          status: "running",
+          isBackground: true,
+        },
+      ],
+    });
+    widgetUi.setWidget("agents", () => ({
+      render: () => [
+        "● Agents",
+        "└─ ⠋ general (twin)  Create an ADR · 3 turns · 1.2s",
+        "     ⎿  thinking…",
+      ],
+      invalidate: () => {},
+    }));
+    if (widgetFactory === undefined) throw new Error("Expected a widget factory");
+    const component = widgetFactory(tui, {
+      fg: (_color: string, text: string) => text,
+      getBgAnsi: () => "\u001b[48;2;34;34;34m",
+      getColorMode: () => "truecolor",
+    } as unknown as Theme);
+    const openedSessions: SubagentSessionTarget[] = [];
+    const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (session) => {
+      openedSessions.push(session);
+    });
+    const uninstallTerminalFilter = installSubagentTerminalLinkFilter(tui);
+    const linkedLine = component
+      .render(80)
+      .findIndex((line) => line.includes(subagentSessionUrl(widgetTarget)));
+    tui.addChild(component);
+
+    try {
+      tui.start();
+      tui.renderNow();
+      expect(linkedLine).toBeGreaterThan(-1);
+      expect(terminal.output).not.toContain(subagentSessionUrl(widgetTarget));
+      terminal.send(`\u001b[<0;4;${linkedLine + 1}M`);
+      terminal.send(`\u001b[<0;4;${linkedLine + 1}m`);
+
+      expect(openedSessions).toEqual([widgetTarget]);
+    } finally {
+      tui.stop();
+      uninstallTerminalFilter();
+      uninstallUrlHandler();
+      uninstallWidgetFrame();
+    }
   });
 
   test("opens the exact session from an actual fullscreen mouse click", () => {

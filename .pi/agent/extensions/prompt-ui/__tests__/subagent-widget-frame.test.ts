@@ -10,7 +10,11 @@ import {
   type TUI,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { colorizeSubagentWidgetLine, installSubagentWidgetFrame } from "../subagent-widget-frame";
+import {
+  colorizeSubagentWidgetLine,
+  installSubagentWidgetFrame,
+  linkSubagentWidgetLines,
+} from "../subagent-widget-frame";
 
 type WidgetComponent = Component & { dispose?(): void };
 type WidgetFactory = (tui: TUI, theme: Theme) => WidgetComponent;
@@ -76,6 +80,149 @@ describe("subagent widget frame", () => {
       true,
     );
     uninstall();
+  });
+
+  test("links a service-spawned agent to its transcript from the widget", () => {
+    const { calls, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => [
+        "● Agents",
+        "└─ ⠋ \u001b[1mgeneral\u001b[22m (twin)  Create an ADR · 3 turns · 1.2s",
+        "     ⎿  thinking…",
+      ],
+      invalidate: () => {},
+    };
+    const uninstall = installSubagentWidgetFrame(ui, {
+      agentColors: new Map(),
+      agentDisplayNames: new Map([["general", "general"]]),
+      getSubagents: () => [
+        {
+          id: "agent-1",
+          type: "general",
+          description: "Create an ADR",
+          status: "running",
+          isBackground: true,
+        },
+      ],
+    });
+
+    ui.setWidget("agents", () => widget, { placement: "aboveEditor" });
+
+    const factory = calls[0]?.content;
+    expect(typeof factory).toBe("function");
+    if (typeof factory !== "function") throw new Error("Expected a widget factory");
+    const rendered = factory(tui, theme).render(80);
+
+    expect(rendered[2]).toContain("pi-action://subagents/session?id=agent-1");
+    expect(rendered[3]).not.toContain("pi-action://subagents/session");
+    uninstall();
+  });
+
+  test("maps mixed and duplicate running rows by the widget's render order", () => {
+    const displayNames = new Map([["general", "general"]]);
+    const lines = [
+      "● Agents",
+      "├─ ✓ general  Completed ADR · 1.0s",
+      "├─ ⠋ general  Repeated task · 1.1s",
+      "│    ⎿  thinking…",
+      "└─ ⠙ general  Repeated task · 1.2s",
+      "     ⎿  reading…",
+      "└─ ◌ 1 queued",
+    ];
+    const linked = linkSubagentWidgetLines(
+      lines,
+      [
+        {
+          id: "running-newer",
+          type: "general",
+          description: "Repeated task",
+          status: "running",
+          isBackground: true,
+        },
+        {
+          id: "finished",
+          type: "general",
+          description: "Completed ADR",
+          status: "completed",
+          isBackground: true,
+          completedAt: 1,
+        },
+        {
+          id: "running-older",
+          type: "general",
+          description: "Repeated task",
+          status: "running",
+          isBackground: true,
+        },
+        {
+          id: "queued",
+          type: "general",
+          description: "Queued task",
+          status: "queued",
+          isBackground: true,
+        },
+      ],
+      displayNames,
+    );
+
+    expect(linked[1]).toContain("id=finished");
+    expect(linked[2]).toContain("id=running-newer");
+    expect(linked[4]).toContain("id=running-older");
+    expect(linked[6]).not.toContain("pi-action://subagents/session");
+  });
+
+  test("uses the full visible description to distinguish completed sessions", () => {
+    const linked = linkSubagentWidgetLines(
+      ["└─ ✓ general  Create an ADR for routing · 1.0s"],
+      [
+        {
+          id: "routing",
+          type: "general",
+          description: "Create an ADR for routing",
+          status: "completed",
+          isBackground: true,
+          completedAt: 2,
+        },
+        {
+          id: "caching",
+          type: "general",
+          description: "Create an ADR for caching",
+          status: "completed",
+          isBackground: true,
+          completedAt: 1,
+        },
+      ],
+      new Map([["general", "general"]]),
+    );
+
+    expect(linked[0]).toContain("id=routing");
+  });
+
+  test("does not guess between indistinguishable completed sessions", () => {
+    const linked = linkSubagentWidgetLines(
+      ["└─ ✓ general  Repeated task · 1.0s"],
+      [
+        {
+          id: "finished-newer",
+          type: "general",
+          description: "Repeated task",
+          status: "completed",
+          isBackground: true,
+          completedAt: 2,
+        },
+        {
+          id: "finished-older",
+          type: "general",
+          description: "Repeated task",
+          status: "completed",
+          isBackground: true,
+          completedAt: 1,
+        },
+      ],
+      new Map([["general", "general"]]),
+    );
+
+    expect(linked[0]).not.toContain("pi-action://subagents/session");
   });
 
   test("renders the agents widget with a half-height bottom edge", () => {
