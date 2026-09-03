@@ -46,6 +46,42 @@
         }
       }
     },
+    "fallow": {
+      "command": "fallow-lsp",
+      "languages": [
+        {
+          "languageId": "javascript",
+          "extensions": [
+            ".js"
+          ]
+        },
+        {
+          "languageId": "javascriptreact",
+          "extensions": [
+            ".jsx"
+          ]
+        },
+        {
+          "languageId": "typescript",
+          "extensions": [
+            ".ts"
+          ]
+        },
+        {
+          "languageId": "typescriptreact",
+          "extensions": [
+            ".tsx"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        ".fallowrc.json",
+        ".fallowrc.jsonc",
+        "fallow.toml",
+        ".fallow.toml",
+        ".git"
+      ]
+    },
     "html": {
       "command": "vscode-html-language-server",
       "args": [

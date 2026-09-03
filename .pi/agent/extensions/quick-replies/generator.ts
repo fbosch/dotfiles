@@ -80,7 +80,7 @@ Return exactly one JSON object with no markdown or surrounding prose:
 Rules:
 - Return either an empty suggestions array or 2 to 5 suggestions.
 - Suggestions must be distinct, useful, and plausible next messages from the user.
-- Match the language, capitalization, brevity, and conversational register of the latest user message when natural.
+- Treat the latest user message as the authoritative writing-style sample. Match its language, capitalization, brevity, and conversational register when natural; preserve coordination shorthand instead of polishing it into assistant prose.
 - Write in a high-signal, low-ceremony style. Terse directives, fragments, and direct questions are appropriate. Avoid praise, filler, generic chatbot phrasing, and forced enthusiasm.
 - Include concrete continuations, clarification requests, corrections, or requests for more detail when they fit.
 - Every message must state the requested action or question explicitly. Never return a bare authorization such as "yes", "proceed", "continue", "go ahead", or "do it".

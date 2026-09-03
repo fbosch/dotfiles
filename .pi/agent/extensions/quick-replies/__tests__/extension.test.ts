@@ -60,6 +60,7 @@ function createHarness(
   const handlers = new Map<string, EventHandler>();
   const shortcuts = new Map<string, ShortcutHandler>();
   const sentMessages: string[] = [];
+  const sendOptions: unknown[] = [];
   const widgetStateAtSend: boolean[] = [];
   const generationCalls: GenerationCall[] = [];
   let editorText = options.editorText ?? "";
@@ -75,9 +76,10 @@ function createHarness(
     registerShortcut: (shortcut: string, definition: { handler: ShortcutHandler }) => {
       shortcuts.set(shortcut, definition.handler);
     },
-    sendUserMessage: (message: string) => {
+    sendUserMessage: (message: string, options: unknown) => {
       widgetStateAtSend.push(widget !== undefined);
       sentMessages.push(message);
+      sendOptions.push(options);
     },
   } as unknown as ExtensionAPI;
 
@@ -103,6 +105,7 @@ function createHarness(
 
   return {
     sentMessages,
+    sendOptions,
     widgetStateAtSend,
     generationCalls,
     get widgetActive() {
@@ -364,6 +367,7 @@ describe("quick replies lifecycle", () => {
     await harness.press(0);
 
     expect(harness.sentMessages).toEqual(["Review the implementation."]);
+    expect(harness.sendOptions).toEqual([{ expandPromptTemplates: false }]);
     expect(harness.widgetStateAtSend).toEqual([false]);
     expect(harness.widgetActive).toBe(false);
   });

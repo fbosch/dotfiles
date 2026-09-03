@@ -19,6 +19,11 @@ function response(replies: readonly QuickReply[]): string {
   return JSON.stringify({ suggestions: replies });
 }
 
+const FAKE_GITHUB_TOKEN = ["ghp", "FAKE0000000000000000"].join("_");
+const FAKE_OPENAI_TOKEN = ["sk", "proj", "FAKE0000000000000000"].join("-");
+const FAKE_JWT = ["eyJFAKEHEADER", "eyJFAKEPAYLOAD", "FAKESIGNATURE"].join(".");
+const FAKE_PRIVATE_KEY_HEADER = ["-----BEGIN", "PRIVATE KEY-----"].join(" ");
+
 describe("quick reply input", () => {
   test("extracts only visible assistant text blocks", () => {
     const message = {
@@ -80,9 +85,26 @@ describe("quick reply input", () => {
     "Grant repository access",
     "Execute this script",
     "Print the API key",
+    "Approve the final release",
+    "Create a pull request",
+    "Reveal the API key",
+    "Run the database migration",
+    "Run terraform apply",
+    "Use sudo reboot",
   ])("rejects high-risk source text: %s", (text) => {
     expect(isHighRiskQuickReplyText(text)).toBe(true);
     expect(prepareQuickReplyInput({ userText: "Continue", assistantText: text })).toBeUndefined();
+  });
+
+  test.each([
+    `Use token ${FAKE_GITHUB_TOKEN}`,
+    `OPENAI_API_KEY=${FAKE_OPENAI_TOKEN}`,
+    `Authorization: ${FAKE_JWT}`,
+    `${FAKE_PRIVATE_KEY_HEADER} FAKE TEST VALUE`,
+  ])("does not send likely secret values to the secondary model: %s", (text) => {
+    expect(
+      prepareQuickReplyInput({ userText: text, assistantText: "Inspect the value." }),
+    ).toBeUndefined();
   });
 
   test("serializes excerpts as quoted data", () => {
@@ -124,6 +146,10 @@ describe("quick reply response validation", () => {
     expect(parseQuickReplyResponse(raw)).toEqual([]);
   });
 
+  test("rejects an oversized model response before parsing", () => {
+    expect(parseQuickReplyResponse(" ".repeat(4_097))).toEqual([]);
+  });
+
   test.each([
     {
       replies: [
@@ -163,6 +189,24 @@ describe("quick reply response validation", () => {
     },
     {
       replies: [
+        { label: "One", message: "Go ahead" },
+        { label: "Two", message: "Explain the tradeoff" },
+      ],
+    },
+    {
+      replies: [
+        { label: "One", message: "Reviеw the diff" },
+        { label: "Two", message: "Explain the tradeoff" },
+      ],
+    },
+    {
+      replies: [
+        { label: "One", message: `Use ${FAKE_GITHUB_TOKEN}` },
+        { label: "Two", message: "Second" },
+      ],
+    },
+    {
+      replies: [
         { label: "x".repeat(25), message: "First" },
         { label: "Two", message: "Second" },
       ],
@@ -187,6 +231,8 @@ describe("quick reply model generation", () => {
       api: "openai-codex-responses",
     };
     const ctx = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
       modelRegistry: {
         find: (provider: string, id: string) => {
           expect([provider, id]).toEqual(["openai-codex", "gpt-5.6-luna-fast"]);
@@ -201,7 +247,7 @@ describe("quick reply model generation", () => {
           };
         },
       },
-    } as unknown as Pick<ExtensionContext, "modelRegistry">;
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
 
     const replies = await generateQuickReplies(
       ctx,
@@ -213,7 +259,9 @@ describe("quick reply model generation", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
     expect(calls[0]?.context).toMatchObject({
-      systemPrompt: expect.stringContaining("untrusted data"),
+      systemPrompt: expect.stringMatching(
+        /untrusted data[\s\S]*authoritative writing-style sample[\s\S]*Match its language, capitalization, brevity, and conversational register/u,
+      ),
       messages: [{ role: "user" }],
     });
     expect(calls[0]?.options).toMatchObject({
@@ -229,13 +277,15 @@ describe("quick reply model generation", () => {
   test("does not call the model for unsafe or already-aborted input", async () => {
     let calls = 0;
     const ctx = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
       modelRegistry: {
         find: () => {
           calls += 1;
           return undefined;
         },
       },
-    } as unknown as Pick<ExtensionContext, "modelRegistry">;
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
     const aborted = new AbortController();
     aborted.abort();
 
@@ -258,8 +308,10 @@ describe("quick reply model generation", () => {
 
   test("returns no suggestions when the model is unavailable or does not stop normally", async () => {
     const unavailable = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
       modelRegistry: { find: () => undefined },
-    } as unknown as Pick<ExtensionContext, "modelRegistry">;
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
     expect(
       await generateQuickReplies(
         unavailable,
@@ -269,6 +321,8 @@ describe("quick reply model generation", () => {
     ).toEqual([]);
 
     const failed = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
@@ -277,7 +331,7 @@ describe("quick reply model generation", () => {
         }),
         complete: async () => ({ role: "assistant", content: [], stopReason: "error" }),
       },
-    } as unknown as Pick<ExtensionContext, "modelRegistry">;
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
     expect(
       await generateQuickReplies(
         failed,

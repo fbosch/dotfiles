@@ -12,7 +12,7 @@ import {
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
-import { type LspOperationResult, LspServerManager } from "./server-manager";
+import type { LspOperationResult, LspServerManager } from "./server-manager";
 import { DEFAULT_LSP_TIMEOUTS, type ResolvedLspSettings, resolveLspSettings } from "./settings";
 
 const PositionFields = {
@@ -110,88 +110,117 @@ function assertMatched(result: LspOperationResult): void {
   throw new Error(`No configured LSP server matched this file and project root${suffix}`);
 }
 
+async function createDefaultManager(
+  cwd: string,
+  settings: ResolvedLspSettings,
+): Promise<LspServerManager> {
+  const { LspServerManager } = await import("./server-manager");
+  return LspServerManager.create(cwd, settings);
+}
+
 export function createLspExtension(dependencies: LspExtensionDependencies = {}) {
   return function lspExtension(pi: ExtensionAPI): void {
-    let manager: LspServerManager | undefined;
+    let managerPromise: Promise<LspServerManager> | undefined;
     let mutationSequence = 0;
-    let toolRegistered = false;
+    let settings: ResolvedLspSettings | undefined;
+    let settingsCwd: string | undefined;
     const pendingMutations = new Map<string, PendingMutation>();
     const warmedPaths = new Set<string>();
 
-    pi.on("session_start", async (_event, context) => {
-      const settings = (dependencies.readSettings ?? loadLspSettings)(context);
-      if (settings.warnings.length > 0) {
-        context.ui.notify(`LSP settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
-        return;
+    const settingsFor = (context: ExtensionContext): ResolvedLspSettings => {
+      if (settings === undefined || settingsCwd !== context.cwd) {
+        settings = (dependencies.readSettings ?? loadLspSettings)(context);
+        settingsCwd = context.cwd;
       }
-      if (context.isProjectTrusted() === false) return;
-      manager = await (dependencies.createManager ?? LspServerManager.create)(
+      return settings;
+    };
+
+    const getManager = (context: ExtensionContext): Promise<LspServerManager> => {
+      if (context.isProjectTrusted() === false) {
+        return Promise.reject(
+          new Error("LSP integration is unavailable until the project is trusted"),
+        );
+      }
+      const resolvedSettings = settingsFor(context);
+      if (resolvedSettings.warnings.length > 0) {
+        return Promise.reject(
+          new Error(`LSP integration is unavailable: ${resolvedSettings.warnings.join("; ")}`),
+        );
+      }
+      if (managerPromise !== undefined) return managerPromise;
+
+      const pending = (dependencies.createManager ?? createDefaultManager)(
         context.cwd,
-        settings,
+        resolvedSettings,
       );
-      if (toolRegistered) return;
-      toolRegistered = true;
+      managerPromise = pending;
+      void pending.catch(() => {
+        if (managerPromise === pending) managerPromise = undefined;
+      });
+      return pending;
+    };
 
-      pi.registerTool(
-        defineTool<typeof LspParameters, LspToolDetails>({
-          name: "lsp",
-          label: "Language Server",
-          description:
-            "Query configured project language servers for diagnostics, hover information, definitions, references, or server status. Paths are project-relative and positions are one-based.",
-          promptSnippet: "Query persistent language servers for project code intelligence",
-          promptGuidelines: [
-            "Use lsp for hover, definitions, or references when semantic navigation is more precise than text search.",
-            "Use one-based line and column positions from source files.",
-          ],
-          parameters: LspParameters,
-          executionMode: "sequential",
+    pi.registerTool(
+      defineTool<typeof LspParameters, LspToolDetails>({
+        name: "lsp",
+        label: "Language Server",
+        description:
+          "Query configured project language servers for diagnostics, hover information, definitions, references, or server status. Paths are project-relative and positions are one-based.",
+        promptSnippet: "Query persistent language servers for project code intelligence",
+        promptGuidelines: [
+          "Use lsp for hover, definitions, or references when semantic navigation is more precise than text search.",
+          "Use one-based line and column positions from source files.",
+        ],
+        parameters: LspParameters,
+        executionMode: "sequential",
 
-          async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-            const activeManager = manager;
-            if (ctx.isProjectTrusted() === false || activeManager === undefined) {
-              throw new Error("LSP integration is unavailable until the project is trusted");
-            }
-            if (params.operation === "status") {
-              return {
-                content: [{ type: "text", text: activeManager.status() }],
-                details: { operation: params.operation, warnings: [] },
-              };
-            }
-
-            const result: LspOperationResult = await match(params)
-              .with({ operation: "diagnostics" }, ({ path }) =>
-                activeManager.diagnostics(path, signal),
-              )
-              .with({ operation: "hover" }, ({ path, line, column }) =>
-                activeManager.hover(path, line, column, signal),
-              )
-              .with({ operation: "goto_definition" }, ({ path, line, column }) =>
-                activeManager.definition(path, line, column, signal),
-              )
-              .with(
-                { operation: "find_references" },
-                ({ path, line, column, includeDeclaration }) =>
-                  activeManager.references(path, line, column, includeDeclaration ?? true, signal),
-              )
-              .exhaustive();
-            assertMatched(result);
+        async execute(_toolCallId, params, signal, _onUpdate, context) {
+          const manager = await getManager(context);
+          if (params.operation === "status") {
             return {
-              content: [{ type: "text", text: resultText(result) }],
-              details: { operation: params.operation, warnings: result.warnings },
+              content: [{ type: "text", text: manager.status() }],
+              details: { operation: params.operation, warnings: [] },
             };
-          },
-        }),
-      );
+          }
+
+          const result: LspOperationResult = await match(params)
+            .with({ operation: "diagnostics" }, ({ path }) => manager.diagnostics(path, signal))
+            .with({ operation: "hover" }, ({ path, line, column }) =>
+              manager.hover(path, line, column, signal),
+            )
+            .with({ operation: "goto_definition" }, ({ path, line, column }) =>
+              manager.definition(path, line, column, signal),
+            )
+            .with({ operation: "find_references" }, ({ path, line, column, includeDeclaration }) =>
+              manager.references(path, line, column, includeDeclaration ?? true, signal),
+            )
+            .exhaustive();
+          assertMatched(result);
+          return {
+            content: [{ type: "text", text: resultText(result) }],
+            details: { operation: params.operation, warnings: result.warnings },
+          };
+        },
+      }),
+    );
+
+    pi.on("session_start", (_event, context) => {
+      const resolvedSettings = settingsFor(context);
+      if (resolvedSettings.warnings.length > 0) {
+        context.ui.notify(`LSP settings:\n- ${resolvedSettings.warnings.join("\n- ")}`, "warning");
+      }
     });
 
     pi.on("tool_result", (event, context) => {
       if (context.isProjectTrusted() === false) return;
       const path = readPath(event);
-      if (path !== undefined && manager !== undefined) {
+      if (path !== undefined) {
         const key = resolve(context.cwd, path);
         if (warmedPaths.has(key) === false) {
           warmedPaths.add(key);
-          void manager.warm(path).catch(() => undefined);
+          void getManager(context)
+            .then((manager) => manager.warm(path))
+            .catch(() => undefined);
         }
       }
       const changedPath = mutationPath(event);
@@ -206,10 +235,12 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
 
     // message_end runs after formatter middleware, so diagnostics can start against final file text.
     pi.on("message_end", (event, context) => {
-      if (event.message.role !== "toolResult" || manager === undefined) return;
+      if (event.message.role !== "toolResult") return;
       const mutation = pendingMutations.get(event.message.toolCallId);
       if (mutation === undefined || mutation.diagnostics !== undefined) return;
-      mutation.diagnostics = manager.diagnostics(mutation.path, context.signal, true);
+      mutation.diagnostics = getManager(context).then((manager) =>
+        manager.diagnostics(mutation.path, context.signal, true),
+      );
       void mutation.diagnostics.catch(() => undefined);
     });
 
@@ -251,9 +282,12 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     pi.on("session_shutdown", async () => {
       pendingMutations.clear();
       warmedPaths.clear();
-      const current = manager;
-      manager = undefined;
-      await current?.shutdown();
+      settings = undefined;
+      settingsCwd = undefined;
+      const pending = managerPromise;
+      managerPromise = undefined;
+      const manager = await pending?.catch(() => undefined);
+      await manager?.shutdown();
     });
   };
 }

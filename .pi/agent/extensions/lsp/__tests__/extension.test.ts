@@ -3,6 +3,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   MessageEndEvent,
+  ToolDefinition,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { createLspExtension } from "../index";
@@ -48,6 +49,93 @@ function turnEnd(...toolCallIds: string[]) {
     toolResults: toolCallIds.map((toolCallId) => mutationMessage(toolCallId).message),
   };
 }
+
+test("registers the tool immediately and creates one manager on first use", async () => {
+  const handlers = new Map<string, Handler>();
+  let managerCreations = 0;
+  let tool: ToolDefinition | undefined;
+  const fakeManager = {
+    shutdown: async () => {},
+    status: () => "ready",
+  } as unknown as LspServerManager;
+  const settings: ResolvedLspSettings = {
+    servers: [],
+    timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+    warnings: [],
+  };
+  const pi = {
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    registerTool(definition: ToolDefinition) {
+      tool = definition;
+    },
+  } as unknown as ExtensionAPI;
+  const context = {
+    cwd: "/project",
+    isProjectTrusted: () => true,
+    signal: undefined,
+    ui: { notify() {} },
+  } as unknown as ExtensionContext;
+
+  createLspExtension({
+    createManager: async () => {
+      managerCreations += 1;
+      return fakeManager;
+    },
+    readSettings: () => settings,
+  })(pi);
+
+  if (tool === undefined) throw new Error("lsp tool was not registered");
+  expect(managerCreations).toBe(0);
+  await handlers.get("session_start")?.({} as never, context);
+  expect(managerCreations).toBe(0);
+
+  const first = await tool.execute("lsp-1", { operation: "status" }, undefined, undefined, context);
+  const second = await tool.execute(
+    "lsp-2",
+    { operation: "status" },
+    undefined,
+    undefined,
+    context,
+  );
+
+  expect(first.content).toEqual([{ type: "text", text: "ready" }]);
+  expect(second.content).toEqual([{ type: "text", text: "ready" }]);
+  expect(managerCreations).toBe(1);
+});
+
+test("loads the default manager when the tool is first used", async () => {
+  let tool: ToolDefinition | undefined;
+  const settings: ResolvedLspSettings = {
+    servers: [],
+    timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+    warnings: [],
+  };
+  const pi = {
+    on() {},
+    registerTool(definition: ToolDefinition) {
+      tool = definition;
+    },
+  } as unknown as ExtensionAPI;
+  const context = {
+    cwd: process.cwd(),
+    isProjectTrusted: () => true,
+  } as ExtensionContext;
+
+  createLspExtension({ readSettings: () => settings })(pi);
+
+  if (tool === undefined) throw new Error("lsp tool was not registered");
+  const result = await tool.execute(
+    "lsp-1",
+    { operation: "status" },
+    undefined,
+    undefined,
+    context,
+  );
+
+  expect(result.content).toEqual([{ type: "text", text: "No LSP servers configured" }]);
+});
 
 test("starts diagnostics after formatting and only reports non-clean results", async () => {
   const handlers = new Map<string, Handler>();

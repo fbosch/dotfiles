@@ -184,7 +184,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
       }
 
       invalidateSettledState(ctx);
-      pi.sendUserMessage(reply.message);
+      pi.sendUserMessage(reply.message, { expandPromptTemplates: false });
     }
 
     function beginGeneration(
