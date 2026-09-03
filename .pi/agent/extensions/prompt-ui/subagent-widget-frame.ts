@@ -55,6 +55,7 @@ export interface SubagentWidgetFrameOptions {
   agentColors?: AgentWidgetColors;
   agentDisplayNames?: AgentWidgetDisplayNames;
   getSubagents?: () => readonly WidgetSubagentRecord[];
+  sessionId?: string;
 }
 
 type PatchableUI = ExtensionUIContext &
@@ -77,6 +78,7 @@ class WidgetFrame implements Component {
     private readonly agentColors: AgentWidgetColors,
     private readonly agentDisplayNames: AgentWidgetDisplayNames,
     private readonly getSubagents: () => readonly WidgetSubagentRecord[],
+    private readonly sessionId: string,
     private readonly colorizeLines: boolean,
   ) {}
 
@@ -105,7 +107,7 @@ class WidgetFrame implements Component {
       let subagents: readonly WidgetSubagentRecord[] = [];
       try {
         subagents = this.getSubagents();
-        for (const record of subagents) rememberSubagentTranscriptRecord(record);
+        for (const record of subagents) rememberSubagentTranscriptRecord(this.sessionId, record);
       } catch {
         // Keep the prompt usable if the optional cross-extension service is reloading.
       }
@@ -131,6 +133,7 @@ function frameWidget(
   agentColors: AgentWidgetColors,
   agentDisplayNames: AgentWidgetDisplayNames,
   getSubagents: () => readonly WidgetSubagentRecord[],
+  sessionId: string,
   colorizeLines: boolean,
 ): WidgetFactory {
   return (tui, theme) =>
@@ -140,6 +143,7 @@ function frameWidget(
       agentColors,
       agentDisplayNames,
       getSubagents,
+      sessionId,
       colorizeLines,
     );
 }
@@ -326,8 +330,16 @@ export function installSubagentWidgetFrame(
   const agentDisplayNames =
     options.agentDisplayNames ?? loadAgentWidgetDisplayNames(cwd, agentDirectory);
   const getSubagents = options.getSubagents ?? widgetSubagents;
+  const sessionId = options.sessionId ?? cwd;
   const wrap = (key: string, factory: WidgetFactory) =>
-    frameWidget(factory, agentColors, agentDisplayNames, getSubagents, key === AGENT_WIDGET_KEY);
+    frameWidget(
+      factory,
+      agentColors,
+      agentDisplayNames,
+      getSubagents,
+      sessionId,
+      key === AGENT_WIDGET_KEY,
+    );
   const owner = Symbol();
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {

@@ -33,6 +33,13 @@ describe("file change model", () => {
     });
   });
 
+  test("counts hunk lines that resemble patch headers", () => {
+    expect(summarizeFileChange(baseline("-- removed\n"), "++ added\n")).toMatchObject({
+      added: 1,
+      removed: 1,
+    });
+  });
+
   test("tracks new empty files and removes files restored to baseline", () => {
     expect(summarizeFileChange(baseline(null), "")).toEqual({
       path: "src/example.ts",
@@ -72,6 +79,20 @@ describe("file changes widget", () => {
     expect(rows[0]).toContain("important-file.ts");
     expect(rows[0]).toContain("+1 -1");
     expect(rows[1]).toContain("└─ A z.ts");
+  });
+
+  test("escapes terminal controls and line breaks in display paths", () => {
+    const rows = renderChangeRows(
+      [{ path: "src/line\n\u001b[31m.ts", kind: "added", added: 1, removed: 0 }],
+      theme,
+      50,
+      false,
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toContain("src/line\\n\\x1b[31m.ts");
+    expect(rows[0]).not.toContain("\n");
+    expect(rows[0]).not.toContain("\u001b");
   });
 
   test("renders the local dock treatment within the available width", () => {

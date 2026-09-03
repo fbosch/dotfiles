@@ -15,6 +15,8 @@ import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import { type LspOperationResult, LspServerManager } from "./server-manager";
 import { DEFAULT_LSP_TIMEOUTS, type ResolvedLspSettings, resolveLspSettings } from "./settings";
 
+const AUTO_DIAGNOSTICS_DEBOUNCE_MS = 300;
+
 const PositionFields = {
   column: Type.Integer({ minimum: 1 }),
   line: Type.Integer({ minimum: 1 }),
@@ -57,7 +59,14 @@ interface LspExtensionDependencies {
     cwd: string,
     settings: ResolvedLspSettings,
   ) => Promise<LspServerManager>;
+  readonly diagnosticsDebounceMs?: number;
   readonly readSettings?: (context: ExtensionContext) => ResolvedLspSettings;
+}
+
+interface PendingMutation {
+  readonly key: string;
+  readonly path: string;
+  readonly updatedAt: number;
 }
 
 function mutationPath(event: ToolResultEvent): string | undefined {
@@ -107,7 +116,8 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
   return function lspExtension(pi: ExtensionAPI): void {
     let manager: LspServerManager | undefined;
     let toolRegistered = false;
-    const pendingMutations = new Map<string, string>();
+    const pendingMutations = new Map<string, PendingMutation>();
+    const latestMutations = new Map<string, PendingMutation>();
     const warmedPaths = new Set<string>();
 
     pi.on("session_start", async (_event, context) => {
@@ -133,6 +143,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           promptSnippet: "Query persistent language servers for project code intelligence",
           promptGuidelines: [
             "Use lsp after locating a relevant source file when semantic navigation is more precise than text search.",
+            "For diagnostics, wait until a file's edit burst is complete and query each changed file once; do not query after every individual edit.",
             "Use one-based line and column positions from source files.",
           ],
           parameters: LspParameters,
@@ -187,31 +198,52 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
         }
       }
       const changedPath = mutationPath(event);
-      if (changedPath !== undefined) pendingMutations.set(event.toolCallId, changedPath);
+      if (changedPath !== undefined) {
+        const mutation = {
+          key: resolve(context.cwd, changedPath),
+          path: changedPath,
+          updatedAt: Date.now(),
+        };
+        pendingMutations.set(event.toolCallId, mutation);
+        latestMutations.set(mutation.key, mutation);
+      }
     });
 
     // Final tool-result messages are emitted only after every tool_result middleware has settled.
     pi.on("message_end", async (event, context) => {
       if (event.message.role !== "toolResult" || manager === undefined) return;
-      const path = pendingMutations.get(event.message.toolCallId);
-      if (path === undefined) return;
+      const mutation = pendingMutations.get(event.message.toolCallId);
+      if (mutation === undefined) return;
       pendingMutations.delete(event.message.toolCallId);
-      const result = await manager.diagnostics(path, context.signal, true);
-      if (result.diagnosticCount === 0 && result.warnings.length === 0) return;
-      if (result.matched === false && result.warnings.length === 0) return;
-      return {
-        message: {
-          ...event.message,
-          content: [
-            ...event.message.content,
-            { type: "text", text: `LSP diagnostics after formatting:\n${resultText(result)}` },
-          ],
-        },
-      };
+      const debounceMs = dependencies.diagnosticsDebounceMs ?? AUTO_DIAGNOSTICS_DEBOUNCE_MS;
+      const quietPeriod = Math.max(0, debounceMs - (Date.now() - mutation.updatedAt));
+      await new Promise<void>((resolve) => setTimeout(resolve, quietPeriod));
+      // Keep diagnostics attached to the final edit in a burst, not stale tool results.
+      if (latestMutations.get(mutation.key) !== mutation) return;
+
+      try {
+        const result = await manager.diagnostics(mutation.path, context.signal, true);
+        if (latestMutations.get(mutation.key) !== mutation) return;
+        latestMutations.delete(mutation.key);
+        if (result.diagnosticCount === 0 && result.warnings.length === 0) return;
+        if (result.matched === false && result.warnings.length === 0) return;
+        return {
+          message: {
+            ...event.message,
+            content: [
+              ...event.message.content,
+              { type: "text", text: `LSP diagnostics after formatting:\n${resultText(result)}` },
+            ],
+          },
+        };
+      } finally {
+        if (latestMutations.get(mutation.key) === mutation) latestMutations.delete(mutation.key);
+      }
     });
 
     pi.on("session_shutdown", async () => {
       pendingMutations.clear();
+      latestMutations.clear();
       warmedPaths.clear();
       const current = manager;
       manager = undefined;

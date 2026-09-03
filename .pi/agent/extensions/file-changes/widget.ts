@@ -6,6 +6,19 @@ import type { TrackedFile } from "./model";
 const COLLAPSED_FILE_LIMIT = 6;
 const PANEL_PADDING_X = 2;
 
+export function sanitizeDisplayPath(path: string): string {
+  return Array.from(path, (character) => {
+    const codePoint = character.codePointAt(0);
+    if (codePoint === undefined || (codePoint >= 0x20 && (codePoint < 0x7f || codePoint > 0x9f))) {
+      return character;
+    }
+    if (character === "\n") return "\\n";
+    if (character === "\r") return "\\r";
+    if (character === "\t") return "\\t";
+    return `\\x${codePoint.toString(16).padStart(2, "0")}`;
+  }).join("");
+}
+
 function pathTail(path: string, width: number): string {
   if (width <= 0) return "";
   if (visibleWidth(path) <= width) return path;
@@ -38,7 +51,8 @@ function renderFileRow(
   const marker = change.kind === "added" ? "A" : "M";
   const prefix = `${branch} ${marker} `;
   const pathWidth = Math.max(0, width - visibleWidth(prefix) - visibleWidth(counts) - 1);
-  const left = theme.fg("muted", prefix) + theme.fg("text", pathTail(change.path, pathWidth));
+  const displayPath = pathTail(sanitizeDisplayPath(change.path), pathWidth);
+  const left = theme.fg("muted", prefix) + theme.fg("text", displayPath);
   return fitColumns(left, counts, width);
 }
 

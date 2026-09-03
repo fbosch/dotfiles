@@ -1,5 +1,5 @@
 const TRANSCRIPT_RECORDS_KEY = Symbol.for("dotfiles:pi-subagent-transcript-records");
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const MAX_RECORDS = 100;
 
 export interface SubagentTranscriptRecord {
@@ -36,12 +36,20 @@ function transcriptRecordCache(): TranscriptRecordCache {
 }
 
 /** Retain only service-origin paths; internal action URLs never carry local file paths. */
-export function rememberSubagentTranscriptRecord(record: SubagentTranscriptRecord): void {
+function cacheKey(sessionId: string, agentId: string): string {
+  return `${sessionId}\u0000${agentId}`;
+}
+
+export function rememberSubagentTranscriptRecord(
+  sessionId: string,
+  record: SubagentTranscriptRecord,
+): void {
   if (record.outputFile === undefined) return;
 
   const records = transcriptRecordCache().records;
-  records.delete(record.id);
-  records.set(record.id, {
+  const key = cacheKey(sessionId, record.id);
+  records.delete(key);
+  records.set(key, {
     id: record.id,
     status: record.status,
     outputFile: record.outputFile,
@@ -54,7 +62,12 @@ export function rememberSubagentTranscriptRecord(record: SubagentTranscriptRecor
 }
 
 export function rememberedSubagentTranscriptRecord(
-  id: string,
+  sessionId: string,
+  agentId: string,
 ): Required<SubagentTranscriptRecord> | undefined {
-  return transcriptRecordCache().records.get(id);
+  return transcriptRecordCache().records.get(cacheKey(sessionId, agentId));
+}
+
+export function forgetSubagentTranscriptRecord(sessionId: string, agentId: string): void {
+  transcriptRecordCache().records.delete(cacheKey(sessionId, agentId));
 }

@@ -30,8 +30,13 @@ export function countPatchLines(patch: string): Pick<TrackedFile, "added" | "rem
   let added = 0;
   let removed = 0;
 
+  let inHunk = false;
   for (const line of patch.split("\n")) {
-    if (line.startsWith("+++ ") || line.startsWith("--- ") || line.startsWith("@@")) continue;
+    if (line.startsWith("@@")) {
+      inHunk = true;
+      continue;
+    }
+    if (!inHunk) continue;
     if (line.startsWith("+")) added += 1;
     if (line.startsWith("-")) removed += 1;
   }

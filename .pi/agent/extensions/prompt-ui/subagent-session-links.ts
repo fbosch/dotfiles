@@ -28,14 +28,14 @@ import {
   subagentSessionUrl,
 } from "./subagent-session-target";
 import {
+  rememberedSubagentTranscriptRecord,
+  rememberSubagentTranscriptRecord,
+} from "./subagent-transcript-records";
+import {
   type AgentWidgetColors,
   colorizeSubagentToolLine,
   loadAgentWidgetColors,
 } from "./subagent-widget-frame";
-import {
-  rememberedSubagentTranscriptRecord,
-  rememberSubagentTranscriptRecord,
-} from "./subagent-transcript-records";
 
 export type { SubagentSessionTarget } from "./subagent-session-target";
 export {
@@ -80,6 +80,7 @@ interface ToolRenderPatchState {
     service?: SubagentsService;
     theme?: Theme;
     agentColors?: AgentWidgetColors;
+    sessionId?: string;
   }>;
 }
 
@@ -110,6 +111,7 @@ interface SubagentToolDetails {
 interface SubagentToolLinkOptions {
   theme?: Theme;
   agentColors?: AgentWidgetColors;
+  sessionId?: string;
 }
 
 // shortcut: Pi has no tool-result link hook. Read the component's runtime fields until
@@ -171,6 +173,7 @@ function stripSubagentSessionLinks(
 function subagentTarget(
   component: PatchableToolExecution,
   service: SubagentsService | undefined,
+  sessionId: string | undefined,
 ): SubagentSessionTarget | undefined {
   if (component.toolName !== "subagent") return undefined;
 
@@ -185,7 +188,9 @@ function subagentTarget(
     return undefined;
   }
   const record = lookupSubagentRecord(service, agentId);
-  if (record !== undefined) rememberSubagentTranscriptRecord({ id: agentId, ...record });
+  if (record !== undefined && sessionId !== undefined) {
+    rememberSubagentTranscriptRecord(sessionId, { id: agentId, ...record });
+  }
   return {
     agentId,
     displayName,
@@ -226,6 +231,7 @@ export function installSubagentToolLinks(
     ...(service === undefined ? {} : { service }),
     ...(options.theme === undefined ? {} : { theme: options.theme }),
     ...(options.agentColors === undefined ? {} : { agentColors: options.agentColors }),
+    ...(options.sessionId === undefined ? {} : { sessionId: options.sessionId }),
   };
   const installedState = prototype[TOOL_RENDER_PATCH];
   if (isCurrentPatchState(installedState)) {
@@ -254,7 +260,7 @@ export function installSubagentToolLinks(
       component.toolName === "subagent" && theme !== undefined && agentColors !== undefined
         ? lines.map((line) => colorizeSubagentToolLine(line, agentColors, theme))
         : lines;
-    const target = subagentTarget(component, registration?.service);
+    const target = subagentTarget(component, registration?.service, registration?.sessionId);
     return target === undefined
       ? coloredLines
       : state.linkLines(coloredLines, subagentSessionUrl(target));
@@ -425,6 +431,33 @@ function lookupSubagentRecord(
   }
 }
 
+function contextSessionId(ctx: ExtensionContext): string {
+  try {
+    return ctx.sessionManager?.getSessionId() ?? ctx.cwd;
+  } catch {
+    return ctx.cwd;
+  }
+}
+
+function readCachedSubagentSession(outputFile: string, parentSessionId: string): string {
+  const content = readFileSync(outputFile, "utf8");
+  const firstLine = content.split(/\r?\n/, 1)[0];
+  if (firstLine === undefined) throw new Error("Subagent transcript has no session header");
+
+  const header = JSON.parse(firstLine) as unknown;
+  if (
+    typeof header !== "object" ||
+    header === null ||
+    !("type" in header) ||
+    header.type !== "session" ||
+    !("parentSession" in header) ||
+    header.parentSession !== parentSessionId
+  ) {
+    throw new Error("Subagent transcript does not belong to the active parent session");
+  }
+  return content;
+}
+
 export interface SubagentTranscriptSource {
   getMessages(): readonly unknown[];
   subscribe(onChange: (event?: unknown) => void): (() => void) | undefined;
@@ -560,8 +593,13 @@ export async function openSubagentSession(
 
   let removeEscapeHandler: (() => void) | undefined;
   try {
+    const sessionId = contextSessionId(ctx);
     const currentRecord = lookupSubagentRecord(service, target.agentId);
-    const record = currentRecord ?? rememberedSubagentTranscriptRecord(target.agentId);
+    const rememberedRecord =
+      currentRecord === undefined
+        ? rememberedSubagentTranscriptRecord(sessionId, target.agentId)
+        : undefined;
+    const record = currentRecord ?? rememberedRecord;
     if (record === undefined) {
       ctx.ui.notify("The selected subagent session is no longer available.", "warning");
       return;
@@ -609,7 +647,11 @@ export async function openSubagentSession(
       source = navigation.liveSource(liveRecord);
     } else {
       if (outputFile === undefined) return;
-      source = navigation.fileSnapshotSource(outputFile, (path) => readFileSync(path, "utf8"));
+      source = navigation.fileSnapshotSource(outputFile, (path) =>
+        rememberedRecord === undefined
+          ? readFileSync(path, "utf8")
+          : readCachedSubagentSession(path, sessionId),
+      );
     }
     source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
@@ -697,6 +739,7 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
   const uninstallToolLinks = installSubagentToolLinks(tui, service, {
     theme: ctx.ui.theme,
     agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir()),
+    sessionId: contextSessionId(ctx),
   });
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {
     openChain = openChain

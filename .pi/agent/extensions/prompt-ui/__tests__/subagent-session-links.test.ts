@@ -29,6 +29,10 @@ import {
   type SubagentSessionTarget,
   subagentSessionUrl,
 } from "../subagent-session-links";
+import {
+  forgetSubagentTranscriptRecord,
+  rememberSubagentTranscriptRecord,
+} from "../subagent-transcript-records";
 import { installSubagentWidgetFrame } from "../subagent-widget-frame";
 
 const toolRenderPatch = Symbol.for("dotfiles:pi-subagent-session-tool-links");
@@ -628,6 +632,7 @@ describe("subagent session links", () => {
   test("opens a widget transcript snapshot after the publishing service is replaced", async () => {
     const directory = mkdtempSync(join(tmpdir(), "stale-subagent-session-"));
     const outputFile = join(directory, "session.jsonl");
+    const sessionId = "parent-session-123";
     const staleTarget = {
       agentId: "stale-agent-123",
       displayName: "explore",
@@ -638,9 +643,10 @@ describe("subagent session links", () => {
       `${JSON.stringify({
         type: "session",
         version: 3,
-        id: staleTarget.agentId,
+        id: "child-session-456",
         timestamp: "2026-09-03T00:00:00.000Z",
         cwd: process.cwd(),
+        parentSession: sessionId,
       })}\n`,
     );
     const staleRecord = {
@@ -659,6 +665,7 @@ describe("subagent session links", () => {
     } as unknown as ExtensionUIContext;
     const uninstallWidgetFrame = installSubagentWidgetFrame(widgetUi, {
       getSubagents: () => [staleRecord],
+      sessionId,
     });
     widgetUi.setWidget("agents", () => ({
       render: () => [
@@ -672,6 +679,7 @@ describe("subagent session links", () => {
     const notifications: Array<[string, string]> = [];
     const ctx = {
       cwd: process.cwd(),
+      sessionManager: { getSessionId: () => sessionId },
       ui: {
         theme: {} as Theme,
         notify: (message: string, level: string) => notifications.push([message, level]),
@@ -694,6 +702,55 @@ describe("subagent session links", () => {
       ]);
     } finally {
       uninstallWidgetFrame();
+      forgetSubagentTranscriptRecord(sessionId, staleTarget.agentId);
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("rejects a cached transcript from another parent session", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "wrong-parent-subagent-session-"));
+    const outputFile = join(directory, "session.jsonl");
+    const sessionId = "expected-parent-session";
+    const agentId = "wrong-parent-agent";
+    writeFileSync(
+      outputFile,
+      `${JSON.stringify({
+        type: "session",
+        version: 3,
+        id: "child-session",
+        timestamp: "2026-09-03T00:00:00.000Z",
+        cwd: process.cwd(),
+        parentSession: "different-parent-session",
+      })}\n`,
+    );
+    rememberSubagentTranscriptRecord(sessionId, {
+      id: agentId,
+      status: "completed",
+      outputFile,
+    });
+    const overlay = createClosingOverlayTui();
+    const notifications: Array<[string, string]> = [];
+    const ctx = {
+      cwd: process.cwd(),
+      sessionManager: { getSessionId: () => sessionId },
+      ui: {
+        theme: {} as Theme,
+        notify: (message: string, level: string) => notifications.push([message, level]),
+      },
+    } as unknown as Parameters<typeof openSubagentSession>[2];
+
+    try {
+      await openSubagentSession(
+        { agentId, displayName: "explore", description: "Wrong parent" },
+        { getRecord: () => undefined },
+        ctx,
+        overlay.tui,
+      );
+
+      expect(overlay.getComponent()).toBeUndefined();
+      expect(notifications).toEqual([["Could not read the selected subagent session.", "error"]]);
+    } finally {
+      forgetSubagentTranscriptRecord(sessionId, agentId);
       rmSync(directory, { recursive: true, force: true });
     }
   });
