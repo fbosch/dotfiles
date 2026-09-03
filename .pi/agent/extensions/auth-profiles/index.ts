@@ -8,6 +8,8 @@
  */
 
 import { existsSync } from "node:fs";
+import type { GitRunner } from "./profile-resolver";
+import { codexUsageLimitResetAt, type ProfileSelection, selectProfile } from "./profile-selector";
 import {
   accountIdFor,
   authPathFor,
@@ -19,12 +21,12 @@ import {
   projectSettingsPath,
   providersIn,
   publishWezTermChange,
-  resolveProfile,
   updateJsonFile,
 } from "./profile-store";
 import { registerResetCreditCommand } from "./reset-credit";
 
-export { authPathFor, resolveProfile } from "./profile-store";
+export { resolveProfile } from "./profile-resolver";
+export { authPathFor } from "./profile-store";
 
 /**
  * auth-profiles — per-project OAuth/API-key credential profiles for pi.
@@ -33,10 +35,15 @@ export { authPathFor, resolveProfile } from "./profile-store";
  *   default        -> ~/.pi/agent/auth.json
  *   <name>         -> ~/.pi/agent/auth-profiles/<name>.json
  *
- * Profile selection (first match wins):
+ * Profile selection order:
  *   1. "authProfile" in <cwd>/.pi/settings.json   (only when the project is trusted)
- *   2. "defaultProfile" in ~/.pi/agent/auth-profiles.json
- *   3. "default"
+ *   2. repository preferences                      (only when the project is trusted)
+ *   3. host defaults
+ *   4. global default
+ *   5. "default"
+ *
+ * Explicit project profiles are pinned. Automatic selections choose the first
+ * profile with confirmed Codex usage, then rotate on confirmed quota headers.
  *
  * The extension rebinds the live AuthStorage backend at session_start and on
  * /profile changes, so the built-in /login, /logout, and OAuth token refresh
@@ -59,6 +66,11 @@ type InternalAuthStorage = {
 type InternalRuntime = {
   credentials?: { store?: InternalAuthStorage };
   forceRefreshAvailability?: () => Promise<unknown>;
+};
+
+type AuthProfileDependencies = {
+  now?: () => number;
+  selectProfile?: typeof selectProfile;
 };
 
 /** Point the session's live credential store at the profile's file. */
@@ -92,19 +104,48 @@ async function bindProfile(
   return path;
 }
 
-export default function authProfiles(pi: ExtensionAPI): void {
+function describeSelection(selection: ProfileSelection): string {
+  const source =
+    selection.source === "repository" && selection.repository
+      ? `repository ${selection.repository.name}`
+      : selection.source === "host default"
+        ? `host ${selection.host.name}`
+        : selection.source;
+  return selection.fallbackFrom ? `${source}; ${selection.fallbackFrom} unavailable` : source;
+}
+
+export default function authProfiles(
+  pi: ExtensionAPI,
+  dependencies: AuthProfileDependencies = {},
+): void {
+  const chooseProfile = dependencies.selectProfile ?? selectProfile;
+  const now = dependencies.now ?? Date.now;
   let activeProfile = DEFAULT_PROFILE;
+  let activeSelection: ProfileSelection | undefined;
+  const exhaustedUntil = new Map<string, number>();
+  let fallbackPromise: Promise<void> | undefined;
+  const runGit: GitRunner = async (cwd, args) => {
+    const result = await pi.exec("git", ["-C", cwd, ...args], { timeout: 2_000 });
+    if (result.code !== 0) return undefined;
+    const output = result.stdout.trim();
+    return output === "" ? undefined : output;
+  };
+
+  const activate = async (
+    ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
+    selection: ProfileSelection,
+  ) => {
+    const path = await bindProfile(ctx, selection.profile);
+    activeProfile = selection.profile;
+    activeSelection = selection;
+    ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);
+    publishWezTermChange(ctx, "profile", selection.profile);
+    return { ...selection, path };
+  };
 
   const rebind = async (
     ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
-  ) => {
-    const { profile, source } = resolveProfile(ctx);
-    const path = await bindProfile(ctx, profile);
-    activeProfile = profile;
-    ctx.ui.setStatus(PROFILE_STATUS_KEY, profile);
-    publishWezTermChange(ctx, "profile", profile);
-    return { profile, source, path };
-  };
+  ) => activate(ctx, await chooseProfile(ctx, { runGit }));
 
   const resolveProfileCredential = async (
     profile: string,
@@ -132,10 +173,72 @@ export default function authProfiles(pi: ExtensionAPI): void {
   };
 
   pi.on("session_start", async (_event, ctx) => {
-    const { profile, source } = await rebind(ctx);
-    if (profile !== DEFAULT_PROFILE) {
-      ctx.ui.notify(`Auth profile: ${profile} (${source})`, "info");
+    const resolution = await rebind(ctx);
+    if (resolution.profile !== DEFAULT_PROFILE) {
+      ctx.ui.notify(
+        `Auth profile: ${resolution.profile} (${describeSelection(resolution)})`,
+        "info",
+      );
     }
+  });
+
+  pi.on("after_provider_response", async (event, ctx) => {
+    if (ctx.model?.provider !== "openai-codex" || activeSelection?.source === "project") return;
+
+    const currentTime = now();
+    const resetAt = codexUsageLimitResetAt(event.headers, currentTime);
+    if (resetAt === undefined) return;
+
+    const exhaustedProfile = activeProfile;
+    if ((exhaustedUntil.get(exhaustedProfile) ?? 0) > currentTime) return;
+    exhaustedUntil.set(exhaustedProfile, resetAt);
+    for (const [profile, expiry] of exhaustedUntil) {
+      if (expiry <= currentTime) exhaustedUntil.delete(profile);
+    }
+
+    if (fallbackPromise === undefined) {
+      let operation: Promise<void>;
+      operation = (async () => {
+        try {
+          const next = await chooseProfile(ctx, {
+            allowUnconfirmedFallback: false,
+            excludedProfiles: new Set(exhaustedUntil.keys()),
+            forceUsageRefresh: true,
+            runGit,
+          });
+          if (
+            next.fallbackReason !== "confirmed usage" ||
+            exhaustedUntil.has(next.profile) ||
+            activeProfile !== exhaustedProfile
+          ) {
+            if (activeProfile === exhaustedProfile) {
+              ctx.ui.notify(
+                `${exhaustedProfile} exhausted; no alternate auth profile has confirmed usage.`,
+                "warning",
+              );
+            }
+            return;
+          }
+
+          await activate(ctx, next);
+          ctx.ui.notify(
+            `${exhaustedProfile} exhausted; switched to ${next.profile}. Retry the request.`,
+            "warning",
+          );
+        } catch (error) {
+          ctx.ui.notify(
+            `${exhaustedProfile} exhausted; auth profile fallback failed: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+        }
+      })().finally(() => {
+        if (fallbackPromise === operation) fallbackPromise = undefined;
+      });
+      fallbackPromise = operation;
+    }
+
+    // A failed response should not finish before its replacement profile is active.
+    if (event.status >= 400) await fallbackPromise;
   });
 
   pi.registerCommand("profile", {
@@ -159,11 +262,25 @@ export default function authProfiles(pi: ExtensionAPI): void {
       try {
         switch (command ?? "show") {
           case "show": {
-            const { profile, source } = resolveProfile(ctx);
-            const providers = providersIn(profile);
+            const resolution = activeSelection ?? (await chooseProfile(ctx, { runGit }));
+            const providers = providersIn(resolution.profile);
+            const repository = resolution.repository
+              ? `${resolution.repository.name} (${resolution.repository.source})`
+              : "not resolved";
+            const repositoryPreferences = resolution.repositoryPreferences.length
+              ? resolution.repositoryPreferences.join(", ")
+              : "none";
+            const hostPreferences = resolution.hostPreferences.length
+              ? resolution.hostPreferences.join(", ")
+              : "none";
             ctx.ui.notify(
-              `Auth profile: ${profile} (${source})\n` +
-                `File: ${authPathFor(profile)}\n` +
+              `Auth profile: ${resolution.profile} (${describeSelection(resolution)})\n` +
+                `Host: ${resolution.host.name} (${resolution.host.source})\n` +
+                `Repository: ${repository}\n` +
+                `Repository order: ${repositoryPreferences}\n` +
+                `Host order: ${hostPreferences}\n` +
+                `Automatic order: ${resolution.profileOrder.join(", ")}\n` +
+                `File: ${authPathFor(resolution.profile)}\n` +
                 `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}`,
               "info",
             );
@@ -204,9 +321,9 @@ export default function authProfiles(pi: ExtensionAPI): void {
             updateJsonFile(globalConfigPath(), (config) => {
               config.defaultProfile = profile;
             });
-            const { profile: active, source } = await rebind(ctx);
+            const resolution = await rebind(ctx);
             ctx.ui.notify(
-              `Global default auth profile set to ${profile}. Active profile: ${active} (${source})`,
+              `Global default auth profile set to ${profile}. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
               "info",
             );
             return;
@@ -218,9 +335,9 @@ export default function authProfiles(pi: ExtensionAPI): void {
                 delete settings.authProfile;
               });
             }
-            const { profile, source } = await rebind(ctx);
+            const resolution = await rebind(ctx);
             ctx.ui.notify(
-              `Project auth profile cleared. Active profile: ${profile} (${source})`,
+              `Project auth profile cleared. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
               "info",
             );
             return;

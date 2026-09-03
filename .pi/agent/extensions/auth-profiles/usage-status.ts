@@ -1,5 +1,7 @@
 import { resolve } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { selectProfile } from "./profile-selector";
+import { projectIsTrusted } from "./project-trust";
 import { collectUsageStatus } from "./usage-status-service";
 
 export * from "./usage-status-service";
@@ -45,7 +47,15 @@ async function main(args: string[]): Promise<number> {
       );
       return 0;
     }
-    process.stdout.write(`${JSON.stringify(await collectUsageStatus({ agentDir, cwd }))}\n`);
+    const resolution = await selectProfile(
+      { cwd, isProjectTrusted: () => projectIsTrusted(cwd, agentDir) },
+      { agentDir },
+    );
+    const status = await collectUsageStatus({
+      activeProfile: resolution.profile,
+      agentDir,
+    });
+    process.stdout.write(`${JSON.stringify(status)}\n`);
     return 0;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

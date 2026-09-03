@@ -1,3 +1,32 @@
 {
-  "defaultProfile": "ct"
+  "defaultProfile": "ct",
+  "hostDefaults": {
+    "rvn-pc": [
+      "fbb",
+      "jpb",
+      "ct"
+    ],
+    "kmd-mac": [
+      "ct"
+    ]
+  },
+  "repositoryPreferences": {
+    "dotfiles": [
+      "fbb",
+      "jpb"
+    ],
+    "nixos": [
+      "fbb",
+      "jpb"
+    ],
+    "KommuneKredit.Frontend": [
+      "kk",
+      "ct"
+    ],
+    "infinite-fusion-nuzlocke": [
+      "fbb",
+      "jpb",
+      "ct"
+    ]
+  }
 }

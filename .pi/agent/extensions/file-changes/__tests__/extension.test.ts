@@ -20,7 +20,7 @@ interface SessionEntry {
   data: unknown;
 }
 
-function createHarness(initialFiles: Record<string, string | null>, hideFileChanges = false) {
+function createHarness(initialFiles: Record<string, string | null>, showFileChanges = true) {
   const cwd = "/repo";
   const files = new Map(
     Object.entries(initialFiles).map(([path, content]) => [join(cwd, path), content]),
@@ -30,6 +30,7 @@ function createHarness(initialFiles: Record<string, string | null>, hideFileChan
   const statuses: Array<string | undefined> = [];
   const widgets: WidgetContent[] = [];
   const notifications: string[] = [];
+  let configuredShowFileChanges = showFileChanges;
   let command: CommandHandler | undefined;
 
   const pi = {
@@ -58,8 +59,11 @@ function createHarness(initialFiles: Record<string, string | null>, hideFileChan
   } as unknown as ExtensionCommandContext;
 
   createFileChangesExtension({
-    readSettings: () => ({ hideFileChanges, warnings: [] }),
+    readSettings: () => ({ showFileChanges: configuredShowFileChanges, warnings: [] }),
     readTextFile: async (absolutePath) => files.get(absolutePath),
+    writeSettings: (value) => {
+      configuredShowFileChanges = value;
+    },
   })(pi);
 
   async function emit(event: string, value: object): Promise<void> {
@@ -74,6 +78,7 @@ function createHarness(initialFiles: Record<string, string | null>, hideFileChan
     statuses,
     widgets,
     emit,
+    getShowFileChanges: () => configuredShowFileChanges,
     async runCommand(args: string): Promise<void> {
       if (command === undefined) throw new Error("changes command was not registered");
       await command(args, context);
@@ -160,10 +165,19 @@ describe("file changes extension", () => {
 
     await harness.runCommand("hide");
     expect(harness.widgets.at(-1)).toBeUndefined();
+    expect(harness.getShowFileChanges()).toBe(false);
     expect(harness.notifications.at(-1)).toBe("Changes hidden");
+
+    await harness.runCommand("");
+    expect(harness.widgets.at(-1)).toBeTypeOf("function");
+    expect(harness.getShowFileChanges()).toBe(true);
+
+    await harness.runCommand("hide");
+    expect(harness.getShowFileChanges()).toBe(false);
 
     await harness.runCommand("show");
     expect(harness.widgets.at(-1)).toBeTypeOf("function");
+    expect(harness.getShowFileChanges()).toBe(true);
 
     await harness.runCommand("clear");
     expect(harness.statuses.at(-1)).toBeUndefined();
@@ -171,8 +185,8 @@ describe("file changes extension", () => {
     expect(harness.notifications.at(-1)).toBe("Cleared 1 file");
   });
 
-  test("hides file changes globally without discarding tracked state", async () => {
-    const harness = createHarness({ "example.ts": "before\n" }, true);
+  test("honors the global setting and toggles it with /changes", async () => {
+    const harness = createHarness({ "example.ts": "before\n" }, false);
     await harness.emit("session_start", { reason: "startup" });
 
     await harness.emit("tool_call", writeCall("write-1", "example.ts"));
@@ -191,9 +205,10 @@ describe("file changes extension", () => {
       },
     });
 
-    await harness.runCommand("show");
-    expect(harness.notifications.at(-1)).toBe(
-      "Changes hidden by the global hideFileChanges setting",
-    );
+    await harness.runCommand("");
+    expect(harness.getShowFileChanges()).toBe(true);
+    expect(harness.statuses.at(-1)).toBe("1 file +1 -1");
+    expect(harness.widgets.at(-1)).toBeTypeOf("function");
+    expect(harness.notifications.at(-1)).toBe("Changes shown");
   });
 });

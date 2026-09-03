@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { resolveQuickReplyModel } from "../settings";
+import {
+  loadQuickRepliesSettings,
+  resolveQuickRepliesSettings,
+  resolveQuickReplyModel,
+  writeQuickRepliesSetting,
+} from "../settings";
 
 const temporaryDirectories: string[] = [];
 
@@ -26,6 +31,58 @@ function project(settings?: unknown): string {
   }
   return cwd;
 }
+
+function settingsFile(settings: unknown): string {
+  const directory = mkdtempSync(join(tmpdir(), "quick-replies-global-settings-"));
+  temporaryDirectories.push(directory);
+  const path = join(directory, "settings.json");
+  writeFileSync(path, JSON.stringify(settings));
+  return path;
+}
+
+describe("quick reply global settings", () => {
+  test.each([undefined, {}, { quickReplies: {} }, { quickReplies: { model: "provider/model" } }])(
+    "enables quick replies when the setting is absent: %j",
+    (settings) => {
+      expect(resolveQuickRepliesSettings(settings)).toEqual({ enabled: true, warnings: [] });
+    },
+  );
+
+  test("disables quick replies when configured globally", () => {
+    expect(resolveQuickRepliesSettings({ quickReplies: { enabled: false } })).toEqual({
+      enabled: false,
+      warnings: [],
+    });
+  });
+
+  test("warns and enables quick replies for an invalid setting", () => {
+    expect(resolveQuickRepliesSettings({ quickReplies: { enabled: "no" } })).toEqual({
+      enabled: true,
+      warnings: ["global quickReplies.enabled: expected a boolean"],
+    });
+  });
+
+  test("loads the global setting from a Pi settings file", () => {
+    expect(loadQuickRepliesSettings(settingsFile({ quickReplies: { enabled: false } }))).toEqual({
+      enabled: false,
+      warnings: [],
+    });
+  });
+
+  test("updates the global setting without dropping other quick-replies settings", () => {
+    const path = settingsFile({
+      theme: "dark",
+      quickReplies: { model: "anthropic/claude-haiku-4-5", enabled: true },
+    });
+
+    writeQuickRepliesSetting(false, path);
+
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      theme: "dark",
+      quickReplies: { model: "anthropic/claude-haiku-4-5", enabled: false },
+    });
+  });
+});
 
 describe("quick reply model settings", () => {
   test("loads the model from trusted project settings", () => {

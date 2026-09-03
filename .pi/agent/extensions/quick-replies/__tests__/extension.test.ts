@@ -8,10 +8,13 @@ import {
   QUICK_REPLY_SHORTCUTS,
   renderQuickReplyPanel,
 } from "../index";
+import type { QuickRepliesSettings } from "../settings";
 
 type ExtensionMode = "tui" | "rpc" | "json" | "print";
 type EventHandler = (event: never, context: ExtensionContext) => unknown | Promise<unknown>;
 type ShortcutHandler = (context: ExtensionContext) => void | Promise<void>;
+type CommandHandler = (args: string, context: ExtensionContext) => void | Promise<void>;
+type ArgumentCompletions = (prefix: string) => unknown[] | null;
 type WidgetFactory = (tui: never, theme: Theme) => Component;
 
 interface GenerationCall {
@@ -62,6 +65,7 @@ function createHarness(
     mode?: ExtensionMode;
     editorText?: string;
     idle?: boolean;
+    enabled?: boolean;
     generate?: QuickReplyGenerator;
   } = {},
 ) {
@@ -73,7 +77,11 @@ function createHarness(
   const generationCalls: GenerationCall[] = [];
   let editorText = options.editorText ?? "";
   let idle = options.idle ?? true;
+  let configuredEnabled = options.enabled ?? true;
   let widget: Component | undefined;
+  let command: CommandHandler | undefined;
+  let getArgumentCompletions: ArgumentCompletions | undefined;
+  const notifications: string[] = [];
   const generate: QuickReplyGenerator = async (_ctx, input, signal) => {
     generationCalls.push({ input, signal });
     return options.generate?.(_ctx, input, signal) ?? generatedReplies;
@@ -84,6 +92,14 @@ function createHarness(
     registerShortcut: (shortcut: string, definition: { handler: ShortcutHandler }) => {
       shortcuts.set(shortcut, definition.handler);
     },
+    registerCommand: (
+      name: string,
+      definition: { handler: CommandHandler; getArgumentCompletions?: ArgumentCompletions },
+    ) => {
+      if (name !== "quick-replies") return;
+      command = definition.handler;
+      getArgumentCompletions = definition.getArgumentCompletions;
+    },
     sendUserMessage: (message: string, sendUserOptions: { expandPromptTemplates?: boolean }) => {
       widgetStateAtSend.push(widget !== undefined);
       sentMessages.push(message);
@@ -93,9 +109,13 @@ function createHarness(
 
   const ctx = {
     mode: options.mode ?? "tui",
+    hasUI: true,
     isIdle: () => idle,
     ui: {
       getEditorText: () => editorText,
+      notify: (message: string) => {
+        notifications.push(message);
+      },
       setEditorText: (value: string) => {
         editorText = value;
       },
@@ -108,7 +128,13 @@ function createHarness(
     },
   } as unknown as ExtensionContext;
 
-  createQuickRepliesExtension({ generate })(pi);
+  createQuickRepliesExtension({
+    generate,
+    readSettings: (): QuickRepliesSettings => ({ enabled: configuredEnabled, warnings: [] }),
+    writeSettings: (value) => {
+      configuredEnabled = value;
+    },
+  })(pi);
 
   async function emit(event: string, value: object = { type: event }): Promise<void> {
     await handlers.get(event)?.(value as never, ctx);
@@ -119,6 +145,7 @@ function createHarness(
     sendOptions,
     widgetStateAtSend,
     generationCalls,
+    notifications,
     get editorText() {
       return editorText;
     },
@@ -157,6 +184,19 @@ function createHarness(
     },
     emit,
     flush: flushPromises,
+    get configuredEnabled() {
+      return configuredEnabled;
+    },
+    async runCommand(args: string) {
+      if (command === undefined) throw new Error("quick-replies command was not registered");
+      await command(args, ctx);
+    },
+    argumentCompletions(prefix: string) {
+      if (getArgumentCompletions === undefined) {
+        throw new Error("quick-replies completions were not registered");
+      }
+      return getArgumentCompletions(prefix);
+    },
     async press(index: number) {
       const shortcut = QUICK_REPLY_SHORTCUTS[index];
       if (shortcut === undefined) throw new Error(`Missing shortcut at index ${index}`);
@@ -188,6 +228,73 @@ describe("quick replies lifecycle", () => {
     });
     expect(harness.widgetActive).toBe(true);
     expect(harness.renderWidget()).toHaveLength(2);
+  });
+
+  test("honors the disabled global setting without generating replies", async () => {
+    const harness = createHarness({ enabled: false });
+    await harness.emit("session_start");
+    await harness.startRun();
+    await harness.finishAssistant("The change is complete.");
+    await harness.settle();
+
+    expect(harness.generationCalls).toHaveLength(0);
+    expect(harness.widgetActive).toBe(false);
+  });
+
+  test("disables and persists quick replies immediately", async () => {
+    const pending = deferred<QuickReply[]>();
+    const harness = createHarness({ generate: () => pending.promise });
+    await showGeneratedReplies(harness);
+    const signal = harness.generationCalls[0]?.signal;
+
+    await harness.runCommand("off");
+    pending.resolve(generatedReplies);
+    await harness.flush();
+    await harness.press(0);
+
+    expect(harness.configuredEnabled).toBe(false);
+    expect(signal?.aborted).toBe(true);
+    expect(harness.widgetActive).toBe(false);
+    expect(harness.sentMessages).toEqual([]);
+    expect(harness.notifications.at(-1)).toBe("Quick replies disabled");
+  });
+
+  test("re-enables generation for a later response", async () => {
+    const harness = createHarness({ enabled: false });
+    await harness.emit("session_start");
+
+    await harness.runCommand("on");
+    await showGeneratedReplies(harness);
+
+    expect(harness.configuredEnabled).toBe(true);
+    expect(harness.generationCalls).toHaveLength(1);
+    expect(harness.widgetActive).toBe(true);
+  });
+
+  test("reports status and validates quick-replies command arguments", async () => {
+    const harness = createHarness();
+
+    await harness.runCommand("");
+    await harness.runCommand("toggle");
+
+    expect(harness.notifications).toEqual([
+      "Quick replies enabled",
+      "Usage: /quick-replies [on|off]",
+    ]);
+  });
+
+  test("completes quick-replies command actions", () => {
+    const harness = createHarness();
+
+    expect(harness.argumentCompletions("")).toEqual([
+      { value: "on", label: "on" },
+      { value: "off", label: "off" },
+    ]);
+    expect(harness.argumentCompletions("o")).toEqual([
+      { value: "on", label: "on" },
+      { value: "off", label: "off" },
+    ]);
+    expect(harness.argumentCompletions("on ")).toBeNull();
   });
 
   test("uses raw user input instead of expanded skill content", async () => {

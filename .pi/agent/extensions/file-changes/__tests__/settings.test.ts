@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadFileChangesSettings, resolveFileChangesSettings } from "../settings";
+import {
+  loadFileChangesSettings,
+  resolveFileChangesSettings,
+  writeFileChangesSetting,
+} from "../settings";
 
 const temporaryDirectories: string[] = [];
 
@@ -13,27 +17,27 @@ afterEach(() => {
 });
 
 describe("file changes settings", () => {
-  test.each([undefined, {}, { hideFileChanges: false }])(
-    "shows file changes when the setting is absent or false: %j",
+  test.each([undefined, {}, { showFileChanges: true }])(
+    "shows file changes when the setting is absent or true: %j",
     (settings) => {
       expect(resolveFileChangesSettings(settings)).toEqual({
-        hideFileChanges: false,
+        showFileChanges: true,
         warnings: [],
       });
     },
   );
 
   test("hides file changes when configured globally", () => {
-    expect(resolveFileChangesSettings({ hideFileChanges: true })).toEqual({
-      hideFileChanges: true,
+    expect(resolveFileChangesSettings({ showFileChanges: false })).toEqual({
+      showFileChanges: false,
       warnings: [],
     });
   });
 
   test("warns and shows file changes for an invalid setting", () => {
-    expect(resolveFileChangesSettings({ hideFileChanges: "yes" })).toEqual({
-      hideFileChanges: false,
-      warnings: ["global hideFileChanges: expected a boolean"],
+    expect(resolveFileChangesSettings({ showFileChanges: "yes" })).toEqual({
+      showFileChanges: true,
+      warnings: ["global showFileChanges: expected a boolean"],
     });
   });
 
@@ -41,11 +45,25 @@ describe("file changes settings", () => {
     const directory = mkdtempSync(join(tmpdir(), "file-changes-settings-"));
     temporaryDirectories.push(directory);
     const path = join(directory, "settings.json");
-    writeFileSync(path, '{"hideFileChanges":true}\n');
+    writeFileSync(path, '{"showFileChanges":false}\n');
 
     expect(loadFileChangesSettings(path)).toEqual({
-      hideFileChanges: true,
+      showFileChanges: false,
       warnings: [],
+    });
+  });
+
+  test("updates the global setting without dropping other settings", () => {
+    const directory = mkdtempSync(join(tmpdir(), "file-changes-settings-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "settings.json");
+    writeFileSync(path, '{"theme":"dark","hideFileChanges":true}\n');
+
+    writeFileChangesSetting(false, path);
+
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      theme: "dark",
+      showFileChanges: false,
     });
   });
 });

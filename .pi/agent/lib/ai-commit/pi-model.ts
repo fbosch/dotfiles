@@ -2,11 +2,12 @@ import { join } from "node:path";
 import {
   getAgentDir,
   ModelRuntime,
-  ProjectTrustStore,
   resolveCliModel,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { authPathFor, resolveProfile } from "../../extensions/auth-profiles/profile-store";
+import { selectProfile } from "../../extensions/auth-profiles/profile-selector";
+import { authPathFor } from "../../extensions/auth-profiles/profile-store";
+import { projectIsTrusted } from "../../extensions/auth-profiles/project-trust";
 import { resolveFastModelRequest } from "../../extensions/openai-fast";
 import {
   type CommitMessageModelConfig,
@@ -34,14 +35,6 @@ function commandTimeoutMs(): number {
   return Number.isNaN(parsed) || parsed < MINIMUM_TIMEOUT_MS ? DEFAULT_TIMEOUT_MS : parsed;
 }
 
-function projectIsTrusted(cwd: string, agentDir: string): boolean {
-  const trustDecision = new ProjectTrustStore(agentDir).get(cwd);
-  if (trustDecision !== null) return trustDecision;
-
-  const globalSettings = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
-  return globalSettings.getDefaultProjectTrust() === "always";
-}
-
 async function createConfiguredRuntime(cwd: string): Promise<{
   runtime: ModelRuntime;
   settings: SettingsManager;
@@ -50,12 +43,12 @@ async function createConfiguredRuntime(cwd: string): Promise<{
   const agentDir = getAgentDir();
   const trusted = projectIsTrusted(cwd, agentDir);
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted: trusted });
-  const { profile } = resolveProfile(
+  const { profile } = await selectProfile(
     {
       cwd,
       isProjectTrusted: () => trusted,
     },
-    agentDir,
+    { agentDir },
   );
   const runtime = await ModelRuntime.create({
     authPath: authPathFor(profile, agentDir),

@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "toolVersion": "0.7.0",
+  "toolVersion": "0.7.1",
   "sources": {
     "vicinae-docs": {
       "repo": "https://github.com/vicinaehq/docs.git",
       "ref": "HEAD",
-      "resolvedCommit": "9953fcc3643128d7ab1f6a46ba9b278f14e0980f",
+      "resolvedCommit": "62d86ea66db62a3c0f234ae6016ea6749c4ca9a7",
       "bytes": 58916,
       "fileCount": 34,
       "manifestSha256": "6939a47c343a73de73f80609c96f0b73154b05a47a0b3376f46a535801ff06c7",
@@ -23,16 +23,16 @@
     "hyprland-docs": {
       "repo": "https://github.com/hyprwm/hyprland-wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "767416d8ad85a3795cdcf02b70945389eeef450b",
-      "bytes": 222862,
-      "fileCount": 32,
-      "manifestSha256": "4bf670c184db41452a4f94f58c4f0286b24ca41ba3c7be540afd6dbb1fc37ddb",
-      "rulesSha256": "9711428153e452825f0368860d30401cea3ed5f5e90d569d70558c392fe0dc83"
+      "resolvedCommit": "b63a2dae5f4ed0fe64ee01fb6759004cf8b9bab4",
+      "bytes": 235157,
+      "fileCount": 49,
+      "manifestSha256": "69d553391edc6bb01bcee6c06355e99a269270bb49a1616486f8b364a2bd13cf",
+      "rulesSha256": "d931090061eef346a419ba272f7282e039f58df92ea9db77f1b71e84d45d9a0a"
     },
     "waybar-docs": {
       "repo": "https://github.com/Alexays/Waybar.wiki.git",
       "ref": "HEAD",
-      "resolvedCommit": "9e8ed49d8b1e7df3f137509a39f3034415582a94",
+      "resolvedCommit": "f3c7307f81960a5c7990b11373d25cd67b8fb7a0",
       "bytes": 22789,
       "fileCount": 2,
       "manifestSha256": "6ce880bf38b379777e79aa3ba0909f4351f89b3a6c39df253a3c357948d2d865",
@@ -41,19 +41,19 @@
     "glance-docs": {
       "repo": "https://github.com/glanceapp/glance",
       "ref": "HEAD",
-      "resolvedCommit": "20672ee30bb2fa8ec6d9da8eeb8f0c055291cd9c",
-      "bytes": 123119,
+      "resolvedCommit": "fbd9c1b6ae0c50ec015843f1bea48c400cddb518",
+      "bytes": 124517,
       "fileCount": 6,
-      "manifestSha256": "e34c9fc4ab699f38383171691f7fd417050031f4ef424f9ba0d61b2f2b2d8dda",
+      "manifestSha256": "af2eed93bc3a0384c55ce11bed22b5c37ec3071c8a3b72be6e06fe1ee8b0f856",
       "rulesSha256": "292a912375f27e4d0426baae461ae7a8c300a1f84c557d8cf7421743fb8b1fde"
     },
     "herdr-docs": {
       "repo": "https://github.com/ogulcancelik/herdr.git",
       "ref": "HEAD",
-      "resolvedCommit": "7d56b4c51b046a5d477439bcea4512339f8841aa",
-      "bytes": 699123,
+      "resolvedCommit": "b07ba9ced8b57099f038bc633ed1c9a5f5b3a1ed",
+      "bytes": 707437,
       "fileCount": 60,
-      "manifestSha256": "1a626275131f50ea2e9315641d374c936cb7d68ca58af97224d0a1ef76b4d777",
+      "manifestSha256": "64b9983d9a0689db17d2e0f78d51f1b5c03535be75a7e3523357514b5eb5cd2a",
       "rulesSha256": "6c03a23386fd099bc5a3c54454281ab61c9eedaa5c656dbfeebc0ca5474f1032"
     }
   },

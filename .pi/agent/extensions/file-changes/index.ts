@@ -14,7 +14,11 @@ import {
   summarizeFileChange,
   type TrackedFile,
 } from "./model";
-import { type FileChangesSettings, loadFileChangesSettings } from "./settings";
+import {
+  type FileChangesSettings,
+  loadFileChangesSettings,
+  writeFileChangesSetting,
+} from "./settings";
 import { FileChangesWidget } from "./widget";
 
 const BASELINE_ENTRY = "file-changes:baseline";
@@ -30,6 +34,7 @@ interface PendingSnapshot extends FileBaseline {}
 interface FileChangesDependencies {
   readonly readSettings?: () => FileChangesSettings;
   readonly readTextFile?: ReadTextFile;
+  readonly writeSettings?: (showFileChanges: boolean) => void;
 }
 
 async function readTextFile(absolutePath: string): Promise<FileContent> {
@@ -71,6 +76,14 @@ function report(ctx: ExtensionContext, message: string): void {
   console.log(message);
 }
 
+function reportError(ctx: ExtensionContext, message: string): void {
+  if (ctx.hasUI) {
+    ctx.ui.notify(message, "error");
+    return;
+  }
+  console.error(message);
+}
+
 export function createFileChangesExtension(
   dependencies: FileChangesDependencies = {},
 ): ExtensionFactory {
@@ -80,20 +93,19 @@ export function createFileChangesExtension(
     const baselines = new Map<string, FileBaseline>();
     const pendingSnapshots = new Map<string, PendingSnapshot>();
     const trackedFiles = new Map<string, TrackedFile>();
-    let hideFileChanges = false;
-    let showWidget = true;
+    let showFileChanges = true;
 
     function updateUi(ctx: ExtensionContext): void {
       if (!ctx.hasUI) return;
 
-      if (hideFileChanges) {
+      if (!showFileChanges) {
         clearUi(ctx);
         return;
       }
 
       ctx.ui.setStatus(UI_KEY, formatChangesStatus(trackedFiles.values()));
       if (ctx.mode !== "tui") return;
-      if (!showWidget || trackedFiles.size === 0) {
+      if (trackedFiles.size === 0) {
         ctx.ui.setWidget(UI_KEY, undefined);
         return;
       }
@@ -164,8 +176,27 @@ export function createFileChangesExtension(
       updateUi(ctx);
     }
 
+    function setShowFileChanges(value: boolean, ctx: ExtensionContext): boolean {
+      try {
+        (dependencies.writeSettings ?? writeFileChangesSetting)(value);
+      } catch (error) {
+        reportError(
+          ctx,
+          `Cannot update global showFileChanges setting: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        return false;
+      }
+
+      showFileChanges = value;
+      updateUi(ctx);
+      report(ctx, value ? "Changes shown" : "Changes hidden");
+      return true;
+    }
+
     pi.registerCommand("changes", {
-      description: "Show, hide, or clear files changed through edit and write",
+      description: "Toggle, show, hide, or clear file changes globally",
       getArgumentCompletions: (prefix) => {
         const input = prefix.trimStart();
         if (input.includes(" ")) return null;
@@ -183,16 +214,7 @@ export function createFileChangesExtension(
           return;
         }
         if (action === "" || action === "show" || action === "hide") {
-          showWidget = action === "show" || (action === "" && !showWidget);
-          updateUi(ctx);
-          report(
-            ctx,
-            hideFileChanges
-              ? "Changes hidden by the global hideFileChanges setting"
-              : showWidget
-                ? "Changes shown"
-                : "Changes hidden",
-          );
+          setShowFileChanges(action === "show" || (action === "" && !showFileChanges), ctx);
           return;
         }
 
@@ -202,7 +224,7 @@ export function createFileChangesExtension(
 
     pi.on("session_start", async (_event, ctx) => {
       const settings = (dependencies.readSettings ?? loadFileChangesSettings)();
-      hideFileChanges = settings.hideFileChanges;
+      showFileChanges = settings.showFileChanges;
       if (settings.warnings.length > 0) {
         ctx.ui.notify(`File changes settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
       }

@@ -62,10 +62,8 @@ describe("auth profile usage status", () => {
     temporaryDirectories.push(root);
     const agentDir = join(root, "agent");
     const profilesDir = join(agentDir, "auth-profiles");
-    const projectDir = join(root, "project");
     const cachePath = join(root, "cache", "usage.json");
     await mkdir(profilesDir, { recursive: true });
-    await mkdir(join(projectDir, ".pi"), { recursive: true });
     await writeCredential(join(agentDir, "auth.json"), {
       access: "default-access-token",
       accountId: "account-default",
@@ -74,8 +72,6 @@ describe("auth profile usage status", () => {
       access: "work-access-token",
       accountId: "account-work",
     });
-    await writeFile(join(projectDir, ".pi", "settings.json"), '{"authProfile":"work"}\n');
-
     const requestedTokens: string[] = [];
     const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
@@ -88,9 +84,9 @@ describe("auth profile usage status", () => {
     };
 
     const payload = await collectUsageStatus({
+      activeProfile: "work",
       agentDir,
       cachePath,
-      cwd: projectDir,
       fetchFn,
       now: () => now,
     });
@@ -116,9 +112,9 @@ describe("auth profile usage status", () => {
 
     let cacheMiss = false;
     const cached = await collectUsageStatus({
+      activeProfile: "work",
       agentDir,
       cachePath,
-      cwd: projectDir,
       fetchFn: async () => {
         cacheMiss = true;
         throw new Error("unexpected network request");
@@ -127,6 +123,17 @@ describe("auth profile usage status", () => {
     });
     expect(cacheMiss).toBe(false);
     expect(cached).toEqual(payload);
+
+    const inactive = await collectUsageStatus({
+      activeProfile: "default",
+      agentDir,
+      cachePath,
+      fetchFn: async () => {
+        throw new Error("unexpected network request");
+      },
+      now: () => now + 5_000,
+    });
+    expect(inactive.profiles[0]?.active).toBe(false);
     expect(JSON.parse(await readFile(cachePath, "utf8")).schema).toBe(
       "fbb.pi-auth-profiles-usage-cache/v1",
     );

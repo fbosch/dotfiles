@@ -44,26 +44,6 @@ export function readJsonFile(path: string): Record<string, unknown> | undefined 
   }
 }
 
-export function resolveProfile(
-  ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
-  agentDir = getAgentDir(),
-): {
-  profile: string;
-  source: string;
-} {
-  if (ctx.isProjectTrusted()) {
-    const project = readJsonFile(projectSettingsPath(ctx.cwd))?.authProfile;
-    if (typeof project === "string" && project.trim()) {
-      return { profile: normalizeName(project), source: "project" };
-    }
-  }
-  const global = readJsonFile(globalConfigPath(agentDir))?.defaultProfile;
-  if (typeof global === "string" && global.trim()) {
-    return { profile: normalizeName(global), source: "global default" };
-  }
-  return { profile: DEFAULT_PROFILE, source: "built-in default" };
-}
-
 export function listProfiles(agentDir = getAgentDir()): string[] {
   const names = new Set([DEFAULT_PROFILE]);
   if (existsSync(profilesDir(agentDir))) {

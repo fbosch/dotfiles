@@ -1,6 +1,11 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
+
+export interface QuickRepliesSettings {
+  readonly enabled: boolean;
+  readonly warnings: readonly string[];
+}
 
 export interface QuickReplyModel {
   provider: string;
@@ -8,6 +13,86 @@ export interface QuickReplyModel {
 }
 
 export const DEFAULT_QUICK_REPLY_MODEL = "openai-codex/gpt-5.6-luna-fast";
+
+function defaultSettings(): QuickRepliesSettings {
+  return { enabled: true, warnings: [] };
+}
+
+function settingsError(settingsPath: string, error: unknown): string {
+  return `Cannot load Pi settings from ${settingsPath}: ${error instanceof Error ? error.message : String(error)}`;
+}
+
+export function resolveQuickRepliesSettings(settings: unknown): QuickRepliesSettings {
+  if (isRecord(settings) === false || settings.quickReplies === undefined) {
+    return defaultSettings();
+  }
+
+  if (isRecord(settings.quickReplies) === false) {
+    return {
+      enabled: true,
+      warnings: ["global quickReplies.enabled: expected a boolean"],
+    };
+  }
+
+  if (settings.quickReplies.enabled === undefined) return defaultSettings();
+  if (typeof settings.quickReplies.enabled !== "boolean") {
+    return {
+      enabled: true,
+      warnings: ["global quickReplies.enabled: expected a boolean"],
+    };
+  }
+
+  return { enabled: settings.quickReplies.enabled, warnings: [] };
+}
+
+export function loadQuickRepliesSettings(
+  settingsPath = join(getAgentDir(), "settings.json"),
+): QuickRepliesSettings {
+  let source: string;
+  try {
+    source = readFileSync(settingsPath, "utf8");
+  } catch (error) {
+    if (isMissingFile(error)) return defaultSettings();
+    return { ...defaultSettings(), warnings: [settingsError(settingsPath, error)] };
+  }
+
+  try {
+    return resolveQuickRepliesSettings(JSON.parse(source));
+  } catch (error) {
+    return { ...defaultSettings(), warnings: [settingsError(settingsPath, error)] };
+  }
+}
+
+export function writeQuickRepliesSetting(
+  enabled: boolean,
+  settingsPath = join(getAgentDir(), "settings.json"),
+): void {
+  let settings: unknown = {};
+  try {
+    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw new Error(settingsError(settingsPath, error));
+    }
+  }
+
+  if (isRecord(settings) === false) {
+    throw new Error(
+      `Cannot update global quickReplies setting from ${settingsPath}: expected a JSON object`,
+    );
+  }
+  if (settings.quickReplies !== undefined && isRecord(settings.quickReplies) === false) {
+    throw new Error(
+      `Cannot update global quickReplies setting from ${settingsPath}: expected quickReplies to be a JSON object`,
+    );
+  }
+
+  settings.quickReplies = {
+    ...(isRecord(settings.quickReplies) ? settings.quickReplies : {}),
+    enabled,
+  };
+  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
+}
 
 export function resolveQuickReplyModel(
   context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,

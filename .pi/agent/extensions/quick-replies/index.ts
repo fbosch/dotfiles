@@ -7,6 +7,11 @@ import {
   type QuickReply,
   type QuickReplyGenerator,
 } from "./generator";
+import {
+  loadQuickRepliesSettings,
+  type QuickRepliesSettings,
+  writeQuickRepliesSetting,
+} from "./settings";
 
 export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"] as const;
 
@@ -47,6 +52,8 @@ export interface RenderedQuickReplies {
 
 export interface QuickRepliesDependencies {
   generate?: QuickReplyGenerator;
+  readSettings?: () => QuickRepliesSettings;
+  writeSettings?: (enabled: boolean) => void;
 }
 
 export function renderQuickReplyPanel(
@@ -155,6 +162,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     let widget: QuickReplyWidget | undefined;
     let widgetMounted = false;
     let uiPromptActive = false;
+    let enabled = true;
 
     function abortGeneration(): void {
       activeGeneration?.controller.abort();
@@ -187,6 +195,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
 
     function canShowReplies(ctx: ExtensionContext, runId: number): boolean {
       return (
+        enabled &&
         ctx.mode === "tui" &&
         ctx.isIdle() &&
         uiPromptActive === false &&
@@ -208,6 +217,41 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
         );
         return widget;
       });
+    }
+
+    function report(
+      ctx: ExtensionContext,
+      message: string,
+      level: "info" | "warning" | "error" = "info",
+    ): void {
+      if (ctx.hasUI) {
+        ctx.ui.notify(message, level);
+        return;
+      }
+      if (level === "error") {
+        console.error(message);
+      } else {
+        console.log(message);
+      }
+    }
+
+    function setEnabled(value: boolean, ctx: ExtensionContext): void {
+      try {
+        (dependencies.writeSettings ?? writeQuickRepliesSetting)(value);
+      } catch (error) {
+        report(
+          ctx,
+          `Cannot update global quickReplies.enabled setting: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          "error",
+        );
+        return;
+      }
+
+      enabled = value;
+      if (value === false) invalidateSettledState(ctx);
+      report(ctx, value ? "Quick replies enabled" : "Quick replies disabled");
     }
 
     function selectReply(index: number, ctx: ExtensionContext): void {
@@ -262,7 +306,37 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
         });
     }
 
-    pi.on("session_start", (_event, ctx) => resetSessionState(ctx));
+    pi.registerCommand("quick-replies", {
+      description: "Enable or disable quick replies globally",
+      getArgumentCompletions: (prefix) => {
+        const input = prefix.trimStart();
+        if (input.includes(" ")) return null;
+        const actions = ["on", "off"];
+        const matches = actions.filter((action) => action.startsWith(input));
+        return matches.length === 0 ? null : matches.map((value) => ({ value, label: value }));
+      },
+      handler: async (args, ctx) => {
+        const action = args.trim();
+        if (action === "") {
+          report(ctx, `Quick replies ${enabled ? "enabled" : "disabled"}`);
+          return;
+        }
+        if (action === "on" || action === "off") {
+          setEnabled(action === "on", ctx);
+          return;
+        }
+        report(ctx, "Usage: /quick-replies [on|off]", "warning");
+      },
+    });
+
+    pi.on("session_start", (_event, ctx) => {
+      const settings = (dependencies.readSettings ?? loadQuickRepliesSettings)();
+      enabled = settings.enabled;
+      if (settings.warnings.length > 0) {
+        report(ctx, `Quick replies settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
+      }
+      resetSessionState(ctx);
+    });
     pi.on("session_shutdown", (_event, ctx) => resetSessionState(ctx));
     pi.on("session_before_switch", (_event, ctx) => resetSessionState(ctx));
     pi.on("session_before_fork", (_event, ctx) => resetSessionState(ctx));

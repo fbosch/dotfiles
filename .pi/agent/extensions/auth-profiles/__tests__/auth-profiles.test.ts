@@ -9,8 +9,13 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import authProfiles from "../index";
+import type { ProfileSelection } from "../profile-selector";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
+type ProviderResponseHandler = (
+  event: { headers: Record<string, string>; status: number },
+  ctx: ExtensionContext,
+) => Promise<void>;
 type ProfileCommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
 type ResetCreditCommandHandler = ProfileCommandHandler;
@@ -60,6 +65,7 @@ describe("auth profile prompt status", () => {
     let profileCommand: ProfileCommandHandler | undefined;
     let resetCreditCommand: ResetCreditCommandHandler | undefined;
     const pi = {
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
       on(event: string, handler: SessionStartHandler) {
         if (event === "session_start") sessionStart = handler;
       },
@@ -98,6 +104,93 @@ describe("auth profile prompt status", () => {
     const projectSettings = await readFile(join(projectDir, ".pi", "settings.json"), "utf8");
     expect(projectSettings).toBe('{\n  "authProfile": "work"\n}\n');
     expect(JSON.parse(projectSettings)).toEqual({ authProfile: "work" });
+  });
+
+  test("switches to the next profile after confirmed Codex exhaustion", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-fallback-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const projectDir = join(root, "project");
+    await mkdir(agentDir);
+    await mkdir(projectDir);
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    const baseSelection = {
+      profileOrder: ["fbb", "jpb", "default"],
+      source: "host default" as const,
+      host: { name: "rvn-pc", source: "system hostname" as const },
+      hostPreferences: ["fbb", "jpb"],
+      repositoryPreferences: [],
+    };
+    const selections: ProfileSelection[] = [
+      { ...baseSelection, profile: "fbb", fallbackReason: "confirmed usage" },
+      {
+        ...baseSelection,
+        profile: "jpb",
+        fallbackFrom: "fbb",
+        fallbackReason: "confirmed usage",
+      },
+    ];
+    const chooseProfile = async (
+      _ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
+      options: { excludedProfiles?: ReadonlySet<string> } = {},
+    ): Promise<ProfileSelection> => {
+      if (selections.length === 1) expect(options.excludedProfiles).toEqual(new Set(["fbb"]));
+      const selection = selections.shift();
+      if (!selection) throw new Error("unexpected profile selection");
+      return selection;
+    };
+
+    let sessionStart: SessionStartHandler | undefined;
+    let providerResponse: ProviderResponseHandler | undefined;
+    const pi = {
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      on(event: string, handler: SessionStartHandler | ProviderResponseHandler) {
+        if (event === "session_start") sessionStart = handler as SessionStartHandler;
+        if (event === "after_provider_response") {
+          providerResponse = handler as ProviderResponseHandler;
+        }
+      },
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI;
+    authProfiles(pi, { now: () => 1_000_000, selectProfile: chooseProfile });
+
+    const statuses: Array<[string, string | undefined]> = [];
+    const notifications: string[] = [];
+    const runtime = {
+      credentials: { store: new FakeAuthStore() },
+      forceRefreshAvailability: async () => undefined,
+    };
+    const ctx = {
+      cwd: projectDir,
+      isProjectTrusted: () => false,
+      mode: "tui",
+      model: { provider: "openai-codex" },
+      modelRegistry: { runtime },
+      ui: {
+        notify: (message: string) => notifications.push(message),
+        setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
+      },
+    } as unknown as ExtensionContext;
+
+    await sessionStart?.({}, ctx);
+    await providerResponse?.(
+      {
+        status: 429,
+        headers: {
+          "x-codex-primary-reset-after-seconds": "30",
+          "x-codex-primary-used-percent": "100",
+        },
+      },
+      ctx,
+    );
+
+    expect(statuses).toEqual([
+      ["auth-profile", "fbb"],
+      ["auth-profile", "jpb"],
+    ]);
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "jpb.json"));
+    expect(notifications.at(-1)).toBe("fbb exhausted; switched to jpb. Retry the request.");
   });
 
   test("reset-credit resolves a named profile and restores the active store", async () => {

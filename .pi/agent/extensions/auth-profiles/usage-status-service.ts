@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { authPathFor, listProfiles, normalizeName, resolveProfile } from "./profile-store";
+import { authPathFor, DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
 
 const OUTPUT_SCHEMA = "fbb.pi-auth-profiles-usage/v1";
 const CACHE_SCHEMA = "fbb.pi-auth-profiles-usage-cache/v1";
@@ -15,7 +15,7 @@ const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_REQUESTS = 4;
 
-type FetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
+export type FetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
 type Urgency = "urgent" | "soon" | "later" | "unknown";
 type DiagnosticCode =
   | "credential-expired"
@@ -90,11 +90,15 @@ type AccountResult = {
 };
 
 export type CollectUsageStatusOptions = {
+  activeProfile?: string;
   agentDir?: string;
   cachePath?: string;
-  cwd?: string;
   fetchFn?: FetchFn;
+  forceUsageRefresh?: boolean;
+  includeDefault?: boolean;
+  includeResetCredits?: boolean;
   now?: () => number;
+  profileLabels?: readonly string[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -362,6 +366,8 @@ async function refreshAccount(
   cached: CachedAccount | undefined,
   now: number,
   fetchFn: FetchFn,
+  forceUsageRefresh: boolean,
+  includeResetCredits: boolean,
 ): Promise<AccountResult> {
   const next: CachedAccount =
     cached?.credentialKey === credentialKey ? { ...cached } : { credentialKey };
@@ -369,7 +375,11 @@ async function refreshAccount(
 
   if (credential.expires <= now) {
     errors.push("credential-expired");
-  } else if (!next.usageCheckedAt || now - next.usageCheckedAt >= USAGE_CACHE_MS) {
+  } else if (
+    forceUsageRefresh ||
+    !next.usageCheckedAt ||
+    now - next.usageCheckedAt >= USAGE_CACHE_MS
+  ) {
     try {
       next.usage = usageFromPayload(await fetchPayload(USAGE_URL, credential, fetchFn));
       next.usageCheckedAt = now;
@@ -383,7 +393,11 @@ async function refreshAccount(
     !next.resetCreditsCheckedAt || now - next.resetCreditsCheckedAt >= RESET_CREDITS_CACHE_MS;
   const resetCreditsCountChanged =
     usageCount !== undefined && next.resetCredits?.availableCount !== usageCount;
-  if (credential.expires > now && (resetCreditsAreStale || resetCreditsCountChanged)) {
+  if (
+    includeResetCredits &&
+    credential.expires > now &&
+    (resetCreditsAreStale || resetCreditsCountChanged)
+  ) {
     try {
       next.resetCredits = resetCreditsFromPayload(
         await fetchPayload(RESET_CREDITS_URL, credential, fetchFn),
@@ -432,14 +446,16 @@ export async function collectUsageStatus(
   options: CollectUsageStatusOptions = {},
 ): Promise<UsageStatusPayload> {
   const agentDir = options.agentDir ?? getAgentDir();
-  const cwd = options.cwd ?? process.cwd();
   const fetchFn = options.fetchFn ?? fetch;
   const now = (options.now ?? Date.now)();
   const diagnostics: UsageStatusPayload["diagnostics"] = [];
   const profileCredentials: ProfileCredential[] = [];
+  const requestedProfiles = options.profileLabels
+    ? new Set(options.profileLabels.map(normalizeName))
+    : undefined;
 
   for (const rawName of listProfiles(agentDir)) {
-    if (rawName === "default") continue;
+    if (rawName === DEFAULT_PROFILE && options.includeDefault !== true) continue;
 
     let profileLabel: string;
     try {
@@ -448,6 +464,8 @@ export async function collectUsageStatus(
       diagnostics.push({ profileLabel: "invalid", code: "invalid-profile-name" });
       continue;
     }
+
+    if (requestedProfiles && requestedProfiles.has(profileLabel) === false) continue;
 
     const result = readCodexCredential(authPathFor(profileLabel, agentDir));
     if (result.kind === "missing") continue;
@@ -462,7 +480,7 @@ export async function collectUsageStatus(
     });
   }
 
-  const activeProfile = resolveProfile({ cwd, isProjectTrusted: () => true }, agentDir).profile;
+  const activeProfile = options.activeProfile ?? DEFAULT_PROFILE;
   const cachePath = options.cachePath ?? defaultCachePath();
   const cache = readUsageCache(cachePath);
   const credentialsByKey = new Map<string, CodexCredential>();
@@ -478,14 +496,25 @@ export async function collectUsageStatus(
     accountEntries,
     MAX_CONCURRENT_REQUESTS,
     ([credentialKey, credential]) =>
-      refreshAccount(credentialKey, credential, cache.accounts[credentialKey], now, fetchFn),
+      refreshAccount(
+        credentialKey,
+        credential,
+        cache.accounts[credentialKey],
+        now,
+        fetchFn,
+        options.forceUsageRefresh === true,
+        options.includeResetCredits !== false,
+      ),
   );
   const resultsByKey = new Map<string, AccountResult>();
   accountEntries.forEach(([credentialKey], index) => {
     const result = accountResults[index];
     if (result) resultsByKey.set(credentialKey, result);
   });
-  const nextCache: UsageCache = { schema: CACHE_SCHEMA, accounts: {} };
+  const nextCache: UsageCache = {
+    schema: CACHE_SCHEMA,
+    accounts: requestedProfiles ? { ...cache.accounts } : {},
+  };
   for (const [credentialKey, result] of resultsByKey) {
     nextCache.accounts[credentialKey] = result.cached;
   }
