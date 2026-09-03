@@ -1,6 +1,7 @@
 ---
 name: justfile
 description: Use when a repository contains a `justfile` or `.justfile` and work should flow through `just` recipes instead of ad-hoc shell commands. Covers recipe discovery, execution, debugging, and concise recipe authoring/refactoring for repeatable project tasks.
+disable-model-invocation: true
 ---
 
 # Justfile
