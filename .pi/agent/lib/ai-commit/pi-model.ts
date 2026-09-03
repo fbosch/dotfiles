@@ -48,7 +48,7 @@ async function createConfiguredRuntime(cwd: string): Promise<{
       cwd,
       isProjectTrusted: () => trusted,
     },
-    { agentDir },
+    { agentDir, forceUsageRefresh: true },
   );
   const runtime = await ModelRuntime.create({
     authPath: authPathFor(profile, agentDir),

@@ -176,7 +176,7 @@
       "chrome-device.realforce.co.jp__-RealforceProfile": "Realforce"
      },
     "rewrite": {
-      "^(\\s*)Baldur's Gate 3.*$": "$1Baldur's Gate 3"
+      "^.*Baldur&apos;s Gate 3.*$": "Baldur&apos;s Gate 3"
     }
    },
   

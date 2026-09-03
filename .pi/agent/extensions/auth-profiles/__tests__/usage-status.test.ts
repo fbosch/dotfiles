@@ -139,6 +139,37 @@ describe("auth profile usage status", () => {
     );
   });
 
+  test("returns live usage when the cache cannot be written", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-cache-failure-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const profilesDir = join(agentDir, "auth-profiles");
+    await mkdir(profilesDir, { recursive: true });
+    await writeCredential(join(profilesDir, "work.json"), {
+      access: "work-access-token",
+      accountId: "account-work",
+    });
+
+    const payload = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cachePath: root,
+      fetchFn: async () => usageResponse(20, 0),
+      includeResetCredits: false,
+      now: () => now,
+    });
+
+    expect(payload.profiles[0]).toMatchObject({
+      active: true,
+      profileLabel: "work",
+      usage: [{ remaining: 80 }],
+    });
+    expect(payload.diagnostics).toContainEqual({
+      profileLabel: "cache",
+      code: "usage-cache-write-failed",
+    });
+  });
+
   test("rejects malformed usage windows", () => {
     expect(() => usageFromPayload({ rate_limit: null })).toThrow(
       "usage response has an unexpected shape",

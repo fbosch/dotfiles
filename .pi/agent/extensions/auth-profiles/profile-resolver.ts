@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { hostname as systemHostname } from "node:os";
 import { basename, resolve as resolvePath } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -15,6 +15,8 @@ import {
 const GIT_TIMEOUT_MS = 2_000;
 const GIT_MAX_OUTPUT_BYTES = 64 * 1024;
 const MAX_PROFILE_PREFERENCES = 16;
+const MAX_MAPPING_ENTRIES = 256;
+const MAX_CONFIG_BYTES = 256 * 1024;
 
 type ProfileContext = Pick<ExtensionContext, "cwd" | "isProjectTrusted">;
 
@@ -119,10 +121,15 @@ function parseHostDefaults(value: unknown): Record<string, string[]> {
     throw new Error("hostDefaults must be a JSON object.");
   }
 
-  const defaults: Record<string, string[]> = {};
-  for (const [rawHost, rawProfiles] of Object.entries(value)) {
+  const entries = Object.entries(value);
+  if (entries.length > MAX_MAPPING_ENTRIES) {
+    throw new Error(`hostDefaults cannot contain more than ${MAX_MAPPING_ENTRIES} hosts.`);
+  }
+
+  const defaults = Object.create(null) as Record<string, string[]>;
+  for (const [rawHost, rawProfiles] of entries) {
     const host = normalizedHostName(rawHost, `hostDefaults key ${JSON.stringify(rawHost)}`);
-    if (host in defaults) {
+    if (Object.hasOwn(defaults, host)) {
       throw new Error(`hostDefaults contains duplicate host name ${JSON.stringify(host)}.`);
     }
     defaults[host] = profilePreferenceList(rawProfiles, `hostDefaults.${rawHost}`, {
@@ -138,8 +145,15 @@ function parseRepositoryPreferences(value: unknown): Record<string, string[]> {
     throw new Error("repositoryPreferences must be a JSON object.");
   }
 
-  const preferences: Record<string, string[]> = {};
-  for (const [rawRepository, rawProfiles] of Object.entries(value)) {
+  const entries = Object.entries(value);
+  if (entries.length > MAX_MAPPING_ENTRIES) {
+    throw new Error(
+      `repositoryPreferences cannot contain more than ${MAX_MAPPING_ENTRIES} repositories.`,
+    );
+  }
+
+  const preferences = Object.create(null) as Record<string, string[]>;
+  for (const [rawRepository, rawProfiles] of entries) {
     const repository = repositoryName(
       rawRepository,
       `repositoryPreferences key ${JSON.stringify(rawRepository)}`,
@@ -161,6 +175,9 @@ export function readAuthProfilesConfig(agentDir = getAgentDir()): AuthProfilesCo
 
   let value: unknown;
   try {
+    if (statSync(path).size > MAX_CONFIG_BYTES) {
+      throw new Error(`configuration cannot exceed ${MAX_CONFIG_BYTES} bytes`);
+    }
     value = JSON.parse(readFileSync(path, "utf8"));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

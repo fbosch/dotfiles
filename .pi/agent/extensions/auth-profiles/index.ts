@@ -9,7 +9,12 @@
 
 import { existsSync } from "node:fs";
 import type { GitRunner } from "./profile-resolver";
-import { codexUsageLimitResetAt, type ProfileSelection, selectProfile } from "./profile-selector";
+import {
+  codexUsageLimitResetAt,
+  codexUsageLimitResetAtFromMessage,
+  type ProfileSelection,
+  selectProfile,
+} from "./profile-selector";
 import {
   accountIdFor,
   authPathFor,
@@ -65,7 +70,6 @@ type InternalAuthStorage = {
 
 type InternalRuntime = {
   credentials?: { store?: InternalAuthStorage };
-  forceRefreshAvailability?: () => Promise<unknown>;
 };
 
 type AuthProfileDependencies = {
@@ -96,11 +100,8 @@ async function bindProfile(
   }
   runtime.credentials.store = create.call(store.constructor, path);
 
-  // Switching after startup otherwise leaves the model availability snapshot
-  // based on the previously selected profile.
-  if (typeof runtime.forceRefreshAvailability === "function") {
-    await runtime.forceRefreshAvailability();
-  }
+  // Keep provider availability in sync with the newly selected credential file.
+  await ctx.modelRegistry.refresh({ allowNetwork: false });
   return path;
 }
 
@@ -124,6 +125,7 @@ export default function authProfiles(
   let activeSelection: ProfileSelection | undefined;
   const exhaustedUntil = new Map<string, number>();
   let fallbackPromise: Promise<void> | undefined;
+  let usageLimitHandledForTurn = false;
   const runGit: GitRunner = async (cwd, args) => {
     const result = await pi.exec("git", ["-C", cwd, ...args], { timeout: 2_000 });
     if (result.code !== 0) return undefined;
@@ -174,6 +176,12 @@ export default function authProfiles(
 
   pi.on("session_start", async (_event, ctx) => {
     const resolution = await rebind(ctx);
+    if (resolution.selectionWarning) {
+      ctx.ui.notify(
+        `Auth profile usage selection unavailable; using ${resolution.profile}: ${resolution.selectionWarning}`,
+        "warning",
+      );
+    }
     if (resolution.profile !== DEFAULT_PROFILE) {
       ctx.ui.notify(
         `Auth profile: ${resolution.profile} (${describeSelection(resolution)})`,
@@ -182,15 +190,16 @@ export default function authProfiles(
     }
   });
 
-  pi.on("after_provider_response", async (event, ctx) => {
-    if (ctx.model?.provider !== "openai-codex" || activeSelection?.source === "project") return;
-
+  const rotateAfterExhaustion = async (
+    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
+    resetAt: number,
+  ): Promise<void> => {
     const currentTime = now();
-    const resetAt = codexUsageLimitResetAt(event.headers, currentTime);
-    if (resetAt === undefined) return;
-
     const exhaustedProfile = activeProfile;
-    if ((exhaustedUntil.get(exhaustedProfile) ?? 0) > currentTime) return;
+    if ((exhaustedUntil.get(exhaustedProfile) ?? 0) > currentTime) {
+      await fallbackPromise;
+      return;
+    }
     exhaustedUntil.set(exhaustedProfile, resetAt);
     for (const [profile, expiry] of exhaustedUntil) {
       if (expiry <= currentTime) exhaustedUntil.delete(profile);
@@ -236,9 +245,50 @@ export default function authProfiles(
       });
       fallbackPromise = operation;
     }
+    await fallbackPromise;
+  };
 
-    // A failed response should not finish before its replacement profile is active.
-    if (event.status >= 400) await fallbackPromise;
+  pi.on("turn_start", () => {
+    usageLimitHandledForTurn = false;
+  });
+
+  pi.on("before_provider_headers", async () => {
+    await fallbackPromise;
+  });
+
+  pi.on("after_provider_response", async (event, ctx) => {
+    if (
+      usageLimitHandledForTurn ||
+      ctx.model?.provider !== "openai-codex" ||
+      activeSelection?.source === "project"
+    ) {
+      return;
+    }
+
+    const resetAt = codexUsageLimitResetAt(event.headers, now());
+    if (resetAt === undefined) return;
+    usageLimitHandledForTurn = true;
+
+    const rotation = rotateAfterExhaustion(ctx, resetAt);
+    // Successful responses must remain consumable while selection runs.
+    if (event.status >= 400) await rotation;
+  });
+
+  pi.on("message_end", async (event, ctx) => {
+    if (
+      usageLimitHandledForTurn ||
+      activeSelection?.source === "project" ||
+      ctx.model?.provider !== "openai-codex" ||
+      event.message.role !== "assistant" ||
+      event.message.stopReason !== "error"
+    ) {
+      return;
+    }
+
+    const resetAt = codexUsageLimitResetAtFromMessage(event.message.errorMessage, now());
+    if (resetAt === undefined) return;
+    usageLimitHandledForTurn = true;
+    await rotateAfterExhaustion(ctx, resetAt);
   });
 
   pi.registerCommand("profile", {
@@ -273,6 +323,9 @@ export default function authProfiles(
             const hostPreferences = resolution.hostPreferences.length
               ? resolution.hostPreferences.join(", ")
               : "none";
+            const warning = resolution.selectionWarning
+              ? `\nSelection warning: ${resolution.selectionWarning}`
+              : "";
             ctx.ui.notify(
               `Auth profile: ${resolution.profile} (${describeSelection(resolution)})\n` +
                 `Host: ${resolution.host.name} (${resolution.host.source})\n` +
@@ -281,7 +334,8 @@ export default function authProfiles(
                 `Host order: ${hostPreferences}\n` +
                 `Automatic order: ${resolution.profileOrder.join(", ")}\n` +
                 `File: ${authPathFor(resolution.profile)}\n` +
-                `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}`,
+                `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}` +
+                warning,
               "info",
             );
             return;

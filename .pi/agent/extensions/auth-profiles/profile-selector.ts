@@ -145,6 +145,15 @@ function finiteHeaderNumber(value: string | undefined): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+export function codexUsageLimitResetAtFromMessage(
+  errorMessage: string | undefined,
+  currentTime = Date.now(),
+): number | undefined {
+  return errorMessage?.startsWith("You have hit your ChatGPT usage limit")
+    ? currentTime + UNKNOWN_USAGE_COOLDOWN_MS
+    : undefined;
+}
+
 export function codexUsageLimitResetAt(
   responseHeaders: Record<string, string>,
   currentTime = Date.now(),

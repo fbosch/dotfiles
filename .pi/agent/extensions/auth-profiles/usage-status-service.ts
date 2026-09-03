@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -11,6 +11,7 @@ const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_RESPONSE_BYTES = 1024 * 1024;
+const MAX_CACHE_BYTES = 2 * 1024 * 1024;
 const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_REQUESTS = 4;
@@ -23,6 +24,7 @@ type DiagnosticCode =
   | "invalid-codex-credential"
   | "invalid-profile-name"
   | "reset-credits-request-failed"
+  | "usage-cache-write-failed"
   | "usage-request-failed";
 
 type CodexCredential = {
@@ -323,6 +325,14 @@ function parseCachedAccount(value: unknown): CachedAccount | undefined {
 }
 
 function readUsageCache(path: string): UsageCache {
+  try {
+    if (existsSync(path) && statSync(path).size > MAX_CACHE_BYTES) {
+      return { schema: CACHE_SCHEMA, accounts: {} };
+    }
+  } catch {
+    return { schema: CACHE_SCHEMA, accounts: {} };
+  }
+
   const value = readJsonObject(path);
   if (value?.schema !== CACHE_SCHEMA || !isRecord(value.accounts)) {
     return { schema: CACHE_SCHEMA, accounts: {} };
@@ -518,7 +528,11 @@ export async function collectUsageStatus(
   for (const [credentialKey, result] of resultsByKey) {
     nextCache.accounts[credentialKey] = result.cached;
   }
-  writeUsageCache(cachePath, nextCache);
+  try {
+    writeUsageCache(cachePath, nextCache);
+  } catch {
+    diagnostics.push({ profileLabel: "cache", code: "usage-cache-write-failed" });
+  }
 
   const profiles = profileCredentials
     .map(({ profileLabel, credentialKey }) => {

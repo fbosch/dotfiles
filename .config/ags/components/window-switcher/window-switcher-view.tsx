@@ -6,6 +6,7 @@ import Gtk from "gi://Gtk?version=4.0";
 import {
 	getFallbackLetter,
 	getIconForWindow,
+	rewriteWaybarTaskbarTitle,
 	setImageFile,
 } from "@/services/app-icons";
 import { perf } from "@/services/performance-monitor";
@@ -149,7 +150,9 @@ export class WindowSwitcherView {
 				this.#reorder(session, mode, addresses);
 			else this.#updateSelection(session);
 			this.#selectedLabel.set_label(
-				session.windows[session.currentIndex]?.title ?? "",
+				rewriteWaybarTaskbarTitle(
+					session.windows[session.currentIndex]?.title ?? "",
+				),
 			);
 		} catch (cause) {
 			ok = false;
@@ -181,7 +184,7 @@ export class WindowSwitcherView {
 			widgets.header.set_size_request(info.width, -1);
 			widgets.body.set_size_request(info.width, info.height);
 			widgets.title.set_label(
-				truncateWindowTitle(window.title, info.width - 52),
+				truncateWindowTitle(rewriteWaybarTaskbarTitle(window.title), info.width - 52),
 			);
 			if (info.texture) {
 				if (widgets.picture) widgets.picture.set_paintable(info.texture);
@@ -252,7 +255,10 @@ export class WindowSwitcherView {
 			const widgets = this.#previewWidgets.get(window.address);
 			if (!widgets) throw new Error(`Missing preview widgets for ${window.address}`);
 			widgets.title.set_label(
-				truncateWindowTitle(window.title, widgets.body.widthRequest - 52),
+				truncateWindowTitle(
+					rewriteWaybarTaskbarTitle(window.title),
+					widgets.body.widthRequest - 52,
+				),
 			);
 			return widgets.body.widthRequest + buttonPadding * 2 + 4 + 48;
 		});
@@ -434,7 +440,10 @@ export class WindowSwitcherView {
 					>
 						{image}
 						<label
-							label={truncateWindowTitle(window.title, info.width - 52)}
+							label={truncateWindowTitle(
+								rewriteWaybarTaskbarTitle(window.title),
+								info.width - 52,
+							)}
 							xalign={0}
 							class="preview-header-title"
 							wrap={false}

@@ -165,6 +165,17 @@ describe("auth profile configuration", () => {
     expect(readAuthProfilesConfig(agentDir).hostDefaults).toEqual({ "rvn-pc": ["fbb"] });
   });
 
+  test("handles prototype-like mapping keys as ordinary data", async () => {
+    const config = JSON.parse(
+      '{"hostDefaults":{"constructor":["fbb"]},"repositoryPreferences":{"__proto__":["jpb"]}}',
+    ) as Record<string, unknown>;
+    const { agentDir } = await temporaryFixture(config);
+    const parsed = readAuthProfilesConfig(agentDir);
+
+    expect(Object.entries(parsed.hostDefaults)).toContainEqual(["constructor", ["fbb"]]);
+    expect(Object.entries(parsed.repositoryPreferences)).toContainEqual(["__proto__", ["jpb"]]);
+  });
+
   test("rejects duplicate repository preferences", async () => {
     const { agentDir } = await temporaryFixture({
       repositoryPreferences: { dotfiles: ["fbb", "fbb"] },

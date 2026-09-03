@@ -2,7 +2,11 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { codexUsageLimitResetAt, selectProfile } from "../profile-selector";
+import {
+  codexUsageLimitResetAt,
+  codexUsageLimitResetAtFromMessage,
+  selectProfile,
+} from "../profile-selector";
 import type { UsageStatusPayload } from "../usage-status-service";
 
 const temporaryDirectories: string[] = [];
@@ -166,6 +170,16 @@ describe("Codex usage-limit headers", () => {
         1_000_000,
       ),
     ).toBe(1_120_000);
+  });
+
+  test("recognizes Pi's body-derived Codex usage-limit message", () => {
+    expect(
+      codexUsageLimitResetAtFromMessage(
+        "You have hit your ChatGPT usage limit (plus plan). Try again in ~30 min.",
+        1_000_000,
+      ),
+    ).toBe(1_060_000);
+    expect(codexUsageLimitResetAtFromMessage("Too many requests", 1_000_000)).toBeUndefined();
   });
 
   test("ignores rate limits without confirmed quota exhaustion", () => {

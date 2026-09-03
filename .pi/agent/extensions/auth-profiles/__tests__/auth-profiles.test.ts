@@ -16,6 +16,7 @@ type ProviderResponseHandler = (
   event: { headers: Record<string, string>; status: number },
   ctx: ExtensionContext,
 ) => Promise<void>;
+type ProviderHeadersHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type ProfileCommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
 type ResetCreditCommandHandler = ProfileCommandHandler;
@@ -77,14 +78,19 @@ describe("auth profile prompt status", () => {
     authProfiles(pi);
 
     const statuses: Array<[string, string | undefined]> = [];
+    let modelRefreshes = 0;
     const runtime = {
       credentials: { store: new FakeAuthStore() },
-      forceRefreshAvailability: async () => undefined,
     };
     const ctx = {
       cwd: projectDir,
       isProjectTrusted: () => true,
-      modelRegistry: { runtime },
+      modelRegistry: {
+        runtime,
+        refresh: async () => {
+          modelRefreshes += 1;
+        },
+      },
       ui: {
         notify: () => undefined,
         setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
@@ -97,10 +103,12 @@ describe("auth profile prompt status", () => {
     await sessionStart?.({}, ctx);
     expect(statuses).toEqual([["auth-profile", "default"]]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
+    expect(modelRefreshes).toBe(1);
 
     await profileCommand?.("use work", ctx);
     expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));
+    expect(modelRefreshes).toBe(2);
     const projectSettings = await readFile(join(projectDir, ".pi", "settings.json"), "utf8");
     expect(projectSettings).toBe('{\n  "authProfile": "work"\n}\n');
     expect(JSON.parse(projectSettings)).toEqual({ authProfile: "work" });
@@ -122,6 +130,10 @@ describe("auth profile prompt status", () => {
       hostPreferences: ["fbb", "jpb"],
       repositoryPreferences: [],
     };
+    let releaseRotation: (() => void) | undefined;
+    const rotationGate = new Promise<void>((resolve) => {
+      releaseRotation = resolve;
+    });
     const selections: ProfileSelection[] = [
       { ...baseSelection, profile: "fbb", fallbackReason: "confirmed usage" },
       {
@@ -135,18 +147,28 @@ describe("auth profile prompt status", () => {
       _ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
       options: { excludedProfiles?: ReadonlySet<string> } = {},
     ): Promise<ProfileSelection> => {
-      if (selections.length === 1) expect(options.excludedProfiles).toEqual(new Set(["fbb"]));
+      if (selections.length === 1) {
+        expect(options.excludedProfiles).toEqual(new Set(["fbb"]));
+        await rotationGate;
+      }
       const selection = selections.shift();
       if (!selection) throw new Error("unexpected profile selection");
       return selection;
     };
 
     let sessionStart: SessionStartHandler | undefined;
+    let providerHeaders: ProviderHeadersHandler | undefined;
     let providerResponse: ProviderResponseHandler | undefined;
     const pi = {
       exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
-      on(event: string, handler: SessionStartHandler | ProviderResponseHandler) {
+      on(
+        event: string,
+        handler: SessionStartHandler | ProviderHeadersHandler | ProviderResponseHandler,
+      ) {
         if (event === "session_start") sessionStart = handler as SessionStartHandler;
+        if (event === "before_provider_headers") {
+          providerHeaders = handler as ProviderHeadersHandler;
+        }
         if (event === "after_provider_response") {
           providerResponse = handler as ProviderResponseHandler;
         }
@@ -159,14 +181,13 @@ describe("auth profile prompt status", () => {
     const notifications: string[] = [];
     const runtime = {
       credentials: { store: new FakeAuthStore() },
-      forceRefreshAvailability: async () => undefined,
     };
     const ctx = {
       cwd: projectDir,
       isProjectTrusted: () => false,
       mode: "tui",
       model: { provider: "openai-codex" },
-      modelRegistry: { runtime },
+      modelRegistry: { runtime, refresh: async () => undefined },
       ui: {
         notify: (message: string) => notifications.push(message),
         setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
@@ -176,7 +197,7 @@ describe("auth profile prompt status", () => {
     await sessionStart?.({}, ctx);
     await providerResponse?.(
       {
-        status: 429,
+        status: 200,
         headers: {
           "x-codex-primary-reset-after-seconds": "30",
           "x-codex-primary-used-percent": "100",
@@ -184,6 +205,15 @@ describe("auth profile prompt status", () => {
       },
       ctx,
     );
+
+    expect(providerHeaders).toBeDefined();
+    const nextRequest = providerHeaders?.({}, ctx);
+    if (!nextRequest) throw new Error("before_provider_headers was not registered");
+    expect(await Promise.race([nextRequest.then(() => true), Bun.sleep(5).then(() => false)])).toBe(
+      false,
+    );
+    releaseRotation?.();
+    await nextRequest;
 
     expect(statuses).toEqual([
       ["auth-profile", "fbb"],
@@ -225,7 +255,6 @@ describe("auth profile prompt status", () => {
 
     const runtime = {
       credentials: { store: new FakeAuthStore() },
-      forceRefreshAvailability: async () => undefined,
     };
     const fetchRequests: Array<{
       url: string;
@@ -243,7 +272,7 @@ describe("auth profile prompt status", () => {
       hasUI: true,
       isIdle: () => true,
       mode: "tui",
-      modelRegistry: { runtime, getProviderAuth },
+      modelRegistry: { runtime, getProviderAuth, refresh: async () => undefined },
       ui: {
         notify: () => undefined,
         setStatus: () => undefined,

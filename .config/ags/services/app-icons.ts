@@ -3,6 +3,11 @@ import Gio from "gi://Gio?version=2.0";
 import GioUnix from "gi://GioUnix?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import type Gtk from "gi://Gtk?version=4.0";
+import {
+	applyWaybarTitleRewrites,
+	parseWaybarTitleRewrites,
+	type WaybarTitleRewrite,
+} from "@/services/waybar-taskbar";
 
 export type IconRef =
 	| { kind: "theme"; name: string }
@@ -70,6 +75,7 @@ const imageTextureCache = new Map<string, Gdk.Texture>();
 let faugusGamesCache: FaugusGame[] | null = null;
 let steamAppsCache: SteamApp[] | null = null;
 let waybarAppIdMappingCache: Record<string, string> | null = null;
+let waybarTitleRewritesCache: WaybarTitleRewrite[] | null = null;
 let desktopEntriesCache: DesktopEntry[] | null = null;
 let desktopAppMonitor: Gio.AppInfoMonitor | null = null;
 
@@ -478,6 +484,61 @@ function getWaybarMappedAppId(appId: string): string | null {
 	if (!appId) return null;
 	const mapping = loadWaybarAppIdMapping();
 	return mapping[appId] ?? mapping[appId.toLowerCase()] ?? null;
+}
+
+function loadWaybarTitleRewrites(): readonly WaybarTitleRewrite[] {
+	if (waybarTitleRewritesCache) return waybarTitleRewritesCache;
+
+	try {
+		const [success, contents] = Gio.File.new_for_path(waybarConfigPath).load_contents(null);
+		if (!success || !contents) {
+			waybarTitleRewritesCache = [];
+			return waybarTitleRewritesCache;
+		}
+
+		const config = new TextDecoder().decode(contents);
+		const taskbar = getObjectContents(config, "wlr/taskbar");
+		const rewrite = taskbar ? getObjectContents(taskbar, "rewrite") : null;
+		waybarTitleRewritesCache = rewrite ? parseWaybarTitleRewrites(rewrite) : [];
+		return waybarTitleRewritesCache;
+	} catch {
+		waybarTitleRewritesCache = [];
+		return waybarTitleRewritesCache;
+	}
+}
+
+function getObjectContents(text: string, key: string): string | null {
+	const keyIndex = text.indexOf(`"${key}"`);
+	if (keyIndex === -1) return null;
+
+	const start = text.indexOf("{", keyIndex + key.length + 2);
+	if (start === -1) return null;
+
+	let depth = 0;
+	let inString = false;
+	let escaped = false;
+	for (let index = start; index < text.length; index += 1) {
+		const character = text[index];
+		if (inString) {
+			if (escaped) escaped = false;
+			else if (character === "\\") escaped = true;
+			else if (character === '"') inString = false;
+			continue;
+		}
+
+		if (character === '"') inString = true;
+		else if (character === "{") depth += 1;
+		else if (character === "}") {
+			depth -= 1;
+			if (depth === 0) return text.slice(start + 1, index);
+		}
+	}
+
+	return null;
+}
+
+export function rewriteWaybarTaskbarTitle(title: string): string {
+	return applyWaybarTitleRewrites(title, loadWaybarTitleRewrites());
 }
 
 function normalizeIconSearchTerm(value: string): string {
