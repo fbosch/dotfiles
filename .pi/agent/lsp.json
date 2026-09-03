@@ -6,6 +6,66 @@
     "shutdownMs": 2000
   },
   "servers": {
+    "biome": {
+      "command": "biome",
+      "args": [
+        "lsp-proxy"
+      ],
+      "languages": [
+        {
+          "languageId": "javascript",
+          "extensions": [
+            ".js"
+          ]
+        },
+        {
+          "languageId": "javascriptreact",
+          "extensions": [
+            ".jsx"
+          ]
+        },
+        {
+          "languageId": "typescript",
+          "extensions": [
+            ".ts"
+          ]
+        },
+        {
+          "languageId": "typescriptreact",
+          "extensions": [
+            ".tsx"
+          ]
+        },
+        {
+          "languageId": "json",
+          "extensions": [
+            ".json"
+          ]
+        },
+        {
+          "languageId": "jsonc",
+          "extensions": [
+            ".jsonc"
+          ]
+        },
+        {
+          "languageId": "css",
+          "extensions": [
+            ".css"
+          ]
+        },
+        {
+          "languageId": "html",
+          "extensions": [
+            ".html"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        "biome.json",
+        "biome.jsonc"
+      ]
+    },
     "cssls": {
       "command": "vscode-css-language-server",
       "args": [
@@ -44,6 +104,60 @@
             "unknownAtRules": "ignore"
           }
         }
+      }
+    },
+    "eslint": {
+      "command": "vscode-eslint-language-server",
+      "args": [
+        "--stdio"
+      ],
+      "languages": [
+        {
+          "languageId": "javascript",
+          "extensions": [
+            ".js"
+          ]
+        },
+        {
+          "languageId": "javascriptreact",
+          "extensions": [
+            ".jsx"
+          ]
+        },
+        {
+          "languageId": "typescript",
+          "extensions": [
+            ".ts"
+          ]
+        },
+        {
+          "languageId": "typescriptreact",
+          "extensions": [
+            ".tsx"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        "eslint.config.js",
+        "eslint.config.mjs",
+        "eslint.config.cjs",
+        "eslint.config.ts",
+        "eslint.config.mts",
+        "eslint.config.cts",
+        ".eslintrc",
+        ".eslintrc.js",
+        ".eslintrc.cjs",
+        ".eslintrc.yaml",
+        ".eslintrc.yml",
+        ".eslintrc.json"
+      ],
+      "settings": {
+        "validate": "on",
+        "run": "onSave",
+        "workingDirectory": {
+          "mode": "auto"
+        },
+        "format": false
       }
     },
     "fallow": {

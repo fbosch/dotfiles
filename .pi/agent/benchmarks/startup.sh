@@ -113,7 +113,16 @@ fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/pi-startup-benchmark.XXXXXX")"
 fixture_root="$(cd "$fixture_root" && pwd -P)"
 initial_worktree_status="$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all)"
 cleanup() {
-  rm -rf -- "$fixture_root"
+  local attempt
+  # A timed-out Pi process may still be unwinding Jiti files while its process group exits.
+  for ((attempt = 1; attempt <= 20; attempt += 1)); do
+    if rm -rf -- "$fixture_root" 2>/dev/null; then
+      return
+    fi
+    sleep 0.1
+  done
+  printf 'pi startup benchmark: failed to remove fixture: %s\n' "$fixture_root" >&2
+  return 1
 }
 trap cleanup EXIT
 
