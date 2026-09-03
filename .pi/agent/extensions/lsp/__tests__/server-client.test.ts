@@ -46,6 +46,36 @@ test("initializes, synchronizes, queries, and shuts down a persistent server", a
   expect(client.status().state).toBe("stopped");
 });
 
+test("treats omitted clean push diagnostics as clean", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-clean-push-client-"));
+  const path = join(directory, "example.lua");
+  await writeFile(path, "value");
+  const document: ProjectFile = {
+    canonicalPath: path,
+    languageId: "lua",
+    path,
+    text: "value",
+  };
+  const client = await LspServerClient.start(
+    {
+      args: [join(import.meta.dir, "fixtures", "fake-server.ts"), "--omit-empty"],
+      command: process.execPath,
+      id: "fake-clean-push",
+      languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+      rootMarkers: [".git"],
+    },
+    directory,
+    { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+  );
+  try {
+    expect(await client.freshDiagnostics(document, undefined)).toEqual([]);
+    expect(await client.freshDiagnostics(document, undefined)).toEqual([]);
+  } finally {
+    await client.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("pulls diagnostics and answers server configuration requests", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-lsp-pull-client-"));
   const path = join(directory, "example.lua");

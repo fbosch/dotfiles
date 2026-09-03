@@ -33,6 +33,7 @@ const hangInitialize = process.argv.includes("--hang-initialize");
 const delayInitialize = process.argv.includes("--delay-initialize");
 const incremental = process.argv.includes("--incremental");
 const pullDiagnostics = process.argv.includes("--pull");
+const omitEmptyDiagnostics = process.argv.includes("--omit-empty");
 
 function argumentValue(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -62,9 +63,11 @@ function diagnostics(uri: string): Diagnostic[] {
 
 function publish(uri: string): void {
   if (pullDiagnostics) return;
+  const items = diagnostics(uri);
+  if (omitEmptyDiagnostics && items.length === 0) return;
   connection.sendNotification(PublishDiagnosticsNotification.type, {
     uri,
-    diagnostics: diagnostics(uri),
+    diagnostics: items,
   });
 }
 

@@ -51,6 +51,7 @@ in
 {
   packages = with pkgs; [
     act
+    bash-language-server
     projectBun
     coreutils
     fish
@@ -75,6 +76,7 @@ in
     ripsecrets
     shellcheck
     stow
+    stylelint-lsp
     stylua
     util-linux
     yq-go

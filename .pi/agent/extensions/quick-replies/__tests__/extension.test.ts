@@ -3,7 +3,11 @@ import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-c
 import type { Component } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { QuickReply, QuickReplyGenerator, QuickReplyInput } from "../generator";
-import { createQuickRepliesExtension, QUICK_REPLY_SHORTCUTS, renderQuickReplyLine } from "../index";
+import {
+  createQuickRepliesExtension,
+  QUICK_REPLY_SHORTCUTS,
+  renderQuickReplyPanel,
+} from "../index";
 
 type ExtensionMode = "tui" | "rpc" | "json" | "print";
 type EventHandler = (event: never, context: ExtensionContext) => unknown | Promise<unknown>;
@@ -15,10 +19,13 @@ interface GenerationCall {
   signal: AbortSignal;
 }
 
+const PANEL_BACKGROUND = "\u001b[48;5;236m";
+
 const theme = {
   fg: (_color: string, text: string) => text,
   bg: (_color: string, text: string) => text,
-} as Theme;
+  getBgAnsi: () => PANEL_BACKGROUND,
+} as unknown as Theme;
 
 const generatedReplies: QuickReply[] = [
   { label: "Review it", message: "Review the implementation." },
@@ -179,7 +186,7 @@ describe("quick replies lifecycle", () => {
       assistantText: "Implemented the feature. All focused tests pass.",
     });
     expect(harness.widgetActive).toBe(true);
-    expect(harness.renderWidget()).toHaveLength(1);
+    expect(harness.renderWidget()).toHaveLength(3);
   });
 
   test("uses raw user input instead of expanded skill content", async () => {
@@ -390,19 +397,19 @@ describe("quick replies lifecycle", () => {
     expect(harness.widgetActive).toBe(false);
   });
 
-  test("submits fourth and fifth replies only when visible", async () => {
-    const wide = createHarness({ generate: async () => fiveReplies });
-    await showGeneratedReplies(wide);
-    wide.renderWidget(120);
-    await wide.press(4);
-
+  test("keeps wrapped replies selectable and rejects replies when the panel cannot render", async () => {
     const narrow = createHarness({ generate: async () => fiveReplies });
     await showGeneratedReplies(narrow);
     narrow.renderWidget(30);
     await narrow.press(4);
 
-    expect(wide.sentMessages).toEqual(["Fifth response"]);
-    expect(narrow.sentMessages).toEqual([]);
+    const hidden = createHarness({ generate: async () => fiveReplies });
+    await showGeneratedReplies(hidden);
+    hidden.renderWidget(6);
+    await hidden.press(4);
+
+    expect(narrow.sentMessages).toEqual(["Fifth response"]);
+    expect(hidden.sentMessages).toEqual([]);
   });
 });
 
@@ -411,35 +418,60 @@ describe("quick reply widget", () => {
     expect(QUICK_REPLY_SHORTCUTS).toEqual(["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"]);
   });
 
-  test("uses the preferred full layout when five replies fit", () => {
-    const rendered = renderQuickReplyLine(fiveReplies, 120, theme);
+  test("renders a compact single-row dock when five replies fit", () => {
+    const rendered = renderQuickReplyPanel(fiveReplies, 120, theme);
+    const firstLine = stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd();
 
-    expect(stripTerminalSequences(rendered?.line ?? "")).toBe(
-      "‹Alt+1› One  ‹Alt+2› Two  ‹Alt+3› Three  ‹Alt+4› Four  ‹Alt+5› Five",
-    );
+    expect(firstLine).toBe("  ‹Alt+1› One  ‹Alt+2› Two  ‹Alt+3› Three  ‹Alt+4› Four  ‹Alt+5› Five");
     expect(rendered?.visibleReplyCount).toBe(5);
+    expect(stripTerminalSequences(rendered?.lines[0] ?? "").trim()).toBe("");
+    expect(rendered?.lines).toHaveLength(3);
+    expect(rendered?.lines.every((line) => visibleWidth(line) === 120)).toBe(true);
   });
 
-  test("shortens hints before removing replies", () => {
-    const rendered = renderQuickReplyLine(fiveReplies, 50, theme);
+  test("shortens key hints before adding rows", () => {
+    const rendered = renderQuickReplyPanel(fiveReplies, 60, theme);
 
-    expect(stripTerminalSequences(rendered?.line ?? "")).toBe(
-      "‹1› One  ‹2› Two  ‹3› Three  ‹4› Four  ‹5› Five",
+    expect(stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd()).toBe(
+      "  ‹A1› One  ‹A2› Two  ‹A3› Three  ‹A4› Four  ‹A5› Five",
     );
+    expect(rendered?.lines).toHaveLength(3);
+  });
+
+  test("wraps all replies on narrow terminals", () => {
+    const rendered = renderQuickReplyPanel(fiveReplies, 50, theme);
+    const plain = rendered?.lines.map((line) => stripTerminalSequences(line).trimEnd());
+
+    expect(plain?.slice(0, -1)).toEqual([
+      "",
+      "  ‹Alt+1› One  ‹Alt+2› Two  ‹Alt+3› Three",
+      "  ‹Alt+4› Four  ‹Alt+5› Five",
+    ]);
     expect(rendered?.visibleReplyCount).toBe(5);
-    expect(visibleWidth(rendered?.line ?? "")).toBeLessThanOrEqual(50);
+    expect(rendered?.lines.every((line) => visibleWidth(line) === 50)).toBe(true);
   });
 
-  test("removes trailing replies instead of truncating labels", () => {
-    const rendered = renderQuickReplyLine(fiveReplies, 30, theme);
-    const plain = stripTerminalSequences(rendered?.line ?? "");
+  test("explains command confirmation without changing the command label", () => {
+    const rendered = renderQuickReplyPanel([{ label: "/hotkeys", message: "/hotkeys" }], 60, theme);
 
-    expect(plain).toBe("‹A1› One  ‹A2› Two  ‹A3› Three");
-    expect(rendered?.visibleReplyCount).toBe(3);
-    expect(plain).not.toContain("Four");
+    expect(stripTerminalSequences(rendered?.lines[1] ?? "").trimEnd()).toBe(
+      "  command · Enter to run  ‹Alt+1› /hotkeys",
+    );
   });
 
-  test("avoids full-cell backgrounds around outlined keycaps", () => {
+  test("colorizes shortcut modifiers, separators, and digits independently", () => {
+    const colorTheme = {
+      ...theme,
+      fg: (color: string, text: string) => `[${color}:${text}]`,
+    } as unknown as Theme;
+
+    const rendered = renderQuickReplyPanel(fiveReplies.slice(0, 1), 200, colorTheme);
+    const line = rendered?.lines[1] ?? "";
+
+    expect(line).toContain("[dim:‹][muted:Alt][dim:+][accent:1][dim:›]");
+  });
+
+  test("uses dock background without filling individual keycaps", () => {
     const backgrounds: string[] = [];
     const trackingTheme = {
       ...theme,
@@ -447,14 +479,15 @@ describe("quick reply widget", () => {
         backgrounds.push(color);
         return text;
       },
-    } as Theme;
+    } as unknown as Theme;
 
-    renderQuickReplyLine(fiveReplies, 120, trackingTheme);
+    const rendered = renderQuickReplyPanel(fiveReplies, 120, trackingTheme);
 
+    expect(rendered?.lines[0]).toContain(PANEL_BACKGROUND);
     expect(backgrounds).toEqual([]);
   });
 
-  test("hides instead of truncating a reply message", () => {
-    expect(renderQuickReplyLine(fiveReplies, 6, theme)).toBeUndefined();
+  test("hides instead of truncating a reply label", () => {
+    expect(renderQuickReplyPanel(fiveReplies, 6, theme)).toBeUndefined();
   });
 });

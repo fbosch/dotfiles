@@ -339,6 +339,9 @@ export class LspServerClient {
       await this.synchronize(document);
       if (this.capabilities?.diagnosticProvider) return;
       await new Promise((resolve) => setTimeout(resolve, PUSH_SERVER_WARMUP_MS));
+      if (this.diagnostics.has(uri) || this.documents.get(uri)?.text !== document.text) return;
+      // nil and some other push-only servers omit an empty publication for clean documents.
+      this.diagnostics.set(uri, { diagnostics: [], uri });
     })();
     this.warmups.set(uri, warming);
     try {
@@ -369,49 +372,46 @@ export class LspServerClient {
       }
       return this.diagnostics.get(uri)?.diagnostics ?? [];
     }
-    const wasOpen = this.documents.has(uri);
-    const timeoutMs = wasOpen
-      ? this.timeouts.diagnosticsMs
-      : PUSH_SERVER_WARMUP_MS + this.timeouts.diagnosticsMs;
-    const next = this.waitForDiagnostics(uri, signal, timeoutMs);
+    const open = this.documents.get(uri);
+    const cached = this.diagnostics.get(uri);
+    if (open?.text === document.text && cached !== undefined) return cached.diagnostics;
+
+    const wasOpen = open !== undefined;
+    const initial = this.waitForPushDiagnostics(uri, signal, INITIAL_DIAGNOSTICS_WAIT_MS);
     let pulsed = false;
     try {
       await this.synchronize(document);
-    } catch (cause) {
-      void next.catch(() => undefined);
-      throw cause;
-    }
-    try {
+      let published = await initial;
+      if (published !== undefined) return published.diagnostics;
+
+      const current = this.diagnostics.get(uri);
+      if (current !== undefined) return current.diagnostics;
       if (wasOpen === false) {
-        const initial = await Promise.race([
-          next,
-          new Promise<undefined>((resolve) => setTimeout(resolve, INITIAL_DIAGNOSTICS_WAIT_MS)),
-        ]);
-        if (initial !== undefined) return initial.diagnostics;
         // Push-only servers such as Lua LS may need a warmed-up document change first.
         await abortableDelay(
           PUSH_SERVER_WARMUP_MS - INITIAL_DIAGNOSTICS_WAIT_MS,
           signal,
           "LSP diagnostics",
         );
-        pulsed = this.pulseDocument(document);
-        if (pulsed) {
-          await next;
-          const restored = this.waitForDiagnostics(uri, signal);
-          try {
-            await this.synchronize(document);
-          } catch (cause) {
-            void restored.catch(() => undefined);
-            throw cause;
-          }
+      }
+      const warmed = this.diagnostics.get(uri);
+      if (warmed !== undefined) return warmed.diagnostics;
+      pulsed = this.pulseDocument(document);
+      if (pulsed) {
+        published = await this.waitForPushDiagnostics(uri, signal, INITIAL_DIAGNOSTICS_WAIT_MS);
+        if (published !== undefined) {
+          await this.synchronize(document);
           pulsed = false;
-          return (await restored).diagnostics;
+          return published.diagnostics;
         }
       }
-      return (await next).diagnostics;
-    } catch (cause) {
-      if (signal?.aborted) throw cause;
-      throw cause;
+
+      const diagnostics = this.diagnostics.get(uri);
+      if (diagnostics !== undefined) return diagnostics.diagnostics;
+      // nil does not publish an empty set for clean documents; absence after the bounded
+      // push window is therefore the clean result for this synchronization.
+      this.diagnostics.set(uri, { diagnostics: [], uri });
+      return [];
     } finally {
       if (pulsed) await this.synchronize(document);
     }
@@ -569,6 +569,25 @@ export class LspServerClient {
       openClose: synchronization?.openClose === true,
       save: save === true || typeof save === "object",
     };
+  }
+
+  private async waitForPushDiagnostics(
+    uri: string,
+    signal: AbortSignal | undefined,
+    timeoutMs: number,
+  ): Promise<PublishDiagnosticsParams | undefined> {
+    try {
+      return await this.waitForDiagnostics(uri, signal, timeoutMs);
+    } catch (cause) {
+      if (signal?.aborted) throw cause;
+      if (
+        cause instanceof Error &&
+        cause.message === `LSP diagnostics timed out after ${timeoutMs}ms`
+      ) {
+        return undefined;
+      }
+      throw cause;
+    }
   }
 
   private waitForDiagnostics(

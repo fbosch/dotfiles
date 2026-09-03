@@ -1,5 +1,6 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
+import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
 import {
   extractVisibleAssistantProse,
   generateQuickReplies,
@@ -12,6 +13,7 @@ export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5
 
 const WIDGET_KEY = "quick-replies";
 const REPLY_GAP = "  ";
+const PANEL_PADDING_X = 2;
 const MIN_GENERATED_REPLIES = 1;
 const MAX_GENERATED_REPLIES = QUICK_REPLY_SHORTCUTS.length;
 
@@ -35,10 +37,11 @@ interface ActiveGeneration {
 interface ReplyLayout {
   replies: readonly QuickReply[];
   shortcutStyle: ShortcutStyle;
+  startIndex: number;
 }
 
 export interface RenderedQuickReplies {
-  line: string;
+  lines: string[];
   visibleReplyCount: number;
 }
 
@@ -46,21 +49,63 @@ export interface QuickRepliesDependencies {
   generate?: QuickReplyGenerator;
 }
 
-export function renderQuickReplyLine(
+export function renderQuickReplyPanel(
   replies: readonly QuickReply[],
   width: number,
   theme: Theme,
 ): RenderedQuickReplies | undefined {
   if (replies.length === 0 || width <= 0) return undefined;
 
-  for (const layout of replyLayouts(replies)) {
-    const line = renderLayout(layout, theme);
-    if (visibleWidth(line) <= width) {
-      return { line, visibleReplyCount: layout.replies.length };
+  const paddingX = width >= PANEL_PADDING_X * 2 + 1 ? PANEL_PADDING_X : 0;
+  const contentWidth = width - paddingX * 2;
+  const header =
+    replies.length === 1 && isSlashCommand(replies[0]?.message ?? "")
+      ? theme.fg("dim", "command · Enter to run")
+      : "";
+  const styles: readonly ShortcutStyle[] = ["full", "short", "numeric"];
+  let content: string[] | undefined;
+
+  for (const shortcutStyle of styles) {
+    const repliesLine = renderLayout({ replies, shortcutStyle, startIndex: 0 }, theme);
+    const combined = header.length > 0 ? `${header}${REPLY_GAP}${repliesLine}` : repliesLine;
+    if (visibleWidth(combined) <= contentWidth) {
+      content = [combined];
+      break;
     }
   }
 
-  return undefined;
+  if (content === undefined) {
+    for (const shortcutStyle of styles) {
+      const repliesLine = renderLayout({ replies, shortcutStyle, startIndex: 0 }, theme);
+      if (header.length > 0 && visibleWidth(repliesLine) <= contentWidth) {
+        content = [header, repliesLine];
+        break;
+      }
+    }
+  }
+
+  if (content === undefined) {
+    for (const shortcutStyle of styles) {
+      const layouts = packReplyRows(replies, shortcutStyle, contentWidth, theme);
+      if (layouts !== undefined) {
+        content = [
+          ...(header.length > 0 ? [header] : []),
+          ...layouts.map((layout) => renderLayout(layout, theme)),
+        ];
+        break;
+      }
+    }
+  }
+
+  if (content === undefined) return undefined;
+
+  const background = theme.getBgAnsi("toolPendingBg");
+  const lines = [
+    paintDockRow("", width, "", background),
+    ...content.map((line) => paintDockRow(`${" ".repeat(paddingX)}${line}`, width, "", background)),
+  ];
+  lines.push(paintDockBottomEdge(width, "", "", background));
+  return { lines, visibleReplyCount: replies.length };
 }
 
 class QuickReplyWidget implements Component {
@@ -85,14 +130,14 @@ class QuickReplyWidget implements Component {
       return [];
     }
 
-    const rendered = renderQuickReplyLine(this.replies, width, this.theme);
+    const rendered = renderQuickReplyPanel(this.replies, width, this.theme);
     if (rendered === undefined) {
       this.visibleReplyCount = 0;
       return [];
     }
 
     this.visibleReplyCount = rendered.visibleReplyCount;
-    return [rendered.line];
+    return rendered.lines;
   }
 
   isReplyVisible(index: number): boolean {
@@ -294,37 +339,64 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
 
 export default createQuickRepliesExtension();
 
-function replyLayouts(replies: readonly QuickReply[]): ReplyLayout[] {
-  const layouts: ReplyLayout[] = [
-    { replies, shortcutStyle: "full" },
-    { replies, shortcutStyle: "short" },
-    { replies, shortcutStyle: "numeric" },
-  ];
+function packReplyRows(
+  replies: readonly QuickReply[],
+  shortcutStyle: ShortcutStyle,
+  width: number,
+  theme: Theme,
+): ReplyLayout[] | undefined {
+  const layouts: ReplyLayout[] = [];
+  let startIndex = 0;
 
-  for (let count = replies.length - 1; count >= 2; count -= 1) {
-    const visibleReplies = replies.slice(0, count);
-    layouts.push({ replies: visibleReplies, shortcutStyle: "short" });
-    layouts.push({ replies: visibleReplies, shortcutStyle: "numeric" });
+  while (startIndex < replies.length) {
+    let endIndex = startIndex + 1;
+    while (
+      endIndex <= replies.length &&
+      visibleWidth(
+        renderLayout(
+          { replies: replies.slice(startIndex, endIndex), shortcutStyle, startIndex },
+          theme,
+        ),
+      ) <= width
+    ) {
+      endIndex += 1;
+    }
+
+    const fittingEndIndex = endIndex - 1;
+    if (fittingEndIndex === startIndex) return undefined;
+    layouts.push({
+      replies: replies.slice(startIndex, fittingEndIndex),
+      shortcutStyle,
+      startIndex,
+    });
+    startIndex = fittingEndIndex;
   }
-  layouts.push({ replies: replies.slice(0, 1), shortcutStyle: "numeric" });
+
   return layouts;
 }
 
 function renderLayout(layout: ReplyLayout, theme: Theme): string {
   return layout.replies
     .map((reply, index) => {
-      const shortcut = formatShortcut(QUICK_REPLY_SHORTCUTS[index] ?? "", layout.shortcutStyle);
-      const shortcutColor = index === 0 ? "accent" : "muted";
-      const labelColor = index === 0 ? "accent" : "text";
-      const keycap = theme.fg(shortcutColor, `‹${shortcut}›`);
-      return `${keycap} ${theme.fg(labelColor, reply.label)}`;
+      const globalIndex = layout.startIndex + index;
+      const shortcut = renderShortcut(
+        QUICK_REPLY_SHORTCUTS[globalIndex] ?? "",
+        layout.shortcutStyle,
+        theme,
+      );
+      const labelColor = globalIndex === 0 ? "accent" : "text";
+      return `${shortcut} ${theme.fg(labelColor, reply.label)}`;
     })
     .join(REPLY_GAP);
 }
 
-function formatShortcut(shortcut: string, style: ShortcutStyle): string {
-  const display = shortcut.charAt(0).toUpperCase() + shortcut.slice(1);
-  if (style === "full") return display;
-  const digit = display.at(-1) ?? "";
-  return style === "short" ? `A${digit}` : digit;
+function renderShortcut(shortcut: string, style: ShortcutStyle, theme: Theme): string {
+  const digit = shortcut.at(-1) ?? "";
+  const modifier = style === "full" ? "Alt" : style === "short" ? "A" : "";
+  const chord = [
+    modifier.length > 0 ? theme.fg("muted", modifier) : "",
+    style === "full" ? theme.fg("dim", "+") : "",
+    theme.fg("accent", digit),
+  ].join("");
+  return `${theme.fg("dim", "‹")}${chord}${theme.fg("dim", "›")}`;
 }

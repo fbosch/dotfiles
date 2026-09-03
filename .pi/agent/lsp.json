@@ -6,6 +6,37 @@
     "shutdownMs": 2000
   },
   "servers": {
+    "bashls": {
+      "command": "bash-language-server",
+      "args": [
+        "start"
+      ],
+      "languages": [
+        {
+          "languageId": "shellscript",
+          "extensions": [
+            ".sh",
+            ".bash"
+          ],
+          "fileNames": [
+            ".bashrc",
+            ".bash_profile",
+            ".bash_login",
+            ".bash_logout",
+            ".profile"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        ".git"
+      ],
+      "settings": {
+        "bashIde": {
+          "shellcheckPath": "shellcheck",
+          "shellcheckExternalSources": true
+        }
+      }
+    },
     "biome": {
       "command": "biome",
       "args": [
@@ -292,6 +323,51 @@
         "devenv.nix",
         "shell.nix"
       ]
+    },
+    "stylelint": {
+      "command": "stylelint-lsp",
+      "args": [
+        "--stdio"
+      ],
+      "languages": [
+        {
+          "languageId": "css",
+          "extensions": [
+            ".css"
+          ]
+        },
+        {
+          "languageId": "scss",
+          "extensions": [
+            ".scss"
+          ]
+        },
+        {
+          "languageId": "less",
+          "extensions": [
+            ".less"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        ".stylelintrc",
+        ".stylelintrc.json",
+        ".stylelintrc.yaml",
+        ".stylelintrc.yml",
+        ".stylelintrc.js",
+        ".stylelintrc.cjs",
+        ".stylelintrc.mjs",
+        "stylelint.config.js",
+        "stylelint.config.cjs",
+        "stylelint.config.mjs"
+      ],
+      "settings": {
+        "stylelintplus": {
+          "enable": true,
+          "validateOnSave": true,
+          "validateOnType": true
+        }
+      }
     },
     "tsgo": {
       "command": "tsgo",
