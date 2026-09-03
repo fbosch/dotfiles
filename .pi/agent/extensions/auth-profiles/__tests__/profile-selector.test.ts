@@ -22,6 +22,24 @@ async function fixture(config: Record<string, unknown>) {
   return { agentDir, projectDir };
 }
 
+async function writeCredential(
+  path: string,
+  credential: { access: string; accountId: string; expires: number },
+): Promise<void> {
+  await writeFile(
+    path,
+    `${JSON.stringify({
+      "openai-codex": {
+        type: "oauth",
+        access: credential.access,
+        refresh: "test-refresh-token",
+        expires: credential.expires,
+        accountId: credential.accountId,
+      },
+    })}\n`,
+  );
+}
+
 function usage(
   profiles: Array<{ profileLabel: string; remaining?: number; resetCredits?: number }>,
 ): UsageStatusPayload {
@@ -76,6 +94,67 @@ describe("automatic auth profile selection", () => {
       fallbackFrom: "fbb",
       fallbackReason: "confirmed usage",
       source: "host default",
+    });
+  });
+
+  test("refreshes an expired alternate before selecting it", async () => {
+    const currentTime = Date.now();
+    const { agentDir, projectDir } = await fixture({
+      hostDefaults: { "rvn-pc": ["fbb", "jpb"] },
+    });
+    const profilesDir = join(agentDir, "auth-profiles");
+    await mkdir(profilesDir);
+    await writeCredential(join(profilesDir, "fbb.json"), {
+      access: "fbb-access-token",
+      accountId: "account-fbb",
+      expires: currentTime + 60_000,
+    });
+    await writeCredential(join(profilesDir, "jpb.json"), {
+      access: "expired-jpb-access-token",
+      accountId: "account-jpb",
+      expires: currentTime - 1,
+    });
+
+    const refreshedProfiles: string[] = [];
+    const selection = await selectProfile(
+      { cwd: projectDir, isProjectTrusted: () => false },
+      {
+        agentDir,
+        cachePath: join(agentDir, "usage-cache.json"),
+        env: {},
+        fetchFn: async (_input, init) => {
+          const accountId = new Headers(init?.headers).get("ChatGPT-Account-Id");
+          return Response.json({
+            rate_limit: {
+              primary_window: {
+                used_percent: accountId === "account-fbb" ? 100 : 20,
+                reset_after_seconds: 60,
+              },
+              secondary_window: null,
+            },
+          });
+        },
+        forceUsageRefresh: true,
+        hostname: () => "rvn-pc",
+        now: () => currentTime,
+        platform: "linux",
+        refreshCredential: async ({ expectedAccountId, profileLabel }) => {
+          expect(expectedAccountId).toBe("account-jpb");
+          refreshedProfiles.push(profileLabel);
+          await writeCredential(join(profilesDir, "jpb.json"), {
+            access: "refreshed-jpb-access-token",
+            accountId: "account-jpb",
+            expires: currentTime + 60_000,
+          });
+        },
+      },
+    );
+
+    expect(refreshedProfiles).toEqual(["jpb"]);
+    expect(selection).toMatchObject({
+      profile: "jpb",
+      fallbackFrom: "fbb",
+      fallbackReason: "confirmed usage",
     });
   });
 

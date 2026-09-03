@@ -55,6 +55,13 @@ test("confirms clean diagnostics only when every server explicitly answers", asy
         languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
         rootMarkers: [".git"],
       },
+      {
+        args: [join(import.meta.dir, "fixtures", "fake-server.ts")],
+        command: process.execPath,
+        id: "fake-push",
+        languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+        rootMarkers: [".git"],
+      },
     ],
     timeouts: { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
     warnings: [],
@@ -65,10 +72,11 @@ test("confirms clean diagnostics only when every server explicitly answers", asy
     expect(result.diagnosticVerdict).toBe("clean");
     expect(result.diagnosticEvidence).toEqual([
       { kind: "pull-report", reportKind: "full", serverId: "fake-pull" },
+      { documentVersion: 1, kind: "push-publication", serverId: "fake-push" },
     ]);
     expect(result.unconfirmedServers).toEqual([]);
     expect(result.text).toBe(
-      "LSP extension verdict: clean\nLSP-native evidence: fake-pull=textDocument/diagnostic full report",
+      "LSP extension verdict: clean\nLSP-native evidence: fake-pull=textDocument/diagnostic full report, fake-push=textDocument/publishDiagnostics notification (document version 1)",
     );
   } finally {
     await manager.shutdown();
@@ -77,7 +85,7 @@ test("confirms clean diagnostics only when every server explicitly answers", asy
 });
 
 test("labels silent push servers as unconfirmed", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-manager-assumed-clean-"));
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-manager-unconfirmed-"));
   await writeFile(join(directory, ".git"), "");
   await writeFile(join(directory, "example.lua"), "value");
   const manager = await LspServerManager.create(directory, {
@@ -102,6 +110,41 @@ test("labels silent push servers as unconfirmed", async () => {
     expect(result.text).toContain("Missing LSP-native evidence");
     expect(result.text).toContain("textDocument/publishDiagnostics");
     expect(result.text).toContain("fake-silent");
+  } finally {
+    await manager.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("labels an unversioned push publication as unconfirmed", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-manager-unversioned-"));
+  await writeFile(join(directory, ".git"), "");
+  await writeFile(join(directory, "example.lua"), "value");
+  const manager = await LspServerManager.create(directory, {
+    servers: [
+      {
+        args: [join(import.meta.dir, "fixtures", "fake-server.ts"), "--omit-diagnostic-version"],
+        command: process.execPath,
+        id: "fake-unversioned",
+        languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+        rootMarkers: [".git"],
+      },
+    ],
+    timeouts: { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+    warnings: [],
+  });
+  try {
+    const result = await manager.diagnostics("example.lua", undefined);
+    expect(result.diagnosticCount).toBe(0);
+    expect(result.diagnosticVerdict).toBe("unconfirmed");
+    expect(result.diagnosticEvidence).toEqual([
+      { kind: "push-publication", serverId: "fake-unversioned" },
+    ]);
+    expect(result.unconfirmedServers).toEqual(["fake-unversioned"]);
+    expect(result.text).toContain(
+      "fake-unversioned=textDocument/publishDiagnostics notification (document version omitted)",
+    );
+    expect(result.text).toContain("Insufficient LSP-native evidence");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });

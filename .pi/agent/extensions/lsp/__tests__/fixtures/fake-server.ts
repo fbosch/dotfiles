@@ -8,6 +8,7 @@ import {
   DidChangeTextDocumentNotification,
   DidOpenTextDocumentNotification,
   DidSaveTextDocumentNotification,
+  type DocumentDiagnosticReport,
   DocumentDiagnosticRequest,
   ExitNotification,
   type HoverParams,
@@ -27,13 +28,16 @@ const connection = createProtocolConnection(process.stdin, process.stdout, {
   info() {},
   log() {},
 });
-const documents = new Map<string, string>();
+const documents = new Map<string, { readonly text: string; readonly version: number }>();
 const hangRequests = process.argv.includes("--hang");
 const hangInitialize = process.argv.includes("--hang-initialize");
 const delayInitialize = process.argv.includes("--delay-initialize");
 const incremental = process.argv.includes("--incremental");
 const pullDiagnostics = process.argv.includes("--pull");
 const omitEmptyDiagnostics = process.argv.includes("--omit-empty");
+const omitDiagnosticVersion = process.argv.includes("--omit-diagnostic-version");
+const rejectConcurrentDiagnostics = process.argv.includes("--reject-concurrent-diagnostics");
+const unchangedDiagnostics = process.argv.includes("--unchanged-diagnostics");
 
 function argumentValue(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -44,9 +48,10 @@ const diagnosticBarrier = argumentValue("--diagnostic-barrier");
 const diagnosticBarrierCount = Number(argumentValue("--diagnostic-barrier-count") ?? 2);
 let configuration = Promise.resolve<unknown[]>([]);
 let invalidIncrementalChange = false;
+let activeDiagnosticRequests = 0;
 
 function diagnostics(uri: string): Diagnostic[] {
-  const text = documents.get(uri) ?? "";
+  const text = documents.get(uri)?.text ?? "";
   return text.includes("BAD")
     ? [
         {
@@ -65,9 +70,11 @@ function publish(uri: string): void {
   if (pullDiagnostics) return;
   const items = diagnostics(uri);
   if (omitEmptyDiagnostics && items.length === 0) return;
+  const version = documents.get(uri)?.version;
   connection.sendNotification(PublishDiagnosticsNotification.type, {
     uri,
     diagnostics: items,
+    ...(omitDiagnosticVersion || version === undefined ? {} : { version }),
   });
 }
 
@@ -91,7 +98,7 @@ connection.onNotification(InitializedNotification.type, () => {
   });
 });
 connection.onNotification(DidOpenTextDocumentNotification.type, ({ textDocument }) => {
-  documents.set(textDocument.uri, textDocument.text);
+  documents.set(textDocument.uri, { text: textDocument.text, version: textDocument.version });
   publish(textDocument.uri);
 });
 connection.onNotification(
@@ -101,7 +108,8 @@ connection.onNotification(
       invalidIncrementalChange = true;
     }
     const text = contentChanges.at(-1)?.text;
-    if (text !== undefined) documents.set(textDocument.uri, text);
+    if (text !== undefined)
+      documents.set(textDocument.uri, { text, version: textDocument.version });
     publish(textDocument.uri);
   },
 );
@@ -120,13 +128,26 @@ async function waitForDiagnosticBarrier(): Promise<void> {
   throw new Error("fake diagnostic barrier timed out");
 }
 
-connection.onRequest(DocumentDiagnosticRequest.type.method, async ({ textDocument }) => {
-  await waitForDiagnosticBarrier();
-  return {
-    kind: "full",
-    items: diagnostics(textDocument.uri),
-  };
-});
+connection.onRequest(
+  DocumentDiagnosticRequest.type,
+  async ({ textDocument }): Promise<DocumentDiagnosticReport> => {
+    if (unchangedDiagnostics) return { kind: "unchanged", resultId: "unexpected" };
+    if (rejectConcurrentDiagnostics && activeDiagnosticRequests > 0) {
+      throw new Error("concurrent diagnostic request");
+    }
+    activeDiagnosticRequests += 1;
+    try {
+      if (rejectConcurrentDiagnostics) await new Promise((resolve) => setTimeout(resolve, 50));
+      await waitForDiagnosticBarrier();
+      return {
+        kind: "full",
+        items: diagnostics(textDocument.uri),
+      };
+    } finally {
+      activeDiagnosticRequests -= 1;
+    }
+  },
+);
 connection.onRequest(HoverRequest.type.method, async (_params: HoverParams) => {
   if (hangRequests) await new Promise(() => {});
   let value = "fake hover";

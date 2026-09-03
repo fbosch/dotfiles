@@ -37,6 +37,7 @@ required_environment=(
   PI_BENCHMARK_PATH
   PI_BENCHMARK_PI
   PI_BENCHMARK_REPO_ROOT
+  PI_BENCHMARK_SHUTDOWN_EXTENSION
   PI_BENCHMARK_STATE_HOME
   PI_BENCHMARK_TMPDIR
 )
@@ -80,7 +81,12 @@ if [[ "$scenario" == pty-control ]]; then
   exec env -i "${clean_environment[@]}" true
 fi
 
-pi_arguments=(--offline --no-session --approve)
+pi_arguments=(
+  --offline
+  --no-session
+  --approve
+  --extension "$PI_BENCHMARK_SHUTDOWN_EXTENSION"
+)
 case "$scenario" in
   full) ;;
   no-extensions)

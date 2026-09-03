@@ -46,11 +46,11 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "c9d13021b9e7961a45da2f26ca80722ceaae87bd",
+      "rev": "d84c0a10cd5ea23285cb5575fa90179f51710f99",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
-      "rev": "6f793b2bcd2d35e201c09520f698bb763220908a",
+      "rev": "9e0201673e08e997e7cf52afca5565c70bd117f3",
       "src": "https://github.com/j-hui/fidget.nvim.git"
     },
     "fzy-lua-native": {
@@ -78,7 +78,7 @@
       "src": "https://github.com/m-demare/hlargs.nvim.git"
     },
     "indent-blankline.nvim": {
-      "rev": "d28a3f70721c79e3c5f6693057ae929f3d9c0a03",
+      "rev": "3b1ee1854c1067c34cad2423eb78e280d4069e01",
       "src": "https://github.com/lukas-reineke/indent-blankline.nvim.git"
     },
     "lazydev.nvim": {
@@ -86,7 +86,7 @@
       "src": "https://github.com/folke/lazydev.nvim.git"
     },
     "leap.nvim": {
-      "rev": "a2e74dbddab5734f022897e224f301e5dfb31950",
+      "rev": "38af0ab56c6eb8757ee6006dd13ab79c2bc11a49",
       "src": "https://codeberg.org/andyg/leap.nvim"
     },
     "live-command.nvim": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "b9c795d3973e8eec22706af14959bc60c579e771",
+      "rev": "775c97a7de77e0368758a70eddd8a52af1ab6046",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "16286347bdba1333c7d124d9de9fe6630731b2b2",
+      "rev": "85e732c62ac59ab7c12df71ddd020baa87948390",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,7 +188,7 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "19071296d3d643b48615ee574a20e8a03ac40872",
+      "rev": "427e9222363d07c32d6db6169e4049c28d58d141",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -236,7 +236,7 @@
       "src": "https://github.com/Wansmer/treesj.git"
     },
     "treewalker.nvim": {
-      "rev": "c6c37b912e84d0522fa585ce83da93b0fd53563b",
+      "rev": "976eb9921c2f26a9a4314b5a0f4842d447a49592",
       "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {

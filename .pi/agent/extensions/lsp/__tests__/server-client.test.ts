@@ -73,6 +73,8 @@ test("confirms an explicit empty push diagnostic publication", async () => {
     expect(await client.freshDiagnostics(document, undefined)).toEqual({
       diagnostics: [],
       kind: "push-publication",
+      publishedVersion: 1,
+      synchronizedVersion: 1,
     });
   } finally {
     await client.shutdown();
@@ -117,6 +119,115 @@ test("records push silence without treating it as LSP-native evidence", async ()
   }
 });
 
+test("records an unversioned push publication without confirming the current document", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-unversioned-push-client-"));
+  const path = join(directory, "example.lua");
+  await writeFile(path, "value");
+  const document: ProjectFile = {
+    canonicalPath: path,
+    languageId: "lua",
+    path,
+    text: "value",
+  };
+  const client = await LspServerClient.start(
+    {
+      args: [join(import.meta.dir, "fixtures", "fake-server.ts"), "--omit-diagnostic-version"],
+      command: process.execPath,
+      id: "fake-unversioned-push",
+      languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+      rootMarkers: [".git"],
+    },
+    directory,
+    { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+  );
+  try {
+    expect(await client.freshDiagnostics(document, undefined)).toEqual({
+      diagnostics: [],
+      kind: "push-publication",
+      synchronizedVersion: 1,
+    });
+  } finally {
+    await client.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("serializes concurrent diagnostic requests for the same document", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-serialized-diagnostics-client-"));
+  const path = join(directory, "example.lua");
+  await writeFile(path, "value");
+  const document: ProjectFile = {
+    canonicalPath: path,
+    languageId: "lua",
+    path,
+    text: "value",
+  };
+  const client = await LspServerClient.start(
+    {
+      args: [
+        join(import.meta.dir, "fixtures", "fake-server.ts"),
+        "--pull",
+        "--reject-concurrent-diagnostics",
+      ],
+      command: process.execPath,
+      id: "fake-serialized-diagnostics",
+      languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+      rootMarkers: [".git"],
+    },
+    directory,
+    { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+  );
+  try {
+    expect(
+      await Promise.all([
+        client.freshDiagnostics(document, undefined),
+        client.freshDiagnostics(document, undefined),
+      ]),
+    ).toEqual([
+      { diagnostics: [], kind: "pull-report", reportKind: "full" },
+      { diagnostics: [], kind: "pull-report", reportKind: "full" },
+    ]);
+  } finally {
+    await client.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("rejects an unchanged pull report without a previous result ID", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-unchanged-pull-client-"));
+  const path = join(directory, "example.lua");
+  await writeFile(path, "value");
+  const document: ProjectFile = {
+    canonicalPath: path,
+    languageId: "lua",
+    path,
+    text: "value",
+  };
+  const client = await LspServerClient.start(
+    {
+      args: [
+        join(import.meta.dir, "fixtures", "fake-server.ts"),
+        "--pull",
+        "--unchanged-diagnostics",
+      ],
+      command: process.execPath,
+      id: "fake-unchanged-pull",
+      languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
+      rootMarkers: [".git"],
+    },
+    directory,
+    { diagnosticsMs: 1_000, requestMs: 1_000, shutdownMs: 1_000, startupMs: 1_000 },
+  );
+  try {
+    await expect(client.freshDiagnostics(document, undefined)).rejects.toThrow(
+      "without previousResultId",
+    );
+  } finally {
+    await client.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("pulls diagnostics and answers server configuration requests", async () => {
   const directory = await mkdtemp(join(tmpdir(), "pi-lsp-pull-client-"));
   const path = join(directory, "example.lua");
@@ -141,7 +252,9 @@ test("pulls diagnostics and answers server configuration requests", async () => 
   );
   try {
     const observation = await client.freshDiagnostics(document, undefined);
-    expect(observation.kind).toBe("pull-report");
+    if (observation.kind !== "pull-report") {
+      throw new Error(`expected pull-report, received ${observation.kind}`);
+    }
     expect(observation.reportKind).toBe("full");
     expect(observation.diagnostics).toHaveLength(1);
     expect(await client.hover(document, { line: 0, character: 0 }, undefined)).toEqual({

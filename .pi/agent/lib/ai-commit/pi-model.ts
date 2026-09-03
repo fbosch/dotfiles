@@ -6,7 +6,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { selectProfile } from "../../extensions/auth-profiles/profile-selector";
-import { authPathFor } from "../../extensions/auth-profiles/profile-store";
+import { createOpenAiCodexProfileAdapter } from "../../extensions/auth-profiles/providers/openai-codex";
 import { projectIsTrusted } from "../../extensions/auth-profiles/project-trust";
 import { resolveFastModelRequest } from "../../extensions/openai-fast";
 import {
@@ -43,15 +43,20 @@ async function createConfiguredRuntime(cwd: string): Promise<{
   const agentDir = getAgentDir();
   const trusted = projectIsTrusted(cwd, agentDir);
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted: trusted });
+  const providerAdapter = createOpenAiCodexProfileAdapter(agentDir);
   const { profile } = await selectProfile(
     {
       cwd,
       isProjectTrusted: () => trusted,
     },
-    { agentDir, forceUsageRefresh: true },
+    {
+      agentDir,
+      forceUsageRefresh: true,
+      providerAdapter,
+    },
   );
   const runtime = await ModelRuntime.create({
-    authPath: authPathFor(profile, agentDir),
+    credentials: await providerAdapter.createCredentialStore(profile),
     modelsPath: join(agentDir, "models.json"),
   });
   return { runtime, settings, profile };

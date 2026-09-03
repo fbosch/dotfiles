@@ -7,7 +7,7 @@ import type {
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { createLspExtension } from "../index";
-import type { LspServerManager } from "../server-manager";
+import type { DiagnosticVerdict, LspServerManager } from "../server-manager";
 import type { ResolvedLspSettings } from "../settings";
 
 type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | unknown;
@@ -194,29 +194,36 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
   });
 });
 
-test("starts diagnostics after formatting and only reports non-clean results", async () => {
+test("starts diagnostics after formatting and suppresses clean and unconfirmed results", async () => {
   const handlers = new Map<string, Handler>();
   const deliveryModes: Array<string | undefined> = [];
   const sentMessages: SentMessage[] = [];
   let formatted = false;
   let diagnosticsObservedFormatting = false;
-  let diagnosticCount = 0;
+  let diagnosticVerdict: DiagnosticVerdict = "clean";
   let diagnosticCalls = 0;
   const fakeManager = {
     diagnostics: async () => {
       diagnosticCalls += 1;
       diagnosticsObservedFormatting = formatted;
+      const hasIssues = diagnosticVerdict === "issues";
       return {
-        diagnosticCount,
+        diagnosticCount: hasIssues ? 1 : 0,
         diagnosticEvidence:
-          diagnosticCount === 0 ? [] : [{ kind: "push-publication", serverId: "fake" }],
-        diagnosticVerdict: diagnosticCount === 0 ? "unconfirmed" : "issues",
+          diagnosticVerdict === "clean"
+            ? [{ kind: "pull-report", reportKind: "full", serverId: "fake" }]
+            : hasIssues
+              ? [{ documentVersion: 1, kind: "push-publication", serverId: "fake" }]
+              : [],
+        diagnosticVerdict,
         matched: true,
         text:
-          diagnosticCount === 0
-            ? "LSP extension verdict: unconfirmed\nLSP-native evidence: none\nMissing LSP-native evidence: fake sent no textDocument/publishDiagnostics notification within the bounded wait"
-            : "LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification\nexample.ts:1:1-1:2 [error] broken (fake)",
-        unconfirmedServers: diagnosticCount === 0 ? ["fake"] : [],
+          diagnosticVerdict === "clean"
+            ? "LSP extension verdict: clean\nLSP-native evidence: fake=textDocument/diagnostic full report"
+            : diagnosticVerdict === "unconfirmed"
+              ? "LSP extension verdict: unconfirmed\nLSP-native evidence: none\nMissing LSP-native evidence: fake sent no textDocument/publishDiagnostics notification within the bounded wait"
+              : "LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
+        unconfirmedServers: diagnosticVerdict === "unconfirmed" ? ["fake"] : [],
         warnings: [],
       };
     },
@@ -257,16 +264,22 @@ test("starts diagnostics after formatting and only reports non-clean results", a
   await handlers.get("turn_end")?.(turnEnd("call-1") as never, context);
   expect(sentMessages).toEqual([]);
 
-  diagnosticCount = 1;
+  diagnosticVerdict = "unconfirmed";
   await handlers.get("tool_result")?.(mutationResult("call-2") as never, context);
   await handlers.get("message_end")?.(mutationMessage("call-2") as never, context);
-  expect(diagnosticCalls).toBe(2);
   await handlers.get("turn_end")?.(turnEnd("call-2") as never, context);
+  expect(sentMessages).toEqual([]);
+
+  diagnosticVerdict = "issues";
+  await handlers.get("tool_result")?.(mutationResult("call-3") as never, context);
+  await handlers.get("message_end")?.(mutationMessage("call-3") as never, context);
+  expect(diagnosticCalls).toBe(3);
+  await handlers.get("turn_end")?.(turnEnd("call-3") as never, context);
 
   expect(sentMessages).toEqual([
     {
       content:
-        "Automatic LSP diagnostics after edits:\nLSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification\nexample.ts:1:1-1:2 [error] broken (fake)",
+        "Automatic LSP diagnostics after edits:\nLSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
       customType: "lsp-diagnostics",
       display: true,
     },

@@ -1,5 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { match } from "ts-pattern";
+import type { ProfileProviderAdapter } from "./provider-adapter";
 import {
   type ProfileResolution,
   type ResolveProfileOptions,
@@ -8,11 +10,16 @@ import {
 import {
   type CollectUsageStatusOptions,
   collectUsageStatus,
+  type DiagnosticCode,
   type FetchFn,
   type UsageStatusPayload,
 } from "./usage-status-service";
+import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 
-const UNKNOWN_USAGE_COOLDOWN_MS = 60_000;
+export {
+  openAiCodexUsageLimitResetAt as codexUsageLimitResetAt,
+  openAiCodexUsageLimitResetAtFromMessage as codexUsageLimitResetAtFromMessage,
+} from "./providers/openai-codex";
 
 type ProfileContext = Pick<ExtensionContext, "cwd" | "isProjectTrusted">;
 type UsageCollector = (options: CollectUsageStatusOptions) => Promise<UsageStatusPayload>;
@@ -31,6 +38,7 @@ export type ProfileSelectionOptions = ResolveProfileOptions & {
   forceUsageRefresh?: boolean;
   now?: () => number;
   preferredProfile?: string;
+  providerAdapter?: ProfileProviderAdapter;
   usageCollector?: UsageCollector;
 };
 
@@ -73,15 +81,35 @@ function preferProfile(
   };
 }
 
+type DiagnosticEffect = "credential-unusable" | "usage-unconfirmed" | "nonblocking";
+
+function diagnosticEffect(code: DiagnosticCode): DiagnosticEffect {
+  return match(code)
+    .returnType<DiagnosticEffect>()
+    .with(
+      "credential-identity-changed",
+      "credential-expired",
+      "credential-read-failed",
+      "credential-refresh-failed",
+      "invalid-auth-file",
+      "invalid-provider-credential",
+      () => "credential-unusable",
+    )
+    .with("usage-request-failed", () => "usage-unconfirmed")
+    .with(
+      "invalid-profile-name",
+      "reset-credits-request-failed",
+      "usage-cache-write-failed",
+      () => "nonblocking",
+    )
+    .exhaustive();
+}
+
 function hasConfirmedUsage(payload: UsageStatusPayload, profile: string): boolean {
   if (
     payload.diagnostics.some(
       (diagnostic) =>
-        diagnostic.profileLabel === profile &&
-        (diagnostic.code === "credential-expired" ||
-          diagnostic.code === "invalid-auth-file" ||
-          diagnostic.code === "invalid-codex-credential" ||
-          diagnostic.code === "usage-request-failed"),
+        diagnostic.profileLabel === profile && diagnosticEffect(diagnostic.code) !== "nonblocking",
     )
   ) {
     return false;
@@ -104,12 +132,7 @@ function hasFallbackCredential(payload: UsageStatusPayload, profile: string): bo
     (diagnostic) => diagnostic.profileLabel === profile,
   );
   if (
-    diagnostics.some(
-      (diagnostic) =>
-        diagnostic.code === "credential-expired" ||
-        diagnostic.code === "invalid-auth-file" ||
-        diagnostic.code === "invalid-codex-credential",
-    )
+    diagnostics.some((diagnostic) => diagnosticEffect(diagnostic.code) === "credential-unusable")
   ) {
     return false;
   }
@@ -117,7 +140,7 @@ function hasFallbackCredential(payload: UsageStatusPayload, profile: string): bo
   const status = payload.profiles.find((candidate) => candidate.profileLabel === profile);
   if (status === undefined) return false;
   return (
-    diagnostics.some((diagnostic) => diagnostic.code === "usage-request-failed") ||
+    diagnostics.some((diagnostic) => diagnosticEffect(diagnostic.code) === "usage-unconfirmed") ||
     status.usage.length === 0 ||
     status.usage.every((window) => window.remaining > 0)
   );
@@ -129,7 +152,6 @@ export async function selectProfile(
 ): Promise<ProfileSelection> {
   const automatic = await resolveProfile(ctx, options);
   const resolution = preferProfile(automatic, options.preferredProfile);
-  if (resolution.profileOrder.length < 2) return resolution;
 
   const eligibleProfiles = resolution.profileOrder.filter(
     (profile) => options.excludedProfiles?.has(profile) !== true,
@@ -138,9 +160,11 @@ export async function selectProfile(
 
   let usage: UsageStatusPayload;
   try {
+    const agentDir = options.agentDir ?? getAgentDir();
+    const providerAdapter = options.providerAdapter ?? createOpenAiCodexProfileAdapter(agentDir);
     usage = await (options.usageCollector ?? collectUsageStatus)({
       activeProfile: resolution.profile,
-      agentDir: options.agentDir ?? getAgentDir(),
+      agentDir,
       ...(options.cachePath === undefined ? {} : { cachePath: options.cachePath }),
       ...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }),
       forceUsageRefresh: options.forceUsageRefresh === true,
@@ -148,6 +172,7 @@ export async function selectProfile(
       includeResetCredits: false,
       ...(options.now === undefined ? {} : { now: options.now }),
       profileLabels: eligibleProfiles,
+      providerAdapter,
     });
   } catch (error) {
     return { ...resolution, selectionWarning: errorMessage(error) };
@@ -172,54 +197,4 @@ export async function selectProfile(
         selectionWarning: `${resolution.profile} is exhausted; no alternate profile has confirmed usage`,
       }
     : resolution;
-}
-
-function finiteHeaderNumber(value: string | undefined): number | undefined {
-  if (value === undefined || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-export function codexUsageLimitResetAtFromMessage(
-  errorMessage: string | undefined,
-  currentTime = Date.now(),
-): number | undefined {
-  return errorMessage?.startsWith("You have hit your ChatGPT usage limit")
-    ? currentTime + UNKNOWN_USAGE_COOLDOWN_MS
-    : undefined;
-}
-
-export function codexUsageLimitResetAt(
-  responseHeaders: Record<string, string>,
-  currentTime = Date.now(),
-): number | undefined {
-  const headers = Object.fromEntries(
-    Object.entries(responseHeaders).map(([name, value]) => [name.toLowerCase(), value]),
-  );
-  const resetTimes: number[] = [];
-  let exhausted = false;
-
-  for (const window of ["primary", "secondary"] as const) {
-    const usedPercent = finiteHeaderNumber(headers[`x-codex-${window}-used-percent`]);
-    if (usedPercent === undefined || usedPercent < 100) continue;
-    exhausted = true;
-
-    const resetAtSeconds = finiteHeaderNumber(headers[`x-codex-${window}-reset-at`]);
-    if (resetAtSeconds !== undefined) {
-      const resetAt = resetAtSeconds * 1_000;
-      if (Number.isFinite(resetAt) && resetAt > currentTime) {
-        resetTimes.push(resetAt);
-        continue;
-      }
-    }
-
-    const resetAfterSeconds = finiteHeaderNumber(headers[`x-codex-${window}-reset-after-seconds`]);
-    if (resetAfterSeconds !== undefined && resetAfterSeconds >= 0) {
-      const resetAt = currentTime + resetAfterSeconds * 1_000;
-      if (Number.isFinite(resetAt) && resetAt > currentTime) resetTimes.push(resetAt);
-    }
-  }
-
-  if (exhausted === false) return undefined;
-  return resetTimes.length > 0 ? Math.max(...resetTimes) : currentTime + UNKNOWN_USAGE_COOLDOWN_MS;
 }

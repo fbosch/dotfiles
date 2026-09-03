@@ -2,7 +2,9 @@
 
 This benchmark measures the time from launching Pi to completing interactive
 TUI initialization. Pi's `PI_STARTUP_BENCHMARK=1` mode performs the normal
-interactive startup and exits before accepting input or contacting a model.
+interactive startup and stops the TUI before accepting input or contacting a
+model. A benchmark-only extension observes that stop and requests graceful
+session shutdown so long-lived extension resources cannot keep the sample alive.
 
 ## Run it
 
@@ -73,6 +75,8 @@ runs:
 - Terminal size is set to 120 columns by 40 rows at the PTY level.
 - Terminal capability detection is fixed to no images, hyperlinks, true color,
   or hardware cursor.
+- After Pi emits the terminal teardown sequence, a benchmark-only extension
+  requests normal session shutdown and restores its stdout interception.
 - Pi agent source, home resources, mutable agent files, and XDG state roots are
   snapshotted into a private temporary fixture that is deleted on exit.
 - Benchmark sources and test directories are excluded because Pi does not load

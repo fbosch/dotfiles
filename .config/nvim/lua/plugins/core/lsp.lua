@@ -1,7 +1,7 @@
 local platform = require("utils.platform")
 
 local servers = {
-	tsgo = {},
+	tsc = {},
 	tailwindcss = {},
 	biome = {},
 	astro = {},

@@ -70,6 +70,8 @@ benchmark_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 agent_dir="$(cd "$benchmark_dir/.." && pwd -P)"
 repo_root="$(git -C "$agent_dir" rev-parse --show-toplevel)"
 sample_script="$benchmark_dir/startup-sample.sh"
+shutdown_extension="$benchmark_dir/startup-shutdown.ts"
+[[ -f "$shutdown_extension" ]] || fail "benchmark shutdown extension not found: $shutdown_extension"
 host_path=""
 IFS=: read -r -a path_entries <<<"$PATH"
 for path_entry in "${path_entries[@]}"; do
@@ -86,7 +88,7 @@ fi
 benchmark_path=""
 append_path() {
   local directory="$1"
-  [[ -d "$directory" ]] || return
+  [[ -d "$directory" ]] || return 0
   case ":$benchmark_path:" in
     *":$directory:"*) return ;;
   esac
@@ -156,6 +158,7 @@ for source in "$agent_dir"/* "$agent_dir"/.[!.]* "$agent_dir"/..?*; do
   esac
 done
 find "$fixture_agent" -type d -name __tests__ -prune -exec rm -rf -- {} +
+cp "$shutdown_extension" "$fixture_agent/startup-benchmark-shutdown.ts"
 
 if [[ -d "$repo_root/.agents" ]]; then
   mkdir -p "$fixture_home/.agents"
@@ -267,6 +270,7 @@ export PI_BENCHMARK_PI="$pi_bin"
 export PI_BENCHMARK_REPO_ROOT="$repo_root"
 export PI_BENCHMARK_STATE_HOME="$fixture_state"
 export PI_BENCHMARK_TMPDIR="$fixture_tmp"
+export PI_BENCHMARK_SHUTDOWN_EXTENSION="$fixture_agent/startup-benchmark-shutdown.ts"
 
 run_sample() {
   local scenario="$1"
@@ -387,6 +391,7 @@ jq -n \
       ephemeralSession: true,
       mutableStateRoots: "temporary fixture",
       installedDependencies: "symlinked, content fingerprinted, package updates disabled",
+      shutdown: "benchmark extension requests graceful shutdown after Pi stops the TUI",
       environment: {
         inherited: "allowlist",
         path: $benchmarkPath,
@@ -407,10 +412,14 @@ jq -n \
     },
     scenarios: {
       "pty-control": ["true"],
-      full: ["--offline", "--no-session", "--approve"],
-      "no-extensions": ["--offline", "--no-session", "--approve", "--no-extensions"],
+      full: ["--offline", "--no-session", "--approve", "--extension", "<benchmark-shutdown>"],
+      "no-extensions": [
+        "--offline", "--no-session", "--approve", "--no-extensions",
+        "--extension", "<benchmark-shutdown>"
+      ],
       "minimal-resources": [
-        "--offline", "--no-session", "--approve", "--no-extensions", "--no-skills",
+        "--offline", "--no-session", "--approve", "--no-extensions", "--extension",
+        "<benchmark-shutdown>", "--no-skills",
         "--no-prompt-templates", "--no-themes", "--no-context-files"
       ]
     }

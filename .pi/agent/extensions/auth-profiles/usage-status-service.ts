@@ -3,40 +3,43 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { authPathFor, DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
+import type {
+  ProfileCredentialReadResult,
+  ProfileProviderAdapter,
+  ProfileProviderCredential,
+  ProviderFetch,
+  ProviderUsageWindow,
+  UsageUrgency,
+} from "./provider-adapter";
+import { DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
+import {
+  createOpenAiCodexProfileAdapter,
+  openAiCodexCreditsFromPayload,
+  openAiCodexUsageFromPayload,
+} from "./providers/openai-codex";
 
 const OUTPUT_SCHEMA = "fbb.pi-auth-profiles-usage/v1";
 const CACHE_SCHEMA = "fbb.pi-auth-profiles-usage-cache/v1";
-const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
-const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
-const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_CACHE_BYTES = 2 * 1024 * 1024;
 const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_REQUESTS = 4;
 
-export type FetchFn = (input: string | URL, init?: RequestInit) => Promise<Response>;
-type Urgency = "urgent" | "soon" | "later" | "unknown";
-type DiagnosticCode =
+export type FetchFn = ProviderFetch;
+type Urgency = UsageUrgency;
+export type DiagnosticCode =
+  | "credential-identity-changed"
   | "credential-expired"
+  | "credential-read-failed"
+  | "credential-refresh-failed"
   | "invalid-auth-file"
-  | "invalid-codex-credential"
+  | "invalid-provider-credential"
   | "invalid-profile-name"
   | "reset-credits-request-failed"
   | "usage-cache-write-failed"
   | "usage-request-failed";
 
-type CodexCredential = {
-  access: string;
-  accountId: string;
-  expires: number;
-};
-
-export type UsageWindowStatus = {
-  remaining: number;
-  resetsIn?: string;
-};
+export type UsageWindowStatus = ProviderUsageWindow;
 
 export type ProfileUsageStatus = {
   profileLabel: string;
@@ -82,7 +85,7 @@ type UsageCache = {
 type ProfileCredential = {
   profileLabel: string;
   credentialKey: string;
-  credential: CodexCredential;
+  credential: ProfileProviderCredential;
 };
 
 type AccountResult = {
@@ -101,6 +104,7 @@ export type CollectUsageStatusOptions = {
   includeResetCredits?: boolean;
   now?: () => number;
   profileLabels?: readonly string[];
+  providerAdapter?: ProfileProviderAdapter;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -125,154 +129,22 @@ function readJsonObject(path: string): Record<string, unknown> | undefined {
   }
 }
 
-function readCodexCredential(
-  path: string,
-):
-  | { kind: "missing" }
-  | { kind: "invalid-auth-file" }
-  | { kind: "invalid-codex-credential" }
-  | { kind: "valid"; credential: CodexCredential } {
-  if (!existsSync(path)) return { kind: "missing" };
-
-  const auth = readJsonObject(path);
-  if (!auth) return { kind: "invalid-auth-file" };
-  const value = auth["openai-codex"];
-  if (value === undefined) return { kind: "missing" };
-  if (!isRecord(value)) return { kind: "invalid-codex-credential" };
-
-  const access = value.access;
-  const accountId = value.accountId;
-  const expires = finiteNumber(value.expires);
-  if (
-    value.type !== "oauth" ||
-    typeof access !== "string" ||
-    access.length === 0 ||
-    access.length > 64 * 1024 ||
-    typeof accountId !== "string" ||
-    !/^[A-Za-z0-9._-]{1,200}$/.test(accountId) ||
-    expires === undefined
-  ) {
-    return { kind: "invalid-codex-credential" };
-  }
-
-  return { kind: "valid", credential: { access, accountId, expires } };
-}
-
 function accountCredentialKey(accountId: string): string {
   return createHash("sha256").update(accountId).digest("hex");
 }
 
-function formatReset(seconds: number | undefined): string | undefined {
-  if (seconds === undefined) return undefined;
-  if (seconds <= 0) return "now";
-  if (seconds < 60) return `${Math.ceil(seconds)}s`;
-  if (seconds < 3600) return `${Math.ceil(seconds / 60)}m`;
-  if (seconds < 86_400) return `${Math.ceil(seconds / 3600)}h`;
-  return `${Math.ceil(seconds / 86_400)}d`;
-}
-
-function parseUsageWindow(value: unknown): UsageWindowStatus | undefined {
-  if (!isRecord(value)) return undefined;
-  const usedPercent = finiteNumber(value.used_percent);
-  if (usedPercent === undefined || usedPercent < 0 || usedPercent > 100) return undefined;
-
-  const resetAfterSeconds = finiteNumber(value.reset_after_seconds);
-  const validResetSeconds =
-    resetAfterSeconds !== undefined && resetAfterSeconds >= 0 && resetAfterSeconds <= 31_536_000
-      ? resetAfterSeconds
-      : undefined;
-  const remaining = Math.max(0, Math.min(100, 100 - Math.floor(usedPercent)));
-  const resetsIn = formatReset(validResetSeconds);
-  return resetsIn ? { remaining, resetsIn } : { remaining };
-}
-
 export function usageFromPayload(payload: unknown): UsageSnapshot {
-  if (!isRecord(payload) || !isRecord(payload.rate_limit)) {
-    throw new Error("usage response has an unexpected shape");
-  }
-
-  const windows = [
-    parseUsageWindow(payload.rate_limit.primary_window),
-    parseUsageWindow(payload.rate_limit.secondary_window),
-  ].filter((window): window is UsageWindowStatus => window !== undefined);
-  const resetCredits = isRecord(payload.rate_limit_reset_credits)
-    ? nonnegativeInteger(payload.rate_limit_reset_credits.available_count)
-    : undefined;
+  const snapshot = openAiCodexUsageFromPayload(payload);
   return {
-    windows,
-    ...(resetCredits !== undefined ? { availableCount: resetCredits } : {}),
+    windows: snapshot.windows,
+    ...(snapshot.availableCreditCount === undefined
+      ? {}
+      : { availableCount: snapshot.availableCreditCount }),
   };
-}
-
-function urgencyFromExpiry(expiresAt: unknown, now: number): Urgency {
-  if (typeof expiresAt !== "string") return "unknown";
-  const timestamp = Date.parse(expiresAt);
-  if (!Number.isFinite(timestamp)) return "unknown";
-  const remaining = timestamp - now;
-  if (remaining < 12 * 60 * 60 * 1_000) return "urgent";
-  if (remaining <= 7 * 86_400_000) return "soon";
-  return "later";
 }
 
 export function resetCreditsFromPayload(payload: unknown, now = Date.now()): ResetCreditsSnapshot {
-  if (!isRecord(payload)) throw new Error("reset credits response has an unexpected shape");
-  const availableCount = nonnegativeInteger(payload.available_count);
-  if (availableCount === undefined) {
-    throw new Error("reset credits response has an unexpected shape");
-  }
-
-  const credits = Array.isArray(payload.credits) ? payload.credits : [];
-  const expiries = credits
-    .filter((credit) => isRecord(credit) && credit.status === "available")
-    .map((credit) => (isRecord(credit) ? credit.expires_at : undefined))
-    .filter((expiresAt): expiresAt is string => typeof expiresAt === "string")
-    .sort((left, right) => Date.parse(left) - Date.parse(right));
-  return {
-    availableCount,
-    urgency: availableCount > 0 ? urgencyFromExpiry(expiries[0], now) : "unknown",
-  };
-}
-
-async function readBoundedJson(response: Response): Promise<unknown> {
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
-    throw new Error("response is too large");
-  }
-  if (!response.body) return undefined;
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const parts: string[] = [];
-  let bytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes += value.byteLength;
-    if (bytes > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error("response is too large");
-    }
-    parts.push(decoder.decode(value, { stream: true }));
-  }
-  parts.push(decoder.decode());
-  return JSON.parse(parts.join(""));
-}
-
-async function fetchPayload(
-  url: string,
-  credential: CodexCredential,
-  fetchFn: FetchFn,
-): Promise<unknown> {
-  const response = await fetchFn(url, {
-    headers: {
-      Authorization: `Bearer ${credential.access}`,
-      "ChatGPT-Account-Id": credential.accountId,
-    },
-    redirect: "error",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!response.ok) throw new Error(`request failed with ${response.status}`);
-  return readBoundedJson(response);
+  return openAiCodexCreditsFromPayload(payload, now);
 }
 
 function parseUsageWindowStatus(value: unknown): UsageWindowStatus | undefined {
@@ -371,8 +243,9 @@ export function cachedResetCreditStatusForAccount(
 }
 
 async function refreshAccount(
+  adapter: ProfileProviderAdapter,
   credentialKey: string,
-  credential: CodexCredential,
+  credential: ProfileProviderCredential,
   cached: CachedAccount | undefined,
   now: number,
   fetchFn: FetchFn,
@@ -383,7 +256,7 @@ async function refreshAccount(
     cached?.credentialKey === credentialKey ? { ...cached } : { credentialKey };
   const errors: DiagnosticCode[] = [];
 
-  if (credential.expires <= now) {
+  if (credential.expiresAt <= now) {
     errors.push("credential-expired");
   } else if (
     forceUsageRefresh ||
@@ -391,7 +264,13 @@ async function refreshAccount(
     now - next.usageCheckedAt >= USAGE_CACHE_MS
   ) {
     try {
-      next.usage = usageFromPayload(await fetchPayload(USAGE_URL, credential, fetchFn));
+      const usage = await adapter.fetchUsage(credential, fetchFn);
+      next.usage = {
+        windows: usage.windows,
+        ...(usage.availableCreditCount === undefined
+          ? {}
+          : { availableCount: usage.availableCreditCount }),
+      };
       next.usageCheckedAt = now;
     } catch {
       errors.push("usage-request-failed");
@@ -405,14 +284,12 @@ async function refreshAccount(
     usageCount !== undefined && next.resetCredits?.availableCount !== usageCount;
   if (
     includeResetCredits &&
-    credential.expires > now &&
+    credential.expiresAt > now &&
+    adapter.fetchCredits !== undefined &&
     (resetCreditsAreStale || resetCreditsCountChanged)
   ) {
     try {
-      next.resetCredits = resetCreditsFromPayload(
-        await fetchPayload(RESET_CREDITS_URL, credential, fetchFn),
-        now,
-      );
+      next.resetCredits = await adapter.fetchCredits(credential, fetchFn, now);
       next.resetCreditsCheckedAt = now;
     } catch {
       errors.push("reset-credits-request-failed");
@@ -458,11 +335,12 @@ export async function collectUsageStatus(
   const agentDir = options.agentDir ?? getAgentDir();
   const fetchFn = options.fetchFn ?? fetch;
   const now = (options.now ?? Date.now)();
+  const adapter = options.providerAdapter ?? createOpenAiCodexProfileAdapter(agentDir);
   const diagnostics: UsageStatusPayload["diagnostics"] = [];
-  const profileCredentials: ProfileCredential[] = [];
   const requestedProfiles = options.profileLabels
     ? new Set(options.profileLabels.map(normalizeName))
     : undefined;
+  const candidateProfiles: string[] = [];
 
   for (const rawName of listProfiles(agentDir)) {
     if (rawName === DEFAULT_PROFILE && options.includeDefault !== true) continue;
@@ -474,29 +352,68 @@ export async function collectUsageStatus(
       diagnostics.push({ profileLabel: "invalid", code: "invalid-profile-name" });
       continue;
     }
-
     if (requestedProfiles && requestedProfiles.has(profileLabel) === false) continue;
-
-    const result = readCodexCredential(authPathFor(profileLabel, agentDir));
-    if (result.kind === "missing") continue;
-    if (result.kind !== "valid") {
-      diagnostics.push({ profileLabel, code: result.kind });
-      continue;
-    }
-    profileCredentials.push({
-      profileLabel,
-      credentialKey: accountCredentialKey(result.credential.accountId),
-      credential: result.credential,
-    });
+    candidateProfiles.push(profileLabel);
   }
+
+  const discoveredProfiles = await mapWithConcurrency(
+    candidateProfiles,
+    MAX_CONCURRENT_REQUESTS,
+    async (profileLabel): Promise<ProfileCredential | undefined> => {
+      let result: ProfileCredentialReadResult;
+      try {
+        result = await adapter.readCredential(profileLabel);
+      } catch {
+        diagnostics.push({ profileLabel, code: "credential-read-failed" });
+        return undefined;
+      }
+      if (result.kind === "valid" && result.credential.expiresAt <= now) {
+        const expectedIdentity = result.credential.identity;
+        let refreshed: ProfileProviderCredential;
+        try {
+          refreshed = await adapter.refreshCredential({ expectedIdentity, profileLabel });
+        } catch {
+          diagnostics.push({ profileLabel, code: "credential-refresh-failed" });
+          return undefined;
+        }
+        if (refreshed.identity !== expectedIdentity) {
+          diagnostics.push({ profileLabel, code: "credential-identity-changed" });
+          return undefined;
+        }
+        if (refreshed.expiresAt <= now) {
+          diagnostics.push({ profileLabel, code: "credential-refresh-failed" });
+          return undefined;
+        }
+        return {
+          profileLabel,
+          credentialKey: accountCredentialKey(refreshed.identity),
+          credential: refreshed,
+        };
+      }
+
+      if (result.kind === "missing") return undefined;
+      if (result.kind !== "valid") {
+        diagnostics.push({ profileLabel, code: result.kind });
+        return undefined;
+      }
+      return {
+        profileLabel,
+        credentialKey: accountCredentialKey(result.credential.identity),
+        credential: result.credential,
+      };
+    },
+  );
+  const profileCredentials = discoveredProfiles.filter(
+    (profile): profile is ProfileCredential => profile !== undefined,
+  );
 
   const activeProfile = options.activeProfile ?? DEFAULT_PROFILE;
   const cachePath = options.cachePath ?? defaultCachePath();
   const cache = readUsageCache(cachePath);
-  const credentialsByKey = new Map<string, CodexCredential>();
+  const credentialsByKey = new Map<string, ProfileProviderCredential>();
   for (const profile of profileCredentials) {
     const existing = credentialsByKey.get(profile.credentialKey);
-    if (!existing || profile.credential.expires > existing.expires) {
+    if (!existing || profile.credential.expiresAt > existing.expiresAt) {
       credentialsByKey.set(profile.credentialKey, profile.credential);
     }
   }
@@ -507,6 +424,7 @@ export async function collectUsageStatus(
     MAX_CONCURRENT_REQUESTS,
     ([credentialKey, credential]) =>
       refreshAccount(
+        adapter,
         credentialKey,
         credential,
         cache.accounts[credentialKey],

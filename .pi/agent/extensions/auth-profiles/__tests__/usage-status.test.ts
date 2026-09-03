@@ -13,7 +13,7 @@ afterEach(async () => {
 
 async function writeCredential(
   path: string,
-  credential: { access: string; accountId: string },
+  credential: { access: string; accountId: string; expires?: number },
 ): Promise<void> {
   await writeFile(
     path,
@@ -22,7 +22,7 @@ async function writeCredential(
         type: "oauth",
         access: credential.access,
         refresh: "test-refresh-token",
-        expires: now + 60 * 60 * 1_000,
+        expires: credential.expires ?? now + 60 * 60 * 1_000,
         accountId: credential.accountId,
       },
     })}\n`,
@@ -137,6 +137,85 @@ describe("auth profile usage status", () => {
     expect(JSON.parse(await readFile(cachePath, "utf8")).schema).toBe(
       "fbb.pi-auth-profiles-usage-cache/v1",
     );
+  });
+
+  test("refreshes an expired profile before requesting its usage", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-refresh-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const credentialPath = join(agentDir, "auth-profiles", "work.json");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await writeCredential(credentialPath, {
+      access: "expired-access-token",
+      accountId: "account-work",
+      expires: now - 1,
+    });
+
+    const refreshes: string[] = [];
+    const payload = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cachePath: join(root, "cache.json"),
+      fetchFn: async (_input, init) => {
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer refreshed-access-token",
+        );
+        return usageResponse(25, 0);
+      },
+      includeResetCredits: false,
+      now: () => now,
+      refreshCredential: async ({ expectedAccountId, profileLabel }) => {
+        expect(expectedAccountId).toBe("account-work");
+        refreshes.push(profileLabel);
+        await writeCredential(credentialPath, {
+          access: "refreshed-access-token",
+          accountId: "account-work",
+          expires: now + 60 * 60 * 1_000,
+        });
+      },
+    });
+
+    expect(refreshes).toEqual(["work"]);
+    expect(payload.profiles[0]).toMatchObject({
+      profileLabel: "work",
+      usage: [{ remaining: 75 }],
+    });
+    expect(payload.diagnostics).toEqual([]);
+  });
+
+  test("skips an expired profile when its credential refresh fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-refresh-failure-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await writeCredential(join(agentDir, "auth-profiles", "work.json"), {
+      access: "expired-access-token",
+      accountId: "account-work",
+      expires: now - 1,
+    });
+
+    let requestedUsage = false;
+    const payload = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cachePath: join(root, "cache.json"),
+      fetchFn: async () => {
+        requestedUsage = true;
+        return usageResponse(25, 0);
+      },
+      includeResetCredits: false,
+      now: () => now,
+      refreshCredential: async () => {
+        throw new Error("refresh failed");
+      },
+    });
+
+    expect(requestedUsage).toBe(false);
+    expect(payload.profiles).toEqual([]);
+    expect(payload.diagnostics).toContainEqual({
+      profileLabel: "work",
+      code: "credential-refresh-failed",
+    });
   });
 
   test("returns live usage when the cache cannot be written", async () => {

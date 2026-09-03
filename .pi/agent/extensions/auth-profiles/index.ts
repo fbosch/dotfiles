@@ -7,15 +7,11 @@
  * License: MIT; see LICENSE in this directory.
  */
 
+import type { CredentialStore } from "@earendil-works/pi-ai";
+import type { ProfileProviderAdapter } from "./provider-adapter";
 import type { GitRunner } from "./profile-resolver";
+import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
-  codexUsageLimitResetAt,
-  codexUsageLimitResetAtFromMessage,
-  type ProfileSelection,
-  selectProfile,
-} from "./profile-selector";
-import {
-  accountIdFor,
   authPathFor,
   DEFAULT_PROFILE,
   globalConfigPath,
@@ -26,6 +22,7 @@ import {
   publishWezTermChange,
   updateJsonFile,
 } from "./profile-store";
+import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
 
@@ -64,11 +61,7 @@ export { authPathFor } from "./profile-store";
  */
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-type InternalAuthStorage = {
-  constructor: { create(path?: string): InternalAuthStorage };
-};
-
-type InternalCredentials = { store?: InternalAuthStorage };
+type InternalCredentials = { store?: CredentialStore };
 
 type InternalRuntime = {
   credentials?: InternalCredentials;
@@ -76,15 +69,16 @@ type InternalRuntime = {
 
 type AuthProfileDependencies = {
   now?: () => number;
+  providerAdapter?: ProfileProviderAdapter;
   selectProfile?: typeof selectProfile;
 };
 
 function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
   credentials: InternalCredentials;
-  store: InternalAuthStorage;
+  store: CredentialStore;
 } {
-  // Pi no longer exposes its file-auth backend to extensions. Reuse the active
-  // store's factory so Pi retains its own locking, permissions, and reload logic.
+  // Pi no longer exposes its credential runtime to extensions, so this is the
+  // narrow compatibility boundary used to replace only its active store.
   const runtime = (ctx.modelRegistry as unknown as { runtime?: InternalRuntime }).runtime;
   const credentials = runtime?.credentials;
   const store = credentials?.store;
@@ -100,17 +94,11 @@ function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
 async function bindProfile(
   ctx: Pick<ExtensionContext, "modelRegistry">,
   profile: string,
+  adapter: ProfileProviderAdapter,
 ): Promise<string> {
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
-  const create = store.constructor?.create;
-  if (typeof create !== "function") {
-    throw new Error(
-      "Auth profiles is incompatible with this version of pi: credential storage cannot be switched.",
-    );
-  }
-
-  credentials.store = create.call(store.constructor, path);
+  credentials.store = await adapter.createCredentialStore(profile);
   try {
     // Keep provider availability in sync with the newly selected credential file.
     await ctx.modelRegistry.refresh({ allowNetwork: false });
@@ -145,6 +133,7 @@ export default function authProfiles(
 ): void {
   const chooseProfile = dependencies.selectProfile ?? selectProfile;
   const now = dependencies.now ?? Date.now;
+  const providerAdapter = dependencies.providerAdapter ?? createOpenAiCodexProfileAdapter();
   let activeProfile = DEFAULT_PROFILE;
   let sessionProfile: string | undefined;
   let activeSelection: ProfileSelection | undefined;
@@ -162,7 +151,7 @@ export default function authProfiles(
     ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
     selection: ProfileSelection,
   ) => {
-    const path = await bindProfile(ctx, selection.profile);
+    const path = await bindProfile(ctx, selection.profile, providerAdapter);
     activeProfile = selection.profile;
     activeSelection = selection;
     ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);
@@ -177,6 +166,7 @@ export default function authProfiles(
       ctx,
       await chooseProfile(ctx, {
         ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
+        providerAdapter,
         runGit,
       }),
     );
@@ -215,12 +205,13 @@ export default function authProfiles(
     const profileWasSwitched = previousProfile !== profile;
     const originalStore = credentialStoreBinding(ctx).store;
     if (profileWasSwitched) {
-      await bindProfile(ctx, profile);
+      await bindProfile(ctx, profile, providerAdapter);
     }
 
     try {
-      const resolved = await ctx.modelRegistry.getProviderAuth("openai-codex");
-      const accountId = accountIdFor(profile);
+      const resolved = await ctx.modelRegistry.getProviderAuth(providerAdapter.providerId);
+      const credential = await providerAdapter.readCredential(profile);
+      const accountId = credential.kind === "valid" ? credential.credential.identity : undefined;
       const accessToken = resolved?.auth.apiKey;
       if (typeof accessToken !== "string" || accessToken.length === 0 || accountId === undefined) {
         throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
@@ -277,6 +268,7 @@ export default function authProfiles(
             excludedProfiles: new Set(exhaustedUntil.keys()),
             forceUsageRefresh: true,
             ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
+            providerAdapter,
             runGit,
           });
           if (
@@ -321,11 +313,11 @@ export default function authProfiles(
   });
 
   pi.on("after_provider_response", async (event, ctx) => {
-    if (ctx.model?.provider !== "openai-codex") return;
+    if (ctx.model?.provider !== providerAdapter.providerId) return;
 
     const responseProfile = activeProfile;
     lastProviderResponseProfile = responseProfile;
-    const resetAt = codexUsageLimitResetAt(event.headers, now());
+    const resetAt = providerAdapter.usageLimitResetAt(event.headers, now());
     if (resetAt === undefined) return;
 
     const rotation = rotateAfterExhaustion(ctx, resetAt, responseProfile);
@@ -335,14 +327,14 @@ export default function authProfiles(
 
   pi.on("message_end", async (event, ctx) => {
     if (
-      ctx.model?.provider !== "openai-codex" ||
+      ctx.model?.provider !== providerAdapter.providerId ||
       event.message.role !== "assistant" ||
       event.message.stopReason !== "error"
     ) {
       return;
     }
 
-    const resetAt = codexUsageLimitResetAtFromMessage(event.message.errorMessage, now());
+    const resetAt = providerAdapter.usageLimitResetAtFromMessage(event.message.errorMessage, now());
     if (resetAt === undefined) return;
     const responseProfile = lastProviderResponseProfile ?? activeProfile;
     lastProviderResponseProfile = undefined;
