@@ -7,6 +7,7 @@ import {
   codexUsageLimitResetAtFromMessage,
   selectProfile,
 } from "../profile-selector";
+import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 import type { UsageStatusPayload } from "../usage-status-service";
 
 const temporaryDirectories: string[] = [];
@@ -138,15 +139,22 @@ describe("automatic auth profile selection", () => {
         hostname: () => "rvn-pc",
         now: () => currentTime,
         platform: "linux",
-        refreshCredential: async ({ expectedAccountId, profileLabel }) => {
-          expect(expectedAccountId).toBe("account-jpb");
-          refreshedProfiles.push(profileLabel);
-          await writeCredential(join(profilesDir, "jpb.json"), {
-            access: "refreshed-jpb-access-token",
-            accountId: "account-jpb",
-            expires: currentTime + 60_000,
-          });
-        },
+        providerAdapter: createOpenAiCodexProfileAdapter(agentDir, {
+          createRuntime: async (credentials) => ({
+            async getAuth() {
+              refreshedProfiles.push("jpb");
+              await credentials.modify("openai-codex", async () => ({
+                type: "oauth",
+                access: "refreshed-jpb-access-token",
+                refresh: "rotated-refresh-token",
+                expires: currentTime + 60_000,
+                accountId: "account-jpb",
+              }));
+              return { auth: { apiKey: "refreshed-jpb-access-token" } };
+            },
+          }),
+          now: () => currentTime,
+        }),
       },
     );
 

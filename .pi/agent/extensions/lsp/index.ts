@@ -134,6 +134,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     let settings: ResolvedLspSettings | undefined;
     let settingsCwd: string | undefined;
     let settingsTrusted: boolean | undefined;
+    const automaticDiagnostics = new Map<string, AbortController>();
     const pendingMutations = new Map<string, PendingMutation>();
     const warmedPaths = new Set<string>();
 
@@ -262,10 +263,22 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       if (event.message.role !== "toolResult") return;
       const mutation = pendingMutations.get(event.message.toolCallId);
       if (mutation === undefined || mutation.diagnostics !== undefined) return;
+      automaticDiagnostics.get(mutation.key)?.abort();
+      const controller = new AbortController();
+      automaticDiagnostics.set(mutation.key, controller);
+      const signal =
+        context.signal === undefined
+          ? controller.signal
+          : AbortSignal.any([context.signal, controller.signal]);
       mutation.diagnostics = getManager(context).then((manager) =>
-        manager.diagnostics(mutation.path, context.signal, true),
+        manager.diagnostics(mutation.path, signal, true),
       );
-      void mutation.diagnostics.catch(() => undefined);
+      const clear = () => {
+        if (automaticDiagnostics.get(mutation.key) === controller) {
+          automaticDiagnostics.delete(mutation.key);
+        }
+      };
+      void mutation.diagnostics.then(clear, clear);
     });
 
     pi.on("turn_end", async (event) => {
@@ -311,6 +324,8 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     });
 
     pi.on("session_shutdown", async () => {
+      for (const controller of automaticDiagnostics.values()) controller.abort();
+      automaticDiagnostics.clear();
       pendingMutations.clear();
       warmedPaths.clear();
       settings = undefined;

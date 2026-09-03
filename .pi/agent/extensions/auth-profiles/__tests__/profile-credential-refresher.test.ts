@@ -5,7 +5,7 @@ import type {
   CredentialInfo,
   CredentialStore,
 } from "@earendil-works/pi-ai";
-import { createProfileCredentialRefresher } from "../profile-credential-refresher";
+import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 
 class FakeCredentialStore implements CredentialStore {
   constructor(public credential: Credential | undefined) {}
@@ -48,10 +48,10 @@ function expiredCredential(accountId = "account-work"): Credential {
   };
 }
 
-describe("expired profile credential refresh", () => {
+describe("OpenAI Codex profile adapter refresh", () => {
   test("uses Pi auth resolution and persists a refreshed credential", async () => {
     const store = new FakeCredentialStore(expiredCredential());
-    const refresher = createProfileCredentialRefresher("/agent", {
+    const adapter = createOpenAiCodexProfileAdapter("/agent", {
       createCredentialStore: async (path) => {
         expect(path).toBe("/agent/auth-profiles/work.json");
         return store;
@@ -59,8 +59,7 @@ describe("expired profile credential refresh", () => {
       createRuntime: async (credentials) => ({
         async getAuth(providerId) {
           expect(providerId).toBe("openai-codex");
-          await credentials.modify(providerId, async (current) => ({
-            ...current,
+          await credentials.modify(providerId, async () => ({
             type: "oauth",
             access: "refreshed-access-token",
             refresh: "rotated-refresh-token",
@@ -73,8 +72,15 @@ describe("expired profile credential refresh", () => {
       now: () => 10_000,
     });
 
-    await refresher({ expectedAccountId: "account-work", profileLabel: "work" });
-
+    const refreshed = await adapter.refreshCredential({
+      expectedIdentity: "account-work",
+      profileLabel: "work",
+    });
+    expect(refreshed).toEqual({
+      accessToken: "refreshed-access-token",
+      identity: "account-work",
+      expiresAt: 20_000,
+    });
     expect(store.credential).toEqual({
       type: "oauth",
       access: "refreshed-access-token",
@@ -87,7 +93,7 @@ describe("expired profile credential refresh", () => {
   test("rejects an account change before it can be persisted", async () => {
     const original = expiredCredential();
     const store = new FakeCredentialStore(original);
-    const refresher = createProfileCredentialRefresher("/agent", {
+    const adapter = createOpenAiCodexProfileAdapter("/agent", {
       createCredentialStore: async () => store,
       createRuntime: async (credentials) => ({
         async getAuth(providerId) {
@@ -104,7 +110,10 @@ describe("expired profile credential refresh", () => {
       now: () => 10_000,
     });
 
-    const refresh = refresher({ expectedAccountId: "account-work", profileLabel: "work" });
+    const refresh = adapter.refreshCredential({
+      expectedIdentity: "account-work",
+      profileLabel: "work",
+    });
     expect(refresh).rejects.toThrow("credential changed accounts");
     await refresh.catch(() => undefined);
     expect(store.credential).toEqual(original);
@@ -113,7 +122,7 @@ describe("expired profile credential refresh", () => {
   test("preserves the expired credential when refresh fails", async () => {
     const original = expiredCredential();
     const store = new FakeCredentialStore(original);
-    const refresher = createProfileCredentialRefresher("/agent", {
+    const adapter = createOpenAiCodexProfileAdapter("/agent", {
       createCredentialStore: async () => store,
       createRuntime: async () => ({
         async getAuth() {
@@ -123,7 +132,10 @@ describe("expired profile credential refresh", () => {
       now: () => 10_000,
     });
 
-    const refresh = refresher({ expectedAccountId: "account-work", profileLabel: "work" });
+    const refresh = adapter.refreshCredential({
+      expectedIdentity: "account-work",
+      profileLabel: "work",
+    });
     expect(refresh).rejects.toThrow("token endpoint unavailable");
     await refresh.catch(() => undefined);
     expect(store.credential).toEqual(original);

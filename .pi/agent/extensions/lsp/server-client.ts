@@ -165,7 +165,7 @@ export class LspServerClient {
     string,
     Set<(params: PublishDiagnosticsParams) => void>
   >();
-  private readonly diagnosticQueues = new Map<string, Promise<void>>();
+  private readonly documentQueues = new Map<string, Promise<void>>();
   private readonly documents = new Map<string, OpenDocument>();
   private readonly warmups = new Map<string, Promise<void>>();
   private capabilities: InitializeResult["capabilities"] | undefined;
@@ -322,7 +322,7 @@ export class LspServerClient {
     return Boolean(this.capabilities?.referencesProvider);
   }
 
-  async synchronize(document: ProjectFile): Promise<void> {
+  private async synchronize(document: ProjectFile): Promise<void> {
     this.assertReady();
     const uri = pathToFileURL(document.canonicalPath).href;
     const open = this.documents.get(uri);
@@ -365,14 +365,14 @@ export class LspServerClient {
     const uri = pathToFileURL(document.canonicalPath).href;
     const existing = this.warmups.get(uri);
     if (existing !== undefined) return existing;
-    const warming = (async () => {
+    const warming = this.runDocumentOperation(uri, async () => {
       await this.synchronize(document);
       if (this.capabilities?.diagnosticProvider) return;
       await new Promise((resolve) => setTimeout(resolve, PUSH_SERVER_WARMUP_MS));
       if (this.diagnostics.has(uri) || this.documents.get(uri)?.text !== document.text) return;
       // Silence is not an LSP diagnostic result; retain it separately from publications.
       this.unconfirmedUris.add(uri);
-    })();
+    });
     this.warmups.set(uri, warming);
     try {
       await warming;
@@ -386,20 +386,7 @@ export class LspServerClient {
     signal: AbortSignal | undefined,
   ): Promise<DiagnosticObservation> {
     const uri = pathToFileURL(document.canonicalPath).href;
-    const previous = this.diagnosticQueues.get(uri) ?? Promise.resolve();
-    // A single LSP document has one mutable version stream; overlapping probes could
-    // otherwise consume each other's publications or restore older text.
-    const current = previous.then(() => this.collectFreshDiagnostics(document, signal));
-    const tail = current.then(
-      () => undefined,
-      () => undefined,
-    );
-    this.diagnosticQueues.set(uri, tail);
-    try {
-      return await current;
-    } finally {
-      if (this.diagnosticQueues.get(uri) === tail) this.diagnosticQueues.delete(uri);
-    }
+    return this.runDocumentOperation(uri, () => this.collectFreshDiagnostics(document, signal));
   }
 
   private async collectFreshDiagnostics(
@@ -408,7 +395,6 @@ export class LspServerClient {
   ): Promise<DiagnosticObservation> {
     if (signal?.aborted) throw cancellationError("LSP diagnostics");
     const uri = pathToFileURL(document.canonicalPath).href;
-    await this.warmups.get(uri);
     if (this.capabilities?.diagnosticProvider) {
       await this.synchronize(document);
       const report = await this.request<DocumentDiagnosticReport>(
@@ -476,25 +462,31 @@ export class LspServerClient {
   }
 
   async hover(document: ProjectFile, position: Position, signal: AbortSignal | undefined) {
-    await this.synchronize(document);
-    return this.request<Hover | null>(
-      HoverRequest.type,
-      { position, textDocument: { uri: pathToFileURL(document.canonicalPath).href } },
-      this.timeouts.requestMs,
-      signal,
-      "LSP hover",
-    );
+    const uri = pathToFileURL(document.canonicalPath).href;
+    return this.runDocumentOperation(uri, async () => {
+      await this.synchronize(document);
+      return this.request<Hover | null>(
+        HoverRequest.type,
+        { position, textDocument: { uri } },
+        this.timeouts.requestMs,
+        signal,
+        "LSP hover",
+      );
+    });
   }
 
   async definition(document: ProjectFile, position: Position, signal: AbortSignal | undefined) {
-    await this.synchronize(document);
-    return this.request<Location | Location[] | LocationLink[] | null>(
-      DefinitionRequest.type,
-      { position, textDocument: { uri: pathToFileURL(document.canonicalPath).href } },
-      this.timeouts.requestMs,
-      signal,
-      "LSP definition",
-    );
+    const uri = pathToFileURL(document.canonicalPath).href;
+    return this.runDocumentOperation(uri, async () => {
+      await this.synchronize(document);
+      return this.request<Location | Location[] | LocationLink[] | null>(
+        DefinitionRequest.type,
+        { position, textDocument: { uri } },
+        this.timeouts.requestMs,
+        signal,
+        "LSP definition",
+      );
+    });
   }
 
   async references(
@@ -503,18 +495,21 @@ export class LspServerClient {
     includeDeclaration: boolean,
     signal: AbortSignal | undefined,
   ) {
-    await this.synchronize(document);
-    return this.request<Location[] | null>(
-      ReferencesRequest.type,
-      {
-        context: { includeDeclaration },
-        position,
-        textDocument: { uri: pathToFileURL(document.canonicalPath).href },
-      },
-      this.timeouts.requestMs,
-      signal,
-      "LSP references",
-    );
+    const uri = pathToFileURL(document.canonicalPath).href;
+    return this.runDocumentOperation(uri, async () => {
+      await this.synchronize(document);
+      return this.request<Location[] | null>(
+        ReferencesRequest.type,
+        {
+          context: { includeDeclaration },
+          position,
+          textDocument: { uri },
+        },
+        this.timeouts.requestMs,
+        signal,
+        "LSP references",
+      );
+    });
   }
 
   async shutdown(): Promise<void> {
@@ -550,9 +545,25 @@ export class LspServerClient {
     this.state = "stopped";
     this.documents.clear();
     this.diagnostics.clear();
-    this.diagnosticQueues.clear();
+    this.documentQueues.clear();
     this.unconfirmedUris.clear();
     this.warmups.clear();
+  }
+
+  private async runDocumentOperation<T>(uri: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.documentQueues.get(uri) ?? Promise.resolve();
+    // Every operation can synchronize the same mutable LSP document version stream.
+    const current = previous.then(operation);
+    const tail = current.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.documentQueues.set(uri, tail);
+    try {
+      return await current;
+    } finally {
+      if (this.documentQueues.get(uri) === tail) this.documentQueues.delete(uri);
+    }
   }
 
   private pushObservation(uri: string, params: PublishDiagnosticsParams): DiagnosticObservation {

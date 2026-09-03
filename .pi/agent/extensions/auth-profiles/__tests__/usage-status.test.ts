@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 import { collectUsageStatus, usageFromPayload } from "../usage-status";
 
 const temporaryDirectories: string[] = [];
@@ -164,15 +165,22 @@ describe("auth profile usage status", () => {
       },
       includeResetCredits: false,
       now: () => now,
-      refreshCredential: async ({ expectedAccountId, profileLabel }) => {
-        expect(expectedAccountId).toBe("account-work");
-        refreshes.push(profileLabel);
-        await writeCredential(credentialPath, {
-          access: "refreshed-access-token",
-          accountId: "account-work",
-          expires: now + 60 * 60 * 1_000,
-        });
-      },
+      providerAdapter: createOpenAiCodexProfileAdapter(agentDir, {
+        createRuntime: async (credentials) => ({
+          async getAuth() {
+            refreshes.push("work");
+            await credentials.modify("openai-codex", async () => ({
+              type: "oauth",
+              access: "refreshed-access-token",
+              refresh: "rotated-refresh-token",
+              expires: now + 60 * 60 * 1_000,
+              accountId: "account-work",
+            }));
+            return { auth: { apiKey: "refreshed-access-token" } };
+          },
+        }),
+        now: () => now,
+      }),
     });
 
     expect(refreshes).toEqual(["work"]);
@@ -205,9 +213,14 @@ describe("auth profile usage status", () => {
       },
       includeResetCredits: false,
       now: () => now,
-      refreshCredential: async () => {
-        throw new Error("refresh failed");
-      },
+      providerAdapter: createOpenAiCodexProfileAdapter(agentDir, {
+        createRuntime: async () => ({
+          async getAuth() {
+            throw new Error("refresh failed");
+          },
+        }),
+        now: () => now,
+      }),
     });
 
     expect(requestedUsage).toBe(false);

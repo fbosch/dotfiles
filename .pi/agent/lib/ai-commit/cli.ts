@@ -103,7 +103,7 @@ async function resolveDisplayModelRef(
 }
 
 function modelLabel(modelRef: string | null): string {
-  return modelRef ?? "unavailable";
+  return pc.cyan(modelRef ?? "unavailable");
 }
 
 function normalizeAvailableModelRef(modelRef: string, availableModelRefs: string[]): string {
@@ -374,7 +374,7 @@ async function main(): Promise<void> {
           displayModelRef = selectedModel;
 
           if (args.verbose) {
-            style(` Model: ${modelRef}`);
+            style(` Model: ${modelLabel(modelRef)}`);
           }
 
           continue;

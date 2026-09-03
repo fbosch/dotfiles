@@ -152,8 +152,8 @@ test("records an unversioned push publication without confirming the current doc
   }
 });
 
-test("serializes concurrent diagnostic requests for the same document", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-serialized-diagnostics-client-"));
+test("serializes concurrent operations for the same document", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-lsp-serialized-operations-client-"));
   const path = join(directory, "example.lua");
   await writeFile(path, "value");
   const document: ProjectFile = {
@@ -167,10 +167,10 @@ test("serializes concurrent diagnostic requests for the same document", async ()
       args: [
         join(import.meta.dir, "fixtures", "fake-server.ts"),
         "--pull",
-        "--reject-concurrent-diagnostics",
+        "--reject-concurrent-document-requests",
       ],
       command: process.execPath,
-      id: "fake-serialized-diagnostics",
+      id: "fake-serialized-operations",
       languages: [{ extensions: [".lua"], fileNames: [], languageId: "lua" }],
       rootMarkers: [".git"],
     },
@@ -181,10 +181,12 @@ test("serializes concurrent diagnostic requests for the same document", async ()
     expect(
       await Promise.all([
         client.freshDiagnostics(document, undefined),
+        client.hover(document, { line: 0, character: 0 }, undefined),
         client.freshDiagnostics(document, undefined),
       ]),
     ).toEqual([
       { diagnostics: [], kind: "pull-report", reportKind: "full" },
+      { contents: { kind: "plaintext", value: "[null,null,null]" } },
       { diagnostics: [], kind: "pull-report", reportKind: "full" },
     ]);
   } finally {

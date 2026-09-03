@@ -36,7 +36,9 @@ const incremental = process.argv.includes("--incremental");
 const pullDiagnostics = process.argv.includes("--pull");
 const omitEmptyDiagnostics = process.argv.includes("--omit-empty");
 const omitDiagnosticVersion = process.argv.includes("--omit-diagnostic-version");
-const rejectConcurrentDiagnostics = process.argv.includes("--reject-concurrent-diagnostics");
+const rejectConcurrentDocumentRequests = process.argv.includes(
+  "--reject-concurrent-document-requests",
+);
 const unchangedDiagnostics = process.argv.includes("--unchanged-diagnostics");
 
 function argumentValue(name: string): string | undefined {
@@ -132,12 +134,14 @@ connection.onRequest(
   DocumentDiagnosticRequest.type,
   async ({ textDocument }): Promise<DocumentDiagnosticReport> => {
     if (unchangedDiagnostics) return { kind: "unchanged", resultId: "unexpected" };
-    if (rejectConcurrentDiagnostics && activeDiagnosticRequests > 0) {
-      throw new Error("concurrent diagnostic request");
+    if (rejectConcurrentDocumentRequests && activeDiagnosticRequests > 0) {
+      throw new Error("concurrent document request");
     }
     activeDiagnosticRequests += 1;
     try {
-      if (rejectConcurrentDiagnostics) await new Promise((resolve) => setTimeout(resolve, 50));
+      if (rejectConcurrentDocumentRequests) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
       await waitForDiagnosticBarrier();
       return {
         kind: "full",
@@ -149,6 +153,9 @@ connection.onRequest(
   },
 );
 connection.onRequest(HoverRequest.type.method, async (_params: HoverParams) => {
+  if (rejectConcurrentDocumentRequests && activeDiagnosticRequests > 0) {
+    throw new Error("concurrent document request");
+  }
   if (hangRequests) await new Promise(() => {});
   let value = "fake hover";
   if (invalidIncrementalChange) value = "invalid incremental change";
