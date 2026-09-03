@@ -98,14 +98,9 @@ export function createFileChangesExtension(
     function updateUi(ctx: ExtensionContext): void {
       if (!ctx.hasUI) return;
 
-      if (!showFileChanges) {
-        clearUi(ctx);
-        return;
-      }
-
       ctx.ui.setStatus(UI_KEY, formatChangesStatus(trackedFiles.values()));
       if (ctx.mode !== "tui") return;
-      if (trackedFiles.size === 0) {
+      if (!showFileChanges || trackedFiles.size === 0) {
         ctx.ui.setWidget(UI_KEY, undefined);
         return;
       }

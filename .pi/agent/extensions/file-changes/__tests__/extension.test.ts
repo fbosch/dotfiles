@@ -164,6 +164,7 @@ describe("file changes extension", () => {
     await harness.emit("tool_result", writeResult("new", "example.ts"));
 
     await harness.runCommand("hide");
+    expect(harness.statuses.at(-1)).toBe("1 file +1");
     expect(harness.widgets.at(-1)).toBeUndefined();
     expect(harness.getShowFileChanges()).toBe(false);
     expect(harness.notifications.at(-1)).toBe("Changes hidden");
@@ -193,7 +194,7 @@ describe("file changes extension", () => {
     harness.files.set("/repo/example.ts", "after\n");
     await harness.emit("tool_result", writeResult("write-1", "example.ts"));
 
-    expect(harness.statuses.at(-1)).toBeUndefined();
+    expect(harness.statuses.at(-1)).toBe("1 file +1 -1");
     expect(harness.widgets.at(-1)).toBeUndefined();
     expect(harness.entries).toContainEqual({
       type: "custom",

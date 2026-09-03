@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const TUI_STOP_SEQUENCE = "\x1b[?2004l";
 
@@ -8,13 +8,14 @@ export interface BenchmarkOutput {
   write: BenchmarkWrite;
 }
 
-export function installBenchmarkShutdown(pi: ExtensionAPI, output: BenchmarkOutput): void {
-  let context: ExtensionContext | undefined;
+export interface BenchmarkRuntime {
+  defer(callback: () => void): void;
+  exit(code: number): never;
+}
+
+export function installBenchmarkShutdown(output: BenchmarkOutput, runtime: BenchmarkRuntime): void {
   let tail = "";
   const originalWrite = output.write;
-  const restoreWrite = () => {
-    output.write = originalWrite;
-  };
 
   output.write = (chunk, ...args) => {
     const text = typeof chunk === "string" ? chunk : Buffer.from(chunk).toString("utf8");
@@ -22,25 +23,20 @@ export function installBenchmarkShutdown(pi: ExtensionAPI, output: BenchmarkOutp
     tail = buffered.slice(-(TUI_STOP_SEQUENCE.length - 1));
     const result = Reflect.apply(originalWrite, output, [chunk, ...args]) as boolean;
 
-    // Pi's benchmark mode stops the TUI without shutting down extension resources.
-    // Request normal shutdown only after that stop is observable on stdout.
     if (buffered.includes(TUI_STOP_SEQUENCE)) {
-      restoreWrite();
-      context?.shutdown();
+      output.write = originalWrite;
+      // Benchmark mode returns after stopping the TUI and never services
+      // ExtensionContext.shutdown(). Exit on the next turn so this write can flush.
+      runtime.defer(() => runtime.exit(0));
     }
     return result;
   };
-
-  pi.on("session_start", (_event, ctx) => {
-    context = ctx;
-  });
-  pi.on("session_shutdown", () => {
-    restoreWrite();
-    context = undefined;
-  });
 }
 
-export default function benchmarkShutdown(pi: ExtensionAPI): void {
+export default function benchmarkShutdown(_pi: ExtensionAPI): void {
   if (process.env.PI_STARTUP_BENCHMARK !== "1") return;
-  installBenchmarkShutdown(pi, process.stdout as unknown as BenchmarkOutput);
+  installBenchmarkShutdown(process.stdout as unknown as BenchmarkOutput, {
+    defer: setImmediate,
+    exit: process.exit,
+  });
 }

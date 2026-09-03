@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSyn
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
 import type {
   ProfileCredentialReadResult,
   ProfileProviderAdapter,
@@ -11,7 +12,6 @@ import type {
   ProviderUsageWindow,
   UsageUrgency,
 } from "./provider-adapter";
-import { DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
 import {
   createOpenAiCodexProfileAdapter,
   openAiCodexCreditsFromPayload,
@@ -19,7 +19,7 @@ import {
 } from "./providers/openai-codex";
 
 const OUTPUT_SCHEMA = "fbb.pi-auth-profiles-usage/v1";
-const CACHE_SCHEMA = "fbb.pi-auth-profiles-usage-cache/v1";
+const CACHE_SCHEMA = "fbb.pi-auth-profiles-usage-cache/v2";
 const MAX_CACHE_BYTES = 2 * 1024 * 1024;
 const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
@@ -129,8 +129,8 @@ function readJsonObject(path: string): Record<string, unknown> | undefined {
   }
 }
 
-function accountCredentialKey(accountId: string): string {
-  return createHash("sha256").update(accountId).digest("hex");
+function accountCredentialKey(providerId: string, identity: string): string {
+  return createHash("sha256").update(providerId).update("\0").update(identity).digest("hex");
 }
 
 export function usageFromPayload(payload: unknown): UsageSnapshot {
@@ -162,11 +162,17 @@ function parseUsageWindowStatus(value: unknown): UsageWindowStatus | undefined {
 }
 
 function parseUsageSnapshot(value: unknown): UsageSnapshot | undefined {
-  if (!isRecord(value) || !Array.isArray(value.windows)) return undefined;
-  const windows = value.windows
-    .map(parseUsageWindowStatus)
-    .filter((window): window is UsageWindowStatus => window !== undefined);
+  if (!isRecord(value) || !Array.isArray(value.windows) || value.windows.length === 0) {
+    return undefined;
+  }
+  const windows: UsageWindowStatus[] = [];
+  for (const valueWindow of value.windows) {
+    const window = parseUsageWindowStatus(valueWindow);
+    if (window === undefined) return undefined;
+    windows.push(window);
+  }
   const availableCount = nonnegativeInteger(value.availableCount);
+  if (value.availableCount !== undefined && availableCount === undefined) return undefined;
   return { windows, ...(availableCount !== undefined ? { availableCount } : {}) };
 }
 
@@ -184,7 +190,7 @@ function parseResetCreditsSnapshot(value: unknown): ResetCreditsSnapshot | undef
 function parseCachedAccount(value: unknown): CachedAccount | undefined {
   if (!isRecord(value) || typeof value.credentialKey !== "string") return undefined;
   const usage = parseUsageSnapshot(value.usage);
-  const usageCheckedAt = finiteNumber(value.usageCheckedAt);
+  const usageCheckedAt = usage === undefined ? undefined : finiteNumber(value.usageCheckedAt);
   const resetCredits = parseResetCreditsSnapshot(value.resetCredits);
   const resetCreditsCheckedAt = finiteNumber(value.resetCreditsCheckedAt);
   return {
@@ -233,8 +239,9 @@ function defaultCachePath(): string {
 export function cachedResetCreditStatusForAccount(
   accountId: string,
   cachePath = defaultCachePath(),
+  providerId = "openai-codex",
 ): CachedResetCreditStatus | undefined {
-  const cached = readUsageCache(cachePath).accounts[accountCredentialKey(accountId)];
+  const cached = readUsageCache(cachePath).accounts[accountCredentialKey(providerId, accountId)];
   if (cached?.resetCredits === undefined || cached.resetCreditsCheckedAt === undefined) {
     return undefined;
   }
@@ -386,7 +393,7 @@ export async function collectUsageStatus(
         }
         return {
           profileLabel,
-          credentialKey: accountCredentialKey(refreshed.identity),
+          credentialKey: accountCredentialKey(adapter.providerId, refreshed.identity),
           credential: refreshed,
         };
       }
@@ -398,7 +405,7 @@ export async function collectUsageStatus(
       }
       return {
         profileLabel,
-        credentialKey: accountCredentialKey(result.credential.identity),
+        credentialKey: accountCredentialKey(adapter.providerId, result.credential.identity),
         credential: result.credential,
       };
     },

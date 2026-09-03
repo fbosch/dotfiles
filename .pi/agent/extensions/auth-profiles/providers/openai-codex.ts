@@ -6,6 +6,7 @@ import type {
   CredentialStore,
 } from "@earendil-works/pi-ai";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { authPathFor, normalizeName } from "../profile-store";
 import type {
   ProfileCredentialReadResult,
   ProfileProviderAdapter,
@@ -15,7 +16,6 @@ import type {
   ProviderUsageSnapshot,
   UsageUrgency,
 } from "../provider-adapter";
-import { authPathFor, normalizeName } from "../profile-store";
 
 const PROVIDER_ID = "openai-codex";
 const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
@@ -68,11 +68,15 @@ function parseCredential(value: unknown): ProfileCredentialReadResult {
   const accessToken = value.access;
   const identity = value.accountId;
   const expiresAt = finiteNumber(value.expires);
+  const refreshToken = value.refresh;
   if (
     value.type !== "oauth" ||
     typeof accessToken !== "string" ||
     accessToken.length === 0 ||
     accessToken.length > 64 * 1024 ||
+    typeof refreshToken !== "string" ||
+    refreshToken.length === 0 ||
+    refreshToken.length > 64 * 1024 ||
     typeof identity !== "string" ||
     /^[A-Za-z0-9._-]{1,200}$/.test(identity) === false ||
     expiresAt === undefined
@@ -98,12 +102,43 @@ function assertExpectedIdentity(
 
 export function guardOpenAiCodexCredential(
   store: CredentialStore,
-  expectedIdentity: string,
+  initialIdentity: string | undefined,
+  allowIdentityResetAfterDelete = false,
 ): CredentialStore {
+  let protectedIdentity = initialIdentity;
+  let mutationTail: Promise<void> = Promise.resolve();
+
+  const serializeMutation = <T>(mutation: () => Promise<T>): Promise<T> => {
+    const result = mutationTail.then(mutation);
+    mutationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+
+  const identityFor = (credential: Credential | undefined): string | undefined => {
+    if (credential === undefined && protectedIdentity === undefined) return undefined;
+    if (protectedIdentity === undefined) {
+      const identity =
+        credential?.type === "oauth" && typeof credential.accountId === "string"
+          ? credential.accountId
+          : undefined;
+      if (identity === undefined) {
+        throw new Error("OpenAI Codex credential has no account identity.");
+      }
+      return identity;
+    }
+    assertExpectedIdentity(credential, protectedIdentity);
+    return protectedIdentity;
+  };
+
   return {
     async read(providerId, options) {
       const credential = await store.read(providerId, options);
-      if (providerId === PROVIDER_ID) assertExpectedIdentity(credential, expectedIdentity);
+      if (providerId === PROVIDER_ID) {
+        protectedIdentity = identityFor(credential) ?? protectedIdentity;
+      }
       return credential;
     },
     list(options): Promise<readonly CredentialInfo[]> {
@@ -111,19 +146,42 @@ export function guardOpenAiCodexCredential(
     },
     modify(providerId, modify, options) {
       if (providerId !== PROVIDER_ID) return store.modify(providerId, modify, options);
-      return store.modify(
-        providerId,
-        async (current) => {
-          assertExpectedIdentity(current, expectedIdentity);
-          const next = await modify(current);
-          if (next !== undefined) assertExpectedIdentity(next, expectedIdentity);
-          return next;
-        },
-        options,
-      );
+      return serializeMutation(async () => {
+        let observedIdentity: string | undefined;
+        const result = await store.modify(
+          providerId,
+          async (current) => {
+            const expectedIdentity = identityFor(current);
+            const next = await modify(current);
+            if (next === undefined) return undefined;
+            const nextIdentity =
+              next.type === "oauth" && typeof next.accountId === "string"
+                ? next.accountId
+                : undefined;
+            if (
+              nextIdentity === undefined ||
+              (expectedIdentity && nextIdentity !== expectedIdentity)
+            ) {
+              throw new Error("OpenAI Codex credential changed accounts during refresh.");
+            }
+            observedIdentity = nextIdentity;
+            return next;
+          },
+          options,
+        );
+        protectedIdentity = observedIdentity ?? protectedIdentity;
+        return result;
+      });
     },
     delete(providerId, options): Promise<void> {
-      return store.delete(providerId, options);
+      if (providerId !== PROVIDER_ID) return store.delete(providerId, options);
+      return serializeMutation(async () => {
+        if (allowIdentityResetAfterDelete === false) {
+          throw new Error("OpenAI Codex credential cannot be deleted during refresh.");
+        }
+        await store.delete(providerId, options);
+        protectedIdentity = undefined;
+      });
     },
   };
 }
@@ -206,10 +264,20 @@ export function openAiCodexUsageFromPayload(payload: unknown): ProviderUsageSnap
   if (!isRecord(payload) || !isRecord(payload.rate_limit)) {
     throw new Error("usage response has an unexpected shape");
   }
-  const windows = [
-    usageWindow(payload.rate_limit.primary_window),
-    usageWindow(payload.rate_limit.secondary_window),
-  ].filter((window): window is NonNullable<typeof window> => window !== undefined);
+  const primaryWindow = usageWindow(payload.rate_limit.primary_window);
+  if (primaryWindow === undefined) {
+    throw new Error("usage response has an unexpected primary window");
+  }
+  const secondaryValue = payload.rate_limit.secondary_window;
+  const secondaryWindow =
+    secondaryValue === undefined || secondaryValue === null
+      ? undefined
+      : usageWindow(secondaryValue);
+  if (secondaryValue !== undefined && secondaryValue !== null && secondaryWindow === undefined) {
+    throw new Error("usage response has an unexpected secondary window");
+  }
+  const windows =
+    secondaryWindow === undefined ? [primaryWindow] : [primaryWindow, secondaryWindow];
   const availableCreditCount = isRecord(payload.rate_limit_reset_credits)
     ? nonnegativeInteger(payload.rate_limit_reset_credits.available_count)
     : undefined;
@@ -312,6 +380,46 @@ export function createOpenAiCodexProfileAdapter(
   const now = dependencies.now ?? Date.now;
   const pathFor = (profileLabel: string) => authPathFor(normalizeName(profileLabel), agentDir);
 
+  const resolveStoredCredential = async (
+    profileLabel: string,
+    expectedIdentity?: string,
+  ): Promise<ProfileProviderCredential> => {
+    const profile = normalizeName(profileLabel);
+    const unguardedStore = await loadStore(pathFor(profile));
+    const initial = parseCredential(
+      await unguardedStore.read(PROVIDER_ID, {
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
+    );
+    if (initial.kind !== "valid") {
+      throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
+    }
+    if (expectedIdentity !== undefined && initial.credential.identity !== expectedIdentity) {
+      throw new Error("OpenAI Codex credential changed accounts during refresh.");
+    }
+
+    const identity = expectedIdentity ?? initial.credential.identity;
+    const store = guardOpenAiCodexCredential(unguardedStore, identity);
+    const runtime = await loadRuntime(store);
+    const auth = await runtime.getAuth(PROVIDER_ID, {
+      minOAuthValidityMs: 1,
+      signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
+    });
+    if (auth === undefined) {
+      throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
+    }
+    const result = parseCredential(
+      await store.read(PROVIDER_ID, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
+    );
+    if (result.kind !== "valid" || result.credential.identity !== identity) {
+      throw new Error("OpenAI Codex credential changed accounts during refresh.");
+    }
+    if (result.credential.expiresAt <= now()) {
+      throw new Error(`Profile ${profile} OpenAI Codex credential remained expired after refresh.`);
+    }
+    return result.credential;
+  };
+
   return {
     providerId: PROVIDER_ID,
     async createCredentialStore(profileLabel) {
@@ -320,11 +428,13 @@ export function createOpenAiCodexProfileAdapter(
       const result = parseCredential(
         await store.read(PROVIDER_ID, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
       );
-      if (result.kind === "missing") return store;
+      if (result.kind === "missing") {
+        return guardOpenAiCodexCredential(store, undefined, true);
+      }
       if (result.kind !== "valid") {
         throw new Error(`Profile ${profile} has an invalid OpenAI Codex credential.`);
       }
-      return guardOpenAiCodexCredential(store, result.credential.identity);
+      return guardOpenAiCodexCredential(store, result.credential.identity, true);
     },
     async readCredential(profileLabel) {
       try {
@@ -336,29 +446,11 @@ export function createOpenAiCodexProfileAdapter(
         return { kind: "invalid-auth-file" };
       }
     },
-    async refreshCredential({ expectedIdentity, profileLabel }) {
-      const profile = normalizeName(profileLabel);
-      const store = guardOpenAiCodexCredential(await loadStore(pathFor(profile)), expectedIdentity);
-      const runtime = await loadRuntime(store);
-      const auth = await runtime.getAuth(PROVIDER_ID, {
-        minOAuthValidityMs: 1,
-        signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
-      });
-      if (auth === undefined) {
-        throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
-      }
-      const result = parseCredential(
-        await store.read(PROVIDER_ID, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) }),
-      );
-      if (result.kind !== "valid" || result.credential.identity !== expectedIdentity) {
-        throw new Error("OpenAI Codex credential changed accounts during refresh.");
-      }
-      if (result.credential.expiresAt <= now()) {
-        throw new Error(
-          `Profile ${profile} OpenAI Codex credential remained expired after refresh.`,
-        );
-      }
-      return result.credential;
+    resolveCredential(profileLabel) {
+      return resolveStoredCredential(profileLabel);
+    },
+    refreshCredential({ expectedIdentity, profileLabel }) {
+      return resolveStoredCredential(profileLabel, expectedIdentity);
     },
     fetchUsage(credential, fetchFn) {
       return fetchPayload(USAGE_URL, credential, fetchFn).then(openAiCodexUsageFromPayload);

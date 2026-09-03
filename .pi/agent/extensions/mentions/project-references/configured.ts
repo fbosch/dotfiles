@@ -1,5 +1,7 @@
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
+import { readLockedJsonFile } from "../../../lib/locked-json-file";
 import type { ProjectReference } from "./types";
 
 const REFERENCE_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -25,17 +27,17 @@ function resolveReferencePath(cwd: string, configuredPath: string, home: string)
 }
 
 export function loadConfiguredProjectReferences(cwd: string, home: string): ProjectReference[] {
-  const settingsPath = join(cwd, ".pi", "settings.json");
-  if (existsSync(settingsPath) === false) return [];
+  const settingsPath = join(cwd, CONFIG_DIR_NAME, "settings.json");
 
   let settings: unknown;
   try {
-    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    settings = readLockedJsonFile(settingsPath);
   } catch (error) {
     throw new Error(
       `Cannot load project references from ${settingsPath}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+  if (settings === undefined) return [];
   if (isRecord(settings) === false) {
     throw new Error(`Project settings must contain a JSON object: ${settingsPath}`);
   }

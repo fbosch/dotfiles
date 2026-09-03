@@ -13,7 +13,7 @@
         "mcp"
       ],
       "lifecycle": "lazy",
-      "directTools": true,
+      "directTools": false,
       "exposeResources": false,
       "approveTools": true
     },

@@ -287,6 +287,72 @@ test("starts diagnostics after formatting and suppresses clean and unconfirmed r
   expect(deliveryModes).toEqual(["steer"]);
 });
 
+test("cancels superseded automatic diagnostics for the same file", async () => {
+  const handlers = new Map<string, Handler>();
+  const sentMessages: SentMessage[] = [];
+  const signals: AbortSignal[] = [];
+  const fakeManager = {
+    diagnostics: async (_path: string, signal: AbortSignal | undefined) => {
+      if (signal === undefined) throw new Error("expected automatic diagnostic signal");
+      signals.push(signal);
+      if (signals.length === 1) {
+        await new Promise<void>((_resolve, reject) => {
+          const cancel = () => {
+            const error = new Error("LSP diagnostics cancelled");
+            error.name = "AbortError";
+            reject(error);
+          };
+          if (signal.aborted) cancel();
+          else signal.addEventListener("abort", cancel, { once: true });
+        });
+      }
+      return {
+        diagnosticCount: 0,
+        diagnosticEvidence: [{ kind: "pull-report", reportKind: "full", serverId: "fake" }],
+        diagnosticVerdict: "clean" as const,
+        matched: true,
+        text: "LSP extension verdict: clean\nLSP-native evidence: fake=textDocument/diagnostic full report",
+        unconfirmedServers: [],
+        warnings: [],
+      };
+    },
+    shutdown: async () => {},
+    status: () => "ready",
+  } as unknown as LspServerManager;
+  const settings: ResolvedLspSettings = {
+    servers: [],
+    timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+    warnings: [],
+  };
+  const pi = {
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    registerTool() {},
+    sendMessage(message: SentMessage) {
+      sentMessages.push(message);
+    },
+  } as unknown as ExtensionAPI;
+  const context = {
+    cwd: "/project",
+    isProjectTrusted: () => true,
+    signal: undefined,
+    ui: { notify() {} },
+  } as unknown as ExtensionContext;
+  createLspExtension({ createManager: async () => fakeManager, readSettings: () => settings })(pi);
+  await handlers.get("session_start")?.({} as never, context);
+
+  await handlers.get("tool_result")?.(mutationResult("call-1") as never, context);
+  await handlers.get("message_end")?.(mutationMessage("call-1") as never, context);
+  await handlers.get("tool_result")?.(mutationResult("call-2") as never, context);
+  await handlers.get("message_end")?.(mutationMessage("call-2") as never, context);
+
+  expect(signals).toHaveLength(2);
+  expect(signals[0]?.aborted).toBeTrue();
+  await handlers.get("turn_end")?.(turnEnd("call-1", "call-2") as never, context);
+  expect(sentMessages).toEqual([]);
+});
+
 test("reports only the latest immediate diagnostic result per file and turn", async () => {
   const handlers = new Map<string, Handler>();
   const diagnosticCalls: string[] = [];

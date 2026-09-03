@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { CredentialStore } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -10,6 +11,9 @@ import type {
 import type { Component } from "@earendil-works/pi-tui";
 import authProfiles from "../index";
 import type { ProfileSelection } from "../profile-selector";
+import { accountIdFor, authPathFor } from "../profile-store";
+import type { ProfileProviderAdapter } from "../provider-adapter";
+import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type ProviderResponseHandler = (
@@ -44,12 +48,57 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
-class FakeAuthStore {
+class FakeAuthStore implements CredentialStore {
   static create(path?: string): FakeAuthStore {
     return new FakeAuthStore(path);
   }
 
   constructor(readonly path?: string) {}
+
+  async read() {
+    return undefined;
+  }
+
+  async list() {
+    return [];
+  }
+
+  async modify() {
+    return undefined;
+  }
+
+  async delete() {}
+}
+
+function testProviderAdapter(agentDir: string): ProfileProviderAdapter {
+  const codex = createOpenAiCodexProfileAdapter(agentDir);
+  return {
+    ...codex,
+    async createCredentialStore(profileLabel) {
+      return FakeAuthStore.create(authPathFor(profileLabel, agentDir));
+    },
+    async readCredential(profileLabel) {
+      const identity = accountIdFor(profileLabel, agentDir);
+      return identity === undefined
+        ? { kind: "missing" }
+        : {
+            kind: "valid",
+            credential: {
+              accessToken: "test-access",
+              expiresAt: Number.MAX_SAFE_INTEGER,
+              identity,
+            },
+          };
+    },
+    async resolveCredential(profileLabel) {
+      const identity = accountIdFor(profileLabel, agentDir);
+      if (identity === undefined) throw new Error("missing test credential");
+      return { accessToken: "test-access", expiresAt: Number.MAX_SAFE_INTEGER, identity };
+    },
+    async refreshCredential() {
+      throw new Error("unexpected credential refresh");
+    },
+  };
 }
 
 describe("auth profile prompt status", () => {
@@ -80,7 +129,7 @@ describe("auth profile prompt status", () => {
         if (name === "reset-credit") resetCreditCommand = command.handler;
       },
     } as unknown as ExtensionAPI;
-    authProfiles(pi);
+    authProfiles(pi, { providerAdapter: testProviderAdapter(agentDir) });
 
     const statuses: Array<[string, string | undefined]> = [];
     let failNextModelRefresh = false;
@@ -226,7 +275,11 @@ describe("auth profile prompt status", () => {
       },
       registerCommand: () => undefined,
     } as unknown as ExtensionAPI;
-    authProfiles(pi, { now: () => 1_000_000, selectProfile: chooseProfile });
+    authProfiles(pi, {
+      now: () => 1_000_000,
+      providerAdapter: testProviderAdapter(agentDir),
+      selectProfile: chooseProfile,
+    });
 
     const statuses: Array<[string, string | undefined]> = [];
     const notifications: string[] = [];
@@ -298,7 +351,7 @@ describe("auth profile prompt status", () => {
     expect(notifications.at(-1)).toBe("jpb exhausted; switched to ct. Retry the request.");
   });
 
-  test("reset-credit resolves a named profile and restores the active store", async () => {
+  test("reset-credit resolves a named profile without changing the active store", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-reset-"));
     temporaryDirectories.push(root);
     const agentDir = join(root, "agent");
@@ -326,7 +379,7 @@ describe("auth profile prompt status", () => {
         if (name === "reset-credit") resetCreditCommand = command.handler;
       },
     } as unknown as ExtensionAPI;
-    authProfiles(pi);
+    authProfiles(pi, { providerAdapter: testProviderAdapter(agentDir) });
 
     const originalStore = new FakeAuthStore();
     const runtime = {

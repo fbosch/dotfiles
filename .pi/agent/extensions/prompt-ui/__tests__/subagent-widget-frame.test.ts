@@ -319,6 +319,40 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
+  test("loads agent metadata only when the agents widget renders", () => {
+    const { calls, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => ["└─ ⠋ Review  Reviewing code"],
+      invalidate: () => {},
+    };
+    let metadataLoads = 0;
+    const uninstall = installSubagentWidgetFrame(ui, {
+      loadAgentMetadata: () => {
+        metadataLoads += 1;
+        return {
+          colors: new Map([["Review", "#a8d0e6"]]),
+          displayNames: new Map([["review", "Review"]]),
+        };
+      },
+    });
+
+    ui.setWidget("rpiv-todos", () => widget);
+    const todoFactory = calls[0]?.content;
+    if (typeof todoFactory !== "function") throw new Error("Expected a todo widget factory");
+    todoFactory(tui, theme).render(32);
+    expect(metadataLoads).toBe(0);
+
+    ui.setWidget("agents", () => widget);
+    const agentFactory = calls[1]?.content;
+    if (typeof agentFactory !== "function") throw new Error("Expected an agent widget factory");
+    const agentWidget = agentFactory(tui, theme);
+    expect(metadataLoads).toBe(0);
+    agentWidget.render(32);
+    agentWidget.render(32);
+    expect(metadataLoads).toBe(1);
+    uninstall();
+  });
+
   test("does not add bottom padding to the todo widget dock", () => {
     const { calls, ui } = createUI();
     let renderedWidth = 0;

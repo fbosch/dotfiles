@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ProfileProviderAdapter } from "../provider-adapter";
 import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 import { collectUsageStatus, usageFromPayload } from "../usage-status";
 
@@ -136,8 +138,55 @@ describe("auth profile usage status", () => {
     });
     expect(inactive.profiles[0]?.active).toBe(false);
     expect(JSON.parse(await readFile(cachePath, "utf8")).schema).toBe(
-      "fbb.pi-auth-profiles-usage-cache/v1",
+      "fbb.pi-auth-profiles-usage-cache/v2",
     );
+  });
+
+  test("refreshes instead of using a partially malformed cached snapshot", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-malformed-cache-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const cachePath = join(root, "usage.json");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await writeCredential(join(agentDir, "auth-profiles", "work.json"), {
+      access: "work-access-token",
+      accountId: "account-work",
+    });
+    const credentialKey = createHash("sha256")
+      .update("openai-codex")
+      .update("\0")
+      .update("account-work")
+      .digest("hex");
+    await writeFile(
+      cachePath,
+      JSON.stringify({
+        schema: "fbb.pi-auth-profiles-usage-cache/v2",
+        accounts: {
+          [credentialKey]: {
+            credentialKey,
+            usage: { windows: [{ remaining: 0 }, { remaining: 101 }] },
+            usageCheckedAt: now,
+          },
+        },
+      }),
+    );
+    let requestCount = 0;
+
+    const payload = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cachePath,
+      includeResetCredits: false,
+      fetchFn: async () => {
+        requestCount += 1;
+        return usageResponse(20, 0);
+      },
+      now: () => now + 1_000,
+    });
+
+    expect(requestCount).toBe(1);
+    expect(payload.profiles[0]?.usage).toEqual([{ remaining: 80, resetsIn: "3h" }]);
+    expect(payload.diagnostics).toEqual([]);
   });
 
   test("refreshes an expired profile before requesting its usage", async () => {
@@ -267,17 +316,70 @@ describe("auth profile usage status", () => {
     });
   });
 
+  test("collects usage through a provider adapter without provider-specific credential fields", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-provider-adapter-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    await mkdir(agentDir, { recursive: true });
+    await writeFile(join(agentDir, "auth.json"), "{}\n", { mode: 0o600 });
+    const credential = {
+      accessToken: "future-provider-token",
+      expiresAt: 2_000_000,
+      identity: "future-tenant",
+    };
+    const providerAdapter: ProfileProviderAdapter = {
+      providerId: "future-provider",
+      async createCredentialStore() {
+        throw new Error("not used by usage discovery");
+      },
+      async readCredential() {
+        return { kind: "valid", credential };
+      },
+      async resolveCredential() {
+        return credential;
+      },
+      async refreshCredential() {
+        return credential;
+      },
+      async fetchUsage(receivedCredential) {
+        expect(receivedCredential).toEqual(credential);
+        return { windows: [{ remaining: 73, resetsIn: "2h" }] };
+      },
+      usageLimitResetAt: () => undefined,
+      usageLimitResetAtFromMessage: () => undefined,
+    };
+
+    const result = await collectUsageStatus({
+      agentDir,
+      cachePath: join(root, "usage-cache.json"),
+      includeDefault: true,
+      includeResetCredits: false,
+      now: () => 1_000_000,
+      providerAdapter,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.profiles).toEqual([
+      {
+        active: true,
+        profileLabel: "default",
+        urgency: "unknown",
+        usage: [{ remaining: 73, resetsIn: "2h" }],
+      },
+    ]);
+  });
+
   test("rejects malformed usage windows", () => {
     expect(() => usageFromPayload({ rate_limit: null })).toThrow(
       "usage response has an unexpected shape",
     );
-    expect(
+    expect(() =>
       usageFromPayload({
         rate_limit: {
           primary_window: { used_percent: 101, reset_after_seconds: 30 },
-          secondary_window: null,
+          secondary_window: { used_percent: 20, reset_after_seconds: 60 },
         },
       }),
-    ).toEqual({ windows: [] });
+    ).toThrow("usage response has an unexpected primary window");
   });
 });

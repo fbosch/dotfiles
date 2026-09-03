@@ -35,6 +35,11 @@ type SetWidget = (key: string, content: WidgetContent, options?: ExtensionWidget
 export type AgentWidgetColors = ReadonlyMap<string, string>;
 export type AgentWidgetDisplayNames = ReadonlyMap<string, string>;
 
+export interface AgentWidgetMetadata {
+  colors: AgentWidgetColors;
+  displayNames: AgentWidgetDisplayNames;
+}
+
 export interface WidgetSubagentRecord {
   id: string;
   type: string;
@@ -54,6 +59,7 @@ export interface SubagentWidgetFrameOptions {
   agentDirectory?: string;
   agentColors?: AgentWidgetColors;
   agentDisplayNames?: AgentWidgetDisplayNames;
+  loadAgentMetadata?: () => AgentWidgetMetadata;
   getSubagents?: () => readonly WidgetSubagentRecord[];
   sessionId?: string;
 }
@@ -77,8 +83,7 @@ class WidgetFrame implements Component {
   constructor(
     private readonly component: WidgetComponent,
     private readonly theme: Theme,
-    private readonly agentColors: AgentWidgetColors,
-    private readonly agentDisplayNames: AgentWidgetDisplayNames,
+    private readonly getAgentMetadata: () => AgentWidgetMetadata,
     private readonly getSubagents: () => readonly WidgetSubagentRecord[],
     private readonly sessionId: string,
     private readonly colorizeLines: boolean,
@@ -100,12 +105,15 @@ class WidgetFrame implements Component {
     // below is the only bottom spacing and remains half-height.
     const contentToRender =
       renderedContent.at(-1) === "" ? renderedContent.slice(0, -1) : renderedContent;
+    const agentMetadata = this.colorizeLines ? this.getAgentMetadata() : undefined;
     let content = contentToRender
       .map((line) =>
-        this.colorizeLines ? colorizeSubagentWidgetLine(line, this.agentColors, this.theme) : line,
+        agentMetadata === undefined
+          ? line
+          : colorizeSubagentWidgetLine(line, agentMetadata.colors, this.theme),
       )
       .map((line) => truncateToWidth(line, contentWidth, ""));
-    if (this.colorizeLines) {
+    if (agentMetadata !== undefined) {
       let subagents: readonly WidgetSubagentRecord[] = [];
       try {
         subagents = this.getSubagents();
@@ -113,7 +121,7 @@ class WidgetFrame implements Component {
       } catch {
         // Keep the prompt usable if the optional cross-extension service is reloading.
       }
-      content = linkSubagentWidgetLines(content, subagents, this.agentDisplayNames);
+      content = linkSubagentWidgetLines(content, subagents, agentMetadata.displayNames);
     }
     content = content.map((line) => `${" ".repeat(paddingX)}${line}`);
     const rows = ["", ...content].map((line) => paintDockRow(line, width, "", backgroundAnsi, ""));
@@ -132,8 +140,7 @@ class WidgetFrame implements Component {
 
 function frameWidget(
   factory: WidgetFactory,
-  agentColors: AgentWidgetColors,
-  agentDisplayNames: AgentWidgetDisplayNames,
+  getAgentMetadata: () => AgentWidgetMetadata,
   getSubagents: () => readonly WidgetSubagentRecord[],
   sessionId: string,
   colorizeLines: boolean,
@@ -142,34 +149,37 @@ function frameWidget(
     new WidgetFrame(
       factory(tui, theme),
       theme,
-      agentColors,
-      agentDisplayNames,
+      getAgentMetadata,
       getSubagents,
       sessionId,
       colorizeLines,
     );
 }
 
-export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
+function widgetMetadataFromMentions(
+  mentions: ReturnType<typeof loadAgentMentions>,
+): AgentWidgetMetadata {
   const colors = new Map<string, string>();
-  for (const mention of loadAgentMentions(cwd, agentDirectory)) {
-    if (mention.color === undefined) continue;
-    colors.set(mention.name, mention.color);
-    if (mention.displayName !== undefined) colors.set(mention.displayName, mention.color);
+  const displayNames = new Map<string, string>();
+  for (const mention of mentions) {
+    if (mention.color !== undefined) {
+      colors.set(mention.name, mention.color);
+      if (mention.displayName !== undefined) colors.set(mention.displayName, mention.color);
+    }
+    displayNames.set(mention.name.toLowerCase(), mention.displayName ?? mention.name);
   }
-  return colors;
+  return { colors, displayNames };
+}
+
+export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
+  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)).colors;
 }
 
 export function loadAgentWidgetDisplayNames(
   cwd: string,
   agentDirectory: string,
 ): AgentWidgetDisplayNames {
-  return new Map(
-    loadAgentMentions(cwd, agentDirectory).map((mention) => [
-      mention.name.toLowerCase(),
-      mention.displayName ?? mention.name,
-    ]),
-  );
+  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)).displayNames;
 }
 
 function publishedWidgetSubagentsService(): WidgetSubagentsService | undefined {
@@ -369,21 +379,24 @@ export function installSubagentWidgetFrame(
   const ui = uiContext as PatchableUI;
   const cwd = options.cwd ?? process.cwd();
   const agentDirectory = options.agentDirectory ?? getAgentDir();
-  const agentColors = options.agentColors ?? loadAgentWidgetColors(cwd, agentDirectory);
-  const agentDisplayNames =
-    options.agentDisplayNames ?? loadAgentWidgetDisplayNames(cwd, agentDirectory);
+  let loadedMetadata: AgentWidgetMetadata | undefined;
+  const getAgentMetadata = (): AgentWidgetMetadata => {
+    if (loadedMetadata === undefined) {
+      loadedMetadata = (
+        options.loadAgentMetadata ??
+        (() => widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)))
+      )();
+    }
+    return {
+      colors: options.agentColors ?? loadedMetadata.colors,
+      displayNames: options.agentDisplayNames ?? loadedMetadata.displayNames,
+    };
+  };
   const capturedService = publishedWidgetSubagentsService();
   const getSubagents = options.getSubagents ?? (() => widgetSubagents(capturedService));
   const sessionId = options.sessionId ?? cwd;
   const wrap = (key: string, factory: WidgetFactory) =>
-    frameWidget(
-      factory,
-      agentColors,
-      agentDisplayNames,
-      getSubagents,
-      sessionId,
-      key === AGENT_WIDGET_KEY,
-    );
+    frameWidget(factory, getAgentMetadata, getSubagents, sessionId, key === AGENT_WIDGET_KEY);
   const registration = { owner: Symbol(), wrap };
   const installedState = ui[AGENT_WIDGET_PATCH];
   if (isCurrentPatchState(installedState)) {

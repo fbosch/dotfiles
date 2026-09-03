@@ -8,19 +8,19 @@ import {
   type QuickReplyGenerator,
 } from "./generator";
 import {
+  DEFAULT_QUICK_REPLY_SHORTCUTS,
   loadQuickRepliesSettings,
   type QuickRepliesSettings,
   writeQuickRepliesSetting,
 } from "./settings";
 
-export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"] as const;
+export const QUICK_REPLY_SHORTCUTS = DEFAULT_QUICK_REPLY_SHORTCUTS;
 
 const WIDGET_KEY = "quick-replies";
 const REPLY_GAP = "  ";
 const PANEL_PADDING_X = 2;
 const KEYCAP_BACKGROUND = "selectedBg";
 const MIN_GENERATED_REPLIES = 1;
-const MAX_GENERATED_REPLIES = QUICK_REPLY_SHORTCUTS.length;
 
 type ShortcutStyle = "full" | "short" | "numeric";
 
@@ -41,6 +41,7 @@ interface ActiveGeneration {
 
 interface ReplyLayout {
   replies: readonly QuickReply[];
+  shortcuts: readonly string[];
   shortcutStyle: ShortcutStyle;
   startIndex: number;
 }
@@ -60,6 +61,7 @@ export function renderQuickReplyPanel(
   replies: readonly QuickReply[],
   width: number,
   theme: Theme,
+  shortcuts: readonly string[] = QUICK_REPLY_SHORTCUTS,
 ): RenderedQuickReplies | undefined {
   if (replies.length === 0 || width <= 0) return undefined;
 
@@ -73,7 +75,7 @@ export function renderQuickReplyPanel(
   let content: string[] | undefined;
 
   for (const shortcutStyle of styles) {
-    const repliesLine = renderLayout({ replies, shortcutStyle, startIndex: 0 }, theme);
+    const repliesLine = renderLayout({ replies, shortcuts, shortcutStyle, startIndex: 0 }, theme);
     const combined = header.length > 0 ? `${header}${REPLY_GAP}${repliesLine}` : repliesLine;
     if (visibleWidth(combined) <= contentWidth) {
       content = [combined];
@@ -83,7 +85,7 @@ export function renderQuickReplyPanel(
 
   if (content === undefined) {
     for (const shortcutStyle of styles) {
-      const repliesLine = renderLayout({ replies, shortcutStyle, startIndex: 0 }, theme);
+      const repliesLine = renderLayout({ replies, shortcuts, shortcutStyle, startIndex: 0 }, theme);
       if (header.length > 0 && visibleWidth(repliesLine) <= contentWidth) {
         content = [header, repliesLine];
         break;
@@ -93,7 +95,7 @@ export function renderQuickReplyPanel(
 
   if (content === undefined) {
     for (const shortcutStyle of styles) {
-      const layouts = packReplyRows(replies, shortcutStyle, contentWidth, theme);
+      const layouts = packReplyRows(replies, shortcuts, shortcutStyle, contentWidth, theme);
       if (layouts !== undefined) {
         content = [
           ...(header.length > 0 ? [header] : []),
@@ -115,6 +117,7 @@ class QuickReplyWidget implements Component {
 
   constructor(
     private readonly replies: readonly QuickReply[],
+    private readonly shortcuts: readonly string[],
     private readonly theme: Theme,
     private readonly getEditorText: () => string,
     private readonly shouldShow: () => boolean,
@@ -132,7 +135,7 @@ class QuickReplyWidget implements Component {
       return [];
     }
 
-    const rendered = renderQuickReplyPanel(this.replies, width, this.theme);
+    const rendered = renderQuickReplyPanel(this.replies, width, this.theme, this.shortcuts);
     if (rendered === undefined) {
       this.visibleReplyCount = 0;
       return [];
@@ -151,7 +154,10 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
   const generate = dependencies.generate ?? generateQuickReplies;
 
   return (pi: ExtensionAPI): void => {
+    const settings = (dependencies.readSettings ?? loadQuickRepliesSettings)();
+    const shortcuts = settings.shortcuts ?? QUICK_REPLY_SHORTCUTS;
     let runSequence = 0;
+    let runActive = false;
     let currentRunId: number | undefined;
     let latestSettledRunId: number | undefined;
     let pendingUserText: string | undefined;
@@ -162,7 +168,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     let widget: QuickReplyWidget | undefined;
     let widgetMounted = false;
     let uiPromptActive = false;
-    let enabled = true;
+    let enabled = settings.enabled;
 
     function abortGeneration(): void {
       activeGeneration?.controller.abort();
@@ -186,6 +192,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     }
 
     function resetSessionState(ctx: ExtensionContext): void {
+      runActive = false;
       currentRunId = undefined;
       pendingUserText = undefined;
       currentUserText = undefined;
@@ -211,6 +218,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
       ctx.ui.setWidget(WIDGET_KEY, (_tui, theme) => {
         widget = new QuickReplyWidget(
           replies,
+          shortcuts,
           theme,
           () => ctx.ui.getEditorText(),
           () => activeReplies?.runId === runId && canShowReplies(ctx, runId),
@@ -293,7 +301,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
           activeGeneration = undefined;
           if (
             replies.length < MIN_GENERATED_REPLIES ||
-            replies.length > MAX_GENERATED_REPLIES ||
+            replies.length > shortcuts.length ||
             canShowReplies(ctx, runId) === false
           ) {
             clearWidget(ctx);
@@ -330,8 +338,6 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     });
 
     pi.on("session_start", (_event, ctx) => {
-      const settings = (dependencies.readSettings ?? loadQuickRepliesSettings)();
-      enabled = settings.enabled;
       if (settings.warnings.length > 0) {
         report(ctx, `Quick replies settings:\n- ${settings.warnings.join("\n- ")}`, "warning");
       }
@@ -345,6 +351,10 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
 
     pi.on("input", (event, ctx) => {
       invalidateSettledState(ctx);
+      if (runActive && event.streamingBehavior !== undefined) {
+        currentUserText = event.text;
+        return;
+      }
       pendingUserText = event.text;
     });
 
@@ -363,6 +373,10 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
 
     pi.on("agent_start", (_event, ctx) => {
       invalidateSettledState(ctx);
+      // Pi emits another low-level start for retry and overflow recovery within one settled run.
+      if (runActive) return;
+
+      runActive = true;
       runSequence += 1;
       currentRunId = runSequence;
       currentUserText = pendingUserText;
@@ -379,6 +393,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     });
 
     pi.on("agent_settled", (_event, ctx) => {
+      runActive = false;
       const settledRunId = currentRunId;
       if (settledRunId !== undefined && latestSettledRunId === settledRunId) return;
       latestSettledRunId = settledRunId;
@@ -397,7 +412,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
       beginGeneration(ctx, settledRunId, userText, finalizedAssistant.prose);
     });
 
-    QUICK_REPLY_SHORTCUTS.forEach((shortcut, index) => {
+    shortcuts.forEach((shortcut, index) => {
       pi.registerShortcut(shortcut, {
         description: `Send quick reply ${index + 1}`,
         handler: (ctx) => selectReply(index, ctx),
@@ -410,6 +425,7 @@ export default createQuickRepliesExtension();
 
 function packReplyRows(
   replies: readonly QuickReply[],
+  shortcuts: readonly string[],
   shortcutStyle: ShortcutStyle,
   width: number,
   theme: Theme,
@@ -423,7 +439,12 @@ function packReplyRows(
       endIndex <= replies.length &&
       visibleWidth(
         renderLayout(
-          { replies: replies.slice(startIndex, endIndex), shortcutStyle, startIndex },
+          {
+            replies: replies.slice(startIndex, endIndex),
+            shortcuts,
+            shortcutStyle,
+            startIndex,
+          },
           theme,
         ),
       ) <= width
@@ -435,6 +456,7 @@ function packReplyRows(
     if (fittingEndIndex === startIndex) return undefined;
     layouts.push({
       replies: replies.slice(startIndex, fittingEndIndex),
+      shortcuts,
       shortcutStyle,
       startIndex,
     });
@@ -449,7 +471,7 @@ function renderLayout(layout: ReplyLayout, theme: Theme): string {
     .map((reply, index) => {
       const globalIndex = layout.startIndex + index;
       const shortcut = renderShortcut(
-        QUICK_REPLY_SHORTCUTS[globalIndex] ?? "",
+        layout.shortcuts[globalIndex] ?? "",
         layout.shortcutStyle,
         theme,
       );
@@ -460,12 +482,37 @@ function renderLayout(layout: ReplyLayout, theme: Theme): string {
 }
 
 function renderShortcut(shortcut: string, style: ShortcutStyle, theme: Theme): string {
-  const digit = shortcut.at(-1) ?? "";
-  const modifier = style === "full" ? "Alt" : style === "short" ? "A" : "";
+  const parts = shortcut.split("+");
+  const key = parts.pop() ?? "";
+  const hideDefaultModifier =
+    style === "numeric" && parts.length === 1 && parts[0]?.toLowerCase() === "alt";
+  const modifier = hideDefaultModifier
+    ? ""
+    : parts.map((part) => formatModifier(part, style)).join(style === "full" ? "+" : "");
   const chord = [
     modifier.length > 0 ? theme.fg("muted", modifier) : "",
-    style === "full" ? theme.fg("dim", "+") : "",
-    theme.fg("accent", digit),
+    modifier.length > 0 && style === "full" ? theme.fg("dim", "+") : "",
+    theme.fg("accent", formatShortcutKey(key)),
   ].join("");
   return theme.bg(KEYCAP_BACKGROUND, ` ${theme.bold(chord)} `);
+}
+
+function formatModifier(modifier: string, style: ShortcutStyle): string {
+  const normalized = modifier.toLowerCase();
+  if (style !== "full") {
+    return { alt: "A", ctrl: "C", shift: "S", super: "M" }[normalized] ?? modifier.at(0) ?? "";
+  }
+  return { alt: "Alt", ctrl: "Ctrl", shift: "Shift", super: "Super" }[normalized] ?? modifier;
+}
+
+function formatShortcutKey(key: string): string {
+  const normalized = key.toLowerCase();
+  return (
+    {
+      pageup: "PgUp",
+      pagedown: "PgDn",
+      escape: "Esc",
+      return: "Enter",
+    }[normalized] ?? (key.length === 1 ? key.toUpperCase() : key)
+  );
 }

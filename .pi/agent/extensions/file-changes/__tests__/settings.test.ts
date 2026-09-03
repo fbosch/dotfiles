@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -64,6 +64,20 @@ describe("file changes settings", () => {
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
       theme: "dark",
       showFileChanges: false,
+    });
+  });
+
+  test("does not overwrite settings while Pi's file lock is held", () => {
+    const directory = mkdtempSync(join(tmpdir(), "file-changes-settings-"));
+    temporaryDirectories.push(directory);
+    const path = join(directory, "settings.json");
+    writeFileSync(path, '{"theme":"dark","showFileChanges":true}\n');
+    mkdirSync(`${path}.lock`);
+
+    expect(() => writeFileChangesSetting(false, path)).toThrow("locked by another process");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      theme: "dark",
+      showFileChanges: true,
     });
   });
 });

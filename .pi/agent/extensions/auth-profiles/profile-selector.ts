@@ -1,12 +1,13 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { match } from "ts-pattern";
-import type { ProfileProviderAdapter } from "./provider-adapter";
 import {
   type ProfileResolution,
   type ResolveProfileOptions,
   resolveProfile,
 } from "./profile-resolver";
+import type { ProfileProviderAdapter } from "./provider-adapter";
+import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import {
   type CollectUsageStatusOptions,
   collectUsageStatus,
@@ -14,7 +15,6 @@ import {
   type FetchFn,
   type UsageStatusPayload,
 } from "./usage-status-service";
-import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 
 export {
   openAiCodexUsageLimitResetAt as codexUsageLimitResetAt,
@@ -138,7 +138,7 @@ function hasFallbackCredential(payload: UsageStatusPayload, profile: string): bo
   }
 
   const status = payload.profiles.find((candidate) => candidate.profileLabel === profile);
-  if (status === undefined) return false;
+  if (status === undefined || status.usage.some((window) => window.remaining <= 0)) return false;
   return (
     diagnostics.some((diagnostic) => diagnosticEffect(diagnostic.code) === "usage-unconfirmed") ||
     status.usage.length === 0 ||
@@ -152,6 +152,7 @@ export async function selectProfile(
 ): Promise<ProfileSelection> {
   const automatic = await resolveProfile(ctx, options);
   const resolution = preferProfile(automatic, options.preferredProfile);
+  if (resolution.profileOrder.length < 2) return resolution;
 
   const eligibleProfiles = resolution.profileOrder.filter(
     (profile) => options.excludedProfiles?.has(profile) !== true,

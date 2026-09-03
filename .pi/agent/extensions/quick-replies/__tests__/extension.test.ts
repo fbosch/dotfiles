@@ -66,6 +66,7 @@ function createHarness(
     editorText?: string;
     idle?: boolean;
     enabled?: boolean;
+    shortcuts?: QuickRepliesSettings["shortcuts"];
     generate?: QuickReplyGenerator;
   } = {},
 ) {
@@ -130,7 +131,11 @@ function createHarness(
 
   createQuickRepliesExtension({
     generate,
-    readSettings: (): QuickRepliesSettings => ({ enabled: configuredEnabled, warnings: [] }),
+    readSettings: (): QuickRepliesSettings => ({
+      enabled: configuredEnabled,
+      ...(options.shortcuts === undefined ? {} : { shortcuts: options.shortcuts }),
+      warnings: [],
+    }),
     writeSettings: (value) => {
       configuredEnabled = value;
     },
@@ -187,6 +192,9 @@ function createHarness(
     get configuredEnabled() {
       return configuredEnabled;
     },
+    get registeredShortcuts() {
+      return [...shortcuts.keys()];
+    },
     async runCommand(args: string) {
       if (command === undefined) throw new Error("quick-replies command was not registered");
       await command(args, ctx);
@@ -198,7 +206,7 @@ function createHarness(
       return getArgumentCompletions(prefix);
     },
     async press(index: number) {
-      const shortcut = QUICK_REPLY_SHORTCUTS[index];
+      const shortcut = [...shortcuts.keys()][index];
       if (shortcut === undefined) throw new Error(`Missing shortcut at index ${index}`);
       await shortcuts.get(shortcut)?.(ctx);
     },
@@ -304,6 +312,43 @@ describe("quick replies lifecycle", () => {
     await harness.settle();
 
     expect(harness.generationCalls[0]?.input.userText).toBe("@research quick replies");
+  });
+
+  test.each(["steer", "followUp"] as const)(
+    "uses the latest raw %s input with the final assistant response",
+    async (streamingBehavior) => {
+      const harness = createHarness();
+      await harness.startRun("Start with the first request");
+      await harness.finishAssistant("The first response.");
+      await harness.emit("input", {
+        type: "input",
+        text: "focus on the lifecycle fix",
+        source: "interactive",
+        streamingBehavior,
+      });
+      await harness.finishAssistant("The lifecycle fix is complete.");
+      await harness.settle();
+
+      expect(harness.generationCalls[0]?.input).toEqual({
+        userText: "focus on the lifecycle fix",
+        assistantText: "The lifecycle fix is complete.",
+      });
+    },
+  );
+
+  test("preserves the user prompt across low-level retry runs", async () => {
+    const harness = createHarness();
+    await harness.startRun("Fix the retry behavior");
+    await harness.finishAssistant("The request failed and will retry.");
+
+    await harness.emit("agent_start");
+    await harness.finishAssistant("The retry behavior is fixed.");
+    await harness.settle();
+
+    expect(harness.generationCalls[0]?.input).toEqual({
+      userText: "Fix the retry behavior",
+      assistantText: "The retry behavior is fixed.",
+    });
   });
 
   test("requires a triggering user prompt and finalized assistant text", async () => {
@@ -524,6 +569,20 @@ describe("quick replies lifecycle", () => {
 describe("quick reply widget", () => {
   test("registers five alternative-digit shortcuts", () => {
     expect(QUICK_REPLY_SHORTCUTS).toEqual(["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"]);
+  });
+
+  test("registers, renders, and handles configured shortcuts", async () => {
+    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "ctrl+5"] as const;
+    const harness = createHarness({ shortcuts });
+
+    expect(harness.registeredShortcuts).toEqual([...shortcuts]);
+    await showGeneratedReplies(harness);
+    expect(stripTerminalSequences(harness.renderWidget(120)[0] ?? "")).toContain(
+      "Ctrl+1  Review it",
+    );
+
+    await harness.press(0);
+    expect(harness.sentMessages).toEqual(["Review the implementation."]);
   });
 
   test("renders compact suggestions with vertical spacing", () => {

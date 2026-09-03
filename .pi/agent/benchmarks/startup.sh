@@ -391,7 +391,7 @@ jq -n \
       ephemeralSession: true,
       mutableStateRoots: "temporary fixture",
       installedDependencies: "symlinked, content fingerprinted, package updates disabled",
-      shutdown: "benchmark extension requests graceful shutdown after Pi stops the TUI",
+      shutdown: "benchmark extension exits after Pi stops the TUI",
       environment: {
         inherited: "allowlist",
         path: $benchmarkPath,

@@ -189,6 +189,32 @@ describe("automatic auth profile selection", () => {
     });
   });
 
+  test("does not select an alternate with cached zero quota after refresh fails", async () => {
+    const { agentDir, projectDir } = await fixture({
+      hostDefaults: { "rvn-pc": ["fbb", "jpb"] },
+    });
+
+    const selection = await selectProfile(
+      { cwd: projectDir, isProjectTrusted: () => false },
+      {
+        agentDir,
+        env: {},
+        hostname: () => "rvn-pc",
+        platform: "linux",
+        usageCollector: async () => ({
+          ...usage([{ profileLabel: "jpb", remaining: 0 }]),
+          diagnostics: [
+            { profileLabel: "fbb", code: "invalid-provider-credential" },
+            { profileLabel: "jpb", code: "usage-request-failed" },
+          ],
+        }),
+      },
+    );
+
+    expect(selection.profile).toBe("fbb");
+    expect(selection.fallbackReason).toBeUndefined();
+  });
+
   test("ignores the retired project-level profile setting", async () => {
     const { agentDir, projectDir } = await fixture({
       hostDefaults: { "rvn-pc": ["fbb", "jpb"] },

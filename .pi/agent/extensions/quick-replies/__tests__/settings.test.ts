@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -55,18 +55,70 @@ describe("quick reply global settings", () => {
     });
   });
 
-  test("warns and enables quick replies for an invalid setting", () => {
-    expect(resolveQuickRepliesSettings({ quickReplies: { enabled: "no" } })).toEqual({
+  test("loads five configurable quick-reply shortcuts", () => {
+    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "ctrl+5"] as const;
+
+    expect(resolveQuickRepliesSettings({ quickReplies: { shortcuts } })).toEqual({
       enabled: true,
-      warnings: ["global quickReplies.enabled: expected a boolean"],
+      shortcuts,
+      warnings: [],
     });
   });
+
+  test.each([
+    { shortcuts: ["ctrl+1", "ctrl+2"] },
+    { shortcuts: ["ctrl+1", "ctrl+1", "ctrl+3", "ctrl+4", "ctrl+5"] },
+    { shortcuts: ["1", "2", "3", "4", "5"] },
+    { shortcuts: ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "invalid+key"] },
+  ])("disables quick replies for invalid shortcut configuration: $shortcuts", ({ shortcuts }) => {
+    expect(resolveQuickRepliesSettings({ quickReplies: { shortcuts } })).toEqual({
+      enabled: false,
+      shortcuts: [],
+      warnings: [
+        "global quickReplies.shortcuts: expected five unique supported modified keys or function keys",
+      ],
+    });
+  });
+
+  test.each([
+    {
+      settings: null,
+      warning: "global Pi settings: expected a JSON object",
+    },
+    {
+      settings: { quickReplies: true },
+      warning: "global quickReplies: expected a JSON object",
+    },
+    {
+      settings: { quickReplies: { enabled: "no" } },
+      warning: "global quickReplies.enabled: expected a boolean",
+    },
+  ])(
+    "warns and disables quick replies for invalid settings: $settings",
+    ({ settings, warning }) => {
+      expect(resolveQuickRepliesSettings(settings)).toEqual({
+        enabled: false,
+        shortcuts: [],
+        warnings: [warning],
+      });
+    },
+  );
 
   test("loads the global setting from a Pi settings file", () => {
     expect(loadQuickRepliesSettings(settingsFile({ quickReplies: { enabled: false } }))).toEqual({
       enabled: false,
       warnings: [],
     });
+  });
+
+  test("disables quick replies when the settings file cannot be parsed", () => {
+    const path = settingsFile({});
+    writeFileSync(path, "invalid json");
+
+    const settings = loadQuickRepliesSettings(path);
+
+    expect(settings.enabled).toBe(false);
+    expect(settings.warnings[0]).toContain(`Cannot load Pi settings from ${path}`);
   });
 
   test("updates the global setting without dropping other quick-replies settings", () => {
@@ -80,6 +132,31 @@ describe("quick reply global settings", () => {
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
       theme: "dark",
       quickReplies: { model: "anthropic/claude-haiku-4-5", enabled: false },
+    });
+  });
+
+  test("does not overwrite settings while Pi's file lock is held", () => {
+    const path = settingsFile({ theme: "dark", quickReplies: { enabled: true } });
+    mkdirSync(`${path}.lock`);
+
+    expect(() => writeQuickRepliesSetting(false, path)).toThrow("locked by another process");
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      theme: "dark",
+      quickReplies: { enabled: true },
+    });
+  });
+
+  test("recovers a stale Pi settings lock before updating", () => {
+    const path = settingsFile({ quickReplies: { enabled: true } });
+    const lockPath = `${path}.lock`;
+    mkdirSync(lockPath);
+    const staleTime = new Date(Date.now() - 20_000);
+    utimesSync(lockPath, staleTime, staleTime);
+
+    writeQuickRepliesSetting(false, path);
+
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
+      quickReplies: { enabled: false },
     });
   });
 });

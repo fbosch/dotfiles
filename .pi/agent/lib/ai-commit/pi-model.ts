@@ -6,8 +6,8 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { selectProfile } from "../../extensions/auth-profiles/profile-selector";
-import { createOpenAiCodexProfileAdapter } from "../../extensions/auth-profiles/providers/openai-codex";
 import { projectIsTrusted } from "../../extensions/auth-profiles/project-trust";
+import { createOpenAiCodexProfileAdapter } from "../../extensions/auth-profiles/providers/openai-codex";
 import { resolveFastModelRequest } from "../../extensions/openai-fast";
 import {
   type CommitMessageModelConfig,

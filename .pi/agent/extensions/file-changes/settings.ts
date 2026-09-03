@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { readLockedJsonFile, updateLockedJsonFile } from "../../lib/locked-json-file";
 
 export interface FileChangesSettings {
   readonly showFileChanges: boolean;
@@ -37,16 +37,9 @@ export function resolveFileChangesSettings(settings: unknown): FileChangesSettin
 export function loadFileChangesSettings(
   settingsPath = join(getAgentDir(), "settings.json"),
 ): FileChangesSettings {
-  let source: string;
   try {
-    source = readFileSync(settingsPath, "utf8");
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return defaultSettings();
-    return { ...defaultSettings(), warnings: [settingsError(settingsPath, error)] };
-  }
-
-  try {
-    return resolveFileChangesSettings(JSON.parse(source));
+    const settings = readLockedJsonFile(settingsPath);
+    return settings === undefined ? defaultSettings() : resolveFileChangesSettings(settings);
   } catch (error) {
     return { ...defaultSettings(), warnings: [settingsError(settingsPath, error)] };
   }
@@ -56,20 +49,21 @@ export function writeFileChangesSetting(
   showFileChanges: boolean,
   settingsPath = join(getAgentDir(), "settings.json"),
 ): void {
-  let settings: Record<string, unknown> = {};
   try {
-    settings = JSON.parse(readFileSync(settingsPath, "utf8"));
+    updateLockedJsonFile(settingsPath, (current) => {
+      const settings = current ?? {};
+      if (isRecord(settings) === false) {
+        throw new Error(`Cannot update Pi settings from ${settingsPath}: expected a JSON object`);
+      }
+
+      settings.showFileChanges = showFileChanges;
+      delete settings.hideFileChanges;
+      return settings;
+    });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-      throw new Error(settingsError(settingsPath, error));
+    if (error instanceof Error && error.message.startsWith("Cannot update Pi settings")) {
+      throw error;
     }
+    throw new Error(settingsError(settingsPath, error));
   }
-
-  if (isRecord(settings) === false) {
-    throw new Error(`Cannot update Pi settings from ${settingsPath}: expected a JSON object`);
-  }
-
-  settings.showFileChanges = showFileChanges;
-  delete settings.hideFileChanges;
-  writeFileSync(settingsPath, `${JSON.stringify(settings, null, 2)}\n`, "utf8");
 }

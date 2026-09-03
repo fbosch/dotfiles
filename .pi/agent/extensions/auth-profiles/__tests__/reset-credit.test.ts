@@ -37,7 +37,11 @@ async function setupProfiles(): Promise<{ agentDir: string; cachePath: string }>
 function cachedCredits(entries: Array<[string, number]>): string {
   const accounts = Object.fromEntries(
     entries.map(([accountId, availableCount]) => {
-      const credentialKey = createHash("sha256").update(accountId).digest("hex");
+      const credentialKey = createHash("sha256")
+        .update("openai-codex")
+        .update("\0")
+        .update(accountId)
+        .digest("hex");
       return [
         credentialKey,
         {
@@ -49,7 +53,7 @@ function cachedCredits(entries: Array<[string, number]>): string {
     }),
   );
   return JSON.stringify({
-    schema: "fbb.pi-auth-profiles-usage-cache/v1",
+    schema: "fbb.pi-auth-profiles-usage-cache/v2",
     accounts,
   });
 }

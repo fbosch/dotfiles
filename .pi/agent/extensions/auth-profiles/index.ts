@@ -8,7 +8,6 @@
  */
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
-import type { ProfileProviderAdapter } from "./provider-adapter";
 import type { GitRunner } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
@@ -22,6 +21,7 @@ import {
   publishWezTermChange,
   updateJsonFile,
 } from "./profile-store";
+import type { ProfileProviderAdapter } from "./provider-adapter";
 import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
@@ -140,6 +140,7 @@ export default function authProfiles(
   const exhaustedUntil = new Map<string, number>();
   let fallbackPromise: Promise<void> | undefined;
   let lastProviderResponseProfile: string | undefined;
+  let profileOperationTail: Promise<void> = Promise.resolve();
   const runGit: GitRunner = async (cwd, args) => {
     const result = await pi.exec("git", ["-C", cwd, ...args], { timeout: 2_000 });
     if (result.code !== 0) return undefined;
@@ -147,7 +148,25 @@ export default function authProfiles(
     return output === "" ? undefined : output;
   };
 
-  const activate = async (
+  const serializeProfileOperation = <T>(operation: () => Promise<T>): Promise<T> => {
+    const result = profileOperationTail.then(operation);
+    profileOperationTail = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  };
+
+  const chooseCurrentProfile = (
+    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
+  ): Promise<ProfileSelection> =>
+    chooseProfile(ctx, {
+      ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
+      providerAdapter,
+      runGit,
+    });
+
+  const activateUnlocked = async (
     ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
     selection: ProfileSelection,
   ) => {
@@ -159,76 +178,50 @@ export default function authProfiles(
     return { ...selection, path };
   };
 
-  const rebind = async (
+  const rebind = (
     ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
   ) =>
-    activate(
-      ctx,
-      await chooseProfile(ctx, {
-        ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
-        providerAdapter,
-        runGit,
-      }),
-    );
+    serializeProfileOperation(async () => activateUnlocked(ctx, await chooseCurrentProfile(ctx)));
 
-  const changeSessionProfile = async (
+  const changeSessionProfile = (
     ctx: Pick<
       ExtensionContext,
       "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "sessionManager" | "ui"
     >,
     profile: string | undefined,
-  ) => {
-    const previousProfile = sessionProfile;
-    persistSessionProfile(pi, ctx, profile);
-    sessionProfile = profile;
-    try {
-      return await rebind(ctx);
-    } catch (switchError) {
-      sessionProfile = previousProfile;
+  ) =>
+    serializeProfileOperation(async () => {
+      const previousProfile = sessionProfile;
+      persistSessionProfile(pi, ctx, profile);
+      sessionProfile = profile;
       try {
-        persistSessionProfile(pi, ctx, previousProfile);
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [switchError, rollbackError],
-          "Could not change or restore the session auth profile preference.",
-        );
+        return await activateUnlocked(ctx, await chooseCurrentProfile(ctx));
+      } catch (switchError) {
+        sessionProfile = previousProfile;
+        try {
+          persistSessionProfile(pi, ctx, previousProfile);
+        } catch (rollbackError) {
+          throw new AggregateError(
+            [switchError, rollbackError],
+            "Could not change or restore the session auth profile preference.",
+          );
+        }
+        throw switchError;
       }
-      throw switchError;
-    }
-  };
+    });
 
   const resolveProfileCredential = async (
     profile: string,
-    ctx: ExtensionContext,
   ): Promise<{ accessToken: string; accountId: string }> => {
-    const previousProfile = activeProfile;
-    const profileWasSwitched = previousProfile !== profile;
-    const originalStore = credentialStoreBinding(ctx).store;
-    if (profileWasSwitched) {
-      await bindProfile(ctx, profile, providerAdapter);
-    }
-
-    try {
-      const resolved = await ctx.modelRegistry.getProviderAuth(providerAdapter.providerId);
-      const credential = await providerAdapter.readCredential(profile);
-      const accountId = credential.kind === "valid" ? credential.credential.identity : undefined;
-      const accessToken = resolved?.auth.apiKey;
-      if (typeof accessToken !== "string" || accessToken.length === 0 || accountId === undefined) {
-        throw new Error(`Profile ${profile} has no usable OpenAI Codex OAuth credential.`);
-      }
-      return { accessToken, accountId };
-    } finally {
-      if (profileWasSwitched) {
-        const { credentials } = credentialStoreBinding(ctx);
-        credentials.store = originalStore;
-        await ctx.modelRegistry.refresh({ allowNetwork: false });
-      }
-    }
+    const credential = await providerAdapter.resolveCredential(profile);
+    return { accessToken: credential.accessToken, accountId: credential.identity };
   };
 
   pi.on("session_start", async (_event, ctx) => {
-    sessionProfile = restoreSessionProfile(ctx);
-    const resolution = await rebind(ctx);
+    const resolution = await serializeProfileOperation(async () => {
+      sessionProfile = restoreSessionProfile(ctx);
+      return activateUnlocked(ctx, await chooseCurrentProfile(ctx));
+    });
     if (resolution.selectionWarning) {
       ctx.ui.notify(
         `Auth profile usage selection unavailable; using ${resolution.profile}: ${resolution.selectionWarning}`,
@@ -261,8 +254,9 @@ export default function authProfiles(
 
     if (fallbackPromise === undefined) {
       let operation: Promise<void>;
-      operation = (async () => {
+      operation = serializeProfileOperation(async () => {
         try {
+          if (activeProfile !== exhaustedProfile) return;
           const next = await chooseProfile(ctx, {
             allowUnconfirmedFallback: false,
             excludedProfiles: new Set(exhaustedUntil.keys()),
@@ -285,7 +279,7 @@ export default function authProfiles(
             return;
           }
 
-          await activate(ctx, next);
+          await activateUnlocked(ctx, next);
           ctx.ui.notify(
             `${exhaustedProfile} exhausted; switched to ${next.profile}. Retry the request.`,
             "warning",
@@ -296,7 +290,7 @@ export default function authProfiles(
             "error",
           );
         }
-      })().finally(() => {
+      }).finally(() => {
         if (fallbackPromise === operation) fallbackPromise = undefined;
       });
       fallbackPromise = operation;
@@ -310,6 +304,7 @@ export default function authProfiles(
 
   pi.on("before_provider_headers", async () => {
     await fallbackPromise;
+    await profileOperationTail;
   });
 
   pi.on("after_provider_response", async (event, ctx) => {
@@ -362,7 +357,8 @@ export default function authProfiles(
       try {
         switch (command ?? "show") {
           case "show": {
-            const resolution = activeSelection ?? (await chooseProfile(ctx, { runGit }));
+            const resolution =
+              activeSelection ?? (await chooseProfile(ctx, { providerAdapter, runGit }));
             const providers = providersIn(resolution.profile);
             const repository = resolution.repository
               ? `${resolution.repository.name} (${resolution.repository.source})`
@@ -439,5 +435,7 @@ export default function authProfiles(
     },
   });
 
-  registerResetCreditCommand(pi, { resolveCredential: resolveProfileCredential });
+  if (providerAdapter.providerId === "openai-codex") {
+    registerResetCreditCommand(pi, { resolveCredential: resolveProfileCredential });
+  }
 }

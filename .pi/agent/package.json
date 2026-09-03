@@ -20,7 +20,7 @@
     "@types/bun": "1.4.0",
     "@types/node": "22.19.19",
     "fallow": "3.21.0",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   },
   "dependencies": {
     "@clack/prompts": "0.11.0",

@@ -40,6 +40,7 @@ export interface ProfileProviderAdapter {
   readonly providerId: string;
   createCredentialStore(profileLabel: string): Promise<CredentialStore>;
   readCredential(profileLabel: string): Promise<ProfileCredentialReadResult>;
+  resolveCredential(profileLabel: string): Promise<ProfileProviderCredential>;
   refreshCredential(request: ProfileCredentialRefreshRequest): Promise<ProfileProviderCredential>;
   fetchUsage(
     credential: ProfileProviderCredential,

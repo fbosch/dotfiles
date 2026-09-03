@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import {
+  CONFIG_DIR_NAME,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
@@ -88,7 +89,7 @@ export function loadAgentMentions(cwd: string, agentDirectory = getAgentDir()): 
     BUILTIN_AGENT_MENTIONS.map((mention) => [mention.name.toLowerCase(), mention]),
   );
   loadAgentDirectory(join(agentDirectory, "agents"), mentions);
-  loadAgentDirectory(join(cwd, ".pi", "agents"), mentions);
+  loadAgentDirectory(join(cwd, CONFIG_DIR_NAME, "agents"), mentions);
   return [...mentions.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
