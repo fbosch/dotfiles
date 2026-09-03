@@ -67,6 +67,8 @@ in
     lua-language-server
     markdownlint-cli
     neovim
+    nil
+    nixd
     nodejs
     pnpm
     ripgrep

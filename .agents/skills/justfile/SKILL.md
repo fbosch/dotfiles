@@ -52,13 +52,13 @@ When a repository has a `justfile`, treat it as the task entrypoint for build/te
 
 1. Re-run directly (`just <recipe>`) and capture the error.
 2. Inspect recipes/signatures with `just --list` and `just --show <recipe>`.
-4. Validate assumptions about env vars, working directory, and shell semantics.
-5. If needed, split complex one-liners into helper recipes for clearer failures.
+3. Validate assumptions about env vars, working directory, and shell semantics.
+4. If needed, split complex one-liners into helper recipes for clearer failures.
 
 ## Failure Routing Matrix
 
 - `just: command not found` -> `just` not installed -> install `just`, then rerun.
-- `Recipe \`x\` not found` -> wrong name/context file -> run `just --list`, confirm `justfile` path.
+- `Recipe \`x\` not found`-> wrong name/context file -> run`just --list`, confirm `justfile` path.
 - Works in shell, fails in recipe -> shell/env mismatch -> make shell explicit and pass needed vars.
 - Recipe succeeds locally, fails in CI -> hidden local state -> remove implicit dependencies; require explicit inputs.
 

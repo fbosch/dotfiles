@@ -76,10 +76,10 @@ function createHarness(
     registerShortcut: (shortcut: string, definition: { handler: ShortcutHandler }) => {
       shortcuts.set(shortcut, definition.handler);
     },
-    sendUserMessage: (message: string, options: unknown) => {
+    sendUserMessage: (message: string, sendUserOptions: { expandPromptTemplates?: boolean }) => {
       widgetStateAtSend.push(widget !== undefined);
       sentMessages.push(message);
-      sendOptions.push(options);
+      sendOptions.push(sendUserOptions);
     },
   } as unknown as ExtensionAPI;
 
@@ -108,6 +108,9 @@ function createHarness(
     sendOptions,
     widgetStateAtSend,
     generationCalls,
+    get editorText() {
+      return editorText;
+    },
     get widgetActive() {
       return widget !== undefined;
     },
@@ -271,16 +274,11 @@ describe("quick replies lifecycle", () => {
     expect(harness.widgetActive).toBe(false);
   });
 
-  test("silently ignores generation errors and invalid reply counts", async () => {
+  test("silently ignores generation errors and excessive reply counts", async () => {
     const failed = createHarness({ generate: async () => Promise.reject(new Error("failed")) });
     await failed.startRun();
     await failed.finishAssistant("Done.");
     await failed.settle();
-
-    const oneReply = createHarness({ generate: async () => generatedReplies.slice(0, 1) });
-    await oneReply.startRun();
-    await oneReply.finishAssistant("Done.");
-    await oneReply.settle();
 
     const sixReplies = createHarness({
       generate: async () =>
@@ -294,8 +292,25 @@ describe("quick replies lifecycle", () => {
     await sixReplies.settle();
 
     expect(failed.widgetActive).toBe(false);
-    expect(oneReply.widgetActive).toBe(false);
     expect(sixReplies.widgetActive).toBe(false);
+  });
+
+  test.each([
+    { label: "/model", message: "/model" },
+    { label: "/skill:research", message: "/skill:research quick replies" },
+  ])("prefills slash command $message for confirmation in the editor", async (reply) => {
+    const harness = createHarness({ generate: async () => [reply] });
+    await harness.startRun();
+    await harness.finishAssistant(`Run \`${reply.message}\`.`);
+    await harness.settle();
+    harness.renderWidget(50);
+
+    await harness.press(0);
+
+    expect(harness.sentMessages).toEqual([]);
+    expect(harness.sendOptions).toEqual([]);
+    expect(harness.editorText).toBe(reply.message);
+    expect(harness.widgetActive).toBe(false);
   });
 
   test("deduplicates repeated settled events", async () => {

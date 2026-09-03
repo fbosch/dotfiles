@@ -1,3 +1,4 @@
+import { appendFile, readFile } from "node:fs/promises";
 import {
   ConfigurationRequest,
   createProtocolConnection,
@@ -32,6 +33,14 @@ const hangInitialize = process.argv.includes("--hang-initialize");
 const delayInitialize = process.argv.includes("--delay-initialize");
 const incremental = process.argv.includes("--incremental");
 const pullDiagnostics = process.argv.includes("--pull");
+
+function argumentValue(name: string): string | undefined {
+  const index = process.argv.indexOf(name);
+  return index === -1 ? undefined : process.argv[index + 1];
+}
+
+const diagnosticBarrier = argumentValue("--diagnostic-barrier");
+const diagnosticBarrierCount = Number(argumentValue("--diagnostic-barrier-count") ?? 2);
 let configuration = Promise.resolve<unknown[]>([]);
 let invalidIncrementalChange = false;
 
@@ -96,10 +105,25 @@ connection.onNotification(
 connection.onNotification(DidSaveTextDocumentNotification.type, ({ textDocument }) => {
   publish(textDocument.uri);
 });
-connection.onRequest(DocumentDiagnosticRequest.type.method, ({ textDocument }) => ({
-  kind: "full",
-  items: diagnostics(textDocument.uri),
-}));
+async function waitForDiagnosticBarrier(): Promise<void> {
+  if (diagnosticBarrier === undefined) return;
+  await appendFile(diagnosticBarrier, `${process.pid}\n`);
+  const deadline = Date.now() + 1_000;
+  while (Date.now() < deadline) {
+    const entries = new Set((await readFile(diagnosticBarrier, "utf8")).trim().split("\n"));
+    if (entries.size >= diagnosticBarrierCount) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("fake diagnostic barrier timed out");
+}
+
+connection.onRequest(DocumentDiagnosticRequest.type.method, async ({ textDocument }) => {
+  await waitForDiagnosticBarrier();
+  return {
+    kind: "full",
+    items: diagnostics(textDocument.uri),
+  };
+});
 connection.onRequest(HoverRequest.type.method, async (_params: HoverParams) => {
   if (hangRequests) await new Promise(() => {});
   let value = "fake hover";

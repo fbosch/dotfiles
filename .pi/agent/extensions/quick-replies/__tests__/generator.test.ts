@@ -5,7 +5,9 @@ import {
   buildQuickReplyPrompt,
   extractVisibleAssistantProse,
   generateQuickReplies,
+  getDeterministicQuickReplies,
   isHighRiskQuickReplyText,
+  isSlashCommand,
   parseQuickReplyResponse,
   prepareQuickReplyInput,
   type QuickReply,
@@ -105,6 +107,37 @@ describe("quick reply input", () => {
     expect(
       prepareQuickReplyInput({ userText: text, assistantText: "Inspect the value." }),
     ).toBeUndefined();
+  });
+
+  test.each([
+    {
+      assistantText: "Run /reload to activate the new configuration.",
+      reply: { label: "/reload", message: "/reload" },
+    },
+    {
+      assistantText: "Run `/model` now.",
+      reply: { label: "/model", message: "/model" },
+    },
+    {
+      assistantText: "- Use `/skill:research quick replies` to investigate further.",
+      reply: { label: "/skill:research", message: "/skill:research quick replies" },
+    },
+    {
+      assistantText: "/compact",
+      reply: { label: "/compact", message: "/compact" },
+    },
+  ])("returns only an explicit final slash command: $assistantText", ({ assistantText, reply }) => {
+    expect(getDeterministicQuickReplies({ userText: "Update it", assistantText })).toEqual([reply]);
+    expect(isSlashCommand(reply.message)).toBe(true);
+  });
+
+  test.each([
+    "Do not run /reload.",
+    "Run /reload and delete the cache.",
+    "The command is /reload.",
+    "Run /not.a-command.",
+  ])("does not infer a slash command from non-directive text: %s", (assistantText) => {
+    expect(getDeterministicQuickReplies({ userText: "Update it", assistantText })).toEqual([]);
   });
 
   test("serializes excerpts as quoted data", () => {
@@ -242,8 +275,15 @@ describe("quick reply model generation", () => {
           calls.push({ model: requestModel, context, options });
           return {
             role: "assistant",
-            content: [{ type: "text", text: response([reply(1), reply(2)]) }],
-            stopReason: "stop",
+            content: [
+              {
+                type: "toolCall",
+                id: "quick-replies-1",
+                name: "return_quick_replies",
+                arguments: { suggestions: [reply(1), reply(2)] },
+              },
+            ],
+            stopReason: "toolUse",
           };
         },
       },
@@ -259,9 +299,30 @@ describe("quick reply model generation", () => {
     expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
     expect(calls[0]?.context).toMatchObject({
       systemPrompt: expect.stringMatching(
-        /untrusted data[\s\S]*authoritative writing-style sample[\s\S]*Explicitly prefer replies that make concrete changes or perform actions[\s\S]*Put change-making and action-performing replies first[\s\S]*only as secondary fallbacks[\s\S]*sent verbatim[\s\S]*faithfully preserve[\s\S]*expect different input/u,
+        /untrusted data[\s\S]*authoritative writing-style sample[\s\S]*Explicitly prefer replies that make concrete changes or perform actions[\s\S]*Put change-making and action-performing replies first[\s\S]*only as secondary fallbacks[\s\S]*sent verbatim[\s\S]*faithfully preserve[\s\S]*expect different input[\s\S]*Call return_quick_replies exactly once/u,
       ),
       messages: [{ role: "user" }],
+      tools: [
+        expect.objectContaining({
+          name: "return_quick_replies",
+          parameters: expect.objectContaining({
+            additionalProperties: false,
+            properties: {
+              suggestions: expect.objectContaining({
+                maxItems: 5,
+                items: expect.objectContaining({
+                  additionalProperties: false,
+                  properties: {
+                    label: expect.objectContaining({ maxLength: 24 }),
+                    message: expect.objectContaining({ maxLength: 160 }),
+                  },
+                }),
+              }),
+            },
+          }),
+          constrainedSampling: { type: "json_schema", strict: "require" },
+        }),
+      ],
     });
     expect(calls[0]?.options).toMatchObject({
       cacheRetention: "short",
@@ -269,11 +330,101 @@ describe("quick reply model generation", () => {
       maxTokens: 384,
       timeoutMs: 3_000,
       reasoningEffort: "none",
+      toolChoice: "required",
       samplingParams: { service_tier: "priority" },
     });
     const sessionIds = calls.map((call) => (call.options as { sessionId?: unknown }).sessionId);
     expect(typeof sessionIds[0]).toBe("string");
     expect(new Set(sessionIds).size).toBe(1);
+  });
+
+  test.each([
+    {
+      name: "wrong tool name",
+      content: [
+        {
+          type: "toolCall",
+          id: "wrong-tool",
+          name: "other_tool",
+          arguments: { suggestions: [reply(1), reply(2)] },
+        },
+      ],
+    },
+    {
+      name: "malformed arguments",
+      content: [
+        {
+          type: "toolCall",
+          id: "malformed-arguments",
+          name: "return_quick_replies",
+          arguments: { suggestions: [reply(1), { label: "Choice 2" }] },
+        },
+      ],
+    },
+    {
+      name: "duplicate tool calls",
+      content: [
+        {
+          type: "toolCall",
+          id: "duplicate-1",
+          name: "return_quick_replies",
+          arguments: { suggestions: [reply(1), reply(2)] },
+        },
+        {
+          type: "toolCall",
+          id: "duplicate-2",
+          name: "return_quick_replies",
+          arguments: { suggestions: [reply(3), reply(4)] },
+        },
+      ],
+    },
+  ])("rejects a structured response with $name", async ({ content }) => {
+    const ctx = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
+      modelRegistry: {
+        find: () => ({
+          provider: "openai-codex",
+          id: "gpt-5.6-luna-fast",
+          api: "openai-codex-responses",
+        }),
+        complete: async () => ({ role: "assistant", content, stopReason: "toolUse" }),
+      },
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
+
+    expect(
+      await generateQuickReplies(
+        ctx,
+        { userText: "Improve it", assistantText: "The change is complete." },
+        new AbortController().signal,
+      ),
+    ).toEqual([]);
+  });
+
+  test("returns an explicit slash command without calling the model", async () => {
+    let calls = 0;
+    const ctx = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
+      modelRegistry: {
+        find: () => {
+          calls += 1;
+          return undefined;
+        },
+      },
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
+
+    expect(
+      await generateQuickReplies(
+        ctx,
+        {
+          userText: "Update the configuration",
+          assistantText: "Run /model to choose another model.",
+        },
+        new AbortController().signal,
+      ),
+    ).toEqual([{ label: "/model", message: "/model" }]);
+    expect(calls).toBe(0);
   });
 
   test("does not call the model for unsafe or already-aborted input", async () => {

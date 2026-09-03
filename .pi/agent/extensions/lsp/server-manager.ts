@@ -1,13 +1,6 @@
 import { basename, extname, resolve } from "node:path";
 import type { Location, LocationLink } from "vscode-languageserver-protocol/node";
-import {
-  renderDiagnostics,
-  renderHovers,
-  renderLocations,
-  type ServerDiagnostic,
-  type ServerHover,
-  type ServerLocations,
-} from "./output";
+import { renderDiagnostics, renderHovers, renderLocations } from "./output";
 import {
   canonicalProjectRoot,
   findServerRoot,
@@ -54,14 +47,40 @@ function normalizedDefinition(
   return Array.isArray(result) ? result : [result];
 }
 
-function appendOperationWarning(
-  warnings: string[],
+function operationWarning(
   serverId: string,
   cause: unknown,
   signal: AbortSignal | undefined,
-): void {
+): string {
   if (signal?.aborted) throw cause;
-  warnings.push(`${serverId}: ${cause instanceof Error ? cause.message : String(cause)}`);
+  return `${serverId}: ${cause instanceof Error ? cause.message : String(cause)}`;
+}
+
+interface MatchedOperationResult<T> {
+  readonly value?: T;
+  readonly warning?: string;
+}
+
+async function runMatched<T>(
+  matches: readonly Match[],
+  signal: AbortSignal | undefined,
+  operation: (match: Match) => Promise<T | undefined>,
+): Promise<{ readonly values: readonly T[]; readonly warnings: readonly string[] }> {
+  // Promise.all preserves configured server order while requests run concurrently.
+  const results = await Promise.all(
+    matches.map(async (match): Promise<MatchedOperationResult<T>> => {
+      try {
+        const value = await operation(match);
+        return value === undefined ? {} : { value };
+      } catch (cause) {
+        return { warning: operationWarning(match.server.id, cause, signal) };
+      }
+    }),
+  );
+  return {
+    values: results.flatMap(({ value }) => (value === undefined ? [] : [value])),
+    warnings: results.flatMap(({ warning }) => (warning === undefined ? [] : [warning])),
+  };
 }
 
 export class LspServerManager {
@@ -107,28 +126,21 @@ export class LspServerManager {
     allowAbsolute = false,
   ): Promise<LspOperationResult> {
     const result = await this.matches(path, allowAbsolute, signal);
-    const diagnostics: ServerDiagnostic[] = [];
-    const warnings = [...result.warnings];
-    for (const match of result.matches) {
-      try {
-        const items = await match.client.freshDiagnostics(match.document, signal);
-        diagnostics.push(
-          ...items.map((diagnostic) => ({
-            diagnostic,
-            path: match.document.canonicalPath,
-            serverId: match.server.id,
-            text: match.document.text,
-          })),
-        );
-      } catch (cause) {
-        appendOperationWarning(warnings, match.server.id, cause, signal);
-      }
-    }
+    const operation = await runMatched(result.matches, signal, async (match) => {
+      const items = await match.client.freshDiagnostics(match.document, signal);
+      return items.map((diagnostic) => ({
+        diagnostic,
+        path: match.document.canonicalPath,
+        serverId: match.server.id,
+        text: match.document.text,
+      }));
+    });
+    const diagnostics = operation.values.flat();
     return {
       diagnosticCount: diagnostics.length,
       matched: result.matches.length > 0,
       text: renderDiagnostics(this.projectRoot, diagnostics),
-      warnings,
+      warnings: [...result.warnings, ...operation.warnings],
     };
   }
 
@@ -139,24 +151,22 @@ export class LspServerManager {
     signal: AbortSignal | undefined,
   ): Promise<LspOperationResult> {
     const result = await this.matches(path, false, signal);
-    const hovers: ServerHover[] = [];
-    const warnings = [...result.warnings];
-    for (const match of result.matches) {
-      if (match.client.supports("hover") === false) continue;
-      try {
-        hovers.push({
-          hover: await match.client.hover(
-            match.document,
-            toProtocolPosition(match.document.text, line, column),
-            signal,
-          ),
-          serverId: match.server.id,
-        });
-      } catch (cause) {
-        appendOperationWarning(warnings, match.server.id, cause, signal);
-      }
-    }
-    return { matched: result.matches.length > 0, text: renderHovers(hovers), warnings };
+    const operation = await runMatched(result.matches, signal, async (match) => {
+      if (match.client.supports("hover") === false) return undefined;
+      return {
+        hover: await match.client.hover(
+          match.document,
+          toProtocolPosition(match.document.text, line, column),
+          signal,
+        ),
+        serverId: match.server.id,
+      };
+    });
+    return {
+      matched: result.matches.length > 0,
+      text: renderHovers(operation.values),
+      warnings: [...result.warnings, ...operation.warnings],
+    };
   }
 
   async definition(
@@ -166,29 +176,23 @@ export class LspServerManager {
     signal: AbortSignal | undefined,
   ): Promise<LspOperationResult> {
     const result = await this.matches(path, false, signal);
-    const groups: ServerLocations[] = [];
-    const warnings = [...result.warnings];
-    for (const match of result.matches) {
-      if (match.client.supports("goto_definition") === false) continue;
-      try {
-        groups.push({
-          locations: normalizedDefinition(
-            await match.client.definition(
-              match.document,
-              toProtocolPosition(match.document.text, line, column),
-              signal,
-            ),
+    const operation = await runMatched(result.matches, signal, async (match) => {
+      if (match.client.supports("goto_definition") === false) return undefined;
+      return {
+        locations: normalizedDefinition(
+          await match.client.definition(
+            match.document,
+            toProtocolPosition(match.document.text, line, column),
+            signal,
           ),
-          serverId: match.server.id,
-        });
-      } catch (cause) {
-        appendOperationWarning(warnings, match.server.id, cause, signal);
-      }
-    }
+        ),
+        serverId: match.server.id,
+      };
+    });
     return {
       matched: result.matches.length > 0,
-      text: await renderLocations(this.projectRoot, groups, signal),
-      warnings,
+      text: await renderLocations(this.projectRoot, operation.values, signal),
+      warnings: [...result.warnings, ...operation.warnings],
     };
   }
 
@@ -200,29 +204,23 @@ export class LspServerManager {
     signal: AbortSignal | undefined,
   ): Promise<LspOperationResult> {
     const result = await this.matches(path, false, signal);
-    const groups: ServerLocations[] = [];
-    const warnings = [...result.warnings];
-    for (const match of result.matches) {
-      if (match.client.supports("find_references") === false) continue;
-      try {
-        groups.push({
-          locations:
-            (await match.client.references(
-              match.document,
-              toProtocolPosition(match.document.text, line, column),
-              includeDeclaration,
-              signal,
-            )) ?? [],
-          serverId: match.server.id,
-        });
-      } catch (cause) {
-        appendOperationWarning(warnings, match.server.id, cause, signal);
-      }
-    }
+    const operation = await runMatched(result.matches, signal, async (match) => {
+      if (match.client.supports("find_references") === false) return undefined;
+      return {
+        locations:
+          (await match.client.references(
+            match.document,
+            toProtocolPosition(match.document.text, line, column),
+            includeDeclaration,
+            signal,
+          )) ?? [],
+        serverId: match.server.id,
+      };
+    });
     return {
       matched: result.matches.length > 0,
-      text: await renderLocations(this.projectRoot, groups, signal),
-      warnings,
+      text: await renderLocations(this.projectRoot, operation.values, signal),
+      warnings: [...result.warnings, ...operation.warnings],
     };
   }
 
@@ -254,33 +252,38 @@ export class LspServerManager {
       );
       return language === undefined ? [] : [{ language, server }];
     });
-    const matches: Match[] = [];
-    const warnings: string[] = [];
-    for (const { language, server } of candidates) {
-      try {
-        if (signal?.aborted) throw new Error("LSP operation cancelled");
-        const document = await readProjectFile(
-          this.projectRoot,
-          path,
-          language.languageId,
-          allowAbsolute,
-        );
-        if (languageForPath(server, document.path) === undefined) continue;
-        const root = await findServerRoot(
-          this.projectRoot,
-          document.canonicalPath,
-          server.rootMarkers,
-        );
-        if (root === undefined) continue;
-        if (this.shuttingDown) throw new Error("LSP integration is shutting down");
-        if (signal?.aborted) throw new Error("LSP operation cancelled");
-        matches.push({ client: await this.client(server, root, signal), document, server });
-      } catch (cause) {
-        if (signal?.aborted) throw cause;
-        warnings.push(`${server.id}: ${cause instanceof Error ? cause.message : String(cause)}`);
-      }
-    }
-    return { matches, warnings };
+    // Promise.all preserves configured server order while roots and clients resolve concurrently.
+    const results = await Promise.all(
+      candidates.map(async ({ language, server }): Promise<{ match?: Match; warning?: string }> => {
+        try {
+          if (signal?.aborted) throw new Error("LSP operation cancelled");
+          const document = await readProjectFile(
+            this.projectRoot,
+            path,
+            language.languageId,
+            allowAbsolute,
+          );
+          if (languageForPath(server, document.path) === undefined) return {};
+          const root = await findServerRoot(
+            this.projectRoot,
+            document.canonicalPath,
+            server.rootMarkers,
+          );
+          if (root === undefined) return {};
+          if (this.shuttingDown) throw new Error("LSP integration is shutting down");
+          if (signal?.aborted) throw new Error("LSP operation cancelled");
+          return {
+            match: { client: await this.client(server, root, signal), document, server },
+          };
+        } catch (cause) {
+          return { warning: operationWarning(server.id, cause, signal) };
+        }
+      }),
+    );
+    return {
+      matches: results.flatMap(({ match }) => (match === undefined ? [] : [match])),
+      warnings: results.flatMap(({ warning }) => (warning === undefined ? [] : [warning])),
+    };
   }
 
   private client(

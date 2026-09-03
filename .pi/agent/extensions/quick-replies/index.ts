@@ -3,6 +3,7 @@ import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import {
   extractVisibleAssistantProse,
   generateQuickReplies,
+  isSlashCommand,
   type QuickReply,
   type QuickReplyGenerator,
 } from "./generator";
@@ -11,7 +12,7 @@ export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5
 
 const WIDGET_KEY = "quick-replies";
 const REPLY_GAP = "  ";
-const MIN_GENERATED_REPLIES = 2;
+const MIN_GENERATED_REPLIES = 1;
 const MAX_GENERATED_REPLIES = QUICK_REPLY_SHORTCUTS.length;
 
 type ShortcutStyle = "full" | "short" | "numeric";
@@ -184,6 +185,10 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
       }
 
       invalidateSettledState(ctx);
+      if (isSlashCommand(reply.message)) {
+        ctx.ui.setEditorText(reply.message);
+        return;
+      }
       pi.sendUserMessage(reply.message, { expandPromptTemplates: false });
     }
 

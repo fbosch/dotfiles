@@ -276,6 +276,23 @@
         ".git"
       ]
     },
+    "nil": {
+      "command": "nil",
+      "languages": [
+        {
+          "languageId": "nix",
+          "extensions": [
+            ".nix"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        "flake.nix",
+        "flake.lock",
+        "devenv.nix",
+        "shell.nix"
+      ]
+    },
     "tsgo": {
       "command": "tsgo",
       "args": [
