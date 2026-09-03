@@ -259,7 +259,7 @@ describe("quick reply model generation", () => {
     expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
     expect(calls[0]?.context).toMatchObject({
       systemPrompt: expect.stringMatching(
-        /untrusted data[\s\S]*authoritative writing-style sample[\s\S]*Match its language, capitalization, brevity, and conversational register/u,
+        /untrusted data[\s\S]*authoritative writing-style sample[\s\S]*Prefer doing over discussing[\s\S]*Include at least one concrete action[\s\S]*Do not use them as default safe suggestions/u,
       ),
       messages: [{ role: "user" }],
     });

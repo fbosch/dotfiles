@@ -78,8 +78,7 @@
         ".fallowrc.json",
         ".fallowrc.jsonc",
         "fallow.toml",
-        ".fallow.toml",
-        ".git"
+        ".fallow.toml"
       ]
     },
     "html": {

@@ -71,7 +71,10 @@ interface AutoSessionNameConfig {
 }
 
 function readJson<T>(url: URL): T {
-  return JSON.parse(readFileSync(url, "utf8")) as T;
+  const source = readFileSync(url, "utf8");
+  return url.pathname.endsWith(".jsonc")
+    ? (Bun.JSONC.parse(source) as T)
+    : (JSON.parse(source) as T);
 }
 
 function toPiModel(model: string): string {

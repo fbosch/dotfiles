@@ -118,6 +118,50 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
+  test("keeps linking rows when the published service is removed after installation", () => {
+    const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
+    const globals = globalThis as Record<symbol, unknown>;
+    const previousService = globals[serviceKey];
+    globals[serviceKey] = {
+      listAgents: () => [
+        {
+          id: "captured-agent",
+          type: "explore",
+          description: "Inspect reload behavior",
+          status: "running",
+          isBackground: true,
+        },
+      ],
+    };
+    const { calls, ui } = createUI();
+    const uninstall = installSubagentWidgetFrame(ui, {
+      agentColors: new Map(),
+      agentDisplayNames: new Map([["explore", "explore"]]),
+    });
+    ui.setWidget("agents", () => ({
+      render: () => [
+        "● Agents",
+        "└─ ⠋ explore  Inspect reload behavior · 1 turn · 1.0s",
+        "     ⎿  thinking…",
+      ],
+      invalidate: () => {},
+    }));
+    delete globals[serviceKey];
+
+    try {
+      const factory = calls[0]?.content;
+      if (typeof factory !== "function") throw new Error("Expected a widget factory");
+
+      expect(factory(tui, theme).render(80)[2]).toContain(
+        "pi-action://subagents/session?id=captured-agent",
+      );
+    } finally {
+      uninstall();
+      if (previousService === undefined) delete globals[serviceKey];
+      else globals[serviceKey] = previousService;
+    }
+  });
+
   test("maps mixed and duplicate running rows by the widget's render order", () => {
     const displayNames = new Map([["general", "general"]]);
     const lines = [
