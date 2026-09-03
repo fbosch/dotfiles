@@ -59,6 +59,17 @@ export function parseArgs(argv: string[]): Args {
   };
 }
 
+export async function resolveFinalCommitMessage(
+  commitMsg: string,
+  shouldEditCommitMessage: boolean,
+  edit: typeof input = input,
+): Promise<string | null> {
+  if (shouldEditCommitMessage === false) return commitMsg;
+
+  const edited = await edit(commitMsg, pc.dim("Edit commit message or press Enter to accept:"));
+  return edited === null ? null : edited.trim();
+}
+
 function exitCancelled(message: string): never {
   style(` ${message}`, 1);
   process.exit(2);
@@ -284,6 +295,7 @@ async function main(): Promise<void> {
   }
 
   let commitMsg = "";
+  let shouldEditCommitMessage = true;
 
   if (hasOnlyLockfiles(stagedFiles)) {
     commitMsg = "chore(deps): update lock file";
@@ -391,18 +403,22 @@ async function main(): Promise<void> {
         exitCancelled("Commit cancelled");
       }
 
-      if (action === "Edit current message" || action === "Proceed") {
+      if (action === "Edit current message") {
+        break;
+      }
+
+      if (action === "Proceed") {
+        shouldEditCommitMessage = false;
         break;
       }
     }
   }
 
-  const edited = await input(commitMsg, pc.dim("Edit commit message or press Enter to accept:"));
-  if (edited === null) {
+  const finalMessage = await resolveFinalCommitMessage(commitMsg, shouldEditCommitMessage);
+  if (finalMessage === null) {
     exitCancelled("Commit cancelled");
   }
 
-  const finalMessage = edited.trim();
   if (finalMessage.length === 0) {
     exitCancelled("Commit cancelled (empty message)");
   }

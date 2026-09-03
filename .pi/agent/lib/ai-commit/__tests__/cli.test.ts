@@ -1,5 +1,20 @@
 import { describe, expect, test } from "bun:test";
-import { parseArgs } from "../cli";
+import { parseArgs, resolveFinalCommitMessage } from "../cli";
+
+describe("ai_commit message selection", () => {
+  test("uses the generated message unchanged when proceeding", async () => {
+    let editorCalled = false;
+    const generatedMessage = "feat(auth): generated message that exceeds the limit";
+
+    const finalMessage = await resolveFinalCommitMessage(generatedMessage, false, async () => {
+      editorCalled = true;
+      return "edited message";
+    });
+
+    expect(finalMessage).toBe(generatedMessage);
+    expect(editorCalled).toBeFalse();
+  });
+});
 
 describe("ai_commit arguments", () => {
   test("preserves the established dry-run, verbose, debug, and model flags", () => {
