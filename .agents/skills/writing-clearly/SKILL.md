@@ -38,6 +38,7 @@ When instructions conflict, use this priority order:
 - Name the source of an attributed claim. Delete phrases such as "experts believe", "reports suggest", or "critics argue" when no source is available.
 - Verify externally checkable details, including names, dates, numbers, quotations, links, publication details, and citations. Confirm that each source supports the exact claim attached to it. Remove or qualify details that cannot be verified.
 - Bound general claims by naming the relevant actor, population, environment, condition, mechanism, or evidence. Avoid universal claims and false consensus unless the source establishes that scope.
+- Name the responsible actor when passive or abstract phrasing hides ownership or accountability. "The decision emerged" becomes "The maintainers decided." Keep ordinary technical subjects when they state behavior clearly, as in "The API returns 404" or "The test fails."
 - Delete superficial `-ing` clauses such as "highlighting", "ensuring", "reflecting", or "showcasing" when they merely announce a consequence. Expand them only when they carry evidence or explain causality.
 - Replace formulaic challenge-and-triumph framing with the actual constraint and outcome.
 - Apply the portability test to project-specific prose: if a sentence could appear unchanged in another project's documentation, rewrite it with this project's mechanism or cut it.
@@ -52,6 +53,7 @@ When instructions conflict, use this priority order:
 - Replace inflated substitutes for "is" or "has", such as "serves as", "stands as", and "boasts", unless the distinction matters.
 - Preserve the source language unless the user requests translation. This includes headings, labels, and surrounding prose; keep code and other technical literals unchanged.
 - Avoid reflexive corrective contrasts such as "It's not X; it's Y", "It's not that X; it's that Y", "not merely X, but Y", and "less about X than Y". Keep the contrast only when X is a plausible interpretation and distinguishing Y changes the reader's understanding. Otherwise, state Y directly.
+- Avoid negative runway that lists what something is not before saying what it is. Lead with the positive claim; keep exclusions only when they define scope or prevent a likely misreading.
 - Do not force ideas into groups of three or use "from X to Y" unless the endpoints form a meaningful scale.
 - Repeat an established technical term instead of cycling through synonyms that could imply different concepts.
 - Cut adverbs that prop up weak or unmeasured claims. Replace "significantly improves" with the measured change or the exact failure mode avoided.
@@ -66,6 +68,7 @@ When instructions conflict, use this priority order:
 - Preserve meaningful Markdown structure, link targets, and frontmatter unless restructuring is requested or the existing structure obstructs comprehension.
 - Each paragraph or section must add evidence, explanation, a decision, or a reader action. Delete closing sentences and subsection summaries that merely restate earlier text.
 - Use signposting only when it establishes scope, prerequisites, navigation, or the reader's next task. Delete document-anatomy narration such as "This section discusses" and "Below we explore".
+- Cut rhetorical questions that only introduce an immediate answer. State the answer directly unless the question gives the reader a real decision or unresolved issue.
 - Vary sentence rhythm when it improves readability. Do not manufacture fragments or deliberate messiness to simulate a human voice.
 - Do not use em dashes. Separate the thought with a period or comma instead; do not substitute parentheses, en dashes, or hyphens merely to preserve the same interruption. Treat repeated parenthetical asides, colons, boldface, and decorative emoji as warning signs, not banned syntax.
 
@@ -121,6 +124,7 @@ Before returning prose, verify:
 - No unsupported agreement, optimism, reassurance, or false balance remains.
 - No em dashes remain, and listed jargon has been replaced unless it carries a precise domain meaning.
 - Lists, headings, punctuation, and sentence rhythm follow the material rather than a repeated template.
+- Actors and ownership are explicit when accountability matters; no negative runway or self-answering rhetorical setup remains.
 - No chatbot artifacts, vague attribution, synonym cycling, forced contrast, false range, or generic conclusion remains.
 
 ## Interaction

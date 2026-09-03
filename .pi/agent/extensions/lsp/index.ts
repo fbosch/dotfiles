@@ -142,8 +142,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
             "Query configured project language servers for diagnostics, hover information, definitions, references, or server status. Paths are project-relative and positions are one-based.",
           promptSnippet: "Query persistent language servers for project code intelligence",
           promptGuidelines: [
-            "Use lsp after locating a relevant source file when semantic navigation is more precise than text search.",
-            "For diagnostics, wait until a file's edit burst is complete and query each changed file once; do not query after every individual edit.",
+            "Use lsp for hover, definitions, or references when semantic navigation is more precise than text search.",
             "Use one-based line and column positions from source files.",
           ],
           parameters: LspParameters,

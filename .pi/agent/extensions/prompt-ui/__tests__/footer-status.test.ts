@@ -46,6 +46,13 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "mcp", "MCP 0/6")).toBe("");
   });
 
+  test("colors file change counts in the footer", () => {
+    expect(renderFooterStatus(theme, "file-changes", "2 files +40 -25")).toBe(
+      "text:2 files success:+40 error:-25",
+    );
+    expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
+  });
+
   test("keeps MCP status right-aligned and other statuses on the left", () => {
     const state = {
       ...promptState,

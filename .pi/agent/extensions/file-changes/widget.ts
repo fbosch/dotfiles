@@ -41,18 +41,12 @@ function renderCounts(change: TrackedFile, theme: Pick<Theme, "fg">): string {
   return counts.length > 0 ? counts.join(" ") : theme.fg("dim", "0 lines");
 }
 
-function renderFileRow(
-  change: TrackedFile,
-  branch: "├─" | "└─",
-  width: number,
-  theme: Pick<Theme, "fg">,
-): string {
+function renderFileRow(change: TrackedFile, width: number, theme: Pick<Theme, "fg">): string {
   const counts = renderCounts(change, theme);
-  const marker = change.kind === "added" ? "A" : "M";
-  const prefix = `${branch} ${marker} `;
-  const pathWidth = Math.max(0, width - visibleWidth(prefix) - visibleWidth(counts) - 1);
+  const status = change.kind === "added" ? theme.fg("success", "??") : theme.fg("warning", " M");
+  const pathWidth = Math.max(0, width - visibleWidth(status) - visibleWidth(counts) - 2);
   const displayPath = pathTail(sanitizeDisplayPath(change.path), pathWidth);
-  const left = theme.fg("muted", prefix) + theme.fg("text", displayPath);
+  const left = `${status} ${theme.fg("text", displayPath)}`;
   return fitColumns(left, counts, width);
 }
 
@@ -66,13 +60,10 @@ export function renderChangeRows(
   const limit = expanded ? sorted.length : COLLAPSED_FILE_LIMIT;
   const visible = sorted.slice(0, limit);
   const hiddenCount = sorted.length - visible.length;
-  const rows = visible.map((change, index) => {
-    const isLast = index === visible.length - 1 && hiddenCount === 0;
-    return renderFileRow(change, isLast ? "└─" : "├─", width, theme);
-  });
+  const rows = visible.map((change) => renderFileRow(change, width, theme));
 
   if (hiddenCount > 0) {
-    rows.push(theme.fg("dim", `└─ ${hiddenCount} more`));
+    rows.push(theme.fg("dim", `   … ${hiddenCount} more`));
   }
 
   return rows;
@@ -90,11 +81,9 @@ export class FileChangesWidget implements Component {
 
     const paddingX = width >= PANEL_PADDING_X * 2 + 1 ? PANEL_PADDING_X : 0;
     const contentWidth = Math.max(0, width - paddingX * 2);
-    const header = `${this.theme.fg("accent", "●")} ${this.theme.bold("Changes")}`;
-    const content = [
-      header,
-      ...renderChangeRows(this.changes, this.theme, contentWidth, this.isExpanded()),
-    ].map((line) => `${" ".repeat(paddingX)}${line}`);
+    const content = renderChangeRows(this.changes, this.theme, contentWidth, this.isExpanded()).map(
+      (line) => `${" ".repeat(paddingX)}${line}`,
+    );
     const background = this.theme.getBgAnsi("toolPendingBg");
     const rows = ["", ...content].map((line) => paintDockRow(line, width, "", background));
 

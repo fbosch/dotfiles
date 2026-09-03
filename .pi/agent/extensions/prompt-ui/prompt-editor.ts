@@ -117,6 +117,20 @@ export function renderMcpFooterStatus(
 
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
   if (key === YOLO_STATUS_KEY) return theme.fg("error", YOLO_STATUS_TEXT);
+  if (key === "file-changes") {
+    const match = /^(\d+ files?)(?: (\+\d+))?(?: (-\d+))?$/.exec(stripTerminalSequences(status));
+    if (match === null) return status;
+
+    const [, files, added, removed] = match;
+    if (files === undefined) return status;
+    return [
+      theme.fg("text", files),
+      added === undefined ? undefined : theme.fg("success", added),
+      removed === undefined ? undefined : theme.fg("error", removed),
+    ]
+      .filter((part) => part !== undefined)
+      .join(" ");
+  }
   if (key !== MCP_STATUS_KEY) return status;
 
   const compactStatus = /^MCP (\d+)\/\d+$/.exec(stripTerminalSequences(status));

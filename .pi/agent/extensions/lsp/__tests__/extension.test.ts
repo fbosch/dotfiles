@@ -190,9 +190,7 @@ test("coalesces automatic diagnostics for rapid edits to the same file", async (
 
   expect(otherFile).toBeDefined();
   expect(diagnosticCalls).toBe(2);
-  expect(promptGuidelines).toContain(
-    "For diagnostics, wait until a file's edit burst is complete and query each changed file once; do not query after every individual edit.",
-  );
+  expect(promptGuidelines.some((guideline) => guideline.includes("diagnostic"))).toBeFalse();
 });
 
 test("warms LSP diagnostics once after a successful native file read", async () => {

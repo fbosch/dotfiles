@@ -63,7 +63,7 @@ describe("file change model", () => {
 });
 
 describe("file changes widget", () => {
-  test("sorts rows, uses tree markers, and preserves the end of long paths", () => {
+  test("sorts porcelain rows and preserves the end of long paths", () => {
     const changes: TrackedFile[] = [
       { path: "z.ts", kind: "added", added: 2, removed: 0 },
       {
@@ -75,10 +75,34 @@ describe("file changes widget", () => {
     ];
     const rows = renderChangeRows(changes, theme, 30, false).map(stripTerminalSequences);
 
-    expect(rows[0]).toStartWith("├─ M …");
+    expect(rows[0]).toStartWith(" M …");
     expect(rows[0]).toContain("important-file.ts");
     expect(rows[0]).toContain("+1 -1");
-    expect(rows[1]).toContain("└─ A z.ts");
+    expect(rows[1]).toContain("?? z.ts");
+  });
+
+  test("colors statuses and line counts semantically", () => {
+    const colors: Array<[string, string]> = [];
+    const recordingTheme = {
+      fg: (color: string, text: string) => {
+        colors.push([color, text]);
+        return text;
+      },
+    };
+    renderChangeRows(
+      [
+        { path: "added.ts", kind: "added", added: 2, removed: 0 },
+        { path: "modified.ts", kind: "modified", added: 0, removed: 1 },
+      ],
+      recordingTheme,
+      60,
+      false,
+    );
+
+    expect(colors).toContainEqual(["success", "??"]);
+    expect(colors).toContainEqual(["success", "+2"]);
+    expect(colors).toContainEqual(["warning", " M"]);
+    expect(colors).toContainEqual(["error", "-1"]);
   });
 
   test("escapes terminal controls and line breaks in display paths", () => {
@@ -109,8 +133,10 @@ describe("file changes widget", () => {
     const lines = widget.render(36);
     const plain = lines.map(stripTerminalSequences);
 
-    expect(plain[1]).toContain("  ● Changes");
-    expect(plain.at(-2)).toContain("└─ 1 more");
+    expect(plain.some((line) => line.includes("Changes"))).toBe(false);
+    expect(plain[0]).toBe(" ".repeat(36));
+    expect(plain[1]).toContain(" M src/file-0.ts");
+    expect(plain.at(-2)).toContain("… 1 more");
     expect(plain.at(-1)).toBe("▀".repeat(36));
     expect(lines.every((line) => visibleWidth(line) === 36)).toBe(true);
   });
