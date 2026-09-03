@@ -18,6 +18,8 @@ const ansiTheme = {
 };
 const promptState: PromptEditorState = {
   isWorking: () => false,
+  isInterruptPending: () => false,
+  setInterruptPending() {},
   getWorkingMarker: () => "●",
   getBranch: () => null,
   getProfileName: () => undefined,
@@ -25,6 +27,17 @@ const promptState: PromptEditorState = {
 };
 
 describe("prompt footer statuses", () => {
+  test("prompts for a second interrupt press while armed", () => {
+    const state = {
+      ...promptState,
+      isWorking: () => true,
+      isInterruptPending: () => true,
+    };
+    const line = renderPromptHints(theme, { getKeys: () => ["escape"] }, state, "~/dotfiles", 60);
+
+    expect(line).toContain("warning:esc again to interrupt");
+  });
+
   test("renders the session YOLO status with its icon and error color", () => {
     expect(renderFooterStatus(theme, "session-yolo", "yolo")).toBe("error:󱚝 yolo");
   });
@@ -51,6 +64,16 @@ describe("prompt footer statuses", () => {
       "text:2 files success:+40 error:-25",
     );
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
+  });
+
+  test("omits YOLO from the lower footer", () => {
+    const state = {
+      ...promptState,
+      getStatuses: () => [renderFooterStatus(ansiTheme, "session-yolo", "yolo")],
+    };
+    const line = renderPromptHints(ansiTheme, keybindings, state, "~/dotfiles", 50);
+
+    expect(stripTerminalSequences(line)).not.toContain("yolo");
   });
 
   test("keeps file changes and MCP together on the right", () => {

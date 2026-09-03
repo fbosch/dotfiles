@@ -49,6 +49,7 @@ function readMcpFooterSnapshot(value: unknown): McpFooterSnapshot | undefined {
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();
   let isWorking = false;
+  let isInterruptPending = false;
   let workingPulseIndex = 0;
   let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
   let activeTui: TUI | undefined;
@@ -68,6 +69,12 @@ export default function promptUi(pi: ExtensionAPI): void {
   };
   const state: PromptEditorState = {
     isWorking: () => isWorking,
+    isInterruptPending: () => isInterruptPending,
+    setInterruptPending: (pending) => {
+      if (isInterruptPending === pending) return;
+      isInterruptPending = pending;
+      activeTui?.requestRender();
+    },
     getWorkingMarker: () => WORKING_PULSE_FRAMES[workingPulseIndex] ?? WORKING_PULSE_FRAMES[0],
     getBranch: () => getBranch(),
     getProfileName: () => getProfileName(),
@@ -82,6 +89,7 @@ export default function promptUi(pi: ExtensionAPI): void {
 
   pi.on("agent_start", () => {
     stopWorkingPulse();
+    state.setInterruptPending(false);
     isWorking = true;
     workingPulseIndex = 0;
     workingPulseTimer = setInterval(() => {
@@ -93,11 +101,13 @@ export default function promptUi(pi: ExtensionAPI): void {
 
   pi.on("agent_settled", () => {
     isWorking = false;
+    state.setInterruptPending(false);
     stopWorkingPulse();
     activeTui?.requestRender();
   });
 
   pi.on("session_shutdown", () => {
+    state.setInterruptPending(false);
     stopWorkingPulse();
     resetMcpFooterSnapshot();
     disposePromptEditor();

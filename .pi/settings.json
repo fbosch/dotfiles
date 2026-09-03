@@ -1,5 +1,8 @@
 {
   "authProfile": "fbb",
+  "quickReplies": {
+    "model": "openai-codex/gpt-5.6-luna-fast"
+  },
   "references": {
     "nixos": {
       "path": "~/nixos",

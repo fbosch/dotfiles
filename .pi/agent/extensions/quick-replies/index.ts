@@ -1,11 +1,18 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
-import { detectQuickReplies, extractVisibleAssistantProse, type QuickReply } from "./classifier";
+import {
+  extractVisibleAssistantProse,
+  generateQuickReplies,
+  type QuickReply,
+  type QuickReplyGenerator,
+} from "./generator";
 
-export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3"] as const;
+export const QUICK_REPLY_SHORTCUTS = ["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"] as const;
 
 const WIDGET_KEY = "quick-replies";
 const REPLY_GAP = "  ";
+const MIN_GENERATED_REPLIES = 2;
+const MAX_GENERATED_REPLIES = QUICK_REPLY_SHORTCUTS.length;
 
 type ShortcutStyle = "full" | "short" | "numeric";
 
@@ -19,6 +26,11 @@ interface FinalizedAssistantProse {
   prose: string;
 }
 
+interface ActiveGeneration {
+  runId: number;
+  controller: AbortController;
+}
+
 interface ReplyLayout {
   replies: readonly QuickReply[];
   shortcutStyle: ShortcutStyle;
@@ -29,6 +41,10 @@ export interface RenderedQuickReplies {
   visibleReplyCount: number;
 }
 
+export interface QuickRepliesDependencies {
+  generate?: QuickReplyGenerator;
+}
+
 export function renderQuickReplyLine(
   replies: readonly QuickReply[],
   width: number,
@@ -36,28 +52,14 @@ export function renderQuickReplyLine(
 ): RenderedQuickReplies | undefined {
   if (replies.length === 0 || width <= 0) return undefined;
 
-  const primaryReplies = replies.slice(0, Math.min(2, replies.length));
-  const layouts: ReplyLayout[] = [
-    { replies, shortcutStyle: "full" },
-    { replies, shortcutStyle: "short" },
-  ];
-  if (primaryReplies.length !== replies.length) {
-    layouts.push({ replies: primaryReplies, shortcutStyle: "short" });
-  }
-  layouts.push({ replies: primaryReplies, shortcutStyle: "numeric" });
-
-  for (const layout of layouts) {
+  for (const layout of replyLayouts(replies)) {
     const line = renderLayout(layout, theme);
     if (visibleWidth(line) <= width) {
       return { line, visibleReplyCount: layout.replies.length };
     }
   }
 
-  const firstReply = primaryReplies[0];
-  if (firstReply === undefined) return undefined;
-
-  const line = renderLayout({ replies: [firstReply], shortcutStyle: "numeric" }, theme);
-  return visibleWidth(line) <= width ? { line, visibleReplyCount: 1 } : undefined;
+  return undefined;
 }
 
 class QuickReplyWidget implements Component {
@@ -97,142 +99,209 @@ class QuickReplyWidget implements Component {
   }
 }
 
-export default function quickRepliesExtension(pi: ExtensionAPI): void {
-  let runSequence = 0;
-  let currentRunId: number | undefined;
-  let latestSettledRunId: number | undefined;
-  let finalizedAssistant: FinalizedAssistantProse | undefined;
-  let activeReplies: ActiveQuickReplies | undefined;
-  let widget: QuickReplyWidget | undefined;
-  let widgetMounted = false;
-  let uiPromptActive = false;
+export function createQuickRepliesExtension(dependencies: QuickRepliesDependencies = {}) {
+  const generate = dependencies.generate ?? generateQuickReplies;
 
-  function clearWidget(ctx: ExtensionContext): void {
-    activeReplies = undefined;
-    widget = undefined;
-    if (widgetMounted && ctx.mode === "tui") {
-      ctx.ui.setWidget(WIDGET_KEY, undefined);
+  return (pi: ExtensionAPI): void => {
+    let runSequence = 0;
+    let currentRunId: number | undefined;
+    let latestSettledRunId: number | undefined;
+    let pendingUserText: string | undefined;
+    let currentUserText: string | undefined;
+    let finalizedAssistant: FinalizedAssistantProse | undefined;
+    let activeGeneration: ActiveGeneration | undefined;
+    let activeReplies: ActiveQuickReplies | undefined;
+    let widget: QuickReplyWidget | undefined;
+    let widgetMounted = false;
+    let uiPromptActive = false;
+
+    function abortGeneration(): void {
+      activeGeneration?.controller.abort();
+      activeGeneration = undefined;
     }
-    widgetMounted = false;
-  }
 
-  function invalidateSettledState(ctx: ExtensionContext): void {
-    finalizedAssistant = undefined;
-    latestSettledRunId = undefined;
-    clearWidget(ctx);
-  }
+    function clearWidget(ctx: ExtensionContext): void {
+      activeReplies = undefined;
+      widget = undefined;
+      if (widgetMounted && ctx.mode === "tui") {
+        ctx.ui.setWidget(WIDGET_KEY, undefined);
+      }
+      widgetMounted = false;
+    }
 
-  function resetSessionState(ctx: ExtensionContext): void {
-    currentRunId = undefined;
-    uiPromptActive = false;
-    invalidateSettledState(ctx);
-  }
+    function invalidateSettledState(ctx: ExtensionContext): void {
+      abortGeneration();
+      finalizedAssistant = undefined;
+      latestSettledRunId = undefined;
+      clearWidget(ctx);
+    }
 
-  function showReplies(ctx: ExtensionContext, runId: number, replies: QuickReply[]): void {
-    activeReplies = { runId, replies };
-    widgetMounted = true;
-    ctx.ui.setWidget(WIDGET_KEY, (_tui, theme) => {
-      widget = new QuickReplyWidget(
-        replies,
-        theme,
-        () => ctx.ui.getEditorText(),
-        () =>
-          activeReplies?.runId === runId &&
-          latestSettledRunId === runId &&
-          uiPromptActive === false &&
-          ctx.isIdle(),
+    function resetSessionState(ctx: ExtensionContext): void {
+      currentRunId = undefined;
+      pendingUserText = undefined;
+      currentUserText = undefined;
+      uiPromptActive = false;
+      invalidateSettledState(ctx);
+    }
+
+    function canShowReplies(ctx: ExtensionContext, runId: number): boolean {
+      return (
+        ctx.mode === "tui" &&
+        ctx.isIdle() &&
+        uiPromptActive === false &&
+        ctx.ui.getEditorText().length === 0 &&
+        currentRunId === runId &&
+        latestSettledRunId === runId
       );
-      return widget;
+    }
+
+    function showReplies(ctx: ExtensionContext, runId: number, replies: QuickReply[]): void {
+      activeReplies = { runId, replies };
+      widgetMounted = true;
+      ctx.ui.setWidget(WIDGET_KEY, (_tui, theme) => {
+        widget = new QuickReplyWidget(
+          replies,
+          theme,
+          () => ctx.ui.getEditorText(),
+          () => activeReplies?.runId === runId && canShowReplies(ctx, runId),
+        );
+        return widget;
+      });
+    }
+
+    function selectReply(index: number, ctx: ExtensionContext): void {
+      const current = activeReplies;
+      if (current === undefined) return;
+
+      const reply = current.replies[index];
+      if (
+        reply === undefined ||
+        canShowReplies(ctx, current.runId) === false ||
+        widget === undefined ||
+        widget.isReplyVisible(index) === false
+      ) {
+        return;
+      }
+
+      invalidateSettledState(ctx);
+      pi.sendUserMessage(reply.message);
+    }
+
+    function beginGeneration(
+      ctx: ExtensionContext,
+      runId: number,
+      userText: string,
+      assistantText: string,
+    ): void {
+      const controller = new AbortController();
+      const generation: ActiveGeneration = { runId, controller };
+      activeGeneration = generation;
+
+      void generate(ctx, { userText, assistantText }, controller.signal)
+        .then((replies) => {
+          if (activeGeneration !== generation) return;
+          activeGeneration = undefined;
+          if (
+            replies.length < MIN_GENERATED_REPLIES ||
+            replies.length > MAX_GENERATED_REPLIES ||
+            canShowReplies(ctx, runId) === false
+          ) {
+            clearWidget(ctx);
+            return;
+          }
+          showReplies(ctx, runId, replies);
+        })
+        .catch(() => {
+          if (activeGeneration === generation) activeGeneration = undefined;
+        });
+    }
+
+    pi.on("session_start", (_event, ctx) => resetSessionState(ctx));
+    pi.on("session_shutdown", (_event, ctx) => resetSessionState(ctx));
+    pi.on("session_before_switch", (_event, ctx) => resetSessionState(ctx));
+    pi.on("session_before_fork", (_event, ctx) => resetSessionState(ctx));
+    pi.on("session_before_tree", (_event, ctx) => resetSessionState(ctx));
+    pi.on("session_tree", (_event, ctx) => resetSessionState(ctx));
+
+    pi.on("input", (event, ctx) => {
+      invalidateSettledState(ctx);
+      pendingUserText = event.text;
     });
-  }
 
-  function selectReply(index: number, ctx: ExtensionContext): void {
-    const current = activeReplies;
-    if (current === undefined) return;
-
-    const reply = current.replies[index];
-    if (
-      reply === undefined ||
-      ctx.mode !== "tui" ||
-      ctx.isIdle() === false ||
-      uiPromptActive ||
-      ctx.ui.getEditorText().length > 0 ||
-      current.runId !== currentRunId ||
-      current.runId !== latestSettledRunId ||
-      widget === undefined ||
-      widget.isReplyVisible(index) === false
-    ) {
-      return;
-    }
-
-    invalidateSettledState(ctx);
-    pi.sendUserMessage(reply.message);
-  }
-
-  pi.on("session_start", (_event, ctx) => resetSessionState(ctx));
-  pi.on("session_shutdown", (_event, ctx) => resetSessionState(ctx));
-  pi.on("session_before_switch", (_event, ctx) => resetSessionState(ctx));
-  pi.on("session_before_fork", (_event, ctx) => resetSessionState(ctx));
-  pi.on("session_before_tree", (_event, ctx) => resetSessionState(ctx));
-  pi.on("session_tree", (_event, ctx) => resetSessionState(ctx));
-
-  pi.on("input", (_event, ctx) => invalidateSettledState(ctx));
-
-  pi.on("ui_prompt_start", (_event, ctx) => {
-    uiPromptActive = true;
-    invalidateSettledState(ctx);
-  });
-
-  pi.on("ui_prompt_end", () => {
-    uiPromptActive = false;
-  });
-
-  pi.on("agent_start", (_event, ctx) => {
-    runSequence += 1;
-    currentRunId = runSequence;
-    invalidateSettledState(ctx);
-  });
-
-  pi.on("message_end", (event) => {
-    if (event.message.role !== "assistant" || currentRunId === undefined) return;
-
-    finalizedAssistant = {
-      runId: currentRunId,
-      prose: extractVisibleAssistantProse(event.message),
-    };
-  });
-
-  pi.on("agent_settled", (_event, ctx) => {
-    const settledRunId = currentRunId;
-    latestSettledRunId = settledRunId;
-
-    if (
-      settledRunId === undefined ||
-      ctx.mode !== "tui" ||
-      ctx.isIdle() === false ||
-      uiPromptActive ||
-      ctx.ui.getEditorText().length > 0 ||
-      finalizedAssistant?.runId !== settledRunId
-    ) {
-      clearWidget(ctx);
-      return;
-    }
-
-    const replies = detectQuickReplies(finalizedAssistant.prose);
-    if (replies.length === 0) {
-      clearWidget(ctx);
-      return;
-    }
-
-    showReplies(ctx, settledRunId, replies);
-  });
-
-  QUICK_REPLY_SHORTCUTS.forEach((shortcut, index) => {
-    pi.registerShortcut(shortcut, {
-      description: `Send quick reply ${index + 1}`,
-      handler: (ctx) => selectReply(index, ctx),
+    pi.on("ui_prompt_start", (_event, ctx) => {
+      uiPromptActive = true;
+      invalidateSettledState(ctx);
     });
-  });
+
+    pi.on("ui_prompt_end", () => {
+      uiPromptActive = false;
+    });
+
+    pi.on("before_agent_start", (event) => {
+      pendingUserText ??= event.prompt;
+    });
+
+    pi.on("agent_start", (_event, ctx) => {
+      invalidateSettledState(ctx);
+      runSequence += 1;
+      currentRunId = runSequence;
+      currentUserText = pendingUserText;
+      pendingUserText = undefined;
+    });
+
+    pi.on("message_end", (event) => {
+      if (event.message.role !== "assistant" || currentRunId === undefined) return;
+
+      finalizedAssistant = {
+        runId: currentRunId,
+        prose: extractVisibleAssistantProse(event.message),
+      };
+    });
+
+    pi.on("agent_settled", (_event, ctx) => {
+      const settledRunId = currentRunId;
+      if (settledRunId !== undefined && latestSettledRunId === settledRunId) return;
+      latestSettledRunId = settledRunId;
+
+      const userText = currentUserText;
+      if (
+        settledRunId === undefined ||
+        userText === undefined ||
+        finalizedAssistant?.runId !== settledRunId ||
+        canShowReplies(ctx, settledRunId) === false
+      ) {
+        clearWidget(ctx);
+        return;
+      }
+
+      beginGeneration(ctx, settledRunId, userText, finalizedAssistant.prose);
+    });
+
+    QUICK_REPLY_SHORTCUTS.forEach((shortcut, index) => {
+      pi.registerShortcut(shortcut, {
+        description: `Send quick reply ${index + 1}`,
+        handler: (ctx) => selectReply(index, ctx),
+      });
+    });
+  };
+}
+
+export default createQuickRepliesExtension();
+
+function replyLayouts(replies: readonly QuickReply[]): ReplyLayout[] {
+  const layouts: ReplyLayout[] = [
+    { replies, shortcutStyle: "full" },
+    { replies, shortcutStyle: "short" },
+    { replies, shortcutStyle: "numeric" },
+  ];
+
+  for (let count = replies.length - 1; count >= 2; count -= 1) {
+    const visibleReplies = replies.slice(0, count);
+    layouts.push({ replies: visibleReplies, shortcutStyle: "short" });
+    layouts.push({ replies: visibleReplies, shortcutStyle: "numeric" });
+  }
+  layouts.push({ replies: replies.slice(0, 1), shortcutStyle: "numeric" });
+  return layouts;
 }
 
 function renderLayout(layout: ReplyLayout, theme: Theme): string {
