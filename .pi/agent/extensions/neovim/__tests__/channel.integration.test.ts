@@ -218,7 +218,104 @@ test("lists source buffers and reads unsaved text without changing disk", async 
   }
 }, 10_000);
 
-test("rejects visible, listed, and read content outside the bound worktree", async () => {
+test("reads ordered diagnostics for unsaved source through preserved Pi context", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-diagnostics-")));
+  const source = join(workspace, "diagnostics.lua");
+  await Bun.write(source, "local disk = true\nreturn disk\n");
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local source = vim.api.nvim_get_current_buf()",
+    'vim.api.nvim_buf_set_lines(source, 0, -1, true, { "local unsaved = unknown", "return unsaved", "-- hint" })',
+    "vim.g.pi_launch_source_context = { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), mode = 'n', buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } }",
+    "local namespace = vim.api.nvim_create_namespace('pi-diagnostic-test')",
+    "vim.diagnostic.set(namespace, source, { { lnum = 2, col = 0, end_lnum = 2, end_col = 4, severity = vim.diagnostic.severity.HINT, message = 'hint', source = 'editor-lint' }, { lnum = 0, col = 16, end_lnum = 0, end_col = 23, severity = vim.diagnostic.severity.WARN, message = 'warning', source = 'editor-lint' }, { lnum = 1, col = 0, end_lnum = 1, end_col = 6, severity = vim.diagnostic.severity.INFO, message = 'information', source = 'neovim-plugin' }, { lnum = 0, col = 6, end_lnum = 0, end_col = 13, severity = vim.diagnostic.severity.ERROR, message = 'unknown variable', source = 'neovim-lsp' } })",
+    "local terminal = vim.api.nvim_create_buf(false, true)",
+    'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
+    "vim.b[terminal].is_pi_terminal = true",
+    "vim.api.nvim_set_current_buf(terminal)",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel) => {
+      expect(await channel.diagnosticSummary({ maxItems: 2 })).toMatchObject({
+        ok: true,
+        value: {
+          buffer: { modified: true, name: source },
+          counts: { error: 1, hint: 1, information: 1, total: 4, warning: 1 },
+          diagnostics: [
+            {
+              end: { column: 14, line: 1 },
+              message: "unknown variable",
+              severity: "error",
+              source: "neovim-lsp",
+              start: { column: 7, line: 1 },
+            },
+            { message: "warning", severity: "warning" },
+          ],
+          truncated: true,
+        },
+      });
+
+      const diagnostics = await channel.diagnostics();
+      expect(diagnostics).toMatchObject({
+        ok: true,
+        value: {
+          buffer: { modified: true, name: source },
+          diagnostics: [
+            { message: "unknown variable", severity: "error" },
+            { message: "warning", severity: "warning" },
+            { message: "information", severity: "information" },
+            { message: "hint", severity: "hint" },
+          ],
+          total: 4,
+        },
+      });
+      expect(JSON.stringify(diagnostics)).not.toContain("pi-terminal-must-not-leak");
+      expect(await channel.diagnostics(999)).toMatchObject({
+        error: { code: "NVIM_INVALID_BUFFER" },
+        ok: false,
+      });
+      expect(await Bun.file(source).text()).toBe("local disk = true\nreturn disk\n");
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
+test("limits complete diagnostics while preserving bounded summaries", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-diagnostic-limit-")));
+  const source = join(workspace, "many-diagnostics.lua");
+  await Bun.write(source, "return true\n");
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local diagnostics = {}",
+    "for index = 1, 501 do diagnostics[index] = { lnum = 0, col = 0, severity = vim.diagnostic.severity.ERROR, message = 'diagnostic ' .. index, source = 'limit-test' } end",
+    "vim.diagnostic.set(vim.api.nvim_create_namespace('pi-diagnostic-limit'), 0, diagnostics)",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel) => {
+      expect(await channel.diagnostics()).toMatchObject({
+        error: { code: "NVIM_LIMIT_EXCEEDED" },
+        ok: false,
+      });
+      expect(await channel.diagnosticSummary({ maxItems: 1 })).toMatchObject({
+        ok: true,
+        value: {
+          counts: { error: 501, total: 501 },
+          diagnostics: [expect.objectContaining({ severity: "error" })],
+          truncated: true,
+        },
+      });
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
+test("rejects visible, listed, read, and diagnostic content outside the bound worktree", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-bound-")));
   const sibling = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-sibling-")));
   const outsideSource = join(sibling, "outside.lua");
@@ -239,6 +336,14 @@ test("rejects visible, listed, and read content outside the bound worktree", asy
         ok: false,
       });
       expect(await channel.readBuffer({ buffer: 1 })).toMatchObject({
+        error: { code: "NVIM_WORKTREE_MISMATCH" },
+        ok: false,
+      });
+      expect(await channel.diagnosticSummary({ buffer: 1 })).toMatchObject({
+        error: { code: "NVIM_WORKTREE_MISMATCH" },
+        ok: false,
+      });
+      expect(await channel.diagnostics(1)).toMatchObject({
         error: { code: "NVIM_WORKTREE_MISMATCH" },
         ok: false,
       });

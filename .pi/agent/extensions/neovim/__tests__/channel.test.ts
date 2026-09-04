@@ -28,6 +28,23 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   activeResponse: unknown = { ...focus, mode: "n", selection: undefined };
   bufferResponse: unknown = { buffers: [focus.buffer], cwd: "/project", pid: 71 };
   closeCalls = 0;
+  diagnosticArguments: unknown[][] = [];
+  diagnosticResponse: unknown = {
+    buffer: focus.buffer,
+    counts: { error: 1, hint: 0, information: 0, total: 1, warning: 0 },
+    cwd: "/project",
+    diagnostics: [
+      {
+        end: { column: 8, line: 3 },
+        message: "unsaved error",
+        severity: "error",
+        source: "neovim-lsp",
+        start: { column: 4, line: 3 },
+      },
+    ],
+    pid: 71,
+    truncated: false,
+  };
   executeCalls: string[] = [];
   identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
   readArguments: unknown[] | undefined;
@@ -57,6 +74,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
       return this.identityResponse;
     }
     if (code === bridgeLua.activeContext) return this.activeResponse;
+    if (code === bridgeLua.diagnostics) {
+      this.diagnosticArguments.push(args ?? []);
+      return this.diagnosticResponse;
+    }
     if (code === bridgeLua.visibleWindows) return this.visibleResponse;
     if (code === bridgeLua.listBuffers) return this.bufferResponse;
     if (code === bridgeLua.readBuffer) {
@@ -135,6 +156,52 @@ describe("PiNeovimChannel", () => {
     expect(connection.executeCalls).toContain(bridgeLua.visibleWindows);
     expect(connection.executeCalls).toContain(bridgeLua.listBuffers);
     expect(connection.executeCalls).toContain(bridgeLua.readBuffer);
+  });
+
+  test("returns bounded Neovim diagnostic summaries and complete details", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.diagnosticSummary()).toMatchObject({
+      ok: true,
+      value: {
+        buffer: focus.buffer,
+        counts: { error: 1, total: 1 },
+        diagnostics: [{ message: "unsaved error", severity: "error" }],
+        editor: { channelId: 9, cwd: "/project", pid: 71 },
+        truncated: false,
+      },
+    });
+    expect(await channel.diagnostics(2)).toMatchObject({
+      ok: true,
+      value: {
+        buffer: focus.buffer,
+        diagnostics: [{ message: "unsaved error", severity: "error" }],
+        editor: { channelId: 9, cwd: "/project", pid: 71 },
+        total: 1,
+      },
+    });
+    expect(connection.diagnosticArguments).toEqual([
+      [0, 20, 500, 32 * 1024],
+      [2, 0, 500, 32 * 1024],
+    ]);
+  });
+
+  test("preserves structured diagnostic failures without disabling the channel", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    connection.diagnosticResponse = { error: "invalidBuffer" };
+    expect(await channel.diagnostics(999)).toMatchObject({
+      error: { code: "NVIM_INVALID_BUFFER" },
+      ok: false,
+    });
+    connection.diagnosticResponse = { error: "diagnosticLimit" };
+    expect(await channel.diagnostics(2)).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    expect((await channel.status()).ok).toBe(true);
   });
 
   test("preserves structured buffer and range failures without disabling the channel", async () => {

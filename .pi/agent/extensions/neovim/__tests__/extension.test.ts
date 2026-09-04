@@ -23,6 +23,31 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     if (code === bridgeLua.installNotifications) {
       return { channelId: 12, cwd: "/project", pid: 80 };
     }
+    if (code === bridgeLua.diagnostics) {
+      return {
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        counts: { error: 1, hint: 0, information: 0, total: 1, warning: 0 },
+        cwd: "/project",
+        diagnostics: [
+          {
+            end: { column: 8, line: 1 },
+            message: "unsaved error",
+            severity: "error",
+            source: "neovim-lsp",
+            start: { column: 1, line: 1 },
+          },
+        ],
+        pid: 80,
+        truncated: false,
+      };
+    }
     if (code === bridgeLua.readBuffer) {
       return {
         buffer: {
@@ -82,10 +107,15 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("visible_windows");
   expect(parameters).toContain("list_buffers");
   expect(parameters).toContain("read_buffer");
+  expect(parameters).toContain("diagnostic_summary");
+  expect(parameters).toContain("diagnostics");
+  expect(parameters).toContain("maxItems");
   expect(parameters).toContain("startLine");
   expect(parameters).toContain("endLine");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
+  expect(tool.description).toContain("live, in-memory state");
+  expect(tool.description).toContain("do not query Pi's separate disk-backed LSP integration");
   const result = await tool.execute(
     "neovim-1",
     { operation: "status" },
@@ -107,6 +137,18 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(readResult.details).toEqual({ ok: true, operation: "read_buffer" });
   expect(readResult.content[0]).toMatchObject({
     text: expect.stringContaining("const unsaved = true;"),
+    type: "text",
+  });
+  const diagnosticResult = await tool.execute(
+    "neovim-3",
+    { operation: "diagnostic_summary" },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(diagnosticResult.details).toEqual({ ok: true, operation: "diagnostic_summary" });
+  expect(diagnosticResult.content[0]).toMatchObject({
+    text: expect.stringContaining("unsaved error"),
     type: "text",
   });
   connection.emit("notification", "pi:focus", [

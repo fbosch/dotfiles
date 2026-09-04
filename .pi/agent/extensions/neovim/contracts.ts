@@ -516,6 +516,13 @@ function isNonNegativeInteger(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) >= 0;
 }
 
+function diagnosticLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_ITEMS} items or ${MAX_DIAGNOSTIC_BYTES} bytes; use diagnostic_summary or reduce diagnostics in the editor`,
+  );
+}
+
 function diagnosticFailure(value: unknown): BridgeResult<never> | undefined {
   if (isRecord(value) === false || typeof value.error !== "string") return undefined;
   if (value.error === "invalidBuffer") {
@@ -524,12 +531,7 @@ function diagnosticFailure(value: unknown): BridgeResult<never> | undefined {
       "Choose a loaded source buffer from visible_windows or list_buffers",
     );
   }
-  if (value.error === "diagnosticLimit") {
-    return failure(
-      "NVIM_LIMIT_EXCEEDED",
-      `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_ITEMS} items or ${MAX_DIAGNOSTIC_BYTES} bytes; use diagnostic_summary or reduce diagnostics in the editor`,
-    );
-  }
+  if (value.error === "diagnosticLimit") return diagnosticLimit();
   if (value.error === "invalidDiagnostics") {
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid diagnostic data");
   }
@@ -617,10 +619,15 @@ function parseDiagnosticSnapshot(
   }
   const counts = parseDiagnosticCounts(snapshot.value.counts);
   if (
+    Array.isArray(snapshot.value.diagnostics) &&
+    snapshot.value.diagnostics.length > MAX_DIAGNOSTIC_ITEMS
+  ) {
+    return diagnosticLimit();
+  }
+  if (
     counts === undefined ||
     Array.isArray(snapshot.value.diagnostics) === false ||
     typeof snapshot.value.truncated !== "boolean" ||
-    snapshot.value.diagnostics.length > MAX_DIAGNOSTIC_ITEMS ||
     snapshot.value.diagnostics.length > counts.total ||
     snapshot.value.truncated !== snapshot.value.diagnostics.length < counts.total
   ) {

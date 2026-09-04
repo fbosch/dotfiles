@@ -6,7 +6,12 @@ import {
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { type NvimConnectionFactory, PiNeovimChannel } from "./channel";
-import type { BridgeResult, NeovimErrorCode } from "./contracts";
+import {
+  type BridgeResult,
+  DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+  MAX_DIAGNOSTIC_SUMMARY_ITEMS,
+  type NeovimErrorCode,
+} from "./contracts";
 
 const NeovimParameters = Type.Union([
   Type.Object({ operation: Type.Literal("status") }, { additionalProperties: false }),
@@ -19,6 +24,27 @@ const NeovimParameters = Type.Union([
       buffer: Type.Integer({ minimum: 1 }),
       startLine: Type.Optional(Type.Integer({ minimum: 1 })),
       endLine: Type.Optional(Type.Integer({ minimum: 1 })),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      operation: Type.Literal("diagnostic_summary"),
+      buffer: Type.Optional(Type.Integer({ minimum: 1 })),
+      maxItems: Type.Optional(
+        Type.Integer({
+          default: DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+          maximum: MAX_DIAGNOSTIC_SUMMARY_ITEMS,
+          minimum: 1,
+        }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      operation: Type.Literal("diagnostics"),
+      buffer: Type.Optional(Type.Integer({ minimum: 1 })),
     },
     { additionalProperties: false },
   ),
@@ -67,13 +93,15 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         name: "neovim",
         label: "Neovim",
         description:
-          "Inspect the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB from Neovim memory, including unsaved text. The socket is fixed by the launch environment and cannot be selected by tool input.",
-        promptSnippet: "Inspect live context and unsaved buffers from Pi's launching Neovim",
+          "Inspect live, in-memory state from the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns bounded text including unsaved edits. Diagnostic operations report Neovim's current vim.diagnostic state for unsaved buffers and do not query Pi's separate disk-backed LSP integration. Diagnostic positions are one-based with end-exclusive ranges. The socket is fixed by the launch environment and cannot be selected by tool input.",
+        promptSnippet:
+          "Inspect live context, unsaved buffers, and editor diagnostics from Pi's launching Neovim",
         promptGuidelines: [
           "Use neovim for live editor state, unsaved text or selections, and source focus that Pi's disk-backed tools cannot observe.",
           "Use one context call for source buffer, cursor, mode, and bounded selection; do not call status first unless connection identity or health is relevant.",
           "Use visible_windows to discover source shown in the current Neovim tab, list_buffers for other listed source buffers, and read_buffer only when in-memory text is needed.",
-          "Treat neovim results as editor state and lsp results as independent language-server evidence.",
+          "Use diagnostic_summary first to triage Neovim's current editor diagnostics; use diagnostics only when the complete bounded diagnostic set is needed.",
+          "Treat neovim diagnostics as live editor state, including unsaved changes and non-LSP producers. Treat lsp diagnostics as independent evidence computed from project files on disk. Do not call both by default.",
         ],
         parameters: NeovimParameters,
         executionMode: "sequential",
@@ -86,6 +114,10 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
             .with({ operation: "visible_windows" }, () => bridge.visibleWindows())
             .with({ operation: "list_buffers" }, () => bridge.listBuffers())
             .with({ operation: "read_buffer" }, (options) => bridge.readBuffer(options))
+            .with({ operation: "diagnostic_summary" }, (options) =>
+              bridge.diagnosticSummary(options),
+            )
+            .with({ operation: "diagnostics" }, ({ buffer }) => bridge.diagnostics(buffer))
             .exhaustive();
           return {
             content: [{ type: "text", text: resultText(result) }],
