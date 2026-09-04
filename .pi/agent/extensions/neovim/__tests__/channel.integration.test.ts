@@ -437,7 +437,8 @@ test("reveals exact source positions while preserving focus unless explicitly re
   const anchor = join(workspace, "anchor.lua");
   const outside = join(outsideWorkspace, "outside.lua");
   const linkedOutside = join(workspace, "linked", "outside.lua");
-  const targetText = "first line\nsecond line\nthird line\n";
+  const linkedMissing = join(workspace, "linked", "missing.lua");
+  const targetText = "first line\nsecond æ line\nthird line\n";
   await Promise.all([
     Bun.write(target, targetText),
     Bun.write(anchor, "return 'anchor'\n"),
@@ -449,6 +450,7 @@ test("reveals exact source positions while preserving focus unless explicitly re
     `local anchor_name = ${JSON.stringify(anchor)}`,
     `local outside_name = ${JSON.stringify(outside)}`,
     `local linked_outside_name = ${JSON.stringify(linkedOutside)}`,
+    `local linked_missing_name = ${JSON.stringify(linkedMissing)}`,
     'vim.cmd("edit " .. vim.fn.fnameescape(target_name))',
     "local target_buffer = vim.api.nvim_get_current_buf()",
     'vim.cmd("edit " .. vim.fn.fnameescape(anchor_name))',
@@ -458,13 +460,17 @@ test("reveals exact source positions while preserving focus unless explicitly re
     "vim.fn.bufload(outside_buffer)",
     "local linked_outside_buffer = vim.fn.bufadd(linked_outside_name)",
     "vim.fn.bufload(linked_outside_buffer)",
+    "local linked_missing_buffer = vim.api.nvim_create_buf(false, false)",
+    "vim.api.nvim_buf_set_name(linked_missing_buffer, linked_missing_name)",
     'vim.cmd("vsplit")',
     "local terminal = vim.api.nvim_create_buf(false, true)",
     'vim.api.nvim_buf_set_name(terminal, "pi-reveal-terminal")',
     "vim.b[terminal].is_pi_terminal = true",
     "vim.api.nvim_set_current_buf(terminal)",
+    "vim.g.pi_reveal_unrequested_events = 0",
+    "vim.api.nvim_create_autocmd({ 'BufEnter', 'BufLeave', 'WinEnter', 'WinLeave' }, { callback = function() vim.g.pi_reveal_unrequested_events = vim.g.pi_reveal_unrequested_events + 1 end })",
     "vim.g.pi_launch_source_context = { buffer = { number = anchor_buffer } }",
-    "vim.g.pi_reveal_test = { target = target_buffer, outside = outside_buffer, linkedOutside = linked_outside_buffer, anchorWindow = anchor_window, terminal = terminal }",
+    "vim.g.pi_reveal_test = { target = target_buffer, outside = outside_buffer, linkedOutside = linked_outside_buffer, linkedMissing = linked_missing_buffer, anchorWindow = anchor_window, terminal = terminal }",
   ].join("; ");
 
   try {
@@ -475,19 +481,21 @@ test("reveals exact source positions while preserving focus unless explicitly re
       const targetBuffer = inventory.value.buffers.find((buffer) => buffer.name === target);
       if (targetBuffer === undefined) throw new Error("hidden reveal target was not listed");
       const initial = (await nvim.executeLua(
-        "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), windows = #vim.api.nvim_tabpage_list_wins(0), outside = vim.g.pi_reveal_test.outside, linkedOutside = vim.g.pi_reveal_test.linkedOutside }",
+        "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), unrequestedEvents = vim.g.pi_reveal_unrequested_events, windows = #vim.api.nvim_tabpage_list_wins(0), outside = vim.g.pi_reveal_test.outside, linkedOutside = vim.g.pi_reveal_test.linkedOutside, linkedMissing = vim.g.pi_reveal_test.linkedMissing }",
         [],
       )) as {
         currentBuffer: number;
         currentWindow: number;
+        linkedMissing: number;
         linkedOutside: number;
         outside: number;
+        unrequestedEvents: number;
         windows: number;
       };
 
       const defaultReveal = await channel.reveal({
         buffer: targetBuffer.number,
-        column: 4,
+        column: 10,
         line: 2,
       });
       expect(defaultReveal).toMatchObject({
@@ -495,43 +503,53 @@ test("reveals exact source positions while preserving focus unless explicitly re
         value: {
           buffer: { name: target, number: targetBuffer.number },
           focused: false,
-          position: { column: 4, line: 2 },
+          focusPreserved: true,
+          position: { column: 10, line: 2 },
+          split: "none",
           splitCreated: false,
         },
       });
       if (defaultReveal.ok === false) return;
       expect(
         await nvim.executeLua(
-          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), revealedBuffer = vim.api.nvim_win_get_buf(window), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), revealedBuffer = vim.api.nvim_win_get_buf(window), cursor = vim.api.nvim_win_get_cursor(window), unrequestedEvents = vim.g.pi_reveal_unrequested_events, windows = #vim.api.nvim_tabpage_list_wins(0) }",
           [defaultReveal.value.window],
         ),
       ).toEqual({
         currentBuffer: initial.currentBuffer,
         currentWindow: initial.currentWindow,
-        cursor: [2, 3],
+        cursor: [2, 9],
         revealedBuffer: targetBuffer.number,
+        unrequestedEvents: initial.unrequestedEvents,
         windows: initial.windows,
       });
 
       const horizontal = await channel.reveal({
         buffer: targetBuffer.number,
-        column: 2,
+        column: 10,
         line: 1,
         split: "horizontal",
       });
       expect(horizontal).toMatchObject({
         ok: true,
-        value: { focused: false, splitCreated: true },
+        value: {
+          focused: false,
+          focusPreserved: true,
+          split: "horizontal",
+          splitCreated: true,
+        },
       });
       if (horizontal.ok === false) return;
       expect(
         await nvim.executeLua(
-          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), split = vim.api.nvim_win_get_config(window).split, unrequestedEvents = vim.g.pi_reveal_unrequested_events, windows = #vim.api.nvim_tabpage_list_wins(0) }",
           [horizontal.value.window],
         ),
       ).toEqual({
         currentWindow: initial.currentWindow,
-        cursor: [1, 1],
+        cursor: [1, 9],
+        split: "below",
+        unrequestedEvents: initial.unrequestedEvents,
         windows: initial.windows + 1,
       });
 
@@ -544,25 +562,53 @@ test("reveals exact source positions while preserving focus unless explicitly re
       });
       expect(vertical).toMatchObject({
         ok: true,
-        value: { focused: true, splitCreated: true },
+        value: { focused: true, split: "vertical", splitCreated: true },
       });
       if (vertical.ok === false) return;
       expect(
         await nvim.executeLua(
-          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), split = vim.api.nvim_win_get_config(window).split, windows = #vim.api.nvim_tabpage_list_wins(0) }",
           [vertical.value.window],
         ),
       ).toEqual({
         currentWindow: vertical.value.window,
         cursor: [3, 2],
+        split: "right",
         windows: initial.windows + 2,
       });
+
+      const beforeFailedSplit = await nvim.executeLua(
+        "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), cursor = vim.api.nvim_win_get_cursor(0), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        [],
+      );
+      await nvim.executeLua(
+        "vim.g.pi_original_win_set_cursor = vim.api.nvim_win_set_cursor; vim.api.nvim_win_set_cursor = function() error('forced split failure') end",
+        [],
+      );
+      expect(
+        await channel.reveal({
+          buffer: targetBuffer.number,
+          column: 1,
+          line: 1,
+          split: "horizontal",
+        }),
+      ).toMatchObject({ error: { code: "NVIM_INVALID_WINDOW" }, ok: false });
+      await nvim.executeLua(
+        "vim.api.nvim_win_set_cursor = vim.g.pi_original_win_set_cursor; vim.g.pi_original_win_set_cursor = nil",
+        [],
+      );
+      expect(
+        await nvim.executeLua(
+          "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), cursor = vim.api.nvim_win_get_cursor(0), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [],
+        ),
+      ).toEqual(beforeFailedSplit);
 
       const beforeRejected = await nvim.executeLua(
         "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), windows = #vim.api.nvim_tabpage_list_wins(0) }",
         [],
       );
-      for (const outsideBuffer of [initial.outside, initial.linkedOutside]) {
+      for (const outsideBuffer of [initial.outside, initial.linkedOutside, initial.linkedMissing]) {
         expect(await channel.reveal({ buffer: outsideBuffer, column: 1, line: 1 })).toMatchObject({
           error: { code: "NVIM_WORKTREE_MISMATCH" },
           ok: false,

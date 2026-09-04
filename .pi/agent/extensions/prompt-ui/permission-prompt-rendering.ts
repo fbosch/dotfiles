@@ -1,21 +1,20 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, truncateToWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 
 const PERMISSION_TITLE = "Permission Required";
 const WARNING_ICON = "\uf071";
 
-/** Nerd Font icons use the common Font Awesome codepoints available in the configured terminal font. */
-const FACT_ICONS = {
-  agent: "\uf007",
-  action: "\uf06e",
-  scope: "\uf07b",
-  rule: "\uf1de",
-  path: "\uf15b",
-  cwd: "\uf3c5",
-} as const;
-
+/** Keep the icon treatment sparse: the title and requested action are the only icons. */
 type PermissionPromptTheme = Pick<Theme, "fg">;
-type FactLabel = "subagent" | "tool" | "surface" | "rule" | "path" | "working directory";
+type FactLabel =
+  | "subagent"
+  | "tool"
+  | "surface"
+  | "rule"
+  | "path"
+  | "working directory"
+  | "command"
+  | "external path";
 
 interface ParsedFact {
   label: FactLabel;
@@ -25,11 +24,14 @@ interface ParsedFact {
 
 interface DisplayFact {
   label: string;
-  icon: string;
+  icon?: string;
+  labelColor: ThemeColor;
   value: string;
+  valueColor?: ThemeColor;
 }
 
-const FACT_PATTERN = /^\s*(subagent|tool|surface|rule|path|working directory)\s+:\s(.*)$/;
+const FACT_PATTERN =
+  /^\s*(subagent|tool|surface|rule|path|working directory|command|external path)\s+:\s(.*)$/;
 const SURFACE_ACTION_SUFFIXES = [
   "_read",
   "_write",
@@ -39,24 +41,28 @@ const SURFACE_ACTION_SUFFIXES = [
   "_network",
 ] as const;
 
-const ACTIONS: Record<string, { label: string; icon: string }> = {
-  bash: { label: "Execute", icon: "\uf120" },
-  edit: { label: "Edit", icon: "\uf044" },
-  find: { label: "Find", icon: "\uf002" },
-  grep: { label: "Search", icon: "\uf002" },
-  ls: { label: "List", icon: "\uf07b" },
-  powershell: { label: "Execute", icon: "\uf120" },
-  read: { label: "Read", icon: "\uf06e" },
-  webfetch: { label: "Network", icon: "\uf0ac" },
-  websearch: { label: "Network", icon: "\uf0ac" },
-  write: { label: "Write", icon: "\uf044" },
+const ACTIONS: Record<string, { label: string; icon: string; color: ThemeColor }> = {
+  bash: { label: "Execute", icon: "\uf120", color: "warning" },
+  edit: { label: "Edit", icon: "\uf044", color: "warning" },
+  find: { label: "Find", icon: "\uf002", color: "success" },
+  grep: { label: "Search", icon: "\uf002", color: "success" },
+  ls: { label: "List", icon: "\uf07b", color: "success" },
+  powershell: { label: "Execute", icon: "\uf120", color: "warning" },
+  read: { label: "Read", icon: "\uf06e", color: "success" },
+  webfetch: { label: "Network", icon: "\uf0ac", color: "accent" },
+  websearch: { label: "Network", icon: "\uf0ac", color: "accent" },
+  write: { label: "Write", icon: "\uf044", color: "warning" },
 };
 
-const FACT_DISPLAY: Record<Exclude<FactLabel, "tool" | "surface">, Omit<DisplayFact, "value">> = {
-  "working directory": { label: "cwd", icon: FACT_ICONS.cwd },
-  path: { label: "path", icon: FACT_ICONS.path },
-  rule: { label: "rule", icon: FACT_ICONS.rule },
-  subagent: { label: "agent", icon: FACT_ICONS.agent },
+type MetadataFactLabel = Exclude<FactLabel, "tool" | "surface">;
+
+const FACT_DISPLAY: Record<MetadataFactLabel, Omit<DisplayFact, "value">> = {
+  "working directory": { label: "cwd", labelColor: "muted" },
+  command: { label: "command", labelColor: "muted" },
+  "external path": { label: "external path", labelColor: "muted" },
+  path: { label: "path", labelColor: "muted" },
+  rule: { label: "rule", labelColor: "muted" },
+  subagent: { label: "agent", labelColor: "muted" },
 };
 
 /**
@@ -84,13 +90,18 @@ export function renderPermissionPromptLines(
 
   const decorated = lines.map((line, index) => {
     if (index === 0) {
-      return `${theme.fg("warning", WARNING_ICON)} ${line}`;
+      return theme.fg("warning", `${WARNING_ICON} ${stripTerminalSequences(line)}`);
     }
 
     const fact = displayFacts[index];
     if (!fact) return line;
 
-    return `${theme.fg("accent", fact.icon)} ${fact.label.padEnd(labelWidth)} : ${fact.value}`;
+    const label = theme.fg(fact.labelColor, fact.label.padEnd(labelWidth));
+    const valueColor = fact.valueColor ?? fact.labelColor;
+    const icon = fact.icon === undefined ? "" : `${theme.fg(valueColor, fact.icon)} `;
+    const value =
+      fact.valueColor === undefined ? fact.value : theme.fg(fact.valueColor, fact.value);
+    return `${label} : ${icon}${value}`;
   });
 
   return fitLinesToWidth(decorated, width);
@@ -123,17 +134,19 @@ function displayFact(fact: ParsedFact): DisplayFact {
   if (fact.label === "surface") {
     return {
       label: "scope",
-      icon: FACT_ICONS.scope,
+      labelColor: "muted",
       value: humanizeSurface(fact.plainValue),
+      valueColor: "accent",
     };
   }
 
   const display = FACT_DISPLAY[fact.label];
-  const value =
-    fact.label === "rule" && fact.plainValue === "*"
-      ? `${fact.rawValue} (wildcard)`
-      : fact.rawValue;
-  return { ...display, value };
+  const wildcard = fact.label === "rule" && fact.plainValue === "*";
+  return {
+    ...display,
+    value: wildcard ? `${fact.rawValue} (wildcard)` : fact.rawValue,
+    ...(wildcard ? { valueColor: "warning" as const } : {}),
+  };
 }
 
 function displayAction(value: string): DisplayFact {
@@ -142,10 +155,17 @@ function displayAction(value: string): DisplayFact {
   const name = (nameEnd === -1 ? trimmed : trimmed.slice(0, nameEnd)).toLowerCase();
   const action = ACTIONS[name] ?? {
     label: humanize(name || trimmed),
-    icon: FACT_ICONS.action,
+    icon: "",
+    color: "accent" as const,
   };
   const suffix = nameEnd === -1 ? "" : trimmed.slice(nameEnd);
-  return { label: "action", icon: action.icon, value: `${action.label}${suffix}` };
+  return {
+    label: "action",
+    icon: action.icon,
+    labelColor: "muted",
+    value: `${action.label}${suffix}`,
+    valueColor: action.color,
+  };
 }
 
 function humanizeSurface(value: string): string {

@@ -95,8 +95,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         },
         cwd: "/project",
         focused: false,
+        focusPreserved: true,
         pid: 80,
         position: { column: 4, line: 3 },
+        split: "none",
         splitCreated: false,
         window: 7,
       };

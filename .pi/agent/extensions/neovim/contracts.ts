@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 export const MAX_CONTEXT_LINES = 500;
@@ -210,7 +210,9 @@ export interface RevealSnapshot {
   readonly buffer: BufferIdentity;
   readonly editor: EditorIdentity;
   readonly focused: boolean;
+  readonly focusPreserved: boolean;
   readonly position: Position;
+  readonly split: RevealSplit;
   readonly splitCreated: boolean;
   readonly window: number;
 }
@@ -369,17 +371,22 @@ function parseSelection(value: unknown): BridgeResult<SelectionContext | undefin
   };
 }
 
-function canonicalPath(path: string): string {
-  const absolutePath = resolve(path);
-  let existingPath = absolutePath;
+function canonicalPath(path: string): string | undefined {
+  let existingPath = resolve(path);
   const missingSegments: string[] = [];
 
   while (true) {
     try {
       return resolve(realpathSync(existingPath), ...missingSegments);
     } catch {
+      try {
+        lstatSync(existingPath);
+        return undefined;
+      } catch (error) {
+        if (isRecord(error) === false || error.code !== "ENOENT") return undefined;
+      }
       const parent = dirname(existingPath);
-      if (parent === existingPath) return absolutePath;
+      if (parent === existingPath) return undefined;
       missingSegments.unshift(basename(existingPath));
       existingPath = parent;
     }
@@ -387,13 +394,16 @@ function canonicalPath(path: string): string {
 }
 
 export function worktreesMatch(left: string, right: string): boolean {
-  return canonicalPath(left) === canonicalPath(right);
+  const canonicalLeft = canonicalPath(left);
+  return canonicalLeft !== undefined && canonicalLeft === canonicalPath(right);
 }
 
 export function pathIsInsideWorktree(path: string, cwd: string): boolean {
   if (path === "") return true;
   const absoluteCwd = canonicalPath(cwd);
+  if (absoluteCwd === undefined) return false;
   const absolutePath = canonicalPath(isAbsolute(path) ? path : resolve(absoluteCwd, path));
+  if (absolutePath === undefined) return false;
   const pathFromCwd = relative(absoluteCwd, absolutePath);
   return (
     pathFromCwd === "" ||
@@ -1026,6 +1036,9 @@ function revealFailure(value: unknown): BridgeResult<never> | undefined {
       "No worktree source window is available for source reveal",
     );
   }
+  if (value.error === "invalidWindow") {
+    return failure("NVIM_INVALID_WINDOW", "Neovim could not create or update the reveal window");
+  }
   return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown reveal error");
 }
 
@@ -1052,7 +1065,12 @@ export function parseReveal(
     snapshot.value.position.line !== resolved.value.line ||
     snapshot.value.position.column !== resolved.value.column ||
     typeof snapshot.value.focused !== "boolean" ||
-    snapshot.value.focused !== resolved.value.focus ||
+    typeof snapshot.value.focusPreserved !== "boolean" ||
+    (resolved.value.focus
+      ? snapshot.value.focused !== true
+      : snapshot.value.focusPreserved !== true) ||
+    isRevealSplit(snapshot.value.split) === false ||
+    snapshot.value.split !== resolved.value.split ||
     typeof snapshot.value.splitCreated !== "boolean" ||
     snapshot.value.splitCreated !== (resolved.value.split !== "none")
   ) {
@@ -1064,7 +1082,9 @@ export function parseReveal(
       buffer: buffer.value,
       editor,
       focused: snapshot.value.focused,
+      focusPreserved: snapshot.value.focusPreserved,
       position: snapshot.value.position,
+      split: snapshot.value.split,
       splitCreated: snapshot.value.splitCreated,
       window: snapshot.value.window as number,
     },

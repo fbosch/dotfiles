@@ -529,11 +529,28 @@ if type(focus) ~= "boolean" or (split ~= "none" and split ~= "horizontal" and sp
 end
 
 local function canonical(path)
-  local normalized = vim.fs.normalize(path)
-  return vim.uv.fs_realpath(normalized) or normalized
+  if type(path) ~= "string" or path == "" then return nil end
+  local candidate = vim.fs.normalize(path)
+  local missing = {}
+  while true do
+    local resolved = vim.uv.fs_realpath(candidate)
+    if resolved ~= nil then
+      for _, segment in ipairs(missing) do
+        resolved = vim.fs.joinpath(resolved, segment)
+      end
+      return vim.fs.normalize(resolved)
+    end
+    local stat = vim.uv.fs_lstat(candidate)
+    if stat ~= nil and stat.type == "link" then return nil end
+    local parent = vim.fs.dirname(candidate)
+    if parent == nil or parent == candidate then return nil end
+    table.insert(missing, 1, vim.fs.basename(candidate))
+    candidate = parent
+  end
 end
 
 local function path_is_inside(path, root)
+  if path == nil or root == nil then return false end
   if path == root then return true end
   if root == "/" then return path:sub(1, 1) == "/" end
   return path:sub(1, #root + 1) == root .. "/"
@@ -541,7 +558,12 @@ end
 
 local editor_cwd = vim.fn.getcwd()
 local root = canonical(expected_cwd)
-if canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
+if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
+
+local target_name = vim.api.nvim_buf_get_name(buffer)
+local target_path = canonical(target_name)
+if target_path == nil then return { error = "invalidBuffer" } end
+if path_is_inside(target_path, root) == false then return { error = "worktreeMismatch" } end
 
 local function is_source_buffer(candidate)
   if
@@ -561,18 +583,12 @@ local function is_source_buffer(candidate)
     and path_is_inside(canonical(name), root)
 end
 
-if is_source_buffer(buffer) == false then
-  local name = vim.api.nvim_buf_get_name(buffer)
-  if name ~= "" and path_is_inside(canonical(name), root) == false then
-    return { error = "worktreeMismatch" }
-  end
-  return { error = "invalidBuffer" }
-end
+if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
 
 local total_lines = vim.api.nvim_buf_line_count(buffer)
 if line > total_lines then return { error = "invalidPosition", totalLines = total_lines } end
 local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
-local max_column = #text + 1
+local max_column = math.max(#text, 1)
 if column > max_column then return { error = "invalidColumn", maxColumn = max_column } end
 
 local function is_source_window(window)
@@ -608,34 +624,126 @@ if window == nil then
 end
 if window == nil then return { error = "missingSourceWindow" } end
 
-local split_created = false
-if split == "none" then
-  vim.api.nvim_win_set_buf(window, buffer)
-else
-  local direction = split == "horizontal" and "below" or "right"
-  window = vim.api.nvim_open_win(buffer, focus, { split = direction, win = window })
-  split_created = true
+local original_window = vim.api.nvim_get_current_win()
+local previous_buffer = vim.api.nvim_win_get_buf(window)
+local previous_cursor = vim.api.nvim_win_get_cursor(window)
+-- Keep user autocommands from overriding an explicit focus/layout contract mid-operation.
+local previous_eventignore = vim.o.eventignore
+vim.o.eventignore = "all"
+local view_ok, previous_view = pcall(vim.api.nvim_win_call, window, function() return vim.fn.winsaveview() end)
+if view_ok == false then
+  vim.o.eventignore = previous_eventignore
+  return { error = "invalidWindow" }
 end
-vim.api.nvim_win_set_cursor(window, { line, column - 1 })
-vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end)
-if focus then vim.api.nvim_set_current_win(window) end
+local created_window = nil
+local window_changed = false
 
+local function set_buffer_without_autocmd(target_window, target_buffer)
+  vim.api.nvim_win_call(target_window, function()
+    vim.api.nvim_cmd({ cmd = "buffer", args = { tostring(target_buffer) }, mods = { noautocmd = true } }, {})
+  end)
+end
+
+local function restore_focus()
+  if
+    vim.api.nvim_win_is_valid(original_window)
+    and vim.api.nvim_get_current_win() ~= original_window
+  then
+    pcall(vim.api.nvim_set_current_win, original_window)
+  end
+end
+
+local function rollback()
+  if created_window ~= nil and vim.api.nvim_win_is_valid(created_window) then
+    pcall(vim.api.nvim_win_close, created_window, true)
+  elseif window_changed and vim.api.nvim_win_is_valid(window) then
+    pcall(set_buffer_without_autocmd, window, previous_buffer)
+    pcall(vim.api.nvim_win_set_cursor, window, previous_cursor)
+    pcall(vim.api.nvim_win_call, window, function() vim.fn.winrestview(previous_view) end)
+  end
+  restore_focus()
+  vim.o.eventignore = previous_eventignore
+end
+
+local operation_ok = pcall(function()
+  if split == "none" then
+    window_changed = true
+    set_buffer_without_autocmd(window, buffer)
+  else
+    local direction = split == "horizontal" and "below" or "right"
+    window = vim.api.nvim_open_win(buffer, false, {
+      split = direction,
+      win = window,
+      noautocmd = true,
+    })
+    if window == 0 or vim.api.nvim_win_is_valid(window) == false then error("split failed") end
+    created_window = window
+  end
+  vim.api.nvim_win_set_cursor(window, { line, column - 1 })
+  vim.api.nvim_win_call(window, function()
+    vim.api.nvim_cmd({ cmd = "normal", args = { "zz" }, bang = true, mods = { noautocmd = true } }, {})
+  end)
+  if focus then vim.api.nvim_set_current_win(window) end
+end)
+if operation_ok == false then
+  rollback()
+  return { error = "invalidWindow" }
+end
+
+if focus == false and vim.api.nvim_get_current_win() ~= original_window then restore_focus() end
+local observed_ok, observed = pcall(function()
+  return {
+    currentWindow = vim.api.nvim_get_current_win(),
+    cursor = vim.api.nvim_win_get_cursor(window),
+    buffer = vim.api.nvim_win_get_buf(window),
+    direction = created_window ~= nil and vim.api.nvim_win_get_config(window).split or "",
+  }
+end)
+if observed_ok == false then
+  rollback()
+  return { error = "invalidWindow" }
+end
+
+local actual_split = "none"
+if observed.direction == "below" then
+  actual_split = "horizontal"
+elseif observed.direction == "right" then
+  actual_split = "vertical"
+elseif created_window ~= nil then
+  rollback()
+  return { error = "invalidWindow" }
+end
+if
+  observed.buffer ~= buffer
+  or observed.cursor[1] ~= line
+  or observed.cursor[2] + 1 ~= column
+  or actual_split ~= split
+  or (focus and observed.currentWindow ~= window)
+  or (focus == false and observed.currentWindow ~= original_window)
+then
+  rollback()
+  return { error = "invalidWindow" }
+end
+
+vim.o.eventignore = previous_eventignore
 local options = vim.bo[buffer]
 return {
   pid = vim.fn.getpid(),
   cwd = editor_cwd,
   buffer = {
-    number = buffer,
+    number = observed.buffer,
     name = vim.api.nvim_buf_get_name(buffer),
-    loaded = true,
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
     filetype = options.filetype,
     buftype = options.buftype,
     modified = options.modified,
   },
   window = window,
-  position = { line = line, column = column },
-  focused = focus,
-  splitCreated = split_created,
+  position = { line = observed.cursor[1], column = observed.cursor[2] + 1 },
+  focused = observed.currentWindow == window,
+  focusPreserved = observed.currentWindow == original_window,
+  split = actual_split,
+  splitCreated = created_window ~= nil,
 }
 `;
 
@@ -1024,7 +1132,16 @@ export class PiNeovimChannel {
         ]),
         "Timed out revealing a source location in the bound Neovim instance",
       );
-      return parseReveal(snapshot, this.#cwd, this.#editor, resolved.value);
+      const result = parseReveal(snapshot, this.#cwd, this.#editor, resolved.value);
+      if (result.ok && resolved.value.focus) {
+        this.#focusContext = {
+          buffer: result.value.buffer,
+          cursor: result.value.position,
+          cwd: result.value.editor.cwd,
+          pid: result.value.editor.pid,
+        };
+      }
+      return result;
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }

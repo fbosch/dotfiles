@@ -430,6 +430,30 @@ explicit.
   byte limits, special buffers, and sibling-worktree paths. The focused suite
   passes 51 tests; TypeScript and Biome checks pass.
 
+### Source reveal implementation record
+
+- The `reveal` operation accepts only a loaded source buffer identity plus an
+  exact one-based line and byte column. It accepts `none`, `horizontal`, or
+  `vertical` split behavior and preserves focus with no split by default. It
+  has no path-loading, arbitrary command, input, or Lua surface.
+- Fixed bridge Lua resolves the target and worktree through existing ancestors,
+  rejects escaping or unresolved symlinks before changing editor state, and
+  validates that the requested cursor position can be represented exactly.
+  Hidden targets reuse the most recent source window, then another contained
+  source window; they never replace the Pi terminal by treating it as source.
+- Reveal suppresses autocommands during its synchronous window operation,
+  validates the observed buffer, cursor, focus, and split orientation, and
+  rolls back a changed window or partially created split on failure. Explicit
+  focus updates the channel's preserved source context without triggering a
+  model turn.
+- Contract, channel, tool-schema, and headless Neovim tests cover defaults,
+  requested focus, horizontal and vertical orientation, exact UTF-8 byte
+  columns, final-column placement, hidden loaded buffers, invalid ranges,
+  ordinary and symlinked outside-worktree buffers, unresolved target paths,
+  autocommand isolation, failed-split rollback, and unchanged source bytes. At
+  task completion, the focused suite passes 55 tests; TypeScript and scoped
+  Biome checks pass.
+
 ### Tracer bullet
 
 1. Populate a Neovim quickfix list.

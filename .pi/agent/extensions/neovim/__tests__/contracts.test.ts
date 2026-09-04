@@ -633,8 +633,10 @@ describe("Neovim editor contracts", () => {
           buffer,
           cwd: editor.cwd,
           focused: false,
+          focusPreserved: true,
           pid: editor.pid,
           position: { column: 5, line: 8 },
+          split: "none",
           splitCreated: false,
           window: 12,
         },
@@ -648,7 +650,9 @@ describe("Neovim editor contracts", () => {
         buffer,
         editor,
         focused: false,
+        focusPreserved: true,
         position: { column: 5, line: 8 },
+        split: "none",
         splitCreated: false,
         window: 12,
       },
@@ -692,8 +696,10 @@ describe("Neovim editor contracts", () => {
       buffer,
       cwd: editor.cwd,
       focused: true,
+      focusPreserved: false,
       pid: editor.pid,
       position: { column: 5, line: 8 },
+      split: "vertical",
       splitCreated: true,
       window: 12,
     };
@@ -717,6 +723,12 @@ describe("Neovim editor contracts", () => {
         ok: false,
       },
     );
+    expect(
+      parseReveal({ ...response, split: "horizontal" }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
   });
 
   test("rejects invalid problem-list owners, bounds, paths, and output sizes", () => {
@@ -793,10 +805,16 @@ describe("Neovim editor contracts", () => {
     const worktree = join(root, "worktree");
     const outside = join(root, "outside");
     await Promise.all([mkdir(worktree), mkdir(outside)]);
-    await symlink(outside, join(worktree, "linked"));
+    await Promise.all([
+      symlink(outside, join(worktree, "linked")),
+      symlink(join(outside, "missing"), join(worktree, "dangling")),
+    ]);
 
     try {
       expect(pathIsInsideWorktree(join(worktree, "linked", "nested", "new.ts"), worktree)).toBe(
+        false,
+      );
+      expect(pathIsInsideWorktree(join(worktree, "dangling", "nested", "new.ts"), worktree)).toBe(
         false,
       );
     } finally {

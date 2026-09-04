@@ -90,8 +90,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     buffer: focus.buffer,
     cwd: "/project",
     focused: false,
+    focusPreserved: true,
     pid: 71,
     position: { column: 4, line: 3 },
+    split: "none",
     splitCreated: false,
     window: 4,
   };
@@ -306,7 +308,9 @@ describe("PiNeovimChannel", () => {
       value: {
         buffer: focus.buffer,
         focused: false,
+        focusPreserved: true,
         position: { column: 4, line: 3 },
+        split: "none",
         splitCreated: false,
         window: 4,
       },
@@ -317,8 +321,10 @@ describe("PiNeovimChannel", () => {
       buffer: focus.buffer,
       cwd: "/project",
       focused: true,
+      focusPreserved: false,
       pid: 71,
       position: { column: 4, line: 3 },
+      split: "horizontal",
       splitCreated: true,
       window: 6,
     };
@@ -332,6 +338,10 @@ describe("PiNeovimChannel", () => {
       }),
     ).toMatchObject({ ok: true, value: { focused: true, splitCreated: true, window: 6 } });
     expect(connection.revealArguments).toEqual([2, 3, 4, true, "horizontal", "/project"]);
+    expect(await channel.focusContext()).toMatchObject({
+      ok: true,
+      value: { buffer: focus.buffer, cursor: { column: 4, line: 3 } },
+    });
 
     expect(await channel.reveal({ buffer: 0, column: 1, line: 1 })).toMatchObject({
       error: { code: "NVIM_INVALID_BUFFER" },
