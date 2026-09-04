@@ -6,6 +6,11 @@
       "jpb",
       "ct"
     ],
+    "rvn-mac": [
+      "ct",
+      "fbb",
+      "jpb"
+    ],
     "kmd-mac": [
       "ct"
     ]
@@ -25,8 +30,7 @@
     ],
     "infinite-fusion-nuzlocke": [
       "fbb",
-      "jpb",
-      "ct"
+      "jpb"
     ]
   }
 }
