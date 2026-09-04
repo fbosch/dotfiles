@@ -230,6 +230,14 @@ test("reads ordered diagnostics for unsaved source through preserved Pi context"
     "vim.g.pi_launch_source_context = { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), mode = 'n', buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } }",
     "local namespace = vim.api.nvim_create_namespace('pi-diagnostic-test')",
     "vim.diagnostic.set(namespace, source, { { lnum = 2, col = 0, end_lnum = 2, end_col = 4, severity = vim.diagnostic.severity.HINT, message = 'hint', source = 'editor-lint' }, { lnum = 0, col = 16, end_lnum = 0, end_col = 23, severity = vim.diagnostic.severity.WARN, message = 'warning', source = 'editor-lint' }, { lnum = 1, col = 0, end_lnum = 1, end_col = 6, severity = vim.diagnostic.severity.INFO, message = 'information', source = 'neovim-plugin' }, { lnum = 0, col = 6, end_lnum = 0, end_col = 13, severity = vim.diagnostic.severity.ERROR, message = 'unknown variable', source = 'neovim-lsp' } })",
+    "local readonly = vim.api.nvim_create_buf(true, false)",
+    `vim.api.nvim_buf_set_name(readonly, ${JSON.stringify(join(workspace, "readonly.lua"))})`,
+    "vim.bo[readonly].modifiable = false",
+    "local special = vim.api.nvim_create_buf(true, true)",
+    `vim.api.nvim_buf_set_name(special, ${JSON.stringify(join(workspace, "special"))})`,
+    "local excluded = vim.api.nvim_create_buf(true, false)",
+    `vim.api.nvim_buf_set_name(excluded, ${JSON.stringify(join(workspace, "excluded.lua"))})`,
+    'vim.bo[excluded].filetype = "opencode"',
     "local terminal = vim.api.nvim_create_buf(false, true)",
     'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
     "vim.b[terminal].is_pi_terminal = true",
@@ -272,11 +280,41 @@ test("reads ordered diagnostics for unsaved source through preserved Pi context"
         },
       });
       expect(JSON.stringify(diagnostics)).not.toContain("pi-terminal-must-not-leak");
-      expect(await channel.diagnostics(999)).toMatchObject({
+      for (const invalidBuffer of [2, 3, 4, 999]) {
+        expect(await channel.diagnostics(invalidBuffer)).toMatchObject({
+          error: { code: "NVIM_INVALID_BUFFER" },
+          ok: false,
+        });
+      }
+      expect(await Bun.file(source).text()).toBe("local disk = true\nreturn disk\n");
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
+test("rejects stale preserved source identity without reading another buffer", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-stale-diagnostic-")));
+  const source = join(workspace, "source.lua");
+  await Bun.write(source, "return true\n");
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local source = vim.api.nvim_get_current_buf()",
+    `vim.g.pi_launch_source_context = { buffer = { number = source, name = ${JSON.stringify(join(workspace, "different.lua"))} } }`,
+    "local terminal = vim.api.nvim_create_buf(false, true)",
+    'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
+    "vim.b[terminal].is_pi_terminal = true",
+    "vim.api.nvim_set_current_buf(terminal)",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel) => {
+      expect(await channel.diagnosticSummary()).toMatchObject({
         error: { code: "NVIM_INVALID_BUFFER" },
         ok: false,
       });
-      expect(await Bun.file(source).text()).toBe("local disk = true\nreturn disk\n");
+      expect(await channel.status()).toMatchObject({ ok: true });
     });
   } finally {
     await rm(workspace, { force: true, recursive: true });

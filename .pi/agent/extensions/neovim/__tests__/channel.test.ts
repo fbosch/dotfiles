@@ -182,8 +182,8 @@ describe("PiNeovimChannel", () => {
       },
     });
     expect(connection.diagnosticArguments).toEqual([
-      [0, 20, 500, 32 * 1024],
-      [2, 0, 500, 32 * 1024],
+      [0, 20, 500, 5_000, 32 * 1024],
+      [2, 0, 500, 5_000, 32 * 1024],
     ]);
   });
 
@@ -198,6 +198,11 @@ describe("PiNeovimChannel", () => {
     });
     connection.diagnosticResponse = { error: "diagnosticLimit" };
     expect(await channel.diagnostics(2)).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    connection.diagnosticResponse = { error: "diagnosticSourceLimit" };
+    expect(await channel.diagnosticSummary()).toMatchObject({
       error: { code: "NVIM_LIMIT_EXCEEDED" },
       ok: false,
     });

@@ -8,6 +8,7 @@ import {
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
   MAX_DIAGNOSTIC_ITEMS,
+  MAX_DIAGNOSTIC_SOURCE_ITEMS,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
   parseActiveContext,
@@ -372,6 +373,34 @@ describe("Neovim editor contracts", () => {
     });
   });
 
+  test("uses deterministic UTF-8 ordering for equal diagnostic locations", () => {
+    const diagnostic = {
+      end: { column: 2, line: 1 },
+      message: "same",
+      severity: "error" as const,
+      start: { column: 1, line: 1 },
+    };
+    const result = parseDiagnostics(
+      {
+        buffer,
+        counts: { error: 2, hint: 0, information: 0, total: 2, warning: 0 },
+        cwd: editor.cwd,
+        diagnostics: [
+          { ...diagnostic, source: "ä" },
+          { ...diagnostic, source: "z" },
+        ],
+        pid: editor.pid,
+        truncated: false,
+      },
+      "/project",
+      editor,
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      value: { diagnostics: [{ source: "z" }, { source: "ä" }] },
+    });
+  });
+
   test("parses complete diagnostics and rejects incomplete or malformed reports", () => {
     const diagnostic = {
       end: { column: 4, line: 1 },
@@ -420,6 +449,9 @@ describe("Neovim editor contracts", () => {
       error: { code: "NVIM_LIMIT_EXCEEDED" },
       ok: false,
     });
+    expect(
+      parseDiagnosticSummary({ error: "diagnosticSourceLimit" }, "/project", editor),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
     expect(
       parseDiagnostics(
         {
@@ -506,6 +538,23 @@ describe("Neovim editor contracts", () => {
       truncated: true,
     };
     expect(parseDiagnosticSummary(response, "/project", editor, 1)).toMatchObject({ ok: true });
+    expect(
+      parseDiagnosticSummary(
+        {
+          ...response,
+          counts: {
+            error: MAX_DIAGNOSTIC_SOURCE_ITEMS + 1,
+            hint: 0,
+            information: 0,
+            total: MAX_DIAGNOSTIC_SOURCE_ITEMS + 1,
+            warning: 0,
+          },
+        },
+        "/project",
+        editor,
+        1,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
     expect(
       parseDiagnosticSummary(
         { ...response, diagnostics: [diagnostic, diagnostic] },

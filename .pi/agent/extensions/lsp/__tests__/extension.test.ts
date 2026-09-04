@@ -89,6 +89,7 @@ test("registers the tool immediately and creates one manager on first use", asyn
   if (tool === undefined) throw new Error("lsp tool was not registered");
   expect(tool.description).toContain("project files read from disk");
   expect(tool.description).toContain("does not inspect Neovim or its unsaved in-memory buffers");
+  expect(tool.description).toContain("do not query both diagnostic sources by default");
   expect(managerCreations).toBe(0);
   await handlers.get("session_start")?.({} as never, context);
   expect(managerCreations).toBe(0);

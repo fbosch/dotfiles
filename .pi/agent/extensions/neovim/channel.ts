@@ -17,6 +17,7 @@ import {
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
   MAX_DIAGNOSTIC_ITEMS,
+  MAX_DIAGNOSTIC_SOURCE_ITEMS,
   MAX_INVENTORY_BYTES,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
@@ -245,13 +246,14 @@ return {
 `;
 
 const DIAGNOSTICS_LUA = `
-local requested_buffer, summary_items, max_items, max_bytes = ...
+local requested_buffer, summary_items, max_items, max_source_items, max_bytes = ...
 
 local function is_integer(value)
   return type(value) == "number" and value >= 0 and value == math.floor(value)
 end
 
 local function is_source_buffer(buffer)
+  if is_integer(buffer) == false or buffer < 1 then return false end
   if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then
     return false
   end
@@ -265,22 +267,36 @@ local function is_source_buffer(buffer)
     and vim.b[buffer].is_pi_terminal ~= true
 end
 
-local buffer = requested_buffer
-if buffer == 0 then
-  buffer = vim.api.nvim_get_current_buf()
-  if is_source_buffer(buffer) == false then
-    local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
-    if
-      ok
-      and type(source) == "table"
-      and type(source.buffer) == "table"
-      and type(source.buffer.number) == "number"
-    then
-      buffer = source.buffer.number
-    end
+local function preserved_source_buffer()
+  local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
+  if
+    ok == false
+    or type(source) ~= "table"
+    or type(source.buffer) ~= "table"
+    or is_integer(source.buffer.number) == false
+    or type(source.buffer.name) ~= "string"
+  then
+    return nil
   end
+  local candidate = source.buffer.number
+  if
+    is_source_buffer(candidate)
+    and vim.api.nvim_buf_get_name(candidate) == source.buffer.name
+  then
+    return candidate
+  end
+  return nil
 end
-if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
+
+local function text_before(left, right)
+  local shared_length = math.min(#left, #right)
+  for index = 1, shared_length do
+    local left_byte = string.byte(left, index)
+    local right_byte = string.byte(right, index)
+    if left_byte ~= right_byte then return left_byte < right_byte end
+  end
+  return #left < #right
+end
 
 local severity_names = {
   [vim.diagnostic.severity.ERROR] = "error",
@@ -289,13 +305,57 @@ local severity_names = {
   [vim.diagnostic.severity.HINT] = "hint",
 }
 local severity_order = { error = 1, warning = 2, information = 3, hint = 4 }
-local diagnostics = {}
-local counts = { error = 0, warning = 0, information = 0, hint = 0, total = 0 }
+
+local function diagnostic_before(left, right)
+  if left.severity ~= right.severity then
+    return severity_order[left.severity] < severity_order[right.severity]
+  end
+  if left.start.line ~= right.start.line then return left.start.line < right.start.line end
+  if left.start.column ~= right.start.column then return left.start.column < right.start.column end
+  if left["end"].line ~= right["end"].line then return left["end"].line < right["end"].line end
+  if left["end"].column ~= right["end"].column then
+    return left["end"].column < right["end"].column
+  end
+  if left.source ~= right.source then return text_before(left.source, right.source) end
+  return text_before(left.message, right.message)
+end
+
+local function retain_diagnostic(diagnostics, diagnostic)
+  if summary_items == 0 then
+    table.insert(diagnostics, diagnostic)
+    return
+  end
+
+  local insert_at = #diagnostics + 1
+  for index, existing in ipairs(diagnostics) do
+    if diagnostic_before(diagnostic, existing) then
+      insert_at = index
+      break
+    end
+  end
+  if insert_at <= summary_items then
+    table.insert(diagnostics, insert_at, diagnostic)
+    if #diagnostics > summary_items then table.remove(diagnostics) end
+  elseif #diagnostics < summary_items then
+    table.insert(diagnostics, diagnostic)
+  end
+end
+
+local buffer = requested_buffer
+if buffer == 0 then
+  buffer = vim.api.nvim_get_current_buf()
+  if is_source_buffer(buffer) == false then buffer = preserved_source_buffer() or -1 end
+end
+if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
+
 local raw_diagnostics = vim.diagnostic.get(buffer)
+if #raw_diagnostics > max_source_items then return { error = "diagnosticSourceLimit" } end
 if summary_items == 0 and #raw_diagnostics > max_items then
   return { error = "diagnosticLimit" }
 end
 
+local diagnostics = {}
+local counts = { error = 0, warning = 0, information = 0, hint = 0, total = 0 }
 for _, diagnostic in ipairs(raw_diagnostics) do
   local severity = severity_names[diagnostic.severity or vim.diagnostic.severity.ERROR]
   local end_line = diagnostic.end_lnum or diagnostic.lnum
@@ -315,7 +375,7 @@ for _, diagnostic in ipairs(raw_diagnostics) do
     return { error = "invalidDiagnostics" }
   end
   counts[severity] = counts[severity] + 1
-  table.insert(diagnostics, {
+  retain_diagnostic(diagnostics, {
     start = { line = diagnostic.lnum + 1, column = diagnostic.col + 1 },
     ["end"] = { line = end_line + 1, column = end_column + 1 },
     severity = severity,
@@ -323,48 +383,32 @@ for _, diagnostic in ipairs(raw_diagnostics) do
     source = source,
   })
 end
-counts.total = #diagnostics
+counts.total = #raw_diagnostics
+if summary_items == 0 then table.sort(diagnostics, diagnostic_before) end
 
-table.sort(diagnostics, function(left, right)
-  if left.severity ~= right.severity then
-    return severity_order[left.severity] < severity_order[right.severity]
-  end
-  if left.start.line ~= right.start.line then return left.start.line < right.start.line end
-  if left.start.column ~= right.start.column then return left.start.column < right.start.column end
-  if left["end"].line ~= right["end"].line then return left["end"].line < right["end"].line end
-  if left["end"].column ~= right["end"].column then
-    return left["end"].column < right["end"].column
-  end
-  if left.source ~= right.source then return left.source < right.source end
-  return left.message < right.message
-end)
-
-local item_count = summary_items == 0 and #diagnostics or math.min(summary_items, #diagnostics)
-local items = {}
-local bytes = 0
-for index = 1, item_count do
-  local diagnostic = diagnostics[index]
+local options = vim.bo[buffer]
+local name = vim.api.nvim_buf_get_name(buffer)
+local bytes = #name + #options.filetype + #options.buftype + 512
+for _, diagnostic in ipairs(diagnostics) do
   -- Reserve transport overhead for fixed range and severity fields.
   bytes = bytes + #diagnostic.message + #diagnostic.source + 128
   if bytes > max_bytes then return { error = "diagnosticLimit" } end
-  table.insert(items, diagnostic)
 end
 
-local options = vim.bo[buffer]
 return {
   pid = vim.fn.getpid(),
   cwd = vim.fn.getcwd(),
   buffer = {
     number = buffer,
-    name = vim.api.nvim_buf_get_name(buffer),
+    name = name,
     loaded = true,
     filetype = options.filetype,
     buftype = options.buftype,
     modified = options.modified,
   },
   counts = counts,
-  diagnostics = items,
-  truncated = item_count < #diagnostics,
+  diagnostics = diagnostics,
+  truncated = #diagnostics < counts.total,
 }
 `;
 
@@ -641,6 +685,7 @@ export class PiNeovimChannel {
           options.buffer ?? 0,
           maxItems,
           MAX_DIAGNOSTIC_ITEMS,
+          MAX_DIAGNOSTIC_SOURCE_ITEMS,
           MAX_DIAGNOSTIC_BYTES,
         ]),
         "Timed out reading diagnostic summary from the bound Neovim instance",
@@ -661,6 +706,7 @@ export class PiNeovimChannel {
           buffer ?? 0,
           0,
           MAX_DIAGNOSTIC_ITEMS,
+          MAX_DIAGNOSTIC_SOURCE_ITEMS,
           MAX_DIAGNOSTIC_BYTES,
         ]),
         "Timed out reading diagnostics from the bound Neovim instance",

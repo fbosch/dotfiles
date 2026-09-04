@@ -8,6 +8,7 @@ export const MAX_INVENTORY_BYTES = 32 * 1024;
 export const DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS = 20;
 export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50;
 export const MAX_DIAGNOSTIC_ITEMS = 500;
+export const MAX_DIAGNOSTIC_SOURCE_ITEMS = 5_000;
 export const MAX_DIAGNOSTIC_BYTES = 32 * 1024;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
@@ -519,7 +520,14 @@ function isNonNegativeInteger(value: unknown): value is number {
 function diagnosticLimit(): BridgeResult<never> {
   return failure(
     "NVIM_LIMIT_EXCEEDED",
-    `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_ITEMS} items or ${MAX_DIAGNOSTIC_BYTES} bytes; use diagnostic_summary or reduce diagnostics in the editor`,
+    `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_ITEMS} detailed items or ${MAX_DIAGNOSTIC_BYTES} output bytes; request fewer summary items or reduce diagnostics in the editor`,
+  );
+}
+
+function diagnosticSourceLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Neovim reports more than ${MAX_DIAGNOSTIC_SOURCE_ITEMS} diagnostics for this buffer; reduce diagnostics in the editor`,
   );
 }
 
@@ -532,6 +540,7 @@ function diagnosticFailure(value: unknown): BridgeResult<never> | undefined {
     );
   }
   if (value.error === "diagnosticLimit") return diagnosticLimit();
+  if (value.error === "diagnosticSourceLimit") return diagnosticSourceLimit();
   if (value.error === "invalidDiagnostics") {
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid diagnostic data");
   }
@@ -584,6 +593,10 @@ function parseDiagnostic(value: unknown): NeovimDiagnostic | undefined {
   };
 }
 
+function compareUtf8(left: string, right: string): number {
+  return Buffer.compare(Buffer.from(left, "utf8"), Buffer.from(right, "utf8"));
+}
+
 function compareDiagnostics(left: NeovimDiagnostic, right: NeovimDiagnostic): number {
   return (
     DIAGNOSTIC_SEVERITY_ORDER[left.severity] - DIAGNOSTIC_SEVERITY_ORDER[right.severity] ||
@@ -591,8 +604,8 @@ function compareDiagnostics(left: NeovimDiagnostic, right: NeovimDiagnostic): nu
     left.start.column - right.start.column ||
     left.end.line - right.end.line ||
     left.end.column - right.end.column ||
-    left.source.localeCompare(right.source) ||
-    left.message.localeCompare(right.message)
+    compareUtf8(left.source, right.source) ||
+    compareUtf8(left.message, right.message)
   );
 }
 
@@ -618,6 +631,9 @@ function parseDiagnosticSnapshot(
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned diagnostics for an unloaded buffer");
   }
   const counts = parseDiagnosticCounts(snapshot.value.counts);
+  if (counts !== undefined && counts.total > MAX_DIAGNOSTIC_SOURCE_ITEMS) {
+    return diagnosticSourceLimit();
+  }
   if (
     Array.isArray(snapshot.value.diagnostics) &&
     snapshot.value.diagnostics.length > MAX_DIAGNOSTIC_ITEMS
@@ -635,7 +651,7 @@ function parseDiagnosticSnapshot(
   }
 
   const diagnostics: NeovimDiagnostic[] = [];
-  let bytes = 0;
+  let bytes = sourceBufferMetadataBytes(buffer.value) + 512;
   for (const candidate of snapshot.value.diagnostics) {
     const diagnostic = parseDiagnostic(candidate);
     if (diagnostic === undefined) {

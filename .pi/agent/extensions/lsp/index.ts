@@ -178,7 +178,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
         name: "lsp",
         label: "Language Server",
         description:
-          "Query configured project language servers using project files read from disk. This tool does not inspect Neovim or its unsaved in-memory buffers. Diagnostic results separate LSP-native evidence, missing evidence, and the extension's aggregate verdict. Paths are project-relative and positions are one-based.",
+          "Query configured project language servers using project files read from disk. This tool does not inspect Neovim or its unsaved in-memory buffers. For live editor diagnostics, use Neovim instead; do not query both diagnostic sources by default. Diagnostic results separate LSP-native evidence, missing evidence, and the extension's aggregate verdict. Paths are project-relative and positions are one-based.",
         promptSnippet: "Query persistent language servers against project files on disk",
         promptGuidelines: [
           "Use lsp for hover, definitions, or references when semantic navigation is more precise than text search.",
