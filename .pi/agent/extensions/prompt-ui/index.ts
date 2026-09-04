@@ -106,6 +106,11 @@ export default function promptUi(pi: ExtensionAPI): void {
     activeTui?.requestRender();
   });
 
+  // Custom compaction can finish after agent_settled; redraw the live usage counter then.
+  pi.on("session_compact", () => {
+    activeTui?.requestRender();
+  });
+
   pi.on("session_shutdown", () => {
     state.setInterruptPending(false);
     stopWorkingPulse();

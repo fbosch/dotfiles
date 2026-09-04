@@ -5,6 +5,10 @@ export const MAX_CONTEXT_LINES = 500;
 export const MAX_CONTEXT_BYTES = 32 * 1024;
 export const MAX_INVENTORY_ITEMS = 500;
 export const MAX_INVENTORY_BYTES = 32 * 1024;
+export const DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS = 20;
+export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50;
+export const MAX_DIAGNOSTIC_ITEMS = 500;
+export const MAX_DIAGNOSTIC_BYTES = 32 * 1024;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
 
@@ -98,6 +102,44 @@ export interface BufferRead {
   readonly lines: readonly string[];
   readonly startLine: number;
   readonly totalLines: number;
+}
+
+export type DiagnosticSeverity = "error" | "warning" | "information" | "hint";
+
+export interface NeovimDiagnostic {
+  readonly end: Position;
+  readonly message: string;
+  readonly severity: DiagnosticSeverity;
+  readonly source: string;
+  readonly start: Position;
+}
+
+export interface DiagnosticCounts {
+  readonly error: number;
+  readonly hint: number;
+  readonly information: number;
+  readonly total: number;
+  readonly warning: number;
+}
+
+export interface DiagnosticSummaryOptions {
+  readonly buffer?: number;
+  readonly maxItems?: number;
+}
+
+export interface DiagnosticSummary {
+  readonly buffer: BufferIdentity;
+  readonly counts: DiagnosticCounts;
+  readonly diagnostics: readonly NeovimDiagnostic[];
+  readonly editor: EditorIdentity;
+  readonly truncated: boolean;
+}
+
+export interface DiagnosticsSnapshot {
+  readonly buffer: BufferIdentity;
+  readonly diagnostics: readonly NeovimDiagnostic[];
+  readonly editor: EditorIdentity;
+  readonly total: number;
 }
 
 export type BridgeResult<T> =
@@ -459,6 +501,213 @@ export function parseBufferRead(
       lines,
       startLine,
       totalLines: snapshot.value.totalLines as number,
+    },
+  };
+}
+
+const DIAGNOSTIC_SEVERITY_ORDER: Record<DiagnosticSeverity, number> = {
+  error: 1,
+  warning: 2,
+  information: 3,
+  hint: 4,
+};
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function diagnosticFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidBuffer") {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (value.error === "diagnosticLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_ITEMS} items or ${MAX_DIAGNOSTIC_BYTES} bytes; use diagnostic_summary or reduce diagnostics in the editor`,
+    );
+  }
+  if (value.error === "invalidDiagnostics") {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid diagnostic data");
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown diagnostic error");
+}
+
+function parseDiagnosticCounts(value: unknown): DiagnosticCounts | undefined {
+  if (
+    isRecord(value) === false ||
+    isNonNegativeInteger(value.error) === false ||
+    isNonNegativeInteger(value.warning) === false ||
+    isNonNegativeInteger(value.information) === false ||
+    isNonNegativeInteger(value.hint) === false ||
+    isNonNegativeInteger(value.total) === false ||
+    value.total !== value.error + value.warning + value.information + value.hint
+  ) {
+    return undefined;
+  }
+  return {
+    error: value.error,
+    hint: value.hint,
+    information: value.information,
+    total: value.total,
+    warning: value.warning,
+  };
+}
+
+function parseDiagnostic(value: unknown): NeovimDiagnostic | undefined {
+  if (
+    isRecord(value) === false ||
+    isPosition(value.start) === false ||
+    isPosition(value.end) === false ||
+    (value.severity !== "error" &&
+      value.severity !== "warning" &&
+      value.severity !== "information" &&
+      value.severity !== "hint") ||
+    isBoundedString(value.message) === false ||
+    isBoundedString(value.source) === false ||
+    value.end.line < value.start.line ||
+    (value.end.line === value.start.line && value.end.column < value.start.column)
+  ) {
+    return undefined;
+  }
+  return {
+    end: value.end,
+    message: value.message,
+    severity: value.severity,
+    source: value.source,
+    start: value.start,
+  };
+}
+
+function compareDiagnostics(left: NeovimDiagnostic, right: NeovimDiagnostic): number {
+  return (
+    DIAGNOSTIC_SEVERITY_ORDER[left.severity] - DIAGNOSTIC_SEVERITY_ORDER[right.severity] ||
+    left.start.line - right.start.line ||
+    left.start.column - right.start.column ||
+    left.end.line - right.end.line ||
+    left.end.column - right.end.column ||
+    left.source.localeCompare(right.source) ||
+    left.message.localeCompare(right.message)
+  );
+}
+
+interface ParsedDiagnosticSnapshot {
+  readonly buffer: BufferIdentity;
+  readonly counts: DiagnosticCounts;
+  readonly diagnostics: readonly NeovimDiagnostic[];
+  readonly truncated: boolean;
+}
+
+function parseDiagnosticSnapshot(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<ParsedDiagnosticSnapshot> {
+  const responseFailure = diagnosticFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (buffer.value.loaded === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned diagnostics for an unloaded buffer");
+  }
+  const counts = parseDiagnosticCounts(snapshot.value.counts);
+  if (
+    counts === undefined ||
+    Array.isArray(snapshot.value.diagnostics) === false ||
+    typeof snapshot.value.truncated !== "boolean" ||
+    snapshot.value.diagnostics.length > MAX_DIAGNOSTIC_ITEMS ||
+    snapshot.value.diagnostics.length > counts.total ||
+    snapshot.value.truncated !== snapshot.value.diagnostics.length < counts.total
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid diagnostic data");
+  }
+
+  const diagnostics: NeovimDiagnostic[] = [];
+  let bytes = 0;
+  for (const candidate of snapshot.value.diagnostics) {
+    const diagnostic = parseDiagnostic(candidate);
+    if (diagnostic === undefined) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid diagnostic data");
+    }
+    bytes +=
+      Buffer.byteLength(diagnostic.message, "utf8") +
+      Buffer.byteLength(diagnostic.source, "utf8") +
+      128;
+    if (bytes > MAX_DIAGNOSTIC_BYTES) {
+      return failure(
+        "NVIM_LIMIT_EXCEEDED",
+        `Neovim diagnostics exceed ${MAX_DIAGNOSTIC_BYTES} bytes; use diagnostic_summary with fewer items`,
+      );
+    }
+    diagnostics.push(diagnostic);
+  }
+  diagnostics.sort(compareDiagnostics);
+  return {
+    ok: true,
+    value: {
+      buffer: buffer.value,
+      counts,
+      diagnostics,
+      truncated: snapshot.value.truncated,
+    },
+  };
+}
+
+export function parseDiagnosticSummary(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  maxItems = DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+): BridgeResult<DiagnosticSummary> {
+  if (
+    Number.isInteger(maxItems) === false ||
+    maxItems < 1 ||
+    maxItems > MAX_DIAGNOSTIC_SUMMARY_ITEMS
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Invalid diagnostic summary item limit");
+  }
+  const snapshot = parseDiagnosticSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  if (snapshot.value.diagnostics.length > maxItems) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim exceeded the diagnostic summary item limit");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: snapshot.value.buffer,
+      counts: snapshot.value.counts,
+      diagnostics: snapshot.value.diagnostics,
+      editor,
+      truncated: snapshot.value.truncated,
+    },
+  };
+}
+
+export function parseDiagnostics(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<DiagnosticsSnapshot> {
+  const snapshot = parseDiagnosticSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  if (
+    snapshot.value.truncated ||
+    snapshot.value.diagnostics.length !== snapshot.value.counts.total
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned incomplete diagnostic data");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: snapshot.value.buffer,
+      diagnostics: snapshot.value.diagnostics,
+      editor,
+      total: snapshot.value.counts.total,
     },
   };
 }

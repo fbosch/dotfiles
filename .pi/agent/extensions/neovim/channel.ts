@@ -6,11 +6,17 @@ import {
   type BufferInventory,
   type BufferRead,
   type BufferReadOptions,
+  DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+  type DiagnosticSummary,
+  type DiagnosticSummaryOptions,
+  type DiagnosticsSnapshot,
   type EditorIdentity,
   FOCUS_NOTIFICATION,
   type FocusContext,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
+  MAX_DIAGNOSTIC_BYTES,
+  MAX_DIAGNOSTIC_ITEMS,
   MAX_INVENTORY_BYTES,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
@@ -20,6 +26,8 @@ import {
   parseActiveContext,
   parseBufferInventory,
   parseBufferRead,
+  parseDiagnostics,
+  parseDiagnosticSummary,
   parseFocusNotification,
   parseVisibleWindows,
   type SelectionSnapshot,
@@ -233,6 +241,130 @@ return {
   endLine = end_line,
   totalLines = total_lines,
   lines = lines,
+}
+`;
+
+const DIAGNOSTICS_LUA = `
+local requested_buffer, summary_items, max_items, max_bytes = ...
+
+local function is_integer(value)
+  return type(value) == "number" and value >= 0 and value == math.floor(value)
+end
+
+local function is_source_buffer(buffer)
+  if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then
+    return false
+  end
+  local options = vim.bo[buffer]
+  return
+    vim.api.nvim_buf_get_name(buffer) ~= ""
+    and options.buftype == ""
+    and options.modifiable
+    and options.filetype ~= "opencode"
+    and options.filetype ~= "opencode_terminal"
+    and vim.b[buffer].is_pi_terminal ~= true
+end
+
+local buffer = requested_buffer
+if buffer == 0 then
+  buffer = vim.api.nvim_get_current_buf()
+  if is_source_buffer(buffer) == false then
+    local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
+    if
+      ok
+      and type(source) == "table"
+      and type(source.buffer) == "table"
+      and type(source.buffer.number) == "number"
+    then
+      buffer = source.buffer.number
+    end
+  end
+end
+if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
+
+local severity_names = {
+  [vim.diagnostic.severity.ERROR] = "error",
+  [vim.diagnostic.severity.WARN] = "warning",
+  [vim.diagnostic.severity.INFO] = "information",
+  [vim.diagnostic.severity.HINT] = "hint",
+}
+local severity_order = { error = 1, warning = 2, information = 3, hint = 4 }
+local diagnostics = {}
+local counts = { error = 0, warning = 0, information = 0, hint = 0, total = 0 }
+local raw_diagnostics = vim.diagnostic.get(buffer)
+if summary_items == 0 and #raw_diagnostics > max_items then
+  return { error = "diagnosticLimit" }
+end
+
+for _, diagnostic in ipairs(raw_diagnostics) do
+  local severity = severity_names[diagnostic.severity or vim.diagnostic.severity.ERROR]
+  local end_line = diagnostic.end_lnum or diagnostic.lnum
+  local end_column = diagnostic.end_col or diagnostic.col
+  local source = diagnostic.source or ""
+  if
+    severity == nil
+    or is_integer(diagnostic.lnum) == false
+    or is_integer(diagnostic.col) == false
+    or is_integer(end_line) == false
+    or is_integer(end_column) == false
+    or end_line < diagnostic.lnum
+    or (end_line == diagnostic.lnum and end_column < diagnostic.col)
+    or type(diagnostic.message) ~= "string"
+    or type(source) ~= "string"
+  then
+    return { error = "invalidDiagnostics" }
+  end
+  counts[severity] = counts[severity] + 1
+  table.insert(diagnostics, {
+    start = { line = diagnostic.lnum + 1, column = diagnostic.col + 1 },
+    ["end"] = { line = end_line + 1, column = end_column + 1 },
+    severity = severity,
+    message = diagnostic.message,
+    source = source,
+  })
+end
+counts.total = #diagnostics
+
+table.sort(diagnostics, function(left, right)
+  if left.severity ~= right.severity then
+    return severity_order[left.severity] < severity_order[right.severity]
+  end
+  if left.start.line ~= right.start.line then return left.start.line < right.start.line end
+  if left.start.column ~= right.start.column then return left.start.column < right.start.column end
+  if left["end"].line ~= right["end"].line then return left["end"].line < right["end"].line end
+  if left["end"].column ~= right["end"].column then
+    return left["end"].column < right["end"].column
+  end
+  if left.source ~= right.source then return left.source < right.source end
+  return left.message < right.message
+end)
+
+local item_count = summary_items == 0 and #diagnostics or math.min(summary_items, #diagnostics)
+local items = {}
+local bytes = 0
+for index = 1, item_count do
+  local diagnostic = diagnostics[index]
+  -- Reserve transport overhead for fixed range and severity fields.
+  bytes = bytes + #diagnostic.message + #diagnostic.source + 128
+  if bytes > max_bytes then return { error = "diagnosticLimit" } end
+  table.insert(items, diagnostic)
+end
+
+local options = vim.bo[buffer]
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = true,
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  counts = counts,
+  diagnostics = items,
+  truncated = item_count < #diagnostics,
 }
 `;
 
@@ -496,6 +628,49 @@ export class PiNeovimChannel {
     }
   }
 
+  async diagnosticSummary(
+    options: DiagnosticSummaryOptions = {},
+  ): Promise<BridgeResult<DiagnosticSummary>> {
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    const maxItems = options.maxItems ?? DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS;
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(DIAGNOSTICS_LUA, [
+          options.buffer ?? 0,
+          maxItems,
+          MAX_DIAGNOSTIC_ITEMS,
+          MAX_DIAGNOSTIC_BYTES,
+        ]),
+        "Timed out reading diagnostic summary from the bound Neovim instance",
+      );
+      return parseDiagnosticSummary(snapshot, this.#cwd, this.#editor, maxItems);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
+  async diagnostics(buffer?: number): Promise<BridgeResult<DiagnosticsSnapshot>> {
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(DIAGNOSTICS_LUA, [
+          buffer ?? 0,
+          0,
+          MAX_DIAGNOSTIC_ITEMS,
+          MAX_DIAGNOSTIC_BYTES,
+        ]),
+        "Timed out reading diagnostics from the bound Neovim instance",
+      );
+      return parseDiagnostics(snapshot, this.#cwd, this.#editor);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
   async focusContext(): Promise<BridgeResult<FocusContext>> {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
@@ -676,6 +851,7 @@ function parseEditorIdentity(
 
 export const bridgeLua = {
   activeContext: ACTIVE_CONTEXT_LUA,
+  diagnostics: DIAGNOSTICS_LUA,
   installNotifications: INSTALL_NOTIFICATIONS_LUA,
   listBuffers: LIST_BUFFERS_LUA,
   readBuffer: READ_BUFFER_LUA,
