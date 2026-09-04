@@ -190,6 +190,27 @@ nvim_session.cwd = repo_root
 
 notifications = {}
 set_metadata(exact_id, false)
+local manual_metadata = session.get_metadata(nvim_session)
+local manual_terminal = pi.start()
+assert(manual_terminal == terminal, "PiStart did not resume the MiniSessions-associated Pi session")
+assert(#opened == 5, "PiStart opened the wrong number of terminals")
+assert(
+	opened[5].command
+		== "PI_NVIM_SOCKET="
+			.. vim.fn.shellescape(vim.v.servername)
+			.. " pi --session-dir "
+			.. vim.fn.shellescape(session_dir)
+			.. " --session "
+			.. vim.fn.shellescape(exact_id),
+	"PiStart did not use the exact saved session and directory"
+)
+assert(opened[5].options.cwd == repo_root, "PiStart did not use the saved worktree")
+assert_metadata_unchanged(manual_metadata, "manual Pi resume changed Neovim metadata")
+assert(vim.deep_equal(vim.fn.readfile(exact_path, "b"), exact_file_before), "manual Pi resume changed the session file")
+terminal_callbacks.TermClose()
+
+notifications = {}
+set_metadata(exact_id, false)
 local closed_metadata = session.get_metadata(nvim_session)
 local opened_before = #opened
 assert(pi.restore() == false, "closed Pi terminal state requested restoration")
@@ -213,6 +234,14 @@ assert(pi.restore() == false, "missing Pi session requested restoration")
 assert(#opened == opened_before, "missing Pi session fell back to another session")
 assert(has_notification("exact saved session is unavailable"), "missing Pi session was not reported")
 assert_metadata_unchanged(missing_metadata, "missing-session rejection changed metadata")
+
+notifications = {}
+set_metadata("missing-session-3.3", false)
+local manual_missing_metadata = session.get_metadata(nvim_session)
+assert(pi.start() == nil, "PiStart silently replaced a missing associated session")
+assert(#opened == opened_before, "PiStart opened a fresh session after an exact-resume failure")
+assert(has_notification("exact saved session is unavailable"), "PiStart did not report its missing session")
+assert_metadata_unchanged(manual_missing_metadata, "manual missing-session rejection changed metadata")
 
 notifications = {}
 local malformed_id = "malformed-session-3.3"

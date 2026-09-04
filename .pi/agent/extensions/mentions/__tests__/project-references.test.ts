@@ -307,11 +307,11 @@ describe("project references", () => {
     );
     expect(result?.systemPrompt).toContain("<name>reference-material</name>");
     expect(result?.systemPrompt).toContain(join(cwd, ".docs", "reference-material"));
-    const rendered = new UserMessageComponent("Inspect @reference-material and @screenshot.png")
+    const rendered = new UserMessageComponent("Inspect @reference-material and screenshot.png")
       .render(80)
       .join("\n");
     expect(rendered).toContain(`${theme.getFgAnsi("warning")}@reference-material`);
-    expect(rendered).toContain(`${theme.getFgAnsi("accent")}@screenshot.png`);
+    expect(rendered).toContain(`${theme.getFgAnsi("accent")}screenshot.png`);
     sessionShutdown?.();
   });
 });

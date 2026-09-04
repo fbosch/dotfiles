@@ -4,7 +4,8 @@ import { isAbsolute, join, resolve } from "node:path";
 import { formatAnsiTextRanges } from "../../../lib/ansi-text-ranges";
 import type { ProjectReference } from "./types";
 
-const REFERENCE_MENTION_PATTERN = /(^|\s)(@(?:"[^"]+"|[^\s]+))(?=\s|$)/g;
+const REFERENCE_OR_IMAGE_PATH_PATTERN =
+  /(^|\s)(@(?:"[^"]+"|[^\s]+)|(?:"[^"]+\.(?:gif|jpe?g|png|webp)"|[^\s@]+\.(?:gif|jpe?g|png|webp)))(?=\s|$)/giu;
 const IMAGE_PATH_PATTERN = /\.(?:gif|jpe?g|png|webp)$/iu;
 
 interface ReferenceMentionMatch {
@@ -14,7 +15,7 @@ interface ReferenceMentionMatch {
 }
 
 function referenceValue(token: string): string {
-  const value = token.slice(1);
+  const value = token.startsWith("@") ? token.slice(1) : token;
   return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
 }
 
@@ -46,14 +47,17 @@ function matchReferenceMentions(
   const referenceNames = new Set(references.map((reference) => reference.name.toLowerCase()));
   const matches: ReferenceMentionMatch[] = [];
 
-  for (const match of text.matchAll(REFERENCE_MENTION_PATTERN)) {
+  for (const match of text.matchAll(REFERENCE_OR_IMAGE_PATH_PATTERN)) {
     const token = match[2];
     if (token === undefined) continue;
 
     const value = referenceValue(token);
+    const imagePath = isImagePath(value, cwd);
     if (
-      referenceNames.has(value.toLowerCase()) === false &&
-      referencePathExists(value, cwd) === false
+      imagePath === false &&
+      (token.startsWith("@") === false ||
+        (referenceNames.has(value.toLowerCase()) === false &&
+          referencePathExists(value, cwd) === false))
     ) {
       continue;
     }
@@ -62,7 +66,7 @@ function matchReferenceMentions(
     matches.push({
       start,
       end: start + token.length,
-      isImagePath: isImagePath(value, cwd),
+      isImagePath: imagePath,
     });
   }
 

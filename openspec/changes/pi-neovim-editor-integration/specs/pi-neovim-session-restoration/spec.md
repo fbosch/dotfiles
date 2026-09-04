@@ -32,6 +32,11 @@ The system SHALL resume only the persisted Pi session whose project identity mat
 - **WHEN** the persisted Pi session identity does not match the restored worktree
 - **THEN** the system refuses to resume it and reports the mismatch
 
+#### Scenario: User reopens a previously closed Pi terminal
+
+- **WHEN** the user invokes `:PiStart` and the current Neovim session retains an available Pi session for the same worktree
+- **THEN** Neovim resumes that exact Pi session even though automatic restoration left the previously closed terminal closed
+
 ### Requirement: Neovim-first Herdr restoration
 
 The system SHALL preserve the restoration order in which Herdr restores the labeled Neovim pane and Neovim subsequently restores the persisted Pi session.

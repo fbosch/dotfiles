@@ -232,7 +232,7 @@ Keep the existing Herdr restoration tests passing.
   `opencode_terminal_open`, and other existing Neovim session metadata.
 - `devenv tasks run test:nvim-pi-launcher` round-trips both products' fields
   through the JSON metadata file and covers unbound saves, invalid bindings,
-  open, close, terminal reuse, and a Pi-assigned replacement ID after reopening.
+  open, close, terminal reuse, and exact manual resume after reopening.
 - An isolated Pi 0.84.4 RPC tracer launched a fresh session against a temporary
   session directory and headless Neovim socket. Pi emitted no stderr warning,
   and Neovim received the exact session ID returned by Pi's `get_state`.
@@ -250,17 +250,19 @@ Keep the existing Herdr restoration tests passing.
   reads only a bounded header, and requires the filename suffix, header ID, and
   absolute canonical header `cwd` to match the restored worktree. It never
   opens a Pi process to validate a session and never selects the latest session.
-- A successful restore launches one terminal in the restored worktree with
+- A successful resume launches one terminal in the saved worktree with
   `PI_NVIM_SOCKET`, the matched `--session-dir`, and
-  `--session <full-session-id>`. Missing, malformed, ambiguous, and
-  wrong-worktree sessions produce warnings without changing Pi, Neovim, or
-  OpenCode metadata. A saved closed-terminal state remains closed without an
-  error notification.
-- `.config/nvim/tests/pi_session_restore.lua` covers exact `SessionLoadPost`
-  resume, idempotent setup, default and configured session directories,
-  closed-terminal state, missing and unrelated sessions, invalid IDs and
-  headers, relative and sibling-worktree headers, active-worktree mismatch,
-  terminal launch failure, unchanged metadata, and unchanged Pi JSONL bytes.
+  `--session <full-session-id>`. Automatic `SessionLoadPost` resume still
+  requires `pi_terminal_open`; explicit `:PiStart` resumes the exact retained
+  ID even when the terminal was previously closed. Missing, malformed,
+  ambiguous, and wrong-worktree sessions produce warnings without silently
+  substituting a fresh session or changing Pi, Neovim, or OpenCode metadata.
+- `.config/nvim/tests/pi_session_restore.lua` covers exact `SessionLoadPost` and
+  manual `:PiStart` resume, idempotent setup, default and configured session
+  directories, closed automatic state, missing manual and automatic sessions,
+  invalid IDs and headers, relative and sibling-worktree headers,
+  active-worktree mismatch, terminal launch failure, unchanged metadata, and
+  unchanged Pi JSONL bytes.
 - The Pi launcher and restore fixtures are part of `test:all`. The lazy-startup
   fixture now uses `$DEVENV_STATE` on Linux because this Neovim config's
   `wildignore` excludes copied fixtures under `/tmp`.

@@ -152,6 +152,48 @@ local function notify_restore_failure(reason)
 	vim.notify("Pi session was not restored: " .. messages[reason] .. ".", vim.log.levels.WARN)
 end
 
+local function resume_saved_session(nvim_session)
+	local session_id = session.get_metadata(nvim_session).pi_session_id
+	if not session.is_valid_pi_session_id(session_id) then
+		notify_restore_failure("invalid_id")
+		return nil
+	end
+	if vim.fn.executable("pi") ~= 1 then
+		vim.notify("Pi session was not restored: pi executable not found.", vim.log.levels.WARN)
+		return nil
+	end
+
+	if session.get_current(vim.fn.getcwd()) ~= nvim_session then
+		notify_restore_failure("wrong_worktree")
+		return nil
+	end
+	local existing = current_terminal()
+	if existing ~= nil then
+		if terminal_owner ~= nvim_session then
+			vim.notify("Pi session was not restored: another Pi terminal is already open.", vim.log.levels.WARN)
+		end
+		return nil
+	end
+
+	local socket = vim.v.servername
+	local found, reason = pi_session.find_exact(session_id, nvim_session.cwd)
+	if found == nil then
+		notify_restore_failure(reason)
+		return nil
+	end
+	if session.get_current(vim.fn.getcwd()) ~= nvim_session or vim.v.servername ~= socket then
+		notify_restore_failure("wrong_worktree")
+		return nil
+	end
+
+	local ok, terminal = pcall(open_terminal, "--session", session_id, found.directory, found.cwd, socket, nvim_session)
+	if not ok then
+		notify_restore_failure("open_failed")
+		return nil
+	end
+	return terminal
+end
+
 function M.restore()
 	local nvim_session = session.get_current()
 	if nvim_session == nil then
@@ -162,45 +204,7 @@ function M.restore()
 	if metadata.pi_terminal_open ~= true then
 		return false
 	end
-	local session_id = metadata.pi_session_id
-	if not session.is_valid_pi_session_id(session_id) then
-		notify_restore_failure("invalid_id")
-		return false
-	end
-	if vim.fn.executable("pi") ~= 1 then
-		vim.notify("Pi session was not restored: pi executable not found.", vim.log.levels.WARN)
-		return false
-	end
-
-	if session.get_current(vim.fn.getcwd()) ~= nvim_session then
-		notify_restore_failure("wrong_worktree")
-		return false
-	end
-	local existing = current_terminal()
-	if existing ~= nil then
-		if terminal_owner ~= nvim_session then
-			vim.notify("Pi session was not restored: another Pi terminal is already open.", vim.log.levels.WARN)
-		end
-		return false
-	end
-
-	local socket = vim.v.servername
-	local found, reason = pi_session.find_exact(session_id, nvim_session.cwd)
-	if found == nil then
-		notify_restore_failure(reason)
-		return false
-	end
-	if session.get_current(vim.fn.getcwd()) ~= nvim_session or vim.v.servername ~= socket then
-		notify_restore_failure("wrong_worktree")
-		return false
-	end
-
-	local ok = pcall(open_terminal, "--session", session_id, found.directory, found.cwd, socket, nvim_session)
-	if not ok then
-		notify_restore_failure("open_failed")
-		return false
-	end
-	return true
+	return resume_saved_session(nvim_session) ~= nil
 end
 
 function M.bind_session(session_id)
@@ -245,6 +249,9 @@ function M.start()
 	end
 
 	local owner = session.get_current(vim.fn.getcwd())
+	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
+		return resume_saved_session(owner)
+	end
 	local cwd = owner ~= nil and owner.cwd or vim.fn.getcwd()
 	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner)
 end

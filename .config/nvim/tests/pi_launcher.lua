@@ -11,7 +11,17 @@ session.set_metadata({
 	opencode_terminal_open = true,
 }, nvim_session)
 package.loaded["utils.session"] = session
-package.loaded["utils.pi_session"] = dofile(repo_root .. "/.config/nvim/lua/utils/pi_session.lua")
+local find_requests = {}
+local saved_session_dir = metadata_root .. "/pi-sessions"
+package.loaded["utils.pi_session"] = {
+	find_exact = function(session_id, cwd)
+		table.insert(find_requests, { session_id = session_id, cwd = cwd })
+		if session_id == "pi-session-one" then
+			return { directory = saved_session_dir, cwd = cwd }, nil
+		end
+		return nil, "missing"
+	end,
+}
 
 local captured_command
 local captured_options
@@ -114,14 +124,21 @@ captured_command = nil
 pi.start()
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
 assert(
-	captured_command == "PI_NVIM_SOCKET=" .. vim.fn.shellescape(vim.v.servername) .. " pi",
-	"reopened Pi launcher supplied a synthetic session ID"
+	captured_command
+		== "PI_NVIM_SOCKET="
+			.. vim.fn.shellescape(vim.v.servername)
+			.. " pi --session-dir "
+			.. vim.fn.shellescape(saved_session_dir)
+			.. " --session "
+			.. vim.fn.shellescape(first_session_id),
+	"Pi launcher did not resume the MiniSessions-associated Pi session"
 )
-local second_session_id = "pi-session-two"
-assert(pi.bind_session(second_session_id) == true, "replacement Pi session ID was not bound")
+assert(#find_requests == 1, "Pi launcher did not perform one exact saved-session lookup")
+assert(find_requests[1].session_id == first_session_id, "Pi launcher looked up the wrong saved session")
+assert(find_requests[1].cwd == repo_root, "Pi launcher looked up the saved session in the wrong worktree")
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 saved_metadata = session.get_metadata(nvim_session)
-assert(saved_metadata.pi_session_id == second_session_id, "replacement Pi session ID was not saved")
-assert(saved_metadata.pi_terminal_open == true, "replacement Pi terminal state was not saved")
+assert(saved_metadata.pi_session_id == first_session_id, "resumed Pi session ID changed during save")
+assert(saved_metadata.pi_terminal_open == true, "resumed Pi terminal state was not saved")
 
 vim.fn.delete(metadata_root, "rf")
