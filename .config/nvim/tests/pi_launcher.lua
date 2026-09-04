@@ -50,15 +50,9 @@ local pi = dofile(repo_root .. "/.config/nvim/lua/utils/pi.lua")
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
-local first_session_id = captured_command:match(" pi %-%-session%-id '([0-9a-f]+)'$")
-assert(type(first_session_id) == "string" and #first_session_id == 32, "Pi launcher did not assign an exact session ID")
 assert(
-	captured_command
-		== "PI_NVIM_SOCKET="
-			.. vim.fn.shellescape(vim.v.servername)
-			.. " pi --session-id "
-			.. vim.fn.shellescape(first_session_id),
-	"Pi launcher did not bind the socket and exact session ID"
+	captured_command == "PI_NVIM_SOCKET=" .. vim.fn.shellescape(vim.v.servername) .. " pi",
+	"fresh Pi launcher did not let Pi assign its session ID"
 )
 assert(
 	vim.g.pi_launch_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
@@ -77,10 +71,20 @@ assert(type(callbacks.TermClose) == "function", "Pi terminal close was not track
 
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 local saved_metadata = session.get_metadata(nvim_session)
-assert(saved_metadata.pi_session_id == first_session_id, "Pi session ID was not saved")
-assert(saved_metadata.pi_terminal_open == true, "open Pi terminal state was not saved")
+assert(saved_metadata.pi_session_id == nil, "unbound Pi terminal invented a session ID")
+assert(saved_metadata.pi_terminal_open == false, "unbound Pi terminal was marked restorable")
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed during Pi save")
 assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed during Pi save")
+
+local first_session_id = "pi-session-one"
+assert(pi.bind_session("invalid/session") == false, "invalid Pi session ID was bound")
+assert(pi.bind_session(first_session_id) == true, "Pi-assigned session ID was not bound")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+saved_metadata = session.get_metadata(nvim_session)
+assert(saved_metadata.pi_session_id == first_session_id, "bound Pi session ID was not saved")
+assert(saved_metadata.pi_terminal_open == true, "bound Pi terminal state was not saved")
+assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi binding")
+assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed after Pi binding")
 
 local restored_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 local restored_metadata = restored_session.get_metadata(nvim_session)
@@ -109,7 +113,15 @@ assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID c
 captured_command = nil
 pi.start()
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
-local second_session_id = captured_command:match(" pi %-%-session%-id '([0-9a-f]+)'$")
-assert(second_session_id ~= first_session_id, "fresh Pi terminal reused the closed session ID")
+assert(
+	captured_command == "PI_NVIM_SOCKET=" .. vim.fn.shellescape(vim.v.servername) .. " pi",
+	"reopened Pi launcher supplied a synthetic session ID"
+)
+local second_session_id = "pi-session-two"
+assert(pi.bind_session(second_session_id) == true, "replacement Pi session ID was not bound")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+saved_metadata = session.get_metadata(nvim_session)
+assert(saved_metadata.pi_session_id == second_session_id, "replacement Pi session ID was not saved")
+assert(saved_metadata.pi_terminal_open == true, "replacement Pi terminal state was not saved")
 
 vim.fn.delete(metadata_root, "rf")

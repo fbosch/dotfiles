@@ -20,11 +20,11 @@
 - [x] 3.2 Add separate `pi_session_id` and Pi terminal-open metadata without changing `opencode_session_id`; verify Neovim session tests preserve both products' fields across save and load.
 - [x] 3.3 Resume only the persisted Pi session whose project and worktree identity match the restored Neovim session; verify exact resume, closed-terminal, missing-session, invalid-session, and wrong-worktree tests.
 - [x] 3.4 Preserve the restoration order `Herdr → Neovim → exact Pi session`; verify existing Herdr restore tests and new Pi-specific restoration fixtures pass.
-- [ ] 3.5 Run the live restore tracer bullet in two sibling worktrees; record exact session continuity and prove neither worktree resumes the other's session.
+- [x] 3.5 Run the live restore tracer bullet in two sibling worktrees; record exact session continuity and prove neither worktree resumes the other's session.
 
 ## 4. Add problem-list navigation and source presentation
 
-- [ ] 4.1 Implement bounded quickfix and location-list inspection with explicit list ownership and source positions; verify default, maximum, empty, invalid-window, and oversized-list cases.
+- [x] 4.1 Implement bounded quickfix and location-list inspection with explicit list ownership and source positions; verify default, maximum, empty, invalid-window, and oversized-list cases.
 - [ ] 4.2 Implement worktree-contained reveal with explicit focus and split options; verify exact line and column placement, focus preservation, requested focus, and outside-worktree rejection.
 - [ ] 4.3 Implement bridge-owned temporary highlights and explicit removal; verify duration bounds, automatic expiry, cleanup, invalid ranges, and unchanged buffer text.
 - [ ] 4.4 Implement atomic bounded annotations with source-text anchors; verify stale anchors and any invalid item reject the whole batch without partial extmarks or text changes.

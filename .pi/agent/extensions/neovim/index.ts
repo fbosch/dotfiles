@@ -9,7 +9,9 @@ import { type NvimConnectionFactory, PiNeovimChannel } from "./channel";
 import {
   type BridgeResult,
   DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+  DEFAULT_QUICKFIX_ITEMS,
   MAX_DIAGNOSTIC_SUMMARY_ITEMS,
+  MAX_QUICKFIX_ITEMS,
   type NeovimErrorCode,
 } from "./contracts";
 
@@ -45,6 +47,35 @@ const NeovimParameters = Type.Union([
     {
       operation: Type.Literal("diagnostics"),
       buffer: Type.Optional(Type.Integer({ minimum: 1 })),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      operation: Type.Literal("quickfix"),
+      kind: Type.Optional(Type.Literal("quickfix")),
+      maxItems: Type.Optional(
+        Type.Integer({
+          default: DEFAULT_QUICKFIX_ITEMS,
+          maximum: MAX_QUICKFIX_ITEMS,
+          minimum: 1,
+        }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      operation: Type.Literal("quickfix"),
+      kind: Type.Literal("location"),
+      maxItems: Type.Optional(
+        Type.Integer({
+          default: DEFAULT_QUICKFIX_ITEMS,
+          maximum: MAX_QUICKFIX_ITEMS,
+          minimum: 1,
+        }),
+      ),
+      window: Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 }),
     },
     { additionalProperties: false },
   ),
@@ -93,7 +124,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         name: "neovim",
         label: "Neovim",
         description:
-          "Inspect live, in-memory state from the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB, including unsaved edits. Diagnostic operations report Neovim's current vim.diagnostic state for unsaved buffers and do not query Pi's separate disk-backed LSP integration. Diagnostic summary counts a bounded editor set and returns 20 highest-priority items by default, at most 50; diagnostics returns a complete set only up to 500 items and 32 KiB. Diagnostic positions are one-based with end-exclusive ranges. The socket is fixed by the launch environment and cannot be selected by tool input.",
+          "Inspect live, in-memory state from the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB, including unsaved edits. Diagnostic operations report Neovim's current vim.diagnostic state for unsaved buffers and do not query Pi's separate disk-backed LSP integration. Diagnostic summary counts a bounded editor set and returns 20 highest-priority items by default, at most 50; diagnostics returns a complete set only up to 500 items and 32 KiB. Quickfix returns the current global quickfix list by default; kind location requires its owning Neovim window. Problem lists return at most 20 entries by default and 50 when requested, with worktree-contained filenames and explicit list ownership. Diagnostic positions are one-based with end-exclusive ranges; missing quickfix positions remain zero. The socket is fixed by the launch environment and cannot be selected by tool input.",
         promptSnippet:
           "Inspect live context, unsaved buffers, and editor diagnostics from Pi's launching Neovim",
         promptGuidelines: [
@@ -101,6 +132,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
           "Use one context call for source buffer, cursor, mode, and bounded selection; do not call status first unless connection identity or health is relevant.",
           "Use visible_windows to discover source shown in the current Neovim tab, list_buffers for other listed source buffers, and read_buffer only when in-memory text is needed.",
           "Use diagnostic_summary first to triage Neovim's current editor diagnostics; use diagnostics only when the complete bounded diagnostic set is needed.",
+          "Use quickfix without a kind for the editor-global quickfix list. For a location list, set kind to location and pass the owning window from visible_windows.",
           "Treat neovim diagnostics as live editor state, including unsaved changes and non-LSP producers. Treat lsp diagnostics as independent evidence computed from project files on disk. Do not call both by default.",
         ],
         parameters: NeovimParameters,
@@ -118,6 +150,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
               bridge.diagnosticSummary(options),
             )
             .with({ operation: "diagnostics" }, ({ buffer }) => bridge.diagnostics(buffer))
+            .with({ operation: "quickfix" }, (options) => bridge.quickfix(options))
             .exhaustive();
           return {
             content: [{ type: "text", text: resultText(result) }],
@@ -126,6 +159,23 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         },
       }),
     );
+
+    pi.on("session_start", async (_event, context) => {
+      const bridge = channelFor(context);
+      const sessionId = context.sessionManager.getSessionId();
+      let result: Awaited<ReturnType<PiNeovimChannel["bindSession"]>> | undefined;
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        result = await bridge.bindSession(sessionId);
+        if (result.ok || result.error.code === "NVIM_UNAVAILABLE") break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (result?.ok === false) {
+        context.ui.notify(
+          `Could not bind Pi's session identity to Neovim: ${result.error.message}`,
+          "warning",
+        );
+      }
+    });
 
     pi.on("session_shutdown", async () => {
       const activeChannel = channel;

@@ -218,17 +218,24 @@ Keep the existing Herdr restoration tests passing.
 
 ### Session metadata implementation record
 
-- Neovim assigns each fresh Pi terminal a random 128-bit hexadecimal ID and
-  launches Pi with `--session-id`, so Neovim knows the exact Pi session identity
-  before the terminal starts.
-- `SessionSavePre` stores that ID as `pi_session_id` and records
-  `pi_terminal_open`. Closing the terminal changes only the open flag and keeps
-  the last exact ID available for restoration decisions.
+- Fresh terminals launch plain `pi`, allowing Pi to assign its native session
+  ID without the expected missing-ID warning produced by `--session-id`.
+- On every Pi `session_start`, the Neovim extension reports Pi's actual session
+  ID over the fixed `PI_NVIM_SOCKET`. Neovim binds the ID only to the live Pi
+  terminal owned by the current Neovim session. This also tracks Pi session
+  changes made inside the TUI.
+- `SessionSavePre` stores the bound ID as `pi_session_id` and records
+  `pi_terminal_open`. An open terminal is not marked restorable before the
+  identity handshake completes. Closing the terminal changes only the open flag
+  and keeps the last exact ID available for restoration decisions.
 - Pi metadata updates preserve `opencode_session_id`,
   `opencode_terminal_open`, and other existing Neovim session metadata.
 - `devenv tasks run test:nvim-pi-launcher` round-trips both products' fields
-  through the JSON metadata file and covers open, close, terminal reuse, and a
-  fresh ID after reopening.
+  through the JSON metadata file and covers unbound saves, invalid bindings,
+  open, close, terminal reuse, and a Pi-assigned replacement ID after reopening.
+- An isolated Pi 0.84.4 RPC tracer launched a fresh session against a temporary
+  session directory and headless Neovim socket. Pi emitted no stderr warning,
+  and Neovim received the exact session ID returned by Pi's `get_state`.
 - `devenv tasks run test:nvim-opencode-session-restore`,
   `just lua-quality changed`, and `just lua-quality style-changed` pass.
 
@@ -297,7 +304,8 @@ devenv tasks run test:nvim-pi-session-restore test:nvim-pi-launcher \
   `test:nvim-pack-lazy-startup`, which confirms `mini.sessions` is ready before
   `VimEnter`. The production-order fixture is registered as
   `test:nvim-pi-production-restore` and included in `test:all`.
-  Validation:
+
+Validation:
 
 ```sh
 devenv tasks run test:herdr-neovim-sessions \
@@ -320,6 +328,43 @@ devenv tasks run test:herdr-neovim-sessions \
 
 6. Repeat with two sibling worktrees.
 7. Verify that neither resumes the other worktree's session.
+
+### Live two-worktree restoration record
+
+- On 2026-09-04, an isolated named Herdr server created two sibling Git working
+  trees from one disposable repository. It used the production
+  `neovim-sessions` plugin and isolated copies of the current Neovim config,
+  session metadata, Pi agent directory, cache, and state.
+- Each production `:PiStart` launched a real Pi 0.84.4 TUI. A temporary local
+  custom provider returned `tracer-response-a` and `tracer-response-b` without
+  credentials or network access, giving each session one user message and one
+  assistant message. `/session` reported the same exact IDs later stored by
+  Neovim:
+  - worktree A: `dd55b9c19af3452421354a55d1fe5b66`
+  - worktree B: `58490cd787f7d2bf8852c706a67c63b9`
+- MiniSessions saved both Neovim sessions while both Pi terminals were open. The
+  tracer then terminated only the two disposable Neovim processes, leaving
+  their owning shells and `restore_pending` metadata intact, and cleanly
+  stopped the named Herdr server so it persisted both workspaces.
+- A fresh Herdr server restored both shell panes. The production startup hook's
+  metadata recovery relaunched Neovim in each original cwd. Each new Neovim
+  process used an automatic RPC socket, emitted `VimEnter` followed by one
+  `SessionLoadPost`, and resumed a new Pi process with its original exact ID:
+  - worktree A: explicit socket → `/run/user/1000/nvim.38537.0` → original A ID
+  - worktree B: explicit socket → `/run/user/1000/nvim.38560.0` → original B ID
+- After both restored Pi TUIs repeated `/session`, the tracer closed them and
+  substituted B's ID into A's temporary metadata, then A's ID into B's. Both
+  calls to `utils.pi.restore()` returned `false`, opened no terminal, and left
+  the original metadata in place.
+- The Pi files remained byte-for-byte unchanged across resume and both rejected
+  cross-worktree attempts:
+  - worktree A SHA-256:
+    `e8df3fcf74a9cada85b8df22b9c87499ae3b3377014dbaca6a8fb35d6b462beb`
+  - worktree B SHA-256:
+    `01b7d286600f477457c61d678fd072998a166e84fb65bbb09c3b882c4ee52eb5`
+- The tracer removed the named Herdr session, both working trees, all live
+  processes, and all temporary Neovim and Pi state after recording evidence in
+  `/tmp/pi-neovim-live-3.5-evidence.json`.
 
 ### Exit criterion
 
@@ -358,6 +403,29 @@ explicit.
 - Annotation batches are atomic and bounded to ten entries.
 - Annotation anchors reject stale source text.
 - Buffer hashes remain unchanged after every presentation operation.
+
+### Problem-list inspection implementation record
+
+- The `quickfix` operation reads the editor-global quickfix list by default.
+  Location-list requests require an explicit owner window from
+  `visible_windows`; responses return the owner kind, window when applicable,
+  and Neovim list ID.
+- Entries preserve Neovim order and expose buffer, filename, validity, type,
+  text, and start/end line and column fields. Missing quickfix positions remain
+  zero rather than being converted into invented coordinates.
+- Results default to 20 entries and accept at most 50. Both the fixed Lua
+  producer and TypeScript parser enforce a 32 KiB serialized-result limit.
+  Neovim exposes entries only as a complete list snapshot, so the producer
+  checks list size first and refuses snapshots above 5,000 entries before
+  requesting `items`.
+- File entries must remain inside the bound worktree. URI-like filenames,
+  special buffers, OpenCode buffers, and Pi terminal buffers are rejected
+  without returning partial list content.
+- `.pi/agent/extensions/neovim/__tests__/` covers global and location-list
+  defaults and maximums, empty lists, explicit ownership, list order, source
+  positions, invalid windows, TypeBox bounds, 5,001-entry refusal, serialized
+  byte limits, special buffers, and sibling-worktree paths. The focused suite
+  passes 51 tests; TypeScript and Biome checks pass.
 
 ### Tracer bullet
 

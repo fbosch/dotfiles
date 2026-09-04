@@ -87,10 +87,6 @@ local function record_source_context()
 	end
 end
 
-local function new_session_id()
-	return vim.text.hexencode(vim.uv.random(16)):lower()
-end
-
 local function launch_command(session_flag, session_id, session_dir, socket)
 	if type(socket) ~= "string" or socket == "" then
 		error("pi requires a Neovim RPC socket")
@@ -99,6 +95,9 @@ local function launch_command(session_flag, session_id, session_dir, socket)
 	local command = "PI_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " pi"
 	if session_dir ~= nil then
 		command = command .. " --session-dir " .. vim.fn.shellescape(session_dir)
+	end
+	if session_flag == nil or session_id == nil then
+		return command
 	end
 	return command .. " " .. session_flag .. " " .. vim.fn.shellescape(session_id)
 end
@@ -133,6 +132,10 @@ local function save_terminal_state()
 
 	local terminal = current_terminal()
 	local is_open = terminal ~= nil and terminal_owner == nvim_session and terminal:valid()
+	if is_open and terminal_session_id == nil then
+		session.set_pi_terminal_state(nil, false, nvim_session)
+		return
+	end
 	session.set_pi_terminal_state(is_open and terminal_session_id or nil, is_open, nvim_session)
 end
 
@@ -200,6 +203,19 @@ function M.restore()
 	return true
 end
 
+function M.bind_session(session_id)
+	if not session.is_valid_pi_session_id(session_id) then
+		return false
+	end
+	local terminal = current_terminal()
+	local owner = session.get_current(vim.fn.getcwd())
+	if terminal == nil or owner == nil or terminal_owner ~= owner then
+		return false
+	end
+	terminal_session_id = session_id
+	return true
+end
+
 function M.setup()
 	local group = vim.api.nvim_create_augroup("PiSessionPersistence", { clear = true })
 	vim.api.nvim_create_autocmd("User", {
@@ -228,10 +244,9 @@ function M.start()
 		return terminal
 	end
 
-	local session_id = new_session_id()
 	local owner = session.get_current(vim.fn.getcwd())
 	local cwd = owner ~= nil and owner.cwd or vim.fn.getcwd()
-	return open_terminal("--session-id", session_id, nil, cwd, vim.v.servername, owner)
+	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner)
 end
 
 return M

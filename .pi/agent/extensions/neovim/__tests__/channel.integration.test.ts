@@ -3,6 +3,7 @@ import { access, mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { PiNeovimChannel } from "../channel";
+import { MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
 
 async function waitForSocket(socket: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -293,6 +294,179 @@ test("reads ordered diagnostics for unsaved source through preserved Pi context"
   }
 }, 10_000);
 
+test("reads bounded quickfix and explicitly owned location lists", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-quickfix-")));
+  const source = join(workspace, "problem-list.lua");
+  const emptySource = join(workspace, "empty-location.lua");
+  await Promise.all([
+    Bun.write(
+      source,
+      `${Array.from({ length: 60 }, (_, index) => `line ${index + 1}`).join("\n")}\n`,
+    ),
+    Bun.write(emptySource, "return true\n"),
+  ]);
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    `local empty_source = ${JSON.stringify(emptySource)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local source_buffer = vim.api.nvim_get_current_buf()",
+    "local source_window = vim.api.nvim_get_current_win()",
+    "local quickfix_items = {}",
+    "for index = 1, 60 do quickfix_items[index] = { bufnr = source_buffer, lnum = index, col = 2, end_lnum = index, end_col = 4, text = 'problem ' .. index, type = 'E' } end",
+    "vim.fn.setqflist({}, 'r', { title = 'quickfix fixture', items = quickfix_items })",
+    "local location_items = {}",
+    "for index = 1, 60 do location_items[index] = { bufnr = source_buffer, lnum = index, col = 3, end_lnum = index, end_col = 7, text = 'location problem ' .. index, type = 'W' } end",
+    "vim.fn.setloclist(source_window, {}, 'r', { title = 'location fixture', items = location_items })",
+    'vim.cmd("vsplit")',
+    'vim.cmd("edit " .. vim.fn.fnameescape(empty_source))',
+    "vim.fn.setloclist(0, {}, 'r', { title = 'empty location', items = {} })",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel) => {
+      const visible = await channel.visibleWindows();
+      if (visible.ok === false) throw new Error(visible.error.message);
+      const sourceWindow = visible.value.windows.find((window) => window.buffer.name === source);
+      const emptyWindow = visible.value.windows.find(
+        (window) => window.buffer.name === emptySource,
+      );
+      if (sourceWindow === undefined || emptyWindow === undefined) {
+        throw new Error("problem-list owner windows were not visible");
+      }
+
+      const defaults = await channel.quickfix();
+      expect(defaults).toMatchObject({
+        ok: true,
+        value: {
+          owner: { kind: "quickfix", listId: expect.any(Number) },
+          title: "quickfix fixture",
+          total: 60,
+          truncated: true,
+        },
+      });
+      if (defaults.ok === false) return;
+      expect(defaults.value.items).toHaveLength(20);
+      expect(defaults.value.items[0]).toMatchObject({
+        column: 2,
+        endColumn: 4,
+        endLine: 1,
+        filename: source,
+        line: 1,
+        text: "problem 1",
+        type: "E",
+        valid: true,
+      });
+      expect(defaults.value.items.at(-1)?.text).toBe("problem 20");
+
+      const maximum = await channel.quickfix({ maxItems: 50 });
+      expect(maximum).toMatchObject({ ok: true, value: { total: 60, truncated: true } });
+      if (maximum.ok === false) return;
+      expect(maximum.value.items).toHaveLength(50);
+      expect(maximum.value.items.at(-1)?.text).toBe("problem 50");
+
+      const locationDefaults = await channel.quickfix({
+        kind: "location",
+        window: sourceWindow.number,
+      });
+      expect(locationDefaults).toMatchObject({
+        ok: true,
+        value: {
+          owner: {
+            kind: "location",
+            listId: expect.any(Number),
+            window: sourceWindow.number,
+          },
+          title: "location fixture",
+          total: 60,
+          truncated: true,
+        },
+      });
+      if (locationDefaults.ok === false) return;
+      expect(locationDefaults.value.items).toHaveLength(20);
+      expect(locationDefaults.value.items[0]).toMatchObject({
+        column: 3,
+        endColumn: 7,
+        endLine: 1,
+        filename: source,
+        line: 1,
+        text: "location problem 1",
+      });
+      expect(locationDefaults.value.items.at(-1)?.text).toBe("location problem 20");
+
+      const locationMaximum = await channel.quickfix({
+        kind: "location",
+        maxItems: 50,
+        window: sourceWindow.number,
+      });
+      expect(locationMaximum).toMatchObject({
+        ok: true,
+        value: { total: 60, truncated: true },
+      });
+      if (locationMaximum.ok === false) return;
+      expect(locationMaximum.value.items).toHaveLength(50);
+      expect(locationMaximum.value.items.at(-1)?.text).toBe("location problem 50");
+      expect(
+        await channel.quickfix({ kind: "location", window: emptyWindow.number }),
+      ).toMatchObject({
+        ok: true,
+        value: {
+          items: [],
+          owner: { kind: "location", window: emptyWindow.number },
+          title: "empty location",
+          total: 0,
+          truncated: false,
+        },
+      });
+      expect(await channel.quickfix({ kind: "location", window: 999_999 })).toMatchObject({
+        error: { code: "NVIM_INVALID_WINDOW" },
+        ok: false,
+      });
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
+test("rejects oversized problem lists and special-buffer locations", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-quickfix-limits-")));
+  const source = join(workspace, "source.lua");
+  await Bun.write(source, "return true\n");
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local owner_window = vim.api.nvim_get_current_win()",
+    "local source_buffer = vim.api.nvim_get_current_buf()",
+    "local items = {}",
+    `for index = 1, ${MAX_QUICKFIX_SOURCE_ITEMS + 1} do items[index] = { bufnr = source_buffer, lnum = 1, col = 1, text = 'problem ' .. index } end`,
+    "vim.fn.setqflist({}, 'r', { items = items })",
+    "local special = vim.api.nvim_create_buf(true, true)",
+    'vim.api.nvim_buf_set_name(special, "term:///outside/special")',
+    "vim.fn.setloclist(owner_window, {}, 'r', { items = { { bufnr = special, lnum = 1, col = 1, text = 'special' } } })",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel) => {
+      expect(await channel.quickfix()).toMatchObject({
+        error: { code: "NVIM_LIMIT_EXCEEDED" },
+        ok: false,
+      });
+      const visible = await channel.visibleWindows();
+      if (visible.ok === false) throw new Error(visible.error.message);
+      expect(
+        await channel.quickfix({
+          kind: "location",
+          window: visible.value.windows[0]?.number ?? 0,
+        }),
+      ).toMatchObject({
+        error: { code: "NVIM_INVALID_RESPONSE" },
+        ok: false,
+      });
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
 test("rejects stale preserved source identity without reading another buffer", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-stale-diagnostic-")));
   const source = join(workspace, "source.lua");
@@ -361,6 +535,7 @@ test("rejects visible, listed, read, and diagnostic content outside the bound wo
   const setup = [
     `local outside_source = ${JSON.stringify(outsideSource)}`,
     'vim.cmd("edit " .. vim.fn.fnameescape(outside_source))',
+    "vim.fn.setqflist({}, 'r', { items = { { bufnr = vim.api.nvim_get_current_buf(), lnum = 1, col = 1, text = 'outside' } } })",
   ].join("; ");
 
   try {
@@ -382,6 +557,10 @@ test("rejects visible, listed, read, and diagnostic content outside the bound wo
         ok: false,
       });
       expect(await channel.diagnostics(1)).toMatchObject({
+        error: { code: "NVIM_WORKTREE_MISMATCH" },
+        ok: false,
+      });
+      expect(await channel.quickfix()).toMatchObject({
         error: { code: "NVIM_WORKTREE_MISMATCH" },
         ok: false,
       });

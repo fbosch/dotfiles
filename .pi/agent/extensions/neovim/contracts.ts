@@ -10,6 +10,10 @@ export const MAX_DIAGNOSTIC_SUMMARY_ITEMS = 50;
 export const MAX_DIAGNOSTIC_ITEMS = 500;
 export const MAX_DIAGNOSTIC_SOURCE_ITEMS = 5_000;
 export const MAX_DIAGNOSTIC_BYTES = 32 * 1024;
+export const DEFAULT_QUICKFIX_ITEMS = 20;
+export const MAX_QUICKFIX_ITEMS = 50;
+export const MAX_QUICKFIX_SOURCE_ITEMS = 5_000;
+export const MAX_QUICKFIX_BYTES = 32 * 1024;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
 
@@ -17,6 +21,7 @@ export type NeovimErrorCode =
   | "NVIM_INVALID_BUFFER"
   | "NVIM_INVALID_RANGE"
   | "NVIM_INVALID_RESPONSE"
+  | "NVIM_INVALID_WINDOW"
   | "NVIM_LIMIT_EXCEEDED"
   | "NVIM_NO_FOCUS_CONTEXT"
   | "NVIM_NO_SELECTION"
@@ -141,6 +146,49 @@ export interface DiagnosticsSnapshot {
   readonly diagnostics: readonly NeovimDiagnostic[];
   readonly editor: EditorIdentity;
   readonly total: number;
+}
+
+export type QuickfixOptions =
+  | {
+      readonly kind?: "quickfix";
+      readonly maxItems?: number;
+    }
+  | {
+      readonly kind: "location";
+      readonly maxItems?: number;
+      readonly window: number;
+    };
+
+export type QuickfixOwner =
+  | {
+      readonly kind: "quickfix";
+      readonly listId: number;
+    }
+  | {
+      readonly kind: "location";
+      readonly listId: number;
+      readonly window: number;
+    };
+
+export interface QuickfixItem {
+  readonly buffer: number;
+  readonly column: number;
+  readonly endColumn: number;
+  readonly endLine: number;
+  readonly filename: string;
+  readonly line: number;
+  readonly text: string;
+  readonly type: string;
+  readonly valid: boolean;
+}
+
+export interface QuickfixSnapshot {
+  readonly editor: EditorIdentity;
+  readonly items: readonly QuickfixItem[];
+  readonly owner: QuickfixOwner;
+  readonly title: string;
+  readonly total: number;
+  readonly truncated: boolean;
 }
 
 export type BridgeResult<T> =
@@ -733,6 +781,164 @@ export function parseDiagnostics(
       total: snapshot.value.counts.total,
     },
   };
+}
+
+function quickfixContentLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Neovim problem-list entries exceed ${MAX_QUICKFIX_BYTES} output bytes; request fewer items`,
+  );
+}
+
+export function invalidQuickfixWindow(): BridgeResult<never> {
+  return failure("NVIM_INVALID_WINDOW", "Choose a valid location-list owner from visible_windows");
+}
+
+export function quickfixRequestLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Request at most ${MAX_QUICKFIX_ITEMS} problem-list entries`,
+  );
+}
+
+function quickfixSourceLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Neovim reports more than ${MAX_QUICKFIX_SOURCE_ITEMS} entries for this problem list; reduce the list in the editor`,
+  );
+}
+
+function quickfixFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidWindow") return invalidQuickfixWindow();
+  if (value.error === "contentLimit") return quickfixContentLimit();
+  if (value.error === "sourceLimit") return quickfixSourceLimit();
+  if (value.error === "invalidSource") {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned a non-source problem-list buffer");
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown problem-list error");
+}
+
+function parseQuickfixOwner(
+  value: unknown,
+  kind: "location" | "quickfix",
+  requestedWindow: number | undefined,
+): QuickfixOwner | undefined {
+  if (isRecord(value) === false || isNonNegativeInteger(value.listId) === false) {
+    return undefined;
+  }
+  if (kind === "quickfix") {
+    return value.kind === "quickfix" && "window" in value === false
+      ? { kind: "quickfix", listId: value.listId }
+      : undefined;
+  }
+  return value.kind === "location" && value.window === requestedWindow
+    ? { kind: "location", listId: value.listId, window: value.window as number }
+    : undefined;
+}
+
+function parseQuickfixItem(value: unknown, expectedCwd: string): BridgeResult<QuickfixItem> {
+  if (
+    isRecord(value) === false ||
+    isNonNegativeInteger(value.buffer) === false ||
+    isNonNegativeInteger(value.line) === false ||
+    isNonNegativeInteger(value.column) === false ||
+    isNonNegativeInteger(value.endLine) === false ||
+    isNonNegativeInteger(value.endColumn) === false ||
+    isBoundedString(value.filename) === false ||
+    isBoundedString(value.text, MAX_QUICKFIX_BYTES) === false ||
+    isBoundedString(value.type, 64) === false ||
+    typeof value.valid !== "boolean"
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid problem-list data");
+  }
+  if (
+    /^[A-Za-z][A-Za-z0-9+.-]*:/.test(value.filename) ||
+    pathIsInsideWorktree(value.filename, expectedCwd) === false
+  ) {
+    return failure(
+      "NVIM_WORKTREE_MISMATCH",
+      "A Neovim problem-list entry is outside Pi's worktree",
+    );
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: value.buffer,
+      column: value.column,
+      endColumn: value.endColumn,
+      endLine: value.endLine,
+      filename: value.filename,
+      line: value.line,
+      text: value.text,
+      type: value.type,
+      valid: value.valid,
+    },
+  };
+}
+
+export function parseQuickfix(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  options: QuickfixOptions = {},
+): BridgeResult<QuickfixSnapshot> {
+  const kind = options.kind ?? "quickfix";
+  const maxItems = options.maxItems ?? DEFAULT_QUICKFIX_ITEMS;
+  const requestedWindow = options.kind === "location" ? options.window : undefined;
+  if (
+    Number.isSafeInteger(maxItems) === false ||
+    maxItems < 1 ||
+    maxItems > MAX_QUICKFIX_ITEMS ||
+    (kind === "location" &&
+      (Number.isSafeInteger(requestedWindow) === false || (requestedWindow as number) < 1))
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Invalid problem-list request bounds");
+  }
+
+  const responseFailure = quickfixFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const owner = parseQuickfixOwner(snapshot.value.owner, kind, requestedWindow);
+  if (
+    isNonNegativeInteger(snapshot.value.total) &&
+    snapshot.value.total > MAX_QUICKFIX_SOURCE_ITEMS
+  ) {
+    return quickfixSourceLimit();
+  }
+  if (
+    owner === undefined ||
+    isBoundedString(snapshot.value.title, MAX_QUICKFIX_BYTES) === false ||
+    isNonNegativeInteger(snapshot.value.total) === false ||
+    Array.isArray(snapshot.value.items) === false ||
+    snapshot.value.items.length > maxItems ||
+    snapshot.value.items.length > snapshot.value.total ||
+    typeof snapshot.value.truncated !== "boolean" ||
+    snapshot.value.truncated !== snapshot.value.items.length < snapshot.value.total
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid problem-list data");
+  }
+
+  const items: QuickfixItem[] = [];
+  for (const candidate of snapshot.value.items) {
+    const item = parseQuickfixItem(candidate, expectedCwd);
+    if (item.ok === false) return item;
+    items.push(item.value);
+  }
+
+  const result: QuickfixSnapshot = {
+    editor,
+    items,
+    owner,
+    title: snapshot.value.title,
+    total: snapshot.value.total,
+    truncated: snapshot.value.truncated,
+  };
+  if (Buffer.byteLength(JSON.stringify(result, null, 2), "utf8") > MAX_QUICKFIX_BYTES) {
+    return quickfixContentLimit();
+  }
+  return { ok: true, value: result };
 }
 
 export function parseFocusContext(value: unknown, expectedCwd: string): BridgeResult<FocusContext> {

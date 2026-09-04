@@ -97,6 +97,33 @@
         "biome.jsonc"
       ]
     },
+    "clangd": {
+      "command": "clangd",
+      "languages": [
+        {
+          "languageId": "cpp",
+          "extensions": [
+            ".cc",
+            ".cpp",
+            ".cxx",
+            ".c++",
+            ".h",
+            ".hh",
+            ".hpp",
+            ".hxx",
+            ".h++",
+            ".ipp"
+          ]
+        }
+      ],
+      "rootMarkers": [
+        "compile_commands.json",
+        "compile_flags.txt",
+        ".clangd",
+        "CMakeLists.txt",
+        ".git"
+      ]
+    },
     "cssls": {
       "command": "vscode-css-language-server",
       "args": [

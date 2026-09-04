@@ -275,12 +275,6 @@
   outline-offset: 2px;
 }
 
-/* Notification Popup Window */
-.notification-window {
-  background: transparent;
-  margin-right: 8px;
-}
-
 /* Individual Notification */
 .notification {
   background: var(--floating-bg-color);
@@ -565,6 +559,8 @@
 }
 
 .floating-notifications {
+  background: transparent;
+  margin-right: -6px;
   padding: 12px 0 4px 0;
 }
 
@@ -585,7 +581,10 @@
   box-shadow: none;
 }
 
-.floating-notifications .notification-row .notification-background .notification {
+.floating-notifications
+  .notification-row
+  .notification-background
+  .notification {
   background: var(--floating-bg-color);
   border: none;
   border-radius: var(--radius-large);

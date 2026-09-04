@@ -11,12 +11,15 @@ import {
   MAX_DIAGNOSTIC_SOURCE_ITEMS,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
+  MAX_QUICKFIX_BYTES,
+  MAX_QUICKFIX_SOURCE_ITEMS,
   parseActiveContext,
   parseBufferInventory,
   parseBufferRead,
   parseDiagnosticSummary,
   parseDiagnostics,
   parseFocusNotification,
+  parseQuickfix,
   parseVisibleWindows,
   pathIsInsideWorktree,
 } from "../contracts";
@@ -574,6 +577,109 @@ describe("Neovim editor contracts", () => {
         1,
       ),
     ).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" }, ok: false });
+  });
+
+  test("parses ordered problem lists with explicit ownership and source positions", () => {
+    const item = {
+      buffer: 4,
+      column: 5,
+      endColumn: 9,
+      endLine: 8,
+      filename: "/project/src/example.ts",
+      line: 8,
+      text: "problem",
+      type: "E",
+      valid: true,
+    };
+    expect(
+      parseQuickfix(
+        {
+          cwd: editor.cwd,
+          items: [item],
+          owner: { kind: "location", listId: 3, window: 12 },
+          pid: editor.pid,
+          title: "location fixture",
+          total: 2,
+          truncated: true,
+        },
+        "/project",
+        editor,
+        { kind: "location", maxItems: 1, window: 12 },
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        editor,
+        items: [item],
+        owner: { kind: "location", listId: 3, window: 12 },
+        title: "location fixture",
+        total: 2,
+        truncated: true,
+      },
+    });
+  });
+
+  test("rejects invalid problem-list owners, bounds, paths, and output sizes", () => {
+    const item = {
+      buffer: 4,
+      column: 1,
+      endColumn: 0,
+      endLine: 0,
+      filename: "/project/src/example.ts",
+      line: 1,
+      text: "problem",
+      type: "E",
+      valid: true,
+    };
+    const response = {
+      cwd: editor.cwd,
+      items: [item],
+      owner: { kind: "quickfix", listId: 1 },
+      pid: editor.pid,
+      title: "quickfix fixture",
+      total: 1,
+      truncated: false,
+    };
+    expect(
+      parseQuickfix({ error: "invalidWindow" }, "/project", editor, {
+        kind: "location",
+        window: 999,
+      }),
+    ).toMatchObject({ error: { code: "NVIM_INVALID_WINDOW" }, ok: false });
+    expect(parseQuickfix({ error: "sourceLimit" }, "/project", editor)).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    expect(
+      parseQuickfix(
+        { ...response, total: MAX_QUICKFIX_SOURCE_ITEMS + 1, truncated: true },
+        "/project",
+        editor,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
+    expect(parseQuickfix({ ...response, items: [item, item] }, "/project", editor)).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+    for (const filename of [
+      "/outside/secret.ts",
+      "term:///outside/secret",
+      "file:///project/src/example.ts",
+    ]) {
+      expect(
+        parseQuickfix({ ...response, items: [{ ...item, filename }] }, "/project", editor),
+      ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+    }
+    expect(
+      parseQuickfix(
+        {
+          ...response,
+          items: [{ ...item, text: "\n".repeat(MAX_QUICKFIX_BYTES / 2) }],
+        },
+        "/project",
+        editor,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
   });
 
   test("contains resolved paths without prefix confusion", () => {

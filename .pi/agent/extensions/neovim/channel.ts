@@ -7,12 +7,14 @@ import {
   type BufferRead,
   type BufferReadOptions,
   DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+  DEFAULT_QUICKFIX_ITEMS,
   type DiagnosticSummary,
   type DiagnosticSummaryOptions,
   type DiagnosticsSnapshot,
   type EditorIdentity,
   FOCUS_NOTIFICATION,
   type FocusContext,
+  invalidQuickfixWindow,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
@@ -21,6 +23,9 @@ import {
   MAX_INVENTORY_BYTES,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
+  MAX_QUICKFIX_BYTES,
+  MAX_QUICKFIX_ITEMS,
+  MAX_QUICKFIX_SOURCE_ITEMS,
   type NeovimError,
   noFocusContext,
   noSelection,
@@ -30,7 +35,11 @@ import {
   parseDiagnosticSummary,
   parseDiagnostics,
   parseFocusNotification,
+  parseQuickfix,
   parseVisibleWindows,
+  type QuickfixOptions,
+  type QuickfixSnapshot,
+  quickfixRequestLimit,
   type SelectionSnapshot,
   unavailable,
   type VisibleWindowsSnapshot,
@@ -45,6 +54,13 @@ class NeovimConnectionError extends Error {
     super(bridgeError.message);
   }
 }
+
+const BIND_SESSION_LUA = `
+local session_id = ...
+local ok, integration = pcall(require, "utils.pi")
+if ok == false or type(integration.bind_session) ~= "function" then return false end
+return integration.bind_session(session_id)
+`;
 
 const ACTIVE_CONTEXT_LUA = `
 local max_lines, max_bytes = ...
@@ -412,6 +428,81 @@ return {
 }
 `;
 
+const QUICKFIX_LUA = `
+local kind, requested_window, max_items, max_source_items, max_bytes = ...
+
+local info
+local owner
+if kind == "location" then
+  if
+    type(requested_window) ~= "number"
+    or requested_window < 1
+    or requested_window ~= math.floor(requested_window)
+    or vim.api.nvim_win_is_valid(requested_window) == false
+  then
+    return { error = "invalidWindow" }
+  end
+  info = vim.fn.getloclist(requested_window, { id = 0, size = 0, title = 1 })
+  owner = { kind = "location", listId = info.id or 0, window = requested_window }
+else
+  info = vim.fn.getqflist({ id = 0, size = 0, title = 1 })
+  owner = { kind = "quickfix", listId = info.id or 0 }
+end
+
+local total = info.size or 0
+if total > max_source_items then return { error = "sourceLimit" } end
+local title = info.title or ""
+if #title + 256 > max_bytes then return { error = "contentLimit" } end
+-- Neovim exposes no ranged item lookup, so refuse oversized lists before taking its whole snapshot.
+local list = kind == "location"
+  and vim.fn.getloclist(requested_window, { items = 1 })
+  or vim.fn.getqflist({ items = 1 })
+local raw_items = list.items or {}
+local items = {}
+for index = 1, math.min(max_items, total) do
+  local item = raw_items[index]
+  local buffer = item.bufnr or 0
+  local filename = item.filename or ""
+  if buffer > 0 and vim.api.nvim_buf_is_valid(buffer) then
+    local options = vim.bo[buffer]
+    local name = vim.api.nvim_buf_get_name(buffer)
+    if
+      name == ""
+      or options.buftype ~= ""
+      or options.filetype == "opencode"
+      or options.filetype == "opencode_terminal"
+      or vim.b[buffer].is_pi_terminal == true
+    then
+      return { error = "invalidSource" }
+    end
+    filename = name
+  end
+  table.insert(items, {
+    buffer = buffer,
+    filename = filename,
+    line = item.lnum or 0,
+    column = item.col or 0,
+    endLine = item.end_lnum or 0,
+    endColumn = item.end_col or 0,
+    text = item.text or "",
+    type = item.type or "",
+    valid = item.valid == 1,
+  })
+end
+
+local result = {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  owner = owner,
+  title = title,
+  total = total,
+  items = items,
+  truncated = #items < total,
+}
+if #vim.json.encode(result) > max_bytes then return { error = "contentLimit" } end
+return result
+`;
+
 const INSTALL_NOTIFICATIONS_LUA = `
 local channel, max_lines, max_bytes = ...
 local group_name = "PiNeovimBridge" .. channel
@@ -602,6 +693,35 @@ export class PiNeovimChannel {
     return { ok: true, value: this.#editor };
   }
 
+  async bindSession(sessionId: string): Promise<BridgeResult<EditorIdentity>> {
+    if (/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(sessionId) === false) {
+      return {
+        error: { code: "NVIM_INVALID_RESPONSE", message: "Pi returned an invalid session ID" },
+        ok: false,
+      };
+    }
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const bound = await withTimeout(
+        connection.value.executeLua(BIND_SESSION_LUA, [sessionId]),
+        "Timed out binding Pi's session identity to Neovim",
+      );
+      return bound === true
+        ? { ok: true, value: this.#editor }
+        : {
+            error: {
+              code: "NVIM_INVALID_RESPONSE",
+              message: "Neovim did not accept Pi's session identity",
+            },
+            ok: false,
+          };
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
   async context(): Promise<BridgeResult<ActiveContext>> {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
@@ -712,6 +832,39 @@ export class PiNeovimChannel {
         "Timed out reading diagnostics from the bound Neovim instance",
       );
       return parseDiagnostics(snapshot, this.#cwd, this.#editor);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
+  async quickfix(options: QuickfixOptions = {}): Promise<BridgeResult<QuickfixSnapshot>> {
+    const maxItems = options.maxItems ?? DEFAULT_QUICKFIX_ITEMS;
+    if (Number.isSafeInteger(maxItems) === false || maxItems < 1 || maxItems > MAX_QUICKFIX_ITEMS) {
+      return quickfixRequestLimit();
+    }
+    if (
+      options.kind === "location" &&
+      (Number.isSafeInteger(options.window) === false || options.window < 1)
+    ) {
+      return invalidQuickfixWindow();
+    }
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    const kind = options.kind ?? "quickfix";
+    const window = options.kind === "location" ? options.window : 0;
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(QUICKFIX_LUA, [
+          kind,
+          window,
+          maxItems,
+          MAX_QUICKFIX_SOURCE_ITEMS,
+          MAX_QUICKFIX_BYTES,
+        ]),
+        "Timed out reading a problem list from the bound Neovim instance",
+      );
+      return parseQuickfix(snapshot, this.#cwd, this.#editor, options);
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }
@@ -897,9 +1050,11 @@ function parseEditorIdentity(
 
 export const bridgeLua = {
   activeContext: ACTIVE_CONTEXT_LUA,
+  bindSession: BIND_SESSION_LUA,
   diagnostics: DIAGNOSTICS_LUA,
   installNotifications: INSTALL_NOTIFICATIONS_LUA,
   listBuffers: LIST_BUFFERS_LUA,
+  quickfix: QUICKFIX_LUA,
   readBuffer: READ_BUFFER_LUA,
   removeNotifications: REMOVE_NOTIFICATIONS_LUA,
   visibleWindows: VISIBLE_WINDOWS_LUA,

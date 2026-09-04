@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { bridgeLua, type NvimConnection, PiNeovimChannel } from "../channel";
-import { FOCUS_NOTIFICATION, MAX_METADATA_STRING_BYTES } from "../contracts";
+import {
+  FOCUS_NOTIFICATION,
+  MAX_METADATA_STRING_BYTES,
+  MAX_QUICKFIX_BYTES,
+  MAX_QUICKFIX_SOURCE_ITEMS,
+} from "../contracts";
 
 const focus = {
   buffer: {
@@ -26,6 +31,7 @@ const focus = {
 class FakeConnection extends EventEmitter implements NvimConnection {
   readonly channelId = Promise.resolve(9);
   activeResponse: unknown = { ...focus, mode: "n", selection: undefined };
+  bindArguments: unknown[] | undefined;
   bufferResponse: unknown = { buffers: [focus.buffer], cwd: "/project", pid: 71 };
   closeCalls = 0;
   diagnosticArguments: unknown[][] = [];
@@ -47,6 +53,28 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   };
   executeCalls: string[] = [];
   identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
+  quickfixArguments: unknown[] | undefined;
+  quickfixResponse: unknown = {
+    cwd: "/project",
+    items: [
+      {
+        buffer: 2,
+        column: 4,
+        endColumn: 8,
+        endLine: 3,
+        filename: "/project/example.ts",
+        line: 3,
+        text: "quickfix item",
+        type: "E",
+        valid: true,
+      },
+    ],
+    owner: { kind: "quickfix", listId: 4 },
+    pid: 71,
+    title: "quickfix fixture",
+    total: 2,
+    truncated: true,
+  };
   readArguments: unknown[] | undefined;
   readResponse: unknown = {
     buffer: focus.buffer,
@@ -73,6 +101,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
       this.emit("notification", FOCUS_NOTIFICATION, [focus]);
       return this.identityResponse;
     }
+    if (code === bridgeLua.bindSession) {
+      this.bindArguments = args;
+      return true;
+    }
     if (code === bridgeLua.activeContext) return this.activeResponse;
     if (code === bridgeLua.diagnostics) {
       this.diagnosticArguments.push(args ?? []);
@@ -80,6 +112,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     }
     if (code === bridgeLua.visibleWindows) return this.visibleResponse;
     if (code === bridgeLua.listBuffers) return this.bufferResponse;
+    if (code === bridgeLua.quickfix) {
+      this.quickfixArguments = args;
+      return this.quickfixResponse;
+    }
     if (code === bridgeLua.readBuffer) {
       this.readArguments = args;
       return this.readResponse;
@@ -121,6 +157,22 @@ describe("PiNeovimChannel", () => {
       },
     });
     expect(creations).toBe(1);
+  });
+
+  test("binds Pi-assigned session identity over fixed bridge Lua", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.bindSession("pi-session-one")).toEqual({
+      ok: true,
+      value: { channelId: 9, cwd: "/project", pid: 71 },
+    });
+    expect(connection.bindArguments).toEqual(["pi-session-one"]);
+    expect(await channel.bindSession("invalid/session")).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+    expect(connection.bindArguments).toEqual(["pi-session-one"]);
   });
 
   test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
@@ -185,6 +237,82 @@ describe("PiNeovimChannel", () => {
       [0, 20, 500, 5_000, 32 * 1024],
       [2, 0, 500, 5_000, 32 * 1024],
     ]);
+  });
+
+  test("returns bounded quickfix and explicitly owned location lists", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.quickfix()).toMatchObject({
+      ok: true,
+      value: {
+        items: [{ filename: "/project/example.ts", line: 3, text: "quickfix item" }],
+        owner: { kind: "quickfix", listId: 4 },
+        title: "quickfix fixture",
+        total: 2,
+        truncated: true,
+      },
+    });
+    expect(connection.quickfixArguments).toEqual([
+      "quickfix",
+      0,
+      20,
+      MAX_QUICKFIX_SOURCE_ITEMS,
+      MAX_QUICKFIX_BYTES,
+    ]);
+
+    connection.quickfixResponse = {
+      cwd: "/project",
+      items: [],
+      owner: { kind: "location", listId: 5, window: 4 },
+      pid: 71,
+      title: "location fixture",
+      total: 0,
+      truncated: false,
+    };
+    expect(await channel.quickfix({ kind: "location", maxItems: 50, window: 4 })).toMatchObject({
+      ok: true,
+      value: { items: [], owner: { kind: "location", listId: 5, window: 4 } },
+    });
+    expect(connection.quickfixArguments).toEqual([
+      "location",
+      4,
+      50,
+      MAX_QUICKFIX_SOURCE_ITEMS,
+      MAX_QUICKFIX_BYTES,
+    ]);
+  });
+
+  test("preserves structured problem-list failures without disabling the channel", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    connection.quickfixResponse = { error: "invalidWindow" };
+    expect(await channel.quickfix({ kind: "location", window: 999 })).toMatchObject({
+      error: { code: "NVIM_INVALID_WINDOW" },
+      ok: false,
+    });
+    connection.quickfixResponse = { error: "contentLimit" };
+    expect(await channel.quickfix()).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    connection.quickfixResponse = { error: "sourceLimit" };
+    expect(await channel.quickfix()).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    expect(await channel.quickfix({ maxItems: 51 })).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    expect(
+      await channel.quickfix({ kind: "location", window: Number.MAX_SAFE_INTEGER + 1 }),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_WINDOW" },
+      ok: false,
+    });
+    expect((await channel.status()).ok).toBe(true);
   });
 
   test("preserves structured diagnostic failures without disabling the channel", async () => {

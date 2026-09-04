@@ -5,6 +5,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { Value } from "typebox/value";
 import type { NvimConnection } from "../channel";
 import { bridgeLua } from "../channel";
 import { createNeovimExtension } from "../index";
@@ -13,13 +14,14 @@ type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | u
 
 class FakeConnection extends EventEmitter implements NvimConnection {
   readonly channelId = Promise.resolve(12);
+  boundSessionArguments: unknown[] | undefined;
   closed = false;
 
   async close(): Promise<void> {
     this.closed = true;
   }
 
-  async executeLua(code: string): Promise<unknown> {
+  async executeLua(code: string, args?: unknown[]): Promise<unknown> {
     if (code === bridgeLua.installNotifications) {
       return { channelId: 12, cwd: "/project", pid: 80 };
     }
@@ -45,6 +47,21 @@ class FakeConnection extends EventEmitter implements NvimConnection {
           },
         ],
         pid: 80,
+        truncated: false,
+      };
+    }
+    if (code === bridgeLua.bindSession) {
+      this.boundSessionArguments = args;
+      return true;
+    }
+    if (code === bridgeLua.quickfix) {
+      return {
+        cwd: "/project",
+        items: [],
+        owner: { kind: "quickfix", listId: 2 },
+        pid: 80,
+        title: "quickfix fixture",
+        total: 0,
         truncated: false,
       };
     }
@@ -90,7 +107,10 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
       modelTurns += 1;
     },
   } as unknown as ExtensionAPI;
-  const context = { cwd: "/project" } as ExtensionContext;
+  const context = {
+    cwd: "/project",
+    sessionManager: { getSessionId: () => "pi-assigned-session" },
+  } as ExtensionContext;
 
   createNeovimExtension({
     createConnection: async (socket) => {
@@ -101,6 +121,8 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   })(pi);
 
   if (tool === undefined) throw new Error("neovim tool was not registered");
+  await handlers.get("session_start")?.({} as never, context);
+  expect(connection.boundSessionArguments).toEqual(["pi-assigned-session"]);
   const parameters = JSON.stringify(tool.parameters);
   expect(parameters).toContain("status");
   expect(parameters).toContain("context");
@@ -109,13 +131,30 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("read_buffer");
   expect(parameters).toContain("diagnostic_summary");
   expect(parameters).toContain("diagnostics");
+  expect(parameters).toContain("quickfix");
+  expect(parameters).toContain("location");
+  expect(parameters).toContain("window");
   expect(parameters).toContain("maxItems");
   expect(parameters).toContain("startLine");
   expect(parameters).toContain("endLine");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
+  expect(Value.Check(tool.parameters, { operation: "quickfix" })).toBe(true);
+  expect(
+    Value.Check(tool.parameters, { kind: "location", operation: "quickfix", window: 12 }),
+  ).toBe(true);
+  expect(Value.Check(tool.parameters, { kind: "location", operation: "quickfix" })).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      kind: "location",
+      operation: "quickfix",
+      window: Number.MAX_SAFE_INTEGER + 1,
+    }),
+  ).toBe(false);
+  expect(Value.Check(tool.parameters, { maxItems: 51, operation: "quickfix" })).toBe(false);
   expect(tool.description).toContain("live, in-memory state");
   expect(tool.description).toContain("do not query Pi's separate disk-backed LSP integration");
+  expect(tool.description).toContain("explicit list ownership");
   const result = await tool.execute(
     "neovim-1",
     { operation: "status" },
@@ -149,6 +188,18 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(diagnosticResult.details).toEqual({ ok: true, operation: "diagnostic_summary" });
   expect(diagnosticResult.content[0]).toMatchObject({
     text: expect.stringContaining("unsaved error"),
+    type: "text",
+  });
+  const quickfixResult = await tool.execute(
+    "neovim-4",
+    { operation: "quickfix" },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(quickfixResult.details).toEqual({ ok: true, operation: "quickfix" });
+  expect(quickfixResult.content[0]).toMatchObject({
+    text: expect.stringContaining("quickfix fixture"),
     type: "text",
   });
   connection.emit("notification", "pi:focus", [
