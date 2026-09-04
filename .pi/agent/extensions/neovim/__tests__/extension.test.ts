@@ -83,6 +83,24 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         totalLines: 1,
       };
     }
+    if (code === bridgeLua.reveal) {
+      return {
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        cwd: "/project",
+        focused: false,
+        pid: 80,
+        position: { column: 4, line: 3 },
+        splitCreated: false,
+        window: 7,
+      };
+    }
     if (code === bridgeLua.removeNotifications) return true;
     throw new Error("unexpected Lua");
   }
@@ -132,11 +150,15 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("diagnostic_summary");
   expect(parameters).toContain("diagnostics");
   expect(parameters).toContain("quickfix");
+  expect(parameters).toContain("reveal");
   expect(parameters).toContain("location");
   expect(parameters).toContain("window");
   expect(parameters).toContain("maxItems");
   expect(parameters).toContain("startLine");
   expect(parameters).toContain("endLine");
+  expect(parameters).toContain("column");
+  expect(parameters).toContain("focus");
+  expect(parameters).toContain("split");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
   expect(Value.Check(tool.parameters, { operation: "quickfix" })).toBe(true);
@@ -152,6 +174,31 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     }),
   ).toBe(false);
   expect(Value.Check(tool.parameters, { maxItems: 51, operation: "quickfix" })).toBe(false);
+  expect(Value.Check(tool.parameters, { buffer: 2, column: 4, line: 3, operation: "reveal" })).toBe(
+    true,
+  );
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      column: 4,
+      focus: true,
+      line: 3,
+      operation: "reveal",
+      split: "vertical",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      column: 4,
+      line: 3,
+      operation: "reveal",
+      split: "diagonal",
+    }),
+  ).toBe(false);
+  expect(Value.Check(tool.parameters, { buffer: 2, column: 0, line: 3, operation: "reveal" })).toBe(
+    false,
+  );
   expect(tool.description).toContain("live, in-memory state");
   expect(tool.description).toContain("do not query Pi's separate disk-backed LSP integration");
   expect(tool.description).toContain("explicit list ownership");
@@ -200,6 +247,18 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(quickfixResult.details).toEqual({ ok: true, operation: "quickfix" });
   expect(quickfixResult.content[0]).toMatchObject({
     text: expect.stringContaining("quickfix fixture"),
+    type: "text",
+  });
+  const revealResult = await tool.execute(
+    "neovim-5",
+    { buffer: 2, column: 4, line: 3, operation: "reveal" },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(revealResult.details).toEqual({ ok: true, operation: "reveal" });
+  expect(revealResult.content[0]).toMatchObject({
+    text: expect.stringContaining('"focused": false'),
     type: "text",
   });
   connection.emit("notification", "pi:focus", [

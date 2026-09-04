@@ -79,6 +79,21 @@ const NeovimParameters = Type.Union([
     },
     { additionalProperties: false },
   ),
+  Type.Object(
+    {
+      operation: Type.Literal("reveal"),
+      buffer: Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 }),
+      line: Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 }),
+      column: Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 }),
+      focus: Type.Optional(Type.Boolean({ default: false })),
+      split: Type.Optional(
+        Type.Union([Type.Literal("none"), Type.Literal("horizontal"), Type.Literal("vertical")], {
+          default: "none",
+        }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
 ]);
 
 type NeovimInput = Static<typeof NeovimParameters>;
@@ -124,7 +139,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         name: "neovim",
         label: "Neovim",
         description:
-          "Inspect live, in-memory state from the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB, including unsaved edits. Diagnostic operations report Neovim's current vim.diagnostic state for unsaved buffers and do not query Pi's separate disk-backed LSP integration. Diagnostic summary counts a bounded editor set and returns 20 highest-priority items by default, at most 50; diagnostics returns a complete set only up to 500 items and 32 KiB. Quickfix returns the current global quickfix list by default; kind location requires its owning Neovim window. Problem lists return at most 20 entries by default and 50 when requested, with worktree-contained filenames and explicit list ownership. Diagnostic positions are one-based with end-exclusive ranges; missing quickfix positions remain zero. The socket is fixed by the launch environment and cannot be selected by tool input.",
+          "Inspect and reveal live, in-memory state from the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB, including unsaved edits. Diagnostic operations report Neovim's current vim.diagnostic state for unsaved buffers and do not query Pi's separate disk-backed LSP integration. Diagnostic summary counts a bounded editor set and returns 20 highest-priority items by default, at most 50; diagnostics returns a complete set only up to 500 items and 32 KiB. Quickfix returns the current global quickfix list by default; kind location requires its owning Neovim window. Problem lists return at most 20 entries by default and 50 when requested, with worktree-contained filenames and explicit list ownership. Reveal moves a loaded worktree source buffer to an exact one-based line and byte column while preserving focus by default; focus and horizontal or vertical split creation must be explicit. Diagnostic positions are one-based with end-exclusive ranges; missing quickfix positions remain zero. The socket is fixed by the launch environment and cannot be selected by tool input.",
         promptSnippet:
           "Inspect live context, unsaved buffers, and editor diagnostics from Pi's launching Neovim",
         promptGuidelines: [
@@ -133,6 +148,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
           "Use visible_windows to discover source shown in the current Neovim tab, list_buffers for other listed source buffers, and read_buffer only when in-memory text is needed.",
           "Use diagnostic_summary first to triage Neovim's current editor diagnostics; use diagnostics only when the complete bounded diagnostic set is needed.",
           "Use quickfix without a kind for the editor-global quickfix list. For a location list, set kind to location and pass the owning window from visible_windows.",
+          "Use reveal with a buffer from context, visible_windows, list_buffers, diagnostics, or quickfix. Omit focus and split to preserve the user's current focus and window layout; request either only when the user needs it.",
           "Treat neovim diagnostics as live editor state, including unsaved changes and non-LSP producers. Treat lsp diagnostics as independent evidence computed from project files on disk. Do not call both by default.",
         ],
         parameters: NeovimParameters,
@@ -151,6 +167,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
             )
             .with({ operation: "diagnostics" }, ({ buffer }) => bridge.diagnostics(buffer))
             .with({ operation: "quickfix" }, (options) => bridge.quickfix(options))
+            .with({ operation: "reveal" }, (options) => bridge.reveal(options))
             .exhaustive();
           return {
             content: [{ type: "text", text: resultText(result) }],

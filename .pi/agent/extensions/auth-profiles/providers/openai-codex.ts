@@ -309,12 +309,18 @@ export function openAiCodexCreditsFromPayload(
   const credits = Array.isArray(payload.credits) ? payload.credits : [];
   const expiries = credits
     .filter((credit) => isRecord(credit) && credit.status === "available")
-    .map((credit) => (isRecord(credit) ? credit.expires_at : undefined))
-    .filter((expiresAt): expiresAt is string => typeof expiresAt === "string")
-    .sort((left, right) => Date.parse(left) - Date.parse(right));
+    .flatMap((credit) => {
+      const expiresAt = isRecord(credit) ? credit.expires_at : undefined;
+      if (typeof expiresAt !== "string") return [];
+      const timestamp = Date.parse(expiresAt);
+      return Number.isFinite(timestamp) ? [{ expiresAt, timestamp }] : [];
+    })
+    .sort((left, right) => left.timestamp - right.timestamp);
+  const nextExpiresAt = availableCount > 0 ? (expiries[0]?.expiresAt ?? null) : null;
   return {
     availableCount,
-    urgency: availableCount > 0 ? urgencyFromExpiry(expiries[0], now) : "unknown",
+    nextExpiresAt,
+    urgency: urgencyFromExpiry(nextExpiresAt, now),
   };
 }
 

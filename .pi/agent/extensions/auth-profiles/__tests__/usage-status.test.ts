@@ -76,14 +76,13 @@ describe("auth profile usage status", () => {
       accountId: "account-work",
     });
     const requestedTokens: string[] = [];
+    const nextExpiresAt = new Date(now + 6 * 60 * 60 * 1_000).toISOString();
     const fetchFn = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       const token = new Headers(init?.headers).get("authorization")?.replace("Bearer ", "") ?? "";
       requestedTokens.push(token);
       const isUsage = String(input).endsWith("/usage");
       if (token !== "work-access-token") throw new Error("unexpected profile request");
-      return isUsage
-        ? usageResponse(57, 2)
-        : resetCreditsResponse(2, new Date(now + 6 * 60 * 60 * 1_000).toISOString());
+      return isUsage ? usageResponse(57, 2) : resetCreditsResponse(2, nextExpiresAt);
     };
 
     const payload = await collectUsageStatus({
@@ -101,6 +100,7 @@ describe("auth profile usage status", () => {
           profileLabel: "work",
           active: true,
           availableCount: 2,
+          nextExpiresAt,
           urgency: "urgent",
           usage: [{ remaining: 43, resetsIn: "3h" }],
         },

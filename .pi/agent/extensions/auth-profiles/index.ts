@@ -163,19 +163,38 @@ function formatUsageWindow(
   return `${renderUsageBar(theme, window.remaining)} ${remaining}${reset}`;
 }
 
-function formatResetTokens(theme: Theme, profile: ProfileUsageStatus): string {
+function durationUntil(timestamp: string, currentTime: number): string | undefined {
+  const remaining = Date.parse(timestamp) - currentTime;
+  if (Number.isFinite(remaining) === false) return undefined;
+  if (remaining <= 0) return "now";
+  if (remaining < 60_000) return `${Math.ceil(remaining / 1_000)}s`;
+  if (remaining < 3_600_000) return `${Math.ceil(remaining / 60_000)}m`;
+  if (remaining < 86_400_000) return `${Math.ceil(remaining / 3_600_000)}h`;
+  return `${Math.ceil(remaining / 86_400_000)}d`;
+}
+
+function formatResetTokens(theme: Theme, profile: ProfileUsageStatus, currentTime: number): string {
   if (profile.availableCount === undefined) return theme.fg("muted", "unavailable");
 
   const value = `${profile.availableCount} available`;
-  if (profile.availableCount === 0 || profile.urgency === "unknown") {
-    return theme.fg("muted", value);
-  }
-  const color =
-    profile.urgency === "urgent" ? "error" : profile.urgency === "soon" ? "warning" : "success";
-  return `${theme.fg(color, value)}${theme.fg("dim", `  ${profile.urgency}`)}`;
+  const count =
+    profile.availableCount === 0 || profile.urgency === "unknown"
+      ? theme.fg("muted", value)
+      : theme.fg(
+          profile.urgency === "urgent"
+            ? "error"
+            : profile.urgency === "soon"
+              ? "warning"
+              : "success",
+          value,
+        );
+  const expiresIn = profile.nextExpiresAt
+    ? durationUntil(profile.nextExpiresAt, currentTime)
+    : undefined;
+  return `${count}${expiresIn ? theme.fg("dim", `  expires in ${expiresIn}`) : ""}`;
 }
 
-function formatUsageStatus(status: UsageStatusPayload, theme: Theme): string {
+function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime: number): string {
   const profiles = [...status.profiles].sort(
     (left, right) =>
       Number(right.active) - Number(left.active) ||
@@ -198,7 +217,7 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme): string {
     return [
       `${marker} ${name} ${state}`,
       ...usageLines,
-      `  ${"reset tokens".padEnd(13)}${formatResetTokens(theme, profile)}`,
+      `  ${"reset tokens".padEnd(13)}${formatResetTokens(theme, profile, currentTime)}`,
     ].join("\n");
   });
 
@@ -448,7 +467,7 @@ export default function authProfiles(
           providerAdapter,
         });
         ctx.ui.notify(
-          formatUsageStatus(status, ctx.ui.theme),
+          formatUsageStatus(status, ctx.ui.theme, now()),
           status.diagnostics.length > 0 ? "warning" : "info",
         );
       } catch (error) {

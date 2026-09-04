@@ -36,10 +36,14 @@ import {
   parseDiagnostics,
   parseFocusNotification,
   parseQuickfix,
+  parseReveal,
   parseVisibleWindows,
   type QuickfixOptions,
   type QuickfixSnapshot,
   quickfixRequestLimit,
+  type RevealOptions,
+  type RevealSnapshot,
+  resolveRevealOptions,
   type SelectionSnapshot,
   unavailable,
   type VisibleWindowsSnapshot,
@@ -503,6 +507,138 @@ if #vim.json.encode(result) > max_bytes then return { error = "contentLimit" } e
 return result
 `;
 
+const REVEAL_LUA = `
+local buffer, line, column, focus, split, expected_cwd = ...
+
+local function positive_integer(value)
+  return type(value) == "number" and value >= 1 and value == math.floor(value)
+end
+
+if
+  positive_integer(buffer) == false
+  or vim.api.nvim_buf_is_valid(buffer) == false
+  or vim.api.nvim_buf_is_loaded(buffer) == false
+then
+  return { error = "invalidBuffer" }
+end
+if positive_integer(line) == false or positive_integer(column) == false then
+  return { error = "invalidPosition" }
+end
+if type(focus) ~= "boolean" or (split ~= "none" and split ~= "horizontal" and split ~= "vertical") then
+  return { error = "invalidRequest" }
+end
+
+local function canonical(path)
+  local normalized = vim.fs.normalize(path)
+  return vim.uv.fs_realpath(normalized) or normalized
+end
+
+local function path_is_inside(path, root)
+  if path == root then return true end
+  if root == "/" then return path:sub(1, 1) == "/" end
+  return path:sub(1, #root + 1) == root .. "/"
+end
+
+local editor_cwd = vim.fn.getcwd()
+local root = canonical(expected_cwd)
+if canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
+
+local function is_source_buffer(candidate)
+  if
+    vim.api.nvim_buf_is_valid(candidate) == false
+    or vim.api.nvim_buf_is_loaded(candidate) == false
+  then
+    return false
+  end
+  local options = vim.bo[candidate]
+  local name = vim.api.nvim_buf_get_name(candidate)
+  return
+    name ~= ""
+    and options.buftype == ""
+    and options.filetype ~= "opencode"
+    and options.filetype ~= "opencode_terminal"
+    and vim.b[candidate].is_pi_terminal ~= true
+    and path_is_inside(canonical(name), root)
+end
+
+if is_source_buffer(buffer) == false then
+  local name = vim.api.nvim_buf_get_name(buffer)
+  if name ~= "" and path_is_inside(canonical(name), root) == false then
+    return { error = "worktreeMismatch" }
+  end
+  return { error = "invalidBuffer" }
+end
+
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+if line > total_lines then return { error = "invalidPosition", totalLines = total_lines } end
+local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
+local max_column = #text + 1
+if column > max_column then return { error = "invalidColumn", maxColumn = max_column } end
+
+local function is_source_window(window)
+  return vim.api.nvim_win_is_valid(window) and is_source_buffer(vim.api.nvim_win_get_buf(window))
+end
+
+local windows = vim.api.nvim_tabpage_list_wins(0)
+local window = nil
+for _, candidate in ipairs(windows) do
+  if vim.api.nvim_win_get_buf(candidate) == buffer then
+    window = candidate
+    break
+  end
+end
+if window == nil then
+  local recent = vim.g.pi_launch_source_context
+  if type(recent) == "table" and type(recent.buffer) == "table" and type(recent.buffer.number) == "number" then
+    for _, candidate in ipairs(windows) do
+      if vim.api.nvim_win_get_buf(candidate) == recent.buffer.number and is_source_window(candidate) then
+        window = candidate
+        break
+      end
+    end
+  end
+end
+if window == nil then
+  for _, candidate in ipairs(windows) do
+    if is_source_window(candidate) then
+      window = candidate
+      break
+    end
+  end
+end
+if window == nil then return { error = "missingSourceWindow" } end
+
+local split_created = false
+if split == "none" then
+  vim.api.nvim_win_set_buf(window, buffer)
+else
+  local direction = split == "horizontal" and "below" or "right"
+  window = vim.api.nvim_open_win(buffer, focus, { split = direction, win = window })
+  split_created = true
+end
+vim.api.nvim_win_set_cursor(window, { line, column - 1 })
+vim.api.nvim_win_call(window, function() vim.cmd("normal! zz") end)
+if focus then vim.api.nvim_set_current_win(window) end
+
+local options = vim.bo[buffer]
+return {
+  pid = vim.fn.getpid(),
+  cwd = editor_cwd,
+  buffer = {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = true,
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  window = window,
+  position = { line = line, column = column },
+  focused = focus,
+  splitCreated = split_created,
+}
+`;
+
 const INSTALL_NOTIFICATIONS_LUA = `
 local channel, max_lines, max_bytes = ...
 local group_name = "PiNeovimBridge" .. channel
@@ -870,6 +1006,30 @@ export class PiNeovimChannel {
     }
   }
 
+  async reveal(options: RevealOptions): Promise<BridgeResult<RevealSnapshot>> {
+    const resolved = resolveRevealOptions(options);
+    if (resolved.ok === false) return resolved;
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(REVEAL_LUA, [
+          resolved.value.buffer,
+          resolved.value.line,
+          resolved.value.column,
+          resolved.value.focus,
+          resolved.value.split,
+          this.#cwd,
+        ]),
+        "Timed out revealing a source location in the bound Neovim instance",
+      );
+      return parseReveal(snapshot, this.#cwd, this.#editor, resolved.value);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
   async focusContext(): Promise<BridgeResult<FocusContext>> {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
@@ -1056,6 +1216,7 @@ export const bridgeLua = {
   listBuffers: LIST_BUFFERS_LUA,
   quickfix: QUICKFIX_LUA,
   readBuffer: READ_BUFFER_LUA,
+  reveal: REVEAL_LUA,
   removeNotifications: REMOVE_NOTIFICATIONS_LUA,
   visibleWindows: VISIBLE_WINDOWS_LUA,
 } as const;

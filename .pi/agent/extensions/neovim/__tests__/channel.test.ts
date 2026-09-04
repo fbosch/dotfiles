@@ -85,6 +85,16 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     startLine: 1,
     totalLines: 2,
   };
+  revealArguments: unknown[] | undefined;
+  revealResponse: unknown = {
+    buffer: focus.buffer,
+    cwd: "/project",
+    focused: false,
+    pid: 71,
+    position: { column: 4, line: 3 },
+    splitCreated: false,
+    window: 4,
+  };
   visibleResponse: unknown = {
     cwd: "/project",
     pid: 71,
@@ -119,6 +129,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     if (code === bridgeLua.readBuffer) {
       this.readArguments = args;
       return this.readResponse;
+    }
+    if (code === bridgeLua.reveal) {
+      this.revealArguments = args;
+      return this.revealResponse;
     }
     if (code === bridgeLua.removeNotifications) return true;
     throw new Error("unexpected Lua");
@@ -281,6 +295,54 @@ describe("PiNeovimChannel", () => {
       MAX_QUICKFIX_SOURCE_ITEMS,
       MAX_QUICKFIX_BYTES,
     ]);
+  });
+
+  test("reveals exact source positions with explicit focus and split options", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.reveal({ buffer: 2, column: 4, line: 3 })).toMatchObject({
+      ok: true,
+      value: {
+        buffer: focus.buffer,
+        focused: false,
+        position: { column: 4, line: 3 },
+        splitCreated: false,
+        window: 4,
+      },
+    });
+    expect(connection.revealArguments).toEqual([2, 3, 4, false, "none", "/project"]);
+
+    connection.revealResponse = {
+      buffer: focus.buffer,
+      cwd: "/project",
+      focused: true,
+      pid: 71,
+      position: { column: 4, line: 3 },
+      splitCreated: true,
+      window: 6,
+    };
+    expect(
+      await channel.reveal({
+        buffer: 2,
+        column: 4,
+        focus: true,
+        line: 3,
+        split: "horizontal",
+      }),
+    ).toMatchObject({ ok: true, value: { focused: true, splitCreated: true, window: 6 } });
+    expect(connection.revealArguments).toEqual([2, 3, 4, true, "horizontal", "/project"]);
+
+    expect(await channel.reveal({ buffer: 0, column: 1, line: 1 })).toMatchObject({
+      error: { code: "NVIM_INVALID_BUFFER" },
+      ok: false,
+    });
+    connection.revealResponse = { error: "worktreeMismatch" };
+    expect(await channel.reveal({ buffer: 2, column: 1, line: 1 })).toMatchObject({
+      error: { code: "NVIM_WORKTREE_MISMATCH" },
+      ok: false,
+    });
+    expect((await channel.status()).ok).toBe(true);
   });
 
   test("preserves structured problem-list failures without disabling the channel", async () => {

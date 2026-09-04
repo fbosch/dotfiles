@@ -20,8 +20,10 @@ import {
   parseDiagnostics,
   parseFocusNotification,
   parseQuickfix,
+  parseReveal,
   parseVisibleWindows,
   pathIsInsideWorktree,
+  resolveRevealOptions,
 } from "../contracts";
 
 const buffer = {
@@ -617,6 +619,104 @@ describe("Neovim editor contracts", () => {
         truncated: true,
       },
     });
+  });
+
+  test("parses exact reveal results and applies focus-preserving defaults", () => {
+    const options = { buffer: 4, column: 5, line: 8 };
+    expect(resolveRevealOptions(options)).toEqual({
+      ok: true,
+      value: { ...options, focus: false, split: "none" },
+    });
+    expect(
+      parseReveal(
+        {
+          buffer,
+          cwd: editor.cwd,
+          focused: false,
+          pid: editor.pid,
+          position: { column: 5, line: 8 },
+          splitCreated: false,
+          window: 12,
+        },
+        "/project",
+        editor,
+        options,
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        buffer,
+        editor,
+        focused: false,
+        position: { column: 5, line: 8 },
+        splitCreated: false,
+        window: 12,
+      },
+    });
+  });
+
+  test("rejects invalid reveal requests, responses, positions, and worktrees", () => {
+    const options = { buffer: 4, column: 5, line: 8, focus: true, split: "vertical" } as const;
+    expect(resolveRevealOptions({ ...options, buffer: 0 })).toMatchObject({
+      error: { code: "NVIM_INVALID_BUFFER" },
+      ok: false,
+    });
+    expect(resolveRevealOptions({ ...options, column: 0 })).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE" },
+      ok: false,
+    });
+    expect(
+      parseReveal({ error: "invalidPosition", totalLines: 2 }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE", message: expect.stringContaining("1-2") },
+      ok: false,
+    });
+    expect(
+      parseReveal({ error: "invalidColumn", maxColumn: 4 }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE", message: expect.stringContaining("1-4") },
+      ok: false,
+    });
+    expect(
+      parseReveal({ error: "missingSourceWindow" }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_WINDOW" },
+      ok: false,
+    });
+    expect(parseReveal({ error: "worktreeMismatch" }, "/project", editor, options)).toMatchObject({
+      error: { code: "NVIM_WORKTREE_MISMATCH" },
+      ok: false,
+    });
+
+    const response = {
+      buffer,
+      cwd: editor.cwd,
+      focused: true,
+      pid: editor.pid,
+      position: { column: 5, line: 8 },
+      splitCreated: true,
+      window: 12,
+    };
+    expect(
+      parseReveal(
+        { ...response, buffer: { ...buffer, name: "/outside/secret.ts" } },
+        "/project",
+        editor,
+        options,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+    expect(
+      parseReveal({ ...response, position: { column: 4, line: 8 } }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+    expect(parseReveal({ ...response, focused: false }, "/project", editor, options)).toMatchObject(
+      {
+        error: { code: "NVIM_INVALID_RESPONSE" },
+        ok: false,
+      },
+    );
   });
 
   test("rejects invalid problem-list owners, bounds, paths, and output sizes", () => {

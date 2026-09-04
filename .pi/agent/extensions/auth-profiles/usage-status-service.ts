@@ -45,6 +45,7 @@ export type ProfileUsageStatus = {
   profileLabel: string;
   active: boolean;
   availableCount?: number;
+  nextExpiresAt?: string;
   urgency: Urgency;
   usage: UsageWindowStatus[];
 };
@@ -62,6 +63,7 @@ type UsageSnapshot = {
 
 type ResetCreditsSnapshot = {
   availableCount: number;
+  nextExpiresAt?: string | null;
   urgency: Urgency;
 };
 
@@ -184,7 +186,19 @@ function parseResetCreditsSnapshot(value: unknown): ResetCreditsSnapshot | undef
   if (!isRecord(value)) return undefined;
   const availableCount = nonnegativeInteger(value.availableCount);
   if (availableCount === undefined) return undefined;
-  return { availableCount, urgency: parseUrgency(value.urgency) };
+  const nextExpiresAt = value.nextExpiresAt;
+  if (
+    nextExpiresAt !== undefined &&
+    nextExpiresAt !== null &&
+    (typeof nextExpiresAt !== "string" || Number.isFinite(Date.parse(nextExpiresAt)) === false)
+  ) {
+    return undefined;
+  }
+  return {
+    availableCount,
+    ...(nextExpiresAt === undefined ? {} : { nextExpiresAt }),
+    urgency: parseUrgency(value.urgency),
+  };
 }
 
 function parseCachedAccount(value: unknown): CachedAccount | undefined {
@@ -289,11 +303,13 @@ async function refreshAccount(
     !next.resetCreditsCheckedAt || now - next.resetCreditsCheckedAt >= RESET_CREDITS_CACHE_MS;
   const resetCreditsCountChanged =
     usageCount !== undefined && next.resetCredits?.availableCount !== usageCount;
+  const resetCreditsExpiryMissing =
+    (next.resetCredits?.availableCount ?? 0) > 0 && next.resetCredits?.nextExpiresAt === undefined;
   if (
     includeResetCredits &&
     credential.expiresAt > now &&
     adapter.fetchCredits !== undefined &&
-    (resetCreditsAreStale || resetCreditsCountChanged)
+    (resetCreditsAreStale || resetCreditsCountChanged || resetCreditsExpiryMissing)
   ) {
     try {
       next.resetCredits = await adapter.fetchCredits(credential, fetchFn, now);
@@ -304,15 +320,19 @@ async function refreshAccount(
   }
 
   const availableCount = next.resetCredits?.availableCount ?? usageCount;
+  const resetCredits =
+    availableCount && next.resetCredits?.availableCount === availableCount
+      ? next.resetCredits
+      : undefined;
   return {
     cached: next,
     profile: {
       usage: next.usage?.windows ?? [],
       ...(availableCount !== undefined ? { availableCount } : {}),
-      urgency:
-        availableCount && next.resetCredits?.availableCount === availableCount
-          ? next.resetCredits.urgency
-          : "unknown",
+      ...(typeof resetCredits?.nextExpiresAt === "string"
+        ? { nextExpiresAt: resetCredits.nextExpiresAt }
+        : {}),
+      urgency: resetCredits?.urgency ?? "unknown",
     },
     errors,
   };

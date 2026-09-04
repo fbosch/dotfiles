@@ -91,9 +91,11 @@
 
 - Be direct, concise, technical, and willing to challenge a weak premise. Do
   not add praise, apologies, or optional closing offers.
-- Use the `writing-clearly` skill for substantial human-facing prose. Keep
-  user-facing interfaces focused on actionable results rather than internal
-  implementation details.
+- Use the `writing-clearly` skill for substantial human-facing prose. Write
+  labels, statuses, and diagnostics in terms of what users can observe or act
+  on. Do not expose caches, retries, request stages, storage details, internal
+  decision paths, or other implementation mechanics unless they change the
+  user's next action.
 - Format user-executed multi-step instructions as a numbered list with the
   immediate action first.
 - When blocked, report the observed symptom, likely cause or uncertainty, and

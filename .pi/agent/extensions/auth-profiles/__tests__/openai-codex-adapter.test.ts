@@ -5,7 +5,10 @@ import type {
   CredentialInfo,
   CredentialStore,
 } from "@earendil-works/pi-ai";
-import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
+import {
+  createOpenAiCodexProfileAdapter,
+  openAiCodexCreditsFromPayload,
+} from "../providers/openai-codex";
 
 class FakeCredentialStore implements CredentialStore {
   constructor(public credential: Credential | undefined) {}
@@ -47,6 +50,38 @@ function expiredCredential(accountId = "account-work"): Credential {
     accountId,
   };
 }
+
+describe("OpenAI Codex reset-credit status", () => {
+  test("reports the nearest available credit expiration", () => {
+    const now = Date.parse("2026-09-02T10:00:00.000Z");
+    expect(
+      openAiCodexCreditsFromPayload(
+        {
+          available_count: 2,
+          credits: [
+            {
+              status: "available",
+              expires_at: "2026-09-04T10:00:00.000Z",
+            },
+            {
+              status: "redeemed",
+              expires_at: "2026-09-02T11:00:00.000Z",
+            },
+            {
+              status: "available",
+              expires_at: "2026-09-02T16:00:00.000Z",
+            },
+          ],
+        },
+        now,
+      ),
+    ).toEqual({
+      availableCount: 2,
+      nextExpiresAt: "2026-09-02T16:00:00.000Z",
+      urgency: "urgent",
+    });
+  });
+});
 
 describe("OpenAI Codex profile adapter credentials", () => {
   test("allows logout followed by login while guarding the new account", async () => {

@@ -22,6 +22,7 @@ import {
   ModalFrame,
   modalSelectListTheme,
 } from "./modal-frame";
+import { renderPermissionPromptLines } from "./permission-prompt-rendering";
 
 const FLOATING_DIALOG_OVERLAY = {
   anchor: "center" as const,
@@ -63,9 +64,11 @@ class InlineDockDialog implements Component {
     const backgroundAnsi = this.theme.getBgAnsi("userMessageBg");
     const rail = this.theme.fg("warning", DOCK_RAIL);
     const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
-    const content = this.component
-      .render(contentWidth)
-      .map((line) => `${" ".repeat(paddingX)}${line}`);
+    const content = renderPermissionPromptLines(
+      this.component.render(contentWidth),
+      contentWidth,
+      this.theme,
+    ).map((line) => `${" ".repeat(paddingX)}${line}`);
     const rows = ["", ...content].map((line) =>
       paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
     );

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
-import { access, mkdtemp, realpath, rm } from "node:fs/promises";
+import { access, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { attach } from "neovim";
 import { PiNeovimChannel } from "../channel";
 import { MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
 
@@ -20,7 +21,7 @@ async function waitForSocket(socket: string): Promise<void> {
 async function withNvim(
   cwd: string,
   setup: string,
-  run: (channel: PiNeovimChannel) => Promise<void>,
+  run: (channel: PiNeovimChannel, socket: string) => Promise<void>,
 ): Promise<void> {
   const socket = `/tmp/pi-neovim-buffer-${process.pid}-${crypto.randomUUID()}.sock`;
   const nvim = Bun.spawn(
@@ -42,7 +43,7 @@ async function withNvim(
 
   try {
     await waitForSocket(socket);
-    await run(channel);
+    await run(channel, socket);
   } finally {
     await channel.close();
     nvim.kill();
@@ -424,6 +425,174 @@ test("reads bounded quickfix and explicitly owned location lists", async () => {
     });
   } finally {
     await rm(workspace, { force: true, recursive: true });
+  }
+}, 10_000);
+
+test("reveals exact source positions while preserving focus unless explicitly requested", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-reveal-")));
+  const outsideWorkspace = await realpath(
+    await mkdtemp(join(tmpdir(), "pi-neovim-reveal-outside-")),
+  );
+  const target = join(workspace, "target.lua");
+  const anchor = join(workspace, "anchor.lua");
+  const outside = join(outsideWorkspace, "outside.lua");
+  const linkedOutside = join(workspace, "linked", "outside.lua");
+  const targetText = "first line\nsecond line\nthird line\n";
+  await Promise.all([
+    Bun.write(target, targetText),
+    Bun.write(anchor, "return 'anchor'\n"),
+    Bun.write(outside, "return 'outside'\n"),
+  ]);
+  await symlink(outsideWorkspace, join(workspace, "linked"));
+  const setup = [
+    `local target_name = ${JSON.stringify(target)}`,
+    `local anchor_name = ${JSON.stringify(anchor)}`,
+    `local outside_name = ${JSON.stringify(outside)}`,
+    `local linked_outside_name = ${JSON.stringify(linkedOutside)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(target_name))',
+    "local target_buffer = vim.api.nvim_get_current_buf()",
+    'vim.cmd("edit " .. vim.fn.fnameescape(anchor_name))',
+    "local anchor_buffer = vim.api.nvim_get_current_buf()",
+    "local anchor_window = vim.api.nvim_get_current_win()",
+    "local outside_buffer = vim.fn.bufadd(outside_name)",
+    "vim.fn.bufload(outside_buffer)",
+    "local linked_outside_buffer = vim.fn.bufadd(linked_outside_name)",
+    "vim.fn.bufload(linked_outside_buffer)",
+    'vim.cmd("vsplit")',
+    "local terminal = vim.api.nvim_create_buf(false, true)",
+    'vim.api.nvim_buf_set_name(terminal, "pi-reveal-terminal")',
+    "vim.b[terminal].is_pi_terminal = true",
+    "vim.api.nvim_set_current_buf(terminal)",
+    "vim.g.pi_launch_source_context = { buffer = { number = anchor_buffer } }",
+    "vim.g.pi_reveal_test = { target = target_buffer, outside = outside_buffer, linkedOutside = linked_outside_buffer, anchorWindow = anchor_window, terminal = terminal }",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel, socket) => {
+      const nvim = attach({ socket });
+      const inventory = await channel.listBuffers();
+      if (inventory.ok === false) throw new Error(inventory.error.message);
+      const targetBuffer = inventory.value.buffers.find((buffer) => buffer.name === target);
+      if (targetBuffer === undefined) throw new Error("hidden reveal target was not listed");
+      const initial = (await nvim.executeLua(
+        "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), windows = #vim.api.nvim_tabpage_list_wins(0), outside = vim.g.pi_reveal_test.outside, linkedOutside = vim.g.pi_reveal_test.linkedOutside }",
+        [],
+      )) as {
+        currentBuffer: number;
+        currentWindow: number;
+        linkedOutside: number;
+        outside: number;
+        windows: number;
+      };
+
+      const defaultReveal = await channel.reveal({
+        buffer: targetBuffer.number,
+        column: 4,
+        line: 2,
+      });
+      expect(defaultReveal).toMatchObject({
+        ok: true,
+        value: {
+          buffer: { name: target, number: targetBuffer.number },
+          focused: false,
+          position: { column: 4, line: 2 },
+          splitCreated: false,
+        },
+      });
+      if (defaultReveal.ok === false) return;
+      expect(
+        await nvim.executeLua(
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), revealedBuffer = vim.api.nvim_win_get_buf(window), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [defaultReveal.value.window],
+        ),
+      ).toEqual({
+        currentBuffer: initial.currentBuffer,
+        currentWindow: initial.currentWindow,
+        cursor: [2, 3],
+        revealedBuffer: targetBuffer.number,
+        windows: initial.windows,
+      });
+
+      const horizontal = await channel.reveal({
+        buffer: targetBuffer.number,
+        column: 2,
+        line: 1,
+        split: "horizontal",
+      });
+      expect(horizontal).toMatchObject({
+        ok: true,
+        value: { focused: false, splitCreated: true },
+      });
+      if (horizontal.ok === false) return;
+      expect(
+        await nvim.executeLua(
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [horizontal.value.window],
+        ),
+      ).toEqual({
+        currentWindow: initial.currentWindow,
+        cursor: [1, 1],
+        windows: initial.windows + 1,
+      });
+
+      const vertical = await channel.reveal({
+        buffer: targetBuffer.number,
+        column: 3,
+        focus: true,
+        line: 3,
+        split: "vertical",
+      });
+      expect(vertical).toMatchObject({
+        ok: true,
+        value: { focused: true, splitCreated: true },
+      });
+      if (vertical.ok === false) return;
+      expect(
+        await nvim.executeLua(
+          "local window = ...; return { currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(window), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [vertical.value.window],
+        ),
+      ).toEqual({
+        currentWindow: vertical.value.window,
+        cursor: [3, 2],
+        windows: initial.windows + 2,
+      });
+
+      const beforeRejected = await nvim.executeLua(
+        "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        [],
+      );
+      for (const outsideBuffer of [initial.outside, initial.linkedOutside]) {
+        expect(await channel.reveal({ buffer: outsideBuffer, column: 1, line: 1 })).toMatchObject({
+          error: { code: "NVIM_WORKTREE_MISMATCH" },
+          ok: false,
+        });
+      }
+      expect(
+        await channel.reveal({ buffer: targetBuffer.number, column: 1, line: 4 }),
+      ).toMatchObject({
+        error: { code: "NVIM_INVALID_RANGE" },
+        ok: false,
+      });
+      expect(
+        await channel.reveal({ buffer: targetBuffer.number, column: 12, line: 1 }),
+      ).toMatchObject({
+        error: { code: "NVIM_INVALID_RANGE" },
+        ok: false,
+      });
+      expect(
+        await nvim.executeLua(
+          "return { currentWindow = vim.api.nvim_get_current_win(), currentBuffer = vim.api.nvim_get_current_buf(), windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [],
+        ),
+      ).toEqual(beforeRejected);
+      expect(await Bun.file(target).text()).toBe(targetText);
+    });
+  } finally {
+    await Promise.all([
+      rm(workspace, { force: true, recursive: true }),
+      rm(outsideWorkspace, { force: true, recursive: true }),
+    ]);
   }
 }, 10_000);
 

@@ -191,6 +191,30 @@ export interface QuickfixSnapshot {
   readonly truncated: boolean;
 }
 
+export type RevealSplit = "horizontal" | "none" | "vertical";
+
+export interface RevealOptions {
+  readonly buffer: number;
+  readonly column: number;
+  readonly focus?: boolean;
+  readonly line: number;
+  readonly split?: RevealSplit;
+}
+
+export interface ResolvedRevealOptions extends RevealOptions {
+  readonly focus: boolean;
+  readonly split: RevealSplit;
+}
+
+export interface RevealSnapshot {
+  readonly buffer: BufferIdentity;
+  readonly editor: EditorIdentity;
+  readonly focused: boolean;
+  readonly position: Position;
+  readonly splitCreated: boolean;
+  readonly window: number;
+}
+
 export type BridgeResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly error: NeovimError; readonly ok: false };
@@ -214,11 +238,47 @@ function isSelectionMode(value: unknown): value is string {
 function isPosition(value: unknown): value is Position {
   return (
     isRecord(value) &&
-    Number.isInteger(value.line) &&
+    Number.isSafeInteger(value.line) &&
     (value.line as number) >= 1 &&
-    Number.isInteger(value.column) &&
+    Number.isSafeInteger(value.column) &&
     (value.column as number) >= 1
   );
+}
+
+function isRevealSplit(value: unknown): value is RevealSplit {
+  return value === "none" || value === "horizontal" || value === "vertical";
+}
+
+export function resolveRevealOptions(options: RevealOptions): BridgeResult<ResolvedRevealOptions> {
+  if (Number.isSafeInteger(options.buffer) === false || options.buffer < 1) {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (
+    Number.isSafeInteger(options.line) === false ||
+    options.line < 1 ||
+    Number.isSafeInteger(options.column) === false ||
+    options.column < 1
+  ) {
+    return failure("NVIM_INVALID_RANGE", "Choose a positive one-based line and column");
+  }
+  const focus = options.focus ?? false;
+  const split = options.split ?? "none";
+  if (typeof focus !== "boolean" || isRevealSplit(split) === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Invalid reveal focus or split option");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: options.buffer,
+      column: options.column,
+      focus,
+      line: options.line,
+      split,
+    },
+  };
 }
 
 function isBufferIdentity(value: unknown): value is BufferIdentity {
@@ -939,6 +999,76 @@ export function parseQuickfix(
     return quickfixContentLimit();
   }
   return { ok: true, value: result };
+}
+
+function revealFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidBuffer") {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (value.error === "worktreeMismatch") {
+    return failure("NVIM_WORKTREE_MISMATCH", "The reveal target is outside Pi's worktree");
+  }
+  if (value.error === "invalidPosition") {
+    const suffix = Number.isSafeInteger(value.totalLines) ? ` within 1-${value.totalLines}` : "";
+    return failure("NVIM_INVALID_RANGE", `Choose a line${suffix}`);
+  }
+  if (value.error === "invalidColumn") {
+    const suffix = Number.isSafeInteger(value.maxColumn) ? ` within 1-${value.maxColumn}` : "";
+    return failure("NVIM_INVALID_RANGE", `Choose a column${suffix}`);
+  }
+  if (value.error === "missingSourceWindow") {
+    return failure(
+      "NVIM_INVALID_WINDOW",
+      "No worktree source window is available for source reveal",
+    );
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown reveal error");
+}
+
+export function parseReveal(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  options: RevealOptions,
+): BridgeResult<RevealSnapshot> {
+  const resolved = resolveRevealOptions(options);
+  if (resolved.ok === false) return resolved;
+  const responseFailure = revealFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (
+    buffer.value.loaded === false ||
+    buffer.value.number !== resolved.value.buffer ||
+    Number.isSafeInteger(snapshot.value.window) === false ||
+    (snapshot.value.window as number) < 1 ||
+    isPosition(snapshot.value.position) === false ||
+    snapshot.value.position.line !== resolved.value.line ||
+    snapshot.value.position.column !== resolved.value.column ||
+    typeof snapshot.value.focused !== "boolean" ||
+    snapshot.value.focused !== resolved.value.focus ||
+    typeof snapshot.value.splitCreated !== "boolean" ||
+    snapshot.value.splitCreated !== (resolved.value.split !== "none")
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid reveal data");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: buffer.value,
+      editor,
+      focused: snapshot.value.focused,
+      position: snapshot.value.position,
+      splitCreated: snapshot.value.splitCreated,
+      window: snapshot.value.window as number,
+    },
+  };
 }
 
 export function parseFocusContext(value: unknown, expectedCwd: string): BridgeResult<FocusContext> {

@@ -213,6 +213,7 @@ describe("auth profile prompt status", () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-status-"));
     temporaryDirectories.push(root);
     const agentDir = join(root, "agent");
+    const currentTime = Date.parse("2026-09-02T10:00:00.000Z");
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
     let profilesCommand: ProfileCommandHandler | undefined;
@@ -238,6 +239,7 @@ describe("auth profile prompt status", () => {
           active: true,
           urgency: "urgent",
           availableCount: 2,
+          nextExpiresAt: "2026-09-02T16:00:00.000Z",
           usage: [
             { remaining: 75, resetsIn: "3h" },
             { remaining: 0, resetsIn: "now" },
@@ -249,6 +251,7 @@ describe("auth profile prompt status", () => {
     let receivedOptions: unknown;
     const notifications: Array<{ message: string; level: string }> = [];
     authProfiles(pi, {
+      now: () => currentTime,
       providerAdapter,
       usageCollector: async (options) => {
         receivedOptions = options;
@@ -279,7 +282,7 @@ describe("auth profile prompt status", () => {
           "<success>*</success> <accent><b>default</b></accent> <success>active</success>\n" +
           "  primary      <success>━━━━━━━━━━╸</success><dim>───</dim> <success>75% remaining</success><dim>  resets 3h</dim>\n" +
           "  secondary    <dim>──────────────</dim> <error>0% remaining</error><dim>  resets now</dim>\n" +
-          "  reset tokens <error>2 available</error><dim>  urgent</dim>\n\n" +
+          "  reset tokens <error>2 available</error><dim>  expires in 6h</dim>\n\n" +
           "<muted>-</muted> <accent><b>work</b></accent> <muted>inactive</muted>\n" +
           "  primary      <muted>unavailable</muted>\n" +
           "  secondary    <muted>unavailable</muted>\n" +

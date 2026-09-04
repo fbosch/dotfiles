@@ -27,6 +27,7 @@ export type ProviderUsageSnapshot = {
 
 export type ProviderCreditSnapshot = {
   availableCount: number;
+  nextExpiresAt: string | null;
   urgency: UsageUrgency;
 };
 
