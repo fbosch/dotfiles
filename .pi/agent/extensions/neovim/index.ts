@@ -11,8 +11,6 @@ import type { BridgeResult, NeovimErrorCode } from "./contracts";
 const NeovimParameters = Type.Union([
   Type.Object({ operation: Type.Literal("status") }, { additionalProperties: false }),
   Type.Object({ operation: Type.Literal("context") }, { additionalProperties: false }),
-  Type.Object({ operation: Type.Literal("focus_context") }, { additionalProperties: false }),
-  Type.Object({ operation: Type.Literal("selection") }, { additionalProperties: false }),
 ]);
 
 type NeovimInput = Static<typeof NeovimParameters>;
@@ -58,10 +56,11 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         name: "neovim",
         label: "Neovim",
         description:
-          "Inspect the exact Neovim instance that launched this Pi session. Operations report connection status, current editor context, the last focused source context, or the bounded source selection. The socket is fixed by the launch environment and cannot be selected by tool input.",
+          "Inspect the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports the active source context, or the last source context when Pi is focused, including any bounded selection. The socket is fixed by the launch environment and cannot be selected by tool input.",
         promptSnippet: "Inspect live context from the Neovim instance that launched Pi",
         promptGuidelines: [
           "Use neovim for live editor state, unsaved selections, or source focus that Pi's disk-backed tools cannot observe.",
+          "Use one context call for source buffer, cursor, mode, and bounded selection; do not call status first unless connection identity or health is relevant.",
           "Treat neovim results as editor state and lsp results as independent language-server evidence.",
         ],
         parameters: NeovimParameters,
@@ -72,8 +71,6 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
           const result = await match(params)
             .with({ operation: "status" }, () => bridge.status())
             .with({ operation: "context" }, () => bridge.context())
-            .with({ operation: "focus_context" }, () => bridge.focusContext())
-            .with({ operation: "selection" }, () => bridge.selection())
             .exhaustive();
           return {
             content: [{ type: "text", text: resultText(result) }],

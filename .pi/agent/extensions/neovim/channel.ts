@@ -23,6 +23,18 @@ const RPC_TIMEOUT_MS = 2_000;
 const ACTIVE_CONTEXT_LUA = `
 local max_lines, max_bytes = ...
 local buffer = vim.api.nvim_get_current_buf()
+if vim.b[buffer].is_pi_terminal == true then
+  local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
+  if ok and type(source) == "table" then
+    -- Neovim can retain a pre-upgrade launcher module while Pi restarts.
+    if type(source.mode) ~= "string" then
+      local selection = source.selection
+      source.mode = type(selection) == "table" and selection.mode or "n"
+    end
+    return source
+  end
+  return vim.NIL
+end
 local options = vim.bo[buffer]
 local mode = vim.api.nvim_get_mode().mode
 local selection = vim.NIL
@@ -101,6 +113,7 @@ local function source_snapshot()
     snapshot = {
       pid = vim.fn.getpid(),
       cwd = vim.fn.getcwd(),
+      mode = mode,
       buffer = {
         number = buffer,
         name = name,
@@ -254,13 +267,13 @@ export class PiNeovimChannel {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
     try {
-      return parseActiveContext(
-        await withTimeout(
-          connection.value.executeLua(ACTIVE_CONTEXT_LUA, [MAX_CONTEXT_LINES, MAX_CONTEXT_BYTES]),
-          "Timed out reading context from the bound Neovim instance",
-        ),
-        this.#cwd,
+      const snapshot = await withTimeout(
+        connection.value.executeLua(ACTIVE_CONTEXT_LUA, [MAX_CONTEXT_LINES, MAX_CONTEXT_BYTES]),
+        "Timed out reading context from the bound Neovim instance",
       );
+      return snapshot === null || snapshot === undefined
+        ? noFocusContext()
+        : parseActiveContext(snapshot, this.#cwd);
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }
@@ -277,18 +290,16 @@ export class PiNeovimChannel {
   async selection(): Promise<BridgeResult<SelectionSnapshot>> {
     const context = await this.context();
     if (context.ok === false) return context;
-    const selection = context.value.selection;
-    return selection === undefined
-      ? noSelection()
-      : {
-          ok: true,
-          value: {
-            ...selection,
-            buffer: context.value.buffer,
-            cwd: context.value.cwd,
-            pid: context.value.pid,
-          },
-        };
+    if (context.value.selection === undefined) return noSelection();
+    return {
+      ok: true,
+      value: {
+        ...context.value.selection,
+        buffer: context.value.buffer,
+        cwd: context.value.cwd,
+        pid: context.value.pid,
+      },
+    };
   }
 
   async close(): Promise<void> {

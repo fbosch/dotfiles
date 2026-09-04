@@ -194,13 +194,14 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
   });
 });
 
-test("starts diagnostics after formatting and suppresses clean and unconfirmed results", async () => {
+test("starts diagnostics after formatting and suppresses empty results", async () => {
   const handlers = new Map<string, Handler>();
   const deliveryModes: Array<string | undefined> = [];
   const sentMessages: SentMessage[] = [];
   let formatted = false;
   let diagnosticsObservedFormatting = false;
   let diagnosticVerdict: DiagnosticVerdict = "clean";
+  let diagnosticWarnings: readonly string[] = [];
   let diagnosticCalls = 0;
   const fakeManager = {
     diagnostics: async () => {
@@ -222,9 +223,11 @@ test("starts diagnostics after formatting and suppresses clean and unconfirmed r
             ? "LSP extension verdict: clean\nLSP-native evidence: fake=textDocument/diagnostic full report"
             : diagnosticVerdict === "unconfirmed"
               ? "LSP extension verdict: unconfirmed\nLSP-native evidence: none\nMissing LSP-native evidence: fake sent no textDocument/publishDiagnostics notification within the bounded wait"
-              : "LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
+              : diagnosticVerdict === "unavailable"
+                ? "LSP extension verdict: unavailable\nLSP-native evidence: none"
+                : "LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
         unconfirmedServers: diagnosticVerdict === "unconfirmed" ? ["fake"] : [],
-        warnings: [],
+        warnings: diagnosticWarnings,
       };
     },
     shutdown: async () => {},
@@ -270,11 +273,19 @@ test("starts diagnostics after formatting and suppresses clean and unconfirmed r
   await handlers.get("turn_end")?.(turnEnd("call-2") as never, context);
   expect(sentMessages).toEqual([]);
 
-  diagnosticVerdict = "issues";
+  diagnosticVerdict = "unavailable";
+  diagnosticWarnings = ["fake: LSP path is outside project root"];
   await handlers.get("tool_result")?.(mutationResult("call-3") as never, context);
   await handlers.get("message_end")?.(mutationMessage("call-3") as never, context);
-  expect(diagnosticCalls).toBe(3);
   await handlers.get("turn_end")?.(turnEnd("call-3") as never, context);
+  expect(sentMessages).toEqual([]);
+
+  diagnosticVerdict = "issues";
+  diagnosticWarnings = [];
+  await handlers.get("tool_result")?.(mutationResult("call-4") as never, context);
+  await handlers.get("message_end")?.(mutationMessage("call-4") as never, context);
+  expect(diagnosticCalls).toBe(4);
+  await handlers.get("turn_end")?.(turnEnd("call-4") as never, context);
 
   expect(sentMessages).toEqual([
     {

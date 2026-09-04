@@ -59,7 +59,7 @@ Alternative considered: feed unsaved buffers into Pi's LSP extension and expose 
 
 ### Use a curated operation set with stable errors
 
-The extension will register explicit operations for context, focus context, selection, buffer inventory, bounded reads, diagnostics, problem lists, reveal, highlight cleanup, and annotations. Each tool boundary validates inputs before invoking fixed bridge-owned Lua. A separate inbound event dispatcher validates the notification name and payload before changing extension state.
+The extension will register explicit operations for context with last-source fallback and bounded selection, buffer inventory, bounded reads, diagnostics, problem lists, reveal, highlight cleanup, and annotations. Connection status remains separately available. Each tool boundary validates inputs before invoking fixed bridge-owned Lua. A separate inbound event dispatcher validates the notification name and payload before changing extension state.
 
 Errors will contain a stable code and human-readable message. Expected codes include unavailable editor, worktree mismatch, invalid buffer, invalid range, limit exceeded, stale anchor, and unsupported operation. Socket paths, inbound event payloads, and unsaved source content must not be written to logs or lifecycle metadata.
 

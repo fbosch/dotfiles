@@ -58,6 +58,11 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   })(pi);
 
   if (tool === undefined) throw new Error("neovim tool was not registered");
+  const parameters = JSON.stringify(tool.parameters);
+  expect(parameters).toContain("status");
+  expect(parameters).toContain("context");
+  expect(parameters).not.toContain("focus_context");
+  expect(parameters).not.toContain("selection");
   const result = await tool.execute(
     "neovim-1",
     { operation: "status" },

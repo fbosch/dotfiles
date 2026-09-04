@@ -53,7 +53,7 @@ The system SHALL verify that editor context belongs to the Pi session's worktree
 
 ### Requirement: Live editor context
 
-The system SHALL expose the active source buffer, cursor, editor mode, focus context, exact visual selection, visible source windows, and listed source buffers from current Neovim memory.
+The system SHALL expose the active source buffer, cursor, editor mode, last-source focus fallback, exact visual selection, visible source windows, and listed source buffers from current Neovim memory. The Phase 1 context operation SHALL combine source identity, cursor, mode, focus fallback, and bounded selection so callers do not need redundant requests.
 
 #### Scenario: User selects unsaved text
 
@@ -62,8 +62,8 @@ The system SHALL expose the active source buffer, cursor, editor mode, focus con
 
 #### Scenario: Focus moves to the agent terminal
 
-- **WHEN** Pi requests focus context after Neovim focus moved from a source buffer to the agent terminal
-- **THEN** the result identifies the last valid source buffer recorded before that focus change
+- **WHEN** Pi requests editor context after Neovim focus moved from a source buffer to the agent terminal
+- **THEN** the single context result identifies the last valid source buffer recorded before that focus change and includes any bounded selection captured there
 
 ### Requirement: Bounded unsaved-buffer reads
 

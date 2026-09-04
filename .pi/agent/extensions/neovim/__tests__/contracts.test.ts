@@ -43,10 +43,17 @@ describe("Neovim editor contracts", () => {
     });
   });
 
-  test("permits terminal metadata without treating it as source content", () => {
+  test("does not expose the internal Pi terminal marker", () => {
+    expect(parseActiveContext({ agentTerminalFocused: true }, "/project")).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+  });
+
+  test("permits unrelated terminal metadata without treating it as source content", () => {
     const terminal = {
       ...focus,
-      buffer: { ...buffer, buftype: "terminal", name: "term:///project//123:pi" },
+      buffer: { ...buffer, buftype: "terminal", name: "term:///project//123:shell" },
       mode: "t",
       selection: undefined,
     };

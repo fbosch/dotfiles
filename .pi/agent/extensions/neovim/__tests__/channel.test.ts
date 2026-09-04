@@ -90,6 +90,39 @@ describe("PiNeovimChannel", () => {
     expect(await channel.focusContext()).toEqual({ ok: true, value: focus });
   });
 
+  test("substitutes source context and selection instead of reporting a marked Pi terminal", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+    await channel.status();
+    connection.activeResponse = { ...focus, mode: "v" };
+
+    expect(bridgeLua.activeContext).toContain("vim.b[buffer].is_pi_terminal");
+    expect(bridgeLua.activeContext).toContain('nvim_get_var, "pi_launch_source_context"');
+    expect(bridgeLua.activeContext).not.toContain("agentTerminalFocused");
+    expect(await channel.context()).toEqual({ ok: true, value: { ...focus, mode: "v" } });
+    expect(await channel.focusContext()).toEqual({ ok: true, value: focus });
+    expect(await channel.selection()).toEqual({
+      ok: true,
+      value: {
+        ...focus.selection,
+        buffer: focus.buffer,
+        cwd: focus.cwd,
+        pid: focus.pid,
+      },
+    });
+  });
+
+  test("reports missing source context instead of marked terminal metadata", async () => {
+    const connection = new FakeConnection();
+    connection.activeResponse = null;
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.context()).toMatchObject({
+      error: { code: "NVIM_NO_FOCUS_CONTEXT" },
+      ok: false,
+    });
+  });
+
   test("reports absent source selection without reading terminal state", async () => {
     const connection = new FakeConnection();
     const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);

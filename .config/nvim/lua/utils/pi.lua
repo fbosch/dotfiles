@@ -1,7 +1,15 @@
 local M = {}
 
 local terminal_instance
-local terminal_options = { win = { position = "left", width = 100 } }
+local terminal_options = {
+	win = {
+		on_buf = function(terminal)
+			vim.b[terminal.buf].is_pi_terminal = true
+		end,
+		position = "left",
+		width = 100,
+	},
+}
 local max_context_lines = 500
 local max_context_bytes = 32 * 1024
 
@@ -51,6 +59,7 @@ local function source_context()
 	return {
 		pid = vim.fn.getpid(),
 		cwd = vim.fn.getcwd(),
+		mode = mode,
 		buffer = {
 			number = buffer,
 			name = name,
@@ -62,6 +71,13 @@ local function source_context()
 		cursor = { line = math.max(cursor[1], 1), column = math.max(cursor[2] + 1, 1) },
 		selection = selection,
 	}
+end
+
+local function record_source_context()
+	local context = source_context()
+	if context ~= nil then
+		vim.g.pi_launch_source_context = context
+	end
 end
 
 local function launch_command()
@@ -79,13 +95,13 @@ function M.start()
 		return nil
 	end
 
+	record_source_context()
 	local terminal = current_terminal()
 	if terminal ~= nil then
 		terminal:show():focus()
 		return terminal
 	end
 
-	vim.g.pi_launch_source_context = source_context()
 	terminal = require("snacks.terminal").open(launch_command(), terminal_options)
 	terminal_instance = terminal
 	local function clear_terminal()

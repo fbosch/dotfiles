@@ -298,15 +298,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           [...latestByFile.values()].map(async ({ diagnostics }) => {
             if (diagnostics === undefined) return undefined;
             const result = await diagnostics;
-            if (
-              result.diagnosticVerdict === "clean" ||
-              result.diagnosticVerdict === "unconfirmed"
-            ) {
-              return undefined;
-            }
-            if (result.diagnosticVerdict === "unavailable" && result.warnings.length === 0) {
-              return undefined;
-            }
+            if ((result.diagnosticCount ?? 0) === 0) return undefined;
             return resultText(result);
           }),
         )

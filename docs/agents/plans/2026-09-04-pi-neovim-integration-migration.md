@@ -36,9 +36,7 @@ active buffer, cursor, and visual selection.
 - Add an opt-in Pi launcher beside the existing OpenCode launcher.
 - Pass `vim.v.servername` through `PI_NVIM_SOCKET`.
 - Register a focused Pi extension with:
-  - `context`
-  - `focus_context`
-  - `selection`
+  - `context`, including last-source fallback and bounded selection
   - `status`
 - Validate the socket against the launching process and current worktree.
 - Fail closed when the socket is missing, stale, or belongs to another
@@ -67,7 +65,8 @@ active buffer, cursor, and visual selection.
 1. Open the dotfiles repository in Neovim.
 2. Select unsaved text.
 3. Launch Pi through the new opt-in command.
-4. Ask Pi for the active file, cursor, focus context, and selected text.
+4. Ask Pi for the current context and verify one call returns the source file,
+   cursor, mode, and selected text.
 5. Launch another Neovim instance in a sibling worktree.
 6. Verify that the first Pi session cannot read the second editor.
 
@@ -79,10 +78,14 @@ OpenCode remains the default editor agent.
 ### Verification record
 
 - `bunx biome check extensions/neovim`, `bun test extensions/neovim`, and
-  `bun run typecheck` pass (17 focused tests, 45 assertions).
+  `bun run typecheck` pass (21 focused tests, 58 assertions).
 - `devenv tasks run test:nvim-pi-launcher` passes. The headless fixture confirms
-  `PI_NVIM_SOCKET` receives `vim.v.servername`, with terminal reuse and
-  reopen-after-close.
+  `PI_NVIM_SOCKET` receives `vim.v.servername`, marks the Pi terminal, preserves
+  bounded pre-Pi selection, and supports terminal reuse and reopen-after-close.
+- A dedicated headless-Neovim tracer confirmed that a marked Pi terminal is
+  replaced by the last bounded source snapshot before context is returned; no
+  Pi-terminal marker or metadata reaches the model. The same tracer
+  covers an older in-memory launcher snapshot without a top-level mode.
 - A live two-worktree tracer connected one channel to each of
   `/Users/fbb/dotfiles` and `/Users/fbb/test-pi-neovim-tracer`. Each channel
   reported its own PID, cwd, buffer, and focus notifications; cross-bound
