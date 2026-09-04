@@ -172,6 +172,7 @@ local user_var_changed = registered_events["user-var-changed"]
 assert_eq(type(user_var_changed), "function", "user variable callback registered")
 
 local captured_status
+local set_right_status_calls = 0
 local original_os_date = os.date
 
 os.date = function(format)
@@ -207,6 +208,7 @@ local window = {
 		}
 	end,
 	set_right_status = function(_, value)
+		set_right_status_calls = set_right_status_calls + 1
 		captured_status = value
 	end,
 	toast_notification = function() end,
@@ -215,6 +217,7 @@ local window = {
 update_status(window)
 os.date = original_os_date
 
+assert_eq(set_right_status_calls, 1, "status update calls set_right_status once")
 assert_eq(type(captured_status), "table", "status payload type")
 assert_eq(find_text(captured_status, "[working] 2 "), false, "Herdr working count omitted")
 assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
