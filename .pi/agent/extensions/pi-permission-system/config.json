@@ -8,6 +8,7 @@
   ],
   "piInfrastructureReadPaths": [
     "~/.agents/skills/*",
+    "~/dotfiles/.agents/skills/*",
     "/nix/store",
     "/tmp/pi-cliboard*"
   ],
