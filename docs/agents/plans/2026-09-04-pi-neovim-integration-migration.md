@@ -79,7 +79,7 @@ OpenCode remains the default editor agent.
 ### Verification record
 
 - `bunx biome check extensions/neovim`, `bun test extensions/neovim`, and
-  `bun run typecheck` pass (17 focused tests, 44 assertions).
+  `bun run typecheck` pass (17 focused tests, 45 assertions).
 - `devenv tasks run test:nvim-pi-launcher` passes. The headless fixture confirms
   `PI_NVIM_SOCKET` receives `vim.v.servername`, with terminal reuse and
   reopen-after-close.
