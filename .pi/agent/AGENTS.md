@@ -87,6 +87,13 @@
 - Put new TypeScript and JavaScript tests in a neighboring `__tests__`
   directory.
 
+## Effect
+
+- This repository uses the Effect TypeScript library. Before writing Effect
+  code, read `node_modules/effect/AGENTS.md` completely and follow its linked
+  guidance when relevant. Search `node_modules/effect/src` when the guide does
+  not cover an API or concept.
+
 ## Communication and Completion
 
 - Be direct, concise, technical, and willing to challenge a weak premise. Do

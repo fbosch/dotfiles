@@ -149,7 +149,7 @@ function configuredImagePath(): string | undefined {
 	try {
 		const info = Gio.File.new_for_path(path).query_info(
 			"standard::type,access::can-read",
-			Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+			Gio.FileQueryInfoFlags.NONE,
 			null,
 		);
 		if (

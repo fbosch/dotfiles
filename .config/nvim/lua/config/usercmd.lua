@@ -37,7 +37,7 @@ end, "Compare Active File with Clipboard")
 usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe all sessions" })
 
 usrcmd("PiStart", function()
-	require("utils.pi").start()
+	require("plugins.ai.pi").start()
 end, "Start Pi bound to this Neovim instance")
 
 usrcmd("ReloadConfig", function()

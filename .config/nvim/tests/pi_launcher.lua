@@ -13,7 +13,7 @@ session.set_metadata({
 package.loaded["utils.session"] = session
 local find_requests = {}
 local saved_session_dir = metadata_root .. "/pi-sessions"
-package.loaded["utils.pi_session"] = {
+package.loaded["plugins.ai.pi.session"] = {
 	find_exact = function(session_id, cwd)
 		table.insert(find_requests, { session_id = session_id, cwd = cwd })
 		if session_id == "pi-session-one" then
@@ -23,7 +23,7 @@ package.loaded["utils.pi_session"] = {
 	end,
 }
 local recorded_source_context
-package.loaded["utils.pi_bridge"] = {
+package.loaded["plugins.ai.pi.bridge"] = {
 	record_source_context = function(context)
 		recorded_source_context = vim.deepcopy(context)
 		return true
@@ -63,7 +63,7 @@ package.loaded["snacks.terminal"] = {
 vim.cmd("edit " .. vim.fn.fnameescape(repo_root .. "/.config/nvim/lua/config/usercmd.lua"))
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 vim.cmd("normal! v2l")
-local pi = dofile(repo_root .. "/.config/nvim/lua/utils/pi.lua")
+local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
@@ -106,7 +106,7 @@ assert(restored_metadata.pi_terminal_open == true, "Pi terminal state did not su
 assert(restored_metadata.opencode_session_id == "ses_exact", "OpenCode session ID did not survive metadata load")
 assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal state did not survive metadata load")
 
-local second_source = repo_root .. "/.config/nvim/lua/utils/pi.lua"
+local second_source = repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua"
 vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 captured_command = nil
 assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")

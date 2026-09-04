@@ -665,7 +665,7 @@ describe("PiNeovimChannel", () => {
     await channel.status();
     connection.activeResponse = { ...focus, mode: "v" };
 
-    expect(bridgeLua.dispatch).toBe('\nreturn require("utils.pi_bridge").dispatch(...)\n');
+    expect(bridgeLua.dispatch).toBe('\nreturn require("plugins.ai.pi.bridge").dispatch(...)\n');
     expect(bridgeOperations.activeContext).toBe("active_context");
     expect(await channel.context()).toEqual({ ok: true, value: { ...focus, mode: "v" } });
     expect(await channel.focusContext()).toEqual({ ok: true, value: focus });

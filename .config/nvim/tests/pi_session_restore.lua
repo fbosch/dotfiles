@@ -23,7 +23,12 @@ local nvim_session = {
 local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 session.set_current(nvim_session)
 package.loaded["utils.session"] = session
-package.loaded["utils.pi_session"] = dofile(repo_root .. "/.config/nvim/lua/utils/pi_session.lua")
+package.loaded["plugins.ai.pi.session"] = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/session.lua")
+package.loaded["plugins.ai.pi.bridge"] = {
+	record_source_context = function()
+		return true
+	end,
+}
 
 local notifications = {}
 local original_notify = vim.notify
@@ -98,7 +103,7 @@ set_metadata(exact_id, true)
 local exact_metadata = session.get_metadata(nvim_session)
 local exact_file_before = vim.fn.readfile(exact_path, "b")
 
-local pi = dofile(repo_root .. "/.config/nvim/lua/utils/pi.lua")
+local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 pi.setup()
 pi.setup()
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })

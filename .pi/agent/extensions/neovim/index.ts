@@ -21,6 +21,7 @@ import {
   MAX_QUICKFIX_ITEMS,
   type NeovimErrorCode,
 } from "./contracts";
+import { repeatPromiseWhile } from "./effect-runtime";
 
 const NeovimParameters = Type.Union([
   Type.Object({ operation: Type.Literal("status") }, { additionalProperties: false }),
@@ -250,13 +251,12 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
     pi.on("session_start", async (_event, context) => {
       const bridge = channelFor(context);
       const sessionId = context.sessionManager.getSessionId();
-      let result: Awaited<ReturnType<PiNeovimChannel["bindSession"]>> | undefined;
-      for (let attempt = 0; attempt < 10; attempt += 1) {
-        result = await bridge.bindSession(sessionId);
-        if (result.ok || result.error.code === "NVIM_UNAVAILABLE") break;
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      }
-      if (result?.ok === false) {
+      const result = await repeatPromiseWhile(
+        () => bridge.bindSession(sessionId),
+        (attempt) => attempt.ok === false && attempt.error.code !== "NVIM_UNAVAILABLE",
+        { delayMs: 50, maxAttempts: 10 },
+      );
+      if (result.ok === false) {
         context.ui.notify(
           `Could not bind Pi's session identity to Neovim: ${result.error.message}`,
           "warning",

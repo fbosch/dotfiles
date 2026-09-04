@@ -55,7 +55,7 @@ active buffer, cursor, and visual selection.
 
 - Missing and stale sockets fail clearly.
 - No tool accepts a socket argument.
-- The TypeScript bridge invokes one fixed dispatcher; `utils.pi_bridge` handles only allowlisted operation messages.
+- The TypeScript bridge invokes one fixed dispatcher; `plugins.ai.pi.bridge` handles only allowlisted operation messages.
 - Selection output respects line and byte limits.
 - Requests from sibling worktrees are rejected.
 - Starting Pi outside Neovim leaves the bridge unavailable without breaking Pi.
@@ -357,7 +357,7 @@ devenv tasks run test:herdr-neovim-sessions \
   - worktree B: explicit socket → `/run/user/1000/nvim.38560.0` → original B ID
 - After both restored Pi TUIs repeated `/session`, the tracer closed them and
   substituted B's ID into A's temporary metadata, then A's ID into B's. Both
-  calls to `utils.pi.restore()` returned `false`, opened no terminal, and left
+  calls to `plugins.ai.pi.restore()` returned `false`, opened no terminal, and left
   the original metadata in place.
 - The Pi files remained byte-for-byte unchanged across resume and both rejected
   cross-worktree attempts:
@@ -499,10 +499,10 @@ explicit.
 ### Bridge module implementation record
 
 - TypeScript now sends one allowlisted operation envelope through the fixed
-  `require("utils.pi_bridge").dispatch(...)` RPC entrypoint. The Neovim module
+  `require("plugins.ai.pi.bridge").dispatch(...)` RPC entrypoint. The Neovim module
   owns editor access, per-channel context, extmarks, timers, notifications, and
   cleanup; TypeScript keeps tool schemas, response validation, and timeouts.
-- Launcher source context is passed directly to `utils.pi_bridge` instead of a
+- Launcher source context is passed directly to `plugins.ai.pi.bridge` instead of a
   shared `vim.g` value. Closing one RPC channel therefore removes only that
   channel's state and leaves another channel's preserved source context intact.
 

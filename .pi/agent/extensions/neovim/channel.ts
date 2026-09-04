@@ -51,6 +51,7 @@ import {
   type VisibleWindowsSnapshot,
   worktreesMatch,
 } from "./contracts";
+import { NeovimEffectScope, runWithTimeout } from "./effect-runtime";
 
 const CONNECT_TIMEOUT_MS = 1_000;
 const RPC_TIMEOUT_MS = 2_000;
@@ -62,7 +63,7 @@ class NeovimConnectionError extends Error {
 }
 
 const BRIDGE_DISPATCH_LUA = `
-return require("utils.pi_bridge").dispatch(...)
+return require("plugins.ai.pi.bridge").dispatch(...)
 `;
 
 export const bridgeOperations = {
@@ -149,19 +150,7 @@ function waitForSocket(socket: Socket): Promise<void> {
 }
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
-  return new Promise((resolvePromise, reject) => {
-    const timeout = setTimeout(() => reject(new Error(message)), RPC_TIMEOUT_MS);
-    promise.then(
-      (value) => {
-        clearTimeout(timeout);
-        resolvePromise(value);
-      },
-      (error: unknown) => {
-        clearTimeout(timeout);
-        reject(error);
-      },
-    );
-  });
+  return runWithTimeout(promise, message, RPC_TIMEOUT_MS);
 }
 
 function annotationMayHaveMutated(value: unknown): boolean {
@@ -202,6 +191,7 @@ async function defaultConnectionFactory(socketPath: string): Promise<NvimConnect
 export class PiNeovimChannel {
   readonly #cwd: string;
   readonly #createConnection: NvimConnectionFactory;
+  readonly #effectScope = new NeovimEffectScope();
   readonly #socketPath: string | undefined;
   #connectionPromise: Promise<NvimConnection> | undefined;
   #connection: NvimConnection | undefined;
@@ -571,22 +561,10 @@ export class PiNeovimChannel {
     this.#focusContext = undefined;
     await this.#connectionPromise?.catch(() => undefined);
     await Promise.all([...this.#presentationOperations]);
-    const connection = this.#connection;
     this.#connection = undefined;
     this.#connectionPromise = undefined;
     this.#editor = undefined;
-    if (connection === undefined) return;
-    connection.off("notification", this.handleNotification);
-    connection.off("disconnect", this.handleDisconnect);
-    try {
-      await withTimeout(
-        executeBridge(connection, bridgeOperations.removeNotifications),
-        "Timed out cleaning up the bound Neovim instance",
-      );
-    } catch {
-      // The editor may already be gone; closing the transport is still required.
-    }
-    await connection.close().catch(() => undefined);
+    await this.#effectScope.close();
   }
 
   private async trackPresentationOperation<T>(operation: Promise<T>): Promise<T> {
@@ -634,6 +612,13 @@ export class PiNeovimChannel {
   }
 
   async #connect(): Promise<NvimConnection> {
+    return this.#effectScope.acquire(
+      () => this.#openConnection(),
+      (connection) => this.#releaseConnection(connection),
+    );
+  }
+
+  async #openConnection(): Promise<NvimConnection> {
     const socketPath = this.#socketPath;
     if (socketPath === undefined || socketPath === "") {
       throw new Error("No bound Neovim instance is available");
@@ -665,6 +650,20 @@ export class PiNeovimChannel {
       await connection.close().catch(() => undefined);
       throw error;
     }
+  }
+
+  async #releaseConnection(connection: NvimConnection): Promise<void> {
+    connection.off("notification", this.handleNotification);
+    connection.off("disconnect", this.handleDisconnect);
+    try {
+      await withTimeout(
+        executeBridge(connection, bridgeOperations.removeNotifications),
+        "Timed out cleaning up the bound Neovim instance",
+      );
+    } catch {
+      // The editor may already be gone; closing the transport is still required.
+    }
+    await connection.close().catch(() => undefined);
   }
 
   private markError(error: NeovimError): BridgeResult<never> {

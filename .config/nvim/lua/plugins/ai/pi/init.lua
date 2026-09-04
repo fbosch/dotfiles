@@ -1,5 +1,5 @@
-local pi_bridge = require("utils.pi_bridge")
-local pi_session = require("utils.pi_session")
+local pi_bridge = require("plugins.ai.pi.bridge")
+local pi_session = require("plugins.ai.pi.session")
 local session = require("utils.session")
 
 local M = {}

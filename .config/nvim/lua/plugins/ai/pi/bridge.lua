@@ -1717,7 +1717,7 @@ local function bind_session(payload)
 		return invalid_request()
 	end
 
-	local ok, integration = pcall(require, "utils.pi")
+	local ok, integration = pcall(require, "plugins.ai.pi")
 	if ok == false or type(integration.bind_session) ~= "function" then
 		return false
 	end
