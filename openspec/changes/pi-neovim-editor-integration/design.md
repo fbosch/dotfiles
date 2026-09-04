@@ -29,13 +29,17 @@ Pi already has disk-backed LSP tools, handoff and transcript recovery, file-chan
 
 ## Decisions
 
-### Use a Pi-native fixed-socket bridge
+### Use one persistent bidirectional Neovim RPC channel
 
-Neovim will launch Pi with its RPC socket in a Pi-specific inherited environment variable. The Pi extension will capture that value at startup and will not accept socket paths through tool arguments, prompts, configuration selected by the model, or runtime discovery.
+Neovim will launch Pi with its RPC socket in a Pi-specific inherited environment variable. The Pi extension will capture that value at session startup, connect lazily, obtain its Neovim channel identity, and retain one Msgpack-RPC channel for the session lifetime. Pi requests editor snapshots over that channel; Neovim sends allowlisted asynchronous notifications over the same channel.
 
-The extension will verify the editor's working directory and source paths against the Pi project worktree before returning content or performing presentation actions. A disconnected socket remains unavailable for that Pi process; it is never replaced through discovery.
+Inbound notifications are schema-validated, bounded, and limited to editor focus, session metadata, and lifecycle events. They update extension state but cannot submit prompts, invoke commands, start model turns, or choose Pi actions. Use asynchronous notifications rather than synchronous Neovim callbacks to avoid re-entrant request deadlocks while Pi is waiting for a Neovim response.
 
-Alternative considered: register the existing OpenCode bridge as a shared MCP server. Rejected because Pi can host a focused extension directly, a shared server would add lifecycle and approval layers, and the OpenCode process-specific environment is not the Pi ownership boundary.
+The extension will not accept socket paths through tool arguments, prompts, model-selected configuration, or runtime discovery. It verifies the editor's working directory and source paths against the Pi project worktree before returning content or performing presentation actions. A disconnected channel remains unavailable for that Pi session and is never replaced through discovery. `session_shutdown` removes notification subscriptions and closes session-scoped resources; the extension factory starts no background connection.
+
+Alternative considered: register the existing OpenCode bridge as a shared MCP server. Rejected because Pi can host a focused extension directly, a shared server would add lifecycle and approval layers, and inbound editor events would still need another transport from the MCP child into Pi's session runtime.
+
+Alternative considered: use separate Neovim-to-Pi and Pi-to-Neovim sockets. Rejected because Msgpack-RPC already multiplexes requests, responses, and notifications over one connection, and a second listener would add discovery, authentication, and teardown concerns.
 
 Alternative considered: discover the most recently focused Neovim instance. Rejected because focus does not prove prompt origin and can expose another worktree's unsaved content.
 
@@ -55,9 +59,9 @@ Alternative considered: feed unsaved buffers into Pi's LSP extension and expose 
 
 ### Use a curated operation set with stable errors
 
-The extension will register explicit operations for context, focus context, selection, buffer inventory, bounded reads, diagnostics, problem lists, reveal, highlight cleanup, and annotations. Each boundary validates inputs before invoking fixed bridge-owned Lua.
+The extension will register explicit operations for context, focus context, selection, buffer inventory, bounded reads, diagnostics, problem lists, reveal, highlight cleanup, and annotations. Each tool boundary validates inputs before invoking fixed bridge-owned Lua. A separate inbound event dispatcher validates the notification name and payload before changing extension state.
 
-Errors will contain a stable code and human-readable message. Expected codes include unavailable editor, worktree mismatch, invalid buffer, invalid range, limit exceeded, stale anchor, and unsupported operation. Socket paths and unsaved source content must not be written to logs or lifecycle metadata.
+Errors will contain a stable code and human-readable message. Expected codes include unavailable editor, worktree mismatch, invalid buffer, invalid range, limit exceeded, stale anchor, and unsupported operation. Socket paths, inbound event payloads, and unsaved source content must not be written to logs or lifecycle metadata.
 
 Alternative considered: expose generic `nvim_exec_lua` with prompt instructions. Rejected because instructions cannot enforce least authority or prevent data and text mutation.
 
@@ -94,6 +98,8 @@ Pi starts as an opt-in Neovim action beside OpenCode. Each workflow moves indepe
 ## Risks / Trade-offs
 
 - [The inherited socket points to the wrong or stale editor] → Validate connection identity and worktree on startup and every dependent request; never discover a replacement.
+- [A synchronous callback deadlocks with an outstanding Neovim request] → Use allowlisted asynchronous notifications from Neovim to Pi and keep inbound handlers non-blocking.
+- [A crafted editor notification triggers unintended agent work] → Validate names and payloads, update extension state only, and prohibit automatic prompts, commands, and model turns.
 - [Unsaved buffers expose more source than disk-based tools] → Require explicit bounded reads, enforce 500-line and 32 KiB limits, and avoid logging content.
 - [Editor state changes between calls] → Return point-in-time buffer and window identities; do not promise cross-call atomicity.
 - [Neovim and Pi disagree about worktree identity] → Fail with a structured mismatch instead of normalizing or falling back silently.
@@ -105,7 +111,7 @@ Pi starts as an opt-in Neovim action beside OpenCode. Each workflow moves indepe
 
 ## Migration Plan
 
-1. Add an opt-in Pi launcher and the minimal fixed-socket context, focus, selection, and status operations.
+1. Add an opt-in Pi launcher and one bidirectional fixed-socket channel with minimal context, focus, selection, status, and allowlisted focus notifications.
 2. Add visible and listed buffers, unsaved reads, and Neovim diagnostics while keeping Pi LSP unchanged.
 3. Persist exact Pi session metadata and validate Neovim-first Herdr restoration.
 4. Add quickfix, location-list, reveal, highlight, cleanup, and annotation operations.

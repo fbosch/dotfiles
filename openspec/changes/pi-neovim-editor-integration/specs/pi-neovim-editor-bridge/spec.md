@@ -4,19 +4,38 @@ Provide Pi with bounded live context and presentation controls from the exact Ne
 
 ## ADDED Requirements
 
-### Requirement: Connection-scoped Neovim binding
+### Requirement: Connection-scoped bidirectional Neovim binding
 
-The system SHALL bind each editor-aware Pi session to the explicit Neovim RPC socket inherited from its launcher for the lifetime of that session. It MUST NOT select an editor by working directory, process discovery, desktop focus, or a caller-supplied socket.
+The system SHALL bind each editor-aware Pi session to the explicit Neovim RPC socket inherited from its launcher for the lifetime of that session. One persistent Msgpack-RPC channel SHALL carry Pi requests to Neovim and allowlisted Neovim notifications to Pi. The system MUST NOT select an editor by working directory, process discovery, desktop focus, or a caller-supplied socket.
 
 #### Scenario: Pi receives the launching editor socket
 
 - **WHEN** Neovim launches an editor-aware Pi session
-- **THEN** Pi's editor operations use only the RPC socket inherited from that Neovim process
+- **THEN** Pi's editor operations and inbound notifications use only the RPC channel connected to the socket inherited from that Neovim process
 
 #### Scenario: Another editor is available
 
 - **WHEN** the bound Neovim instance is unavailable while another Neovim instance is running
 - **THEN** Pi reports the bound editor as unavailable and does not connect to the other instance
+
+#### Scenario: Session shuts down
+
+- **WHEN** the Pi session shuts down, reloads, or switches sessions
+- **THEN** the integration removes its Neovim notification subscriptions and closes its session-scoped channel
+
+### Requirement: Allowlisted editor notifications
+
+The system SHALL accept only declared, schema-validated Neovim notification names with bounded payloads. Editor notifications MUST NOT trigger a model turn automatically, invoke Pi commands, or bypass Pi's normal permission and input handling.
+
+#### Scenario: Neovim reports a focus change
+
+- **WHEN** the bound Neovim channel sends a valid allowlisted focus notification
+- **THEN** Pi updates its cached focus context without starting a model turn
+
+#### Scenario: Neovim sends an unknown notification
+
+- **WHEN** the bound channel sends an undeclared notification name or invalid payload
+- **THEN** Pi ignores or rejects the notification without changing session state or triggering a model turn
 
 ### Requirement: Worktree-scoped editor identity
 
@@ -104,7 +123,7 @@ The system SHALL support bounded temporary highlights, explicit highlight remova
 
 ### Requirement: Curated editor authority
 
-The editor integration MUST NOT expose arbitrary Lua evaluation, Ex commands, key input, terminal interaction, buffer mutation, or caller-selected socket routing. Errors SHALL use stable machine-readable codes with human-readable messages.
+The editor integration MUST NOT expose arbitrary Lua evaluation, Ex commands, key input, terminal interaction, buffer mutation, caller-selected socket routing, or notification-selected Pi actions. Errors SHALL use stable machine-readable codes with human-readable messages.
 
 #### Scenario: Caller requests unsupported editor execution
 
