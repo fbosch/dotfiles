@@ -47,6 +47,25 @@ describe("reference mentions", () => {
     ).toBe('Read [@"file with spaces.md"]');
   });
 
+  test("uses a distinct color for existing image paths", () => {
+    const cwd = temporaryDirectory();
+    writeFileSync(join(cwd, "screenshot.PNG"), "image\n");
+    const warning = "\u001b[38;2;183;126;100m";
+    const accent = "\u001b[38;2;102;165;173m";
+    const reset = "\u001b[39m";
+
+    expect(
+      formatAnsiReferenceMentions(
+        "Read @screenshot.PNG and @missing.png",
+        [],
+        cwd,
+        warning,
+        reset,
+        accent,
+      ),
+    ).toBe(`Read ${accent}@screenshot.PNG${reset} and @missing.png`);
+  });
+
   test("restores orange after foreground resets inside editor tokens", () => {
     const cwd = temporaryDirectory();
     writeFileSync(join(cwd, "opencode.json"), "{}\n");

@@ -1,14 +1,16 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { formatAnsiTextRanges } from "../../../lib/ansi-text-ranges";
 import type { ProjectReference } from "./types";
 
 const REFERENCE_MENTION_PATTERN = /(^|\s)(@(?:"[^"]+"|[^\s]+))(?=\s|$)/g;
+const IMAGE_PATH_PATTERN = /\.(?:gif|jpe?g|png|webp)$/iu;
 
 interface ReferenceMentionMatch {
   start: number;
   end: number;
+  isImagePath: boolean;
 }
 
 function referenceValue(token: string): string {
@@ -16,10 +18,24 @@ function referenceValue(token: string): string {
   return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
 }
 
-function referencePathExists(value: string, cwd: string): boolean {
+function resolveReferencePath(value: string, cwd: string): string {
   const expandedPath =
     value === "~" ? homedir() : value.startsWith("~/") ? join(homedir(), value.slice(2)) : value;
-  return existsSync(isAbsolute(expandedPath) ? expandedPath : resolve(cwd, expandedPath));
+  return isAbsolute(expandedPath) ? expandedPath : resolve(cwd, expandedPath);
+}
+
+function referencePathExists(value: string, cwd: string): boolean {
+  return existsSync(resolveReferencePath(value, cwd));
+}
+
+function isImagePath(value: string, cwd: string): boolean {
+  if (IMAGE_PATH_PATTERN.test(value) === false) return false;
+
+  try {
+    return statSync(resolveReferencePath(value, cwd)).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function matchReferenceMentions(
@@ -43,7 +59,11 @@ function matchReferenceMentions(
     }
 
     const start = (match.index ?? 0) + (match[1]?.length ?? 0);
-    matches.push({ start, end: start + token.length });
+    matches.push({
+      start,
+      end: start + token.length,
+      isImagePath: isImagePath(value, cwd),
+    });
   }
 
   return matches;
@@ -72,11 +92,12 @@ export function formatAnsiReferenceMentions(
   cwd: string,
   foregroundAnsi: string,
   restoreAnsi = "\u001b[39m",
+  imageForegroundAnsi = foregroundAnsi,
 ): string {
   return formatAnsiTextRanges(
     text,
     (plainText) => matchReferenceMentions(plainText, references, cwd),
-    () => foregroundAnsi,
+    (match) => (match.isImagePath ? imageForegroundAnsi : foregroundAnsi),
     restoreAnsi,
   );
 }

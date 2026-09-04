@@ -258,6 +258,7 @@ describe("project references", () => {
   test("injects trusted docs-cache references through the extension lifecycle", () => {
     const cwd = temporaryDirectory();
     mkdirSync(join(cwd, ".docs", "reference-material"), { recursive: true });
+    writeFileSync(join(cwd, "screenshot.png"), "image\n");
     writeDocsLock(cwd, {
       "reference-material": { repo: "https://github.com/owner/reference-material.git" },
     });
@@ -306,9 +307,11 @@ describe("project references", () => {
     );
     expect(result?.systemPrompt).toContain("<name>reference-material</name>");
     expect(result?.systemPrompt).toContain(join(cwd, ".docs", "reference-material"));
-    expect(new UserMessageComponent("Inspect @reference-material").render(80).join("\n")).toContain(
-      `${theme.getFgAnsi("warning")}@reference-material`,
-    );
+    const rendered = new UserMessageComponent("Inspect @reference-material and @screenshot.png")
+      .render(80)
+      .join("\n");
+    expect(rendered).toContain(`${theme.getFgAnsi("warning")}@reference-material`);
+    expect(rendered).toContain(`${theme.getFgAnsi("accent")}@screenshot.png`);
     sessionShutdown?.();
   });
 });

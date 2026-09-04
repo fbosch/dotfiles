@@ -372,6 +372,8 @@ export class PromptEditor extends CustomEditor {
         this.projectReferences,
         this.ctx.cwd,
         theme.getFgAnsi("warning"),
+        "\u001b[39m",
+        theme.getFgAnsi("accent"),
       );
     });
     const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";

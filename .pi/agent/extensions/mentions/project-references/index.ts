@@ -18,6 +18,7 @@ interface UserMessageReferenceColors {
   cwd: string;
   references: readonly ProjectReference[];
   foregroundAnsi: string;
+  imageForegroundAnsi: string;
   restoreAnsi: string;
 }
 
@@ -54,6 +55,7 @@ function installUserMessageReferenceColors(
           activeColors.cwd,
           activeColors.foregroundAnsi,
           activeColors.restoreAnsi,
+          activeColors.imageForegroundAnsi,
         ),
       );
     };
@@ -140,6 +142,7 @@ export default function projectReferences(pi: ExtensionAPI): void {
       cwd: activeContext.cwd,
       references,
       foregroundAnsi: activeContext.ui.theme.getFgAnsi("warning"),
+      imageForegroundAnsi: activeContext.ui.theme.getFgAnsi("accent"),
       restoreAnsi: activeContext.ui.theme.getFgAnsi("userMessageText"),
     };
   });

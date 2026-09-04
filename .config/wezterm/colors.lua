@@ -35,6 +35,8 @@ return function(config)
 			},
 			width = "1px",
 			height = "1cell",
+			-- Keep scanlines on the text cell grid below Hyprland's top padding.
+			vertical_offset = is_hyprland and 4 or 0,
 			repeat_x = "Repeat",
 			repeat_y = "Repeat",
 			opacity = 0.66,
