@@ -3,22 +3,39 @@ import type { Logger } from "neovim/lib/utils/logger";
 import {
   type ActiveContext,
   type BridgeResult,
+  type BufferInventory,
+  type BufferRead,
+  type BufferReadOptions,
   type EditorIdentity,
   FOCUS_NOTIFICATION,
   type FocusContext,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
+  MAX_INVENTORY_BYTES,
+  MAX_INVENTORY_ITEMS,
+  MAX_METADATA_STRING_BYTES,
+  type NeovimError,
   noFocusContext,
   noSelection,
   parseActiveContext,
+  parseBufferInventory,
+  parseBufferRead,
   parseFocusNotification,
+  parseVisibleWindows,
   type SelectionSnapshot,
   unavailable,
+  type VisibleWindowsSnapshot,
   worktreesMatch,
 } from "./contracts";
 
 const CONNECT_TIMEOUT_MS = 1_000;
 const RPC_TIMEOUT_MS = 2_000;
+
+class NeovimConnectionError extends Error {
+  constructor(readonly bridgeError: NeovimError) {
+    super(bridgeError.message);
+  }
+}
 
 const ACTIVE_CONTEXT_LUA = `
 local max_lines, max_bytes = ...
@@ -70,6 +87,152 @@ return {
     modified = options.modified,
   },
   cursor = { line = math.max(cursor[1], 1), column = math.max(cursor[2] + 1, 1) },
+}
+`;
+
+const VISIBLE_WINDOWS_LUA = `
+local max_items, max_bytes = ...
+local function is_source_buffer(buffer)
+  if vim.api.nvim_buf_is_valid(buffer) == false then return false end
+  local options = vim.bo[buffer]
+  return
+    vim.api.nvim_buf_get_name(buffer) ~= ""
+    and options.buftype == ""
+    and options.modifiable
+    and options.filetype ~= "opencode"
+    and options.filetype ~= "opencode_terminal"
+    and vim.b[buffer].is_pi_terminal ~= true
+end
+
+local function buffer_info(buffer)
+  local options = vim.bo[buffer]
+  return {
+    number = buffer,
+    name = vim.api.nvim_buf_get_name(buffer),
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  }
+end
+
+local windows = {}
+local bytes = 0
+for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+  local buffer = vim.api.nvim_win_get_buf(window)
+  if is_source_buffer(buffer) then
+    local viewport = vim.fn.getwininfo(window)[1]
+    local info = buffer_info(buffer)
+    if #windows >= max_items then return { error = "inventoryLimit" } end
+    -- Reserve transport overhead for fixed window and buffer fields.
+    bytes = bytes + #info.name + #info.filetype + #info.buftype + 160
+    if bytes > max_bytes then return { error = "inventoryLimit" } end
+    table.insert(windows, {
+      number = window,
+      buffer = info,
+      topLine = viewport.topline,
+      bottomLine = viewport.botline,
+    })
+  end
+end
+table.sort(windows, function(left, right) return left.number < right.number end)
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  windows = windows,
+}
+`;
+
+const LIST_BUFFERS_LUA = `
+local max_items, max_bytes = ...
+local function is_source_buffer(buffer)
+  if vim.api.nvim_buf_is_valid(buffer) == false then return false end
+  local options = vim.bo[buffer]
+  return
+    vim.api.nvim_buf_get_name(buffer) ~= ""
+    and options.buftype == ""
+    and options.modifiable
+    and options.filetype ~= "opencode"
+    and options.filetype ~= "opencode_terminal"
+    and vim.b[buffer].is_pi_terminal ~= true
+end
+
+local buffers = {}
+local bytes = 0
+for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+  if vim.fn.buflisted(buffer) == 1 and is_source_buffer(buffer) then
+    local options = vim.bo[buffer]
+    local info = {
+      number = buffer,
+      name = vim.api.nvim_buf_get_name(buffer),
+      loaded = vim.api.nvim_buf_is_loaded(buffer),
+      filetype = options.filetype,
+      buftype = options.buftype,
+      modified = options.modified,
+    }
+    if #buffers >= max_items then return { error = "inventoryLimit" } end
+    -- Reserve transport overhead for fixed buffer fields.
+    bytes = bytes + #info.name + #info.filetype + #info.buftype + 128
+    if bytes > max_bytes then return { error = "inventoryLimit" } end
+    table.insert(buffers, info)
+  end
+end
+table.sort(buffers, function(left, right) return left.number < right.number end)
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffers = buffers,
+}
+`;
+
+const READ_BUFFER_LUA = `
+local buffer, requested_start, requested_end, max_lines, max_bytes = ...
+if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
+
+local options = vim.bo[buffer]
+local name = vim.api.nvim_buf_get_name(buffer)
+local loaded = vim.api.nvim_buf_is_loaded(buffer)
+if
+  loaded == false
+  or name == ""
+  or options.buftype ~= ""
+  or options.modifiable == false
+  or options.filetype == "opencode"
+  or options.filetype == "opencode_terminal"
+  or vim.b[buffer].is_pi_terminal == true
+then
+  return { error = "invalidBuffer" }
+end
+
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+local start_line = requested_start == 0 and 1 or requested_start
+local end_line = requested_end == 0 and math.min(total_lines, start_line + max_lines - 1) or requested_end
+if start_line > total_lines or end_line < start_line or end_line > total_lines then
+  return { error = "invalidRange", totalLines = total_lines }
+end
+if end_line - start_line + 1 > max_lines then return { error = "lineLimit" } end
+
+local lines = vim.api.nvim_buf_get_lines(buffer, start_line - 1, end_line, true)
+local bytes = math.max(0, #lines - 1)
+for _, line in ipairs(lines) do
+  bytes = bytes + #line
+  if bytes > max_bytes then return { error = "byteLimit" } end
+end
+return {
+  pid = vim.fn.getpid(),
+  cwd = vim.fn.getcwd(),
+  buffer = {
+    number = buffer,
+    name = name,
+    loaded = loaded,
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  startLine = start_line,
+  endLine = end_line,
+  totalLines = total_lines,
+  lines = lines,
 }
 `;
 
@@ -244,7 +407,7 @@ export class PiNeovimChannel {
   #connection: NvimConnection | undefined;
   #editor: EditorIdentity | undefined;
   #focusContext: FocusContext | undefined;
-  #unavailableMessage: string | undefined;
+  #unavailableError: NeovimError | undefined;
 
   constructor(
     socketPath: string | undefined,
@@ -279,6 +442,60 @@ export class PiNeovimChannel {
     }
   }
 
+  async visibleWindows(): Promise<BridgeResult<VisibleWindowsSnapshot>> {
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(VISIBLE_WINDOWS_LUA, [
+          MAX_INVENTORY_ITEMS,
+          MAX_INVENTORY_BYTES,
+        ]),
+        "Timed out reading visible windows from the bound Neovim instance",
+      );
+      return parseVisibleWindows(snapshot, this.#cwd, this.#editor);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
+  async listBuffers(): Promise<BridgeResult<BufferInventory>> {
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(LIST_BUFFERS_LUA, [MAX_INVENTORY_ITEMS, MAX_INVENTORY_BYTES]),
+        "Timed out reading buffers from the bound Neovim instance",
+      );
+      return parseBufferInventory(snapshot, this.#cwd, this.#editor);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
+  async readBuffer(options: BufferReadOptions): Promise<BridgeResult<BufferRead>> {
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const snapshot = await withTimeout(
+        connection.value.executeLua(READ_BUFFER_LUA, [
+          options.buffer,
+          options.startLine ?? 0,
+          options.endLine ?? 0,
+          MAX_CONTEXT_LINES,
+          MAX_CONTEXT_BYTES,
+        ]),
+        "Timed out reading a buffer from the bound Neovim instance",
+      );
+      return parseBufferRead(snapshot, this.#cwd, this.#editor);
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
   async focusContext(): Promise<BridgeResult<FocusContext>> {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
@@ -303,7 +520,13 @@ export class PiNeovimChannel {
   }
 
   async close(): Promise<void> {
-    this.#unavailableMessage = "The Neovim channel is closed";
+    this.#unavailableError = {
+      code: "NVIM_UNAVAILABLE",
+      message: "The Neovim channel is closed",
+    };
+    this.#focusContext = undefined;
+    this.#editor = undefined;
+    await this.#connectionPromise?.catch(() => undefined);
     const connection = this.#connection;
     this.#connection = undefined;
     this.#connectionPromise = undefined;
@@ -338,16 +561,23 @@ export class PiNeovimChannel {
   };
 
   private async connection(): Promise<BridgeResult<NvimConnection>> {
-    if (this.#unavailableMessage !== undefined) return unavailable(this.#unavailableMessage);
+    if (this.#unavailableError !== undefined) {
+      return { error: this.#unavailableError, ok: false };
+    }
     if (this.#connection !== undefined) return { ok: true, value: this.#connection };
     if (this.#socketPath === undefined || this.#socketPath === "") return unavailable();
     if (this.#connectionPromise === undefined) {
       this.#connectionPromise = this.#connect();
     }
     try {
-      return { ok: true, value: await this.#connectionPromise };
+      const connection = await this.#connectionPromise;
+      return this.#unavailableError === undefined
+        ? { ok: true, value: connection }
+        : { error: this.#unavailableError, ok: false };
     } catch (error) {
-      return this.markUnavailable(error instanceof Error ? error.message : String(error));
+      return error instanceof NeovimConnectionError
+        ? this.markError(error.bridgeError)
+        : this.markUnavailable(error instanceof Error ? error.message : String(error));
     }
   }
 
@@ -375,8 +605,9 @@ export class PiNeovimChannel {
           "Timed out configuring the bound Neovim instance",
         ),
         this.#cwd,
+        channelId,
       );
-      if (identity.ok === false) throw new Error(identity.error.message);
+      if (identity.ok === false) throw new NeovimConnectionError(identity.error);
       this.#connection = connection;
       this.#editor = identity.value;
       return connection;
@@ -388,20 +619,30 @@ export class PiNeovimChannel {
     }
   }
 
+  private markError(error: NeovimError): BridgeResult<never> {
+    this.#unavailableError = error;
+    return { error, ok: false };
+  }
+
   private markUnavailable(message: string): BridgeResult<never> {
-    this.#unavailableMessage = message;
-    return unavailable(message);
+    return this.markError({ code: "NVIM_UNAVAILABLE", message });
   }
 }
 
-function parseEditorIdentity(value: unknown, expectedCwd: string): BridgeResult<EditorIdentity> {
+function parseEditorIdentity(
+  value: unknown,
+  expectedCwd: string,
+  expectedChannelId: number,
+): BridgeResult<EditorIdentity> {
   if (
     typeof value !== "object" ||
     value === null ||
     Array.isArray(value) ||
     Number.isInteger((value as Record<string, unknown>).pid) === false ||
     Number.isInteger((value as Record<string, unknown>).channelId) === false ||
-    typeof (value as Record<string, unknown>).cwd !== "string"
+    typeof (value as Record<string, unknown>).cwd !== "string" ||
+    Buffer.byteLength((value as Record<string, unknown>).cwd as string, "utf8") >
+      MAX_METADATA_STRING_BYTES
   ) {
     return {
       error: {
@@ -412,6 +653,15 @@ function parseEditorIdentity(value: unknown, expectedCwd: string): BridgeResult<
     };
   }
   const record = value as { channelId: number; cwd: string; pid: number };
+  if (record.channelId !== expectedChannelId) {
+    return {
+      error: {
+        code: "NVIM_INVALID_RESPONSE",
+        message: "Neovim returned an unexpected channel identity",
+      },
+      ok: false,
+    };
+  }
   if (worktreesMatch(record.cwd, expectedCwd) === false) {
     return {
       error: {
@@ -427,5 +677,8 @@ function parseEditorIdentity(value: unknown, expectedCwd: string): BridgeResult<
 export const bridgeLua = {
   activeContext: ACTIVE_CONTEXT_LUA,
   installNotifications: INSTALL_NOTIFICATIONS_LUA,
+  listBuffers: LIST_BUFFERS_LUA,
+  readBuffer: READ_BUFFER_LUA,
   removeNotifications: REMOVE_NOTIFICATIONS_LUA,
+  visibleWindows: VISIBLE_WINDOWS_LUA,
 } as const;

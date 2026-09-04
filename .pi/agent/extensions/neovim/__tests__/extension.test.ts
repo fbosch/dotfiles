@@ -23,6 +23,24 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     if (code === bridgeLua.installNotifications) {
       return { channelId: 12, cwd: "/project", pid: 80 };
     }
+    if (code === bridgeLua.readBuffer) {
+      return {
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        cwd: "/project",
+        endLine: 1,
+        lines: ["const unsaved = true;"],
+        pid: 80,
+        startLine: 1,
+        totalLines: 1,
+      };
+    }
     if (code === bridgeLua.removeNotifications) return true;
     throw new Error("unexpected Lua");
   }
@@ -61,6 +79,11 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   const parameters = JSON.stringify(tool.parameters);
   expect(parameters).toContain("status");
   expect(parameters).toContain("context");
+  expect(parameters).toContain("visible_windows");
+  expect(parameters).toContain("list_buffers");
+  expect(parameters).toContain("read_buffer");
+  expect(parameters).toContain("startLine");
+  expect(parameters).toContain("endLine");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
   const result = await tool.execute(
@@ -74,6 +97,18 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(sockets).toEqual(["/tmp/launching-nvim.sock"]);
   expect(result.details).toEqual({ ok: true, operation: "status" });
   expect(result.content[0]).toMatchObject({ type: "text" });
+  const readResult = await tool.execute(
+    "neovim-2",
+    { operation: "read_buffer", buffer: 2 },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(readResult.details).toEqual({ ok: true, operation: "read_buffer" });
+  expect(readResult.content[0]).toMatchObject({
+    text: expect.stringContaining("const unsaved = true;"),
+    type: "text",
+  });
   connection.emit("notification", "pi:focus", [
     {
       buffer: {

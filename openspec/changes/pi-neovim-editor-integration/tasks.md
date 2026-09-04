@@ -9,8 +9,8 @@
 
 ## 2. Read live buffers and Neovim diagnostics
 
-- [ ] 2.1 Implement visible-window and listed-source-buffer inventory with bound-instance and source identities; verify tests cover modified, loaded, unlisted, unnamed, special, and cross-worktree buffers.
-- [ ] 2.2 Implement bounded in-memory buffer reads without filesystem fallback; verify an integration test returns unsaved text while the on-disk file remains unchanged.
+- [x] 2.1 Implement visible-window and listed-source-buffer inventory with bound-instance and source identities; verify tests cover modified, loaded, unlisted, unnamed, special, and cross-worktree buffers.
+- [x] 2.2 Implement bounded in-memory buffer reads without filesystem fallback; verify an integration test returns unsaved text while the on-disk file remains unchanged.
 - [ ] 2.3 Implement Neovim diagnostic summaries and detailed diagnostic reads as distinct from Pi LSP results; verify ordering, positions, severities, limits, and invalid-buffer errors.
 - [ ] 2.4 Run the live unsaved-buffer tracer bullet with two visible files and an unsaved diagnostic; record the returned Neovim state and unchanged disk contents.
 

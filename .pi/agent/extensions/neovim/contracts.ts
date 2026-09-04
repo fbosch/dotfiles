@@ -1,12 +1,16 @@
 import { realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 export const MAX_CONTEXT_LINES = 500;
 export const MAX_CONTEXT_BYTES = 32 * 1024;
+export const MAX_INVENTORY_ITEMS = 500;
+export const MAX_INVENTORY_BYTES = 32 * 1024;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
 
 export type NeovimErrorCode =
+  | "NVIM_INVALID_BUFFER"
+  | "NVIM_INVALID_RANGE"
   | "NVIM_INVALID_RESPONSE"
   | "NVIM_LIMIT_EXCEEDED"
   | "NVIM_NO_FOCUS_CONTEXT"
@@ -64,6 +68,38 @@ export interface ActiveContext extends FocusContext {
   readonly mode: string;
 }
 
+export interface VisibleWindow {
+  readonly bottomLine: number;
+  readonly buffer: BufferIdentity;
+  readonly number: number;
+  readonly topLine: number;
+}
+
+export interface VisibleWindowsSnapshot {
+  readonly editor: EditorIdentity;
+  readonly windows: readonly VisibleWindow[];
+}
+
+export interface BufferInventory {
+  readonly buffers: readonly BufferIdentity[];
+  readonly editor: EditorIdentity;
+}
+
+export interface BufferReadOptions {
+  readonly buffer: number;
+  readonly endLine?: number;
+  readonly startLine?: number;
+}
+
+export interface BufferRead {
+  readonly buffer: BufferIdentity;
+  readonly editor: EditorIdentity;
+  readonly endLine: number;
+  readonly lines: readonly string[];
+  readonly startLine: number;
+  readonly totalLines: number;
+}
+
 export type BridgeResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly error: NeovimError; readonly ok: false };
@@ -107,8 +143,32 @@ function isBufferIdentity(value: unknown): value is BufferIdentity {
   );
 }
 
-function selectionBytes(lines: readonly string[]): number {
-  return Buffer.byteLength(lines.join("\n"), "utf8");
+function isSourceBufferIdentity(value: unknown): value is BufferIdentity {
+  return (
+    isBufferIdentity(value) &&
+    value.number >= 1 &&
+    value.name !== "" &&
+    value.buftype === "" &&
+    value.filetype !== "opencode" &&
+    value.filetype !== "opencode_terminal"
+  );
+}
+
+function textFitsByteLimit(lines: readonly string[]): boolean {
+  let bytes = Math.max(0, lines.length - 1);
+  for (const line of lines) {
+    bytes += Buffer.byteLength(line, "utf8");
+    if (bytes > MAX_CONTEXT_BYTES) return false;
+  }
+  return true;
+}
+
+function sourceBufferMetadataBytes(buffer: BufferIdentity): number {
+  return (
+    Buffer.byteLength(buffer.name, "utf8") +
+    Buffer.byteLength(buffer.filetype, "utf8") +
+    Buffer.byteLength(buffer.buftype, "utf8")
+  );
 }
 
 function parseSelection(value: unknown): BridgeResult<SelectionContext | undefined> {
@@ -124,16 +184,24 @@ function parseSelection(value: unknown): BridgeResult<SelectionContext | undefin
     isSelectionMode(value.mode) === false ||
     isPosition(value.anchor) === false ||
     isPosition(value.cursor) === false ||
-    Array.isArray(value.lines) === false ||
-    value.lines.every((line) => typeof line === "string") === false
+    Array.isArray(value.lines) === false
   ) {
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid selection data");
   }
-  const lines = value.lines as string[];
-  if (lines.length === 0) {
+  if (value.lines.length === 0) {
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned an empty selection");
   }
-  if (lines.length > MAX_CONTEXT_LINES || selectionBytes(lines) > MAX_CONTEXT_BYTES) {
+  if (value.lines.length > MAX_CONTEXT_LINES) {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Neovim selection exceeds ${MAX_CONTEXT_LINES} lines or ${MAX_CONTEXT_BYTES} bytes`,
+    );
+  }
+  if (value.lines.every((line) => typeof line === "string") === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid selection data");
+  }
+  const lines = value.lines as string[];
+  if (textFitsByteLimit(lines) === false) {
     return failure(
       "NVIM_LIMIT_EXCEEDED",
       `Neovim selection exceeds ${MAX_CONTEXT_LINES} lines or ${MAX_CONTEXT_BYTES} bytes`,
@@ -151,10 +219,19 @@ function parseSelection(value: unknown): BridgeResult<SelectionContext | undefin
 }
 
 function canonicalPath(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return resolve(path);
+  const absolutePath = resolve(path);
+  let existingPath = absolutePath;
+  const missingSegments: string[] = [];
+
+  while (true) {
+    try {
+      return resolve(realpathSync(existingPath), ...missingSegments);
+    } catch {
+      const parent = dirname(existingPath);
+      if (parent === existingPath) return absolutePath;
+      missingSegments.unshift(basename(existingPath));
+      existingPath = parent;
+    }
   }
 }
 
@@ -164,13 +241,226 @@ export function worktreesMatch(left: string, right: string): boolean {
 
 export function pathIsInsideWorktree(path: string, cwd: string): boolean {
   if (path === "") return true;
-  const absolutePath = canonicalPath(path);
   const absoluteCwd = canonicalPath(cwd);
+  const absolutePath = canonicalPath(isAbsolute(path) ? path : resolve(absoluteCwd, path));
   const pathFromCwd = relative(absoluteCwd, absolutePath);
   return (
     pathFromCwd === "" ||
     (pathFromCwd.startsWith("..") === false && isAbsolute(pathFromCwd) === false)
   );
+}
+
+function parseBoundSnapshot(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<Record<string, unknown>> {
+  if (
+    isRecord(value) === false ||
+    Number.isInteger(value.pid) === false ||
+    isBoundedString(value.cwd) === false
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned an invalid editor snapshot");
+  }
+  if (worktreesMatch(value.cwd, expectedCwd) === false) {
+    return failure(
+      "NVIM_WORKTREE_MISMATCH",
+      "The bound Neovim instance does not match Pi's working directory",
+    );
+  }
+  if (value.pid !== editor.pid || worktreesMatch(value.cwd, editor.cwd) === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned a snapshot from another editor");
+  }
+  return { ok: true, value };
+}
+
+function parseSourceBuffer(value: unknown, expectedCwd: string): BridgeResult<BufferIdentity> {
+  if (isSourceBufferIdentity(value) === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid source buffer data");
+  }
+  if (pathIsInsideWorktree(value.name, expectedCwd) === false) {
+    return failure("NVIM_WORKTREE_MISMATCH", "The Neovim buffer is outside Pi's worktree");
+  }
+  return { ok: true, value };
+}
+
+function inventoryLimit(): BridgeResult<never> {
+  return failure(
+    "NVIM_LIMIT_EXCEEDED",
+    `Neovim source inventory exceeds ${MAX_INVENTORY_ITEMS} entries or ${MAX_INVENTORY_BYTES} bytes`,
+  );
+}
+
+function parseInventoryFailure(value: unknown): BridgeResult<never> | undefined {
+  return isRecord(value) && value.error === "inventoryLimit" ? inventoryLimit() : undefined;
+}
+
+export function parseVisibleWindows(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<VisibleWindowsSnapshot> {
+  const inventoryFailure = parseInventoryFailure(value);
+  if (inventoryFailure !== undefined) return inventoryFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  if (Array.isArray(snapshot.value.windows) === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid visible window data");
+  }
+  if (snapshot.value.windows.length > MAX_INVENTORY_ITEMS) return inventoryLimit();
+
+  const windows: VisibleWindow[] = [];
+  const windowNumbers = new Set<number>();
+  let metadataBytes = 0;
+  for (const candidate of snapshot.value.windows) {
+    if (
+      isRecord(candidate) === false ||
+      Number.isInteger(candidate.number) === false ||
+      (candidate.number as number) < 1 ||
+      Number.isInteger(candidate.topLine) === false ||
+      (candidate.topLine as number) < 1 ||
+      Number.isInteger(candidate.bottomLine) === false ||
+      (candidate.bottomLine as number) < (candidate.topLine as number)
+    ) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid visible window data");
+    }
+    const number = candidate.number as number;
+    if (windowNumbers.has(number)) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned duplicate window identities");
+    }
+    const buffer = parseSourceBuffer(candidate.buffer, expectedCwd);
+    if (buffer.ok === false) return buffer;
+    metadataBytes += sourceBufferMetadataBytes(buffer.value) + 160;
+    if (metadataBytes > MAX_INVENTORY_BYTES) return inventoryLimit();
+    windowNumbers.add(number);
+    windows.push({
+      bottomLine: candidate.bottomLine as number,
+      buffer: buffer.value,
+      number,
+      topLine: candidate.topLine as number,
+    });
+  }
+  windows.sort((left, right) => left.number - right.number);
+  return { ok: true, value: { editor, windows } };
+}
+
+export function parseBufferInventory(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<BufferInventory> {
+  const inventoryFailure = parseInventoryFailure(value);
+  if (inventoryFailure !== undefined) return inventoryFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  if (Array.isArray(snapshot.value.buffers) === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid buffer inventory data");
+  }
+  if (snapshot.value.buffers.length > MAX_INVENTORY_ITEMS) return inventoryLimit();
+
+  const buffers: BufferIdentity[] = [];
+  const bufferNumbers = new Set<number>();
+  let metadataBytes = 0;
+  for (const candidate of snapshot.value.buffers) {
+    const buffer = parseSourceBuffer(candidate, expectedCwd);
+    if (buffer.ok === false) return buffer;
+    if (bufferNumbers.has(buffer.value.number)) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned duplicate buffer identities");
+    }
+    metadataBytes += sourceBufferMetadataBytes(buffer.value) + 128;
+    if (metadataBytes > MAX_INVENTORY_BYTES) return inventoryLimit();
+    bufferNumbers.add(buffer.value.number);
+    buffers.push(buffer.value);
+  }
+  buffers.sort((left, right) => left.number - right.number);
+  return { ok: true, value: { buffers, editor } };
+}
+
+function parseReadFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidBuffer") {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (value.error === "invalidRange") {
+    const suffix = Number.isInteger(value.totalLines) ? ` within 1-${value.totalLines}` : "";
+    return failure("NVIM_INVALID_RANGE", `Choose a line range${suffix}`);
+  }
+  if (value.error === "lineLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Read at most ${MAX_CONTEXT_LINES} lines; narrow the requested range`,
+    );
+  }
+  if (value.error === "byteLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Read at most ${MAX_CONTEXT_BYTES} bytes; narrow the requested range`,
+    );
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown buffer read error");
+}
+
+export function parseBufferRead(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+): BridgeResult<BufferRead> {
+  const readFailure = parseReadFailure(value);
+  if (readFailure !== undefined) return readFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (buffer.value.loaded === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned content for an unloaded buffer");
+  }
+  if (
+    Number.isInteger(snapshot.value.startLine) === false ||
+    (snapshot.value.startLine as number) < 1 ||
+    Number.isInteger(snapshot.value.endLine) === false ||
+    (snapshot.value.endLine as number) < (snapshot.value.startLine as number) ||
+    Number.isInteger(snapshot.value.totalLines) === false ||
+    (snapshot.value.totalLines as number) < (snapshot.value.endLine as number) ||
+    Array.isArray(snapshot.value.lines) === false
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid buffer content");
+  }
+
+  const startLine = snapshot.value.startLine as number;
+  const endLine = snapshot.value.endLine as number;
+  if (snapshot.value.lines.length > MAX_CONTEXT_LINES) {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Read at most ${MAX_CONTEXT_LINES} lines; narrow the requested range`,
+    );
+  }
+  if (snapshot.value.lines.every((line) => typeof line === "string") === false) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid buffer content");
+  }
+  const lines = snapshot.value.lines as string[];
+  if (lines.length !== endLine - startLine + 1) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned an incomplete buffer range");
+  }
+  if (textFitsByteLimit(lines) === false) {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Read at most ${MAX_CONTEXT_BYTES} bytes; narrow the requested range`,
+    );
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: buffer.value,
+      editor,
+      endLine,
+      lines,
+      startLine,
+      totalLines: snapshot.value.totalLines as number,
+    },
+  };
 }
 
 export function parseFocusContext(value: unknown, expectedCwd: string): BridgeResult<FocusContext> {

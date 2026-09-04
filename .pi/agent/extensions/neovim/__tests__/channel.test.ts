@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { bridgeLua, type NvimConnection, PiNeovimChannel } from "../channel";
-import { FOCUS_NOTIFICATION } from "../contracts";
+import { FOCUS_NOTIFICATION, MAX_METADATA_STRING_BYTES } from "../contracts";
 
 const focus = {
   buffer: {
@@ -26,20 +26,43 @@ const focus = {
 class FakeConnection extends EventEmitter implements NvimConnection {
   readonly channelId = Promise.resolve(9);
   activeResponse: unknown = { ...focus, mode: "n", selection: undefined };
+  bufferResponse: unknown = { buffers: [focus.buffer], cwd: "/project", pid: 71 };
   closeCalls = 0;
   executeCalls: string[] = [];
+  identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
+  readArguments: unknown[] | undefined;
+  readResponse: unknown = {
+    buffer: focus.buffer,
+    cwd: "/project",
+    endLine: 2,
+    lines: ["const unsaved = true;", "export { unsaved };"],
+    pid: 71,
+    startLine: 1,
+    totalLines: 2,
+  };
+  visibleResponse: unknown = {
+    cwd: "/project",
+    pid: 71,
+    windows: [{ bottomLine: 20, buffer: focus.buffer, number: 4, topLine: 1 }],
+  };
 
   async close(): Promise<void> {
     this.closeCalls += 1;
   }
 
-  async executeLua(code: string): Promise<unknown> {
+  async executeLua(code: string, args?: unknown[]): Promise<unknown> {
     this.executeCalls.push(code);
     if (code === bridgeLua.installNotifications) {
       this.emit("notification", FOCUS_NOTIFICATION, [focus]);
-      return { channelId: 9, cwd: "/project", pid: 71 };
+      return this.identityResponse;
     }
     if (code === bridgeLua.activeContext) return this.activeResponse;
+    if (code === bridgeLua.visibleWindows) return this.visibleResponse;
+    if (code === bridgeLua.listBuffers) return this.bufferResponse;
+    if (code === bridgeLua.readBuffer) {
+      this.readArguments = args;
+      return this.readResponse;
+    }
     if (code === bridgeLua.removeNotifications) return true;
     throw new Error("unexpected Lua");
   }
@@ -77,6 +100,58 @@ describe("PiNeovimChannel", () => {
       },
     });
     expect(creations).toBe(1);
+  });
+
+  test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.visibleWindows()).toEqual({
+      ok: true,
+      value: {
+        editor: { channelId: 9, cwd: "/project", pid: 71 },
+        windows: [{ bottomLine: 20, buffer: focus.buffer, number: 4, topLine: 1 }],
+      },
+    });
+    expect(await channel.listBuffers()).toEqual({
+      ok: true,
+      value: {
+        buffers: [focus.buffer],
+        editor: { channelId: 9, cwd: "/project", pid: 71 },
+      },
+    });
+    expect(await channel.readBuffer({ buffer: 2, endLine: 2, startLine: 1 })).toEqual({
+      ok: true,
+      value: {
+        buffer: focus.buffer,
+        editor: { channelId: 9, cwd: "/project", pid: 71 },
+        endLine: 2,
+        lines: ["const unsaved = true;", "export { unsaved };"],
+        startLine: 1,
+        totalLines: 2,
+      },
+    });
+    expect(connection.readArguments).toEqual([2, 1, 2, 500, 32 * 1024]);
+    expect(connection.executeCalls).toContain(bridgeLua.visibleWindows);
+    expect(connection.executeCalls).toContain(bridgeLua.listBuffers);
+    expect(connection.executeCalls).toContain(bridgeLua.readBuffer);
+  });
+
+  test("preserves structured buffer and range failures without disabling the channel", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    connection.readResponse = { error: "invalidBuffer" };
+    expect(await channel.readBuffer({ buffer: 999 })).toMatchObject({
+      error: { code: "NVIM_INVALID_BUFFER" },
+      ok: false,
+    });
+    connection.readResponse = { error: "invalidRange", totalLines: 2 };
+    expect(await channel.readBuffer({ buffer: 2, startLine: 3 })).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE" },
+      ok: false,
+    });
+    expect((await channel.status()).ok).toBe(true);
   });
 
   test("unknown and malformed notifications cannot replace focus state", async () => {
@@ -146,6 +221,56 @@ describe("PiNeovimChannel", () => {
     });
   });
 
+  test("rejects an identity that does not match the connected RPC channel", async () => {
+    const connection = new FakeConnection();
+    connection.identityResponse = { channelId: 10, cwd: "/project", pid: 71 };
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.status()).toMatchObject({
+      error: {
+        code: "NVIM_INVALID_RESPONSE",
+        message: "Neovim returned an unexpected channel identity",
+      },
+      ok: false,
+    });
+    expect(connection.closeCalls).toBe(1);
+  });
+
+  test("rejects oversized editor identity metadata", async () => {
+    const connection = new FakeConnection();
+    connection.identityResponse = {
+      channelId: 9,
+      cwd: "x".repeat(MAX_METADATA_STRING_BYTES + 1),
+      pid: 71,
+    };
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.status()).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+  });
+
+  test("closes a connection that finishes opening during shutdown", async () => {
+    const connection = new FakeConnection();
+    let resolveConnection: ((connection: NvimConnection) => void) | undefined;
+    const pendingConnection = new Promise<NvimConnection>((resolvePromise) => {
+      resolveConnection = resolvePromise;
+    });
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", () => pendingConnection);
+
+    const status = channel.status();
+    await Bun.sleep(0);
+    const closing = channel.close();
+    resolveConnection?.(connection);
+
+    expect(await status).toMatchObject({ error: { code: "NVIM_UNAVAILABLE" }, ok: false });
+    await closing;
+    expect(connection.executeCalls).toContain(bridgeLua.removeNotifications);
+    expect(connection.listenerCount("notification")).toBe(0);
+    expect(connection.closeCalls).toBe(1);
+  });
+
   test("missing sockets fail closed without creating a connection", async () => {
     let creations = 0;
     const channel = new PiNeovimChannel(undefined, "/project", async () => {
@@ -198,10 +323,13 @@ describe("PiNeovimChannel", () => {
     });
 
     expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_UNAVAILABLE" },
+      error: { code: "NVIM_WORKTREE_MISMATCH" },
       ok: false,
     });
-    expect(await channel.status()).toMatchObject({ ok: false });
+    expect(await channel.status()).toMatchObject({
+      error: { code: "NVIM_WORKTREE_MISMATCH" },
+      ok: false,
+    });
     expect(creations).toBe(1);
   });
 

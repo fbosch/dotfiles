@@ -11,6 +11,17 @@ import type { BridgeResult, NeovimErrorCode } from "./contracts";
 const NeovimParameters = Type.Union([
   Type.Object({ operation: Type.Literal("status") }, { additionalProperties: false }),
   Type.Object({ operation: Type.Literal("context") }, { additionalProperties: false }),
+  Type.Object({ operation: Type.Literal("visible_windows") }, { additionalProperties: false }),
+  Type.Object({ operation: Type.Literal("list_buffers") }, { additionalProperties: false }),
+  Type.Object(
+    {
+      operation: Type.Literal("read_buffer"),
+      buffer: Type.Integer({ minimum: 1 }),
+      startLine: Type.Optional(Type.Integer({ minimum: 1 })),
+      endLine: Type.Optional(Type.Integer({ minimum: 1 })),
+    },
+    { additionalProperties: false },
+  ),
 ]);
 
 type NeovimInput = Static<typeof NeovimParameters>;
@@ -56,11 +67,12 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         name: "neovim",
         label: "Neovim",
         description:
-          "Inspect the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports the active source context, or the last source context when Pi is focused, including any bounded selection. The socket is fixed by the launch environment and cannot be selected by tool input.",
-        promptSnippet: "Inspect live context from the Neovim instance that launched Pi",
+          "Inspect the exact Neovim instance that launched this Pi session. Status reports connection identity. Context reports active or preserved source context and selection. Visible windows and listed buffers expose only worktree-contained source buffers. Read buffer returns up to 500 lines or 32 KiB from Neovim memory, including unsaved text. The socket is fixed by the launch environment and cannot be selected by tool input.",
+        promptSnippet: "Inspect live context and unsaved buffers from Pi's launching Neovim",
         promptGuidelines: [
-          "Use neovim for live editor state, unsaved selections, or source focus that Pi's disk-backed tools cannot observe.",
+          "Use neovim for live editor state, unsaved text or selections, and source focus that Pi's disk-backed tools cannot observe.",
           "Use one context call for source buffer, cursor, mode, and bounded selection; do not call status first unless connection identity or health is relevant.",
+          "Use visible_windows to discover source shown in the current Neovim tab, list_buffers for other listed source buffers, and read_buffer only when in-memory text is needed.",
           "Treat neovim results as editor state and lsp results as independent language-server evidence.",
         ],
         parameters: NeovimParameters,
@@ -71,6 +83,9 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
           const result = await match(params)
             .with({ operation: "status" }, () => bridge.status())
             .with({ operation: "context" }, () => bridge.context())
+            .with({ operation: "visible_windows" }, () => bridge.visibleWindows())
+            .with({ operation: "list_buffers" }, () => bridge.listBuffers())
+            .with({ operation: "read_buffer" }, (options) => bridge.readBuffer(options))
             .exhaustive();
           return {
             content: [{ type: "text", text: resultText(result) }],
