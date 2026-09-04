@@ -1,5 +1,6 @@
 import {
   type ExtensionAPI,
+  type ExtensionContext,
   type FileOperations,
   findCutPoint,
   getAgentDir,
@@ -9,9 +10,15 @@ import {
   sessionEntryToContextMessages,
 } from "@earendil-works/pi-coding-agent";
 
+export const COMPACTION_THRESHOLD_KEY = "threshold";
 export const KEEP_RECENT_PERCENT_KEY = "keepRecentPercent";
 
 export type CompactionPreparation = SessionBeforeCompactEvent["preparation"];
+
+type CompactionCustomizationSettings = {
+  threshold?: number;
+  keepRecentPercent?: number;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
@@ -29,21 +36,58 @@ function getCompactionSettings(
   return settings.compaction;
 }
 
+function resolveFractionalSetting(
+  compaction: Record<string, unknown> | undefined,
+  key: string,
+  warn: (message: string) => void,
+): number | undefined {
+  const value = compaction?.[key];
+  if (value === undefined) return undefined;
+
+  if (typeof value !== "number" || Number.isFinite(value) === false || value <= 0 || value >= 1) {
+    warn(`${key} must be a finite number greater than 0 and less than 1.`);
+    return undefined;
+  }
+
+  return value;
+}
+
+function resolveCompactionCustomizationSettings(
+  settings: unknown,
+  warn: (message: string) => void,
+): CompactionCustomizationSettings {
+  const compaction = getCompactionSettings(settings, warn);
+  const threshold = resolveFractionalSetting(compaction, COMPACTION_THRESHOLD_KEY, warn);
+  const keepRecentPercent = resolveFractionalSetting(compaction, KEEP_RECENT_PERCENT_KEY, warn);
+
+  return {
+    ...(threshold === undefined ? {} : { threshold }),
+    ...(keepRecentPercent === undefined ? {} : { keepRecentPercent }),
+  };
+}
+
+export function resolveCompactionThreshold(
+  settings: unknown,
+  warn: (message: string) => void = (message) =>
+    console.warn(`[compaction-customization] ${message}`),
+): number | undefined {
+  return resolveCompactionCustomizationSettings(settings, warn).threshold;
+}
+
 export function resolveKeepRecentPercent(
   settings: unknown,
   warn: (message: string) => void = (message) =>
     console.warn(`[compaction-customization] ${message}`),
 ): number | undefined {
-  const compaction = getCompactionSettings(settings, warn);
-  const value = compaction?.[KEEP_RECENT_PERCENT_KEY];
-  if (value === undefined) return undefined;
+  return resolveCompactionCustomizationSettings(settings, warn).keepRecentPercent;
+}
 
-  if (typeof value !== "number" || Number.isFinite(value) === false || value <= 0 || value >= 1) {
-    warn(`${KEEP_RECENT_PERCENT_KEY} must be a finite number greater than 0 and less than 1.`);
-    return undefined;
-  }
-
-  return value;
+export function shouldCompactAtThreshold(
+  usage: { tokens: number | null; contextWindow: number } | undefined,
+  threshold: number,
+): boolean {
+  if (usage === undefined || usage.tokens === null || usage.contextWindow <= 0) return false;
+  return usage.tokens / usage.contextWindow >= 1 - threshold;
 }
 
 export function keepRecentTokensForPercent(tokensBefore: number, percent: number): number {
@@ -191,14 +235,43 @@ export function applyPercentageCompaction(
   return true;
 }
 
-function loadKeepRecentPercent(ctx: { cwd: string }): number | undefined {
+function loadCompactionCustomizationSettings(ctx: {
+  cwd: string;
+}): CompactionCustomizationSettings {
   const settings = SettingsManager.create(ctx.cwd, getAgentDir(), { projectTrusted: false });
-  return resolveKeepRecentPercent(settings.getGlobalSettings());
+  return resolveCompactionCustomizationSettings(settings.getGlobalSettings(), (message) =>
+    console.warn(`[compaction-customization] ${message}`),
+  );
+}
+
+function compactWhenIdle(ctx: ExtensionContext): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+
+    try {
+      ctx.compact({ onComplete: finish, onError: finish });
+    } catch {
+      finish();
+    }
+  });
 }
 
 export default function compactionCustomization(pi: ExtensionAPI): void {
+  pi.on("agent_settled", async (_event, ctx) => {
+    const { threshold } = loadCompactionCustomizationSettings(ctx);
+    if (threshold === undefined) return;
+    if (!shouldCompactAtThreshold(ctx.getContextUsage(), threshold)) return;
+
+    await compactWhenIdle(ctx);
+  });
+
   pi.on("session_before_compact", (event, ctx) => {
-    const percent = loadKeepRecentPercent(ctx);
+    const { keepRecentPercent: percent } = loadCompactionCustomizationSettings(ctx);
     if (percent === undefined) return;
 
     if (applyPercentageCompaction(event, percent)) return;

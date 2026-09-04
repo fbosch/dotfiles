@@ -4,7 +4,9 @@ import {
   applyPercentageCompaction,
   keepRecentTokensForPercent,
   preparePercentageCompaction,
+  resolveCompactionThreshold,
   resolveKeepRecentPercent,
+  shouldCompactAtThreshold,
 } from "../index";
 
 function createPreparation(tokensBefore = 400): SessionBeforeCompactEvent["preparation"] {
@@ -27,6 +29,10 @@ describe("compaction customization", () => {
 
   test("accepts fractional ratios between zero and one", () => {
     expect(resolveKeepRecentPercent({ compaction: { keepRecentPercent: 0.375 } })).toBe(0.375);
+  });
+
+  test("accepts a fractional headroom threshold", () => {
+    expect(resolveCompactionThreshold({ compaction: { threshold: 0.25 } })).toBe(0.25);
   });
 
   test.each([{ value: null }, { value: [] }, { value: "enabled" }])(
@@ -52,6 +58,26 @@ describe("compaction customization", () => {
       expect(warnings).toHaveLength(1);
     },
   );
+
+  test.each([0, 1, -1, 1.01, Number.NaN, Number.POSITIVE_INFINITY, "0.25"])(
+    "rejects invalid threshold %j",
+    (value) => {
+      const warnings: string[] = [];
+      expect(
+        resolveCompactionThreshold({ compaction: { threshold: value } }, (message) => {
+          warnings.push(message);
+        }),
+      ).toBeUndefined();
+      expect(warnings).toHaveLength(1);
+    },
+  );
+
+  test("triggers at the configured context usage threshold", () => {
+    const usage = { tokens: 750, contextWindow: 1_000 };
+    expect(shouldCompactAtThreshold(usage, 0.25)).toBe(true);
+    expect(shouldCompactAtThreshold({ ...usage, tokens: 749 }, 0.25)).toBe(false);
+    expect(shouldCompactAtThreshold({ ...usage, tokens: null }, 0.25)).toBe(false);
+  });
 
   test("converts the percentage to a token retention budget", () => {
     expect(keepRecentTokensForPercent(100_000, 0.25)).toBe(25_000);

@@ -4,9 +4,9 @@ import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { match } from "ts-pattern";
 import type { FormatterExecutionResult } from "./command-runner";
 import {
-  matchesFormatterRule,
   type FormatterCommand,
   type FormatterRule,
+  matchesFormatterRule,
   type ResolvedFormatterSettings,
 } from "./settings";
 

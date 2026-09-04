@@ -23,6 +23,7 @@
     "--save-exact"
   ],
   "compaction": {
+    "threshold": 0.25,
     "keepRecentPercent": 0.25
   },
   "compactionModel": {

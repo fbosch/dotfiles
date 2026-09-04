@@ -44,6 +44,8 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
   const inheritedSocket = dependencies.socketPath ?? process.env.PI_NVIM_SOCKET;
 
   return function neovimExtension(pi: ExtensionAPI): void {
+    if (inheritedSocket === undefined || inheritedSocket === "") return;
+
     let channel: PiNeovimChannel | undefined;
 
     const channelFor = (context: ExtensionContext): PiNeovimChannel => {

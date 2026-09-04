@@ -1,4 +1,5 @@
 import { createConnection, type Socket } from "node:net";
+import type { Logger } from "neovim/lib/utils/logger";
 import {
   type ActiveContext,
   type BridgeResult,
@@ -161,6 +162,14 @@ export interface NvimConnection {
 
 export type NvimConnectionFactory = (socketPath: string) => Promise<NvimConnection>;
 
+const silentLogger = {
+  debug() {},
+  error() {},
+  info() {},
+  level: "error",
+  warn() {},
+} as unknown as Logger;
+
 function waitForSocket(socket: Socket): Promise<void> {
   return new Promise((resolvePromise, reject) => {
     const timeout = setTimeout(() => {
@@ -208,22 +217,10 @@ async function defaultConnectionFactory(socketPath: string): Promise<NvimConnect
   // Keep connection failures from becoming process-level uncaught errors.
   socket.on("error", () => undefined);
   await waitForSocket(socket);
-  const originalConsole = {
-    assert: console.assert,
-    debug: console.debug,
-    error: console.error,
-    info: console.info,
-    log: console.log,
-    warn: console.warn,
-  };
-  try {
-    // neovim@5 patches these methods when it lazily creates its default silent logger.
-    // Restore them because Pi's stdio is its own RPC/UI channel.
-    const { attach } = await import("neovim");
-    return attach({ reader: socket, writer: socket });
-  } finally {
-    Object.assign(console, originalConsole);
-  }
+  const { attach } = await import("neovim");
+  // Avoid neovim@5's default Winston logger: Pi's runtime cannot resolve its lazy
+  // CJS transport tree reliably, and the logger also monkey-patches global console.
+  return attach({ options: { logger: silentLogger }, reader: socket, writer: socket });
 }
 
 export class PiNeovimChannel {

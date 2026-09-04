@@ -90,16 +90,18 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(connection.closed).toBe(true);
 });
 
-test("reports an absent launch binding without attempting socket discovery", async () => {
-  let tool: ToolDefinition | undefined;
+test("stays unloaded when the session has no Neovim launch binding", () => {
+  let registrations = 0;
+  let lifecycleHandlers = 0;
   let connections = 0;
   const pi = {
-    on() {},
-    registerTool(definition: ToolDefinition) {
-      tool = definition;
+    on() {
+      lifecycleHandlers += 1;
+    },
+    registerTool() {
+      registrations += 1;
     },
   } as unknown as ExtensionAPI;
-  const context = { cwd: "/project" } as ExtensionContext;
 
   createNeovimExtension({
     createConnection: async () => {
@@ -109,15 +111,7 @@ test("reports an absent launch binding without attempting socket discovery", asy
     socketPath: "",
   })(pi);
 
-  if (tool === undefined) throw new Error("neovim tool was not registered");
-  const result = await tool.execute(
-    "neovim-1",
-    { operation: "status" },
-    undefined,
-    undefined,
-    context,
-  );
-
+  expect(registrations).toBe(0);
+  expect(lifecycleHandlers).toBe(0);
   expect(connections).toBe(0);
-  expect(result.details).toEqual({ code: "NVIM_UNAVAILABLE", ok: false, operation: "status" });
 });
