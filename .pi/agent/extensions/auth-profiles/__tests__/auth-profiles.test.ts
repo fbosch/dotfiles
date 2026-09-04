@@ -14,6 +14,7 @@ import type { ProfileSelection } from "../profile-selector";
 import { accountIdFor, authPathFor } from "../profile-store";
 import type { ProfileProviderAdapter } from "../provider-adapter";
 import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
+import type { UsageStatusPayload } from "../usage-status-service";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type ProviderResponseHandler = (
@@ -206,6 +207,87 @@ describe("auth profile prompt status", () => {
       data: { profile: null, sessionId: "session-2" },
     });
     expect(modelRefreshes).toBe(7);
+  });
+
+  test("reports usage and reset-token status for all profiles", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-status-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    let profilesCommand: ProfileCommandHandler | undefined;
+    const pi = {
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      on: () => undefined,
+      registerCommand(name: string, command: { handler: ProfileCommandHandler }) {
+        if (name === "profiles") profilesCommand = command.handler;
+      },
+    } as unknown as ExtensionAPI;
+    const providerAdapter = testProviderAdapter(agentDir);
+    const status: UsageStatusPayload = {
+      schema: "fbb.pi-auth-profiles-usage/v1",
+      profiles: [
+        {
+          profileLabel: "work",
+          active: false,
+          urgency: "unknown",
+          usage: [],
+        },
+        {
+          profileLabel: "default",
+          active: true,
+          urgency: "urgent",
+          availableCount: 2,
+          usage: [
+            { remaining: 75, resetsIn: "3h" },
+            { remaining: 0, resetsIn: "now" },
+          ],
+        },
+      ],
+      diagnostics: [{ profileLabel: "work", code: "usage-request-failed" }],
+    };
+    let receivedOptions: unknown;
+    const notifications: Array<{ message: string; level: string }> = [];
+    authProfiles(pi, {
+      providerAdapter,
+      usageCollector: async (options) => {
+        receivedOptions = options;
+        return status;
+      },
+    });
+
+    expect(profilesCommand).toBeDefined();
+    await profilesCommand?.("status", {
+      ui: {
+        notify: (message: string, level: string) => notifications.push({ message, level }),
+        theme: {
+          bold: (text: string) => `<b>${text}</b>`,
+          fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
+        },
+      },
+    } as unknown as ExtensionCommandContext);
+
+    expect(receivedOptions).toMatchObject({
+      activeProfile: "default",
+      includeDefault: true,
+      providerAdapter,
+    });
+    expect(notifications).toEqual([
+      {
+        level: "warning",
+        message:
+          "<success>*</success> <accent><b>default</b></accent> <success>active</success>\n" +
+          "  primary      <success>━━━━━━━━━━╸</success><dim>───</dim> <success>75% remaining</success><dim>  resets 3h</dim>\n" +
+          "  secondary    <dim>──────────────</dim> <error>0% remaining</error><dim>  resets now</dim>\n" +
+          "  reset tokens <error>2 available</error><dim>  urgent</dim>\n\n" +
+          "<muted>-</muted> <accent><b>work</b></accent> <muted>inactive</muted>\n" +
+          "  primary      <muted>unavailable</muted>\n" +
+          "  secondary    <muted>unavailable</muted>\n" +
+          "  reset tokens <muted>unavailable</muted>\n\n" +
+          "<warning><b>Diagnostics</b></warning>\n" +
+          "  <muted>work:</muted> usage request failed",
+      },
+    ]);
   });
 
   test("switches a session-preferred profile after confirmed Codex exhaustion", async () => {

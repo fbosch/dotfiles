@@ -222,17 +222,18 @@ Keep the existing Herdr restoration tests passing.
   ID without the expected missing-ID warning produced by `--session-id`.
 - On every Pi `session_start`, the Neovim extension reports Pi's actual session
   ID over the fixed `PI_NVIM_SOCKET`. Neovim binds the ID only to the live Pi
-  terminal owned by the current Neovim session. This also tracks Pi session
-  changes made inside the TUI.
-- `SessionSavePre` stores the bound ID as `pi_session_id` and records
-  `pi_terminal_open`. An open terminal is not marked restorable before the
-  identity handshake completes. Closing the terminal changes only the open flag
-  and keeps the last exact ID available for restoration decisions.
+  terminal owned by the current Neovim session, then immediately stores the ID
+  and open state. This also tracks Pi session changes made inside the TUI.
+- `TermClose` and `BufWipeout` immediately mark the bound terminal closed while
+  retaining its exact ID. `SessionSavePre` reconciles the same state, but an
+  intervening MiniSessions save is no longer required before `:PiStart` can
+  resume a Pi terminal that was just closed.
 - Pi metadata updates preserve `opencode_session_id`,
   `opencode_terminal_open`, and other existing Neovim session metadata.
 - `devenv tasks run test:nvim-pi-launcher` round-trips both products' fields
   through the JSON metadata file and covers unbound saves, invalid bindings,
-  open, close, terminal reuse, and exact manual resume after reopening.
+  immediate bind/close persistence, terminal reuse, and exact manual resume
+  after closing Pi without an intervening MiniSessions save.
 - An isolated Pi 0.84.4 RPC tracer launched a fresh session against a temporary
   session directory and headless Neovim socket. Pi emitted no stderr warning,
   and Neovim received the exact session ID returned by Pi's `get_state`.

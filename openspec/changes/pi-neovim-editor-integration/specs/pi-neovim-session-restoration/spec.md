@@ -18,6 +18,16 @@ The system SHALL persist Pi's exact session identifier and terminal-open state i
 - **WHEN** Neovim saves Pi session metadata beside existing OpenCode session metadata
 - **THEN** the OpenCode fields retain their previous values and semantics
 
+#### Scenario: Fresh Pi reports its assigned session identifier
+
+- **WHEN** a newly launched Pi process binds its actual session identifier to Neovim
+- **THEN** the current Neovim session metadata immediately stores that identifier and marks the Pi terminal open
+
+#### Scenario: Pi closes before another Neovim session save
+
+- **WHEN** a bound Pi terminal closes before `SessionSavePre` runs again
+- **THEN** the metadata immediately marks the terminal closed while retaining its exact Pi session identifier
+
 ### Requirement: Exact worktree-scoped resume
 
 The system SHALL resume only the persisted Pi session whose project identity matches the restored Neovim worktree. It MUST NOT infer the latest, most recently active, or nearest Pi session.

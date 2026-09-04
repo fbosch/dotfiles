@@ -25,6 +25,11 @@ import type { ProfileProviderAdapter } from "./provider-adapter";
 import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
+import {
+  collectUsageStatus,
+  type ProfileUsageStatus,
+  type UsageStatusPayload,
+} from "./usage-status-service";
 
 export { resolveProfile } from "./profile-resolver";
 export { authPathFor } from "./profile-store";
@@ -57,9 +62,10 @@ export { authPathFor } from "./profile-store";
  *   /profile use <name>      prefer a profile in the current session
  *   /profile default <name>  set the global fallback profile
  *   /profile clear           restore automatic selection in this session
+ *   /profiles status         show usage for all configured profiles
  *   /reset-credit [--dry-run] select and consume an earned reset credit
  */
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 
 type InternalCredentials = { store?: CredentialStore };
 
@@ -71,6 +77,7 @@ type AuthProfileDependencies = {
   now?: () => number;
   providerAdapter?: ProfileProviderAdapter;
   selectProfile?: typeof selectProfile;
+  usageCollector?: typeof collectUsageStatus;
 };
 
 function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
@@ -127,6 +134,91 @@ function describeSelection(selection: ProfileSelection): string {
   return selection.fallbackFrom ? `${source}; ${selection.fallbackFrom} unavailable` : source;
 }
 
+const USAGE_BAR_WIDTH = 14;
+
+function usageColor(theme: Theme, remaining: number, value: string): string {
+  if (remaining >= 75) return theme.fg("success", value);
+  if (remaining >= 50) return theme.fg("warning", value);
+  if (remaining >= 25) return theme.bold(theme.fg("warning", value));
+  return theme.fg("error", value);
+}
+
+function renderUsageBar(theme: Theme, remaining: number): string {
+  const clamped = Math.max(0, Math.min(100, remaining));
+  const cells = (clamped / 100) * USAGE_BAR_WIDTH;
+  const fullCells = Math.floor(cells);
+  const partialCell = cells - fullCells >= 0.5 ? "╸" : "";
+  const emptyCells = USAGE_BAR_WIDTH - fullCells - Number(partialCell !== "");
+  const filled = `${"━".repeat(fullCells)}${partialCell}`;
+  return `${filled ? usageColor(theme, clamped, filled) : ""}${theme.fg("dim", "─".repeat(emptyCells))}`;
+}
+
+function formatUsageWindow(
+  theme: Theme,
+  window: ProfileUsageStatus["usage"][number] | undefined,
+): string {
+  if (window === undefined) return theme.fg("muted", "unavailable");
+  const remaining = usageColor(theme, window.remaining, `${window.remaining}% remaining`);
+  const reset = window.resetsIn ? theme.fg("dim", `  resets ${window.resetsIn}`) : "";
+  return `${renderUsageBar(theme, window.remaining)} ${remaining}${reset}`;
+}
+
+function formatResetTokens(theme: Theme, profile: ProfileUsageStatus): string {
+  if (profile.availableCount === undefined) return theme.fg("muted", "unavailable");
+
+  const value = `${profile.availableCount} available`;
+  if (profile.availableCount === 0 || profile.urgency === "unknown") {
+    return theme.fg("muted", value);
+  }
+  const color =
+    profile.urgency === "urgent" ? "error" : profile.urgency === "soon" ? "warning" : "success";
+  return `${theme.fg(color, value)}${theme.fg("dim", `  ${profile.urgency}`)}`;
+}
+
+function formatUsageStatus(status: UsageStatusPayload, theme: Theme): string {
+  const profiles = [...status.profiles].sort(
+    (left, right) =>
+      Number(right.active) - Number(left.active) ||
+      left.profileLabel.localeCompare(right.profileLabel),
+  );
+  const sections = profiles.map((profile) => {
+    const activeColor = profile.active ? "success" : "muted";
+    const marker = theme.fg(activeColor, profile.active ? "*" : "-");
+    const name = theme.fg("accent", theme.bold(profile.profileLabel));
+    const state = theme.fg(activeColor, profile.active ? "active" : "inactive");
+    const windows: Array<ProfileUsageStatus["usage"][number] | undefined> = [
+      profile.usage[0],
+      profile.usage[1],
+      ...profile.usage.slice(2),
+    ];
+    const usageLines = windows.map((window, index) => {
+      const label = index === 0 ? "primary" : index === 1 ? "secondary" : `window ${index + 1}`;
+      return `  ${label.padEnd(13)}${formatUsageWindow(theme, window)}`;
+    });
+    return [
+      `${marker} ${name} ${state}`,
+      ...usageLines,
+      `  ${"reset tokens".padEnd(13)}${formatResetTokens(theme, profile)}`,
+    ].join("\n");
+  });
+
+  if (sections.length === 0) {
+    sections.push(theme.fg("muted", "No auth profiles with usable credentials."));
+  }
+  if (status.diagnostics.length > 0) {
+    sections.push(
+      [
+        theme.fg("warning", theme.bold("Diagnostics")),
+        ...status.diagnostics.map(
+          ({ profileLabel, code }) =>
+            `  ${theme.fg("muted", `${profileLabel}:`)} ${code.replaceAll("-", " ")}`,
+        ),
+      ].join("\n"),
+    );
+  }
+  return sections.join("\n\n");
+}
+
 export default function authProfiles(
   pi: ExtensionAPI,
   dependencies: AuthProfileDependencies = {},
@@ -134,6 +226,7 @@ export default function authProfiles(
   const chooseProfile = dependencies.selectProfile ?? selectProfile;
   const now = dependencies.now ?? Date.now;
   const providerAdapter = dependencies.providerAdapter ?? createOpenAiCodexProfileAdapter();
+  const usageCollector = dependencies.usageCollector ?? collectUsageStatus;
   let activeProfile = DEFAULT_PROFILE;
   let sessionProfile: string | undefined;
   let activeSelection: ProfileSelection | undefined;
@@ -334,6 +427,34 @@ export default function authProfiles(
     const responseProfile = lastProviderResponseProfile ?? activeProfile;
     lastProviderResponseProfile = undefined;
     await rotateAfterExhaustion(ctx, resetAt, responseProfile);
+  });
+
+  pi.registerCommand("profiles", {
+    description: "Show usage and reset-token status for all auth profiles",
+    getArgumentCompletions: (prefix) =>
+      "status".startsWith(prefix) ? [{ value: "status", label: "status" }] : [],
+    handler: async (args, ctx) => {
+      const usage = "Usage: /profiles status";
+      if (args.trim() !== "status") {
+        ctx.ui.notify(usage, "warning");
+        return;
+      }
+
+      try {
+        await profileOperationTail;
+        const status = await usageCollector({
+          activeProfile,
+          includeDefault: true,
+          providerAdapter,
+        });
+        ctx.ui.notify(
+          formatUsageStatus(status, ctx.ui.theme),
+          status.diagnostics.length > 0 ? "warning" : "info",
+        );
+      } catch (error) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      }
+    },
   });
 
   pi.registerCommand("profile", {

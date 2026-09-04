@@ -89,10 +89,9 @@ assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state c
 local first_session_id = "pi-session-one"
 assert(pi.bind_session("invalid/session") == false, "invalid Pi session ID was bound")
 assert(pi.bind_session(first_session_id) == true, "Pi-assigned session ID was not bound")
-vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 saved_metadata = session.get_metadata(nvim_session)
-assert(saved_metadata.pi_session_id == first_session_id, "bound Pi session ID was not saved")
-assert(saved_metadata.pi_terminal_open == true, "bound Pi terminal state was not saved")
+assert(saved_metadata.pi_session_id == first_session_id, "bound Pi session ID was not persisted immediately")
+assert(saved_metadata.pi_terminal_open == true, "bound Pi terminal was not persisted immediately")
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi binding")
 assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed after Pi binding")
 
@@ -114,10 +113,11 @@ assert(
 )
 
 callbacks.TermClose()
-vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.pi_session_id == first_session_id, "closed Pi terminal discarded its session ID")
-assert(saved_metadata.pi_terminal_open == false, "closed Pi terminal state was not saved")
+assert(saved_metadata.pi_terminal_open == false, "closed Pi terminal state was not persisted immediately")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi close")
 
 captured_command = nil

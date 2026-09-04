@@ -114,9 +114,14 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 	terminal_owner = owner
 	local function clear_terminal()
 		if terminal_instance == terminal then
+			local closed_session_id = terminal_session_id
+			local closed_owner = terminal_owner
 			terminal_instance = nil
 			terminal_session_id = nil
 			terminal_owner = nil
+			if closed_owner ~= nil then
+				session.set_pi_terminal_state(closed_session_id, false, closed_owner)
+			end
 		end
 	end
 	terminal:on("TermClose", clear_terminal, { buf = true })
@@ -217,7 +222,7 @@ function M.bind_session(session_id)
 		return false
 	end
 	terminal_session_id = session_id
-	return true
+	return session.set_pi_terminal_state(session_id, true, owner)
 end
 
 function M.setup()
