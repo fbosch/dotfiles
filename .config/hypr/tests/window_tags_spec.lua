@@ -5,9 +5,10 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local window_tags = require("lib.window_tags")
 
 describe("window tags", function()
-	it("recognizes static and dynamic non-resizable tags", function()
+	it("recognizes static and dynamic policy tags", function()
 		assert.is_true(window_tags.has({ "non-resizable" }, window_tags.non_resizable))
 		assert.is_true(window_tags.has({ "non-resizable*" }, window_tags.non_resizable))
+		assert.is_true(window_tags.has({ "intentionally-frozen" }, window_tags.intentionally_frozen))
 	end)
 
 	it("does not match unrelated or missing tags", function()

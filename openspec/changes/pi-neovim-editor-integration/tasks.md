@@ -11,15 +11,15 @@
 
 - [x] 2.1 Implement visible-window and listed-source-buffer inventory with bound-instance and source identities; verify tests cover modified, loaded, unlisted, unnamed, special, and cross-worktree buffers.
 - [x] 2.2 Implement bounded in-memory buffer reads without filesystem fallback; verify an integration test returns unsaved text while the on-disk file remains unchanged.
-- [ ] 2.3 Implement Neovim diagnostic summaries and detailed diagnostic reads as distinct from Pi LSP results; verify ordering, positions, severities, limits, and invalid-buffer errors.
-- [ ] 2.4 Run the live unsaved-buffer tracer bullet with two visible files and an unsaved diagnostic; record the returned Neovim state and unchanged disk contents.
+- [x] 2.3 Implement Neovim diagnostic summaries and detailed diagnostic reads as distinct from Pi LSP results; verify ordering, positions, severities, limits, and invalid-buffer errors.
+- [x] 2.4 Run the live unsaved-buffer tracer bullet with two visible files and an unsaved diagnostic; record the returned Neovim state and unchanged disk contents.
 
 ## 3. Restore the exact Pi session through Neovim
 
-- [ ] 3.1 Confirm Pi 0.84.4's supported exact session ID, project identity, and resume invocation from Pi documentation and runtime behavior; record the verified contract before implementing persistence.
-- [ ] 3.2 Add separate `pi_session_id` and Pi terminal-open metadata without changing `opencode_session_id`; verify Neovim session tests preserve both products' fields across save and load.
-- [ ] 3.3 Resume only the persisted Pi session whose project and worktree identity match the restored Neovim session; verify exact resume, closed-terminal, missing-session, invalid-session, and wrong-worktree tests.
-- [ ] 3.4 Preserve the restoration order `Herdr → Neovim → exact Pi session`; verify existing Herdr restore tests and new Pi-specific restoration fixtures pass.
+- [x] 3.1 Confirm Pi 0.84.4's supported exact session ID, project identity, and resume invocation from Pi documentation and runtime behavior; record the verified contract before implementing persistence.
+- [x] 3.2 Add separate `pi_session_id` and Pi terminal-open metadata without changing `opencode_session_id`; verify Neovim session tests preserve both products' fields across save and load.
+- [x] 3.3 Resume only the persisted Pi session whose project and worktree identity match the restored Neovim session; verify exact resume, closed-terminal, missing-session, invalid-session, and wrong-worktree tests.
+- [x] 3.4 Preserve the restoration order `Herdr → Neovim → exact Pi session`; verify existing Herdr restore tests and new Pi-specific restoration fixtures pass.
 - [ ] 3.5 Run the live restore tracer bullet in two sibling worktrees; record exact session continuity and prove neither worktree resumes the other's session.
 
 ## 4. Add problem-list navigation and source presentation

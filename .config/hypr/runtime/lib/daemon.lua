@@ -53,6 +53,17 @@ local function default_transport()
 	}
 end
 
+local function normalize_workspace(workspace)
+	if type(workspace) ~= "table" then
+		return nil
+	end
+
+	return {
+		id = number(workspace.id),
+		name = tostring(workspace.name or ""),
+	}
+end
+
 local function normalize_monitor(monitor)
 	if type(monitor) ~= "table" then
 		return nil
@@ -72,6 +83,8 @@ local function normalize_monitor(monitor)
 		width = width,
 		height = height,
 		refresh_rate = number(monitor.refreshRate),
+		activeWorkspace = normalize_workspace(monitor.activeWorkspace),
+		specialWorkspace = normalize_workspace(monitor.specialWorkspace),
 	}
 end
 

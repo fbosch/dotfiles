@@ -1,4 +1,5 @@
 require("plugins.adaptive_soft_shadow")
+require("plugins.anr_tag_ignore")
 require("plugins.custom_layout_resize")
 require("plugins.cursor_outline")
 require("plugins.focus_animation")

@@ -27,6 +27,17 @@ Consumers must treat `name` and `name*` as the same tag. Use
 - Producer: the AGS class rule in `rules/ags.lua`.
 - Consumer: the FreeRDP pass-through bind in `keybinds.lua`.
 
+### `intentionally-frozen`
+
+- Owner: `lib/window_tags.lua`
+- Purpose: marks every mapped window of a game client while the gaming watchdog
+  intentionally pauses its process with `wl-freeze`.
+- Producer: `runtime/gaming/daemons/gaming-session-watchdog`.
+- Consumer: the `anr-tag-ignore` plugin. Its
+  `plugin.anr_tag_ignore.ignored_tags` setting clears missed pings and
+  suppresses the dialog only when every mapped window for the client has an
+  ignored tag.
+
 ### Picture-In-Picture Corners
 
 - Tags: `pip-top-left`, `pip-top-right`, `pip-bottom-left`, and

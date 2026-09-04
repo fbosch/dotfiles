@@ -1,4 +1,17 @@
 local repo_root = assert(vim.env.REPO_ROOT)
+local metadata_root = vim.fn.tempname()
+local nvim_session = {
+	cwd = repo_root,
+	metadata_path = metadata_root .. "/session.json",
+}
+local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
+session.set_current(nvim_session)
+session.set_metadata({
+	opencode_session_id = "ses_exact",
+	opencode_terminal_open = true,
+}, nvim_session)
+package.loaded["utils.session"] = session
+package.loaded["utils.pi_session"] = dofile(repo_root .. "/.config/nvim/lua/utils/pi_session.lua")
 
 local captured_command
 local captured_options
@@ -17,6 +30,9 @@ local terminal = {
 	show = function(self)
 		return self
 	end,
+	valid = function()
+		return true
+	end,
 }
 package.loaded["snacks.terminal"] = {
 	open = function(command, options)
@@ -34,9 +50,15 @@ local pi = dofile(repo_root .. "/.config/nvim/lua/utils/pi.lua")
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
+local first_session_id = captured_command:match(" pi %-%-session%-id '([0-9a-f]+)'$")
+assert(type(first_session_id) == "string" and #first_session_id == 32, "Pi launcher did not assign an exact session ID")
 assert(
-	captured_command == "PI_NVIM_SOCKET=" .. vim.fn.shellescape(vim.v.servername) .. " pi",
-	"Pi launcher did not bind the launching Neovim socket"
+	captured_command
+		== "PI_NVIM_SOCKET="
+			.. vim.fn.shellescape(vim.v.servername)
+			.. " pi --session-id "
+			.. vim.fn.shellescape(first_session_id),
+	"Pi launcher did not bind the socket and exact session ID"
 )
 assert(
 	vim.g.pi_launch_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
@@ -53,6 +75,20 @@ assert(captured_options.win.width == 100, "Pi terminal width changed")
 assert(vim.b[terminal.buf].is_pi_terminal == true, "Pi terminal buffer was not marked")
 assert(type(callbacks.TermClose) == "function", "Pi terminal close was not tracked")
 
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+local saved_metadata = session.get_metadata(nvim_session)
+assert(saved_metadata.pi_session_id == first_session_id, "Pi session ID was not saved")
+assert(saved_metadata.pi_terminal_open == true, "open Pi terminal state was not saved")
+assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed during Pi save")
+assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed during Pi save")
+
+local restored_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
+local restored_metadata = restored_session.get_metadata(nvim_session)
+assert(restored_metadata.pi_session_id == first_session_id, "Pi session ID did not survive metadata load")
+assert(restored_metadata.pi_terminal_open == true, "Pi terminal state did not survive metadata load")
+assert(restored_metadata.opencode_session_id == "ses_exact", "OpenCode session ID did not survive metadata load")
+assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal state did not survive metadata load")
+
 local second_source = repo_root .. "/.config/nvim/lua/utils/pi.lua"
 vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 captured_command = nil
@@ -64,5 +100,16 @@ assert(
 )
 
 callbacks.TermClose()
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+saved_metadata = session.get_metadata(nvim_session)
+assert(saved_metadata.pi_session_id == first_session_id, "closed Pi terminal discarded its session ID")
+assert(saved_metadata.pi_terminal_open == false, "closed Pi terminal state was not saved")
+assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi close")
+
+captured_command = nil
 pi.start()
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
+local second_session_id = captured_command:match(" pi %-%-session%-id '([0-9a-f]+)'$")
+assert(second_session_id ~= first_session_id, "fresh Pi terminal reused the closed session ID")
+
+vim.fn.delete(metadata_root, "rf")

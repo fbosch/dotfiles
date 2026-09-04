@@ -8,7 +8,7 @@ local host = system.hostname()
 if host == "rvn-pc" then
 	hl.monitor({
 		output = monitor_role.name_for(monitor_role.ultrawide),
-		mode = "3440x1440@164.9",
+		mode = "3440x1440@99.98",
 		position = "1440x500",
 		scale = 1.0,
 		-- 10 bpc causes flickering black bars in the XWayland WoW client.

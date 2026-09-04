@@ -324,6 +324,14 @@ in
         -l .config/nvim/tests/pi_launcher.lua
     '';
 
+    "test:nvim-pi-session-restore".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/pi-session-restore.sock" \
+        -l .config/nvim/tests/pi_session_restore.lua
+    '';
+
+    "test:nvim-pi-production-restore".exec =
+      "timeout --foreground 15s bash .config/herdr/plugins/neovim-sessions/tests/pi_restore_order.sh";
+
     "test:nvim-pack-inventory".exec = ''
       XDG_CONFIG_HOME="$PWD/.config" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/pack_inventory.lua
@@ -335,11 +343,11 @@ in
     '';
 
     "test:nvim-pack-lazy-startup".exec = ''
-      # Avoid Neovim's /tmp -> /private/tmp canonicalization breaking globpath on copied config.
+      # Keep copied config outside paths excluded by wildignore; Darwin also canonicalizes /tmp.
       if [[ "$(uname -s)" == "Darwin" ]]; then
         temp_parent="$(getconf DARWIN_USER_TEMP_DIR)"
       else
-        temp_parent="''${TMPDIR:-/tmp}"
+        temp_parent="$DEVENV_STATE"
       fi
       test_root="$(mktemp -d "''${temp_parent%/}/nvim-pack-lazy.XXXXXX")"
       trap 'rm -rf "$test_root"' EXIT
@@ -405,6 +413,9 @@ in
         "test:herdr-neovim-sessions"
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
+        "test:nvim-pi-launcher"
+        "test:nvim-pi-session-restore"
+        "test:nvim-pi-production-restore"
         "test:nvim-pack-disabled-sync"
         "test:nvim-pack-lazy-startup"
         "test:nvim-pack-loader"

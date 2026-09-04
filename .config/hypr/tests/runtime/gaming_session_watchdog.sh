@@ -46,6 +46,24 @@ assert_count() {
   }
 }
 
+assert_order() {
+  local file="$1"
+  shift
+  local expected_patterns=("$@") expected_index=0 line
+
+  while IFS= read -r line; do
+    if [[ "$line" == *"${expected_patterns[expected_index]}"* ]]; then
+      expected_index=$((expected_index + 1))
+      (( expected_index < ${#expected_patterns[@]} )) && continue
+      return 0
+    fi
+  done < "$file"
+
+  printf 'expected ordered transitions in %s: %s\n' "$file" "$*" >&2
+  printf '%s\n' "$(<"$file")" >&2
+  exit 1
+}
+
 wait_for_count() {
   local file="$1" expected="$2" count="$3" attempts=0 actual
   while (( attempts < 80 )); do
@@ -132,22 +150,48 @@ end
 local function close(fd) ffi.C.close(fd) end
 local server = make_server()
 local ready = io.open(ready_file, "w"); ready:close()
+local dispatch_log = os.getenv("DISPATCH_LOG")
+local transition_log = os.getenv("TRANSITION_LOG")
+local function append(path, line)
+  if not path or path == "" then return end
+  local file = assert(io.open(path, "a"))
+  file:write(line, "\n")
+  file:close()
+end
+local function file_exists(path)
+  if not path or path == "" then return false end
+  local handle = io.open(path, "r")
+  if not handle then return false end
+  handle:close()
+  return true
+end
 if kind == "query" then
   while true do
     local client = accept(server)
-    local buffer = ffi.new("char[64]")
-    ffi.C.recv(client, buffer, 64, 0)
-    local clear_handle = io.open(clear_file, "r")
-    local is_cleared = clear_handle ~= nil
-    if clear_handle then clear_handle:close() end
-    local game = os.getenv("CLIENTS_MODE") == "override"
-      and '[{"pid":4242,"class":"bg3","initialClass":"bg3","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
-      or '[{"pid":4242,"class":"fixture-game","initialClass":"fixture-game","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+    local buffer = ffi.new("char[1024]")
+    local received = ffi.C.recv(client, buffer, 1024, 0)
+    local message = received > 0 and ffi.string(buffer, received) or ""
+    local is_cleared = file_exists(clear_file)
+    local game
+    if os.getenv("CLIENTS_MODE") == "override" then
+      game = '[{"address":"0x4242","pid":4242,"class":"bg3","initialClass":"bg3","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+    elseif os.getenv("CLIENTS_MODE") == "multi-window" then
+      game = '[{"address":"0x4242","pid":4242,"class":"fixture-game","initialClass":"fixture-game","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0},{"address":"0x4243","pid":4242,"class":"fixture-helper","initialClass":"fixture-helper","title":"Helper","initialTitle":"Helper","contentType":"none","workspace":{"name":"10"},"focusHistoryID":1}]'
+    else
+      game = '[{"address":"0x4242","pid":4242,"class":"fixture-game","initialClass":"fixture-game","title":"Fixture","initialTitle":"Fixture","contentType":"game","workspace":{"name":"10"},"focusHistoryID":0}]'
+    end
     local clients = is_cleared and "[]" or game
     if os.getenv("CLIENTS_MODE") == "late-game" then clients = is_cleared and game or "[]" end
-    local monitors = '[{"name":"fixture","focused":true,"activeWorkspace":{"name":"1"},"specialWorkspace":{"name":""}}]'
-    local response = buffer == nil and "" or (clients .. "\n")
-    if ffi.string(buffer):match("j/monitors") then response = monitors .. "\n" end
+    local active_workspace = file_exists(os.getenv("MONITORS_VISIBLE_FILE")) and "10" or "1"
+    local monitors = '[{"name":"fixture","focused":true,"activeWorkspace":{"name":"' .. active_workspace .. '"},"specialWorkspace":{"name":""}}]'
+    local response = clients .. "\n"
+    if message:match("^dispatch ") then
+      append(dispatch_log, message)
+      append(transition_log, "tag " .. (message:match('tag = "([+-]intentionally%-frozen)"') or "unknown"))
+      response = "ok\n"
+    elseif message:match("j/monitors") then
+      response = monitors .. "\n"
+    end
     ffi.C.send(client, response, #response, 0)
     close(client)
   end
@@ -180,14 +224,14 @@ run_case() {
 	local bin_dir="$case_dir/bin" home_dir="$case_dir/home"
 	local runtime_dir="$case_dir/runtime"
 	local socket_dir="$runtime_dir/hypr/fixture"
-	local event_file=""
+	local event_file="" visibility_file="$case_dir/visible"
   mkdir -p "$bin_dir" "$home_dir/.config" "$socket_dir"
   cp -a "$repo_root/.config/hypr" "$home_dir/.config/"
   # shellcheck disable=SC2016
   printf '%s\n' '#!/bin/sh' 'printf "%s %s\n" "$*" >> "$PROFILE_LOG"' 'exit 0' > "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
   chmod +x "$home_dir/.config/hypr/runtime/profiles/profilectl.sh"
   # shellcheck disable=SC2016
-  printf '%s\n' '#!/bin/sh' 'if [ "$FREEZE_MODE" = missing ]; then exit 127; fi' 'printf "%s\n" "$*" >> "$FREEZE_LOG"' 'if [ "$FREEZE_MODE" = failed ]; then exit 1; fi' 'if [ -e "$FREEZE_STATE" ]; then rm -f "$FREEZE_STATE"; else : > "$FREEZE_STATE"; fi' > "$bin_dir/wl-freeze"
+  printf '%s\n' '#!/bin/sh' 'if [ "$FREEZE_MODE" = missing ]; then exit 127; fi' 'if [ "$FREEZE_MODE" = failed ]; then exit 1; fi' 'if [ -e "$FREEZE_STATE" ]; then action=resume; rm -f "$FREEZE_STATE"; else action=freeze; : > "$FREEZE_STATE"; fi' 'printf "%s %s\n" "$action" "$*" >> "$FREEZE_LOG"' 'printf "%s %s\n" "$action" "$*" >> "$TRANSITION_LOG"' > "$bin_dir/wl-freeze"
   # shellcheck disable=SC2016
   printf '%s\n' '#!/bin/sh' 'if [ -e "$FREEZE_STATE" ]; then printf "T\n"; else printf "R\n"; fi' > "$bin_dir/ps"
   # shellcheck disable=SC2016
@@ -199,15 +243,17 @@ run_case() {
 	write_profile_state "$runtime_dir/hypr-profiles/state.json" "$resolved_profile"
 	touch "$case_dir/ready-query" "$case_dir/ready-event"
   rm "$case_dir/ready-query" "$case_dir/ready-event"
-  export CLIENTS_MODE="$clients_mode"
-	if [[ "$transition" == gaming ]]; then event_file="$case_dir/event"; fi
+  export CLIENTS_MODE="$clients_mode" MONITORS_VISIBLE_FILE="$visibility_file"
+  export DISPATCH_LOG="$case_dir/dispatch.log" TRANSITION_LOG="$case_dir/transition.log"
+  : > "$DISPATCH_LOG"; : > "$TRANSITION_LOG"
+	if [[ "$transition" == gaming || "$transition" == visibility ]]; then event_file="$case_dir/event"; fi
   "$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket.sock" query "$case_dir/clear" "$case_dir/ready-query" & query_pid=$!
 	"$luajit_path" "$test_dir/fake_socket.lua" "$socket_dir/.socket2.sock" "$event_mode" "$case_dir/clear" "$case_dir/ready-event" "$event_file" & event_pid=$!
   wait_for_socket "$socket_dir/.socket.sock" "$name query socket"
   wait_for_socket "$socket_dir/.socket2.sock" "$name event socket"
   export HOME="$home_dir" PATH="$bin_dir" XDG_RUNTIME_DIR="$runtime_dir" HYPRLAND_INSTANCE_SIGNATURE=fixture
   export PROFILE_LOG="$case_dir/profile.log" FREEZE_LOG="$case_dir/freeze.log" PRESENTATION_LOG="$case_dir/presentation.log" FREEZE_STATE="$case_dir/frozen" FREEZE_MODE="$freeze_mode" CLIENTS_MODE="$clients_mode"
-	: > "$PROFILE_LOG"; : > "$FREEZE_LOG"; : > "$PRESENTATION_LOG"
+	: > "$PROFILE_LOG"; : > "$FREEZE_LOG"; : > "$PRESENTATION_LOG"; : > "$TRANSITION_LOG"
 	if [[ "$clients_mode" == empty ]]; then touch "$case_dir/clear"; fi
 	"$home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh" > "$case_dir/out" 2> "$case_dir/err" & watchdog_pid=$!
 	wait_for_file "$PROFILE_LOG" "$name profile sync"
@@ -219,6 +265,12 @@ run_case() {
 		write_profile_state "$runtime_dir/hypr-profiles/state.json" gaming
 		touch "$case_dir/event.2"
 		sleep 1.2
+	elif [[ "$transition" == visibility ]]; then
+		wait_for_count "$FREEZE_LOG" '-p 4242 -s' 1
+		touch "$visibility_file" "$event_file"
+		wait_for_count "$FREEZE_LOG" '-p 4242 -s' 2
+		[[ ! -e "$FREEZE_STATE" ]] || { printf 'visible game was not resumed\n' >&2; exit 1; }
+		touch "$event_file.2"
 	elif [[ "$clients_mode" == late-game ]]; then
     touch "$case_dir/clear"
     sleep 1.2
@@ -264,6 +316,8 @@ run_case missing missing game event
 run_case failed failed game event
 run_case ordinary missing empty stable
 run_case cleanup success game event
+run_case visibility-resume success game event gaming visibility
+run_case multi-window-tags success multi-window event gaming visibility
 run_case override missing override event
 run_case late-game missing late-game event
 run_case manual-default missing override event default
@@ -271,6 +325,23 @@ run_case manual-powersave missing override event powersave
 run_case unreadable-state missing override event missing
 run_case presentation-resume missing override event gaming gaming
 assert_contains "$test_dir/cleanup/profile.log" 'sync-source gaming watchdog 0'
+assert_count "$test_dir/visibility-resume/freeze.log" '-p 4242 -s' 2
+assert_count "$test_dir/visibility-resume/dispatch.log" '+intentionally-frozen' 1
+assert_count "$test_dir/visibility-resume/dispatch.log" '-intentionally-frozen' 1
+assert_order "$test_dir/visibility-resume/transition.log" \
+  'tag +intentionally-frozen' \
+  'freeze -p 4242 -s' \
+  'resume -p 4242 -s' \
+  'tag -intentionally-frozen'
+assert_count "$test_dir/multi-window-tags/dispatch.log" '+intentionally-frozen' 2
+assert_count "$test_dir/multi-window-tags/dispatch.log" '-intentionally-frozen' 2
+assert_order "$test_dir/multi-window-tags/transition.log" \
+  'tag +intentionally-frozen' \
+  'tag +intentionally-frozen' \
+  'freeze -p 4242 -s' \
+  'resume -p 4242 -s' \
+  'tag -intentionally-frozen' \
+  'tag -intentionally-frozen'
 assert_contains "$test_dir/override/profile.log" 'sync-source gaming watchdog 1'
 assert_contains "$test_dir/cleanup/err" 'event socket closed; retrying in 1s'
 assert_contains "$test_dir/cleanup/err" 'event socket reconnected'

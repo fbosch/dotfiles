@@ -11,6 +11,7 @@ local daemon = require("runtime.lib.daemon")
 local profile_state = require("lib.profile_state")
 local gaming = require("gaming")
 local minimized_state = require("runtime.windows.minimized-state")
+local window_tags = require("lib.window_tags")
 local profilectl = home .. "/.config/hypr/runtime/profiles/profilectl.sh"
 local kit = daemon.new({})
 local reconnect_delay_seconds = 1
@@ -18,9 +19,10 @@ local event_idle_timeout_seconds = 5
 local diagnostic_interval_seconds = 30
 local gaming_workspace = gaming.workspace
 local gaming_overlay_workspace = "special:gaming-overlay"
+local intentionally_frozen_tag = window_tags.intentionally_frozen
 local wl_freeze_checked = false
 local wl_freeze_available = false
-local frozen_pids = {}
+local managed_pids = {}
 local last_presentation = nil
 local last_diagnostic_at = {}
 
@@ -124,7 +126,11 @@ local function get_freezable_gaming_windows(clients)
 			and not excludes_freezing(client)
 			and has_game_content(client)
 		then
-			windows[#windows + 1] = { pid = tostring(client.pid or ""), workspace = workspace }
+			windows[#windows + 1] = {
+				pid = tostring(client.pid or ""),
+				workspace = workspace,
+				address = tostring(client.address or ""),
+			}
 		end
 	end
 
@@ -146,6 +152,10 @@ local function workspace_visible(workspace, monitors)
 	return false
 end
 
+local function lua_string(value)
+	return string.format("%q", value)
+end
+
 local function process_state(pid)
 	if not pid or not pid:match("^[0-9]+$") then
 		return ""
@@ -164,6 +174,51 @@ local function can_wl_freeze()
 		end
 	end
 	return wl_freeze_available
+end
+
+local function set_window_tag(address, tag, enabled)
+	if address == "" then
+		return false
+	end
+
+	local response, err = kit:request(
+		string.format(
+			"dispatch hl.dsp.window.tag({ tag = %s, window = %s })",
+			lua_string((enabled and "+" or "-") .. tag),
+			lua_string("address:" .. address)
+		)
+	)
+	if err == nil and response:match("^ok") then
+		return true
+	end
+
+	local action = enabled and "apply" or "remove"
+	log_diagnostic(
+		"window-tag-" .. action,
+		"failed to " .. action .. " tag " .. tag .. " for window " .. address .. ": " .. tostring(err or response)
+	)
+	return false
+end
+
+local function set_process_window_tag(addresses, enabled)
+	if #addresses == 0 then
+		log_diagnostic("window-tag-address", "cannot tag a frozen process without a Hyprland window address")
+		return false
+	end
+
+	local applied = {}
+	for _, address in ipairs(addresses) do
+		if set_window_tag(address, intentionally_frozen_tag, enabled) then
+			applied[#applied + 1] = address
+		elseif enabled then
+			for _, applied_address in ipairs(applied) do
+				set_window_tag(applied_address, intentionally_frozen_tag, false)
+			end
+			return false
+		end
+	end
+
+	return #applied == #addresses
 end
 
 local function set_process_frozen(pid, should_freeze)
@@ -189,32 +244,81 @@ local function set_process_frozen(pid, should_freeze)
 	return changed
 end
 
+local function freeze_process(pid, addresses)
+	if not can_wl_freeze() or not set_process_window_tag(addresses, true) then
+		return false
+	end
+
+	if set_process_frozen(pid, true) then
+		return true
+	end
+
+	set_process_window_tag(addresses, false)
+	return false
+end
+
+local function resume_process(pid, addresses)
+	if not set_process_frozen(pid, false) then
+		return false
+	end
+
+	return set_process_window_tag(addresses, false)
+end
+
+local function window_addresses_by_pid(clients)
+	local addresses_by_pid = {}
+	local seen_addresses = {}
+	for _, client in ipairs(clients) do
+		local pid = tostring(client.pid or "")
+		local address = tostring(client.address or "")
+		if pid ~= "" and address ~= "" then
+			seen_addresses[pid] = seen_addresses[pid] or {}
+			if not seen_addresses[pid][address] then
+				seen_addresses[pid][address] = true
+				addresses_by_pid[pid] = addresses_by_pid[pid] or {}
+				addresses_by_pid[pid][#addresses_by_pid[pid] + 1] = address
+			end
+		end
+	end
+
+	return addresses_by_pid
+end
+
 local function sync_gaming_freeze_state(clients, monitors)
 	local windows = get_freezable_gaming_windows(clients)
 	monitors = monitors or kit:monitors({ force = true })
 
-	local tracked_pids = {}
 	local should_freeze_by_pid = {}
 	for _, window in ipairs(windows) do
-		tracked_pids[window.pid] = true
-		local visible = workspace_visible(window.workspace, monitors)
-		if should_freeze_by_pid[window.pid] == nil then
-			should_freeze_by_pid[window.pid] = true
-		end
-		if visible then
-			should_freeze_by_pid[window.pid] = false
+		if window.pid ~= "" then
+			local visible = workspace_visible(window.workspace, monitors)
+			if should_freeze_by_pid[window.pid] == nil then
+				should_freeze_by_pid[window.pid] = true
+			end
+			if visible then
+				should_freeze_by_pid[window.pid] = false
+			end
 		end
 	end
 
-	for pid in pairs(frozen_pids) do
-		if not tracked_pids[pid] and set_process_frozen(pid, false) then
-			frozen_pids[pid] = nil
+	local addresses_by_pid = window_addresses_by_pid(clients)
+	for pid, state in pairs(managed_pids) do
+		if should_freeze_by_pid[pid] ~= true then
+			local addresses = addresses_by_pid[pid] or state.addresses
+			if resume_process(pid, addresses) then
+				managed_pids[pid] = nil
+			else
+				state.addresses = addresses
+			end
 		end
 	end
 
 	for pid, should_freeze in pairs(should_freeze_by_pid) do
-		if set_process_frozen(pid, should_freeze) then
-			frozen_pids[pid] = should_freeze or nil
+		if should_freeze and (managed_pids[pid] == nil or process_state(pid):match("^T") == nil) then
+			local addresses = addresses_by_pid[pid] or {}
+			if freeze_process(pid, addresses) then
+				managed_pids[pid] = { addresses = addresses }
+			end
 		end
 	end
 end
@@ -294,10 +398,6 @@ local function overlay_window_count(clients)
 		end
 	end
 	return count
-end
-
-local function lua_string(value)
-	return string.format("%q", value)
 end
 
 local function gaming_workspace_monitor(monitors)
@@ -427,8 +527,8 @@ local function event_kind(event)
 end
 
 local function cleanup()
-	for pid in pairs(frozen_pids) do
-		set_process_frozen(pid, false)
+	for pid, state in pairs(managed_pids) do
+		resume_process(pid, state.addresses)
 	end
 	profile_sync(0)
 end

@@ -46,6 +46,7 @@ return {
 			local sessions = require("mini.sessions")
 			local target = session.resolve_requested()
 			session.set_current(target)
+			require("utils.pi").setup()
 			sessions.setup({
 				directory = session.get_root_dir(),
 				file = "",

@@ -147,6 +147,19 @@ responsibilities:
 Pi can reason about live unsaved code without confusing Neovim diagnostics with
 its independent LSP state.
 
+### Verification record
+
+- A live isolated Neovim tracer opened `one.lua` and `two.lua` in two visible
+  windows and connected through the production `PiNeovimChannel`.
+- Reading `one.lua` returned its three unsaved in-memory lines with
+  `modified: true`, while its disk contents remained
+  `local disk = true\nreturn disk\n`.
+- Neovim returned one unsaved-buffer error from `pi-live-tracer` with the message
+  `unknown_symbol is undefined`; the summary was not truncated.
+- The disk SHA-256 remained
+  `20150de52489f09a2f088bf1cb70943d05f3871a46ff62fd828e1a8a360567cd`
+  before and after the tracer.
+
 ## Phase 3: Restore the exact Pi session through Neovim
 
 **Depends on:** Phase 1
@@ -155,6 +168,29 @@ its independent LSP state.
 
 Herdr restores Neovim, then Neovim resumes the exact Pi session recorded in its
 session metadata.
+
+### Verified Pi 0.84.4 session contract
+
+- The persisted session identifier is the session header's `id`. Extensions read
+  the same value through `ctx.sessionManager.getSessionId()`, and RPC
+  `get_state` returns it as `sessionId`.
+- The session header's absolute `cwd` is Pi's persisted project identity. Pi has
+  no separate project or worktree identifier, so restoration must compare this
+  path with the restored Neovim worktree.
+- Resume with `pi --session <full-session-id>` from the restored worktree. Pass
+  the full ID rather than a prefix, and do not use `--continue` or `--resume`.
+- Validate an exact current-worktree session before launch. `--session` also
+  accepts ID prefixes and offers to fork an ID found only in another project,
+  so the CLI lookup alone does not enforce the restoration contract.
+- Do not use `--session-id` for restoration. Pi creates a new project session
+  with that ID when no exact local session exists.
+
+An isolated Pi 0.84.4 RPC probe confirmed that a version 3 session header stored
+one ID and its source `cwd`. `pi --session <full-session-id>` from that directory
+returned the same ID and session file. An unknown ID exited with status 1. The
+same ID launched from a sibling directory did not resume and offered to fork;
+answering no left the sibling unchanged. `--session-id` warned and created a new
+empty session when its ID was absent.
 
 ### Delivery
 
@@ -179,6 +215,96 @@ Extend Neovim session tests to cover:
 - Pi not starting when the saved terminal state says it was closed
 
 Keep the existing Herdr restoration tests passing.
+
+### Session metadata implementation record
+
+- Neovim assigns each fresh Pi terminal a random 128-bit hexadecimal ID and
+  launches Pi with `--session-id`, so Neovim knows the exact Pi session identity
+  before the terminal starts.
+- `SessionSavePre` stores that ID as `pi_session_id` and records
+  `pi_terminal_open`. Closing the terminal changes only the open flag and keeps
+  the last exact ID available for restoration decisions.
+- Pi metadata updates preserve `opencode_session_id`,
+  `opencode_terminal_open`, and other existing Neovim session metadata.
+- `devenv tasks run test:nvim-pi-launcher` round-trips both products' fields
+  through the JSON metadata file and covers open, close, terminal reuse, and a
+  fresh ID after reopening.
+- `devenv tasks run test:nvim-opencode-session-restore`,
+  `just lua-quality changed`, and `just lua-quality style-changed` pass.
+
+### Exact-resume implementation record
+
+- The mini.sessions setup registers Pi persistence before reading a Neovim
+  session. Its `SessionLoadPost` handler does nothing unless
+  `pi_terminal_open` is true and `pi_session_id` passes Pi 0.84.4's identifier
+  rules.
+- Resume validation is read-only. Neovim searches the documented default Pi
+  directory plus environment- and settings-configured session directories,
+  reads only a bounded header, and requires the filename suffix, header ID, and
+  absolute canonical header `cwd` to match the restored worktree. It never
+  opens a Pi process to validate a session and never selects the latest session.
+- A successful restore launches one terminal in the restored worktree with
+  `PI_NVIM_SOCKET`, the matched `--session-dir`, and
+  `--session <full-session-id>`. Missing, malformed, ambiguous, and
+  wrong-worktree sessions produce warnings without changing Pi, Neovim, or
+  OpenCode metadata. A saved closed-terminal state remains closed without an
+  error notification.
+- `.config/nvim/tests/pi_session_restore.lua` covers exact `SessionLoadPost`
+  resume, idempotent setup, default and configured session directories,
+  closed-terminal state, missing and unrelated sessions, invalid IDs and
+  headers, relative and sibling-worktree headers, active-worktree mismatch,
+  terminal launch failure, unchanged metadata, and unchanged Pi JSONL bytes.
+- The Pi launcher and restore fixtures are part of `test:all`. The lazy-startup
+  fixture now uses `$DEVENV_STATE` on Linux because this Neovim config's
+  `wildignore` excludes copied fixtures under `/tmp`.
+  Validation:
+
+```sh
+devenv tasks run test:nvim-pi-session-restore test:nvim-pi-launcher \
+  test:nvim-opencode-session-restore test:nvim-pack-lazy-startup
+```
+
+### Production restoration-order record
+
+- `.config/herdr/plugins/neovim-sessions/tests/pi_restore_order.sh` executes the
+  production restore script entrypoint against an isolated Herdr workspace,
+  pane, process, and metadata fixture. The fake pane enters its restored cwd
+  before running the unmodified `HERDR_ENV`, `HERDR_PANE_ID`,
+  `HERDR_SOCKET_PATH`, `NVIM_SESSION`, and
+  `HERDR_MINI_SESSION_RESTORE` command assembled by `restore.sh`.
+- The command launches a real Neovim 0.12 process without `--listen`. The test
+  confirms normal startup creates `vim.v.servername`, then loads the production
+  session declaration and the pinned `mini.sessions` implementation from its
+  installed native package.
+- The cross-process order log is exact:
+
+  ```text
+  Herdr session report
+  → Herdr pane run
+  → Neovim startup in the restored cwd
+  → Pi handler registration before mini.sessions setup
+  → VimEnter
+  → Neovim session read and source
+  → exact Pi resume
+  ```
+
+- The fixture supplies a non-running fake `pi` executable for the availability
+  check and stubs only the Snacks terminal process boundary. It verifies the
+  full Pi command, exact Neovim and Pi session IDs, worktree cwd, Herdr restore
+  metadata, preserved OpenCode fields, and unchanged Pi JSONL bytes without
+  starting an interactive Pi process or writing user session state.
+- Normal native-package activation remains covered by
+  `test:nvim-pack-lazy-startup`, which confirms `mini.sessions` is ready before
+  `VimEnter`. The production-order fixture is registered as
+  `test:nvim-pi-production-restore` and included in `test:all`.
+  Validation:
+
+```sh
+devenv tasks run test:herdr-neovim-sessions \
+  test:nvim-pi-production-restore test:nvim-pi-session-restore \
+  test:nvim-pi-launcher test:nvim-opencode-session-restore \
+  test:nvim-pack-lazy-startup test:shellcheck
+```
 
 ### Tracer bullet
 

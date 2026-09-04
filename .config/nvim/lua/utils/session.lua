@@ -136,7 +136,7 @@ function M.get_metadata(session)
 end
 
 function M.set_metadata(metadata, session)
-	vim.fn.mkdir(metadata_dir, "p")
+	vim.fn.mkdir(vim.fs.dirname(session.metadata_path), "p")
 	vim.fn.writefile({ vim.json.encode(metadata) }, session.metadata_path)
 end
 
@@ -164,6 +164,39 @@ function M.set_opencode_session_id(session_id, session)
 
 	metadata.opencode_session_id = session_id
 	M.set_metadata(metadata, session)
+	return true
+end
+
+function M.is_valid_pi_session_id(session_id)
+	return type(session_id) == "string"
+		and session_id:match("^[A-Za-z0-9._-]+$") ~= nil
+		and session_id:match("^[A-Za-z0-9]") ~= nil
+		and session_id:match("[A-Za-z0-9]$") ~= nil
+end
+
+function M.set_pi_terminal_state(session_id, is_open, session)
+	if type(is_open) ~= "boolean" or (session_id ~= nil and not M.is_valid_pi_session_id(session_id)) then
+		return false
+	end
+	if is_open and session_id == nil then
+		return false
+	end
+
+	session = session or M.get_current()
+	if session == nil then
+		return false
+	end
+
+	local metadata = M.get_metadata(session)
+	local changed = metadata.pi_terminal_open ~= is_open
+	metadata.pi_terminal_open = is_open
+	if session_id ~= nil and metadata.pi_session_id ~= session_id then
+		metadata.pi_session_id = session_id
+		changed = true
+	end
+	if changed then
+		M.set_metadata(metadata, session)
+	end
 	return true
 end
 
