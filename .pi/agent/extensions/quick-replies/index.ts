@@ -1,10 +1,12 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
 import {
+  extractRecentQuickReplyContext,
   extractVisibleAssistantProse,
   generateQuickReplies,
   isSlashCommand,
   type QuickReply,
+  type QuickReplyContextTurn,
   type QuickReplyGenerator,
 } from "./generator";
 import {
@@ -290,12 +292,13 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
       runId: number,
       userText: string,
       assistantText: string,
+      recentContext: readonly QuickReplyContextTurn[],
     ): void {
       const controller = new AbortController();
       const generation: ActiveGeneration = { runId, controller };
       activeGeneration = generation;
 
-      void generate(ctx, { userText, assistantText }, controller.signal)
+      void generate(ctx, { userText, assistantText, recentContext }, controller.signal)
         .then((replies) => {
           if (activeGeneration !== generation) return;
           activeGeneration = undefined;
@@ -409,7 +412,10 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
         return;
       }
 
-      beginGeneration(ctx, settledRunId, userText, finalizedAssistant.prose);
+      const recentContext = extractRecentQuickReplyContext(
+        ctx.sessionManager.buildContextEntries(),
+      );
+      beginGeneration(ctx, settledRunId, userText, finalizedAssistant.prose, recentContext);
     });
 
     shortcuts.forEach((shortcut, index) => {

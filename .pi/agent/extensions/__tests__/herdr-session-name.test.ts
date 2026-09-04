@@ -4,7 +4,7 @@ import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import herdrSessionName from "../herdr-session-name";
+import herdrSessionName from "../herdr/session-name";
 
 type Request = {
   method: string;

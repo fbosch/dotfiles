@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import herdrPromptState from "../herdr-permission-state";
+import herdrPromptState from "../herdr/permission-state";
 
 type ExtensionHandler = (event: { title?: string }) => void;
 type EventHandler = (data: unknown) => void;

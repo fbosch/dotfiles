@@ -32,10 +32,10 @@
 
 ## 5. Integrate embedded Pi with existing Herdr reporting
 
-- [ ] 5.1 Trace direct and Neovim-launched Pi environment and reporter ownership; verify a focused fixture demonstrates whether additional parent-pane wiring is required.
-- [ ] 5.2 Add only the missing pane association to the existing Pi title, state, and permission reporters; verify exactly one title and lifecycle source handles working, blocked, idle, error, and shutdown transitions.
-- [ ] 5.3 Verify resumed editor sessions retain the correct Herdr pane association without making Pi a restoration owner; run existing Pi Herdr tests and Herdr Neovim restoration tests.
-- [ ] 5.4 Run the live Herdr tracer bullet covering rename, active work, permission or question blocking, completion, close protection, and state cleanup.
+- [x] 5.1 Trace direct and Neovim-launched Pi environment and reporter ownership; verify a focused fixture demonstrates whether additional parent-pane wiring is required.
+- [x] 5.2 Add only the missing pane association to the existing Pi title, state, and permission reporters; verify exactly one title and lifecycle source handles working, blocked, idle, error, and shutdown transitions.
+- [x] 5.3 Verify resumed editor sessions retain the correct Herdr pane association without making Pi a restoration owner; run existing Pi Herdr tests and Herdr Neovim restoration tests.
+- [x] 5.4 Run the live Herdr tracer bullet covering rename, active work, permission or question blocking, completion, close protection, and state cleanup. Herdr v0.8.2 only protects linked-worktree-group closure; its close API does not protect ordinary or main-worktree panes.
 
 ## 6. Decide and implement editor-owned diff review
 

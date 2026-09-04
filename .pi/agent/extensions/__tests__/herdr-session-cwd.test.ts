@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { createHerdrSessionCwdExtension } from "../herdr-session-cwd";
+import { createHerdrSessionCwdExtension } from "../herdr/session-cwd";
 
 type SessionStartHandler = (
   event: { reason: string },

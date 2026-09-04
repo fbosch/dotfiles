@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  SessionManager,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import type { QuickReply, QuickReplyGenerator, QuickReplyInput } from "../generator";
@@ -30,6 +35,15 @@ const theme = {
   bold: (text: string) => text,
   getBgAnsi: () => PANEL_BACKGROUND,
 } as unknown as Theme;
+
+const emptyUsage = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+  totalTokens: 0,
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+};
 
 const generatedReplies: QuickReply[] = [
   { label: "Review it", message: "Review the implementation." },
@@ -83,6 +97,7 @@ function createHarness(
   let command: CommandHandler | undefined;
   let getArgumentCompletions: ArgumentCompletions | undefined;
   const notifications: string[] = [];
+  const sessionManager = SessionManager.inMemory("/project");
   const generate: QuickReplyGenerator = async (_ctx, input, signal) => {
     generationCalls.push({ input, signal });
     return options.generate?.(_ctx, input, signal) ?? generatedReplies;
@@ -112,6 +127,7 @@ function createHarness(
     mode: options.mode ?? "tui",
     hasUI: true,
     isIdle: () => idle,
+    sessionManager,
     ui: {
       getEditorText: () => editorText,
       notify: (message: string) => {
@@ -168,6 +184,11 @@ function createHarness(
     },
     async startRun(prompt = "Improve the extension", expandedPrompt = prompt) {
       idle = false;
+      sessionManager.appendMessage({
+        role: "user",
+        content: expandedPrompt,
+        timestamp: Date.now(),
+      });
       await emit("input", { type: "input", text: prompt, source: "interactive" });
       await emit("before_agent_start", { type: "before_agent_start", prompt: expandedPrompt });
       await emit("agent_start");
@@ -177,6 +198,16 @@ function createHarness(
       await emit("agent_start");
     },
     async finishAssistant(text: string) {
+      sessionManager.appendMessage({
+        role: "assistant",
+        content: [{ type: "text", text }],
+        api: "openai-responses",
+        provider: "openai-codex",
+        model: "test-model",
+        usage: emptyUsage,
+        stopReason: "stop",
+        timestamp: Date.now(),
+      });
       await emit("message_end", {
         type: "message_end",
         message: { role: "assistant", content: [{ type: "text", text }] },
@@ -233,6 +264,7 @@ describe("quick replies lifecycle", () => {
     expect(harness.generationCalls[0]?.input).toEqual({
       userText: "Add generated quick replies",
       assistantText: "Implemented the feature. All focused tests pass.",
+      recentContext: [],
     });
     expect(harness.widgetActive).toBe(true);
     expect(harness.renderWidget()).toHaveLength(2);
@@ -314,6 +346,29 @@ describe("quick replies lifecycle", () => {
     expect(harness.generationCalls[0]?.input.userText).toBe("@research quick replies");
   });
 
+  test("adds prior conversation separately from the latest style sample", async () => {
+    const harness = createHarness();
+    await harness.startRun("Compare the two options");
+    await harness.finishAssistant("Option A is simpler; option B is more configurable.");
+    await harness.settle();
+
+    await harness.startRun("go with that");
+    await harness.finishAssistant("Applied option A.");
+    await harness.settle();
+
+    expect(harness.generationCalls[1]?.input).toEqual({
+      userText: "go with that",
+      assistantText: "Applied option A.",
+      recentContext: [
+        { role: "user", text: "Compare the two options" },
+        {
+          role: "assistant",
+          text: "Option A is simpler; option B is more configurable.",
+        },
+      ],
+    });
+  });
+
   test.each(["steer", "followUp"] as const)(
     "uses the latest raw %s input with the final assistant response",
     async (streamingBehavior) => {
@@ -332,6 +387,7 @@ describe("quick replies lifecycle", () => {
       expect(harness.generationCalls[0]?.input).toEqual({
         userText: "focus on the lifecycle fix",
         assistantText: "The lifecycle fix is complete.",
+        recentContext: [],
       });
     },
   );
@@ -348,6 +404,7 @@ describe("quick replies lifecycle", () => {
     expect(harness.generationCalls[0]?.input).toEqual({
       userText: "Fix the retry behavior",
       assistantText: "The retry behavior is fixed.",
+      recentContext: [],
     });
   });
 

@@ -93,7 +93,14 @@ local function launch_command(session_flag, session_id, session_dir, socket)
 		error("pi requires a Neovim RPC socket")
 	end
 
-	local command = "PI_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " pi"
+	local environment = "PI_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
+	local pane_id = vim.env.HERDR_PANE_ID
+	if vim.env.HERDR_ENV == "1" and type(pane_id) == "string" and pane_id ~= "" then
+		-- Herdr accepts official Pi lifecycle reports only when Pi owns the pane process.
+		environment = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID=" .. vim.fn.shellescape(pane_id) .. " " .. environment
+	end
+
+	local command = environment .. "pi"
 	if session_dir ~= nil then
 		command = command .. " --session-dir " .. vim.fn.shellescape(session_dir)
 	end

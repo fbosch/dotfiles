@@ -1,4 +1,10 @@
 local repo_root = assert(vim.env.REPO_ROOT)
+local original_herdr_env = vim.env.HERDR_ENV
+local original_herdr_pane_id = vim.env.HERDR_PANE_ID
+local original_pi_herdr_pane_id = vim.env.PI_NVIM_HERDR_PANE_ID
+vim.env.HERDR_ENV = "1"
+vim.env.HERDR_PANE_ID = "wFixture:p1"
+vim.env.PI_NVIM_HERDR_PANE_ID = nil
 local metadata_root = vim.fn.tempname()
 local nvim_session = {
 	cwd = repo_root,
@@ -64,13 +70,14 @@ vim.cmd("edit " .. vim.fn.fnameescape(repo_root .. "/.config/nvim/lua/config/use
 vim.api.nvim_win_set_cursor(0, { 1, 0 })
 vim.cmd("normal! v2l")
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
+local command_prefix = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
+	.. vim.fn.shellescape(vim.env.HERDR_PANE_ID)
+	.. " PI_NVIM_SOCKET="
+	.. vim.fn.shellescape(vim.v.servername)
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
-assert(
-	captured_command == "PI_NVIM_SOCKET=" .. vim.fn.shellescape(vim.v.servername) .. " pi",
-	"fresh Pi launcher did not let Pi assign its session ID"
-)
+assert(captured_command == command_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
 assert(
 	recorded_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
 	"Pi launcher did not capture the source context before opening its terminal"
@@ -129,8 +136,7 @@ pi.start()
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
 assert(
 	captured_command
-		== "PI_NVIM_SOCKET="
-			.. vim.fn.shellescape(vim.v.servername)
+		== command_prefix
 			.. " pi --session-dir "
 			.. vim.fn.shellescape(saved_session_dir)
 			.. " --session "
@@ -145,4 +151,7 @@ saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.pi_session_id == first_session_id, "resumed Pi session ID changed during save")
 assert(saved_metadata.pi_terminal_open == true, "resumed Pi terminal state was not saved")
 
+vim.env.HERDR_ENV = original_herdr_env
+vim.env.HERDR_PANE_ID = original_herdr_pane_id
+vim.env.PI_NVIM_HERDR_PANE_ID = original_pi_herdr_pane_id
 vim.fn.delete(metadata_root, "rf")

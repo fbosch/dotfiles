@@ -2,6 +2,7 @@ local repo_root = assert(vim.env.REPO_ROOT)
 local test_root = assert(vim.env.PI_PRODUCTION_TEST_ROOT)
 local expected_specifier = assert(vim.env.PI_EXPECTED_NVIM_SESSION)
 local expected_pane_id = assert(vim.env.PI_EXPECTED_HERDR_PANE_ID)
+local pi_environment_capture = assert(vim.env.PI_ENVIRONMENT_CAPTURE)
 local mini_sessions_path = assert(vim.env.PI_MINI_SESSIONS_PATH)
 local order_log = assert(vim.env.PI_RESTORE_ORDER_LOG)
 
@@ -96,6 +97,8 @@ local opened_terminal
 package.loaded["snacks.terminal"] = {
 	open = function(command, options)
 		record_order("pi-exact-resume")
+		local output = vim.fn.system(command)
+		assert(vim.v.shell_error == 0, "restored Pi command failed: " .. output)
 		terminal.buf = vim.api.nvim_create_buf(false, true)
 		opened_terminal = { command = command, options = options }
 		options.win.on_buf(terminal)
@@ -148,7 +151,9 @@ rawset(vim, "system", original_system)
 assert(vim.g.pi_production_session_loaded == 1, "Neovim did not source the restored session")
 assert(
 	opened_terminal.command
-		== "PI_NVIM_SOCKET="
+		== "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
+			.. vim.fn.shellescape(expected_pane_id)
+			.. " PI_NVIM_SOCKET="
 			.. vim.fn.shellescape(vim.v.servername)
 			.. " pi --session-dir "
 			.. vim.fn.shellescape(pi_session_dir)
@@ -159,6 +164,20 @@ assert(
 assert(opened_terminal.command:find("--session-id", 1, true) == nil, "production restore created a Pi session")
 assert(opened_terminal.options.cwd == repo_root, "production restore launched Pi outside the restored worktree")
 assert(vim.b[terminal.buf].is_pi_terminal == true, "production restore did not mark the Pi terminal")
+assert(
+	vim.deep_equal(vim.fn.readfile(pi_environment_capture), {
+		"HERDR_ENV=1",
+		"HERDR_PANE_ID=",
+		"HERDR_SOCKET_PATH=" .. vim.env.HERDR_SOCKET_PATH,
+		"PI_NVIM_HERDR_PANE_ID=" .. expected_pane_id,
+		"PI_NVIM_SOCKET=" .. vim.v.servername,
+		"ARG1=--session-dir",
+		"ARG2=" .. pi_session_dir,
+		"ARG3=--session",
+		"ARG4=" .. pi_session_id,
+	}),
+	"restored Pi did not inherit the owning Herdr pane and exact session arguments"
+)
 
 local expected_order = {
 	"herdr-session-report",

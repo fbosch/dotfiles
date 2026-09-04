@@ -19,6 +19,7 @@ fake_bin="$test_dir/bin"
 command_capture="$test_dir/herdr-pane-run.txt"
 process_state="$test_dir/neovim-restored"
 order_log="$test_dir/restore-order.txt"
+pi_environment_capture="$test_dir/pi-environment.txt"
 mkdir -p "$fake_bin" "$test_dir/config" "$test_dir/data" "$test_dir/state" "$test_dir/cache"
 printf '{"workspaces":[{"id":"w1","custom_name":"fixture"}]}\n' >"$test_dir/session.json"
 
@@ -88,8 +89,20 @@ chmod +x "$fake_bin/nvim"
 
 cat >"$fake_bin/pi" <<'PI'
 #!/usr/bin/env bash
-printf 'The production restoration fixture must not start a real Pi process.\n' >&2
-exit 97
+set -euo pipefail
+: "${PI_ENVIRONMENT_CAPTURE:?}"
+{
+	printf 'HERDR_ENV=%s\n' "${HERDR_ENV:-}"
+	printf 'HERDR_PANE_ID=%s\n' "${HERDR_PANE_ID:-}"
+	printf 'HERDR_SOCKET_PATH=%s\n' "${HERDR_SOCKET_PATH:-}"
+	printf 'PI_NVIM_HERDR_PANE_ID=%s\n' "${PI_NVIM_HERDR_PANE_ID:-}"
+	printf 'PI_NVIM_SOCKET=%s\n' "${PI_NVIM_SOCKET:-}"
+	index=0
+	for argument in "$@"; do
+		index=$((index + 1))
+		printf 'ARG%d=%s\n' "$index" "$argument"
+	done
+} >"$PI_ENVIRONMENT_CAPTURE"
 PI
 chmod +x "$fake_bin/pi"
 
@@ -101,6 +114,7 @@ export HERDR_PANE_CWD="$repo_root"
 export HERDR_SOCKET_PATH="$test_dir/herdr.sock"
 export PI_EXPECTED_HERDR_PANE_ID="w1:p1"
 export PI_EXPECTED_NVIM_SESSION="herdr-w1-p1"
+export PI_ENVIRONMENT_CAPTURE="$pi_environment_capture"
 export PI_MINI_SESSIONS_PATH="$mini_sessions_path"
 export PI_PRODUCTION_FIXTURE="$repo_root/.config/nvim/tests/pi_production_session_restore.lua"
 export PI_PRODUCTION_TEST_ROOT="$test_dir"

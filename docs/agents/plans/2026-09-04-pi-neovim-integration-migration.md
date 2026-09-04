@@ -554,9 +554,8 @@ state to the owning Herdr pane.
 
 Validate and reuse:
 
-- `.pi/agent/extensions/herdr-session-name.ts`
-- `.pi/agent/extensions/herdr-agent-state.ts`
-- `.pi/agent/extensions/herdr-permission-state.ts`
+- `.pi/agent/extensions/herdr/` for user-owned title, prompt, cwd, and embedded lifecycle integration
+- `.pi/agent/extensions/herdr-agent-state.ts` for Herdr's generated standalone-Pi lifecycle integration
 
 Add only the wiring required to associate embedded Pi with the parent Neovim
 pane. Do not add a second lifecycle reporter.
@@ -585,6 +584,19 @@ pane. Do not add a second lifecycle reporter.
 
 Embedded and standalone Pi sessions report lifecycle state without duplicate or
 stale Herdr records.
+
+### Verification record (2026-09-04)
+
+- Focused fixtures passed for direct and embedded launch modes: one exclusive
+  lifecycle source, title association, working/blocked/idle transitions, and a
+  sequenced embedded shutdown release.
+- An isolated Herdr v0.8.2 tracer passed session rename, working, question-blocked,
+  completed-idle, presentation label, and shutdown cleanup. After Pi exited,
+  `agent get` returned `agent_not_found` while Neovim remained alive.
+- Herdr's close API does not protect an ordinary or main-worktree pane because
+  `pane.close` bypasses interactive confirmation. It protects only implicit
+  linked-worktree-group closure. The active-pane close check therefore remains
+  unsupported upstream rather than being approximated by the integration.
 
 ## Phase 6: Gate editor-owned diff review
 

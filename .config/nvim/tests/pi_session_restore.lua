@@ -13,8 +13,14 @@ vim.fn.mkdir(sibling_worktree, "p")
 
 local previous_agent_dir = vim.env.PI_CODING_AGENT_DIR
 local previous_session_dir = vim.env.PI_CODING_AGENT_SESSION_DIR
+local previous_herdr_env = vim.env.HERDR_ENV
+local previous_herdr_pane_id = vim.env.HERDR_PANE_ID
+local previous_pi_herdr_pane_id = vim.env.PI_NVIM_HERDR_PANE_ID
 vim.env.PI_CODING_AGENT_DIR = agent_dir
 vim.env.PI_CODING_AGENT_SESSION_DIR = nil
+vim.env.HERDR_ENV = nil
+vim.env.HERDR_PANE_ID = nil
+vim.env.PI_NVIM_HERDR_PANE_ID = nil
 
 local nvim_session = {
 	cwd = repo_root,
@@ -308,4 +314,7 @@ assert(
 rawset(vim, "notify", original_notify)
 vim.env.PI_CODING_AGENT_DIR = previous_agent_dir
 vim.env.PI_CODING_AGENT_SESSION_DIR = previous_session_dir
+vim.env.HERDR_ENV = previous_herdr_env
+vim.env.HERDR_PANE_ID = previous_herdr_pane_id
+vim.env.PI_NVIM_HERDR_PANE_ID = previous_pi_herdr_pane_id
 vim.fn.delete(test_root, "rf")

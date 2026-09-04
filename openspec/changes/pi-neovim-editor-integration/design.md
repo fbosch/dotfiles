@@ -79,11 +79,13 @@ Herdr continues to restore the labeled Neovim pane. Neovim's existing session-lo
 
 Alternative considered: let Herdr restore Pi directly. Rejected because this creates two restoration owners and can launch Pi before Neovim has restored its editor state and socket.
 
-### Reuse the existing Pi Herdr reporters
+### Keep one exclusive Pi Herdr reporter per launch mode
 
-The editor launcher will pass only the pane identity needed by the existing Pi Herdr extensions. Those extensions remain responsible for title and working, idle, blocked, error, and shutdown state. The Neovim bridge will not emit a second agent state stream.
+Standalone Pi keeps Herdr's generated `herdr:pi` reporter. Neovim-launched Pi cannot use that path because Herdr validates the official source against the pane's foreground process, which remains Neovim. The launcher therefore unsets `HERDR_PANE_ID`, passes the parent identity as `PI_NVIM_HERDR_PANE_ID`, and activates one embedded reporter at `custom:neovim-pi`. Title, prompt, cwd, and lifecycle behavior remain composed by the existing Pi Herdr extension suite; the Neovim bridge emits no state.
 
-Alternative considered: port the OpenCode Neovim integration's Herdr reporter. Rejected because Pi already reports these states and duplicate sources would race.
+The embedded reporter uses semantic label `neovim-pi` with presentation label `Pi`. Herdr v0.8.2 otherwise treats a released built-in `pi` label as process-owned while Neovim remains alive and retains a stale native agent record. The distinct semantic label and sequenced release clear that record without giving Herdr a Pi session reference or making Pi a restoration owner.
+
+Alternative considered: activate both the generated standalone reporter and an embedded adapter. Rejected because duplicate sources race, and Herdr ignores the official source while Neovim owns the pane process.
 
 ### Treat diff review and clickable navigation as capability gates
 
@@ -105,7 +107,8 @@ Pi starts as an opt-in Neovim action beside OpenCode. Each workflow moves indepe
 - [Neovim and Pi disagree about worktree identity] → Fail with a structured mismatch instead of normalizing or falling back silently.
 - [A missing Pi session breaks workspace restoration] → Restore Neovim independently, report the Pi failure, and do not substitute another session.
 - [Presentation state survives a failed Pi process] → Use bridge-owned namespaces, bounded expiry, and cleanup during the next connection or explicit clear operation.
-- [Two Herdr reporters race] → Keep lifecycle ownership in the existing Pi extensions and test that only one source is registered.
+- [Two Herdr reporters race] → Make standalone and embedded lifecycle sources mutually exclusive and test that exactly one source is registered.
+- [Herdr retains embedded Pi after shutdown] → Use a non-built-in semantic label, a `Pi` presentation label, and a sequenced embedded release so Neovim may remain alive without preserving stale agent identity.
 - [Pi lacks stable diff or click APIs] → Retain those workflows in OpenCode and record the limit rather than patching private internals.
 - [Copying bridge logic creates drift] → Port only the tested snapshot core, document its source, and add equivalent Pi regression coverage before changing behavior.
 
