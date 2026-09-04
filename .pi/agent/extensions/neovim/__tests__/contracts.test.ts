@@ -3,12 +3,15 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DEFAULT_HIGHLIGHT_DURATION_MS,
   FOCUS_NOTIFICATION,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
   MAX_DIAGNOSTIC_ITEMS,
   MAX_DIAGNOSTIC_SOURCE_ITEMS,
+  MAX_HIGHLIGHT_DURATION_MS,
+  MAX_HIGHLIGHT_LINES,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
   MAX_QUICKFIX_BYTES,
@@ -19,10 +22,14 @@ import {
   parseDiagnosticSummary,
   parseDiagnostics,
   parseFocusNotification,
+  parseHighlight,
+  parseHighlightClear,
   parseQuickfix,
   parseReveal,
   parseVisibleWindows,
   pathIsInsideWorktree,
+  resolveHighlightClearOptions,
+  resolveHighlightOptions,
   resolveRevealOptions,
 } from "../contracts";
 
@@ -729,6 +736,146 @@ describe("Neovim editor contracts", () => {
       error: { code: "NVIM_INVALID_RESPONSE" },
       ok: false,
     });
+  });
+
+  test("parses bounded temporary highlights and explicit removal", () => {
+    const options = { buffer: 4, startLine: 8 };
+    expect(resolveHighlightOptions(options)).toEqual({
+      ok: true,
+      value: {
+        buffer: 4,
+        durationMs: DEFAULT_HIGHLIGHT_DURATION_MS,
+        endColumn: undefined,
+        endLine: 8,
+        startColumn: 1,
+        startLine: 8,
+      },
+    });
+    expect(
+      parseHighlight(
+        {
+          buffer,
+          cwd: editor.cwd,
+          expiresInMs: DEFAULT_HIGHLIGHT_DURATION_MS,
+          highlightId: 7,
+          pid: editor.pid,
+          start: { column: 1, line: 8 },
+          end: { column: 12, line: 8 },
+        },
+        "/project",
+        editor,
+        options,
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        buffer,
+        editor,
+        expiresInMs: DEFAULT_HIGHLIGHT_DURATION_MS,
+        highlightId: 7,
+        start: { column: 1, line: 8 },
+        end: { column: 12, line: 8 },
+      },
+    });
+
+    const clearOptions = { buffer: 4, highlightId: 7 };
+    expect(resolveHighlightClearOptions(clearOptions)).toEqual({ ok: true, value: clearOptions });
+    expect(
+      parseHighlightClear(
+        {
+          buffer,
+          cleared: true,
+          cwd: editor.cwd,
+          highlightId: 7,
+          pid: editor.pid,
+        },
+        "/project",
+        editor,
+        clearOptions,
+      ),
+    ).toEqual({
+      ok: true,
+      value: { buffer, cleared: true, editor, highlightId: 7 },
+    });
+  });
+
+  test("rejects invalid highlight ranges, limits, targets, and responses", () => {
+    const options = {
+      buffer: 4,
+      durationMs: 5_000,
+      endColumn: 8,
+      endLine: 10,
+      startColumn: 2,
+      startLine: 8,
+    };
+    for (const invalid of [
+      { ...options, buffer: 0 },
+      { ...options, startLine: 0 },
+      { ...options, startColumn: 0 },
+      { ...options, endLine: 7 },
+      { ...options, durationMs: 0 },
+      { ...options, durationMs: MAX_HIGHLIGHT_DURATION_MS + 1 },
+      { ...options, endLine: options.startLine + MAX_HIGHLIGHT_LINES },
+      { ...options, endColumn: 2, endLine: 8 },
+    ]) {
+      expect(resolveHighlightOptions(invalid)).toMatchObject({ ok: false });
+    }
+    expect(resolveHighlightClearOptions({ buffer: 4, highlightId: 0 })).toMatchObject({
+      ok: false,
+    });
+
+    expect(
+      parseHighlight({ error: "invalidRange", totalLines: 3 }, "/project", editor, options),
+    ).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE", message: expect.stringContaining("1-3") },
+      ok: false,
+    });
+    expect(parseHighlight({ error: "lineLimit" }, "/project", editor, options)).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    const response = {
+      buffer,
+      cwd: editor.cwd,
+      expiresInMs: 5_000,
+      highlightId: 7,
+      pid: editor.pid,
+      start: { column: 2, line: 8 },
+      end: { column: 8, line: 10 },
+    };
+    expect(
+      parseHighlight(
+        { ...response, buffer: { ...buffer, name: "/outside/secret.ts" } },
+        "/project",
+        editor,
+        options,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+    for (const invalid of [
+      { ...response, expiresInMs: 1 },
+      { ...response, highlightId: 0 },
+      { ...response, start: { column: 3, line: 8 } },
+      { ...response, end: { column: 7, line: 10 } },
+    ]) {
+      expect(parseHighlight(invalid, "/project", editor, options)).toMatchObject({
+        error: { code: "NVIM_INVALID_RESPONSE" },
+        ok: false,
+      });
+    }
+    expect(
+      parseHighlightClear(
+        {
+          buffer,
+          cleared: "yes",
+          cwd: editor.cwd,
+          highlightId: 7,
+          pid: editor.pid,
+        },
+        "/project",
+        editor,
+        { buffer: 4, highlightId: 7 },
+      ),
+    ).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" }, ok: false });
   });
 
   test("rejects invalid problem-list owners, bounds, paths, and output sizes", () => {

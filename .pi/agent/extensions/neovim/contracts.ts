@@ -14,6 +14,9 @@ export const DEFAULT_QUICKFIX_ITEMS = 20;
 export const MAX_QUICKFIX_ITEMS = 50;
 export const MAX_QUICKFIX_SOURCE_ITEMS = 5_000;
 export const MAX_QUICKFIX_BYTES = 32 * 1024;
+export const DEFAULT_HIGHLIGHT_DURATION_MS = 2_000;
+export const MAX_HIGHLIGHT_DURATION_MS = 30_000;
+export const MAX_HIGHLIGHT_LINES = 500;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
 
@@ -217,6 +220,45 @@ export interface RevealSnapshot {
   readonly window: number;
 }
 
+export interface HighlightOptions {
+  readonly buffer: number;
+  readonly durationMs?: number;
+  readonly endColumn?: number;
+  readonly endLine?: number;
+  readonly startColumn?: number;
+  readonly startLine: number;
+}
+
+export interface ResolvedHighlightOptions {
+  readonly buffer: number;
+  readonly durationMs: number;
+  readonly endColumn: number | undefined;
+  readonly endLine: number;
+  readonly startColumn: number;
+  readonly startLine: number;
+}
+
+export interface HighlightSnapshot {
+  readonly buffer: BufferIdentity;
+  readonly editor: EditorIdentity;
+  readonly end: Position;
+  readonly expiresInMs: number;
+  readonly highlightId: number;
+  readonly start: Position;
+}
+
+export interface HighlightClearOptions {
+  readonly buffer: number;
+  readonly highlightId: number;
+}
+
+export interface HighlightClearSnapshot {
+  readonly buffer: BufferIdentity;
+  readonly cleared: boolean;
+  readonly editor: EditorIdentity;
+  readonly highlightId: number;
+}
+
 export type BridgeResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly error: NeovimError; readonly ok: false };
@@ -249,6 +291,73 @@ function isPosition(value: unknown): value is Position {
 
 function isRevealSplit(value: unknown): value is RevealSplit {
   return value === "none" || value === "horizontal" || value === "vertical";
+}
+
+export function resolveHighlightOptions(
+  options: HighlightOptions,
+): BridgeResult<ResolvedHighlightOptions> {
+  if (Number.isSafeInteger(options.buffer) === false || options.buffer < 1) {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  const startColumn = options.startColumn ?? 1;
+  const endLine = options.endLine ?? options.startLine;
+  const durationMs = options.durationMs ?? DEFAULT_HIGHLIGHT_DURATION_MS;
+  if (
+    Number.isSafeInteger(options.startLine) === false ||
+    options.startLine < 1 ||
+    Number.isSafeInteger(startColumn) === false ||
+    startColumn < 1 ||
+    Number.isSafeInteger(endLine) === false ||
+    endLine < options.startLine ||
+    (options.endColumn !== undefined &&
+      (Number.isSafeInteger(options.endColumn) === false || options.endColumn < 1)) ||
+    Number.isSafeInteger(durationMs) === false ||
+    durationMs < 1
+  ) {
+    return failure("NVIM_INVALID_RANGE", "Choose a valid positive highlight range and duration");
+  }
+  if (endLine - options.startLine + 1 > MAX_HIGHLIGHT_LINES) {
+    return failure("NVIM_LIMIT_EXCEEDED", `Highlight at most ${MAX_HIGHLIGHT_LINES} lines`);
+  }
+  if (durationMs > MAX_HIGHLIGHT_DURATION_MS) {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Highlight duration must not exceed ${MAX_HIGHLIGHT_DURATION_MS} ms`,
+    );
+  }
+  if (
+    endLine === options.startLine &&
+    options.endColumn !== undefined &&
+    options.endColumn <= startColumn
+  ) {
+    return failure("NVIM_INVALID_RANGE", "Choose a non-empty highlight range");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: options.buffer,
+      durationMs,
+      endColumn: options.endColumn,
+      endLine,
+      startColumn,
+      startLine: options.startLine,
+    },
+  };
+}
+
+export function resolveHighlightClearOptions(
+  options: HighlightClearOptions,
+): BridgeResult<HighlightClearOptions> {
+  if (Number.isSafeInteger(options.buffer) === false || options.buffer < 1) {
+    return failure("NVIM_INVALID_BUFFER", "Choose the buffer that owns the highlight");
+  }
+  if (Number.isSafeInteger(options.highlightId) === false || options.highlightId < 1) {
+    return failure("NVIM_INVALID_RANGE", "Choose a positive bridge-owned highlight ID");
+  }
+  return { ok: true, value: options };
 }
 
 export function resolveRevealOptions(options: RevealOptions): BridgeResult<ResolvedRevealOptions> {
@@ -1087,6 +1196,113 @@ export function parseReveal(
       split: snapshot.value.split,
       splitCreated: snapshot.value.splitCreated,
       window: snapshot.value.window as number,
+    },
+  };
+}
+
+function highlightFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidBuffer") {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (value.error === "worktreeMismatch") {
+    return failure("NVIM_WORKTREE_MISMATCH", "The highlight target is outside Pi's worktree");
+  }
+  if (value.error === "invalidRange" || value.error === "invalidColumn") {
+    const suffix = Number.isSafeInteger(value.totalLines)
+      ? ` within 1-${value.totalLines} lines`
+      : "";
+    return failure("NVIM_INVALID_RANGE", `Choose a valid non-empty highlight range${suffix}`);
+  }
+  if (value.error === "lineLimit") {
+    return failure("NVIM_LIMIT_EXCEEDED", `Highlight at most ${MAX_HIGHLIGHT_LINES} lines`);
+  }
+  if (value.error === "extmarkFailure") {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim could not create the temporary highlight");
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown highlight error");
+}
+
+function rangeIsOrdered(start: Position, end: Position): boolean {
+  return end.line > start.line || (end.line === start.line && end.column > start.column);
+}
+
+export function parseHighlight(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  options: HighlightOptions,
+): BridgeResult<HighlightSnapshot> {
+  const resolved = resolveHighlightOptions(options);
+  if (resolved.ok === false) return resolved;
+  const responseFailure = highlightFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (
+    buffer.value.loaded === false ||
+    buffer.value.number !== resolved.value.buffer ||
+    Number.isSafeInteger(snapshot.value.highlightId) === false ||
+    (snapshot.value.highlightId as number) < 1 ||
+    isPosition(snapshot.value.start) === false ||
+    snapshot.value.start.line !== resolved.value.startLine ||
+    snapshot.value.start.column !== resolved.value.startColumn ||
+    isPosition(snapshot.value.end) === false ||
+    snapshot.value.end.line !== resolved.value.endLine ||
+    (resolved.value.endColumn !== undefined &&
+      snapshot.value.end.column !== resolved.value.endColumn) ||
+    rangeIsOrdered(snapshot.value.start, snapshot.value.end) === false ||
+    snapshot.value.end.line - snapshot.value.start.line + 1 > MAX_HIGHLIGHT_LINES ||
+    snapshot.value.expiresInMs !== resolved.value.durationMs
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid highlight data");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: buffer.value,
+      editor,
+      end: snapshot.value.end,
+      expiresInMs: resolved.value.durationMs,
+      highlightId: snapshot.value.highlightId as number,
+      start: snapshot.value.start,
+    },
+  };
+}
+
+export function parseHighlightClear(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  options: HighlightClearOptions,
+): BridgeResult<HighlightClearSnapshot> {
+  const resolved = resolveHighlightClearOptions(options);
+  if (resolved.ok === false) return resolved;
+  const responseFailure = highlightFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (
+    buffer.value.number !== resolved.value.buffer ||
+    snapshot.value.highlightId !== resolved.value.highlightId ||
+    typeof snapshot.value.cleared !== "boolean"
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid highlight cleanup data");
+  }
+  return {
+    ok: true,
+    value: {
+      buffer: buffer.value,
+      cleared: snapshot.value.cleared,
+      editor,
+      highlightId: resolved.value.highlightId,
     },
   };
 }

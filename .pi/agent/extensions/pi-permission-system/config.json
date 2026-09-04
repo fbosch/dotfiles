@@ -10,7 +10,8 @@
     "~/.agents/skills/*",
     "~/dotfiles/.agents/skills/*",
     "/nix/store",
-    "/tmp/pi-cliboard*"
+    "/tmp/pi-clipboard-*",
+    "/home/fbb/Pictures/screenshots"
   ],
   "permission": {
     "*": "allow",

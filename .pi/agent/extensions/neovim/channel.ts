@@ -7,6 +7,7 @@ import {
   type BufferRead,
   type BufferReadOptions,
   DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
+  DEFAULT_HIGHLIGHT_DURATION_MS,
   DEFAULT_QUICKFIX_ITEMS,
   type DiagnosticSummary,
   type DiagnosticSummaryOptions,
@@ -14,12 +15,18 @@ import {
   type EditorIdentity,
   FOCUS_NOTIFICATION,
   type FocusContext,
+  type HighlightClearOptions,
+  type HighlightClearSnapshot,
+  type HighlightOptions,
+  type HighlightSnapshot,
   invalidQuickfixWindow,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
   MAX_DIAGNOSTIC_ITEMS,
   MAX_DIAGNOSTIC_SOURCE_ITEMS,
+  MAX_HIGHLIGHT_DURATION_MS,
+  MAX_HIGHLIGHT_LINES,
   MAX_INVENTORY_BYTES,
   MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
@@ -35,6 +42,8 @@ import {
   parseDiagnosticSummary,
   parseDiagnostics,
   parseFocusNotification,
+  parseHighlight,
+  parseHighlightClear,
   parseQuickfix,
   parseReveal,
   parseVisibleWindows,
@@ -43,6 +52,8 @@ import {
   quickfixRequestLimit,
   type RevealOptions,
   type RevealSnapshot,
+  resolveHighlightClearOptions,
+  resolveHighlightOptions,
   resolveRevealOptions,
   type SelectionSnapshot,
   unavailable,
@@ -744,6 +755,228 @@ return {
   focusPreserved = observed.currentWindow == original_window,
   split = actual_split,
   splitCreated = created_window ~= nil,
+}
+`;
+
+const HIGHLIGHT_LUA = `
+local buffer, start_line, start_column, end_line, end_column, duration_ms, max_lines, max_duration_ms, channel, expected_cwd = ...
+
+local function positive_integer(value)
+  return type(value) == "number" and value >= 1 and value == math.floor(value)
+end
+
+if
+  positive_integer(buffer) == false
+  or vim.api.nvim_buf_is_valid(buffer) == false
+  or vim.api.nvim_buf_is_loaded(buffer) == false
+then
+  return { error = "invalidBuffer" }
+end
+if
+  positive_integer(start_line) == false
+  or positive_integer(start_column) == false
+  or positive_integer(end_line) == false
+  or (end_column ~= 0 and positive_integer(end_column) == false)
+  or positive_integer(duration_ms) == false
+  or positive_integer(max_lines) == false
+  or positive_integer(max_duration_ms) == false
+  or positive_integer(channel) == false
+then
+  return { error = "invalidRange" }
+end
+if duration_ms > max_duration_ms then return { error = "durationLimit" } end
+
+local function canonical(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  local candidate = vim.fs.normalize(path)
+  local missing = {}
+  while true do
+    local resolved = vim.uv.fs_realpath(candidate)
+    if resolved ~= nil then
+      for _, segment in ipairs(missing) do
+        resolved = vim.fs.joinpath(resolved, segment)
+      end
+      return vim.fs.normalize(resolved)
+    end
+    local stat = vim.uv.fs_lstat(candidate)
+    if stat ~= nil and stat.type == "link" then return nil end
+    local parent = vim.fs.dirname(candidate)
+    if parent == nil or parent == candidate then return nil end
+    table.insert(missing, 1, vim.fs.basename(candidate))
+    candidate = parent
+  end
+end
+
+local function path_is_inside(path, root)
+  if path == nil or root == nil then return false end
+  if path == root then return true end
+  if root == "/" then return path:sub(1, 1) == "/" end
+  return path:sub(1, #root + 1) == root .. "/"
+end
+
+local editor_cwd = vim.fn.getcwd()
+local root = canonical(expected_cwd)
+if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
+local name = vim.api.nvim_buf_get_name(buffer)
+local target = canonical(name)
+if target == nil then return { error = "invalidBuffer" } end
+if path_is_inside(target, root) == false then return { error = "worktreeMismatch" } end
+local options = vim.bo[buffer]
+if
+  name == ""
+  or options.buftype ~= ""
+  or options.filetype == "opencode"
+  or options.filetype == "opencode_terminal"
+  or vim.b[buffer].is_pi_terminal == true
+then
+  return { error = "invalidBuffer" }
+end
+
+local total_lines = vim.api.nvim_buf_line_count(buffer)
+if
+  start_line > total_lines
+  or end_line > total_lines
+  or end_line < start_line
+then
+  return { error = "invalidRange", totalLines = total_lines }
+end
+if end_line - start_line + 1 > max_lines then return { error = "lineLimit" } end
+local start_text = vim.api.nvim_buf_get_lines(buffer, start_line - 1, start_line, true)[1]
+local end_text = vim.api.nvim_buf_get_lines(buffer, end_line - 1, end_line, true)[1]
+if end_column == 0 then end_column = #end_text + 1 end
+if start_column > #start_text + 1 or end_column > #end_text + 1 then
+  return { error = "invalidColumn", totalLines = total_lines }
+end
+if end_line == start_line and end_column <= start_column then
+  return { error = "invalidRange", totalLines = total_lines }
+end
+
+local namespace = vim.api.nvim_create_namespace("PiNeovimHighlights" .. channel)
+local mark_ok, id = pcall(vim.api.nvim_buf_set_extmark, buffer, namespace, start_line - 1, start_column - 1, {
+  end_row = end_line - 1,
+  end_col = end_column - 1,
+  hl_group = "Search",
+  hl_mode = "combine",
+  priority = 200,
+  strict = true,
+})
+if mark_ok == false or positive_integer(id) == false then return { error = "extmarkFailure" } end
+
+local mark = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace, id, { details = true, hl_name = true })
+if
+  #mark < 3
+  or mark[1] ~= start_line - 1
+  or mark[2] ~= start_column - 1
+  or mark[3].end_row ~= end_line - 1
+  or mark[3].end_col ~= end_column - 1
+  or mark[3].hl_group ~= "Search"
+then
+  vim.api.nvim_buf_del_extmark(buffer, namespace, id)
+  return { error = "extmarkFailure" }
+end
+
+vim.defer_fn(function()
+  if vim.api.nvim_buf_is_valid(buffer) then
+    pcall(vim.api.nvim_buf_del_extmark, buffer, namespace, id)
+  end
+end, duration_ms)
+
+return {
+  pid = vim.fn.getpid(),
+  cwd = editor_cwd,
+  buffer = {
+    number = buffer,
+    name = name,
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  highlightId = id,
+  start = { line = mark[1] + 1, column = mark[2] + 1 },
+  ["end"] = { line = mark[3].end_row + 1, column = mark[3].end_col + 1 },
+  expiresInMs = duration_ms,
+}
+`;
+
+const CLEAR_HIGHLIGHT_LUA = `
+local buffer, id, channel, expected_cwd = ...
+
+local function positive_integer(value)
+  return type(value) == "number" and value >= 1 and value == math.floor(value)
+end
+
+if
+  positive_integer(buffer) == false
+  or vim.api.nvim_buf_is_valid(buffer) == false
+  or vim.api.nvim_buf_is_loaded(buffer) == false
+then
+  return { error = "invalidBuffer" }
+end
+if positive_integer(id) == false or positive_integer(channel) == false then
+  return { error = "invalidRange" }
+end
+
+local function canonical(path)
+  if type(path) ~= "string" or path == "" then return nil end
+  local candidate = vim.fs.normalize(path)
+  local missing = {}
+  while true do
+    local resolved = vim.uv.fs_realpath(candidate)
+    if resolved ~= nil then
+      for _, segment in ipairs(missing) do
+        resolved = vim.fs.joinpath(resolved, segment)
+      end
+      return vim.fs.normalize(resolved)
+    end
+    local stat = vim.uv.fs_lstat(candidate)
+    if stat ~= nil and stat.type == "link" then return nil end
+    local parent = vim.fs.dirname(candidate)
+    if parent == nil or parent == candidate then return nil end
+    table.insert(missing, 1, vim.fs.basename(candidate))
+    candidate = parent
+  end
+end
+
+local function path_is_inside(path, root)
+  if path == nil or root == nil then return false end
+  if path == root then return true end
+  if root == "/" then return path:sub(1, 1) == "/" end
+  return path:sub(1, #root + 1) == root .. "/"
+end
+
+local editor_cwd = vim.fn.getcwd()
+local root = canonical(expected_cwd)
+if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
+local name = vim.api.nvim_buf_get_name(buffer)
+local target = canonical(name)
+if target == nil then return { error = "invalidBuffer" } end
+if path_is_inside(target, root) == false then return { error = "worktreeMismatch" } end
+local options = vim.bo[buffer]
+if
+  name == ""
+  or options.buftype ~= ""
+  or options.filetype == "opencode"
+  or options.filetype == "opencode_terminal"
+  or vim.b[buffer].is_pi_terminal == true
+then
+  return { error = "invalidBuffer" }
+end
+
+local namespace = vim.api.nvim_create_namespace("PiNeovimHighlights" .. channel)
+return {
+  pid = vim.fn.getpid(),
+  cwd = editor_cwd,
+  buffer = {
+    number = buffer,
+    name = name,
+    loaded = vim.api.nvim_buf_is_loaded(buffer),
+    filetype = options.filetype,
+    buftype = options.buftype,
+    modified = options.modified,
+  },
+  highlightId = id,
+  cleared = vim.api.nvim_buf_del_extmark(buffer, namespace, id),
 }
 `;
 

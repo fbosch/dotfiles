@@ -642,6 +642,130 @@ test("reveals exact source positions while preserving focus unless explicitly re
   }
 }, 10_000);
 
+test("owns temporary highlights through expiry, explicit removal, and channel cleanup", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-highlight-")));
+  const outsideWorkspace = await realpath(
+    await mkdtemp(join(tmpdir(), "pi-neovim-highlight-outside-")),
+  );
+  const source = join(workspace, "source.lua");
+  const outside = join(outsideWorkspace, "outside.lua");
+  const diskText = "alpha æ\nbeta\n";
+  await Promise.all([Bun.write(source, diskText), Bun.write(outside, "outside\n")]);
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    `local outside_name = ${JSON.stringify(outside)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local source_buffer = vim.api.nvim_get_current_buf()",
+    "vim.api.nvim_buf_set_lines(source_buffer, 0, 1, true, { 'alpha æ unsaved' })",
+    "local outside_buffer = vim.fn.bufadd(outside_name)",
+    "vim.fn.bufload(outside_buffer)",
+    "vim.g.pi_highlight_test = { source = source_buffer, outside = outside_buffer }",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel, socket) => {
+      const nvim = attach({ socket });
+      const initial = (await nvim.executeLua(
+        "local b = vim.g.pi_highlight_test.source; return { buffer = b, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, outside = vim.g.pi_highlight_test.outside, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        [],
+      )) as {
+        buffer: number;
+        changedtick: number;
+        currentWindow: number;
+        lines: string[];
+        modified: boolean;
+        outside: number;
+        windows: number;
+      };
+
+      const temporary = await channel.highlight({
+        buffer: initial.buffer,
+        durationMs: 100,
+        startLine: 1,
+      });
+      expect(temporary).toMatchObject({
+        ok: true,
+        value: {
+          end: { column: 17, line: 1 },
+          expiresInMs: 100,
+          start: { column: 1, line: 1 },
+        },
+      });
+      if (temporary.ok === false) return;
+      const namespace = `PiNeovimHighlights${temporary.value.editor.channelId}`;
+      expect(
+        await nvim.executeLua(
+          "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; local mark = vim.api.nvim_buf_get_extmark_by_id(b, ns, id, { details = true, hl_name = true }); return { mark = mark, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [initial.buffer, namespace, temporary.value.highlightId],
+        ),
+      ).toMatchObject({
+        changedtick: initial.changedtick,
+        currentWindow: initial.currentWindow,
+        lines: initial.lines,
+        mark: [0, 0, expect.objectContaining({ end_col: 16, end_row: 0, hl_group: "Search" })],
+        modified: initial.modified,
+        windows: initial.windows,
+      });
+
+      await Bun.sleep(150);
+      expect(
+        await nvim.executeLua(
+          "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmark_by_id(b, ns, id, {})",
+          [initial.buffer, namespace, temporary.value.highlightId],
+        ),
+      ).toEqual([]);
+
+      const removable = await channel.highlight({
+        buffer: initial.buffer,
+        durationMs: 30_000,
+        endColumn: 5,
+        startLine: 2,
+      });
+      if (removable.ok === false) throw new Error(removable.error.message);
+      expect(
+        await channel.clearHighlight({
+          buffer: initial.buffer,
+          highlightId: removable.value.highlightId,
+        }),
+      ).toMatchObject({ ok: true, value: { cleared: true } });
+      expect(
+        await channel.clearHighlight({
+          buffer: initial.buffer,
+          highlightId: removable.value.highlightId,
+        }),
+      ).toMatchObject({ ok: true, value: { cleared: false } });
+
+      expect(
+        await channel.highlight({ buffer: initial.buffer, endColumn: 1, startLine: 1 }),
+      ).toMatchObject({ error: { code: "NVIM_INVALID_RANGE" }, ok: false });
+      expect(
+        await channel.highlight({ buffer: initial.outside, endColumn: 2, startLine: 1 }),
+      ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+
+      const cleanup = await channel.highlight({
+        buffer: initial.buffer,
+        durationMs: 30_000,
+        endColumn: 5,
+        startLine: 2,
+      });
+      if (cleanup.ok === false) throw new Error(cleanup.error.message);
+      await channel.close();
+      expect(
+        await nvim.executeLua(
+          "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmark_by_id(b, ns, id, {})",
+          [initial.buffer, namespace, cleanup.value.highlightId],
+        ),
+      ).toEqual([]);
+      expect(await Bun.file(source).text()).toBe(diskText);
+    });
+  } finally {
+    await Promise.all([
+      rm(workspace, { force: true, recursive: true }),
+      rm(outsideWorkspace, { force: true, recursive: true }),
+    ]);
+  }
+}, 10_000);
+
 test("rejects oversized problem lists and special-buffer locations", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-quickfix-limits-")));
   const source = join(workspace, "source.lua");

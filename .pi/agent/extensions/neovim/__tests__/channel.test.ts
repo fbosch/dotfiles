@@ -52,6 +52,24 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     truncated: false,
   };
   executeCalls: string[] = [];
+  highlightArguments: unknown[] | undefined;
+  highlightResponse: unknown = {
+    buffer: focus.buffer,
+    cwd: "/project",
+    expiresInMs: 2_000,
+    highlightId: 7,
+    pid: 71,
+    start: { column: 1, line: 3 },
+    end: { column: 6, line: 3 },
+  };
+  highlightClearArguments: unknown[] | undefined;
+  highlightClearResponse: unknown = {
+    buffer: focus.buffer,
+    cleared: true,
+    cwd: "/project",
+    highlightId: 7,
+    pid: 71,
+  };
   identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
   quickfixArguments: unknown[] | undefined;
   quickfixResponse: unknown = {
@@ -123,6 +141,14 @@ class FakeConnection extends EventEmitter implements NvimConnection {
       return this.diagnosticResponse;
     }
     if (code === bridgeLua.visibleWindows) return this.visibleResponse;
+    if (code === bridgeLua.highlight) {
+      this.highlightArguments = args;
+      return this.highlightResponse;
+    }
+    if (code === bridgeLua.highlightClear) {
+      this.highlightClearArguments = args;
+      return this.highlightClearResponse;
+    }
     if (code === bridgeLua.listBuffers) return this.bufferResponse;
     if (code === bridgeLua.quickfix) {
       this.quickfixArguments = args;
@@ -350,6 +376,42 @@ describe("PiNeovimChannel", () => {
     connection.revealResponse = { error: "worktreeMismatch" };
     expect(await channel.reveal({ buffer: 2, column: 1, line: 1 })).toMatchObject({
       error: { code: "NVIM_WORKTREE_MISMATCH" },
+      ok: false,
+    });
+    expect((await channel.status()).ok).toBe(true);
+  });
+
+  test("creates and explicitly removes bounded temporary highlights", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(
+      await channel.highlight({ buffer: 2, endColumn: 6, endLine: 3, startLine: 3 }),
+    ).toMatchObject({
+      ok: true,
+      value: {
+        buffer: focus.buffer,
+        expiresInMs: 2_000,
+        highlightId: 7,
+        start: { column: 1, line: 3 },
+        end: { column: 6, line: 3 },
+      },
+    });
+    expect(connection.highlightArguments).toEqual([2, 3, 1, 3, 6, 2_000, 500, 9, "/project"]);
+
+    expect(await channel.clearHighlight({ buffer: 2, highlightId: 7 })).toMatchObject({
+      ok: true,
+      value: { cleared: true, highlightId: 7 },
+    });
+    expect(connection.highlightClearArguments).toEqual([2, 7, 9, "/project"]);
+
+    expect(await channel.highlight({ buffer: 2, durationMs: 30_001, startLine: 1 })).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    connection.highlightResponse = { error: "invalidRange", totalLines: 2 };
+    expect(await channel.highlight({ buffer: 2, startLine: 3 })).toMatchObject({
+      error: { code: "NVIM_INVALID_RANGE" },
       ok: false,
     });
     expect((await channel.status()).ok).toBe(true);

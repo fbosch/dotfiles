@@ -103,6 +103,40 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         window: 7,
       };
     }
+    if (code === bridgeLua.highlight) {
+      return {
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        cwd: "/project",
+        expiresInMs: 2_000,
+        highlightId: 7,
+        pid: 80,
+        start: { column: 1, line: 3 },
+        end: { column: 6, line: 3 },
+      };
+    }
+    if (code === bridgeLua.highlightClear) {
+      return {
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        cleared: true,
+        cwd: "/project",
+        highlightId: 7,
+        pid: 80,
+      };
+    }
     if (code === bridgeLua.removeNotifications) return true;
     throw new Error("unexpected Lua");
   }
@@ -153,6 +187,8 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("diagnostics");
   expect(parameters).toContain("quickfix");
   expect(parameters).toContain("reveal");
+  expect(parameters).toContain("highlight");
+  expect(parameters).toContain("clear_highlight");
   expect(parameters).toContain("location");
   expect(parameters).toContain("window");
   expect(parameters).toContain("maxItems");
@@ -161,6 +197,8 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("column");
   expect(parameters).toContain("focus");
   expect(parameters).toContain("split");
+  expect(parameters).toContain("durationMs");
+  expect(parameters).toContain("highlightId");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
   expect(Value.Check(tool.parameters, { operation: "quickfix" })).toBe(true);
@@ -201,6 +239,24 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(Value.Check(tool.parameters, { buffer: 2, column: 0, line: 3, operation: "reveal" })).toBe(
     false,
   );
+  expect(Value.Check(tool.parameters, { buffer: 2, operation: "highlight", startLine: 3 })).toBe(
+    true,
+  );
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      durationMs: 30_001,
+      operation: "highlight",
+      startLine: 3,
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      highlightId: 7,
+      operation: "clear_highlight",
+    }),
+  ).toBe(true);
   expect(tool.description).toContain("live, in-memory state");
   expect(tool.description).toContain("do not query Pi's separate disk-backed LSP integration");
   expect(tool.description).toContain("explicit list ownership");
@@ -261,6 +317,30 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(revealResult.details).toEqual({ ok: true, operation: "reveal" });
   expect(revealResult.content[0]).toMatchObject({
     text: expect.stringContaining('"focused": false'),
+    type: "text",
+  });
+  const highlightResult = await tool.execute(
+    "neovim-6",
+    { buffer: 2, endColumn: 6, operation: "highlight", startLine: 3 },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(highlightResult.details).toEqual({ ok: true, operation: "highlight" });
+  expect(highlightResult.content[0]).toMatchObject({
+    text: expect.stringContaining('"highlightId": 7'),
+    type: "text",
+  });
+  const clearHighlightResult = await tool.execute(
+    "neovim-7",
+    { buffer: 2, highlightId: 7, operation: "clear_highlight" },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(clearHighlightResult.details).toEqual({ ok: true, operation: "clear_highlight" });
+  expect(clearHighlightResult.content[0]).toMatchObject({
+    text: expect.stringContaining('"cleared": true'),
     type: "text",
   });
   connection.emit("notification", "pi:focus", [
