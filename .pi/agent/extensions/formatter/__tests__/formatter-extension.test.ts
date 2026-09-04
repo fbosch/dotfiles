@@ -114,3 +114,101 @@ test("serializes formatter runs through filesystem aliases of the same file", as
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test("loads the formatter runtime once for successful matching mutations", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-formatter-lazy-runtime-"));
+  try {
+    const firstFile = join(directory, "first.ts");
+    const secondFile = join(directory, "second.ts");
+    const unmatchedFile = join(directory, "notes.txt");
+    await Promise.all([
+      writeFile(firstFile, "const first=1"),
+      writeFile(secondFile, "const second=2"),
+      writeFile(unmatchedFile, "notes"),
+    ]);
+    const settings: ResolvedFormatterSettings = {
+      timeoutMs: 1_000,
+      warnings: [],
+      rules: [
+        {
+          id: "typescript",
+          mode: "pipeline",
+          extensions: [".ts"],
+          fileNames: [],
+          commands: [
+            {
+              command: "formatter",
+              args: ["$FILE"],
+              requireRootMarker: false,
+              rootMarkers: [],
+            },
+          ],
+        },
+      ],
+    };
+    let sessionStart: SessionStartHandler | undefined;
+    let toolResult: ToolResultHandler | undefined;
+    const pi = {
+      on(event: string, handler: SessionStartHandler | ToolResultHandler) {
+        if (event === "session_start") sessionStart = handler as SessionStartHandler;
+        if (event === "tool_result") toolResult = handler as ToolResultHandler;
+      },
+    } as unknown as ExtensionAPI;
+    const formatted: string[] = [];
+    let runtimeLoads = 0;
+    let settingsLoads = 0;
+    const context = {
+      cwd: directory,
+      isProjectTrusted: () => true,
+      signal: undefined,
+      ui: { notify() {} },
+    } as unknown as ExtensionContext;
+    const event = (path: string): ToolResultEvent =>
+      ({
+        type: "tool_result",
+        toolCallId: path,
+        toolName: "write",
+        input: { path, content: "updated" },
+        content: [{ type: "text", text: "wrote file" }],
+        details: undefined,
+        isError: false,
+      }) as ToolResultEvent;
+
+    createFormatterExtension({
+      loadRuntime: async () => {
+        runtimeLoads += 1;
+        return {
+          execute: async () => ({ kind: "success" as const }),
+          formatFile: async ({ filePath }) => {
+            formatted.push(filePath);
+            return [];
+          },
+        };
+      },
+      readSettings: () => {
+        settingsLoads += 1;
+        return settings;
+      },
+    })(pi);
+    if (sessionStart === undefined || toolResult === undefined) {
+      throw new Error("formatter handlers were not registered");
+    }
+
+    await sessionStart({} as never, context);
+    expect(settingsLoads).toBe(1);
+
+    await toolResult(event(unmatchedFile), context);
+    expect(runtimeLoads).toBe(0);
+
+    await Promise.all([
+      toolResult(event(firstFile), context),
+      toolResult(event(secondFile), context),
+    ]);
+    expect(runtimeLoads).toBe(1);
+    expect(formatted).toHaveLength(2);
+    expect(formatted).toContain(firstFile);
+    expect(formatted).toContain(secondFile);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

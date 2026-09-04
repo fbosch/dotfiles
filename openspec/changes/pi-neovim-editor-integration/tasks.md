@@ -1,11 +1,11 @@
 ## 1. Bind Pi to the launching Neovim instance
 
-- [ ] 1.1 Define the Pi editor tool, error, and inbound notification contracts, including stable error codes, source identity, allowlisted events, payload bounds, the prohibition on event-triggered model turns, and worktree containment; verify focused contract tests cover every boundary.
-- [ ] 1.2 Add an opt-in Neovim Pi launcher that passes only `vim.v.servername` through `PI_NVIM_SOCKET` and leaves existing OpenCode commands and keymaps unchanged; verify a headless Neovim test captures the expected launch command and environment.
-- [ ] 1.3 Add a Pi extension that lazily opens one persistent Msgpack-RPC channel from the inherited socket, obtains its channel identity, and exposes connection status without socket arguments or discovery; verify missing, stale, and alternate active sockets fail closed.
-- [ ] 1.4 Add an allowlisted asynchronous Neovim notification dispatcher with session-shutdown cleanup; verify valid focus events update extension state while unknown or malformed events cannot invoke commands, submit prompts, or trigger model turns.
-- [ ] 1.5 Implement active context, focus context, and exact visual selection with fixed bridge-owned Lua; verify tests cover normal, terminal-focused, absent-selection, invalid-response, and bounded-selection cases.
-- [ ] 1.6 Run the live bidirectional connection tracer bullet in the main and a sibling worktree; record evidence that each Pi session reads only its launching editor and receives only its editor's focus notifications before marking the slice complete.
+- [x] 1.1 Define the Pi editor tool, error, and inbound notification contracts, including stable error codes, source identity, allowlisted events, payload bounds, the prohibition on event-triggered model turns, and worktree containment; verify focused contract tests cover every boundary.
+- [x] 1.2 Add an opt-in Neovim Pi launcher that passes only `vim.v.servername` through `PI_NVIM_SOCKET` and leaves existing OpenCode commands and keymaps unchanged; verify a headless Neovim test captures the expected launch command and environment.
+- [x] 1.3 Add a Pi extension that lazily opens one persistent Msgpack-RPC channel from the inherited socket, obtains its channel identity, and exposes connection status without socket arguments or discovery; verify missing, stale, and alternate active sockets fail closed.
+- [x] 1.4 Add an allowlisted asynchronous Neovim notification dispatcher with session-shutdown cleanup; verify valid focus events update extension state while unknown or malformed events cannot invoke commands, submit prompts, or trigger model turns.
+- [x] 1.5 Implement active context, focus context, and exact visual selection with fixed bridge-owned Lua; verify tests cover normal, terminal-focused, absent-selection, invalid-response, and bounded-selection cases.
+- [x] 1.6 Run the live bidirectional connection tracer bullet in the main and a sibling worktree; record evidence that each Pi session reads only its launching editor and receives only its editor's focus notifications before marking the slice complete.
 
 ## 2. Read live buffers and Neovim diagnostics
 

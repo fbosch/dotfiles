@@ -76,6 +76,19 @@ active buffer, cursor, and visual selection.
 One Pi session consistently reads only the Neovim instance that launched it.
 OpenCode remains the default editor agent.
 
+### Verification record
+
+- `bunx biome check extensions/neovim`, `bun test extensions/neovim`, and
+  `bun run typecheck` pass (17 focused tests, 44 assertions).
+- `devenv tasks run test:nvim-pi-launcher` passes. The headless fixture confirms
+  `PI_NVIM_SOCKET` receives `vim.v.servername`, with terminal reuse and
+  reopen-after-close.
+- A live two-worktree tracer connected one channel to each of
+  `/Users/fbb/dotfiles` and `/Users/fbb/test-pi-neovim-tracer`. Each channel
+  reported its own PID, cwd, buffer, and focus notifications; cross-bound
+  sockets returned `NVIM_UNAVAILABLE` with a worktree mismatch.
+- `openspec validate pi-neovim-editor-integration --strict` passes.
+
 ## Phase 2: Read live buffers and Neovim diagnostics
 
 **Depends on:** Phase 1

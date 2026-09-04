@@ -9,20 +9,36 @@ import {
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
-import { runFormatterCommand } from "./command-runner";
-import { type CommandAvailability, type FormatterExecutor, formatFile } from "./format-file";
+import type { CommandAvailability, FormatterExecutor } from "./format-file";
 import {
   DEFAULT_FORMATTER_TIMEOUT_MS,
+  matchesFormatterRule,
   type ResolvedFormatterSettings,
   resolveFormatterSettings,
 } from "./settings";
 
 type SettingsLoader = (context: ExtensionContext) => ResolvedFormatterSettings;
 
+interface FormatterRuntime {
+  readonly execute: FormatterExecutor;
+  readonly formatFile: typeof import("./format-file").formatFile;
+}
+
+type FormatterRuntimeLoader = () => Promise<FormatterRuntime>;
+
 interface FormatterExtensionDependencies {
   readonly commandAvailable?: CommandAvailability;
   readonly execute?: FormatterExecutor;
+  readonly loadRuntime?: FormatterRuntimeLoader;
   readonly readSettings?: SettingsLoader;
+}
+
+async function loadFormatterRuntime(): Promise<FormatterRuntime> {
+  const [{ formatFile }, { runFormatterCommand }] = await Promise.all([
+    import("./format-file"),
+    import("./command-runner"),
+  ]);
+  return { execute: runFormatterCommand, formatFile };
 }
 
 export function loadFormatterSettings(
@@ -57,7 +73,22 @@ export function createFormatterExtension(
 ): ExtensionFactory {
   return (pi) => {
     let settings: ResolvedFormatterSettings | undefined;
+    let runtimePromise: Promise<FormatterRuntime> | undefined;
     const fileQueues = new Map<string, Promise<void>>();
+    const runtimeLoader = dependencies.loadRuntime ?? loadFormatterRuntime;
+
+    function runtime(): Promise<FormatterRuntime> {
+      if (runtimePromise !== undefined) return runtimePromise;
+      const loaded = runtimeLoader().then((loadedRuntime) => ({
+        ...loadedRuntime,
+        ...(dependencies.execute === undefined ? {} : { execute: dependencies.execute }),
+      }));
+      runtimePromise = loaded;
+      void loaded.catch(() => {
+        if (runtimePromise === loaded) runtimePromise = undefined;
+      });
+      return loaded;
+    }
 
     function serialize<T>(keys: readonly string[], operation: () => Promise<T>): Promise<T> {
       const uniqueKeys = [...new Set(keys)];
@@ -92,6 +123,10 @@ export function createFormatterExtension(
       const currentSettings = settings;
       if (path === undefined || currentSettings === undefined) return undefined;
       const filePath = resolve(context.cwd, path);
+      if (currentSettings.rules.some((rule) => matchesFormatterRule(rule, filePath)) === false) {
+        return undefined;
+      }
+      const formatterRuntime = await runtime();
       const queuePath = await realpath(filePath).catch(() => filePath);
       const identity = await stat(filePath)
         .then(({ dev, ino }) => `inode:${dev}:${ino}`)
@@ -100,10 +135,10 @@ export function createFormatterExtension(
       const warnings = await serialize(
         identity === undefined ? [`path:${queuePath}`] : [`path:${queuePath}`, identity],
         () =>
-          formatFile({
+          formatterRuntime.formatFile({
             cwd: context.cwd,
             // Pi 0.84.4's executor can leave timed-out children alive and buffer unbounded output.
-            execute: dependencies.execute ?? runFormatterCommand,
+            execute: formatterRuntime.execute,
             filePath,
             settings: currentSettings,
             ...(dependencies.commandAvailable === undefined

@@ -36,6 +36,10 @@ end, "Compare Active File with Clipboard")
 
 usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe all sessions" })
 
+usrcmd("PiStart", function()
+	require("utils.pi").start()
+end, "Start Pi bound to this Neovim instance")
+
 usrcmd("ReloadConfig", function()
 	-- Only reload keymaps: other config modules register commands and autocmds that are not reload-safe.
 	for _, module_name in ipairs(keymap_modules) do

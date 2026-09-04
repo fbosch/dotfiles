@@ -319,6 +319,11 @@ in
         -l .config/nvim/tests/opencode_session_restore.lua
     '';
 
+    "test:nvim-pi-launcher".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/pi-launcher.sock" \
+        -l .config/nvim/tests/pi_launcher.lua
+    '';
+
     "test:nvim-pack-inventory".exec = ''
       XDG_CONFIG_HOME="$PWD/.config" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/pack_inventory.lua

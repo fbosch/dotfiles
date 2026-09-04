@@ -1,3 +1,5 @@
+import { basename, extname } from "node:path";
+
 export const DEFAULT_FORMATTER_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 300_000;
 
@@ -22,6 +24,10 @@ export interface ResolvedFormatterSettings {
   readonly rules: readonly FormatterRule[];
   readonly timeoutMs: number;
   readonly warnings: readonly string[];
+}
+
+export function matchesFormatterRule(rule: FormatterRule, filePath: string): boolean {
+  return rule.extensions.includes(extname(filePath)) || rule.fileNames.includes(basename(filePath));
 }
 
 interface ParsedFormatterLayer {

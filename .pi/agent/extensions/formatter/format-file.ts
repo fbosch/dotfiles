@@ -1,9 +1,14 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
-import { basename, delimiter, dirname, extname, isAbsolute, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { match } from "ts-pattern";
 import type { FormatterExecutionResult } from "./command-runner";
-import type { FormatterCommand, FormatterRule, ResolvedFormatterSettings } from "./settings";
+import {
+  matchesFormatterRule,
+  type FormatterCommand,
+  type FormatterRule,
+  type ResolvedFormatterSettings,
+} from "./settings";
 
 export type FormatterExecutor = (
   command: string,
@@ -30,10 +35,6 @@ interface ResolvedCommand {
 interface CommandOutcome {
   readonly startupFailed: boolean;
   readonly warning?: string;
-}
-
-function matchesRule(rule: FormatterRule, filePath: string): boolean {
-  return rule.extensions.includes(extname(filePath)) || rule.fileNames.includes(basename(filePath));
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -226,7 +227,7 @@ export async function formatFile(options: FormatFileOptions): Promise<readonly s
 
   const warnings: string[] = [];
   for (const rule of options.settings.rules) {
-    if (matchesRule(rule, filePath) === false) continue;
+    if (matchesFormatterRule(rule, filePath) === false) continue;
     warnings.push(...(await formatWithRule(rule, filePath, options)));
   }
   return warnings;
