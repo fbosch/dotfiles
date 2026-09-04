@@ -3,8 +3,13 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  DEFAULT_ANNOTATION_DURATION_MS,
   DEFAULT_HIGHLIGHT_DURATION_MS,
   FOCUS_NOTIFICATION,
+  MAX_ANNOTATION_ANCHOR_BYTES,
+  MAX_ANNOTATION_DURATION_MS,
+  MAX_ANNOTATION_TEXT_BYTES,
+  MAX_ANNOTATIONS,
   MAX_CONTEXT_BYTES,
   MAX_CONTEXT_LINES,
   MAX_DIAGNOSTIC_BYTES,
@@ -17,6 +22,7 @@ import {
   MAX_QUICKFIX_BYTES,
   MAX_QUICKFIX_SOURCE_ITEMS,
   parseActiveContext,
+  parseAnnotations,
   parseBufferInventory,
   parseBufferRead,
   parseDiagnosticSummary,
@@ -28,6 +34,7 @@ import {
   parseReveal,
   parseVisibleWindows,
   pathIsInsideWorktree,
+  resolveAnnotationOptions,
   resolveHighlightClearOptions,
   resolveHighlightOptions,
   resolveRevealOptions,
@@ -808,6 +815,9 @@ describe("Neovim editor contracts", () => {
       startColumn: 2,
       startLine: 8,
     };
+    expect(resolveHighlightOptions({ buffer: 4, endLine: 500, startLine: 1 })).toMatchObject({
+      ok: true,
+    });
     for (const invalid of [
       { ...options, buffer: 0 },
       { ...options, startLine: 0 },
@@ -876,6 +886,192 @@ describe("Neovim editor contracts", () => {
         { buffer: 4, highlightId: 7 },
       ),
     ).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" }, ok: false });
+  });
+
+  test("parses an ordered atomic annotation batch", () => {
+    const annotations = [
+      { anchor: "target", kind: "warning" as const, line: 8, text: "Review this call" },
+      { anchor: "return", kind: "note" as const, line: 3, text: "Result leaves here" },
+    ];
+    const options = { annotations, buffer: 4 };
+    expect(resolveAnnotationOptions(options)).toEqual({
+      ok: true,
+      value: {
+        annotations,
+        buffer: 4,
+        durationMs: DEFAULT_ANNOTATION_DURATION_MS,
+      },
+    });
+    expect(
+      parseAnnotations(
+        {
+          annotations: [
+            {
+              annotationId: 12,
+              column: 1,
+              inputIndex: 2,
+              kind: "note",
+              line: 3,
+              placement: "callout",
+              sourceLineBytes: 20,
+              text: "Result leaves here",
+            },
+            {
+              annotationId: 11,
+              column: 7,
+              inputIndex: 1,
+              kind: "warning",
+              line: 8,
+              placement: "callout",
+              sourceLineBytes: 20,
+              text: "Review this call",
+            },
+          ],
+          batchId: 7,
+          buffer,
+          cwd: editor.cwd,
+          expiresInMs: DEFAULT_ANNOTATION_DURATION_MS,
+          pid: editor.pid,
+          totalLines: 10,
+        },
+        "/project",
+        editor,
+        options,
+        7,
+      ),
+    ).toEqual({
+      ok: true,
+      value: {
+        annotations: [
+          {
+            annotationId: 12,
+            column: 1,
+            inputIndex: 2,
+            kind: "note",
+            line: 3,
+            placement: "callout",
+            text: "Result leaves here",
+          },
+          {
+            annotationId: 11,
+            column: 7,
+            inputIndex: 1,
+            kind: "warning",
+            line: 8,
+            placement: "callout",
+            text: "Review this call",
+          },
+        ],
+        batchId: 7,
+        buffer,
+        editor,
+        expiresInMs: DEFAULT_ANNOTATION_DURATION_MS,
+        totalLines: 10,
+      },
+    });
+  });
+
+  test("rejects invalid annotation input, stale anchors, and malformed responses", () => {
+    const annotation = { anchor: "target", kind: "error" as const, line: 2, text: "Fix this" };
+    expect(resolveAnnotationOptions({ annotations: [], buffer: 4 })).toMatchObject({
+      error: { code: "NVIM_LIMIT_EXCEEDED" },
+      ok: false,
+    });
+    expect(
+      resolveAnnotationOptions({
+        annotations: Array.from({ length: MAX_ANNOTATIONS + 1 }, () => annotation),
+        buffer: 4,
+      }),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
+    for (const invalid of [
+      { ...annotation, anchor: "" },
+      { ...annotation, anchor: "a".repeat(MAX_ANNOTATION_ANCHOR_BYTES + 1) },
+      { ...annotation, kind: "info" },
+      { ...annotation, line: 0 },
+      { ...annotation, text: "" },
+      { ...annotation, text: "bad\ncallout" },
+      { ...annotation, text: "\u202evisually reversed" },
+      { ...annotation, text: "æ".repeat(MAX_ANNOTATION_TEXT_BYTES) },
+    ]) {
+      expect(
+        resolveAnnotationOptions({
+          annotations: [invalid as unknown as typeof annotation],
+          buffer: 4,
+        }),
+      ).toMatchObject({
+        error: { code: "NVIM_INVALID_ANNOTATION" },
+        ok: false,
+      });
+    }
+    expect(
+      resolveAnnotationOptions({
+        annotations: [annotation],
+        buffer: 4,
+        durationMs: MAX_ANNOTATION_DURATION_MS + 1,
+      }),
+    ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
+
+    const options = { annotations: [annotation], buffer: 4 };
+    expect(
+      parseAnnotations(
+        { error: "staleAnchor", annotationIndex: 1, requestedLine: 2 },
+        "/project",
+        editor,
+        options,
+        7,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_STALE_ANCHOR" }, ok: false });
+    expect(
+      parseAnnotations(
+        { error: "ambiguousAnchor", annotationIndex: 1, requestedLine: 2 },
+        "/project",
+        editor,
+        options,
+        7,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_AMBIGUOUS_ANCHOR" }, ok: false });
+
+    const response = {
+      annotations: [
+        {
+          annotationId: 11,
+          column: 7,
+          inputIndex: 1,
+          kind: "error",
+          line: 2,
+          placement: "callout",
+          sourceLineBytes: 20,
+          text: "Fix this",
+        },
+      ],
+      batchId: 7,
+      buffer,
+      cwd: editor.cwd,
+      expiresInMs: DEFAULT_ANNOTATION_DURATION_MS,
+      pid: editor.pid,
+      totalLines: 3,
+    };
+    for (const invalid of [
+      { ...response, annotations: [] },
+      { ...response, annotations: [{ ...response.annotations[0], annotationId: 0 }] },
+      { ...response, annotations: [{ ...response.annotations[0], inputIndex: 2 }] },
+      { ...response, annotations: [{ ...response.annotations[0], text: "changed" }] },
+      { ...response, expiresInMs: 1 },
+    ]) {
+      expect(parseAnnotations(invalid, "/project", editor, options, 7)).toMatchObject({
+        error: { code: "NVIM_INVALID_RESPONSE" },
+        ok: false,
+      });
+    }
+    expect(
+      parseAnnotations(
+        { ...response, buffer: { ...buffer, name: "/outside/source.ts" } },
+        "/project",
+        editor,
+        options,
+        7,
+      ),
+    ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
   });
 
   test("rejects invalid problem-list owners, bounds, paths, and output sizes", () => {

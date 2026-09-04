@@ -2,41 +2,31 @@ import { createConnection, type Socket } from "node:net";
 import type { Logger } from "neovim/lib/utils/logger";
 import {
   type ActiveContext,
+  type AnnotationOptions,
+  type AnnotationSnapshot,
   type BridgeResult,
   type BufferInventory,
   type BufferRead,
   type BufferReadOptions,
   DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
-  DEFAULT_HIGHLIGHT_DURATION_MS,
   DEFAULT_QUICKFIX_ITEMS,
   type DiagnosticSummary,
   type DiagnosticSummaryOptions,
   type DiagnosticsSnapshot,
   type EditorIdentity,
-  FOCUS_NOTIFICATION,
   type FocusContext,
   type HighlightClearOptions,
   type HighlightClearSnapshot,
   type HighlightOptions,
   type HighlightSnapshot,
   invalidQuickfixWindow,
-  MAX_CONTEXT_BYTES,
-  MAX_CONTEXT_LINES,
-  MAX_DIAGNOSTIC_BYTES,
-  MAX_DIAGNOSTIC_ITEMS,
-  MAX_DIAGNOSTIC_SOURCE_ITEMS,
-  MAX_HIGHLIGHT_DURATION_MS,
-  MAX_HIGHLIGHT_LINES,
-  MAX_INVENTORY_BYTES,
-  MAX_INVENTORY_ITEMS,
   MAX_METADATA_STRING_BYTES,
-  MAX_QUICKFIX_BYTES,
   MAX_QUICKFIX_ITEMS,
-  MAX_QUICKFIX_SOURCE_ITEMS,
   type NeovimError,
   noFocusContext,
   noSelection,
   parseActiveContext,
+  parseAnnotations,
   parseBufferInventory,
   parseBufferRead,
   parseDiagnosticSummary,
@@ -52,6 +42,7 @@ import {
   quickfixRequestLimit,
   type RevealOptions,
   type RevealSnapshot,
+  resolveAnnotationOptions,
   resolveHighlightClearOptions,
   resolveHighlightOptions,
   resolveRevealOptions,
@@ -70,1000 +61,32 @@ class NeovimConnectionError extends Error {
   }
 }
 
-const BIND_SESSION_LUA = `
-local session_id = ...
-local ok, integration = pcall(require, "utils.pi")
-if ok == false or type(integration.bind_session) ~= "function" then return false end
-return integration.bind_session(session_id)
+const BRIDGE_DISPATCH_LUA = `
+return require("utils.pi_bridge").dispatch(...)
 `;
 
-const ACTIVE_CONTEXT_LUA = `
-local max_lines, max_bytes = ...
-local buffer = vim.api.nvim_get_current_buf()
-if vim.b[buffer].is_pi_terminal == true then
-  local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
-  if ok and type(source) == "table" then
-    -- Neovim can retain a pre-upgrade launcher module while Pi restarts.
-    if type(source.mode) ~= "string" then
-      local selection = source.selection
-      source.mode = type(selection) == "table" and selection.mode or "n"
-    end
-    return source
-  end
-  return vim.NIL
-end
-local options = vim.bo[buffer]
-local mode = vim.api.nvim_get_mode().mode
-local selection = vim.NIL
-if mode == "v" or mode == "V" or mode == string.char(22) then
-  local anchor = vim.fn.getpos("v")
-  local current = vim.fn.getpos(".")
-  local lines = vim.fn.getregion(anchor, current, { type = mode })
-  local bytes = math.max(0, #lines - 1)
-  for _, line in ipairs(lines) do bytes = bytes + #line end
-  if #lines <= max_lines and bytes <= max_bytes then
-    selection = {
-      mode = mode,
-      anchor = { line = anchor[2], column = anchor[3] },
-      cursor = { line = current[2], column = current[3] },
-      lines = lines,
-    }
-  else
-    selection = { limited = true }
-  end
-end
-local cursor = vim.api.nvim_win_get_cursor(0)
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  mode = mode,
-  selection = selection,
-  buffer = {
-    number = buffer,
-    name = vim.api.nvim_buf_get_name(buffer),
-    loaded = vim.api.nvim_buf_is_loaded(buffer),
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  cursor = { line = math.max(cursor[1], 1), column = math.max(cursor[2] + 1, 1) },
-}
-`;
-
-const VISIBLE_WINDOWS_LUA = `
-local max_items, max_bytes = ...
-local function is_source_buffer(buffer)
-  if vim.api.nvim_buf_is_valid(buffer) == false then return false end
-  local options = vim.bo[buffer]
-  return
-    vim.api.nvim_buf_get_name(buffer) ~= ""
-    and options.buftype == ""
-    and options.modifiable
-    and options.filetype ~= "opencode"
-    and options.filetype ~= "opencode_terminal"
-    and vim.b[buffer].is_pi_terminal ~= true
-end
-
-local function buffer_info(buffer)
-  local options = vim.bo[buffer]
-  return {
-    number = buffer,
-    name = vim.api.nvim_buf_get_name(buffer),
-    loaded = vim.api.nvim_buf_is_loaded(buffer),
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  }
-end
-
-local windows = {}
-local bytes = 0
-for _, window in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-  local buffer = vim.api.nvim_win_get_buf(window)
-  if is_source_buffer(buffer) then
-    local viewport = vim.fn.getwininfo(window)[1]
-    local info = buffer_info(buffer)
-    if #windows >= max_items then return { error = "inventoryLimit" } end
-    -- Reserve transport overhead for fixed window and buffer fields.
-    bytes = bytes + #info.name + #info.filetype + #info.buftype + 160
-    if bytes > max_bytes then return { error = "inventoryLimit" } end
-    table.insert(windows, {
-      number = window,
-      buffer = info,
-      topLine = viewport.topline,
-      bottomLine = viewport.botline,
-    })
-  end
-end
-table.sort(windows, function(left, right) return left.number < right.number end)
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  windows = windows,
-}
-`;
-
-const LIST_BUFFERS_LUA = `
-local max_items, max_bytes = ...
-local function is_source_buffer(buffer)
-  if vim.api.nvim_buf_is_valid(buffer) == false then return false end
-  local options = vim.bo[buffer]
-  return
-    vim.api.nvim_buf_get_name(buffer) ~= ""
-    and options.buftype == ""
-    and options.modifiable
-    and options.filetype ~= "opencode"
-    and options.filetype ~= "opencode_terminal"
-    and vim.b[buffer].is_pi_terminal ~= true
-end
-
-local buffers = {}
-local bytes = 0
-for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
-  if vim.fn.buflisted(buffer) == 1 and is_source_buffer(buffer) then
-    local options = vim.bo[buffer]
-    local info = {
-      number = buffer,
-      name = vim.api.nvim_buf_get_name(buffer),
-      loaded = vim.api.nvim_buf_is_loaded(buffer),
-      filetype = options.filetype,
-      buftype = options.buftype,
-      modified = options.modified,
-    }
-    if #buffers >= max_items then return { error = "inventoryLimit" } end
-    -- Reserve transport overhead for fixed buffer fields.
-    bytes = bytes + #info.name + #info.filetype + #info.buftype + 128
-    if bytes > max_bytes then return { error = "inventoryLimit" } end
-    table.insert(buffers, info)
-  end
-end
-table.sort(buffers, function(left, right) return left.number < right.number end)
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffers = buffers,
-}
-`;
-
-const READ_BUFFER_LUA = `
-local buffer, requested_start, requested_end, max_lines, max_bytes = ...
-if vim.api.nvim_buf_is_valid(buffer) == false then return { error = "invalidBuffer" } end
-
-local options = vim.bo[buffer]
-local name = vim.api.nvim_buf_get_name(buffer)
-local loaded = vim.api.nvim_buf_is_loaded(buffer)
-if
-  loaded == false
-  or name == ""
-  or options.buftype ~= ""
-  or options.modifiable == false
-  or options.filetype == "opencode"
-  or options.filetype == "opencode_terminal"
-  or vim.b[buffer].is_pi_terminal == true
-then
-  return { error = "invalidBuffer" }
-end
-
-local total_lines = vim.api.nvim_buf_line_count(buffer)
-local start_line = requested_start == 0 and 1 or requested_start
-local end_line = requested_end == 0 and math.min(total_lines, start_line + max_lines - 1) or requested_end
-if start_line > total_lines or end_line < start_line or end_line > total_lines then
-  return { error = "invalidRange", totalLines = total_lines }
-end
-if end_line - start_line + 1 > max_lines then return { error = "lineLimit" } end
-
-local lines = vim.api.nvim_buf_get_lines(buffer, start_line - 1, end_line, true)
-local bytes = math.max(0, #lines - 1)
-for _, line in ipairs(lines) do
-  bytes = bytes + #line
-  if bytes > max_bytes then return { error = "byteLimit" } end
-end
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffer = {
-    number = buffer,
-    name = name,
-    loaded = loaded,
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  startLine = start_line,
-  endLine = end_line,
-  totalLines = total_lines,
-  lines = lines,
-}
-`;
-
-const DIAGNOSTICS_LUA = `
-local requested_buffer, summary_items, max_items, max_source_items, max_bytes = ...
-
-local function is_integer(value)
-  return type(value) == "number" and value >= 0 and value == math.floor(value)
-end
-
-local function is_source_buffer(buffer)
-  if is_integer(buffer) == false or buffer < 1 then return false end
-  if vim.api.nvim_buf_is_valid(buffer) == false or vim.api.nvim_buf_is_loaded(buffer) == false then
-    return false
-  end
-  local options = vim.bo[buffer]
-  return
-    vim.api.nvim_buf_get_name(buffer) ~= ""
-    and options.buftype == ""
-    and options.modifiable
-    and options.filetype ~= "opencode"
-    and options.filetype ~= "opencode_terminal"
-    and vim.b[buffer].is_pi_terminal ~= true
-end
-
-local function preserved_source_buffer()
-  local ok, source = pcall(vim.api.nvim_get_var, "pi_launch_source_context")
-  if
-    ok == false
-    or type(source) ~= "table"
-    or type(source.buffer) ~= "table"
-    or is_integer(source.buffer.number) == false
-    or type(source.buffer.name) ~= "string"
-  then
-    return nil
-  end
-  local candidate = source.buffer.number
-  if
-    is_source_buffer(candidate)
-    and vim.api.nvim_buf_get_name(candidate) == source.buffer.name
-  then
-    return candidate
-  end
-  return nil
-end
-
-local function text_before(left, right)
-  local shared_length = math.min(#left, #right)
-  for index = 1, shared_length do
-    local left_byte = string.byte(left, index)
-    local right_byte = string.byte(right, index)
-    if left_byte ~= right_byte then return left_byte < right_byte end
-  end
-  return #left < #right
-end
-
-local severity_names = {
-  [vim.diagnostic.severity.ERROR] = "error",
-  [vim.diagnostic.severity.WARN] = "warning",
-  [vim.diagnostic.severity.INFO] = "information",
-  [vim.diagnostic.severity.HINT] = "hint",
-}
-local severity_order = { error = 1, warning = 2, information = 3, hint = 4 }
-
-local function diagnostic_before(left, right)
-  if left.severity ~= right.severity then
-    return severity_order[left.severity] < severity_order[right.severity]
-  end
-  if left.start.line ~= right.start.line then return left.start.line < right.start.line end
-  if left.start.column ~= right.start.column then return left.start.column < right.start.column end
-  if left["end"].line ~= right["end"].line then return left["end"].line < right["end"].line end
-  if left["end"].column ~= right["end"].column then
-    return left["end"].column < right["end"].column
-  end
-  if left.source ~= right.source then return text_before(left.source, right.source) end
-  return text_before(left.message, right.message)
-end
-
-local function retain_diagnostic(diagnostics, diagnostic)
-  if summary_items == 0 then
-    table.insert(diagnostics, diagnostic)
-    return
-  end
-
-  local insert_at = #diagnostics + 1
-  for index, existing in ipairs(diagnostics) do
-    if diagnostic_before(diagnostic, existing) then
-      insert_at = index
-      break
-    end
-  end
-  if insert_at <= summary_items then
-    table.insert(diagnostics, insert_at, diagnostic)
-    if #diagnostics > summary_items then table.remove(diagnostics) end
-  elseif #diagnostics < summary_items then
-    table.insert(diagnostics, diagnostic)
-  end
-end
-
-local buffer = requested_buffer
-if buffer == 0 then
-  buffer = vim.api.nvim_get_current_buf()
-  if is_source_buffer(buffer) == false then buffer = preserved_source_buffer() or -1 end
-end
-if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
-
-local raw_diagnostics = vim.diagnostic.get(buffer)
-if #raw_diagnostics > max_source_items then return { error = "diagnosticSourceLimit" } end
-if summary_items == 0 and #raw_diagnostics > max_items then
-  return { error = "diagnosticLimit" }
-end
-
-local diagnostics = {}
-local counts = { error = 0, warning = 0, information = 0, hint = 0, total = 0 }
-for _, diagnostic in ipairs(raw_diagnostics) do
-  local severity = severity_names[diagnostic.severity or vim.diagnostic.severity.ERROR]
-  local end_line = diagnostic.end_lnum or diagnostic.lnum
-  local end_column = diagnostic.end_col or diagnostic.col
-  local source = diagnostic.source or ""
-  if
-    severity == nil
-    or is_integer(diagnostic.lnum) == false
-    or is_integer(diagnostic.col) == false
-    or is_integer(end_line) == false
-    or is_integer(end_column) == false
-    or end_line < diagnostic.lnum
-    or (end_line == diagnostic.lnum and end_column < diagnostic.col)
-    or type(diagnostic.message) ~= "string"
-    or type(source) ~= "string"
-  then
-    return { error = "invalidDiagnostics" }
-  end
-  counts[severity] = counts[severity] + 1
-  retain_diagnostic(diagnostics, {
-    start = { line = diagnostic.lnum + 1, column = diagnostic.col + 1 },
-    ["end"] = { line = end_line + 1, column = end_column + 1 },
-    severity = severity,
-    message = diagnostic.message,
-    source = source,
-  })
-end
-counts.total = #raw_diagnostics
-if summary_items == 0 then table.sort(diagnostics, diagnostic_before) end
-
-local options = vim.bo[buffer]
-local name = vim.api.nvim_buf_get_name(buffer)
-local bytes = #name + #options.filetype + #options.buftype + 512
-for _, diagnostic in ipairs(diagnostics) do
-  -- Reserve transport overhead for fixed range and severity fields.
-  bytes = bytes + #diagnostic.message + #diagnostic.source + 128
-  if bytes > max_bytes then return { error = "diagnosticLimit" } end
-end
-
-return {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  buffer = {
-    number = buffer,
-    name = name,
-    loaded = true,
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  counts = counts,
-  diagnostics = diagnostics,
-  truncated = #diagnostics < counts.total,
-}
-`;
-
-const QUICKFIX_LUA = `
-local kind, requested_window, max_items, max_source_items, max_bytes = ...
-
-local info
-local owner
-if kind == "location" then
-  if
-    type(requested_window) ~= "number"
-    or requested_window < 1
-    or requested_window ~= math.floor(requested_window)
-    or vim.api.nvim_win_is_valid(requested_window) == false
-  then
-    return { error = "invalidWindow" }
-  end
-  info = vim.fn.getloclist(requested_window, { id = 0, size = 0, title = 1 })
-  owner = { kind = "location", listId = info.id or 0, window = requested_window }
-else
-  info = vim.fn.getqflist({ id = 0, size = 0, title = 1 })
-  owner = { kind = "quickfix", listId = info.id or 0 }
-end
-
-local total = info.size or 0
-if total > max_source_items then return { error = "sourceLimit" } end
-local title = info.title or ""
-if #title + 256 > max_bytes then return { error = "contentLimit" } end
--- Neovim exposes no ranged item lookup, so refuse oversized lists before taking its whole snapshot.
-local list = kind == "location"
-  and vim.fn.getloclist(requested_window, { items = 1 })
-  or vim.fn.getqflist({ items = 1 })
-local raw_items = list.items or {}
-local items = {}
-for index = 1, math.min(max_items, total) do
-  local item = raw_items[index]
-  local buffer = item.bufnr or 0
-  local filename = item.filename or ""
-  if buffer > 0 and vim.api.nvim_buf_is_valid(buffer) then
-    local options = vim.bo[buffer]
-    local name = vim.api.nvim_buf_get_name(buffer)
-    if
-      name == ""
-      or options.buftype ~= ""
-      or options.filetype == "opencode"
-      or options.filetype == "opencode_terminal"
-      or vim.b[buffer].is_pi_terminal == true
-    then
-      return { error = "invalidSource" }
-    end
-    filename = name
-  end
-  table.insert(items, {
-    buffer = buffer,
-    filename = filename,
-    line = item.lnum or 0,
-    column = item.col or 0,
-    endLine = item.end_lnum or 0,
-    endColumn = item.end_col or 0,
-    text = item.text or "",
-    type = item.type or "",
-    valid = item.valid == 1,
-  })
-end
-
-local result = {
-  pid = vim.fn.getpid(),
-  cwd = vim.fn.getcwd(),
-  owner = owner,
-  title = title,
-  total = total,
-  items = items,
-  truncated = #items < total,
-}
-if #vim.json.encode(result) > max_bytes then return { error = "contentLimit" } end
-return result
-`;
-
-const REVEAL_LUA = `
-local buffer, line, column, focus, split, expected_cwd = ...
-
-local function positive_integer(value)
-  return type(value) == "number" and value >= 1 and value == math.floor(value)
-end
-
-if
-  positive_integer(buffer) == false
-  or vim.api.nvim_buf_is_valid(buffer) == false
-  or vim.api.nvim_buf_is_loaded(buffer) == false
-then
-  return { error = "invalidBuffer" }
-end
-if positive_integer(line) == false or positive_integer(column) == false then
-  return { error = "invalidPosition" }
-end
-if type(focus) ~= "boolean" or (split ~= "none" and split ~= "horizontal" and split ~= "vertical") then
-  return { error = "invalidRequest" }
-end
-
-local function canonical(path)
-  if type(path) ~= "string" or path == "" then return nil end
-  local candidate = vim.fs.normalize(path)
-  local missing = {}
-  while true do
-    local resolved = vim.uv.fs_realpath(candidate)
-    if resolved ~= nil then
-      for _, segment in ipairs(missing) do
-        resolved = vim.fs.joinpath(resolved, segment)
-      end
-      return vim.fs.normalize(resolved)
-    end
-    local stat = vim.uv.fs_lstat(candidate)
-    if stat ~= nil and stat.type == "link" then return nil end
-    local parent = vim.fs.dirname(candidate)
-    if parent == nil or parent == candidate then return nil end
-    table.insert(missing, 1, vim.fs.basename(candidate))
-    candidate = parent
-  end
-end
-
-local function path_is_inside(path, root)
-  if path == nil or root == nil then return false end
-  if path == root then return true end
-  if root == "/" then return path:sub(1, 1) == "/" end
-  return path:sub(1, #root + 1) == root .. "/"
-end
-
-local editor_cwd = vim.fn.getcwd()
-local root = canonical(expected_cwd)
-if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
-
-local target_name = vim.api.nvim_buf_get_name(buffer)
-local target_path = canonical(target_name)
-if target_path == nil then return { error = "invalidBuffer" } end
-if path_is_inside(target_path, root) == false then return { error = "worktreeMismatch" } end
-
-local function is_source_buffer(candidate)
-  if
-    vim.api.nvim_buf_is_valid(candidate) == false
-    or vim.api.nvim_buf_is_loaded(candidate) == false
-  then
-    return false
-  end
-  local options = vim.bo[candidate]
-  local name = vim.api.nvim_buf_get_name(candidate)
-  return
-    name ~= ""
-    and options.buftype == ""
-    and options.filetype ~= "opencode"
-    and options.filetype ~= "opencode_terminal"
-    and vim.b[candidate].is_pi_terminal ~= true
-    and path_is_inside(canonical(name), root)
-end
-
-if is_source_buffer(buffer) == false then return { error = "invalidBuffer" } end
-
-local total_lines = vim.api.nvim_buf_line_count(buffer)
-if line > total_lines then return { error = "invalidPosition", totalLines = total_lines } end
-local text = vim.api.nvim_buf_get_lines(buffer, line - 1, line, true)[1]
-local max_column = math.max(#text, 1)
-if column > max_column then return { error = "invalidColumn", maxColumn = max_column } end
-
-local function is_source_window(window)
-  return vim.api.nvim_win_is_valid(window) and is_source_buffer(vim.api.nvim_win_get_buf(window))
-end
-
-local windows = vim.api.nvim_tabpage_list_wins(0)
-local window = nil
-for _, candidate in ipairs(windows) do
-  if vim.api.nvim_win_get_buf(candidate) == buffer then
-    window = candidate
-    break
-  end
-end
-if window == nil then
-  local recent = vim.g.pi_launch_source_context
-  if type(recent) == "table" and type(recent.buffer) == "table" and type(recent.buffer.number) == "number" then
-    for _, candidate in ipairs(windows) do
-      if vim.api.nvim_win_get_buf(candidate) == recent.buffer.number and is_source_window(candidate) then
-        window = candidate
-        break
-      end
-    end
-  end
-end
-if window == nil then
-  for _, candidate in ipairs(windows) do
-    if is_source_window(candidate) then
-      window = candidate
-      break
-    end
-  end
-end
-if window == nil then return { error = "missingSourceWindow" } end
-
-local original_window = vim.api.nvim_get_current_win()
-local previous_buffer = vim.api.nvim_win_get_buf(window)
-local previous_cursor = vim.api.nvim_win_get_cursor(window)
--- Keep user autocommands from overriding an explicit focus/layout contract mid-operation.
-local previous_eventignore = vim.o.eventignore
-vim.o.eventignore = "all"
-local view_ok, previous_view = pcall(vim.api.nvim_win_call, window, function() return vim.fn.winsaveview() end)
-if view_ok == false then
-  vim.o.eventignore = previous_eventignore
-  return { error = "invalidWindow" }
-end
-local created_window = nil
-local window_changed = false
-
-local function set_buffer_without_autocmd(target_window, target_buffer)
-  vim.api.nvim_win_call(target_window, function()
-    vim.api.nvim_cmd({ cmd = "buffer", args = { tostring(target_buffer) }, mods = { noautocmd = true } }, {})
-  end)
-end
-
-local function restore_focus()
-  if
-    vim.api.nvim_win_is_valid(original_window)
-    and vim.api.nvim_get_current_win() ~= original_window
-  then
-    pcall(vim.api.nvim_set_current_win, original_window)
-  end
-end
-
-local function rollback()
-  if created_window ~= nil and vim.api.nvim_win_is_valid(created_window) then
-    pcall(vim.api.nvim_win_close, created_window, true)
-  elseif window_changed and vim.api.nvim_win_is_valid(window) then
-    pcall(set_buffer_without_autocmd, window, previous_buffer)
-    pcall(vim.api.nvim_win_set_cursor, window, previous_cursor)
-    pcall(vim.api.nvim_win_call, window, function() vim.fn.winrestview(previous_view) end)
-  end
-  restore_focus()
-  vim.o.eventignore = previous_eventignore
-end
-
-local operation_ok = pcall(function()
-  if split == "none" then
-    window_changed = true
-    set_buffer_without_autocmd(window, buffer)
-  else
-    local direction = split == "horizontal" and "below" or "right"
-    window = vim.api.nvim_open_win(buffer, false, {
-      split = direction,
-      win = window,
-      noautocmd = true,
-    })
-    if window == 0 or vim.api.nvim_win_is_valid(window) == false then error("split failed") end
-    created_window = window
-  end
-  vim.api.nvim_win_set_cursor(window, { line, column - 1 })
-  vim.api.nvim_win_call(window, function()
-    vim.api.nvim_cmd({ cmd = "normal", args = { "zz" }, bang = true, mods = { noautocmd = true } }, {})
-  end)
-  if focus then vim.api.nvim_set_current_win(window) end
-end)
-if operation_ok == false then
-  rollback()
-  return { error = "invalidWindow" }
-end
-
-if focus == false and vim.api.nvim_get_current_win() ~= original_window then restore_focus() end
-local observed_ok, observed = pcall(function()
-  return {
-    currentWindow = vim.api.nvim_get_current_win(),
-    cursor = vim.api.nvim_win_get_cursor(window),
-    buffer = vim.api.nvim_win_get_buf(window),
-    direction = created_window ~= nil and vim.api.nvim_win_get_config(window).split or "",
-  }
-end)
-if observed_ok == false then
-  rollback()
-  return { error = "invalidWindow" }
-end
-
-local actual_split = "none"
-if observed.direction == "below" then
-  actual_split = "horizontal"
-elseif observed.direction == "right" then
-  actual_split = "vertical"
-elseif created_window ~= nil then
-  rollback()
-  return { error = "invalidWindow" }
-end
-if
-  observed.buffer ~= buffer
-  or observed.cursor[1] ~= line
-  or observed.cursor[2] + 1 ~= column
-  or actual_split ~= split
-  or (focus and observed.currentWindow ~= window)
-  or (focus == false and observed.currentWindow ~= original_window)
-then
-  rollback()
-  return { error = "invalidWindow" }
-end
-
-vim.o.eventignore = previous_eventignore
-local options = vim.bo[buffer]
-return {
-  pid = vim.fn.getpid(),
-  cwd = editor_cwd,
-  buffer = {
-    number = observed.buffer,
-    name = vim.api.nvim_buf_get_name(buffer),
-    loaded = vim.api.nvim_buf_is_loaded(buffer),
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  window = window,
-  position = { line = observed.cursor[1], column = observed.cursor[2] + 1 },
-  focused = observed.currentWindow == window,
-  focusPreserved = observed.currentWindow == original_window,
-  split = actual_split,
-  splitCreated = created_window ~= nil,
-}
-`;
-
-const HIGHLIGHT_LUA = `
-local buffer, start_line, start_column, end_line, end_column, duration_ms, max_lines, max_duration_ms, channel, expected_cwd = ...
-
-local function positive_integer(value)
-  return type(value) == "number" and value >= 1 and value == math.floor(value)
-end
-
-if
-  positive_integer(buffer) == false
-  or vim.api.nvim_buf_is_valid(buffer) == false
-  or vim.api.nvim_buf_is_loaded(buffer) == false
-then
-  return { error = "invalidBuffer" }
-end
-if
-  positive_integer(start_line) == false
-  or positive_integer(start_column) == false
-  or positive_integer(end_line) == false
-  or (end_column ~= 0 and positive_integer(end_column) == false)
-  or positive_integer(duration_ms) == false
-  or positive_integer(max_lines) == false
-  or positive_integer(max_duration_ms) == false
-  or positive_integer(channel) == false
-then
-  return { error = "invalidRange" }
-end
-if duration_ms > max_duration_ms then return { error = "durationLimit" } end
-
-local function canonical(path)
-  if type(path) ~= "string" or path == "" then return nil end
-  local candidate = vim.fs.normalize(path)
-  local missing = {}
-  while true do
-    local resolved = vim.uv.fs_realpath(candidate)
-    if resolved ~= nil then
-      for _, segment in ipairs(missing) do
-        resolved = vim.fs.joinpath(resolved, segment)
-      end
-      return vim.fs.normalize(resolved)
-    end
-    local stat = vim.uv.fs_lstat(candidate)
-    if stat ~= nil and stat.type == "link" then return nil end
-    local parent = vim.fs.dirname(candidate)
-    if parent == nil or parent == candidate then return nil end
-    table.insert(missing, 1, vim.fs.basename(candidate))
-    candidate = parent
-  end
-end
-
-local function path_is_inside(path, root)
-  if path == nil or root == nil then return false end
-  if path == root then return true end
-  if root == "/" then return path:sub(1, 1) == "/" end
-  return path:sub(1, #root + 1) == root .. "/"
-end
-
-local editor_cwd = vim.fn.getcwd()
-local root = canonical(expected_cwd)
-if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
-local name = vim.api.nvim_buf_get_name(buffer)
-local target = canonical(name)
-if target == nil then return { error = "invalidBuffer" } end
-if path_is_inside(target, root) == false then return { error = "worktreeMismatch" } end
-local options = vim.bo[buffer]
-if
-  name == ""
-  or options.buftype ~= ""
-  or options.filetype == "opencode"
-  or options.filetype == "opencode_terminal"
-  or vim.b[buffer].is_pi_terminal == true
-then
-  return { error = "invalidBuffer" }
-end
-
-local total_lines = vim.api.nvim_buf_line_count(buffer)
-if
-  start_line > total_lines
-  or end_line > total_lines
-  or end_line < start_line
-then
-  return { error = "invalidRange", totalLines = total_lines }
-end
-if end_line - start_line + 1 > max_lines then return { error = "lineLimit" } end
-local start_text = vim.api.nvim_buf_get_lines(buffer, start_line - 1, start_line, true)[1]
-local end_text = vim.api.nvim_buf_get_lines(buffer, end_line - 1, end_line, true)[1]
-if end_column == 0 then end_column = #end_text + 1 end
-if start_column > #start_text + 1 or end_column > #end_text + 1 then
-  return { error = "invalidColumn", totalLines = total_lines }
-end
-if end_line == start_line and end_column <= start_column then
-  return { error = "invalidRange", totalLines = total_lines }
-end
-
-local namespace = vim.api.nvim_create_namespace("PiNeovimHighlights" .. channel)
-local mark_ok, id = pcall(vim.api.nvim_buf_set_extmark, buffer, namespace, start_line - 1, start_column - 1, {
-  end_row = end_line - 1,
-  end_col = end_column - 1,
-  hl_group = "Search",
-  hl_mode = "combine",
-  priority = 200,
-  strict = true,
-})
-if mark_ok == false or positive_integer(id) == false then return { error = "extmarkFailure" } end
-
-local mark = vim.api.nvim_buf_get_extmark_by_id(buffer, namespace, id, { details = true, hl_name = true })
-if
-  #mark < 3
-  or mark[1] ~= start_line - 1
-  or mark[2] ~= start_column - 1
-  or mark[3].end_row ~= end_line - 1
-  or mark[3].end_col ~= end_column - 1
-  or mark[3].hl_group ~= "Search"
-then
-  vim.api.nvim_buf_del_extmark(buffer, namespace, id)
-  return { error = "extmarkFailure" }
-end
-
-vim.defer_fn(function()
-  if vim.api.nvim_buf_is_valid(buffer) then
-    pcall(vim.api.nvim_buf_del_extmark, buffer, namespace, id)
-  end
-end, duration_ms)
-
-return {
-  pid = vim.fn.getpid(),
-  cwd = editor_cwd,
-  buffer = {
-    number = buffer,
-    name = name,
-    loaded = vim.api.nvim_buf_is_loaded(buffer),
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  highlightId = id,
-  start = { line = mark[1] + 1, column = mark[2] + 1 },
-  ["end"] = { line = mark[3].end_row + 1, column = mark[3].end_col + 1 },
-  expiresInMs = duration_ms,
-}
-`;
-
-const CLEAR_HIGHLIGHT_LUA = `
-local buffer, id, channel, expected_cwd = ...
-
-local function positive_integer(value)
-  return type(value) == "number" and value >= 1 and value == math.floor(value)
-end
-
-if
-  positive_integer(buffer) == false
-  or vim.api.nvim_buf_is_valid(buffer) == false
-  or vim.api.nvim_buf_is_loaded(buffer) == false
-then
-  return { error = "invalidBuffer" }
-end
-if positive_integer(id) == false or positive_integer(channel) == false then
-  return { error = "invalidRange" }
-end
-
-local function canonical(path)
-  if type(path) ~= "string" or path == "" then return nil end
-  local candidate = vim.fs.normalize(path)
-  local missing = {}
-  while true do
-    local resolved = vim.uv.fs_realpath(candidate)
-    if resolved ~= nil then
-      for _, segment in ipairs(missing) do
-        resolved = vim.fs.joinpath(resolved, segment)
-      end
-      return vim.fs.normalize(resolved)
-    end
-    local stat = vim.uv.fs_lstat(candidate)
-    if stat ~= nil and stat.type == "link" then return nil end
-    local parent = vim.fs.dirname(candidate)
-    if parent == nil or parent == candidate then return nil end
-    table.insert(missing, 1, vim.fs.basename(candidate))
-    candidate = parent
-  end
-end
-
-local function path_is_inside(path, root)
-  if path == nil or root == nil then return false end
-  if path == root then return true end
-  if root == "/" then return path:sub(1, 1) == "/" end
-  return path:sub(1, #root + 1) == root .. "/"
-end
-
-local editor_cwd = vim.fn.getcwd()
-local root = canonical(expected_cwd)
-if root == nil or canonical(editor_cwd) ~= root then return { error = "worktreeMismatch" } end
-local name = vim.api.nvim_buf_get_name(buffer)
-local target = canonical(name)
-if target == nil then return { error = "invalidBuffer" } end
-if path_is_inside(target, root) == false then return { error = "worktreeMismatch" } end
-local options = vim.bo[buffer]
-if
-  name == ""
-  or options.buftype ~= ""
-  or options.filetype == "opencode"
-  or options.filetype == "opencode_terminal"
-  or vim.b[buffer].is_pi_terminal == true
-then
-  return { error = "invalidBuffer" }
-end
-
-local namespace = vim.api.nvim_create_namespace("PiNeovimHighlights" .. channel)
-return {
-  pid = vim.fn.getpid(),
-  cwd = editor_cwd,
-  buffer = {
-    number = buffer,
-    name = name,
-    loaded = vim.api.nvim_buf_is_loaded(buffer),
-    filetype = options.filetype,
-    buftype = options.buftype,
-    modified = options.modified,
-  },
-  highlightId = id,
-  cleared = vim.api.nvim_buf_del_extmark(buffer, namespace, id),
-}
-`;
-
-const INSTALL_NOTIFICATIONS_LUA = `
-local channel, max_lines, max_bytes = ...
-local group_name = "PiNeovimBridge" .. channel
-local group = vim.api.nvim_create_augroup(group_name, { clear = true })
-
-local function source_snapshot()
-  local buffer = vim.api.nvim_get_current_buf()
-  local options = vim.bo[buffer]
-  local name = vim.api.nvim_buf_get_name(buffer)
-  local snapshot
-  if
-    name ~= ""
-    and options.buftype == ""
-    and options.filetype ~= "opencode"
-    and options.filetype ~= "opencode_terminal"
-  then
-    local cursor = vim.api.nvim_win_get_cursor(0)
-    local mode = vim.api.nvim_get_mode().mode
-    local selection = vim.NIL
-    if mode == "v" or mode == "V" or mode == string.char(22) then
-      local anchor = vim.fn.getpos("v")
-      local current = vim.fn.getpos(".")
-      local lines = vim.fn.getregion(anchor, current, { type = mode })
-      local bytes = math.max(0, #lines - 1)
-      for _, line in ipairs(lines) do bytes = bytes + #line end
-      if #lines <= max_lines and bytes <= max_bytes then
-        selection = {
-          mode = mode,
-          anchor = { line = anchor[2], column = anchor[3] },
-          cursor = { line = current[2], column = current[3] },
-          lines = lines,
-        }
-      else
-        selection = { limited = true }
-      end
-    end
-
-    snapshot = {
-      pid = vim.fn.getpid(),
-      cwd = vim.fn.getcwd(),
-      mode = mode,
-      buffer = {
-        number = buffer,
-        name = name,
-        loaded = vim.api.nvim_buf_is_loaded(buffer),
-        filetype = options.filetype,
-        buftype = options.buftype,
-        modified = options.modified,
-      },
-      cursor = { line = math.max(cursor[1], 1), column = math.max(cursor[2] + 1, 1) },
-      selection = selection,
-    }
-    vim.g.pi_launch_source_context = snapshot
-  else
-    snapshot = vim.g.pi_launch_source_context
-  end
-  if type(snapshot) ~= "table" then return end
-
-  vim.rpcnotify(channel, "${FOCUS_NOTIFICATION}", snapshot)
-end
-
-vim.api.nvim_create_autocmd({
-  "BufEnter",
-  "BufLeave",
-  "BufModifiedSet",
-  "CursorMoved",
-  "CursorMovedI",
-  "ModeChanged",
-  "WinEnter",
-  "WinLeave",
-}, {
-  group = group,
-  callback = source_snapshot,
-})
-source_snapshot()
-return { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), channelId = channel }
-`;
-
-const REMOVE_NOTIFICATIONS_LUA = `
-local channel = ...
-pcall(vim.api.nvim_del_augroup_by_name, "PiNeovimBridge" .. channel)
-vim.g.pi_launch_source_context = nil
-return true
-`;
+export const bridgeOperations = {
+  activeContext: "active_context",
+  annotate: "annotate",
+  bindSession: "bind_session",
+  clearHighlight: "clear_highlight",
+  deleteAnnotations: "delete_annotations",
+  deleteHighlight: "delete_highlight",
+  diagnostics: "diagnostics",
+  diagnosticSummary: "diagnostic_summary",
+  highlight: "highlight",
+  installNotifications: "install_notifications",
+  listBuffers: "list_buffers",
+  quickfix: "quickfix",
+  readBuffer: "read_buffer",
+  removeNotifications: "remove_notifications",
+  reveal: "reveal",
+  visibleWindows: "visible_windows",
+} as const;
+
+type BridgeOperation = (typeof bridgeOperations)[keyof typeof bridgeOperations];
+
+export const bridgeLua = { dispatch: BRIDGE_DISPATCH_LUA } as const;
 
 export interface NvimConnection {
   readonly channelId: Promise<number>;
@@ -1081,6 +104,15 @@ export interface NvimConnection {
 }
 
 export type NvimConnectionFactory = (socketPath: string) => Promise<NvimConnection>;
+
+async function executeBridge(
+  connection: NvimConnection,
+  operation: BridgeOperation,
+  payload: Readonly<Record<string, unknown>> = {},
+): Promise<unknown> {
+  const channelId = await connection.channelId;
+  return connection.executeLua(BRIDGE_DISPATCH_LUA, [{ channelId, operation, payload }]);
+}
 
 const silentLogger = {
   debug() {},
@@ -1132,6 +164,30 @@ function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   });
 }
 
+function annotationMayHaveMutated(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return true;
+  const error = (value as Record<string, unknown>).error;
+  return typeof error !== "string" || error === "extmarkFailure";
+}
+
+function highlightCleanupId(value: unknown, expectedBuffer: number): number | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const snapshot = value as Record<string, unknown>;
+  if (
+    typeof snapshot.buffer !== "object" ||
+    snapshot.buffer === null ||
+    Array.isArray(snapshot.buffer)
+  ) {
+    return undefined;
+  }
+  const buffer = snapshot.buffer as Record<string, unknown>;
+  return buffer.number === expectedBuffer &&
+    Number.isSafeInteger(snapshot.highlightId) &&
+    (snapshot.highlightId as number) > 0
+    ? (snapshot.highlightId as number)
+    : undefined;
+}
+
 async function defaultConnectionFactory(socketPath: string): Promise<NvimConnection> {
   const socket = createConnection(socketPath);
   // Keep connection failures from becoming process-level uncaught errors.
@@ -1151,6 +207,8 @@ export class PiNeovimChannel {
   #connection: NvimConnection | undefined;
   #editor: EditorIdentity | undefined;
   #focusContext: FocusContext | undefined;
+  #nextAnnotationBatchId = 1;
+  readonly #presentationOperations = new Set<Promise<void>>();
   #unavailableError: NeovimError | undefined;
 
   constructor(
@@ -1182,7 +240,7 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const bound = await withTimeout(
-        connection.value.executeLua(BIND_SESSION_LUA, [sessionId]),
+        executeBridge(connection.value, bridgeOperations.bindSession, { sessionId }),
         "Timed out binding Pi's session identity to Neovim",
       );
       return bound === true
@@ -1204,7 +262,7 @@ export class PiNeovimChannel {
     if (connection.ok === false) return connection;
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(ACTIVE_CONTEXT_LUA, [MAX_CONTEXT_LINES, MAX_CONTEXT_BYTES]),
+        executeBridge(connection.value, bridgeOperations.activeContext),
         "Timed out reading context from the bound Neovim instance",
       );
       return snapshot === null || snapshot === undefined
@@ -1221,10 +279,7 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(VISIBLE_WINDOWS_LUA, [
-          MAX_INVENTORY_ITEMS,
-          MAX_INVENTORY_BYTES,
-        ]),
+        executeBridge(connection.value, bridgeOperations.visibleWindows),
         "Timed out reading visible windows from the bound Neovim instance",
       );
       return parseVisibleWindows(snapshot, this.#cwd, this.#editor);
@@ -1239,7 +294,7 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(LIST_BUFFERS_LUA, [MAX_INVENTORY_ITEMS, MAX_INVENTORY_BYTES]),
+        executeBridge(connection.value, bridgeOperations.listBuffers),
         "Timed out reading buffers from the bound Neovim instance",
       );
       return parseBufferInventory(snapshot, this.#cwd, this.#editor);
@@ -1254,13 +309,11 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(READ_BUFFER_LUA, [
-          options.buffer,
-          options.startLine ?? 0,
-          options.endLine ?? 0,
-          MAX_CONTEXT_LINES,
-          MAX_CONTEXT_BYTES,
-        ]),
+        executeBridge(connection.value, bridgeOperations.readBuffer, {
+          buffer: options.buffer,
+          ...(options.startLine === undefined ? {} : { startLine: options.startLine }),
+          ...(options.endLine === undefined ? {} : { endLine: options.endLine }),
+        }),
         "Timed out reading a buffer from the bound Neovim instance",
       );
       return parseBufferRead(snapshot, this.#cwd, this.#editor);
@@ -1278,13 +331,10 @@ export class PiNeovimChannel {
     const maxItems = options.maxItems ?? DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS;
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(DIAGNOSTICS_LUA, [
-          options.buffer ?? 0,
+        executeBridge(connection.value, bridgeOperations.diagnosticSummary, {
           maxItems,
-          MAX_DIAGNOSTIC_ITEMS,
-          MAX_DIAGNOSTIC_SOURCE_ITEMS,
-          MAX_DIAGNOSTIC_BYTES,
-        ]),
+          ...(options.buffer === undefined ? {} : { buffer: options.buffer }),
+        }),
         "Timed out reading diagnostic summary from the bound Neovim instance",
       );
       return parseDiagnosticSummary(snapshot, this.#cwd, this.#editor, maxItems);
@@ -1299,13 +349,9 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(DIAGNOSTICS_LUA, [
-          buffer ?? 0,
-          0,
-          MAX_DIAGNOSTIC_ITEMS,
-          MAX_DIAGNOSTIC_SOURCE_ITEMS,
-          MAX_DIAGNOSTIC_BYTES,
-        ]),
+        executeBridge(connection.value, bridgeOperations.diagnostics, {
+          ...(buffer === undefined ? {} : { buffer }),
+        }),
         "Timed out reading diagnostics from the bound Neovim instance",
       );
       return parseDiagnostics(snapshot, this.#cwd, this.#editor);
@@ -1329,22 +375,136 @@ export class PiNeovimChannel {
     if (connection.ok === false) return connection;
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     const kind = options.kind ?? "quickfix";
-    const window = options.kind === "location" ? options.window : 0;
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(QUICKFIX_LUA, [
+        executeBridge(connection.value, bridgeOperations.quickfix, {
           kind,
-          window,
           maxItems,
-          MAX_QUICKFIX_SOURCE_ITEMS,
-          MAX_QUICKFIX_BYTES,
-        ]),
+          ...(options.kind === "location" ? { window: options.window } : {}),
+        }),
         "Timed out reading a problem list from the bound Neovim instance",
       );
       return parseQuickfix(snapshot, this.#cwd, this.#editor, options);
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }
+  }
+
+  async annotate(options: AnnotationOptions): Promise<BridgeResult<AnnotationSnapshot>> {
+    const resolved = resolveAnnotationOptions(options);
+    if (resolved.ok === false) return resolved;
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    const editor = this.#editor;
+    if (editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    return this.trackPresentationOperation(
+      (async () => {
+        try {
+          const batchId = this.#nextAnnotationBatchId;
+          this.#nextAnnotationBatchId =
+            batchId === Number.MAX_SAFE_INTEGER ? 1 : this.#nextAnnotationBatchId + 1;
+          const cleanup = () =>
+            withTimeout(
+              executeBridge(connection.value, bridgeOperations.deleteAnnotations, {
+                batchId,
+                buffer: resolved.value.buffer,
+              }),
+              "Timed out rolling back an annotation batch",
+            ).catch(() => undefined);
+          const snapshot = await withTimeout(
+            executeBridge(connection.value, bridgeOperations.annotate, {
+              annotations: resolved.value.annotations,
+              batchId,
+              buffer: resolved.value.buffer,
+              durationMs: resolved.value.durationMs,
+              expectedCwd: this.#cwd,
+            }),
+            "Timed out creating annotations in the bound Neovim instance",
+          ).catch(async (error: unknown) => {
+            await cleanup();
+            throw error;
+          });
+          const result = parseAnnotations(snapshot, this.#cwd, editor, options, batchId);
+          if (result.ok === false && annotationMayHaveMutated(snapshot)) await cleanup();
+          return result;
+        } catch {
+          return this.markUnavailable("The bound Neovim instance stopped responding");
+        }
+      })(),
+    );
+  }
+
+  async highlight(options: HighlightOptions): Promise<BridgeResult<HighlightSnapshot>> {
+    const resolved = resolveHighlightOptions(options);
+    if (resolved.ok === false) return resolved;
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    const editor = this.#editor;
+    if (editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    return this.trackPresentationOperation(
+      (async () => {
+        try {
+          const snapshot = await withTimeout(
+            executeBridge(connection.value, bridgeOperations.highlight, {
+              buffer: resolved.value.buffer,
+              durationMs: resolved.value.durationMs,
+              ...(resolved.value.endColumn === undefined
+                ? {}
+                : { endColumn: resolved.value.endColumn }),
+              endLine: resolved.value.endLine,
+              expectedCwd: this.#cwd,
+              startColumn: resolved.value.startColumn,
+              startLine: resolved.value.startLine,
+            }),
+            "Timed out creating a temporary highlight in the bound Neovim instance",
+          );
+          const result = parseHighlight(snapshot, this.#cwd, editor, options);
+          if (result.ok === false) {
+            const highlightId = highlightCleanupId(snapshot, resolved.value.buffer);
+            if (highlightId !== undefined) {
+              await withTimeout(
+                executeBridge(connection.value, bridgeOperations.deleteHighlight, {
+                  buffer: resolved.value.buffer,
+                  highlightId,
+                }),
+                "Timed out rolling back an invalid highlight response",
+              ).catch(() => undefined);
+            }
+          }
+          return result;
+        } catch {
+          return this.markUnavailable("The bound Neovim instance stopped responding");
+        }
+      })(),
+    );
+  }
+
+  async clearHighlight(
+    options: HighlightClearOptions,
+  ): Promise<BridgeResult<HighlightClearSnapshot>> {
+    const resolved = resolveHighlightClearOptions(options);
+    if (resolved.ok === false) return resolved;
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    const editor = this.#editor;
+    if (editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    return this.trackPresentationOperation(
+      (async () => {
+        try {
+          const snapshot = await withTimeout(
+            executeBridge(connection.value, bridgeOperations.clearHighlight, {
+              buffer: resolved.value.buffer,
+              expectedCwd: this.#cwd,
+              highlightId: resolved.value.highlightId,
+            }),
+            "Timed out removing a temporary highlight from the bound Neovim instance",
+          );
+          return parseHighlightClear(snapshot, this.#cwd, editor, resolved.value);
+        } catch {
+          return this.markUnavailable("The bound Neovim instance stopped responding");
+        }
+      })(),
+    );
   }
 
   async reveal(options: RevealOptions): Promise<BridgeResult<RevealSnapshot>> {
@@ -1355,14 +515,14 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const snapshot = await withTimeout(
-        connection.value.executeLua(REVEAL_LUA, [
-          resolved.value.buffer,
-          resolved.value.line,
-          resolved.value.column,
-          resolved.value.focus,
-          resolved.value.split,
-          this.#cwd,
-        ]),
+        executeBridge(connection.value, bridgeOperations.reveal, {
+          buffer: resolved.value.buffer,
+          column: resolved.value.column,
+          expectedCwd: this.#cwd,
+          focus: resolved.value.focus,
+          line: resolved.value.line,
+          split: resolved.value.split,
+        }),
         "Timed out revealing a source location in the bound Neovim instance",
       );
       const result = parseReveal(snapshot, this.#cwd, this.#editor, resolved.value);
@@ -1409,29 +569,37 @@ export class PiNeovimChannel {
       message: "The Neovim channel is closed",
     };
     this.#focusContext = undefined;
-    this.#editor = undefined;
     await this.#connectionPromise?.catch(() => undefined);
+    await Promise.all([...this.#presentationOperations]);
     const connection = this.#connection;
     this.#connection = undefined;
     this.#connectionPromise = undefined;
-    this.#focusContext = undefined;
     this.#editor = undefined;
     if (connection === undefined) return;
     connection.off("notification", this.handleNotification);
     connection.off("disconnect", this.handleDisconnect);
     try {
-      const channelId = await withTimeout(
-        connection.channelId,
-        "Timed out closing the bound Neovim instance",
-      );
       await withTimeout(
-        connection.executeLua(REMOVE_NOTIFICATIONS_LUA, [channelId]),
+        executeBridge(connection, bridgeOperations.removeNotifications),
         "Timed out cleaning up the bound Neovim instance",
       );
     } catch {
       // The editor may already be gone; closing the transport is still required.
     }
     await connection.close().catch(() => undefined);
+  }
+
+  private async trackPresentationOperation<T>(operation: Promise<T>): Promise<T> {
+    const completion = operation.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.#presentationOperations.add(completion);
+    try {
+      return await operation;
+    } finally {
+      this.#presentationOperations.delete(completion);
+    }
   }
 
   private readonly handleNotification = (method: unknown, args: unknown): void => {
@@ -1481,11 +649,7 @@ export class PiNeovimChannel {
       connection.setClientInfo("pi-neovim", { major: 0, minor: 1 }, "remote", {}, {});
       const identity = parseEditorIdentity(
         await withTimeout(
-          connection.executeLua(INSTALL_NOTIFICATIONS_LUA, [
-            channelId,
-            MAX_CONTEXT_LINES,
-            MAX_CONTEXT_BYTES,
-          ]),
+          executeBridge(connection, bridgeOperations.installNotifications),
           "Timed out configuring the bound Neovim instance",
         ),
         this.#cwd,
@@ -1557,16 +721,3 @@ function parseEditorIdentity(
   }
   return { ok: true, value: record };
 }
-
-export const bridgeLua = {
-  activeContext: ACTIVE_CONTEXT_LUA,
-  bindSession: BIND_SESSION_LUA,
-  diagnostics: DIAGNOSTICS_LUA,
-  installNotifications: INSTALL_NOTIFICATIONS_LUA,
-  listBuffers: LIST_BUFFERS_LUA,
-  quickfix: QUICKFIX_LUA,
-  readBuffer: READ_BUFFER_LUA,
-  reveal: REVEAL_LUA,
-  removeNotifications: REMOVE_NOTIFICATIONS_LUA,
-  visibleWindows: VISIBLE_WINDOWS_LUA,
-} as const;

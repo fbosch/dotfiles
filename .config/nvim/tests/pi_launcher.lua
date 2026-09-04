@@ -22,6 +22,13 @@ package.loaded["utils.pi_session"] = {
 		return nil, "missing"
 	end,
 }
+local recorded_source_context
+package.loaded["utils.pi_bridge"] = {
+	record_source_context = function(context)
+		recorded_source_context = vim.deepcopy(context)
+		return true
+	end,
+}
 
 local captured_command
 local captured_options
@@ -65,15 +72,12 @@ assert(
 	"fresh Pi launcher did not let Pi assign its session ID"
 )
 assert(
-	vim.g.pi_launch_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
+	recorded_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
 	"Pi launcher did not capture the source context before opening its terminal"
 )
-assert(vim.g.pi_launch_source_context.mode == "v", "Pi launcher did not capture source mode")
-assert(vim.g.pi_launch_source_context.selection.mode == "v", "Pi launcher did not capture visual mode")
-assert(
-	vim.g.pi_launch_source_context.selection.lines[1] == "loc",
-	"Pi launcher did not capture the bounded pre-Pi selection"
-)
+assert(recorded_source_context.mode == "v", "Pi launcher did not capture source mode")
+assert(recorded_source_context.selection.mode == "v", "Pi launcher did not capture visual mode")
+assert(recorded_source_context.selection.lines[1] == "loc", "Pi launcher did not capture the bounded pre-Pi selection")
 assert(captured_options.win.position == "left", "Pi terminal was not opened on the left")
 assert(captured_options.win.width == 100, "Pi terminal width changed")
 assert(vim.b[terminal.buf].is_pi_terminal == true, "Pi terminal buffer was not marked")
@@ -108,7 +112,7 @@ captured_command = nil
 assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")
 assert(captured_command == nil, "Pi launcher opened a duplicate terminal")
 assert(
-	vim.g.pi_launch_source_context.buffer.name == second_source,
+	recorded_source_context.buffer.name == second_source,
 	"Pi launcher did not refresh source context before reusing its terminal"
 )
 

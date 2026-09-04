@@ -7,14 +7,14 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import type { NvimConnection } from "../channel";
-import { bridgeLua } from "../channel";
+import { bridgeLua, bridgeOperations } from "../channel";
 import { createNeovimExtension } from "../index";
 
 type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | unknown;
 
 class FakeConnection extends EventEmitter implements NvimConnection {
   readonly channelId = Promise.resolve(12);
-  boundSessionArguments: unknown[] | undefined;
+  boundSessionArguments: unknown;
   closed = false;
 
   async close(): Promise<void> {
@@ -22,10 +22,20 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   }
 
   async executeLua(code: string, args?: unknown[]): Promise<unknown> {
-    if (code === bridgeLua.installNotifications) {
+    if (code !== bridgeLua.dispatch) throw new Error("unexpected Lua");
+    const request = args?.[0];
+    if (typeof request !== "object" || request === null || Array.isArray(request)) {
+      throw new Error("invalid bridge request");
+    }
+    const operation = (request as Record<string, unknown>).operation;
+    const payload = (request as Record<string, unknown>).payload as Record<string, unknown>;
+    if (operation === bridgeOperations.installNotifications) {
       return { channelId: 12, cwd: "/project", pid: 80 };
     }
-    if (code === bridgeLua.diagnostics) {
+    if (
+      operation === bridgeOperations.diagnosticSummary ||
+      operation === bridgeOperations.diagnostics
+    ) {
       return {
         buffer: {
           buftype: "",
@@ -50,11 +60,11 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         truncated: false,
       };
     }
-    if (code === bridgeLua.bindSession) {
-      this.boundSessionArguments = args;
+    if (operation === bridgeOperations.bindSession) {
+      this.boundSessionArguments = payload;
       return true;
     }
-    if (code === bridgeLua.quickfix) {
+    if (operation === bridgeOperations.quickfix) {
       return {
         cwd: "/project",
         items: [],
@@ -65,7 +75,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         truncated: false,
       };
     }
-    if (code === bridgeLua.readBuffer) {
+    if (operation === bridgeOperations.readBuffer) {
       return {
         buffer: {
           buftype: "",
@@ -83,7 +93,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         totalLines: 1,
       };
     }
-    if (code === bridgeLua.reveal) {
+    if (operation === bridgeOperations.reveal) {
       return {
         buffer: {
           buftype: "",
@@ -103,7 +113,36 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         window: 7,
       };
     }
-    if (code === bridgeLua.highlight) {
+    if (operation === bridgeOperations.annotate) {
+      return {
+        annotations: [
+          {
+            annotationId: 11,
+            column: 7,
+            inputIndex: 1,
+            kind: "warning",
+            line: 3,
+            placement: "callout",
+            sourceLineBytes: 24,
+            text: "Review this call",
+          },
+        ],
+        batchId: payload.batchId,
+        buffer: {
+          buftype: "",
+          filetype: "typescript",
+          loaded: true,
+          modified: true,
+          name: "/project/example.ts",
+          number: 2,
+        },
+        cwd: "/project",
+        expiresInMs: 2_000,
+        pid: 80,
+        totalLines: 3,
+      };
+    }
+    if (operation === bridgeOperations.highlight) {
       return {
         buffer: {
           buftype: "",
@@ -121,7 +160,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         end: { column: 6, line: 3 },
       };
     }
-    if (code === bridgeLua.highlightClear) {
+    if (operation === bridgeOperations.clearHighlight) {
       return {
         buffer: {
           buftype: "",
@@ -137,7 +176,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
         pid: 80,
       };
     }
-    if (code === bridgeLua.removeNotifications) return true;
+    if (operation === bridgeOperations.removeNotifications) return true;
     throw new Error("unexpected Lua");
   }
 
@@ -176,7 +215,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
 
   if (tool === undefined) throw new Error("neovim tool was not registered");
   await handlers.get("session_start")?.({} as never, context);
-  expect(connection.boundSessionArguments).toEqual(["pi-assigned-session"]);
+  expect(connection.boundSessionArguments).toEqual({ sessionId: "pi-assigned-session" });
   const parameters = JSON.stringify(tool.parameters);
   expect(parameters).toContain("status");
   expect(parameters).toContain("context");
@@ -189,6 +228,9 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("reveal");
   expect(parameters).toContain("highlight");
   expect(parameters).toContain("clear_highlight");
+  expect(parameters).toContain("annotate");
+  expect(parameters).toContain("annotations");
+  expect(parameters).toContain("anchor");
   expect(parameters).toContain("location");
   expect(parameters).toContain("window");
   expect(parameters).toContain("maxItems");
@@ -201,6 +243,9 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("highlightId");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
+  expect(tool.promptGuidelines?.join("\n")).toContain(
+    "If context reports NVIM_NO_FOCUS_CONTEXT, call visible_windows and then list_buffers before asking the user",
+  );
   expect(Value.Check(tool.parameters, { operation: "quickfix" })).toBe(true);
   expect(
     Value.Check(tool.parameters, { kind: "location", operation: "quickfix", window: 12 }),
@@ -248,6 +293,20 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
       durationMs: 30_001,
       operation: "highlight",
       startLine: 3,
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      annotations: [{ anchor: "target", kind: "warning", line: 3, text: "Review this call" }],
+      buffer: 2,
+      operation: "annotate",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(tool.parameters, {
+      annotations: [],
+      buffer: 2,
+      operation: "annotate",
     }),
   ).toBe(false);
   expect(
@@ -341,6 +400,22 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(clearHighlightResult.details).toEqual({ ok: true, operation: "clear_highlight" });
   expect(clearHighlightResult.content[0]).toMatchObject({
     text: expect.stringContaining('"cleared": true'),
+    type: "text",
+  });
+  const annotateResult = await tool.execute(
+    "neovim-8",
+    {
+      annotations: [{ anchor: "target", kind: "warning", line: 3, text: "Review this call" }],
+      buffer: 2,
+      operation: "annotate",
+    },
+    undefined,
+    undefined,
+    context,
+  );
+  expect(annotateResult.details).toEqual({ ok: true, operation: "annotate" });
+  expect(annotateResult.content[0]).toMatchObject({
+    text: expect.stringContaining('"placement": "callout"'),
     type: "text",
   });
   connection.emit("notification", "pi:focus", [

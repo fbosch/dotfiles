@@ -26,9 +26,9 @@
 
 - [x] 4.1 Implement bounded quickfix and location-list inspection with explicit list ownership and source positions; verify default, maximum, empty, invalid-window, and oversized-list cases.
 - [x] 4.2 Implement worktree-contained reveal with explicit focus and split options; verify exact line and column placement, focus preservation, requested focus, and outside-worktree rejection.
-- [ ] 4.3 Implement bridge-owned temporary highlights and explicit removal; verify duration bounds, automatic expiry, cleanup, invalid ranges, and unchanged buffer text.
-- [ ] 4.4 Implement atomic bounded annotations with source-text anchors; verify stale anchors and any invalid item reject the whole batch without partial extmarks or text changes.
-- [ ] 4.5 Run the live presentation tracer bullet covering quickfix inspection, reveal with and without focus, highlight, annotation, cleanup, and unchanged source hashes.
+- [x] 4.3 Implement bridge-owned temporary highlights and explicit removal; verify duration bounds, automatic expiry, cleanup, invalid ranges, and unchanged buffer text.
+- [x] 4.4 Implement atomic bounded annotations with source-text anchors; verify stale anchors and any invalid item reject the whole batch without partial extmarks or text changes.
+- [x] 4.5 Run the live presentation tracer bullet covering quickfix inspection, reveal with and without focus, highlight, annotation, cleanup, and unchanged source hashes.
 
 ## 5. Integrate embedded Pi with existing Herdr reporting
 

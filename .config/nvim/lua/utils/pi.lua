@@ -1,3 +1,4 @@
+local pi_bridge = require("utils.pi_bridge")
 local pi_session = require("utils.pi_session")
 local session = require("utils.session")
 
@@ -83,7 +84,7 @@ end
 local function record_source_context()
 	local context = source_context()
 	if context ~= nil then
-		vim.g.pi_launch_source_context = context
+		pi_bridge.record_source_context(context)
 	end
 end
 

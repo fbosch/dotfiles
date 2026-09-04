@@ -1,10 +1,12 @@
 import { expect, test } from "bun:test";
 import { access, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { attach } from "neovim";
 import { PiNeovimChannel } from "../channel";
-import { MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
+import { MAX_ANNOTATION_SEARCH_LINES, MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
+
+const NVIM_RUNTIME = resolve(import.meta.dir, "../../../../../.config/nvim");
 
 async function waitForSocket(socket: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -33,6 +35,8 @@ async function withNvim(
       "--cmd",
       "set noswapfile",
       "--cmd",
+      `set runtimepath^=${NVIM_RUNTIME}`,
+      "--cmd",
       `lua ${setup}`,
       "--listen",
       socket,
@@ -60,7 +64,7 @@ test("normalizes source context captured by an already-loaded launcher", async (
     "local source = vim.api.nvim_get_current_buf()",
     `vim.api.nvim_buf_set_name(source, ${JSON.stringify(sourceName)})`,
     'vim.bo[source].filetype = "typescript"',
-    "vim.g.pi_launch_source_context = { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } }",
+    "require('utils.pi_bridge').record_source_context({ pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } })",
     "local terminal = vim.api.nvim_create_buf(false, true)",
     'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
     "vim.b[terminal].is_pi_terminal = true",
@@ -75,6 +79,8 @@ test("normalizes source context captured by an already-loaded launcher", async (
       "--cmd",
       "set noswapfile",
       "--cmd",
+      `set runtimepath^=${NVIM_RUNTIME}`,
+      "--cmd",
       `lua ${setup}`,
       "--listen",
       socket,
@@ -82,6 +88,7 @@ test("normalizes source context captured by an already-loaded launcher", async (
     { cwd, stderr: "ignore", stdout: "ignore" },
   );
   const channel = new PiNeovimChannel(socket, cwd);
+  const secondChannel = new PiNeovimChannel(socket, cwd);
 
   try {
     await waitForSocket(socket);
@@ -93,8 +100,17 @@ test("normalizes source context captured by an already-loaded launcher", async (
         mode: "n",
       },
     });
-  } finally {
+    expect(await secondChannel.context()).toMatchObject({
+      ok: true,
+      value: { buffer: { name: sourceName } },
+    });
     await channel.close();
+    expect(await secondChannel.context()).toMatchObject({
+      ok: true,
+      value: { buffer: { name: sourceName } },
+    });
+  } finally {
+    await Promise.all([channel.close(), secondChannel.close()]);
     nvim.kill();
     await nvim.exited;
     await rm(socket, { force: true });
@@ -229,7 +245,7 @@ test("reads ordered diagnostics for unsaved source through preserved Pi context"
     'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
     "local source = vim.api.nvim_get_current_buf()",
     'vim.api.nvim_buf_set_lines(source, 0, -1, true, { "local unsaved = unknown", "return unsaved", "-- hint" })',
-    "vim.g.pi_launch_source_context = { pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), mode = 'n', buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } }",
+    "require('utils.pi_bridge').record_source_context({ pid = vim.fn.getpid(), cwd = vim.fn.getcwd(), mode = 'n', buffer = { number = source, name = vim.api.nvim_buf_get_name(source), loaded = true, filetype = vim.bo[source].filetype, buftype = vim.bo[source].buftype, modified = vim.bo[source].modified }, cursor = { line = 1, column = 1 } })",
     "local namespace = vim.api.nvim_create_namespace('pi-diagnostic-test')",
     "vim.diagnostic.set(namespace, source, { { lnum = 2, col = 0, end_lnum = 2, end_col = 4, severity = vim.diagnostic.severity.HINT, message = 'hint', source = 'editor-lint' }, { lnum = 0, col = 16, end_lnum = 0, end_col = 23, severity = vim.diagnostic.severity.WARN, message = 'warning', source = 'editor-lint' }, { lnum = 1, col = 0, end_lnum = 1, end_col = 6, severity = vim.diagnostic.severity.INFO, message = 'information', source = 'neovim-plugin' }, { lnum = 0, col = 6, end_lnum = 0, end_col = 13, severity = vim.diagnostic.severity.ERROR, message = 'unknown variable', source = 'neovim-lsp' } })",
     "local readonly = vim.api.nvim_create_buf(true, false)",
@@ -469,7 +485,7 @@ test("reveals exact source positions while preserving focus unless explicitly re
     "vim.api.nvim_set_current_buf(terminal)",
     "vim.g.pi_reveal_unrequested_events = 0",
     "vim.api.nvim_create_autocmd({ 'BufEnter', 'BufLeave', 'WinEnter', 'WinLeave' }, { callback = function() vim.g.pi_reveal_unrequested_events = vim.g.pi_reveal_unrequested_events + 1 end })",
-    "vim.g.pi_launch_source_context = { buffer = { number = anchor_buffer } }",
+    "require('utils.pi_bridge').record_source_context({ buffer = { number = anchor_buffer } })",
     "vim.g.pi_reveal_test = { target = target_buffer, outside = outside_buffer, linkedOutside = linked_outside_buffer, linkedMissing = linked_missing_buffer, anchorWindow = anchor_window, terminal = terminal }",
   ].join("; ");
 
@@ -648,33 +664,44 @@ test("owns temporary highlights through expiry, explicit removal, and channel cl
     await mkdtemp(join(tmpdir(), "pi-neovim-highlight-outside-")),
   );
   const source = join(workspace, "source.lua");
+  const readonly = join(workspace, "readonly.lua");
   const outside = join(outsideWorkspace, "outside.lua");
   const diskText = "alpha æ\nbeta\n";
-  await Promise.all([Bun.write(source, diskText), Bun.write(outside, "outside\n")]);
+  await Promise.all([
+    Bun.write(source, diskText),
+    Bun.write(readonly, "readonly\n"),
+    Bun.write(outside, "outside\n"),
+  ]);
   const setup = [
     `local source_name = ${JSON.stringify(source)}`,
+    `local readonly_name = ${JSON.stringify(readonly)}`,
     `local outside_name = ${JSON.stringify(outside)}`,
     'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
     "local source_buffer = vim.api.nvim_get_current_buf()",
     "vim.api.nvim_buf_set_lines(source_buffer, 0, 1, true, { 'alpha æ unsaved' })",
+    "local readonly_buffer = vim.fn.bufadd(readonly_name)",
+    "vim.fn.bufload(readonly_buffer)",
+    "vim.bo[readonly_buffer].modifiable = false",
     "local outside_buffer = vim.fn.bufadd(outside_name)",
     "vim.fn.bufload(outside_buffer)",
-    "vim.g.pi_highlight_test = { source = source_buffer, outside = outside_buffer }",
+    "vim.g.pi_highlight_test = { source = source_buffer, readonly = readonly_buffer, outside = outside_buffer }",
   ].join("; ");
 
   try {
     await withNvim(workspace, setup, async (channel, socket) => {
       const nvim = attach({ socket });
       const initial = (await nvim.executeLua(
-        "local b = vim.g.pi_highlight_test.source; return { buffer = b, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, outside = vim.g.pi_highlight_test.outside, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        "local b = vim.g.pi_highlight_test.source; return { buffer = b, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(0), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, outside = vim.g.pi_highlight_test.outside, readonly = vim.g.pi_highlight_test.readonly, windows = #vim.api.nvim_tabpage_list_wins(0) }",
         [],
       )) as {
         buffer: number;
         changedtick: number;
         currentWindow: number;
+        cursor: [number, number];
         lines: string[];
         modified: boolean;
         outside: number;
+        readonly: number;
         windows: number;
       };
 
@@ -695,12 +722,13 @@ test("owns temporary highlights through expiry, explicit removal, and channel cl
       const namespace = `PiNeovimHighlights${temporary.value.editor.channelId}`;
       expect(
         await nvim.executeLua(
-          "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; local mark = vim.api.nvim_buf_get_extmark_by_id(b, ns, id, { details = true, hl_name = true }); return { mark = mark, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; local mark = vim.api.nvim_buf_get_extmark_by_id(b, ns, id, { details = true, hl_name = true }); return { mark = mark, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(0), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, windows = #vim.api.nvim_tabpage_list_wins(0) }",
           [initial.buffer, namespace, temporary.value.highlightId],
         ),
       ).toMatchObject({
         changedtick: initial.changedtick,
         currentWindow: initial.currentWindow,
+        cursor: initial.cursor,
         lines: initial.lines,
         mark: [0, 0, expect.objectContaining({ end_col: 16, end_row: 0, hl_group: "Search" })],
         modified: initial.modified,
@@ -741,6 +769,9 @@ test("owns temporary highlights through expiry, explicit removal, and channel cl
       expect(
         await channel.highlight({ buffer: initial.outside, endColumn: 2, startLine: 1 }),
       ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+      expect(
+        await channel.highlight({ buffer: initial.readonly, endColumn: 2, startLine: 1 }),
+      ).toMatchObject({ error: { code: "NVIM_INVALID_BUFFER" }, ok: false });
 
       const cleanup = await channel.highlight({
         buffer: initial.buffer,
@@ -749,11 +780,287 @@ test("owns temporary highlights through expiry, explicit removal, and channel cl
         startLine: 2,
       });
       if (cleanup.ok === false) throw new Error(cleanup.error.message);
+      const secondChannel = new PiNeovimChannel(socket, workspace);
+      const second = await secondChannel.highlight({
+        buffer: initial.buffer,
+        durationMs: 30_000,
+        endColumn: 5,
+        startLine: 2,
+      });
+      if (second.ok === false) throw new Error(second.error.message);
+      const secondNamespace = `PiNeovimHighlights${second.value.editor.channelId}`;
+      expect(secondNamespace).not.toBe(namespace);
+
       await channel.close();
       expect(
         await nvim.executeLua(
+          "local b, first_name, first_id, second_name, second_id = ...; local namespaces = vim.api.nvim_get_namespaces(); return { first = vim.api.nvim_buf_get_extmark_by_id(b, namespaces[first_name], first_id, {}), second = vim.api.nvim_buf_get_extmark_by_id(b, namespaces[second_name], second_id, {}) }",
+          [
+            initial.buffer,
+            namespace,
+            cleanup.value.highlightId,
+            secondNamespace,
+            second.value.highlightId,
+          ],
+        ),
+      ).toEqual({ first: [], second: [1, 0] });
+      await secondChannel.close();
+      expect(
+        await nvim.executeLua(
           "local b, name, id = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmark_by_id(b, ns, id, {})",
-          [initial.buffer, namespace, cleanup.value.highlightId],
+          [initial.buffer, secondNamespace, second.value.highlightId],
+        ),
+      ).toEqual([]);
+      expect(await Bun.file(source).text()).toBe(diskText);
+    });
+  } finally {
+    await Promise.all([
+      rm(workspace, { force: true, recursive: true }),
+      rm(outsideWorkspace, { force: true, recursive: true }),
+    ]);
+  }
+}, 10_000);
+
+test("creates atomic source-anchored callouts without changing editor or buffer state", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-annotations-")));
+  const outsideWorkspace = await realpath(
+    await mkdtemp(join(tmpdir(), "pi-neovim-annotations-outside-")),
+  );
+  const source = join(workspace, "source.lua");
+  const readonly = join(workspace, "readonly.lua");
+  const outside = join(outsideWorkspace, "outside.lua");
+  const diskText =
+    "local shifted = true\nlocal target = call()\nreturn target\nduplicate duplicate\n";
+  await Promise.all([
+    Bun.write(source, diskText),
+    Bun.write(readonly, "readonly\n"),
+    Bun.write(outside, "outside\n"),
+  ]);
+  const setup = [
+    `local source_name = ${JSON.stringify(source)}`,
+    `local readonly_name = ${JSON.stringify(readonly)}`,
+    `local outside_name = ${JSON.stringify(outside)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
+    "local source_buffer = vim.api.nvim_get_current_buf()",
+    "vim.api.nvim_buf_set_lines(source_buffer, 0, 0, true, { '-- æ unsaved' })",
+    "vim.api.nvim_win_set_cursor(0, { 2, 3 })",
+    "local readonly_buffer = vim.fn.bufadd(readonly_name)",
+    "vim.fn.bufload(readonly_buffer)",
+    "vim.bo[readonly_buffer].modifiable = false",
+    "local outside_buffer = vim.fn.bufadd(outside_name)",
+    "vim.fn.bufload(outside_buffer)",
+    "vim.g.pi_annotation_test = { source = source_buffer, readonly = readonly_buffer, outside = outside_buffer }",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel, socket) => {
+      const nvim = attach({ socket });
+      const initial = (await nvim.executeLua(
+        "local b = vim.g.pi_annotation_test.source; return { buffer = b, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(0), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, outside = vim.g.pi_annotation_test.outside, readonly = vim.g.pi_annotation_test.readonly, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        [],
+      )) as {
+        buffer: number;
+        changedtick: number;
+        currentWindow: number;
+        cursor: [number, number];
+        lines: string[];
+        modified: boolean;
+        outside: number;
+        readonly: number;
+        windows: number;
+      };
+      const shiftedAnnotation = {
+        anchor: "return target",
+        kind: "note" as const,
+        line: 2,
+        text: "Result exits here",
+      };
+      const targetAnnotation = {
+        anchor: "target = call",
+        kind: "warning" as const,
+        line: 3,
+        text: "Review this call",
+      };
+      const annotations = [shiftedAnnotation, targetAnnotation];
+      const result = await channel.annotate({
+        annotations,
+        buffer: initial.buffer,
+        durationMs: 100,
+      });
+      expect(result).toMatchObject({
+        ok: true,
+        value: {
+          annotations: [
+            {
+              column: 7,
+              inputIndex: 2,
+              kind: "warning",
+              line: 3,
+              placement: "callout",
+              text: "Review this call",
+            },
+            {
+              column: 1,
+              inputIndex: 1,
+              kind: "note",
+              line: 4,
+              placement: "callout",
+              text: "Result exits here",
+            },
+          ],
+          expiresInMs: 100,
+        },
+      });
+      if (result.ok === false) return;
+      const namespace = `PiNeovimAnnotations${result.value.editor.channelId}`;
+      expect(
+        await nvim.executeLua(
+          "local b, name = ...; local ns = vim.api.nvim_get_namespaces()[name]; local marks = vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, { details = true, hl_name = true }); return { marks = marks, changedtick = vim.api.nvim_buf_get_changedtick(b), currentWindow = vim.api.nvim_get_current_win(), cursor = vim.api.nvim_win_get_cursor(0), lines = vim.api.nvim_buf_get_lines(b, 0, -1, true), modified = vim.bo[b].modified, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [initial.buffer, namespace],
+        ),
+      ).toMatchObject({
+        changedtick: initial.changedtick,
+        currentWindow: initial.currentWindow,
+        cursor: initial.cursor,
+        lines: initial.lines,
+        marks: [
+          [
+            result.value.annotations[0]?.annotationId,
+            2,
+            6,
+            expect.objectContaining({
+              virt_lines: [
+                [
+                  ["└──── ", "DiagnosticWarn"],
+                  ["Review this call", "DiagnosticWarn"],
+                ],
+              ],
+            }),
+          ],
+          [
+            result.value.annotations[1]?.annotationId,
+            3,
+            0,
+            expect.objectContaining({
+              virt_lines: [
+                [
+                  ["└──── ", "DiagnosticInfo"],
+                  ["Result exits here", "DiagnosticInfo"],
+                ],
+              ],
+            }),
+          ],
+        ],
+        modified: initial.modified,
+        windows: initial.windows,
+      });
+
+      await Bun.sleep(150);
+      expect(
+        await nvim.executeLua(
+          "local b, name = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, {})",
+          [initial.buffer, namespace],
+        ),
+      ).toEqual([]);
+
+      expect(
+        await channel.annotate({
+          annotations: [
+            shiftedAnnotation,
+            { anchor: "missing source", kind: "error", line: 3, text: "Must not remain" },
+          ],
+          buffer: initial.buffer,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_STALE_ANCHOR" }, ok: false });
+      expect(
+        await channel.annotate({
+          annotations: [{ anchor: "duplicate", kind: "error", line: 1, text: "Ambiguous source" }],
+          buffer: initial.buffer,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_AMBIGUOUS_ANCHOR" }, ok: false });
+      expect(
+        await nvim.executeLua(
+          "local b, name = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, {})",
+          [initial.buffer, namespace],
+        ),
+      ).toEqual([]);
+      expect(
+        await channel.annotate({
+          annotations: [shiftedAnnotation],
+          buffer: initial.readonly,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_INVALID_BUFFER" }, ok: false });
+      expect(
+        await channel.annotate({
+          annotations: [shiftedAnnotation],
+          buffer: initial.outside,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_WORKTREE_MISMATCH" }, ok: false });
+
+      await nvim.executeLua(
+        "_G.pi_original_set_extmark = vim.api.nvim_buf_set_extmark; _G.pi_set_extmark_calls = 0; vim.api.nvim_buf_set_extmark = function(...) _G.pi_set_extmark_calls = _G.pi_set_extmark_calls + 1; if _G.pi_set_extmark_calls == 2 then error('forced extmark failure') end; return _G.pi_original_set_extmark(...) end",
+        [],
+      );
+      const partial = await channel.annotate({ annotations, buffer: initial.buffer });
+      await nvim.executeLua(
+        "vim.api.nvim_buf_set_extmark = _G.pi_original_set_extmark; _G.pi_original_set_extmark = nil; _G.pi_set_extmark_calls = nil",
+        [],
+      );
+      expect(partial).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" }, ok: false });
+      expect(
+        await nvim.executeLua(
+          "local b, name = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, {})",
+          [initial.buffer, namespace],
+        ),
+      ).toEqual([]);
+
+      await nvim.executeLua(
+        "local b, count = ...; local lines = {}; for index = 1, count do lines[index] = '-- filler ' .. index end; vim.api.nvim_buf_set_lines(b, -1, -1, true, lines)",
+        [initial.buffer, MAX_ANNOTATION_SEARCH_LINES - initial.lines.length + 1],
+      );
+      expect(
+        await channel.annotate({
+          annotations: [shiftedAnnotation],
+          buffer: initial.buffer,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
+
+      const cleanup = await channel.annotate({
+        annotations: [targetAnnotation],
+        buffer: initial.buffer,
+        durationMs: 30_000,
+      });
+      if (cleanup.ok === false) throw new Error(cleanup.error.message);
+      const repeated = Array.from({ length: 10 }, () => targetAnnotation);
+      for (let index = 0; index < 4; index += 1) {
+        expect(
+          await channel.annotate({
+            annotations: repeated,
+            buffer: initial.buffer,
+            durationMs: 30_000,
+          }),
+        ).toMatchObject({ ok: true });
+      }
+      expect(
+        await channel.annotate({
+          annotations: repeated.slice(0, 9),
+          buffer: initial.buffer,
+          durationMs: 30_000,
+        }),
+      ).toMatchObject({ ok: true });
+      expect(
+        await channel.annotate({
+          annotations: [targetAnnotation],
+          buffer: initial.buffer,
+          durationMs: 30_000,
+        }),
+      ).toMatchObject({ error: { code: "NVIM_LIMIT_EXCEEDED" }, ok: false });
+
+      await channel.close();
+      expect(
+        await nvim.executeLua(
+          "local b, name = ...; local ns = vim.api.nvim_get_namespaces()[name]; return vim.api.nvim_buf_get_extmarks(b, ns, 0, -1, {})",
+          [initial.buffer, namespace],
         ),
       ).toEqual([]);
       expect(await Bun.file(source).text()).toBe(diskText);
@@ -814,7 +1121,7 @@ test("rejects stale preserved source identity without reading another buffer", a
     `local source_name = ${JSON.stringify(source)}`,
     'vim.cmd("edit " .. vim.fn.fnameescape(source_name))',
     "local source = vim.api.nvim_get_current_buf()",
-    `vim.g.pi_launch_source_context = { buffer = { number = source, name = ${JSON.stringify(join(workspace, "different.lua"))} } }`,
+    `require('utils.pi_bridge').record_source_context({ buffer = { number = source, name = ${JSON.stringify(join(workspace, "different.lua"))} } })`,
     "local terminal = vim.api.nvim_create_buf(false, true)",
     'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
     "vim.b[terminal].is_pi_terminal = true",

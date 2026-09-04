@@ -55,7 +55,7 @@ active buffer, cursor, and visual selection.
 
 - Missing and stale sockets fail clearly.
 - No tool accepts a socket argument.
-- The bridge executes only fixed internal Lua.
+- The TypeScript bridge invokes one fixed dispatcher; `utils.pi_bridge` handles only allowlisted operation messages.
 - Selection output respects line and byte limits.
 - Requests from sibling worktrees are rejected.
 - Starting Pi outside Neovim leaves the bridge unavailable without breaking Pi.
@@ -454,6 +454,58 @@ explicit.
   task completion, the focused suite passes 55 tests; TypeScript and scoped
   Biome checks pass.
 
+### Temporary highlight implementation record
+
+- `highlight` accepts one loaded, modifiable source buffer and a non-empty
+  one-based byte range with an exclusive end. It defaults to the full requested
+  line and a 2-second duration, caps ranges at 500 lines and durations at 30
+  seconds, and never changes windows, focus, cursors, or source text.
+- Fixed Lua verifies canonical worktree containment before creating a `Search`
+  extmark. Each Pi RPC channel gets a distinct highlight namespace, so expiry,
+  explicit `clear_highlight`, and session cleanup cannot remove another
+  channel's presentation state.
+- The bridge checks the created extmark's observed range and highlight group,
+  removes it if response validation fails, drains in-flight presentation calls
+  before shutdown cleanup, and treats repeated expiry or removal as
+  idempotent. Session shutdown clears every remaining highlight owned by that
+  channel.
+- Contract, channel, tool-schema, and headless Neovim tests cover range and
+  duration defaults and limits, exact UTF-8 end columns, automatic expiry,
+  repeated explicit removal, readonly and outside-worktree rejection,
+  malformed-response rollback, in-flight shutdown, cross-channel isolation,
+  unchanged changedtick, cursor, window state, unsaved text, and disk bytes. At
+  task completion, the focused suite passes 60 tests; TypeScript and scoped
+  Biome checks pass.
+
+### Atomic annotation implementation record
+
+- `annotate` accepts at most ten literal source anchors in one request. It uses
+  the requested line when possible, otherwise searches only when the loaded
+  buffer remains within 1,000 lines and 256 KiB. Missing and non-unique anchors
+  reject the complete batch.
+- Neovim resolves every anchor before creating extmarks. Each channel owns its
+  annotation namespace and batch IDs, may hold at most 50 active annotations,
+  and removes every batch on expiry or session cleanup. Failed extmark or timer
+  creation rolls back the complete batch.
+- Responses bind each annotation to its input index, resolved byte column,
+  source-line byte length, buffer line count, batch ID, and expiry. TypeScript
+  validates those observations and asks Neovim to remove the batch after any
+  malformed or uncertain response.
+- Headless RPC tests cover shifted and UTF-8 anchors, stale and ambiguous
+  anchors, search and active limits, partial extmark rollback, expiry,
+  read-only and outside-worktree rejection, session cleanup, and unchanged
+  text, changedtick, cursor, focus, windows, and disk bytes.
+
+### Bridge module implementation record
+
+- TypeScript now sends one allowlisted operation envelope through the fixed
+  `require("utils.pi_bridge").dispatch(...)` RPC entrypoint. The Neovim module
+  owns editor access, per-channel context, extmarks, timers, notifications, and
+  cleanup; TypeScript keeps tool schemas, response validation, and timeouts.
+- Launcher source context is passed directly to `utils.pi_bridge` instead of a
+  shared `vim.g` value. Closing one RPC channel therefore removes only that
+  channel's state and leaves another channel's preserved source context intact.
+
 ### Tracer bullet
 
 1. Populate a Neovim quickfix list.
@@ -468,6 +520,26 @@ explicit.
 
 Pi can inspect and present editor locations with the same containment and
 non-mutation guarantees as the OpenCode bridge.
+
+### Verification record
+
+- An isolated live Neovim tracer connected through the production
+  `PiNeovimChannel` and inspected one quickfix entry at line 1, byte column 7.
+- A focus-preserving reveal updated source window `1000` while the terminal
+  remained active in window `1002`. The explicit-focus reveal then selected
+  source window `1000` and placed the cursor at Neovim position `[1, 6]`, which
+  is the requested one-based byte column 7.
+- The tracer observed the temporary highlight extmark at `[0, 6]`, removed it
+  explicitly, and then observed no highlight. Its shifted annotation resolved
+  from requested line 1 to line 2, byte column 1, and channel shutdown removed
+  the annotation batch.
+- Source lines and changedtick remained unchanged. The disk SHA-256 was
+  `fb9958b22c5a120bf8c170ceadf88f864d79b8e2775263e398adbe5eafd6d9d0`
+  before and after the complete tracer.
+- The full Pi agent suite passes with 689 tests and 2,038 assertions. The
+  TypeScript typecheck, scoped Biome check, Lua diagnostics, StyLua check,
+  launcher fixture, strict OpenSpec validation, and `git diff --check` also
+  pass.
 
 ## Phase 5: Integrate the embedded Pi lifecycle with Herdr
 

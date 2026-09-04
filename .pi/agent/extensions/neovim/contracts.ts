@@ -17,10 +17,20 @@ export const MAX_QUICKFIX_BYTES = 32 * 1024;
 export const DEFAULT_HIGHLIGHT_DURATION_MS = 2_000;
 export const MAX_HIGHLIGHT_DURATION_MS = 30_000;
 export const MAX_HIGHLIGHT_LINES = 500;
+export const DEFAULT_ANNOTATION_DURATION_MS = 2_000;
+export const MAX_ANNOTATION_DURATION_MS = 30_000;
+export const MAX_ANNOTATIONS = 10;
+export const MAX_ANNOTATION_ANCHOR_BYTES = 512;
+export const MAX_ANNOTATION_TEXT_BYTES = 256;
+export const MAX_ANNOTATION_SEARCH_LINES = 1_000;
+export const MAX_ANNOTATION_SEARCH_BYTES = 256 * 1024;
+export const MAX_ACTIVE_ANNOTATIONS = 50;
 export const MAX_METADATA_STRING_BYTES = 4 * 1024;
 export const FOCUS_NOTIFICATION = "pi:focus";
 
 export type NeovimErrorCode =
+  | "NVIM_AMBIGUOUS_ANCHOR"
+  | "NVIM_INVALID_ANNOTATION"
   | "NVIM_INVALID_BUFFER"
   | "NVIM_INVALID_RANGE"
   | "NVIM_INVALID_RESPONSE"
@@ -28,6 +38,7 @@ export type NeovimErrorCode =
   | "NVIM_LIMIT_EXCEEDED"
   | "NVIM_NO_FOCUS_CONTEXT"
   | "NVIM_NO_SELECTION"
+  | "NVIM_STALE_ANCHOR"
   | "NVIM_UNAVAILABLE"
   | "NVIM_WORKTREE_MISMATCH";
 
@@ -259,6 +270,46 @@ export interface HighlightClearSnapshot {
   readonly highlightId: number;
 }
 
+export type AnnotationKind = "note" | "warning" | "error";
+
+export interface SourceAnnotationInput {
+  readonly anchor: string;
+  readonly kind: AnnotationKind;
+  readonly line: number;
+  readonly text: string;
+}
+
+export interface AnnotationOptions {
+  readonly annotations: readonly SourceAnnotationInput[];
+  readonly buffer: number;
+  readonly durationMs?: number;
+}
+
+export interface ResolvedAnnotationOptions {
+  readonly annotations: readonly SourceAnnotationInput[];
+  readonly buffer: number;
+  readonly durationMs: number;
+}
+
+export interface SourceAnnotation {
+  readonly annotationId: number;
+  readonly column: number;
+  readonly inputIndex: number;
+  readonly kind: AnnotationKind;
+  readonly line: number;
+  readonly placement: "callout";
+  readonly text: string;
+}
+
+export interface AnnotationSnapshot {
+  readonly annotations: readonly SourceAnnotation[];
+  readonly batchId: number;
+  readonly buffer: BufferIdentity;
+  readonly editor: EditorIdentity;
+  readonly expiresInMs: number;
+  readonly totalLines: number;
+}
+
 export type BridgeResult<T> =
   | { readonly ok: true; readonly value: T }
   | { readonly error: NeovimError; readonly ok: false };
@@ -291,6 +342,68 @@ function isPosition(value: unknown): value is Position {
 
 function isRevealSplit(value: unknown): value is RevealSplit {
   return value === "none" || value === "horizontal" || value === "vertical";
+}
+
+function isAnnotationKind(value: unknown): value is AnnotationKind {
+  return value === "note" || value === "warning" || value === "error";
+}
+
+function containsAnnotationControlCharacter(value: string): boolean {
+  return /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value);
+}
+
+export function resolveAnnotationOptions(
+  options: AnnotationOptions,
+): BridgeResult<ResolvedAnnotationOptions> {
+  if (Number.isSafeInteger(options.buffer) === false || options.buffer < 1) {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (
+    Array.isArray(options.annotations) === false ||
+    options.annotations.length < 1 ||
+    options.annotations.length > MAX_ANNOTATIONS
+  ) {
+    return failure("NVIM_LIMIT_EXCEEDED", `Annotate between 1 and ${MAX_ANNOTATIONS} anchors`);
+  }
+  const durationMs = options.durationMs ?? DEFAULT_ANNOTATION_DURATION_MS;
+  if (Number.isSafeInteger(durationMs) === false || durationMs < 1) {
+    return failure("NVIM_INVALID_ANNOTATION", "Choose a positive annotation duration");
+  }
+  if (durationMs > MAX_ANNOTATION_DURATION_MS) {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Annotation duration must not exceed ${MAX_ANNOTATION_DURATION_MS} ms`,
+    );
+  }
+  for (let index = 0; index < options.annotations.length; index += 1) {
+    const annotation: unknown = options.annotations[index];
+    if (
+      isRecord(annotation) === false ||
+      Number.isSafeInteger(annotation.line) === false ||
+      (annotation.line as number) < 1 ||
+      typeof annotation.anchor !== "string" ||
+      annotation.anchor.length < 1 ||
+      Buffer.byteLength(annotation.anchor, "utf8") > MAX_ANNOTATION_ANCHOR_BYTES ||
+      /[\0\r\n]/u.test(annotation.anchor) ||
+      typeof annotation.text !== "string" ||
+      annotation.text.trim().length < 1 ||
+      Buffer.byteLength(annotation.text, "utf8") > MAX_ANNOTATION_TEXT_BYTES ||
+      containsAnnotationControlCharacter(annotation.text) ||
+      isAnnotationKind(annotation.kind) === false
+    ) {
+      return failure(
+        "NVIM_INVALID_ANNOTATION",
+        `Annotation ${index + 1} must have a bounded line, anchor, text, and kind`,
+      );
+    }
+  }
+  return {
+    ok: true,
+    value: { annotations: options.annotations, buffer: options.buffer, durationMs },
+  };
 }
 
 export function resolveHighlightOptions(
@@ -481,6 +594,7 @@ function parseSelection(value: unknown): BridgeResult<SelectionContext | undefin
 }
 
 function canonicalPath(path: string): string | undefined {
+  if (/^[A-Za-z][A-Za-z\d+.-]*:/u.test(path)) return undefined;
   let existingPath = resolve(path);
   const missingSegments: string[] = [];
 
@@ -1200,6 +1314,166 @@ export function parseReveal(
   };
 }
 
+function annotationFailure(value: unknown): BridgeResult<never> | undefined {
+  if (isRecord(value) === false || typeof value.error !== "string") return undefined;
+  if (value.error === "invalidBuffer") {
+    return failure(
+      "NVIM_INVALID_BUFFER",
+      "Choose a loaded source buffer from visible_windows or list_buffers",
+    );
+  }
+  if (value.error === "worktreeMismatch") {
+    return failure("NVIM_WORKTREE_MISMATCH", "The annotation target is outside Pi's worktree");
+  }
+  if (value.error === "annotationLimit") {
+    return failure("NVIM_LIMIT_EXCEEDED", `Annotate between 1 and ${MAX_ANNOTATIONS} anchors`);
+  }
+  if (value.error === "activeLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `At most ${MAX_ACTIVE_ANNOTATIONS} annotations may be active per Pi session`,
+    );
+  }
+  if (value.error === "searchLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Shifted-anchor search is limited to ${MAX_ANNOTATION_SEARCH_LINES} lines and ${MAX_ANNOTATION_SEARCH_BYTES} bytes`,
+    );
+  }
+  if (value.error === "durationLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Annotation duration must not exceed ${MAX_ANNOTATION_DURATION_MS} ms`,
+    );
+  }
+  const index = Number.isSafeInteger(value.annotationIndex) ? ` ${value.annotationIndex}` : "";
+  const line = Number.isSafeInteger(value.requestedLine) ? ` near line ${value.requestedLine}` : "";
+  if (value.error === "staleAnchor") {
+    return failure("NVIM_STALE_ANCHOR", `Annotation${index} no longer matches source text${line}`);
+  }
+  if (value.error === "ambiguousAnchor") {
+    return failure(
+      "NVIM_AMBIGUOUS_ANCHOR",
+      `Annotation${index} matches source text more than once${line}`,
+    );
+  }
+  if (value.error === "invalidAnnotation") {
+    return failure("NVIM_INVALID_ANNOTATION", `Annotation${index} is invalid`);
+  }
+  if (value.error === "extmarkFailure") {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim could not create the annotation batch");
+  }
+  return failure("NVIM_INVALID_RESPONSE", "Neovim returned an unknown annotation error");
+}
+
+function compareSourceAnnotations(left: SourceAnnotation, right: SourceAnnotation): number {
+  if (left.line !== right.line) return left.line - right.line;
+  if (left.column !== right.column) return left.column - right.column;
+  return left.inputIndex - right.inputIndex;
+}
+
+export function parseAnnotations(
+  value: unknown,
+  expectedCwd: string,
+  editor: EditorIdentity,
+  options: AnnotationOptions,
+  expectedBatchId: number,
+): BridgeResult<AnnotationSnapshot> {
+  const resolved = resolveAnnotationOptions(options);
+  if (resolved.ok === false) return resolved;
+  const responseFailure = annotationFailure(value);
+  if (responseFailure !== undefined) return responseFailure;
+  const snapshot = parseBoundSnapshot(value, expectedCwd, editor);
+  if (snapshot.ok === false) return snapshot;
+  const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
+  if (buffer.ok === false) return buffer;
+  if (
+    buffer.value.loaded === false ||
+    buffer.value.number !== resolved.value.buffer ||
+    snapshot.value.batchId !== expectedBatchId ||
+    Number.isSafeInteger(snapshot.value.totalLines) === false ||
+    (snapshot.value.totalLines as number) < 1 ||
+    snapshot.value.expiresInMs !== resolved.value.durationMs ||
+    Array.isArray(snapshot.value.annotations) === false ||
+    snapshot.value.annotations.length !== resolved.value.annotations.length
+  ) {
+    return failure("NVIM_INVALID_RESPONSE", "Neovim returned invalid annotation data");
+  }
+
+  const annotations: SourceAnnotation[] = [];
+  const annotationIds = new Set<number>();
+  const inputIndexes = new Set<number>();
+  for (const candidate of snapshot.value.annotations) {
+    if (
+      isRecord(candidate) === false ||
+      Number.isSafeInteger(candidate.annotationId) === false ||
+      (candidate.annotationId as number) < 1 ||
+      Number.isSafeInteger(candidate.inputIndex) === false ||
+      (candidate.inputIndex as number) < 1 ||
+      (candidate.inputIndex as number) > resolved.value.annotations.length ||
+      Number.isSafeInteger(candidate.line) === false ||
+      (candidate.line as number) < 1 ||
+      Number.isSafeInteger(candidate.column) === false ||
+      (candidate.column as number) < 1 ||
+      (candidate.line as number) > (snapshot.value.totalLines as number) ||
+      Number.isSafeInteger(candidate.sourceLineBytes) === false ||
+      (candidate.sourceLineBytes as number) < 0 ||
+      candidate.placement !== "callout" ||
+      isAnnotationKind(candidate.kind) === false ||
+      typeof candidate.text !== "string"
+    ) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned an invalid annotation item");
+    }
+    const annotationId = candidate.annotationId as number;
+    const inputIndex = candidate.inputIndex as number;
+    const input = resolved.value.annotations[inputIndex - 1];
+    if (
+      input === undefined ||
+      candidate.kind !== input.kind ||
+      candidate.text !== input.text ||
+      (candidate.column as number) + Buffer.byteLength(input.anchor, "utf8") - 1 >
+        (candidate.sourceLineBytes as number) ||
+      annotationIds.has(annotationId) ||
+      inputIndexes.has(inputIndex)
+    ) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned mismatched annotation data");
+    }
+    annotationIds.add(annotationId);
+    inputIndexes.add(inputIndex);
+    annotations.push({
+      annotationId,
+      column: candidate.column as number,
+      inputIndex,
+      kind: candidate.kind,
+      line: candidate.line as number,
+      placement: "callout",
+      text: candidate.text,
+    });
+  }
+  for (let index = 1; index < annotations.length; index += 1) {
+    const previous = annotations[index - 1];
+    const current = annotations[index];
+    if (
+      previous === undefined ||
+      current === undefined ||
+      compareSourceAnnotations(previous, current) > 0
+    ) {
+      return failure("NVIM_INVALID_RESPONSE", "Neovim returned annotations out of order");
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      annotations,
+      batchId: expectedBatchId,
+      buffer: buffer.value,
+      editor,
+      expiresInMs: resolved.value.durationMs,
+      totalLines: snapshot.value.totalLines as number,
+    },
+  };
+}
+
 function highlightFailure(value: unknown): BridgeResult<never> | undefined {
   if (isRecord(value) === false || typeof value.error !== "string") return undefined;
   if (value.error === "invalidBuffer") {
@@ -1219,6 +1493,12 @@ function highlightFailure(value: unknown): BridgeResult<never> | undefined {
   }
   if (value.error === "lineLimit") {
     return failure("NVIM_LIMIT_EXCEEDED", `Highlight at most ${MAX_HIGHLIGHT_LINES} lines`);
+  }
+  if (value.error === "durationLimit") {
+    return failure(
+      "NVIM_LIMIT_EXCEEDED",
+      `Highlight duration must not exceed ${MAX_HIGHLIGHT_DURATION_MS} ms`,
+    );
   }
   if (value.error === "extmarkFailure") {
     return failure("NVIM_INVALID_RESPONSE", "Neovim could not create the temporary highlight");
@@ -1290,6 +1570,7 @@ export function parseHighlightClear(
   const buffer = parseSourceBuffer(snapshot.value.buffer, expectedCwd);
   if (buffer.ok === false) return buffer;
   if (
+    buffer.value.loaded === false ||
     buffer.value.number !== resolved.value.buffer ||
     snapshot.value.highlightId !== resolved.value.highlightId ||
     typeof snapshot.value.cleared !== "boolean"
@@ -1374,7 +1655,10 @@ export function unavailable(
 }
 
 export function noFocusContext(): BridgeResult<never> {
-  return failure("NVIM_NO_FOCUS_CONTEXT", "No source focus context has been reported by Neovim");
+  return failure(
+    "NVIM_NO_FOCUS_CONTEXT",
+    "No source focus context has been reported by Neovim; inspect visible_windows, then list_buffers",
+  );
 }
 
 export function noSelection(): BridgeResult<never> {
