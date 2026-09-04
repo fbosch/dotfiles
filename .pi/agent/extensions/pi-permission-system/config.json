@@ -8,7 +8,8 @@
   ],
   "piInfrastructureReadPaths": [
     "~/.agents/skills/*",
-    "/nix/store"
+    "/nix/store",
+    "/tmp/pi-cliboard*"
   ],
   "permission": {
     "*": "allow",
