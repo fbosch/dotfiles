@@ -550,8 +550,12 @@ Implementation record (2026-09-05):
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.
-- The latest Neovim extension suite passes 114 tests with 547 assertions,
-  including all four lazy-entrypoint tests. Typecheck and scoped Biome pass.
+- The latest Neovim and permission-policy suites pass 131 tests with 703
+  assertions, including all four lazy-entrypoint tests. Typecheck, scoped
+  Biome, and the focused Devenv Lua, launch, and restoration checks pass.
+- A later traced live Ask completed without cancellation; the earlier abort
+  cause was not captured. Final direct-read and permission behavior still need
+  live confirmation after restarting Neovim. Temporary tracing was removed.
 - The headless context test drives real Lua Ask, notification parsing, the Pi
   dispatcher, acknowledgement, pending resolution, and focus gating. Pi's
   public submission API and terminal binding are test doubles; actual

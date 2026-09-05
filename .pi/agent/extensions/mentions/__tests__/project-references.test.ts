@@ -255,7 +255,7 @@ describe("project references", () => {
     expect(wrapped.shouldTriggerFileCompletion?.(["@ni"], 0, 3)).toBe(true);
   });
 
-  test("injects trusted docs-cache references through the extension lifecycle", () => {
+  test("injects trusted docs-cache references through the extension lifecycle", async () => {
     const cwd = temporaryDirectory();
     mkdirSync(join(cwd, ".docs", "reference-material"), { recursive: true });
     writeFileSync(join(cwd, "screenshot.png"), "image\n");
@@ -269,7 +269,10 @@ describe("project references", () => {
       | ((
           event: BeforeAgentStartEvent,
           ctx: ExtensionContext,
-        ) => BeforeAgentStartEventResult | undefined)
+        ) =>
+          | BeforeAgentStartEventResult
+          | undefined
+          | Promise<BeforeAgentStartEventResult | undefined>)
       | undefined;
     let sessionShutdown: (() => void) | undefined;
     const pi = {
@@ -283,27 +286,26 @@ describe("project references", () => {
     setThemeInstance(
       loadThemeFromPath(join(import.meta.dir, "..", "..", "..", "themes", "zenwritten-dark.json")),
     );
-    sessionStart?.(
-      {} as SessionStartEvent,
-      {
-        cwd,
-        hasUI: false,
-        isProjectTrusted: () => true,
-        ui: {
-          notify: () => {},
-          theme,
-        },
-      } as unknown as ExtensionContext,
-    );
+    const context = {
+      cwd,
+      hasUI: false,
+      isProjectTrusted: () => true,
+      sessionManager: { getHeader: () => ({ id: "docs-cache-reference-test" }) },
+      ui: {
+        notify: () => {},
+        theme,
+      },
+    } as unknown as ExtensionContext;
+    sessionStart?.({} as SessionStartEvent, context);
 
-    const result = beforeAgentStart?.(
+    const result = await beforeAgentStart?.(
       {
         type: "before_agent_start",
         prompt: "Inspect docs",
         systemPrompt: "base prompt",
         systemPromptOptions: {},
       } as BeforeAgentStartEvent,
-      {} as ExtensionContext,
+      context,
     );
     expect(result?.systemPrompt).toContain("<name>reference-material</name>");
     expect(result?.systemPrompt).toContain(join(cwd, ".docs", "reference-material"));
@@ -313,5 +315,90 @@ describe("project references", () => {
     expect(rendered).toContain(`${theme.getFgAnsi("warning")}@reference-material`);
     expect(rendered).toContain(`${theme.getFgAnsi("accent")}screenshot.png`);
     sessionShutdown?.();
+  });
+
+  test("registers only external references for read access and disposes them", async () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const external = join(root, "external docs");
+    mkdirSync(join(cwd, "local-docs"), { recursive: true });
+    mkdirSync(external);
+    writeProjectSettings(cwd, {
+      references: {
+        external: { path: external, description: "External documentation" },
+        local: { path: "local-docs", description: "Local documentation" },
+      },
+    });
+
+    let sessionStart:
+      | ((event: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>)
+      | undefined;
+    let beforeAgentStart:
+      | ((
+          event: BeforeAgentStartEvent,
+          ctx: ExtensionContext,
+        ) =>
+          | BeforeAgentStartEventResult
+          | undefined
+          | Promise<BeforeAgentStartEventResult | undefined>)
+      | undefined;
+    let sessionShutdown: (() => void) | undefined;
+    const pi = {
+      on(event: string, handler: typeof sessionStart | typeof beforeAgentStart) {
+        if (event === "session_start") sessionStart = handler as typeof sessionStart;
+        if (event === "before_agent_start") beforeAgentStart = handler as typeof beforeAgentStart;
+        if (event === "session_shutdown") sessionShutdown = handler as () => void;
+      },
+    } as unknown as ExtensionAPI;
+    projectReferences(pi);
+
+    const sessionId = "project-reference-read-test";
+    const registrations: string[] = [];
+    const disposals: string[] = [];
+    const permissions = {
+      registerInfrastructureReadDirectory(directory: string) {
+        registrations.push(directory);
+        return () => disposals.push(directory);
+      },
+    };
+    const serviceModule = (await import(
+      new URL(
+        "../../../npm/node_modules/@gotgenes/pi-permission-system/src/service.ts",
+        import.meta.url,
+      ).href
+    )) as {
+      publishPermissionsService(sessionId: string, service: typeof permissions): void;
+      unpublishPermissionsService(sessionId: string, service: typeof permissions): void;
+    };
+    serviceModule.publishPermissionsService(sessionId, permissions);
+
+    const notifications: string[] = [];
+    const context = {
+      cwd,
+      isProjectTrusted: () => true,
+      sessionManager: { getHeader: () => ({ id: sessionId }) },
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionContext;
+
+    try {
+      await sessionStart?.({} as SessionStartEvent, context);
+      const event = {
+        type: "before_agent_start",
+        prompt: "Inspect references",
+        systemPrompt: "base prompt",
+        systemPromptOptions: {},
+      } as BeforeAgentStartEvent;
+      await beforeAgentStart?.(event, context);
+      await beforeAgentStart?.(event, context);
+
+      expect(registrations).toEqual([realpathSync(external)]);
+      expect(notifications).toEqual([]);
+      expect(disposals).toEqual([]);
+
+      sessionShutdown?.();
+      expect(disposals).toEqual([realpathSync(external)]);
+    } finally {
+      serviceModule.unpublishPermissionsService(sessionId, permissions);
+    }
   });
 });

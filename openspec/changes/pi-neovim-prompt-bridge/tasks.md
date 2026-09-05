@@ -70,7 +70,7 @@
       bounded unsaved reads guarded by expected path and tick
 - [ ] 6.3 Add Snacks highlighting and completion while preserving native
       `vim.ui.input` behavior, cancellation, and visual selection restoration
-- [ ] 6.4 Resolve selected paths in one bounded, internally guarded Neovim read
+- [x] 6.4 Resolve selected paths in one bounded, internally guarded Neovim read
       and allow the bound Neovim tool without permission prompts
 
 ## 7. Add Append and Remaining Interactions

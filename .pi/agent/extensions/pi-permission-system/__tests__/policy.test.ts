@@ -513,15 +513,20 @@ describe("pi-permission-system policy", () => {
     ).toBe("ask");
   });
 
-  test("allows external reads from project policy and asks for external writes", () => {
+  test("asks for unregistered external access and allows /tmp reads and writes", () => {
     const engine = createEngine();
     const externalPath = "~/nixos/synthetic-fixture.txt";
 
     const readResult = externalDirectoryGate(engine, "read", externalPath);
-    expect(readResult?.preCheck?.state).toBe("allow");
+    expect(readResult?.preCheck?.state).toBe("ask");
 
     const writeResult = externalDirectoryGate(engine, "write", externalPath);
     expect(writeResult?.preCheck?.state).toBe("ask");
+
+    for (const tmpPath of ["/tmp", "/tmp/synthetic-fixture.txt"]) {
+      expect(externalDirectoryGate(engine, "read", tmpPath)?.preCheck?.state).toBe("allow");
+      expect(externalDirectoryGate(engine, "write", tmpPath)?.preCheck?.state).toBe("allow");
+    }
   });
 
   test("evaluates chained shell commands through each command unit", async () => {

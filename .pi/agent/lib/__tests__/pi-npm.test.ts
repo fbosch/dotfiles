@@ -20,11 +20,21 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
+const permissionPatch = `diff --git a/node_modules/@gotgenes/pi-permission-system/example.txt b/node_modules/@gotgenes/pi-permission-system/example.txt
+index 3367afd..5ea2ed4 100644
+--- a/node_modules/@gotgenes/pi-permission-system/example.txt
++++ b/node_modules/@gotgenes/pi-permission-system/example.txt
+@@ -1 +1 @@
+-original
++patched
+`;
 let directory: string;
 let agent: string;
 let install: string;
 let example: string;
 let manifest: string;
+let permissionExample: string;
+let permissionManifest: string;
 
 function run(args: string[], env: Record<string, string> = {}) {
   return Bun.spawnSync([process.execPath, join(agent, "lib/pi-npm.ts"), ...args], {
@@ -41,10 +51,13 @@ beforeEach(() => {
   install = join(directory, "managed npm");
   manifest = join(install, "node_modules/pi-worktrunk/package.json");
   example = join(install, "node_modules/pi-worktrunk/example.txt");
+  permissionManifest = join(install, "node_modules/@gotgenes/pi-permission-system/package.json");
+  permissionExample = join(install, "node_modules/@gotgenes/pi-permission-system/example.txt");
   mkdirSync(join(agent, "lib"), { recursive: true });
   mkdirSync(join(agent, "patches"));
   mkdirSync(join(agent, "node_modules"));
   mkdirSync(join(install, "node_modules/pi-worktrunk"), { recursive: true });
+  mkdirSync(join(install, "node_modules/@gotgenes/pi-permission-system"), { recursive: true });
   mkdirSync(join(directory, "bin"));
   cpSync(join(sourceRoot, "lib/pi-npm.ts"), join(agent, "lib/pi-npm.ts"));
   symlinkSync(
@@ -52,9 +65,18 @@ beforeEach(() => {
     join(agent, "node_modules/patch-package"),
   );
   writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), patch);
+  writeFileSync(
+    join(agent, "patches/@gotgenes+pi-permission-system+31.1.1.patch"),
+    permissionPatch,
+  );
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
   writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.8.0" }));
   writeFileSync(example, "original\n");
+  writeFileSync(
+    permissionManifest,
+    JSON.stringify({ name: "@gotgenes/pi-permission-system", version: "31.1.1" }),
+  );
+  writeFileSync(permissionExample, "original\n");
   writeFileSync(
     join(directory, "bin/npm"),
     `#!/usr/bin/env bun
@@ -78,6 +100,7 @@ describe("tracked Pi package patches", () => {
       expect(result.stderr.toString()).toBe("");
       expect(result.exitCode).toBe(0);
       expect(readFileSync(example, "utf8")).toBe("patched\n");
+      expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
     }
   });
 
@@ -87,6 +110,7 @@ describe("tracked Pi package patches", () => {
     symlinkSync(install, link);
     expect(run(["--apply-patches", link]).exitCode).toBe(0);
     expect(readFileSync(example, "utf8")).toBe("patched\n");
+    expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
   });
 
   test.each(["0.7.0", "0.8.1", "0.8.0-beta", "^0.8.0"])(
@@ -151,12 +175,8 @@ describe("tracked Pi package patches", () => {
     );
     const result = run(["--apply-patches", install]);
     expect(result.exitCode).toBe(17);
-    expect(JSON.parse(result.stdout.toString())).toEqual([
-      "--patch-dir",
-      "../agent config/patches",
-      "--error-on-fail",
-      "--error-on-warn",
-    ]);
+    const args = JSON.parse(result.stdout.toString()) as string[];
+    expect(args).toEqual(["--patch-dir", "../patches", "--error-on-fail", "--error-on-warn"]);
   });
 });
 
@@ -178,6 +198,7 @@ describe("Pi npmCommand wrapper", () => {
       ...args,
     ]);
     expect(readFileSync(example, "utf8")).toBe("patched\n");
+    expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
   });
 
   test("rejects requested upgrades before invoking npm", () => {
@@ -185,6 +206,16 @@ describe("Pi npmCommand wrapper", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stdout.toString()).toBe("");
     expect(readFileSync(example, "utf8")).toBe("original\n");
+
+    const permissionResult = run([
+      "install",
+      "@gotgenes/pi-permission-system@32.0.0",
+      "--prefix",
+      install,
+    ]);
+    expect(permissionResult.exitCode).toBe(1);
+    expect(permissionResult.stdout.toString()).toBe("");
+    expect(readFileSync(permissionExample, "utf8")).toBe("original\n");
   });
 
   test("checks the installed version again after npm finishes", () => {

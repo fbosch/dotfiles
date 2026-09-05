@@ -786,7 +786,7 @@ function parseReadFailure(value: unknown): BridgeResult<never> | undefined {
   if (value.error === "contextStale") {
     return failure(
       "NVIM_CONTEXT_STALE",
-      "The Neovim context is stale; refresh context and retry read_buffer",
+      "The selected source no longer matches this request. Submit a new Ask before reading it.",
     );
   }
   if (value.error === "worktreeMismatch") {

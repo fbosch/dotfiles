@@ -1,0 +1,193 @@
+diff --git a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
+index 0e268df..c671479 100644
+--- a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
++++ b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
+@@ -579,6 +579,17 @@ interface PermissionsService extends PermissionQuery {
+      * @param agentName - Optional agent name for per-agent policy resolution.
+      */
+     isToolFullyDenied(toolName: string, agentName?: string): boolean;
++    /**
++     * Register an absolute, literal directory that read-only path tools may
++     * access outside the working directory without prompting.
++     *
++     * The cross-cutting `path` gate still applies, and write-capable tools do not
++     * use this registration. The returned disposer removes only this specific
++     * registration, so independent consumers may register the same directory.
++     *
++     * @param directory - Absolute directory path without wildcard characters.
++     */
++    registerInfrastructureReadDirectory(directory: string): () => void;
+     /**
+      * Register a custom preview formatter for a specific tool name.
+      *
+diff --git a/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md b/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
+index f9f77a0..9ceea81 100644
+--- a/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
++++ b/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
+@@ -75,6 +75,12 @@ interface PermissionsService {
+   /** Whether every value under a tool's surface resolves to deny; use this to pre-filter a tool list. */
+   isToolFullyDenied(toolName: string, agentName?: string): boolean;
+ 
++  /**
++   * Register an absolute, literal directory that read-only path tools may
++   * access outside cwd without prompting. Returns a disposer.
++   */
++  registerInfrastructureReadDirectory(directory: string): () => void;
++
+   /**
+    * Register a custom preview formatter for a specific tool name.
+    * Returns a disposer that unregisters the formatter.
+@@ -154,6 +160,23 @@ const usable = tools.filter((t) => !permissions.isToolFullyDenied(t, agentName))
+ Rule ordering is honored (last-match-wins), so an exception written after a `deny` catch-all keeps the tool reachable while one written before it does not.
+ It considers config-layer rules only; a runtime session approval does not change the answer.
+ 
++#### `registerInfrastructureReadDirectory`
++
++Register an absolute, literal directory that Pi's read-only path tools (`read`, `find`, `grep`, and `ls`) may access outside the working directory without prompting.
++The registration bypasses only the `external_directory` gate: the cross-cutting `path` gate still applies, and write-capable tools are unaffected.
++The directory must be absolute and must not contain `*` or `?` wildcard characters.
++
++```typescript
++const dispose = permissions.registerInfrastructureReadDirectory(
++  "/absolute/reference/docs",
++);
++```
++
++Each call creates an independent registration and returns an identity-scoped disposer.
++If two consumers register the same directory, disposing one does not remove the other's registration.
++Registrations belong to one permission-system node and are cleared when that node shuts down.
++Register again after `/reload` or session replacement.
++
+ #### `registerToolInputFormatter`
+ 
+ Register a custom preview formatter for a specific tool name.
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/service.ts b/node_modules/@gotgenes/pi-permission-system/src/service.ts
+index 3348223..825faa9 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/service.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/service.ts
+@@ -148,6 +148,18 @@ export interface PermissionsService extends PermissionQuery {
+    */
+   isToolFullyDenied(toolName: string, agentName?: string): boolean;
+ 
++  /**
++   * Register an absolute, literal directory that read-only path tools may
++   * access outside the working directory without prompting.
++   *
++   * The cross-cutting `path` gate still applies, and write-capable tools do not
++   * use this registration. The returned disposer removes only this specific
++   * registration, so independent consumers may register the same directory.
++   *
++   * @param directory - Absolute directory path without wildcard characters.
++   */
++  registerInfrastructureReadDirectory(directory: string): () => void;
++
+   /**
+    * Register a custom preview formatter for a specific tool name.
+    *
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/service/permissions-service.ts b/node_modules/@gotgenes/pi-permission-system/src/service/permissions-service.ts
+index 52abe07..8d83eb8 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/service/permissions-service.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/service/permissions-service.ts
+@@ -28,9 +28,10 @@ interface ResolverForService {
+   isToolFullyDenied(toolName: string, agentName?: string): boolean;
+ }
+ 
+-/** Narrow session view: hands out the cwd-bound path normalizer. */
+-interface PathNormalizerProvider {
++/** Narrow session view used by path queries and live read-directory registrations. */
++interface PermissionSessionService {
+   getPathNormalizer(): PathNormalizer;
++  registerInfrastructureReadDirectory(directory: string): () => void;
+ }
+ 
+ /**
+@@ -46,7 +47,7 @@ interface PathNormalizerProvider {
+ export class LocalPermissionsService implements PermissionsService {
+   constructor(
+     private readonly resolver: ResolverForService,
+-    private readonly session: PathNormalizerProvider,
++    private readonly session: PermissionSessionService,
+     private readonly formatterRegistry: ToolInputFormatterRegistrar &
+       ToolInputFormatterLookup,
+     private readonly accessExtractorRegistry: ToolAccessExtractorRegistrar &
+@@ -89,6 +90,12 @@ export class LocalPermissionsService implements PermissionsService {
+     return this.resolver.isToolFullyDenied(toolName, agentName);
+   }
+ 
++  registerInfrastructureReadDirectory(
++    directory: string,
++  ): ReturnType<PermissionsService["registerInfrastructureReadDirectory"]> {
++    return this.session.registerInfrastructureReadDirectory(directory);
++  }
++
+   registerToolInputFormatter(
+     toolName: string,
+     formatter: ToolInputFormatter,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts b/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
+index 04b5ad6..2f5ee5a 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
+@@ -45,6 +45,10 @@ export class PermissionSession implements ToolCallGateInputs {
+   private knownAgentName: string | null = null;
+   private pathNormalizer: PathNormalizer;
+   private readonly toolSurfaceBaseline = new ToolSurfaceBaseline();
++  private readonly infrastructureReadDirectoryRegistrations = new Map<
++    symbol,
++    string
++  >();
+ 
+   constructor(
+     private readonly paths: ExtensionPaths,
+@@ -125,6 +129,7 @@ export class PermissionSession implements ToolCallGateInputs {
+     this.sessionRules.clear();
+     this.skillEntries = [];
+     this.toolSurfaceBaseline.reset();
++    this.infrastructureReadDirectoryRegistrations.clear();
+     this.deactivate();
+   }
+ 
+@@ -226,13 +231,42 @@ export class PermissionSession implements ToolCallGateInputs {
+   // ── Infrastructure paths ───────────────────────────────────────────────
+ 
+   /**
+-   * Combined infrastructure read directories: static paths from
+-   * `ExtensionPaths` plus config-derived paths.
++   * Register one absolute, literal directory for read-only external access.
++   * The identity-scoped disposer preserves another consumer's registration of
++   * the same directory.
++   */
++  registerInfrastructureReadDirectory(directory: string): () => void {
++    if (directory.trim().length === 0) {
++      throw new TypeError("Infrastructure read directory must not be empty.");
++    }
++    if (directory.includes("*") || directory.includes("?")) {
++      throw new TypeError(
++        "Infrastructure read directory must not contain wildcard characters.",
++      );
++    }
++    if (!this.pathNormalizer.isAbsolute(directory)) {
++      throw new TypeError("Infrastructure read directory must be absolute.");
++    }
++
++    const registration = Symbol("infrastructure-read-directory");
++    const canonicalDirectory = this.pathNormalizer
++      .forPath(directory)
++      .boundaryValue();
++    this.infrastructureReadDirectoryRegistrations.set(registration, canonicalDirectory);
++    return () => {
++      this.infrastructureReadDirectoryRegistrations.delete(registration);
++    };
++  }
++
++  /**
++   * Combined infrastructure read directories: static paths, config-derived
++   * paths, and live cross-extension registrations.
+    */
+   getInfrastructureReadDirs(): string[] {
+     return [
+       ...this.paths.piInfrastructureDirs,
+       ...(this.config.piInfrastructureReadPaths ?? []),
++      ...this.infrastructureReadDirectoryRegistrations.values(),
+     ];
+   }
+ 

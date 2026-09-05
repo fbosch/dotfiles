@@ -192,9 +192,15 @@
     "skill": "allow",
     "external_directory_read": {
       "*": "ask",
+      "/tmp": "allow",
+      "/tmp/*": "allow",
       "~/.config/opencode/*": "allow",
       "/dev/shm/opencode-window-screenshots/*": "allow"
     },
-    "external_directory_write": "ask"
+    "external_directory_write": {
+      "*": "ask",
+      "/tmp": "allow",
+      "/tmp/*": "allow"
+    }
   }
 }

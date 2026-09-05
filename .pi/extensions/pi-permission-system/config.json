@@ -11,10 +11,6 @@
       "bun run test": "allow",
       "bun run check": "allow",
       "just stow-check": "allow"
-    },
-    "external_directory_read": {
-      "~/nixos": "allow",
-      "~/nixos/**": "allow"
     }
   }
 }

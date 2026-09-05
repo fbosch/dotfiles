@@ -1,4 +1,6 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
+import { isAbsolute, relative, sep } from "node:path";
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -13,6 +15,18 @@ import { formatAnsiReferenceMentions } from "./reference-mentions";
 import { PROJECT_REFERENCES_END, PROJECT_REFERENCES_START, type ProjectReference } from "./types";
 
 const USER_MESSAGE_RENDER_PATCH = Symbol.for("dotfiles:pi-reference-mention-colors");
+const PERMISSION_SERVICE_MODULE_URL = new URL(
+  "../../../npm/node_modules/@gotgenes/pi-permission-system/src/service.ts",
+  import.meta.url,
+).href;
+
+interface ProjectReferencePermissions {
+  registerInfrastructureReadDirectory(directory: string): () => void;
+}
+
+interface PermissionSystemServiceModule {
+  getPermissionsService(sessionId: string): ProjectReferencePermissions | undefined;
+}
 
 interface UserMessageReferenceColors {
   cwd: string;
@@ -70,6 +84,45 @@ function installUserMessageReferenceColors(
     prototype.render = patchState.originalRender;
     delete prototype[USER_MESSAGE_RENDER_PATCH];
   };
+}
+
+function isOutsideWorkingDirectory(cwd: string, path: string): boolean {
+  const relativePath = relative(realpathSync(cwd), path);
+  return relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath);
+}
+
+async function registerReferenceReadDirectories(
+  ctx: Pick<ExtensionContext, "cwd" | "sessionManager">,
+  references: readonly ProjectReference[],
+): Promise<Array<() => void>> {
+  const directories = references
+    .map((reference) => reference.path)
+    .filter((path) => isOutsideWorkingDirectory(ctx.cwd, path));
+  if (directories.length === 0) return [];
+
+  const sessionId = ctx.sessionManager.getHeader()?.id;
+  if (typeof sessionId !== "string" || sessionId.length === 0) {
+    throw new Error("Permission service registration requires an active session id.");
+  }
+
+  const serviceModule = (await import(
+    PERMISSION_SERVICE_MODULE_URL
+  )) as PermissionSystemServiceModule;
+  const permissions = serviceModule.getPermissionsService(sessionId);
+  if (permissions === undefined) {
+    throw new Error(`Permission service is unavailable for session '${sessionId}'.`);
+  }
+
+  const disposers: Array<() => void> = [];
+  try {
+    for (const directory of directories) {
+      disposers.push(permissions.registerInfrastructureReadDirectory(directory));
+    }
+    return disposers;
+  } catch (error) {
+    for (const dispose of disposers.reverse()) dispose();
+    throw error;
+  }
 }
 
 function assertNoReferenceCollisions(
@@ -136,6 +189,13 @@ export {
 export default function projectReferences(pi: ExtensionAPI): void {
   let references: ProjectReference[] = [];
   let activeContext: ExtensionContext | undefined;
+  let referenceReadDirectoryDisposers: Array<() => void> = [];
+  let referenceReadDirectoriesRegistered = false;
+  let referenceReadDirectoryRegistrationFailed = false;
+  const disposeReferenceReadDirectories = (): void => {
+    for (const dispose of referenceReadDirectoryDisposers.reverse()) dispose();
+    referenceReadDirectoryDisposers = [];
+  };
   const disposeUserMessageColors = installUserMessageReferenceColors(() => {
     if (activeContext === undefined) return undefined;
     return {
@@ -148,6 +208,9 @@ export default function projectReferences(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", (_event, ctx) => {
+    disposeReferenceReadDirectories();
+    referenceReadDirectoriesRegistered = false;
+    referenceReadDirectoryRegistrationFailed = false;
     activeContext = ctx;
     try {
       references = loadProjectReferences(ctx.cwd, ctx.isProjectTrusted());
@@ -159,11 +222,30 @@ export default function projectReferences(pi: ExtensionAPI): void {
     }
   });
   pi.on("session_shutdown", () => {
+    disposeReferenceReadDirectories();
     activeContext = undefined;
     disposeUserMessageColors();
   });
 
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: appendProjectReferences(event.systemPrompt, references),
-  }));
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (
+      referenceReadDirectoriesRegistered === false &&
+      referenceReadDirectoryRegistrationFailed === false
+    ) {
+      try {
+        referenceReadDirectoryDisposers = await registerReferenceReadDirectories(ctx, references);
+        referenceReadDirectoriesRegistered = true;
+      } catch (error) {
+        referenceReadDirectoryRegistrationFailed = true;
+        ctx.ui.notify(
+          `Could not authorize project reference reads: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+      }
+    }
+
+    return {
+      systemPrompt: appendProjectReferences(event.systemPrompt, references),
+    };
+  });
 }

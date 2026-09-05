@@ -8,6 +8,9 @@ should use these terms; new concepts named during design work land here.
 - **prompt mention** — recognized `@name` token in user input that resolves to
   either an agent invocation or a project reference. Both roles share one
   case-insensitive name space.
+- **autocomplete display**: suggestion panel above the Pi prompt dock. It
+  presents completion candidates without taking keyboard focus away from the
+  prompt.
 
 ## Pi permissions
 
