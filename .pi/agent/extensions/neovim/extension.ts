@@ -22,6 +22,7 @@ import {
   type NeovimErrorCode,
 } from "./contracts";
 import { repeatPromiseWhile } from "./effect-runtime";
+import { installNeovimFileLinks } from "./file-links";
 import { PromptRequestDispatcher } from "./prompt-protocol";
 
 const NeovimParameters = Type.Union([
@@ -216,6 +217,7 @@ export function initializeNeovim(
   let activeContext: ExtensionContext | undefined;
   let channel: PiNeovimChannel | undefined;
   let blockingPromptActive = false;
+  let disposeFileLinks = () => {};
   const promptDispatcher = new PromptRequestDispatcher(pi, {
     binding: () => channel?.promptBinding(),
     blockingPromptActive: () => blockingPromptActive,
@@ -282,6 +284,7 @@ export function initializeNeovim(
   );
 
   pi.on("session_start", async (event, context) => {
+    disposeFileLinks();
     activeContext = context;
     blockingPromptActive = false;
     const bridge = channelFor(context);
@@ -298,6 +301,19 @@ export function initializeNeovim(
         "warning",
       );
     }
+    if (context.mode === "tui") {
+      // A zero-row widget gives this extension the TUI and a disposal lifecycle
+      // without replacing the editor or depending on the prompt-ui extension.
+      context.ui.setWidget(
+        "neovim-file-links",
+        (tui) => {
+          const dispose = installNeovimFileLinks(tui, context, (path) => bridge.openFile(path));
+          disposeFileLinks = dispose;
+          return { render: () => [], invalidate() {}, dispose };
+        },
+        { placement: "belowEditor" },
+      );
+    }
   });
 
   pi.on("ui_prompt_start", () => {
@@ -308,7 +324,10 @@ export function initializeNeovim(
     blockingPromptActive = false;
   });
 
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (_event, context) => {
+    disposeFileLinks();
+    disposeFileLinks = () => {};
+    if (context.mode === "tui") context.ui.setWidget("neovim-file-links", undefined);
     activeContext = undefined;
     blockingPromptActive = false;
     const activeChannel = channel;

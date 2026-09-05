@@ -3,8 +3,10 @@ import { EventEmitter } from "node:events";
 import type {
   ExtensionAPI,
   ExtensionContext,
+  ExtensionUIContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import type { Component, TUI } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import type { NvimConnection } from "../channel";
 import { bridgeLua, bridgeOperations } from "../channel";
@@ -18,6 +20,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   boundSessionArguments: unknown;
   closed = false;
   promptAcknowledgement: unknown;
+  readonly openedPaths: unknown[] = [];
 
   async close(): Promise<void> {
     this.closed = true;
@@ -75,6 +78,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
             sessionId: payload.sessionId,
             version: 1,
           };
+    }
+    if (operation === bridgeOperations.openFile) {
+      this.openedPaths.push(payload.path);
+      return true;
     }
     if (operation === bridgeOperations.promptAck) {
       this.promptAcknowledgement = payload;
@@ -228,7 +235,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     isIdle: () => true,
     mode: "tui",
     sessionManager: { getSessionId: () => "pi-assigned-session" },
-    ui: { getEditorText: () => "", setEditorText: () => undefined },
+    ui: { getEditorText: () => "", setEditorText: () => undefined, setWidget() {} },
   } as unknown as ExtensionContext;
 
   await createNeovimExtension({
@@ -275,6 +282,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("split");
   expect(parameters).toContain("durationMs");
   expect(parameters).toContain("highlightId");
+  expect(parameters).not.toContain("open_file");
   expect(parameters).not.toContain("focus_context");
   expect(parameters).not.toContain("selection");
   expect(tool.promptGuidelines?.join("\n")).toContain(
@@ -613,6 +621,56 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   await handlers.get("session_shutdown")?.({} as never, replacementContext);
   expect(connection.closed).toBe(true);
 });
+
+for (const mode of ["tui", "rpc", "json", "print"] as const) {
+  test(`file links follow session lifecycle without an editor replacement (${mode})`, async () => {
+    const handlers = new Map<string, Handler>();
+    const connection = new FakeConnection();
+    const external: string[] = [];
+    const original = (url: string) => {
+      external.push(url);
+    };
+    const tui = { mode: "fullscreen", openUrl: original };
+    let widget: (Component & { dispose?: () => void }) | undefined;
+    const context = {
+      cwd: "/project",
+      mode,
+      sessionManager: { getSessionId: () => "click-session" },
+      ui: {
+        setWidget(_key: string, content: Parameters<ExtensionUIContext["setWidget"]>[1]) {
+          widget?.dispose?.();
+          widget =
+            typeof content === "function" ? content(tui as unknown as TUI, {} as never) : undefined;
+        },
+        notify(message: string) {
+          throw new Error(message);
+        },
+      },
+    } as unknown as ExtensionContext;
+    const pi = {
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+      registerTool() {},
+    } as unknown as ExtensionAPI;
+    await createNeovimExtension({
+      createConnection: async () => connection,
+      socketPath: "/tmp/launching-nvim.sock",
+    })(pi);
+
+    await handlers.get("session_start")?.({} as never, context);
+    expect(widget?.render(80)).toEqual(mode === "tui" ? [] : undefined);
+    tui.openUrl("file:///tmp/clipboard.png");
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(connection.openedPaths).toEqual(mode === "tui" ? ["/tmp/clipboard.png"] : []);
+    expect(external).toEqual(mode === "tui" ? [] : ["file:///tmp/clipboard.png"]);
+
+    await handlers.get("session_shutdown")?.({} as never, context);
+    expect(tui.openUrl).toBe(original);
+    expect(widget).toBeUndefined();
+    expect(connection.closed).toBe(true);
+  });
+}
 
 test("stays unloaded when the session has no Neovim launch binding", async () => {
   let registrations = 0;

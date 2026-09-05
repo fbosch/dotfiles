@@ -628,7 +628,10 @@ export class PiNeovimChannel {
     if (
       isAbsolute(path) === false ||
       Buffer.byteLength(path, "utf8") > 4_096 ||
-      /[\0-\x1f\x7f-\x9f]/u.test(path)
+      Array.from(path).some((character) => {
+        const code = character.charCodeAt(0);
+        return code < 32 || (code >= 127 && code <= 159);
+      })
     ) {
       return {
         error: { code: "NVIM_INVALID_RESPONSE", message: "Choose an absolute local file path" },
