@@ -78,7 +78,7 @@
       "src": "https://github.com/m-demare/hlargs.nvim.git"
     },
     "indent-blankline.nvim": {
-      "rev": "3b1ee1854c1067c34cad2423eb78e280d4069e01",
+      "rev": "f1e186e44d3b7f9ae918008e2c28ce37c6023d2d",
       "src": "https://github.com/lukas-reineke/indent-blankline.nvim.git"
     },
     "lazydev.nvim": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "775c97a7de77e0368758a70eddd8a52af1ab6046",
+      "rev": "276f096ef324c140d00bd0188a0e70382e156771",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "85e732c62ac59ab7c12df71ddd020baa87948390",
+      "rev": "84252f9832fb5b9024fe9f7258e7c2aff915e6fb",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,7 +188,7 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "427e9222363d07c32d6db6169e4049c28d58d141",
+      "rev": "41416e81a6c7f4af4984395bfe0cd8d174e70976",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -208,7 +208,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "0ab2e4928dc867dfea3ff1da186e69f289d8a532",
+      "rev": "0c7abbf2f4e64e56519cb036f01e62e83e2cdcf1",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
