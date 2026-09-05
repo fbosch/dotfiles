@@ -124,6 +124,21 @@ describe("tracked Pi package patches", () => {
     },
   );
 
+  test.each(["31.1.0", "31.1.2", "31.1.1-beta", "^31.1.1"])(
+    "rejects permission-system %s before writing either package",
+    (version) => {
+      writeFileSync(
+        permissionManifest,
+        JSON.stringify({ name: "@gotgenes/pi-permission-system", version }),
+      );
+      const result = run(["--apply-patches", install]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain("requires exactly 31.1.1");
+      expect(readFileSync(permissionExample, "utf8")).toBe("original\n");
+      expect(readFileSync(example, "utf8")).toBe("original\n");
+    },
+  );
+
   test("fails on a missing package or malformed manifest", () => {
     rmSync(manifest);
     expect(run(["--apply-patches", install]).exitCode).toBe(1);

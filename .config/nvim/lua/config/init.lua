@@ -1,5 +1,6 @@
 require("config.builtins")
 require("config.opts")
+require("vim._core.ui2").enable()
 require("config.direnv").setup()
 require("config.usercmd")
 require("config.keymaps")

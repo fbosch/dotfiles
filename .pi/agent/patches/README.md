@@ -2,7 +2,7 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 
-- `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration.
+- `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration and direct TypeScript import resolution.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
@@ -51,6 +51,19 @@ normal policy.
 
 Registrations are removed on session shutdown. Duplicate registrations remain
 independent, so disposing one consumer cannot remove another consumer's access.
+
+## Permission-system imports
+
+The permission-system patch maps `#src/*` to `./src/*.ts` instead of `./src/*`.
+All runtime aliases in the pinned package resolve to the same files, without
+Jiti's failed extensionless lookups. No permission code, command registration,
+configuration loading, or authorization work is deferred.
+
+Regression tests apply the import-map patch to a disposable package, check every
+runtime alias with Node's resolver, and compare eager gate registration and
+public service exports through Pi's SDK loader. Keep the exact-version guard:
+a future package could use directory imports or explicit extensions that need a
+different map.
 
 ## Cache behavior
 

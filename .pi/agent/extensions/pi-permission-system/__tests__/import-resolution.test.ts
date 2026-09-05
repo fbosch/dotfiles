@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,7 +16,7 @@ import { join, resolve } from "node:path";
 
 const agentRoot = resolve(import.meta.dir, "../../..");
 const name = "@gotgenes/pi-permission-system";
-const root = mkdtempSync(join(tmpdir(), "pi-permission-imports-"));
+const root = realpathSync(mkdtempSync(join(tmpdir(), "pi-permission-imports-")));
 const packageDir = join(root, "node_modules", name);
 const manifest = join(packageDir, "package.json");
 const sourceFiles = new Map<string, string>();
