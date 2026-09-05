@@ -39,6 +39,7 @@ __pycache__
 ^/\.config/(nodemon[^/]*|TabNine|github-copilot|configstore|raycast|broot|neofetch|zed|go)$
 ^/\.config/ags/(@girs|config\.js)$
 ^/\.config/codex/config\.toml$
+^/\.config/opencode/command$
 ^/\.config/fish/(completions|conf\.d)$
 ^/\.config/fish/fish_variables.*$
 ^/\.config/herdr/(plugins|release-notes|session|session-history)\.json$
