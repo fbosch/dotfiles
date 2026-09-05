@@ -6,6 +6,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -47,6 +48,19 @@ interface PermissionModules {
   LocalPermissionsService: new (...args: unknown[]) => PermissionsServiceLike;
   PathNormalizer: new (flavor: unknown, cwd: string) => PathNormalizerLike;
   posixPathFlavor: unknown;
+  describePathGate(
+    context: {
+      toolName: string;
+      agentName: null;
+      input: { path: string };
+      toolCallId: string;
+      cwd: string;
+    },
+    resolver: {
+      resolve(intent: { surface: string; path: { matchValues(): string[] } }): PermissionCheck;
+    },
+    normalizer: PathNormalizerLike,
+  ): GateResult | null;
   describeExternalDirectoryGate(
     context: {
       toolName: string;
@@ -67,12 +81,13 @@ const sourceRoot = new URL(
   "../../../npm/node_modules/@gotgenes/pi-permission-system/src/",
   import.meta.url,
 );
-const [sessionModule, serviceModule, normalizerModule, flavorModule, gateModule] =
+const [sessionModule, serviceModule, normalizerModule, flavorModule, pathGateModule, gateModule] =
   await Promise.all([
     import(new URL("session/permission-session.ts", sourceRoot).href),
     import(new URL("service/permissions-service.ts", sourceRoot).href),
     import(new URL("path/path-normalizer.ts", sourceRoot).href),
     import(new URL("path/path-flavor.ts", sourceRoot).href),
+    import(new URL("handlers/gates/path.ts", sourceRoot).href),
     import(new URL("handlers/gates/external-directory.ts", sourceRoot).href),
   ]);
 const modules: PermissionModules = {
@@ -85,6 +100,8 @@ const modules: PermissionModules = {
   PathNormalizer: (normalizerModule as { PathNormalizer: PermissionModules["PathNormalizer"] })
     .PathNormalizer,
   posixPathFlavor: (flavorModule as { posixPathFlavor: unknown }).posixPathFlavor,
+  describePathGate: (pathGateModule as { describePathGate: PermissionModules["describePathGate"] })
+    .describePathGate,
   describeExternalDirectoryGate: (
     gateModule as {
       describeExternalDirectoryGate: PermissionModules["describeExternalDirectoryGate"];
@@ -121,6 +138,31 @@ function createPermissionSession(): PermissionSessionLike {
 
 function createPermissionsService(session: PermissionSessionLike): PermissionsServiceLike {
   return new modules.LocalPermissionsService({}, session, {}, {}, {});
+}
+
+function describeDeniedPath(cwd: string, path: string, deniedPath: string): GateResult | null {
+  return modules.describePathGate(
+    {
+      toolName: "read",
+      agentName: null,
+      input: { path },
+      toolCallId: "synthetic-read",
+      cwd,
+    },
+    {
+      resolve(intent) {
+        const denied = intent.path.matchValues().includes(deniedPath);
+        const check: PermissionCheck = {
+          toolName: intent.surface,
+          state: denied ? "deny" : "allow",
+          source: "default",
+          origin: "builtin",
+        };
+        return denied ? { ...check, matchedPattern: deniedPath } : check;
+      },
+    },
+    new modules.PathNormalizer(modules.posixPathFlavor, cwd),
+  );
 }
 
 function describeExternalAccess(
@@ -256,10 +298,14 @@ describe("registered infrastructure read directories", () => {
     const quoteSibling = join(root, "docs");
     const wildcardTarget = join(root, "wild*");
     const wildcardSibling = join(root, "wild-unrelated");
+    const deniedFile = join(root, "denied.txt");
+    const escapingQuotedLink = join(wildcardTarget, 'secret"');
     for (const directory of [cwd, quoted, quoteSibling, wildcardTarget, wildcardSibling]) {
       mkdirSync(directory);
       writeFileSync(join(directory, "guide.md"), "guide\n");
     }
+    writeFileSync(deniedFile, "secret\n");
+    symlinkSync(deniedFile, escapingQuotedLink);
 
     const session = createPermissionSession();
     const permissions = createPermissionsService(session);
@@ -280,5 +326,11 @@ describe("registered infrastructure read directories", () => {
       describeExternalAccess(cwd, "read", join(wildcardSibling, "guide.md"), registrations)
         ?.preCheck,
     ).toMatchObject({ state: "ask" });
+    expect(
+      describeExternalAccess(cwd, "read", escapingQuotedLink, registrations)?.preCheck,
+    ).toMatchObject({ state: "ask" });
+    expect(
+      describeDeniedPath(cwd, escapingQuotedLink, realpathSync(deniedFile))?.preCheck,
+    ).toMatchObject({ state: "deny" });
   });
 });

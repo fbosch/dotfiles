@@ -149,6 +149,22 @@ function diagnosticMessageText(content: unknown): string {
   return typeof content === "string" ? content : "";
 }
 
+class LspDiagnosticsMessage {
+  constructor(
+    private readonly content: unknown,
+    private readonly isVisible: () => boolean,
+  ) {}
+
+  render(width: number) {
+    const text = this.isVisible()
+      ? diagnosticMessageText(this.content)
+      : "LSP diagnostics hidden (/lsp-output on to show).";
+    return new Text(text, 0, 0).render(width);
+  }
+
+  invalidate(): void {}
+}
+
 function assertMatched(result: LspOperationResult): void {
   if (result.matched) return;
   const suffix = result.warnings.length === 0 ? "" : `: ${result.warnings.join("; ")}`;
@@ -166,17 +182,26 @@ async function createDefaultManager(
 
 export function createLspExtension(dependencies: LspExtensionDependencies = {}) {
   return function lspExtension(pi: ExtensionAPI): void {
+    let showAutomaticDiagnostics = false;
     pi.registerMessageRenderer(
       "lsp-diagnostics",
-      (message, { expanded }) =>
-        new Text(
-          expanded
-            ? diagnosticMessageText(message.content)
-            : "LSP diagnostics hidden; expand tool output to view.",
-          0,
-          0,
-        ),
+      (message) => new LspDiagnosticsMessage(message.content, () => showAutomaticDiagnostics),
     );
+    pi.registerCommand("lsp-output", {
+      description: "Show or hide automatic LSP diagnostics: /lsp-output on|off",
+      handler: async (args, context) => {
+        const output = args.trim().toLowerCase();
+        if (output !== "on" && output !== "off") {
+          context.ui.notify("Usage: /lsp-output on|off", "error");
+          return;
+        }
+        showAutomaticDiagnostics = output === "on";
+        context.ui.setStatus(
+          "lsp-diagnostics",
+          `Automatic LSP diagnostics: ${showAutomaticDiagnostics ? "visible" : "hidden"}`,
+        );
+      },
+    });
 
     let managerPromise: Promise<LspServerManager> | undefined;
     let mutationSequence = 0;

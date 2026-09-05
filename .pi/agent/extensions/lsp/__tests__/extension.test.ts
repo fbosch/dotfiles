@@ -23,6 +23,8 @@ type RegisteredMessageRenderer = (
   options: { readonly expanded: boolean; readonly outputPad: number },
 ) => { render(width: number): readonly string[] };
 
+type RegisteredCommand = (args: string, context: ExtensionContext) => Promise<void>;
+
 function mutationResult(toolCallId: string, path = "example.ts"): ToolResultEvent {
   return {
     type: "tool_result",
@@ -55,29 +57,42 @@ function turnEnd(...toolCallIds: string[]) {
   };
 }
 
-test("hides automatic diagnostics until tool output is expanded", () => {
+test("hides automatic diagnostics until lsp-output is enabled", async () => {
   let renderer: RegisteredMessageRenderer | undefined;
+  let command: string | undefined;
+  let setOutput: RegisteredCommand | undefined;
   createLspExtension()({
     on() {},
     registerTool() {},
     registerMessageRenderer(_customType: string, registeredRenderer: RegisteredMessageRenderer) {
       renderer = registeredRenderer;
     },
+    registerCommand(registeredCommand: string, { handler }: { handler: RegisteredCommand }) {
+      command = registeredCommand;
+      setOutput = handler;
+    },
   } as unknown as ExtensionAPI);
 
   if (renderer === undefined) throw new Error("LSP diagnostic renderer was not registered");
+  if (command === undefined) throw new Error("LSP output command was not registered");
+  if (setOutput === undefined) throw new Error("LSP output command handler was not registered");
 
   const output = "LSP diagnostics: issues. Diagnostics were reported for the current document.";
-  const collapsed = renderer({ content: output }, { expanded: false, outputPad: 0 })
-    .render(200)
-    .join("\n");
-  const expanded = renderer({ content: output }, { expanded: true, outputPad: 0 })
-    .render(200)
-    .join("\n");
+  const component = renderer({ content: output }, { expanded: true, outputPad: 0 });
+  const render = () => component.render(200).join("\n");
 
-  expect(collapsed).toContain("LSP diagnostics hidden");
-  expect(collapsed).not.toContain(output);
-  expect(expanded).toContain(output);
+  expect(command).toBe("lsp-output");
+  expect(render()).toContain("LSP diagnostics hidden");
+  expect(render()).not.toContain(output);
+
+  const context = { ui: { notify() {}, setStatus() {} } } as unknown as ExtensionContext;
+  await setOutput("on", context);
+
+  expect(render()).toContain(output);
+
+  await setOutput("off", context);
+
+  expect(render()).toContain("LSP diagnostics hidden");
 });
 
 test("registers the tool immediately and creates one manager on first use", async () => {
@@ -101,6 +116,7 @@ test("registers the tool immediately and creates one manager on first use", asyn
       tool = definition;
     },
     registerMessageRenderer() {},
+    registerCommand() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -152,6 +168,7 @@ test("loads the default manager when the tool is first used", async () => {
       tool = definition;
     },
     registerMessageRenderer() {},
+    registerCommand() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: process.cwd(),
@@ -198,6 +215,7 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
       tool = definition;
     },
     registerMessageRenderer() {},
+    registerCommand() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -262,6 +280,7 @@ test.each(["clean", "unconfirmed", "partial", "unavailable"] as const)(
     })({
       on() {},
       registerMessageRenderer() {},
+      registerCommand() {},
       registerTool(definition: ToolDefinition) {
         tool = definition;
       },
@@ -339,6 +358,7 @@ test("starts diagnostics after formatting and suppresses empty results", async (
     },
     registerTool() {},
     registerMessageRenderer() {},
+    registerCommand() {},
     sendMessage(message: SentMessage, options?: { deliverAs?: string }) {
       sentMessages.push(message);
       deliveryModes.push(options?.deliverAs);
@@ -437,6 +457,7 @@ test("cancels superseded automatic diagnostics for the same file", async () => {
     },
     registerTool() {},
     registerMessageRenderer() {},
+    registerCommand() {},
     sendMessage(message: SentMessage) {
       sentMessages.push(message);
     },
@@ -495,6 +516,7 @@ test("reports only the latest immediate diagnostic result per file and turn", as
       promptGuidelines = definition.promptGuidelines ?? [];
     },
     registerMessageRenderer() {},
+    registerCommand() {},
     sendMessage(message: SentMessage) {
       sentMessages.push(message);
     },
@@ -553,6 +575,7 @@ test("warms LSP diagnostics once after a successful native file read", async () 
     },
     registerTool() {},
     registerMessageRenderer() {},
+    registerCommand() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",

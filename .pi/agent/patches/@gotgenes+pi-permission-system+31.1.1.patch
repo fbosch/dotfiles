@@ -61,8 +61,31 @@ index f9f77a0..0cfdec8 100644
  #### `registerToolInputFormatter`
 
  Register a custom preview formatter for a specific tool name.
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
+index 17d1c09..be8feff 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
+@@ -84,6 +84,18 @@ export class AccessPath {
+     return this.canonical;
+   }
+
++  /**
++   * Replace the canonical boundary with a tool-runtime-accurate value while
++   * retaining the policy aliases already derived from the input.
++   */
++  withCanonicalBoundary(canonical: string): AccessPath {
++    return new AccessPath(
++      this.lexical,
++      canonical ? [...new Set([...this.matchAliases, canonical])] : this.matchAliases,
++      canonical,
++    );
++  }
++
+   /**
+    * Build an `AccessPath` for a tool-input or bash-token path, resolved against
+    * `resolveBase` (the cd-folded effective directory; defaults to `cwd`).
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
-index b9a2be9..5056a6f 100644
+index b9a2be9..ab21d36 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
 @@ -28,6 +28,7 @@ export function describeExternalDirectoryGate(
@@ -73,9 +96,23 @@ index b9a2be9..5056a6f 100644
  ): GateResult {
    const { path: externalDirectoryPath, source: pathSource } = getToolInputPath(
      tcc.toolName,
-@@ -46,7 +47,12 @@ export function describeExternalDirectoryGate(
-   const accessPath = normalizer.forPath(externalDirectoryPath);
+@@ -36,17 +37,20 @@ export function describeExternalDirectoryGate(
+   );
+   if (!externalDirectoryPath) return null;
 
+-  if (!normalizer.isOutsideWorkingDirectory(externalDirectoryPath)) {
++  // The boundary decision and infrastructure-read containment use the actual
++  // tool target's canonical path; pattern matching retains the policy aliases.
++  const accessPath = normalizer.forToolPath(tcc.toolName, externalDirectoryPath);
++  if (!normalizer.isBoundaryOutsideWorkingDirectory(accessPath.boundaryValue())) {
+     return null;
+   }
+
+-  // The boundary decision (above) and the infrastructure-read containment
+-  // check (below) use the canonical, symlink-resolved path; pattern matching
+-  // uses the typed and resolved aliases (#418).
+-  const accessPath = normalizer.forPath(externalDirectoryPath);
+-
    // ── Pi infrastructure read bypass ──────────────────────────────────────
 -  if (normalizer.isInfrastructureRead(tcc.toolName, accessPath, infraDirs)) {
 +  const registeredRead =
@@ -87,8 +124,21 @@ index b9a2be9..5056a6f 100644
      return {
        action: "allow",
        // Containment allowed this, not a rule the operator wrote.
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/path.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/path.ts
+index 0ab181e..da20de9 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/path.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/path.ts
+@@ -42,7 +42,7 @@ export function describePathGate(
+   // Emit an access-path intent so the resolver matches the lexical aliases
+   // *and* the canonical (symlink-resolved) form, the same set
+   // `external_directory` matches (#418, #486).
+-  const accessPath = normalizer.forPath(filePath);
++  const accessPath = normalizer.forToolPath(tcc.toolName, filePath);
+   const check = resolver.resolve({
+     kind: "access-path",
+     surface,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
-index 9817c1f..a6c3b87 100644
+index 9817c1f..931e503 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
 @@ -41,6 +41,8 @@ export interface ToolCallGateInputs {
@@ -108,19 +158,56 @@ index 9817c1f..a6c3b87 100644
          ),
        () =>
          describeBashExternalDirectoryGate(
+@@ -194,7 +197,7 @@ export class ToolCallGatePipeline {
+
+     const filePath = getPathBearingToolPath(tcc.toolName, tcc.input);
+     if (filePath !== null) {
+-      const accessPath = normalizer.forPath(filePath);
++      const accessPath = normalizer.forToolPath(tcc.toolName, filePath);
+       return {
+         pathAccess: {
+           path: accessPath,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
-index 3361354..0f3aeb6 100644
+index 3361354..a5b3f8d 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
-@@ -8,6 +8,7 @@ import {
+@@ -6,6 +6,8 @@ import {
+   normalizePathPolicyLiteral,
+ } from "#src/access-intent/path-normalization";
  import { deriveApprovalPattern } from "./approval-pattern";
++import { canonicalizePath } from "./canonicalize-path";
++import { expandHomePath } from "./expand-home";
  import { isPathOutsideWorkingDirectory } from "./path-containment";
  import type { PathFlavor } from "./path-flavor";
-+import { canonicalizePath } from "./canonicalize-path";
  import { isPiInfrastructureRead } from "./pi-infrastructure-read";
+@@ -60,6 +62,26 @@ export class PathNormalizer {
+     });
+   }
 
- /**
-@@ -157,6 +158,15 @@ export class PathNormalizer {
++  /**
++   * Build the path a tool actually accesses. The built-in read tool preserves
++   * quote characters, while policy literals historically strip them.
++   */
++  forToolPath(
++    toolName: string,
++    pathValue: string,
++    options?: { resolveBase?: string },
++  ): AccessPath {
++    const accessPath = this.forPath(pathValue, options);
++    if (toolName !== "read") return accessPath;
++
++    const unprefixed = pathValue.startsWith("@") ? pathValue.slice(1) : pathValue;
++    const absolute = this.flavor.comparable(
++      expandHomePath(unprefixed),
++      options?.resolveBase ?? this.cwd,
++    );
++    return accessPath.withCanonicalBoundary(this.canonicalLiteralPath(absolute));
++  }
++
+   /** Build a literal-only AccessPath (unknown base after a non-literal `cd`). */
+   forLiteral(literal: string): AccessPath {
+     return AccessPath.forLiteral(literal);
+@@ -157,6 +179,15 @@ export class PathNormalizer {
      return this.flavor.isWithin(pathValue, directory);
    }
 
