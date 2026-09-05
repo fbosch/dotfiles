@@ -42,8 +42,9 @@
       behavior
 - [x] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
       dispatch, acknowledgement, and pending-request round trip
-- [x] 4.5 Clear prompt listeners, bindings, timers, and request state on disconnect,
-      terminal close, reload, session replacement, and shutdown in lifecycle tests
+- [x] 4.5 Clear prompt listeners, bindings, timers, and pending state on disconnect,
+      terminal close, reload, session replacement, and shutdown while retaining
+      per-launch replay protection in lifecycle tests
 
 ## 5. Ship the Literal PiAsk Canary
 

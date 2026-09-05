@@ -9,6 +9,8 @@ function fixture(
     readonly hasUI?: boolean;
     readonly idle?: boolean;
     readonly mode?: ExtensionContext["mode"];
+    readonly sendThrows?: boolean;
+    readonly writeThrows?: boolean;
   } = {},
 ) {
   let editorText = options.editorText ?? "";
@@ -23,6 +25,7 @@ function fixture(
       sendOptions: { readonly expandPromptTemplates?: boolean } | undefined,
     ) => {
       sent.push({ options: sendOptions, text });
+      if (options.sendThrows === true) throw new Error("send failed");
     },
   } as unknown as ExtensionAPI;
   const context = {
@@ -34,6 +37,7 @@ function fixture(
       setEditorText: (text: string) => {
         editorText = text;
         editorWrites.push(text);
+        if (options.writeThrows === true) throw new Error("write failed");
       },
     },
   } as unknown as ExtensionContext;
@@ -88,6 +92,18 @@ describe("Pi prompt public API dispatch", () => {
     expect(target.editorText()).toBe("existing\n@this");
     expect(target.editorWrites).toEqual(["existing\n@this"]);
     expect(target.sent).toEqual([]);
+  });
+
+  test.each([
+    { operation: "submit" as const, options: { sendThrows: true } },
+    { operation: "append" as const, options: { writeThrows: true } },
+  ])("reports uncertain delivery after a public API throws", ({ operation, options }) => {
+    const target = fixture(options);
+
+    expect(target[operation]("possibly delivered")).toEqual({
+      code: "PI_DELIVERY_UNKNOWN",
+      ok: false,
+    });
   });
 
   test("rejects append without a TUI editor", () => {

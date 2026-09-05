@@ -33,6 +33,9 @@ should use these terms; new concepts named during design work land here.
   This is the ownership boundary for daemon sockets, locks, and state files;
   all paths derive from it through `runtime/lib/hypr-ipc.{lua,sh}` and must
   respect the Unix socket path-length limit (ADR-0011).
+- **window preview**: a disposable image of a window belonging to one
+  compositor instance. It can survive helper restarts within that instance,
+  but is never reused by another instance.
 - **control socket** — instance-scoped command channel a daemon serves so
   keybind actions can drive it (e.g. `pip-monitor.sock`).
 - **query/dispatch IPC split** — read-only Hyprland queries use the query

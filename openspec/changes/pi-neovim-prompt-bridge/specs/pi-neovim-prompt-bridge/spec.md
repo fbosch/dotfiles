@@ -136,6 +136,13 @@ resubmission.
 - **WHEN** a known request ID is reused with different content
 - **THEN** the request is rejected without a side effect
 
+#### Scenario: Extension reload preserves replay protection
+
+- **WHEN** the extension reloads during the same terminal launch and receives an
+  already-dispatched request ID
+- **THEN** the recorded acknowledgement is replayed without a second Pi side
+  effect
+
 #### Scenario: Acknowledgement is lost
 
 - **WHEN** Neovim does not receive an acknowledgement before its deadline
@@ -161,9 +168,11 @@ only that Pi synchronously invoked the relevant public API without throwing.
 
 ### Requirement: Lifecycle cleanup invalidates prompt state
 
-The system SHALL clear listeners, pending requests, request outcomes, timers,
-launch binding, and session binding when the channel disconnects, the terminal
-closes, the session is replaced, extensions reload, or Pi shuts down.
+The system SHALL clear listeners, pending requests, timers, launch binding,
+and session binding when the channel disconnects, the terminal closes, the
+session is replaced, extensions reload, or Pi shuts down. It SHALL retain the
+bounded outcome ledger and expected sequence across channel replacement and
+extension reload for the lifetime of the same Pi terminal launch.
 
 #### Scenario: Session is replaced while request waits
 

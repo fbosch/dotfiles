@@ -155,12 +155,12 @@ describe("Pi prompt notification contract", () => {
   });
 
   test("rejects empty and NUL-containing submissions", () => {
-    expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: " \n\t" })]),
-    ).toMatchObject({
-      error: "PI_PROMPT_EMPTY",
-      ok: false,
-    });
+    for (const text of [" \n\t", "\u00a0\u2003"]) {
+      expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toMatchObject({
+        error: "PI_PROMPT_EMPTY",
+        ok: false,
+      });
+    }
     expect(
       parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: "no\0pe" })]),
     ).toMatchObject({

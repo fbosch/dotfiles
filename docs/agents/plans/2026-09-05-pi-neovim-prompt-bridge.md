@@ -102,8 +102,9 @@ from prompt text or model-selected input.
 ### Submit once and do not guess after a timeout
 
 A submitted Snacks input maps to one request ID and at most one call to
-`pi.sendUserMessage`. Pi remembers a bounded set of completed request IDs for
-the active channel.
+`pi.sendUserMessage`. Pi remembers a bounded set of completed request IDs and
+the expected sequence for the terminal launch, including across extension
+reloads.
 
 - An identical duplicate receives the recorded acknowledgement and produces no
   second side effect.
@@ -226,8 +227,9 @@ lowercase hexadecimal characters, `requestId` is
 `nvim:<launchId>:<sequence>` and at most 96 ASCII bytes, and `sessionId` keeps
 its existing restricted grammar with a new 128-byte maximum. `cwd` must
 canonicalize to the Pi extension's `ctx.cwd` and the bound editor worktree.
-Neovim starts `sequence` at 1 for each accepted launch binding and increments
-it once per request. IDs are never derived from prompt content.
+Neovim starts `sequence` at 1 for each terminal launch and increments it once
+per request. Rebinding the same launch, replacing the Pi session, or reloading
+the extension does not reset it. IDs are never derived from prompt content.
 
 The Pi client returns the acknowledgement with a normal `nvim_exec_lua`
 request for the fixed `prompt_ack` bridge operation on the same channel. The
@@ -274,9 +276,9 @@ retract the acknowledgement.
   `PI_REQUEST_PENDING` and produces no second side effect. A completed
   identical duplicate replays the recorded acknowledgement. Reusing an ID with
   different content returns `PI_REQUEST_ID_REUSED`.
-- Last 64 request outcomes retained in memory per channel for duplicate
-  detection. An unknown lower sequence is stale; a gap is out of order and is
-  rejected without advancing the expected sequence.
+- The last 64 request outcomes and the expected sequence are retained in memory
+  per launch across extension reloads. An unknown lower sequence is stale; a
+  gap is out of order and is rejected without advancing the expected sequence.
 - Cold-start request deadline: 10 seconds, cancelled immediately on terminal
   close, session replacement, worktree change, or channel disconnect.
 
@@ -371,6 +373,7 @@ interface aid only; protocol behavior does not depend on Snacks.
 - `PI_REQUEST_OUT_OF_ORDER`
 - `PI_ACK_TIMEOUT`
 - `PI_DISCONNECTED`
+- `PI_DELIVERY_UNKNOWN`
 - `PI_UNSUPPORTED`
 
 Malformed notifications without a valid request ID are ignored. A valid request
@@ -534,8 +537,8 @@ Implementation record (2026-09-05):
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.
-- The focused Pi suite passes 70 tests with 334 assertions, including a real
-  headless Neovim notification and `prompt_ack` round trip.
+- The focused Pi and Herdr extension suite passes 103 tests with 473 assertions,
+  including a real headless Neovim notification and `prompt_ack` round trip.
 - The prompt, launcher, exact-session restoration, production restoration,
   cutover, and OpenCode restoration Neovim tasks pass.
 - The isolated warm/cold two-worktree live matrix remains the Phase 2 exit gate.

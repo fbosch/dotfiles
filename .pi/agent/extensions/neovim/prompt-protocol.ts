@@ -15,6 +15,7 @@ export type PromptState = "blocked" | "closed" | "idle" | "starting" | "streamin
 export type PromptFailureCode =
   | "PI_BUSY"
   | "PI_DISCONNECTED"
+  | "PI_DELIVERY_UNKNOWN"
   | "PI_INVALID_REQUEST"
   | "PI_INVALID_UTF8"
   | "PI_LAUNCH_MISMATCH"
@@ -233,6 +234,9 @@ export function parsePromptNotification(
   ) {
     return promptFailure("PI_INVALID_REQUEST", identity);
   }
+  if (value.text.length > MAX_PROMPT_BYTES) {
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
+  }
   if (value.text.includes("\0")) {
     return promptFailure("PI_INVALID_REQUEST", identity);
   }
@@ -320,37 +324,22 @@ export class PromptRequestDispatcher {
     const blocked = this.#dependencies.blockingPromptActive();
     const state = promptState(context, blocked);
     if (binding === undefined || context === undefined) {
-      return acknowledgement(request, "rejected", state, "PI_SESSION_NOT_READY");
+      return this.#replayState.has(request.launchId)
+        ? this.#rejectSequenced(request, state, "PI_SESSION_NOT_READY", JSON.stringify(request))
+        : acknowledgement(request, "rejected", state, "PI_SESSION_NOT_READY");
     }
-    if (request.launchId !== binding.launchId) {
-      return acknowledgement(request, "rejected", state, "PI_LAUNCH_MISMATCH");
+    const identityFailure = this.#identityFailure(request, binding, context);
+    if (identityFailure === "PI_LAUNCH_MISMATCH") {
+      return acknowledgement(request, "rejected", state, identityFailure);
     }
-    if (
-      request.sessionId !== binding.sessionId ||
-      request.ownerId !== binding.ownerId ||
-      request.editorPid !== binding.editorPid ||
-      context.sessionManager.getSessionId() !== binding.sessionId
-    ) {
-      return acknowledgement(request, "rejected", state, "PI_SESSION_MISMATCH");
-    }
-    if (
-      worktreesMatch(request.cwd, binding.cwd) === false ||
-      worktreesMatch(context.cwd, binding.cwd) === false
-    ) {
-      return acknowledgement(request, "rejected", state, "PI_WORKTREE_MISMATCH");
+    if (identityFailure !== undefined) {
+      return this.#rejectSequenced(request, state, identityFailure, JSON.stringify(request));
     }
 
     const launchState = this.#launchState(request.launchId);
     const fingerprint = JSON.stringify(request);
-    const existing = launchState.records.get(request.requestId);
-    if (existing !== undefined) {
-      if (existing.fingerprint !== fingerprint) {
-        return acknowledgement(request, "rejected", state, "PI_REQUEST_ID_REUSED");
-      }
-      return existing.acknowledgement === undefined
-        ? acknowledgement(request, "duplicate", state, "PI_REQUEST_PENDING")
-        : { ...existing.acknowledgement, outcome: "duplicate" };
-    }
+    const existing = this.#existingAcknowledgement(request, state, launchState, fingerprint);
+    if (existing !== undefined) return existing;
     if (request.sequence < launchState.expectedSequence) {
       return acknowledgement(request, "rejected", state, "PI_STALE_REQUEST");
     }
@@ -377,38 +366,67 @@ export class PromptRequestDispatcher {
     const context = this.#dependencies.context();
     const blocked = this.#dependencies.blockingPromptActive();
     const state = promptState(context, blocked);
+    const fingerprint = `malformed:${code}`;
     if (binding === undefined || context === undefined) {
-      return acknowledgement(request, "rejected", state, "PI_SESSION_NOT_READY");
+      return this.#replayState.has(request.launchId)
+        ? this.#rejectSequenced(request, state, "PI_SESSION_NOT_READY", fingerprint)
+        : acknowledgement(request, "rejected", state, "PI_SESSION_NOT_READY");
     }
-    if (request.launchId !== binding.launchId) {
-      return acknowledgement(request, "rejected", state, "PI_LAUNCH_MISMATCH");
+    const identityFailure = this.#identityFailure(request, binding, context);
+    if (identityFailure === "PI_LAUNCH_MISMATCH") {
+      return acknowledgement(request, "rejected", state, identityFailure);
     }
+    return this.#rejectSequenced(request, state, identityFailure ?? code, fingerprint);
+  }
+
+  #existingAcknowledgement(
+    request: PromptRequestIdentity,
+    state: PromptState,
+    launchState: LaunchRequestState,
+    fingerprint: string,
+  ): PromptAcknowledgement | undefined {
+    const existing = launchState.records.get(request.requestId);
+    if (existing === undefined) return undefined;
+    if (existing.fingerprint !== fingerprint) {
+      return acknowledgement(request, "rejected", state, "PI_REQUEST_ID_REUSED");
+    }
+    return existing.acknowledgement === undefined
+      ? acknowledgement(request, "duplicate", state, "PI_REQUEST_PENDING")
+      : { ...existing.acknowledgement, outcome: "duplicate" };
+  }
+
+  #identityFailure(
+    request: PromptRequestIdentity,
+    binding: PromptBinding,
+    context: ExtensionContext,
+  ): PromptFailureCode | undefined {
+    if (request.launchId !== binding.launchId) return "PI_LAUNCH_MISMATCH";
     if (
       request.sessionId !== binding.sessionId ||
       request.ownerId !== binding.ownerId ||
       request.editorPid !== binding.editorPid ||
       context.sessionManager.getSessionId() !== binding.sessionId
     ) {
-      return acknowledgement(request, "rejected", state, "PI_SESSION_MISMATCH");
+      return "PI_SESSION_MISMATCH";
     }
     if (
       worktreesMatch(request.cwd, binding.cwd) === false ||
       worktreesMatch(context.cwd, binding.cwd) === false
     ) {
-      return acknowledgement(request, "rejected", state, "PI_WORKTREE_MISMATCH");
+      return "PI_WORKTREE_MISMATCH";
     }
+    return undefined;
+  }
 
+  #rejectSequenced(
+    request: PromptRequestIdentity,
+    state: PromptState,
+    code: PromptFailureCode,
+    fingerprint: string,
+  ): PromptAcknowledgement {
     const launchState = this.#launchState(request.launchId);
-    const fingerprint = `malformed:${code}`;
-    const existing = launchState.records.get(request.requestId);
-    if (existing !== undefined) {
-      if (existing.fingerprint !== fingerprint) {
-        return acknowledgement(request, "rejected", state, "PI_REQUEST_ID_REUSED");
-      }
-      return existing.acknowledgement === undefined
-        ? acknowledgement(request, "duplicate", state, "PI_REQUEST_PENDING")
-        : { ...existing.acknowledgement, outcome: "duplicate" };
-    }
+    const existing = this.#existingAcknowledgement(request, state, launchState, fingerprint);
+    if (existing !== undefined) return existing;
     if (request.sequence < launchState.expectedSequence) {
       return acknowledgement(request, "rejected", state, "PI_STALE_REQUEST");
     }

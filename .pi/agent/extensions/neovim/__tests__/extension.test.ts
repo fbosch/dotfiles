@@ -504,7 +504,63 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   });
   await handlers.get("ui_prompt_end")?.({} as never, context);
 
-  await handlers.get("session_shutdown")?.({} as never, context);
+  connection.emit("notification", PROMPT_NOTIFICATION, [
+    {
+      ...promptRequest,
+      forged: true,
+      requestId: "nvim:0123456789abcdef0123456789abcdef:3",
+      sequence: 3,
+    },
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(submittedPrompts).toEqual(["literal prompt"]);
+  expect(connection.promptAcknowledgement).toMatchObject({
+    code: "PI_INVALID_REQUEST",
+    outcome: "rejected",
+  });
+
+  connection.emit("notification", PROMPT_NOTIFICATION, [
+    {
+      ...promptRequest,
+      requestId: "nvim:0123456789abcdef0123456789abcdef:4",
+      sequence: 4,
+      text: "after malformed request",
+    },
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(submittedPrompts).toEqual(["literal prompt", "after malformed request"]);
+  expect(connection.promptAcknowledgement).toMatchObject({ outcome: "accepted" });
+
+  const replacementContext = {
+    ...context,
+    sessionManager: { getSessionId: () => "pi-replacement-session" },
+  } as ExtensionContext;
+  await handlers.get("session_start")?.(
+    { previousSessionFile: "/tmp/previous.jsonl", reason: "new" } as never,
+    replacementContext,
+  );
+  expect(connection.boundSessionArguments).toEqual({
+    launchId: "0123456789abcdef0123456789abcdef",
+    replacePending: true,
+    sessionId: "pi-replacement-session",
+  });
+  connection.emit("notification", PROMPT_NOTIFICATION, [
+    {
+      ...promptRequest,
+      requestId: "nvim:0123456789abcdef0123456789abcdef:5",
+      sequence: 5,
+      sessionId: "pi-replacement-session",
+      text: "replacement session prompt",
+    },
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(submittedPrompts).toEqual([
+    "literal prompt",
+    "after malformed request",
+    "replacement session prompt",
+  ]);
+
+  await handlers.get("session_shutdown")?.({} as never, replacementContext);
   expect(connection.closed).toBe(true);
 });
 

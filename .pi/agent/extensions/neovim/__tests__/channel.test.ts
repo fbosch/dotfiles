@@ -283,19 +283,35 @@ describe("PiNeovimChannel", () => {
     } as const;
     connection.bindResponse = binding;
     const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+    const malformed: string[] = [];
     const requests: PromptRequest[] = [];
-    channel.setPromptRequestHandler((request) => {
-      requests.push(request);
-      return {
-        launchId: request.launchId,
-        outcome: "accepted",
-        ownerId: request.ownerId,
-        requestId: request.requestId,
-        sessionId: request.sessionId,
-        state: "idle",
-        version: 1,
-      };
-    });
+    channel.setPromptRequestHandler(
+      (request) => {
+        requests.push(request);
+        return {
+          launchId: request.launchId,
+          outcome: "accepted",
+          ownerId: request.ownerId,
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          state: "idle",
+          version: 1,
+        };
+      },
+      (request, code) => {
+        malformed.push(code);
+        return {
+          code,
+          launchId: request.launchId,
+          outcome: "rejected",
+          ownerId: request.ownerId,
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          state: "idle",
+          version: 1,
+        };
+      },
+    );
 
     expect(await channel.bindSession(binding.sessionId, launchId)).toEqual({
       ok: true,
@@ -327,6 +343,20 @@ describe("PiNeovimChannel", () => {
       sessionId: "pi-session-one",
       state: "idle",
       version: 1,
+    });
+    connection.emit("notification", PROMPT_NOTIFICATION, [
+      {
+        ...request,
+        requestId: `nvim:${launchId}:2`,
+        sequence: 2,
+        unexpected: true,
+      },
+    ]);
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(malformed).toEqual(["PI_INVALID_REQUEST"]);
+    expect(connection.promptAckArguments).toMatchObject({
+      code: "PI_INVALID_REQUEST",
+      requestId: `nvim:${launchId}:2`,
     });
     connection.emit("disconnect");
     expect(channel.promptBinding()).toBeUndefined();

@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
-export type PromptDispatchFailureCode = "PI_BUSY" | "PI_NO_UI" | "PI_UNSUPPORTED";
+export type PromptDispatchFailureCode = "PI_BUSY" | "PI_DELIVERY_UNKNOWN" | "PI_NO_UI";
 
 export type PromptDispatchResult =
   | { readonly ok: true }
@@ -23,7 +23,7 @@ export function submitPrompt(
     pi.sendUserMessage(text, { expandPromptTemplates: false });
     return { ok: true };
   } catch {
-    return { code: "PI_UNSUPPORTED", ok: false };
+    return { code: "PI_DELIVERY_UNKNOWN", ok: false };
   }
 }
 
@@ -36,6 +36,6 @@ export function appendPrompt(context: ExtensionContext, text: string): PromptDis
     context.ui.setEditorText(context.ui.getEditorText() + text);
     return { ok: true };
   } catch {
-    return { code: "PI_UNSUPPORTED", ok: false };
+    return { code: "PI_DELIVERY_UNKNOWN", ok: false };
   }
 }

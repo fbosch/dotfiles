@@ -1,6 +1,17 @@
 {
   "$schema": "https://raw.githubusercontent.com/gotgenes/pi-packages/pi-permission-system-v29.0.0/packages/pi-permission-system/schemas/permissions.schema.json",
   "permission": {
+    "just_devenv_test": "allow",
+    "bash": {
+      "devenv test": "allow",
+      "devenv tasks run test:pi-extensions": "allow",
+      "bun test extensions": "allow",
+      "bun run lint": "allow",
+      "bun run typecheck": "allow",
+      "bun run test": "allow",
+      "bun run check": "allow",
+      "just stow-check": "allow"
+    },
     "external_directory_read": {
       "~/nixos": "allow",
       "~/nixos/**": "allow"

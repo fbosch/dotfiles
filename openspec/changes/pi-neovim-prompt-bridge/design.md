@@ -84,10 +84,13 @@ Alternatives rejected:
 
 ### Use at-most-once request sequencing
 
-Neovim numbers requests from 1 for each accepted launch binding and derives
-`requestId` from launch ID plus sequence. Pi reserves the ID and a normalized
-payload fingerprint before any side effect. It retains at most 64 in-flight or
-completed outcomes for the active channel.
+Neovim numbers requests from 1 for each terminal launch and derives
+`requestId` from launch ID plus sequence. Rebinding the same launch, replacing
+the Pi session, or reloading the extension does not reset that sequence. Pi
+reserves the ID and a normalized payload fingerprint before any side effect. A
+process-global replay ledger preserves the launch sequence across extension
+reloads and retains at most 64 in-flight or completed outcomes; evicted older
+sequences remain stale because the expected sequence is retained.
 
 Identical completed duplicates replay the prior acknowledgement. In-flight
 duplicates, ID reuse with changed content, old unknown sequences, and sequence
@@ -125,8 +128,9 @@ unknown placeholders remain literal.
 The extension stores only the current session context and small protocol state.
 It checks `ctx.isIdle()` at dispatch and tracks blocking prompt events to fail
 closed. Session start/replacement establishes context; session shutdown and the
-existing Effect finalizer clear listeners, request state, timers, and bindings.
-No readiness polling is introduced.
+existing Effect finalizer clear listeners, pending UI state, timers, and
+bindings. The bounded replay ledger remains for the terminal launch so reload
+cannot admit an already-dispatched request. No readiness polling is introduced.
 
 ### Keep context rendering bounded and explicit
 
@@ -141,14 +145,17 @@ and tool controls remain authoritative.
 
 - [An acknowledgement can follow a successful dispatch whose provider later
   fails] -> Define acceptance as synchronous public API invocation only and
-  leave later failures in Pi's normal TUI and lifecycle reporting.
+  leave later failures in Pi's normal TUI and lifecycle reporting. A synchronous
+  public API exception is `PI_DELIVERY_UNKNOWN`, not a safe rejection.
 - [An acknowledgement can be lost after a turn starts] -> Report unknown
   delivery, never retry automatically, and let the user inspect Pi.
 - [A Pi process launched before launch IDs cannot bind] -> Reject it with an
   actionable launch mismatch and require one terminal restart.
 - [Another trusted Neovim plugin can forge a request] -> State the same-process
-  trust boundary; keep operations closed and incapable of arbitrary editor or
-  terminal execution.
+  trust boundary explicitly. Launch identity prevents stale routing but is not
+  authentication; local Neovim plugins and same-user RPC clients are trusted.
+  Keep operations closed and incapable of arbitrary editor or terminal
+  execution.
 - [Source text can contain model instructions] -> Delimit it as untrusted data,
   disable Pi prompt expansion, and retain normal permissions.
 - [Preserve-focus startup differs from the current launcher] -> Isolate it as an

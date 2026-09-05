@@ -12,6 +12,7 @@ local pending
 local failure_messages = {
 	PI_ACK_TIMEOUT = "Pi may have received the prompt; inspect Pi before submitting it again.",
 	PI_BUSY = "Wait for the current Pi response or question to finish.",
+	PI_DELIVERY_UNKNOWN = "Pi may have received the prompt; inspect Pi before submitting it again.",
 	PI_DISCONNECTED = "The bound Pi terminal disconnected.",
 	PI_INVALID_REQUEST = "The prompt request was invalid.",
 	PI_INVALID_UTF8 = "The prompt is not valid UTF-8.",
@@ -230,8 +231,9 @@ local function send_pending()
 		text = pending.text,
 		context = vim.NIL,
 	}
-	local ok = pcall(vim.rpcnotify, active_binding.channelId, notification, request)
-	if not ok then
+	local ok, sent = pcall(vim.rpcnotify, active_binding.channelId, notification, request)
+	if not ok or sent == false then
+		active_binding = nil
 		clear_pending()
 		notify_failure("PI_DISCONNECTED")
 	end

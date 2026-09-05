@@ -328,12 +328,6 @@ in
       bun run typecheck
     '';
 
-    "test:pi-tree-sitter".exec = ''
-      set -euo pipefail
-      cd .pi/agent
-      bun test extensions/tree-sitter/__tests__
-    '';
-
     "test:nvim-pi-launcher".exec = ''
       test_bin="$(mktemp -d "$DEVENV_STATE/pi-launcher-bin.XXXXXX")"
       trap 'rm -rf "$test_bin"' EXIT
@@ -443,7 +437,6 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:pi-extensions"
-        "test:pi-tree-sitter"
         "test:nvim-pi-launcher"
         "test:nvim-pi-cutover"
         "test:nvim-pi-prompt"

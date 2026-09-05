@@ -138,6 +138,7 @@ assert(#focus_calls == 0, "mismatched acknowledgement focused Pi")
 assert(prompt.acknowledge(accepted, 12) == true, "Pi Ask rejected its acknowledgement")
 assert(#focus_calls == 1, "accepted Pi Ask did not focus Pi")
 assert(focus_calls[1].launchId == launch_id, "Pi Ask focused another launch")
+assert(prompt.on_bound(binding) == true, "same Pi binding was not idempotent")
 
 table.insert(input_values, "stale timer guard")
 prompt.ask("")

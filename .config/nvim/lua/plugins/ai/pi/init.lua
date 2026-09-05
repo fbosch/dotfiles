@@ -26,11 +26,10 @@ local terminal_options = {
 local max_context_lines = 500
 local max_context_bytes = 32 * 1024
 
-local function current_terminal()
-	if terminal_instance ~= nil and terminal_instance:buf_valid() then
-		return terminal_instance
-	end
-
+local function clear_terminal_state()
+	local closed_session_id = terminal_session_id
+	local closed_owner = terminal_owner
+	local closed_launch_id = terminal_launch_id
 	terminal_instance = nil
 	terminal_session_id = nil
 	terminal_owner = nil
@@ -38,6 +37,23 @@ local function current_terminal()
 	terminal_launch_id = nil
 	terminal_channel_id = nil
 	terminal_bound = false
+	local prompt = package.loaded["plugins.ai.pi.prompt"]
+	if type(prompt) == "table" and type(prompt.terminal_closed) == "function" then
+		prompt.terminal_closed(closed_launch_id)
+	end
+	if closed_owner ~= nil then
+		session.set_pi_terminal_state(closed_session_id, false, closed_owner)
+	end
+end
+
+local function current_terminal()
+	if terminal_instance ~= nil and terminal_instance:buf_valid() then
+		return terminal_instance
+	end
+
+	if terminal_instance ~= nil then
+		clear_terminal_state()
+	end
 	return nil
 end
 
@@ -238,23 +254,7 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 	configure_terminal(terminal)
 	local function clear_terminal()
 		if terminal_instance == terminal then
-			local closed_session_id = terminal_session_id
-			local closed_owner = terminal_owner
-			local closed_launch_id = terminal_launch_id
-			terminal_instance = nil
-			terminal_session_id = nil
-			terminal_owner = nil
-			terminal_owner_id = nil
-			terminal_launch_id = nil
-			terminal_channel_id = nil
-			terminal_bound = false
-			local prompt = package.loaded["plugins.ai.pi.prompt"]
-			if type(prompt) == "table" and type(prompt.terminal_closed) == "function" then
-				prompt.terminal_closed(closed_launch_id)
-			end
-			if closed_owner ~= nil then
-				session.set_pi_terminal_state(closed_session_id, false, closed_owner)
-			end
+			clear_terminal_state()
 		end
 	end
 	terminal:on("TermClose", clear_terminal, { buf = true })
