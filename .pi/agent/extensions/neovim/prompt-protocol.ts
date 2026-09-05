@@ -40,18 +40,21 @@ export interface PromptBinding {
   readonly version: 1;
 }
 
-export interface PromptRequest {
-  readonly context: null;
+export interface PromptRequestIdentity {
   readonly cwd: string;
   readonly editorPid: number;
   readonly launchId: string;
-  readonly operation: PromptOperation;
   readonly ownerId: string;
   readonly requestId: string;
   readonly sequence: number;
   readonly sessionId: string;
-  readonly text: string;
   readonly version: 1;
+}
+
+export interface PromptRequest extends PromptRequestIdentity {
+  readonly context: null;
+  readonly operation: PromptOperation;
+  readonly text: string;
 }
 
 export interface PromptAcknowledgement {
@@ -67,17 +70,43 @@ export interface PromptAcknowledgement {
 
 export type PromptNotificationResult =
   | { readonly ok: true; readonly value: PromptRequest }
-  | { readonly error: PromptFailureCode; readonly ok: false };
+  | {
+      readonly error: PromptFailureCode;
+      readonly identity?: PromptRequestIdentity;
+      readonly ok: false;
+    };
 
 interface RequestRecord {
   acknowledgement?: PromptAcknowledgement;
   readonly fingerprint: string;
 }
 
+interface LaunchRequestState {
+  expectedSequence: number;
+  readonly records: Map<string, RequestRecord>;
+}
+
+export type PromptReplayState = Map<string, LaunchRequestState>;
+
 interface PromptDispatcherDependencies {
   readonly binding: () => PromptBinding | undefined;
   readonly blockingPromptActive: () => boolean;
   readonly context: () => ExtensionContext | undefined;
+  readonly replayState?: PromptReplayState;
+}
+
+const replayStateKey = "__piNvimPromptReplayV1";
+
+function defaultReplayState(): PromptReplayState {
+  const existing = Reflect.get(globalThis, replayStateKey);
+  if (existing instanceof Map) return existing as PromptReplayState;
+  const created: PromptReplayState = new Map();
+  Reflect.set(globalThis, replayStateKey, created);
+  return created;
+}
+
+export function createPromptReplayState(): PromptReplayState {
+  return new Map();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,7 +148,7 @@ function promptState(context: ExtensionContext | undefined, blocked: boolean): P
 }
 
 function acknowledgement(
-  request: PromptRequest,
+  request: PromptRequestIdentity,
   outcome: PromptAcknowledgement["outcome"],
   state: PromptState,
   code?: PromptFailureCode,
@@ -136,15 +165,53 @@ function acknowledgement(
   };
 }
 
+function parseRequestIdentity(value: Record<string, unknown>): PromptRequestIdentity | undefined {
+  if (
+    value.version !== 1 ||
+    typeof value.launchId !== "string" ||
+    launchIdPattern.test(value.launchId) === false ||
+    Number.isSafeInteger(value.sequence) === false ||
+    (value.sequence as number) < 1 ||
+    value.requestId !== `nvim:${value.launchId}:${value.sequence}` ||
+    typeof value.sessionId !== "string" ||
+    sessionIdPattern.test(value.sessionId) === false ||
+    Buffer.byteLength(value.sessionId, "utf8") > 128 ||
+    isBoundedText(value.ownerId, 128) === false ||
+    isBoundedText(value.cwd, 4096) === false ||
+    Number.isSafeInteger(value.editorPid) === false ||
+    (value.editorPid as number) < 1
+  ) {
+    return undefined;
+  }
+  return {
+    cwd: value.cwd,
+    editorPid: value.editorPid as number,
+    launchId: value.launchId,
+    ownerId: value.ownerId,
+    requestId: value.requestId,
+    sequence: value.sequence as number,
+    sessionId: value.sessionId,
+    version: 1,
+  };
+}
+
+function promptFailure(
+  error: PromptFailureCode,
+  identity?: PromptRequestIdentity,
+): PromptNotificationResult {
+  return { ...(identity === undefined ? {} : { identity }), error, ok: false };
+}
+
 export function parsePromptNotification(
   method: string,
   args: unknown,
 ): PromptNotificationResult | undefined {
   if (method !== PROMPT_NOTIFICATION) return undefined;
   if (Array.isArray(args) === false || args.length !== 1 || isRecord(args[0]) === false) {
-    return { error: "PI_INVALID_REQUEST", ok: false };
+    return promptFailure("PI_INVALID_REQUEST");
   }
   const value = args[0];
+  const identity = parseRequestIdentity(value);
   if (
     hasOnlyKeys(value, [
       "version",
@@ -159,55 +226,36 @@ export function parsePromptNotification(
       "text",
       "context",
     ]) === false ||
-    value.version !== 1 ||
+    identity === undefined ||
     (value.operation !== "submit" && value.operation !== "append") ||
-    typeof value.launchId !== "string" ||
-    launchIdPattern.test(value.launchId) === false ||
-    Number.isSafeInteger(value.sequence) === false ||
-    (value.sequence as number) < 1 ||
-    value.requestId !== `nvim:${value.launchId}:${value.sequence}` ||
-    typeof value.sessionId !== "string" ||
-    sessionIdPattern.test(value.sessionId) === false ||
-    Buffer.byteLength(value.sessionId, "utf8") > 128 ||
-    isBoundedText(value.ownerId, 128) === false ||
-    isBoundedText(value.cwd, 4096) === false ||
-    Number.isSafeInteger(value.editorPid) === false ||
-    (value.editorPid as number) < 1 ||
     typeof value.text !== "string" ||
     value.context !== null
   ) {
-    return { error: "PI_INVALID_REQUEST", ok: false };
+    return promptFailure("PI_INVALID_REQUEST", identity);
   }
   if (value.text.includes("\0")) {
-    return { error: "PI_INVALID_REQUEST", ok: false };
+    return promptFailure("PI_INVALID_REQUEST", identity);
   }
   if (hasValidUnicode(value.text) === false) {
-    return { error: "PI_INVALID_UTF8", ok: false };
+    return promptFailure("PI_INVALID_UTF8", identity);
   }
   if (Buffer.byteLength(value.text, "utf8") > MAX_PROMPT_BYTES) {
-    return { error: "PI_PROMPT_TOO_LARGE", ok: false };
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
   }
   if (value.operation === "submit" && value.text.trim() === "") {
-    return { error: "PI_PROMPT_EMPTY", ok: false };
+    return promptFailure("PI_PROMPT_EMPTY", identity);
   }
   if (Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_PROMPT_REQUEST_BYTES) {
-    return { error: "PI_PROMPT_TOO_LARGE", ok: false };
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
   }
 
   return {
     ok: true,
     value: {
+      ...identity,
       context: null,
-      cwd: value.cwd,
-      editorPid: value.editorPid as number,
-      launchId: value.launchId,
       operation: value.operation,
-      ownerId: value.ownerId,
-      requestId: value.requestId,
-      sequence: value.sequence as number,
-      sessionId: value.sessionId,
       text: value.text,
-      version: 1,
     },
   };
 }
@@ -258,12 +306,12 @@ export function parsePromptBinding(
 export class PromptRequestDispatcher {
   readonly #dependencies: PromptDispatcherDependencies;
   readonly #pi: ExtensionAPI;
-  #expectedSequence = 1;
-  #records = new Map<string, RequestRecord>();
+  readonly #replayState: PromptReplayState;
 
   constructor(pi: ExtensionAPI, dependencies: PromptDispatcherDependencies) {
     this.#pi = pi;
     this.#dependencies = dependencies;
+    this.#replayState = dependencies.replayState ?? defaultReplayState();
   }
 
   dispatch(request: PromptRequest): PromptAcknowledgement {
@@ -292,8 +340,9 @@ export class PromptRequestDispatcher {
       return acknowledgement(request, "rejected", state, "PI_WORKTREE_MISMATCH");
     }
 
+    const launchState = this.#launchState(request.launchId);
     const fingerprint = JSON.stringify(request);
-    const existing = this.#records.get(request.requestId);
+    const existing = launchState.records.get(request.requestId);
     if (existing !== undefined) {
       if (existing.fingerprint !== fingerprint) {
         return acknowledgement(request, "rejected", state, "PI_REQUEST_ID_REUSED");
@@ -302,16 +351,16 @@ export class PromptRequestDispatcher {
         ? acknowledgement(request, "duplicate", state, "PI_REQUEST_PENDING")
         : { ...existing.acknowledgement, outcome: "duplicate" };
     }
-    if (request.sequence < this.#expectedSequence) {
+    if (request.sequence < launchState.expectedSequence) {
       return acknowledgement(request, "rejected", state, "PI_STALE_REQUEST");
     }
-    if (request.sequence > this.#expectedSequence) {
+    if (request.sequence > launchState.expectedSequence) {
       return acknowledgement(request, "rejected", state, "PI_REQUEST_OUT_OF_ORDER");
     }
 
     const record: RequestRecord = { fingerprint };
-    this.#records.set(request.requestId, record);
-    this.#expectedSequence += 1;
+    launchState.records.set(request.requestId, record);
+    launchState.expectedSequence += 1;
     const result =
       request.operation === "submit"
         ? submitPrompt(this.#pi, context, request.text, blocked)
@@ -319,20 +368,74 @@ export class PromptRequestDispatcher {
     record.acknowledgement = result.ok
       ? acknowledgement(request, "accepted", state)
       : acknowledgement(request, "rejected", state, result.code);
-    this.#trimRecords();
+    this.#trimRecords(launchState);
     return record.acknowledgement;
   }
 
-  reset(): void {
-    this.#expectedSequence = 1;
-    this.#records = new Map();
+  rejectMalformed(request: PromptRequestIdentity, code: PromptFailureCode): PromptAcknowledgement {
+    const binding = this.#dependencies.binding();
+    const context = this.#dependencies.context();
+    const blocked = this.#dependencies.blockingPromptActive();
+    const state = promptState(context, blocked);
+    if (binding === undefined || context === undefined) {
+      return acknowledgement(request, "rejected", state, "PI_SESSION_NOT_READY");
+    }
+    if (request.launchId !== binding.launchId) {
+      return acknowledgement(request, "rejected", state, "PI_LAUNCH_MISMATCH");
+    }
+    if (
+      request.sessionId !== binding.sessionId ||
+      request.ownerId !== binding.ownerId ||
+      request.editorPid !== binding.editorPid ||
+      context.sessionManager.getSessionId() !== binding.sessionId
+    ) {
+      return acknowledgement(request, "rejected", state, "PI_SESSION_MISMATCH");
+    }
+    if (
+      worktreesMatch(request.cwd, binding.cwd) === false ||
+      worktreesMatch(context.cwd, binding.cwd) === false
+    ) {
+      return acknowledgement(request, "rejected", state, "PI_WORKTREE_MISMATCH");
+    }
+
+    const launchState = this.#launchState(request.launchId);
+    const fingerprint = `malformed:${code}`;
+    const existing = launchState.records.get(request.requestId);
+    if (existing !== undefined) {
+      if (existing.fingerprint !== fingerprint) {
+        return acknowledgement(request, "rejected", state, "PI_REQUEST_ID_REUSED");
+      }
+      return existing.acknowledgement === undefined
+        ? acknowledgement(request, "duplicate", state, "PI_REQUEST_PENDING")
+        : { ...existing.acknowledgement, outcome: "duplicate" };
+    }
+    if (request.sequence < launchState.expectedSequence) {
+      return acknowledgement(request, "rejected", state, "PI_STALE_REQUEST");
+    }
+    if (request.sequence > launchState.expectedSequence) {
+      return acknowledgement(request, "rejected", state, "PI_REQUEST_OUT_OF_ORDER");
+    }
+
+    const rejected = acknowledgement(request, "rejected", state, code);
+    launchState.records.set(request.requestId, { acknowledgement: rejected, fingerprint });
+    launchState.expectedSequence += 1;
+    this.#trimRecords(launchState);
+    return rejected;
   }
 
-  #trimRecords(): void {
-    while (this.#records.size > MAX_PROMPT_OUTCOMES) {
-      const oldest = this.#records.keys().next().value;
+  #launchState(launchId: string): LaunchRequestState {
+    const existing = this.#replayState.get(launchId);
+    if (existing !== undefined) return existing;
+    const created: LaunchRequestState = { expectedSequence: 1, records: new Map() };
+    this.#replayState.set(launchId, created);
+    return created;
+  }
+
+  #trimRecords(state: LaunchRequestState): void {
+    while (state.records.size > MAX_PROMPT_OUTCOMES) {
+      const oldest = state.records.keys().next().value;
       if (oldest === undefined) return;
-      this.#records.delete(oldest);
+      state.records.delete(oldest);
     }
   }
 }

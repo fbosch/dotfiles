@@ -41,12 +41,12 @@ function createHarness() {
   };
 }
 
-function writeCall(content: string): ToolCallEvent {
+function writeCall(content: string, path = "example.el"): ToolCallEvent {
   return {
     type: "tool_call",
     toolCallId: "write-1",
     toolName: "write",
-    input: { path: "example.el", content },
+    input: { path, content },
   };
 }
 
@@ -71,6 +71,25 @@ test("registers structural tools and blocks malformed delimiter-only files", asy
     await handler(writeCall("(defun example ()\n  (+ 1 2))"), harness.context),
   ).toBeUndefined();
 });
+
+test("allows valid Lua writes and blocks missing end tokens", async () => {
+  const harness = createHarness();
+  await treeSitterExtension(harness.pi);
+  const handler = harness.getToolCallHandler();
+
+  expect(
+    await handler(
+      writeCall("local function greet()\n  return 1\nend", "example.lua"),
+      harness.context,
+    ),
+  ).toBeUndefined();
+  expect(
+    await handler(writeCall("local function greet()\n  return 1", "example.lua"), harness.context),
+  ).toMatchObject({
+    block: true,
+    reason: expect.stringContaining("Missing `end`"),
+  });
+}, 120_000);
 
 test("structural tools reject an already-cancelled call", async () => {
   const harness = createHarness();

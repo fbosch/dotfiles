@@ -210,7 +210,7 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         channel = new PiNeovimChannel(inheritedSocket, context.cwd, dependencies.createConnection);
         channel.setPromptRequestHandler(
           (request) => promptDispatcher.dispatch(request),
-          () => promptDispatcher.reset(),
+          (request, code) => promptDispatcher.rejectMalformed(request, code),
         );
       }
       return channel;
@@ -264,14 +264,14 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
       }),
     );
 
-    pi.on("session_start", async (_event, context) => {
+    pi.on("session_start", async (event, context) => {
       activeContext = context;
       blockingPromptActive = false;
-      promptDispatcher.reset();
       const bridge = channelFor(context);
       const sessionId = context.sessionManager.getSessionId();
+      const replacePending = event.previousSessionFile !== undefined;
       const result = await repeatPromiseWhile(
-        () => bridge.bindSession(sessionId, inheritedLaunchId),
+        () => bridge.bindSession(sessionId, inheritedLaunchId, replacePending),
         (attempt) => attempt.ok === false && attempt.error.code !== "NVIM_UNAVAILABLE",
         { delayMs: 50, maxAttempts: 10 },
       );
@@ -294,7 +294,6 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
     pi.on("session_shutdown", async () => {
       activeContext = undefined;
       blockingPromptActive = false;
-      promptDispatcher.reset();
       const activeChannel = channel;
       await activeChannel?.close();
       if (channel === activeChannel) channel = undefined;

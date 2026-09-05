@@ -284,24 +284,18 @@ describe("PiNeovimChannel", () => {
     connection.bindResponse = binding;
     const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
     const requests: PromptRequest[] = [];
-    let resets = 0;
-    channel.setPromptRequestHandler(
-      (request) => {
-        requests.push(request);
-        return {
-          launchId: request.launchId,
-          outcome: "accepted",
-          ownerId: request.ownerId,
-          requestId: request.requestId,
-          sessionId: request.sessionId,
-          state: "idle",
-          version: 1,
-        };
-      },
-      () => {
-        resets += 1;
-      },
-    );
+    channel.setPromptRequestHandler((request) => {
+      requests.push(request);
+      return {
+        launchId: request.launchId,
+        outcome: "accepted",
+        ownerId: request.ownerId,
+        requestId: request.requestId,
+        sessionId: request.sessionId,
+        state: "idle",
+        version: 1,
+      };
+    });
 
     expect(await channel.bindSession(binding.sessionId, launchId)).toEqual({
       ok: true,
@@ -334,10 +328,8 @@ describe("PiNeovimChannel", () => {
       state: "idle",
       version: 1,
     });
-    expect(resets).toBe(1);
     connection.emit("disconnect");
     expect(channel.promptBinding()).toBeUndefined();
-    expect(resets).toBe(2);
     await channel.close();
   });
 

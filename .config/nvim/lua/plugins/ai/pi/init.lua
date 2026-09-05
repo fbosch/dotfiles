@@ -371,11 +371,18 @@ function M.bind_session(binding)
 			or binding.channelId < 1
 			or binding.channelId % 1 ~= 0
 			or binding.editorPid ~= vim.fn.getpid()
+			or (binding.replacePending ~= nil and type(binding.replacePending) ~= "boolean")
 			or binding_cwd == nil
 			or owner_cwd == nil
 			or binding_cwd ~= owner_cwd
 		then
 			return false
+		end
+		if binding.replacePending then
+			local prompt = package.loaded["plugins.ai.pi.prompt"]
+			if type(prompt) == "table" and type(prompt.session_replaced) == "function" then
+				prompt.session_replaced(binding.launchId)
+			end
 		end
 	end
 
@@ -386,6 +393,10 @@ function M.bind_session(binding)
 	if type(binding) ~= "table" or binding.launchId == nil then
 		terminal_bound = false
 		terminal_channel_id = nil
+		local prompt = package.loaded["plugins.ai.pi.prompt"]
+		if type(prompt) == "table" and type(prompt.binding_unavailable) == "function" then
+			prompt.binding_unavailable(terminal_launch_id)
+		end
 		return true
 	end
 

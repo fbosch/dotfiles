@@ -143,18 +143,15 @@ test("round-trips a prompt acknowledgement over the existing channel", async () 
       text: "literal prompt",
       version: 1,
     };
-    channel.setPromptRequestHandler(
-      (received) => ({
-        launchId: received.launchId,
-        outcome: "accepted",
-        ownerId: received.ownerId,
-        requestId: received.requestId,
-        sessionId: received.sessionId,
-        state: "idle",
-        version: 1,
-      }),
-      () => undefined,
-    );
+    channel.setPromptRequestHandler((received) => ({
+      launchId: received.launchId,
+      outcome: "accepted",
+      ownerId: received.ownerId,
+      requestId: received.requestId,
+      sessionId: received.sessionId,
+      state: "idle",
+      version: 1,
+    }));
 
     await nvim.executeLua(
       "local channel, method, request = ...; vim.rpcnotify(channel, method, request)",

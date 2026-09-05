@@ -5,6 +5,7 @@ local max_prompt_bytes = 16 * 1024
 local request_timeout_ms = 10 * 1000
 
 local active_binding
+local sequence_launch_id
 local next_sequence = 1
 local pending
 
@@ -129,6 +130,35 @@ local function valid_utf8(text)
 	return true
 end
 
+local function whitespace_only(text)
+	local remaining = text:gsub("%s", "")
+	local unicode_whitespace = {
+		0x00A0,
+		0x1680,
+		0x2000,
+		0x2001,
+		0x2002,
+		0x2003,
+		0x2004,
+		0x2005,
+		0x2006,
+		0x2007,
+		0x2008,
+		0x2009,
+		0x200A,
+		0x2028,
+		0x2029,
+		0x202F,
+		0x205F,
+		0x3000,
+		0xFEFF,
+	}
+	for _, codepoint in ipairs(unicode_whitespace) do
+		remaining = remaining:gsub(vim.pesc(vim.fn.nr2char(codepoint)), "")
+	end
+	return remaining == ""
+end
+
 local function validate_prompt(text)
 	if type(text) ~= "string" or text:find("\0", 1, true) ~= nil then
 		return "PI_INVALID_REQUEST"
@@ -139,14 +169,10 @@ local function validate_prompt(text)
 	if #text > max_prompt_bytes then
 		return "PI_PROMPT_TOO_LARGE"
 	end
-	if text:match("^%s*$") ~= nil then
+	if whitespace_only(text) then
 		return "PI_PROMPT_EMPTY"
 	end
 	return nil
-end
-
-local function binding_key(identity)
-	return table.concat({ identity.launchId, identity.sessionId, tostring(identity.channelId) }, ":")
 end
 
 local function valid_identity(identity)
@@ -219,10 +245,9 @@ function M.on_bound(identity)
 		clear_pending()
 		notify_failure("PI_SESSION_MISMATCH")
 	end
-	local previous_key = active_binding ~= nil and binding_key(active_binding) or nil
-	local current_key = binding_key(identity)
-	if previous_key ~= current_key then
+	if sequence_launch_id ~= identity.launchId then
 		next_sequence = 1
+		sequence_launch_id = identity.launchId
 	end
 	active_binding = vim.deepcopy(identity)
 	send_pending()
@@ -265,6 +290,9 @@ function M.acknowledge(payload, channel)
 		end
 	end
 
+	if payload.outcome == "duplicate" and payload.code == "PI_REQUEST_PENDING" then
+		return true
+	end
 	local completed = clear_pending()
 	if payload.outcome == "accepted" or (payload.outcome == "duplicate" and payload.code == nil) then
 		local integration = require("plugins.ai.pi")
@@ -314,10 +342,11 @@ function M.ask(prefill)
 			text = text,
 			sent = false,
 		}
-		pending.timer = vim.defer_fn(function()
-			if pending ~= nil and pending.launchId == launch.launchId then
+		local current = pending
+		current.timer = vim.defer_fn(function()
+			if pending == current then
 				clear_pending()
-				notify_failure("PI_ACK_TIMEOUT")
+				notify_failure(current.sent and "PI_ACK_TIMEOUT" or "PI_SESSION_NOT_READY")
 			end
 		end, request_timeout_ms)
 
@@ -336,6 +365,9 @@ function M.terminal_closed(launch_id)
 	end
 	if active_binding ~= nil and active_binding.launchId == launch_id then
 		active_binding = nil
+	end
+	if sequence_launch_id == launch_id then
+		sequence_launch_id = nil
 		next_sequence = 1
 	end
 end
@@ -344,11 +376,33 @@ function M.channel_closed(channel)
 	if active_binding ~= nil and active_binding.channelId == channel then
 		local launch_id = active_binding.launchId
 		active_binding = nil
-		next_sequence = 1
 		if pending ~= nil and pending.launchId == launch_id then
 			clear_pending()
 			notify_failure("PI_DISCONNECTED")
 		end
+	elseif active_binding == nil and pending ~= nil then
+		clear_pending()
+		notify_failure("PI_DISCONNECTED")
+	end
+end
+
+function M.session_replaced(launch_id)
+	if pending ~= nil and pending.launchId == launch_id then
+		clear_pending()
+		notify_failure("PI_SESSION_MISMATCH")
+	end
+	if active_binding ~= nil and active_binding.launchId == launch_id then
+		active_binding = nil
+	end
+end
+
+function M.binding_unavailable(launch_id)
+	if pending ~= nil and pending.launchId == launch_id then
+		clear_pending()
+		notify_failure("PI_SESSION_NOT_READY")
+	end
+	if active_binding ~= nil and active_binding.launchId == launch_id then
+		active_binding = nil
 	end
 end
 

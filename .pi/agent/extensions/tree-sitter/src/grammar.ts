@@ -94,9 +94,11 @@ export const LANGUAGE_MAP: Record<string, GrammarEntry> = {
   // Dart — explicit WASM-only package
   ".dart": { pkg: "@winci/tree-sitter-dart", wasm: "tree-sitter-dart.wasm" },
 
+  // The bundle's Lua WASM uses legacy dylink metadata rejected by web-tree-sitter 0.26.
+  ".lua": { pkg: "@tree-sitter-grammars/tree-sitter-lua", wasm: "tree-sitter-lua.wasm" },
+
   // Languages via tree-sitter-wasms (prebuilt WASM bundle)
-  // Lua, Swift, TOML, YAML, Vue don't publish WASM in their individual packages
-  ".lua": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-lua.wasm" },
+  // Swift, TOML, YAML, Vue don't publish WASM in their individual packages
   ".swift": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-swift.wasm" },
   ".toml": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-toml.wasm" },
   ".yaml": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-yaml.wasm" },
@@ -128,6 +130,10 @@ const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
   "@tree-sitter-grammars/tree-sitter-kotlin/tree-sitter-kotlin.wasm": {
     version: "1.1.0",
     sha256: "7009d69453bc8735e438b2818a633efb21c88f99782769abba60dffedfab73f7",
+  },
+  "@tree-sitter-grammars/tree-sitter-lua/tree-sitter-lua.wasm": {
+    version: "0.4.1",
+    sha256: "6d95607fc7d78964cfdf065ccb1ba76be5ed217c5ec0d0a3cace13c59fa1ae43",
   },
   "@tree-sitter-grammars/tree-sitter-zig/tree-sitter-zig.wasm": {
     version: "1.1.2",
@@ -216,10 +222,6 @@ const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
   "tree-sitter-typescript/tree-sitter-typescript.wasm": {
     version: "0.23.2",
     sha256: "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d",
-  },
-  "tree-sitter-wasms/out/tree-sitter-lua.wasm": {
-    version: "0.1.13",
-    sha256: "75ef809136d610068c5b2135741d89f5df62690a3d55169203351cb7cc85727d",
   },
   "tree-sitter-wasms/out/tree-sitter-swift.wasm": {
     version: "0.1.13",

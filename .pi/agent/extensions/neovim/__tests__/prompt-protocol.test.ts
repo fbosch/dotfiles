@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
+  createPromptReplayState,
   MAX_PROMPT_BYTES,
   PROMPT_NOTIFICATION,
   type PromptBinding,
+  type PromptReplayState,
   type PromptRequest,
   PromptRequestDispatcher,
   parsePromptBinding,
@@ -54,6 +56,7 @@ function dispatcherFixture(
     readonly hasContext?: boolean;
     readonly idle?: boolean;
     readonly onSubmit?: () => void;
+    readonly replayState?: PromptReplayState;
   } = {},
 ) {
   let editorText = options.editorText ?? "";
@@ -83,6 +86,7 @@ function dispatcherFixture(
     binding: () => options.binding ?? binding(),
     blockingPromptActive: () => options.blockingPromptActive ?? false,
     context: () => (options.hasContext === false ? undefined : context),
+    replayState: options.replayState ?? createPromptReplayState(),
   });
   return { dispatcher, editorText: () => editorText, sent, writes };
 }
@@ -100,7 +104,9 @@ describe("Pi prompt notification contract", () => {
   });
 
   test("rejects extra fields and malformed request identity", () => {
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [{ ...request(), forged: true }])).toEqual({
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [{ ...request(), forged: true }]),
+    ).toMatchObject({
       error: "PI_INVALID_REQUEST",
       ok: false,
     });
@@ -114,7 +120,9 @@ describe("Pi prompt notification contract", () => {
   test("uses UTF-8 byte limits without truncation", () => {
     const exact = "ø".repeat(MAX_PROMPT_BYTES / 2);
     expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: exact })])?.ok).toBe(true);
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: `${exact}ø` })])).toEqual({
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: `${exact}ø` })]),
+    ).toMatchObject({
       error: "PI_PROMPT_TOO_LARGE",
       ok: false,
     });
@@ -122,7 +130,7 @@ describe("Pi prompt notification contract", () => {
       parsePromptNotification(PROMPT_NOTIFICATION, [
         request({ text: String.fromCharCode(0xd800) }),
       ]),
-    ).toEqual({
+    ).toMatchObject({
       error: "PI_INVALID_UTF8",
       ok: false,
     });
@@ -131,7 +139,7 @@ describe("Pi prompt notification contract", () => {
   test.each(["\ud800", "prefix\udbff", "\udc00", "\ud800x", "\ud800\ud800"])(
     "rejects unpaired surrogates in prompt text: %j",
     (text) => {
-      expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toEqual({
+      expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toMatchObject({
         error: "PI_INVALID_UTF8",
         ok: false,
       });
@@ -147,11 +155,15 @@ describe("Pi prompt notification contract", () => {
   });
 
   test("rejects empty and NUL-containing submissions", () => {
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: " \n\t" })])).toEqual({
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: " \n\t" })]),
+    ).toMatchObject({
       error: "PI_PROMPT_EMPTY",
       ok: false,
     });
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: "no\0pe" })])).toEqual({
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: "no\0pe" })]),
+    ).toMatchObject({
       error: "PI_INVALID_REQUEST",
       ok: false,
     });
@@ -262,6 +274,34 @@ describe("Pi prompt request dispatch", () => {
       outcome: "rejected",
     });
     expect(target.sent).toEqual(["literal prompt"]);
+  });
+
+  test("acknowledges malformed requests and advances their sequence", () => {
+    const target = dispatcherFixture();
+
+    expect(target.dispatcher.rejectMalformed(request(), "PI_INVALID_UTF8")).toMatchObject({
+      code: "PI_INVALID_UTF8",
+      outcome: "rejected",
+    });
+    expect(target.sent).toEqual([]);
+    expect(
+      target.dispatcher.dispatch(request({ requestId: `nvim:${launchId}:2`, sequence: 2 })),
+    ).toMatchObject({ outcome: "accepted" });
+    expect(target.sent).toEqual(["literal prompt"]);
+  });
+
+  test("preserves replay protection across dispatcher replacement", () => {
+    const replayState = createPromptReplayState();
+    const first = dispatcherFixture({ replayState });
+    first.dispatcher.dispatch(request());
+
+    const replacement = dispatcherFixture({ replayState });
+    expect(replacement.dispatcher.dispatch(request())).toMatchObject({ outcome: "duplicate" });
+    expect(replacement.sent).toEqual([]);
+    expect(
+      replacement.dispatcher.dispatch(request({ requestId: `nvim:${launchId}:2`, sequence: 2 })),
+    ).toMatchObject({ outcome: "accepted" });
+    expect(replacement.sent).toEqual(["literal prompt"]);
   });
 
   test("rejects sequence gaps and stale unknown requests", () => {

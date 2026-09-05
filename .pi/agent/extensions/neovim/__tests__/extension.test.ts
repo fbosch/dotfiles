@@ -243,6 +243,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   await handlers.get("session_start")?.({} as never, context);
   expect(connection.boundSessionArguments).toEqual({
     launchId: "0123456789abcdef0123456789abcdef",
+    replacePending: false,
     sessionId: "pi-assigned-session",
   });
   const parameters = JSON.stringify(tool.parameters);

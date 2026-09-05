@@ -9,7 +9,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { type Language, type Node, Parser, Query } from "web-tree-sitter";
+import { type Language, type Node, Query } from "web-tree-sitter";
+import { withParseTree } from "./parse-tree.js";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -67,12 +68,11 @@ function sig(node: Node, source: string): string {
   return source.slice(node.startIndex, end).trim();
 }
 
-function parseRoot(source: string, lang: Language): Node {
-  const parser = new Parser();
-  parser.setLanguage(lang);
-  const tree = parser.parse(source);
-  if (tree === null) throw new Error("Tree-sitter returned no parse tree");
-  return tree.rootNode;
+function extractWithTree(
+  extract: (source: string, root: Node) => ExtractedFile,
+): LangConfig["extract"] {
+  return (source, language) =>
+    withParseTree(source, language, (tree) => extract(source, tree.rootNode));
 }
 
 /** Strip C/C++ comments and string literals for .h sniffing. */
@@ -101,23 +101,28 @@ function queryCaptures(
   range?: ByteRange,
 ): Array<{ name: string; line: number }> {
   try {
-    const q = new Query(lang, querySource);
-    const root = parseRoot(source, lang);
-    const matches = q.matches(root, {});
-    const result: Array<{ name: string; line: number }> = [];
-    for (const m of matches) {
-      for (const c of m.captures) {
-        if (c.name === captureName) {
-          if (
-            !range ||
-            (c.node.startIndex >= range.startByte && c.node.startIndex <= range.endByte)
-          ) {
-            result.push({ name: nodeText(c.node, source), line: c.node.startPosition.row + 1 });
+    const query = new Query(lang, querySource);
+    try {
+      return withParseTree(source, lang, (tree) => {
+        const matches = query.matches(tree.rootNode, {});
+        const result: Array<{ name: string; line: number }> = [];
+        for (const m of matches) {
+          for (const c of m.captures) {
+            if (c.name === captureName) {
+              if (
+                !range ||
+                (c.node.startIndex >= range.startByte && c.node.startIndex <= range.endByte)
+              ) {
+                result.push({ name: nodeText(c.node, source), line: c.node.startPosition.row + 1 });
+              }
+            }
           }
         }
-      }
+        return result;
+      });
+    } finally {
+      query.delete();
     }
-    return result;
   } catch {
     return [];
   }
@@ -139,8 +144,7 @@ export interface LangConfig {
 
 // ── TypeScript / JavaScript ──────────────────────────────────────────────
 
-const tsExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const tsExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -323,8 +327,7 @@ const tsCallees = (
 
 // ── Python ───────────────────────────────────────────────────────────────
 
-const pyExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const pyExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -438,8 +441,7 @@ const pyCallees = (
 
 // ── Rust ─────────────────────────────────────────────────────────────────
 
-const rsExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const rsExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -608,8 +610,7 @@ const rsCallees = (
 
 // ── Clojure ──────────────────────────────────────────────────────────────
 
-const cljExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const cljExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -706,8 +707,7 @@ const cljCallees = (
 
 // ── Go ───────────────────────────────────────────────────────────────────
 
-const goExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const goExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -970,8 +970,7 @@ function ktIsInterface(node: Node, source: string): boolean {
   return false;
 }
 
-const ktExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const ktExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1081,8 +1080,7 @@ const ktCallees = (
 
 // ── Lua ──────────────────────────────────────────────────────────────────
 
-const luaExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const luaExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1091,34 +1089,17 @@ const luaExtract = (source: string, lang: Language): ExtractedFile => {
     const child = root.namedChild(i);
     if (!child) continue;
 
-    switch (child.type) {
-      case "function_declaration": {
-        const nn = child.childForFieldName("name");
-        if (nn)
-          symbols.push({
-            kind: "function",
-            name: nodeText(nn, source),
-            range: nodeRange(child),
-            signature: sig(child, source),
-            isExported: true,
-            parentClass: null,
-          });
-        break;
-      }
-      case "local_function_declaration": {
-        const nn = child.childForFieldName("name");
-        if (nn)
-          symbols.push({
-            kind: "function",
-            name: nodeText(nn, source),
-            range: nodeRange(child),
-            signature: sig(child, source),
-            isExported: false,
-            parentClass: null,
-          });
-        break;
-      }
-    }
+    if (child.type !== "function_declaration") continue;
+    const name = child.childForFieldName("name");
+    if (!name) continue;
+    symbols.push({
+      kind: "function",
+      name: nodeText(name, source),
+      range: nodeRange(child),
+      signature: sig(child, source),
+      isExported: child.child(0)?.type !== "local",
+      parentClass: null,
+    });
   }
 
   return { symbols, imports: [], exports: [], warnings };
@@ -1129,12 +1110,11 @@ const luaCallees = (
   lang: Language,
   range: ByteRange,
 ): Array<{ name: string; line: number }> =>
-  queryCaptures(source, lang, "(function_call function: (identifier) @callee)", "callee", range);
+  queryCaptures(source, lang, "(function_call name: (identifier) @callee)", "callee", range);
 
 // ── PHP ──────────────────────────────────────────────────────────────────
 
-const phpExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const phpExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1237,8 +1217,7 @@ const phpCallees = (
 
 // ── Scala ────────────────────────────────────────────────────────────────
 
-const scalaExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const scalaExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1316,8 +1295,7 @@ const scalaCallees = (
 
 // ── Swift ────────────────────────────────────────────────────────────────
 
-const swiftExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const swiftExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1530,8 +1508,7 @@ function javaWalkClassBody(
   }
 }
 
-const javaExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const javaExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1628,8 +1605,7 @@ const javaCallees = (
 
 // ── Ruby ─────────────────────────────────────────────────────────────────
 
-const rbExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const rbExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1731,8 +1707,7 @@ function cFuncName(node: Node, source: string): string | null {
   return null;
 }
 
-const cExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const cExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1795,8 +1770,7 @@ const cCallees = (
 
 // ── C++ ──────────────────────────────────────────────────────────────────
 
-const cppExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const cppExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -1873,8 +1847,7 @@ const cppCallees = (
 
 // ── Zig ──────────────────────────────────────────────────────────────────
 
-const zigExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const zigExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -2022,8 +1995,7 @@ function elixirWalkBlock(
   }
 }
 
-const elixirExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const elixirExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -2040,8 +2012,7 @@ const elixirCallees = (
 
 // ── C# ───────────────────────────────────────────────────────────────────
 
-const csExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const csExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -2144,8 +2115,7 @@ const csCallees = (
 
 // ── Dart ─────────────────────────────────────────────────────────────────
 
-const dartExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const dartExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -2253,8 +2223,7 @@ const dartCallees = (
 
 // ── Bash ─────────────────────────────────────────────────────────────────
 
-const bashExtract = (source: string, lang: Language): ExtractedFile => {
-  const root = parseRoot(source, lang);
+const bashExtract = (source: string, root: Node): ExtractedFile => {
   const symbols: Symbol[] = [];
   const warnings: string[] = [];
   if (root.hasError) warnings.push("tree-sitter reported syntax errors");
@@ -2290,35 +2259,39 @@ const bashCallees = (
 const LANGUAGES: LangConfig[] = [
   {
     extensions: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
-    extract: tsExtract,
+    extract: extractWithTree(tsExtract),
     findCallees: tsCallees,
   },
-  { extensions: [".py", ".pyi"], extract: pyExtract, findCallees: pyCallees },
-  { extensions: [".rs"], extract: rsExtract, findCallees: rsCallees },
-  { extensions: [".go"], extract: goExtract, findCallees: goCallees },
+  { extensions: [".py", ".pyi"], extract: extractWithTree(pyExtract), findCallees: pyCallees },
+  { extensions: [".rs"], extract: extractWithTree(rsExtract), findCallees: rsCallees },
+  { extensions: [".go"], extract: extractWithTree(goExtract), findCallees: goCallees },
   {
     extensions: [".clj", ".cljs", ".cljc", ".bb", ".edn", ".cljd"],
-    extract: cljExtract,
+    extract: extractWithTree(cljExtract),
     findCallees: cljCallees,
   },
-  { extensions: [".kt", ".kts"], extract: ktExtract, findCallees: ktCallees },
-  { extensions: [".lua"], extract: luaExtract, findCallees: luaCallees },
-  { extensions: [".php"], extract: phpExtract, findCallees: phpCallees },
-  { extensions: [".scala"], extract: scalaExtract, findCallees: scalaCallees },
-  { extensions: [".swift"], extract: swiftExtract, findCallees: swiftCallees },
-  { extensions: [".java"], extract: javaExtract, findCallees: javaCallees },
-  { extensions: [".rb"], extract: rbExtract, findCallees: rbCallees },
-  { extensions: [".c", ".h"], extract: cExtract, findCallees: cCallees },
+  { extensions: [".kt", ".kts"], extract: extractWithTree(ktExtract), findCallees: ktCallees },
+  { extensions: [".lua"], extract: extractWithTree(luaExtract), findCallees: luaCallees },
+  { extensions: [".php"], extract: extractWithTree(phpExtract), findCallees: phpCallees },
+  { extensions: [".scala"], extract: extractWithTree(scalaExtract), findCallees: scalaCallees },
+  { extensions: [".swift"], extract: extractWithTree(swiftExtract), findCallees: swiftCallees },
+  { extensions: [".java"], extract: extractWithTree(javaExtract), findCallees: javaCallees },
+  { extensions: [".rb"], extract: extractWithTree(rbExtract), findCallees: rbCallees },
+  { extensions: [".c", ".h"], extract: extractWithTree(cExtract), findCallees: cCallees },
   {
     extensions: [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx", ".h"],
-    extract: cppExtract,
+    extract: extractWithTree(cppExtract),
     findCallees: cppCallees,
   },
-  { extensions: [".sh", ".bash"], extract: bashExtract, findCallees: bashCallees },
-  { extensions: [".zig"], extract: zigExtract, findCallees: zigCallees },
-  { extensions: [".ex", ".exs"], extract: elixirExtract, findCallees: elixirCallees },
-  { extensions: [".cs"], extract: csExtract, findCallees: csCallees },
-  { extensions: [".dart"], extract: dartExtract, findCallees: dartCallees },
+  { extensions: [".sh", ".bash"], extract: extractWithTree(bashExtract), findCallees: bashCallees },
+  { extensions: [".zig"], extract: extractWithTree(zigExtract), findCallees: zigCallees },
+  {
+    extensions: [".ex", ".exs"],
+    extract: extractWithTree(elixirExtract),
+    findCallees: elixirCallees,
+  },
+  { extensions: [".cs"], extract: extractWithTree(csExtract), findCallees: csCallees },
+  { extensions: [".dart"], extract: extractWithTree(dartExtract), findCallees: dartCallees },
 ];
 
 /** Find the config for a file extension (e.g. ".ts"). */

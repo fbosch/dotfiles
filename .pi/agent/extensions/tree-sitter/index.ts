@@ -34,7 +34,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { Parser, type Tree, type Node as TSNode } from "web-tree-sitter";
+import type { Tree, Node as TSNode } from "web-tree-sitter";
 import { BALANCE_RULES, checkDelimiterBalance } from "./src/delimiter.js";
 import {
   describePrefixLeftover,
@@ -45,6 +45,7 @@ import { findProjectFiles, type ProjectFileSearch, readFileSafe } from "./src/fi
 import { ensureParser, LANGUAGE_MAP, loadGrammar, type NotifyFn } from "./src/grammar.js";
 import type { ExtractedFile, Symbol as Sym } from "./src/languages.js";
 import { configForFile } from "./src/languages.js";
+import { withParseTree } from "./src/parse-tree.js";
 
 // ── Error collection (write-time validation) ─────────────────────────────
 
@@ -238,46 +239,26 @@ async function validateContent(
     await ensureParser(signal);
     const lang = await loadGrammar(entry, notify, signal);
     if (lang) {
-      const parser = new Parser();
-      parser.setLanguage(lang);
-      const tree = parser.parse(content);
-      if (tree?.rootNode.hasError) {
-        const errors = collectErrors(tree, content);
-        if (errors.length > 0) {
-          // Grammar reports errors — run delimiter balance as second opinion
-          if (rules) {
-            const balanceErr = checkDelimiterBalance(path, content, rules);
-            if (balanceErr === null) {
-              // Delimiters are balanced — grammar likely producing a false
-              // positive (e.g. Java interop in Clojure). Warn but don't block.
-              return null;
-            }
-            // Both grammar and delimiter check agree — block with combined message
-            let msg =
-              "Syntax check failed for " +
-              path +
-              ": " +
-              errors.length +
-              " error(s) detected by tree-sitter.\n";
-            msg += "Delimiter balance also reports issues:\n  " + balanceErr + "\n";
-            msg +=
-              "Fix and re-submit. (This is a pre-write guard \u2014 the file was NOT modified.)\n";
-            msg += errors.join("\n");
-            if (errors.length >= MAX_ERRORS) {
-              msg +=
-                "\n  \u2026(truncated at " +
-                MAX_ERRORS +
-                " errors; fix the listed issues and re-check)";
-            }
-            return msg;
+      const errors = withParseTree(content, lang, (tree) =>
+        tree.rootNode.hasError ? collectErrors(tree, content) : [],
+      );
+      if (errors.length > 0) {
+        // Grammar reports errors — run delimiter balance as second opinion
+        if (rules) {
+          const balanceErr = checkDelimiterBalance(path, content, rules);
+          if (balanceErr === null) {
+            // Delimiters are balanced — grammar likely producing a false
+            // positive (e.g. Java interop in Clojure). Warn but don't block.
+            return null;
           }
-          // No delimiter rules for this extension — trust the grammar
+          // Both grammar and delimiter check agree — block with combined message
           let msg =
             "Syntax check failed for " +
             path +
             ": " +
             errors.length +
             " error(s) detected by tree-sitter.\n";
+          msg += "Delimiter balance also reports issues:\n  " + balanceErr + "\n";
           msg +=
             "Fix and re-submit. (This is a pre-write guard \u2014 the file was NOT modified.)\n";
           msg += errors.join("\n");
@@ -289,6 +270,22 @@ async function validateContent(
           }
           return msg;
         }
+        // No delimiter rules for this extension — trust the grammar
+        let msg =
+          "Syntax check failed for " +
+          path +
+          ": " +
+          errors.length +
+          " error(s) detected by tree-sitter.\n";
+        msg += "Fix and re-submit. (This is a pre-write guard \u2014 the file was NOT modified.)\n";
+        msg += errors.join("\n");
+        if (errors.length >= MAX_ERRORS) {
+          msg +=
+            "\n  \u2026(truncated at " +
+            MAX_ERRORS +
+            " errors; fix the listed issues and re-check)";
+        }
+        return msg;
       }
       // Grammar loaded but file has no errors — clean
       return null;

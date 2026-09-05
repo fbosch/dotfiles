@@ -86,6 +86,11 @@ prompt.ask("")
 assert(#ensure_calls == 0, "empty Pi Ask started Pi")
 assert(notifications[#notifications].message:find("PI_PROMPT_EMPTY", 1, true), "empty Pi Ask lacked a stable error")
 
+table.insert(input_values, vim.fn.nr2char(0x00A0) .. vim.fn.nr2char(0x2003))
+prompt.ask("")
+assert(#ensure_calls == 0, "Unicode whitespace-only Pi Ask started Pi")
+assert(notifications[#notifications].message:find("PI_PROMPT_EMPTY", 1, true), "Unicode whitespace was not empty")
+
 table.insert(input_values, string.char(0xFF))
 prompt.ask("")
 assert(#ensure_calls == 0, "invalid UTF-8 started Pi")
@@ -134,33 +139,48 @@ assert(prompt.acknowledge(accepted, 12) == true, "Pi Ask rejected its acknowledg
 assert(#focus_calls == 1, "accepted Pi Ask did not focus Pi")
 assert(focus_calls[1].launchId == launch_id, "Pi Ask focused another launch")
 
-table.insert(input_values, "uncertain delivery")
+table.insert(input_values, "stale timer guard")
 prompt.ask("")
 assert(#requests == 2, "warm Pi Ask did not send immediately")
 assert(requests[2].request.sequence == 2, "warm Pi Ask did not advance its sequence")
+timers[1].fire()
+local pending_duplicate = vim.tbl_extend("force", accepted, {
+	code = "PI_REQUEST_PENDING",
+	outcome = "duplicate",
+	requestId = requests[2].request.requestId,
+})
+assert(prompt.acknowledge(pending_duplicate, 12) == true, "in-flight duplicate terminated Pi Ask")
+assert(#focus_calls == 1, "in-flight duplicate focused Pi")
+local second_accepted = vim.tbl_extend("force", accepted, { requestId = requests[2].request.requestId })
+assert(prompt.acknowledge(second_accepted, 12) == true, "stale timer cleared a newer Pi Ask")
+assert(#focus_calls == 2, "accepted warm Pi Ask did not focus Pi")
+
+table.insert(input_values, "uncertain delivery")
+prompt.ask("")
+assert(#requests == 3, "timeout Pi Ask did not send")
 local timeout_timer = timers[#timers]
 timeout_timer.fire()
 assert(notifications[#notifications].message:find("PI_ACK_TIMEOUT", 1, true), "Pi Ask timeout was not visible")
-local late = vim.tbl_extend("force", accepted, { requestId = requests[2].request.requestId })
+local late = vim.tbl_extend("force", accepted, { requestId = requests[3].request.requestId })
 assert(prompt.acknowledge(late, 12) == false, "late Pi Ask acknowledgement changed state")
-assert(#focus_calls == 1, "late Pi Ask acknowledgement focused Pi")
+assert(#focus_calls == 2, "late Pi Ask acknowledgement focused Pi")
 
 table.insert(input_values, "busy request")
 prompt.ask("")
-assert(#requests == 3, "busy acknowledgement fixture did not send")
+assert(#requests == 4, "busy acknowledgement fixture did not send")
 local rejected = vim.tbl_extend("force", accepted, {
 	code = "PI_BUSY",
 	outcome = "rejected",
-	requestId = requests[3].request.requestId,
+	requestId = requests[4].request.requestId,
 	state = "streaming",
 })
 assert(prompt.acknowledge(rejected, 12) == true, "Pi Ask rejected a valid failure acknowledgement")
 assert(notifications[#notifications].message:find("PI_BUSY", 1, true), "Pi Ask rejection was not visible")
-assert(#focus_calls == 1, "rejected Pi Ask focused Pi")
+assert(#focus_calls == 2, "rejected Pi Ask focused Pi")
 
 table.insert(input_values, "replace session while pending")
 prompt.ask("")
-assert(#requests == 4, "session replacement fixture did not send")
+assert(#requests == 5, "session replacement fixture did not send")
 local replacement = vim.tbl_extend("force", binding, { sessionId = "pi-session-two" })
 assert(prompt.on_bound(replacement) == true, "Pi Ask rejected replacement session identity")
 assert(
@@ -168,18 +188,35 @@ assert(
 	"session replacement did not cancel Pi Ask"
 )
 assert(
-	prompt.acknowledge(vim.tbl_extend("force", accepted, { requestId = requests[4].request.requestId }), 12) == false
+	prompt.acknowledge(vim.tbl_extend("force", accepted, { requestId = requests[5].request.requestId }), 12) == false
 )
 assert(prompt.on_bound(binding) == true, "Pi Ask did not restore the original test binding")
 
 table.insert(input_values, "close while pending")
 prompt.ask("")
-assert(#requests == 5, "terminal-close Pi Ask did not send")
+assert(#requests == 6, "terminal-close Pi Ask did not send")
 prompt.terminal_closed(launch_id)
 assert(notifications[#notifications].message:find("PI_DISCONNECTED", 1, true), "terminal close was not visible")
 assert(
-	prompt.acknowledge(vim.tbl_extend("force", accepted, { requestId = requests[5].request.requestId }), 12) == false
+	prompt.acknowledge(vim.tbl_extend("force", accepted, { requestId = requests[6].request.requestId }), 12) == false
 )
+
+package.loaded["plugins.ai.pi"].prompt_identity = function()
+	return nil
+end
+table.insert(input_values, "replace before cold binding")
+prompt.ask("")
+assert(#requests == 6, "cold pending Pi Ask sent before binding")
+prompt.session_replaced(launch_id)
+assert(
+	notifications[#notifications].message:find("PI_SESSION_MISMATCH", 1, true),
+	"cold session replacement kept Pi Ask pending"
+)
+table.insert(input_values, "waiting for cold binding")
+prompt.ask("")
+assert(#requests == 6, "second cold pending Pi Ask sent before binding")
+prompt.channel_closed(99)
+assert(notifications[#notifications].message:find("PI_DISCONNECTED", 1, true), "cold channel close kept Pi Ask pending")
 
 rawset(vim.ui, "input", original_input)
 rawset(vim, "notify", original_notify)

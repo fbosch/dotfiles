@@ -188,7 +188,7 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
   expect(result.content).toEqual([
     {
       type: "text",
-      text: "LSP diagnostics: none\nfake: spawn failed",
+      text: "LSP diagnostics: unavailable. No matching server completed a diagnostic check.\nLSP-native evidence: none.\nfake: spawn failed",
     },
   ]);
   expect(result.details).toEqual({
@@ -199,6 +199,65 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
     warnings: ["fake: spawn failed"],
   });
 });
+
+test.each(["clean", "unconfirmed", "partial", "unavailable"] as const)(
+  "includes the %s verdict and evidence in model-visible content",
+  async (verdict) => {
+    let tool: ToolDefinition | undefined;
+    const unconfirmedServers = verdict === "unconfirmed" ? ["fake"] : [];
+    const diagnosticEvidence =
+      verdict === "unavailable"
+        ? []
+        : verdict === "unconfirmed"
+          ? [{ kind: "push-publication" as const, serverId: "fake" }]
+          : [{ kind: "pull-report" as const, reportKind: "full" as const, serverId: "fake" }];
+    const fakeManager = {
+      diagnostics: async () => ({
+        diagnosticCount: 0,
+        diagnosticEvidence,
+        diagnosticVerdict: verdict,
+        matched: verdict !== "unavailable",
+        text: "LSP diagnostics: none",
+        unconfirmedServers,
+        warnings: verdict === "partial" ? ["other: server failed"] : [],
+      }),
+    } as unknown as LspServerManager;
+    createLspExtension({
+      createManager: async () => fakeManager,
+      readSettings: () => ({
+        servers: [],
+        timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+        warnings: [],
+      }),
+    })({
+      on() {},
+      registerMessageRenderer() {},
+      registerTool(definition: ToolDefinition) {
+        tool = definition;
+      },
+    } as unknown as ExtensionAPI);
+    if (tool === undefined) throw new Error("lsp tool was not registered");
+    const context = { cwd: "/project", isProjectTrusted: () => true } as ExtensionContext;
+    const result = await tool.execute(
+      "diagnostics",
+      { operation: "diagnostics", path: "example.ts" },
+      undefined,
+      undefined,
+      context,
+    );
+    const text = result.content.map((part) => (part.type === "text" ? part.text : "")).join("\n");
+    expect(text).toContain(`LSP diagnostics: ${verdict}.`);
+    expect(text).not.toContain("LSP diagnostics: none");
+    if (verdict === "unavailable") expect(text).toContain("LSP-native evidence: none.");
+    if (verdict === "clean" || verdict === "partial")
+      expect(text).toContain("fake returned a full diagnostic report");
+    if (verdict === "unconfirmed") {
+      expect(text).toContain("without a document version");
+      expect(text).toContain("Unconfirmed servers: fake.");
+    }
+    if (verdict === "partial") expect(text).toContain("other: server failed");
+  },
+);
 
 test("starts diagnostics after formatting and suppresses empty results", async () => {
   const handlers = new Map<string, Handler>();
@@ -296,7 +355,8 @@ test("starts diagnostics after formatting and suppresses empty results", async (
 
   expect(sentMessages).toEqual([
     {
-      content: "example.ts:1:1-1:2 [error] broken (fake)",
+      content:
+        "LSP diagnostics: issues. Diagnostics were reported for the current document.\nLSP-native evidence: fake published diagnostics for document version 1.\nexample.ts:1:1-1:2 [error] broken (fake)",
       customType: "lsp-diagnostics",
       display: true,
     },
@@ -381,7 +441,7 @@ test("reports only the latest immediate diagnostic result per file and turn", as
       diagnosticCalls.push(path);
       return {
         diagnosticCount: 1,
-        diagnosticEvidence: [{ kind: "push-publication", serverId: "fake" }],
+        diagnosticEvidence: [{ kind: "push-publication", documentVersion: 1, serverId: "fake" }],
         diagnosticVerdict: "issues",
         matched: true,
         text: `${path} diagnostic ${diagnosticCalls.length}`,
@@ -433,7 +493,8 @@ test("reports only the latest immediate diagnostic result per file and turn", as
 
   expect(sentMessages).toEqual([
     {
-      content: "example.ts diagnostic 2\n\nother.ts diagnostic 3",
+      content:
+        "LSP diagnostics: issues. Diagnostics were reported for the current document.\nLSP-native evidence: fake published diagnostics for document version 1.\nexample.ts diagnostic 2\n\nLSP diagnostics: issues. Diagnostics were reported for the current document.\nLSP-native evidence: fake published diagnostics for document version 1.\nother.ts diagnostic 3",
       customType: "lsp-diagnostics",
       display: true,
     },

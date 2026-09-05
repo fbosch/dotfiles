@@ -1708,7 +1708,7 @@ local function remove_notifications(state, channel, payload)
 end
 
 local function bind_session(channel, payload)
-	if not has_only_keys(payload, { launchId = true, sessionId = true }) then
+	if not has_only_keys(payload, { launchId = true, replacePending = true, sessionId = true }) then
 		return invalid_request()
 	end
 	local session_id = payload.sessionId
@@ -1718,6 +1718,9 @@ local function bind_session(channel, payload)
 	local single_character = session_id:match("^[A-Za-z0-9]$") ~= nil
 	local multiple_characters = session_id:match("^[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]$") ~= nil
 	if single_character == false and multiple_characters == false then
+		return invalid_request()
+	end
+	if payload.replacePending ~= nil and type(payload.replacePending) ~= "boolean" then
 		return invalid_request()
 	end
 	if
@@ -1742,6 +1745,7 @@ local function bind_session(channel, payload)
 			channelId = channel,
 			cwd = vim.fn.getcwd(),
 			editorPid = vim.fn.getpid(),
+			replacePending = payload.replacePending == true,
 		}
 	local bound_ok, bound = pcall(integration.bind_session, binding)
 	return bound_ok and bound or false
