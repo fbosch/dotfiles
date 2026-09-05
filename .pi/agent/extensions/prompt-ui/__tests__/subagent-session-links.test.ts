@@ -507,6 +507,23 @@ describe("subagent session links", () => {
     const directory = mkdtempSync(join(tmpdir(), "subagent-transcript-heading-"));
     mkdirSync(join(directory, ".pi", "agents"), { recursive: true });
     writeFileSync(join(directory, ".pi", "agents", "explore.md"), '---\ncolor: "#5B9BD5"\n---\n');
+    const outputFile = join(directory, "explore.jsonl");
+    writeFileSync(
+      outputFile,
+      [
+        JSON.stringify({ type: "session", parentSession: directory }),
+        JSON.stringify({
+          type: "model_change",
+          provider: "openai-codex",
+          modelId: "gpt-5.6-luna",
+        }),
+        JSON.stringify({
+          type: "model_change",
+          provider: "openai-codex",
+          modelId: "gpt-5.6-luna-fast",
+        }),
+      ].join("\n"),
+    );
     const liveRecord = {
       id: target.agentId,
       status: "completed",
@@ -526,7 +543,7 @@ describe("subagent session links", () => {
       getToolDefinition: () => undefined,
     };
     const service = {
-      getRecord: () => ({ status: "completed" }),
+      getRecord: () => ({ status: "completed", outputFile }),
       manager: { getRecord: () => liveRecord, listAgents: () => [liveRecord] },
     };
     const frames: Array<{ width: number; rows: number; lines: string[] }> = [];
@@ -592,6 +609,7 @@ describe("subagent session links", () => {
 
     expect(renderError).toBeUndefined();
     expect(firstRaw).toContain("\u001b[38;2;91;155;213mExplore\u001b[39m subagent session");
+    expect(first).toContain("Explore subagent session · openai-codex/gpt-5.6-luna-fast");
     expect(firstRaw).not.toContain("\u001b]133;");
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");

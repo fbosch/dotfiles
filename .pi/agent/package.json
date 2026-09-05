@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "audit": "fallow --only dead-code --fail-on-issues",
     "benchmark:startup": "bash benchmarks/startup.sh",
+    "patch:packages": "bun lib/pi-npm.ts --apply-patches",
     "check": "bun run lint && bun run test && bun run typecheck && bun run audit"
   },
   "devDependencies": {
@@ -28,6 +29,7 @@
     "effect": "4.0.0-beta.107",
     "neovim": "5.4.0",
     "neverthrow": "8.2.0",
+    "patch-package": "8.0.1",
     "picocolors": "1.1.1",
     "ts-pattern": "5.9.0",
     "vscode-languageserver-protocol": "3.18.2",

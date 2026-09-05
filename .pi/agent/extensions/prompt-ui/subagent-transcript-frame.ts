@@ -16,6 +16,7 @@ export class SubagentTranscriptFrame implements Component {
     private readonly theme: Theme,
     private readonly agentName: string,
     private readonly agentColor?: string,
+    private readonly model?: string,
   ) {}
 
   render(width: number): string[] {
@@ -39,12 +40,14 @@ export class SubagentTranscriptFrame implements Component {
         this.agentColor === undefined
           ? this.theme.fg("accent", name)
           : `${hexForegroundAnsi(this.theme, this.agentColor)}${name}\u001b[39m`;
+      const model = stripTerminalSequences(this.model ?? "")
+        .replace(NAME_CONTROL_CHARACTERS, " ")
+        .trim();
+      const heading = `${coloredName} subagent session${
+        model.length === 0 ? "" : this.theme.fg("muted", ` · ${model}`)
+      }`;
       // Replace the pinned pane's fixed header without changing its viewport or footer.
-      content[0] = truncateToWidth(
-        this.theme.bold(`${coloredName} subagent session`),
-        contentWidth,
-        "",
-      );
+      content[0] = truncateToWidth(this.theme.bold(heading), contentWidth, "");
     }
     return [
       border(`╭${horizontal}╮`),

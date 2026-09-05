@@ -1,0 +1,266 @@
+diff --git a/node_modules/pi-worktrunk/reference-cache.ts b/node_modules/pi-worktrunk/reference-cache.ts
+new file mode 100644
+index 0000000..965c9a1
+--- /dev/null
++++ b/node_modules/pi-worktrunk/reference-cache.ts
+@@ -0,0 +1,163 @@
++import { createHash, randomUUID } from "node:crypto";
++import {
++  accessSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync,
++  openSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync,
++} from "node:fs";
++import { delimiter, join, resolve } from "node:path";
++
++// Bump when discovery, parsing, formatting, or this persisted schema changes.
++export const GENERATOR_REVISION = "pi-worktrunk-reference-v1";
++const MAX_CACHE_BYTES = 256_000;
++const MAX_REFERENCE_BYTES = 30_000;
++
++export type ExecutableIdentity = {
++  path: string;
++  realpath: string;
++  dev: string;
++  ino: string;
++  mode: string;
++  size: string;
++  mtimeNs: string;
++  ctimeNs: string;
++};
++export type ReferenceValue = {
++  commands: { name: string; description: string }[];
++  version: string;
++  reference: string;
++};
++export type ReferenceDiscovery = { value: ReferenceValue; complete: boolean };
++
++export function sameExecutableIdentity(
++  left: ExecutableIdentity | undefined,
++  right: ExecutableIdentity | undefined,
++): boolean {
++  return left !== undefined && right !== undefined && JSON.stringify(left) === JSON.stringify(right);
++}
++
++export function executableIdentity(command: string, cwd: string): ExecutableIdentity | undefined {
++  // Wrappers and unsupported platforms still discover live; their targets cannot be identified here.
++  if (process.platform === "win32") return undefined;
++  const paths = command.includes("/")
++    ? [resolve(cwd, command)]
++    : (process.env.PATH ?? "/usr/bin:/bin").split(delimiter).map((part) => resolve(cwd, part, command));
++  for (const path of paths) {
++    try {
++      accessSync(path, constants.X_OK);
++      if (!statSync(path).isFile()) continue;
++      const canonical = realpathSync(path);
++      const fd = openSync(canonical, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
++      try {
++        const stat = fstatSync(fd, { bigint: true });
++        if (!stat.isFile()) return undefined;
++        const magic = Buffer.alloc(4);
++        if (readSync(fd, magic, 0, 4, 0) !== 4) return undefined;
++        // ELF and Mach-O (including universal binaries), not shebang scripts or shims.
++        if (![0x7f454c46, 0xfeedface, 0xfeedfacf, 0xcafebabe, 0xcefaedfe, 0xcffaedfe, 0xbebafeca].includes(magic.readUInt32BE())) return undefined;
++        if (canonical !== realpathSync(path)) return undefined;
++        return {
++          path, realpath: canonical, dev: String(stat.dev), ino: String(stat.ino),
++          mode: String(stat.mode), size: String(stat.size),
++          mtimeNs: String(stat.mtimeNs), ctimeNs: String(stat.ctimeNs),
++        };
++      } finally { closeSync(fd); }
++    } catch { /* Node's PATH search also continues past inaccessible candidates. */ }
++  }
++  return undefined;
++}
++
++function cachePath(directory: string, identity: ExecutableIdentity): string {
++  const key = createHash("sha256").update(JSON.stringify([GENERATOR_REVISION, identity])).digest("hex");
++  return join(directory, `${key}.json`);
++}
++
++function privateDirectory(directory: string): boolean {
++  const stat = lstatSync(directory);
++  return stat.isDirectory() && (stat.mode & 0o022) === 0 &&
++    (process.getuid === undefined || stat.uid === process.getuid());
++}
++
++function validValue(value: unknown): value is ReferenceValue {
++  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
++  const entry = value as Partial<ReferenceValue>;
++  if (typeof entry.version !== "string" || !entry.version.trim() || entry.version.length > 256 ||
++    typeof entry.reference !== "string" || !entry.reference.trim() || Buffer.byteLength(entry.reference) > MAX_REFERENCE_BYTES ||
++    !Array.isArray(entry.commands) || entry.commands.length === 0 || entry.commands.length > 128) return false;
++  const names = new Set<string>();
++  for (const command of entry.commands) {
++    if (!command || typeof command !== "object" || typeof command.name !== "string" ||
++      !/^[a-z][a-z0-9-]{0,79}$/.test(command.name) || names.has(command.name) ||
++      typeof command.description !== "string" || command.description.length > 2048) return false;
++    names.add(command.name);
++  }
++  return true;
++}
++
++export function readReferenceCache(directory: string, identity: ExecutableIdentity): ReferenceValue | undefined {
++  try {
++    if (!privateDirectory(directory)) return undefined;
++    const fd = openSync(cachePath(directory, identity), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
++    try {
++      const stat = fstatSync(fd);
++      if (!stat.isFile() || stat.size === 0 || stat.size > MAX_CACHE_BYTES || (stat.mode & 0o022) !== 0 ||
++        (process.getuid !== undefined && stat.uid !== process.getuid())) return undefined;
++      const bytes = Buffer.alloc(stat.size);
++      let offset = 0;
++      while (offset < bytes.length) {
++        const count = readSync(fd, bytes, offset, bytes.length - offset, offset);
++        if (count === 0) return undefined;
++        offset += count;
++      }
++      const record: unknown = JSON.parse(bytes.toString("utf8"));
++      if (!record || typeof record !== "object" || !("revision" in record) ||
++        record.revision !== GENERATOR_REVISION || !("identity" in record) ||
++        JSON.stringify(record.identity) !== JSON.stringify(identity) || !("value" in record) ||
++        !validValue(record.value)) return undefined;
++      return record.value;
++    } finally { closeSync(fd); }
++  } catch { return undefined; }
++}
++
++export function writeReferenceCache(directory: string, identity: ExecutableIdentity, value: ReferenceValue): void {
++  let temporary: string | undefined;
++  try {
++    if (!validValue(value)) return;
++    const data = JSON.stringify({ revision: GENERATOR_REVISION, identity, value });
++    if (Buffer.byteLength(data) > MAX_CACHE_BYTES) return;
++    mkdirSync(directory, { recursive: true, mode: 0o700 });
++    if (!privateDirectory(directory)) return;
++    const target = cachePath(directory, identity);
++    const path = join(directory, `.${randomUUID()}.tmp`);
++    const fd = openSync(path, "wx", 0o600);
++    temporary = path;
++    try { writeFileSync(fd, data, "utf8"); fsyncSync(fd); }
++    finally { closeSync(fd); }
++    renameSync(path, target);
++    temporary = undefined;
++  } catch {
++    // Cache persistence must not turn successful live discovery into a startup failure.
++  } finally {
++    if (temporary) try { unlinkSync(temporary); } catch {}
++  }
++}
++
++export async function cachedReference(
++  directory: string,
++  cwd: string,
++  signal: AbortSignal | undefined,
++  discover: () => Promise<ReferenceDiscovery | undefined>,
++): Promise<ReferenceValue | undefined> {
++  if (signal?.aborted) return undefined;
++  const before = executableIdentity("wt", cwd);
++  if (before) {
++    const cached = readReferenceCache(directory, before);
++    if (cached) {
++      return !signal?.aborted && sameExecutableIdentity(before, executableIdentity("wt", cwd)) ? cached : undefined;
++    }
++  }
++  const result = await discover();
++  if (!result || signal?.aborted) return undefined;
++  const after = executableIdentity("wt", cwd);
++  if ((before || after) && !sameExecutableIdentity(before, after)) return undefined;
++  if (before && result.complete) writeReferenceCache(directory, before, result.value);
++  return result.value;
++}
+diff --git a/node_modules/pi-worktrunk/worktrunk.ts b/node_modules/pi-worktrunk/worktrunk.ts
+index 3fe0174..e5e8275 100644
+--- a/node_modules/pi-worktrunk/worktrunk.ts
++++ b/node_modules/pi-worktrunk/worktrunk.ts
+@@ -1,8 +1,10 @@
+ import { randomUUID } from "node:crypto";
+ import { existsSync, realpathSync, statSync, writeFileSync } from "node:fs";
+-import { basename, dirname, resolve } from "node:path";
++import { basename, dirname, join, resolve } from "node:path";
++import { cachedReference } from "./reference-cache.ts";
+ 
+ import {
++  getAgentDir,
+   SessionManager,
+   type ExtensionAPI,
+   type ExtensionCommandContext,
+@@ -851,43 +853,45 @@ export default function extension(pi: ExtensionAPI) {
+     worktrunkReference = "";
+     commandNames.clear();
+     aliasNames.clear();
+-    let help: WtResult;
+-    try {
+-      help = await runWt(["--help-md"], {
+-        cwd: ctx.cwd,
+-        signal: ctx.signal,
+-        timeout: HELP_PROBE_TIMEOUT_MS,
+-        cwdMode: "repository-read",
+-      });
+-    } catch { return; }
+-    if (help.code !== 0) return;
+-    const rootOutput = help.stdout ?? "";
+-    installedCommands = parseWorktrunkCommands(rootOutput);
+-    for (const { name } of installedCommands) commandNames.add(name);
+-
+-    const [version, reference, settings] = await Promise.all([
+-      runWt(["--version"], {
+-        cwd: ctx.cwd,
+-        signal: ctx.signal,
+-        timeout: HELP_PROBE_TIMEOUT_MS,
+-        cwdMode: "repository-read",
+-      }).catch(() => undefined),
+-      buildReference(installedCommands, rootOutput, async (path) => {
+-        const help = await runWt(
+-          [...path, "--help-md"],
+-          {
+-            cwd: ctx.cwd,
+-            signal: ctx.signal,
+-            timeout: HELP_PROBE_TIMEOUT_MS,
+-            cwdMode: "repository-read",
+-          },
+-        );
+-        return help.code === 0 && help.stdout?.trim() ? help.stdout : undefined;
+-      }).catch(() => ""),
++    const [catalog, settings] = await Promise.all([
++      cachedReference(join(getAgentDir(), "cache", "pi-worktrunk"), ctx.cwd, ctx.signal, async () => {
++        const options: RunWtOptions = {
++          cwd: ctx.cwd, signal: ctx.signal, timeout: HELP_PROBE_TIMEOUT_MS, cwdMode: "repository-read",
++        };
++        const help = await runWt(["--help-md"], options).catch(() => undefined);
++        if (!help || help.code !== 0 || help.killed || !help.stdout?.trim()) return undefined;
++        const rootOutput = help.stdout;
++        const commands = parseWorktrunkCommands(rootOutput);
++        let complete = !help.relocated && /^Usage: wt(?:\s|$)/m.test(rootOutput);
++        const [version, reference] = await Promise.all([
++          runWt(["--version"], options).catch(() => undefined),
++          buildReference(commands, rootOutput, async (path) => {
++            const result = await runWt([...path, "--help-md"], options).catch(() => undefined);
++            const usage = `Usage: wt ${path.join(" ")}`;
++            const valid = result?.code === 0 && !result.killed &&
++              !ctx.signal?.aborted && result.stdout?.split("\n").some((line) =>
++                line === usage || line.startsWith(`${usage} `));
++            // buildReference tolerates partial discovery; never persist those missing branches.
++            if (!valid || result?.relocated) complete = false;
++            return valid ? result!.stdout : undefined;
++          }).catch(() => { complete = false; return ""; }),
++        ]);
++        const validVersion = version?.code === 0 && !version.killed && !!version.stdout?.trim();
++        return {
++          value: { commands, version: validVersion ? version!.stdout!.trim() : "", reference },
++          complete: complete && validVersion && !version?.relocated,
++        };
++      }),
++      // Alias discovery remains session-fresh, even on a reference cache hit or failed help probe.
+       client.settings(ctx.cwd, ctx.signal).catch(() => undefined),
+     ]);
+-    if (version?.code === 0) installedVersion = version.stdout?.trim();
+-    worktrunkReference = reference;
++    if (ctx.signal?.aborted) return;
++    if (catalog) {
++      installedCommands = catalog.commands;
++      installedVersion = catalog.version || undefined;
++      worktrunkReference = catalog.reference;
++      for (const { name } of installedCommands) commandNames.add(name);
++    }
+     if (settings !== undefined) aliases = parseWorktrunkAliases(settings);
+     for (const { name } of aliases) aliasNames.add(name);
+   }

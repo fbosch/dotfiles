@@ -41,6 +41,7 @@ async function partition(entries: string[]) {
 test("records known runtime writes without changing the immutable input manifest", async () => {
   const source = "agent/extensions/example/index.ts\tfile:source";
   const outputs = [
+    `agent/cache/pi-worktrunk/${"a".repeat(64)}.json`,
     "agent/fff/frecency/data.mdb",
     "agent/fff/frecency/lock.mdb",
     "agent/fff/history/data.mdb",
@@ -62,6 +63,11 @@ test("preserves unexpected paths and symlinks as strict immutable inputs", async
     "agent/extensions/example/index.ts\tfile:changed",
     "agent/settings.json\tfile:changed",
     "agent/auth.json\tfile:unexpected",
+    `agent/cache/pi-worktrunk/${"a".repeat(64)}.json\tlink:/outside`,
+    "agent/cache/pi-worktrunk/short.json\tfile:unexpected",
+    `agent/cache/pi-worktrunk/${"a".repeat(63)}.json\tfile:unexpected`,
+    `agent/cache/pi-worktrunk/${"a".repeat(64)}.tmp\tfile:unexpected`,
+    `agent/cache/pi-worktrunk/nested/${"a".repeat(64)}.json\tfile:unexpected`,
     "agent/fff/frecency/config.json\tfile:unexpected",
     "agent/fff/other/data.mdb\tfile:unexpected",
     "agent/fff/frecency/data.mdb\tlink:/outside",

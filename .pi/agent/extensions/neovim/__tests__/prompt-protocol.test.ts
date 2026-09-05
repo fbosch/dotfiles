@@ -339,24 +339,49 @@ describe("Pi prompt request dispatch", () => {
     expect(target.sentOptions).toEqual([{ expandPromptTemplates: false }]);
   });
 
-  test("submits unchanged text with untrusted metadata and bounded-read instructions", () => {
+  test("submits only filepath, character range, and the unchanged prompt", () => {
     const target = dispatcherFixture();
 
     expect(target.dispatcher.dispatch(request({ context: selectionReference }))).toMatchObject({
       outcome: "accepted",
       state: "idle",
     });
-    const message = target.sent[0];
-    if (message === undefined) throw new Error("context prompt was not submitted");
-    expect(message.startsWith("literal prompt")).toBe(true);
-    expect(message).toContain("[UNTRUSTED NEOVIM CONTEXT METADATA JSON]");
-    expect(message).toContain(JSON.stringify(selectionReference));
-    expect(message).toContain("read_buffer");
-    expect(message).toContain("expectedPath:path");
-    expect(message).toContain("expectedChangedtick:changedtick");
-    expect(message).toContain("bounded chunks");
-    expect(message).not.toContain("selected text");
+    expect(target.sent).toEqual(["src/example.ts:8:2-8:7: literal prompt"]);
     expect(target.sentOptions).toEqual([{ expandPromptTemplates: false }]);
+  });
+
+  test("renders reversed visual-line selections as a compact line range", () => {
+    const target = dispatcherFixture();
+    target.dispatcher.dispatch(
+      request({
+        text: "what's this? æøå",
+        context: {
+          ...selectionReference,
+          path: "/project/src/default.nix",
+          selectionMode: "line",
+          range: {
+            anchor: { line: 7, column: 13, offset: 0 },
+            cursor: { line: 4, column: 1, offset: 0 },
+          },
+        },
+      }),
+    );
+    expect(target.sent).toEqual(["src/default.nix:4-7: what's this? æøå"]);
+  });
+
+  test("renders a cursor location without a duplicate endpoint", () => {
+    const target = dispatcherFixture();
+    const point = { line: 3, column: 5, offset: 0 };
+    target.dispatcher.dispatch(
+      request({
+        context: {
+          ...selectionReference,
+          selectionMode: "cursor",
+          range: { anchor: point, cursor: point },
+        },
+      }),
+    );
+    expect(target.sent).toEqual(["src/example.ts:3:5: literal prompt"]);
   });
 
   test.each([

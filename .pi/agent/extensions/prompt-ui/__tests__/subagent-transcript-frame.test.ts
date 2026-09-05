@@ -13,11 +13,13 @@ import { SubagentTranscriptFrame } from "../subagent-transcript-frame";
 const background = "\u001b[48;2;25;25;25m";
 const border = "\u001b[38;2;187;187;187m";
 const accent = "\u001b[38;2;102;165;173m";
+const muted = "\u001b[38;2;104;104;104m";
 function createTheme(mode: ReturnType<Theme["getColorMode"]> = "truecolor"): Theme {
   return {
     fg: (color: string, text: string) => {
-      expect(["borderAccent", "accent"]).toContain(color);
-      return `${color === "accent" ? accent : border}${text}\u001b[39m`;
+      expect(["borderAccent", "accent", "muted"]).toContain(color);
+      const colorAnsi = color === "accent" ? accent : color === "muted" ? muted : border;
+      return `${colorAnsi}${text}\u001b[39m`;
     },
     bold: (text: string) => text,
     getColorMode: () => mode,
@@ -66,6 +68,23 @@ describe("subagent transcript frame", () => {
       "\u001b[38;2;91;155;213mexplore\u001b[39m subagent session",
     );
     expect(fallback.render(40)[1]).toContain(`${accent}explore\u001b[39m subagent session`);
+  });
+
+  test("shows the effective model after the agent-specific heading", () => {
+    const frame = new SubagentTranscriptFrame(
+      createPane([]),
+      theme,
+      "explore",
+      "#5B9BD5",
+      "openai-codex/gpt-5.6-luna",
+    );
+    const title = frame.render(64)[1] ?? "";
+
+    expect(stripTerminalSequences(title)).toContain(
+      "explore subagent session · openai-codex/gpt-5.6-luna",
+    );
+    expect(title).toContain("\u001b[38;2;91;155;213mexplore\u001b[39m");
+    expect(title).toContain(`${muted} · openai-codex/gpt-5.6-luna\u001b[39m`);
   });
 
   test("keeps agent names on one row without terminal control sequences", () => {

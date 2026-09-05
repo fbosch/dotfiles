@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.84.4",
+  "lastChangelogVersion": "0.85.0",
   "theme": "zenwritten-dark",
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-luna-fast",
@@ -19,8 +19,10 @@
   },
   "fullscreenExitOutput": "resume-hint",
   "npmCommand": [
-    "npm",
-    "--save-exact"
+    "bash",
+    "-c",
+    "exec bun --no-install \"${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/lib/pi-npm.ts\" \"$@\"",
+    "pi-npm"
   ],
   "compaction": {
     "threshold": 0.25,

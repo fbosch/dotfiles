@@ -10,7 +10,8 @@ split_fixture_manifest() {
   : >"$immutable_manifest"
   : >"$runtime_manifest"
   awk -F '\t' -v immutable="$immutable_manifest" -v runtime="$runtime_manifest" '
-    $2 ~ /^file:/ && ($1 ~ /^agent\/fff\/(frecency|history)\/(data|lock)\.mdb$/ ||
+    $2 ~ /^file:/ && ($1 ~ /^agent\/cache\/pi-worktrunk\/[0-9a-f]{64}\.json$/ ||
+      $1 ~ /^agent\/fff\/(frecency|history)\/(data|lock)\.mdb$/ ||
       $1 ~ /^agent\/sessions\/permission-forwarding\/serving\/[^/]+\.json$/ ||
       $1 ~ /^tmp\/jiti\/[^/]+\.[0-9a-f]{8}\.[cm]js$/) { print > runtime; next }
     { print > immutable }

@@ -458,6 +458,38 @@ function readCachedSubagentSession(outputFile: string, parentSessionId: string):
   return content;
 }
 
+function readSubagentModel(outputFile: string, parentSessionId: string): string | undefined {
+  let content: string;
+  try {
+    content = readCachedSubagentSession(outputFile, parentSessionId);
+  } catch {
+    return undefined;
+  }
+
+  let model: string | undefined;
+  for (const line of content.split(/\r?\n/)) {
+    if (line.length === 0) continue;
+    try {
+      const entry = JSON.parse(line) as unknown;
+      if (
+        typeof entry === "object" &&
+        entry !== null &&
+        "type" in entry &&
+        entry.type === "model_change" &&
+        "provider" in entry &&
+        typeof entry.provider === "string" &&
+        "modelId" in entry &&
+        typeof entry.modelId === "string"
+      ) {
+        model = `${entry.provider}/${entry.modelId}`;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return model;
+}
+
 export interface SubagentTranscriptSource {
   getMessages(): readonly unknown[];
   subscribe(onChange: (event?: unknown) => void): (() => void) | undefined;
@@ -658,6 +690,8 @@ export async function openSubagentSession(
     const agentColor = [...loadAgentWidgetColors(ctx.cwd, getAgentDir())].find(
       ([name]) => name.toLowerCase() === target.displayName.toLowerCase(),
     )?.[1];
+    const agentModel =
+      outputFile === undefined ? undefined : readSubagentModel(outputFile, sessionId);
     // Transcript inspection is user navigation, not a blocking agent prompt. Mount it
     // directly so Pi does not emit ui_prompt events that Herdr interprets as attention.
     await new Promise<void>((resolve, reject) => {
@@ -692,6 +726,7 @@ export async function openSubagentSession(
           ctx.ui.theme,
           target.displayName,
           agentColor,
+          agentModel,
         );
         if (closed) {
           overlayComponent.dispose?.();

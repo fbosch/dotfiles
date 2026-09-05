@@ -330,7 +330,7 @@ in
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions benchmarks
+      bun test extensions benchmarks lib
       bun run typecheck
     '';
 

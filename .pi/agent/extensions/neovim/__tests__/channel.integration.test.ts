@@ -256,9 +256,7 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
         },
         selectionMode: "character",
       });
-      expect(sent).toHaveLength(1);
-      expect(sent[0]).toContain(JSON.stringify(reference));
-      expect(sent[0]).not.toContain("æøå");
+      expect(sent).toEqual(["source.lua:1:1-3:2: literal question"]);
       expect(received[0]?.text).toBe("literal question");
       const read = {
         buffer: reference.buffer,
