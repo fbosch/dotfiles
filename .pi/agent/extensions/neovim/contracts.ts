@@ -110,16 +110,20 @@ export interface BufferInventory {
   readonly editor: EditorIdentity;
 }
 
-export interface BufferReadOptions {
-  readonly buffer: number;
+interface BufferReadBounds {
   readonly endLine?: number;
   readonly expectedChangedtick?: number;
   readonly expectedPath?: string;
   readonly startLine?: number;
 }
 
+export type BufferReadOptions =
+  | (BufferReadBounds & { readonly buffer: number; readonly path?: never })
+  | (BufferReadBounds & { readonly buffer?: never; readonly path: string });
+
 export interface BufferRead {
   readonly buffer: BufferIdentity;
+  readonly changedtick: number;
   readonly editor: EditorIdentity;
   readonly endLine: number;
   readonly lines: readonly string[];
@@ -596,7 +600,7 @@ function parseSelection(value: unknown): BridgeResult<SelectionContext | undefin
   };
 }
 
-function canonicalPath(path: string): string | undefined {
+export function canonicalPath(path: string): string | undefined {
   if (/^[A-Za-z][A-Za-z\d+.-]*:/u.test(path)) return undefined;
   let existingPath = resolve(path);
   const missingSegments: string[] = [];
@@ -785,6 +789,9 @@ function parseReadFailure(value: unknown): BridgeResult<never> | undefined {
       "The Neovim context is stale; refresh context and retry read_buffer",
     );
   }
+  if (value.error === "worktreeMismatch") {
+    return failure("NVIM_WORKTREE_MISMATCH", "The Neovim buffer is outside Pi's worktree");
+  }
   if (value.error === "lineLimit") {
     return failure(
       "NVIM_LIMIT_EXCEEDED",
@@ -815,6 +822,8 @@ export function parseBufferRead(
     return failure("NVIM_INVALID_RESPONSE", "Neovim returned content for an unloaded buffer");
   }
   if (
+    Number.isSafeInteger(snapshot.value.changedtick) === false ||
+    (snapshot.value.changedtick as number) < 0 ||
     Number.isInteger(snapshot.value.startLine) === false ||
     (snapshot.value.startLine as number) < 1 ||
     Number.isInteger(snapshot.value.endLine) === false ||
@@ -851,6 +860,7 @@ export function parseBufferRead(
     ok: true,
     value: {
       buffer: buffer.value,
+      changedtick: snapshot.value.changedtick as number,
       editor,
       endLine,
       lines,

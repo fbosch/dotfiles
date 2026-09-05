@@ -125,10 +125,16 @@ losing reversed, exclusive, or block selection semantics. Lua captures this
 reference before opening input and rechecks path and `changedtick` before
 launch and delivery.
 
-Pi receives the reference as explicitly untrusted metadata alongside the user
-text. The existing `read_buffer` operation accepts `expectedPath` and
-`expectedChangedtick` guards; it checks them before returning bounded unsaved
-buffer contents. References may cover more than the per-read 500-line limit.
+Pi receives only `filepath:line-range: user prompt`, with byte columns included
+for character selections. Do not append JSON, context blocks, read instructions,
+or hidden model messages. The structured reference stays in the bridge for
+validation and guarded reads.
+
+The existing `read_buffer` operation accepts a worktree-relative or absolute
+path, resolves the loaded source buffer internally, and applies the current Ask
+reference's identity and changedtick guards. The model need not discover buffer
+IDs or guess ticks. Explicit guards remain available for deliberate later reads.
+References may cover more than the per-read 500-line limit.
 
 Lua captures eligible context before input and rechecks the buffer path and
 changed tick immediately before `rpcnotify`. Generic literal Ask permits null

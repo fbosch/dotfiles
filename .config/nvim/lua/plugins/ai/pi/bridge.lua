@@ -493,6 +493,54 @@ local function list_buffers(payload)
 	}
 end
 
+local function read_target(payload)
+	local root = canonical_path(vim.fn.getcwd())
+	if root == nil then
+		return nil, "worktreeMismatch"
+	end
+
+	local requested_buffer = payload.buffer
+	if requested_buffer ~= nil then
+		if positive_integer(requested_buffer) == false or vim.api.nvim_buf_is_valid(requested_buffer) == false then
+			return nil, "invalidBuffer"
+		end
+		if is_source_buffer(requested_buffer, true) == false then
+			return nil, "invalidBuffer"
+		end
+		if path_is_inside(canonical_path(vim.api.nvim_buf_get_name(requested_buffer)), root) == false then
+			return nil, "worktreeMismatch"
+		end
+		return requested_buffer, nil
+	end
+
+	local requested_path = payload.path
+	if
+		type(requested_path) ~= "string"
+		or requested_path == ""
+		or #requested_path > 4096
+		or requested_path:find("\0", 1, true) ~= nil
+		or has_uri_scheme(requested_path)
+	then
+		return nil, "invalidBuffer"
+	end
+	local target =
+		canonical_path(requested_path:sub(1, 1) == "/" and requested_path or vim.fs.joinpath(root, requested_path))
+	if path_is_inside(target, root) == false then
+		return nil, "worktreeMismatch"
+	end
+
+	local matched
+	for _, candidate in ipairs(vim.api.nvim_list_bufs()) do
+		if is_source_buffer(candidate, true) and canonical_path(vim.api.nvim_buf_get_name(candidate)) == target then
+			if matched ~= nil then
+				return nil, "invalidBuffer"
+			end
+			matched = candidate
+		end
+	end
+	return matched, matched == nil and "invalidBuffer" or nil
+end
+
 local function read_buffer(payload)
 	if
 		not has_only_keys(payload, {
@@ -502,20 +550,20 @@ local function read_buffer(payload)
 			expectedPath = true,
 			maxBytes = true,
 			maxLines = true,
+			path = true,
 			startLine = true,
 		})
 	then
 		return invalid_request()
 	end
-
-	local buffer = payload.buffer
-	if positive_integer(buffer) == false or vim.api.nvim_buf_is_valid(buffer) == false then
-		return { error = "invalidBuffer" }
-	end
-	if is_source_buffer(buffer, true) == false then
-		return { error = "invalidBuffer" }
+	if (payload.buffer == nil) == (payload.path == nil) then
+		return invalid_request()
 	end
 
+	local buffer, target_error = read_target(payload)
+	if buffer == nil then
+		return { error = target_error }
+	end
 	if payload.expectedChangedtick ~= nil then
 		if not nonnegative_integer(payload.expectedChangedtick) then
 			return invalid_request()
@@ -573,6 +621,7 @@ local function read_buffer(payload)
 		pid = vim.fn.getpid(),
 		cwd = vim.fn.getcwd(),
 		buffer = buffer_info(buffer),
+		changedtick = vim.api.nvim_buf_get_changedtick(buffer),
 		startLine = start_line,
 		endLine = end_line,
 		totalLines = total_lines,

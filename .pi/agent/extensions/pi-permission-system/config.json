@@ -105,6 +105,7 @@
     "get_symbol_body": "allow",
     "find_callees": "allow",
     "lsp": "allow",
+    "neovim": "allow",
     "git_diff": "allow",
     "websearch": "allow",
     "webfetch": "allow",

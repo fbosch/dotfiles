@@ -328,6 +328,25 @@ describe("pi-permission-system policy", () => {
     expect(pathGate(engine, "edit", "src/example.ts")).toBeNull();
   });
 
+  test("allows the bound Neovim tool without broadening other tool permissions", () => {
+    const engine = createEngine();
+    for (const operation of ["read_buffer", "context", "reveal", "highlight", "annotate"]) {
+      expect(
+        engine.manager.check({
+          kind: "tool",
+          surface: "neovim",
+          input: { operation },
+        }).state,
+      ).toBe("allow");
+    }
+    expect(engine.manager.check({ kind: "tool", surface: "neovim_other", input: {} }).state).toBe(
+      "ask",
+    );
+    expect(engine.manager.check({ kind: "tool", surface: "unknown_tool", input: {} }).state).toBe(
+      "ask",
+    );
+  });
+
   test("asks for destructive, unknown, and unlisted shell operations", async () => {
     const engine = createEngine();
     const commands = [

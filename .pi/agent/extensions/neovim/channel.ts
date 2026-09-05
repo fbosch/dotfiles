@@ -1,4 +1,5 @@
 import { createConnection, type Socket } from "node:net";
+import { isAbsolute, resolve } from "node:path";
 import type { Logger } from "neovim/lib/utils/logger";
 import {
   type ActiveContext,
@@ -8,6 +9,7 @@ import {
   type BufferInventory,
   type BufferRead,
   type BufferReadOptions,
+  canonicalPath,
   DEFAULT_DIAGNOSTIC_SUMMARY_ITEMS,
   DEFAULT_QUICKFIX_ITEMS,
   type DiagnosticSummary,
@@ -58,6 +60,7 @@ import {
   type PromptFailureCode,
   type PromptRequest,
   type PromptRequestIdentity,
+  type SelectionReference,
   parsePromptBinding,
   parsePromptNotification,
 } from "./prompt-protocol";
@@ -216,6 +219,7 @@ export class PiNeovimChannel {
   #nextAnnotationBatchId = 1;
   readonly #presentationOperations = new Set<Promise<void>>();
   #promptBinding: PromptBinding | undefined;
+  #promptReference: SelectionReference | undefined;
   readonly #promptOperations = new Set<Promise<void>>();
   #promptRejectionHandler: MalformedPromptHandler | undefined;
   #promptRequestHandler: PromptRequestHandler | undefined;
@@ -267,6 +271,7 @@ export class PiNeovimChannel {
       );
       if (launchId === undefined && bound === true) {
         this.#promptBinding = undefined;
+        this.#promptReference = undefined;
         return { ok: true, value: editor };
       }
       const channelId = await connection.value.channelId;
@@ -282,6 +287,7 @@ export class PiNeovimChannel {
             });
       if (promptBinding !== undefined) {
         this.#promptBinding = promptBinding;
+        this.#promptReference = undefined;
         return { ok: true, value: editor };
       }
       return {
@@ -358,15 +364,27 @@ export class PiNeovimChannel {
     const connection = await this.connection();
     if (connection.ok === false) return connection;
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    const reference =
+      options.path === undefined ? undefined : this.matchingPromptReference(options.path);
     try {
       const snapshot = await withTimeout(
         executeBridge(connection.value, bridgeOperations.readBuffer, {
-          buffer: options.buffer,
+          ...(reference === undefined
+            ? options.path === undefined
+              ? { buffer: options.buffer }
+              : { path: options.path }
+            : { buffer: reference.buffer }),
           ...(options.startLine === undefined ? {} : { startLine: options.startLine }),
           ...(options.endLine === undefined ? {} : { endLine: options.endLine }),
-          ...(options.expectedPath === undefined ? {} : { expectedPath: options.expectedPath }),
+          ...(options.expectedPath === undefined
+            ? reference === undefined
+              ? {}
+              : { expectedPath: reference.path }
+            : { expectedPath: options.expectedPath }),
           ...(options.expectedChangedtick === undefined
-            ? {}
+            ? reference === undefined
+              ? {}
+              : { expectedChangedtick: reference.changedtick }
             : { expectedChangedtick: options.expectedChangedtick }),
         }),
         "Timed out reading a buffer from the bound Neovim instance",
@@ -625,6 +643,7 @@ export class PiNeovimChannel {
     };
     this.#focusContext = undefined;
     this.#promptBinding = undefined;
+    this.#promptReference = undefined;
     this.#promptRejectionHandler = undefined;
     this.#promptRequestHandler = undefined;
     await this.#connectionPromise?.catch(() => undefined);
@@ -663,6 +682,9 @@ export class PiNeovimChannel {
       : prompt.identity === undefined
         ? undefined
         : this.#promptRejectionHandler?.(prompt.identity, prompt.error, prompt.fingerprint);
+    if (prompt.ok && acknowledgement?.outcome === "accepted") {
+      this.#promptReference = prompt.value.context ?? undefined;
+    }
     const connection = this.#connection;
     if (acknowledgement === undefined || connection === undefined) return;
     const operation = withTimeout(
@@ -680,6 +702,7 @@ export class PiNeovimChannel {
 
   private readonly handleDisconnect = (): void => {
     this.#promptBinding = undefined;
+    this.#promptReference = undefined;
     this.markUnavailable("The bound Neovim instance disconnected");
   };
 
@@ -759,8 +782,16 @@ export class PiNeovimChannel {
     await connection.close().catch(() => undefined);
   }
 
+  private matchingPromptReference(path: string): SelectionReference | undefined {
+    const reference = this.#promptReference;
+    if (reference === undefined) return undefined;
+    const canonical = canonicalPath(isAbsolute(path) ? path : resolve(this.#cwd, path));
+    return canonical === reference.path ? reference : undefined;
+  }
+
   private markError(error: NeovimError): BridgeResult<never> {
     this.#unavailableError = error;
+    this.#promptReference = undefined;
     return { error, ok: false };
   }
 

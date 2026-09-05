@@ -25,6 +25,25 @@ Worktrunk version. Patch application uses `--error-on-fail --error-on-warn` and
 never `--partial`. A failed patch stops the command; it does not roll back the
 npm installation that preceded it. Review the error before starting Pi.
 
+## Cache behavior
+
+References are stored under
+`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/cache/pi-worktrunk/`. Entries are keyed by
+`GENERATOR_REVISION`, the selected and resolved executable paths, and the binary's
+device, inode, mode, size, nanosecond mtime, and ctime. Resolving the path catches
+Nix upgrades and rollbacks even when timestamps are normalized.
+
+Each lookup resolves `wt` using Pi's inherited PATH and command cwd. Identities
+are checked around cache reads and discovery. Failed, cancelled, malformed, or
+partial help discovery is not persisted, and references from a changed executable
+are discarded. Script wrappers and unsupported platforms use live discovery
+without caching. Aliases, repository identity, and activity markers remain fresh.
+
+Cache reads are bounded and validated. Writes use private, exclusive temporary
+files, flush their contents, then rename them atomically. Corrupt or unwritable
+cache files do not prevent live discovery. Bump `GENERATOR_REVISION` when changing
+reference generation, parsing, formatting, or the persisted schema.
+
 ## Updating or removing the patch
 
 1. Review the new upstream package before changing its pin. Retire this patch if
