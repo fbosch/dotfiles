@@ -70,6 +70,7 @@ test("registers the tool immediately and creates one manager on first use", asyn
     registerTool(definition: ToolDefinition) {
       tool = definition;
     },
+    registerMessageRenderer() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -120,6 +121,7 @@ test("loads the default manager when the tool is first used", async () => {
     registerTool(definition: ToolDefinition) {
       tool = definition;
     },
+    registerMessageRenderer() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: process.cwd(),
@@ -148,7 +150,7 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
       diagnosticEvidence: [],
       diagnosticVerdict: "unavailable" as const,
       matched: false,
-      text: "LSP extension verdict: unavailable\nLSP-native evidence: none",
+      text: "LSP diagnostics: none",
       unconfirmedServers: [],
       warnings: ["fake: spawn failed"],
     }),
@@ -165,6 +167,7 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
     registerTool(definition: ToolDefinition) {
       tool = definition;
     },
+    registerMessageRenderer() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
@@ -185,7 +188,7 @@ test("returns unavailable diagnostics as an honest tool result", async () => {
   expect(result.content).toEqual([
     {
       type: "text",
-      text: "LSP extension verdict: unavailable\nLSP-native evidence: none\n\nLSP warnings:\n- fake: spawn failed",
+      text: "LSP diagnostics: none\nfake: spawn failed",
     },
   ]);
   expect(result.details).toEqual({
@@ -223,12 +226,12 @@ test("starts diagnostics after formatting and suppresses empty results", async (
         matched: true,
         text:
           diagnosticVerdict === "clean"
-            ? "LSP extension verdict: clean\nLSP-native evidence: fake=textDocument/diagnostic full report"
+            ? "LSP diagnostics: none"
             : diagnosticVerdict === "unconfirmed"
-              ? "LSP extension verdict: unconfirmed\nLSP-native evidence: none\nMissing LSP-native evidence: fake sent no textDocument/publishDiagnostics notification within the bounded wait"
+              ? "LSP diagnostics: none"
               : diagnosticVerdict === "unavailable"
-                ? "LSP extension verdict: unavailable\nLSP-native evidence: none"
-                : "LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
+                ? "LSP diagnostics: none"
+                : "example.ts:1:1-1:2 [error] broken (fake)",
         unconfirmedServers: diagnosticVerdict === "unconfirmed" ? ["fake"] : [],
         warnings: diagnosticWarnings,
       };
@@ -246,6 +249,7 @@ test("starts diagnostics after formatting and suppresses empty results", async (
       handlers.set(event, handler);
     },
     registerTool() {},
+    registerMessageRenderer() {},
     sendMessage(message: SentMessage, options?: { deliverAs?: string }) {
       sentMessages.push(message);
       deliveryModes.push(options?.deliverAs);
@@ -292,8 +296,7 @@ test("starts diagnostics after formatting and suppresses empty results", async (
 
   expect(sentMessages).toEqual([
     {
-      content:
-        "Automatic LSP diagnostics after edits:\nLSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification (document version 1)\nexample.ts:1:1-1:2 [error] broken (fake)",
+      content: "example.ts:1:1-1:2 [error] broken (fake)",
       customType: "lsp-diagnostics",
       display: true,
     },
@@ -325,7 +328,7 @@ test("cancels superseded automatic diagnostics for the same file", async () => {
         diagnosticEvidence: [{ kind: "pull-report", reportKind: "full", serverId: "fake" }],
         diagnosticVerdict: "clean" as const,
         matched: true,
-        text: "LSP extension verdict: clean\nLSP-native evidence: fake=textDocument/diagnostic full report",
+        text: "LSP diagnostics: none",
         unconfirmedServers: [],
         warnings: [],
       };
@@ -343,6 +346,7 @@ test("cancels superseded automatic diagnostics for the same file", async () => {
       handlers.set(event, handler);
     },
     registerTool() {},
+    registerMessageRenderer() {},
     sendMessage(message: SentMessage) {
       sentMessages.push(message);
     },
@@ -380,7 +384,7 @@ test("reports only the latest immediate diagnostic result per file and turn", as
         diagnosticEvidence: [{ kind: "push-publication", serverId: "fake" }],
         diagnosticVerdict: "issues",
         matched: true,
-        text: `LSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification\n${path} diagnostic ${diagnosticCalls.length}`,
+        text: `${path} diagnostic ${diagnosticCalls.length}`,
         unconfirmedServers: [],
         warnings: [],
       };
@@ -400,6 +404,7 @@ test("reports only the latest immediate diagnostic result per file and turn", as
     registerTool(definition: { promptGuidelines?: readonly string[] }) {
       promptGuidelines = definition.promptGuidelines ?? [];
     },
+    registerMessageRenderer() {},
     sendMessage(message: SentMessage) {
       sentMessages.push(message);
     },
@@ -428,8 +433,7 @@ test("reports only the latest immediate diagnostic result per file and turn", as
 
   expect(sentMessages).toEqual([
     {
-      content:
-        "Automatic LSP diagnostics after edits:\nLSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification\nexample.ts diagnostic 2\n\nLSP extension verdict: issues\nLSP-native evidence: fake=textDocument/publishDiagnostics notification\nother.ts diagnostic 3",
+      content: "example.ts diagnostic 2\n\nother.ts diagnostic 3",
       customType: "lsp-diagnostics",
       display: true,
     },
@@ -457,6 +461,7 @@ test("warms LSP diagnostics once after a successful native file read", async () 
       handlers.set(event, handler);
     },
     registerTool() {},
+    registerMessageRenderer() {},
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",

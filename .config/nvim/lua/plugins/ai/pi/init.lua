@@ -30,6 +30,45 @@ local function current_terminal()
 	return nil
 end
 
+local function return_to_editor()
+	if vim.api.nvim_get_mode().mode:sub(1, 1) == "t" then
+		vim.cmd("stopinsert")
+	end
+	vim.cmd("wincmd p")
+end
+
+local function configure_terminal(terminal)
+	local options = { buffer = terminal.buf, silent = true }
+	vim.keymap.set(
+		"t",
+		"<C-g>",
+		return_to_editor,
+		vim.tbl_extend("force", options, {
+			desc = "Return to editor",
+		})
+	)
+	vim.keymap.set(
+		{ "n", "t" },
+		"<C-\\>",
+		return_to_editor,
+		vim.tbl_extend("force", options, {
+			desc = "Toggle Pi focus",
+		})
+	)
+	vim.keymap.set(
+		"n",
+		"q",
+		return_to_editor,
+		vim.tbl_extend("force", options, {
+			desc = "Exit Pi terminal",
+		})
+	)
+	vim.keymap.set("n", "<C-h>", "<C-w>h", options)
+	vim.keymap.set("n", "<C-j>", "<C-w>j", options)
+	vim.keymap.set("n", "<C-k>", "<C-w>k", options)
+	vim.keymap.set("n", "<C-l>", "<C-w>l", options)
+end
+
 local function source_context()
 	local buffer = vim.api.nvim_get_current_buf()
 	local options = vim.bo[buffer]
@@ -120,6 +159,7 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 	terminal_instance = terminal
 	terminal_session_id = session_id
 	terminal_owner = owner
+	configure_terminal(terminal)
 	local function clear_terminal()
 		if terminal_instance == terminal then
 			local closed_session_id = terminal_session_id
@@ -267,6 +307,22 @@ function M.start()
 	end
 	local cwd = owner ~= nil and owner.cwd or vim.fn.getcwd()
 	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner)
+end
+
+function M.toggle()
+	M.setup()
+	if vim.fn.executable("pi") ~= 1 then
+		vim.notify("pi executable not found", vim.log.levels.ERROR)
+		return nil
+	end
+
+	record_source_context()
+	local terminal = current_terminal()
+	if terminal ~= nil then
+		terminal:toggle()
+		return terminal
+	end
+	return M.start()
 end
 
 return M

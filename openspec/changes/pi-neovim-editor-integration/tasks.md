@@ -39,17 +39,16 @@
 
 ## 6. Decide and implement editor-owned diff review
 
-- [ ] 6.1 Inspect Pi 0.84.4 and the selected IDE integration's public APIs for editable Neovim diff review; record whether they can guarantee unchanged source on reject and cancellation and exact reviewed contents on accept.
-- [ ] 6.2 If the public contract is sufficient, implement one-file review with stale-buffer and wrong-worktree protection; verify automated reject, modified-accept, cancellation, unavailable-editor, and sibling-worktree cases.
-- [ ] 6.3 If the public contract is insufficient, record diff review as `OpenCode retained` with the missing API and verify no private Pi or renderer patch was added.
-- [ ] 6.4 When implemented, run the live diff tracer bullet by rejecting one edit and accepting a user-modified version of the same edit; record byte-for-byte source evidence for both outcomes.
+- [x] 6.1 Inspect Pi 0.84.4 and the selected IDE integration's public APIs for editable Neovim diff review; record whether they can guarantee unchanged source on reject and cancellation and exact reviewed contents on accept. - [x] 6.2 Not applicable: the public contract is insufficient for a stale-safe, editor-modified commit, so no one-file review was implemented.
+- [x] 6.3 Record diff review as `OpenCode retained` with the missing review transaction and compare-and-write contract; verify no private Pi or renderer patch was added.
+- [x] 6.4 Not applicable: no unsupported live review path was implemented.
 
 ## 7. Decide and implement clickable patch navigation
 
-- [ ] 7.1 Inspect Pi 0.84.4 for a supported public rendered-output click API; record whether patch-header navigation can be implemented without private renderer access.
-- [ ] 7.2 If the public contract is sufficient, adapt the pure patch path and first-changed-line parser with selection suppression and worktree containment; verify patched, created, moved, deleted, malformed, selected-text, and escaping-path cases.
-- [ ] 7.3 If the public contract is insufficient, record patch navigation as `OpenCode retained` and verify no private Pi renderer patch was added.
-- [ ] 7.4 When implemented, run the live click tracer bullet against a multi-file Pi change and record that the bound Neovim instance opens the correct file and line.
+- [x] 7.1 Inspect Pi 0.84.4 for a supported public rendered-output click API; record that patch-header navigation cannot be implemented without private renderer access.
+- [x] 7.2 Not applicable: the public component and renderer contracts expose no bound click action or selection state.
+- [x] 7.3 Record patch navigation as `OpenCode retained` and verify no private Pi renderer patch was added.
+- [x] 7.4 Not applicable: no unsupported live click path was implemented.
 
 ## 8. Switch verified Neovim workflows to Pi
 

@@ -93,6 +93,10 @@ Editor-owned diff review requires supported APIs that preserve source contents o
 
 Private renderer patching is excluded because it would make upgrades and failure diagnosis depend on undocumented Pi internals.
 
+The Phase 6 assessment retains editor-side diff review in OpenCode. Pi 0.84.4 exposes tool overrides, renderer inheritance, diff helpers, and an in-process mutation queue, but no editor-review transaction or compare-and-write primitive. The evaluated `pi-vscode-sr` integration writes the original proposal rather than editor-modified content, does not revalidate stale content, fails open when its editor heartbeat is absent, and does not confine paths to the worktree. The installed Delta extension also owns Pi's first effective `edit` override. No private patch or additional IDE dependency will be added to bridge these gaps.
+
+The Phase 7 assessment also retains clickable patch navigation in OpenCode. Pi's public component interface has no mouse callback, and tool renderers expose neither component bounds nor fullscreen selection state. OSC 8 links are routed through Pi's fixed browser callback in fullscreen mode or delegated to the terminal in main-screen mode; extensions cannot bind those clicks to this session's verified Neovim channel. No Delta renderer or private TUI output tree will be patched.
+
 ### Cut over by verified workflow
 
 Pi starts as an opt-in Neovim action beside OpenCode. Each workflow moves independently after automated tests and a live tracer bullet pass. A capability matrix records `Pi`, `OpenCode retained`, or `retired` and links the evidence. Pi becomes the default only after every required workflow is resolved and the explicit OpenCode rollback path has been exercised.

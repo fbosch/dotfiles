@@ -32,10 +32,10 @@ test("runs diagnostics for matching servers concurrently", async () => {
       { kind: "pull-report", reportKind: "full", serverId: "second" },
     ]);
     expect(result.unconfirmedServers).toEqual([]);
-    expect(result.text).toContain("LSP extension verdict: issues");
-    expect(result.text).toContain("LSP-native evidence:");
-    expect(result.text).toContain("(first)");
-    expect(result.text).toContain("(second)");
+    expect(result.text).toContain("example.lua:1:1-1:4 [error] fake diagnostic (first)");
+    expect(result.text).toContain("example.lua:1:1-1:4 [error] fake diagnostic (second)");
+    expect(result.text).not.toContain("LSP extension verdict");
+    expect(result.text).not.toContain("LSP-native evidence");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -75,9 +75,7 @@ test("confirms clean diagnostics only when every server explicitly answers", asy
       { documentVersion: 1, kind: "push-publication", serverId: "fake-push" },
     ]);
     expect(result.unconfirmedServers).toEqual([]);
-    expect(result.text).toBe(
-      "LSP extension verdict: clean\nLSP-native evidence: fake-pull=textDocument/diagnostic full report, fake-push=textDocument/publishDiagnostics notification (document version 1)",
-    );
+    expect(result.text).toBe("LSP diagnostics: none");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -107,9 +105,7 @@ test("labels silent push servers as unconfirmed", async () => {
     expect(result.diagnosticVerdict).toBe("unconfirmed");
     expect(result.diagnosticEvidence).toEqual([]);
     expect(result.unconfirmedServers).toEqual(["fake-silent"]);
-    expect(result.text).toContain("Missing LSP-native evidence");
-    expect(result.text).toContain("textDocument/publishDiagnostics");
-    expect(result.text).toContain("fake-silent");
+    expect(result.text).toBe("LSP diagnostics: none");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -141,10 +137,7 @@ test("labels an unversioned push publication as unconfirmed", async () => {
       { kind: "push-publication", serverId: "fake-unversioned" },
     ]);
     expect(result.unconfirmedServers).toEqual(["fake-unversioned"]);
-    expect(result.text).toContain(
-      "fake-unversioned=textDocument/publishDiagnostics notification (document version omitted)",
-    );
-    expect(result.text).toContain("Insufficient LSP-native evidence");
+    expect(result.text).toBe("LSP diagnostics: none");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -180,9 +173,7 @@ test("labels mixed server success and failure as partial", async () => {
     const result = await manager.diagnostics("example.lua", undefined);
     expect(result.diagnosticCount).toBe(1);
     expect(result.diagnosticVerdict).toBe("partial");
-    expect(result.text).toContain("LSP extension verdict: partial");
-    expect(result.text).toContain("LSP-native evidence:");
-    expect(result.text).toContain("fake diagnostic");
+    expect(result.text).toBe("example.lua:1:1-1:4 [error] fake diagnostic (available)");
     expect(result.warnings[0]).toContain("unavailable: spawn failed");
   } finally {
     await manager.shutdown();
@@ -214,7 +205,7 @@ test("labels diagnostics unavailable when no server completes", async () => {
     expect(result.matched).toBeFalse();
     expect(result.diagnosticEvidence).toEqual([]);
     expect(result.unconfirmedServers).toEqual([]);
-    expect(result.text).toBe("LSP extension verdict: unavailable\nLSP-native evidence: none");
+    expect(result.text).toBe("LSP diagnostics: none");
   } finally {
     await manager.shutdown();
     await rm(directory, { recursive: true, force: true });
@@ -241,9 +232,12 @@ test("retries initialization after the first startup is cancelled", async () => 
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 10);
   try {
-    await expect(manager.diagnostics("example.lua", controller.signal)).rejects.toThrow(
-      "LSP initialize cancelled",
+    const failure = await manager.diagnostics("example.lua", controller.signal).then(
+      () => undefined,
+      (cause) => cause,
     );
+    if (!(failure instanceof Error)) throw new Error("expected diagnostics to reject");
+    expect(failure.message).toBe("LSP initialize cancelled");
     const result = await manager.diagnostics("example.lua", undefined);
     expect(result.warnings).toEqual([]);
     expect(result.diagnosticVerdict).toBe("issues");

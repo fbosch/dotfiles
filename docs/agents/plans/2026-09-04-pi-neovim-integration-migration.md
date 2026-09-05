@@ -651,6 +651,29 @@ Start with one file and one proposed edit. Expand only after that path passes.
 
 Do not patch private Pi renderer internals to force parity.
 
+### Decision record (2026-09-04): OpenCode retained
+
+Pi 0.84.4 publicly supports same-name `edit` and `write` overrides, native
+renderer inheritance, diff generation, and an in-process mutation queue. It
+does not expose an editor-review transaction or an atomic compare-and-write
+primitive. The queue coordinates Pi tools only; it cannot prevent a Neovim,
+shell, or external write between validation and commit. The current Neovim
+bridge intentionally has no source-text mutation or review protocol.
+
+The evaluated public IDE integration,
+[`pi-vscode-sr` at `b6129f9`](https://github.com/Serhioromano/pi-vscode-sr/tree/b6129f95551811c9db07c8cfcdfa8ded245ff385),
+also misses the required contract: it ignores editor-returned final content,
+writes the original proposal, performs no stale-content revalidation, permits
+paths outside the worktree, and bypasses review when the editor heartbeat is
+absent. The installed Delta extension already owns Pi's first effective `edit`
+override, so another independent override would not compose with it.
+
+Implementing this safely would require a new public review transaction spanning
+Pi and Neovim, including cancellation, versioned source snapshots, and a
+compare-and-write commit. No private renderer patch, tool override, or new IDE
+dependency was added. `opencode.nvim` remains the explicit owner of editor-side
+diff review.
+
 ## Phase 7: Gate clickable patch navigation
 
 **Depends on:** Phase 1
@@ -695,6 +718,26 @@ Adapt the TUI wiring only through supported Pi APIs.
 - **Pass:** Enable Pi patch navigation.
 - **Unsupported:** Retain OpenCode patch navigation and document it as an
   intentional exception.
+
+### Decision record (2026-09-04): OpenCode retained
+
+Pi 0.84.4's public component contract exposes rendering, keyboard input, and
+invalidation, but no mouse or click callback. Tool renderers receive no TUI
+instance or component bounds. The raw terminal-input hook does not expose
+rendered row ownership or fullscreen selection state, so parsing mouse escape
+sequences there cannot safely associate a click with one patch header.
+
+Pi can render OSC 8 links. In fullscreen mode, however, Pi owns their activation
+and routes every URL through its fixed `openBrowser` callback; extensions cannot
+replace that callback with the bound Neovim channel. Main-screen activation is
+left to the terminal emulator. Neither path proves the launching Neovim
+instance, preserves worktree isolation, or exposes the required selection
+suppression contract.
+
+Adding click behavior would therefore require a public renderer action API or a
+supported hyperlink dispatch hook. No Delta renderer, Pi TUI internal, or
+private output tree was patched. OpenCode's tested patch-navigation integration
+remains the intentional owner.
 
 ## Phase 8: Switch Neovim's default agent to Pi
 

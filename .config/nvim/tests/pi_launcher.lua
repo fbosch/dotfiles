@@ -39,6 +39,7 @@ package.loaded["plugins.ai.pi.bridge"] = {
 local captured_command
 local captured_options
 local callbacks = {}
+local toggles = 0
 local terminal = {
 	buf = vim.api.nvim_create_buf(false, true),
 	buf_valid = function()
@@ -51,6 +52,10 @@ local terminal = {
 		callbacks[event] = callback
 	end,
 	show = function(self)
+		return self
+	end,
+	toggle = function(self)
+		toggles = toggles + 1
 		return self
 	end,
 	valid = function()
@@ -89,6 +94,14 @@ assert(captured_options.win.position == "left", "Pi terminal was not opened on t
 assert(captured_options.win.width == 100, "Pi terminal width changed")
 assert(vim.b[terminal.buf].is_pi_terminal == true, "Pi terminal buffer was not marked")
 assert(type(callbacks.TermClose) == "function", "Pi terminal close was not tracked")
+assert(
+	vim.iter(vim.api.nvim_buf_get_keymap(terminal.buf, "n")):any(function(mapping)
+		return mapping.desc == "Toggle Pi focus"
+	end),
+	"Pi terminal did not receive its buffer-local focus mapping"
+)
+assert(pi.toggle() == terminal, "Pi toggle did not reuse its live terminal")
+assert(toggles == 1, "Pi toggle did not toggle the live terminal exactly once")
 
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 local saved_metadata = session.get_metadata(nvim_session)

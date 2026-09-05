@@ -9,6 +9,7 @@ import {
   isWriteToolResult,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
@@ -109,7 +110,11 @@ export function loadLspSettings(
 
 function resultText(result: LspOperationResult): string {
   if (result.warnings.length === 0) return result.text;
-  return `${result.text}\n\nLSP warnings:\n- ${result.warnings.join("\n- ")}`;
+  return [result.text, ...result.warnings].join("\n");
+}
+
+function diagnosticMessageText(content: unknown): string {
+  return typeof content === "string" ? content : "";
 }
 
 function assertMatched(result: LspOperationResult): void {
@@ -129,6 +134,11 @@ async function createDefaultManager(
 
 export function createLspExtension(dependencies: LspExtensionDependencies = {}) {
   return function lspExtension(pi: ExtensionAPI): void {
+    pi.registerMessageRenderer(
+      "lsp-diagnostics",
+      (message) => new Text(diagnosticMessageText(message.content), 0, 0),
+    );
+
     let managerPromise: Promise<LspServerManager> | undefined;
     let mutationSequence = 0;
     let settings: ResolvedLspSettings | undefined;
@@ -308,7 +318,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       pi.sendMessage(
         {
           customType: "lsp-diagnostics",
-          content: `Automatic LSP diagnostics after edits:\n${reports.join("\n\n")}`,
+          content: reports.join("\n\n"),
           display: true,
         },
         { deliverAs: "steer" },

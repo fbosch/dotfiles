@@ -30,13 +30,8 @@ return {
 			return vim.env.CORPORATE == nil and vim.fn.executable("opencode") == 1
 		end,
 		keys = {
-			key("<leader>ac", { "n", "x" }, "Ask opencode"),
 			key("<leader>as", { "n", "x" }, "opencode actions"),
 			key("<leader>aS", "n", "Select opencode session"),
-			key("ga", { "n", "x" }, "Add to opencode"),
-			key("<C-\\>", "n", "Toggle opencode focus"),
-			key("<A-a>", { "n", "t" }, "Toggle opencode"),
-			key("<A-x>", { "n", "v" }, "Send to opencode"),
 			key("<leader>ae", { "n", "v" }, "Explain code"),
 			key("<leader>ao", { "n", "v" }, "Optimize code"),
 			key("<leader>ad", { "n", "v" }, "Add documentation"),
@@ -160,7 +155,6 @@ return {
 					error("opencode requires a Neovim RPC socket")
 				end
 
-				local cwd = vim.fn.getcwd()
 				local environment = "OPENCODE_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
 				local pane_id = vim.env.HERDR_PANE_ID
 				if vim.env.HERDR_ENV == "1" and type(pane_id) == "string" and pane_id ~= "" then
@@ -578,13 +572,7 @@ return {
 				desc = "Show opencode integration health",
 			})
 
-			-- Core keymaps
-			vim.keymap.set("n", "<C-\\>", focus_opencode_window, { desc = "Toggle opencode focus" })
-
-			vim.keymap.set({ "n", "x" }, "<leader>ac", function()
-				ask_opencode_and_focus_after_submit("@this: ")
-			end, { desc = "Ask opencode" })
-
+			-- OpenCode-specific actions remain available during the Pi rollback period.
 			vim.keymap.set({ "n", "x" }, "<leader>as", function()
 				require("opencode").select()
 			end, { desc = "opencode actions" })
@@ -592,84 +580,6 @@ return {
 			vim.keymap.set("n", "<leader>aS", function()
 				require("opencode").command("session.select")
 			end, { desc = "Select opencode session" })
-
-			vim.keymap.set({ "n", "x" }, "ga", function()
-				append_opencode("@this")
-			end, { desc = "Add to opencode" })
-
-			vim.keymap.set({ "n", "t" }, "<A-a>", function()
-				require("opencode.config").opts.server.toggle()
-			end, { desc = "Toggle opencode" })
-
-			-- Send selection to opencode with Alt-x (visual mode)
-			vim.keymap.set("v", "<A-x>", function()
-				local start_line = vim.fn.line("'<")
-				local end_line = vim.fn.line("'>")
-				local filename = vim.api.nvim_buf_get_name(0)
-
-				if filename == "" then
-					vim.notify("No file name for current buffer", vim.log.levels.WARN)
-					return
-				end
-
-				local relative_path = vim.fn.fnamemodify(filename, ":.")
-				local bufnr = vim.api.nvim_get_current_buf()
-				local lines = vim.api.nvim_buf_get_lines(bufnr, start_line - 1, end_line, false)
-
-				-- Format the code block with actual content
-				local code_block = table.concat(lines, "\n")
-				local formatted_text = string.format(
-					"%s L%d-L%d \n ```%s\n%s\n```",
-					relative_path,
-					start_line,
-					end_line,
-					vim.bo.filetype,
-					code_block
-				)
-				append_opencode(formatted_text)
-
-				vim.notify(
-					string.format(
-						"Sent to opencode: %s (lines %d-%d) with %d lines",
-						relative_path,
-						start_line,
-						end_line,
-						#lines
-					),
-					vim.log.levels.INFO
-				)
-			end, { desc = "Send selection to opencode" })
-
-			-- Send visible buffers to opencode with Alt-x (normal mode)
-			vim.keymap.set("n", "<A-x>", function()
-				local visible_files = {}
-				local seen_buffers = {}
-
-				for _, win in ipairs(vim.api.nvim_list_wins()) do
-					local bufnr = vim.api.nvim_win_get_buf(win)
-
-					if not seen_buffers[bufnr] then
-						seen_buffers[bufnr] = true
-						local filename = vim.api.nvim_buf_get_name(bufnr)
-
-						if filename ~= "" and vim.fn.filereadable(filename) == 1 then
-							local relative_path = vim.fn.fnamemodify(filename, ":.")
-							table.insert(visible_files, "@" .. relative_path)
-						end
-					end
-				end
-
-				if #visible_files == 0 then
-					vim.notify("No visible buffers to send", vim.log.levels.WARN)
-					return
-				end
-
-				-- Send all visible files to opencode
-				local formatted_text = table.concat(visible_files, " ")
-				append_opencode(formatted_text)
-
-				vim.notify(string.format("Sent %d visible buffers to opencode", #visible_files), vim.log.levels.INFO)
-			end, { desc = "Send visible buffers to opencode" })
 
 			-- Code actions with prompts (replacing ChatGPT commands)
 			vim.keymap.set({ "n", "v" }, "<leader>ae", function()

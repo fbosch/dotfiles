@@ -30,6 +30,7 @@
     "neverthrow": "8.2.0",
     "picocolors": "1.1.1",
     "ts-pattern": "5.9.0",
-    "vscode-languageserver-protocol": "3.18.2"
+    "vscode-languageserver-protocol": "3.18.2",
+    "web-tree-sitter": "0.26.10"
   }
 }

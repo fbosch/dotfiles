@@ -324,6 +324,11 @@ in
         -l .config/nvim/tests/pi_launcher.lua
     '';
 
+    "test:nvim-pi-cutover".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pi_cutover.lua
+    '';
+
     "test:nvim-pi-session-restore".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/pi-session-restore.sock" \
         -l .config/nvim/tests/pi_session_restore.lua

@@ -1,5 +1,6 @@
 local utils = require("utils")
 local pack_inventory = require("config.pack.inventory")
+local pack_loader = require("config.pack.loader")
 local usrcmd = utils.set_usrcmd
 local keymap_modules = {
 	"config.keymaps.core",
@@ -39,6 +40,31 @@ usrcmd("WipeAllSessions", utils.wipe_all_sessions, { bang = true, desc = "Wipe a
 usrcmd("PiStart", function()
 	require("plugins.ai.pi").start()
 end, "Start Pi bound to this Neovim instance")
+
+usrcmd("PiToggle", function()
+	require("plugins.ai.pi").toggle()
+end, "Toggle Pi bound to this Neovim instance")
+
+local function with_opencode(action)
+	local activated, reason = pack_loader.activate("opencode.nvim", { source = "command" })
+	if activated == false then
+		vim.notify("OpenCode is unavailable: " .. reason, vim.log.levels.WARN)
+		return
+	end
+	action(require("opencode.config").opts.server)
+end
+
+usrcmd("OpenCodeStart", function()
+	with_opencode(function(server)
+		server.start()
+	end)
+end, "Start the OpenCode rollback integration")
+
+usrcmd("OpenCodeToggle", function()
+	with_opencode(function(server)
+		server.toggle()
+	end)
+end, "Toggle the OpenCode rollback integration")
 
 usrcmd("ReloadConfig", function()
 	-- Only reload keymaps: other config modules register commands and autocmds that are not reload-safe.

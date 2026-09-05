@@ -43,12 +43,15 @@ end
 
 local registration = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")
 assert(type(registration) == "table" and type(registration[1]) == "table", "opencode plugin was not registered")
-assert(
-	vim.iter(registration[1].keys):any(function(key)
-		return key[1] == "<C-\\>" and key.mode == "n"
-	end),
-	"Ctrl-Escape did not activate the OpenCode plugin"
-)
+local function registers_key(lhs)
+	return vim.iter(registration[1].keys):any(function(key)
+		return key[1] == lhs
+	end)
+end
+assert(registers_key("<leader>as"), "OpenCode-specific actions no longer activate the plugin")
+for _, lhs in ipairs({ "<leader>ac", "ga", "<C-\\>", "<A-a>", "<A-x>" }) do
+	assert(registers_key(lhs) == false, "OpenCode still claims Pi's default key: " .. lhs)
+end
 local corporate = vim.env.CORPORATE
 vim.env.CORPORATE = "1"
 assert(registration[1].enabled() == false, "opencode plugin was enabled in corporate context")
@@ -92,27 +95,18 @@ vim.b[opencode_buf].is_opencode_terminal = true
 
 registration[1].setup()
 vim.api.nvim_set_current_win(source_win)
-
-local focus_mapping = vim.fn.maparg("<C-\\>", "n", false, true)
-assert(type(focus_mapping.callback) == "function", "Ctrl-Escape editor mapping was not configured")
-focus_mapping.callback()
 assert(
-	vim.wait(100, function()
-		return vim.api.nvim_get_current_win() == opencode_win
+	vim.iter(vim.api.nvim_get_keymap("n")):all(function(mapping)
+		return mapping.desc ~= "Toggle opencode focus"
 	end),
-	"Ctrl-Escape did not focus the OpenCode window"
+	"OpenCode replaced Pi's global focus key"
 )
 
-local terminal_mapping = vim.fn.maparg("<C-\\>", "n", false, true)
-assert(terminal_mapping.buffer == 1, "Ctrl-Escape OpenCode mapping was not buffer-local")
+vim.api.nvim_set_current_win(opencode_win)
+local terminal_mapping = vim.iter(vim.api.nvim_buf_get_keymap(opencode_buf, "n")):find(function(mapping)
+	return mapping.desc == "Toggle opencode focus"
+end)
+assert(terminal_mapping ~= nil, "Ctrl-Escape OpenCode mapping was not buffer-local")
 terminal_mapping.callback()
 assert(vim.api.nvim_get_current_win() == source_win, "Ctrl-Escape did not return to the editor")
-
-vim.api.nvim_win_close(opencode_win, true)
-focus_mapping.callback()
-assert(
-	vim.wait(100, function()
-		return starts == 1
-	end),
-	"Ctrl-Escape did not reopen a hidden OpenCode window"
-)
+assert(starts == 0, "OpenCode started unexpectedly during terminal navigation")

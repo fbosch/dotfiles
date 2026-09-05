@@ -128,48 +128,11 @@ function diagnosticVerdict(
   return hasUnconfirmed ? "unconfirmed" : "clean";
 }
 
-function evidenceLabel(evidence: LspDiagnosticEvidence): string {
-  if (evidence.kind === "pull-report") {
-    return `${evidence.serverId}=textDocument/diagnostic ${evidence.reportKind} report`;
-  }
-  const version =
-    evidence.documentVersion === undefined
-      ? "document version omitted"
-      : `document version ${evidence.documentVersion}`;
-  return `${evidence.serverId}=textDocument/publishDiagnostics notification (${version})`;
-}
-
-function diagnosticText(
-  projectRoot: string,
-  results: readonly ServerDiagnosticResult[],
-  verdict: DiagnosticVerdict,
-): string {
-  const diagnostics = results.flatMap((result) => result.diagnostics);
-  const evidence = results.flatMap((result) =>
-    result.evidence === undefined ? [] : [result.evidence],
+function diagnosticText(projectRoot: string, results: readonly ServerDiagnosticResult[]): string {
+  return renderDiagnostics(
+    projectRoot,
+    results.flatMap((result) => result.diagnostics),
   );
-  const missingEvidence = results.flatMap((result) =>
-    result.observationKind === "push-silence" && result.unconfirmedReason !== undefined
-      ? [result.unconfirmedReason]
-      : [],
-  );
-  const insufficientEvidence = results.flatMap((result) =>
-    result.observationKind !== "push-silence" && result.unconfirmedReason !== undefined
-      ? [result.unconfirmedReason]
-      : [],
-  );
-  const sections = [
-    `LSP extension verdict: ${verdict}`,
-    `LSP-native evidence: ${evidence.length === 0 ? "none" : evidence.map(evidenceLabel).join(", ")}`,
-  ];
-  if (missingEvidence.length > 0) {
-    sections.push(`Missing LSP-native evidence: ${missingEvidence.join(", ")}`);
-  }
-  if (insufficientEvidence.length > 0) {
-    sections.push(`Insufficient LSP-native evidence: ${insufficientEvidence.join(", ")}`);
-  }
-  if (diagnostics.length > 0) sections.push(renderDiagnostics(projectRoot, diagnostics));
-  return sections.join("\n");
 }
 
 function normalizedDefinition(
@@ -289,7 +252,7 @@ export class LspServerManager {
       ),
       diagnosticVerdict: verdict,
       matched: result.matches.length > 0,
-      text: diagnosticText(this.projectRoot, operation.values, verdict),
+      text: diagnosticText(this.projectRoot, operation.values),
       unconfirmedServers: operation.values
         .filter((observation) => observation.unconfirmedReason !== undefined)
         .map((observation) => observation.serverId),
