@@ -10,7 +10,7 @@ const alternateBuildModel = { provider: "openai-codex", id: "gpt-5.6-terra-fast"
 const alternatePlanModel = { provider: "openai-codex", id: "gpt-5.6-sol-fast" };
 
 type ModeConfigLoader = NonNullable<Parameters<typeof planMode>[1]>;
-type EventHandler = (event: never, context: ExtensionContext) => void | Promise<void>;
+type EventHandler = (event: never, context: ExtensionContext) => unknown | Promise<unknown>;
 
 interface PersistedEntry {
   type: "custom";
@@ -25,6 +25,9 @@ function createHarness(options: {
   loadModes?: ModeConfigLoader;
   sessionId?: string;
   entries?: PersistedEntry[];
+  mode?: ExtensionContext["mode"];
+  parentSession?: string;
+  systemPrompt?: string;
 }) {
   let activeTools = [...options.activeTools];
   let idle = options.idle ?? true;
@@ -61,7 +64,9 @@ function createHarness(options: {
     setThinkingLevel: (level: string) => thinkingLevels.push(level),
   } as unknown as ExtensionAPI;
   const ctx = {
+    getSystemPrompt: () => options.systemPrompt ?? "base system prompt",
     isIdle: () => idle,
+    mode: options.mode ?? "tui",
     modelRegistry: {
       find: (provider: string, id: string) => {
         if (provider === planModel.provider && id === planModel.id) {
@@ -81,7 +86,7 @@ function createHarness(options: {
     },
     sessionManager: {
       getEntries: () => [...entries],
-      getHeader: () => ({ id: sessionId }),
+      getHeader: () => ({ id: sessionId, parentSession: options.parentSession }),
     },
     ui: {
       notify: (message: string, level: string) => notifications.push([message, level]),
@@ -105,6 +110,9 @@ function createHarness(options: {
     selectModel(model: { provider: string; id: string }) {
       void handlers.get("model_select")?.({ model, source: "set" } as never, ctx);
     },
+    async beforeAgentStart(systemPrompt = options.systemPrompt ?? "base system prompt") {
+      return handlers.get("before_agent_start")?.({ systemPrompt } as never, ctx);
+    },
     async startSession(reason: "new" | "reload" | "resume") {
       await handlers.get("session_start")?.({ reason } as never, ctx);
     },
@@ -118,6 +126,40 @@ function createHarness(options: {
 }
 
 describe("plan mode", () => {
+  test("does not override a subagent model or inject parent build instructions", async () => {
+    const harness = createHarness({
+      activeTools: ["read", "write"],
+      mode: "json",
+      parentSession: "parent-session-id",
+      systemPrompt:
+        '<active_agent name="review"/>\n\n# Environment\nWorking directory: /tmp/review',
+    });
+
+    await harness.startSession("new");
+    const beforeAgentStart = await harness.beforeAgentStart();
+
+    expect(harness.selectedModels).toEqual([]);
+    expect(harness.thinkingLevels).toEqual([]);
+    expect(beforeAgentStart).toBeUndefined();
+  });
+
+  test("keeps normal build setup in a noninteractive parent session", async () => {
+    const harness = createHarness({
+      activeTools: ["read", "write"],
+      mode: "json",
+      parentSession: "/parent/session.jsonl",
+    });
+
+    await harness.startSession("new");
+    const beforeAgentStart = await harness.beforeAgentStart();
+
+    expect(harness.selectedModels).toEqual([buildModel]);
+    expect(harness.thinkingLevels).toEqual(["xhigh"]);
+    expect(beforeAgentStart).toEqual({
+      systemPrompt: expect.stringContaining("You are Pi's primary build agent."),
+    });
+  });
+
   test("entering selects the configured plan model and thinking level and keeps only read-only tools", async () => {
     const harness = createHarness({
       activeTools: [

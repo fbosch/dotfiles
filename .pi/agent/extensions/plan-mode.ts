@@ -40,8 +40,20 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
   "max",
 ]);
 
+const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"[^"\r\n]+"|'[^'\r\n]+')[^>]*\/>\s*$/u;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isSubagentSession(ctx: ExtensionContext, systemPrompt = ctx.getSystemPrompt()): boolean {
+  // pi-subagents supplies both signals: its documented active-agent marker and
+  // the parent-session header. Requiring both avoids treating a normal fork or
+  // prompt text that merely quotes the marker as a child session.
+  const parentSession = ctx.sessionManager.getHeader()?.parentSession;
+  if (typeof parentSession !== "string" || parentSession.length === 0) return false;
+
+  return systemPrompt.split("\n").some((line) => ACTIVE_AGENT_MARKER.test(line));
 }
 
 function isThinkingLevel(value: unknown): value is ThinkingLevel {
@@ -158,6 +170,7 @@ export function getModeColor(name: ModeName): string {
 
 export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader = loadModes): void {
   let enabled = false;
+  let childSession = false;
   let selectingModeModel = false;
   let toolsBeforePlanMode: string[] | undefined;
   const configuredModeModels: Record<ModeName, string> = {
@@ -231,6 +244,8 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   }
 
   async function toggle(ctx: ExtensionContext): Promise<void> {
+    if (childSession || isSubagentSession(ctx)) return;
+
     if (ctx.isIdle() === false) {
       ctx.ui.notify("Wait for the current response to finish before switching modes.", "warning");
       return;
@@ -259,6 +274,9 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   }
 
   pi.on("session_start", async (_event, ctx) => {
+    childSession = isSubagentSession(ctx);
+    if (childSession) return;
+
     restoreModeModels(ctx);
     if ((await selectModeModel("build", ctx)) === false) return;
 
@@ -266,6 +284,7 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   });
 
   pi.on("model_select", (event, ctx) => {
+    if (childSession || isSubagentSession(ctx)) return;
     if (selectingModeModel || event.source === "restore") return;
 
     const mode: ModeName = enabled ? "plan" : "build";
@@ -273,7 +292,8 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
     persistModeModels(ctx);
   });
 
-  pi.on("thinking_level_select", (event) => {
+  pi.on("thinking_level_select", (event, ctx) => {
+    if (childSession || isSubagentSession(ctx)) return;
     if (selectingModeModel) return;
 
     const mode: ModeName = enabled ? "plan" : "build";
@@ -290,7 +310,9 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
     handler: async (ctx) => toggle(ctx),
   });
 
-  pi.on("before_agent_start", async (event) => {
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (childSession || isSubagentSession(ctx, event.systemPrompt)) return;
+
     const modePrompt = MODE_PROMPTS[enabled ? "plan" : "build"];
 
     return {
