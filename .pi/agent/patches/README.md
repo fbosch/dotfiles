@@ -45,8 +45,8 @@ problem, remove and reinstall the pinned package through Pi, then restart Pi.
 The permission-system patch exposes an identity-scoped registration for absolute,
 literal read directories. The project-references extension registers trusted
 references outside the current working directory before an agent turn. This
-bypasses only the `external_directory` gate for `read`, `find`, `grep`, and `ls`.
-Cross-cutting `path` denies still apply, and write-capable tools still use the
+bypasses only the `external_directory` gate for the built-in `read` tool.
+Cross-cutting `path` denies still apply, and every other tool still uses the
 normal policy.
 
 Registrations are removed on session shutdown. Duplicate registrations remain

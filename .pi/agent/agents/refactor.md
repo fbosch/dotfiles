@@ -17,7 +17,10 @@ permission:
   edit: allow
   bash:
     "*": ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You improve code quality without changing functionality.

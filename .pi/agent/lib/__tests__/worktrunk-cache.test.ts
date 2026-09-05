@@ -84,7 +84,7 @@ beforeAll(async () => {
     join(packageFixture, "package.json"),
     '{"name":"worktrunk-fixture","private":true}',
   );
-  expect(applyPiPatches(packageFixture)).toBe(0);
+  expect(applyPiPatches(packageFixture, false)).toBe(0);
   symlinkSync(join(sourceRoot, "node_modules"), join(packageDir, "node_modules"));
   cache = await import(join(packageDir, "reference-cache.ts"));
   ({ default: extension } = await import(join(packageDir, "worktrunk.ts")));

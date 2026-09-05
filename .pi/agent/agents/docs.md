@@ -17,7 +17,10 @@ permission:
   write: allow
   edit: allow
   bash: deny
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You write clear, comprehensive documentation.

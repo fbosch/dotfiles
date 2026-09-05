@@ -17,7 +17,10 @@ permission:
   edit: allow
   bash:
     "*": ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You write, run, and diagnose comprehensive tests. Focus on edge cases, error conditions, clear names, and good coverage. Run relevant suites when validation needs interpretation, failure diagnosis, or follow-up changes.

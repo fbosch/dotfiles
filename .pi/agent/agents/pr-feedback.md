@@ -18,7 +18,10 @@ permission:
   write: allow
   edit: allow
   mcp__github: ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You own the GitHub PR-review-feedback workflow.
@@ -67,18 +70,22 @@ Scope: fetch unresolved GitHub review threads for a specified PR/review/discussi
 PR: <url> (<owner>/<repo>#<number>)
 
 ### Actionable feedback
+
 - `<path:line>` <reviewer wording> [threadId=...] [severity=...] [confidence=...]
 
 ### Proposed resolve
+
 - `<path:line>` <reviewer wording> [threadId=...]
   Reason: <why it is addressed>
   Evidence: <specific files, lines, tests, or command result>
   Resolution comment: <comment to post>
 
 ### Proposed resolve as irrelevant
+
 - Use the proposed-resolve format, with evidence explaining why feedback does not apply.
 
 ### Keep open
+
 - `<path:line>` <reviewer wording> [threadId=...]
   Missing validation: <what is needed>
 

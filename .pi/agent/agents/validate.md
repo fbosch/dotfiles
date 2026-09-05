@@ -15,8 +15,14 @@ permission:
   ffgrep: allow
   bash:
     "*": ask
-  external_directory: ask
-  external_directory_write: deny
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
+  external_directory_write:
+    "*": deny
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 Run the smallest relevant post-change validation checks and report evidence.

@@ -168,7 +168,14 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
   return function lspExtension(pi: ExtensionAPI): void {
     pi.registerMessageRenderer(
       "lsp-diagnostics",
-      (message) => new Text(diagnosticMessageText(message.content), 0, 0),
+      (message, { expanded }) =>
+        new Text(
+          expanded
+            ? diagnosticMessageText(message.content)
+            : "LSP diagnostics hidden; expand tool output to view.",
+          0,
+          0,
+        ),
     );
 
     let managerPromise: Promise<LspServerManager> | undefined;

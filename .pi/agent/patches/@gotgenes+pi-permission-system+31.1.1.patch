@@ -1,5 +1,5 @@
 diff --git a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
-index 0e268df..c671479 100644
+index 0e268df..89f6408 100644
 --- a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
 @@ -579,6 +579,17 @@ interface PermissionsService extends PermissionQuery {
@@ -7,29 +7,29 @@ index 0e268df..c671479 100644
       */
      isToolFullyDenied(toolName: string, agentName?: string): boolean;
 +    /**
-+     * Register an absolute, literal directory that read-only path tools may
++     * Register an absolute, literal directory that the built-in `read` tool may
 +     * access outside the working directory without prompting.
 +     *
-+     * The cross-cutting `path` gate still applies, and write-capable tools do not
-+     * use this registration. The returned disposer removes only this specific
++     * The cross-cutting `path` gate still applies, and other tools do not use
++     * this registration. The returned disposer removes only this specific
 +     * registration, so independent consumers may register the same directory.
 +     *
-+     * @param directory - Absolute directory path without wildcard characters.
++     * @param directory - Absolute directory path interpreted literally.
 +     */
 +    registerInfrastructureReadDirectory(directory: string): () => void;
      /**
       * Register a custom preview formatter for a specific tool name.
       *
 diff --git a/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md b/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
-index f9f77a0..9ceea81 100644
+index f9f77a0..0cfdec8 100644
 --- a/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
 +++ b/node_modules/@gotgenes/pi-permission-system/docs/cross-extension-api.md
 @@ -75,6 +75,12 @@ interface PermissionsService {
    /** Whether every value under a tool's surface resolves to deny; use this to pre-filter a tool list. */
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
- 
+
 +  /**
-+   * Register an absolute, literal directory that read-only path tools may
++   * Register an absolute, literal directory that the built-in `read` tool may
 +   * access outside cwd without prompting. Returns a disposer.
 +   */
 +  registerInfrastructureReadDirectory(directory: string): () => void;
@@ -40,12 +40,12 @@ index f9f77a0..9ceea81 100644
 @@ -154,6 +160,23 @@ const usable = tools.filter((t) => !permissions.isToolFullyDenied(t, agentName))
  Rule ordering is honored (last-match-wins), so an exception written after a `deny` catch-all keeps the tool reachable while one written before it does not.
  It considers config-layer rules only; a runtime session approval does not change the answer.
- 
+
 +#### `registerInfrastructureReadDirectory`
 +
-+Register an absolute, literal directory that Pi's read-only path tools (`read`, `find`, `grep`, and `ls`) may access outside the working directory without prompting.
-+The registration bypasses only the `external_directory` gate: the cross-cutting `path` gate still applies, and write-capable tools are unaffected.
-+The directory must be absolute and must not contain `*` or `?` wildcard characters.
++Register an absolute, literal directory that Pi's built-in `read` tool may access outside the working directory without prompting.
++The registration bypasses only the `external_directory` gate: the cross-cutting `path` gate still applies, and every other tool is unaffected.
++The directory must be absolute. Characters such as `*` and `?` are interpreted as literal filename characters, not patterns.
 +
 +```typescript
 +const dispose = permissions.registerInfrastructureReadDirectory(
@@ -59,25 +59,100 @@ index f9f77a0..9ceea81 100644
 +Register again after `/reload` or session replacement.
 +
  #### `registerToolInputFormatter`
- 
+
  Register a custom preview formatter for a specific tool name.
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
+index b9a2be9..5056a6f 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
+@@ -28,6 +28,7 @@ export function describeExternalDirectoryGate(
+   resolver: ScopedPermissionResolver,
+   normalizer: PathNormalizer,
+   extractors?: ToolAccessExtractorLookup,
++  registeredReadDirectories: readonly string[] = [],
+ ): GateResult {
+   const { path: externalDirectoryPath, source: pathSource } = getToolInputPath(
+     tcc.toolName,
+@@ -46,7 +47,12 @@ export function describeExternalDirectoryGate(
+   const accessPath = normalizer.forPath(externalDirectoryPath);
+
+   // ── Pi infrastructure read bypass ──────────────────────────────────────
+-  if (normalizer.isInfrastructureRead(tcc.toolName, accessPath, infraDirs)) {
++  const registeredRead =
++    tcc.toolName === "read" &&
++    registeredReadDirectories.some((directory) =>
++      normalizer.isWithinDirectory(accessPath.boundaryValue(), directory),
++    );
++  if (registeredRead || normalizer.isInfrastructureRead(tcc.toolName, accessPath, infraDirs)) {
+     return {
+       action: "allow",
+       // Containment allowed this, not a rule the operator wrote.
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
+index 9817c1f..a6c3b87 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
+@@ -41,6 +41,8 @@ export interface ToolCallGateInputs {
+   getActiveSkillEntries(): SkillPromptEntry[];
+   /** Combined infrastructure read directories (static + config-derived). */
+   getInfrastructureReadDirs(): string[];
++  /** Literal read directories registered by sibling extensions. */
++  getRegisteredInfrastructureReadDirectories(): string[];
+   /** Resolved tool-preview formatter options from the current config. */
+   getToolPreviewLimits(): ToolPreviewFormatterOptions;
+   /** The session's path normalizer (platform + cwd baked in). */
+@@ -113,6 +115,7 @@ export class ToolCallGatePipeline {
+           this.resolver,
+           normalizer,
+           this.customExtractors,
++          this.inputs.getRegisteredInfrastructureReadDirectories(),
+         ),
+       () =>
+         describeBashExternalDirectoryGate(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
+index 3361354..0f3aeb6 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
+@@ -8,6 +8,7 @@ import {
+ import { deriveApprovalPattern } from "./approval-pattern";
+ import { isPathOutsideWorkingDirectory } from "./path-containment";
+ import type { PathFlavor } from "./path-flavor";
++import { canonicalizePath } from "./canonicalize-path";
+ import { isPiInfrastructureRead } from "./pi-infrastructure-read";
+
+ /**
+@@ -157,6 +158,15 @@ export class PathNormalizer {
+     return this.flavor.isWithin(pathValue, directory);
+   }
+
++  /**
++   * Canonicalize an already-absolute literal path without policy-value cleanup.
++   * Live directory registrations use this so quotes, at-signs, and wildcard
++   * characters in real filenames retain their literal meaning.
++   */
++  canonicalLiteralPath(pathValue: string): string {
++    return this.flavor.fold(canonicalizePath(pathValue, this.flavor));
++  }
++
+   /** Canonical (symlink-resolved) outside-cwd test against the baked cwd. */
+   isOutsideWorkingDirectory(pathValue: string): boolean {
+     const canonicalPath = canonicalNormalizePathForComparison(
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/service.ts b/node_modules/@gotgenes/pi-permission-system/src/service.ts
-index 3348223..825faa9 100644
+index 3348223..5aa7410 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/service.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/service.ts
 @@ -148,6 +148,18 @@ export interface PermissionsService extends PermissionQuery {
     */
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
- 
+
 +  /**
-+   * Register an absolute, literal directory that read-only path tools may
++   * Register an absolute, literal directory that the built-in `read` tool may
 +   * access outside the working directory without prompting.
 +   *
-+   * The cross-cutting `path` gate still applies, and write-capable tools do not
-+   * use this registration. The returned disposer removes only this specific
++   * The cross-cutting `path` gate still applies, and other tools do not use
++   * this registration. The returned disposer removes only this specific
 +   * registration, so independent consumers may register the same directory.
 +   *
-+   * @param directory - Absolute directory path without wildcard characters.
++   * @param directory - Absolute directory path interpreted literally.
 +   */
 +  registerInfrastructureReadDirectory(directory: string): () => void;
 +
@@ -91,7 +166,7 @@ index 52abe07..8d83eb8 100644
 @@ -28,9 +28,10 @@ interface ResolverForService {
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
  }
- 
+
 -/** Narrow session view: hands out the cwd-bound path normalizer. */
 -interface PathNormalizerProvider {
 +/** Narrow session view used by path queries and live read-directory registrations. */
@@ -99,7 +174,7 @@ index 52abe07..8d83eb8 100644
    getPathNormalizer(): PathNormalizer;
 +  registerInfrastructureReadDirectory(directory: string): () => void;
  }
- 
+
  /**
 @@ -46,7 +47,7 @@ interface PathNormalizerProvider {
  export class LocalPermissionsService implements PermissionsService {
@@ -113,7 +188,7 @@ index 52abe07..8d83eb8 100644
 @@ -89,6 +90,12 @@ export class LocalPermissionsService implements PermissionsService {
      return this.resolver.isToolFullyDenied(toolName, agentName);
    }
- 
+
 +  registerInfrastructureReadDirectory(
 +    directory: string,
 +  ): ReturnType<PermissionsService["registerInfrastructureReadDirectory"]> {
@@ -124,7 +199,7 @@ index 52abe07..8d83eb8 100644
      toolName: string,
      formatter: ToolInputFormatter,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts b/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
-index 04b5ad6..2f5ee5a 100644
+index 04b5ad6..6656b4c 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/session/permission-session.ts
 @@ -45,6 +45,10 @@ export class PermissionSession implements ToolCallGateInputs {
@@ -135,7 +210,7 @@ index 04b5ad6..2f5ee5a 100644
 +    symbol,
 +    string
 +  >();
- 
+
    constructor(
      private readonly paths: ExtensionPaths,
 @@ -125,6 +129,7 @@ export class PermissionSession implements ToolCallGateInputs {
@@ -145,49 +220,39 @@ index 04b5ad6..2f5ee5a 100644
 +    this.infrastructureReadDirectoryRegistrations.clear();
      this.deactivate();
    }
- 
-@@ -226,13 +231,42 @@ export class PermissionSession implements ToolCallGateInputs {
+
+@@ -226,9 +231,32 @@ export class PermissionSession implements ToolCallGateInputs {
    // ── Infrastructure paths ───────────────────────────────────────────────
- 
+
    /**
 -   * Combined infrastructure read directories: static paths from
 -   * `ExtensionPaths` plus config-derived paths.
 +   * Register one absolute, literal directory for read-only external access.
 +   * The identity-scoped disposer preserves another consumer's registration of
 +   * the same directory.
-+   */
+    */
 +  registerInfrastructureReadDirectory(directory: string): () => void {
 +    if (directory.trim().length === 0) {
 +      throw new TypeError("Infrastructure read directory must not be empty.");
-+    }
-+    if (directory.includes("*") || directory.includes("?")) {
-+      throw new TypeError(
-+        "Infrastructure read directory must not contain wildcard characters.",
-+      );
 +    }
 +    if (!this.pathNormalizer.isAbsolute(directory)) {
 +      throw new TypeError("Infrastructure read directory must be absolute.");
 +    }
 +
 +    const registration = Symbol("infrastructure-read-directory");
-+    const canonicalDirectory = this.pathNormalizer
-+      .forPath(directory)
-+      .boundaryValue();
++    const canonicalDirectory = this.pathNormalizer.canonicalLiteralPath(directory);
 +    this.infrastructureReadDirectoryRegistrations.set(registration, canonicalDirectory);
 +    return () => {
 +      this.infrastructureReadDirectoryRegistrations.delete(registration);
 +    };
 +  }
 +
-+  /**
-+   * Combined infrastructure read directories: static paths, config-derived
-+   * paths, and live cross-extension registrations.
-    */
++  /** Live literal directories registered by sibling extensions. */
++  getRegisteredInfrastructureReadDirectories(): string[] {
++    return [...this.infrastructureReadDirectoryRegistrations.values()];
++  }
++
++  /** Combined static and config-derived infrastructure read directories. */
    getInfrastructureReadDirs(): string[] {
      return [
        ...this.paths.piInfrastructureDirs,
-       ...(this.config.piInfrastructureReadPaths ?? []),
-+      ...this.infrastructureReadDirectoryRegistrations.values(),
-     ];
-   }
- 

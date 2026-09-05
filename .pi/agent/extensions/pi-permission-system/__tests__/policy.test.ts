@@ -529,6 +529,36 @@ describe("pi-permission-system policy", () => {
     }
   });
 
+  test("allows build agents to read and write /tmp", () => {
+    const engine = createEngine();
+    const buildAgents = [
+      "adversarial",
+      "benchmark",
+      "debug",
+      "docs",
+      "general",
+      "pr-feedback",
+      "quick",
+      "refactor",
+      "test",
+      "validate",
+    ];
+
+    for (const agentName of buildAgents) {
+      for (const surface of ["external_directory_read", "external_directory_write"]) {
+        expect(
+          engine.resolver.resolve({
+            kind: "path-values",
+            surface,
+            values: ["/tmp/synthetic-fixture.txt"],
+            agentName,
+          }).state,
+          `${agentName}: ${surface}`,
+        ).toBe("allow");
+      }
+    }
+  });
+
   test("evaluates chained shell commands through each command unit", async () => {
     const engine = createEngine();
     const result = await checkBash(engine, "set -o pipefail; git status --short");

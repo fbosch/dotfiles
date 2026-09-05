@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { ProjectReference } from "./types";
 
@@ -59,7 +59,8 @@ export function loadDocsCacheReferences(cwd: string): ProjectReference[] {
     }
 
     // The lock format omits cacheDir, so lock-only discovery follows docs-cache's default layout.
-    const path = resolve(cwd, ".docs", name);
+    const cachePath = resolve(cwd, ".docs", name);
+    const path = existsSync(cachePath) ? realpathSync(cachePath) : cachePath;
     const description = `Use for documentation from ${repositoryLabel(value.repo.trim())}.${
       existsSync(join(path, "TOC.md")) ? " Start with TOC.md." : ""
     }`;

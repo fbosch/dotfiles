@@ -18,7 +18,10 @@ permission:
   edit: allow
   bash:
     "*": ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You handle fast, cost-efficient work for well-scoped tasks, especially repeatable command workflows.

@@ -1,10 +1,19 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { applyPiPatches } from "../../../lib/pi-npm";
 
 interface PermissionSessionLike {
-  getInfrastructureReadDirs(): string[];
+  getRegisteredInfrastructureReadDirectories(): string[];
   registerInfrastructureReadDirectory(directory: string): () => void;
   shutdown(): void;
 }
@@ -46,9 +55,11 @@ interface PermissionModules {
       toolCallId: string;
       cwd: string;
     },
-    directories: string[],
+    infrastructureDirectories: string[],
     resolver: { resolve(intent: { surface: string }): PermissionCheck },
     normalizer: PathNormalizerLike,
+    extractors: undefined,
+    registeredReadDirectories: readonly string[],
   ): GateResult | null;
 }
 
@@ -116,7 +127,7 @@ function describeExternalAccess(
   cwd: string,
   toolName: string,
   path: string,
-  directories: string[],
+  registeredReadDirectories: string[],
 ): GateResult | null {
   const resolver = {
     resolve(intent: { surface: string }): PermissionCheck {
@@ -137,14 +148,40 @@ function describeExternalAccess(
       toolCallId: `synthetic-${toolName}`,
       cwd,
     },
-    directories,
+    [],
     resolver,
     new modules.PathNormalizer(modules.posixPathFlavor, cwd),
+    undefined,
+    registeredReadDirectories,
   );
 }
 
 describe("registered infrastructure read directories", () => {
-  test("allows read-only tools without allowing writes", () => {
+  test("reconstructs the package changes from the tracked patch", () => {
+    const fixture = mkdtempSync(join(tmpdir(), "pi-permission-package-"));
+    temporaryDirectories.push(fixture);
+    const agentRoot = resolve(import.meta.dir, "../../..");
+    const patch = join(agentRoot, "patches/@gotgenes+pi-permission-system+31.1.1.patch");
+    const packageDirectory = join(fixture, "node_modules/@gotgenes/pi-permission-system");
+    mkdirSync(join(fixture, "node_modules/@gotgenes"), { recursive: true });
+    cpSync(join(agentRoot, "npm/node_modules/@gotgenes/pi-permission-system"), packageDirectory, {
+      recursive: true,
+    });
+    expect(
+      Bun.spawnSync(["git", "apply", "--reverse", "--check", patch], {
+        cwd: fixture,
+      }).exitCode,
+    ).toBe(0);
+    expect(Bun.spawnSync(["git", "apply", "--reverse", patch], { cwd: fixture }).exitCode).toBe(0);
+    const source = join(packageDirectory, "src/session/permission-session.ts");
+    expect(readFileSync(source, "utf8")).not.toContain("registerInfrastructureReadDirectory");
+    writeFileSync(join(fixture, "package.json"), '{"private":true}\n');
+
+    expect(applyPiPatches(fixture, false)).toBe(0);
+    expect(readFileSync(source, "utf8")).toContain("registerInfrastructureReadDirectory");
+  });
+
+  test("allows only the built-in read tool", () => {
     const root = mkdtempSync(join(tmpdir(), "pi-reference-read-directory-"));
     temporaryDirectories.push(root);
     const cwd = join(root, "project");
@@ -156,21 +193,36 @@ describe("registered infrastructure read directories", () => {
 
     const session = createPermissionSession();
     const permissions = createPermissionsService(session);
-    expect(
-      describeExternalAccess(cwd, "read", file, session.getInfrastructureReadDirs())?.preCheck,
-    ).toMatchObject({ state: "ask" });
+    expect(describeExternalAccess(cwd, "read", file, [])?.preCheck).toMatchObject({
+      state: "ask",
+    });
 
     const dispose = permissions.registerInfrastructureReadDirectory(reference);
-    expect(session.getInfrastructureReadDirs()).toContain(realpathSync(reference));
+    expect(session.getRegisteredInfrastructureReadDirectories()).toContain(realpathSync(reference));
     expect(
-      describeExternalAccess(cwd, "read", file, session.getInfrastructureReadDirs()),
+      describeExternalAccess(
+        cwd,
+        "read",
+        file,
+        session.getRegisteredInfrastructureReadDirectories(),
+      ),
     ).toMatchObject({ action: "allow" });
-    expect(
-      describeExternalAccess(cwd, "write", file, session.getInfrastructureReadDirs())?.preCheck,
-    ).toMatchObject({ state: "ask" });
+    for (const toolName of ["grep", "find", "ls", "write", "edit"]) {
+      expect(
+        describeExternalAccess(
+          cwd,
+          toolName,
+          file,
+          session.getRegisteredInfrastructureReadDirectories(),
+        )?.preCheck,
+        toolName,
+      ).toMatchObject({ state: "ask" });
+    }
 
     dispose();
-    expect(session.getInfrastructureReadDirs()).not.toContain(realpathSync(reference));
+    expect(session.getRegisteredInfrastructureReadDirectories()).not.toContain(
+      realpathSync(reference),
+    );
   });
 
   test("keeps duplicate registrations independent and validates the boundary", () => {
@@ -185,16 +237,48 @@ describe("registered infrastructure read directories", () => {
     const disposeSecond = permissions.registerInfrastructureReadDirectory(reference);
 
     disposeFirst();
-    expect(session.getInfrastructureReadDirs()).toContain(realpathSync(reference));
+    expect(session.getRegisteredInfrastructureReadDirectories()).toContain(realpathSync(reference));
     disposeSecond();
-    expect(session.getInfrastructureReadDirs()).not.toContain(realpathSync(reference));
+    expect(session.getRegisteredInfrastructureReadDirectories()).not.toContain(
+      realpathSync(reference),
+    );
     expect(() => permissions.registerInfrastructureReadDirectory("relative/path")).toThrow(
       "must be absolute",
     );
-    expect(() => permissions.registerInfrastructureReadDirectory("/tmp/reference-*")).toThrow(
-      "must not contain wildcard",
-    );
-
     session.shutdown();
+  });
+
+  test("keeps quote and wildcard characters in canonical directory names literal", () => {
+    const root = mkdtempSync(join(tmpdir(), "pi-reference-read-directory-"));
+    temporaryDirectories.push(root);
+    const cwd = join(root, "project");
+    const quoted = join(root, 'docs"');
+    const quoteSibling = join(root, "docs");
+    const wildcardTarget = join(root, "wild*");
+    const wildcardSibling = join(root, "wild-unrelated");
+    for (const directory of [cwd, quoted, quoteSibling, wildcardTarget, wildcardSibling]) {
+      mkdirSync(directory);
+      writeFileSync(join(directory, "guide.md"), "guide\n");
+    }
+
+    const session = createPermissionSession();
+    const permissions = createPermissionsService(session);
+    permissions.registerInfrastructureReadDirectory(quoted);
+    permissions.registerInfrastructureReadDirectory(wildcardTarget);
+    const registrations = session.getRegisteredInfrastructureReadDirectories();
+
+    expect(
+      describeExternalAccess(cwd, "read", join(quoted, "guide.md"), registrations),
+    ).toMatchObject({ action: "allow" });
+    expect(
+      describeExternalAccess(cwd, "read", join(quoteSibling, "guide.md"), registrations)?.preCheck,
+    ).toMatchObject({ state: "ask" });
+    expect(
+      describeExternalAccess(cwd, "read", join(wildcardTarget, "guide.md"), registrations),
+    ).toMatchObject({ action: "allow" });
+    expect(
+      describeExternalAccess(cwd, "read", join(wildcardSibling, "guide.md"), registrations)
+        ?.preCheck,
+    ).toMatchObject({ state: "ask" });
   });
 });

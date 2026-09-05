@@ -18,6 +18,11 @@ interface SentMessage {
   readonly display: boolean;
 }
 
+type RegisteredMessageRenderer = (
+  message: { readonly content: unknown },
+  options: { readonly expanded: boolean; readonly outputPad: number },
+) => { render(width: number): readonly string[] };
+
 function mutationResult(toolCallId: string, path = "example.ts"): ToolResultEvent {
   return {
     type: "tool_result",
@@ -49,6 +54,31 @@ function turnEnd(...toolCallIds: string[]) {
     toolResults: toolCallIds.map((toolCallId) => mutationMessage(toolCallId).message),
   };
 }
+
+test("hides automatic diagnostics until tool output is expanded", () => {
+  let renderer: RegisteredMessageRenderer | undefined;
+  createLspExtension()({
+    on() {},
+    registerTool() {},
+    registerMessageRenderer(_customType: string, registeredRenderer: RegisteredMessageRenderer) {
+      renderer = registeredRenderer;
+    },
+  } as unknown as ExtensionAPI);
+
+  if (renderer === undefined) throw new Error("LSP diagnostic renderer was not registered");
+
+  const output = "LSP diagnostics: issues. Diagnostics were reported for the current document.";
+  const collapsed = renderer({ content: output }, { expanded: false, outputPad: 0 })
+    .render(200)
+    .join("\n");
+  const expanded = renderer({ content: output }, { expanded: true, outputPad: 0 })
+    .render(200)
+    .join("\n");
+
+  expect(collapsed).toContain("LSP diagnostics hidden");
+  expect(collapsed).not.toContain(output);
+  expect(expanded).toContain(output);
+});
 
 test("registers the tool immediately and creates one manager on first use", async () => {
   const handlers = new Map<string, Handler>();

@@ -18,7 +18,10 @@ permission:
   bash:
     "*": ask
   mcp__chrome_devtools: ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 You investigate and diagnose issues systematically.

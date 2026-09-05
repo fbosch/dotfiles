@@ -16,7 +16,10 @@ permission:
   ffgrep: allow
   bash:
     "*": ask
-  external_directory: ask
+  external_directory:
+    "*": ask
+    "/tmp": allow
+    "/tmp/*": allow
 ---
 
 Profile and benchmark code systematically.

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -321,13 +321,20 @@ describe("project references", () => {
     const root = temporaryDirectory();
     const cwd = join(root, "project");
     const external = join(root, "external docs");
+    const docsCacheExternal = join(root, "docs-cache *");
     mkdirSync(join(cwd, "local-docs"), { recursive: true });
     mkdirSync(external);
+    mkdirSync(docsCacheExternal);
+    mkdirSync(join(cwd, ".docs"));
+    symlinkSync(docsCacheExternal, join(cwd, ".docs", "symlinked-docs"), "dir");
     writeProjectSettings(cwd, {
       references: {
         external: { path: external, description: "External documentation" },
         local: { path: "local-docs", description: "Local documentation" },
       },
+    });
+    writeDocsLock(cwd, {
+      "symlinked-docs": { repo: "https://github.com/owner/symlinked-docs.git" },
     });
 
     let sessionStart:
@@ -391,12 +398,12 @@ describe("project references", () => {
       await beforeAgentStart?.(event, context);
       await beforeAgentStart?.(event, context);
 
-      expect(registrations).toEqual([realpathSync(external)]);
+      expect(registrations).toEqual([realpathSync(external), realpathSync(docsCacheExternal)]);
       expect(notifications).toEqual([]);
       expect(disposals).toEqual([]);
 
       sessionShutdown?.();
-      expect(disposals).toEqual([realpathSync(external)]);
+      expect(disposals).toEqual([realpathSync(docsCacheExternal), realpathSync(external)]);
     } finally {
       serviceModule.unpublishPermissionsService(sessionId, permissions);
     }
