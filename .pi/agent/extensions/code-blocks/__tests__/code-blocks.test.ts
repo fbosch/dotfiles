@@ -1,8 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
-import { Markdown, stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { associateFilenamesWithCodeFences, installCodeBlockRenderer, renderCodeBlock } from "..";
+import {
+  getOsc8LinkAtColumn,
+  Markdown,
+  stripTerminalSequences,
+  type Terminal,
+  TuiAltScreen,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
+import {
+  associateFilenamesWithCodeFences,
+  installCodeBlockClipboard,
+  installCodeBlockRenderer,
+  renderCodeBlock,
+} from "..";
 
 const FOREGROUND = "\u001b[38;2;187;187;187m";
 const FOREGROUND_RESET = "\u001b[39m";
@@ -56,7 +68,7 @@ describe("code block rendering", () => {
     expect(lines.every((line) => visibleWidth(line) === 28)).toBe(true);
     expect(plain(lines)).toEqual([
       "                            ",
-      "   TypeScript              ",
+      "   TypeScript        copy  ",
       "                            ",
       "                            ",
       "  1  const answer = 42;     ",
@@ -64,7 +76,108 @@ describe("code block rendering", () => {
       "                            ",
     ]);
     expect(lines[1]).toContain(BACKGROUNDS.customMessageBg);
+    expect(plain(lines)[1]?.endsWith(" ")).toBe(true);
     expect(lines[3]).toContain(BACKGROUNDS.userMessageBg);
+  });
+
+  test("copies raw code from the header action without gutters", async () => {
+    const code = "const value = 1;\nreturn value;";
+    let invalidations = 0;
+    const cachedComponent = {
+      ...component,
+      invalidate: () => {
+        invalidations += 1;
+      },
+    };
+    const lines = renderCodeBlock(
+      cachedComponent,
+      { type: "code", lang: "ts", text: code },
+      40,
+      undefined,
+      blockTheme,
+    );
+    const header = lines[1] ?? "";
+    const plainHeader = plain([header])[0] ?? "";
+    const copyColumn = plainHeader.indexOf("copy") + 1;
+    expect(getOsc8LinkAtColumn(header, copyColumn)).toMatch(/^pi-copy:\/\/code-block\//);
+
+    let copied: string | undefined;
+    const clipboardPatch = installCodeBlockClipboard(async (text) => {
+      copied = text;
+    });
+    const terminalWrites: string[] = [];
+    const tui = new TuiAltScreen({
+      columns: 40,
+      rows: 20,
+      start: () => {},
+      stop: () => {},
+      drainInput: async () => {},
+      write: (data) => {
+        terminalWrites.push(data);
+      },
+      moveBy: () => {},
+      kittyProtocolActive: false,
+      hideCursor: () => {},
+      showCursor: () => {},
+      clearLine: () => {},
+      clearFromCursor: () => {},
+      clearScreen: () => {},
+      setTitle: () => {},
+      setProgress: () => {},
+    } as Terminal);
+    const internals = tui as unknown as {
+      beforeTerminalStart: () => void;
+      handleSelectionMouseEvent: (event: {
+        button: number;
+        x: number;
+        y: number;
+        release: boolean;
+      }) => void;
+      previousScreen: string[];
+      flash: () => void;
+      requestRender: () => void;
+    };
+    internals.previousScreen = [header];
+    internals.flash = () => {};
+    internals.requestRender = () => {};
+
+    try {
+      internals.beforeTerminalStart();
+      expect(terminalWrites.at(-1)).toBe("\u001b[?1003h");
+      internals.previousScreen = [header];
+      internals.handleSelectionMouseEvent({
+        button: 32,
+        x: copyColumn,
+        y: 0,
+        release: false,
+      });
+      expect(invalidations).toBe(1);
+      const hoveredLines = renderCodeBlock(
+        cachedComponent,
+        { type: "code", lang: "ts", text: code },
+        40,
+        undefined,
+        blockTheme,
+      );
+      expect(hoveredLines[1]).not.toContain("38;2;96;153;192");
+
+      internals.handleSelectionMouseEvent({
+        button: 0,
+        x: copyColumn,
+        y: 0,
+        release: false,
+      });
+      internals.handleSelectionMouseEvent({
+        button: 0,
+        x: copyColumn,
+        y: 0,
+        release: true,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(copied).toBe(code);
+    } finally {
+      clipboardPatch.restore();
+    }
   });
 
   test("wraps long code without repeating the line number on continuation rows", () => {
@@ -103,7 +216,7 @@ describe("code block rendering", () => {
     );
     const rendered = plain(lines);
 
-    expect(rendered[1]?.trim()).toBe(" example.ts");
+    expect(rendered[1]?.trim()).toBe(" example.ts            copy");
     expect(rendered[4]?.startsWith(" 10  const stable = true;")).toBe(true);
     expect(rendered[5]?.startsWith(" 11- const oldValue = 1;")).toBe(true);
     expect(rendered[6]?.startsWith(" 11+ const newValue = 2;")).toBe(true);
@@ -122,7 +235,7 @@ describe("code block rendering", () => {
     );
     const rendered = plain(lines);
 
-    expect(rendered[1]?.trim()).toBe(" Diff");
+    expect(rendered[1]?.trim()).toBe(" Diff          copy");
     expect(rendered[4]?.startsWith("  1- -- old")).toBe(true);
     expect(rendered[5]?.startsWith("  1+ ++ new")).toBe(true);
   });
@@ -146,7 +259,7 @@ describe("code block rendering", () => {
     );
     const rendered = plain(lines);
 
-    expect(rendered[1]?.trim()).toBe(" old.ts");
+    expect(rendered[1]?.trim()).toBe(" old.ts                    copy");
     expect(rendered[4]?.startsWith("  8- export const oldValue = 1;")).toBe(true);
     expect(rendered.some((line) => line.includes("deleted file mode"))).toBe(false);
   });
@@ -177,7 +290,9 @@ describe("code block rendering", () => {
     );
 
     expect(
-      rendered.filter((line) => line.trim().endsWith(".ts")).map((line) => line.trim()),
+      rendered
+        .filter((line) => line.trimEnd().endsWith("copy"))
+        .map((line) => line.trim().replace(/\s+copy$/, "")),
     ).toEqual([" a.ts", " b.ts"]);
     expect(rendered.some((line) => line.startsWith(" 20- const b = 1;"))).toBe(true);
   });
@@ -206,7 +321,9 @@ describe("code block rendering", () => {
     );
 
     expect(
-      rendered.filter((line) => line.trim().endsWith(".ts")).map((line) => line.trim()),
+      rendered
+        .filter((line) => line.trimEnd().endsWith("copy"))
+        .map((line) => line.trim().replace(/\s+copy$/, "")),
     ).toEqual([" a.ts", " b.ts"]);
     expect(rendered.some((line) => line.startsWith("  4+ const b = 2;"))).toBe(true);
   });
@@ -233,7 +350,7 @@ describe("code block rendering", () => {
       blockTheme,
     );
 
-    expect(plain(lines)[1]?.trim()).toBe(" src/example file.ts");
+    expect(plain(lines)[1]?.trim()).toBe(" src/example file.ts           copy");
   });
 
   test("uses a strict leading filename comment when fence metadata has no path", () => {
@@ -245,7 +362,7 @@ describe("code block rendering", () => {
       blockTheme,
     );
 
-    expect(plain(lines)[1]?.trim()).toBe(" agents.ts");
+    expect(plain(lines)[1]?.trim()).toBe(" agents.ts             copy");
     expect(plain(lines)[4]?.includes("// agents.ts")).toBe(true);
   });
 
@@ -276,9 +393,9 @@ describe("code block rendering", () => {
 
     try {
       const rendered = plain(markdown.render(48));
-      expect(rendered.some((line) => line.trim() === " .pi/agent/extensions/code-blocks.ts")).toBe(
-        true,
-      );
+      expect(
+        rendered.some((line) => line.trim().startsWith(" .pi/agent/extensions/code-blocks.ts")),
+      ).toBe(true);
       expect(rendered.filter((line) => line.includes("code-blocks.ts"))).toHaveLength(1);
     } finally {
       patch.restore();

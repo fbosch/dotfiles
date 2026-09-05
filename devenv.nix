@@ -322,8 +322,12 @@ in
     '';
 
     "test:nvim-pi-launcher".exec = ''
-      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/pi-launcher.sock" \
-        -l .config/nvim/tests/pi_launcher.lua
+      test_bin="$(mktemp -d "$DEVENV_STATE/pi-launcher-bin.XXXXXX")"
+      trap 'rm -rf "$test_bin"' EXIT
+      printf '%s\n' '#!/bin/sh' 'exit 127' > "$test_bin/pi"
+      chmod +x "$test_bin/pi"
+      PATH="$test_bin:$PATH" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        --listen "$DEVENV_STATE/pi-launcher.sock" -l .config/nvim/tests/pi_launcher.lua
     '';
 
     "test:nvim-pi-cutover".exec = ''

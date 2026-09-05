@@ -63,13 +63,30 @@ assert(captured_command:find("opencode --port", 1, true), "fresh OpenCode comman
 
 metadata.opencode_session_id = "ses_exact"
 local original_system = vim.system
-vim.system = function()
+rawset(vim, "system", function()
 	error("session fallback must not overwrite an exact OpenCode session ID")
-end
+end)
 local ok, err = pcall(vim.api.nvim_exec_autocmds, "User", { pattern = "SessionSavePre" })
-vim.system = original_system
+rawset(vim, "system", original_system)
 assert(ok, err)
 assert(metadata.opencode_session_id == "ses_exact", "exact OpenCode session ID changed during save")
+
+metadata.opencode_session_id = nil
+local fallback_query
+rawset(vim, "system", function(command)
+	fallback_query = command[#command]
+	return {
+		wait = function()
+			return { code = 0, stdout = '[{"id":"ses_inferred"}]' }
+		end,
+	}
+end)
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+rawset(vim, "system", original_system)
+assert(type(fallback_query) == "string", "fresh OpenCode session lookup did not run")
+assert(fallback_query:lower():find(" like ", 1, true) == nil, "OpenCode session lookup retained SQL wildcards")
+assert(fallback_query:find("substr(directory", 1, true) ~= nil, "OpenCode session lookup lost descendant matching")
+assert(metadata.opencode_session_id == "ses_inferred", "fresh OpenCode session ID was not persisted")
 
 local starts = 0
 package.preload["opencode.config"] = function()

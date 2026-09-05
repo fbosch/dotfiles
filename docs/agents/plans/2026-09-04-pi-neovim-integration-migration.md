@@ -745,8 +745,11 @@ remains the intentional owner.
 
 ### Outcome
 
-Normal Neovim agent actions launch Pi. OpenCode remains an explicit rollback
-command during a retention period.
+Neovim launch, focus, and bounded editor-context actions use Pi. OpenCode
+remains an explicit rollback command during a retention period. Generic Ask and
+prompt-append behavior were not migrated by this phase; their replacement is
+planned in
+[`2026-09-05-pi-neovim-prompt-bridge.md`](./2026-09-05-pi-neovim-prompt-bridge.md).
 
 ### Delivery
 
@@ -762,26 +765,28 @@ command during a retention period.
 
 ### Capability matrix
 
-| Neovim workflow                                                            | Owner             | Evidence                                                              |
-| -------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| Launch, toggle, and terminal focus                                         | Pi                | `test:nvim-pi-launcher`, `test:nvim-pi-cutover`, Phase 1 live tracer  |
-| Active and preserved source context                                        | Pi                | `extensions/neovim` focused suite, Phase 1 live tracer                |
-| Exact visual selection                                                     | Pi                | `test:nvim-pi-launcher`, Phase 1 live tracer                          |
-| Visible and listed buffers                                                 | Pi                | `extensions/neovim` focused suite, Phase 2 live tracer                |
-| Unsaved buffer reads and Neovim diagnostics                                | Pi                | `extensions/neovim` focused suite, Phase 2 unchanged-disk tracer      |
-| Quickfix and location lists                                                | Pi                | `extensions/neovim` focused suite, Phase 4 presentation tracer        |
-| Reveal, highlight, annotation, and cleanup                                 | Pi                | `extensions/neovim` focused suite, Phase 4 unchanged-source tracer    |
-| Exact editor-owned session restoration                                     | Pi                | Neovim/Herdr restoration fixtures, Phase 3 two-worktree tracer        |
-| Herdr title and lifecycle state                                            | Pi                | Herdr extension fixtures, Phase 5 isolated lifecycle tracer           |
-| Editor-owned editable diff review                                          | OpenCode retained | Phase 6 public-API decision record                                    |
-| Clickable patch-header navigation                                          | OpenCode retained | Phase 7 public-API decision record                                    |
-| OpenCode actions, session selection, and prompt presets                    | OpenCode retained | `test:nvim-opencode-session-restore`; active `opencode.nvim` mappings |
-| Default OpenCode context injection through `<leader>ac`, `ga`, and `<A-x>` | Retired           | Replaced by bound Pi context operations in `test:nvim-pi-cutover`     |
+| Neovim workflow                                                  | Owner             | Evidence                                                              |
+| ---------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
+| Launch, toggle, and terminal focus                               | Pi                | `test:nvim-pi-launcher`, `test:nvim-pi-cutover`, Phase 1 live tracer  |
+| Active and preserved source context                              | Pi                | `extensions/neovim` focused suite, Phase 1 live tracer                |
+| Exact visual selection                                           | Pi                | `test:nvim-pi-launcher`, Phase 1 live tracer                          |
+| Visible and listed buffers                                       | Pi                | `extensions/neovim` focused suite, Phase 2 live tracer                |
+| Unsaved buffer reads and Neovim diagnostics                      | Pi                | `extensions/neovim` focused suite, Phase 2 unchanged-disk tracer      |
+| Quickfix and location lists                                      | Pi                | `extensions/neovim` focused suite, Phase 4 presentation tracer        |
+| Reveal, highlight, annotation, and cleanup                       | Pi                | `extensions/neovim` focused suite, Phase 4 unchanged-source tracer    |
+| Exact editor-owned session restoration                           | Pi                | Neovim/Herdr restoration fixtures, Phase 3 two-worktree tracer        |
+| Herdr title and lifecycle state                                  | Pi                | Herdr extension fixtures, Phase 5 isolated lifecycle tracer           |
+| Editor-owned editable diff review                                | OpenCode retained | Phase 6 public-API decision record                                    |
+| Clickable patch-header navigation                                | OpenCode retained | Phase 7 public-API decision record                                    |
+| OpenCode actions, session selection, and prompt presets          | OpenCode retained | `test:nvim-opencode-session-restore`; active `opencode.nvim` mappings |
+| Ask input and prompt submission previously owned by `<leader>ac` | OpenCode retained | New prompt-bridge plan; no current Pi prompt-ingress API              |
+| Prompt append previously owned by `ga` and `<A-x>`               | OpenCode retained | New prompt-bridge plan; current Pi mappings only record context       |
 
 The default Pi mappings are `<A-a>` for toggle, `<C-\\>` for focus,
-`<leader>ac` and `ga` for source context, and `<A-x>` for selection or
-visible-buffer context. `:OpenCodeStart`, `:OpenCodeToggle`, and `<leader>aO`
-remain the explicit rollback entry points.
+`<leader>ac` and `ga` for source-context capture, and `<A-x>` for selection or
+visible-buffer context capture. The latter three do not reproduce the prior Ask
+or append interactions and are not prompt-cutover evidence. `:OpenCodeStart`,
+`:OpenCodeToggle`, and `<leader>aO` remain the explicit rollback entry points.
 
 ### Complete live matrix
 
@@ -847,6 +852,39 @@ Also confirm:
 - No generated lockfiles changed unexpectedly.
 - OpenCode still starts independently.
 - Existing Pi LSP, handoff, and Herdr tests still pass.
+
+### Repository validation record (2026-09-05)
+
+- `just stow-check`, `devenv tasks run test:stow`, and `devenv test` pass. The
+  full Devenv graph includes the new `test:nvim-pi-cutover` dependency.
+- The Stow fixture now excludes `.pi/skills`, matching the repository rule that
+  Pi discovers these project-local skills in place. `.config/opencode/command`
+  is also excluded from Stow, matching its existing local Git ignore.
+- The complete Pi suite passes 724 tests with 2,109 assertions; TypeScript,
+  scoped Neovim/Herdr Biome checks, Neovim Lua quality, and `git diff --check`
+  pass.
+- `ripsecrets` found no credentials in the integration, migration, or fixture
+  paths. Git status contains no session state, credential files, Neovim pack
+  lock, or generated AGS typings.
+- The repository-wide Pi `bun run check` remains independently blocked by an
+  existing Biome newline finding in clean `.pi/agent/settings.json` and the
+  known Fallow unused export at `benchmarks/startup-shutdown.ts:36`. Neither
+  file is part of this migration.
+- A final cutover review found and fixed cross-session terminal reuse before
+  context capture, ambiguous previous-window return behavior, SQL wildcard
+  matching in the retained OpenCode fallback, and an ambient `pi` dependency in
+  the launcher fixture. The focused Neovim tasks and final `devenv test` pass
+  after these fixes.
+- Concurrent non-migration work was preserved and was not edited or attributed
+  to this migration.
+
+### Rollback retention
+
+OpenCode has no automatic expiry. Keep `opencode.nvim`, its session metadata,
+its prompt/session mappings, and `:OpenCodeStart`, `:OpenCodeToggle`, and
+`<leader>aO` until a separate approved cleanup change repeats this matrix after
+at least one Pi upgrade. Diff review and clickable patch navigation remain
+OpenCode-owned until supported Pi public APIs pass their Phase 6 and 7 gates.
 
 ### Cutover criterion
 

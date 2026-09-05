@@ -7,6 +7,8 @@ local M = {}
 local terminal_instance
 local terminal_session_id
 local terminal_owner
+local source_window
+local source_buffer
 local terminal_options = {
 	win = {
 		on_buf = function(terminal)
@@ -30,9 +32,30 @@ local function current_terminal()
 	return nil
 end
 
+local function owned_terminal(owner)
+	local terminal = current_terminal()
+	if terminal ~= nil and terminal_owner ~= owner then
+		vim.notify(
+			"Pi terminal belongs to another Neovim session; close it before starting Pi here.",
+			vim.log.levels.WARN
+		)
+		return nil, false
+	end
+	return terminal, true
+end
+
 local function return_to_editor()
 	if vim.api.nvim_get_mode().mode:sub(1, 1) == "t" then
 		vim.cmd("stopinsert")
+	end
+	if
+		source_window ~= nil
+		and source_buffer ~= nil
+		and vim.api.nvim_win_is_valid(source_window)
+		and vim.api.nvim_win_get_buf(source_window) == source_buffer
+	then
+		vim.api.nvim_set_current_win(source_window)
+		return
 	end
 	vim.cmd("wincmd p")
 end
@@ -123,6 +146,8 @@ end
 local function record_source_context()
 	local context = source_context()
 	if context ~= nil then
+		source_window = vim.api.nvim_get_current_win()
+		source_buffer = context.buffer.number
 		pi_bridge.record_source_context(context)
 	end
 end
@@ -294,14 +319,17 @@ function M.start()
 		return nil
 	end
 
+	local owner = session.get_current(vim.fn.getcwd())
+	local terminal, owned = owned_terminal(owner)
+	if not owned then
+		return nil
+	end
 	record_source_context()
-	local terminal = current_terminal()
 	if terminal ~= nil then
 		terminal:show():focus()
 		return terminal
 	end
 
-	local owner = session.get_current(vim.fn.getcwd())
 	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
 		return resume_saved_session(owner)
 	end
@@ -316,9 +344,13 @@ function M.toggle()
 		return nil
 	end
 
-	record_source_context()
-	local terminal = current_terminal()
+	local owner = session.get_current(vim.fn.getcwd())
+	local terminal, owned = owned_terminal(owner)
+	if not owned then
+		return nil
+	end
 	if terminal ~= nil then
+		record_source_context()
 		terminal:toggle()
 		return terminal
 	end

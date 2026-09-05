@@ -1,7 +1,10 @@
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import { copyToClipboard, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
 import {
+  getOsc8LinkAtColumn,
+  hyperlink,
   Markdown,
   type MarkdownTheme,
+  TuiAltScreen,
   truncateToWidth,
   visibleWidth,
   wrapTextWithAnsi,
@@ -23,6 +26,7 @@ interface MarkdownToken {
 interface MarkdownInternals {
   theme: MarkdownTheme;
   renderToken: RenderToken;
+  invalidate: () => void;
 }
 
 type CodeBlockComponent = Pick<MarkdownInternals, "theme">;
@@ -45,6 +49,44 @@ interface PatchState {
 export interface CodeBlockPatch {
   installed: boolean;
   reason?: string;
+  restore: () => void;
+}
+
+interface TuiMouseEvent {
+  button: number;
+  x: number;
+  y: number;
+  release: boolean;
+}
+
+interface TuiAltScreenInternals {
+  beforeTerminalStart: () => void;
+  handleSelectionMouseEvent: TuiMouseHandler;
+  openUrl: ((url: string) => void) | undefined;
+  pressedUrl: string | undefined;
+  previousScreen: string[];
+  terminal: { write: (data: string) => void };
+  mouseEnabled: boolean;
+  flash: (message: string) => void;
+  requestRender: () => void;
+}
+
+type TuiMouseHandler = (this: TuiAltScreenInternals, event: TuiMouseEvent) => void;
+type TuiLifecycleHandler = (this: TuiAltScreenInternals) => void;
+type ClipboardWriter = (text: string) => Promise<void>;
+
+export interface CodeBlockClipboardPatch {
+  installed: boolean;
+  reason?: string;
+  restore: () => void;
+}
+
+interface ClipboardPatchState {
+  prototype: TuiAltScreenInternals;
+  patchedBeforeTerminalStart: TuiLifecycleHandler;
+  originalBeforeTerminalStart: TuiLifecycleHandler;
+  patchedHandleSelectionMouseEvent: TuiMouseHandler;
+  originalHandleSelectionMouseEvent: TuiMouseHandler;
   restore: () => void;
 }
 
@@ -74,8 +116,66 @@ interface HunkHeader {
 type CodeBlockTheme = Pick<Theme, "fg" | "getBgAnsi">;
 
 const PATCH_KEY = Symbol.for("dotfiles:pi-code-block-renderer");
+const CLIPBOARD_PATCH_KEY = Symbol.for("dotfiles:pi-code-block-clipboard");
+const COPY_URL_PREFIX = "pi-copy://code-block/";
+const COPY_BUTTON_LABEL = "copy";
+const COPY_BUTTON_EDGE_GAP = "  ";
+const MIN_COPY_HEADER_WIDTH = 10;
+const MAX_COPY_PAYLOADS = 1024;
 const BACKGROUND_RESET = "\u001b[49m";
+const ENABLE_ALL_MOTION_MOUSE = "\u001b[?1003h";
+let nextCopyPayloadId = 0;
+const copyPayloads = new Map<string, string>();
+const copyPayloadIds = new Map<string, string>();
+const codeBlockMarkdowns = new Set<MarkdownInternals>();
+let hoveredCopyUrl: string | undefined;
 let resolveActiveTheme: () => CodeBlockTheme | undefined = () => undefined;
+
+function globalClipboardPatchState(): ClipboardPatchState | undefined {
+  return (globalThis as typeof globalThis & { [CLIPBOARD_PATCH_KEY]?: ClipboardPatchState })[
+    CLIPBOARD_PATCH_KEY
+  ];
+}
+
+function setGlobalClipboardPatchState(state: ClipboardPatchState | undefined): void {
+  const target = globalThis as typeof globalThis & {
+    [CLIPBOARD_PATCH_KEY]?: ClipboardPatchState;
+  };
+  if (state) {
+    target[CLIPBOARD_PATCH_KEY] = state;
+    return;
+  }
+
+  delete target[CLIPBOARD_PATCH_KEY];
+}
+
+function registerCopyPayload(code: string): string {
+  const existingId = copyPayloadIds.get(code);
+  if (existingId !== undefined) return `${COPY_URL_PREFIX}${existingId}`;
+
+  const id = String(++nextCopyPayloadId);
+  copyPayloads.set(id, code);
+  copyPayloadIds.set(code, id);
+
+  while (copyPayloads.size > MAX_COPY_PAYLOADS) {
+    const oldestId = copyPayloads.keys().next().value;
+    if (oldestId === undefined) break;
+    const oldestCode = copyPayloads.get(oldestId);
+    copyPayloads.delete(oldestId);
+    if (oldestCode !== undefined) copyPayloadIds.delete(oldestCode);
+  }
+
+  return `${COPY_URL_PREFIX}${id}`;
+}
+
+function isCopyPayloadUrl(url: string | undefined): url is string {
+  return url?.startsWith(COPY_URL_PREFIX) ?? false;
+}
+
+function copyPayloadForUrl(url: string): string | undefined {
+  if (!isCopyPayloadUrl(url)) return undefined;
+  return copyPayloads.get(url.slice(COPY_URL_PREFIX.length));
+}
 
 function globalPatchState(): PatchState | undefined {
   return (globalThis as typeof globalThis & { [PATCH_KEY]?: PatchState })[PATCH_KEY];
@@ -411,6 +511,9 @@ export function renderCodeBlock(
   activeTheme = resolveActiveTheme(),
 ): string[] {
   const code = token.text ?? "";
+  // Markdown caches rendered lines, so hover changes must invalidate messages containing code blocks.
+  const markdown = component as MarkdownInternals;
+  if (typeof markdown.invalidate === "function") codeBlockMarkdowns.add(markdown);
   const isDiff = normaliseLanguage(token.lang?.trim().split(/\s+/, 1)[0]) === "diff";
   const sections = isDiff ? splitDiffSections(code) : [code];
   const lines: string[] = [];
@@ -422,6 +525,28 @@ export function renderCodeBlock(
 
   if (nextTokenType && nextTokenType !== "space") lines.push("");
   return lines;
+}
+
+function renderCodeHeader(
+  descriptor: CodeBlockDescriptor,
+  code: string,
+  width: number,
+  activeTheme: CodeBlockTheme | undefined,
+): string {
+  const headerText = `${descriptor.icon} ${descriptor.label}`;
+  const header = activeTheme?.fg("accent", headerText) ?? headerText;
+  if (!activeTheme || width < MIN_COPY_HEADER_WIDTH) return `  ${header}`;
+
+  const copyUrl = registerCopyPayload(code);
+  const copyButtonForeground = activeTheme.fg("dim", COPY_BUTTON_LABEL);
+  const copyButton = hyperlink(copyButtonForeground, copyUrl);
+  const buttonWidth = visibleWidth(COPY_BUTTON_LABEL);
+  const contentWidth = width - visibleWidth(COPY_BUTTON_EDGE_GAP);
+  const labelWidth = Math.max(1, contentWidth - buttonWidth - 3);
+  const label = truncateToWidth(header, labelWidth, "");
+  const prefix = `  ${label}`;
+  const gap = " ".repeat(Math.max(1, contentWidth - visibleWidth(prefix) - buttonWidth));
+  return `${prefix}${gap}${copyButton}${COPY_BUTTON_EDGE_GAP}`;
 }
 
 function renderCodePanel(
@@ -439,11 +564,13 @@ function renderCodePanel(
   const gutterWidth = width > numberWidth + 2 ? numberWidth + 2 : 0;
   const contentWidth = Math.max(1, width - gutterWidth);
   const headerBackground = activeTheme?.getBgAnsi("customMessageBg") ?? "";
-  const headerText = `${descriptor.icon} ${descriptor.label}`;
-  const header = activeTheme?.fg("accent", headerText) ?? headerText;
   const lines = [
     paintBackground("", width, headerBackground),
-    paintBackground(`  ${header}`, width, headerBackground),
+    paintBackground(
+      renderCodeHeader(descriptor, code, width, activeTheme),
+      width,
+      headerBackground,
+    ),
     paintBackground("", width, headerBackground),
     paintBackground("", width, activeTheme?.getBgAnsi("userMessageBg") ?? ""),
   ];
@@ -467,6 +594,105 @@ function renderCodePanel(
 
   lines.push(paintBackground("", width, activeTheme?.getBgAnsi("userMessageBg") ?? ""));
   return lines;
+}
+
+function updateHoveredCopyButton(tui: TuiAltScreenInternals, event: TuiMouseEvent): void {
+  const url = getOsc8LinkAtColumn(tui.previousScreen[event.y] ?? "", event.x);
+  const nextHoveredCopyUrl = isCopyPayloadUrl(url) ? url : undefined;
+  if (nextHoveredCopyUrl === hoveredCopyUrl) return;
+
+  hoveredCopyUrl = nextHoveredCopyUrl;
+  for (const markdown of codeBlockMarkdowns) markdown.invalidate();
+  tui.requestRender();
+}
+
+export function installCodeBlockClipboard(
+  writeClipboard: ClipboardWriter = copyToClipboard,
+): CodeBlockClipboardPatch {
+  globalClipboardPatchState()?.restore();
+
+  const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenInternals;
+  const originalBeforeTerminalStart = prototype.beforeTerminalStart;
+  const originalHandleSelectionMouseEvent = prototype.handleSelectionMouseEvent;
+  if (
+    typeof originalBeforeTerminalStart !== "function" ||
+    typeof originalHandleSelectionMouseEvent !== "function"
+  ) {
+    return {
+      installed: false,
+      reason: "This Pi TUI version does not expose the expected fullscreen mouse handlers.",
+      restore: () => {},
+    };
+  }
+
+  // Pi downgrades multiplexers to button-motion tracking; copy buttons need passive motion to hover.
+  const patchedBeforeTerminalStart: TuiLifecycleHandler = function (): void {
+    originalBeforeTerminalStart.call(this);
+    if (this.mouseEnabled) this.terminal.write(ENABLE_ALL_MOTION_MOUSE);
+  };
+  prototype.beforeTerminalStart = patchedBeforeTerminalStart;
+
+  // Pi exposes link activation only as URL opening, so route this private action URI through
+  // the existing fullscreen hit-test without changing how ordinary links are handled.
+  const patchedHandleSelectionMouseEvent: TuiMouseHandler = function (event): void {
+    updateHoveredCopyButton(this, event);
+    const pressedUrl = event.release ? this.pressedUrl : undefined;
+    if (!isCopyPayloadUrl(pressedUrl)) {
+      originalHandleSelectionMouseEvent.call(this, event);
+      return;
+    }
+
+    const originalOpenUrl = this.openUrl;
+    this.openUrl = (url) => {
+      if (url !== pressedUrl) {
+        originalOpenUrl?.(url);
+        return;
+      }
+
+      const code = copyPayloadForUrl(url);
+      if (code === undefined) {
+        this.flash("Copy failed");
+        return;
+      }
+
+      void Promise.resolve()
+        .then(() => writeClipboard(code))
+        .then(
+          () => this.flash("Copied!"),
+          () => this.flash("Copy failed"),
+        );
+    };
+
+    try {
+      originalHandleSelectionMouseEvent.call(this, event);
+    } finally {
+      this.openUrl = originalOpenUrl;
+    }
+  };
+
+  prototype.handleSelectionMouseEvent = patchedHandleSelectionMouseEvent;
+  let state: ClipboardPatchState;
+  const restore = (): void => {
+    hoveredCopyUrl = undefined;
+    if (prototype.beforeTerminalStart === patchedBeforeTerminalStart) {
+      prototype.beforeTerminalStart = originalBeforeTerminalStart;
+    }
+    if (prototype.handleSelectionMouseEvent === patchedHandleSelectionMouseEvent) {
+      prototype.handleSelectionMouseEvent = originalHandleSelectionMouseEvent;
+    }
+    if (globalClipboardPatchState() === state) setGlobalClipboardPatchState(undefined);
+  };
+  state = {
+    prototype,
+    patchedBeforeTerminalStart,
+    originalBeforeTerminalStart,
+    patchedHandleSelectionMouseEvent,
+    originalHandleSelectionMouseEvent,
+    restore,
+  };
+  setGlobalClipboardPatchState(state);
+
+  return { installed: true, restore };
 }
 
 export function installCodeBlockRenderer(): CodeBlockPatch {
@@ -495,6 +721,7 @@ export function installCodeBlockRenderer(): CodeBlockPatch {
   prototype.renderToken = patchedRenderToken;
   let state: PatchState;
   const restore = (): void => {
+    codeBlockMarkdowns.clear();
     if (prototype.renderToken === patchedRenderToken) prototype.renderToken = originalRenderToken;
     if (globalPatchState() === state) setGlobalPatchState(undefined);
   };
@@ -506,6 +733,7 @@ export function installCodeBlockRenderer(): CodeBlockPatch {
 
 export default function codeBlocks(pi: ExtensionAPI): void {
   const patch = installCodeBlockRenderer();
+  const clipboardPatch = installCodeBlockClipboard();
   pi.registerMarkdownTransformer((markdown) => associateFilenamesWithCodeFences(markdown));
 
   pi.on("session_start", (_event, ctx) => {
@@ -517,6 +745,7 @@ export default function codeBlocks(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", () => {
     resolveActiveTheme = () => undefined;
+    clipboardPatch.restore();
     patch.restore();
   });
 }

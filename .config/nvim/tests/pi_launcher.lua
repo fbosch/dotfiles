@@ -100,8 +100,36 @@ assert(
 	end),
 	"Pi terminal did not receive its buffer-local focus mapping"
 )
+local source_window = vim.api.nvim_get_current_win()
+vim.cmd("vsplit")
+local decoy_window = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(decoy_window, vim.api.nvim_create_buf(false, true))
+vim.cmd("vsplit")
+local pi_window = vim.api.nvim_get_current_win()
+vim.api.nvim_win_set_buf(pi_window, terminal.buf)
+local return_mapping = vim.iter(vim.api.nvim_buf_get_keymap(terminal.buf, "n")):find(function(mapping)
+	return mapping.desc == "Toggle Pi focus"
+end)
+return_mapping.callback()
+assert(vim.api.nvim_get_current_win() == source_window, "Pi terminal did not return to its source window")
+vim.api.nvim_win_close(pi_window, true)
+vim.api.nvim_win_close(decoy_window, true)
 assert(pi.toggle() == terminal, "Pi toggle did not reuse its live terminal")
 assert(toggles == 1, "Pi toggle did not toggle the live terminal exactly once")
+
+local first_context = vim.deepcopy(recorded_source_context)
+local second_source = repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua"
+local foreign_target = vim.tbl_extend("force", vim.deepcopy(nvim_session), { specifier = "other" })
+session.set_current(foreign_target)
+vim.cmd("edit " .. vim.fn.fnameescape(second_source))
+assert(pi.start() == nil, "Pi launcher reused a terminal owned by another Neovim session")
+assert(pi.toggle() == nil, "Pi toggle reused a terminal owned by another Neovim session")
+assert(toggles == 1, "Foreign-session Pi toggle reached the existing terminal")
+assert(
+	vim.deep_equal(recorded_source_context, first_context),
+	"Foreign-session context reached the existing Pi terminal"
+)
+session.set_current(nvim_session)
 
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 local saved_metadata = session.get_metadata(nvim_session)
@@ -126,7 +154,6 @@ assert(restored_metadata.pi_terminal_open == true, "Pi terminal state did not su
 assert(restored_metadata.opencode_session_id == "ses_exact", "OpenCode session ID did not survive metadata load")
 assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal state did not survive metadata load")
 
-local second_source = repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua"
 vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 captured_command = nil
 assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")

@@ -113,11 +113,17 @@ return {
 				local query = "select id from session where time_archived is null and parent_id is null"
 					.. " and (directory = "
 					.. cwd_sql
-					.. " or directory like "
+					.. " or (length(directory) > length("
 					.. cwd_sql
-					.. " || '/%' or "
+					.. ") and substr(directory, 1, length("
 					.. cwd_sql
-					.. " like directory || '/%')"
+					.. ") + 1) = "
+					.. cwd_sql
+					.. " || '/') or (length("
+					.. cwd_sql
+					.. ") > length(directory) and substr("
+					.. cwd_sql
+					.. ", 1, length(directory) + 1) = directory || '/'))"
 					.. " order by time_updated desc limit 1"
 
 				local result = vim.system({ "sqlite3", opencode_db_path, "-json", query }, { text = true }):wait()

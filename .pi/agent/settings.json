@@ -2,11 +2,11 @@
   "lastChangelogVersion": "0.84.4",
   "theme": "zenwritten-dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-luna-fast",
+  "defaultModel": "gpt-5.6-luna",
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
