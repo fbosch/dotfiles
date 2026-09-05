@@ -9,6 +9,9 @@ map("n", "<C-\\>", focus_pi, "Focus Pi")
 map({ "n", "t" }, "<A-a>", function()
 	require("plugins.ai.pi").toggle()
 end, "Toggle Pi")
+map({ "n", "x" }, "<leader>ac", function()
+	require("plugins.ai.pi.prompt").ask("")
+end, "Ask Pi")
 map({ "n", "t" }, "<leader>aO", "<Cmd>OpenCodeToggle<CR>", "Toggle OpenCode rollback")
 
 -- web

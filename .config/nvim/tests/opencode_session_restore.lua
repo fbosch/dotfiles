@@ -48,10 +48,10 @@ local function registers_key(lhs)
 		return key[1] == lhs
 	end)
 end
-for _, lhs in ipairs({ "<leader>ac", "ga", "<A-x>", "<leader>as" }) do
+for _, lhs in ipairs({ "ga", "<A-x>", "<leader>as" }) do
 	assert(registers_key(lhs), "OpenCode prompt workflow no longer activates the plugin: " .. lhs)
 end
-for _, lhs in ipairs({ "<C-\\>", "<A-a>" }) do
+for _, lhs in ipairs({ "<C-\\>", "<A-a>", "<leader>ac" }) do
 	assert(registers_key(lhs) == false, "OpenCode still claims Pi's default key: " .. lhs)
 end
 local corporate = vim.env.CORPORATE

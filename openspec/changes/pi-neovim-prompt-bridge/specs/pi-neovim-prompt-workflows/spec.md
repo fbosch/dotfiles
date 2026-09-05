@@ -133,15 +133,22 @@ OpenCode session, diff, or navigation behavior as Pi actions.
 
 ### Requirement: Prompt mappings cut over only after workflow parity
 
-The system SHALL keep OpenCode Ask and append mappings as the default owner
-while Pi equivalents are canaries. `<leader>ac`, `ga`, `<A-x>`, and optionally
+The user-approved `<leader>ac` canary SHALL open literal Pi Ask in normal and
+visual mode with empty prefill. This exception SHALL NOT imply context parity
+or move the remaining OpenCode workflows. `ga`, `<A-x>`, and optionally
 `<leader>as` SHALL move to Pi only after each corresponding interaction passes
 its automated and live matrix.
 
 #### Scenario: Pi Ask is still a canary
 
 - **WHEN** literal Pi Ask is available but context or append parity is incomplete
-- **THEN** OpenCode retains the default Ask and append mappings
+- **THEN** `<leader>ac` opens literal Pi Ask without automatic selection context,
+  while OpenCode retains append mappings and the explicit `:OpenCodeAsk` command
+
+#### Scenario: OpenCode loads after the Ask mapping
+
+- **WHEN** OpenCode activates after Pi's Ask mapping is installed
+- **THEN** it does not replace `<leader>ac` in normal or visual mode
 
 #### Scenario: Mapping cutover succeeds
 

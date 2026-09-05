@@ -61,6 +61,16 @@ end
 mapping("n", "Toggle Pi").callback()
 mapping("t", "Toggle Pi").callback()
 assert(toggles == 2, "Pi toggle mappings did not toggle Pi")
+
+-- Loading OpenCode later must not reclaim Pi's Ask mapping.
+dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")[1].setup()
+for _, mode in ipairs({ "n", "x" }) do
+	local ask = vim.fn.maparg("<leader>ac", mode, false, true)
+	assert(ask.desc == "Ask Pi" and type(ask.callback) == "function", "Ask mapping is not Pi-owned in " .. mode)
+	ask.callback()
+end
+assert(vim.deep_equal(pi_asks, { "", "" }), "Pi Ask mappings did not open literal input")
+pi_asks = {}
 local rollback = mapping("n", "Toggle OpenCode rollback")
 assert(rollback.rhs:find("OpenCodeToggle", 1, true) ~= nil, "OpenCode rollback key changed")
 

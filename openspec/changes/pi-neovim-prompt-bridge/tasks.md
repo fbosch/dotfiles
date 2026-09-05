@@ -52,7 +52,8 @@
 - [x] 5.1 Add preserve-focus terminal start/restore behavior for prompt requests and
       verify normal Pi start/toggle behavior remains unchanged
 - [x] 5.2 Add `:PiAsk [prefill]` with `vim.ui.input`, local validation, cancellation,
-      a 10-second binding/acknowledgement deadline, and no default mapping
+      a 10-second binding/acknowledgement deadline, and the explicitly requested
+      `<leader>ac` literal canary mapping; preserve `:OpenCodeAsk` rollback
 - [x] 5.3 Focus Pi only after a matching accepted acknowledgement and verify reject,
       timeout, late acknowledgement, terminal-close, and session-replacement paths
       retain or restore source focus without automatic retry

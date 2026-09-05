@@ -30,7 +30,6 @@ return {
 			return vim.env.CORPORATE == nil and vim.fn.executable("opencode") == 1
 		end,
 		keys = {
-			key("<leader>ac", { "n", "x" }, "Ask opencode"),
 			key("ga", { "n", "x" }, "Add to opencode"),
 			key("<A-x>", { "n", "x" }, "Send to opencode"),
 			key("<leader>as", { "n", "x" }, "opencode actions"),
@@ -581,11 +580,7 @@ return {
 				desc = "Show opencode integration health",
 			})
 
-			-- Prompt workflows remain OpenCode-owned until the Pi prompt bridge passes its live gate.
-			vim.keymap.set({ "n", "x" }, "<leader>ac", function()
-				ask_opencode_and_focus_after_submit("@this: ")
-			end, { desc = "Ask opencode" })
-
+			-- Append stays OpenCode-owned until Pi supports bounded context capture.
 			vim.keymap.set({ "n", "x" }, "ga", function()
 				append_opencode("@this")
 			end, { desc = "Add to opencode" })
