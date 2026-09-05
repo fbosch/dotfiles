@@ -1,21 +1,21 @@
 ## 1. Correct Prompt Ownership
 
-- [ ] 1.1 Restore `<leader>ac`, `ga`, and `<A-x>` to OpenCode Ask and append
+- [x] 1.1 Restore `<leader>ac`, `ga`, and `<A-x>` to OpenCode Ask and append
       behavior while preserving Pi focus/toggle, and verify the Neovim cutover and
       OpenCode restoration fixtures
-- [ ] 1.2 Add an explicit OpenCode Ask command and verify it opens the retained
+- [x] 1.2 Add an explicit OpenCode Ask command and verify it opens the retained
       Snacks Ask workflow without changing Pi state
-- [ ] 1.3 Record Ask and append as OpenCode-retained in the predecessor migration
+- [x] 1.3 Record Ask and append as OpenCode-retained in the predecessor migration
       artifacts and pass strict validation for both OpenSpec changes
 
 ## 2. Prove Public Pi Ingress
 
-- [ ] 2.1 Add a focused extension proof that idle
+- [x] 2.1 Add a focused extension proof that idle
       `sendUserMessage(..., { expandPromptTemplates: false })` emits one extension
       input and starts one turn, while busy state sends nothing
-- [ ] 2.2 Prove TUI editor append with `getEditorText` and `setEditorText`, including
+- [x] 2.2 Prove TUI editor append with `getEditorText` and `setEditorText`, including
       exact existing-text preservation and zero user-message dispatches
-- [ ] 2.3 Verify the proof imports no private Pi module and record the Pi 0.84.4
+- [x] 2.3 Verify the proof imports no private Pi module and record the Pi 0.84.4
       result in the migration plan
 
 ## 3. Define the Prompt Protocol

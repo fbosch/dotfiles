@@ -491,6 +491,20 @@ Acceptance:
 
 If this proof fails, retain OpenCode Ask and stop. Do not patch Pi.
 
+Proof record (2026-09-05):
+
+- `prompt-dispatch.test.ts` passes seven focused cases for one idle literal
+  dispatch, busy and blocked rejection, missing-TUI rejection, exact append,
+  and zero append submissions.
+- The implementation imports `ExtensionAPI` and `ExtensionContext` only from
+  Pi's public package root. It calls `sendUserMessage` once with
+  `expandPromptTemplates: false` and gives append no access to that API.
+- Pi 0.84.4's public declaration says `sendUserMessage` always triggers a turn;
+  the installed runtime routes that call to `prompt` with `source:
+"extension"`. Provider completion is deliberately outside the bridge
+  acknowledgement contract.
+- `bun run typecheck` passes after the proof.
+
 ### Phase 2: Ship literal `:PiAsk` canary
 
 Implement the versioned request, launch binding, session/worktree checks,
