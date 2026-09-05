@@ -553,12 +553,15 @@ function normalizeRenderedText(value: string): string {
     .trim();
 }
 
-function attributeValue(raw: string, attributeName: string): string | undefined {
+function attributeValue(raw: string, attributeName: string, deadline: number): string | undefined {
   let position = 0;
   while (position < raw.length) {
+    assertBeforeDeadline(deadline);
     while (position < raw.length && /[\s/]/.test(raw[position] ?? "")) position += 1;
     const nameStart = position;
     while (position < raw.length && /[^\s=/>]/.test(raw[position] ?? "")) position += 1;
+    // Malformed attribute syntax must not leave the scanner at the same character.
+    if (position === nameStart) return undefined;
     const name = raw.slice(nameStart, position).toLowerCase();
     while (position < raw.length && /\s/.test(raw[position] ?? "")) position += 1;
     if (raw[position] !== "=") continue;
@@ -580,8 +583,8 @@ function attributeValue(raw: string, attributeName: string): string | undefined 
   return undefined;
 }
 
-function resolvedLink(raw: string, baseUrl: URL): string | undefined {
-  const href = attributeValue(raw, "href");
+function resolvedLink(raw: string, baseUrl: URL, deadline: number): string | undefined {
+  const href = attributeValue(raw, "href", deadline);
   if (href === undefined) return undefined;
   try {
     const url = new URL(decodeHtmlEntities(href), baseUrl);
@@ -669,7 +672,7 @@ export function htmlToMarkdown(
       }
       if (name === "a") {
         if (!closing) {
-          const link = resolvedLink(token.raw, baseUrl);
+          const link = resolvedLink(token.raw, baseUrl, deadline);
           links.push(link);
           if (link !== undefined) output += "[";
         } else {

@@ -52,6 +52,13 @@ import {
   worktreesMatch,
 } from "./contracts";
 import { NeovimEffectScope, runWithTimeout } from "./effect-runtime";
+import {
+  type PromptAcknowledgement,
+  type PromptBinding,
+  type PromptRequest,
+  parsePromptBinding,
+  parsePromptNotification,
+} from "./prompt-protocol";
 
 const CONNECT_TIMEOUT_MS = 1_000;
 const RPC_TIMEOUT_MS = 2_000;
@@ -78,6 +85,7 @@ export const bridgeOperations = {
   highlight: "highlight",
   installNotifications: "install_notifications",
   listBuffers: "list_buffers",
+  promptAck: "prompt_ack",
   quickfix: "quickfix",
   readBuffer: "read_buffer",
   removeNotifications: "remove_notifications",
@@ -105,11 +113,12 @@ export interface NvimConnection {
 }
 
 export type NvimConnectionFactory = (socketPath: string) => Promise<NvimConnection>;
+export type PromptRequestHandler = (request: PromptRequest) => PromptAcknowledgement;
 
 async function executeBridge(
   connection: NvimConnection,
   operation: BridgeOperation,
-  payload: Readonly<Record<string, unknown>> = {},
+  payload: Readonly<object> = {},
 ): Promise<unknown> {
   const channelId = await connection.channelId;
   return connection.executeLua(BRIDGE_DISPATCH_LUA, [{ channelId, operation, payload }]);
@@ -199,6 +208,10 @@ export class PiNeovimChannel {
   #focusContext: FocusContext | undefined;
   #nextAnnotationBatchId = 1;
   readonly #presentationOperations = new Set<Promise<void>>();
+  #promptBinding: PromptBinding | undefined;
+  readonly #promptOperations = new Set<Promise<void>>();
+  #promptRequestHandler: PromptRequestHandler | undefined;
+  #resetPromptRequests: (() => void) | undefined;
   #unavailableError: NeovimError | undefined;
 
   constructor(
@@ -218,33 +231,68 @@ export class PiNeovimChannel {
     return { ok: true, value: this.#editor };
   }
 
-  async bindSession(sessionId: string): Promise<BridgeResult<EditorIdentity>> {
-    if (/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(sessionId) === false) {
+  async bindSession(sessionId: string, launchId?: string): Promise<BridgeResult<EditorIdentity>> {
+    if (
+      /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(sessionId) === false ||
+      Buffer.byteLength(sessionId, "utf8") > 128 ||
+      (launchId !== undefined && /^[a-f0-9]{32}$/.test(launchId) === false)
+    ) {
       return {
-        error: { code: "NVIM_INVALID_RESPONSE", message: "Pi returned an invalid session ID" },
+        error: { code: "NVIM_INVALID_RESPONSE", message: "Pi returned invalid session identity" },
         ok: false,
       };
     }
     const connection = await this.connection();
     if (connection.ok === false) return connection;
-    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    const editor = this.#editor;
+    if (editor === undefined) return unavailable("Neovim connection identity is unavailable");
     try {
       const bound = await withTimeout(
-        executeBridge(connection.value, bridgeOperations.bindSession, { sessionId }),
+        executeBridge(connection.value, bridgeOperations.bindSession, {
+          ...(launchId === undefined ? {} : { launchId }),
+          sessionId,
+        }),
         "Timed out binding Pi's session identity to Neovim",
       );
-      return bound === true
-        ? { ok: true, value: this.#editor }
-        : {
-            error: {
-              code: "NVIM_INVALID_RESPONSE",
-              message: "Neovim did not accept Pi's session identity",
-            },
-            ok: false,
-          };
+      if (launchId === undefined && bound === true) {
+        this.#promptBinding = undefined;
+        return { ok: true, value: editor };
+      }
+      const channelId = await connection.value.channelId;
+      const promptBinding =
+        launchId === undefined
+          ? undefined
+          : parsePromptBinding(bound, {
+              channelId,
+              cwd: this.#cwd,
+              editorPid: editor.pid,
+              launchId,
+              sessionId,
+            });
+      if (promptBinding !== undefined) {
+        this.#resetPromptRequests?.();
+        this.#promptBinding = promptBinding;
+        return { ok: true, value: editor };
+      }
+      return {
+        error: {
+          code: "NVIM_INVALID_RESPONSE",
+          message: "Neovim did not accept Pi's session identity",
+        },
+        ok: false,
+      };
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }
+  }
+
+  promptBinding(): PromptBinding | undefined {
+    return this.#promptBinding;
+  }
+
+  setPromptRequestHandler(handler: PromptRequestHandler, resetRequests: () => void): void {
+    this.#promptRequestHandler = handler;
+    this.#resetPromptRequests = resetRequests;
   }
 
   async context(): Promise<BridgeResult<ActiveContext>> {
@@ -559,8 +607,12 @@ export class PiNeovimChannel {
       message: "The Neovim channel is closed",
     };
     this.#focusContext = undefined;
+    this.#promptBinding = undefined;
+    this.#promptRequestHandler = undefined;
+    this.#resetPromptRequests?.();
+    this.#resetPromptRequests = undefined;
     await this.#connectionPromise?.catch(() => undefined);
-    await Promise.all([...this.#presentationOperations]);
+    await Promise.all([...this.#presentationOperations, ...this.#promptOperations]);
     this.#connection = undefined;
     this.#connectionPromise = undefined;
     this.#editor = undefined;
@@ -582,11 +634,30 @@ export class PiNeovimChannel {
 
   private readonly handleNotification = (method: unknown, args: unknown): void => {
     if (typeof method !== "string") return;
-    const result = parseFocusNotification(method, args, this.#cwd);
-    if (result?.ok === true) this.#focusContext = result.value;
+    const focus = parseFocusNotification(method, args, this.#cwd);
+    if (focus !== undefined) {
+      if (focus.ok) this.#focusContext = focus.value;
+      return;
+    }
+
+    const prompt = parsePromptNotification(method, args);
+    if (prompt?.ok !== true || this.#promptRequestHandler === undefined) return;
+    const acknowledgement = this.#promptRequestHandler(prompt.value);
+    const connection = this.#connection;
+    if (connection === undefined) return;
+    const operation = executeBridge(connection, bridgeOperations.promptAck, acknowledgement).then(
+      () => undefined,
+      () => {
+        this.markUnavailable("The bound Neovim instance stopped responding");
+      },
+    );
+    this.#promptOperations.add(operation);
+    void operation.finally(() => this.#promptOperations.delete(operation));
   };
 
   private readonly handleDisconnect = (): void => {
+    this.#promptBinding = undefined;
+    this.#resetPromptRequests?.();
     this.markUnavailable("The bound Neovim instance disconnected");
   };
 

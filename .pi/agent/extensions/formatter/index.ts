@@ -7,6 +7,7 @@ import {
   isEditToolResult,
   isWriteToolResult,
   type ToolResultEvent,
+  withFileMutationQueue,
 } from "@earendil-works/pi-coding-agent";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import type { CommandAvailability, FormatterExecutor } from "./format-file";
@@ -134,18 +135,21 @@ export function createFormatterExtension(
 
       const warnings = await serialize(
         identity === undefined ? [`path:${queuePath}`] : [`path:${queuePath}`, identity],
+        // The local queue covers hard links; Pi's queue also excludes native edit/write operations.
         () =>
-          formatterRuntime.formatFile({
-            cwd: context.cwd,
-            // Pi 0.84.4's executor can leave timed-out children alive and buffer unbounded output.
-            execute: formatterRuntime.execute,
-            filePath,
-            settings: currentSettings,
-            ...(dependencies.commandAvailable === undefined
-              ? {}
-              : { commandAvailable: dependencies.commandAvailable }),
-            ...(context.signal === undefined ? {} : { signal: context.signal }),
-          }),
+          withFileMutationQueue(filePath, () =>
+            formatterRuntime.formatFile({
+              cwd: context.cwd,
+              // Pi 0.84.4's executor can leave timed-out children alive and buffer unbounded output.
+              execute: formatterRuntime.execute,
+              filePath,
+              settings: currentSettings,
+              ...(dependencies.commandAvailable === undefined
+                ? {}
+                : { commandAvailable: dependencies.commandAvailable }),
+              ...(context.signal === undefined ? {} : { signal: context.signal }),
+            }),
+          ),
       );
       if (warnings.length === 0) return undefined;
       return {

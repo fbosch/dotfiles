@@ -20,38 +20,38 @@
 
 ## 3. Define the Prompt Protocol
 
-- [ ] 3.1 Add closed TypeScript request and acknowledgement parsers with identifier,
-      UTF-8, NUL, prompt, context, request, and sequence bounds, and pass focused
-      contract tests
-- [ ] 3.2 Add Lua request construction and acknowledgement parsing with matching
+- [x] 3.1 Add closed TypeScript literal-request and launch-binding parsers with
+      identifier, UTF-8, NUL, prompt, request, and sequence bounds, and pass
+      focused contract tests
+- [x] 3.2 Add Lua request construction and acknowledgement parsing with matching
       bounds and failure codes, and pass headless boundary tests including
       multibyte text
-- [ ] 3.3 Add launch ID generation and bind it to the existing channel, Pi session,
+- [x] 3.3 Add launch ID generation and bind it to the existing channel, Pi session,
       Neovim owner, editor PID, and canonical worktree; verify stale and sibling
       identities fail closed
 
 ## 4. Implement Literal Request Delivery
 
-- [ ] 4.1 Install the explicit `pi:nvim-prompt/v1` notification listener in the
+- [x] 4.1 Install the explicit `pi:nvim-prompt/v1` notification listener in the
       existing Effect-owned channel and verify passive notifications still produce
       zero submissions
-- [ ] 4.2 Dispatch idle literal submit through Pi's public API and reject non-TUI,
+- [x] 4.2 Dispatch idle literal submit through Pi's public API and reject non-TUI,
       busy, blocked, stale, and replacing-session states in focused tests
-- [ ] 4.3 Reserve in-flight request IDs, retain 64 outcomes, and verify pending,
+- [x] 4.3 Reserve in-flight request IDs, retain 64 outcomes, and verify pending,
       completed duplicate, changed-content reuse, stale sequence, and sequence-gap
       behavior
-- [ ] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
+- [x] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
       dispatch, acknowledgement, and pending-request round trip
-- [ ] 4.5 Clear prompt listeners, bindings, timers, and request state on disconnect,
+- [x] 4.5 Clear prompt listeners, bindings, timers, and request state on disconnect,
       terminal close, reload, session replacement, and shutdown in lifecycle tests
 
 ## 5. Ship the Literal PiAsk Canary
 
-- [ ] 5.1 Add preserve-focus terminal start/restore behavior for prompt requests and
+- [x] 5.1 Add preserve-focus terminal start/restore behavior for prompt requests and
       verify normal Pi start/toggle behavior remains unchanged
-- [ ] 5.2 Add `:PiAsk [prefill]` with `vim.ui.input`, local validation, cancellation,
+- [x] 5.2 Add `:PiAsk [prefill]` with `vim.ui.input`, local validation, cancellation,
       a 10-second binding/acknowledgement deadline, and no default mapping
-- [ ] 5.3 Focus Pi only after a matching accepted acknowledgement and verify reject,
+- [x] 5.3 Focus Pi only after a matching accepted acknowledgement and verify reject,
       timeout, late acknowledgement, terminal-close, and session-replacement paths
       retain or restore source focus without automatic retry
 - [ ] 5.4 Run warm, cold, exact-restored, wrong-session, wrong-socket, and sibling

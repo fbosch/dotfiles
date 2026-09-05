@@ -7,6 +7,11 @@ local M = {}
 local terminal_instance
 local terminal_session_id
 local terminal_owner
+local terminal_owner_id
+local terminal_launch_id
+local terminal_channel_id
+local terminal_bound = false
+local launch_sequence = 0
 local source_window
 local source_buffer
 local terminal_options = {
@@ -29,6 +34,10 @@ local function current_terminal()
 	terminal_instance = nil
 	terminal_session_id = nil
 	terminal_owner = nil
+	terminal_owner_id = nil
+	terminal_launch_id = nil
+	terminal_channel_id = nil
+	terminal_bound = false
 	return nil
 end
 
@@ -152,12 +161,42 @@ local function record_source_context()
 	end
 end
 
-local function launch_command(session_flag, session_id, session_dir, socket)
+local function next_launch_id()
+	launch_sequence = launch_sequence + 1
+	local seed = table.concat({
+		tostring(vim.fn.getpid()),
+		tostring(vim.uv.hrtime()),
+		tostring(launch_sequence),
+		tostring({}),
+	}, ":")
+	return vim.fn.sha256(seed):sub(1, 32)
+end
+
+local function owner_id(owner)
+	if type(owner) == "table" and type(owner.specifier) == "string" and owner.specifier ~= "" then
+		return owner.specifier
+	end
+	return "nvim:" .. tostring(vim.fn.getpid())
+end
+
+local function canonical_path(path)
+	return vim.uv.fs_realpath(path) or vim.fs.normalize(path)
+end
+
+local function launch_command(session_flag, session_id, session_dir, socket, launch_id)
 	if type(socket) ~= "string" or socket == "" then
 		error("pi requires a Neovim RPC socket")
 	end
+	if type(launch_id) ~= "string" or launch_id:match("^[a-f0-9]+$") == nil or #launch_id ~= 32 then
+		error("pi requires a valid Neovim launch ID")
+	end
 
-	local environment = "PI_NVIM_SOCKET=" .. vim.fn.shellescape(socket) .. " "
+	local environment = "PI_NVIM_LAUNCH_ID="
+		.. vim.fn.shellescape(launch_id)
+		.. " "
+		.. "PI_NVIM_SOCKET="
+		.. vim.fn.shellescape(socket)
+		.. " "
 	local pane_id = vim.env.HERDR_PANE_ID
 	if vim.env.HERDR_ENV == "1" and type(pane_id) == "string" and pane_id ~= "" then
 		-- Herdr accepts official Pi lifecycle reports only when Pi owns the pane process.
@@ -174,24 +213,45 @@ local function launch_command(session_flag, session_id, session_dir, socket)
 	return command .. " " .. session_flag .. " " .. vim.fn.shellescape(session_id)
 end
 
-local function open_terminal(session_flag, session_id, session_dir, cwd, socket, owner)
+local function open_terminal(session_flag, session_id, session_dir, cwd, socket, owner, launch_options)
+	launch_options = launch_options or {}
+	local launch_id = next_launch_id()
+	local win_options = vim.deepcopy(terminal_options.win)
+	if launch_options.focus == false then
+		win_options.enter = false
+	end
 	local options = {
 		cwd = cwd,
-		win = terminal_options.win,
+		win = win_options,
 	}
-	local terminal =
-		require("snacks.terminal").open(launch_command(session_flag, session_id, session_dir, socket), options)
+	local terminal = require("snacks.terminal").open(
+		launch_command(session_flag, session_id, session_dir, socket, launch_id),
+		options
+	)
 	terminal_instance = terminal
 	terminal_session_id = session_id
 	terminal_owner = owner
+	terminal_owner_id = owner_id(owner)
+	terminal_launch_id = launch_id
+	terminal_channel_id = nil
+	terminal_bound = false
 	configure_terminal(terminal)
 	local function clear_terminal()
 		if terminal_instance == terminal then
 			local closed_session_id = terminal_session_id
 			local closed_owner = terminal_owner
+			local closed_launch_id = terminal_launch_id
 			terminal_instance = nil
 			terminal_session_id = nil
 			terminal_owner = nil
+			terminal_owner_id = nil
+			terminal_launch_id = nil
+			terminal_channel_id = nil
+			terminal_bound = false
+			local prompt = package.loaded["plugins.ai.pi.prompt"]
+			if type(prompt) == "table" and type(prompt.terminal_closed) == "function" then
+				prompt.terminal_closed(closed_launch_id)
+			end
 			if closed_owner ~= nil then
 				session.set_pi_terminal_state(closed_session_id, false, closed_owner)
 			end
@@ -199,6 +259,10 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 	end
 	terminal:on("TermClose", clear_terminal, { buf = true })
 	terminal:on("BufWipeout", clear_terminal, { buf = true })
+	local focus_window = launch_options.focus_window
+	if launch_options.focus == false and focus_window ~= nil and vim.api.nvim_win_is_valid(focus_window) then
+		vim.api.nvim_set_current_win(focus_window)
+	end
 	return terminal
 end
 
@@ -230,7 +294,7 @@ local function notify_restore_failure(reason)
 	vim.notify("Pi session was not restored: " .. messages[reason] .. ".", vim.log.levels.WARN)
 end
 
-local function resume_saved_session(nvim_session)
+local function resume_saved_session(nvim_session, launch_options)
 	local session_id = session.get_metadata(nvim_session).pi_session_id
 	if not session.is_valid_pi_session_id(session_id) then
 		notify_restore_failure("invalid_id")
@@ -264,7 +328,8 @@ local function resume_saved_session(nvim_session)
 		return nil
 	end
 
-	local ok, terminal = pcall(open_terminal, "--session", session_id, found.directory, found.cwd, socket, nvim_session)
+	local ok, terminal =
+		pcall(open_terminal, "--session", session_id, found.directory, found.cwd, socket, nvim_session, launch_options)
 	if not ok then
 		notify_restore_failure("open_failed")
 		return nil
@@ -285,7 +350,8 @@ function M.restore()
 	return resume_saved_session(nvim_session) ~= nil
 end
 
-function M.bind_session(session_id)
+function M.bind_session(binding)
+	local session_id = type(binding) == "table" and binding.sessionId or binding
 	if not session.is_valid_pi_session_id(session_id) then
 		return false
 	end
@@ -294,8 +360,104 @@ function M.bind_session(session_id)
 	if terminal == nil or owner == nil or terminal_owner ~= owner then
 		return false
 	end
+
+	if type(binding) == "table" and binding.launchId ~= nil then
+		local binding_cwd = type(binding.cwd) == "string" and canonical_path(binding.cwd) or nil
+		local owner_cwd = canonical_path(owner.cwd)
+		if
+			type(binding.launchId) ~= "string"
+			or binding.launchId ~= terminal_launch_id
+			or type(binding.channelId) ~= "number"
+			or binding.channelId < 1
+			or binding.channelId % 1 ~= 0
+			or binding.editorPid ~= vim.fn.getpid()
+			or binding_cwd == nil
+			or owner_cwd == nil
+			or binding_cwd ~= owner_cwd
+		then
+			return false
+		end
+	end
+
 	terminal_session_id = session_id
-	return session.set_pi_terminal_state(session_id, true, owner)
+	if not session.set_pi_terminal_state(session_id, true, owner) then
+		return false
+	end
+	if type(binding) ~= "table" or binding.launchId == nil then
+		terminal_bound = false
+		terminal_channel_id = nil
+		return true
+	end
+
+	terminal_channel_id = binding.channelId
+	terminal_bound = true
+	local identity = {
+		version = 1,
+		channelId = terminal_channel_id,
+		cwd = canonical_path(owner.cwd),
+		editorPid = vim.fn.getpid(),
+		launchId = terminal_launch_id,
+		ownerId = terminal_owner_id,
+		sessionId = terminal_session_id,
+	}
+	vim.schedule(function()
+		local prompt = package.loaded["plugins.ai.pi.prompt"]
+		if type(prompt) == "table" and type(prompt.on_bound) == "function" then
+			prompt.on_bound(identity)
+		end
+	end)
+	return identity
+end
+
+function M.prompt_launch()
+	if current_terminal() == nil then
+		return nil
+	end
+	local owner = session.get_current(vim.fn.getcwd())
+	if owner == nil or terminal_owner ~= owner then
+		return nil
+	end
+	return {
+		cwd = canonical_path(owner.cwd),
+		editorPid = vim.fn.getpid(),
+		launchId = terminal_launch_id,
+		ownerId = terminal_owner_id,
+		sessionId = terminal_session_id,
+	}
+end
+
+function M.prompt_identity()
+	if not terminal_bound then
+		return nil
+	end
+	local launch = M.prompt_launch()
+	if launch == nil then
+		return nil
+	end
+	return vim.tbl_extend("force", launch, {
+		version = 1,
+		channelId = terminal_channel_id,
+		sessionId = terminal_session_id,
+	})
+end
+
+function M.focus_bound(expected)
+	local identity = M.prompt_identity()
+	if
+		identity == nil
+		or type(expected) ~= "table"
+		or identity.channelId ~= expected.channelId
+		or identity.launchId ~= expected.launchId
+		or identity.sessionId ~= expected.sessionId
+	then
+		return false
+	end
+	local terminal = current_terminal()
+	if terminal == nil then
+		return false
+	end
+	terminal:show():focus()
+	return true
 end
 
 function M.setup()
@@ -312,7 +474,8 @@ function M.setup()
 	})
 end
 
-function M.start()
+function M.ensure_started(options)
+	options = options or {}
 	M.setup()
 	if vim.fn.executable("pi") ~= 1 then
 		vim.notify("pi executable not found", vim.log.levels.ERROR)
@@ -326,15 +489,21 @@ function M.start()
 	end
 	record_source_context()
 	if terminal ~= nil then
-		terminal:show():focus()
+		if options.focus ~= false then
+			terminal:show():focus()
+		end
 		return terminal
 	end
 
 	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
-		return resume_saved_session(owner)
+		return resume_saved_session(owner, options)
 	end
 	local cwd = owner ~= nil and owner.cwd or vim.fn.getcwd()
-	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner)
+	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner, options)
+end
+
+function M.start()
+	return M.ensure_started({ focus = true })
 end
 
 function M.toggle()

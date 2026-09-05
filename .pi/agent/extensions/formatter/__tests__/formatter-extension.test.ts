@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
-import { link, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { link, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ToolResultEvent,
+import {
+  createEditTool,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { createFormatterExtension } from "../index";
 import type { ResolvedFormatterSettings } from "../settings";
@@ -111,6 +112,83 @@ test("serializes formatter runs through filesystem aliases of the same file", as
     expect(executionCount).toBe(3);
     expect(maximumActiveExecutions).toBe(1);
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("does not overwrite a native edit made while a formatter is running", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-formatter-native-edit-"));
+  const started = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const pending: Promise<unknown>[] = [];
+  try {
+    const filePath = join(directory, "example.ts");
+    await writeFile(filePath, "const a=1;\nconst b=1;\n");
+    let sessionStart: SessionStartHandler | undefined;
+    let toolResult: ToolResultHandler | undefined;
+    const pi = {
+      on(event: string, handler: SessionStartHandler | ToolResultHandler) {
+        if (event === "session_start") sessionStart = handler as SessionStartHandler;
+        if (event === "tool_result") toolResult = handler as ToolResultHandler;
+      },
+    } as unknown as ExtensionAPI;
+    const context = { cwd: directory, ui: { notify() {} } } as unknown as ExtensionContext;
+    createFormatterExtension({
+      readSettings: () => ({
+        timeoutMs: 1_000,
+        warnings: [],
+        rules: [{ id: "ts", mode: "pipeline", extensions: [".ts"], fileNames: [], commands: [] }],
+      }),
+      loadRuntime: async () => ({
+        execute: async () => ({ kind: "success" }),
+        formatFile: async () => {
+          const snapshot = await readFile(filePath, "utf8");
+          started.resolve();
+          await release.promise;
+          await writeFile(filePath, snapshot.replaceAll("=", " = "));
+          return [];
+        },
+      }),
+    })(pi);
+    if (sessionStart === undefined || toolResult === undefined) {
+      throw new Error("formatter handlers were not registered");
+    }
+    await sessionStart({} as never, context);
+    const edit = createEditTool(directory);
+    const input = { path: filePath, edits: [{ oldText: "a=1", newText: "a=2" }] };
+    const result = await edit.execute("first", input);
+    const formatting = Promise.resolve(
+      toolResult(
+        {
+          type: "tool_result",
+          toolCallId: "first",
+          toolName: "edit",
+          input,
+          ...result,
+          isError: false,
+        },
+        context,
+      ),
+    );
+    pending.push(formatting);
+    await started.promise;
+    const secondEdit = edit.execute("second", {
+      path: filePath,
+      edits: [{ oldText: "b", newText: "c" }],
+    });
+    pending.push(secondEdit);
+    // Give an unqueued native edit time to finish before the formatter writes its old snapshot.
+    const completedEarly = await Promise.race([
+      secondEdit.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 50)),
+    ]);
+    release.resolve();
+    await Promise.all(pending);
+    expect(completedEarly).toBe(false);
+    expect(await readFile(filePath, "utf8")).toBe("const a = 2;\nconst c = 1;\n");
+  } finally {
+    release.resolve();
+    await Promise.allSettled(pending);
     await rm(directory, { recursive: true, force: true });
   }
 });

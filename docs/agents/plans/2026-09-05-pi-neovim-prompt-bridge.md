@@ -2,8 +2,10 @@
 
 ## Status
 
-Draft. This is a new migration slice. It does not reopen the completed editor
-inspection and presentation work.
+In progress. Prompt ownership is corrected, the Pi 0.84.4 public API proof is
+complete, and the literal unmapped `:PiAsk` canary is implemented with automated
+round-trip coverage. Its isolated live matrix remains pending. This slice does
+not reopen the completed editor inspection and presentation work.
 
 ## Problem
 
@@ -211,7 +213,9 @@ The sole argument is a closed request object:
   operation: "submit" | "append",
   launchId: string,
   sessionId: string,
+  ownerId: string,
   cwd: string,
+  editorPid: positive integer,
   text: string,
   context: ContextSnapshot | null
 }
@@ -235,6 +239,9 @@ handler:
 {
   version: 1,
   requestId: string,
+  launchId: string,
+  sessionId: string,
+  ownerId: string,
   outcome: "accepted" | "rejected" | "duplicate",
   state: "starting" | "idle" | "streaming" | "blocked" | "closed",
   code?: FailureCode
@@ -519,6 +526,19 @@ Acceptance:
 - Busy Pi rejects the request.
 - Focus changes only after acceptance.
 - Timeout creates no automatic retry.
+
+Implementation record (2026-09-05):
+
+- `:PiAsk [prefill]` is available without a default mapping. It validates input
+  before launch and uses a preserve-focus terminal start.
+- Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
+  identity are bound before delivery. Pre-launch Pi processes remain usable for
+  editor inspection but cannot accept prompt requests until restarted.
+- The focused Pi suite passes 70 tests with 334 assertions, including a real
+  headless Neovim notification and `prompt_ack` round trip.
+- The prompt, launcher, exact-session restoration, production restoration,
+  cutover, and OpenCode restoration Neovim tasks pass.
+- The isolated warm/cold two-worktree live matrix remains the Phase 2 exit gate.
 
 ### Phase 3: Add stable `@this` context
 

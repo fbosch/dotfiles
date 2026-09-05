@@ -149,10 +149,14 @@ sessions.read = original_sessions_read
 rawset(vim, "system", original_system)
 
 assert(vim.g.pi_production_session_loaded == 1, "Neovim did not source the restored session")
+local launch_id = assert(opened_terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
+assert(#launch_id == 32, "production wiring did not assign a bounded Pi launch ID")
 assert(
 	opened_terminal.command
 		== "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 			.. vim.fn.shellescape(expected_pane_id)
+			.. " PI_NVIM_LAUNCH_ID="
+			.. vim.fn.shellescape(launch_id)
 			.. " PI_NVIM_SOCKET="
 			.. vim.fn.shellescape(vim.v.servername)
 			.. " pi --session-dir "
@@ -170,6 +174,7 @@ assert(
 		"HERDR_PANE_ID=",
 		"HERDR_SOCKET_PATH=" .. vim.env.HERDR_SOCKET_PATH,
 		"PI_NVIM_HERDR_PANE_ID=" .. expected_pane_id,
+		"PI_NVIM_LAUNCH_ID=" .. launch_id,
 		"PI_NVIM_SOCKET=" .. vim.v.servername,
 		"ARG1=--session-dir",
 		"ARG2=" .. pi_session_dir,

@@ -782,11 +782,11 @@ planned in
 | Ask input and prompt submission previously owned by `<leader>ac` | OpenCode retained | New prompt-bridge plan; no current Pi prompt-ingress API              |
 | Prompt append previously owned by `ga` and `<A-x>`               | OpenCode retained | New prompt-bridge plan; current Pi mappings only record context       |
 
-The default Pi mappings are `<A-a>` for toggle, `<C-\\>` for focus,
-`<leader>ac` and `ga` for source-context capture, and `<A-x>` for selection or
-visible-buffer context capture. The latter three do not reproduce the prior Ask
-or append interactions and are not prompt-cutover evidence. `:OpenCodeStart`,
-`:OpenCodeToggle`, and `<leader>aO` remain the explicit rollback entry points.
+The default Pi mappings are `<A-a>` for toggle and `<C-\\>` for focus.
+OpenCode retains `<leader>ac` for Ask and `ga` and `<A-x>` for prompt append
+while the separate prompt bridge is a canary. `:OpenCodeStart`,
+`:OpenCodeToggle`, `:OpenCodeAsk`, and `<leader>aO` remain explicit rollback
+entry points.
 
 ### Complete live matrix
 

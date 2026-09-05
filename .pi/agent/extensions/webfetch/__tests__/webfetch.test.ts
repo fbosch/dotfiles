@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { rejects } from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { fetchWebContent, htmlToMarkdown, htmlToText, isBlockedAddress } from "..";
 
 const PUBLIC_ADDRESSES = async () => ["93.184.216.34"];
@@ -13,8 +15,9 @@ describe("webfetch", () => {
     expect(isBlockedAddress("0:0:0:0:0:ffff:7f00:1")).toBe(true);
     expect(isBlockedAddress("93.184.216.34")).toBe(false);
 
-    await expect(fetchWebContent({ url: "http://127.0.0.1/private" })).rejects.toThrow(
-      "Private or reserved IP addresses",
+    await rejects(
+      fetchWebContent({ url: "http://127.0.0.1/private" }),
+      /Private or reserved IP addresses/,
     );
   });
 
@@ -28,12 +31,13 @@ describe("webfetch", () => {
       });
     };
 
-    await expect(
+    await rejects(
       fetchWebContent({ url: "https://example.com" }, undefined, {
         requestFn,
         resolveHostname: PUBLIC_ADDRESSES,
       }),
-    ).rejects.toThrow("Private or reserved IP addresses");
+      /Private or reserved IP addresses/,
+    );
     expect(calls).toBe(1);
   });
 
@@ -70,6 +74,35 @@ describe("webfetch", () => {
     );
   });
 
+  test("malformed anchor attributes cannot hang the process", () => {
+    // Isolate the synchronous parser so a regression is killed rather than hanging the suite.
+    const script = `
+      import { htmlToMarkdown } from ${JSON.stringify(new URL("../index.ts", import.meta.url).href)};
+      const html = ${JSON.stringify('<a ">">text</a><a " > " href="/ignored">more</a>')};
+      console.log(htmlToMarkdown(html, new URL("https://example.com"), performance.now() + 500));
+    `;
+    const result = spawnSync(process.execPath, ["--eval", script], {
+      encoding: "utf8",
+      killSignal: "SIGKILL",
+      timeout: 2_000,
+    });
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(0);
+    expect(result.stdout.trim()).toBe("textmore");
+  });
+
+  test("preserves valid attributes with quoted greater-than signs", () => {
+    expect(
+      htmlToMarkdown('<a title=">" hidden href="/docs">Docs</a>', new URL("https://example.com")),
+    ).toBe("[Docs](https://example.com/docs)");
+  });
+
+  test("stops conversion after its deadline", () => {
+    expect(() =>
+      htmlToMarkdown('<a href="/docs">Docs</a>', new URL("https://example.com"), -1),
+    ).toThrow("Request timed out");
+  });
+
   test("returns supported images to the model", async () => {
     const requestFn = async () => {
       return new Response(new Uint8Array([1, 2, 3]), {
@@ -92,12 +125,13 @@ describe("webfetch", () => {
       });
     };
 
-    await expect(
+    await rejects(
       fetchWebContent({ url: "https://example.com/large" }, undefined, {
         requestFn,
         resolveHostname: PUBLIC_ADDRESSES,
       }),
-    ).rejects.toThrow("Response too large");
+      /Response too large/,
+    );
   });
 
   test("pins each request to the validated DNS result", async () => {
@@ -123,19 +157,21 @@ describe("webfetch", () => {
       });
     };
 
-    await expect(
+    await rejects(
       fetchWebContent({ url: "https://example.com" }, undefined, {
         requestFn,
         resolveHostname: PUBLIC_ADDRESSES,
       }),
-    ).rejects.toThrow("HTTPS redirects to HTTP");
+      /HTTPS redirects to HTTP/,
+    );
   });
 
   test("bounds DNS resolution by the requested timeout", async () => {
     const resolveHostname = () => new Promise<readonly string[]>(() => undefined);
-    await expect(
+    await rejects(
       fetchWebContent({ url: "https://example.com", timeout: 1 }, undefined, { resolveHostname }),
-    ).rejects.toBeInstanceOf(Error);
+      Error,
+    );
   });
 
   test("converts hostile unclosed tags in linear time", () => {

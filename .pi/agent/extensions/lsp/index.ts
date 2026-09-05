@@ -108,9 +108,41 @@ export function loadLspSettings(
   }
 }
 
+const diagnosticSummaries: Record<DiagnosticVerdict, string> = {
+  clean: "All matching servers confirmed no diagnostics.",
+  issues: "Diagnostics were reported for the current document.",
+  unconfirmed: "No diagnostics were reported, but the current document was not confirmed clean.",
+  partial: "Results are incomplete; do not treat this as a clean check.",
+  unavailable: "No matching server completed a diagnostic check.",
+};
+
 function resultText(result: LspOperationResult): string {
-  if (result.warnings.length === 0) return result.text;
-  return [result.text, ...result.warnings].join("\n");
+  const verdict = result.diagnosticVerdict;
+  if (verdict === undefined) return [result.text, ...result.warnings].join("\n");
+
+  const evidence = result.diagnosticEvidence ?? [];
+  const lines = [`LSP diagnostics: ${verdict}. ${diagnosticSummaries[verdict]}`];
+  if (evidence.length === 0) lines.push("LSP-native evidence: none.");
+  for (const observation of evidence) {
+    lines.push(
+      match(observation)
+        .with(
+          { kind: "pull-report" },
+          ({ serverId }) => `LSP-native evidence: ${serverId} returned a full diagnostic report.`,
+        )
+        .with(
+          { kind: "push-publication" },
+          ({ serverId, documentVersion }) =>
+            `LSP-native evidence: ${serverId} published diagnostics ${documentVersion === undefined ? "without a document version" : `for document version ${documentVersion}`}.`,
+        )
+        .exhaustive(),
+    );
+  }
+  if ((result.unconfirmedServers?.length ?? 0) > 0) {
+    lines.push(`Unconfirmed servers: ${result.unconfirmedServers?.join(", ")}.`);
+  }
+  if ((result.diagnosticCount ?? 0) > 0) lines.push(result.text);
+  return [...lines, ...result.warnings].join("\n");
 }
 
 function diagnosticMessageText(content: unknown): string {

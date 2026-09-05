@@ -9,6 +9,7 @@ import { Value } from "typebox/value";
 import type { NvimConnection } from "../channel";
 import { bridgeLua, bridgeOperations } from "../channel";
 import { createNeovimExtension } from "../index";
+import { PROMPT_NOTIFICATION } from "../prompt-protocol";
 
 type Handler = (event: never, context: ExtensionContext) => Promise<unknown> | unknown;
 
@@ -16,6 +17,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   readonly channelId = Promise.resolve(12);
   boundSessionArguments: unknown;
   closed = false;
+  promptAcknowledgement: unknown;
 
   async close(): Promise<void> {
     this.closed = true;
@@ -62,6 +64,20 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     }
     if (operation === bridgeOperations.bindSession) {
       this.boundSessionArguments = payload;
+      return payload.launchId === undefined
+        ? true
+        : {
+            channelId: 12,
+            cwd: "/project",
+            editorPid: 80,
+            launchId: payload.launchId,
+            ownerId: "fixture",
+            sessionId: payload.sessionId,
+            version: 1,
+          };
+    }
+    if (operation === bridgeOperations.promptAck) {
+      this.promptAcknowledgement = payload;
       return true;
     }
     if (operation === bridgeOperations.quickfix) {
@@ -189,6 +205,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   const connection = new FakeConnection();
   let tool: ToolDefinition | undefined;
   let modelTurns = 0;
+  const submittedPrompts: string[] = [];
   const pi = {
     on(event: string, handler: Handler) {
       handlers.set(event, handler);
@@ -199,23 +216,35 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     sendMessage() {
       modelTurns += 1;
     },
+    sendUserMessage(text: string) {
+      modelTurns += 1;
+      submittedPrompts.push(text);
+    },
   } as unknown as ExtensionAPI;
   const context = {
     cwd: "/project",
+    hasUI: true,
+    isIdle: () => true,
+    mode: "tui",
     sessionManager: { getSessionId: () => "pi-assigned-session" },
-  } as ExtensionContext;
+    ui: { getEditorText: () => "", setEditorText: () => undefined },
+  } as unknown as ExtensionContext;
 
   createNeovimExtension({
     createConnection: async (socket) => {
       sockets.push(socket);
       return connection;
     },
+    launchId: "0123456789abcdef0123456789abcdef",
     socketPath: "/tmp/launching-nvim.sock",
   })(pi);
 
   if (tool === undefined) throw new Error("neovim tool was not registered");
   await handlers.get("session_start")?.({} as never, context);
-  expect(connection.boundSessionArguments).toEqual({ sessionId: "pi-assigned-session" });
+  expect(connection.boundSessionArguments).toEqual({
+    launchId: "0123456789abcdef0123456789abcdef",
+    sessionId: "pi-assigned-session",
+  });
   const parameters = JSON.stringify(tool.parameters);
   expect(parameters).toContain("status");
   expect(parameters).toContain("context");
@@ -434,6 +463,45 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     },
   ]);
   expect(modelTurns).toBe(0);
+
+  const promptRequest = {
+    context: null,
+    cwd: "/project",
+    editorPid: 80,
+    launchId: "0123456789abcdef0123456789abcdef",
+    operation: "submit",
+    ownerId: "fixture",
+    requestId: "nvim:0123456789abcdef0123456789abcdef:1",
+    sequence: 1,
+    sessionId: "pi-assigned-session",
+    text: "literal prompt",
+    version: 1,
+  } as const;
+  connection.emit("notification", PROMPT_NOTIFICATION, [promptRequest]);
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(submittedPrompts).toEqual(["literal prompt"]);
+  expect(modelTurns).toBe(1);
+  expect(connection.promptAcknowledgement).toMatchObject({
+    outcome: "accepted",
+    requestId: promptRequest.requestId,
+  });
+
+  await handlers.get("ui_prompt_start")?.({} as never, context);
+  connection.emit("notification", PROMPT_NOTIFICATION, [
+    {
+      ...promptRequest,
+      requestId: "nvim:0123456789abcdef0123456789abcdef:2",
+      sequence: 2,
+      text: "blocked prompt",
+    },
+  ]);
+  await new Promise((resolve) => setImmediate(resolve));
+  expect(submittedPrompts).toEqual(["literal prompt"]);
+  expect(connection.promptAcknowledgement).toMatchObject({
+    code: "PI_BUSY",
+    outcome: "rejected",
+  });
+  await handlers.get("ui_prompt_end")?.({} as never, context);
 
   await handlers.get("session_shutdown")?.({} as never, context);
   expect(connection.closed).toBe(true);

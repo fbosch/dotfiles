@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import { bridgeLua, bridgeOperations, type NvimConnection, PiNeovimChannel } from "../channel";
 import { FOCUS_NOTIFICATION, MAX_METADATA_STRING_BYTES } from "../contracts";
+import { PROMPT_NOTIFICATION, type PromptRequest } from "../prompt-protocol";
 
 const focus = {
   buffer: {
@@ -48,6 +49,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     totalLines: 3,
   };
   bindArguments: unknown;
+  bindResponse: unknown = true;
   bufferResponse: unknown = { buffers: [focus.buffer], cwd: "/project", pid: 71 };
   closeCalls = 0;
   deleteAnnotationArguments: unknown;
@@ -90,6 +92,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     pid: 71,
   };
   identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
+  promptAckArguments: unknown;
   quickfixArguments: unknown;
   quickfixResponse: unknown = {
     cwd: "/project",
@@ -162,7 +165,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     }
     if (operation === bridgeOperations.bindSession) {
       this.bindArguments = payload as Record<string, unknown>;
-      return true;
+      return this.bindResponse;
     }
     if (operation === bridgeOperations.activeContext) return this.activeResponse;
     if (operation === bridgeOperations.annotate) {
@@ -195,6 +198,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
       return this.highlightClearResponse;
     }
     if (operation === bridgeOperations.listBuffers) return this.bufferResponse;
+    if (operation === bridgeOperations.promptAck) {
+      this.promptAckArguments = payload;
+      return true;
+    }
     if (operation === bridgeOperations.quickfix) {
       this.quickfixArguments = payload as Record<string, unknown>;
       return this.quickfixResponse;
@@ -260,6 +267,78 @@ describe("PiNeovimChannel", () => {
       ok: false,
     });
     expect(connection.bindArguments).toEqual({ sessionId: "pi-session-one" });
+  });
+
+  test("delivers prompt requests and acknowledgements over the bound channel", async () => {
+    const connection = new FakeConnection();
+    const launchId = "0123456789abcdef0123456789abcdef";
+    const binding = {
+      channelId: 9,
+      cwd: "/project",
+      editorPid: 71,
+      launchId,
+      ownerId: "fixture",
+      sessionId: "pi-session-one",
+      version: 1,
+    } as const;
+    connection.bindResponse = binding;
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+    const requests: PromptRequest[] = [];
+    let resets = 0;
+    channel.setPromptRequestHandler(
+      (request) => {
+        requests.push(request);
+        return {
+          launchId: request.launchId,
+          outcome: "accepted",
+          ownerId: request.ownerId,
+          requestId: request.requestId,
+          sessionId: request.sessionId,
+          state: "idle",
+          version: 1,
+        };
+      },
+      () => {
+        resets += 1;
+      },
+    );
+
+    expect(await channel.bindSession(binding.sessionId, launchId)).toEqual({
+      ok: true,
+      value: { channelId: 9, cwd: "/project", pid: 71 },
+    });
+    expect(channel.promptBinding()).toEqual(binding);
+    const request = {
+      context: null,
+      cwd: "/project",
+      editorPid: 71,
+      launchId,
+      operation: "submit",
+      ownerId: "fixture",
+      requestId: `nvim:${launchId}:1`,
+      sequence: 1,
+      sessionId: "pi-session-one",
+      text: "literal prompt",
+      version: 1,
+    } as const;
+    connection.emit("notification", PROMPT_NOTIFICATION, [request]);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(requests).toEqual([request]);
+    expect(connection.promptAckArguments).toEqual({
+      launchId,
+      outcome: "accepted",
+      ownerId: "fixture",
+      requestId: request.requestId,
+      sessionId: "pi-session-one",
+      state: "idle",
+      version: 1,
+    });
+    expect(resets).toBe(1);
+    connection.emit("disconnect");
+    expect(channel.promptBinding()).toBeUndefined();
+    expect(resets).toBe(2);
+    await channel.close();
   });
 
   test("returns source inventory and bounded in-memory reads over the bound channel", async () => {

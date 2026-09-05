@@ -7,6 +7,7 @@ local M = {
 	overlap_gap = 15,
 	snap_vicinity = 100,
 	rounding = 8,
+	default_animation = "slide bottom",
 	corners = {
 		["top-left"] = { tag = "pip-top-left", animation = "slide top" },
 		["top-right"] = { tag = "pip-top-right", animation = "slide top" },

@@ -22,6 +22,7 @@ import {
   type NeovimErrorCode,
 } from "./contracts";
 import { repeatPromiseWhile } from "./effect-runtime";
+import { PromptRequestDispatcher } from "./prompt-protocol";
 
 const NeovimParameters = Type.Union([
   Type.Object({ operation: Type.Literal("status") }, { additionalProperties: false }),
@@ -172,6 +173,7 @@ interface NeovimToolDetails {
 
 interface NeovimExtensionDependencies {
   readonly createConnection?: NvimConnectionFactory;
+  readonly launchId?: string;
   readonly socketPath?: string;
 }
 
@@ -189,14 +191,28 @@ function resultDetails(
 
 export function createNeovimExtension(dependencies: NeovimExtensionDependencies = {}) {
   const inheritedSocket = dependencies.socketPath ?? process.env.PI_NVIM_SOCKET;
+  const inheritedLaunchId = dependencies.launchId ?? process.env.PI_NVIM_LAUNCH_ID;
 
   return function neovimExtension(pi: ExtensionAPI): void {
     if (inheritedSocket === undefined || inheritedSocket === "") return;
 
+    let activeContext: ExtensionContext | undefined;
     let channel: PiNeovimChannel | undefined;
+    let blockingPromptActive = false;
+    const promptDispatcher = new PromptRequestDispatcher(pi, {
+      binding: () => channel?.promptBinding(),
+      blockingPromptActive: () => blockingPromptActive,
+      context: () => activeContext,
+    });
 
     const channelFor = (context: ExtensionContext): PiNeovimChannel => {
-      channel ??= new PiNeovimChannel(inheritedSocket, context.cwd, dependencies.createConnection);
+      if (channel === undefined) {
+        channel = new PiNeovimChannel(inheritedSocket, context.cwd, dependencies.createConnection);
+        channel.setPromptRequestHandler(
+          (request) => promptDispatcher.dispatch(request),
+          () => promptDispatcher.reset(),
+        );
+      }
       return channel;
     };
 
@@ -249,10 +265,13 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
     );
 
     pi.on("session_start", async (_event, context) => {
+      activeContext = context;
+      blockingPromptActive = false;
+      promptDispatcher.reset();
       const bridge = channelFor(context);
       const sessionId = context.sessionManager.getSessionId();
       const result = await repeatPromiseWhile(
-        () => bridge.bindSession(sessionId),
+        () => bridge.bindSession(sessionId, inheritedLaunchId),
         (attempt) => attempt.ok === false && attempt.error.code !== "NVIM_UNAVAILABLE",
         { delayMs: 50, maxAttempts: 10 },
       );
@@ -264,7 +283,18 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
       }
     });
 
+    pi.on("ui_prompt_start", () => {
+      blockingPromptActive = true;
+    });
+
+    pi.on("ui_prompt_end", () => {
+      blockingPromptActive = false;
+    });
+
     pi.on("session_shutdown", async () => {
+      activeContext = undefined;
+      blockingPromptActive = false;
+      promptDispatcher.reset();
       const activeChannel = channel;
       await activeChannel?.close();
       if (channel === activeChannel) channel = undefined;

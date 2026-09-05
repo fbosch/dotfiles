@@ -103,6 +103,23 @@ local function has_notification(fragment)
 	end)
 end
 
+local function assert_exact_command(command, directory, session_id, message)
+	local launch_id = command:match("^PI_NVIM_LAUNCH_ID='([a-f0-9]+)'")
+	assert(type(launch_id) == "string" and #launch_id == 32, message .. ": invalid launch ID")
+	assert(
+		command
+			== "PI_NVIM_LAUNCH_ID="
+				.. vim.fn.shellescape(launch_id)
+				.. " PI_NVIM_SOCKET="
+				.. vim.fn.shellescape(vim.v.servername)
+				.. " pi --session-dir "
+				.. vim.fn.shellescape(directory)
+				.. " --session "
+				.. vim.fn.shellescape(session_id),
+		message
+	)
+end
+
 local exact_id = "exact-session-3.3"
 local exact_path = write_session(exact_id, repo_root)
 set_metadata(exact_id, true)
@@ -114,14 +131,10 @@ pi.setup()
 pi.setup()
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
 assert(#opened == 1, "SessionLoadPost did not restore exactly one Pi terminal")
-assert(
-	opened[1].command
-		== "PI_NVIM_SOCKET="
-			.. vim.fn.shellescape(vim.v.servername)
-			.. " pi --session-dir "
-			.. vim.fn.shellescape(session_dir)
-			.. " --session "
-			.. vim.fn.shellescape(exact_id),
+assert_exact_command(
+	opened[1].command,
+	session_dir,
+	exact_id,
 	"restored Pi command did not use the exact session and directory"
 )
 assert(opened[1].command:find("--session-id", 1, true) == nil, "restore used the session-creation flag")
@@ -205,14 +218,10 @@ local manual_metadata = session.get_metadata(nvim_session)
 local manual_terminal = pi.start()
 assert(manual_terminal == terminal, "PiStart did not resume the MiniSessions-associated Pi session")
 assert(#opened == 5, "PiStart opened the wrong number of terminals")
-assert(
-	opened[5].command
-		== "PI_NVIM_SOCKET="
-			.. vim.fn.shellescape(vim.v.servername)
-			.. " pi --session-dir "
-			.. vim.fn.shellescape(session_dir)
-			.. " --session "
-			.. vim.fn.shellescape(exact_id),
+assert_exact_command(
+	opened[5].command,
+	session_dir,
+	exact_id,
 	"PiStart did not use the exact saved session and directory"
 )
 assert(opened[5].options.cwd == repo_root, "PiStart did not use the saved worktree")

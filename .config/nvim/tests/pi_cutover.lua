@@ -7,12 +7,18 @@ package.path = table.concat({
 
 local starts = 0
 local toggles = 0
+local pi_asks = {}
 package.loaded["plugins.ai.pi"] = {
 	start = function()
 		starts = starts + 1
 	end,
 	toggle = function()
 		toggles = toggles + 1
+	end,
+}
+package.loaded["plugins.ai.pi.prompt"] = {
+	ask = function(prefill)
+		table.insert(pi_asks, prefill)
 	end,
 }
 package.loaded["utils"] = {
@@ -61,6 +67,7 @@ assert(rollback.rhs:find("OpenCodeToggle", 1, true) ~= nil, "OpenCode rollback k
 for _, command in ipairs({
 	"PiStart",
 	"PiToggle",
+	"PiAsk",
 	"OpenCodeStart",
 	"OpenCodeToggle",
 	"OpenCodeAsk",
@@ -120,11 +127,14 @@ package.loaded["opencode"] = {
 dofile(repo_root .. "/.config/nvim/lua/config/usercmd.lua")
 vim.cmd("PiStart")
 vim.cmd("PiToggle")
+vim.cmd("PiAsk")
+vim.cmd("PiAsk literal prompt")
 vim.cmd("OpenCodeStart")
 vim.cmd("OpenCodeToggle")
 vim.cmd("OpenCodeAsk")
 vim.cmd("OpenCodeAsk explain this")
 assert(starts == 2 and toggles == 3, "Pi commands did not use the cutover integration")
+assert(vim.deep_equal(pi_asks, { "", "literal prompt" }), "Pi Ask did not preserve literal prefill")
 assert(activations == 4, "OpenCode rollback commands did not activate the plugin")
 assert(opencode_starts == 1, "OpenCode rollback start command did not start OpenCode")
 assert(opencode_toggles == 1, "OpenCode rollback toggle command did not toggle OpenCode")

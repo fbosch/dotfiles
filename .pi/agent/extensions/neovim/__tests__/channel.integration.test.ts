@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { attach } from "neovim";
 import { PiNeovimChannel } from "../channel";
 import { MAX_ANNOTATION_SEARCH_LINES, MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
+import { PROMPT_NOTIFICATION, type PromptRequest } from "../prompt-protocol";
 
 const NVIM_RUNTIME = resolve(import.meta.dir, "../../../../../.config/nvim");
 
@@ -115,6 +116,65 @@ test("normalizes source context captured by an already-loaded launcher", async (
     await nvim.exited;
     await rm(socket, { force: true });
   }
+}, 10_000);
+
+test("round-trips a prompt acknowledgement over the existing channel", async () => {
+  const cwd = process.cwd();
+  const setup = [
+    "vim.g.pi_prompt_ack = vim.NIL",
+    "package.loaded['plugins.ai.pi.prompt'] = { acknowledge = function(payload, channel) vim.g.pi_prompt_ack = { payload = payload, channel = channel }; return true end }",
+  ].join("; ");
+
+  await withNvim(cwd, setup, async (channel, socket) => {
+    const status = await channel.status();
+    if (status.ok === false) throw new Error(status.error.message);
+    const nvim = attach({ socket });
+    const launchId = "0123456789abcdef0123456789abcdef";
+    const request: PromptRequest = {
+      context: null,
+      cwd,
+      editorPid: status.value.pid,
+      launchId,
+      operation: "submit",
+      ownerId: "integration",
+      requestId: `nvim:${launchId}:1`,
+      sequence: 1,
+      sessionId: "pi-session-one",
+      text: "literal prompt",
+      version: 1,
+    };
+    channel.setPromptRequestHandler(
+      (received) => ({
+        launchId: received.launchId,
+        outcome: "accepted",
+        ownerId: received.ownerId,
+        requestId: received.requestId,
+        sessionId: received.sessionId,
+        state: "idle",
+        version: 1,
+      }),
+      () => undefined,
+    );
+
+    await nvim.executeLua(
+      "local channel, method, request = ...; vim.rpcnotify(channel, method, request)",
+      [status.value.channelId, PROMPT_NOTIFICATION, request],
+    );
+    let acknowledgement: { channel: number; payload: Record<string, unknown> } | undefined;
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const value = await nvim.getVar("pi_prompt_ack");
+      if (typeof value === "object" && value !== null && Array.isArray(value) === false) {
+        acknowledgement = value as typeof acknowledgement;
+        break;
+      }
+      await Bun.sleep(10);
+    }
+
+    expect(acknowledgement).toMatchObject({
+      channel: status.value.channelId,
+      payload: { outcome: "accepted", requestId: request.requestId },
+    });
+  });
 }, 10_000);
 
 test("lists source buffers and reads unsaved text without changing disk", async () => {

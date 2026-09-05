@@ -45,6 +45,10 @@ usrcmd("PiToggle", function()
 	require("plugins.ai.pi").toggle()
 end, "Toggle Pi bound to this Neovim instance")
 
+usrcmd("PiAsk", function(args)
+	require("plugins.ai.pi.prompt").ask(args.args)
+end, { nargs = "*", desc = "Ask the bound idle Pi session" })
+
 local function with_opencode(action)
 	local activated, reason = pack_loader.activate("opencode.nvim", { source = "command" })
 	if activated == false then

@@ -9,6 +9,7 @@ local metadata_root = vim.fn.tempname()
 local nvim_session = {
 	cwd = repo_root,
 	metadata_path = metadata_root .. "/session.json",
+	specifier = "fixture",
 }
 local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 session.set_current(nvim_session)
@@ -39,6 +40,8 @@ package.loaded["plugins.ai.pi.bridge"] = {
 local captured_command
 local captured_options
 local callbacks = {}
+local focuses = 0
+local shows = 0
 local toggles = 0
 local terminal = {
 	buf = vim.api.nvim_create_buf(false, true),
@@ -46,12 +49,14 @@ local terminal = {
 		return true
 	end,
 	focus = function(self)
+		focuses = focuses + 1
 		return self
 	end,
 	on = function(_, event, callback)
 		callbacks[event] = callback
 	end,
 	show = function(self)
+		shows = shows + 1
 		return self
 	end,
 	toggle = function(self)
@@ -77,12 +82,17 @@ vim.cmd("normal! v2l")
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 local command_prefix = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 	.. vim.fn.shellescape(vim.env.HERDR_PANE_ID)
-	.. " PI_NVIM_SOCKET="
-	.. vim.fn.shellescape(vim.v.servername)
+	.. " PI_NVIM_LAUNCH_ID="
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
-assert(captured_command == command_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
+local first_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
+assert(#first_launch_id == 32, "Pi launcher did not generate a bounded launch ID")
+local expected_prefix = command_prefix
+	.. vim.fn.shellescape(first_launch_id)
+	.. " PI_NVIM_SOCKET="
+	.. vim.fn.shellescape(vim.v.servername)
+assert(captured_command == expected_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
 assert(
 	recorded_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
 	"Pi launcher did not capture the source context before opening its terminal"
@@ -92,6 +102,7 @@ assert(recorded_source_context.selection.mode == "v", "Pi launcher did not captu
 assert(recorded_source_context.selection.lines[1] == "loc", "Pi launcher did not capture the bounded pre-Pi selection")
 assert(captured_options.win.position == "left", "Pi terminal was not opened on the left")
 assert(captured_options.win.width == 100, "Pi terminal width changed")
+assert(captured_options.win.enter == nil, "normal Pi start unexpectedly preserved focus")
 assert(vim.b[terminal.buf].is_pi_terminal == true, "Pi terminal buffer was not marked")
 assert(type(callbacks.TermClose) == "function", "Pi terminal close was not tracked")
 assert(
@@ -140,7 +151,24 @@ assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state c
 
 local first_session_id = "pi-session-one"
 assert(pi.bind_session("invalid/session") == false, "invalid Pi session ID was bound")
-assert(pi.bind_session(first_session_id) == true, "Pi-assigned session ID was not bound")
+assert(pi.bind_session({
+	sessionId = first_session_id,
+	launchId = "abcdef0123456789abcdef0123456789",
+	channelId = 12,
+	cwd = repo_root,
+	editorPid = vim.fn.getpid(),
+}) == false, "stale Pi launch ID was bound")
+local bound = pi.bind_session({
+	sessionId = first_session_id,
+	launchId = first_launch_id,
+	channelId = 12,
+	cwd = repo_root,
+	editorPid = vim.fn.getpid(),
+})
+assert(type(bound) == "table", "Pi-assigned session identity was not bound")
+assert(bound.launchId == first_launch_id, "Pi binding changed its launch ID")
+assert(bound.channelId == 12, "Pi binding changed its RPC channel")
+assert(bound.ownerId == nvim_session.specifier, "Pi binding lost its Neovim session owner")
 saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.pi_session_id == first_session_id, "bound Pi session ID was not persisted immediately")
 assert(saved_metadata.pi_terminal_open == true, "bound Pi terminal was not persisted immediately")
@@ -156,7 +184,12 @@ assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal stat
 
 vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 captured_command = nil
+local focuses_before_reuse = focuses
+assert(pi.ensure_started({ focus = false }) == terminal, "Pi preserve-focus start did not reuse its live terminal")
+assert(focuses == focuses_before_reuse, "Pi preserve-focus start focused a live terminal")
 assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")
+assert(focuses == focuses_before_reuse + 1, "normal Pi start did not focus its live terminal")
+assert(shows >= 1, "normal Pi start did not show its live terminal")
 assert(captured_command == nil, "Pi launcher opened a duplicate terminal")
 assert(
 	recorded_source_context.buffer.name == second_source,
@@ -172,17 +205,26 @@ saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi close")
 
 captured_command = nil
-pi.start()
+local restore_source_window = vim.api.nvim_get_current_win()
+pi.ensure_started({ focus = false, focus_window = restore_source_window })
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
+local restored_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
+assert(restored_launch_id ~= first_launch_id, "Pi launcher reused a closed terminal launch ID")
+local restored_prefix = command_prefix
+	.. vim.fn.shellescape(restored_launch_id)
+	.. " PI_NVIM_SOCKET="
+	.. vim.fn.shellescape(vim.v.servername)
 assert(
 	captured_command
-		== command_prefix
+		== restored_prefix
 			.. " pi --session-dir "
 			.. vim.fn.shellescape(saved_session_dir)
 			.. " --session "
 			.. vim.fn.shellescape(first_session_id),
 	"Pi launcher did not resume the MiniSessions-associated Pi session"
 )
+assert(captured_options.win.enter == false, "prompt start did not use preserve-focus terminal options")
+assert(vim.api.nvim_get_current_win() == restore_source_window, "prompt start changed the source window")
 assert(#find_requests == 1, "Pi launcher did not perform one exact saved-session lookup")
 assert(find_requests[1].session_id == first_session_id, "Pi launcher looked up the wrong saved session")
 assert(find_requests[1].cwd == repo_root, "Pi launcher looked up the saved session in the wrong worktree")

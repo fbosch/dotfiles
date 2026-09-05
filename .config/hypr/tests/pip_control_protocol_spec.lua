@@ -87,7 +87,7 @@ describe("picture-in-picture identity", function()
 end)
 
 describe("picture-in-picture window rules", function()
-	it("applies only a static initial size", function()
+	it("applies static setup and slide animation to every PiP state", function()
 		local rules = {}
 		_G.hl = {
 			window_rule = function(rule)
@@ -106,5 +106,14 @@ describe("picture-in-picture window rules", function()
 		assert_equal(base_rule.max_size, nil, "maximum size")
 		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
 		assert.is_true(base_rule.persistent_size)
+		assert_equal(rules[2].animation, "slide bottom", "default animation")
+		local corner_animations = {}
+		for index = 3, 6 do
+			corner_animations[rules[index].match.tag] = rules[index].animation
+		end
+		assert_equal(corner_animations["pip-top-left"], "slide top", "top-left animation")
+		assert_equal(corner_animations["pip-top-right"], "slide top", "top-right animation")
+		assert_equal(corner_animations["pip-bottom-left"], "slide bottom", "bottom-left animation")
+		assert_equal(corner_animations["pip-bottom-right"], "slide bottom", "bottom-right animation")
 	end)
 end)

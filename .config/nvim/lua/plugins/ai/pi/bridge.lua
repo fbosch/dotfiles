@@ -1699,16 +1699,20 @@ local function remove_notifications(state, channel, payload)
 	state.annotation_batches = {}
 	state.highlights = {}
 	state.source_context = nil
+	local prompt = package.loaded["plugins.ai.pi.prompt"]
+	if type(prompt) == "table" and type(prompt.channel_closed) == "function" then
+		prompt.channel_closed(channel)
+	end
 	channel_states[channel] = nil
 	return true
 end
 
-local function bind_session(payload)
-	if not has_only_keys(payload, { sessionId = true }) then
+local function bind_session(channel, payload)
+	if not has_only_keys(payload, { launchId = true, sessionId = true }) then
 		return invalid_request()
 	end
 	local session_id = payload.sessionId
-	if type(session_id) ~= "string" then
+	if type(session_id) ~= "string" or #session_id > 128 then
 		return invalid_request()
 	end
 	local single_character = session_id:match("^[A-Za-z0-9]$") ~= nil
@@ -1716,13 +1720,40 @@ local function bind_session(payload)
 	if single_character == false and multiple_characters == false then
 		return invalid_request()
 	end
+	if
+		payload.launchId ~= nil
+		and (
+			type(payload.launchId) ~= "string"
+			or #payload.launchId ~= 32
+			or payload.launchId:match("^[a-f0-9]+$") == nil
+		)
+	then
+		return invalid_request()
+	end
 
 	local ok, integration = pcall(require, "plugins.ai.pi")
 	if ok == false or type(integration.bind_session) ~= "function" then
 		return false
 	end
-	local bound_ok, bound = pcall(integration.bind_session, session_id)
-	return bound_ok and bound == true
+	local binding = payload.launchId == nil and session_id
+		or {
+			sessionId = session_id,
+			launchId = payload.launchId,
+			channelId = channel,
+			cwd = vim.fn.getcwd(),
+			editorPid = vim.fn.getpid(),
+		}
+	local bound_ok, bound = pcall(integration.bind_session, binding)
+	return bound_ok and bound or false
+end
+
+local function prompt_ack(channel, payload)
+	local ok, prompt = pcall(require, "plugins.ai.pi.prompt")
+	if ok == false or type(prompt.acknowledge) ~= "function" then
+		return false
+	end
+	local acknowledged, result = pcall(prompt.acknowledge, payload, channel)
+	return acknowledged and result == true
 end
 
 local handlers = {
@@ -1732,8 +1763,8 @@ local handlers = {
 	annotate = function(state, channel, payload)
 		return annotate(state, channel, payload)
 	end,
-	bind_session = function(_, _, payload)
-		return bind_session(payload)
+	bind_session = function(_, channel, payload)
+		return bind_session(channel, payload)
 	end,
 	clear_highlight = function(state, _, payload)
 		return clear_highlight(state, payload)
@@ -1758,6 +1789,9 @@ local handlers = {
 	end,
 	list_buffers = function(_, _, payload)
 		return list_buffers(payload)
+	end,
+	prompt_ack = function(_, channel, payload)
+		return prompt_ack(channel, payload)
 	end,
 	quickfix = function(_, _, payload)
 		return quickfix(payload)

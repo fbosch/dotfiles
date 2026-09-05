@@ -96,6 +96,7 @@ set -euo pipefail
 	printf 'HERDR_PANE_ID=%s\n' "${HERDR_PANE_ID:-}"
 	printf 'HERDR_SOCKET_PATH=%s\n' "${HERDR_SOCKET_PATH:-}"
 	printf 'PI_NVIM_HERDR_PANE_ID=%s\n' "${PI_NVIM_HERDR_PANE_ID:-}"
+	printf 'PI_NVIM_LAUNCH_ID=%s\n' "${PI_NVIM_LAUNCH_ID:-}"
 	printf 'PI_NVIM_SOCKET=%s\n' "${PI_NVIM_SOCKET:-}"
 	index=0
 	for argument in "$@"; do
