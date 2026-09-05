@@ -90,6 +90,7 @@ export const bridgeOperations = {
   highlight: "highlight",
   installNotifications: "install_notifications",
   listBuffers: "list_buffers",
+  openFile: "open_file",
   promptAck: "prompt_ack",
   quickfix: "quickfix",
   readBuffer: "read_buffer",
@@ -618,6 +619,65 @@ export class PiNeovimChannel {
         };
       }
       return result;
+    } catch {
+      return this.markUnavailable("The bound Neovim instance stopped responding");
+    }
+  }
+
+  async openFile(path: string): Promise<BridgeResult<true>> {
+    if (
+      isAbsolute(path) === false ||
+      Buffer.byteLength(path, "utf8") > 4_096 ||
+      /[\0-\x1f\x7f-\x9f]/u.test(path)
+    ) {
+      return {
+        error: { code: "NVIM_INVALID_RESPONSE", message: "Choose an absolute local file path" },
+        ok: false,
+      };
+    }
+    const connection = await this.connection();
+    if (connection.ok === false) return connection;
+    if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
+    try {
+      const result = await withTimeout(
+        executeBridge(connection.value, bridgeOperations.openFile, {
+          expectedCwd: this.#cwd,
+          path,
+        }),
+        "Timed out opening the local file in the bound Neovim instance",
+      );
+      if (result === true) return { ok: true, value: true };
+      if (typeof result === "object" && result !== null && !Array.isArray(result)) {
+        const error = (result as Record<string, unknown>).error;
+        if (error === "invalidBuffer") {
+          return {
+            error: {
+              code: "NVIM_INVALID_BUFFER",
+              message: "The requested local file is unavailable",
+            },
+            ok: false,
+          };
+        }
+        if (error === "worktreeMismatch") {
+          return {
+            error: {
+              code: "NVIM_WORKTREE_MISMATCH",
+              message: "The bound Neovim instance does not match Pi's working directory",
+            },
+            ok: false,
+          };
+        }
+        if (error === "invalidWindow") {
+          return {
+            error: { code: "NVIM_INVALID_WINDOW", message: "Neovim could not open the local file" },
+            ok: false,
+          };
+        }
+      }
+      return {
+        error: { code: "NVIM_INVALID_RESPONSE", message: "Neovim rejected the local file request" },
+        ok: false,
+      };
     } catch {
       return this.markUnavailable("The bound Neovim instance stopped responding");
     }

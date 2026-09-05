@@ -68,12 +68,6 @@ return {
 		end,
 	},
 	{
-		name = "modicator.nvim",
-		src = "https://github.com/mawkler/modicator.nvim.git",
-		module = "modicator",
-		opts = {},
-	},
-	{
 		name = "nvim-scrollbar",
 		src = "https://github.com/petertriho/nvim-scrollbar.git",
 		module = "scrollbar",

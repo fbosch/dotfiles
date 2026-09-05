@@ -652,6 +652,73 @@ test("reads bounded quickfix and explicitly owned location lists", async () => {
   }
 }, 10_000);
 
+test("opens absolute local files outside the worktree without replacing terminal or unsaved buffers", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-open-workspace-")));
+  const outside = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-open-outside-")));
+  const source = join(workspace, "unsaved.lua");
+  const target = join(outside, "target;|$(not-a-command).png");
+  const missing = join(outside, "missing.lua");
+  const marker = join(outside, "not-a-command");
+  await Promise.all([Bun.write(source, "disk source\n"), Bun.write(target, "image fixture\n")]);
+  const setup = [
+    `local source = ${JSON.stringify(source)}`,
+    `local target = ${JSON.stringify(target)}`,
+    'vim.cmd("edit " .. vim.fn.fnameescape(source))',
+    "local source_buffer = vim.api.nvim_get_current_buf()",
+    'vim.api.nvim_buf_set_lines(source_buffer, 0, -1, false, { "unsaved source" })',
+    'vim.cmd("vsplit")',
+    "local terminal = vim.api.nvim_create_buf(false, true)",
+    'vim.api.nvim_buf_set_name(terminal, "pi-open-file-terminal")',
+    "vim.b[terminal].is_pi_terminal = true",
+    "vim.api.nvim_set_current_buf(terminal)",
+    "vim.g.pi_open_file_reads = 0",
+    "vim.api.nvim_create_autocmd('BufReadPost', { pattern = target, callback = function() vim.g.pi_open_file_reads = vim.g.pi_open_file_reads + 1 end })",
+    "vim.g.pi_open_file_test = { source = source_buffer, terminal = terminal }",
+  ].join("; ");
+
+  try {
+    await withNvim(workspace, setup, async (channel, socket) => {
+      const nvim = attach({ socket });
+      expect(await channel.openFile(target)).toEqual({ ok: true, value: true });
+      const opened = await nvim.executeLua(
+        "local state = vim.g.pi_open_file_test; local terminal_visible = false; for _, win in ipairs(vim.api.nvim_tabpage_list_wins(0)) do terminal_visible = terminal_visible or vim.api.nvim_win_get_buf(win) == state.terminal end; return { current = vim.api.nvim_buf_get_name(0), reads = vim.g.pi_open_file_reads, sourceLines = vim.api.nvim_buf_get_lines(state.source, 0, -1, true), sourceModified = vim.bo[state.source].modified, terminalVisible = terminal_visible, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+        [],
+      );
+      expect(opened).toEqual({
+        current: target,
+        reads: 1,
+        sourceLines: ["unsaved source"],
+        sourceModified: true,
+        terminalVisible: true,
+        windows: 3,
+      });
+      expect(await channel.openFile(target)).toEqual({ ok: true, value: true });
+      expect(
+        await nvim.executeLua(
+          "return { current = vim.api.nvim_buf_get_name(0), reads = vim.g.pi_open_file_reads, windows = #vim.api.nvim_tabpage_list_wins(0) }",
+          [],
+        ),
+      ).toEqual({ current: target, reads: 1, windows: 3 });
+      for (const path of [missing, outside, `${target}\n`]) {
+        expect(await channel.openFile(path)).toMatchObject({ ok: false });
+      }
+      let markerExists = true;
+      try {
+        await access(marker);
+      } catch {
+        markerExists = false;
+      }
+      expect(markerExists).toBe(false);
+      expect(await Bun.file(target).text()).toBe("image fixture\n");
+    });
+  } finally {
+    await Promise.all([
+      rm(workspace, { force: true, recursive: true }),
+      rm(outside, { force: true, recursive: true }),
+    ]);
+  }
+}, 10_000);
+
 test("reveals exact source positions while preserving focus unless explicitly requested", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-reveal-")));
   const outsideWorkspace = await realpath(

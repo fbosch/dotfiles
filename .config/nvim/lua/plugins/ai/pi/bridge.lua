@@ -542,6 +542,107 @@ local function read_target(payload)
 	return matched, matched == nil and "invalidBuffer" or nil
 end
 
+local function open_file_target(payload)
+	if not has_only_keys(payload, { expectedCwd = true, path = true }) then
+		return nil, "invalidRequest"
+	end
+	local path = payload.path
+	if
+		type(path) ~= "string"
+		or path:sub(1, 1) ~= "/"
+		or #path > 4096
+		or path:find("[%z\1-\31\127]") ~= nil
+		or path:find("\194[\128-\159]") ~= nil
+		or has_uri_scheme(path)
+	then
+		return nil, "invalidRequest"
+	end
+
+	local editor_cwd = canonical_path(vim.fn.getcwd())
+	local expected_cwd = canonical_path(payload.expectedCwd)
+	if editor_cwd == nil or expected_cwd == nil or editor_cwd ~= expected_cwd then
+		return nil, "worktreeMismatch"
+	end
+	local target = canonical_path(path)
+	local stat = target == nil and nil or vim.uv.fs_stat(target)
+	if stat == nil or stat.type ~= "file" then
+		return nil, "invalidBuffer"
+	end
+	return target, nil
+end
+
+local function source_window(window)
+	return vim.api.nvim_win_is_valid(window) and is_source_buffer(vim.api.nvim_win_get_buf(window), true)
+end
+
+local function target_buffer(path)
+	for _, buffer in ipairs(vim.api.nvim_list_bufs()) do
+		if vim.api.nvim_buf_is_valid(buffer) and canonical_path(vim.api.nvim_buf_get_name(buffer)) == path then
+			return buffer
+		end
+	end
+	return nil
+end
+
+local function open_file(_, payload)
+	local path, target_error = open_file_target(payload)
+	if path == nil then
+		return { error = target_error }
+	end
+
+	local buffer = target_buffer(path)
+	local windows = vim.api.nvim_tabpage_list_wins(0)
+	if buffer ~= nil then
+		for _, window in ipairs(windows) do
+			if vim.api.nvim_win_get_buf(window) == buffer then
+				vim.api.nvim_set_current_win(window)
+				return true
+			end
+		end
+	end
+
+	local window
+	for _, candidate in ipairs(windows) do
+		if source_window(candidate) and vim.bo[vim.api.nvim_win_get_buf(candidate)].modified == false then
+			window = candidate
+			break
+		end
+	end
+
+	local created_window
+	if window == nil then
+		local original_window = vim.api.nvim_get_current_win()
+		local ok, split = pcall(vim.api.nvim_open_win, vim.api.nvim_win_get_buf(original_window), false, {
+			split = "below",
+			win = original_window,
+		})
+		if ok == false or vim.api.nvim_win_is_valid(split) == false then
+			return { error = "invalidWindow" }
+		end
+		window = split
+		created_window = split
+	end
+
+	local ok = pcall(vim.api.nvim_win_call, window, function()
+		if buffer ~= nil and vim.api.nvim_buf_is_loaded(buffer) then
+			vim.api.nvim_win_set_buf(window, buffer)
+		else
+			vim.api.nvim_cmd({ cmd = "edit", args = { path } }, {})
+		end
+	end)
+	if ok == false then
+		if created_window ~= nil and vim.api.nvim_win_is_valid(created_window) then
+			pcall(vim.api.nvim_win_close, created_window, false)
+		end
+		return { error = "invalidWindow" }
+	end
+	if canonical_path(vim.api.nvim_buf_get_name(vim.api.nvim_win_get_buf(window))) ~= path then
+		return { error = "invalidWindow" }
+	end
+	vim.api.nvim_set_current_win(window)
+	return true
+end
+
 local function read_buffer(payload)
 	if
 		not has_only_keys(payload, {
@@ -1932,6 +2033,9 @@ local handlers = {
 	end,
 	list_buffers = function(_, _, payload)
 		return list_buffers(payload)
+	end,
+	open_file = function(state, _, payload)
+		return open_file(state, payload)
 	end,
 	prompt_ack = function(_, channel, payload)
 		return prompt_ack(channel, payload)

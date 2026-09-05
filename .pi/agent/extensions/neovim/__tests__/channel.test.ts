@@ -92,6 +92,8 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     pid: 71,
   };
   identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
+  openFileArguments: unknown;
+  openFileResponse: unknown = true;
   promptAckArguments: unknown;
   quickfixArguments: unknown;
   quickfixResponse: unknown = {
@@ -199,6 +201,10 @@ class FakeConnection extends EventEmitter implements NvimConnection {
       return this.highlightClearResponse;
     }
     if (operation === bridgeOperations.listBuffers) return this.bufferResponse;
+    if (operation === bridgeOperations.openFile) {
+      this.openFileArguments = payload as Record<string, unknown>;
+      return this.openFileResponse;
+    }
     if (operation === bridgeOperations.promptAck) {
       this.promptAckArguments = payload;
       return true;
@@ -456,6 +462,36 @@ describe("PiNeovimChannel", () => {
     expect(await channel.bindSession("pi-session-one")).toMatchObject({ ok: true });
     await channel.readBuffer({ path: focus.buffer.name });
     expect(connection.readArguments).toEqual({ expectedCwd: "/project", path: focus.buffer.name });
+  });
+
+  test("opens validated local files over the bound channel", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+
+    expect(await channel.openFile("/tmp/outside-project.lua")).toEqual({ ok: true, value: true });
+    expect(connection.openFileArguments).toEqual({
+      expectedCwd: "/project",
+      path: "/tmp/outside-project.lua",
+    });
+    for (const path of [
+      "relative.lua",
+      "/tmp/newline\n.lua",
+      "/tmp/nul\0.lua",
+      "/tmp/\u0080.lua",
+    ]) {
+      expect(await channel.openFile(path)).toMatchObject({
+        error: { code: "NVIM_INVALID_RESPONSE" },
+        ok: false,
+      });
+    }
+    expect(
+      connection.executeCalls.filter((operation) => operation === bridgeOperations.openFile),
+    ).toHaveLength(1);
+    connection.openFileResponse = { error: "invalidBuffer" };
+    expect(await channel.openFile("/tmp/missing.lua")).toMatchObject({
+      error: { code: "NVIM_INVALID_BUFFER" },
+      ok: false,
+    });
   });
 
   test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
