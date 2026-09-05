@@ -655,6 +655,9 @@ export async function openSubagentSession(
     }
     source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
+    const agentColor = [...loadAgentWidgetColors(ctx.cwd, getAgentDir())].find(
+      ([name]) => name.toLowerCase() === target.displayName.toLowerCase(),
+    )?.[1];
     // Transcript inspection is user navigation, not a blocking agent prompt. Mount it
     // directly so Pi does not emit ui_prompt events that Herdr interprets as attention.
     await new Promise<void>((resolve, reject) => {
@@ -687,6 +690,8 @@ export async function openSubagentSession(
             markdownTheme,
           }),
           ctx.ui.theme,
+          target.displayName,
+          agentColor,
         );
         if (closed) {
           overlayComponent.dispose?.();

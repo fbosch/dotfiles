@@ -12,6 +12,11 @@ const COMMAND_ALIASES: readonly CommandAlias[] = [
     target: "/quit",
     description: "Quit pi",
   },
+  {
+    trigger: "/qa",
+    target: "/quit",
+    description: "Quit pi",
+  },
 ];
 
 export function getCommandAlias(input: string): CommandAlias | undefined {

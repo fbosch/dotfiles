@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -504,6 +504,9 @@ describe("subagent session links", () => {
   });
 
   test("frames the real transcript without clipping its footer or changing scroll and close behavior", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "subagent-transcript-heading-"));
+    mkdirSync(join(directory, ".pi", "agents"), { recursive: true });
+    writeFileSync(join(directory, ".pi", "agents", "explore.md"), '---\ncolor: "#5B9BD5"\n---\n');
     const liveRecord = {
       id: target.agentId,
       status: "completed",
@@ -528,6 +531,7 @@ describe("subagent session links", () => {
     };
     const frames: Array<{ width: number; rows: number; lines: string[] }> = [];
     let first = "";
+    let firstRaw = "";
     let last = "";
     let previousPage = "";
     let renderError: unknown;
@@ -535,7 +539,8 @@ describe("subagent session links", () => {
       onShow: (component) => {
         try {
           component.handleInput?.("\u001b[H");
-          first = stripTerminalSequences(component.render(76).join("\n"));
+          firstRaw = component.render(76).join("\n");
+          first = stripTerminalSequences(firstRaw);
           component.handleInput?.("\u001b[F");
           last = stripTerminalSequences(component.render(76).join("\n"));
           component.handleInput?.("\u001b[5~");
@@ -562,7 +567,7 @@ describe("subagent session links", () => {
       getColorMode: () => "truecolor",
       bold: (text: string) => text,
     } as unknown as Theme;
-    const ctx = { ui: { theme, notify() {} }, cwd: process.cwd() } as unknown as Parameters<
+    const ctx = { ui: { theme, notify() {} }, cwd: directory } as unknown as Parameters<
       typeof openSubagentSession
     >[2];
 
@@ -582,9 +587,12 @@ describe("subagent session links", () => {
         if (previous === undefined) delete globals[key];
         else globals[key] = previous;
       });
+      rmSync(directory, { recursive: true, force: true });
     }
 
     expect(renderError).toBeUndefined();
+    expect(firstRaw).toContain("\u001b[38;2;91;155;213mExplore\u001b[39m subagent session");
+    expect(firstRaw).not.toContain("\u001b]133;");
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");
     expect(last).toContain("transcript row 120");
