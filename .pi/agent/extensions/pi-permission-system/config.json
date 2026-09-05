@@ -150,6 +150,7 @@
       "cd *": "allow",
       "ls *": "allow",
       "cat *": "allow",
+      "nl *": "allow",
       "head *": "allow",
       "tail *": "allow",
       "wc *": "allow",

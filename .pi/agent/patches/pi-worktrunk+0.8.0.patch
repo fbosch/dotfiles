@@ -180,7 +180,7 @@ index 3fe0174..e5e8275 100644
 -import { basename, dirname, resolve } from "node:path";
 +import { basename, dirname, join, resolve } from "node:path";
 +import { cachedReference } from "./reference-cache.ts";
- 
+
  import {
 +  getAgentDir,
    SessionManager,

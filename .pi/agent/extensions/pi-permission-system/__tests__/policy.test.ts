@@ -320,6 +320,7 @@ describe("pi-permission-system policy", () => {
       "git diff --check",
       "git worktree prune --dry-run",
       "pwd",
+      "nl -ba src/example.ts",
     ]) {
       expect((await checkBash(engine, command)).state, command).toBe("allow");
     }

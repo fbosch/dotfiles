@@ -433,18 +433,29 @@ describe("PiNeovimChannel", () => {
     });
     expect(connection.executeCalls.slice(beforeRead)).toEqual([bridgeOperations.readBuffer]);
     expect(connection.readArguments).toEqual({
+      expectedCwd: "/project",
       buffer: 2,
       endLine: 2,
       expectedChangedtick: 12,
       expectedPath: focus.buffer.name,
       startLine: 1,
     });
-    await channel.readBuffer({ expectedChangedtick: 11, path: focus.buffer.name });
-    expect(connection.readArguments).toMatchObject({ expectedChangedtick: 11 });
+    const beforeStaleGuards = connection.executeCalls.length;
+    for (const guards of [
+      { expectedChangedtick: 11 },
+      { expectedChangedtick: 13 },
+      { expectedPath: "/project/renamed.ts" },
+    ]) {
+      expect(await channel.readBuffer({ ...guards, path: focus.buffer.name })).toMatchObject({
+        ok: false,
+        error: { code: "NVIM_CONTEXT_STALE" },
+      });
+    }
+    expect(connection.executeCalls.length).toBe(beforeStaleGuards);
 
     expect(await channel.bindSession("pi-session-one")).toMatchObject({ ok: true });
     await channel.readBuffer({ path: focus.buffer.name });
-    expect(connection.readArguments).toEqual({ path: focus.buffer.name });
+    expect(connection.readArguments).toEqual({ expectedCwd: "/project", path: focus.buffer.name });
   });
 
   test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
@@ -477,7 +488,12 @@ describe("PiNeovimChannel", () => {
         totalLines: 2,
       },
     });
-    expect(connection.readArguments).toEqual({ buffer: 2, endLine: 2, startLine: 1 });
+    expect(connection.readArguments).toEqual({
+      expectedCwd: "/project",
+      buffer: 2,
+      endLine: 2,
+      startLine: 1,
+    });
     expect(
       await channel.readBuffer({
         buffer: 2,
@@ -488,6 +504,7 @@ describe("PiNeovimChannel", () => {
       }),
     ).toMatchObject({ ok: true });
     expect(connection.readArguments).toEqual({
+      expectedCwd: "/project",
       buffer: 2,
       endLine: 2,
       expectedChangedtick: 12,

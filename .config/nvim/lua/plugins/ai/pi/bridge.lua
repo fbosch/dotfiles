@@ -494,8 +494,9 @@ local function list_buffers(payload)
 end
 
 local function read_target(payload)
-	local root = canonical_path(vim.fn.getcwd())
-	if root == nil then
+	local editor_root = canonical_path(vim.fn.getcwd())
+	local root = payload.expectedCwd == nil and editor_root or canonical_path(payload.expectedCwd)
+	if root == nil or root ~= editor_root then
 		return nil, "worktreeMismatch"
 	end
 
@@ -546,6 +547,7 @@ local function read_buffer(payload)
 		not has_only_keys(payload, {
 			buffer = true,
 			endLine = true,
+			expectedCwd = true,
 			expectedChangedtick = true,
 			expectedPath = true,
 			maxBytes = true,

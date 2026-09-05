@@ -60,7 +60,7 @@
         "False"
       ],
       "lifecycle": "lazy",
-      "directTools": false,
+      "directTools": true,
       "exposeResources": false,
       "approveTools": true
     },

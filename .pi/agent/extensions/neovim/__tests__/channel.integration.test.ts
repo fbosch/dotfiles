@@ -1393,7 +1393,7 @@ test("rejects visible, listed, read, and diagnostic content outside the bound wo
   ].join("; ");
 
   try {
-    await withNvim(workspace, setup, async (channel) => {
+    await withNvim(workspace, setup, async (channel, socket) => {
       expect(await channel.visibleWindows()).toMatchObject({
         error: { code: "NVIM_WORKTREE_MISMATCH" },
         ok: false,
@@ -1418,6 +1418,24 @@ test("rejects visible, listed, read, and diagnostic content outside the bound wo
         error: { code: "NVIM_WORKTREE_MISMATCH" },
         ok: false,
       });
+      const connection = attach({ socket });
+      await connection.executeLua(
+        `
+        vim.cmd.cd(...)
+        _G.source_read_count = 0
+        local get_lines = vim.api.nvim_buf_get_lines
+        vim.api.nvim_buf_get_lines = function(...)
+          _G.source_read_count = _G.source_read_count + 1
+          return get_lines(...)
+        end
+      `,
+        [sibling],
+      );
+      expect(await channel.readBuffer({ path: "outside.lua" })).toMatchObject({
+        ok: false,
+        error: { code: "NVIM_WORKTREE_MISMATCH" },
+      });
+      expect(await connection.executeLua("return _G.source_read_count")).toBe(0);
     });
   } finally {
     await Promise.all([
