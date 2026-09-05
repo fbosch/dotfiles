@@ -1939,9 +1939,9 @@ local function remove_notifications(state, channel, payload)
 	state.annotation_batches = {}
 	state.highlights = {}
 	state.source_context = nil
-	local prompt = package.loaded["plugins.ai.pi.prompt"]
-	if type(prompt) == "table" and type(prompt.channel_closed) == "function" then
-		prompt.channel_closed(channel)
+	local ok, integration = pcall(require, "plugins.ai.pi")
+	if ok and type(integration.prompt_channel_closed) == "function" then
+		integration.prompt_channel_closed(channel)
 	end
 	channel_states[channel] = nil
 	return true
@@ -1992,11 +1992,11 @@ local function bind_session(channel, payload)
 end
 
 local function prompt_ack(channel, payload)
-	local ok, prompt = pcall(require, "plugins.ai.pi.prompt")
-	if ok == false or type(prompt.acknowledge) ~= "function" then
+	local ok, integration = pcall(require, "plugins.ai.pi")
+	if ok == false or type(integration.prompt_acknowledge) ~= "function" then
 		return false
 	end
-	local acknowledged, result = pcall(prompt.acknowledge, payload, channel)
+	local acknowledged, result = pcall(integration.prompt_acknowledge, payload, channel)
 	return acknowledged and result == true
 end
 

@@ -8,7 +8,6 @@ import { PiNeovimChannel } from "../channel";
 import { MAX_ANNOTATION_SEARCH_LINES, MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
 import {
   createPromptReplayState,
-  PROMPT_NOTIFICATION,
   type PromptRequest,
   PromptRequestDispatcher,
 } from "../prompt-protocol";
@@ -124,62 +123,6 @@ test("normalizes source context captured by an already-loaded launcher", async (
   }
 }, 10_000);
 
-test("round-trips a prompt acknowledgement over the existing channel", async () => {
-  const cwd = process.cwd();
-  const setup = [
-    "vim.g.pi_prompt_ack = vim.NIL",
-    "package.loaded['plugins.ai.pi.prompt'] = { acknowledge = function(payload, channel) vim.g.pi_prompt_ack = { payload = payload, channel = channel }; return true end }",
-  ].join("; ");
-
-  await withNvim(cwd, setup, async (channel, socket) => {
-    const status = await channel.status();
-    if (status.ok === false) throw new Error(status.error.message);
-    const nvim = attach({ socket });
-    const launchId = "0123456789abcdef0123456789abcdef";
-    const request: PromptRequest = {
-      context: null,
-      cwd,
-      editorPid: status.value.pid,
-      launchId,
-      operation: "submit",
-      ownerId: "integration",
-      requestId: `nvim:${launchId}:1`,
-      sequence: 1,
-      sessionId: "pi-session-one",
-      text: "literal prompt",
-      version: 1,
-    };
-    channel.setPromptRequestHandler((received) => ({
-      launchId: received.launchId,
-      outcome: "accepted",
-      ownerId: received.ownerId,
-      requestId: received.requestId,
-      sessionId: received.sessionId,
-      state: "idle",
-      version: 1,
-    }));
-
-    await nvim.executeLua(
-      "local channel, method, request = ...; vim.rpcnotify(channel, method, request)",
-      [status.value.channelId, PROMPT_NOTIFICATION, request],
-    );
-    let acknowledgement: { channel: number; payload: Record<string, unknown> } | undefined;
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      const value = await nvim.getVar("pi_prompt_ack");
-      if (typeof value === "object" && value !== null && Array.isArray(value) === false) {
-        acknowledgement = value as typeof acknowledgement;
-        break;
-      }
-      await Bun.sleep(10);
-    }
-
-    expect(acknowledgement).toMatchObject({
-      channel: status.value.channelId,
-      payload: { outcome: "accepted", requestId: request.requestId },
-    });
-  });
-}, 10_000);
-
 test("delivers captured Ask references and rejects stale guarded reads", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-ask-context-")));
   const path = join(workspace, "source.lua");
@@ -188,6 +131,9 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
     `vim.api.nvim_buf_set_name(0, ${JSON.stringify(path)})`,
     'vim.api.nvim_buf_set_lines(0, 0, -1, false, {"æøå", "second", "third"})',
     "vim.g.pi_focus_calls = 0",
+    `local session = dofile(${JSON.stringify(`${NVIM_RUNTIME}/lua/utils/session.lua`)}); local owner = { cwd = vim.fn.getcwd(), metadata_path = vim.fn.tempname(), specifier = 'integration' }; session.set_current(owner); session.set_metadata({}, owner); package.loaded['utils.session'] = session`,
+    "package.loaded['config.direnv'] = { synchronize = function() return { ok = true } end }",
+    "local terminal = { buf = vim.api.nvim_create_buf(false, true), events = {} }; function terminal:buf_valid() return vim.api.nvim_buf_is_valid(self.buf) end; function terminal:valid() return self:buf_valid() end; function terminal:on(event, callback) self.events[event] = callback end; function terminal:show() return self end; function terminal:focus() vim.g.pi_focus_calls = vim.g.pi_focus_calls + 1; return self end; function terminal:toggle() return self end; package.loaded['snacks.terminal'] = { open = function(command, options) vim.g.pi_launch_command = command; options.win.on_buf(terminal); return terminal end }",
   ].join("; ");
   try {
     await withNvim(workspace, setup, async (channel, socket) => {
@@ -198,7 +144,7 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
         channelId: status.value.channelId,
         cwd: workspace,
         editorPid: status.value.pid,
-        launchId: "abcdef0123456789abcdef0123456789",
+        launchId: "",
         ownerId: "integration",
         sessionId: "pi-context-session",
         version: 1 as const,
@@ -230,16 +176,26 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
       });
       await nvim.executeLua(
         [
-          "local binding = ...",
-          "package.loaded['plugins.ai.pi'] = {ensure_started = function() return {} end, prompt_launch = function() return binding end, prompt_identity = function() return binding end, focus_bound = function() vim.g.pi_focus_calls = vim.g.pi_focus_calls + 1; return true end}",
-          "vim.ui.input = function(_, confirm) vim.cmd('normal! ' .. string.char(27)); vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(false, true)); confirm('literal question') end",
+          "vim.ui.input = function(_, confirm) vim.g.pi_confirm = confirm end",
           "vim.api.nvim_win_set_cursor(0, {1, 0})",
           "vim.cmd('normal! v')",
           "vim.api.nvim_win_set_cursor(0, {3, 1})",
-          "assert(require('plugins.ai.pi.prompt').ask(''))",
+          "assert(require('plugins.ai.pi').ask(''))",
+          "assert(type(vim.g.pi_confirm) == 'function')",
+          "vim.g.pi_confirm('literal question')",
         ].join("; "),
-        [binding],
       );
+      const launchCommand = await nvim.getVar("pi_launch_command");
+      if (typeof launchCommand !== "string")
+        throw new Error("real Pi owner did not launch its terminal");
+      const launchId = /PI_NVIM_LAUNCH_ID='([a-f0-9]{32})'/.exec(launchCommand)?.[1];
+      if (launchId == null) throw new Error("real Pi owner did not supply a launch ID");
+      binding.launchId = launchId;
+      const bound = await nvim.executeLua(
+        "return require('plugins.ai.pi.bridge').dispatch({ channelId = ..., operation = 'bind_session', payload = { launchId = select(2, ...), sessionId = select(3, ...) } })",
+        [status.value.channelId, launchId, binding.sessionId],
+      );
+      expect(bound).toMatchObject({ launchId, sessionId: binding.sessionId });
       for (let attempt = 0; attempt < 50; attempt += 1) {
         if ((await nvim.getVar("pi_focus_calls")) === 1) break;
         await Bun.sleep(10);

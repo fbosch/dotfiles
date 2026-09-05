@@ -9,6 +9,9 @@ local starts = 0
 local toggles = 0
 local pi_asks = {}
 package.loaded["plugins.ai.pi"] = {
+	ask = function(prefill)
+		table.insert(pi_asks, prefill)
+	end,
 	start = function()
 		starts = starts + 1
 	end,
@@ -16,11 +19,7 @@ package.loaded["plugins.ai.pi"] = {
 		toggles = toggles + 1
 	end,
 }
-package.loaded["plugins.ai.pi.prompt"] = {
-	ask = function(prefill)
-		table.insert(pi_asks, prefill)
-	end,
-}
+package.loaded["plugins.ai.pi.prompt"] = nil
 package.loaded["utils"] = {
 	set_keymap = function(mode, lhs, rhs, desc)
 		vim.keymap.set(mode, lhs, rhs, { desc = desc, silent = true })
@@ -69,7 +68,7 @@ for _, mode in ipairs({ "n", "x" }) do
 	assert(ask.desc == "Ask Pi" and type(ask.callback) == "function", "Ask mapping is not Pi-owned in " .. mode)
 	ask.callback()
 end
-assert(vim.deep_equal(pi_asks, { "", "" }), "Pi Ask mappings did not open literal input")
+assert(vim.deep_equal(pi_asks, { "", "" }), "Pi Ask mapping callbacks did not call pi.ask with literal input")
 pi_asks = {}
 local rollback = mapping("n", "Toggle OpenCode rollback")
 assert(rollback.rhs:find("OpenCodeToggle", 1, true) ~= nil, "OpenCode rollback key changed")

@@ -6,12 +6,14 @@ local original_rpcnotify = vim.rpcnotify
 local original_integration = package.loaded["plugins.ai.pi"]
 local original_prompt = package.loaded["plugins.ai.pi.prompt"]
 local original_snacks = package.loaded["snacks"]
+local original_terminal = package.loaded["snacks.terminal"]
+local original_session = package.loaded["utils.session"]
+local original_direnv = package.loaded["config.direnv"]
 local original_cwd = vim.fn.getcwd()
 local snacks_enabled = true
 local input_options, confirm
 local requests, notifications = {}, {}
 local starts, focuses = 0, 0
-local bound = true
 local binding = {
 	version = 1,
 	channelId = 12,
@@ -22,20 +24,47 @@ local binding = {
 	sessionId = "pi-context-session",
 }
 package.loaded["plugins.ai.pi.prompt"] = nil
-package.loaded["plugins.ai.pi"] = {
-	ensure_started = function()
-		starts = starts + 1
-		return {}
-	end,
-	prompt_launch = function()
-		return binding
-	end,
-	prompt_identity = function()
-		return bound and binding or nil
-	end,
-	focus_bound = function()
-		focuses = focuses + 1
+package.loaded["plugins.ai.pi"] = nil
+local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
+local owner = { cwd = repo_root, metadata_path = vim.fn.tempname(), specifier = binding.ownerId }
+session.set_current(owner)
+session.set_metadata({}, owner)
+package.loaded["utils.session"] = session
+package.loaded["config.direnv"] = {
+	synchronize = function()
 		return true
+	end,
+}
+local terminal
+package.loaded["snacks.terminal"] = {
+	open = function(command, options)
+		starts = starts + 1
+		binding.launchId = assert(command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
+		terminal = { buf = vim.api.nvim_create_buf(false, true) }
+		function terminal:buf_valid()
+			return vim.api.nvim_buf_is_valid(self.buf)
+		end
+		function terminal:valid()
+			return self:buf_valid()
+		end
+		function terminal:on(event, callback)
+			vim.api.nvim_create_autocmd(event, { buffer = self.buf, callback = callback })
+		end
+		function terminal:show()
+			return self
+		end
+		function terminal:focus()
+			focuses = focuses + 1
+			return self
+		end
+		function terminal:close()
+			if self:buf_valid() then
+				vim.api.nvim_buf_delete(self.buf, { force = true })
+			end
+			return self
+		end
+		options.win.on_buf(terminal)
+		return terminal
 	end,
 }
 package.loaded["snacks"] = {
@@ -63,19 +92,40 @@ vim.api.nvim_set_current_buf(source)
 vim.api.nvim_buf_set_name(source, repo_root .. "/pi-ask-selection-fixture.lua")
 vim.api.nvim_buf_set_lines(source, 0, -1, false, { "første", "anden", "tredje", "fjerde" })
 local input_buffer = vim.api.nvim_create_buf(false, true)
-local prompt = require("plugins.ai.pi.prompt")
+local prompt = require("plugins.ai.pi")
+local function bind_terminal()
+	local result = bridge.dispatch({
+		channelId = binding.channelId,
+		operation = "bind_session",
+		payload = {
+			launchId = binding.launchId,
+			sessionId = binding.sessionId,
+		},
+	})
+	assert(type(result) == "table", "context terminal failed to bind")
+	vim.wait(10, function()
+		return false
+	end)
+end
+assert(prompt.start() ~= nil)
+bind_terminal()
+focuses = 0
 
 local function accept_last()
 	local request = assert(requests[#requests])
-	assert(prompt.acknowledge({
-		version = 1,
-		requestId = request.requestId,
-		launchId = request.launchId,
-		sessionId = request.sessionId,
-		ownerId = request.ownerId,
-		outcome = "accepted",
-		state = "idle",
-	}, binding.channelId))
+	assert(bridge.dispatch({
+		channelId = binding.channelId,
+		operation = "prompt_ack",
+		payload = {
+			version = 1,
+			requestId = request.requestId,
+			launchId = request.launchId,
+			sessionId = request.sessionId,
+			ownerId = request.ownerId,
+			outcome = "accepted",
+			state = "idle",
+		},
+	}))
 end
 
 local function select(mode, first, last)
@@ -161,17 +211,16 @@ confirm("question about renamed source")
 assert(starts == before_starts and #requests == before_requests, "renamed source started Pi")
 assert(notifications[#notifications]:find("PI_CONTEXT_STALE", 1, true))
 
-bound = false
-prompt.channel_closed(binding.channelId)
+vim.api.nvim_exec_autocmds("TermClose", { buffer = terminal.buf, data = { status = 0 } })
+session.set_metadata({}, owner)
 select("V", 2, 3)
 assert(prompt.ask("") == true)
 confirm("source changes during cold startup")
 assert(starts == before_starts + 1 and #requests == before_requests)
 vim.api.nvim_buf_set_lines(source, 1, 2, false, { "changed again" })
-assert(prompt.on_bound(binding))
+bind_terminal()
 assert(#requests == before_requests, "stale cold-start context was sent")
 assert(notifications[#notifications]:find("PI_CONTEXT_STALE", 1, true))
-bound = true
 
 vim.cmd("normal! \27")
 vim.api.nvim_buf_set_name(source, "/tmp/pi-ask-outside-fixture.lua")
@@ -258,7 +307,8 @@ assert(
 assert(starts == before_reload_starts, "mixed bridge versions started Pi")
 bridge.capture_prompt_location = capture
 
-prompt.terminal_closed(binding.launchId)
+terminal:close()
+vim.fn.delete(owner.metadata_path)
 vim.cmd.cd(original_cwd)
 vim.api.nvim_buf_delete(source, { force = true })
 vim.api.nvim_buf_delete(input_buffer, { force = true })
@@ -268,3 +318,6 @@ rawset(vim, "rpcnotify", original_rpcnotify)
 package.loaded["plugins.ai.pi"] = original_integration
 package.loaded["plugins.ai.pi.prompt"] = original_prompt
 package.loaded["snacks"] = original_snacks
+package.loaded["snacks.terminal"] = original_terminal
+package.loaded["utils.session"] = original_session
+package.loaded["config.direnv"] = original_direnv

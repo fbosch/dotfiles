@@ -101,6 +101,12 @@ should use these terms; new concepts named during design work land here.
   selection and ends in an answer, cancellation, or failure. Results arriving
   from an earlier interaction are stale and cannot change the current one.
 
+## Neovim Pi integration
+
+- **embedded Pi terminal**: a Pi terminal opened by one Neovim session for one
+  worktree. Hiding the terminal or switching its active Pi conversation does not
+  change that ownership.
+
 ## Neovim package lifecycle
 
 - **lifecycle inventory** — process-local classification of package declarations

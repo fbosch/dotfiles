@@ -46,7 +46,7 @@ usrcmd("PiToggle", function()
 end, "Toggle Pi bound to this Neovim instance")
 
 usrcmd("PiAsk", function(args)
-	require("plugins.ai.pi.prompt").ask(args.args)
+	require("plugins.ai.pi").ask(args.args)
 end, { nargs = "*", desc = "Ask the bound idle Pi session" })
 
 local function with_opencode(action)

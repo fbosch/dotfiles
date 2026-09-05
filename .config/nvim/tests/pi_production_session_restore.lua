@@ -94,6 +94,9 @@ terminal = {
 	buf_valid = function()
 		return terminal.buf ~= nil and vim.api.nvim_buf_is_valid(terminal.buf)
 	end,
+	close = function(self)
+		return self
+	end,
 	on = function(_, event, callback)
 		terminal_callbacks[event] = callback
 	end,

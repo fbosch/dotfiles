@@ -87,11 +87,15 @@ describe("OpenAI capabilities", () => {
     );
   });
 
-  test("registers native capabilities only for the configured Astra alias", () => {
+  test("registers both Astra variants without adding priority routing to standard Astra", () => {
     const harness = createCapabilitiesHarness();
     expect(harness.registrations).toEqual([
+      { provider: "openai-codex", model: "gpt-6-astra", asyncTools: true, steering: true },
       { provider: "openai-codex", model: "gpt-6-astra-fast", asyncTools: true, steering: true },
     ]);
+    const standardPayload = { model: "gpt-6-astra", stream: true };
+    expect(harness.emit("before_provider_request", { payload: standardPayload })).toBeUndefined();
+    expect(standardPayload).toEqual({ model: "gpt-6-astra", stream: true });
     const payload = { model: "gpt-6-astra-fast", stream: true, tools: [{ name: "read" }] };
     expect(harness.emit("before_provider_request", { payload })).toEqual({
       ...payload,
@@ -122,12 +126,17 @@ describe("OpenAI capabilities", () => {
       {},
       { ui, model: { provider: "openai-codex", id: "gpt-6-astra-fast" } },
     );
-    expect(warnings).toEqual([
-      [
-        "Native async tools and mid-turn steering require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
-        "warning",
-      ],
-    ]);
+    const warning = [
+      "Native async tools and mid-turn steering require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
+      "warning",
+    ];
+    expect(warnings).toEqual([warning]);
+    harness.emit(
+      "session_start",
+      {},
+      { ui, model: { provider: "openai-codex", id: "gpt-6-astra" } },
+    );
+    expect(warnings).toEqual([warning, warning]);
   });
 
   test("rejects malformed fast-model configuration", () => {

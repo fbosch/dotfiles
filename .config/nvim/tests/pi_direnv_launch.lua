@@ -56,6 +56,9 @@ local terminal = {
 	focus = function(self)
 		return self
 	end,
+	close = function(self)
+		return self
+	end,
 	on = function(_, event, callback)
 		terminal_callbacks[event] = callback
 	end,

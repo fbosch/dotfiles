@@ -60,6 +60,9 @@ local terminal = {
 		focuses = focuses + 1
 		return self
 	end,
+	close = function(self)
+		return self
+	end,
 	on = function(_, event, callback)
 		callbacks[event] = callback
 	end,
@@ -193,8 +196,6 @@ assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal stat
 vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 captured_command = nil
 local focuses_before_reuse = focuses
-assert(pi.ensure_started({ focus = false }) == terminal, "Pi preserve-focus start did not reuse its live terminal")
-assert(focuses == focuses_before_reuse, "Pi preserve-focus start focused a live terminal")
 assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")
 assert(focuses == focuses_before_reuse + 1, "normal Pi start did not focus its live terminal")
 assert(shows >= 1, "normal Pi start did not show its live terminal")
@@ -213,8 +214,7 @@ saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi close")
 
 captured_command = nil
-local restore_source_window = vim.api.nvim_get_current_win()
-pi.ensure_started({ focus = false, focus_window = restore_source_window })
+pi.start()
 assert(captured_command ~= nil, "Pi launcher did not reopen after terminal close")
 local restored_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
 assert(restored_launch_id ~= first_launch_id, "Pi launcher reused a closed terminal launch ID")
@@ -231,8 +231,7 @@ assert(
 			.. vim.fn.shellescape(first_session_id),
 	"Pi launcher did not resume the MiniSessions-associated Pi session"
 )
-assert(captured_options.win.enter == false, "prompt start did not use preserve-focus terminal options")
-assert(vim.api.nvim_get_current_win() == restore_source_window, "prompt start changed the source window")
+assert(captured_options.win.enter ~= false, "manual restore unexpectedly disabled focus")
 assert(#find_requests == 1, "Pi launcher did not perform one exact saved-session lookup")
 assert(find_requests[1].session_id == first_session_id, "Pi launcher looked up the wrong saved session")
 assert(find_requests[1].cwd == repo_root, "Pi launcher looked up the saved session in the wrong worktree")

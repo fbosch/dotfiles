@@ -389,14 +389,23 @@ ID receives a rejection when the channel is still usable.
 
 ## Ownership and lifecycle
 
-- Neovim owns the input UI, source snapshot, terminal instance, pending request,
-  focus, and launch ID.
+- `plugins.ai.pi` owns each embedded Pi terminal across Start, toggle,
+  restoration, and Ask. It owns launch and binding identity, pending delivery,
+  deadlines, acknowledgements, cleanup, and focus. Bridge events reach this
+  owner directly; input callers do not coordinate launch and delivery.
+- `prompt.lua` captures source context before input and hands confirmed text
+  and that snapshot to the owner. Exact-session lookup stays in `session.lua`.
 - Pi owns its prompt editor, model turns, streaming state, session ID, and
   session file.
 - The extension owns request validation, dispatch, duplicate detection, and
   acknowledgements.
 - Herdr owns panes and workspaces. The prompt bridge uses the existing Pi Herdr
   reporter and does not report lifecycle state independently.
+
+The terminal owner records closure before closing the Snacks window. Snacks'
+default auto-close removes its event group before later cleanup callbacks run,
+so the owner performs the same successful-exit auto-close itself. Failed
+processes still retain their terminal output and report the exit code.
 
 The extension derives request availability from public Pi events:
 `session_start`, `agent_start`, `agent_settled`, `ui_prompt_start`,
@@ -569,7 +578,38 @@ Implementation record (2026-09-05):
 - Pi typecheck, scoped Biome checks, Lua quality, prompt, launcher, exact-session
   restoration, production restoration, cutover, OpenCode restoration, and Herdr
   Neovim restoration checks pass. Both OpenSpec changes pass strict validation.
-- The isolated warm/cold two-worktree live matrix remains the Phase 2 exit gate.
+- The isolated warm/cold two-worktree live matrix is the Phase 2 exit gate.
+  Its successful run is recorded below.
+
+Lifecycle deepening record (2026-09-05):
+
+- The embedded Pi terminal owner now handles Start, toggle, restoration, and
+  Ask. Launch coordination and binding getters are private. Input capture and
+  exact-session lookup remain separate; the TypeScript protocol is unchanged.
+- `pi_prompt_owner.lua` exercises real owner, input, and bridge modules with
+  terminal, RPC, and deadline stand-ins. It covers cancellation, busy input,
+  cold and warm delivery, mismatched and late acknowledgements, replacement,
+  timeout lockout, unrelated channel cleanup, native close, restart recovery,
+  owner/worktree focus checks, and restored-session identity. The original
+  visual/context matrix runs through the real owner as well.
+- Six focused Devenv tasks pass: prompt, launcher, cutover, direnv launch,
+  exact-session restoration, and production restoration. The 13 channel
+  integration tests, Pi typecheck, scoped Biome, Lua diagnostics, and changed
+  Lua formatting checks pass.
+- The isolated live matrix passes with Pi 0.85.0 and real Snacks/Neovim
+  terminals in two disposable worktrees. Cold Ask, warm Ask, terminal exit,
+  exact-session reopen, restored Ask, sibling launch, and acknowledgement
+  focus pass. A production-channel probe returns `NVIM_WORKTREE_MISMATCH` for
+  wrong-worktree routing without changing sibling metadata. Exactly four
+  requests reach the credential-free loopback provider. Input confirmation
+  is automated and direnv synchronization is a stand-in; no user editor or
+  session is used. Final report: `/tmp/pi-neovim-live.0D0VIU/report.json`.
+- Full `devenv test` is not green: its Pi suite reports 935 passes and four
+  failures. Three are model-settings assertions for the adversarial, review,
+  and spec agents. The fourth is the stale-context message expectation in
+  `channel.test.ts:910`, also reproduced from clean `HEAD`. These assertions
+  are outside this refactor and remain unchanged.
+- Restart Neovim before using the changed stateful Lua modules.
 
 ### Phase 3: Add stable `@this` context
 

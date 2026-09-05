@@ -4,7 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 const MODELS_CONFIG_URL = new URL("../models.json", import.meta.url);
 const FAST_SERVICE_TIER = "priority";
 const FAST_SUFFIX = "-fast";
-const ASTRA_MODEL_ID = "gpt-6-astra-fast";
+const ASTRA_MODEL_IDS = new Set(["gpt-6-astra", "gpt-6-astra-fast"]);
 
 interface NativeOpenAICapabilityRegistration {
   provider: string;
@@ -95,16 +95,18 @@ export function applyFastServiceTierForPayload(
 
 export default function openaiCapabilities(pi: OpenAICapabilitiesAPI): void {
   if (pi.registerOpenAICapabilities) {
-    pi.registerOpenAICapabilities({
-      provider: "openai-codex",
-      model: ASTRA_MODEL_ID,
-      asyncTools: true,
-      steering: true,
-    });
+    for (const model of ASTRA_MODEL_IDS) {
+      pi.registerOpenAICapabilities({
+        provider: "openai-codex",
+        model,
+        asyncTools: true,
+        steering: true,
+      });
+    }
   } else {
     // Stow and Nix deploy independently; remove this guard once all hosts run the patched Pi build.
     const warnIfAstra = (ctx: ExtensionContext) => {
-      if (ctx.model?.provider !== "openai-codex" || ctx.model.id !== ASTRA_MODEL_ID) return;
+      if (ctx.model?.provider !== "openai-codex" || !ASTRA_MODEL_IDS.has(ctx.model.id)) return;
       ctx.ui.notify(
         "Native async tools and mid-turn steering require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
         "warning",
