@@ -159,9 +159,11 @@ in
         fi
       done
 
-      # Every tracked Pi resource is managed; derive coverage so new resources
-      # do not require another hand-maintained test entry.
+      # Project-local Pi skills are intentionally discovered from the repository instead of deployed to ~/.pi.
       while IFS= read -r -d "" deployment_path; do
+        case "$deployment_path" in
+          ".pi/skills/"*) continue ;;
+        esac
         if ! test -e "$target/$deployment_path"; then
           printf 'Expected Stow deployment is missing: %s\n' "$deployment_path" >&2
           exit 1
@@ -419,6 +421,7 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:nvim-pi-launcher"
+        "test:nvim-pi-cutover"
         "test:nvim-pi-session-restore"
         "test:nvim-pi-production-restore"
         "test:nvim-pack-disabled-sync"

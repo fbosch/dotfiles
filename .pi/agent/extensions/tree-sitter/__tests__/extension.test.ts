@@ -14,14 +14,14 @@ type ToolCallHandler = (
 ) => Promise<ToolCallEventResult | undefined> | ToolCallEventResult | undefined;
 
 function createHarness() {
-  const toolNames: string[] = [];
+  const tools = new Map<string, ToolDefinition>();
   let toolCallHandler: ToolCallHandler | undefined;
   const pi = {
     on(event: string, handler: ToolCallHandler) {
       if (event === "tool_call") toolCallHandler = handler;
     },
     registerTool(definition: ToolDefinition) {
-      toolNames.push(definition.name);
+      tools.set(definition.name, definition);
     },
   } as unknown as ExtensionAPI;
 
@@ -33,7 +33,7 @@ function createHarness() {
   return {
     context,
     pi,
-    toolNames,
+    tools,
     getToolCallHandler(): ToolCallHandler {
       if (toolCallHandler === undefined) throw new Error("tool_call handler was not registered");
       return toolCallHandler;
@@ -54,7 +54,7 @@ test("registers structural tools and blocks malformed delimiter-only files", asy
   const harness = createHarness();
   await treeSitterExtension(harness.pi);
 
-  expect(harness.toolNames).toEqual([
+  expect([...harness.tools.keys()]).toEqual([
     "list_symbols",
     "find_definition",
     "find_callers",
@@ -70,4 +70,16 @@ test("registers structural tools and blocks malformed delimiter-only files", asy
   expect(
     await handler(writeCall("(defun example ()\n  (+ 1 2))"), harness.context),
   ).toBeUndefined();
+});
+
+test("structural tools reject an already-cancelled call", async () => {
+  const harness = createHarness();
+  await treeSitterExtension(harness.pi);
+  const listSymbols = harness.tools.get("list_symbols");
+  if (listSymbols === undefined) throw new Error("list_symbols was not registered");
+
+  const signal = AbortSignal.abort();
+  expect(
+    listSymbols.execute("cancelled", { path: "example.ts" }, signal, undefined, harness.context),
+  ).rejects.toMatchObject({ name: "AbortError" });
 });

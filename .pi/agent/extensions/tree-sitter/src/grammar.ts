@@ -2,7 +2,8 @@
  * Grammar loading — maps file extensions to tree-sitter WASM grammars,
  * fetches from CDN on first use, caches to disk for offline reuse.
  */
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { Language, Parser } from "web-tree-sitter";
@@ -74,9 +75,9 @@ export const LANGUAGE_MAP: Record<string, GrammarEntry> = {
   ".edn": { pkg: "@yogthos/tree-sitter-clojure", wasm: "tree-sitter-clojure.wasm" },
   ".cljd": { pkg: "@yogthos/tree-sitter-clojure", wasm: "tree-sitter-clojure.wasm" },
 
-  // Scheme — includes *.wasm
-  ".scm": { pkg: "@6cdh/tree-sitter-scheme", wasm: "tree-sitter-scheme.wasm" },
-  ".ss": { pkg: "@6cdh/tree-sitter-scheme", wasm: "tree-sitter-scheme.wasm" },
+  // Scheme — compatible WASM build of @6cdh/tree-sitter-scheme
+  ".scm": { pkg: "@lumis-sh/wasm-scheme", wasm: "tree-sitter-scheme.wasm" },
+  ".ss": { pkg: "@lumis-sh/wasm-scheme", wasm: "tree-sitter-scheme.wasm" },
 
   // Racket — explicit WASM package
   ".rkt": { pkg: "@lumis-sh/wasm-racket", wasm: "tree-sitter-racket.wasm" },
@@ -103,198 +104,295 @@ export const LANGUAGE_MAP: Record<string, GrammarEntry> = {
   ".vue": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-vue.wasm" },
 };
 
-// ── CDN + disk cache ────────────────────────────────────────────────────
+// ── Pinned grammar artifacts + disk cache ────────────────────────────────
 
 const WASM_CDN = "https://cdn.jsdelivr.net/npm";
 const CACHE_DIR = resolve(homedir(), ".cache", "pi-tree-sitter");
-const grammarCache = new Map<string, Language | null>();
 
-/** Ensure the web-tree-sitter WASM runtime is initialized (once). */
+interface GrammarArtifact {
+  readonly version: string;
+  readonly sha256: string;
+}
+
+// These executable WASM assets are pinned separately from the extension so a
+// CDN or package update cannot silently change the parser loaded by Pi.
+const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
+  "@lumis-sh/wasm-racket/tree-sitter-racket.wasm": {
+    version: "0.26.3",
+    sha256: "2353b094c38d29c4b46a3f2a5f79f76abaa39aef595175cfd4eb7a3107506b59",
+  },
+  "@lumis-sh/wasm-scheme/tree-sitter-scheme.wasm": {
+    version: "0.26.2",
+    sha256: "128a9ee019b51461c9c829a51af81ca9a70e8c28673ac711cb6f391d5a71ef6f",
+  },
+  "@tree-sitter-grammars/tree-sitter-kotlin/tree-sitter-kotlin.wasm": {
+    version: "1.1.0",
+    sha256: "7009d69453bc8735e438b2818a633efb21c88f99782769abba60dffedfab73f7",
+  },
+  "@tree-sitter-grammars/tree-sitter-zig/tree-sitter-zig.wasm": {
+    version: "1.1.2",
+    sha256: "54b3b83dd9c62da5815f06132bc3fc914d9dcc780370b32416446a0b7969e8c6",
+  },
+  "@winci/tree-sitter-dart/tree-sitter-dart.wasm": {
+    version: "1.0.0",
+    sha256: "be45b7cc41f1a6dc66f8bcf8af90d665912fc7323b80371b96a595552b1ca64d",
+  },
+  "@yogthos/tree-sitter-clojure/tree-sitter-clojure.wasm": {
+    version: "0.0.14",
+    sha256: "90f8866b74d04e1643ed73cce25720c732df2aaa38b45da9dcc773bae8181c27",
+  },
+  "tree-sitter-bash/tree-sitter-bash.wasm": {
+    version: "0.25.1",
+    sha256: "8292919c88a0f7d3fb31d0cd0253ca5a9531bc1ede82b0537f2c63dd8abe6a7a",
+  },
+  "tree-sitter-c-sharp/tree-sitter-c_sharp.wasm": {
+    version: "0.23.5",
+    sha256: "6f69e1cae44e1c32c1eccc170dc5a9778fb94ff716f71113fe1f8c4299aa2f40",
+  },
+  "tree-sitter-c/tree-sitter-c.wasm": {
+    version: "0.24.1",
+    sha256: "c852c2a85ebf2beb636aa3b0ef7f7e70458684d74f6741b20dcb296885bed9f9",
+  },
+  "tree-sitter-cpp/tree-sitter-cpp.wasm": {
+    version: "0.23.4",
+    sha256: "174eb0deb75b2ec7881bcacda9f995648d8e683956e5c2267e69ab6dc503fcbf",
+  },
+  "tree-sitter-css/tree-sitter-css.wasm": {
+    version: "0.25.0",
+    sha256: "8a23977fe271357cce6f254ef88c9bebf3854602d8046605aef6a45c02135c59",
+  },
+  "tree-sitter-elixir/tree-sitter-elixir.wasm": {
+    version: "0.3.5",
+    sha256: "ed99093c548c12d43f7e337fd3440e9e2daa2ec671a5e29aadb6c6dcb2232a62",
+  },
+  "tree-sitter-go/tree-sitter-go.wasm": {
+    version: "0.25.0",
+    sha256: "9504573f352b20be7f2f1911754d710622aedc15afff16d5ed8fb5645681aee7",
+  },
+  "tree-sitter-haskell/tree-sitter-haskell.wasm": {
+    version: "0.23.1",
+    sha256: "37a6b07b1a838d02ffb4f4c2a06863637a8efe48432d60a275f50f1d08f1092c",
+  },
+  "tree-sitter-html/tree-sitter-html.wasm": {
+    version: "0.23.2",
+    sha256: "c48fcd82c7ea8bf943180088ba7f28c48b2bb5287874179168bf9d31e394cf85",
+  },
+  "tree-sitter-java/tree-sitter-java.wasm": {
+    version: "0.23.5",
+    sha256: "4fdeac4ca6ca089f06c6f7e562abcac1733cd465728cc7031ebb73c2019122c4",
+  },
+  "tree-sitter-javascript/tree-sitter-javascript.wasm": {
+    version: "0.25.0",
+    sha256: "5fb488d0cabb4775a594bab85682de5ad6ce83c0d6ac997a9f82dd084d571240",
+  },
+  "tree-sitter-json/tree-sitter-json.wasm": {
+    version: "0.24.8",
+    sha256: "d2119fb98d5912719b13f9458574f8608d2d29dfbe45f6be1f860ea1fe2a2405",
+  },
+  "tree-sitter-php/tree-sitter-php.wasm": {
+    version: "0.24.2",
+    sha256: "d4df6a6ff08c87c3ec4f9cbb785fe09998a0cb570e03f57d7b19b3acfb146aa7",
+  },
+  "tree-sitter-python/tree-sitter-python.wasm": {
+    version: "0.25.0",
+    sha256: "16108b50df4ee9a30168794252ab55e7c93bfc5765d7fa0aa3e335752c515f47",
+  },
+  "tree-sitter-ruby/tree-sitter-ruby.wasm": {
+    version: "0.23.1",
+    sha256: "09a96427d7c72f0613ed470cd9812223fc4a91d6a9c025c0235cc6bd59ff96f4",
+  },
+  "tree-sitter-rust/tree-sitter-rust.wasm": {
+    version: "0.24.0",
+    sha256: "f65f354215611fd94ad34134b3427eb3d58cbb745df7b6509ba722184db73d57",
+  },
+  "tree-sitter-scala/tree-sitter-scala.wasm": {
+    version: "0.24.0",
+    sha256: "b7ec2bb29c19827abcefd18ed5cb5a43596009f96a5d53c5b9d1f9676d7521c3",
+  },
+  "tree-sitter-typescript/tree-sitter-tsx.wasm": {
+    version: "0.23.2",
+    sha256: "79e5da75ea62855a0cd67177685f0164eac87d5f630b3cbe1e0a099751ad30f8",
+  },
+  "tree-sitter-typescript/tree-sitter-typescript.wasm": {
+    version: "0.23.2",
+    sha256: "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d",
+  },
+  "tree-sitter-wasms/out/tree-sitter-lua.wasm": {
+    version: "0.1.13",
+    sha256: "75ef809136d610068c5b2135741d89f5df62690a3d55169203351cb7cc85727d",
+  },
+  "tree-sitter-wasms/out/tree-sitter-swift.wasm": {
+    version: "0.1.13",
+    sha256: "41c4fdb2249a3aa6d87eed0d383081ff09725c2248b4977043a43825980ffcc7",
+  },
+  "tree-sitter-wasms/out/tree-sitter-toml.wasm": {
+    version: "0.1.13",
+    sha256: "7849ac8ce9d10a4684ca189ea8ad3654c20c38acb2d674a014a164398cbd37a2",
+  },
+  "tree-sitter-wasms/out/tree-sitter-vue.wasm": {
+    version: "0.1.13",
+    sha256: "6244521bb3fb60f34ce5f677f2af81facb2c38691193985ca5fa85e1b6f29250",
+  },
+  "tree-sitter-wasms/out/tree-sitter-yaml.wasm": {
+    version: "0.1.13",
+    sha256: "5dea7cfff83d41d8f87fb8e434e1a5b292c0d670bfcdc42cb2af420ef490dde5",
+  },
+};
+
+const grammarCache = new Map<string, Promise<Language | null>>();
 let parserInit: Promise<void> | null = null;
 
-export async function ensureParser(): Promise<void> {
-  if (!parserInit) {
-    parserInit = Parser.init();
-  }
-  await parserInit;
-}
-
-/** How often to revalidate cached grammars against the CDN (30 days in ms). */
-const REVALIDATE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
-
-/** Max retries for CDN fetches. */
 const MAX_FETCH_RETRIES = 3;
-
-/** Fetch timeout in ms. */
 const FETCH_TIMEOUT_MS = 30_000;
 
-/** Fetch with retries, exponential backoff, and timeout. */
-async function fetchWithRetry(url: string, options: RequestInit = {}): Promise<Response> {
-  let lastErr: Error | undefined;
-  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-      try {
-        return await fetch(url, { ...options, signal: controller.signal });
-      } finally {
-        clearTimeout(timeoutId);
-      }
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      if (attempt < MAX_FETCH_RETRIES) {
-        const delay = 1000 * 2 ** (attempt - 1); // 1s, 2s, 4s
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastErr ?? new Error("fetch failed");
+function artifactFor(entry: GrammarEntry): GrammarArtifact {
+  const key = `${entry.pkg}/${entry.wasm}`;
+  const artifact = GRAMMAR_ARTIFACTS[key];
+  if (artifact === undefined) throw new Error(`No pinned grammar artifact configured for ${key}`);
+  return artifact;
 }
 
-/** Resolve a WASM file: disk cache → conditional CDN fetch → return Language or null.
- *
- * - Caches WASM files to disk with the server's ETag and a download date.
- * - Only revalidates against the CDN every 30 days (checks mtime of the date file).
- * - Revalidation uses conditional GET with `If-None-Match`:
- *   304 → touch date file (reset the 30-day timer)
- *   200 → download new version, update cache + etag + date
- * - On network error during revalidation → keep cache, touch date (retry in 30 days).
- * - Fresh downloads retry up to MAX_FETCH_RETRIES times with exponential backoff.
- */
-export async function loadGrammar(
+for (const entry of Object.values(LANGUAGE_MAP)) artifactFor(entry);
+
+function waitForSignal<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (signal === undefined) return promise;
+  signal.throwIfAborted();
+
+  return new Promise<T>((resolvePromise, rejectPromise) => {
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    const onAbort = () => {
+      cleanup();
+      rejectPromise(signal.reason ?? new Error("Operation aborted"));
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        cleanup();
+        resolvePromise(value);
+      },
+      (error: unknown) => {
+        cleanup();
+        rejectPromise(error);
+      },
+    );
+    if (signal.aborted) onAbort();
+  });
+}
+
+/** Ensure the web-tree-sitter WASM runtime is initialized once per process. */
+export async function ensureParser(signal?: AbortSignal): Promise<void> {
+  if (parserInit === null) {
+    parserInit = Parser.init().catch((error: unknown) => {
+      parserInit = null;
+      throw error;
+    });
+  }
+  await waitForSignal(parserInit, signal);
+}
+
+function hasExpectedIntegrity(bytes: Uint8Array, artifact: GrammarArtifact): boolean {
+  return createHash("sha256").update(bytes).digest("hex") === artifact.sha256;
+}
+
+async function fetchWithRetry(url: string): Promise<Uint8Array> {
+  let lastError: Error | undefined;
+  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return new Uint8Array(await response.arrayBuffer());
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      if (attempt < MAX_FETCH_RETRIES) {
+        await new Promise((resolvePromise) =>
+          setTimeout(resolvePromise, 1000 * 2 ** (attempt - 1)),
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+  throw lastError ?? new Error("Grammar download failed");
+}
+
+async function writeCacheAtomically(cachePath: string, bytes: Uint8Array): Promise<void> {
+  await mkdir(dirname(cachePath), { recursive: true });
+  const temporaryPath = `${cachePath}.${process.pid}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, bytes, { mode: 0o600 });
+    await rename(temporaryPath, cachePath);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
+}
+
+async function loadGrammarUncached(
   entry: GrammarEntry,
+  artifact: GrammarArtifact,
   notify?: NotifyFn,
 ): Promise<Language | null> {
-  const key = `${entry.pkg}/${entry.wasm}`;
-  const cached = grammarCache.get(key);
-  if (cached !== undefined) return cached;
+  const versionedPackage = `${entry.pkg}@${artifact.version}`;
+  const versionedKey = `${versionedPackage}/${entry.wasm}`;
+  const cachePath = resolve(CACHE_DIR, versionedPackage, entry.wasm);
 
-  const cachePath = resolve(CACHE_DIR, entry.pkg, entry.wasm);
-  const datePath = `${cachePath}.date`;
-  const etagPath = `${cachePath}.etag`;
-  let wasmBytes: Uint8Array | null = null;
-
-  // Helper: save wasm + metadata to disk
-  async function saveCache(bytes: Uint8Array, etag: string): Promise<void> {
-    await mkdir(dirname(cachePath), { recursive: true });
-    await writeFile(cachePath, Buffer.from(bytes));
-    await writeFile(datePath, Date.now().toString());
-    if (etag) await writeFile(etagPath, etag);
+  const cachedBytes = await readFile(cachePath)
+    .then((bytes) => new Uint8Array(bytes))
+    .catch(() => null);
+  if (cachedBytes !== null) {
+    if (hasExpectedIntegrity(cachedBytes, artifact)) {
+      const language = await Language.load(cachedBytes).catch(() => null);
+      if (language !== null) return language;
+    }
+    await rm(cachePath, { force: true }).catch(() => undefined);
   }
 
-  // Helper: touch date file (reset revalidation timer)
-  async function touchDate(): Promise<void> {
-    try {
-      await writeFile(datePath, Date.now().toString());
-    } catch {
-      /* best-effort */
+  try {
+    const bytes = await fetchWithRetry(`${WASM_CDN}/${versionedKey}`);
+    if (!hasExpectedIntegrity(bytes, artifact)) {
+      throw new Error(`Integrity check failed for ${versionedKey}`);
     }
-  }
-
-  // Helper: delete all cache files for this grammar
-  async function clearCache(): Promise<void> {
-    for (const p of [cachePath, etagPath, datePath]) {
-      try {
-        await rm(p, { force: true });
-      } catch {
-        /* best-effort */
-      }
-    }
-  }
-
-  // Helper: try to load Language from bytes; on failure, clear cache so next call re-downloads
-  async function tryLoad(bytes: Uint8Array): Promise<Language | null> {
-    const lang = await Language.load(bytes).catch(() => null);
-    if (lang) {
-      grammarCache.set(key, lang);
-      return lang;
-    }
-    grammarCache.set(key, null);
-    await clearCache();
+    const language = await Language.load(bytes);
+    // A read-only or full cache must not disable an otherwise valid grammar.
+    await writeCacheAtomically(cachePath, bytes).catch(() => undefined);
+    notify?.(`Tree-sitter grammar for ${formatGrammarName(entry)} ready`, "info");
+    return language;
+  } catch {
+    notify?.(`Failed to load tree-sitter grammar for ${formatGrammarName(entry)}`, "error");
     return null;
   }
+}
 
-  // 1. Try reading cached WASM
-  const cachedEtag = await readFile(etagPath, "utf-8").catch(() => "");
-  wasmBytes = await readFile(cachePath)
-    .then((b) => new Uint8Array(b))
-    .catch(() => null);
-  const cachedDate = await readFile(datePath, "utf-8").catch(() => "");
-
-  if (wasmBytes && cachedEtag && cachedDate) {
-    const age = Date.now() - parseInt(cachedDate, 10);
-    if (age < REVALIDATE_AFTER_MS) {
-      const lang = await tryLoad(wasmBytes);
-      if (lang) return lang;
-      // Cached bytes are corrupted — fall through to re-download
-    } else {
-      // 2. Cache is stale — revalidate with conditional GET
-      try {
-        const url = `${WASM_CDN}/${key}`;
-        const res = await fetchWithRetry(url, { headers: { "If-None-Match": cachedEtag } });
-        if (res.status === 304) {
-          await touchDate();
-          if (wasmBytes !== null) {
-            const lang = await tryLoad(wasmBytes);
-            if (lang) return lang;
-          }
-        } else if (res.ok) {
-          wasmBytes = new Uint8Array(await res.arrayBuffer());
-          const newEtag = res.headers.get("etag") || "";
-          await saveCache(wasmBytes, newEtag);
-          const lang = await tryLoad(wasmBytes);
-          if (lang) {
-            notify?.(`Tree-sitter grammar for ${formatGrammarName(entry)} updated`, "info");
-            return lang;
-          }
-        } else {
-          // Unexpected status (429, 500, etc.) — keep cache, retry in 30 days
-          await touchDate();
-          const lang = await tryLoad(wasmBytes);
-          if (lang) return lang;
-        }
-      } catch {
-        // Network error — keep cached copy, reset timer (retry in 30 days)
-        await touchDate();
-        const lang = await tryLoad(wasmBytes);
-        if (lang) return lang;
-      }
-    }
+/** Load a pinned, integrity-checked grammar with shared in-flight work. */
+export function loadGrammar(
+  entry: GrammarEntry,
+  notify?: NotifyFn,
+  signal?: AbortSignal,
+): Promise<Language | null> {
+  const artifact = artifactFor(entry);
+  const key = `${entry.pkg}@${artifact.version}/${entry.wasm}`;
+  let loading = grammarCache.get(key);
+  if (loading === undefined) {
+    loading = loadGrammarUncached(entry, artifact, notify).then(
+      (language) => {
+        if (language === null) grammarCache.delete(key);
+        return language;
+      },
+      (error: unknown) => {
+        grammarCache.delete(key);
+        throw error;
+      },
+    );
+    grammarCache.set(key, loading);
   }
-
-  // 3. No cache (or cache corrupted) — fresh download with retry
-  for (let attempt = 1; attempt <= MAX_FETCH_RETRIES; attempt++) {
-    try {
-      const url = `${WASM_CDN}/${key}`;
-      const res = await fetchWithRetry(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      wasmBytes = new Uint8Array(await res.arrayBuffer());
-      const etag = res.headers.get("etag") || "";
-      const lang = await Language.load(wasmBytes).catch(() => null);
-      if (lang) {
-        await saveCache(wasmBytes, etag);
-        grammarCache.set(key, lang);
-        notify?.(`Tree-sitter grammar for ${formatGrammarName(entry)} ready`, "info");
-        return lang;
-      }
-      // Downloaded bytes are invalid — try again
-    } catch {
-      if (attempt < MAX_FETCH_RETRIES) {
-        const delay = 1000 * 2 ** (attempt - 1);
-        await new Promise((r) => setTimeout(r, delay));
-      }
-    }
-  }
-
-  grammarCache.set(key, null);
-  notify?.(`Failed to load tree-sitter grammar for ${formatGrammarName(entry)}`, "error");
-  return null;
+  return waitForSignal(loading, signal);
 }
 
 /** Get a grammar for a file extension, or null if unknown. */
-export async function getLanguage(ext: string): Promise<Language | null> {
+export async function getLanguage(ext: string, signal?: AbortSignal): Promise<Language | null> {
   const entry = LANGUAGE_MAP[ext.toLowerCase()];
   if (!entry) return null;
-  await ensureParser();
-  return loadGrammar(entry);
+  await ensureParser(signal);
+  return loadGrammar(entry, undefined, signal);
 }

@@ -760,6 +760,29 @@ command during a retention period.
   - Retired
 - Remove active OpenCode Neovim wiring only after the rollback period.
 
+### Capability matrix
+
+| Neovim workflow                                                            | Owner             | Evidence                                                              |
+| -------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
+| Launch, toggle, and terminal focus                                         | Pi                | `test:nvim-pi-launcher`, `test:nvim-pi-cutover`, Phase 1 live tracer  |
+| Active and preserved source context                                        | Pi                | `extensions/neovim` focused suite, Phase 1 live tracer                |
+| Exact visual selection                                                     | Pi                | `test:nvim-pi-launcher`, Phase 1 live tracer                          |
+| Visible and listed buffers                                                 | Pi                | `extensions/neovim` focused suite, Phase 2 live tracer                |
+| Unsaved buffer reads and Neovim diagnostics                                | Pi                | `extensions/neovim` focused suite, Phase 2 unchanged-disk tracer      |
+| Quickfix and location lists                                                | Pi                | `extensions/neovim` focused suite, Phase 4 presentation tracer        |
+| Reveal, highlight, annotation, and cleanup                                 | Pi                | `extensions/neovim` focused suite, Phase 4 unchanged-source tracer    |
+| Exact editor-owned session restoration                                     | Pi                | Neovim/Herdr restoration fixtures, Phase 3 two-worktree tracer        |
+| Herdr title and lifecycle state                                            | Pi                | Herdr extension fixtures, Phase 5 isolated lifecycle tracer           |
+| Editor-owned editable diff review                                          | OpenCode retained | Phase 6 public-API decision record                                    |
+| Clickable patch-header navigation                                          | OpenCode retained | Phase 7 public-API decision record                                    |
+| OpenCode actions, session selection, and prompt presets                    | OpenCode retained | `test:nvim-opencode-session-restore`; active `opencode.nvim` mappings |
+| Default OpenCode context injection through `<leader>ac`, `ga`, and `<A-x>` | Retired           | Replaced by bound Pi context operations in `test:nvim-pi-cutover`     |
+
+The default Pi mappings are `<A-a>` for toggle, `<C-\\>` for focus,
+`<leader>ac` and `ga` for source context, and `<A-x>` for selection or
+visible-buffer context. `:OpenCodeStart`, `:OpenCodeToggle`, and `<leader>aO`
+remain the explicit rollback entry points.
+
 ### Complete live matrix
 
 Verify:
@@ -780,6 +803,33 @@ Verify:
 - Missing editor behavior
 - Stale socket behavior
 - Sibling-worktree isolation
+
+### Consolidated matrix record (2026-09-04)
+
+The full matrix combines the isolated live tracer bullets above with a fresh
+post-cutover regression run. No bridge operation changed during keymap cutover.
+
+- Phase 1's two-worktree live tracer verified fixed-socket identity, active and
+  preserved focus context, exact selection, notification isolation, and
+  `NVIM_UNAVAILABLE` on a cross-bound socket.
+- Phase 2's live tracer verified visible buffers, unsaved reads, Neovim
+  diagnostics, and unchanged disk bytes.
+- Phase 4's live tracer verified quickfix, focus-preserving and explicit-focus
+  reveal, highlight, annotation, cleanup, and unchanged source hashes.
+- Phase 3's two-worktree Herdr restore tracer verified exact IDs, Neovim-first
+  resume, sibling-worktree refusal, and unchanged Pi session files.
+- Phase 5's isolated Herdr tracer verified title, working, blocked, completed
+  idle, and shutdown cleanup while Neovim remained alive.
+- The post-cutover Pi/Neovim and Herdr suite passed 75 tests with 423 assertions.
+  It re-exercised real headless Neovim RPC plus missing socket, stale socket,
+  invalid identity, unavailable editor, outside-worktree, and sibling-worktree
+  failures. Seven Neovim/Herdr restoration, launcher, rollback, inventory, and
+  lazy-startup tasks also passed.
+- Diff review and clickable patch navigation were excluded from Pi's live path
+  according to their Phase 6 and 7 gates; OpenCode remains their tested owner.
+- After the Pi matrix passed, the cutover fixture invoked `:OpenCodeStart` and
+  `:OpenCodeToggle`, then the independent OpenCode restoration fixture started
+  the rollback terminal and exercised its buffer-local return-to-editor key.
 
 ### Repository validation
 

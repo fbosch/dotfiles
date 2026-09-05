@@ -1,6 +1,6 @@
 /**
  * Utility to recursively find project files matching known extensions.
- * Skips node_modules, .git, and other common non-project directories.
+ * Skips common generated, dependency, cache, and VCS directories.
  */
 import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
@@ -17,10 +17,13 @@ const IGNORE_DIRS = new Set<string>([
   "dist",
   ".next",
   ".cache",
+  ".devenv",
+  ".direnv",
+  ".docs",
+  ".tox",
   "__pycache__",
   "venv",
   ".venv",
-  ".tox",
   "vendor",
   ".bundle",
   "elm-stuff",
@@ -28,48 +31,74 @@ const IGNORE_DIRS = new Set<string>([
   "coverage",
 ]);
 
-/** Find all files with known extensions under `dir`, up to `maxFiles`. */
-export async function findProjectFiles(dir: string, maxFiles = 2000): Promise<string[]> {
-  const exts = allExtensions();
-  const results: string[] = [];
+export const DEFAULT_PROJECT_FILE_LIMIT = 2000;
+
+export interface ProjectFileSearch {
+  readonly files: string[];
+  readonly limit: number;
+  readonly truncated: boolean;
+}
+
+export interface ProjectFileSearchOptions {
+  readonly maxFiles?: number;
+  readonly signal?: AbortSignal;
+}
+
+/** Find source files with known extensions under `dir`. */
+export async function findProjectFiles(
+  dir: string,
+  options: ProjectFileSearchOptions = {},
+): Promise<ProjectFileSearch> {
+  const { maxFiles = DEFAULT_PROJECT_FILE_LIMIT, signal } = options;
+  if (!Number.isSafeInteger(maxFiles) || maxFiles < 1) {
+    throw new RangeError("maxFiles must be a positive safe integer");
+  }
+
+  const exts = new Set(allExtensions());
+  const files: string[] = [];
 
   async function walk(path: string): Promise<void> {
-    if (results.length >= maxFiles) return;
+    signal?.throwIfAborted();
+    if (files.length > maxFiles) return;
 
     let entries: Dirent[];
     try {
       entries = await readdir(path, { withFileTypes: true });
     } catch {
+      signal?.throwIfAborted();
       return;
     }
 
+    signal?.throwIfAborted();
+    entries.sort((left, right) => (left.name < right.name ? -1 : left.name > right.name ? 1 : 0));
     for (const entry of entries) {
-      if (results.length >= maxFiles) break;
+      signal?.throwIfAborted();
+      if (files.length > maxFiles) break;
       const full = join(path, entry.name);
 
       if (entry.isDirectory()) {
-        if (!IGNORE_DIRS.has(entry.name) && !entry.name.startsWith(".")) {
-          await walk(full);
-        }
+        if (!IGNORE_DIRS.has(entry.name)) await walk(full);
       } else if (entry.isFile()) {
         const ext = entry.name.match(/\.[^.]+$/)?.[0]?.toLowerCase();
-        if (ext && exts.includes(ext)) {
-          results.push(full);
-        }
+        if (ext && exts.has(ext)) files.push(full);
       }
     }
   }
 
   await walk(dir);
-  return results;
+  const truncated = files.length > maxFiles;
+  if (truncated) files.length = maxFiles;
+  return { files, limit: maxFiles, truncated };
 }
 
-/** Read file content, return null on error. */
-export async function readFileSafe(path: string): Promise<string | null> {
+/** Read file content, returning null for ordinary filesystem errors. */
+export async function readFileSafe(path: string, signal?: AbortSignal): Promise<string | null> {
   try {
-    const { readFile } = await import("node:fs/promises");
-    return await readFile(path, "utf-8");
+    return await import("node:fs/promises").then(({ readFile }) =>
+      readFile(path, { encoding: "utf-8", signal }),
+    );
   } catch {
+    signal?.throwIfAborted();
     return null;
   }
 }

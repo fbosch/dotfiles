@@ -300,7 +300,7 @@ function tsWalkExportDecl(node: Node, source: string, symbols: Symbol[]): void {
 function tsClassBody(body: Node, source: string, symbols: Symbol[], className: string): void {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
-    if (!child || child.type !== "method_definition") continue;
+    if (child?.type !== "method_definition") continue;
     const nn = child.childForFieldName("name");
     if (!nn) continue;
     symbols.push({
@@ -350,7 +350,7 @@ const pyExtract = (source: string, lang: Language): ExtractedFile => {
       }
       case "decorated_definition": {
         const fn = child.childForFieldName("definition");
-        if (!fn || fn.type !== "function_definition") break;
+        if (fn?.type !== "function_definition") break;
         const nn = fn.childForFieldName("name");
         if (!nn) break;
         const name = nodeText(nn, source);
@@ -575,7 +575,7 @@ function rsTypeLeafName(node: Node, source: string): string | null {
 function rsImplBody(body: Node, source: string, symbols: Symbol[], target: string): void {
   for (let i = 0; i < body.namedChildCount; i++) {
     const child = body.namedChild(i);
-    if (!child || child.type !== "function_item") continue;
+    if (child?.type !== "function_item") continue;
     const name = rsIdentChild(child, source);
     if (name)
       symbols.push({
@@ -616,10 +616,10 @@ const cljExtract = (source: string, lang: Language): ExtractedFile => {
 
   for (let i = 0; i < root.namedChildCount; i++) {
     const child = root.namedChild(i);
-    if (!child || child.type !== "list_lit") continue;
+    if (child?.type !== "list_lit") continue;
 
     const first = child.namedChild(0);
-    if (!first || first.type !== "sym_lit") continue;
+    if (first?.type !== "sym_lit") continue;
 
     const head = nodeText(first, source);
     const nameNode = child.namedChild(1);
@@ -1936,7 +1936,7 @@ const ELIXIR_MOD_KWS = new Set(["defmodule", "defprotocol", "defimpl"]);
 
 function elixirKw(call: Node, source: string): string | null {
   const target = call.childForFieldName("target");
-  if (!target || target.type !== "identifier") return null;
+  if (target?.type !== "identifier") return null;
   return nodeText(target, source);
 }
 
@@ -1987,7 +1987,7 @@ function elixirWalkBlock(
 ): void {
   for (let i = 0; i < block.namedChildCount; i++) {
     const c = block.namedChild(i);
-    if (!c || c.type !== "call") continue;
+    if (c?.type !== "call") continue;
     const kw = elixirKw(c, source);
     if (!kw) continue;
 

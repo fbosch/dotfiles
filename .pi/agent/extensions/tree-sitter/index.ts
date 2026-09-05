@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -40,7 +41,7 @@ import {
   findPrefixLeftover,
   simulateEditContent,
 } from "./src/edit-guard.js";
-import { findProjectFiles, readFileSafe } from "./src/files.js";
+import { findProjectFiles, type ProjectFileSearch, readFileSafe } from "./src/files.js";
 import { ensureParser, LANGUAGE_MAP, loadGrammar, type NotifyFn } from "./src/grammar.js";
 import type { ExtractedFile, Symbol as Sym } from "./src/languages.js";
 import { configForFile } from "./src/languages.js";
@@ -68,6 +69,7 @@ interface SymbolToolDetails {
 
 interface SymbolBodyDetails {
   readonly body?: string;
+  readonly fullBodyPath?: string;
   readonly language?: string;
   readonly lineCount?: number;
   readonly name?: string;
@@ -82,16 +84,47 @@ function toolResultText(result: AgentToolResult<unknown>): string {
   return result.content.flatMap((item) => (item.type === "text" ? [item.text] : [])).join("\n");
 }
 
-async function boundedOutput(text: string): Promise<string> {
-  const truncation = truncateHead(text, {
+function outputTruncation(text: string) {
+  return truncateHead(text, {
     maxBytes: DEFAULT_MAX_BYTES,
     maxLines: DEFAULT_MAX_LINES,
   });
-  if (!truncation.truncated) return text;
+}
 
-  const outputPath = resolve(tmpdir(), `pi-tree-sitter-${randomUUID()}.txt`);
-  await writeFile(outputPath, text, { encoding: "utf8", mode: 0o600 });
-  return `${truncation.content}\n\n[Output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). Full output saved to: ${outputPath}]`;
+interface BoundedResult {
+  readonly fullPath?: string;
+  readonly text: string;
+}
+
+async function boundedResult(
+  text: string,
+  persistedText = text,
+  fullOutputLabel = "Full output",
+): Promise<BoundedResult> {
+  const truncation = outputTruncation(text);
+  if (!truncation.truncated) return { text };
+
+  const fullPath = resolve(tmpdir(), `pi-tree-sitter-${randomUUID()}.txt`);
+  await writeFile(fullPath, persistedText, { encoding: "utf8", mode: 0o600 });
+  return {
+    fullPath,
+    text: `${truncation.content}\n\n[Output truncated: ${truncation.outputLines} of ${truncation.totalLines} lines (${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}). ${fullOutputLabel} saved to: ${fullPath}]`,
+  };
+}
+
+async function boundedOutput(text: string): Promise<string> {
+  return (await boundedResult(text)).text;
+}
+
+function boundedPreview(text: string): string {
+  const truncation = outputTruncation(text);
+  return truncation.truncated ? `${truncation.content}\n…` : text;
+}
+
+function searchLimitNotice(search: Pick<ProjectFileSearch, "limit" | "truncated">): string {
+  return search.truncated
+    ? `\n\n[Search stopped after ${search.limit} source files. Pass a narrower path to search the remaining files.]`
+    : "";
 }
 
 /** Return the line content that contains `offset`, for context. */
@@ -193,6 +226,7 @@ async function validateContent(
   path: string,
   content: string,
   notify?: NotifyFn,
+  signal?: AbortSignal,
 ): Promise<string | null> {
   const ext = path.match(/\.[^.]+$/)?.[0]?.toLowerCase();
   if (!ext) return null;
@@ -201,13 +235,13 @@ async function validateContent(
 
   const entry = LANGUAGE_MAP[ext];
   if (entry) {
-    await ensureParser();
-    const lang = await loadGrammar(entry, notify);
+    await ensureParser(signal);
+    const lang = await loadGrammar(entry, notify, signal);
     if (lang) {
       const parser = new Parser();
       parser.setLanguage(lang);
       const tree = parser.parse(content);
-      if (tree && tree.rootNode.hasError) {
+      if (tree?.rootNode.hasError) {
         const errors = collectErrors(tree, content);
         if (errors.length > 0) {
           // Grammar reports errors — run delimiter balance as second opinion
@@ -309,10 +343,15 @@ function formatResults(results: Map<string, Sym[]>): string {
   return parts.join("\n");
 }
 
-async function extractFile(filePath: string, notify?: NotifyFn): Promise<ExtractedFile | null> {
+async function extractFile(
+  filePath: string,
+  notify?: NotifyFn,
+  signal?: AbortSignal,
+): Promise<ExtractedFile | null> {
+  signal?.throwIfAborted();
   const ext = filePath.match(/\.[^.]+$/)?.[0]?.toLowerCase();
   if (!ext) return null;
-  const source = await readFileSafe(filePath);
+  const source = await readFileSafe(filePath, signal);
   if (source === null) return null;
   const config = configForFile(filePath, source);
   if (!config) return null;
@@ -320,22 +359,32 @@ async function extractFile(filePath: string, notify?: NotifyFn): Promise<Extract
   if (grammarExt === undefined) return null;
   const entry = LANGUAGE_MAP[grammarExt];
   if (!entry) return null;
-  await ensureParser();
-  const lang = await loadGrammar(entry, notify);
+  await ensureParser(signal);
+  const lang = await loadGrammar(entry, notify, signal);
   if (!lang) return null;
-  return config.extract(source, lang);
+  signal?.throwIfAborted();
+  const extracted = config.extract(source, lang);
+  signal?.throwIfAborted();
+  return extracted;
 }
 
-async function extractAllFiles(dir: string, notify?: NotifyFn): Promise<Map<string, Sym[]>> {
+interface ExtractedSearch extends ProjectFileSearch {
+  readonly results: Map<string, Sym[]>;
+}
+
+async function extractAllFiles(
+  dir: string,
+  notify?: NotifyFn,
+  signal?: AbortSignal,
+): Promise<ExtractedSearch> {
   const results = new Map<string, Sym[]>();
-  const files = await findProjectFiles(dir);
-  for (const file of files) {
-    const extracted = await extractFile(file, notify);
-    if (extracted && extracted.symbols.length > 0) {
-      results.set(file, extracted.symbols);
-    }
+  const search = await findProjectFiles(dir, signal ? { signal } : {});
+  for (const file of search.files) {
+    signal?.throwIfAborted();
+    const extracted = await extractFile(file, notify, signal);
+    if (extracted && extracted.symbols.length > 0) results.set(file, extracted.symbols);
   }
-  return results;
+  return { ...search, results };
 }
 
 // ── Shared renderCall (generic for all symbol tools) ─────────────────────
@@ -421,8 +470,21 @@ export default async function (pi: ExtensionAPI) {
           const cause = leftover ? describePrefixLeftover(leftover) + "\n\n" : "";
           return { block: true, reason: cause + err };
         }
-      } catch {
-        // File doesn't exist — let edit tool handle the error
+        // shortcut: tool-call hooks cannot hold Pi's mutation queue through the
+        // later edit execution. Native oldText matching catches most stale
+        // snapshots; replace this hook if Pi adds atomic execution middleware.
+      } catch (error) {
+        // Let the edit tool report ordinary filesystem failures itself, but do
+        // not silently disable validation after an unexpected simulation bug.
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "code" in error &&
+          typeof error.code === "string"
+        ) {
+          return;
+        }
+        throw error;
       }
     }
   });
@@ -451,35 +513,39 @@ export default async function (pi: ExtensionAPI) {
     }),
     renderCall: renderSymbolCall("list_symbols"),
     renderResult: renderSymbolResult(),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
       const filterKind = params.kind?.toLowerCase();
-      const notify = ctx?.ui?.notify?.bind(ctx.ui);
-      let results: Map<string, Sym[]>;
+      const notify = ctx.ui.notify.bind(ctx.ui);
+      let search: ExtractedSearch;
       if (params.path) {
         const filePath = resolveToolPath(ctx.cwd, params.path);
-        const extracted = await extractFile(filePath, notify);
-        results = new Map();
+        const extracted = await extractFile(filePath, notify, signal);
+        const results = new Map<string, Sym[]>();
         if (extracted) results.set(filePath, extracted.symbols);
+        search = { files: [filePath], limit: 1, truncated: false, results };
       } else {
-        results = await extractAllFiles(ctx.cwd, notify);
+        search = await extractAllFiles(ctx.cwd, notify, signal);
       }
+      const { results } = search;
       if (results.size === 0) {
         return {
-          content: [{ type: "text", text: "No symbols found." }],
+          content: [{ type: "text", text: `No symbols found.${searchLimitNotice(search)}` }],
           details: { count: 0, label: "symbols" },
         };
       }
       if (filterKind) {
         for (const [path, syms] of results) {
-          const filtered = syms.filter((s) => s.kind === filterKind);
+          const filtered = syms.filter((symbol) => symbol.kind === filterKind);
           if (filtered.length > 0) results.set(path, filtered);
           else results.delete(path);
         }
       }
       let total = 0;
-      for (const syms of results.values()) total += syms.length;
+      for (const symbols of results.values()) total += symbols.length;
+      const output = `${formatResults(results)}${searchLimitNotice(search)}`;
       return {
-        content: [{ type: "text", text: await boundedOutput(formatResults(results)) }],
+        content: [{ type: "text", text: await boundedOutput(output) }],
         details: { count: total, label: "symbols", fileCount: results.size },
       };
     },
@@ -500,34 +566,34 @@ export default async function (pi: ExtensionAPI) {
     }),
     renderCall: renderSymbolCall("find_definition"),
     renderResult: renderSymbolResult(),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const allResults = await extractAllFiles(ctx.cwd, ctx.ui.notify.bind(ctx.ui));
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      const search = await extractAllFiles(ctx.cwd, ctx.ui.notify.bind(ctx.ui), signal);
       interface Hit {
         path: string;
         sym: Sym;
       }
       const hits: Hit[] = [];
-      for (const [path, syms] of allResults) {
-        for (const sym of syms) {
-          if (sym.name === params.name) hits.push({ path, sym });
+      for (const [path, symbols] of search.results) {
+        signal?.throwIfAborted();
+        for (const symbol of symbols) {
+          if (symbol.name === params.name) hits.push({ path, sym: symbol });
         }
       }
+      const limitNotice = searchLimitNotice(search);
       if (hits.length === 0) {
         return {
-          content: [{ type: "text", text: "No definition found for '" + params.name + "'" }],
+          content: [
+            { type: "text", text: `No definition found for '${params.name}'.${limitNotice}` },
+          ],
           details: { count: 0, label: "definitions", name: params.name },
         };
       }
-      const lines: string[] = [
-        "Found " + hits.length + " definition(s) for '" + params.name + "':",
-      ];
+      const lines: string[] = [`Found ${hits.length} definition(s) for '${params.name}':`];
       for (const { path, sym } of hits) {
-        lines.push(
-          "  " + path + ":" + sym.range.startLine + " [" + sym.kind + "] " + sym.signature,
-        );
+        lines.push(`  ${path}:${sym.range.startLine} [${sym.kind}] ${sym.signature}`);
       }
       return {
-        content: [{ type: "text", text: await boundedOutput(lines.join("\n")) }],
+        content: [{ type: "text", text: await boundedOutput(`${lines.join("\n")}${limitNotice}`) }],
         details: { count: hits.length, label: "definitions", name: params.name },
       };
     },
@@ -553,42 +619,42 @@ export default async function (pi: ExtensionAPI) {
     }),
     renderCall: renderSymbolCall("find_callers"),
     renderResult: renderSymbolResult(),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
       const notify = ctx.ui.notify.bind(ctx.ui);
       const searchPath = params.path ? resolveToolPath(ctx.cwd, params.path) : ctx.cwd;
       const callers: string[] = [];
 
-      const files = await findProjectFiles(searchPath);
-      for (const file of files) {
-        const ext = file.match(/\.[^.]+$/)?.[0]?.toLowerCase();
-        if (!ext) continue;
+      const search = await findProjectFiles(searchPath, signal ? { signal } : {});
+      for (const file of search.files) {
+        signal?.throwIfAborted();
         const config = configForFile(file);
         if (!config) continue;
         const grammarExt = config.extensions[0];
         if (grammarExt === undefined) continue;
         const entry = LANGUAGE_MAP[grammarExt];
         if (!entry) continue;
-        await ensureParser();
-        const lang = await loadGrammar(entry, notify);
+        await ensureParser(signal);
+        const lang = await loadGrammar(entry, notify, signal);
         if (!lang) continue;
-        const source = await readFileSafe(file);
+        const source = await readFileSafe(file, signal);
         if (source === null) continue;
 
+        signal?.throwIfAborted();
         const extracted = config.extract(source, lang);
-        for (const sym of extracted.symbols) {
-          if (sym.name === params.name) continue;
-          const callees = config.findCallees(source, lang, sym.range);
-          if (callees.some((c) => c.name === params.name)) {
-            callers.push(
-              "  " + file + ":" + sym.range.startLine + " [" + sym.kind + "] " + sym.name,
-            );
+        for (const symbol of extracted.symbols) {
+          if (symbol.name === params.name) continue;
+          const callees = config.findCallees(source, lang, symbol.range);
+          if (callees.some((callee) => callee.name === params.name)) {
+            callers.push(`  ${file}:${symbol.range.startLine} [${symbol.kind}] ${symbol.name}`);
           }
         }
       }
 
+      const limitNotice = searchLimitNotice(search);
       if (callers.length === 0) {
         return {
-          content: [{ type: "text", text: "No callers found for '" + params.name + "'" }],
+          content: [{ type: "text", text: `No callers found for '${params.name}'.${limitNotice}` }],
           details: { count: 0, label: "callers", name: params.name },
         };
       }
@@ -597,7 +663,7 @@ export default async function (pi: ExtensionAPI) {
           {
             type: "text",
             text: await boundedOutput(
-              `${callers.length} caller(s) for '${params.name}':\n${callers.join("\n")}`,
+              `${callers.length} caller(s) for '${params.name}':\n${callers.join("\n")}${limitNotice}`,
             ),
           },
         ],
@@ -615,10 +681,10 @@ export default async function (pi: ExtensionAPI) {
     name: "get_symbol_body",
     label: "Get Symbol Body",
     description:
-      "Get the full source code of a named symbol (function, class, method, etc.) from a file. Uses tree-sitter to precisely extract by byte range.",
+      "Get the full source code of a named symbol (function, class, method, etc.) from a file. Uses tree-sitter to precisely extract by source range.",
     promptSnippet: "Get the full source code of a named symbol from a file",
     promptGuidelines: [
-      "Use get_symbol_body to extract the full source code of a named symbol by its AST byte range, which is more accurate than slicing by line numbers.",
+      "Use get_symbol_body to extract the full source code of a named symbol by its AST source range, which is more accurate than slicing by line numbers.",
     ],
     parameters: getSymbolBodyParameters,
     renderCall: renderSymbolCall("get_symbol_body"),
@@ -634,7 +700,15 @@ export default async function (pi: ExtensionAPI) {
         return new Text(theme.fg("error", toolResultText(result) || "Error"), 0, 0);
       }
       if (expanded) {
-        return new Text(highlightCode(details.body, details.language).join("\n"), 0, 0);
+        let body = details.body;
+        if (details.fullBodyPath !== undefined) {
+          try {
+            body = readFileSync(details.fullBodyPath, "utf8");
+          } catch {
+            body += "\n\n[Full symbol body is no longer available.]";
+          }
+        }
+        return new Text(highlightCode(body, details.language).join("\n"), 0, 0);
       }
       return new Text(
         theme.fg("success", "✓ ") +
@@ -645,40 +719,43 @@ export default async function (pi: ExtensionAPI) {
         0,
       );
     },
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
       const filePath = resolveToolPath(ctx.cwd, params.path);
-      const extracted = await extractFile(filePath, ctx?.ui?.notify?.bind(ctx.ui));
+      const extracted = await extractFile(filePath, ctx.ui.notify.bind(ctx.ui), signal);
       if (!extracted) {
-        return { content: [{ type: "text", text: "Could not parse " + filePath }], details: {} };
+        return { content: [{ type: "text", text: `Could not parse ${filePath}` }], details: {} };
       }
-      for (const sym of extracted.symbols) {
-        if (sym.name === params.name) {
-          const source = await readFileSafe(filePath);
+      for (const symbol of extracted.symbols) {
+        signal?.throwIfAborted();
+        if (symbol.name === params.name) {
+          const source = await readFileSafe(filePath, signal);
           if (source === null) {
-            return { content: [{ type: "text", text: "Could not read " + filePath }], details: {} };
+            return { content: [{ type: "text", text: `Could not read ${filePath}` }], details: {} };
           }
-          const body = source.slice(sym.range.startByte, sym.range.endByte);
+          const body = source.slice(symbol.range.startByte, symbol.range.endByte);
           const lineCount = body.split("\n").length;
           const language = getLanguageFromPath(filePath);
+          const output = await boundedResult(
+            `Symbol: ${params.name} in ${filePath}\n\n${body}`,
+            body,
+            "Full symbol body",
+          );
           return {
-            content: [
-              {
-                type: "text",
-                text: await boundedOutput(`Symbol: ${params.name} in ${filePath}\n\n${body}`),
-              },
-            ],
+            content: [{ type: "text", text: output.text }],
             details: {
-              body,
+              body: boundedPreview(body),
               name: params.name,
               path: filePath,
               lineCount,
+              ...(output.fullPath === undefined ? {} : { fullBodyPath: output.fullPath }),
               ...(language === undefined ? {} : { language }),
             },
           };
         }
       }
       return {
-        content: [{ type: "text", text: "Symbol '" + params.name + "' not found in " + filePath }],
+        content: [{ type: "text", text: `Symbol '${params.name}' not found in ${filePath}` }],
         details: {},
       };
     },
@@ -700,53 +777,33 @@ export default async function (pi: ExtensionAPI) {
     }),
     renderCall: renderSymbolCall("find_callees"),
     renderResult: renderSymbolResult(),
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      const noCallees = () => ({
+        content: [{ type: "text" as const, text: `No callees found for '${params.name}'` }],
+        details: { count: 0, label: "callees", name: params.name },
+      });
       const notify = ctx.ui.notify.bind(ctx.ui);
       const filePath = resolveToolPath(ctx.cwd, params.path);
-      const ext = filePath.match(/\.[^.]+$/)?.[0]?.toLowerCase();
-      if (!ext)
-        return {
-          content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-          details: { count: 0, label: "callees", name: params.name },
-        };
       const config = configForFile(filePath);
-      if (!config)
-        return {
-          content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-          details: { count: 0, label: "callees", name: params.name },
-        };
+      if (!config) return noCallees();
       const grammarExt = config.extensions[0];
       const entry = grammarExt === undefined ? undefined : LANGUAGE_MAP[grammarExt];
-      if (!entry)
-        return {
-          content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-          details: { count: 0, label: "callees", name: params.name },
-        };
-      await ensureParser();
-      const lang = await loadGrammar(entry, notify);
-      if (!lang)
-        return {
-          content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-          details: { count: 0, label: "callees", name: params.name },
-        };
-      const source = await readFileSafe(filePath);
-      if (source === null)
-        return {
-          content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-          details: { count: 0, label: "callees", name: params.name },
-        };
+      if (!entry) return noCallees();
+      await ensureParser(signal);
+      const lang = await loadGrammar(entry, notify, signal);
+      if (!lang) return noCallees();
+      const source = await readFileSafe(filePath, signal);
+      if (source === null) return noCallees();
 
+      signal?.throwIfAborted();
       const extracted = config.extract(source, lang);
-      for (const sym of extracted.symbols) {
-        if (sym.name === params.name) {
-          const callees = config.findCallees(source, lang, sym.range);
-          if (callees.length === 0) {
-            return {
-              content: [{ type: "text", text: "No callees found for '" + params.name + "'" }],
-              details: { count: 0, label: "callees", name: params.name },
-            };
-          }
-          const lines = callees.map((c) => "  " + c.line + "  " + c.name);
+      signal?.throwIfAborted();
+      for (const symbol of extracted.symbols) {
+        if (symbol.name === params.name) {
+          const callees = config.findCallees(source, lang, symbol.range);
+          if (callees.length === 0) return noCallees();
+          const lines = callees.map((callee) => `  ${callee.line}  ${callee.name}`);
           return {
             content: [
               {
@@ -761,7 +818,7 @@ export default async function (pi: ExtensionAPI) {
         }
       }
       return {
-        content: [{ type: "text", text: "Symbol '" + params.name + "' not found in " + filePath }],
+        content: [{ type: "text", text: `Symbol '${params.name}' not found in ${filePath}` }],
         details: {},
       };
     },

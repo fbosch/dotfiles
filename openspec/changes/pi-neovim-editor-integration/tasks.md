@@ -39,7 +39,8 @@
 
 ## 6. Decide and implement editor-owned diff review
 
-- [x] 6.1 Inspect Pi 0.84.4 and the selected IDE integration's public APIs for editable Neovim diff review; record whether they can guarantee unchanged source on reject and cancellation and exact reviewed contents on accept. - [x] 6.2 Not applicable: the public contract is insufficient for a stale-safe, editor-modified commit, so no one-file review was implemented.
+- [x] 6.1 Inspect Pi 0.84.4 and the selected IDE integration's public APIs for editable Neovim diff review; record whether they can guarantee unchanged source on reject and cancellation and exact reviewed contents on accept.
+- [x] 6.2 Not applicable: the public contract is insufficient for a stale-safe, editor-modified commit, so no one-file review was implemented.
 - [x] 6.3 Record diff review as `OpenCode retained` with the missing review transaction and compare-and-write contract; verify no private Pi or renderer patch was added.
 - [x] 6.4 Not applicable: no unsupported live review path was implemented.
 
@@ -52,9 +53,9 @@
 
 ## 8. Switch verified Neovim workflows to Pi
 
-- [ ] 8.1 Create a capability matrix that marks every current Neovim workflow as `Pi`, `OpenCode retained`, or `retired` and links each Pi entry to automated and live evidence.
-- [ ] 8.2 Add Pi equivalents for verified launch, focus, selection, and visible-buffer actions while preserving an explicit OpenCode rollback command; verify Neovim keymap tests cover both paths without collisions.
-- [ ] 8.3 Run the full live matrix for socket isolation, active and focus context, selection, visible and unsaved buffers, diagnostics, problem lists, navigation, presentation, restoration, Herdr lifecycle, and supported gated capabilities; record missing-editor, stale-socket, and sibling-worktree failures.
+- [x] 8.1 Create a capability matrix that marks every current Neovim workflow as `Pi`, `OpenCode retained`, or `retired` and links each Pi entry to automated and live evidence.
+- [x] 8.2 Add Pi equivalents for verified launch, focus, selection, and visible-buffer actions while preserving explicit `:OpenCodeStart`, `:OpenCodeToggle`, and `<leader>aO` rollback entry points; verify Neovim keymap tests cover both paths without collisions.
+- [x] 8.3 Run the full matrix across the isolated Phase 1–5 live tracers and a fresh post-cutover regression run for socket isolation, active and focus context, selection, visible and unsaved buffers, diagnostics, problem lists, navigation, presentation, restoration, and Herdr lifecycle; record missing-editor, stale-socket, and sibling-worktree failures.
 - [ ] 8.4 Run `just stow-check`, `devenv tasks run test:stow`, and `devenv test`; verify no credentials, session state, generated lockfiles, or unrelated changes enter the diff.
-- [ ] 8.5 Exercise the explicit OpenCode rollback after the Pi checks pass, then switch Neovim's default agent to Pi only when every required capability has a resolved status.
+- [x] 8.5 Exercise the explicit OpenCode rollback after the Pi checks pass, then switch Neovim's default launch, focus, selection, and visible-buffer mappings to Pi after every required capability has a resolved status.
 - [ ] 8.6 Update the migration records with the cutover result and retain active OpenCode Neovim wiring until the documented rollback period ends.

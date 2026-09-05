@@ -33,6 +33,13 @@ export interface PrefixLeftover {
  * The guard stays silent in those cases and lets the tool report its precise
  * error.
  */
+function isExpectedEditFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return /^(?:Could not find|Found \d+ occurrences|(?:edits\[\d+\]\.oldText|oldText) must not be empty|edits\[\d+\] and edits\[\d+\] overlap|No changes made)/.test(
+    error.message,
+  );
+}
+
 export async function simulateEditContent(
   rawContent: string,
   path: string,
@@ -52,8 +59,9 @@ export async function simulateEditContent(
   });
   try {
     await definition.execute("", { path, edits }, new AbortController().signal, undefined, ctx);
-  } catch {
-    return null;
+  } catch (error) {
+    if (isExpectedEditFailure(error)) return null;
+    throw error;
   }
   return proposed;
 }
