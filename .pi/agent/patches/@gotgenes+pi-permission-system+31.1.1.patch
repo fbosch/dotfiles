@@ -1,3 +1,16 @@
+diff --git a/node_modules/@gotgenes/pi-permission-system/package.json b/node_modules/@gotgenes/pi-permission-system/package.json
+index a46c836..1b9181a 100644
+--- a/node_modules/@gotgenes/pi-permission-system/package.json
++++ b/node_modules/@gotgenes/pi-permission-system/package.json
+@@ -10,7 +10,7 @@
+     }
+   },
+   "imports": {
+-    "#src/*": "./src/*",
++    "#src/*": "./src/*.ts",
+     "#test/*": "./test/*"
+   },
+   "files": [
 diff --git a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
 index 0e268df..89f6408 100644
 --- a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts

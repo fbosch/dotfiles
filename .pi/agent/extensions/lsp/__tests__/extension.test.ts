@@ -85,9 +85,18 @@ test("hides automatic diagnostics until lsp-output is enabled", async () => {
   expect(render()).toContain("LSP diagnostics hidden");
   expect(render()).not.toContain(output);
 
-  const context = { ui: { notify() {}, setStatus() {} } } as unknown as ExtensionContext;
+  let lspStatus: string | undefined = "visible";
+  const context = {
+    ui: {
+      notify() {},
+      setStatus(_key: string, value: string | undefined) {
+        lspStatus = value;
+      },
+    },
+  } as unknown as ExtensionContext;
   await setOutput("on", context);
 
+  expect(lspStatus).toBeUndefined();
   expect(render()).toContain(output);
 
   await setOutput("off", context);

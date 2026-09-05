@@ -196,10 +196,8 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           return;
         }
         showAutomaticDiagnostics = output === "on";
-        context.ui.setStatus(
-          "lsp-diagnostics",
-          `Automatic LSP diagnostics: ${showAutomaticDiagnostics ? "visible" : "hidden"}`,
-        );
+        // Clear our status key to request a transcript redraw without leaving footer chrome.
+        context.ui.setStatus("lsp-diagnostics", undefined);
       },
     });
 
