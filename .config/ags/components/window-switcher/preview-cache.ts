@@ -33,14 +33,19 @@ export class PreviewCache {
 
 		// Captures can arrive after activation, so watch a directory we create first.
 		if (GLib.mkdir_with_parents(previewDirectory, 0o700) !== 0) {
-			this.#reportError("create", previewDirectory, new Error("Could not create preview directory"));
+			this.#reportError(
+				"create",
+				previewDirectory,
+				new Error("Could not create preview directory"),
+			);
 			return;
 		}
 
 		try {
-			this.#monitor = Gio.File.new_for_path(
-				previewDirectory,
-			).monitor_directory(Gio.FileMonitorFlags.NONE, null);
+			this.#monitor = Gio.File.new_for_path(previewDirectory).monitor_directory(
+				Gio.FileMonitorFlags.NONE,
+				null,
+			);
 			this.#monitor.connect("changed", (_monitor, file, otherFile) => {
 				const paths = [file.get_path(), otherFile?.get_path()];
 				const changedPreview = paths.some(
@@ -103,7 +108,11 @@ export class PreviewCache {
 
 			const [success, contents] = file.load_contents(null);
 			if (!success || !contents) {
-				this.#reportError("read", path, new Error("Preview contents were empty"));
+				this.#reportError(
+					"read",
+					path,
+					new Error("Preview contents were empty"),
+				);
 				return finishPreviewInfo(mark, {
 					mtime,
 					...fallbackPreviewDimensions(size),
@@ -115,7 +124,11 @@ export class PreviewCache {
 			);
 			const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
 			if (!pixbuf) {
-				this.#reportError("decode", path, new Error("Preview image was invalid"));
+				this.#reportError(
+					"decode",
+					path,
+					new Error("Preview image was invalid"),
+				);
 				return finishPreviewInfo(mark, {
 					mtime,
 					...fallbackPreviewDimensions(size),
@@ -189,7 +202,9 @@ function previewDirectoryFromEnvironment(): string | null {
 }
 
 function isPreviewPath(path: string, previewDirectory: string): boolean {
-	return GLib.path_get_dirname(path) === previewDirectory && path.endsWith(".jpg");
+	return (
+		GLib.path_get_dirname(path) === previewDirectory && path.endsWith(".jpg")
+	);
 }
 
 function finishPreviewInfo(

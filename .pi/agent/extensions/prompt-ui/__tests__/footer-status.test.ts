@@ -61,9 +61,9 @@ describe("prompt footer statuses", () => {
 
   test("colors file change counts in the footer", () => {
     expect(renderFooterStatus(theme, "file-changes", "2 files +40 -25")).toBe(
-      "text:2 files success:+40 error:-25 ",
+      "text:2 files success:+40 error:-25",
     );
-    expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file ");
+    expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
   test("omits YOLO from the lower footer", () => {
@@ -95,23 +95,23 @@ describe("prompt footer statuses", () => {
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).toContain("permission status");
-    expect(plainLine.endsWith("2 files +40 -25  · ⊙ 2 MCP")).toBe(true);
+    expect(plainLine.endsWith("2 files +40 -25 · ⊙ 2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });
 
-  test("leaves one column after file changes at the right edge", () => {
-    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
+  test("leaves one column after right-side statuses at the right edge", () => {
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
     const line = renderPromptHints(
       ansiTheme,
       keybindings,
       promptState,
       "~/dotfiles",
       60,
-      fileStatus,
+      mcpStatus,
     );
     const plainLine = stripTerminalSequences(line);
 
-    expect(plainLine.endsWith("2 files +40 -25 ")).toBe(true);
+    expect(plainLine.endsWith("⊙ 2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });
 
@@ -130,7 +130,7 @@ describe("prompt footer statuses", () => {
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).not.toContain("2 files");
-    expect(plainLine.endsWith("⊙ 2 MCP")).toBe(true);
+    expect(plainLine.endsWith("⊙ 2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(25);
   });
 

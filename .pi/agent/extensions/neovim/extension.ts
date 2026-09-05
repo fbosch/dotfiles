@@ -32,9 +32,13 @@ const NeovimParameters = Type.Union([
   Type.Object(
     {
       operation: Type.Literal("read_buffer"),
-      buffer: Type.Integer({ minimum: 1 }),
-      startLine: Type.Optional(Type.Integer({ minimum: 1 })),
-      endLine: Type.Optional(Type.Integer({ minimum: 1 })),
+      buffer: Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 }),
+      startLine: Type.Optional(Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 })),
+      endLine: Type.Optional(Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 })),
+      expectedPath: Type.Optional(Type.String({ maxLength: 4096 })),
+      expectedChangedtick: Type.Optional(
+        Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 0 }),
+      ),
     },
     { additionalProperties: false },
   ),

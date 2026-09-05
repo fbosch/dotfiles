@@ -1,9 +1,48 @@
+import { createRoot } from "ags";
 import GdkPixbuf from "gi://GdkPixbuf?version=2.0";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
+import { WindowSwitcherController } from "@/components/window-switcher/controller";
 import type { WindowInfo } from "@/components/window-switcher/machine";
 import { PreviewCache } from "@/components/window-switcher/preview-cache";
 import { assert, test } from "./harness";
+
+test("Window Switcher starts preview monitoring on every opening path", async () => {
+	for (const action of ["show", "next", "prev"] as const) {
+		await withPreviewEnvironment(async ({ previewDirectory }) => {
+			const windows: WindowInfo[] = [
+				{ address: "0x1", class: "One", title: "One", workspace: "1" },
+				{ address: "0x2", class: "Two", title: "Two", workspace: "1" },
+			];
+			const controller = new WindowSwitcherController({
+				repository: {
+					getWindows: async () => windows,
+					getActiveAddress: async () => windows[0].address,
+					updateFocusHistory: () => {},
+				},
+			});
+			let disposeRoot = () => {};
+			createRoot((dispose) => {
+				disposeRoot = dispose;
+				controller.init();
+			});
+			try {
+				await controller[action]();
+				assert(
+					controller.isVisible(),
+					`${action} did not activate the switcher`,
+				);
+				assert(
+					GLib.file_test(previewDirectory, GLib.FileTest.IS_DIR),
+					`${action} did not establish the instance preview directory`,
+				);
+			} finally {
+				controller.teardown();
+				disposeRoot();
+			}
+		});
+	}
+});
 
 test("Window Switcher decodes and caches preview textures", async () => {
 	await withPreviewEnvironment(async ({ previewDirectory }) => {
@@ -26,7 +65,10 @@ test("Window Switcher decodes and caches preview textures", async () => {
 			const cached = cache.getInfo(fixturePath);
 			assert(cached.texture !== undefined, "cached preview has no texture");
 			assert(cached === decoded, "second preview read did not use the cache");
-			assert(cache.getMtime(fixturePath) !== null, "preview mtime was unavailable");
+			assert(
+				cache.getMtime(fixturePath) !== null,
+				"preview mtime was unavailable",
+			);
 			assert(cache.getMtime(null) === null, "null preview had an mtime");
 			cache.startMonitoring();
 			cache.startMonitoring();
@@ -46,14 +88,19 @@ test("Window Switcher keeps preview lookup inside the Hyprland instance", async 
 			flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
 		});
 		// AGS runs native tests from scripts/tests/gjs.
-		launcher.set_cwd(GLib.canonicalize_filename("../../../../hypr", GLib.get_current_dir()));
+		launcher.set_cwd(
+			GLib.canonicalize_filename("../../../../hypr", GLib.get_current_dir()),
+		);
 		const lua = launcher.spawnv([
 			"luajit",
 			"-e",
 			'io.write(require("runtime.lib.hypr-ipc").instance_path("window-captures"))',
 		]);
 		const [success, instanceA, diagnostic] = lua.communicate_utf8(null, null);
-		assert(success && lua.get_successful(), `Lua instance path failed: ${diagnostic}`);
+		assert(
+			success && lua.get_successful(),
+			`Lua instance path failed: ${diagnostic}`,
+		);
 		const instanceB = previewDirectoryFor(runtimeDirectory, "instance-b");
 		assert(
 			instanceA === `${runtimeDirectory}/hypr/instance-a/window-captures`,
@@ -96,9 +143,15 @@ test("Window Switcher keeps preview lookup inside the Hyprland instance", async 
 					cacheB.getPath(window) === stablePathB,
 					"cache did not resolve the second instance directory",
 				);
-				assert(cacheB.getInfo(stablePathA).texture === undefined, "decoded another instance's preview");
+				assert(
+					cacheB.getInfo(stablePathA).texture === undefined,
+					"decoded another instance's preview",
+				);
 				GLib.unlink(stablePathA);
-				assert(cacheA.getPath(window) === addressPathA, "address fallback was not preserved");
+				assert(
+					cacheA.getPath(window) === addressPathA,
+					"address fallback was not preserved",
+				);
 			} finally {
 				cacheB.dispose();
 			}
@@ -162,7 +215,10 @@ test("Window Switcher preserves previews across cache disposal", async () => {
 		};
 		const firstCache = new PreviewCache(() => {});
 		try {
-			assert(firstCache.getPath(window) === fixturePath, "initial preview was not found");
+			assert(
+				firstCache.getPath(window) === fixturePath,
+				"initial preview was not found",
+			);
 			assert(
 				firstCache.getInfo(fixturePath).texture !== undefined,
 				"initial preview was not decoded",
@@ -200,10 +256,16 @@ test("Window Switcher can watch previews after directory creation fails", async 
 		try {
 			cache.startMonitoring();
 			cache.startMonitoring();
-			assert(cache.getPath({ address: "0xblocked" } as WindowInfo) === null, "blocked directory exposed a preview");
+			assert(
+				cache.getInfo(`${previewDirectory}/blocked.jpg`).texture === undefined,
+				"blocked directory exposed a preview",
+			);
 			GLib.unlink(parentPath);
 			cache.startMonitoring();
-			assert(GLib.file_test(previewDirectory, GLib.FileTest.IS_DIR), "monitor did not recover after directory became writable");
+			assert(
+				GLib.file_test(previewDirectory, GLib.FileTest.IS_DIR),
+				"monitor did not recover after directory became writable",
+			);
 		} finally {
 			cache.dispose();
 		}
@@ -257,8 +319,14 @@ test("Window Switcher monitors a missing directory before first publication", as
 			);
 			await firstChange;
 			await delay(50);
-			assert(changes > 0, "preview monitor did not notify for first publication");
-			assert(cache.getPath(window) === publishedPath, "published preview was not found");
+			assert(
+				changes > 0,
+				"preview monitor did not notify for first publication",
+			);
+			assert(
+				cache.getPath(window) === publishedPath,
+				"published preview was not found",
+			);
 			const changesBeforeDispose = changes;
 			cache.dispose();
 
@@ -271,7 +339,10 @@ test("Window Switcher monitors a missing directory before first publication", as
 				null,
 			);
 			await delay(100);
-			assert(changes === changesBeforeDispose, "disposed preview monitor still notified");
+			assert(
+				changes === changesBeforeDispose,
+				"disposed preview monitor still notified",
+			);
 		} finally {
 			if (timeoutId !== 0) GLib.source_remove(timeoutId);
 			cache.dispose();
@@ -291,7 +362,10 @@ async function withPreviewEnvironment(
 		GLib.get_tmp_dir(),
 		`ags-window-switcher-preview-test-${GLib.uuid_string_random()}`,
 	]);
-	const previewDirectory = previewDirectoryFor(runtimeDirectory, "test-instance");
+	const previewDirectory = previewDirectoryFor(
+		runtimeDirectory,
+		"test-instance",
+	);
 	GLib.setenv("XDG_RUNTIME_DIR", runtimeDirectory, true);
 	GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", "test-instance", true);
 	try {
@@ -301,13 +375,20 @@ async function withPreviewEnvironment(
 			GLib.setenv("XDG_RUNTIME_DIR", originalRuntimeDirectory, true);
 		else GLib.unsetenv("XDG_RUNTIME_DIR");
 		if (originalInstanceSignature !== null)
-			GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", originalInstanceSignature, true);
+			GLib.setenv(
+				"HYPRLAND_INSTANCE_SIGNATURE",
+				originalInstanceSignature,
+				true,
+			);
 		else GLib.unsetenv("HYPRLAND_INSTANCE_SIGNATURE");
 		removeTree(Gio.File.new_for_path(runtimeDirectory));
 	}
 }
 
-function previewDirectoryFor(runtimeDirectory: string, instanceSignature: string): string {
+function previewDirectoryFor(
+	runtimeDirectory: string,
+	instanceSignature: string,
+): string {
 	return GLib.build_filenamev([
 		runtimeDirectory,
 		"hypr",

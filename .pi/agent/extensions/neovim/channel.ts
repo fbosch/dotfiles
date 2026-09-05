@@ -364,6 +364,10 @@ export class PiNeovimChannel {
           buffer: options.buffer,
           ...(options.startLine === undefined ? {} : { startLine: options.startLine }),
           ...(options.endLine === undefined ? {} : { endLine: options.endLine }),
+          ...(options.expectedPath === undefined ? {} : { expectedPath: options.expectedPath }),
+          ...(options.expectedChangedtick === undefined
+            ? {}
+            : { expectedChangedtick: options.expectedChangedtick }),
         }),
         "Timed out reading a buffer from the bound Neovim instance",
       );
@@ -652,7 +656,7 @@ export class PiNeovimChannel {
       return;
     }
 
-    const prompt = parsePromptNotification(method, args);
+    const prompt = parsePromptNotification(method, args, this.#cwd);
     if (prompt === undefined) return;
     const acknowledgement = prompt.ok
       ? this.#promptRequestHandler?.(prompt.value)

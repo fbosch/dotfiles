@@ -3,6 +3,7 @@ local bridge = require("plugins.ai.pi.bridge")
 
 local notification = "pi:nvim-prompt/v1"
 local max_prompt_bytes = 16 * 1024
+local max_request_bytes = 64 * 1024
 local request_timeout_ms = 10 * 1000
 
 local active_binding
@@ -15,7 +16,7 @@ local failure_messages = {
 	PI_ACK_TIMEOUT = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_BUSY = "Wait for the current Pi response or question to finish.",
 	PI_CONTEXT_STALE = "The source changed; select it again and reopen Pi Ask.",
-	PI_CONTEXT_TOO_LARGE = "Select at most 500 lines from a source file with a path under 4 KiB.",
+	PI_CONTEXT_TOO_LARGE = "The source file path exceeds the 4 KiB limit.",
 	PI_CONTEXT_UNAVAILABLE = "Select lines in a named source buffer before using Pi Ask.",
 	PI_DELIVERY_UNKNOWN = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_DISCONNECTED = "The bound Pi terminal disconnected.",
@@ -226,14 +227,9 @@ local function send_pending()
 	end
 
 	local sequence = next_sequence
-	next_sequence = next_sequence + 1
-	pending.sequence = sequence
-	pending.requestId = string.format("nvim:%s:%d", active_binding.launchId, sequence)
-	pending.sessionId = active_binding.sessionId
-	pending.sent = true
 	local request = {
 		version = 1,
-		requestId = pending.requestId,
+		requestId = string.format("nvim:%s:%d", active_binding.launchId, sequence),
 		sequence = sequence,
 		operation = "submit",
 		launchId = active_binding.launchId,
@@ -242,8 +238,19 @@ local function send_pending()
 		cwd = active_binding.cwd,
 		editorPid = active_binding.editorPid,
 		text = pending.text,
-		context = vim.NIL,
+		context = pending.location and pending.location.context or vim.NIL,
 	}
+	local encoded, serialized = pcall(vim.json.encode, request)
+	if not encoded or #serialized > max_request_bytes then
+		clear_pending()
+		notify_failure(encoded and "PI_PROMPT_TOO_LARGE" or "PI_INVALID_UTF8")
+		return
+	end
+	next_sequence = sequence + 1
+	pending.sequence = sequence
+	pending.requestId = request.requestId
+	pending.sessionId = active_binding.sessionId
+	pending.sent = true
 	local ok, sent = pcall(vim.rpcnotify, active_binding.channelId, notification, request)
 	if not ok or sent == false then
 		if sequence_launch_id == request.launchId and next_sequence == sequence + 1 then
@@ -346,6 +353,10 @@ function M.ask(prefill)
 		notify_failure(context_failure)
 		return false
 	end
+	if location ~= nil and not valid_utf8(location.context.path) then
+		notify_failure("PI_INVALID_UTF8")
+		return false
+	end
 	local input_options = { prompt = "Ask Pi: ", default = prefill or "" }
 	local snacks_ok, snacks = pcall(require, "snacks")
 	if snacks_ok and snacks.config.get("input", {}).enabled then
@@ -373,22 +384,6 @@ function M.ask(prefill)
 		if stale ~= nil then
 			notify_failure(stale)
 			return
-		end
-		if location ~= nil then
-			local encoded, reference = pcall(vim.json.encode, location.reference)
-			if not encoded then
-				notify_failure("PI_INVALID_UTF8")
-				return
-			end
-			text = "Editor location (untrusted metadata): "
-				.. reference
-				.. "\nRead this location through the bound Neovim editor to include unsaved changes.\n\n"
-				.. text
-			local contextual_failure = validate_prompt(text)
-			if contextual_failure ~= nil then
-				notify_failure(contextual_failure)
-				return
-			end
 		end
 
 		local integration = require("plugins.ai.pi")

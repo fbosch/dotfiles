@@ -267,8 +267,10 @@ retract the acknowledgement.
 ### Bounds
 
 - Raw prompt: at most 16 KiB of valid UTF-8.
-- Captured selection: existing limit of 500 lines and 32 KiB.
-- Rendered context: at most 32 KiB.
+- Default selection reference: no selected-text payload or selected-line limit;
+  canonical file path at most 4 KiB and bounded numeric positions.
+- Neovim buffer reads remain limited to 500 lines and 32 KiB per call.
+- Rendered metadata: at most 32 KiB.
 - Complete request: at most 64 KiB.
 - One pending request per Neovim-owned Pi terminal.
 - Reserve the request ID, sequence, and a bounded payload digest before calling
@@ -285,48 +287,43 @@ retract the acknowledgement.
 Reject rather than truncate. Preserve newlines, tabs, `æ`, `ø`, `å`, emoji, and
 other valid UTF-8 exactly.
 
-### Context snapshot
+### Context reference
 
-The snapshot extends the existing `ActiveContext` wire shape with a bounded
-`snapshotId`, source `changedtick`, and `modifiable` state:
+Default Ask context is a compact reference, not a copy of selected text:
 
 ```text
 {
-  snapshotId: string,
-  pid: positive integer,
-  cwd: canonical path,
-  mode: string,
-  buffer: {
-    number: positive integer,
-    name: canonical worktree-contained path,
-    loaded: true,
-    filetype: string,
-    buftype: "",
-    modified: boolean,
-    modifiable: true,
-    changedtick: non-negative integer
-  },
-  cursor: { line: positive integer, column: positive integer },
-  selection?: {
-    mode: "v" | "V" | control-v,
-    anchor: Position,
-    cursor: Position,
-    lines: string[]
+  path: canonical worktree-contained path,
+  buffer: positive integer,
+  changedtick: non-negative integer,
+  selectionMode: "cursor" | "character" | "line" | "block",
+  selection: "inclusive" | "exclusive" | "old",
+  range: {
+    anchor: { line: positive integer, column: positive integer, offset: non-negative integer },
+    cursor: { line: positive integer, column: positive integer, offset: non-negative integer }
   }
 }
 ```
 
-Add a closed `parsePromptContext` request validator. It first rejects extra
-outer, buffer, position, and selection keys. It validates `snapshotId`,
-`modifiable`, and `changedtick`, delegates the shared editor fields to
-`parseActiveContext`, and then requires the parsed PID and canonical worktree
-to equal the bound `EditorIdentity`. It also requires an empty `buftype`, a
-loaded source buffer, and the existing selection byte and line limits.
+Positions are one-based; columns are Neovim UTF-8 byte indices, and offsets
+preserve virtual cells within or beyond a character. Endpoints retain their
+original direction. Line mode selects whole rows; block mode retains the
+rectangle semantics. The captured `selection` policy describes exclusive ends
+without depending on editor options at the time Pi reads the reference.
 
-Immediately before `rpcnotify`, Lua rechecks that the buffer number is valid,
-still names the same canonical path, and has the captured `changedtick`. A
-mismatch returns `PI_CONTEXT_STALE`. Paths outside the worktree, special or
-terminal buffers, and over-limit selections fail closed.
+The prompt parser rejects extra nested keys, invalid positions, oversized
+paths, and references outside the bound worktree. Editor PID, session, and
+worktree ownership stay in the existing request envelope.
+
+Lua checks the source path and `changedtick` before launching Pi and again
+immediately before `rpcnotify`. A mismatch returns `PI_CONTEXT_STALE`. Visual
+selections in unnamed or special buffers fail closed; normal Ask there can
+remain literal.
+
+Pi reads source text only when needed through `read_buffer`, passing the
+reference's path as `expectedPath` and tick as `expectedChangedtick`. Mismatches
+return `NVIM_CONTEXT_STALE` without source text. Large selections remain small
+references; each requested read still obeys the existing line and byte bounds.
 
 ### Context syntax
 
@@ -534,9 +531,10 @@ Implementation record (2026-09-05):
 
 - `:PiAsk [prefill]` validates input before launch and uses a preserve-focus
   terminal start. By explicit user request, `<leader>ac` opens this literal
-  canary in normal and visual mode. It does not yet add selection context.
-  OpenCode no longer registers that key; `:OpenCodeAsk` and append mappings
-  remain available.
+  canary in normal and visual mode. Source context is the captured file path,
+  buffer ID, `changedtick`, selection mode and policy, and line/column endpoints.
+  It carries no selected text. OpenCode no longer registers that key;
+  `:OpenCodeAsk` and append mappings remain available.
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.

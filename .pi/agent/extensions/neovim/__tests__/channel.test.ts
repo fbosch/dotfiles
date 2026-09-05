@@ -393,6 +393,22 @@ describe("PiNeovimChannel", () => {
       },
     });
     expect(connection.readArguments).toEqual({ buffer: 2, endLine: 2, startLine: 1 });
+    expect(
+      await channel.readBuffer({
+        buffer: 2,
+        expectedChangedtick: 12,
+        expectedPath: focus.buffer.name,
+        endLine: 2,
+        startLine: 1,
+      }),
+    ).toMatchObject({ ok: true });
+    expect(connection.readArguments).toEqual({
+      buffer: 2,
+      endLine: 2,
+      expectedChangedtick: 12,
+      expectedPath: focus.buffer.name,
+      startLine: 1,
+    });
     expect(connection.executeCalls).toContain(bridgeOperations.visibleWindows);
     expect(connection.executeCalls).toContain(bridgeOperations.listBuffers);
     expect(connection.executeCalls).toContain(bridgeOperations.readBuffer);
@@ -744,6 +760,20 @@ describe("PiNeovimChannel", () => {
     connection.readResponse = { error: "invalidRange", totalLines: 2 };
     expect(await channel.readBuffer({ buffer: 2, startLine: 3 })).toMatchObject({
       error: { code: "NVIM_INVALID_RANGE" },
+      ok: false,
+    });
+    connection.readResponse = { error: "contextStale" };
+    expect(
+      await channel.readBuffer({
+        buffer: 2,
+        expectedChangedtick: 12,
+        expectedPath: focus.buffer.name,
+      }),
+    ).toEqual({
+      error: {
+        code: "NVIM_CONTEXT_STALE",
+        message: "The Neovim context is stale; refresh context and retry read_buffer",
+      },
       ok: false,
     });
     expect((await channel.status()).ok).toBe(true);

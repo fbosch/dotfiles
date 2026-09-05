@@ -44,6 +44,7 @@ case "$target" in
 esac
 
 require_command git
+require_command bun
 require_command hyperfine
 require_command jq
 require_command script
@@ -295,6 +296,11 @@ write_external_source_manifest "$external_source_manifest_before"
 write_fixture_manifest "$fixture_source_manifest"
 external_source_fingerprint="$(git hash-object "$external_source_manifest_before")"
 fixture_source_fingerprint="$(git hash-object "$fixture_source_manifest")"
+if ! env -i HOME="$fixture_home" PATH="$benchmark_path" PI_OFFLINE=0 \
+  "$timeout_bin" --kill-after=2s "$sample_timeout" \
+  bun "$benchmark_dir/startup-packages.ts" "$repo_root" "$fixture_agent"; then
+  fail "configured packages are unavailable; install the configured versions before benchmarking"
+fi
 if ! run_sample full; then
   fail "preflight startup failed or exceeded $sample_timeout"
 fi
@@ -395,6 +401,7 @@ jq -n \
       ephemeralSession: true,
       mutableStateRoots: "temporary fixture",
       installedDependencies: "symlinked, content fingerprinted, package updates disabled",
+      packageAvailability: "Pi resolver checks configured versions before timing; installation forbidden",
       fixtureValidation: "immutable files and all links must match; declared runtime outputs fingerprinted separately",
       declaredRuntimeOutputs: [
         "agent/fff/{frecency,history}/{data,lock}.mdb",

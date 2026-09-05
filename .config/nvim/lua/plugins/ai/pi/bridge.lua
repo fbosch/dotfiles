@@ -206,34 +206,28 @@ function M.capture_prompt_location()
 		return nil, "PI_CONTEXT_TOO_LARGE"
 	end
 
-	local cursor = vim.api.nvim_win_get_cursor(0)
-	local first_line, last_line = cursor[1], cursor[1]
-	if visual then
-		local anchor = vim.fn.getpos("v")
-		first_line = math.min(anchor[2], cursor[1])
-		last_line = math.max(anchor[2], cursor[1])
-	end
-	if first_line < 1 or last_line > vim.api.nvim_buf_line_count(buffer) then
+	local cursor = vim.fn.getpos(".")
+	local anchor = visual and vim.fn.getpos("v") or cursor
+	local total_lines = vim.api.nvim_buf_line_count(buffer)
+	if anchor[2] < 1 or cursor[2] < 1 or anchor[2] > total_lines or cursor[2] > total_lines then
 		return nil, "PI_CONTEXT_UNAVAILABLE"
 	end
-	if last_line - first_line + 1 > MAX_CONTEXT_LINES then
-		return nil, "PI_CONTEXT_TOO_LARGE"
-	end
-
-	local relative = path:sub(#cwd + (cwd == "/" and 1 or 2))
-	local reference = string.format("%s:L%d", relative, first_line)
-	if visual then
-		reference = reference .. string.format("-L%d", last_line)
-	else
-		reference = reference .. string.format(":C%d", cursor[2] + 1)
-	end
+	local selection_modes = { v = "character", V = "line", [string.char(22)] = "block" }
+	-- Preserve direction, byte columns and virtual-cell offsets without reading selected text.
 	return {
-		buffer = buffer,
 		name = name,
-		path = path,
 		cwd = cwd,
-		changedtick = vim.api.nvim_buf_get_changedtick(buffer),
-		reference = reference,
+		context = {
+			path = path,
+			buffer = buffer,
+			changedtick = vim.api.nvim_buf_get_changedtick(buffer),
+			selectionMode = selection_modes[mode] or "cursor",
+			selection = vim.o.selection,
+			range = {
+				anchor = { line = anchor[2], column = anchor[3], offset = anchor[4] },
+				cursor = { line = cursor[2], column = cursor[3], offset = cursor[4] },
+			},
+		},
 	}
 end
 
@@ -241,11 +235,12 @@ function M.validate_prompt_location(location, cwd)
 	if location == nil then
 		return nil
 	end
+	local context = location.context
 	if
-		not is_source_buffer(location.buffer, true)
-		or vim.api.nvim_buf_get_name(location.buffer) ~= location.name
-		or canonical_path(location.name) ~= location.path
-		or vim.api.nvim_buf_get_changedtick(location.buffer) ~= location.changedtick
+		not is_source_buffer(context.buffer, true)
+		or vim.api.nvim_buf_get_name(context.buffer) ~= location.name
+		or canonical_path(location.name) ~= context.path
+		or vim.api.nvim_buf_get_changedtick(context.buffer) ~= context.changedtick
 	then
 		return "PI_CONTEXT_STALE"
 	end
@@ -503,6 +498,8 @@ local function read_buffer(payload)
 		not has_only_keys(payload, {
 			buffer = true,
 			endLine = true,
+			expectedChangedtick = true,
+			expectedPath = true,
 			maxBytes = true,
 			maxLines = true,
 			startLine = true,
@@ -517,6 +514,29 @@ local function read_buffer(payload)
 	end
 	if is_source_buffer(buffer, true) == false then
 		return { error = "invalidBuffer" }
+	end
+
+	if payload.expectedChangedtick ~= nil then
+		if not nonnegative_integer(payload.expectedChangedtick) then
+			return invalid_request()
+		end
+		if vim.api.nvim_buf_get_changedtick(buffer) ~= payload.expectedChangedtick then
+			return { error = "contextStale" }
+		end
+	end
+	if payload.expectedPath ~= nil then
+		local expected_path = payload.expectedPath
+		if
+			type(expected_path) ~= "string"
+			or #expected_path > 4096
+			or expected_path:sub(1, 1) ~= "/"
+			or expected_path:find("\0", 1, true) ~= nil
+		then
+			return invalid_request()
+		end
+		if canonical_path(vim.api.nvim_buf_get_name(buffer)) ~= canonical_path(expected_path) then
+			return { error = "contextStale" }
+		end
 	end
 
 	local requested_start = payload.startLine or 0

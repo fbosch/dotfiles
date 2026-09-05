@@ -97,11 +97,24 @@ for _, mode in ipairs({ "v", "V", string.char(22) }) do
 		local before = #requests
 		confirm("explain æøå")
 		assert(#requests == before + 1, "selected Pi Ask did not send once")
-		local text = requests[#requests].text
-		assert(text:find('"pi-ask-selection-fixture.lua:L2-L4"', 1, true), "Pi Ask lost its captured line range")
-		assert(text:find("untrusted metadata", 1, true), "source location was not labeled as data")
-		assert(text:find("explain æøå", 1, true), "Pi Ask changed the user's text")
-		assert(not text:find("anden", 1, true), "location-only context copied source text")
+		local request = requests[#requests]
+		assert(request.text == "explain æøå", "Pi Ask changed the user's text")
+		local selection_modes = { v = "character", V = "line", [string.char(22)] = "block" }
+		assert(
+			vim.deep_equal(request.context, {
+				path = repo_root .. "/pi-ask-selection-fixture.lua",
+				buffer = source,
+				changedtick = vim.api.nvim_buf_get_changedtick(source),
+				selectionMode = selection_modes[mode],
+				selection = vim.o.selection,
+				range = {
+					anchor = { line = endpoints[1], column = 1, offset = 0 },
+					cursor = { line = endpoints[2], column = 2, offset = 0 },
+				},
+			}),
+			"Pi Ask lost its captured selection reference"
+		)
+		assert(not vim.json.encode(request):find("anden", 1, true), "reference context copied source text")
 		assert(focuses == before, "Pi Ask focused before acknowledgement")
 		accept_last()
 	end
@@ -113,7 +126,12 @@ snacks_enabled = false
 assert(prompt.ask("native input") == true)
 assert(input_options.win == nil, "native input received Snacks-only options")
 confirm("cursor question")
-assert(requests[#requests].text:find('"pi-ask-selection-fixture.lua:L2:C2"', 1, true))
+assert(requests[#requests].text == "cursor question")
+assert(requests[#requests].context.selectionMode == "cursor")
+assert(vim.deep_equal(requests[#requests].context.range, {
+	anchor = { line = 2, column = 2, offset = 0 },
+	cursor = { line = 2, column = 2, offset = 0 },
+}))
 accept_last()
 snacks_enabled = true
 
@@ -126,8 +144,8 @@ assert(prompt.ask("") == true)
 confirm(" ")
 assert(starts == before_starts and #requests == before_requests, "context made an empty prompt submittable")
 assert(prompt.ask("") == true)
-confirm(string.rep("a", 16 * 1024))
-assert(starts == before_starts and #requests == before_requests, "context bypassed the combined text limit")
+confirm(string.rep("a", 16 * 1024 + 1))
+assert(starts == before_starts and #requests == before_requests, "context bypassed the prompt text limit")
 assert(notifications[#notifications]:find("PI_PROMPT_TOO_LARGE", 1, true))
 
 assert(prompt.ask("") == true)
@@ -160,10 +178,63 @@ vim.api.nvim_buf_set_name(source, "/tmp/pi-ask-outside-fixture.lua")
 assert(prompt.ask("") == false, "outside-worktree source opened contextual Ask")
 assert(notifications[#notifications]:find("PI_WORKTREE_MISMATCH", 1, true))
 vim.api.nvim_buf_set_name(source, repo_root .. "/pi-ask-selection-fixture.lua")
-vim.api.nvim_buf_set_lines(source, 0, -1, false, vim.fn["repeat"]({ "line" }, 501))
-select("V", 1, 501)
-assert(prompt.ask("") == false, "over-limit selection opened Pi Ask")
-assert(notifications[#notifications]:find("PI_CONTEXT_TOO_LARGE", 1, true))
+vim.api.nvim_buf_set_lines(source, 0, -1, false, vim.fn["repeat"]({ "large range source text" }, 10000))
+select("V", 1, 10000)
+local original_getregion = vim.fn.getregion
+rawset(vim.fn, "getregion", function()
+	error("reference capture must not read selected text")
+end)
+assert(prompt.ask("") == true, "large reference-only selection could not open Pi Ask")
+rawset(vim.fn, "getregion", original_getregion)
+confirm("question about a large range")
+local large = requests[#requests].context
+assert(large.range.anchor.line == 1 and large.range.cursor.line == 10000)
+assert(#vim.json.encode(large) < 1024, "large selection produced a large prompt context")
+assert(not vim.json.encode(large):find("large range source text", 1, true))
+accept_last()
+
+vim.cmd("normal! \27")
+vim.api.nvim_buf_set_lines(source, 0, -1, false, { "æøå🚀", "\ttext" })
+local original_selection = vim.o.selection
+local original_virtualedit = vim.o.virtualedit
+vim.o.selection = "exclusive"
+vim.o.virtualedit = "all"
+vim.api.nvim_win_set_cursor(0, { 1, 2 })
+vim.cmd("normal! v")
+vim.api.nvim_win_set_cursor(0, { 1, 6 })
+assert(prompt.ask("") == true)
+vim.o.selection = "inclusive"
+confirm("multibyte range")
+local multibyte = requests[#requests].context
+assert(multibyte.selection == "exclusive", "input-time selection option replaced the snapshot")
+assert(multibyte.range.anchor.column == 3 and multibyte.range.cursor.column == 7, "UTF-8 byte columns changed")
+accept_last()
+vim.cmd("normal! \27")
+vim.o.selection = original_selection
+vim.o.virtualedit = original_virtualedit
+
+local function read_reference(context, extra)
+	return bridge.dispatch({
+		channelId = binding.channelId,
+		operation = "read_buffer",
+		payload = vim.tbl_extend("force", {
+			buffer = context.buffer,
+			expectedPath = context.path,
+			expectedChangedtick = context.changedtick,
+			startLine = 1,
+			endLine = 1,
+		}, extra or {}),
+	})
+end
+assert(vim.deep_equal(read_reference(multibyte).lines, { "æøå🚀" }), "guarded read did not return unsaved text")
+assert(read_reference(multibyte, { expectedPath = repo_root .. "/different-file.lua" }).error == "contextStale")
+assert(read_reference(multibyte, { expectedChangedtick = -1 }).error == "invalidRequest")
+assert(read_reference(multibyte, { expectedPath = "relative.lua" }).error == "invalidRequest")
+vim.api.nvim_buf_set_lines(source, 0, 1, false, { "new source" })
+assert(read_reference(multibyte).error == "contextStale", "guarded read accepted a changed source")
+local latest = assert(bridge.capture_prompt_location()).context
+vim.api.nvim_buf_set_name(source, repo_root .. "/pi-ask-renamed-fixture.lua")
+assert(read_reference(latest).error == "contextStale", "guarded read accepted a renamed buffer")
 
 vim.cmd("normal! \27")
 vim.api.nvim_set_current_buf(input_buffer)

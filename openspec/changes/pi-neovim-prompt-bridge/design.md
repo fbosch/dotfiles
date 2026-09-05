@@ -113,10 +113,22 @@ focus.
 ### Keep request validation separate from tool response parsing
 
 A dedicated prompt protocol module owns closed envelope validation, UTF-8 byte
-limits, stable failure codes, sequencing, and acknowledgements. Prompt context
-uses an `ActiveContext`-compatible shape but adds snapshot ID, `changedtick`,
-and `modifiable`. Its request validator rejects extra nested keys before
-reusing the proven editor field parser and checking the bound editor identity.
+limits, stable failure codes, sequencing, and acknowledgements. Default prompt
+context is a closed selection reference: canonical file path, buffer ID,
+`changedtick`, selection mode and policy, and anchor/cursor positions. It carries
+no source text and does not grow with the selected range. Nested keys and
+worktree containment are validated before dispatch.
+
+Positions use one-based lines and UTF-8 byte columns plus native virtual-cell
+offsets. Keeping anchor/cursor direction and the `selection` option avoids
+losing reversed, exclusive, or block selection semantics. Lua captures this
+reference before opening input and rechecks path and `changedtick` before
+launch and delivery.
+
+Pi receives the reference as explicitly untrusted metadata alongside the user
+text. The existing `read_buffer` operation accepts `expectedPath` and
+`expectedChangedtick` guards; it checks them before returning bounded unsaved
+buffer contents. References may cover more than the per-read 500-line limit.
 
 Lua captures eligible context before input and rechecks the buffer path and
 changed tick immediately before `rpcnotify`. Generic literal Ask permits null

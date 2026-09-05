@@ -266,6 +266,8 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("maxItems");
   expect(parameters).toContain("startLine");
   expect(parameters).toContain("endLine");
+  expect(parameters).toContain("expectedPath");
+  expect(parameters).toContain("expectedChangedtick");
   expect(parameters).toContain("column");
   expect(parameters).toContain("focus");
   expect(parameters).toContain("split");
@@ -289,6 +291,35 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     }),
   ).toBe(false);
   expect(Value.Check(tool.parameters, { maxItems: 51, operation: "quickfix" })).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      expectedChangedtick: 0,
+      expectedPath: "/project/example.ts",
+      operation: "read_buffer",
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      expectedChangedtick: -1,
+      operation: "read_buffer",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      expectedChangedtick: Number.MAX_SAFE_INTEGER + 1,
+      operation: "read_buffer",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
+      buffer: 2,
+      expectedPath: "x".repeat(4097),
+      operation: "read_buffer",
+    }),
+  ).toBe(false);
   expect(Value.Check(tool.parameters, { buffer: 2, column: 4, line: 3, operation: "reveal" })).toBe(
     true,
   );

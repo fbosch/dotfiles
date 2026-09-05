@@ -1,5 +1,4 @@
 import { createRoot } from "ags";
-import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import type { WindowSwitcherController } from "@/components/window-switcher/controller";
@@ -522,56 +521,6 @@ test("Window Switcher ignores a hidden cycle after cancellation", async () => {
 	}
 });
 
-test("Window Switcher starts preview monitoring for real next and prev", async () => {
-	const originalRuntimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
-	const originalInstanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
-	const runtimeDirectory = GLib.build_filenamev([
-		GLib.get_tmp_dir(),
-		`ags-window-switcher-controller-test-${GLib.uuid_string_random()}`,
-	]);
-	const previewDirectory = GLib.build_filenamev([
-		runtimeDirectory,
-		"hypr",
-		"controller-test-instance",
-		"window-captures",
-	]);
-	GLib.setenv("XDG_RUNTIME_DIR", runtimeDirectory, true);
-	GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", "controller-test-instance", true);
-	const controller = new RealWindowSwitcherController({
-		repository: {
-			getWindows: async () => windows,
-			getActiveAddress: async () => windows[0].address,
-			updateFocusHistory: () => {},
-		},
-	});
-	let disposeRoot = () => {};
-	createRoot((dispose) => {
-		disposeRoot = dispose;
-		controller.init();
-	});
-	try {
-		await controller.next("ALT");
-		assert(controller.isVisible(), "real next did not activate the switcher");
-		assert(
-			Gio.File.new_for_path(previewDirectory).query_exists(null),
-			"real next did not create the instance preview directory",
-		);
-		controller.hide();
-		await controller.prev("ALT");
-		assert(controller.isVisible(), "real prev did not activate the switcher");
-	} finally {
-		controller.teardown();
-		disposeRoot();
-		if (originalRuntimeDirectory !== null)
-			GLib.setenv("XDG_RUNTIME_DIR", originalRuntimeDirectory, true);
-		else GLib.unsetenv("XDG_RUNTIME_DIR");
-		if (originalInstanceSignature !== null)
-			GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", originalInstanceSignature, true);
-		else GLib.unsetenv("HYPRLAND_INSTANCE_SIGNATURE");
-		removeTree(Gio.File.new_for_path(runtimeDirectory));
-	}
-});
-
 function createPreviewCacheWithoutIdentity(): PreviewCache {
 	const originalRuntimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
 	const originalInstanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
@@ -653,27 +602,3 @@ function findWidgetWithClass(widget: Gtk.Widget, className: string): Gtk.Widget 
 	return null;
 }
 
-function removeTree(file: Gio.File): void {
-	let enumerator: Gio.FileEnumerator | null = null;
-	try {
-		enumerator = file.enumerate_children(
-			"standard::name,standard::type",
-			Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
-			null,
-		);
-		while (true) {
-			const info = enumerator.next_file(null);
-			if (!info) break;
-			removeTree(file.get_child(info.get_name()));
-		}
-	} catch {
-		// A regular file has no children.
-	} finally {
-		enumerator?.close(null);
-	}
-	try {
-		file.delete(null);
-	} catch {
-		// Failed tests should not hide their original assertion behind fixture cleanup.
-	}
-}

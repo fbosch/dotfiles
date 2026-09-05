@@ -30,6 +30,7 @@ export const FOCUS_NOTIFICATION = "pi:focus";
 
 export type NeovimErrorCode =
   | "NVIM_AMBIGUOUS_ANCHOR"
+  | "NVIM_CONTEXT_STALE"
   | "NVIM_INVALID_ANNOTATION"
   | "NVIM_INVALID_BUFFER"
   | "NVIM_INVALID_RANGE"
@@ -112,6 +113,8 @@ export interface BufferInventory {
 export interface BufferReadOptions {
   readonly buffer: number;
   readonly endLine?: number;
+  readonly expectedChangedtick?: number;
+  readonly expectedPath?: string;
   readonly startLine?: number;
 }
 
@@ -621,6 +624,10 @@ export function worktreesMatch(left: string, right: string): boolean {
   return canonicalLeft !== undefined && canonicalLeft === canonicalPath(right);
 }
 
+export function pathIsCanonical(path: string): boolean {
+  return isAbsolute(path) && canonicalPath(path) === path;
+}
+
 export function pathIsInsideWorktree(path: string, cwd: string): boolean {
   if (path === "") return true;
   const absoluteCwd = canonicalPath(cwd);
@@ -771,6 +778,12 @@ function parseReadFailure(value: unknown): BridgeResult<never> | undefined {
   if (value.error === "invalidRange") {
     const suffix = Number.isInteger(value.totalLines) ? ` within 1-${value.totalLines}` : "";
     return failure("NVIM_INVALID_RANGE", `Choose a line range${suffix}`);
+  }
+  if (value.error === "contextStale") {
+    return failure(
+      "NVIM_CONTEXT_STALE",
+      "The Neovim context is stale; refresh context and retry read_buffer",
+    );
   }
   if (value.error === "lineLimit") {
     return failure(

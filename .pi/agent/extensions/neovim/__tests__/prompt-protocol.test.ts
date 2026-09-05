@@ -10,11 +10,24 @@ import {
   PromptRequestDispatcher,
   parsePromptBinding,
   parsePromptNotification,
+  parseSelectionReference,
+  type SelectionReference,
 } from "../prompt-protocol";
 
 const launchId = "0123456789abcdef0123456789abcdef";
 const sessionId = "pi-session-one";
 const ownerId = "herdr-w1-p1";
+const selectionReference: SelectionReference = {
+  buffer: 4,
+  changedtick: 12,
+  path: "/project/src/example.ts",
+  range: {
+    anchor: { column: 2, line: 8, offset: 1 },
+    cursor: { column: 7, line: 8, offset: 6 },
+  },
+  selection: "inclusive",
+  selectionMode: "character",
+};
 
 function request(overrides: Partial<PromptRequest> = {}): PromptRequest {
   const sequence = overrides.sequence ?? 1;
@@ -61,6 +74,7 @@ function dispatcherFixture(
 ) {
   let editorText = options.editorText ?? "";
   const sent: string[] = [];
+  const sentOptions: unknown[] = [];
   const writes: string[] = [];
   const context = {
     cwd: "/project",
@@ -77,8 +91,9 @@ function dispatcherFixture(
     },
   } as unknown as ExtensionContext;
   const pi = {
-    sendUserMessage: (text: string) => {
+    sendUserMessage: (text: string, sendOptions: unknown) => {
       sent.push(text);
+      sentOptions.push(sendOptions);
       options.onSubmit?.();
     },
   } as unknown as ExtensionAPI;
@@ -88,28 +103,127 @@ function dispatcherFixture(
     context: () => (options.hasContext === false ? undefined : context),
     replayState: options.replayState ?? createPromptReplayState(),
   });
-  return { dispatcher, editorText: () => editorText, sent, writes };
+  return { dispatcher, editorText: () => editorText, sent, sentOptions, writes };
 }
 
 describe("Pi prompt notification contract", () => {
   test("parses one closed bounded request", () => {
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request()])).toEqual({
+    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request()], "/project")).toEqual({
       ok: true,
       value: request(),
     });
   });
 
+  test("parses bounded closed references without selected text", () => {
+    expect(parseSelectionReference(selectionReference, "/project")).toEqual(selectionReference);
+    expect(
+      parseSelectionReference(
+        {
+          ...selectionReference,
+          path: "/project/src/æøå.ts",
+        },
+        "/project",
+      ),
+    ).toMatchObject({ path: "/project/src/æøå.ts" });
+
+    const hugeRange: SelectionReference = {
+      ...selectionReference,
+      buffer: Number.MAX_SAFE_INTEGER,
+      changedtick: Number.MAX_SAFE_INTEGER,
+      range: {
+        anchor: {
+          column: Number.MAX_SAFE_INTEGER,
+          line: Number.MAX_SAFE_INTEGER,
+          offset: Number.MAX_SAFE_INTEGER,
+        },
+        cursor: {
+          column: Number.MAX_SAFE_INTEGER,
+          line: Number.MAX_SAFE_INTEGER,
+          offset: Number.MAX_SAFE_INTEGER,
+        },
+      },
+    };
+    expect(parseSelectionReference(hugeRange, "/project")).toEqual(hugeRange);
+    expect(Buffer.byteLength(JSON.stringify(hugeRange), "utf8")).toBeLessThan(1024);
+    expect(
+      parseSelectionReference({ ...selectionReference, lines: ["secret selection"] }, "/project"),
+    ).toBeUndefined();
+  });
+
+  test("rejects invalid reference fields, nested extras, and other worktrees", () => {
+    const invalidReferences: unknown[] = [
+      { ...selectionReference, buffer: 0 },
+      { ...selectionReference, changedtick: -1 },
+      { ...selectionReference, selectionMode: "visual" },
+      { ...selectionReference, selection: "default" },
+      { ...selectionReference, path: "src/example.ts" },
+      { ...selectionReference, path: "/project-copy/example.ts" },
+      { ...selectionReference, path: "/project/\u0000example.ts" },
+      { ...selectionReference, path: "/project/\ud800.ts" },
+      { ...selectionReference, path: `/project/${"x".repeat(4096)}` },
+      {
+        ...selectionReference,
+        range: { ...selectionReference.range, extra: true },
+      },
+      {
+        ...selectionReference,
+        range: {
+          ...selectionReference.range,
+          anchor: { ...selectionReference.range.anchor, extra: true },
+        },
+      },
+      {
+        ...selectionReference,
+        range: {
+          ...selectionReference.range,
+          cursor: { ...selectionReference.range.cursor, extra: true },
+        },
+      },
+      {
+        ...selectionReference,
+        selectionMode: "cursor",
+      },
+    ];
+    for (const invalid of invalidReferences) {
+      expect(parseSelectionReference(invalid, "/project")).toBeUndefined();
+    }
+  });
+
+  test("accepts a submit reference, validates request worktree, and rejects contextual append", () => {
+    expect(
+      parsePromptNotification(
+        PROMPT_NOTIFICATION,
+        [request({ context: selectionReference })],
+        "/project",
+      ),
+    ).toEqual({ ok: true, value: request({ context: selectionReference }) });
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ cwd: "/project-copy" })], "/project"),
+    ).toMatchObject({ error: "PI_WORKTREE_MISMATCH", ok: false });
+    expect(
+      parsePromptNotification(
+        PROMPT_NOTIFICATION,
+        [request({ context: selectionReference, operation: "append" })],
+        "/project",
+      ),
+    ).toMatchObject({ error: "PI_UNSUPPORTED", ok: false });
+  });
+
   test("ignores unrelated notifications", () => {
-    expect(parsePromptNotification("pi:focus", [request()])).toBeUndefined();
+    expect(parsePromptNotification("pi:focus", [request()], "/project")).toBeUndefined();
   });
 
   test("rejects extra fields and malformed request identity", () => {
-    const malformed = parsePromptNotification(PROMPT_NOTIFICATION, [
-      { ...request(), forged: true },
-    ]);
-    const changed = parsePromptNotification(PROMPT_NOTIFICATION, [
-      { ...request(), forged: "changed" },
-    ]);
+    const malformed = parsePromptNotification(
+      PROMPT_NOTIFICATION,
+      [{ ...request(), forged: true }],
+      "/project",
+    );
+    const changed = parsePromptNotification(
+      PROMPT_NOTIFICATION,
+      [{ ...request(), forged: "changed" }],
+      "/project",
+    );
     expect(malformed).toMatchObject({
       error: "PI_INVALID_REQUEST",
       ok: false,
@@ -119,25 +233,31 @@ describe("Pi prompt notification contract", () => {
       malformed?.ok === false ? malformed.fingerprint : undefined,
     );
     expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [
-        { ...request(), requestId: `nvim:${launchId}:2` },
-      ]),
+      parsePromptNotification(
+        PROMPT_NOTIFICATION,
+        [{ ...request(), requestId: `nvim:${launchId}:2` }],
+        "/project",
+      ),
     ).toEqual({ error: "PI_INVALID_REQUEST", ok: false });
   });
 
   test("uses UTF-8 byte limits without truncation", () => {
     const exact = "ø".repeat(MAX_PROMPT_BYTES / 2);
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: exact })])?.ok).toBe(true);
     expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: `${exact}ø` })]),
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: exact })], "/project")?.ok,
+    ).toBe(true);
+    expect(
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: `${exact}ø` })], "/project"),
     ).toMatchObject({
       error: "PI_PROMPT_TOO_LARGE",
       ok: false,
     });
     expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [
-        request({ text: String.fromCharCode(0xd800) }),
-      ]),
+      parsePromptNotification(
+        PROMPT_NOTIFICATION,
+        [request({ text: String.fromCharCode(0xd800) })],
+        "/project",
+      ),
     ).toMatchObject({
       error: "PI_INVALID_UTF8",
       ok: false,
@@ -147,7 +267,9 @@ describe("Pi prompt notification contract", () => {
   test.each(["\ud800", "prefix\udbff", "\udc00", "\ud800x", "\ud800\ud800"])(
     "rejects unpaired surrogates in prompt text: %j",
     (text) => {
-      expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toMatchObject({
+      expect(
+        parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })], "/project"),
+      ).toMatchObject({
         error: "PI_INVALID_UTF8",
         ok: false,
       });
@@ -156,7 +278,7 @@ describe("Pi prompt notification contract", () => {
 
   test("preserves valid surrogate pairs", () => {
     const text = "prefix\ud83d\ude00suffix";
-    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toEqual({
+    expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })], "/project")).toEqual({
       ok: true,
       value: request({ text }),
     });
@@ -164,13 +286,15 @@ describe("Pi prompt notification contract", () => {
 
   test("rejects empty and NUL-containing submissions", () => {
     for (const text of [" \n\t", "\u0085", "\u00a0\u2003"]) {
-      expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toMatchObject({
+      expect(
+        parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })], "/project"),
+      ).toMatchObject({
         error: "PI_PROMPT_EMPTY",
         ok: false,
       });
     }
     expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: "no\0pe" })]),
+      parsePromptNotification(PROMPT_NOTIFICATION, [request({ text: "no\0pe" })], "/project"),
     ).toMatchObject({
       error: "PI_INVALID_REQUEST",
       ok: false,
@@ -212,6 +336,27 @@ describe("Pi prompt request dispatch", () => {
       state: "idle",
     });
     expect(target.sent).toEqual(["literal prompt"]);
+    expect(target.sentOptions).toEqual([{ expandPromptTemplates: false }]);
+  });
+
+  test("submits unchanged text with untrusted metadata and bounded-read instructions", () => {
+    const target = dispatcherFixture();
+
+    expect(target.dispatcher.dispatch(request({ context: selectionReference }))).toMatchObject({
+      outcome: "accepted",
+      state: "idle",
+    });
+    const message = target.sent[0];
+    if (message === undefined) throw new Error("context prompt was not submitted");
+    expect(message.startsWith("literal prompt")).toBe(true);
+    expect(message).toContain("[UNTRUSTED NEOVIM CONTEXT METADATA JSON]");
+    expect(message).toContain(JSON.stringify(selectionReference));
+    expect(message).toContain("read_buffer");
+    expect(message).toContain("expectedPath:path");
+    expect(message).toContain("expectedChangedtick:changedtick");
+    expect(message).toContain("bounded chunks");
+    expect(message).not.toContain("selected text");
+    expect(target.sentOptions).toEqual([{ expandPromptTemplates: false }]);
   });
 
   test.each([
@@ -257,6 +402,19 @@ describe("Pi prompt request dispatch", () => {
     expect(target.sent).toEqual([]);
   });
 
+  test("rejects contextual append without changing the editor", () => {
+    const target = dispatcherFixture({ editorText: "existing" });
+
+    expect(
+      target.dispatcher.dispatch(
+        request({ context: selectionReference, operation: "append", text: "\ncontext" }),
+      ),
+    ).toMatchObject({ code: "PI_UNSUPPORTED", outcome: "rejected" });
+    expect(target.editorText()).toBe("existing");
+    expect(target.writes).toEqual([]);
+    expect(target.sent).toEqual([]);
+  });
+
   test("rejects an in-flight duplicate before a second side effect", () => {
     let nested: ReturnType<PromptRequestDispatcher["dispatch"]> | undefined;
     let dispatcher: PromptRequestDispatcher;
@@ -282,6 +440,19 @@ describe("Pi prompt request dispatch", () => {
       outcome: "rejected",
     });
     expect(target.sent).toEqual(["literal prompt"]);
+  });
+
+  test("rejects request ID reuse when only the reference changes", () => {
+    const target = dispatcherFixture();
+    target.dispatcher.dispatch(request({ context: selectionReference }));
+
+    expect(target.dispatcher.dispatch(request({ context: selectionReference }))).toMatchObject({
+      outcome: "duplicate",
+    });
+    expect(
+      target.dispatcher.dispatch(request({ context: { ...selectionReference, changedtick: 13 } })),
+    ).toMatchObject({ code: "PI_REQUEST_ID_REUSED", outcome: "rejected" });
+    expect(target.sent).toHaveLength(1);
   });
 
   test("acknowledges malformed requests and advances their sequence", () => {

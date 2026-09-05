@@ -102,11 +102,11 @@ function keyHint(
   return key === undefined ? "" : `${formatKey(key)} ${description}`;
 }
 
-function sanitizeStatus(status: string, preserveTrailingSpace = false): string {
-  const sanitized = status.replace(/[\r\n\t]/g, " ").replace(/ +/g, " ");
-  const hasTrailingSpace = sanitized.endsWith(" ");
-  const trimmed = sanitized.trim();
-  return preserveTrailingSpace && hasTrailingSpace ? `${trimmed} ` : trimmed;
+function sanitizeStatus(status: string): string {
+  return status
+    .replace(/[\r\n\t]/g, " ")
+    .replace(/ +/g, " ")
+    .trim();
 }
 
 function isYoloStatus(status: string): boolean {
@@ -132,13 +132,13 @@ export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status
 
     const [, files, added, removed] = match;
     if (files === undefined) return status;
-    return `${[
+    return [
       theme.fg("text", files),
       added === undefined ? undefined : theme.fg("success", added),
       removed === undefined ? undefined : theme.fg("error", removed),
     ]
       .filter((part) => part !== undefined)
-      .join(" ")} `;
+      .join(" ");
   }
   if (key !== MCP_STATUS_KEY) return status;
 
@@ -180,14 +180,16 @@ export function renderPromptHints(
   const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
   const renderedLeft = theme.fg("muted", ` ${hintLeft}`);
-  const primaryRight = sanitizeStatus(primaryRightStatus, true);
-  const secondaryRight = sanitizeStatus(secondaryRightStatus, true);
+  const primaryRight = sanitizeStatus(primaryRightStatus);
+  const secondaryRight = sanitizeStatus(secondaryRightStatus);
   const combinedRight = [secondaryRight, primaryRight].filter(Boolean).join(" · ");
   const rightWidth = Math.max(0, width - visibleWidth(renderedLeft) - 1);
   const hintRight =
     primaryRight && secondaryRight && visibleWidth(combinedRight) > rightWidth
-      ? primaryRight
-      : combinedRight;
+      ? `${primaryRight} `
+      : combinedRight.length > 0
+        ? `${combinedRight} `
+        : "";
   return fitColumns(renderedLeft, hintRight, width);
 }
 

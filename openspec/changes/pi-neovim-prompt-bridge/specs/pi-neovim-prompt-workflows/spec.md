@@ -24,10 +24,17 @@ the user confirms nonempty valid text.
 - **THEN** the command ensures the exact Pi session, submits one request, and
   focuses Pi only after acceptance
 
+#### Scenario: Input opens near the editor cursor
+
+- **WHEN** Snacks enhances `vim.ui.input`
+- **THEN** Pi Ask uses cursor-relative placement above the captured source cursor,
+  rather than the default editor-centered input position
+
 #### Scenario: Native input fallback is active
 
 - **WHEN** Snacks does not enhance `vim.ui.input`
-- **THEN** `:PiAsk` retains the same submission and cancellation behavior
+- **THEN** `:PiAsk` retains the same submission and cancellation behavior without
+  passing Snacks-specific window options to native input
 
 ### Requirement: Cold start preserves source focus until acceptance
 
@@ -48,22 +55,41 @@ window current until a matching accepted acknowledgement arrives.
 
 ### Requirement: Context snapshots are stable and bounded
 
-The system SHALL capture source buffer identity, changed tick, cursor, visual
-range, selection text, Neovim session owner, and canonical worktree before
-opening Ask input. Known placeholders MUST use that snapshot and MUST fail when
-required context is absent, changed, outside the worktree, special, stale, or
-over its bound.
+The system SHALL use a compact source reference as the default Ask context.
+Before opening input it SHALL capture the canonical file path, buffer ID,
+`changedtick`, selection mode, selection policy, and anchor/cursor line and
+column positions. Columns SHALL be one-based UTF-8 byte positions with Neovim's
+virtual-cell offsets. Direction and inclusive/exclusive selection policy SHALL
+be preserved. It MUST NOT copy selected source text into the prompt.
+
+The reference MUST remain bounded regardless of the number of selected lines.
+Named source references outside the bound worktree and visual selections in
+unnamed or special buffers MUST fail closed. Normal Ask without an eligible
+source buffer MAY remain literal.
 
 #### Scenario: Visual context remains stable
 
 - **WHEN** an eligible visual selection is captured before input opens
-- **THEN** `@this` uses that bounded selection rather than input-window focus
+- **THEN** the prompt carries the captured source reference rather than
+  input-window focus or a later selection
 
 #### Scenario: Source changes while input is open
 
 - **WHEN** the captured buffer's path or changed tick changes before request
   delivery
 - **THEN** the request fails as stale without submitting partial context
+
+#### Scenario: Large selection stays metadata-only
+
+- **WHEN** the user selects a range larger than one bounded Neovim read
+- **THEN** the reference is accepted without copying or truncating selected text,
+  and Pi reads only the needed chunks through the bound toolkit
+
+#### Scenario: Source changes before a guarded read
+
+- **WHEN** Pi calls `read_buffer` with the reference's `expectedPath` and
+  `expectedChangedtick`, but either no longer matches the selected buffer
+- **THEN** the toolkit reports `NVIM_CONTEXT_STALE` without returning buffer text
 
 #### Scenario: Unknown placeholder is entered
 
@@ -87,7 +113,8 @@ omission.
 #### Scenario: Selection `@this` is available
 
 - **WHEN** `@this` has a valid captured visual selection
-- **THEN** it includes the bounded captured text with its path and range
+- **THEN** it identifies the captured reference and directs Pi to guarded,
+  bounded Neovim reads rather than embedding the selected text
 
 #### Scenario: Known context is unavailable
 
