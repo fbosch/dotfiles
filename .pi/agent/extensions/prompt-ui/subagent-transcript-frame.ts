@@ -1,6 +1,10 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
-import { paintDockRow } from "./dock-rendering";
+import { foregroundToBackground, paintDockRow } from "./dock-rendering";
+import { hexForegroundAnsi } from "./terminal-color";
+
+// Use Zenwritten's base color, not the brighter selected-row panel color.
+const TRANSCRIPT_BACKGROUND = "#191919";
 
 export class SubagentTranscriptFrame implements Component {
   constructor(
@@ -11,11 +15,11 @@ export class SubagentTranscriptFrame implements Component {
   render(width: number): string[] {
     if (width < 2) return [];
 
+    const background = foregroundToBackground(hexForegroundAnsi(this.theme, TRANSCRIPT_BACKGROUND));
     const border = (text: string) =>
-      this.theme.bg("selectedBg", this.theme.fg("borderAccent", text));
+      `${background}${this.theme.fg("borderAccent", text)}\u001b[49m`;
     const side = border("│");
     const horizontal = "─".repeat(width - 2);
-    const background = this.theme.getBgAnsi("selectedBg");
     const content = this.pane.render(Math.max(0, width - 4));
     return [
       border(`╭${horizontal}╮`),

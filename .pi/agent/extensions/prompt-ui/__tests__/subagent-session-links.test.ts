@@ -559,6 +559,7 @@ describe("subagent session links", () => {
       fg: (_color: string, text: string) => text,
       bg: (_color: string, text: string) => `\u001b[48;2;44;44;44m${text}\u001b[49m`,
       getBgAnsi: () => "\u001b[48;2;44;44;44m",
+      getColorMode: () => "truecolor",
       bold: (text: string) => text,
     } as unknown as Theme;
     const ctx = { ui: { theme, notify() {} }, cwd: process.cwd() } as unknown as Parameters<
@@ -595,7 +596,7 @@ describe("subagent session links", () => {
       expect(lines.every((line) => visibleWidth(line) === width)).toBe(true);
       expect(stripTerminalSequences(lines[0] ?? "")).toBe(`╭${"─".repeat(width - 2)}╮`);
       expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe(`╰${"─".repeat(width - 2)}╯`);
-      expect(lines.every((line) => line.includes("\u001b[48;2;44;44;44m"))).toBe(true);
+      expect(lines.every((line) => line.includes("\u001b[48;2;25;25;25m"))).toBe(true);
     }
     expect(overlay.getOptions()?.maxHeight).toBeUndefined();
     expect(overlay.isHidden()).toBe(true);

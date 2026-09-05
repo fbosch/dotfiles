@@ -1,5 +1,6 @@
 local repo_root = assert(vim.env.REPO_ROOT)
 local original_system = vim.system
+local original_defer_fn = vim.defer_fn
 local original_cwd = vim.fn.getcwd()
 local original_path = vim.env.PATH
 local original_secret = vim.env.DIRENV_TEST_SECRET
@@ -44,6 +45,12 @@ vim.cmd("cd " .. vim.fn.fnameescape(project_a))
 
 local requests = {}
 local callbacks = {}
+local deadlines = {}
+rawset(vim, "defer_fn", function(callback, timeout)
+	local timer = original_defer_fn(callback, timeout)
+	table.insert(deadlines, timer)
+	return timer
+end)
 local results = {
 	[project_a] = { code = 0, stdout = '{"PATH":"/project/a/bin","PROJECT_SECRET":"do-not-copy"}' },
 	[project_b] = { code = 0, stdout = '{"PATH":"/project/b/bin"}' },
@@ -57,6 +64,30 @@ local results = {
 
 local function copy_result(result)
 	return vim.deepcopy(result)
+end
+
+local function complete_export(index)
+	local completion = assert(callbacks[index or #callbacks])
+	local finished, failure = false, nil
+	local timer = assert(vim.uv.new_timer())
+	timer:start(0, 0, function()
+		timer:stop()
+		timer:close()
+		assert(vim.in_fast_event(), "process exit fixture did not run in a fast event")
+		local ok, err = pcall(completion.callback, completion.result)
+		failure = not ok and err or nil
+		-- Drain editor work scheduled by the exit callback before checking its effects.
+		vim.schedule(function()
+			finished = true
+		end)
+	end)
+	assert(
+		vim.wait(1000, function()
+			return finished
+		end),
+		"process exit callback did not finish"
+	)
+	assert(failure == nil, "process exit callback used an unsafe editor API: " .. tostring(failure))
 end
 
 rawset(vim, "system", function(command, options, callback)
@@ -127,10 +158,12 @@ vim.cmd("cd " .. vim.fn.fnameescape(project_b))
 local new_refresh = loader.refresh(project_b)
 assert(new_refresh.ok == false and new_refresh.status == "pending", "second refresh was not coalesced")
 assert(#callbacks >= 2, "refresh did not register both fake process callbacks")
-callbacks[#callbacks].callback(callbacks[#callbacks].result)
+complete_export()
 assert(vim.env.PATH == "/project/b/bin", "current refresh did not apply its project PATH")
-callbacks[#callbacks - 1].callback(callbacks[#callbacks - 1].result)
+complete_export(#callbacks - 1)
 assert(vim.env.PATH == "/project/b/bin", "stale refresh overwrote the current project PATH")
+assert(deadlines[1]:is_closing(), "cancelled refresh left its deadline active")
+assert(deadlines[2]:is_closing(), "completed refresh left its deadline active")
 
 loader.setup()
 local autocmds = vim.api.nvim_get_autocmds({ group = "DirenvPathLoader" })
@@ -151,13 +184,32 @@ assert(
 local callback_count = #callbacks
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
 assert(#callbacks == callback_count + 1, "session load did not refresh the project environment")
-callbacks[#callbacks].callback(callbacks[#callbacks].result)
+complete_export()
 vim.cmd("cd " .. vim.fn.fnameescape(missing))
 assert(vim.env.PATH == "/clean/path", "directory change did not restore the clean baseline")
 
 vim.api.nvim_del_augroup_by_name("DirenvPathLoader")
+vim.env.PATH = "/baseline/path"
+local startup_loader = dofile(repo_root .. "/.config/nvim/lua/config/direnv.lua")
+startup_loader.setup()
+local startup_callback_count = #callbacks
+vim.api.nvim_exec_autocmds("VimEnter", {})
+assert(
+	vim.wait(1000, function()
+		return #callbacks == startup_callback_count + 1
+	end),
+	"startup did not request the clean baseline"
+)
+local baseline_directory = requests[#requests].cwd
+assert(vim.uv.fs_stat(baseline_directory) ~= nil, "baseline export did not create its temporary directory")
+complete_export()
+assert(vim.uv.fs_stat(baseline_directory) == nil, "baseline exit did not clean up its temporary directory")
+assert(vim.env.PATH == "/clean/path", "asynchronous baseline exit did not apply the clean PATH")
+
+vim.api.nvim_del_augroup_by_name("DirenvPathLoader")
 vim.cmd("cd " .. vim.fn.fnameescape(original_cwd))
 rawset(vim, "system", original_system)
+rawset(vim, "defer_fn", original_defer_fn)
 vim.env.PATH = original_path
 vim.env.DIRENV_TEST_SECRET = original_secret
 vim.env.DIRENV_ACTIVE = original_active

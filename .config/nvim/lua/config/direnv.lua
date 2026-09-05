@@ -109,8 +109,9 @@ local function stop_process(process)
 end
 
 local function stop_timer(timer)
-	if timer ~= nil then
-		pcall(vim.fn.timer_stop, timer)
+	if timer ~= nil and not timer:is_closing() then
+		timer:stop()
+		timer:close()
 	end
 end
 
@@ -159,7 +160,9 @@ local function process_options(cwd)
 end
 
 local function run_export(cwd, callback)
-	local ok, process = pcall(vim.system, { direnv_command, "export", "json" }, process_options(cwd), callback)
+	-- Process exits run in fast events; both refresh and baseline cleanup use editor APIs.
+	local on_exit = callback and vim.schedule_wrap(callback) or nil
+	local ok, process = pcall(vim.system, { direnv_command, "export", "json" }, process_options(cwd), on_exit)
 	if not ok or process == nil then
 		return nil
 	end
