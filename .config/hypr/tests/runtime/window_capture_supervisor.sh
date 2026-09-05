@@ -98,13 +98,11 @@ fi
 wait_for_absent "$runtime_dir/hypr/fixture/window-capture-daemon.lock.d" "daemon lock cleanup"
 
 real_runtime_dir="$test_dir/real-runtime"
-real_capture_dir="$test_dir/real-captures"
-mkdir -p "$real_runtime_dir" "$real_capture_dir"
+mkdir -p "$real_runtime_dir"
 
 HOME="$test_home" \
   XDG_RUNTIME_DIR="$real_runtime_dir" \
   HYPRLAND_INSTANCE_SIGNATURE=fixture \
-  HYPR_WINDOW_CAPTURE_DIR="$real_capture_dir" \
   "$wrapper" >/dev/null 2>&1 &
 wrapper_pid="$!"
 

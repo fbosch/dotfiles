@@ -30,6 +30,14 @@ local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 session.set_current(nvim_session)
 package.loaded["utils.session"] = session
 package.loaded["plugins.ai.pi.session"] = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/session.lua")
+package.loaded["config.direnv"] = {
+	synchronize = function(cwd)
+		return { ok = true, status = "missing", cwd = cwd }
+	end,
+	failure_message = function()
+		return "project environment fixture failure"
+	end,
+}
 package.loaded["plugins.ai.pi.bridge"] = {
 	record_source_context = function()
 		return true

@@ -5,7 +5,7 @@
 import type { Dirent } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import { allExtensions } from "./languages.js";
+import { loadSyntaxRuntime } from "./runtime.js";
 
 const IGNORE_DIRS = new Set<string>([
   "node_modules",
@@ -54,6 +54,10 @@ export async function findProjectFiles(
     throw new RangeError("maxFiles must be a positive safe integer");
   }
 
+  signal?.throwIfAborted();
+  const {
+    languages: { allExtensions },
+  } = await loadSyntaxRuntime();
   const exts = new Set(allExtensions());
   const files: string[] = [];
 

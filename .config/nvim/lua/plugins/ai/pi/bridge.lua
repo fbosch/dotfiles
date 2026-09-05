@@ -188,6 +188,73 @@ local function is_source_buffer(buffer, require_loaded)
 		and vim.b[buffer].is_pi_terminal ~= true
 end
 
+function M.capture_prompt_location()
+	local buffer = vim.api.nvim_get_current_buf()
+	local mode = vim.api.nvim_get_mode().mode
+	local visual = mode == "v" or mode == "V" or mode == string.char(22)
+	if not is_source_buffer(buffer, true) then
+		return nil, visual and "PI_CONTEXT_UNAVAILABLE" or nil
+	end
+
+	local name = vim.api.nvim_buf_get_name(buffer)
+	local path = canonical_path(name)
+	local cwd = canonical_path(vim.fn.getcwd())
+	if not path_is_inside(path, cwd) then
+		return nil, "PI_WORKTREE_MISMATCH"
+	end
+	if #path > 4096 then
+		return nil, "PI_CONTEXT_TOO_LARGE"
+	end
+
+	local cursor = vim.api.nvim_win_get_cursor(0)
+	local first_line, last_line = cursor[1], cursor[1]
+	if visual then
+		local anchor = vim.fn.getpos("v")
+		first_line = math.min(anchor[2], cursor[1])
+		last_line = math.max(anchor[2], cursor[1])
+	end
+	if first_line < 1 or last_line > vim.api.nvim_buf_line_count(buffer) then
+		return nil, "PI_CONTEXT_UNAVAILABLE"
+	end
+	if last_line - first_line + 1 > MAX_CONTEXT_LINES then
+		return nil, "PI_CONTEXT_TOO_LARGE"
+	end
+
+	local relative = path:sub(#cwd + (cwd == "/" and 1 or 2))
+	local reference = string.format("%s:L%d", relative, first_line)
+	if visual then
+		reference = reference .. string.format("-L%d", last_line)
+	else
+		reference = reference .. string.format(":C%d", cursor[2] + 1)
+	end
+	return {
+		buffer = buffer,
+		name = name,
+		path = path,
+		cwd = cwd,
+		changedtick = vim.api.nvim_buf_get_changedtick(buffer),
+		reference = reference,
+	}
+end
+
+function M.validate_prompt_location(location, cwd)
+	if location == nil then
+		return nil
+	end
+	if
+		not is_source_buffer(location.buffer, true)
+		or vim.api.nvim_buf_get_name(location.buffer) ~= location.name
+		or canonical_path(location.name) ~= location.path
+		or vim.api.nvim_buf_get_changedtick(location.buffer) ~= location.changedtick
+	then
+		return "PI_CONTEXT_STALE"
+	end
+	if canonical_path(cwd) ~= location.cwd or canonical_path(vim.fn.getcwd()) ~= location.cwd then
+		return "PI_WORKTREE_MISMATCH"
+	end
+	return nil
+end
+
 local function buffer_info(buffer)
 	local options = vim.bo[buffer]
 	return {

@@ -25,6 +25,14 @@ assert(vim.v.servername ~= "", "production Neovim startup did not create an RPC 
 vim.opt.runtimepath:prepend(mini_sessions_path)
 vim.opt.runtimepath:prepend(repo_root .. "/.config/nvim")
 
+package.loaded["config.direnv"] = {
+	synchronize = function(cwd)
+		return { ok = true, status = "missing", cwd = cwd }
+	end,
+	failure_message = function()
+		return "project environment fixture failure"
+	end,
+}
 local session = require("utils.session")
 local sessions = require("mini.sessions")
 local target = session.resolve(repo_root, expected_specifier)
@@ -155,7 +163,7 @@ assert(
 	opened_terminal.command
 		== "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 			.. vim.fn.shellescape(expected_pane_id)
-			.. " PI_NVIM_LAUNCH_ID="
+			.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
 			.. vim.fn.shellescape(launch_id)
 			.. " PI_NVIM_SOCKET="
 			.. vim.fn.shellescape(vim.v.servername)
@@ -174,6 +182,7 @@ assert(
 		"HERDR_PANE_ID=",
 		"HERDR_SOCKET_PATH=" .. vim.env.HERDR_SOCKET_PATH,
 		"PI_NVIM_HERDR_PANE_ID=" .. expected_pane_id,
+		"PI_IMAGE_PROTOCOL=none",
 		"PI_NVIM_LAUNCH_ID=" .. launch_id,
 		"PI_NVIM_SOCKET=" .. vim.v.servername,
 		"ARG1=--session-dir",

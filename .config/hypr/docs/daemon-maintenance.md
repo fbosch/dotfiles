@@ -128,6 +128,25 @@ singleton external process needs an explicit ownership mechanism.
 - Keep timeouts, retry delays, polling intervals, debounce windows, and stale
   thresholds as named constants near the owning implementation.
 
+## Window Previews
+
+Window capture and the AGS window switcher share
+`$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/window-captures`.
+JPEGs and capture coordination markers belong to that compositor instance.
+Restarting either helper preserves its previews; another compositor instance
+starts without them. Cleanup never traverses another instance's directory.
+
+`HYPR_WINDOW_CAPTURE_DIR` is no longer supported. Both helpers require the
+instance environment and never fall back to the former global preview directory.
+Without it, capture exits and AGS keeps window switching available without previews.
+AGS watches the instance directory on every switcher activation, including when
+it must create the directory before the first capture arrives.
+
+The runtime shell tests cover isolation and capture-helper restarts. The native
+AGS tests cover lookup, file notifications, reader restarts, and switcher entry
+paths. Both run through `devenv test`; native AGS tests require the installed AGS
+runtime and a graphical session.
+
 ## Logging And Recovery
 
 - Write daemon logs to stderr by default, prefixed with the daemon or feature name.

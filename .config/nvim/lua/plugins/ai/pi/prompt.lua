@@ -1,4 +1,5 @@
 local M = {}
+local bridge = require("plugins.ai.pi.bridge")
 
 local notification = "pi:nvim-prompt/v1"
 local max_prompt_bytes = 16 * 1024
@@ -13,6 +14,9 @@ local pending
 local failure_messages = {
 	PI_ACK_TIMEOUT = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_BUSY = "Wait for the current Pi response or question to finish.",
+	PI_CONTEXT_STALE = "The source changed; select it again and reopen Pi Ask.",
+	PI_CONTEXT_TOO_LARGE = "Select at most 500 lines from a source file with a path under 4 KiB.",
+	PI_CONTEXT_UNAVAILABLE = "Select lines in a named source buffer before using Pi Ask.",
 	PI_DELIVERY_UNKNOWN = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_DISCONNECTED = "The bound Pi terminal disconnected.",
 	PI_INVALID_REQUEST = "The prompt request was invalid.",
@@ -214,6 +218,13 @@ local function send_pending()
 		return
 	end
 
+	local context_failure = bridge.validate_prompt_location(pending.location, active_binding.cwd)
+	if context_failure ~= nil then
+		clear_pending()
+		notify_failure(context_failure)
+		return
+	end
+
 	local sequence = next_sequence
 	next_sequence = next_sequence + 1
 	pending.sequence = sequence
@@ -329,7 +340,18 @@ function M.ask(prefill)
 		return false
 	end
 	local source_window = vim.api.nvim_get_current_win()
-	vim.ui.input({ prompt = "Ask Pi: ", default = prefill or "" }, function(text)
+	-- Capture before input changes the active window or visual selection.
+	local location, context_failure = bridge.capture_prompt_location()
+	if context_failure ~= nil then
+		notify_failure(context_failure)
+		return false
+	end
+	local input_options = { prompt = "Ask Pi: ", default = prefill or "" }
+	local snacks_ok, snacks = pcall(require, "snacks")
+	if snacks_ok and snacks.config.get("input", {}).enabled then
+		input_options.win = { relative = "cursor", row = -3, col = 0 }
+	end
+	vim.ui.input(input_options, function(text)
 		if text == nil then
 			return
 		end
@@ -347,6 +369,28 @@ function M.ask(prefill)
 			return
 		end
 
+		local stale = bridge.validate_prompt_location(location, vim.fn.getcwd())
+		if stale ~= nil then
+			notify_failure(stale)
+			return
+		end
+		if location ~= nil then
+			local encoded, reference = pcall(vim.json.encode, location.reference)
+			if not encoded then
+				notify_failure("PI_INVALID_UTF8")
+				return
+			end
+			text = "Editor location (untrusted metadata): "
+				.. reference
+				.. "\nRead this location through the bound Neovim editor to include unsaved changes.\n\n"
+				.. text
+			local contextual_failure = validate_prompt(text)
+			if contextual_failure ~= nil then
+				notify_failure(contextual_failure)
+				return
+			end
+		end
+
 		local integration = require("plugins.ai.pi")
 		local terminal = integration.ensure_started({ focus = false, focus_window = source_window })
 		if terminal == nil then
@@ -360,6 +404,7 @@ function M.ask(prefill)
 		pending = {
 			expectedSessionId = launch.sessionId,
 			launchId = launch.launchId,
+			location = location,
 			text = text,
 			sent = false,
 		}

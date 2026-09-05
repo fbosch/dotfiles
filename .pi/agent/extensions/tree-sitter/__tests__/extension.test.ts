@@ -264,6 +264,56 @@ test("find_callers matches Lua qualified names exactly and bare member names bro
   }
 }, 120_000);
 
+test.each([
+  ...[".ts", ".mts", ".cts"].map(
+    (extension) => [extension, "type assertions", "<number>target()"] as const,
+  ),
+  ...[".tsx", ".js", ".jsx", ".mjs", ".cjs"].flatMap((extension) => [
+    [extension, "JSX elements", "<Widget>{target()}</Widget>"] as const,
+    [extension, "JSX fragments", "<>{target()}</>"] as const,
+  ]),
+])(
+  "%s structural tools parse %s with the correct grammar",
+  async (extension, _syntax, expression) => {
+    const root = await temporaryProject();
+    const path = `example${extension}`;
+    const source = `function caller() { return ${expression}; }`;
+    await writeFile(join(root, path), source);
+    const harness = createHarness(root);
+    await treeSitterExtension(harness.pi);
+
+    for (const [name, params] of [
+      ["list_symbols", { path }],
+      ["find_definition", { name: "caller" }],
+      ["find_callers", { name: "target" }],
+      ["get_symbol_body", { path, name: "caller" }],
+      ["find_callees", { path, name: "caller" }],
+    ] as const) {
+      const tool = harness.tools.get(name);
+      if (tool === undefined) throw new Error(`${name} was not registered`);
+      const result = await tool.execute(
+        "grammar-selection",
+        params,
+        undefined,
+        undefined,
+        harness.context,
+      );
+      const output = result.content
+        .flatMap((item) => (item.type === "text" ? [item.text] : []))
+        .join("\n");
+      if (name === "get_symbol_body") {
+        expect(output).toContain(source);
+      } else {
+        expect(result.details).toMatchObject({ count: 1 });
+        expect(output).toContain(
+          name === "find_callers" || name === "find_callees" ? "target" : "caller",
+        );
+      }
+    }
+  },
+  120_000,
+);
+
 test("structural tools reject an already-cancelled call", async () => {
   const harness = createHarness();
   await treeSitterExtension(harness.pi);

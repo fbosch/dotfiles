@@ -42,10 +42,9 @@ import {
   simulateEditContent,
 } from "./src/edit-guard.js";
 import { findProjectFiles, type ProjectFileSearch, readFileSafe } from "./src/files.js";
-import { ensureParser, LANGUAGE_MAP, loadGrammar, type NotifyFn } from "./src/grammar.js";
+import type { NotifyFn } from "./src/grammar.js";
 import type { ExtractedFile, Symbol as Sym } from "./src/languages.js";
-import { configForFile } from "./src/languages.js";
-import { withParseTree } from "./src/parse-tree.js";
+import { loadSyntaxRuntime } from "./src/runtime.js";
 
 // ── Error collection (write-time validation) ─────────────────────────────
 
@@ -234,6 +233,10 @@ async function validateContent(
 
   const rules = ext ? BALANCE_RULES[ext] : undefined;
 
+  const {
+    grammar: { ensureParser, LANGUAGE_MAP, loadGrammar },
+    trees: { withParseTree },
+  } = await loadSyntaxRuntime();
   const entry = LANGUAGE_MAP[ext];
   if (entry) {
     await ensureParser(signal);
@@ -350,6 +353,10 @@ async function extractFile(
   if (!ext) return null;
   const source = await readFileSafe(filePath, signal);
   if (source === null) return null;
+  const {
+    grammar: { ensureParser, LANGUAGE_MAP, loadGrammar },
+    languages: { configForFile },
+  } = await loadSyntaxRuntime();
   const config = configForFile(filePath, source);
   if (!config) return null;
   const grammarExt = config.extensions[0];
@@ -621,6 +628,10 @@ export default async function (pi: ExtensionAPI) {
       const notify = ctx.ui.notify.bind(ctx.ui);
       const searchPath = params.path ? resolveToolPath(ctx.cwd, params.path) : ctx.cwd;
       const callers: string[] = [];
+      const {
+        grammar: { ensureParser, LANGUAGE_MAP, loadGrammar },
+        languages: { configForFile },
+      } = await loadSyntaxRuntime();
 
       const search = await findProjectFiles(searchPath, signal ? { signal } : {});
       for (const file of search.files) {
@@ -789,6 +800,10 @@ export default async function (pi: ExtensionAPI) {
       });
       const notify = ctx.ui.notify.bind(ctx.ui);
       const filePath = resolveToolPath(ctx.cwd, params.path);
+      const {
+        grammar: { ensureParser, LANGUAGE_MAP, loadGrammar },
+        languages: { configForFile },
+      } = await loadSyntaxRuntime();
       const config = configForFile(filePath);
       if (!config) return noCallees();
       const grammarExt = config.extensions[0];

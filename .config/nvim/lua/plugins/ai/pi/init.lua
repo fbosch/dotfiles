@@ -1,5 +1,6 @@
 local pi_bridge = require("plugins.ai.pi.bridge")
 local pi_session = require("plugins.ai.pi.session")
+local path_loader = require("config.direnv")
 local session = require("utils.session")
 
 local M = {}
@@ -199,6 +200,27 @@ local function canonical_path(path)
 	return vim.uv.fs_realpath(path) or vim.fs.normalize(path)
 end
 
+local function prepare_launch(cwd, owner)
+	local expected_cwd = canonical_path(cwd)
+	local socket = vim.v.servername
+	if expected_cwd == nil or canonical_path(vim.fn.getcwd()) ~= expected_cwd then
+		return nil, "worktree"
+	end
+
+	local ok, result = pcall(path_loader.synchronize, expected_cwd)
+	if not ok or (result ~= true and (type(result) ~= "table" or result.ok ~= true)) then
+		return nil, "environment", ok and result or nil
+	end
+	if
+		canonical_path(vim.fn.getcwd()) ~= expected_cwd
+		or vim.v.servername ~= socket
+		or session.get_current(vim.fn.getcwd()) ~= owner
+	then
+		return nil, "changed"
+	end
+	return socket
+end
+
 local function launch_command(session_flag, session_id, session_dir, socket, launch_id)
 	if type(socket) ~= "string" or socket == "" then
 		error("pi requires a Neovim RPC socket")
@@ -213,6 +235,10 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 		.. "PI_NVIM_SOCKET="
 		.. vim.fn.shellescape(socket)
 		.. " "
+	if vim.env.HERDR_ENV == "1" then
+		-- Snacks launches Pi directly, bypassing the Fish wrapper used by Herdr shells.
+		environment = "PI_IMAGE_PROTOCOL=none " .. environment
+	end
 	local pane_id = vim.env.HERDR_PANE_ID
 	if vim.env.HERDR_ENV == "1" and type(pane_id) == "string" and pane_id ~= "" then
 		-- Herdr accepts official Pi lifecycle reports only when Pi owns the pane process.
@@ -294,10 +320,51 @@ local function notify_restore_failure(reason)
 	vim.notify("Pi session was not restored: " .. messages[reason] .. ".", vim.log.levels.WARN)
 end
 
-local function resume_saved_session(nvim_session, launch_options)
+local function notify_launch_environment_failure(result)
+	local status = type(result) == "table" and result.status or "unavailable"
+	local message = "Project environment is unavailable; check direnv and `.envrc` before starting Pi."
+	if type(path_loader.failure_message) == "function" then
+		message = path_loader.failure_message(status)
+	end
+	vim.notify("Pi launch blocked: " .. message, vim.log.levels.ERROR)
+end
+
+local function notify_launch_preparation_failure(reason, result)
+	if reason == "environment" then
+		notify_launch_environment_failure(result)
+	elseif reason == "worktree" then
+		vim.notify("Pi launch cancelled: the current worktree changed.", vim.log.levels.WARN)
+	else
+		vim.notify("Pi launch cancelled: the Neovim session or RPC socket changed.", vim.log.levels.WARN)
+	end
+end
+
+local function resume_saved_session(nvim_session, launch_options, prepared_socket)
 	local session_id = session.get_metadata(nvim_session).pi_session_id
 	if not session.is_valid_pi_session_id(session_id) then
 		notify_restore_failure("invalid_id")
+		return nil
+	end
+
+	local socket = prepared_socket
+	if socket == nil then
+		local reason, result
+		socket, reason, result = prepare_launch(nvim_session.cwd, nvim_session)
+		if socket == nil then
+			if reason == "worktree" then
+				notify_restore_failure("wrong_worktree")
+			else
+				notify_launch_preparation_failure(reason, result)
+			end
+			return nil
+		end
+	end
+	if
+		canonical_path(vim.fn.getcwd()) ~= canonical_path(nvim_session.cwd)
+		or session.get_current(vim.fn.getcwd()) ~= nvim_session
+		or vim.v.servername ~= socket
+	then
+		notify_restore_failure("wrong_worktree")
 		return nil
 	end
 	if vim.fn.executable("pi") ~= 1 then
@@ -305,10 +372,6 @@ local function resume_saved_session(nvim_session, launch_options)
 		return nil
 	end
 
-	if session.get_current(vim.fn.getcwd()) ~= nvim_session then
-		notify_restore_failure("wrong_worktree")
-		return nil
-	end
 	local existing = current_terminal()
 	if existing ~= nil then
 		if terminal_owner ~= nvim_session then
@@ -317,7 +380,6 @@ local function resume_saved_session(nvim_session, launch_options)
 		return nil
 	end
 
-	local socket = vim.v.servername
 	local found, reason = pi_session.find_exact(session_id, nvim_session.cwd)
 	if found == nil then
 		notify_restore_failure(reason)
@@ -488,12 +550,9 @@ end
 function M.ensure_started(options)
 	options = options or {}
 	M.setup()
-	if vim.fn.executable("pi") ~= 1 then
-		vim.notify("pi executable not found", vim.log.levels.ERROR)
-		return nil
-	end
 
-	local owner = session.get_current(vim.fn.getcwd())
+	local cwd = vim.fn.getcwd()
+	local owner = session.get_current(cwd)
 	local terminal, owned = owned_terminal(owner)
 	if not owned then
 		return nil
@@ -506,11 +565,21 @@ function M.ensure_started(options)
 		return terminal
 	end
 
-	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
-		return resume_saved_session(owner, options)
+	local socket, reason, result = prepare_launch(cwd, owner)
+	if socket == nil then
+		notify_launch_preparation_failure(reason, result)
+		return nil
 	end
-	local cwd = owner ~= nil and owner.cwd or vim.fn.getcwd()
-	return open_terminal(nil, nil, nil, cwd, vim.v.servername, owner, options)
+	if vim.fn.executable("pi") ~= 1 then
+		vim.notify("pi executable not found", vim.log.levels.ERROR)
+		return nil
+	end
+
+	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
+		return resume_saved_session(owner, options, socket)
+	end
+	local launch_cwd = owner ~= nil and owner.cwd or cwd
+	return open_terminal(nil, nil, nil, launch_cwd, socket, owner, options)
 end
 
 function M.start()
@@ -519,11 +588,6 @@ end
 
 function M.toggle()
 	M.setup()
-	if vim.fn.executable("pi") ~= 1 then
-		vim.notify("pi executable not found", vim.log.levels.ERROR)
-		return nil
-	end
-
 	local owner = session.get_current(vim.fn.getcwd())
 	local terminal, owned = owned_terminal(owner)
 	if not owned then

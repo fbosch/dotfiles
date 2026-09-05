@@ -20,15 +20,13 @@ ffi.cdef([[
 ]])
 
 local mode = arg[1] or "daemon"
-local screenshot_dir = os.getenv("HYPR_WINDOW_CAPTURE_DIR")
-if not screenshot_dir then
-	screenshot_dir = "/tmp/hypr-window-captures"
-	if os.execute("test -d /dev/shm >/dev/null 2>&1") then
-		screenshot_dir = "/dev/shm/hypr-window-captures"
-	end
+if (os.getenv("XDG_RUNTIME_DIR") or "") == "" or (os.getenv("HYPRLAND_INSTANCE_SIGNATURE") or "") == "" then
+	io.stderr:write("window-capture: XDG_RUNTIME_DIR and HYPRLAND_INSTANCE_SIGNATURE are required\n")
+	os.exit(1)
 end
 
 local kit = daemon.new({})
+local screenshot_dir = kit:instance_path("window-captures")
 local daemon_lock_dir = kit:instance_path("window-capture-daemon.lock.d")
 local worker_lock_dir = kit:instance_path("window-capture-worker.lock.d")
 -- Lock exclusivity relies on plain mkdir failing when the lock dir exists, so

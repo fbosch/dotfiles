@@ -532,8 +532,11 @@ Acceptance:
 
 Implementation record (2026-09-05):
 
-- `:PiAsk [prefill]` is available without a default mapping. It validates input
-  before launch and uses a preserve-focus terminal start.
+- `:PiAsk [prefill]` validates input before launch and uses a preserve-focus
+  terminal start. By explicit user request, `<leader>ac` opens this literal
+  canary in normal and visual mode. It does not yet add selection context.
+  OpenCode no longer registers that key; `:OpenCodeAsk` and append mappings
+  remain available.
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.

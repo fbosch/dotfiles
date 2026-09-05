@@ -2263,8 +2263,19 @@ const bashCallees = (
 // ── Registry ─────────────────────────────────────────────────────────────
 
 const LANGUAGES: LangConfig[] = [
+  // Tools load each group's first extension, so shared extractors still need grammar-specific groups.
   {
-    extensions: [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"],
+    extensions: [".ts", ".mts", ".cts"],
+    extract: extractWithTree(tsExtract),
+    findCallees: tsCallees,
+  },
+  {
+    extensions: [".tsx"],
+    extract: extractWithTree(tsExtract),
+    findCallees: tsCallees,
+  },
+  {
+    extensions: [".js", ".jsx", ".mjs", ".cjs"],
     extract: extractWithTree(tsExtract),
     findCallees: tsCallees,
   },

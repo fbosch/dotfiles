@@ -59,8 +59,8 @@ Every preflight, warmup, and measured sample is bounded by
 accepted by `timeout` or `gtimeout`.
 
 Use the `full` median from `summary.json` as the baseline. Compare results only
-when the Pi version, machine, target, run counts, and `setupFingerprint` match
-the intended before and after states.
+when the metadata schema version, Pi version, machine, target, run counts, and
+`setupFingerprint` match the intended before and after states.
 
 ## Controlled workload
 
@@ -88,10 +88,16 @@ runs:
   contribute to `setupFingerprint`.
 - One preflight startup and explicit warmup runs establish the fixture state
   before Hyperfine measures it.
-- The benchmark fails if the warmed fixture, linked dependencies, or
-  project-level startup resources change during measured runs. LMDB
-  process-lock bookkeeping and per-session permission-serving heartbeats are
-  ignored.
+- The benchmark fails if immutable fixture inputs, linked dependencies, or
+  project-level startup resources change during measured runs. All fixture
+  symlinks remain immutable, including links at declared output paths.
+- Declared runtime outputs are fingerprinted separately before and after
+  measurement: the FFF frecency/history `data.mdb` and `lock.mdb` files,
+  permission-serving heartbeat JSON files, and Jiti's hash-named `.cjs`/`.mjs`
+  files directly under `TMPDIR/jiti`. Their contents can change during normal
+  startup. Unexpected files, including other files in those directories, still
+  invalidate the benchmark. Runtime outputs remain warmed between samples;
+  they are not reset to a seed.
 
 The measurements include Pi's fixed 150 ms terminal-query drain in startup
 benchmark mode. They represent credential-free startup with caches warmed
@@ -103,7 +109,10 @@ run-to-run variance are inconclusive.
 
 Each run writes:
 
-- `metadata.json`: runtime, machine, Git, workload, isolation, and sample policy;
+- `metadata.json`: runtime, machine, Git, workload, isolation, sample policy,
+  declared runtime outputs, and their before/after fingerprints;
+- `runtime-before.tsv` and `runtime-after.tsv`: runtime-output paths and content
+  hashes, retained even when immutable-input validation fails;
 - `summary.json`: median, mean, standard deviation, minimum, and maximum wall
   time in milliseconds;
 - `startup.json` and `startup.md`: raw Hyperfine results for Pi scenarios;

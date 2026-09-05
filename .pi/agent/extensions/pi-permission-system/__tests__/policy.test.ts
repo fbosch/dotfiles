@@ -201,9 +201,9 @@ async function loadPermissionModules(): Promise<PermissionModules> {
     chainModule,
     delegationEnvelopeModule,
   ] = await Promise.all([
-    import(new URL("permission-manager.ts", sourceRoot).href),
-    import(new URL("permission-resolver.ts", sourceRoot).href),
-    import(new URL("path-normalizer.ts", sourceRoot).href),
+    import(new URL("policy/permission-manager.ts", sourceRoot).href),
+    import(new URL("policy/permission-resolver.ts", sourceRoot).href),
+    import(new URL("path/path-normalizer.ts", sourceRoot).href),
     import(new URL("path/path-flavor.ts", sourceRoot).href),
     import(new URL("handlers/gates/path.ts", sourceRoot).href),
     import(new URL("handlers/gates/external-directory.ts", sourceRoot).href),
@@ -291,7 +291,7 @@ function externalDirectoryGate(
   );
 }
 
-describe("pi-permission-system v29 policy", () => {
+describe("pi-permission-system policy", () => {
   test("loads valid global and project policy without config issues", () => {
     expect(createEngine().manager.getConfigIssues()).toEqual([]);
   });

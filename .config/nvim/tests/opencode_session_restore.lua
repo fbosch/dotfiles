@@ -114,9 +114,10 @@ vim.b[opencode_buf].is_opencode_terminal = true
 
 registration[1].setup()
 vim.api.nvim_set_current_win(source_win)
+for _, mode in ipairs({ "n", "x" }) do
+	assert(vim.fn.maparg("<leader>ac", mode) == "", "OpenCode setup reclaimed Pi's Ask mapping in " .. mode)
+end
 for _, expected in ipairs({
-	{ mode = "n", description = "Ask opencode" },
-	{ mode = "x", description = "Ask opencode" },
 	{ mode = "n", description = "Add to opencode" },
 	{ mode = "x", description = "Add to opencode" },
 	{ mode = "n", description = "Send to opencode" },

@@ -96,7 +96,6 @@ export class WindowSwitcherController {
 
 	async show(): Promise<void> {
 		const generation = ++this.#requestGeneration;
-		this.#previews.startMonitoring();
 		const windows = await this.#repository.getWindows(this.#sortMode);
 		if (generation !== this.#requestGeneration) return;
 		if (windows.length <= 1) return;
@@ -233,6 +232,7 @@ export class WindowSwitcherController {
 		index: number,
 		triggerModifier: string,
 	): void {
+		this.#previews.startMonitoring();
 		if (this.#viewAttached === false) {
 			this.#modifiers.attach(this.#view.create());
 			this.#viewAttached = true;

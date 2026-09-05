@@ -70,6 +70,9 @@ benchmark_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 agent_dir="$(cd "$benchmark_dir/.." && pwd -P)"
 repo_root="$(git -C "$agent_dir" rev-parse --show-toplevel)"
 sample_script="$benchmark_dir/startup-sample.sh"
+# shellcheck source-path=SCRIPTDIR
+# shellcheck source=startup-manifest.sh
+source "$benchmark_dir/startup-manifest.sh"
 shutdown_extension="$benchmark_dir/startup-shutdown.ts"
 [[ -f "$shutdown_extension" ]] || fail "benchmark shutdown extension not found: $shutdown_extension"
 host_path=""
@@ -236,28 +239,27 @@ write_dependency_manifest() {
   done
   (
     cd "$agent_dir"
-    find "${dependency_roots[@]}" -type f -print | LC_ALL=C sort >"$file_list"
-    find "${dependency_roots[@]}" -type l -print | LC_ALL=C sort >"$link_list"
+    # Dependency roots may themselves be links (for example, an isolated source snapshot).
+    find -H "${dependency_roots[@]}" -type f -print | LC_ALL=C sort >"$file_list"
+    find -H "${dependency_roots[@]}" -type l -print | LC_ALL=C sort >"$link_list"
   )
   assemble_manifest "$agent_dir" "$file_list" "$link_list" "$output_path"
 }
 
 write_fixture_manifest() {
   local output_path="$1"
+  local runtime_path="${2:-$manifest_dir/runtime-source.tsv}"
   local file_list="$manifest_dir/fixture-files.txt"
   local link_list="$manifest_dir/fixture-links.txt"
+  local complete_manifest="$manifest_dir/fixture-all.tsv"
 
   (
     cd "$fixture_root"
-    # LMDB rewrites its process-lock bookkeeping even when the indexed data is unchanged.
-    find agent home cache data state tmp \
-      -type f \
-      ! -path 'agent/fff/*/lock.mdb' \
-      ! -path 'agent/sessions/permission-forwarding/serving/*.json' \
-      -print | LC_ALL=C sort >"$file_list"
+    find agent home cache data state tmp -type f -print | LC_ALL=C sort >"$file_list"
     find agent home cache data state tmp -type l -print | LC_ALL=C sort >"$link_list"
   )
-  assemble_manifest "$fixture_root" "$file_list" "$link_list" "$output_path"
+  assemble_manifest "$fixture_root" "$file_list" "$link_list" "$complete_manifest"
+  split_fixture_manifest "$complete_manifest" "$output_path" "$runtime_path"
 }
 
 export PI_BENCHMARK_AGENT_DIR="$fixture_agent"
@@ -287,6 +289,8 @@ dependency_manifest_after="$manifest_dir/dependencies-after.tsv"
 fixture_source_manifest="$manifest_dir/fixture-source.tsv"
 fixture_manifest_before="$manifest_dir/fixture-before.tsv"
 fixture_manifest_after="$manifest_dir/fixture-after.tsv"
+runtime_manifest_before="$output_dir/runtime-before.tsv"
+runtime_manifest_after="$output_dir/runtime-after.tsv"
 write_external_source_manifest "$external_source_manifest_before"
 write_fixture_manifest "$fixture_source_manifest"
 external_source_fingerprint="$(git hash-object "$external_source_manifest_before")"
@@ -309,7 +313,7 @@ done
 
 printf 'Fingerprinting linked dependencies before measurement...\n'
 write_dependency_manifest "$dependency_manifest_before"
-write_fixture_manifest "$fixture_manifest_before"
+write_fixture_manifest "$fixture_manifest_before" "$runtime_manifest_before"
 dependency_fingerprint="$(git hash-object "$dependency_manifest_before")"
 setup_fingerprint="$(
   printf '%s\n%s\n%s\n' \
@@ -356,7 +360,7 @@ jq -n \
   --argjson localExtensionModuleCount "$local_extension_module_count" \
   --argjson packageCount "$package_count" \
   '{
-    schemaVersion: 1,
+    schemaVersion: 2,
     timestamp: $timestamp,
     target: $target,
     workload: "warm-cache interactive startup",
@@ -391,6 +395,12 @@ jq -n \
       ephemeralSession: true,
       mutableStateRoots: "temporary fixture",
       installedDependencies: "symlinked, content fingerprinted, package updates disabled",
+      fixtureValidation: "immutable files and all links must match; declared runtime outputs fingerprinted separately",
+      declaredRuntimeOutputs: [
+        "agent/fff/{frecency,history}/{data,lock}.mdb",
+        "agent/sessions/permission-forwarding/serving/*.json (direct children only)",
+        "tmp/jiti/*.<8 hex characters>.{cjs,mjs} (direct children only)"
+      ],
       shutdown: "benchmark extension exits after Pi stops the TUI",
       environment: {
         inherited: "allowlist",
@@ -463,13 +473,19 @@ if ! hyperfine "${startup_commands[@]}"; then
 fi
 
 printf 'Validating fixture fingerprints after measurement...\n'
-write_fixture_manifest "$fixture_manifest_after"
+write_fixture_manifest "$fixture_manifest_after" "$runtime_manifest_after"
+jq \
+  --arg before "$(git hash-object "$runtime_manifest_before")" \
+  --arg after "$(git hash-object "$runtime_manifest_after")" \
+  '.runtimeOutputs = {beforeFingerprint: $before, afterFingerprint: $after, changed: ($before != $after)}' \
+  "$output_dir/metadata.json" >"$output_dir/metadata-updated.json"
+mv "$output_dir/metadata-updated.json" "$output_dir/metadata.json"
 printf 'Validating linked dependency fingerprint after measurement...\n'
 write_dependency_manifest "$dependency_manifest_after"
 write_external_source_manifest "$external_source_manifest_after"
 if ! cmp -s "$fixture_manifest_before" "$fixture_manifest_after"; then
   printf 'pi startup benchmark: isolated Pi state changed during measured runs:\n' >&2
-  comm -3 "$fixture_manifest_before" "$fixture_manifest_after" \
+  LC_ALL=C comm -3 "$fixture_manifest_before" "$fixture_manifest_after" \
     | sed $'s/^\t//' \
     | cut -f 1 \
     | uniq \
@@ -478,7 +494,7 @@ if ! cmp -s "$fixture_manifest_before" "$fixture_manifest_after"; then
 fi
 if ! cmp -s "$external_source_manifest_before" "$external_source_manifest_after"; then
   printf 'pi startup benchmark: project startup source changed during measured runs:\n' >&2
-  comm -3 "$external_source_manifest_before" "$external_source_manifest_after" \
+  LC_ALL=C comm -3 "$external_source_manifest_before" "$external_source_manifest_after" \
     | sed $'s/^\t//' \
     | cut -f 1 \
     | uniq \
@@ -487,7 +503,7 @@ if ! cmp -s "$external_source_manifest_before" "$external_source_manifest_after"
 fi
 if ! cmp -s "$dependency_manifest_before" "$dependency_manifest_after"; then
   printf 'pi startup benchmark: linked dependency content changed during measured runs:\n' >&2
-  comm -3 "$dependency_manifest_before" "$dependency_manifest_after" \
+  LC_ALL=C comm -3 "$dependency_manifest_before" "$dependency_manifest_after" \
     | sed $'s/^\t//' \
     | cut -f 1 \
     | uniq \

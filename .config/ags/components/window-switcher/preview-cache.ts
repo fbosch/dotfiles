@@ -8,9 +8,6 @@ import {
 	fallbackPreviewDimensions,
 	scaledPreviewDimensions,
 } from "./preview-policy";
-const previewCacheDirectory = GLib.file_test("/dev/shm", GLib.FileTest.IS_DIR)
-	? "/dev/shm/hypr-window-captures"
-	: `${GLib.get_tmp_dir()}/hypr-window-captures`;
 
 export type PreviewInfo = {
 	mtime: number;
@@ -22,31 +19,43 @@ export type PreviewInfo = {
 export class PreviewCache {
 	#entries = new Map<string, PreviewInfo>();
 	#monitor: Gio.FileMonitor | null = null;
+	readonly #previewDirectory: string | null;
+	#reportedErrors = new Set<string>();
 
-	constructor(private readonly onPreviewChanged: () => void) {}
+	constructor(private readonly onPreviewChanged: () => void) {
+		// Keep each cache bound to the Hyprland instance that created it.
+		this.#previewDirectory = previewDirectoryFromEnvironment();
+	}
 
 	startMonitoring(): void {
-		if (
-			this.#monitor ||
-			GLib.file_test(previewCacheDirectory, GLib.FileTest.IS_DIR) === false
-		)
+		const previewDirectory = this.#previewDirectory;
+		if (this.#monitor || !previewDirectory) return;
+
+		// Captures can arrive after activation, so watch a directory we create first.
+		if (GLib.mkdir_with_parents(previewDirectory, 0o700) !== 0) {
+			this.#reportError("create", previewDirectory, new Error("Could not create preview directory"));
 			return;
+		}
 
-		this.#monitor = Gio.File.new_for_path(
-			previewCacheDirectory,
-		).monitor_directory(Gio.FileMonitorFlags.NONE, null);
-		this.#monitor.connect("changed", (_monitor, file, otherFile) => {
-			const paths = [file.get_path(), otherFile?.get_path()];
-			const changedPreview = paths.some(
-				(path) =>
-					path?.startsWith(`${previewCacheDirectory}/`) &&
-					path.endsWith(".jpg"),
-			);
-			if (changedPreview === false) return;
+		try {
+			this.#monitor = Gio.File.new_for_path(
+				previewDirectory,
+			).monitor_directory(Gio.FileMonitorFlags.NONE, null);
+			this.#monitor.connect("changed", (_monitor, file, otherFile) => {
+				const paths = [file.get_path(), otherFile?.get_path()];
+				const changedPreview = paths.some(
+					(path) => path && isPreviewPath(path, previewDirectory),
+				);
+				if (changedPreview === false) return;
 
-			for (const path of paths) if (path) this.#entries.delete(path);
-			this.onPreviewChanged();
-		});
+				for (const path of paths) if (path) this.#entries.delete(path);
+				this.onPreviewChanged();
+			});
+		} catch (error) {
+			this.#monitor?.cancel();
+			this.#monitor = null;
+			this.#reportError("monitor", previewDirectory, error);
+		}
 	}
 
 	dispose(): void {
@@ -55,24 +64,27 @@ export class PreviewCache {
 	}
 
 	getPath(window: WindowInfo): string | null {
+		const previewDirectory = this.#previewDirectory;
+		if (!previewDirectory) return null;
+
 		const ids = [window.stableId, window.address.replace(/^0x/, "")].filter(
 			(id): id is string => Boolean(id),
 		);
 		for (const id of ids) {
-			const path = `${previewCacheDirectory}/${id}.jpg`;
+			const path = GLib.build_filenamev([previewDirectory, `${id}.jpg`]);
 			try {
 				if (Gio.File.new_for_path(path).query_exists(null)) return path;
 			} catch (error) {
-				console.error(`Failed to find preview for ${id}:`, error);
+				this.#reportError("find", path, error);
 			}
 		}
 		return null;
 	}
 
 	getInfo(path: string | null, size?: WindowInfo["size"]): PreviewInfo {
-    const mark = perf.start("window-switcher", "getPreviewInfo");
-		if (!path)
-		return finishPreviewInfo(mark, {
+		const mark = perf.start("window-switcher", "getPreviewInfo");
+		if (!path || !this.#isPreviewPath(path))
+			return finishPreviewInfo(mark, {
 				mtime: 0,
 				...fallbackPreviewDimensions(size),
 			});
@@ -87,24 +99,28 @@ export class PreviewCache {
 				),
 			);
 			const cached = this.#entries.get(path);
-      if (cached?.mtime === mtime) return finishPreviewInfo(mark, cached);
+			if (cached?.mtime === mtime) return finishPreviewInfo(mark, cached);
 
 			const [success, contents] = file.load_contents(null);
-			if (!success || !contents)
-        return finishPreviewInfo(mark, {
+			if (!success || !contents) {
+				this.#reportError("read", path, new Error("Preview contents were empty"));
+				return finishPreviewInfo(mark, {
 					mtime,
 					...fallbackPreviewDimensions(size),
 				});
+			}
 
 			const stream = Gio.MemoryInputStream.new_from_bytes(
 				new GLib.Bytes(contents),
 			);
 			const pixbuf = GdkPixbuf.Pixbuf.new_from_stream(stream, null);
-			if (!pixbuf)
-        return finishPreviewInfo(mark, {
+			if (!pixbuf) {
+				this.#reportError("decode", path, new Error("Preview image was invalid"));
+				return finishPreviewInfo(mark, {
 					mtime,
 					...fallbackPreviewDimensions(size),
 				});
+			}
 
 			const dimensions = scaledPreviewDimensions(
 				pixbuf.get_width(),
@@ -122,16 +138,16 @@ export class PreviewCache {
 			};
 			this.#entries.set(path, entry);
 			if (this.#entries.size > 100) this.#entries.clear();
-      return finishPreviewInfo(mark, entry);
+			return finishPreviewInfo(mark, entry);
 		} catch (error) {
-			console.error("Failed to get preview info:", error);
+			this.#reportError("read", path, error);
 			mark.end(false, String(error));
 			return { mtime: 0, ...fallbackPreviewDimensions(size) };
 		}
 	}
 
 	getMtime(path: string | null): number | null {
-		if (!path) return null;
+		if (!path || !this.#isPreviewPath(path)) return null;
 		try {
 			return previewMtime(
 				Gio.File.new_for_path(path).query_info(
@@ -141,19 +157,47 @@ export class PreviewCache {
 				),
 			);
 		} catch (error) {
-			console.error("Failed to read preview mtime:", error);
+			this.#reportError("mtime", path, error);
 			return null;
 		}
 	}
 
+	#isPreviewPath(path: string): boolean {
+		return (
+			this.#previewDirectory !== null &&
+			isPreviewPath(path, this.#previewDirectory)
+		);
+	}
+
+	#reportError(operation: string, path: string, error: unknown): void {
+		if (this.#reportedErrors.has(operation)) return;
+		this.#reportedErrors.add(operation);
+		console.error(`Failed to ${operation} window preview ${path}:`, error);
+	}
+}
+
+function previewDirectoryFromEnvironment(): string | null {
+	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
+	const instanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+	if (!runtimeDirectory || !instanceSignature) return null;
+	return GLib.build_filenamev([
+		runtimeDirectory,
+		"hypr",
+		instanceSignature,
+		"window-captures",
+	]);
+}
+
+function isPreviewPath(path: string, previewDirectory: string): boolean {
+	return GLib.path_get_dirname(path) === previewDirectory && path.endsWith(".jpg");
 }
 
 function finishPreviewInfo(
-  mark: ReturnType<typeof perf.start>,
-  info: PreviewInfo,
+	mark: ReturnType<typeof perf.start>,
+	info: PreviewInfo,
 ): PreviewInfo {
-  mark.end(true);
-  return info;
+	mark.end(true);
+	return info;
 }
 
 function previewMtime(info: Gio.FileInfo): number {

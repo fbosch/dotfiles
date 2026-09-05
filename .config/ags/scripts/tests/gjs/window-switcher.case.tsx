@@ -1,4 +1,5 @@
 import { createRoot } from "ags";
+import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import Gtk from "gi://Gtk?version=4.0";
 import type { WindowSwitcherController } from "@/components/window-switcher/controller";
@@ -151,7 +152,7 @@ test("Window Switcher dispatches every request action", async () => {
 test("Window Switcher view renders and updates both display modes", () => {
 	createRoot((dispose) => {
 		const calls: string[] = [];
-		const previews = new PreviewCache(() => {});
+		const previews = createPreviewCacheWithoutIdentity();
 		const view = new WindowSwitcherView(previews, {
 			onSelect: (index) => calls.push(`select:${index}`),
 			onCommit: () => calls.push("commit"),
@@ -215,7 +216,7 @@ test("Window Switcher refreshes previews without rebuilding buttons", () => {
 			"preview refresh rebuilt a button",
 		);
 		assert(
-			previewBody.widthRequest === 180,
+			findWidgetWithClass(window, "preview-body")?.widthRequest === 180,
 			"preview width was not updated",
 		);
 		view.dispose();
@@ -226,7 +227,7 @@ test("Window Switcher refreshes previews without rebuilding buttons", () => {
 test("Window Switcher reorders existing buttons with current click indices", () => {
 	createRoot((dispose) => {
 		const selections: number[] = [];
-		const previews = new PreviewCache(() => {});
+		const previews = createPreviewCacheWithoutIdentity();
 		const view = new WindowSwitcherView(previews, {
 			onSelect: (index) => selections.push(index),
 			onCommit: () => {},
@@ -298,7 +299,7 @@ test("Window repository reads, caches, sorts, and updates focus history", async 
 
 test("Window Switcher controller completes a real lifecycle", async () => {
 	let disposeRoot = () => {};
-	const controller = new RealWindowSwitcherController();
+	const controller = createControllerWithoutPreviewIdentity();
 	createRoot((dispose) => {
 		disposeRoot = dispose;
 		controller.init();
@@ -330,7 +331,7 @@ test("Window Switcher ignores a hidden lifecycle and activates the latest show",
 	const firstWindows = deferred<WindowInfo[]>();
 	const secondWindows = deferred<WindowInfo[]>();
 	let query = 0;
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: () => (query++ === 0 ? firstWindows.promise : secondWindows.promise),
 			getActiveAddress: async () => windows[1].address,
@@ -366,7 +367,7 @@ test("Window Switcher ignores a hidden lifecycle and activates the latest show",
 
 test("Window Switcher ignores active-window results after teardown", async () => {
 	const activeAddress = deferred<string | null>();
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: async () => windows,
 			getActiveAddress: () => activeAddress.promise,
@@ -395,7 +396,7 @@ test("Window Switcher ignores an older overlapping sort refresh", async () => {
 	const olderRefresh = deferred<WindowInfo[]>();
 	const latestRefresh = deferred<WindowInfo[]>();
 	let query = 0;
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: () => {
 				query += 1;
@@ -435,7 +436,7 @@ test("Window Switcher ignores an older overlapping sort refresh", async () => {
 test("Window Switcher preserves a newer cycle over a pending sort refresh", async () => {
 	const refresh = deferred<WindowInfo[]>();
 	let query = 0;
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: () => (query++ === 0 ? Promise.resolve(windows) : refresh.promise),
 			getActiveAddress: async () => windows[0].address,
@@ -465,7 +466,7 @@ test("Window Switcher preserves a newer cycle over a pending sort refresh", asyn
 test("Window Switcher preserves a newer selection over a pending sort refresh", async () => {
 	const refresh = deferred<WindowInfo[]>();
 	let query = 0;
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: () => (query++ === 0 ? Promise.resolve(windows) : refresh.promise),
 			getActiveAddress: async () => windows[0].address,
@@ -494,7 +495,7 @@ test("Window Switcher preserves a newer selection over a pending sort refresh", 
 
 test("Window Switcher ignores a hidden cycle after cancellation", async () => {
 	const activeAddress = deferred<string | null>();
-	const controller = new RealWindowSwitcherController({
+	const controller = createControllerWithoutPreviewIdentity({
 		repository: {
 			getWindows: async () => windows,
 			getActiveAddress: () => activeAddress.promise,
@@ -520,6 +521,88 @@ test("Window Switcher ignores a hidden cycle after cancellation", async () => {
 		disposeRoot();
 	}
 });
+
+test("Window Switcher starts preview monitoring for real next and prev", async () => {
+	const originalRuntimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
+	const originalInstanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+	const runtimeDirectory = GLib.build_filenamev([
+		GLib.get_tmp_dir(),
+		`ags-window-switcher-controller-test-${GLib.uuid_string_random()}`,
+	]);
+	const previewDirectory = GLib.build_filenamev([
+		runtimeDirectory,
+		"hypr",
+		"controller-test-instance",
+		"window-captures",
+	]);
+	GLib.setenv("XDG_RUNTIME_DIR", runtimeDirectory, true);
+	GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", "controller-test-instance", true);
+	const controller = new RealWindowSwitcherController({
+		repository: {
+			getWindows: async () => windows,
+			getActiveAddress: async () => windows[0].address,
+			updateFocusHistory: () => {},
+		},
+	});
+	let disposeRoot = () => {};
+	createRoot((dispose) => {
+		disposeRoot = dispose;
+		controller.init();
+	});
+	try {
+		await controller.next("ALT");
+		assert(controller.isVisible(), "real next did not activate the switcher");
+		assert(
+			Gio.File.new_for_path(previewDirectory).query_exists(null),
+			"real next did not create the instance preview directory",
+		);
+		controller.hide();
+		await controller.prev("ALT");
+		assert(controller.isVisible(), "real prev did not activate the switcher");
+	} finally {
+		controller.teardown();
+		disposeRoot();
+		if (originalRuntimeDirectory !== null)
+			GLib.setenv("XDG_RUNTIME_DIR", originalRuntimeDirectory, true);
+		else GLib.unsetenv("XDG_RUNTIME_DIR");
+		if (originalInstanceSignature !== null)
+			GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", originalInstanceSignature, true);
+		else GLib.unsetenv("HYPRLAND_INSTANCE_SIGNATURE");
+		removeTree(Gio.File.new_for_path(runtimeDirectory));
+	}
+});
+
+function createPreviewCacheWithoutIdentity(): PreviewCache {
+	const originalRuntimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
+	const originalInstanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+	GLib.unsetenv("XDG_RUNTIME_DIR");
+	GLib.unsetenv("HYPRLAND_INSTANCE_SIGNATURE");
+	try {
+		return new PreviewCache(() => {});
+	} finally {
+		if (originalRuntimeDirectory !== null)
+			GLib.setenv("XDG_RUNTIME_DIR", originalRuntimeDirectory, true);
+		if (originalInstanceSignature !== null)
+			GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", originalInstanceSignature, true);
+	}
+}
+
+function createControllerWithoutPreviewIdentity(
+	options: ConstructorParameters<typeof RealWindowSwitcherController>[0] = {},
+): RealWindowSwitcherController {
+	const originalRuntimeDirectory = GLib.getenv("XDG_RUNTIME_DIR");
+	const originalInstanceSignature = GLib.getenv("HYPRLAND_INSTANCE_SIGNATURE");
+	GLib.unsetenv("XDG_RUNTIME_DIR");
+	GLib.unsetenv("HYPRLAND_INSTANCE_SIGNATURE");
+	try {
+		return new RealWindowSwitcherController(options);
+	} finally {
+		if (originalRuntimeDirectory !== null)
+			GLib.setenv("XDG_RUNTIME_DIR", originalRuntimeDirectory, true);
+		if (originalInstanceSignature !== null)
+			GLib.setenv("HYPRLAND_INSTANCE_SIGNATURE", originalInstanceSignature, true);
+	}
+}
 
 function request(
 	handler: (argv: string[], respond: (response: string) => void) => void,
@@ -568,4 +651,29 @@ function findWidgetWithClass(widget: Gtk.Widget, className: string): Gtk.Widget 
 		child = child.get_next_sibling();
 	}
 	return null;
+}
+
+function removeTree(file: Gio.File): void {
+	let enumerator: Gio.FileEnumerator | null = null;
+	try {
+		enumerator = file.enumerate_children(
+			"standard::name,standard::type",
+			Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+			null,
+		);
+		while (true) {
+			const info = enumerator.next_file(null);
+			if (!info) break;
+			removeTree(file.get_child(info.get_name()));
+		}
+	} catch {
+		// A regular file has no children.
+	} finally {
+		enumerator?.close(null);
+	}
+	try {
+		file.delete(null);
+	} catch {
+		// Failed tests should not hide their original assertion behind fixture cleanup.
+	}
 }

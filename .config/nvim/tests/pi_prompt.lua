@@ -249,3 +249,5 @@ rawset(vim.ui, "input", original_input)
 rawset(vim, "notify", original_notify)
 rawset(vim, "rpcnotify", original_rpcnotify)
 rawset(vim, "defer_fn", original_defer_fn)
+
+dofile(repo_root .. "/.config/nvim/tests/pi_prompt_context.lua")

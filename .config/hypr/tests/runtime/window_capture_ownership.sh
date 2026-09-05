@@ -10,7 +10,7 @@ fi
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 test_dir="$(mktemp -d)"
 runtime_dir="$test_dir/runtime"
-capture_dir="$test_dir/captures"
+capture_dir="$runtime_dir/hypr/fixture/window-captures"
 bin_dir="$test_dir/bin"
 home_dir="$test_dir/home"
 event_server="$test_dir/event-server.lua"
@@ -108,7 +108,6 @@ HOME="$home_dir" \
   PATH="$bin_dir:$original_path" \
   XDG_RUNTIME_DIR="$runtime_dir" \
   HYPRLAND_INSTANCE_SIGNATURE=fixture \
-  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
   luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" \
   handle-event 'openwindow>>0xoffscreen,10,fixture,Offscreen'
 test -s "$capture_dir/offscreen-id.jpg"
@@ -119,7 +118,6 @@ HOME="$home_dir" \
   PATH="$bin_dir:$original_path" \
   XDG_RUNTIME_DIR="$runtime_dir" \
   HYPRLAND_INSTANCE_SIGNATURE=fixture \
-  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
   luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" \
   handle-event 'openwindow>>0xvisible,1,fixture,Visible'
 test -s "$capture_dir/visible-id.jpg"
@@ -134,7 +132,6 @@ HOME="$home_dir" \
   PATH="$bin_dir:$original_path" \
   XDG_RUNTIME_DIR="$runtime_dir" \
   HYPRLAND_INSTANCE_SIGNATURE=fixture \
-  HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
   luajit "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.lua" worker
 test ! -s "$GRIM_LOG"
 test ! -e "$capture_dir/visible-id.jpg"
@@ -173,7 +170,6 @@ start_daemon() {
     PATH="$bin_dir:$original_path" \
     XDG_RUNTIME_DIR="$runtime_dir" \
     HYPRLAND_INSTANCE_SIGNATURE=fixture \
-    HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
     "$repo_root/runtime/windows/daemons/window-capture/window-capture-daemon.sh" \
     >"$test_dir/daemon.log" 2>&1 &
   wrapper_pid="$!"
@@ -185,7 +181,6 @@ capturectl() {
     PATH="$bin_dir:$original_path" \
     XDG_RUNTIME_DIR="$runtime_dir" \
     HYPRLAND_INSTANCE_SIGNATURE=fixture \
-    HYPR_WINDOW_CAPTURE_DIR="$capture_dir" \
     "$control" "$@"
 }
 

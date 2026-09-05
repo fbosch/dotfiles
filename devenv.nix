@@ -299,6 +299,12 @@ in
       '';
     };
 
+    "test:ags-gjs".exec = ''
+      set -euo pipefail
+      cd .config/ags
+      timeout --foreground 180s bun run test:gjs
+    '';
+
     "test:runtime-shell".exec = ''
       set -euo pipefail
       shopt -s nullglob
@@ -324,8 +330,18 @@ in
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions
+      bun test extensions benchmarks
       bun run typecheck
+    '';
+
+    "test:nvim-direnv-loader".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/direnv_loader.lua
+    '';
+
+    "test:nvim-pi-direnv-launch".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        --listen "$DEVENV_STATE/pi-direnv-launch.sock" -l .config/nvim/tests/pi_direnv_launch.lua
     '';
 
     "test:nvim-pi-launcher".exec = ''
@@ -437,6 +453,8 @@ in
         "test:lua-quality"
         "test:nvim-opencode-session-restore"
         "test:pi-extensions"
+        "test:nvim-direnv-loader"
+        "test:nvim-pi-direnv-launch"
         "test:nvim-pi-launcher"
         "test:nvim-pi-cutover"
         "test:nvim-pi-prompt"
@@ -448,6 +466,7 @@ in
         "test:nvim-pack-inventory"
         "test:vicinae"
         "test:runtime-shell"
+        "test:ags-gjs"
         "test:lua"
         "test:window-state-runtime"
       ];

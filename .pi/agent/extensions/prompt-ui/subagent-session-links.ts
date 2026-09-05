@@ -474,7 +474,7 @@ interface SessionNavigationModule {
 }
 
 interface SessionNavigatorModule {
-  TranscriptOverlay: new (options: {
+  TranscriptPane: new (options: {
     tui: TUI;
     theme: Theme;
     source: SubagentTranscriptSource;
@@ -677,7 +677,7 @@ export async function openSubagentSession(
       }
 
       try {
-        overlayComponent = new navigator.TranscriptOverlay({
+        overlayComponent = new navigator.TranscriptPane({
           tui,
           theme: ctx.ui.theme,
           source,

@@ -230,7 +230,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
     ui: { getEditorText: () => "", setEditorText: () => undefined },
   } as unknown as ExtensionContext;
 
-  createNeovimExtension({
+  await createNeovimExtension({
     createConnection: async (socket) => {
       sockets.push(socket);
       return connection;
@@ -564,7 +564,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(connection.closed).toBe(true);
 });
 
-test("stays unloaded when the session has no Neovim launch binding", () => {
+test("stays unloaded when the session has no Neovim launch binding", async () => {
   let registrations = 0;
   let lifecycleHandlers = 0;
   let connections = 0;
@@ -577,7 +577,7 @@ test("stays unloaded when the session has no Neovim launch binding", () => {
     },
   } as unknown as ExtensionAPI;
 
-  createNeovimExtension({
+  await createNeovimExtension({
     createConnection: async () => {
       connections += 1;
       return new FakeConnection();

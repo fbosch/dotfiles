@@ -1,5 +1,6 @@
 require("config.builtins")
 require("config.opts")
+require("config.direnv").setup()
 require("config.usercmd")
 require("config.keymaps")
 require("config.autocmd")

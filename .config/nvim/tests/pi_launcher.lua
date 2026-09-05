@@ -30,6 +30,14 @@ package.loaded["plugins.ai.pi.session"] = {
 	end,
 }
 local recorded_source_context
+package.loaded["config.direnv"] = {
+	synchronize = function(cwd)
+		return { ok = true, status = "missing", cwd = cwd }
+	end,
+	failure_message = function()
+		return "project environment fixture failure"
+	end,
+}
 package.loaded["plugins.ai.pi.bridge"] = {
 	record_source_context = function(context)
 		recorded_source_context = vim.deepcopy(context)
@@ -82,7 +90,7 @@ vim.cmd("normal! v2l")
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 local command_prefix = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 	.. vim.fn.shellescape(vim.env.HERDR_PANE_ID)
-	.. " PI_NVIM_LAUNCH_ID="
+	.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
