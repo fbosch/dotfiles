@@ -1110,7 +1110,13 @@ const luaCallees = (
   lang: Language,
   range: ByteRange,
 ): Array<{ name: string; line: number }> =>
-  queryCaptures(source, lang, "(function_call name: (identifier) @callee)", "callee", range);
+  queryCaptures(
+    source,
+    lang,
+    "(function_call name: [(identifier) (dot_index_expression) (method_index_expression)] @callee)",
+    "callee",
+    range,
+  );
 
 // ── PHP ──────────────────────────────────────────────────────────────────
 
@@ -1384,7 +1390,7 @@ const swiftCallees = (
   lang: Language,
   range: ByteRange,
 ): Array<{ name: string; line: number }> =>
-  queryCaptures(source, lang, "(call_expression function: (identifier) @callee)", "callee", range);
+  queryCaptures(source, lang, "(call_expression (simple_identifier) @callee)", "callee", range);
 
 // ── Java ─────────────────────────────────────────────────────────────────
 

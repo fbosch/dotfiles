@@ -40,8 +40,9 @@
 - [x] 4.3 Reserve in-flight request IDs, retain 64 outcomes, and verify pending,
       completed duplicate, changed-content reuse, stale sequence, and sequence-gap
       behavior
-- [x] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
-      dispatch, acknowledgement, and pending-request round trip
+- [ ] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
+      dispatch, acknowledgement, and pending-request round trip. Transport-only
+      and separate boundary tests pass; the complete production path is unverified.
 - [x] 4.5 Clear prompt listeners, bindings, timers, and pending state on disconnect,
       terminal close, reload, session replacement, and shutdown while retaining
       per-launch replay protection in lifecycle tests

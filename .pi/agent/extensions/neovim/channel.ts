@@ -119,6 +119,7 @@ export type PromptRequestHandler = (request: PromptRequest) => PromptAcknowledge
 export type MalformedPromptHandler = (
   request: PromptRequestIdentity,
   code: PromptFailureCode,
+  fingerprint?: string,
 ) => PromptAcknowledgement;
 
 async function executeBridge(
@@ -657,7 +658,7 @@ export class PiNeovimChannel {
       ? this.#promptRequestHandler?.(prompt.value)
       : prompt.identity === undefined
         ? undefined
-        : this.#promptRejectionHandler?.(prompt.identity, prompt.error);
+        : this.#promptRejectionHandler?.(prompt.identity, prompt.error, prompt.fingerprint);
     const connection = this.#connection;
     if (acknowledgement === undefined || connection === undefined) return;
     const operation = withTimeout(

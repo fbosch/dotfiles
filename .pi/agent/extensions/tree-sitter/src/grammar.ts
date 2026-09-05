@@ -97,13 +97,21 @@ export const LANGUAGE_MAP: Record<string, GrammarEntry> = {
   // The bundle's Lua WASM uses legacy dylink metadata rejected by web-tree-sitter 0.26.
   ".lua": { pkg: "@tree-sitter-grammars/tree-sitter-lua", wasm: "tree-sitter-lua.wasm" },
 
-  // Languages via tree-sitter-wasms (prebuilt WASM bundle)
-  // Swift, TOML, YAML, Vue don't publish WASM in their individual packages
-  ".swift": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-swift.wasm" },
-  ".toml": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-toml.wasm" },
-  ".yaml": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-yaml.wasm" },
-  ".yml": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-yaml.wasm" },
-  ".vue": { pkg: "tree-sitter-wasms", wasm: "out/tree-sitter-vue.wasm" },
+  // Swift and Vue use explicit compatible WASM builds; TOML and YAML publish WASM directly.
+  ".swift": { pkg: "@lumis-sh/wasm-swift", wasm: "tree-sitter-swift.wasm" },
+  ".toml": {
+    pkg: "@tree-sitter-grammars/tree-sitter-toml",
+    wasm: "tree-sitter-toml.wasm",
+  },
+  ".yaml": {
+    pkg: "@tree-sitter-grammars/tree-sitter-yaml",
+    wasm: "tree-sitter-yaml.wasm",
+  },
+  ".yml": {
+    pkg: "@tree-sitter-grammars/tree-sitter-yaml",
+    wasm: "tree-sitter-yaml.wasm",
+  },
+  ".vue": { pkg: "@lumis-sh/wasm-vue", wasm: "tree-sitter-vue.wasm" },
 };
 
 // ── Pinned grammar artifacts + disk cache ────────────────────────────────
@@ -127,6 +135,14 @@ const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
     version: "0.26.2",
     sha256: "128a9ee019b51461c9c829a51af81ca9a70e8c28673ac711cb6f391d5a71ef6f",
   },
+  "@lumis-sh/wasm-swift/tree-sitter-swift.wasm": {
+    version: "0.26.2",
+    sha256: "88def22102e36be1f2a612cbca2911af7acbb5a775893975f84e111910568144",
+  },
+  "@lumis-sh/wasm-vue/tree-sitter-vue.wasm": {
+    version: "0.26.1",
+    sha256: "0e7829716cef1d1f2ee3297e6ec682ab221fce2355a42b1e28afecfddc32d4b1",
+  },
   "@tree-sitter-grammars/tree-sitter-kotlin/tree-sitter-kotlin.wasm": {
     version: "1.1.0",
     sha256: "7009d69453bc8735e438b2818a633efb21c88f99782769abba60dffedfab73f7",
@@ -134,6 +150,14 @@ const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
   "@tree-sitter-grammars/tree-sitter-lua/tree-sitter-lua.wasm": {
     version: "0.4.1",
     sha256: "6d95607fc7d78964cfdf065ccb1ba76be5ed217c5ec0d0a3cace13c59fa1ae43",
+  },
+  "@tree-sitter-grammars/tree-sitter-toml/tree-sitter-toml.wasm": {
+    version: "0.7.0",
+    sha256: "1ac6a83826c35a68857f8325e00c78f6bcbef4eb6db3931a6cf3041f76e5e09f",
+  },
+  "@tree-sitter-grammars/tree-sitter-yaml/tree-sitter-yaml.wasm": {
+    version: "0.7.1",
+    sha256: "e752dc21c3591df9b45692fe417d101f45d1828c28c44d79005f4066dc7e4e91",
   },
   "@tree-sitter-grammars/tree-sitter-zig/tree-sitter-zig.wasm": {
     version: "1.1.2",
@@ -222,22 +246,6 @@ const GRAMMAR_ARTIFACTS: Record<string, GrammarArtifact> = {
   "tree-sitter-typescript/tree-sitter-typescript.wasm": {
     version: "0.23.2",
     sha256: "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d",
-  },
-  "tree-sitter-wasms/out/tree-sitter-swift.wasm": {
-    version: "0.1.13",
-    sha256: "41c4fdb2249a3aa6d87eed0d383081ff09725c2248b4977043a43825980ffcc7",
-  },
-  "tree-sitter-wasms/out/tree-sitter-toml.wasm": {
-    version: "0.1.13",
-    sha256: "7849ac8ce9d10a4684ca189ea8ad3654c20c38acb2d674a014a164398cbd37a2",
-  },
-  "tree-sitter-wasms/out/tree-sitter-vue.wasm": {
-    version: "0.1.13",
-    sha256: "6244521bb3fb60f34ce5f677f2af81facb2c38691193985ca5fa85e1b6f29250",
-  },
-  "tree-sitter-wasms/out/tree-sitter-yaml.wasm": {
-    version: "0.1.13",
-    sha256: "5dea7cfff83d41d8f87fb8e434e1a5b292c0d670bfcdc42cb2af420ef490dde5",
   },
 };
 

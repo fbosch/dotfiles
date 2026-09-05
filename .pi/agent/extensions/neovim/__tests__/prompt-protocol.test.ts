@@ -104,12 +104,20 @@ describe("Pi prompt notification contract", () => {
   });
 
   test("rejects extra fields and malformed request identity", () => {
-    expect(
-      parsePromptNotification(PROMPT_NOTIFICATION, [{ ...request(), forged: true }]),
-    ).toMatchObject({
+    const malformed = parsePromptNotification(PROMPT_NOTIFICATION, [
+      { ...request(), forged: true },
+    ]);
+    const changed = parsePromptNotification(PROMPT_NOTIFICATION, [
+      { ...request(), forged: "changed" },
+    ]);
+    expect(malformed).toMatchObject({
       error: "PI_INVALID_REQUEST",
       ok: false,
     });
+    expect(malformed?.ok === false ? malformed.fingerprint : undefined).toHaveLength(64);
+    expect(changed?.ok === false ? changed.fingerprint : undefined).not.toBe(
+      malformed?.ok === false ? malformed.fingerprint : undefined,
+    );
     expect(
       parsePromptNotification(PROMPT_NOTIFICATION, [
         { ...request(), requestId: `nvim:${launchId}:2` },
@@ -155,7 +163,7 @@ describe("Pi prompt notification contract", () => {
   });
 
   test("rejects empty and NUL-containing submissions", () => {
-    for (const text of [" \n\t", "\u00a0\u2003"]) {
+    for (const text of [" \n\t", "\u0085", "\u00a0\u2003"]) {
       expect(parsePromptNotification(PROMPT_NOTIFICATION, [request({ text })])).toMatchObject({
         error: "PI_PROMPT_EMPTY",
         ok: false,
@@ -279,8 +287,14 @@ describe("Pi prompt request dispatch", () => {
   test("acknowledges malformed requests and advances their sequence", () => {
     const target = dispatcherFixture();
 
-    expect(target.dispatcher.rejectMalformed(request(), "PI_INVALID_UTF8")).toMatchObject({
+    expect(target.dispatcher.rejectMalformed(request(), "PI_INVALID_UTF8", "first")).toMatchObject({
       code: "PI_INVALID_UTF8",
+      outcome: "rejected",
+    });
+    expect(
+      target.dispatcher.rejectMalformed(request(), "PI_INVALID_UTF8", "changed"),
+    ).toMatchObject({
+      code: "PI_REQUEST_ID_REUSED",
       outcome: "rejected",
     });
     expect(target.sent).toEqual([]);

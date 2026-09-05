@@ -110,8 +110,8 @@ reloads.
   second side effect.
 - Reusing an ID with different content is rejected.
 - Neovim does not retry a submit after an acknowledgement timeout. The UI
-  reports that delivery is unknown and requires the user to inspect Pi before
-  trying again.
+  reports that delivery is unknown, retires prompt ingress for that launch, and
+  requires the user to inspect Pi and restart its terminal before trying again.
 
 This favors at-most-once behavior over convenience. Retrying an ambiguous
 submission can start two model turns.
@@ -537,10 +537,16 @@ Implementation record (2026-09-05):
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.
-- The focused Pi and Herdr extension suite passes 103 tests with 473 assertions,
-  including a real headless Neovim notification and `prompt_ack` round trip.
-- The prompt, launcher, exact-session restoration, production restoration,
-  cutover, and OpenCode restoration Neovim tasks pass.
+- The latest Neovim extension suite run has 103 passing tests and four failures
+  in the concurrently added `entrypoint.test.ts`. Those tests expect lazy
+  loading of `extension.ts`, which another session is implementing. Do not
+  declare the suite green until that change lands and the suite passes again.
+- The headless transport test covers a real Neovim notification and `prompt_ack`
+  with a stub request handler and acknowledgement receiver. It does not prove
+  the complete `:PiAsk` startup, Pi dispatch, pending resolution, and focus path.
+- Pi typecheck, scoped Biome checks, Lua quality, prompt, launcher, exact-session
+  restoration, production restoration, cutover, OpenCode restoration, and Herdr
+  Neovim restoration checks pass. Both OpenSpec changes pass strict validation.
 - The isolated warm/cold two-worktree live matrix remains the Phase 2 exit gate.
 
 ### Phase 3: Add stable `@this` context

@@ -210,7 +210,8 @@ export function createNeovimExtension(dependencies: NeovimExtensionDependencies 
         channel = new PiNeovimChannel(inheritedSocket, context.cwd, dependencies.createConnection);
         channel.setPromptRequestHandler(
           (request) => promptDispatcher.dispatch(request),
-          (request, code) => promptDispatcher.rejectMalformed(request, code),
+          (request, code, fingerprint) =>
+            promptDispatcher.rejectMalformed(request, code, fingerprint),
         );
       }
       return channel;

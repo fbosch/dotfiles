@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,13 +29,11 @@ type PathValuesIntent = {
 type PermissionManagerLike = {
   configureForCwd(cwd: string | undefined | null): void;
   check(intent: ToolIntent | PathValuesIntent): PermissionCheck;
+  getConfigIssues(): string[];
 };
 
 type PermissionManagerModule = {
-  PermissionManager: new (options: {
-    agentDir: string;
-    isYoloEnabled?: () => boolean;
-  }) => PermissionManagerLike;
+  PermissionManager: new (options: { agentDir: string }) => PermissionManagerLike;
 };
 
 type PermissionResolverLike = {
@@ -128,6 +128,13 @@ type BashCheckModule = {
   resolveBashCommandCheck: BashCheck;
 };
 
+type BashPathGate = (
+  context: ToolCallContext,
+  program: BashProgramLike,
+  resolver: PermissionResolverLike,
+  normalizer: PathNormalizerLike,
+) => GateResult;
+
 type ChainVerdict = { kind: "allow" } | { kind: "deny"; reason?: string } | { kind: "defer" };
 
 type PermissionPromptDecision = {
@@ -168,6 +175,7 @@ type PermissionModules = {
   describeExternalDirectoryGate: ExternalDirectoryGate;
   BashProgram: BashProgramModule["BashProgram"];
   resolveBashCommandCheck: BashCheck;
+  describeBashPathGate: BashPathGate;
   composeAuthorizerChain: AuthorizerChainModule["composeAuthorizerChain"];
   encloseInDelegationEnvelope: DelegationEnvelopeModule["encloseInDelegationEnvelope"];
 };
@@ -189,6 +197,7 @@ async function loadPermissionModules(): Promise<PermissionModules> {
     externalDirectoryGateModule,
     bashProgramModule,
     bashCheckModule,
+    bashPathModule,
     chainModule,
     delegationEnvelopeModule,
   ] = await Promise.all([
@@ -200,6 +209,7 @@ async function loadPermissionModules(): Promise<PermissionModules> {
     import(new URL("handlers/gates/external-directory.ts", sourceRoot).href),
     import(new URL("access-intent/bash/program.ts", sourceRoot).href),
     import(new URL("handlers/gates/bash-command.ts", sourceRoot).href),
+    import(new URL("handlers/gates/bash-path.ts", sourceRoot).href),
     import(new URL("authority/authorizer-chain.ts", sourceRoot).href),
     import(new URL("authority/delegation-envelope.ts", sourceRoot).href),
   ]);
@@ -215,6 +225,8 @@ async function loadPermissionModules(): Promise<PermissionModules> {
     BashProgram: (bashProgramModule as unknown as BashProgramModule).BashProgram,
     resolveBashCommandCheck: (bashCheckModule as unknown as BashCheckModule)
       .resolveBashCommandCheck,
+    describeBashPathGate: (bashPathModule as { describeBashPathGate: BashPathGate })
+      .describeBashPathGate,
     composeAuthorizerChain: (chainModule as unknown as AuthorizerChainModule)
       .composeAuthorizerChain,
     encloseInDelegationEnvelope: (delegationEnvelopeModule as unknown as DelegationEnvelopeModule)
@@ -230,19 +242,16 @@ type PermissionEngine = {
   normalizer: PathNormalizerLike;
 };
 
-function createEngine(isYoloEnabled = false): PermissionEngine {
-  const manager = new modules.PermissionManager({
-    agentDir,
-    isYoloEnabled: () => isYoloEnabled,
-  });
-  manager.configureForCwd(repoRoot);
+function createEngine(cwd = repoRoot): PermissionEngine {
+  const manager = new modules.PermissionManager({ agentDir });
+  manager.configureForCwd(cwd);
 
   return {
     manager,
     resolver: new modules.PermissionResolver(manager, {
       getRuleset: () => [],
     }),
-    normalizer: new modules.PathNormalizer(modules.posixPathFlavor, repoRoot),
+    normalizer: new modules.PathNormalizer(modules.posixPathFlavor, cwd),
   };
 }
 
@@ -283,6 +292,10 @@ function externalDirectoryGate(
 }
 
 describe("pi-permission-system v29 policy", () => {
+  test("loads valid global and project policy without config issues", () => {
+    expect(createEngine().manager.getConfigIssues()).toEqual([]);
+  });
+
   test("allows ordinary local file tools and named safe shell commands", async () => {
     const engine = createEngine();
 
@@ -301,7 +314,13 @@ describe("pi-permission-system v29 policy", () => {
       }).state,
     ).toBe("allow");
 
-    for (const command of ["set -o pipefail", "git status --short", "git diff --check", "pwd"]) {
+    for (const command of [
+      "set -o pipefail",
+      "git status --short",
+      "git diff --check",
+      "git worktree prune --dry-run",
+      "pwd",
+    ]) {
       expect((await checkBash(engine, command)).state, command).toBe("allow");
     }
 
@@ -313,7 +332,11 @@ describe("pi-permission-system v29 policy", () => {
     const engine = createEngine();
     const commands = [
       "git -C . reset --hard",
+      "set -o pipefail; git -C . reset --hard",
       "git branch -D feature",
+      "git worktree prune",
+      "git worktree prune --dry-run --no-dry-run",
+      "git diff --output=synthetic-output.txt",
       "find . -delete",
       "gh api -X DELETE repos/example/project",
       "gh api repos/example/project -X DELETE",
@@ -332,23 +355,77 @@ describe("pi-permission-system v29 policy", () => {
         input: { value: "synthetic" },
       }).state,
     ).toBe("ask");
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "worktrunk",
+        input: { command: "remove", args: ["--force", "--force-delete", "feature"] },
+      }).state,
+    ).toBe("ask");
+  });
+
+  test("scopes named checks to the dotfiles project", async () => {
+    const project = createEngine();
+    const otherProject = createEngine(join(repoRoot, "synthetic-unconfigured-project"));
+
+    for (const command of ["devenv test", "bun test extensions", "bun run typecheck"]) {
+      expect((await checkBash(project, command)).state, command).toBe("allow");
+      expect((await checkBash(otherProject, command)).state, command).toBe("ask");
+    }
   });
 
   test("keeps privileged shell commands explicitly denied", async () => {
     const engine = createEngine();
 
-    for (const command of ["sudo id", "doas id", "pkexec id"]) {
+    for (const command of ["sudo id", "doas id", "pkexec id", "su root"]) {
       expect((await checkBash(engine, command)).state, command).toBe("deny");
     }
   });
 
-  test("denies credential paths through the cross-cutting path gate", () => {
+  test("denies credential paths through resolver path-values intents", () => {
     const engine = createEngine();
+    const syntheticAuthPaths = [
+      join(homedir(), ".pi/agent/auth.json"),
+      join(homedir(), "dotfiles/.pi/agent/auth.json"),
+    ];
 
-    for (const path of ["~/.pi/agent/auth.json", "~/dotfiles/.pi/agent/auth.json"]) {
-      const result = pathGate(engine, "read", path);
-      expect(result, path).not.toBeNull();
-      expect(result?.preCheck?.state, path).toBe("deny");
+    for (const path of [...syntheticAuthPaths, join(repoRoot, "synthetic-secret.env")]) {
+      for (const surface of ["path_read", "path_write"]) {
+        const result = engine.resolver.resolve({
+          kind: "path-values",
+          surface,
+          values: [path],
+        });
+        expect(result.state, `${surface}: ${path}`).toBe("deny");
+      }
+    }
+  });
+
+  test("protected-file asks never override a secret deny on another path alias", async () => {
+    const engine = createEngine();
+    const config = JSON.parse(
+      await readFile(new URL("../config.json", import.meta.url), "utf8"),
+    ) as {
+      permission: { path: Record<string, PermissionState> };
+    };
+
+    // Directional entries append after bare path rules, so path_write must reassert the denies last.
+    for (const [pattern, state] of Object.entries(config.permission.path)) {
+      if (state !== "deny") continue;
+      const fixture = pattern.replaceAll("*", "synthetic-secret");
+      const secretAlias = fixture.startsWith("~/")
+        ? join(homedir(), fixture.slice(2))
+        : join(repoRoot, fixture);
+      for (const surface of ["path_read", "path_write"]) {
+        expect(
+          engine.resolver.resolve({
+            kind: "path-values",
+            surface,
+            values: [join(repoRoot, ".pi/agent/settings.json"), secretAlias],
+          }).state,
+          `${surface}: ${pattern}`,
+        ).toBe("deny");
+      }
     }
   });
 
@@ -370,6 +447,50 @@ describe("pi-permission-system v29 policy", () => {
       expect(result, path).not.toBeNull();
       expect(result?.preCheck?.state, path).toBe("ask");
     }
+  });
+
+  test("gates redirects even when the command itself is allowed", async () => {
+    const engine = createEngine();
+    const cases = [
+      ["printf x > .pi/agent/settings.json", "ask"],
+      ["echo x > ./synthetic-policy-secret.env", "deny"],
+    ] as const;
+
+    for (const [command, expected] of cases) {
+      expect((await checkBash(engine, command)).state).toBe("allow");
+      const program = await modules.BashProgram.parse(command, engine.normalizer);
+      const gate = modules.describeBashPathGate(
+        toolContext("bash", { command }),
+        program,
+        engine.resolver,
+        engine.normalizer,
+      );
+      expect(gate?.preCheck?.state, command).toBe(expected);
+    }
+  });
+
+  test("allows MCP discovery and context7 reads while asking for GitHub mutations", () => {
+    const engine = createEngine();
+
+    // Discovery targets follow server/search candidates; a surface catch-all would mask them.
+    for (const input of [{}, { server: "context7" }, { search: "context7" }]) {
+      expect(engine.manager.check({ kind: "tool", surface: "mcp", input }).state).toBe("allow");
+    }
+
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "mcp",
+        input: { server: "context7", tool: "get-library-docs" },
+      }).state,
+    ).toBe("allow");
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "mcp",
+        input: { server: "github", tool: "delete_repository" },
+      }).state,
+    ).toBe("ask");
   });
 
   test("allows external reads from project policy and asks for external writes", () => {
@@ -431,12 +552,5 @@ describe("pi-permission-system v29 policy", () => {
 
     expect((await chain.authorize(ordinaryAsk)).approved).toBe(true);
     expect((await chain.authorize(pathAsk)).approved).toBe(false);
-  });
-
-  test("preserves explicit denies when yolo rewrites asks", async () => {
-    const yoloEngine = createEngine(true);
-
-    expect((await checkBash(yoloEngine, "git -C . reset --hard")).state).toBe("allow");
-    expect((await checkBash(yoloEngine, "sudo id")).state).toBe("deny");
   });
 });

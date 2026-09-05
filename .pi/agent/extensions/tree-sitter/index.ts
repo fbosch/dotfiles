@@ -290,7 +290,7 @@ async function validateContent(
       // Grammar loaded but file has no errors — clean
       return null;
     }
-    // Grammar not available — fall through to delimiter balance if rules exist
+    return `Cannot modify ${path}: syntax validation is unavailable because its tree-sitter grammar could not be loaded. The file was NOT modified.`;
   }
 
   if (rules) {
@@ -358,7 +358,7 @@ async function extractFile(
   if (!entry) return null;
   await ensureParser(signal);
   const lang = await loadGrammar(entry, notify, signal);
-  if (!lang) return null;
+  if (!lang) throw new Error(`Cannot inspect ${filePath}: tree-sitter grammar is unavailable.`);
   signal?.throwIfAborted();
   const extracted = config.extract(source, lang);
   signal?.throwIfAborted();
@@ -601,7 +601,7 @@ export default async function (pi: ExtensionAPI) {
     name: "find_callers",
     label: "Find Callers",
     description:
-      "Find all call sites of a function or method across the project. Uses tree-sitter AST queries to find precise call references, not substring matching. Supports all tree-sitter supported languages.",
+      "Find call sites of a function or method across the project, including module-level and recursive calls. Returns call-site lines, not declaration lines. Uses tree-sitter AST queries, not substring matching. Lua accepts exact qualified names (M.target, object:method) or bare member names.",
     promptSnippet: "Find all call sites of a function or method across the project",
     promptGuidelines: [
       "Use find_callers to find all places that call a specific function or method. This is more precise than grep because it uses AST queries and excludes false positives from comments/strings.",
@@ -633,17 +633,24 @@ export default async function (pi: ExtensionAPI) {
         if (!entry) continue;
         await ensureParser(signal);
         const lang = await loadGrammar(entry, notify, signal);
-        if (!lang) continue;
+        if (!lang) throw new Error(`Cannot inspect ${file}: tree-sitter grammar is unavailable.`);
         const source = await readFileSafe(file, signal);
         if (source === null) continue;
 
         signal?.throwIfAborted();
-        const extracted = config.extract(source, lang);
-        for (const symbol of extracted.symbols) {
-          if (symbol.name === params.name) continue;
-          const callees = config.findCallees(source, lang, symbol.range);
-          if (callees.some((callee) => callee.name === params.name)) {
-            callers.push(`  ${file}:${symbol.range.startLine} [${symbol.kind}] ${symbol.name}`);
+        // Query the whole file once so calls need not belong to an extracted declaration.
+        const callees = config.findCallees(source, lang, {
+          startByte: 0,
+          endByte: source.length,
+          startLine: 1,
+          endLine: source.split("\n").length,
+        });
+        const matchLuaMembers = config.extensions.includes(".lua") && !/[.:]/.test(params.name);
+        for (const callee of callees) {
+          const memberMatches =
+            matchLuaMembers && callee.name.split(/[.:]/).at(-1)?.trim() === params.name;
+          if (callee.name === params.name || memberMatches) {
+            callers.push(`  ${file}:${callee.line} ${callee.name}`);
           }
         }
       }
@@ -652,7 +659,7 @@ export default async function (pi: ExtensionAPI) {
       if (callers.length === 0) {
         return {
           content: [{ type: "text", text: `No callers found for '${params.name}'.${limitNotice}` }],
-          details: { count: 0, label: "callers", name: params.name },
+          details: { count: 0, label: "call sites", name: params.name },
         };
       }
       return {
@@ -660,11 +667,11 @@ export default async function (pi: ExtensionAPI) {
           {
             type: "text",
             text: await boundedOutput(
-              `${callers.length} caller(s) for '${params.name}':\n${callers.join("\n")}${limitNotice}`,
+              `${callers.length} call site(s) for '${params.name}':\n${callers.join("\n")}${limitNotice}`,
             ),
           },
         ],
-        details: { count: callers.length, label: "callers", name: params.name },
+        details: { count: callers.length, label: "call sites", name: params.name },
       };
     },
   });
@@ -789,7 +796,7 @@ export default async function (pi: ExtensionAPI) {
       if (!entry) return noCallees();
       await ensureParser(signal);
       const lang = await loadGrammar(entry, notify, signal);
-      if (!lang) return noCallees();
+      if (!lang) throw new Error(`Cannot inspect ${filePath}: tree-sitter grammar is unavailable.`);
       const source = await readFileSafe(filePath, signal);
       if (source === null) return noCallees();
 

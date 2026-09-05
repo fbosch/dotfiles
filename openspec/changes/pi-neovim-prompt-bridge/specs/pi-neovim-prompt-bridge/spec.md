@@ -146,7 +146,8 @@ resubmission.
 #### Scenario: Acknowledgement is lost
 
 - **WHEN** Neovim does not receive an acknowledgement before its deadline
-- **THEN** it reports unknown delivery and does not resubmit automatically
+- **THEN** it reports unknown delivery, retires prompt ingress for that launch,
+  and does not resubmit automatically
 
 ### Requirement: Acknowledgements are correlated and limited
 

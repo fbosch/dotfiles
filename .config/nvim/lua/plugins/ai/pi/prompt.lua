@@ -6,13 +6,14 @@ local request_timeout_ms = 10 * 1000
 
 local active_binding
 local sequence_launch_id
+local uncertain_launch_id
 local next_sequence = 1
 local pending
 
 local failure_messages = {
-	PI_ACK_TIMEOUT = "Pi may have received the prompt; inspect Pi before submitting it again.",
+	PI_ACK_TIMEOUT = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_BUSY = "Wait for the current Pi response or question to finish.",
-	PI_DELIVERY_UNKNOWN = "Pi may have received the prompt; inspect Pi before submitting it again.",
+	PI_DELIVERY_UNKNOWN = "Pi may have received the prompt; inspect Pi, then restart its terminal before submitting again.",
 	PI_DISCONNECTED = "The bound Pi terminal disconnected.",
 	PI_INVALID_REQUEST = "The prompt request was invalid.",
 	PI_INVALID_UTF8 = "The prompt is not valid UTF-8.",
@@ -134,6 +135,7 @@ end
 local function whitespace_only(text)
 	local remaining = text:gsub("%s", "")
 	local unicode_whitespace = {
+		0x0085,
 		0x00A0,
 		0x1680,
 		0x2000,
@@ -233,6 +235,9 @@ local function send_pending()
 	}
 	local ok, sent = pcall(vim.rpcnotify, active_binding.channelId, notification, request)
 	if not ok or sent == false then
+		if sequence_launch_id == request.launchId and next_sequence == sequence + 1 then
+			next_sequence = sequence
+		end
 		active_binding = nil
 		clear_pending()
 		notify_failure("PI_DISCONNECTED")
@@ -244,12 +249,14 @@ function M.on_bound(identity)
 		return false
 	end
 	if pending ~= nil and pending.sent and pending.sessionId ~= identity.sessionId then
+		uncertain_launch_id = pending.launchId
 		clear_pending()
-		notify_failure("PI_SESSION_MISMATCH")
+		notify_failure("PI_DELIVERY_UNKNOWN")
 	end
 	if sequence_launch_id ~= identity.launchId then
 		next_sequence = 1
 		sequence_launch_id = identity.launchId
+		uncertain_launch_id = nil
 	end
 	active_binding = vim.deepcopy(identity)
 	send_pending()
@@ -296,6 +303,10 @@ function M.acknowledge(payload, channel)
 		return true
 	end
 	local completed = clear_pending()
+	if payload.code == "PI_DELIVERY_UNKNOWN" then
+		uncertain_launch_id = payload.launchId
+		active_binding = nil
+	end
 	if payload.outcome == "accepted" or (payload.outcome == "duplicate" and payload.code == nil) then
 		local integration = require("plugins.ai.pi")
 		return integration.focus_bound({
@@ -309,6 +320,10 @@ function M.acknowledge(payload, channel)
 end
 
 function M.ask(prefill)
+	if uncertain_launch_id ~= nil then
+		notify_failure("PI_DELIVERY_UNKNOWN")
+		return false
+	end
 	if pending ~= nil then
 		notify_failure("PI_BUSY")
 		return false
@@ -321,6 +336,10 @@ function M.ask(prefill)
 		local failure = validate_prompt(text)
 		if failure ~= nil then
 			notify_failure(failure)
+			return
+		end
+		if uncertain_launch_id ~= nil then
+			notify_failure("PI_DELIVERY_UNKNOWN")
 			return
 		end
 		if pending ~= nil then
@@ -347,6 +366,10 @@ function M.ask(prefill)
 		local current = pending
 		current.timer = vim.defer_fn(function()
 			if pending == current then
+				if current.sent then
+					uncertain_launch_id = current.launchId
+					active_binding = nil
+				end
 				clear_pending()
 				notify_failure(current.sent and "PI_ACK_TIMEOUT" or "PI_SESSION_NOT_READY")
 			end
@@ -370,6 +393,7 @@ function M.terminal_closed(launch_id)
 	end
 	if sequence_launch_id == launch_id then
 		sequence_launch_id = nil
+		uncertain_launch_id = nil
 		next_sequence = 1
 	end
 end
@@ -379,19 +403,31 @@ function M.channel_closed(channel)
 		local launch_id = active_binding.launchId
 		active_binding = nil
 		if pending ~= nil and pending.launchId == launch_id then
+			local was_sent = pending.sent
+			if was_sent then
+				uncertain_launch_id = launch_id
+			end
 			clear_pending()
-			notify_failure("PI_DISCONNECTED")
+			notify_failure(was_sent and "PI_DELIVERY_UNKNOWN" or "PI_DISCONNECTED")
 		end
 	elseif active_binding == nil and pending ~= nil then
+		local was_sent = pending.sent
+		if was_sent then
+			uncertain_launch_id = pending.launchId
+		end
 		clear_pending()
-		notify_failure("PI_DISCONNECTED")
+		notify_failure(was_sent and "PI_DELIVERY_UNKNOWN" or "PI_DISCONNECTED")
 	end
 end
 
 function M.session_replaced(launch_id)
 	if pending ~= nil and pending.launchId == launch_id then
+		local was_sent = pending.sent
+		if was_sent then
+			uncertain_launch_id = launch_id
+		end
 		clear_pending()
-		notify_failure("PI_SESSION_MISMATCH")
+		notify_failure(was_sent and "PI_DELIVERY_UNKNOWN" or "PI_SESSION_MISMATCH")
 	end
 	if active_binding ~= nil and active_binding.launchId == launch_id then
 		active_binding = nil
@@ -400,8 +436,12 @@ end
 
 function M.binding_unavailable(launch_id)
 	if pending ~= nil and pending.launchId == launch_id then
+		local was_sent = pending.sent
+		if was_sent then
+			uncertain_launch_id = launch_id
+		end
 		clear_pending()
-		notify_failure("PI_SESSION_NOT_READY")
+		notify_failure(was_sent and "PI_DELIVERY_UNKNOWN" or "PI_SESSION_NOT_READY")
 	end
 	if active_binding ~= nil and active_binding.launchId == launch_id then
 		active_binding = nil

@@ -148,7 +148,8 @@ and tool controls remain authoritative.
   leave later failures in Pi's normal TUI and lifecycle reporting. A synchronous
   public API exception is `PI_DELIVERY_UNKNOWN`, not a safe rejection.
 - [An acknowledgement can be lost after a turn starts] -> Report unknown
-  delivery, never retry automatically, and let the user inspect Pi.
+  delivery, retire prompt ingress for that launch, and require the user to
+  inspect Pi and restart its terminal before another submission.
 - [A Pi process launched before launch IDs cannot bind] -> Reject it with an
   actionable launch mismatch and require one terminal restart.
 - [Another trusted Neovim plugin can forge a request] -> State the same-process

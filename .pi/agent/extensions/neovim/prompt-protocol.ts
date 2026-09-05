@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { worktreesMatch } from "./contracts";
 import { appendPrompt, submitPrompt } from "./prompt-dispatch";
@@ -73,6 +74,7 @@ export type PromptNotificationResult =
   | { readonly ok: true; readonly value: PromptRequest }
   | {
       readonly error: PromptFailureCode;
+      readonly fingerprint?: string;
       readonly identity?: PromptRequestIdentity;
       readonly ok: false;
     };
@@ -142,6 +144,10 @@ function hasValidUnicode(value: string): boolean {
   return true;
 }
 
+function isWhitespaceOnly(value: string): boolean {
+  return /^[\s\u0085]*$/u.test(value);
+}
+
 function promptState(context: ExtensionContext | undefined, blocked: boolean): PromptState {
   if (context === undefined) return "starting";
   if (blocked) return "blocked";
@@ -196,11 +202,27 @@ function parseRequestIdentity(value: Record<string, unknown>): PromptRequestIden
   };
 }
 
+function malformedFingerprint(value: Record<string, unknown>): string | undefined {
+  try {
+    return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+  } catch {
+    return undefined;
+  }
+}
+
 function promptFailure(
   error: PromptFailureCode,
   identity?: PromptRequestIdentity,
+  value?: Record<string, unknown>,
 ): PromptNotificationResult {
-  return { ...(identity === undefined ? {} : { identity }), error, ok: false };
+  const fingerprint =
+    value === undefined || identity === undefined ? undefined : malformedFingerprint(value);
+  return {
+    ...(fingerprint === undefined ? {} : { fingerprint }),
+    ...(identity === undefined ? {} : { identity }),
+    error,
+    ok: false,
+  };
 }
 
 export function parsePromptNotification(
@@ -232,25 +254,25 @@ export function parsePromptNotification(
     typeof value.text !== "string" ||
     value.context !== null
   ) {
-    return promptFailure("PI_INVALID_REQUEST", identity);
+    return promptFailure("PI_INVALID_REQUEST", identity, value);
   }
   if (value.text.length > MAX_PROMPT_BYTES) {
-    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity, value);
   }
   if (value.text.includes("\0")) {
-    return promptFailure("PI_INVALID_REQUEST", identity);
+    return promptFailure("PI_INVALID_REQUEST", identity, value);
   }
   if (hasValidUnicode(value.text) === false) {
-    return promptFailure("PI_INVALID_UTF8", identity);
+    return promptFailure("PI_INVALID_UTF8", identity, value);
   }
   if (Buffer.byteLength(value.text, "utf8") > MAX_PROMPT_BYTES) {
-    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity, value);
   }
-  if (value.operation === "submit" && value.text.trim() === "") {
-    return promptFailure("PI_PROMPT_EMPTY", identity);
+  if (value.operation === "submit" && isWhitespaceOnly(value.text)) {
+    return promptFailure("PI_PROMPT_EMPTY", identity, value);
   }
   if (Buffer.byteLength(JSON.stringify(value), "utf8") > MAX_PROMPT_REQUEST_BYTES) {
-    return promptFailure("PI_PROMPT_TOO_LARGE", identity);
+    return promptFailure("PI_PROMPT_TOO_LARGE", identity, value);
   }
 
   return {
@@ -361,12 +383,16 @@ export class PromptRequestDispatcher {
     return record.acknowledgement;
   }
 
-  rejectMalformed(request: PromptRequestIdentity, code: PromptFailureCode): PromptAcknowledgement {
+  rejectMalformed(
+    request: PromptRequestIdentity,
+    code: PromptFailureCode,
+    payloadFingerprint?: string,
+  ): PromptAcknowledgement {
     const binding = this.#dependencies.binding();
     const context = this.#dependencies.context();
     const blocked = this.#dependencies.blockingPromptActive();
     const state = promptState(context, blocked);
-    const fingerprint = `malformed:${code}`;
+    const fingerprint = `malformed:${code}:${payloadFingerprint ?? "unavailable"}`;
     if (binding === undefined || context === undefined) {
       return this.#replayState.has(request.launchId)
         ? this.#rejectSequenced(request, state, "PI_SESSION_NOT_READY", fingerprint)
