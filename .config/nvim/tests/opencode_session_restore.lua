@@ -48,8 +48,10 @@ local function registers_key(lhs)
 		return key[1] == lhs
 	end)
 end
-assert(registers_key("<leader>as"), "OpenCode-specific actions no longer activate the plugin")
-for _, lhs in ipairs({ "<leader>ac", "ga", "<C-\\>", "<A-a>", "<A-x>" }) do
+for _, lhs in ipairs({ "<leader>ac", "ga", "<A-x>", "<leader>as" }) do
+	assert(registers_key(lhs), "OpenCode prompt workflow no longer activates the plugin: " .. lhs)
+end
+for _, lhs in ipairs({ "<C-\\>", "<A-a>" }) do
 	assert(registers_key(lhs) == false, "OpenCode still claims Pi's default key: " .. lhs)
 end
 local corporate = vim.env.CORPORATE
@@ -112,6 +114,21 @@ vim.b[opencode_buf].is_opencode_terminal = true
 
 registration[1].setup()
 vim.api.nvim_set_current_win(source_win)
+for _, expected in ipairs({
+	{ mode = "n", description = "Ask opencode" },
+	{ mode = "x", description = "Ask opencode" },
+	{ mode = "n", description = "Add to opencode" },
+	{ mode = "x", description = "Add to opencode" },
+	{ mode = "n", description = "Send to opencode" },
+	{ mode = "x", description = "Send to opencode" },
+}) do
+	assert(
+		vim.iter(vim.api.nvim_get_keymap(expected.mode)):any(function(mapping)
+			return mapping.desc == expected.description
+		end),
+		("OpenCode did not restore %s in %s mode"):format(expected.description, expected.mode)
+	)
+end
 assert(
 	vim.iter(vim.api.nvim_get_keymap("n")):all(function(mapping)
 		return mapping.desc ~= "Toggle opencode focus"

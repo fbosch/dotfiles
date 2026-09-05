@@ -54,7 +54,7 @@
 ## 8. Switch verified Neovim workflows to Pi
 
 - [x] 8.1 Create a capability matrix that marks every current Neovim workflow as `Pi`, `OpenCode retained`, or `retired` and links each Pi entry to automated and live evidence.
-- [x] 8.2 Add Pi equivalents for verified launch, focus, selection, and visible-buffer actions while preserving explicit `:OpenCodeStart`, `:OpenCodeToggle`, and `<leader>aO` rollback entry points; verify Neovim keymap tests cover both paths without collisions.
+- [x] 8.2 Add Pi equivalents for verified launch, focus, selection capture, and visible-buffer capture while preserving OpenCode Ask/append ownership and explicit `:OpenCodeStart`, `:OpenCodeToggle`, and `<leader>aO` rollback entry points; verify Neovim keymap tests cover both paths without collisions.
 - [x] 8.3 Run the full matrix across the isolated Phase 1–5 live tracers and a fresh post-cutover regression run for socket isolation, active and focus context, selection, visible and unsaved buffers, diagnostics, problem lists, navigation, presentation, restoration, and Herdr lifecycle; record missing-editor, stale-socket, and sibling-worktree failures.
 - [x] 8.4 Run `just stow-check`, `devenv tasks run test:stow`, and `devenv test`; verify no credentials, session state, or unexpected generated files enter the integration paths, and preserve concurrent tree-sitter work without attributing it to this migration.
 - [x] 8.5 Exercise the explicit OpenCode rollback after the Pi checks pass, then switch Neovim's default launch, focus, selection, and visible-buffer mappings to Pi after every required capability has a resolved status.

@@ -5,15 +5,10 @@ local function focus_pi()
 	require("plugins.ai.pi").start()
 end
 
--- Pi reads the recorded editor state over its bound channel; these mappings never inject terminal input.
-map({ "n", "x" }, "<leader>ac", focus_pi, "Focus Pi with source context")
-map({ "n", "x" }, "ga", focus_pi, "Add source context to Pi")
 map("n", "<C-\\>", focus_pi, "Focus Pi")
 map({ "n", "t" }, "<A-a>", function()
 	require("plugins.ai.pi").toggle()
 end, "Toggle Pi")
-map("n", "<A-x>", focus_pi, "Focus Pi with visible buffers")
-map("x", "<A-x>", focus_pi, "Focus Pi with selection")
 map({ "n", "t" }, "<leader>aO", "<Cmd>OpenCodeToggle<CR>", "Toggle OpenCode rollback")
 
 -- web

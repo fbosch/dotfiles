@@ -66,6 +66,13 @@ usrcmd("OpenCodeToggle", function()
 	end)
 end, "Toggle the OpenCode rollback integration")
 
+usrcmd("OpenCodeAsk", function(args)
+	with_opencode(function()
+		local prefill = args.args ~= "" and args.args or "@this: "
+		require("opencode").ask(prefill)
+	end)
+end, { nargs = "*", desc = "Open the retained OpenCode Ask input" })
+
 usrcmd("ReloadConfig", function()
 	-- Only reload keymaps: other config modules register commands and autocmds that are not reload-safe.
 	for _, module_name in ipairs(keymap_modules) do

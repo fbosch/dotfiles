@@ -38,18 +38,20 @@ local function mapping(mode, description)
 	)
 end
 
-for _, case in ipairs({
-	{ "n", "Focus Pi with source context" },
-	{ "x", "Focus Pi with source context" },
-	{ "n", "Add source context to Pi" },
-	{ "x", "Add source context to Pi" },
-	{ "n", "Focus Pi" },
-	{ "n", "Focus Pi with visible buffers" },
-	{ "x", "Focus Pi with selection" },
+mapping("n", "Focus Pi").callback()
+assert(starts == 1, "Pi focus mapping did not start Pi")
+for _, description in ipairs({
+	"Focus Pi with source context",
+	"Add source context to Pi",
+	"Focus Pi with visible buffers",
 }) do
-	mapping(case[1], case[2]).callback()
+	assert(
+		vim.iter(vim.api.nvim_get_keymap("n")):all(function(candidate)
+			return candidate.desc ~= description
+		end),
+		"Pi still claims an OpenCode prompt mapping: " .. description
+	)
 end
-assert(starts == 7, "Pi context and focus mappings did not start Pi")
 mapping("n", "Toggle Pi").callback()
 mapping("t", "Toggle Pi").callback()
 assert(toggles == 2, "Pi toggle mappings did not toggle Pi")
@@ -61,6 +63,7 @@ for _, command in ipairs({
 	"PiToggle",
 	"OpenCodeStart",
 	"OpenCodeToggle",
+	"OpenCodeAsk",
 	"ReloadConfig",
 	"Z",
 	"DiffClip",
@@ -95,6 +98,7 @@ package.loaded["config.pack.loader"] = {
 }
 local opencode_starts = 0
 local opencode_toggles = 0
+local opencode_asks = {}
 package.loaded["opencode.config"] = {
 	opts = {
 		server = {
@@ -107,13 +111,21 @@ package.loaded["opencode.config"] = {
 		},
 	},
 }
+package.loaded["opencode"] = {
+	ask = function(prefill)
+		table.insert(opencode_asks, prefill)
+	end,
+}
 
 dofile(repo_root .. "/.config/nvim/lua/config/usercmd.lua")
 vim.cmd("PiStart")
 vim.cmd("PiToggle")
 vim.cmd("OpenCodeStart")
 vim.cmd("OpenCodeToggle")
-assert(starts == 8 and toggles == 3, "Pi commands did not use the cutover integration")
-assert(activations == 2, "OpenCode rollback commands did not activate the plugin")
+vim.cmd("OpenCodeAsk")
+vim.cmd("OpenCodeAsk explain this")
+assert(starts == 2 and toggles == 3, "Pi commands did not use the cutover integration")
+assert(activations == 4, "OpenCode rollback commands did not activate the plugin")
 assert(opencode_starts == 1, "OpenCode rollback start command did not start OpenCode")
 assert(opencode_toggles == 1, "OpenCode rollback toggle command did not toggle OpenCode")
+assert(vim.deep_equal(opencode_asks, { "@this: ", "explain this" }), "OpenCode Ask did not preserve prefill")

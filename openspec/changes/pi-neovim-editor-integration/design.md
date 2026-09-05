@@ -101,7 +101,7 @@ The Phase 7 assessment also retains clickable patch navigation in OpenCode. Pi's
 
 Pi starts as an opt-in Neovim action beside OpenCode. Each workflow moves independently after automated tests and a live tracer bullet pass. A capability matrix records `Pi`, `OpenCode retained`, or `retired` and links the evidence. Pi becomes the default only after every required workflow is resolved and the explicit OpenCode rollback path has been exercised.
 
-Phase 8 assigns the default launch, toggle, focus, source-context, selection, and visible-buffer mappings to Pi. The mappings only record bounded source context and focus the Pi terminal; they do not inject terminal input or submit a model turn. OpenCode remains active through named rollback commands and a dedicated rollback key. Its diff review, clickable patch navigation, prompt presets, and session selection remain available.
+Phase 8 assigns the default launch, toggle, and focus mappings to Pi. Its source-context, selection, and visible-buffer mappings only record bounded editor state and focus the Pi terminal; they do not replace OpenCode Ask or prompt append. Those prompt mappings remain OpenCode-owned until the separate `pi-neovim-prompt-bridge` change passes its gates. OpenCode remains active through named rollback commands and a dedicated rollback key. Its diff review, clickable patch navigation, prompt presets, and session selection remain available.
 
 The rollback period has no automatic expiry. Removing OpenCode requires a separate approved cleanup change after at least one Pi upgrade and another complete migration matrix. Unsupported diff review and clickable navigation remain OpenCode-owned until their public-API gates pass.
 
