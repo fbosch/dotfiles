@@ -2,12 +2,8 @@ import { isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
+import { activeUrlHandler, trackUrlHandler } from "../../lib/tui-url-handler";
 import type { BridgeResult } from "./contracts";
-
-const URL_HANDLER_STATE = Symbol.for("dotfiles:pi-neovim-file-link-handler");
-type UrlHandler = ((url: string) => void) & {
-  [URL_HANDLER_STATE]?: { disposed: boolean; original: UrlHandler };
-};
 
 function hasControlCharacters(value: string): boolean {
   return Array.from(value).some((character) => {
@@ -41,28 +37,21 @@ function localFilePath(value: string): string | undefined {
   }
 }
 
-function activeHandler(handler: UrlHandler): UrlHandler {
-  let current = handler;
-  while (current[URL_HANDLER_STATE]?.disposed) {
-    current = current[URL_HANDLER_STATE].original;
-  }
-  return current;
-}
-
 export function installNeovimFileLinks(
   tui: TUI,
   context: ExtensionContext,
   openFile: (path: string) => Promise<BridgeResult<true>>,
 ): () => void {
-  const target = tui as TUI & { openUrl?: UrlHandler };
+  const target = tui as TUI & { openUrl?: (url: string) => void };
   if (tui.mode !== "fullscreen" || typeof target.openUrl !== "function") return () => {};
 
-  const state = { disposed: false, original: activeHandler(target.openUrl) };
+  const original = activeUrlHandler(target.openUrl);
+  const state = { disposed: false, ...(original === undefined ? {} : { original }) };
   let pending = Promise.resolve();
-  const handler: UrlHandler = (url) => {
+  const handler = (url: string) => {
     const path = state.disposed ? undefined : localFilePath(url);
     if (path === undefined) {
-      state.original.call(tui, url);
+      state.original?.call(tui, url);
       return;
     }
     pending = pending.then(async () => {
@@ -77,12 +66,15 @@ export function installNeovimFileLinks(
       }
     });
   };
-  // Fullscreen Pi has no public link hook. Tag wrappers so reload can remove stale
-  // handlers even when another extension temporarily owns the outer callback.
-  handler[URL_HANDLER_STATE] = state;
+  // TuiAltScreen reads this private field at mouse release; Pi has no public link hook.
+  trackUrlHandler(handler, state);
   target.openUrl = handler;
   return () => {
     state.disposed = true;
-    if (target.openUrl === handler) target.openUrl = activeHandler(state.original);
+    if (target.openUrl === handler) {
+      const previous = activeUrlHandler(state.original);
+      if (previous === undefined) delete target.openUrl;
+      else target.openUrl = previous;
+    }
   };
 }

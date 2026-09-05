@@ -21,6 +21,7 @@ import {
   type TUI,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { activeUrlHandler, trackUrlHandler } from "../../lib/tui-url-handler";
 import {
   parseSubagentSessionUrl,
   SUBAGENT_SESSION_URL_PREFIX,
@@ -319,10 +320,11 @@ export function installSubagentSessionUrlHandler(
   }
   restoreLegacyTuiUrlPatch(patchableTui, installedState);
 
+  const originalOpenUrl = activeUrlHandler(patchableTui.openUrl);
   const state: TuiUrlPatchState = {
     version: PATCH_VERSION,
     registrations: [registration],
-    ...(patchableTui.openUrl === undefined ? {} : { originalOpenUrl: patchableTui.openUrl }),
+    ...(originalOpenUrl === undefined ? {} : { originalOpenUrl }),
     patchedOpenUrl: () => {},
   };
   state.patchedOpenUrl = (url) => {
@@ -334,6 +336,12 @@ export function installSubagentSessionUrlHandler(
 
     state.originalOpenUrl?.call(patchableTui, url);
   };
+  trackUrlHandler(state.patchedOpenUrl, {
+    get disposed() {
+      return state.registrations.length === 0;
+    },
+    ...(originalOpenUrl === undefined ? {} : { original: originalOpenUrl }),
+  });
   patchableTui[TUI_URL_PATCH] = state;
   // TuiAltScreen reads this field at mouse release; Pi has no internal-action link API.
   patchableTui.openUrl = state.patchedOpenUrl;
@@ -763,10 +771,11 @@ function uninstallTuiUrlPatch(
   if (index >= 0) state.registrations.splice(index, 1);
   if (state.registrations.length > 0) return;
   if (patchableTui.openUrl === state.patchedOpenUrl) {
-    if (state.originalOpenUrl === undefined) {
+    const originalOpenUrl = activeUrlHandler(state.originalOpenUrl);
+    if (originalOpenUrl === undefined) {
       delete patchableTui.openUrl;
     } else {
-      patchableTui.openUrl = state.originalOpenUrl;
+      patchableTui.openUrl = originalOpenUrl;
     }
   }
   if (patchableTui[TUI_URL_PATCH] === state) patchableTui[TUI_URL_PATCH] = undefined;

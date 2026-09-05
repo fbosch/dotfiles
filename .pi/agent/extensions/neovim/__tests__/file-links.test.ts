@@ -56,6 +56,8 @@ test("leaves web, remote, malformed, and unsupported URLs with the previous hand
     "file:///tmp/encoded%2fslash.png",
     "file:///tmp/null%00.png",
     "file:///tmp/new%0aline.png",
+    "file:///tmp/control%C2%80.png",
+    "file:///tmp/invalid-utf8%FF.png",
     "file:///tmp/raw\tname.png",
     `file:///tmp/${"a".repeat(4096)}`,
     "not a URL",
@@ -126,25 +128,21 @@ for (const neovimFirst of [true, false]) {
     const installFile = () => installNeovimFileLinks(tui, f.context, f.openFile);
     const installSession = () =>
       installSubagentSessionUrlHandler(tui, (value) => sessions.push(value));
-    const [disposeFirst, disposeSecond] = neovimFirst
-      ? [installFile(), installSession()]
-      : [installSession(), installFile()];
-    f.tui.openUrl(imageUrl);
-    f.tui.openUrl(subagentSessionUrl(target));
-    f.tui.openUrl("https://example.com");
-    await settle();
-    expect(f.opened).toEqual([imagePath]);
-    expect(sessions).toEqual([target]);
-    expect(f.external).toEqual(["https://example.com"]);
-    disposeFirst();
-    disposeSecond();
-    const disposeReloaded = installFile();
-    f.tui.openUrl(imageUrl);
-    await settle();
-    expect(f.opened).toEqual([imagePath, imagePath]);
-    disposeReloaded();
-    // The Neovim wrapper must not accumulate after another extension restores it.
-    if (neovimFirst) expect(f.tui.openUrl).toBe(f.original);
+    for (let reload = 0; reload < 3; reload++) {
+      const [disposeFirst, disposeSecond] = neovimFirst
+        ? [installFile(), installSession()]
+        : [installSession(), installFile()];
+      f.tui.openUrl(imageUrl);
+      f.tui.openUrl(subagentSessionUrl(target));
+      f.tui.openUrl("https://example.com");
+      await settle();
+      expect(f.opened).toEqual(Array(reload + 1).fill(imagePath));
+      expect(sessions).toEqual(Array(reload + 1).fill(target));
+      expect(f.external).toEqual(Array(reload + 1).fill("https://example.com"));
+      disposeFirst();
+      disposeSecond();
+      expect(f.tui.openUrl).toBe(f.original);
+    }
   });
 }
 
