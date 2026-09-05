@@ -339,6 +339,15 @@ local function notify_launch_preparation_failure(reason, result)
 	end
 end
 
+local function open_fresh_session(nvim_session, socket, launch_options)
+	local ok, terminal = pcall(open_terminal, nil, nil, nil, nvim_session.cwd, socket, nvim_session, launch_options)
+	if not ok then
+		notify_restore_failure("open_failed")
+		return nil
+	end
+	return terminal
+end
+
 local function resume_saved_session(nvim_session, launch_options, prepared_socket)
 	local session_id = session.get_metadata(nvim_session).pi_session_id
 	if not session.is_valid_pi_session_id(session_id) then
@@ -381,13 +390,20 @@ local function resume_saved_session(nvim_session, launch_options, prepared_socke
 	end
 
 	local found, reason = pi_session.find_exact(session_id, nvim_session.cwd)
-	if found == nil then
+	if found == nil and reason ~= "missing" then
 		notify_restore_failure(reason)
 		return nil
 	end
 	if session.get_current(vim.fn.getcwd()) ~= nvim_session or vim.v.servername ~= socket then
 		notify_restore_failure("wrong_worktree")
 		return nil
+	end
+	if found == nil then
+		local terminal = open_fresh_session(nvim_session, socket, launch_options)
+		if terminal ~= nil then
+			vim.notify("Saved Pi session is unavailable; started a new Pi session.", vim.log.levels.INFO)
+		end
+		return terminal
 	end
 
 	local ok, terminal =
@@ -448,10 +464,10 @@ function M.bind_session(binding)
 		end
 	end
 
-	terminal_session_id = session_id
 	if not session.set_pi_terminal_state(session_id, true, owner) then
 		return false
 	end
+	terminal_session_id = session_id
 	if type(binding) ~= "table" or binding.launchId == nil then
 		terminal_bound = false
 		terminal_channel_id = nil

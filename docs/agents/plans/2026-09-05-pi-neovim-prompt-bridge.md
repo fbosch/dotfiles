@@ -516,7 +516,7 @@ Proof record (2026-09-05):
 
 Implement the versioned request, launch binding, session/worktree checks,
 acknowledgement, duplicate defense, cold-start queue, and cancellation cleanup.
-Expose `:PiAsk` without assigning a default key.
+Expose `:PiAsk` and the explicitly requested `<leader>ac` canary mapping.
 
 Acceptance:
 
@@ -538,13 +538,18 @@ Implementation record (2026-09-05):
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for
   editor inspection but cannot accept prompt requests until restarted.
-- The latest Neovim extension suite run has 103 passing tests and four failures
-  in the concurrently added `entrypoint.test.ts`. Those tests expect lazy
-  loading of `extension.ts`, which another session is implementing. Do not
-  declare the suite green until that change lands and the suite passes again.
-- The headless transport test covers a real Neovim notification and `prompt_ack`
-  with a stub request handler and acknowledgement receiver. It does not prove
-  the complete `:PiAsk` startup, Pi dispatch, pending resolution, and focus path.
+- The latest Neovim extension suite passes 114 tests with 547 assertions,
+  including all four lazy-entrypoint tests. Typecheck and scoped Biome pass.
+- The headless context test drives real Lua Ask, notification parsing, the Pi
+  dispatcher, acknowledgement, pending resolution, and focus gating. Pi's
+  public submission API and terminal binding are test doubles; actual
+  terminal/provider acceptance remains part of the live matrix.
+- Guarded reads return unsaved text and reject stale paths or ticks without
+  changing disk. Lua tests cover all visual modes, reversed endpoints, UTF-8
+  byte columns, and a 10,000-line selection encoded in under 1 KiB of metadata.
+- An isolated real Snacks input check verifies cursor-relative positioning and
+  cancellation without Pi startup. Running editors must restart after these
+  stateful Lua modules change; keymap reload alone does not replace them.
 - Pi typecheck, scoped Biome checks, Lua quality, prompt, launcher, exact-session
   restoration, production restoration, cutover, OpenCode restoration, and Herdr
   Neovim restoration checks pass. Both OpenSpec changes pass strict validation.

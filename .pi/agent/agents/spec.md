@@ -2,7 +2,7 @@
 color: "#81a5bb"
 description: Turns an ambiguous request into an explicit contract — scope, interfaces, invariants, and failure behavior. Use before implementing any new feature, API, CLI command, or config format.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-astra
 thinking: high
 tools: read, grep, find, ls, fffind, ffgrep
 permission:

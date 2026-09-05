@@ -26,6 +26,7 @@ local failure_messages = {
 	PI_NO_UI = "Pi Ask requires the interactive Pi terminal.",
 	PI_PROMPT_EMPTY = "Enter a prompt before submitting.",
 	PI_PROMPT_TOO_LARGE = "The prompt exceeds the 16 KiB limit.",
+	PI_RELOAD_REQUIRED = "Restart Neovim to load the updated Pi Ask integration.",
 	PI_REQUEST_ID_REUSED = "The prompt request identity was already used.",
 	PI_REQUEST_OUT_OF_ORDER = "The prompt request arrived out of order.",
 	PI_REQUEST_PENDING = "The prompt request is already being delivered.",
@@ -347,10 +348,19 @@ function M.ask(prefill)
 		return false
 	end
 	local source_window = vim.api.nvim_get_current_win()
+	-- The launcher may have loaded an older bridge before the config changed.
+	if type(bridge.capture_prompt_location) ~= "function" or type(bridge.validate_prompt_location) ~= "function" then
+		notify_failure("PI_RELOAD_REQUIRED")
+		return false
+	end
 	-- Capture before input changes the active window or visual selection.
 	local location, context_failure = bridge.capture_prompt_location()
 	if context_failure ~= nil then
 		notify_failure(context_failure)
+		return false
+	end
+	if location ~= nil and type(location.context) ~= "table" then
+		notify_failure("PI_RELOAD_REQUIRED")
 		return false
 	end
 	if location ~= nil and not valid_utf8(location.context.path) then

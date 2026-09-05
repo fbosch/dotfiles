@@ -128,6 +128,21 @@ local function assert_exact_command(command, directory, session_id, message)
 	)
 end
 
+local function assert_fresh_command(command, message)
+	local launch_id = command:match("^PI_NVIM_LAUNCH_ID='([a-f0-9]+)'")
+	assert(type(launch_id) == "string" and #launch_id == 32, message .. ": invalid launch ID")
+	assert(
+		command
+			== "PI_NVIM_LAUNCH_ID="
+				.. vim.fn.shellescape(launch_id)
+				.. " PI_NVIM_SOCKET="
+				.. vim.fn.shellescape(vim.v.servername)
+				.. " pi",
+		message .. ": fresh Pi command was not session-neutral"
+	)
+	return launch_id
+end
+
 local exact_id = "exact-session-3.3"
 local exact_path = write_session(exact_id, repo_root)
 set_metadata(exact_id, true)
@@ -254,22 +269,88 @@ assert(#opened == opened_before, "invalid Pi session ID opened Pi")
 assert(has_notification("saved session ID is invalid"), "invalid Pi session ID was not reported")
 assert_metadata_unchanged(invalid_id_metadata, "invalid-ID rejection changed metadata")
 
-notifications = {}
+local missing_id = "missing-session-3.3"
 write_session("newer-unrelated-session", repo_root)
-set_metadata("missing-session-3.3", true)
-local missing_metadata = session.get_metadata(nvim_session)
-assert(pi.restore() == false, "missing Pi session requested restoration")
-assert(#opened == opened_before, "missing Pi session fell back to another session")
-assert(has_notification("exact saved session is unavailable"), "missing Pi session was not reported")
-assert_metadata_unchanged(missing_metadata, "missing-session rejection changed metadata")
 
 notifications = {}
-set_metadata("missing-session-3.3", false)
+set_metadata(missing_id, true)
+local fresh_failure_metadata = session.get_metadata(nvim_session)
+fail_open = true
+assert(pi.restore() == false, "failed fresh Pi fallback reported success")
+fail_open = false
+assert(#opened == opened_before, "failed fresh Pi fallback recorded an open terminal")
+assert(not has_notification("started a new Pi session"), "failed fallback reported a new Pi session")
+assert(has_notification("Pi terminal could not be opened"), "fresh Pi fallback failure was not reported")
+assert_metadata_unchanged(fresh_failure_metadata, "fresh fallback failure changed metadata")
+
+notifications = {}
+set_metadata(missing_id, true)
+local missing_metadata = session.get_metadata(nvim_session)
+assert(pi.restore() == true, "missing Pi session did not start a fresh terminal")
+assert(#opened == opened_before + 1, "missing Pi session opened the wrong number of terminals")
+local fresh_launch_id = assert_fresh_command(opened[#opened].command, "missing Pi session fallback")
+assert(opened[#opened].options.cwd == repo_root, "fresh Pi fallback used the wrong worktree")
+assert(has_notification("started a new Pi session"), "missing Pi session recovery was not reported")
+assert(not has_notification("Pi session was not restored"), "successful recovery still reported a restore failure")
+assert_metadata_unchanged(missing_metadata, "fresh fallback replaced metadata before Pi binding")
+
+local replacement_id = "replacement-session-3.3"
+local replacement_binding = pi.bind_session({
+	sessionId = replacement_id,
+	launchId = fresh_launch_id,
+	channelId = 21,
+	cwd = repo_root,
+	editorPid = vim.fn.getpid(),
+})
+assert(type(replacement_binding) == "table", "Pi fallback did not bind Pi's actual session ID")
+local replacement_metadata = session.get_metadata(nvim_session)
+assert(replacement_metadata.pi_session_id == replacement_id, "Pi fallback binding did not persist the replacement ID")
+assert(replacement_metadata.pi_terminal_open == true, "Pi fallback binding did not persist the open state")
+assert(replacement_metadata.opencode_session_id == "ses_exact", "Pi fallback binding changed OpenCode session metadata")
+assert(replacement_metadata.opencode_terminal_open == true, "Pi fallback binding changed OpenCode terminal metadata")
+local reloaded_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
+local reloaded_metadata = reloaded_session.get_metadata(nvim_session)
+assert(reloaded_metadata.pi_session_id == replacement_id, "bound Pi ID did not survive metadata reload")
+assert(reloaded_metadata.pi_terminal_open == true, "bound Pi open state did not survive metadata reload")
+write_session(replacement_id, repo_root)
+terminal_callbacks.TermClose()
+assert(session.get_metadata(nvim_session).pi_session_id == replacement_id, "closing Pi discarded the replacement ID")
+assert(session.get_metadata(nvim_session).pi_terminal_open == false, "closing Pi did not persist the replacement state")
+local resumed_replacement_metadata = session.get_metadata(nvim_session)
+assert(pi.start() == terminal, "PiStart did not restore the newly bound Pi session")
+assert(#opened == opened_before + 2, "PiStart opened the wrong number of terminals for the replacement")
+assert_exact_command(
+	opened[#opened].command,
+	session_dir,
+	replacement_id,
+	"PiStart did not target the newly persisted Pi session"
+)
+assert_metadata_unchanged(resumed_replacement_metadata, "replacement resume changed metadata")
+terminal_callbacks.TermClose()
+
+notifications = {}
+set_metadata(missing_id, false)
 local manual_missing_metadata = session.get_metadata(nvim_session)
-assert(pi.start() == nil, "PiStart silently replaced a missing associated session")
-assert(#opened == opened_before, "PiStart opened a fresh session after an exact-resume failure")
-assert(has_notification("exact saved session is unavailable"), "PiStart did not report its missing session")
-assert_metadata_unchanged(manual_missing_metadata, "manual missing-session rejection changed metadata")
+local manual_fresh_terminal = pi.start()
+assert(manual_fresh_terminal == terminal, "PiStart did not start a fresh terminal for a missing session")
+assert(#opened == opened_before + 3, "PiStart missing-session fallback opened the wrong number of terminals")
+local manual_fresh_launch_id = assert_fresh_command(opened[#opened].command, "PiStart missing-session fallback")
+assert(has_notification("started a new Pi session"), "PiStart did not report its missing-session recovery")
+assert_metadata_unchanged(manual_missing_metadata, "PiStart fallback replaced metadata before Pi binding")
+local manual_replacement_id = "manual-replacement-session-3.3"
+assert(type(pi.bind_session({
+	sessionId = manual_replacement_id,
+	launchId = manual_fresh_launch_id,
+	channelId = 22,
+	cwd = repo_root,
+	editorPid = vim.fn.getpid(),
+})) == "table", "PiStart fresh fallback did not bind Pi's actual session ID")
+assert(
+	session.get_metadata(nvim_session).pi_session_id == manual_replacement_id,
+	"PiStart fallback did not persist its bound ID"
+)
+terminal_callbacks.TermClose()
+opened_before = #opened
 
 notifications = {}
 local malformed_id = "malformed-session-3.3"
@@ -290,6 +371,17 @@ assert(pi.restore() == false, "relative-cwd Pi session requested restoration")
 assert(#opened == opened_before, "relative-cwd Pi session opened Pi")
 assert(has_notification("saved session file is invalid"), "relative-cwd Pi session was not reported")
 assert_metadata_unchanged(relative_cwd_metadata, "relative-cwd rejection changed metadata")
+
+notifications = {}
+local ambiguous_id = "ambiguous-session-3.3"
+write_session(ambiguous_id, repo_root, nil, session_dir)
+write_session(ambiguous_id, repo_root, nil, settings_dir)
+set_metadata(ambiguous_id, true)
+local ambiguous_metadata = session.get_metadata(nvim_session)
+assert(pi.restore() == false, "ambiguous Pi session requested restoration")
+assert(#opened == opened_before, "ambiguous Pi session opened Pi")
+assert(has_notification("multiple files have the saved session ID"), "ambiguous Pi session was not reported")
+assert_metadata_unchanged(ambiguous_metadata, "ambiguous-session rejection changed metadata")
 
 notifications = {}
 local wrong_id = "wrong-worktree-session-3.3"
@@ -327,6 +419,20 @@ assert(
 	vim.deep_equal(vim.fn.readfile(launch_failure_path, "b"), launch_failure_file),
 	"terminal-launch failure changed the Pi session file"
 )
+
+notifications = {}
+local limited_agent_dir = test_root .. "/limited-pi-agent"
+local limited_sessions_root = limited_agent_dir .. "/sessions"
+for index = 1, 1025 do
+	vim.fn.mkdir(limited_sessions_root .. "/directory-" .. index, "p")
+end
+vim.env.PI_CODING_AGENT_DIR = limited_agent_dir
+vim.env.PI_CODING_AGENT_SESSION_DIR = nil
+local limited_metadata = session.get_metadata(nvim_session)
+assert(pi.restore() == false, "limited Pi session search requested restoration")
+assert(#opened == opened_before, "limited Pi session search opened Pi")
+assert(has_notification("session search limit was reached"), "limited Pi session search was not reported")
+assert_metadata_unchanged(limited_metadata, "limited-session rejection changed metadata")
 
 rawset(vim, "notify", original_notify)
 vim.env.PI_CODING_AGENT_DIR = previous_agent_dir

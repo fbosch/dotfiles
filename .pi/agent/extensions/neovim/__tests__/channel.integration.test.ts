@@ -2,10 +2,16 @@ import { expect, test } from "bun:test";
 import { access, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { attach } from "neovim";
 import { PiNeovimChannel } from "../channel";
 import { MAX_ANNOTATION_SEARCH_LINES, MAX_QUICKFIX_SOURCE_ITEMS } from "../contracts";
-import { PROMPT_NOTIFICATION, type PromptRequest } from "../prompt-protocol";
+import {
+  createPromptReplayState,
+  PROMPT_NOTIFICATION,
+  type PromptRequest,
+  PromptRequestDispatcher,
+} from "../prompt-protocol";
 
 const NVIM_RUNTIME = resolve(import.meta.dir, "../../../../../.config/nvim");
 
@@ -172,6 +178,118 @@ test("round-trips a prompt acknowledgement over the existing channel", async () 
       payload: { outcome: "accepted", requestId: request.requestId },
     });
   });
+}, 10_000);
+
+test("delivers captured Ask references and rejects stale guarded reads", async () => {
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-ask-context-")));
+  const path = join(workspace, "source.lua");
+  await Bun.write(path, "disk text\n");
+  const setup = [
+    `vim.api.nvim_buf_set_name(0, ${JSON.stringify(path)})`,
+    'vim.api.nvim_buf_set_lines(0, 0, -1, false, {"æøå", "second", "third"})',
+    "vim.g.pi_focus_calls = 0",
+  ].join("; ");
+  try {
+    await withNvim(workspace, setup, async (channel, socket) => {
+      const status = await channel.status();
+      if (!status.ok) throw new Error(status.error.message);
+      const nvim = attach({ socket });
+      const binding = {
+        channelId: status.value.channelId,
+        cwd: workspace,
+        editorPid: status.value.pid,
+        launchId: "abcdef0123456789abcdef0123456789",
+        ownerId: "integration",
+        sessionId: "pi-context-session",
+        version: 1 as const,
+      };
+      const sent: string[] = [];
+      const pi = {
+        sendUserMessage: (text: string, options: { expandPromptTemplates: boolean }) => {
+          expect(options.expandPromptTemplates).toBe(false);
+          sent.push(text);
+        },
+      } as unknown as ExtensionAPI;
+      const context = {
+        cwd: workspace,
+        hasUI: true,
+        isIdle: () => true,
+        mode: "tui",
+        sessionManager: { getSessionId: () => binding.sessionId },
+      } as unknown as ExtensionContext;
+      const dispatcher = new PromptRequestDispatcher(pi, {
+        binding: () => binding,
+        blockingPromptActive: () => false,
+        context: () => context,
+        replayState: createPromptReplayState(),
+      });
+      const received: PromptRequest[] = [];
+      channel.setPromptRequestHandler((request) => {
+        received.push(request);
+        return dispatcher.dispatch(request);
+      });
+      await nvim.executeLua(
+        [
+          "local binding = ...",
+          "package.loaded['plugins.ai.pi'] = {ensure_started = function() return {} end, prompt_launch = function() return binding end, prompt_identity = function() return binding end, focus_bound = function() vim.g.pi_focus_calls = vim.g.pi_focus_calls + 1; return true end}",
+          "vim.ui.input = function(_, confirm) vim.cmd('normal! ' .. string.char(27)); vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(false, true)); confirm('literal question') end",
+          "vim.api.nvim_win_set_cursor(0, {1, 0})",
+          "vim.cmd('normal! v')",
+          "vim.api.nvim_win_set_cursor(0, {3, 1})",
+          "assert(require('plugins.ai.pi.prompt').ask(''))",
+        ].join("; "),
+        [binding],
+      );
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        if ((await nvim.getVar("pi_focus_calls")) === 1) break;
+        await Bun.sleep(10);
+      }
+      expect(await nvim.getVar("pi_focus_calls")).toBe(1);
+      expect(received).toHaveLength(1);
+      const reference = received[0]?.context;
+      if (reference == null) throw new Error("Ask did not deliver its captured reference");
+      expect(reference).toMatchObject({
+        path,
+        range: {
+          anchor: { line: 1, column: 1, offset: 0 },
+          cursor: { line: 3, column: 2, offset: 0 },
+        },
+        selectionMode: "character",
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toContain(JSON.stringify(reference));
+      expect(sent[0]).not.toContain("æøå");
+      expect(received[0]?.text).toBe("literal question");
+      const read = {
+        buffer: reference.buffer,
+        expectedPath: reference.path,
+        expectedChangedtick: reference.changedtick,
+        startLine: 1,
+        endLine: 3,
+      };
+      expect(await channel.readBuffer(read)).toMatchObject({
+        ok: true,
+        value: { lines: ["æøå", "second", "third"] },
+      });
+      expect(
+        await channel.readBuffer({ ...read, expectedPath: join(workspace, "other.lua") }),
+      ).toMatchObject({
+        ok: false,
+        error: { code: "NVIM_CONTEXT_STALE" },
+      });
+      await nvim.executeLua(
+        "local buffer = ...; vim.api.nvim_buf_set_lines(buffer, 0, 1, false, {'changed'})",
+        [reference.buffer],
+      );
+      expect(await channel.readBuffer(read)).toMatchObject({
+        ok: false,
+        error: { code: "NVIM_CONTEXT_STALE" },
+      });
+      expect(await Bun.file(path).text()).toBe("disk text\n");
+    });
+  } finally {
+    await rm(workspace, { force: true, recursive: true });
+  }
 }, 10_000);
 
 test("lists source buffers and reads unsaved text without changing disk", async () => {

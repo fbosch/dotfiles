@@ -68,6 +68,10 @@ The benchmark fixes the parts of startup that would otherwise vary between
 runs:
 
 - Pi-managed startup network operations and telemetry are disabled.
+- Before timing, a separate Pi package-resolution check rejects missing or
+  mismatched installed npm/git packages. Installation is forbidden. This check
+  deliberately does not use offline resolution, which silently skips missing
+  packages and can make an incomplete setup appear faster.
 - Credentials, sessions, and live model, MCP, trust, and FFF caches are
   excluded from the initial fixture.
 - Project trust is approved explicitly.

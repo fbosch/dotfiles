@@ -169,8 +169,8 @@ its automated and live matrix.
 #### Scenario: Pi Ask is still a canary
 
 - **WHEN** literal Pi Ask is available but context or append parity is incomplete
-- **THEN** `<leader>ac` opens literal Pi Ask without automatic selection context,
-  while OpenCode retains append mappings and the explicit `:OpenCodeAsk` command
+- **THEN** `<leader>ac` opens Pi Ask with the default source reference, while
+  OpenCode retains append mappings and the explicit `:OpenCodeAsk` command
 
 #### Scenario: OpenCode loads after the Ask mapping
 

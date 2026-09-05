@@ -27,6 +27,7 @@ import {
   type SubagentSessionTarget,
   subagentSessionUrl,
 } from "./subagent-session-target";
+import { SubagentTranscriptFrame } from "./subagent-transcript-frame";
 import {
   rememberedSubagentTranscriptRecord,
   rememberSubagentTranscriptRecord,
@@ -53,7 +54,6 @@ const OSC8_SEQUENCE = new RegExp(
   "g",
 );
 const PATCH_VERSION = 5;
-const OVERLAY_HEIGHT = "70%";
 const OVERLAY_WIDTH = "90%";
 const TRANSCRIPT_TOOL_PREVIEW_LINES = 5;
 const TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS = 500;
@@ -677,22 +677,25 @@ export async function openSubagentSession(
       }
 
       try {
-        overlayComponent = new navigator.TranscriptPane({
-          tui,
-          theme: ctx.ui.theme,
-          source,
-          done: close,
-          cwd: ctx.cwd,
-          markdownTheme,
-        });
+        overlayComponent = new SubagentTranscriptFrame(
+          new navigator.TranscriptPane({
+            tui,
+            theme: ctx.ui.theme,
+            source,
+            done: close,
+            cwd: ctx.cwd,
+            markdownTheme,
+          }),
+          ctx.ui.theme,
+        );
         if (closed) {
           overlayComponent.dispose?.();
           return;
         }
+        // The pane already caps its height; capping again would clip the frame and footer.
         overlayHandle = tui.showOverlay(overlayComponent, {
           anchor: "center",
           width: OVERLAY_WIDTH,
-          maxHeight: OVERLAY_HEIGHT,
         });
       } catch (error) {
         signal?.removeEventListener("abort", close);

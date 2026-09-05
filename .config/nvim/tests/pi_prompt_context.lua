@@ -245,6 +245,19 @@ vim.cmd("normal! \27")
 local location, failure = bridge.capture_prompt_location()
 assert(location == nil and failure == nil, "normal special-buffer Ask cannot remain literal")
 
+local capture = bridge.capture_prompt_location
+bridge.capture_prompt_location = function()
+	return { buffer = source, reference = "old module result" }
+end
+local before_reload_starts = starts
+assert(prompt.ask("") == false, "mixed bridge versions did not fail closed")
+assert(
+	notifications[#notifications]:find("PI_RELOAD_REQUIRED", 1, true),
+	"mixed bridge versions lacked a reload message"
+)
+assert(starts == before_reload_starts, "mixed bridge versions started Pi")
+bridge.capture_prompt_location = capture
+
 prompt.terminal_closed(binding.launchId)
 vim.cmd.cd(original_cwd)
 vim.api.nvim_buf_delete(source, { force = true })

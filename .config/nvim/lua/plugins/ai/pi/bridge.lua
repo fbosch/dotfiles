@@ -534,7 +534,8 @@ local function read_buffer(payload)
 		then
 			return invalid_request()
 		end
-		if canonical_path(vim.api.nvim_buf_get_name(buffer)) ~= canonical_path(expected_path) then
+		local expected = canonical_path(expected_path)
+		if expected == nil or canonical_path(vim.api.nvim_buf_get_name(buffer)) ~= expected then
 			return { error = "contextStale" }
 		end
 	end

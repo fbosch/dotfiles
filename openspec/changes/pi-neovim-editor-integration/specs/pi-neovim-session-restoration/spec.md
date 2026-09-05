@@ -63,14 +63,15 @@ The system SHALL preserve the restoration order in which Herdr restores the labe
 
 ### Requirement: Explicit unavailable-session behavior
 
-The system SHALL report an unavailable or invalid persisted Pi session without silently substituting another session. Neovim restoration SHALL continue when Pi cannot resume.
+The system SHALL report an unavailable or invalid persisted Pi session without silently substituting another existing session. Neovim restoration SHALL continue when Pi cannot resume.
 
 #### Scenario: Persisted Pi session is missing
 
 - **WHEN** Neovim restores metadata for a Pi session that no longer exists
-- **THEN** Neovim remains usable, Pi does not resume another session, and the failure is reported
+- **THEN** Neovim remains usable, reports that the exact session is unavailable, and launches one new unbound Pi session in the validated worktree without selecting another existing session
+- **AND** the persisted Pi session ID remains unchanged until the new Pi process binds its actual session ID through the editor callback
 
 #### Scenario: Pi resume fails
 
-- **WHEN** the exact Pi resume operation fails after Neovim restoration
-- **THEN** the failure does not alter Neovim or OpenCode session metadata
+- **WHEN** exact resume fails for any reason other than a genuinely missing session, or the new missing-session launch cannot be opened
+- **THEN** Pi remains blocked and the failure does not alter Neovim or OpenCode session metadata

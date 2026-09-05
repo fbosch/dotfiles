@@ -75,7 +75,7 @@ Alternative considered: encode annotations as buffer text or virtual documents. 
 
 Neovim session metadata will gain separate Pi fields for the exact Pi session identifier and terminal-open state. OpenCode fields remain untouched during coexistence. Restoration uses only the stored exact Pi identity after validating project and worktree association; it never falls back to the latest Pi session.
 
-Herdr continues to restore the labeled Neovim pane. Neovim's existing session-load event then decides whether to launch or resume Pi. A missing Pi session reports an error but does not block Neovim restoration or rewrite metadata.
+Herdr continues to restore the labeled Neovim pane. Neovim's existing session-load event then decides whether to launch or resume Pi. For a genuinely missing Pi session, Neovim starts one new unbound Pi process only after the normal owner, worktree, socket, executable, and environment checks, then reports the recovery as information rather than a failed restoration. It never selects another existing session, and it does not rewrite the saved Pi ID until that process binds its actual ID through the editor callback.
 
 Alternative considered: let Herdr restore Pi directly. Rejected because this creates two restoration owners and can launch Pi before Neovim has restored its editor state and socket.
 
@@ -113,7 +113,7 @@ The rollback period has no automatic expiry. Removing OpenCode requires a separa
 - [Unsaved buffers expose more source than disk-based tools] → Require explicit bounded reads, enforce 500-line and 32 KiB limits, and avoid logging content.
 - [Editor state changes between calls] → Return point-in-time buffer and window identities; do not promise cross-call atomicity.
 - [Neovim and Pi disagree about worktree identity] → Fail with a structured mismatch instead of normalizing or falling back silently.
-- [A missing Pi session breaks workspace restoration] → Restore Neovim independently, report the Pi failure, and do not substitute another session.
+- [A missing Pi session breaks workspace restoration] → Restore Neovim independently, report the unavailable exact session, and launch only a new unbound Pi process after the normal checks; never select another existing session, and persist its replacement ID only from the validated bind callback.
 - [Presentation state survives a failed Pi process] → Use bridge-owned namespaces, bounded expiry, and cleanup during the next connection or explicit clear operation.
 - [Two Herdr reporters race] → Make standalone and embedded lifecycle sources mutually exclusive and test that exactly one source is registered.
 - [Herdr retains embedded Pi after shutdown] → Use a non-built-in semantic label, a `Pi` presentation label, and a sequenced embedded release so Neovim may remain alive without preserving stale agent identity.

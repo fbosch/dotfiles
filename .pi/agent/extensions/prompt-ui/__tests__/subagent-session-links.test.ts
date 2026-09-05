@@ -12,10 +12,12 @@ import {
   type Component,
   hyperlink,
   type OverlayHandle,
+  stripTerminalSequences,
   type Terminal,
   Text,
   type TUI,
   TuiAltScreen,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
   compactSubagentTranscriptSource,
@@ -490,7 +492,6 @@ describe("subagent session links", () => {
       expect(overlay.getOptions()).toEqual({
         anchor: "center",
         width: "90%",
-        maxHeight: "70%",
       });
       expect(overlay.isHidden()).toBe(true);
       expect(customPromptCalls).toBe(0);
@@ -500,6 +501,104 @@ describe("subagent session links", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  test("frames the real transcript without clipping its footer or changing scroll and close behavior", async () => {
+    const liveRecord = {
+      id: target.agentId,
+      status: "completed",
+      agentMessages: [
+        {
+          role: "user",
+          content: Array.from({ length: 120 }, (_, index) => `transcript row ${index + 1}`).join(
+            "\n",
+          ),
+          timestamp: 0,
+        },
+      ],
+      activeTools: new Map<string, string>(),
+      responseText: "",
+      isSessionReady: () => true,
+      subscribeToUpdates: () => () => {},
+      getToolDefinition: () => undefined,
+    };
+    const service = {
+      getRecord: () => ({ status: "completed" }),
+      manager: { getRecord: () => liveRecord, listAgents: () => [liveRecord] },
+    };
+    const frames: Array<{ width: number; rows: number; lines: string[] }> = [];
+    let first = "";
+    let last = "";
+    let previousPage = "";
+    let renderError: unknown;
+    const overlay = createClosingOverlayTui({
+      onShow: (component) => {
+        try {
+          component.handleInput?.("\u001b[H");
+          first = stripTerminalSequences(component.render(76).join("\n"));
+          component.handleInput?.("\u001b[F");
+          last = stripTerminalSequences(component.render(76).join("\n"));
+          component.handleInput?.("\u001b[5~");
+          previousPage = stripTerminalSequences(component.render(76).join("\n"));
+          for (const [width, rows] of [
+            [76, 24],
+            [40, 12],
+            [96, 40],
+          ] as const) {
+            (overlay.tui.terminal as { rows: number }).rows = rows;
+            frames.push({ width, rows, lines: component.render(width) });
+          }
+        } catch (error) {
+          renderError = error;
+        } finally {
+          component.handleInput?.("\u001b");
+        }
+      },
+    });
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      bg: (_color: string, text: string) => `\u001b[48;2;44;44;44m${text}\u001b[49m`,
+      getBgAnsi: () => "\u001b[48;2;44;44;44m",
+      bold: (text: string) => text,
+    } as unknown as Theme;
+    const ctx = { ui: { theme, notify() {} }, cwd: process.cwd() } as unknown as Parameters<
+      typeof openSubagentSession
+    >[2];
+
+    // Pi's message components share a process-wide theme, including the legacy SDK alias.
+    const globals = globalThis as Record<symbol, unknown>;
+    const themeKeys = [
+      Symbol.for("@earendil-works/pi-coding-agent:theme"),
+      Symbol.for("@mariozechner/pi-coding-agent:theme"),
+    ];
+    const previousThemes = themeKeys.map((key) => globals[key]);
+    for (const key of themeKeys) globals[key] = theme;
+    try {
+      await openSubagentSession(target, service, ctx, overlay.tui);
+    } finally {
+      themeKeys.forEach((key, index) => {
+        const previous = previousThemes[index];
+        if (previous === undefined) delete globals[key];
+        else globals[key] = previous;
+      });
+    }
+
+    expect(renderError).toBeUndefined();
+    expect(first).toMatch(/transcript row 1\b/);
+    expect(first).not.toContain("transcript row 120");
+    expect(last).toContain("transcript row 120");
+    expect(last).toContain("Esc close");
+    expect(previousPage).not.toContain("transcript row 120");
+    expect(frames).toHaveLength(3);
+    for (const { width, rows, lines } of frames) {
+      expect(lines.length).toBeLessThanOrEqual(rows);
+      expect(lines.every((line) => visibleWidth(line) === width)).toBe(true);
+      expect(stripTerminalSequences(lines[0] ?? "")).toBe(`╭${"─".repeat(width - 2)}╮`);
+      expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe(`╰${"─".repeat(width - 2)}╯`);
+      expect(lines.every((line) => line.includes("\u001b[48;2;44;44;44m"))).toBe(true);
+    }
+    expect(overlay.getOptions()?.maxHeight).toBeUndefined();
+    expect(overlay.isHidden()).toBe(true);
   });
 
   test("closes the transcript before a non-overlay prompt can consume Escape", async () => {

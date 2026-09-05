@@ -40,9 +40,9 @@
 - [x] 4.3 Reserve in-flight request IDs, retain 64 outcomes, and verify pending,
       completed duplicate, changed-content reuse, stale sequence, and sequence-gap
       behavior
-- [ ] 4.4 Return `prompt_ack` on the same channel and verify the full notification,
-      dispatch, acknowledgement, and pending-request round trip. Transport-only
-      and separate boundary tests pass; the complete production path is unverified.
+- [x] 4.4 Return `prompt_ack` on the same channel and verify the notification,
+      dispatcher, acknowledgement, and Lua pending-request round trip in real
+      headless Neovim; the live terminal/provider matrix remains task 5.4
 - [x] 4.5 Clear prompt listeners, bindings, timers, and pending state on disconnect,
       terminal close, reload, session replacement, and shutdown while retaining
       per-launch replay protection in lifecycle tests
@@ -62,11 +62,11 @@
 
 ## 6. Add Stable Context
 
-- [ ] 6.1 Capture a closed `ActiveContext`-compatible snapshot with source
-      eligibility, changed tick, cursor, and all visual modes before input, and pass
-      headless stale/reversed/multibyte selection tests
-- [ ] 6.2 Render bounded `@this` context as explicitly untrusted data and verify
-      cursor and exact unsaved-selection behavior without prompt expansion
+- [x] 6.1 Capture the requested default file/range reference with buffer ID,
+      changedtick, selection mode and policy before input; verify reversed,
+      multibyte, stale, and large-range cases without copying selected text
+- [x] 6.2 Render the reference as explicitly untrusted metadata without prompt
+      expansion and verify bounded unsaved reads guarded by expected path and tick
 - [ ] 6.3 Add Snacks highlighting and completion while preserving native
       `vim.ui.input` behavior, cancellation, and visual selection restoration
 
