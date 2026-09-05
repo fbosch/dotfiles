@@ -118,6 +118,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   readArguments: unknown;
   readResponse: unknown = {
     buffer: focus.buffer,
+    changedtick: 12,
     cwd: "/project",
     endLine: 2,
     lines: ["const unsaved = true;", "export { unsaved };"],
@@ -363,6 +364,89 @@ describe("PiNeovimChannel", () => {
     await channel.close();
   });
 
+  test("guards direct path reads with only the latest accepted Ask reference", async () => {
+    const connection = new FakeConnection();
+    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
+    const launchId = "0123456789abcdef0123456789abcdef";
+    const reference = {
+      buffer: 2,
+      changedtick: 12,
+      path: focus.buffer.name,
+      range: {
+        anchor: { column: 1, line: 1, offset: 0 },
+        cursor: { column: 1, line: 1, offset: 0 },
+      },
+      selection: "inclusive",
+      selectionMode: "cursor",
+    } as const;
+    const acknowledgement = (
+      request: PromptRequest,
+      outcome: "accepted" | "duplicate" | "rejected",
+    ) => ({
+      launchId: request.launchId,
+      outcome,
+      ownerId: request.ownerId,
+      requestId: request.requestId,
+      sessionId: request.sessionId,
+      state: "idle" as const,
+      version: 1 as const,
+    });
+    channel.setPromptRequestHandler((request) =>
+      acknowledgement(
+        request,
+        request.sequence === 1 ? "accepted" : request.sequence === 2 ? "duplicate" : "rejected",
+      ),
+    );
+    await channel.status();
+    const request = (
+      sequence: number,
+      context: NonNullable<PromptRequest["context"]> = reference,
+    ) => ({
+      context,
+      cwd: "/project",
+      editorPid: 71,
+      launchId,
+      operation: "submit" as const,
+      ownerId: "fixture",
+      requestId: `nvim:${launchId}:${sequence}`,
+      sequence,
+      sessionId: "pi-session-one",
+      text: "literal prompt",
+      version: 1 as const,
+    });
+
+    connection.emit("notification", PROMPT_NOTIFICATION, [request(1)]);
+    connection.emit("notification", PROMPT_NOTIFICATION, [
+      request(2, { ...reference, buffer: 7, changedtick: 99, path: "/project/other.ts" }),
+    ]);
+    connection.emit("notification", PROMPT_NOTIFICATION, [
+      request(3, { ...reference, buffer: 8, changedtick: 100, path: "/project/rejected.ts" }),
+    ]);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const beforeRead = connection.executeCalls.length;
+    expect(
+      await channel.readBuffer({ endLine: 2, path: "example.ts", startLine: 1 }),
+    ).toMatchObject({
+      ok: true,
+      value: { changedtick: 12 },
+    });
+    expect(connection.executeCalls.slice(beforeRead)).toEqual([bridgeOperations.readBuffer]);
+    expect(connection.readArguments).toEqual({
+      buffer: 2,
+      endLine: 2,
+      expectedChangedtick: 12,
+      expectedPath: focus.buffer.name,
+      startLine: 1,
+    });
+    await channel.readBuffer({ expectedChangedtick: 11, path: focus.buffer.name });
+    expect(connection.readArguments).toMatchObject({ expectedChangedtick: 11 });
+
+    expect(await channel.bindSession("pi-session-one")).toMatchObject({ ok: true });
+    await channel.readBuffer({ path: focus.buffer.name });
+    expect(connection.readArguments).toEqual({ path: focus.buffer.name });
+  });
+
   test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
     const connection = new FakeConnection();
     const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
@@ -385,6 +469,7 @@ describe("PiNeovimChannel", () => {
       ok: true,
       value: {
         buffer: focus.buffer,
+        changedtick: 12,
         editor: { channelId: 9, cwd: "/project", pid: 71 },
         endLine: 2,
         lines: ["const unsaved = true;", "export { unsaved };"],

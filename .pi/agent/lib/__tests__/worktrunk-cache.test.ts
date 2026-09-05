@@ -152,6 +152,17 @@ describe("executable-keyed reference cache", () => {
     expect(cache.executableIdentity("wt", other)).toBeUndefined();
   });
 
+  test("resolves symlinked cwd and PATH parent traversal like the kernel", () => {
+    mkdirSync(join(directory, "real/cwd"), { recursive: true });
+    const linked = join(directory, "linked");
+    symlinkSync(join(directory, "real/cwd"), linked);
+    nativeFile(join(directory, "real/wt"));
+    process.env.PATH = "..";
+    expect(cache.executableIdentity("wt", linked)?.realpath).toBe(join(directory, "real/wt"));
+    process.env.PATH = `${linked}/..`;
+    expect(cache.executableIdentity("wt", directory)?.realpath).toBe(join(directory, "real/wt"));
+  });
+
   test("unset PATH uses Node's standard search rather than command cwd", () => {
     nativeFile(join(directory, "wt"));
     delete process.env.PATH;
@@ -331,17 +342,44 @@ describe("executable-keyed reference cache", () => {
     expect(cache.readReferenceCache(cacheDir, identity())).toBeUndefined();
   });
 
-  test("parallel writers produce one valid complete entry", async () => {
-    const results = await Promise.all(
-      Array.from({ length: 8 }, () =>
-        load(async () => {
-          await new Promise<void>((resolve) => setImmediate(resolve));
-          return discovery();
-        }),
+  test("concurrent processes never read a partially written reference", async () => {
+    await load();
+    const variants = [
+      value,
+      ...["a", "b", "c", "d"].map((letter) => ({
+        ...value,
+        reference: letter.repeat(29_000),
+      })),
+    ];
+    const writers = variants.slice(1).map((candidate) =>
+      Bun.spawn(
+        [
+          process.execPath,
+          "-e",
+          `
+        import assert from 'node:assert/strict';
+        import { readReferenceCache, writeReferenceCache } from ${JSON.stringify(join(packageFixture, "node_modules/pi-worktrunk/reference-cache.ts"))};
+        const directory = ${JSON.stringify(cacheDir)};
+        const identity = ${JSON.stringify(identity())};
+        const base = ${JSON.stringify(value)};
+        const values = [base, ...['a', 'b', 'c', 'd'].map(letter => ({...base, reference: letter.repeat(29_000)}))];
+        for (let i = 0; i < 20; i++) {
+          writeReferenceCache(directory, identity, ${JSON.stringify(candidate)});
+          const read = readReferenceCache(directory, identity);
+          assert(values.some(value => JSON.stringify(value) === JSON.stringify(read)));
+        }
+      `,
+        ],
+        { stdout: "pipe", stderr: "pipe" },
       ),
     );
-    expect(results).toEqual(Array.from({ length: 8 }, () => value));
-    expect(cache.readReferenceCache(cacheDir, identity())).toEqual(value);
+    for (const writer of writers) {
+      expect(await new Response(writer.stderr).text()).toBe("");
+      expect(await writer.exited).toBe(0);
+    }
+    const stored = cache.readReferenceCache(cacheDir, identity());
+    if (!stored) throw new Error("Concurrent writers did not leave a valid entry");
+    expect(variants).toContainEqual(stored);
     cacheFile();
   });
 });

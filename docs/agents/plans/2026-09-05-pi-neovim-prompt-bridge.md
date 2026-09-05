@@ -320,10 +320,21 @@ immediately before `rpcnotify`. A mismatch returns `PI_CONTEXT_STALE`. Visual
 selections in unnamed or special buffers fail closed; normal Ask there can
 remain literal.
 
-Pi reads source text only when needed through `read_buffer`, passing the
-reference's path as `expectedPath` and tick as `expectedChangedtick`. Mismatches
-return `NVIM_CONTEXT_STALE` without source text. Large selections remain small
-references; each requested read still obeys the existing line and byte bounds.
+Only `filepath:line-range: user prompt` is submitted to Pi, with columns for
+character selections. Do not add JSON context blocks, extra instructions, or
+hidden model messages.
+
+Pi reads source text through `read_buffer` with the path and range directly.
+The bridge resolves the loaded source and applies the current Ask reference's
+buffer, path, and tick guards internally. Mismatches return `NVIM_CONTEXT_STALE`
+without source text. A read result exposes its actual changedtick for deliberate
+later guarded reads; the model must not guess or reuse ticks from old editor
+instances. Large selections remain small references, and each read still obeys
+the existing line and byte bounds.
+
+The permission policy allows the `neovim` tool. The tool itself is registered
+only when the fixed launch socket is present; other tool permissions and all
+bridge validation remain unchanged.
 
 ### Context syntax
 
@@ -533,7 +544,8 @@ Implementation record (2026-09-05):
   terminal start. By explicit user request, `<leader>ac` opens this literal
   canary in normal and visual mode. Source context is the captured file path,
   buffer ID, `changedtick`, selection mode and policy, and line/column endpoints.
-  It carries no selected text. OpenCode no longer registers that key;
+  These remain bridge metadata; Pi receives only `filepath:range: user prompt`,
+  never selected text or JSON instructions. OpenCode no longer registers that key;
   `:OpenCodeAsk` and append mappings remain available.
 - Launch, Pi session, Neovim owner, editor PID, channel, and canonical worktree
   identity are bound before delivery. Pre-launch Pi processes remain usable for

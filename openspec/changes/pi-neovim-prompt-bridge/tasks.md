@@ -65,10 +65,13 @@
 - [x] 6.1 Capture the requested default file/range reference with buffer ID,
       changedtick, selection mode and policy before input; verify reversed,
       multibyte, stale, and large-range cases without copying selected text
-- [x] 6.2 Render the reference as explicitly untrusted metadata without prompt
-      expansion and verify bounded unsaved reads guarded by expected path and tick
+- [x] 6.2 Send only `filepath:line-range: user prompt` without JSON blocks,
+      hidden messages, or appended instructions; preserve literal text and verify
+      bounded unsaved reads guarded by expected path and tick
 - [ ] 6.3 Add Snacks highlighting and completion while preserving native
       `vim.ui.input` behavior, cancellation, and visual selection restoration
+- [ ] 6.4 Resolve selected paths in one bounded, internally guarded Neovim read
+      and allow the bound Neovim tool without permission prompts
 
 ## 7. Add Append and Remaining Interactions
 

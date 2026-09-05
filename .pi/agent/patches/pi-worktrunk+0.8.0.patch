@@ -1,18 +1,18 @@
 diff --git a/node_modules/pi-worktrunk/reference-cache.ts b/node_modules/pi-worktrunk/reference-cache.ts
 new file mode 100644
-index 0000000..965c9a1
+index 0000000..af55879
 --- /dev/null
 +++ b/node_modules/pi-worktrunk/reference-cache.ts
-@@ -0,0 +1,163 @@
+@@ -0,0 +1,166 @@
 +import { createHash, randomUUID } from "node:crypto";
 +import {
 +  accessSync, closeSync, constants, fstatSync, fsyncSync, lstatSync, mkdirSync,
 +  openSync, readSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync,
 +} from "node:fs";
-+import { delimiter, join, resolve } from "node:path";
++import { delimiter, isAbsolute, join } from "node:path";
 +
 +// Bump when discovery, parsing, formatting, or this persisted schema changes.
-+export const GENERATOR_REVISION = "pi-worktrunk-reference-v1";
++export const GENERATOR_REVISION = "pi-worktrunk-reference-v2";
 +const MAX_CACHE_BYTES = 256_000;
 +const MAX_REFERENCE_BYTES = 30_000;
 +
@@ -43,9 +43,12 @@ index 0000000..965c9a1
 +export function executableIdentity(command: string, cwd: string): ExecutableIdentity | undefined {
 +  // Wrappers and unsupported platforms still discover live; their targets cannot be identified here.
 +  if (process.platform === "win32") return undefined;
++  try { cwd = realpathSync(cwd); } catch { return undefined; }
++  // Do not normalize PATH's '..' lexically: the kernel follows preceding symlinks first.
++  const absolute = (path: string) => isAbsolute(path) ? path : `${cwd}/${path}`;
 +  const paths = command.includes("/")
-+    ? [resolve(cwd, command)]
-+    : (process.env.PATH ?? "/usr/bin:/bin").split(delimiter).map((part) => resolve(cwd, part, command));
++    ? [absolute(command)]
++    : (process.env.PATH ?? "/usr/bin:/bin").split(delimiter).map((part) => absolute(part ? `${part}/${command}` : command));
 +  for (const path of paths) {
 +    try {
 +      accessSync(path, constants.X_OK);

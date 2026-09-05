@@ -62,6 +62,11 @@ column positions. Columns SHALL be one-based UTF-8 byte positions with Neovim's
 virtual-cell offsets. Direction and inclusive/exclusive selection policy SHALL
 be preserved. It MUST NOT copy selected source text into the prompt.
 
+Pi's user message SHALL contain only `filepath:line-range: user prompt`, using
+a worktree-relative path and including byte columns for character selections.
+The system MUST NOT append JSON context blocks, model instructions, or hidden
+model messages. The structured reference stays inside the bridge.
+
 The reference MUST remain bounded regardless of the number of selected lines.
 Named source references outside the bound worktree and visual selections in
 unnamed or special buffers MUST fail closed. Normal Ask without an eligible
@@ -87,9 +92,22 @@ source buffer MAY remain literal.
 
 #### Scenario: Source changes before a guarded read
 
-- **WHEN** Pi calls `read_buffer` with the reference's `expectedPath` and
-  `expectedChangedtick`, but either no longer matches the selected buffer
+- **WHEN** Pi reads the selected path, but its captured buffer identity or
+  changedtick no longer matches
 - **THEN** the toolkit reports `NVIM_CONTEXT_STALE` without returning buffer text
+
+#### Scenario: Selected path can be read directly
+
+- **WHEN** Pi has the filepath and line range from Ask
+- **THEN** one `read_buffer` call with that path and range resolves the loaded
+  source buffer and applies the current Ask guards without discovery calls or
+  guessed buffer IDs and ticks
+
+#### Scenario: Neovim tool approval is implicit
+
+- **WHEN** Pi is launched with its fixed Neovim binding and calls the `neovim` tool
+- **THEN** it needs no permission prompt, while socket, source, worktree, and
+  read bounds remain enforced and unrelated tools retain their permission rules
 
 #### Scenario: Unknown placeholder is entered
 

@@ -60,9 +60,9 @@ import {
   type PromptFailureCode,
   type PromptRequest,
   type PromptRequestIdentity,
-  type SelectionReference,
   parsePromptBinding,
   parsePromptNotification,
+  type SelectionReference,
 } from "./prompt-protocol";
 
 const CONNECT_TIMEOUT_MS = 1_000;

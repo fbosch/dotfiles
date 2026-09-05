@@ -44,6 +44,19 @@ const NeovimParameters = Type.Union([
   ),
   Type.Object(
     {
+      operation: Type.Literal("read_buffer"),
+      path: Type.String({ maxLength: 4096, minLength: 1 }),
+      startLine: Type.Optional(Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 })),
+      endLine: Type.Optional(Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 1 })),
+      expectedPath: Type.Optional(Type.String({ maxLength: 4096 })),
+      expectedChangedtick: Type.Optional(
+        Type.Integer({ maximum: Number.MAX_SAFE_INTEGER, minimum: 0 }),
+      ),
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
       operation: Type.Literal("diagnostic_summary"),
       buffer: Type.Optional(Type.Integer({ minimum: 1 })),
       maxItems: Type.Optional(
@@ -232,6 +245,7 @@ export function initializeNeovim(
       promptGuidelines: [
         "Use neovim for live editor state, unsaved text or selections, and source focus that Pi's disk-backed tools cannot observe.",
         "Use one context call for source buffer, cursor, mode, and bounded selection; do not call status first unless connection identity or health is relevant. If context reports NVIM_NO_FOCUS_CONTEXT, call visible_windows and then list_buffers before asking the user for a buffer.",
+        "Given a filepath and range, use read_buffer directly with path; it resolves only an already-loaded source buffer in this worktree, so no preliminary discovery call is needed. Do not guess buffer IDs or changedticks, and do not reuse either across editor sessions.",
         "Use visible_windows to discover source shown in the current Neovim tab, list_buffers for other listed source buffers, and read_buffer only when in-memory text is needed.",
         "Use diagnostic_summary first to triage Neovim's current editor diagnostics; use diagnostics only when the complete bounded diagnostic set is needed.",
         "Use quickfix without a kind for the editor-global quickfix list. For a location list, set kind to location and pass the owning window from visible_windows.",

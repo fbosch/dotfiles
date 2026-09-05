@@ -269,6 +269,7 @@ describe("Neovim editor contracts", () => {
   test("parses bounded in-memory reads and structured read failures", () => {
     const read = {
       buffer,
+      changedtick: 12,
       cwd: editor.cwd,
       endLine: 9,
       lines: ["unsaved one", "unsaved two"],
@@ -280,6 +281,7 @@ describe("Neovim editor contracts", () => {
       ok: true,
       value: {
         buffer,
+        changedtick: 12,
         editor,
         endLine: 9,
         lines: ["unsaved one", "unsaved two"],
@@ -295,6 +297,18 @@ describe("Neovim editor contracts", () => {
       error: { code: "NVIM_INVALID_RANGE", message: "Choose a line range within 1-20" },
       ok: false,
     });
+    expect(parseBufferRead({ error: "worktreeMismatch" }, "/project", editor)).toMatchObject({
+      error: { code: "NVIM_WORKTREE_MISMATCH" },
+      ok: false,
+    });
+    expect(parseBufferRead({ ...read, changedtick: -1 }, "/project", editor)).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
+    expect(parseBufferRead({ ...read, changedtick: undefined }, "/project", editor)).toMatchObject({
+      error: { code: "NVIM_INVALID_RESPONSE" },
+      ok: false,
+    });
     expect(parseBufferRead({ error: "lineLimit" }, "/project", editor)).toMatchObject({
       error: { code: "NVIM_LIMIT_EXCEEDED" },
       ok: false,
@@ -308,6 +322,7 @@ describe("Neovim editor contracts", () => {
   test("defensively enforces response line and UTF-8 byte bounds", () => {
     const response = {
       buffer,
+      changedtick: 12,
       cwd: editor.cwd,
       endLine: 1,
       pid: editor.pid,

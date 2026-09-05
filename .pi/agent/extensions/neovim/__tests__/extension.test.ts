@@ -101,6 +101,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
           name: "/project/example.ts",
           number: 2,
         },
+        changedtick: 12,
         cwd: "/project",
         endLine: 1,
         lines: ["const unsaved = true;"],
@@ -268,6 +269,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).toContain("endLine");
   expect(parameters).toContain("expectedPath");
   expect(parameters).toContain("expectedChangedtick");
+  expect(parameters).toContain("path");
   expect(parameters).toContain("column");
   expect(parameters).toContain("focus");
   expect(parameters).toContain("split");
@@ -277,6 +279,9 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   expect(parameters).not.toContain("selection");
   expect(tool.promptGuidelines?.join("\n")).toContain(
     "If context reports NVIM_NO_FOCUS_CONTEXT, call visible_windows and then list_buffers before asking the user",
+  );
+  expect(tool.promptGuidelines?.join("\n")).toContain(
+    "Given a filepath and range, use read_buffer directly with path",
   );
   expect(Value.Check(tool.parameters, { operation: "quickfix" })).toBe(true);
   expect(
@@ -301,9 +306,23 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   ).toBe(true);
   expect(
     Value.Check(tool.parameters, {
+      operation: "read_buffer",
+      path: "src/example.ts",
+      startLine: 1,
+    }),
+  ).toBe(true);
+  expect(
+    Value.Check(tool.parameters, {
       buffer: 2,
+      operation: "read_buffer",
+      path: "src/example.ts",
+    }),
+  ).toBe(false);
+  expect(
+    Value.Check(tool.parameters, {
       expectedChangedtick: -1,
       operation: "read_buffer",
+      path: "src/example.ts",
     }),
   ).toBe(false);
   expect(

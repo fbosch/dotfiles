@@ -321,6 +321,16 @@ export class PromptEditor extends CustomEditor {
     }
     this.resetInterruptConfirmation();
 
+    if (
+      this.isShowingAutocomplete() &&
+      (this.appKeybindings.matches(data, "tui.select.cancel") ||
+        this.appKeybindings.matches(data, "tui.select.confirm") ||
+        this.appKeybindings.matches(data, "tui.input.tab"))
+    ) {
+      // Slash-command submission can replace the editor before its next render.
+      this.autocompleteOverlay.hide();
+    }
+
     const lines = this.getLines();
     const cursor = this.getCursor();
     const lastLine = lines.at(-1) ?? "";

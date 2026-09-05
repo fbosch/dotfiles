@@ -258,30 +258,31 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
       });
       expect(sent).toEqual(["source.lua:1:1-3:2: literal question"]);
       expect(received[0]?.text).toBe("literal question");
-      const read = {
-        buffer: reference.buffer,
-        expectedPath: reference.path,
-        expectedChangedtick: reference.changedtick,
-        startLine: 1,
-        endLine: 3,
-      };
+      const read = { endLine: 3, path: reference.path, startLine: 1 };
       expect(await channel.readBuffer(read)).toMatchObject({
         ok: true,
-        value: { lines: ["æøå", "second", "third"] },
+        value: { changedtick: reference.changedtick, lines: ["æøå", "second", "third"] },
       });
       expect(
         await channel.readBuffer({ ...read, expectedPath: join(workspace, "other.lua") }),
       ).toMatchObject({
-        ok: false,
         error: { code: "NVIM_CONTEXT_STALE" },
+        ok: false,
       });
       await nvim.executeLua(
         "local buffer = ...; vim.api.nvim_buf_set_lines(buffer, 0, 1, false, {'changed'})",
         [reference.buffer],
       );
       expect(await channel.readBuffer(read)).toMatchObject({
-        ok: false,
         error: { code: "NVIM_CONTEXT_STALE" },
+        ok: false,
+      });
+      await nvim.executeLua(
+        "local buffer, path = ...; vim.api.nvim_buf_delete(buffer, { force = true }); vim.cmd('edit ' .. vim.fn.fnameescape(path))",
+        [reference.buffer, path],
+      );
+      expect(await channel.readBuffer(read)).toMatchObject({
+        ok: false,
       });
       expect(await Bun.file(path).text()).toBe("disk text\n");
     });
@@ -292,6 +293,9 @@ test("delivers captured Ask references and rejects stale guarded reads", async (
 
 test("lists source buffers and reads unsaved text without changing disk", async () => {
   const workspace = await realpath(await mkdtemp(join(tmpdir(), "pi-neovim-buffers-")));
+  const outsideWorkspace = await realpath(
+    await mkdtemp(join(tmpdir(), "pi-neovim-buffers-outside-")),
+  );
   const sourceOne = join(workspace, "one.lua");
   const sourceTwo = join(workspace, "two.lua");
   const unloadedSource = join(workspace, "unloaded.lua");
@@ -299,11 +303,15 @@ test("lists source buffers and reads unsaved text without changing disk", async 
   const specialName = join(workspace, "special-buffer");
   const lineLimitSource = join(workspace, "line-limit.lua");
   const byteLimitSource = join(workspace, "byte-limit.lua");
+  const outsideSource = join(outsideWorkspace, "outside.lua");
+  const linkedOutside = join(workspace, "linked", "outside.lua");
   await Promise.all([
     Bun.write(sourceOne, "local disk = true\nreturn disk\n"),
     Bun.write(sourceTwo, "return 'two'\n"),
     Bun.write(unloadedSource, "return 'unloaded'\n"),
+    Bun.write(outsideSource, "return 'outside'\n"),
   ]);
+  await symlink(outsideWorkspace, join(workspace, "linked"));
   const setup = [
     `local source_one = ${JSON.stringify(sourceOne)}`,
     `local source_two = ${JSON.stringify(sourceTwo)}`,
@@ -312,6 +320,7 @@ test("lists source buffers and reads unsaved text without changing disk", async 
     `local special_name = ${JSON.stringify(specialName)}`,
     `local line_limit_source = ${JSON.stringify(lineLimitSource)}`,
     `local byte_limit_source = ${JSON.stringify(byteLimitSource)}`,
+    `local linked_outside = ${JSON.stringify(linkedOutside)}`,
     'vim.cmd("edit " .. vim.fn.fnameescape(source_one))',
     "local modified = vim.api.nvim_get_current_buf()",
     'vim.api.nvim_buf_set_lines(modified, 0, -1, true, { "local unsaved = true", "return unsaved" })',
@@ -332,6 +341,8 @@ test("lists source buffers and reads unsaved text without changing disk", async 
     "local byte_limit = vim.api.nvim_create_buf(true, false)",
     "vim.api.nvim_buf_set_name(byte_limit, byte_limit_source)",
     'vim.api.nvim_buf_set_lines(byte_limit, 0, -1, true, { string.rep("x", 32769) })',
+    "local outside = vim.fn.bufadd(linked_outside)",
+    "vim.fn.bufload(outside)",
   ].join("; ");
 
   try {
@@ -382,6 +393,27 @@ test("lists source buffers and reads unsaved text without changing disk", async 
         },
       });
       expect(await Bun.file(sourceOne).text()).toBe("local disk = true\nreturn disk\n");
+      expect(await channel.readBuffer({ path: "one.lua" })).toMatchObject({
+        ok: true,
+        value: {
+          changedtick: expect.any(Number),
+          lines: ["local unsaved = true", "return unsaved"],
+        },
+      });
+      expect(await channel.readBuffer({ path: sourceOne })).toMatchObject({
+        ok: true,
+        value: { buffer: { name: sourceOne } },
+      });
+      for (const path of [unloadedSource, specialName, join(workspace, "missing.lua")]) {
+        expect(await channel.readBuffer({ path })).toMatchObject({
+          error: { code: "NVIM_INVALID_BUFFER" },
+          ok: false,
+        });
+      }
+      expect(await channel.readBuffer({ path: linkedOutside })).toMatchObject({
+        error: { code: "NVIM_WORKTREE_MISMATCH" },
+        ok: false,
+      });
 
       const lineLimit = inventory.value.buffers.find((buffer) => buffer.name === lineLimitSource);
       const byteLimit = inventory.value.buffers.find((buffer) => buffer.name === byteLimitSource);
@@ -405,7 +437,10 @@ test("lists source buffers and reads unsaved text without changing disk", async 
       });
     });
   } finally {
-    await rm(workspace, { force: true, recursive: true });
+    await Promise.all([
+      rm(workspace, { force: true, recursive: true }),
+      rm(outsideWorkspace, { force: true, recursive: true }),
+    ]);
   }
 }, 10_000);
 
