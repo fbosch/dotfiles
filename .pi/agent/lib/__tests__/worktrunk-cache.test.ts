@@ -152,15 +152,32 @@ describe("executable-keyed reference cache", () => {
     expect(cache.executableIdentity("wt", other)).toBeUndefined();
   });
 
-  test("resolves symlinked cwd and PATH parent traversal like the kernel", () => {
+  test("Node resolves symlinked cwd and PATH parent traversal like the kernel", () => {
+    const node = Bun.spawnSync(["node", "-p", "process.execPath"]).stdout.toString().trim();
     mkdirSync(join(directory, "real/cwd"), { recursive: true });
     const linked = join(directory, "linked");
     symlinkSync(join(directory, "real/cwd"), linked);
     nativeFile(join(directory, "real/wt"));
     process.env.PATH = "..";
     expect(cache.executableIdentity("wt", linked)?.realpath).toBe(join(directory, "real/wt"));
-    process.env.PATH = `${linked}/..`;
-    expect(cache.executableIdentity("wt", directory)?.realpath).toBe(join(directory, "real/wt"));
+    // Bun's realpathSync.native currently normalizes '..' lexically. Verify on Pi's Node runtime.
+    const module = join(directory, "reference-cache.ts");
+    copyFileSync(join(packageFixture, "node_modules/pi-worktrunk/reference-cache.ts"), module);
+    const result = Bun.spawnSync(
+      [
+        node,
+        "--input-type=module",
+        "-e",
+        `
+      import { executableIdentity } from ${JSON.stringify(module)};
+      console.log(JSON.stringify(executableIdentity('wt', ${JSON.stringify(directory)})));
+    `,
+      ],
+      { env: { ...process.env, PATH: `${linked}/..` }, stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.stderr.toString()).toBe("");
+    expect(result.exitCode).toBe(0);
+    expect(JSON.parse(result.stdout.toString()).realpath).toBe(join(directory, "real/wt"));
   });
 
   test("unset PATH uses Node's standard search rather than command cwd", () => {

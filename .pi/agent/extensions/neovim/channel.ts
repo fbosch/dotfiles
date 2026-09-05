@@ -366,9 +366,27 @@ export class PiNeovimChannel {
     if (this.#editor === undefined) return unavailable("Neovim connection identity is unavailable");
     const reference =
       options.path === undefined ? undefined : this.matchingPromptReference(options.path);
+    if (
+      reference !== undefined &&
+      ((options.expectedChangedtick !== undefined &&
+        options.expectedChangedtick !== reference.changedtick) ||
+        (options.expectedPath !== undefined &&
+          canonicalPath(resolve(this.#cwd, options.expectedPath)) !== reference.path))
+    ) {
+      return {
+        ok: false,
+        error: {
+          code: "NVIM_CONTEXT_STALE",
+          message: "The read does not match the selected source; capture a new Ask selection.",
+        },
+      };
+    }
+    const expectedPath = options.expectedPath ?? reference?.path;
+    const expectedChangedtick = options.expectedChangedtick ?? reference?.changedtick;
     try {
       const snapshot = await withTimeout(
         executeBridge(connection.value, bridgeOperations.readBuffer, {
+          expectedCwd: this.#cwd,
           ...(reference === undefined
             ? options.path === undefined
               ? { buffer: options.buffer }
@@ -376,16 +394,8 @@ export class PiNeovimChannel {
             : { buffer: reference.buffer }),
           ...(options.startLine === undefined ? {} : { startLine: options.startLine }),
           ...(options.endLine === undefined ? {} : { endLine: options.endLine }),
-          ...(options.expectedPath === undefined
-            ? reference === undefined
-              ? {}
-              : { expectedPath: reference.path }
-            : { expectedPath: options.expectedPath }),
-          ...(options.expectedChangedtick === undefined
-            ? reference === undefined
-              ? {}
-              : { expectedChangedtick: reference.changedtick }
-            : { expectedChangedtick: options.expectedChangedtick }),
+          ...(expectedPath === undefined ? {} : { expectedPath }),
+          ...(expectedChangedtick === undefined ? {} : { expectedChangedtick }),
         }),
         "Timed out reading a buffer from the bound Neovim instance",
       );

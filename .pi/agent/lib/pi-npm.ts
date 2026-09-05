@@ -46,6 +46,17 @@ export function applyPiPatches(root: string, required = true): number {
       `Expected only ${patchFilename} in ${patchDirectory}. Review the patch runner before adding patches.`,
     );
   }
+  const contents = readFileSync(resolve(patchDirectory, patchFilename), "utf8");
+  // patch-package accepts an empty effects list as a successful application.
+  if (
+    !/^diff --git /m.test(contents) ||
+    !/^@@ /m.test(contents) ||
+    !/^[+-](?![+-])/m.test(contents)
+  ) {
+    throw new Error(
+      `${patchFilename} contains no textual changes. Regenerate the patch before applying it.`,
+    );
+  }
   if (!existsSync(patchPackage)) {
     throw new Error("patch-package is missing. Run just install-pi before installing Pi packages.");
   }

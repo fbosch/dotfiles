@@ -89,18 +89,37 @@ describe("tracked Pi package patches", () => {
     expect(readFileSync(example, "utf8")).toBe("patched\n");
   });
 
-  test.each(["0.8.1", "0.8.0-beta", "^0.8.0"])("rejects %s before writing anything", (version) => {
-    writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version }));
-    const result = run(["--apply-patches", install]);
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toContain("requires exactly 0.8.0");
-    expect(readFileSync(example, "utf8")).toBe("original\n");
-  });
+  test.each(["0.7.0", "0.8.1", "0.8.0-beta", "^0.8.0"])(
+    "rejects %s before writing anything",
+    (version) => {
+      writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version }));
+      const result = run(["--apply-patches", install]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain("requires exactly 0.8.0");
+      expect(readFileSync(example, "utf8")).toBe("original\n");
+    },
+  );
 
   test("fails on a missing package or malformed manifest", () => {
     rmSync(manifest);
     expect(run(["--apply-patches", install]).exitCode).toBe(1);
     writeFileSync(manifest, "null");
+    expect(run(["--apply-patches", install]).exitCode).toBe(1);
+  });
+
+  test.each(["", " \n", "not a patch", "diff --git a/example b/example\n"])(
+    "rejects empty and no-diff patches: %j",
+    (contents) => {
+      writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), contents);
+      const result = run(["--apply-patches", install]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain("contains no textual changes");
+      expect(readFileSync(example, "utf8")).toBe("original\n");
+    },
+  );
+
+  test("fails when a patch target file is missing", () => {
+    rmSync(example);
     expect(run(["--apply-patches", install]).exitCode).toBe(1);
   });
 

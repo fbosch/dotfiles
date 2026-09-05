@@ -1,6 +1,6 @@
 diff --git a/node_modules/pi-worktrunk/reference-cache.ts b/node_modules/pi-worktrunk/reference-cache.ts
 new file mode 100644
-index 0000000..af55879
+index 0000000..599e1fa
 --- /dev/null
 +++ b/node_modules/pi-worktrunk/reference-cache.ts
 @@ -0,0 +1,166 @@
@@ -43,7 +43,7 @@ index 0000000..af55879
 +export function executableIdentity(command: string, cwd: string): ExecutableIdentity | undefined {
 +  // Wrappers and unsupported platforms still discover live; their targets cannot be identified here.
 +  if (process.platform === "win32") return undefined;
-+  try { cwd = realpathSync(cwd); } catch { return undefined; }
++  try { cwd = realpathSync.native(cwd); } catch { return undefined; }
 +  // Do not normalize PATH's '..' lexically: the kernel follows preceding symlinks first.
 +  const absolute = (path: string) => isAbsolute(path) ? path : `${cwd}/${path}`;
 +  const paths = command.includes("/")
@@ -53,7 +53,7 @@ index 0000000..af55879
 +    try {
 +      accessSync(path, constants.X_OK);
 +      if (!statSync(path).isFile()) continue;
-+      const canonical = realpathSync(path);
++      const canonical = realpathSync.native(path);
 +      const fd = openSync(canonical, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 +      try {
 +        const stat = fstatSync(fd, { bigint: true });
@@ -62,7 +62,7 @@ index 0000000..af55879
 +        if (readSync(fd, magic, 0, 4, 0) !== 4) return undefined;
 +        // ELF and Mach-O (including universal binaries), not shebang scripts or shims.
 +        if (![0x7f454c46, 0xfeedface, 0xfeedfacf, 0xcafebabe, 0xcefaedfe, 0xcffaedfe, 0xbebafeca].includes(magic.readUInt32BE())) return undefined;
-+        if (canonical !== realpathSync(path)) return undefined;
++        if (canonical !== realpathSync.native(path)) return undefined;
 +        return {
 +          path, realpath: canonical, dev: String(stat.dev), ino: String(stat.ino),
 +          mode: String(stat.mode), size: String(stat.size),

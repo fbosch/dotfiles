@@ -22,8 +22,11 @@ outside Pi bypass it; run `patch:packages` afterwards.
 The runner checks the installed package name and exact version **before**
 invoking patch-package. It also rejects a request to install a different
 Worktrunk version. Patch application uses `--error-on-fail --error-on-warn` and
-never `--partial`. A failed patch stops the command; it does not roll back the
-npm installation that preceded it. Review the error before starting Pi.
+never `--partial`. Empty patches and patches without textual changes are rejected.
+A failed patch stops the command; it does not roll back the npm installation that
+preceded it. Conflict preflight is not a filesystem transaction: disk or permission
+errors during writing can leave partially patched package files. Fix the filesystem
+problem, remove and reinstall the pinned package through Pi, then restart Pi.
 
 ## Cache behavior
 
