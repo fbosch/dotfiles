@@ -8,7 +8,7 @@ import {
 import { selectProfile } from "../../extensions/auth-profiles/profile-selector";
 import { projectIsTrusted } from "../../extensions/auth-profiles/project-trust";
 import { createOpenAiCodexProfileAdapter } from "../../extensions/auth-profiles/providers/openai-codex";
-import { resolveFastModelRequest } from "../../extensions/openai-fast";
+import { resolveFastModelRequest } from "../../extensions/openai-capabilities";
 import {
   type CommitMessageModelConfig,
   resolveCommitMessageModelConfig,

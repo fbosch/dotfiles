@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AssistantMessage, TextContent, Tool } from "@earendil-works/pi-ai";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { resolveFastModelRequest } from "../openai-fast";
+import { resolveFastModelRequest } from "../openai-capabilities";
 import { resolveQuickReplyModel } from "./settings";
 
 export interface QuickReply {

@@ -6,7 +6,7 @@ import {
   type ExtensionCommandContext,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
-import { resolveFastModelRequest } from "../openai-fast";
+import { resolveFastModelRequest } from "../openai-capabilities";
 import {
   buildHandoffDraft,
   buildSelectedFileContext,
