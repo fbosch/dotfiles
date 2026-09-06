@@ -155,7 +155,7 @@ local exact_file_before = vim.fn.readfile(exact_path, "b")
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 pi.setup()
 pi.setup()
-vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+vim.api.nvim_exec_autocmds("SessionLoadPost", {})
 assert(#opened == 1, "SessionLoadPost did not restore exactly one Pi terminal")
 assert_exact_command(
 	opened[1].command,

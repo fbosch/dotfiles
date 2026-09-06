@@ -72,8 +72,7 @@ local original_sessions_setup = sessions.setup
 local original_sessions_read = sessions.read
 sessions.setup = function(options)
 	local pi_handler = vim.iter(vim.api.nvim_get_autocmds({
-		event = "User",
-		pattern = "SessionLoadPost",
+		event = "SessionLoadPost",
 	})):any(function(autocmd)
 		return autocmd.group_name == "PiSessionPersistence"
 	end)

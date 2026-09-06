@@ -368,6 +368,14 @@ in
         -l .config/nvim/tests/pi_session_restore.lua
     '';
 
+
+    "test:nvim-session-selection".exec = ''
+      set -euo pipefail
+      test_config="$(mktemp -d "$DEVENV_STATE/nvim-session-selection.XXXXXX")"
+      trap 'rm -rf "$test_config"' EXIT
+      XDG_CONFIG_HOME="$test_config" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/session_selection.lua
+    '';
     "test:nvim-pi-production-restore".exec =
       "timeout --foreground 15s bash .config/herdr/plugins/neovim-sessions/tests/pi_restore_order.sh";
 
@@ -459,6 +467,7 @@ in
         "test:nvim-pi-cutover"
         "test:nvim-pi-prompt"
         "test:nvim-pi-session-restore"
+        "test:nvim-session-selection"
         "test:nvim-pi-production-restore"
         "test:nvim-pack-disabled-sync"
         "test:nvim-pack-lazy-startup"

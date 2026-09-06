@@ -42,6 +42,10 @@ local function session_from_name(cwd, name)
 	}
 end
 
+local function is_herdr_session(session, metadata)
+	return session.specifier:match("^herdr%-") ~= nil or metadata.herdr_managed == true
+end
+
 function M.get_root_dir()
 	return root_dir
 end
@@ -80,12 +84,16 @@ function M.resolve_requested(cwd)
 	end
 
 	local sessions = {}
+	-- Normal startup must not attach to a pane-specific session left by Herdr.
 	for _, path in ipairs(vim.fn.glob(root_dir .. vim.fn.sha256(cwd) .. "--*.vim", false, true)) do
 		local name = vim.fs.basename(path)
 		local session = session_from_name(cwd, name)
 		if session ~= nil then
-			session.last_used_at = tonumber(read_metadata(session.metadata_path).last_used_at) or vim.fn.getftime(path)
-			table.insert(sessions, session)
+			local metadata = read_metadata(session.metadata_path)
+			if vim.env.HERDR_ENV == "1" or not is_herdr_session(session, metadata) then
+				session.last_used_at = tonumber(metadata.last_used_at) or vim.fn.getftime(path)
+				table.insert(sessions, session)
+			end
 		end
 	end
 

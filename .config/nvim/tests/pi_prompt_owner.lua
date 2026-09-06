@@ -419,7 +419,7 @@ scenario("restored terminal serves Ask and rejects a different cold binding", fu
 	}, f.session_dir .. "/fixture_pi-saved.jsonl")
 	f.session.set_metadata({ pi_session_id = "pi-saved", pi_terminal_open = true }, f.owner)
 	f.pi.setup()
-	vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+	vim.api.nvim_exec_autocmds("SessionLoadPost", {})
 	assert(#f.terminals == 1, "session restoration did not open the saved terminal")
 	assert(type(f.bind(12, "pi-saved")) == "table")
 	f.flush()

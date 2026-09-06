@@ -525,6 +525,11 @@ end
 
 function M.setup()
 	local group = vim.api.nvim_create_augroup("PiSessionPersistence", { clear = true })
+	vim.api.nvim_create_autocmd("SessionLoadPost", {
+		group = group,
+		callback = M.restore,
+	})
+	-- mini.sessions emits this bridge event because its deferred source path skips the native event.
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
 		pattern = "SessionLoadPost",
