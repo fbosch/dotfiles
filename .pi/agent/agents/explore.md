@@ -6,12 +6,6 @@ model: openai-codex/gpt-5.6-luna
 thinking: low
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
   external_directory: ask
 ---
 

@@ -8,20 +8,8 @@ max_turns: 24
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, mcp__github
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
   bash: deny
-  write: allow
-  edit: allow
   mcp__github: ask
-  external_directory:
-    "*": ask
-    "/tmp": allow
-    "/tmp/*": allow
 ---
 
 You own the GitHub PR-review-feedback workflow.

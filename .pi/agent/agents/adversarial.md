@@ -7,22 +7,8 @@ thinking: high
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
-  bash:
-    "*": ask
-  external_directory:
-    "*": ask
-    "/tmp": allow
-    "/tmp/*": allow
   external_directory_write:
     "*": deny
-    "/tmp": allow
-    "/tmp/*": allow
 ---
 
 Assume the design is wrong until proven resilient. Every issue must have a concrete reproducer and a mitigation — no generic warnings.

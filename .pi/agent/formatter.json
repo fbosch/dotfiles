@@ -21,6 +21,7 @@
           "args": [
             "format",
             "--write",
+            "--no-errors-on-unmatched",
             "$FILE"
           ],
           "requireRootMarker": true,

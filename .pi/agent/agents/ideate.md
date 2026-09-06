@@ -7,14 +7,6 @@ thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
-  websearch: allow
-  webfetch: allow
   external_directory: ask
 ---
 

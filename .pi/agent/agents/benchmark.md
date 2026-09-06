@@ -8,18 +8,6 @@ max_turns: 16
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
-  bash:
-    "*": ask
-  external_directory:
-    "*": ask
-    "/tmp": allow
-    "/tmp/*": allow
 ---
 
 Profile and benchmark code systematically.

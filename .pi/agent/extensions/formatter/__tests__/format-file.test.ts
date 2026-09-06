@@ -84,6 +84,59 @@ describe("formatFile", () => {
     });
   });
 
+  test("does not report Biome's ignored-path diagnostic", async () => {
+    await temporaryProject(async (directory) => {
+      const filePath = join(directory, "index.html");
+      await writeFile(filePath, "<div>content</div>");
+      const settings: ResolvedFormatterSettings = {
+        timeoutMs: 1_000,
+        warnings: [],
+        rules: [
+          {
+            id: "web",
+            mode: "first_available",
+            extensions: [".html"],
+            fileNames: [],
+            commands: [
+              {
+                command: "biome",
+                args: ["format", "--write", "$FILE"],
+                requireRootMarker: false,
+                rootMarkers: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(
+        await formatFile({
+          commandAvailable: async () => true,
+          cwd: directory,
+          execute: async () => ({
+            kind: "exit_error",
+            exitCode: 1,
+            signal: null,
+            stderr: [
+              "format ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+              "",
+              "  × No files were processed in the specified paths.",
+              "",
+              "  i Check your biome.json or biome.jsonc to ensure the paths are not ignored by the configuration.",
+              "",
+              "  i These paths were provided but ignored:",
+              "",
+              `  - ${filePath}`,
+              "",
+            ].join("\n"),
+          }),
+          filePath,
+          settings,
+        }),
+      ).toEqual([]);
+    });
+  });
+
   test("runs pipeline commands in order and continues after a failure", async () => {
     await temporaryProject(async (directory) => {
       const filePath = join(directory, "example.lua");

@@ -7,20 +7,6 @@ thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
-  write: allow
-  edit: allow
-  bash:
-    "*": ask
-  external_directory:
-    "*": ask
-    "/tmp": allow
-    "/tmp/*": allow
 ---
 
 You improve code quality without changing functionality.

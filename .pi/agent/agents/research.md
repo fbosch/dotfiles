@@ -7,17 +7,8 @@ thinking: high
 tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__github
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
   bash: deny
   external_directory_write: deny
-  websearch: allow
-  webfetch: allow
-  mcp__context7: allow
   mcp__github: ask
   external_directory: ask
 ---

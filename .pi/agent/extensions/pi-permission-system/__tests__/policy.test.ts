@@ -320,6 +320,13 @@ describe("pi-permission-system policy", () => {
         input: { query: "figma implementation" },
       }).state,
     ).toBe("allow");
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "exec",
+        input: { code: 'text("ok")' },
+      }).state,
+    ).toBe("allow");
 
     for (const command of [
       "set -o pipefail",
@@ -500,7 +507,15 @@ describe("pi-permission-system policy", () => {
     const engine = createEngine();
 
     // Discovery targets follow server/search candidates; a surface catch-all would mask them.
-    for (const input of [{}, { server: "context7" }, { search: "context7" }]) {
+    for (const input of [
+      {},
+      { server: "github" },
+      { search: "github" },
+      { describe: "github:delete_repository" },
+      { connect: "github" },
+      { server: "context7" },
+      { search: "context7" },
+    ]) {
       expect(engine.manager.check({ kind: "tool", surface: "mcp", input }).state).toBe("allow");
     }
 
@@ -540,6 +555,38 @@ describe("pi-permission-system policy", () => {
         input: {},
       }).state,
     ).toBe("allow");
+  });
+
+  test("inherits global grants while preserving subagent restrictions", () => {
+    const engine = createEngine();
+    const cases = [
+      { agentName: "quick", tmpRead: "allow", externalWrite: "ask" },
+      { agentName: "research", tmpRead: "ask", externalWrite: "deny" },
+      { agentName: "validate", tmpRead: "allow", externalWrite: "deny" },
+    ] as const;
+
+    for (const { agentName, tmpRead, externalWrite } of cases) {
+      for (const [surface, expected] of [
+        ["read", "allow"],
+        ["unknown_tool", "deny"],
+        ["worktrunk", "ask"],
+      ] as const) {
+        expect(
+          engine.manager.check({ kind: "tool", surface, input: {}, agentName }).state,
+          `${agentName}: ${surface}`,
+        ).toBe(expected);
+      }
+      for (const [surface, path, expected] of [
+        ["external_directory_read", "/tmp/synthetic-fixture.txt", tmpRead],
+        ["external_directory_write", "/synthetic-outside-project/fixture.txt", externalWrite],
+      ] as const) {
+        expect(
+          engine.resolver.resolve({ kind: "path-values", surface, values: [path], agentName })
+            .state,
+          `${agentName}: ${surface}`,
+        ).toBe(expected);
+      }
+    }
   });
 
   test("allows the shared tone file for reads without allowing writes", () => {

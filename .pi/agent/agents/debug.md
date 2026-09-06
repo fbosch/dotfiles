@@ -7,21 +7,7 @@ thinking: medium
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, mcp__chrome_devtools
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
-  write: allow
-  edit: allow
-  bash:
-    "*": ask
   mcp__chrome_devtools: ask
-  external_directory:
-    "*": ask
-    "/tmp": allow
-    "/tmp/*": allow
 ---
 
 You investigate and diagnose issues systematically.

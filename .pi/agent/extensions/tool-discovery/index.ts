@@ -10,6 +10,7 @@ const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
 
 const DEFERRED_TOOL_NAMES = new Set([
+  "exec",
   "find_definition",
   "find_callers",
   "find_callees",

@@ -118,6 +118,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
+    expect(isDeferredToolName("exec")).toBe(true);
     expect(isDeferredToolName("find_definition")).toBe(true);
     expect(isDeferredToolName("worktrunk")).toBe(true);
 

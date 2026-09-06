@@ -7,12 +7,6 @@ thinking: low
 tools: read, grep, find, ls, fffind, ffgrep
 permission:
   "*": deny
-  read: allow
-  grep: allow
-  find: allow
-  ls: allow
-  fffind: allow
-  ffgrep: allow
   bash: deny
   external_directory: ask
   external_directory_write: deny

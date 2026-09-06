@@ -1,6 +1,6 @@
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
-import { delimiter, dirname, isAbsolute, resolve } from "node:path";
+import { basename, delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { match } from "ts-pattern";
 import type { FormatterExecutionResult } from "./command-runner";
 import {
@@ -107,6 +107,25 @@ async function resolveCommands(
   return commands;
 }
 
+function isBiomeIgnoredPathDiagnostic(command: string, stderr: string): boolean {
+  if (basename(command) !== "biome") return false;
+
+  const lines = stderr
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length < 5) return false;
+
+  return (
+    /^format\s+━+$/u.test(lines[0] ?? "") &&
+    lines[1] === "× No files were processed in the specified paths." &&
+    lines[2] ===
+      "i Check your biome.json or biome.jsonc to ensure the paths are not ignored by the configuration." &&
+    lines[3] === "i These paths were provided but ignored:" &&
+    lines.slice(4).every((line) => line.startsWith("- "))
+  );
+}
+
 function failureMessage(
   rule: FormatterRule,
   command: FormatterCommand,
@@ -131,6 +150,8 @@ function failureMessage(
         `Formatter ${rule.id}: ${command.command} cancelled for ${filePath}${stderr === "" ? "" : `: ${stderr}`}`,
     )
     .with({ kind: "exit_error" }, ({ exitCode, signal, stderr }) => {
+      // Biome exits with code 1 when VCS ignores the requested file; that is not a formatter failure.
+      if (isBiomeIgnoredPathDiagnostic(command.command, stderr)) return undefined;
       const status = exitCode === null ? `signal ${signal ?? "unknown"}` : `exit code ${exitCode}`;
       return `Formatter ${rule.id}: ${command.command} failed for ${filePath} (${status})${stderr === "" ? "" : `: ${stderr}`}`;
     })
