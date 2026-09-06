@@ -2121,3 +2121,44 @@ index b7a05f4..a16645d 100644
  ]);
 
  export const PATH_BEARING_TOOLS = new Set([
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
+index a54250c..58f535b 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
+@@ -153,7 +153,7 @@ export class AuthorizerSelection
+         continue;
+       }
+       resolved.push(name);
+-      links.push({ name, authorize: encloseInDelegationEnvelope(authorize) });
++      links.push({ name, authorize: encloseInDelegationEnvelope(name, authorize) });
+     }
+     if (resolved.length > 0) {
+       this.deps.logger.review("authorizer_chain_resolved", {
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
+index 4b7ecd5..abb5611 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
+@@ -15,6 +15,10 @@
+  * family name resolves to members, and leaves *which* families are excluded
+  * independently relaxable (#620).
+  *
++ * The locally registered `session-yolo` link is the deliberate exception. It
++ * sees only `ask` decisions after policy resolution, so allowing it across all
++ * surfaces suppresses every prompt without weakening explicit `deny` rules.
++ *
+  * A finer secret-shaped-`path` exclusion (letting a link allow a non-secret
+  * path) is deferred to the allow-capable slice that needs it (#620); until then
+  * the conservative whole-family exclusion ships. The checkpoint is dormant
+@@ -38,8 +42,12 @@ export const DELEGATION_EXCLUDED_SURFACES: ReadonlySet<string> = new Set([
+  * are forwarded as-is.
+  */
+ export function encloseInDelegationEnvelope(
++  name: string,
+   authorize: Authorizer["authorize"],
+ ): Authorizer["authorize"] {
++  if (name === "session-yolo") {
++    return authorize;
++  }
+   return async (details, query, log) => {
+     const verdict = await authorize(details, query, log);
+     if (verdict.kind === "allow" && isExcludedSurface(details)) {

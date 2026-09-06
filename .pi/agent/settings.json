@@ -2,7 +2,7 @@
   "lastChangelogVersion": "0.85.1",
   "theme": "zenwritten-dark",
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.6-luna-fast",
+  "defaultModel": "gpt-5.5",
   "quickReplies": {
     "enabled": true
   },

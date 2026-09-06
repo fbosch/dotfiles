@@ -9,244 +9,257 @@
 // Learn more about configuration at https://docs.vicinae.com/config
 
 {
-   "$schema": "https://vicinae.com/schemas/config.json",
-   "close_on_focus_loss": false,
-   "pop_to_root_on_close": true,
-   "escape_key_behavior": "close_window",
-   "keybinding": "vim",
-   "search_files_in_root": false,
-   "global_shortcuts": {
-      "toggle": "control+SPACE"
-   },
-   "font": {
-      "rendering": "native",
-      "normal": {
-         "family": "SF Pro Text"
+  "$schema": "https://vicinae.com/schemas/config.json",
+  "close_on_focus_loss": false,
+  "pop_to_root_on_close": true,
+  "escape_key_behavior": "close_window",
+  "keybinding": "vim",
+  "search_files_in_root": false,
+  "global_shortcuts": {
+    "toggle": "control+SPACE"
+  },
+  "font": {
+    "rendering": "native",
+    "normal": {
+      "family": "SF Pro Text"
+    }
+  },
+  "theme": {
+    "dark": {
+      "name": "zenwritten-dark",
+      "icon_theme": "Win11"
+    }
+  },
+  "launcher_window": {
+    "rounding": 10,
+    "opacity": 0.85,
+    "client_side_decorations": {
+      "enabled": true,
+      "border_width": 1,
+      "shadow_size": 16
+    },
+    "blur": {
+      "enabled": false
+    },
+    "compact_mode": {
+      "enabled": true
+    },
+    "layer_shell": {
+      "keyboard_interactivity": "on_demand",
+      "enabled": true
+    },
+    "material": "blur"
+  },
+  "keybinds": {
+    "toggle-action-panel": "control+RETURN"
+  },
+  "favorites": [
+    "applications:company.thebrowser.Browser",
+    "applications:com.github.wez.wezterm",
+    "applications:com.tinyspeck.slackmacgap",
+    "applications:com.microsoft.teams2",
+    "applications:protonmail",
+    "applications:org.signal.Signal",
+    "applications:one.ablaze.floorp",
+    "@fbosch/yr-weather:yr-weather",
+    "@fbosch/home-assistant:home-assistant-lights",
+    "applications:com.discordapp.Discord",
+    "@aurelleb/store.vicinae.mullvad:connect",
+    "@aurelleb/store.vicinae.mullvad:disconnect",
+    "applications:bitwarden",
+    "applications:steam",
+    "applications:helium-browser",
+    "applications:chromium-protonmail",
+    "applications:app.zen_browser.zen"
+  ],
+  "fallbacks": [
+    "@knoopx/store.vicinae.nix:packages",
+    "@fbosch/flathub-search:flathub-search",
+    "@fbosch/kagi-search:kagi-search",
+    "files:search"
+  ],
+  "providers": {
+    "@fbosch/home-assistant": {
+      "preferences": {
+        "baseUrl": "https://ha.corvus-corax.synology.me"
       }
-   },
-   "theme": {
-      "dark": {
-         "name": "zenwritten-dark",
-         "icon_theme": "Win11"
+    },
+    "@fbosch/local-wallpaper": {
+      "preferences": {
+        "fileExtensions": "png,jpg,jpeg,webp,jxl",
+        "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
+        "sortBy": "name",
+        "wallpapersDirectory": "/mnt/nas/photo/Wallpapers"
       }
-   },
-   "launcher_window": {
-      "rounding": 10,
-      "opacity": 0.85,
-      "client_side_decorations": {
-         "enabled": true,
-         "border_width": 1,
-         "shadow_size": 16
-      },
-      "blur": {
-         "enabled": false
-      },
-      "compact_mode": {
-         "enabled": true
-      },
-      "layer_shell": {
-         "keyboard_interactivity": "on_demand",
-         "enabled": true
-      },
-      "material": "blur"
-   },
-   "keybinds": {
-      "toggle-action-panel": "control+RETURN"
-   },
-   "favorites": [
-      "applications:company.thebrowser.Browser",
-      "applications:com.github.wez.wezterm",
-      "applications:com.tinyspeck.slackmacgap",
-      "applications:com.microsoft.teams2",
-      "applications:protonmail",
-      "applications:org.signal.Signal",
-      "applications:one.ablaze.floorp",
-      "@fbosch/yr-weather:yr-weather",
-      "@fbosch/home-assistant:home-assistant-lights",
-      "applications:com.discordapp.Discord",
-      "@aurelleb/store.vicinae.mullvad:connect",
-      "@aurelleb/store.vicinae.mullvad:disconnect",
-      "applications:bitwarden",
-      "applications:steam",
-      "applications:helium-browser",
-      "applications:chromium-protonmail",
-      "applications:app.zen_browser.zen"
-   ],
-   "fallbacks": [
-      "@knoopx/store.vicinae.nix:packages",
-      "@fbosch/flathub-search:flathub-search",
-      "@fbosch/kagi-search:kagi-search",
-      "files:search"
-   ],
-   "providers": {
-      "@fbosch/home-assistant": {
-         "preferences": {
-            "baseUrl": "https://ha.corvus-corax.synology.me"
-         }
-      },
-      "@fbosch/local-wallpaper": {
-         "preferences": {
-            "fileExtensions": "png,jpg,jpeg,webp,jxl",
-            "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
-            "sortBy": "name",
-            "wallpapersDirectory": "/mnt/nas/photo/Wallpapers"
-         }
-      },
-      "@fbosch/wallhaven": {
-         "preferences": {
-            "useUserSettings": true,
-            "downloadDirectory": "~/Pictures/Wallpapers",
-            "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
-            "purity": "111",
-            "sorting": "relevance",
-            "topRange": "3d"
-         }
-      },
-      "@fbosch/wallhaven-search": {
-         "enabled": false
-      },
-      "@fbosch/wowhead": {
-         "entrypoints": {
-            "wowhead": {
-               "alias": "wh"
-            }
-         }
-      },
-      "applications": {
-         "preferences": {
-            "launchPrefix": "uwsm-app --",
-            "paths": [
-               "/home/fbb/.local/share/applications",
-               "/home/fbb/.local/share/flatpak/exports/share/applications",
-               "/etc/profiles/per-user/fbb/share/applications",
-               "/run/current-system/sw/share/applications"
-            ],
-            "defaultAction": "launch"
-         },
-         "entrypoints": {
-            "Battle.net": {
-               "enabled": true
-            },
-            "Pokmon Infinite Fusion": {
-               "enabled": false
-            },
-            "app.zen_browser.zen": {
-               "alias": "z"
-            },
-            "battlenet": {
-               "alias": "b"
-            },
-            "btop": {
-               "enabled": false
-            },
-            "chatgpt": {
-               "alias": "codex"
-            },
-            "chrome-ndcljijdejihfgkgocfgkbffacaljofo-Default": {
-               "enabled": false
-            },
-            "chrome-paeimkinmcfdlknnebjfgiebgemdbegd-Default": {
-               "enabled": false
-            },
-            "chromium-realforce": {
-               "enabled": false
-            },
-            "gvim": {
-               "enabled": false
-            },
-            "htop": {
-               "enabled": false
-            },
-            "hyprprop": {
-               "enabled": false
-            },
-            "io.github.Faugus.faugus-launcher": {
-               "enabled": false
-            },
-            "io.github.Foldex.AdwSteamGtk": {
-               "enabled": true
-            },
-            "mullvad-vpn": {
-               "enabled": false
-            },
-            "nemo": {
-               "alias": "f"
-            },
-            "net.lutris.battlenet-1": {
-               "enabled": false
-            },
-            "nix.bwrapper.helium_browser": {
-               "alias": "h"
-            },
-            "nvidia-settings": {
-               "enabled": true
-            },
-            "nvim": {
-               "enabled": false
-            },
-            "org.gtk.Demo4": {
-               "enabled": false
-            },
-            "org.gtk.Shaper": {
-               "enabled": false
-            },
-            "org.gtk.WidgetFactory4": {
-               "enabled": false
-            },
-            "org.gtk.gtk4.NodeEditor": {
-               "enabled": false
-            },
-            "org.signal.Signal": {
-               "alias": "s"
-            },
-            "realforce-installer": {
-               "enabled": false
-            },
-            "selectdefaultapplication": {
-               "enabled": false
-            },
-            "tectonic": {
-               "enabled": false
-            },
-            "url2app": {
-               "enabled": false
-            },
-            "wine.Programs.Topre REALFORCE CONNECT Software.REALFORCE CONNECT": {
-               "enabled": false
-            },
-            "zen-twilight": {
-               "alias": "zt"
-            }
-         }
-      },
-      "files": {
-         "preferences": {
-            "autoIndexing": true,
-            "paths": "/home/fbb",
-            "excludedPaths": "/home/fbb/.local/share/Steam;/home/fbb/.local/share/umu;/home/fbb/.local/share/opencode;/home/fbb/.local/share/pnpm;/home/fbb/.local/share/flatpak;/home/fbb/.local/share/containers;/home/fbb/.var/app;/home/fbb/.npm;/home/fbb/.bun;/home/fbb/.rustup;/home/fbb/.cargo;/home/fbb/.claude",
-            "watcherPaths": ""
-         }
-      },
-      "power": {
-         "entrypoints": {
-            "lock": {
-               "preferences": {
-                  "customProgram": "hyprlock"
-               }
-            },
-            "power-off": {
-               "preferences": {
-                  "confirm": true,
-                  "customProgram": ""
-               }
-            },
-            "reboot": {
-               "preferences": {
-                  "confirm": true,
-                  "customProgram": ""
-               }
-            }
-         }
+    },
+    "@fbosch/wallhaven": {
+      "preferences": {
+        "useUserSettings": true,
+        "downloadDirectory": "~/Pictures/Wallpapers",
+        "hyprpaperConfigPath": "~/.config/hypr/hyprpaper.conf",
+        "purity": "111",
+        "sorting": "relevance",
+        "topRange": "3d"
       }
-   }
+    },
+    "@fbosch/wallhaven-search": {
+      "enabled": false
+    },
+    "@fbosch/wowhead": {
+      "entrypoints": {
+        "wowhead": {
+          "alias": "wh"
+        }
+      }
+    },
+    "applications": {
+      "preferences": {
+        "launchPrefix": "uwsm-app --",
+        "paths": [
+          "/home/fbb/.local/share/applications",
+          "/home/fbb/.local/share/flatpak/exports/share/applications",
+          "/etc/profiles/per-user/fbb/share/applications",
+          "/run/current-system/sw/share/applications"
+        ],
+        "defaultAction": "launch"
+      },
+      "entrypoints": {
+        "Battle.net": {
+          "enabled": true
+        },
+        "Pokmon Infinite Fusion": {
+          "enabled": false
+        },
+        "app.zen_browser.zen": {
+          "alias": "z"
+        },
+        "battlenet": {
+          "alias": "b"
+        },
+        "btop": {
+          "enabled": false
+        },
+        "chatgpt": {
+          "alias": "codex"
+        },
+        "chrome-ndcljijdejihfgkgocfgkbffacaljofo-Default": {
+          "enabled": false
+        },
+        "chrome-paeimkinmcfdlknnebjfgiebgemdbegd-Default": {
+          "enabled": false
+        },
+        "chromium-realforce": {
+          "enabled": false
+        },
+        "gvim": {
+          "enabled": false
+        },
+        "htop": {
+          "enabled": false
+        },
+        "hyprprop": {
+          "enabled": false
+        },
+        "io.github.Faugus.faugus-launcher": {
+          "enabled": false
+        },
+        "io.github.Foldex.AdwSteamGtk": {
+          "enabled": true
+        },
+        "mullvad-vpn": {
+          "enabled": false
+        },
+        "nemo": {
+          "alias": "f"
+        },
+        "net.lutris.battlenet-1": {
+          "enabled": false
+        },
+        "nix.bwrapper.helium_browser": {
+          "alias": "h"
+        },
+        "nvidia-settings": {
+          "enabled": true
+        },
+        "nvim": {
+          "enabled": false
+        },
+        "org.gtk.Demo4": {
+          "enabled": false
+        },
+        "org.gtk.Shaper": {
+          "enabled": false
+        },
+        "org.gtk.WidgetFactory4": {
+          "enabled": false
+        },
+        "org.gtk.gtk4.NodeEditor": {
+          "enabled": false
+        },
+        "org.signal.Signal": {
+          "alias": "s"
+        },
+        "realforce-installer": {
+          "enabled": false
+        },
+        "selectdefaultapplication": {
+          "enabled": false
+        },
+        "tectonic": {
+          "enabled": false
+        },
+        "url2app": {
+          "enabled": false
+        },
+        "wine.Programs.Topre REALFORCE CONNECT Software.REALFORCE CONNECT": {
+          "enabled": false
+        },
+        "zen-twilight": {
+          "alias": "zt"
+        }
+      }
+    },
+    "files": {
+      "preferences": {
+        "autoIndexing": true,
+        "indexingPaths": ["/home/fbb"],
+        "excludedIndexingPaths": [
+          "/home/fbb/Faugus",
+          "/home/fbb/.local/share/Steam",
+          "/home/fbb/.local/share/umu",
+          "/home/fbb/.local/share/opencode",
+          "/home/fbb/.local/share/pnpm",
+          "/home/fbb/.local/share/flatpak",
+          "/home/fbb/.local/share/containers",
+          "/home/fbb/.var/app",
+          "/home/fbb/.npm",
+          "/home/fbb/.bun",
+          "/home/fbb/.rustup",
+          "/home/fbb/.cargo",
+          "/home/fbb/.claude"
+        ]
+      }
+    },
+    "power": {
+      "entrypoints": {
+        "lock": {
+          "preferences": {
+            "customProgram": "hyprlock"
+          }
+        },
+        "power-off": {
+          "preferences": {
+            "confirm": true,
+            "customProgram": ""
+          }
+        },
+        "reboot": {
+          "preferences": {
+            "confirm": true,
+            "customProgram": ""
+          }
+        }
+      }
+    }
+  }
 }

@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+hypr_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+recorder="$hypr_dir/benchmarks/startup-recorder.sh"
+state_dir="$(mktemp -d)"
+trap 'rm -rf "$state_dir"' EXIT
+
+run_recorder() {
+  HYPRLAND_INSTANCE_SIGNATURE="current-session" HYPR_STARTUP_BENCHMARK_STATE_DIR="$state_dir" "$recorder" "$@"
+}
+
+run_recorder arm
+campaign="$state_dir/campaigns/$(<"$state_dir/current")"
+
+# The session used to arm the campaign cannot create a login sample.
+run_recorder mark current-session waybar-layer-mapped 1.000000000
+[[ -z "$(find "$campaign" -mindepth 1 -maxdepth 1 -type d -name 'run-*' -print -quit)" ]]
+
+# Markers may finish before begin's asynchronous helper without being lost.
+run_recorder mark login-1 waybar-layer-mapped 11.000000000
+run_recorder begin login-1 10.000000000
+run_recorder mark login-1 waybar-layer-mapped 12.000000000
+run_recorder mark login-1 ags-component-host-main-complete 13.000000000
+[[ "$(<"$campaign/run-1/waybar-layer-mapped")" == "11.000000000" ]]
+
+# Repeated callbacks in the same compositor session cannot overwrite milestones.
+run_recorder mark login-1 ags-component-host-main-complete 14.000000000
+run_recorder mark login-1 waybar-layer-mapped 131.000000000
+[[ "$(<"$campaign/run-1/ags-component-host-main-complete")" == "13.000000000" ]]
+[[ ! -e "$campaign/run-1/timed-out" ]]
+
+run_recorder begin login-2 20.000000000
+run_recorder mark login-2 waybar-layer-mapped 19.000000000
+run_recorder mark login-2 ags-component-host-main-complete 21.000000000
+
+run_recorder begin login-3 30.000000000
+report="$(run_recorder report)"
+grep -Fq 'run-1: Waybar layer mapped 1000 ms; AGS component-host main complete 3000 ms' <<<"$report"
+grep -Fq 'run-2: invalid monotonic ordering or duration; excluded' <<<"$report"
+grep -Fq 'run-3: incomplete (compositor=recorded, waybar=missing, ags=missing)' <<<"$report"
+grep -Fq 'n=1' <<<"$report"
+
+run_recorder mark login-3 waybar-layer-mapped 151.000000000
+report="$(run_recorder report)"
+grep -Fq 'run-3: timed out after 120 s (compositor=recorded, waybar=missing, ags=missing)' <<<"$report"
+
+run_recorder disarm
+run_recorder mark login-3 waybar-layer-mapped 31.000000000
+[[ ! -e "$campaign/run-3/waybar-layer-mapped" ]]
+
+# A fully valid three-run campaign automatically stops accepting observations.
+run_recorder arm
+campaign="$state_dir/campaigns/$(<"$state_dir/current")"
+run_recorder begin complete-1 10.000000000
+run_recorder mark complete-1 waybar-layer-mapped 11.000000000
+run_recorder mark complete-1 ags-component-host-main-complete 12.000000000
+run_recorder begin complete-2 20.000000000
+run_recorder mark complete-2 waybar-layer-mapped 21.000000000
+run_recorder mark complete-2 ags-component-host-main-complete 22.000000000
+run_recorder begin complete-3 30.000000000
+run_recorder mark complete-3 waybar-layer-mapped 31.000000000
+run_recorder mark complete-3 ags-component-host-main-complete 32.000000000
+[[ ! -e "$state_dir/armed" ]]
+grep -Fq 'n=3' < <(run_recorder report)
+
+commands_file="$state_dir/commands"
+mkdir -p "$state_dir/home/.local/state/hypr-startup-benchmark"
+touch "$state_dir/home/.local/state/hypr-startup-benchmark/armed"
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$commands_file" HOME="$state_dir/home" \
+  XDG_STATE_HOME="$state_dir/home/.local/state" HYPRLAND_INSTANCE_SIGNATURE="login-lua" luajit - <<'LUA'
+local root = assert(os.getenv("HYPR_DIR"))
+package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
+local events = {}
+hl = {
+  exec_cmd = function(command)
+    local file = assert(io.open(assert(os.getenv("COMMANDS_FILE")), "a"))
+    file:write(command, "\n")
+    file:close()
+  end,
+  on = function(name, callback)
+    events[name] = callback
+  end,
+}
+require("autostart")
+assert(events["config.reloaded"] == nil)
+events["hyprland.start"]()
+events["layer.opened"]({ namespace = "waybar" })
+LUA
+first_command="$(head -n 1 "$commands_file")"
+[[ "$first_command" == *"startup-recorder.sh' 'begin' 'login-lua'"* ]]
+[[ ! "$first_command" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]
+grep -Fq "startup-recorder.sh' 'mark' 'login-lua' 'waybar-layer-mapped'" "$commands_file"
+grep -Fq "uwsm-app -s s -- env HYPR_STARTUP_BENCHMARK_SESSION='login-lua' ~/.config/ags/start-daemons.sh" "$commands_file"
+
+unarmed_commands="$state_dir/unarmed-commands"
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$unarmed_commands" HOME="$state_dir/unarmed-home" \
+  XDG_STATE_HOME="$state_dir/unarmed-home/.local/state" HYPRLAND_INSTANCE_SIGNATURE="unarmed-lua" luajit - <<'LUA'
+local root = assert(os.getenv("HYPR_DIR"))
+package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
+local events = {}
+hl = {
+  exec_cmd = function(command)
+    local file = assert(io.open(assert(os.getenv("COMMANDS_FILE")), "a"))
+    file:write(command, "\n")
+    file:close()
+  end,
+  on = function(name, callback)
+    events[name] = callback
+  end,
+}
+require("autostart")
+assert(events["layer.opened"] == nil)
+events["hyprland.start"]()
+LUA
+if grep -Fq 'startup-recorder.sh' "$unarmed_commands"; then
+  exit 1
+fi
+grep -Fq 'uwsm-app -s s -- ~/.config/ags/start-daemons.sh' "$unarmed_commands"
+
+# Recorder load failures must not block the normal desktop launch path.
+faulty_load_commands="$state_dir/faulty-load-commands"
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_load_commands" HYPRLAND_INSTANCE_SIGNATURE="faulty-load" luajit - <<'LUA'
+local root = assert(os.getenv("HYPR_DIR"))
+package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
+package.preload["benchmarks.startup-recorder"] = function()
+  error("simulated recorder load failure")
+end
+local events = {}
+hl = {
+  exec_cmd = function(command)
+    local file = assert(io.open(assert(os.getenv("COMMANDS_FILE")), "a"))
+    file:write(command, "\n")
+    file:close()
+  end,
+  on = function(name, callback)
+    events[name] = callback
+  end,
+}
+require("autostart")
+assert(events["layer.opened"] == nil)
+events["hyprland.start"]()
+LUA
+grep -Fq 'uwsm-app -s s -- ~/.config/ags/start-daemons.sh' "$faulty_load_commands"
+if grep -Fq 'startup-recorder.sh' "$faulty_load_commands"; then
+  exit 1
+fi
+
+# Recorder generation and dispatch failures must not block app startup or escape event handlers.
+faulty_callback_commands="$state_dir/faulty-callback-commands"
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_callback_commands" HYPRLAND_INSTANCE_SIGNATURE="faulty-callback" luajit - <<'LUA'
+local root = assert(os.getenv("HYPR_DIR"))
+package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
+package.preload["benchmarks.startup-recorder"] = function()
+  return {
+    armed = function() return true end,
+    wrap_ags_command = function(command) return command end,
+    begin = function() return "benchmark-command" end,
+    mark_waybar_layer_mapped = function() error("simulated marker failure") end,
+  }
+end
+local events = {}
+hl = {
+  exec_cmd = function(command)
+    if command == "benchmark-command" then error("simulated dispatch failure") end
+    local file = assert(io.open(assert(os.getenv("COMMANDS_FILE")), "a"))
+    file:write(command, "\n")
+    file:close()
+  end,
+  on = function(name, callback)
+    events[name] = callback
+  end,
+}
+require("autostart")
+events["hyprland.start"]()
+events["layer.opened"]({ namespace = "waybar" })
+LUA
+grep -Fq 'uwsm-app -s s -- ~/.config/ags/start-daemons.sh' "$faulty_callback_commands"
+if grep -Fq 'startup-recorder.sh' "$faulty_callback_commands"; then
+  exit 1
+fi

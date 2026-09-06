@@ -15,6 +15,31 @@ import GLib from "gi://GLib?version=2.0";
 const instanceName =
 	GLib.getenv("AGS_MEMORY_BENCHMARK_INSTANCE") ?? "ags-bundled";
 
+function recordStartupBenchmarkAgsReady(): void {
+	try {
+		if (instanceName !== "ags-bundled") return;
+		const benchmarkSession = GLib.getenv("HYPR_STARTUP_BENCHMARK_SESSION");
+		if (!benchmarkSession) return;
+		const configuredStateHome = GLib.getenv("XDG_STATE_HOME");
+		const stateHome = configuredStateHome || `${GLib.get_home_dir()}/.local/state`;
+		if (!GLib.file_test(`${stateHome}/hypr-startup-benchmark/armed`, GLib.FileTest.EXISTS)) return;
+
+		// Match Hyprland's recorder clock so suspend time cannot skew the interval.
+		const [success, contents] = GLib.file_get_contents("/proc/uptime");
+		const uptime = success && contents
+			? /^([0-9]+)\.([0-9]+)/.exec(new TextDecoder().decode(contents))
+			: null;
+		if (!uptime) throw new Error("Could not read /proc/uptime");
+		const timestamp = `${uptime[1]}.${uptime[2].slice(0, 9).padEnd(9, "0")}`;
+		const recorder = `${GLib.get_home_dir()}/.config/hypr/benchmarks/startup-recorder.sh`;
+		GLib.spawn_command_line_async(
+			`${GLib.shell_quote(recorder)} mark ${GLib.shell_quote(benchmarkSession)} ags-component-host-main-complete ${timestamp}`,
+		);
+	} catch (error) {
+		console.error("[ags-bundled] Startup benchmark recorder failed:", error);
+	}
+}
+
 declare global {
 	var ConfirmDialog: ComponentModule;
 	var VolumeIndicator: ComponentModule;
@@ -43,6 +68,7 @@ resetAiPointerStartupState();
 startComponentHost({
 	instanceName,
 	css: bundledCss,
+	onReady: recordStartupBenchmarkAgsReady,
 	components: [
 		() => globalThis.ConfirmDialog,
 		() => globalThis.VolumeIndicator,

@@ -20,6 +20,7 @@ interface ComponentHostOptions {
   components: Array<() => ComponentModule>;
   taskbarVisibilityComponents: string[];
   css?: string;
+  onReady?: () => void;
 }
 
 export function startComponentHost({
@@ -27,6 +28,7 @@ export function startComponentHost({
   components: componentFactories,
   taskbarVisibilityComponents,
   css,
+  onReady,
 }: ComponentHostOptions): void {
   const components = new Map<string, ComponentRequestHandler>();
   const handleRequest = createComponentHostRequestHandler({
@@ -50,6 +52,11 @@ export function startComponentHost({
         } catch (error) {
           console.error(`[${instanceName}] Failed to initialize component:`, error);
         }
+      }
+      try {
+        onReady?.();
+      } catch (error) {
+        console.error(`[${instanceName}] Ready observer failed:`, error);
       }
       return null;
     },

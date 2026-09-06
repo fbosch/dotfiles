@@ -21,6 +21,7 @@ POWERSAVE_PROFILE="powersave"
 GAMING_PROFILE="gaming"
 DEFAULT_PROFILE="default"
 AUTO_SELECTION="auto"
+LACTD_UNIT="lactd.service"
 STATE_FILE="$STATE_DIR/state.json"
 PROFILE_STATE_HELPER="$(dirname "$0")/profile-state.lua"
 MAX_STATE_GENERATION=2147483647
@@ -228,6 +229,22 @@ restore_hypr_defaults() {
 
 }
 
+sync_lactd_for_profile() {
+  local profile="$1"
+  local action="stop"
+
+  if [[ "$profile" == "$GAMING_PROFILE" ]]; then
+    action="start"
+  fi
+
+  if systemctl "$action" "$LACTD_UNIT" >/dev/null 2>&1; then
+    return
+  fi
+
+  printf "profilectl: failed to %s %s for %s profile\n" "$action" "$LACTD_UNIT" "$profile" >&2
+  return 1
+}
+
 notify_failure() {
   local key="$1"
   local summary="$2"
@@ -239,6 +256,9 @@ rollback_overlay() {
   resume_background_helpers
   set_power_profile balanced
   if ! restore_hypr_defaults; then
+    return 1
+  fi
+  if ! sync_lactd_for_profile "$DEFAULT_PROFILE"; then
     return 1
   fi
 
@@ -301,6 +321,10 @@ apply_effective_state() {
       notify_failure "profile-restore" "Hyprland profile restore failed" "Gaming settings may still be active."
       return 1
     fi
+    if ! sync_lactd_for_profile "$DEFAULT_PROFILE"; then
+      notify_failure "profile-restore" "Gaming GPU control failed to stop" "GPU tuning may still be active."
+      return 1
+    fi
     refresh_window_captures
     return
   fi
@@ -314,19 +338,27 @@ apply_effective_state() {
 
   pause_background_helpers
   if [[ "$desired" == "$GAMING_PROFILE" ]]; then
-      set_power_profile performance
-      if ! apply_hypr_gaming_overlay; then
-        notify_apply_failure "Gaming profile failed"
-        return 1
-      fi
+    set_power_profile performance
+    if ! apply_hypr_gaming_overlay; then
+      notify_apply_failure "Gaming profile failed"
+      return 1
+    fi
+    if ! sync_lactd_for_profile "$GAMING_PROFILE"; then
+      notify_apply_failure "Gaming profile GPU control failed"
+      return 1
+    fi
     return
   fi
 
-    set_power_profile power-saver
-    if ! apply_hypr_powersave_overlay; then
-      notify_apply_failure "Power-save profile failed"
-      return 1
-    fi
+  set_power_profile power-saver
+  if ! apply_hypr_powersave_overlay; then
+    notify_apply_failure "Power-save profile failed"
+    return 1
+  fi
+  if ! sync_lactd_for_profile "$POWERSAVE_PROFILE"; then
+    notify_apply_failure "Power-save profile GPU control failed"
+    return 1
+  fi
 }
 
 set_profile_count() {

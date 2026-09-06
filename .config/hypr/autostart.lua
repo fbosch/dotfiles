@@ -1,6 +1,7 @@
 -- Autostart commands ported from autostart.conf.
 
 local paths = require("lib.paths")
+local startup_benchmark_ok, startup_benchmark = pcall(require, "benchmarks.startup-recorder")
 local system = require("lib.system")
 local host = system.hostname()
 
@@ -16,6 +17,33 @@ local function background(command)
 	return uwsm("b", command)
 end
 
+local function benchmark_is_armed()
+	if not startup_benchmark_ok then
+		return false
+	end
+
+	local ok, armed = pcall(startup_benchmark.armed)
+	return ok and armed
+end
+
+local function record_benchmark(command)
+	local ok, value = pcall(command)
+	if ok and type(value) == "string" then
+		pcall(hl.exec_cmd, value)
+	end
+end
+
+local benchmark_armed = benchmark_is_armed()
+local ags_command = "~/.config/ags/start-daemons.sh"
+if benchmark_armed then
+	local ok, value = pcall(startup_benchmark.wrap_ags_command, ags_command)
+	if ok and type(value) == "string" then
+		ags_command = value
+	else
+		benchmark_armed = false
+	end
+end
+
 local commands = {
 	session("atuin daemon start"),
 	background("foot --server"),
@@ -28,7 +56,7 @@ local commands = {
 	session("hyprpaper"),
 	session("waybar"),
 	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
-	session("~/.config/ags/start-daemons.sh"),
+	session(ags_command),
 	background(paths.runtime_script("desktop/night-light.sh") .. " daemon"),
 	-- Session-scoped because it coordinates Waybar, AGS, SwayNC, and PiP.
 	session(paths.runtime_script("desktop/waybar-monitor.sh")),
@@ -45,6 +73,17 @@ local function run_commands()
 	end
 end
 
-hl.on("hyprland.start", function()
-	run_commands()
-end)
+if benchmark_armed then
+	hl.on("hyprland.start", function()
+		record_benchmark(startup_benchmark.begin)
+		run_commands()
+	end)
+
+	hl.on("layer.opened", function(layer)
+		if layer and layer.namespace == "waybar" then
+			record_benchmark(startup_benchmark.mark_waybar_layer_mapped)
+		end
+	end)
+else
+	hl.on("hyprland.start", run_commands)
+end

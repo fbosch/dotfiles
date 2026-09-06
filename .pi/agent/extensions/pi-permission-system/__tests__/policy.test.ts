@@ -3,8 +3,6 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canAutoApproveInYolo } from "../../yolo";
-
 type PermissionState = "allow" | "deny" | "ask";
 
 type PermissionCheck = {
@@ -164,7 +162,7 @@ type AuthorizerChainModule = {
 };
 
 type DelegationEnvelopeModule = {
-  encloseInDelegationEnvelope(authorize: ChainAuthorizer): ChainAuthorizer;
+  encloseInDelegationEnvelope(name: string, authorize: ChainAuthorizer): ChainAuthorizer;
 };
 
 type PermissionModules = {
@@ -554,7 +552,6 @@ describe("pi-permission-system policy", () => {
       "PATH=./audit-bin git status",
     ]) {
       expect((await checkBash(engine, command)).state, command).toBe("ask");
-      expect(await canAutoApproveInYolo({ surface: "bash", command }), command).toBe(false);
     }
     for (const command of [
       "cat ./audit.txt",
@@ -857,7 +854,17 @@ describe("pi-permission-system policy", () => {
     expect(result.state).toBe("allow");
   });
 
-  test("/yolo preserves terminal review for destructive commands and path asks", async () => {
+  test("/yolo approves every ask without weakening explicit denials", async () => {
+    const engine = createEngine();
+    expect((await checkBash(engine, "command sudo id")).state).toBe("deny");
+    expect(
+      engine.resolver.resolve({
+        kind: "path-values",
+        surface: "path_write",
+        values: [join(repoRoot, "audit.env")],
+      }).state,
+    ).toBe("deny");
+
     const terminal: TerminalAuthorizer = {
       authorize: async () => ({
         approved: false,
@@ -865,54 +872,40 @@ describe("pi-permission-system policy", () => {
         decidedBy: { kind: "terminal" },
       }),
     };
-    const query = {};
-    const log = { review() {}, debug() {} };
-    const allow = modules.encloseInDelegationEnvelope(async (details) => ({
-      kind: (await canAutoApproveInYolo(details)) ? "allow" : "defer",
+    const allow = modules.encloseInDelegationEnvelope("session-yolo", async () => ({
+      kind: "allow",
     }));
     const chain = modules.composeAuthorizerChain(
       [{ name: "session-yolo", authorize: allow }],
       terminal,
-      query,
-      log,
+      {},
+      { review() {}, debug() {} },
     );
 
-    const ordinaryAsk = {
-      surface: "bash",
-      value: "git -C . reset --hard",
-      accessIntent: {
-        surface: "bash",
-        matchValues: ["git -C . reset --hard"],
-        boundaryValue: null,
-      },
-    };
-    const pathAsk = {
-      surface: "path_write",
-      value: "~/dotfiles/.pi/agent/settings.json",
-      accessIntent: {
-        surface: "path_write",
-        matchValues: ["/synthetic/settings.json"],
-        boundaryValue: "/synthetic/settings.json",
-      },
-    };
+    for (const ask of [
+      { surface: "bash", command: "git -C . reset --hard" },
+      { surface: "path_write", value: "~/dotfiles/.pi/agent/settings.json" },
+      { surface: "external_directory_read", value: "/synthetic/outside" },
+      { surface: "mcp__github" },
+      { surface: "worktrunk" },
+    ]) {
+      expect((await chain.authorize(ask)).approved, ask.surface).toBe(true);
+    }
 
-    expect((await chain.authorize(ordinaryAsk)).approved).toBe(false);
+    const ordinaryLink = modules.encloseInDelegationEnvelope("ordinary-link", async () => ({
+      kind: "allow",
+    }));
     expect(
-      (await chain.authorize({ surface: "bash", command: "git status --short" })).approved,
-    ).toBe(true);
-    expect((await chain.authorize(pathAsk)).approved).toBe(false);
-    const approvedByUser = modules.composeAuthorizerChain(
-      [{ name: "session-yolo", authorize: allow }],
-      {
-        authorize: async () => ({
-          approved: true,
-          state: "approved",
-          decidedBy: { kind: "terminal" },
-        }),
-      },
-      query,
-      log,
-    );
-    expect((await approvedByUser.authorize(ordinaryAsk)).approved).toBe(true);
+      (
+        await modules
+          .composeAuthorizerChain(
+            [{ name: "ordinary-link", authorize: ordinaryLink }],
+            terminal,
+            {},
+            { review() {}, debug() {} },
+          )
+          .authorize({ surface: "path_write" })
+      ).approved,
+    ).toBe(false);
   });
 });
