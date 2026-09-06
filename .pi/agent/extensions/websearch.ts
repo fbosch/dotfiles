@@ -4,6 +4,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { PROGRAMMATIC_READ_ONLY } from "../lib/tool-exposure";
 
 const EXA_URL = "https://mcp.exa.ai/mcp";
 const PARALLEL_URL = "https://search.parallel.ai/mcp";
@@ -277,6 +278,7 @@ function modelName(ctx: ExtensionContext): string | undefined {
 export default function webSearchExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof WebSearchParamsSchema, WebSearchDetails>({
+      ...PROGRAMMATIC_READ_ONLY,
       name: "websearch",
       label: "Web Search",
       description: `Search the current web using Exa or Parallel. Use ${new Date().getFullYear()} when searching for recent information.`,

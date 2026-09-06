@@ -5,6 +5,7 @@ import { isIP } from "node:net";
 import { Readable } from "node:stream";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 120;
@@ -834,6 +835,7 @@ export async function fetchWebContent(
 export default function webFetchExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof WebFetchParamsSchema, WebFetchDetails>({
+      ...PROGRAMMATIC_READ_ONLY,
       name: "webfetch",
       label: "Web Fetch",
       description:

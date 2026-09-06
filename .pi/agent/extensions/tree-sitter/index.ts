@@ -35,6 +35,7 @@ import {
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { Tree, Node as TSNode } from "web-tree-sitter";
+import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 import { BALANCE_RULES, checkDelimiterBalance } from "./src/delimiter.js";
 import {
   describePrefixLeftover,
@@ -495,6 +496,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── list_symbols ─────────────────────────────────────────────────────
   pi.registerTool({
+    ...PROGRAMMATIC_READ_ONLY,
     name: "list_symbols",
     label: "List Symbols",
     description:
@@ -557,6 +559,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── find_definition ──────────────────────────────────────────────────
   pi.registerTool({
+    ...PROGRAMMATIC_READ_ONLY,
     name: "find_definition",
     label: "Find Definition",
     description:
@@ -605,6 +608,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── find_callers ─────────────────────────────────────────────────────
   pi.registerTool({
+    ...PROGRAMMATIC_READ_ONLY,
     name: "find_callers",
     label: "Find Callers",
     description:
@@ -693,6 +697,7 @@ export default async function (pi: ExtensionAPI) {
     name: Type.String({ description: "Name of the symbol to retrieve" }),
   });
   pi.registerTool<typeof getSymbolBodyParameters, SymbolBodyDetails>({
+    ...PROGRAMMATIC_READ_ONLY,
     name: "get_symbol_body",
     label: "Get Symbol Body",
     description:
@@ -778,6 +783,7 @@ export default async function (pi: ExtensionAPI) {
 
   // ── find_callees ─────────────────────────────────────────────────────
   pi.registerTool({
+    ...PROGRAMMATIC_READ_ONLY,
     name: "find_callees",
     label: "Find Callees",
     description:

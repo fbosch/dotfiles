@@ -27,7 +27,7 @@ interface PersistedYoloMode {
 
 type SessionYoloRegistrationState = "not_ready" | "registering" | "registered" | "failed";
 type SessionYoloVerdict = { kind: "allow" } | { kind: "defer" };
-type SessionYoloAuthorizer = (...args: never[]) => Promise<SessionYoloVerdict>;
+type SessionYoloAuthorizer = (details: unknown) => Promise<SessionYoloVerdict>;
 
 interface SessionYoloPermissions {
   registerAuthorizer(name: string, authorize: SessionYoloAuthorizer): () => void;
@@ -104,9 +104,45 @@ async function registerSessionYoloAuthorizer(
     throw new Error(`Permission service is unavailable for session '${sessionId}'.`);
   }
 
-  return permissions.registerAuthorizer(SESSION_YOLO_AUTHORIZER, async () =>
-    effectiveEnabled() ? { kind: "allow" } : { kind: "defer" },
-  );
+  return permissions.registerAuthorizer(SESSION_YOLO_AUTHORIZER, async (details) => {
+    if (!effectiveEnabled()) return { kind: "defer" };
+    const allowed = await canAutoApproveInYolo(details);
+    return effectiveEnabled() && allowed ? { kind: "allow" } : { kind: "defer" };
+  });
+}
+
+export async function canAutoApproveInYolo(details: unknown): Promise<boolean> {
+  if (!isRecord(details)) return false;
+  const intent = isRecord(details.accessIntent) ? details.accessIntent : undefined;
+  const surface = intent?.surface ?? details.surface ?? details.toolName;
+  if (typeof surface !== "string") return false;
+  if (/^(?:path|external_directory|mcp)(?:$|[_:])/.test(surface) || surface === "worktrunk")
+    return false;
+  if (surface !== "bash") return details.command === undefined;
+
+  const commands = [
+    details.command,
+    details.value,
+    ...(Array.isArray(intent?.matchValues) ? intent.matchValues : []),
+  ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+  if (commands.length === 0) return false;
+  try {
+    const module = (await import(
+      new URL(
+        "../npm/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts",
+        import.meta.url,
+      ).href
+    )) as {
+      requiresBashReview(command: string): Promise<boolean>;
+    };
+    for (const command of new Set(commands)) {
+      if (await module.requiresBashReview(command)) return false;
+    }
+    return true;
+  } catch {
+    // A missing patch or parser failure must keep the confirmation prompt.
+    return false;
+  }
 }
 
 function unavailableEnableMessage(registrationState: SessionYoloRegistrationState): string {
@@ -215,7 +251,7 @@ export function registerYoloCommand(pi: ExtensionAPI): void {
         publishEffectiveYoloState(pi, ctx, isEffective());
         ctx.ui.notify(
           requestedEnabled
-            ? "Session YOLO mode enabled. Ordinary ask-state permission checks and MCP tool approvals are auto-approved. Path-sensitive asks and explicit denies still block."
+            ? "Session YOLO mode enabled. Low-risk permission prompts are auto-approved. Destructive or uncertain shell commands, MCP requests, worktree operations, and protected paths still require approval. Explicit denies still block."
             : "Session YOLO mode disabled. Permission checks and MCP tool approvals prompt when required.",
           requestedEnabled ? "warning" : "info",
         );

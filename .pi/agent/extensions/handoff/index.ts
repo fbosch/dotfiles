@@ -6,6 +6,7 @@ import {
   type ExtensionCommandContext,
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
+import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 import { resolveFastModelRequest } from "../openai-capabilities";
 import {
   buildHandoffDraft,
@@ -251,6 +252,7 @@ export function createHandoffExtension(
 
     pi.registerTool(
       defineTool<typeof ReadSessionParameters, { code: string }>({
+        ...PROGRAMMATIC_READ_ONLY,
         name: "read_session",
         label: "Read Session",
         description:

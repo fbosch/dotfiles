@@ -49,6 +49,16 @@
       "~/.local/share/opencode/auth.json": "deny"
     },
     "path_write": {
+      "*/.git": "ask",
+      "*/.git/*": "ask",
+      "*/.pi/agent/patches/*": "ask",
+      "*/node_modules/@gotgenes/pi-permission-system/*": "ask",
+      "/dev/sd*": "deny",
+      "/dev/nvme*": "deny",
+      "/dev/vd*": "deny",
+      "/dev/xvd*": "deny",
+      "/dev/mmcblk*": "deny",
+      "/dev/disk*": "deny",
       "*/.pi/agent/extensions/pi-permission-system/config.json": "ask",
       "*/.pi/extensions/pi-permission-system/config.json": "ask",
       "*/.pi/agent/settings.json": "ask",
@@ -181,10 +191,29 @@
       "git worktree list *": "allow",
       "git worktree prune --dry-run": "allow",
       "git clean -nd": "allow",
+      "sudo": "deny",
       "sudo *": "deny",
+      "doas": "deny",
       "doas *": "deny",
+      "pkexec": "deny",
       "pkexec *": "deny",
-      "su *": "deny"
+      "su": "deny",
+      "su *": "deny",
+      "mkfs*": "deny",
+      "mke2fs*": "deny",
+      "newfs*": "deny",
+      "wipefs*": "deny",
+      "shred*": "deny",
+      "dd *of=/dev/*": "deny",
+      "shutdown*": "deny",
+      "reboot*": "deny",
+      "poweroff*": "deny",
+      "halt*": "deny",
+      "systemctl reboot*": "deny",
+      "systemctl poweroff*": "deny",
+      "systemctl halt*": "deny",
+      "systemctl kexec*": "deny",
+      "systemctl soft-reboot*": "deny"
     },
     "skill": "allow",
     "external_directory_read": {
@@ -213,6 +242,9 @@
       "*": "allow"
     },
     "figma_get_node_metadata": {
+      "*": "allow"
+    },
+    "figma_parse_url": {
       "*": "allow"
     }
   }

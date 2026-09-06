@@ -40,6 +40,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { globalExtensionConfigPath, readJsonConfig } from "../../lib/extension-config";
+import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 
 const COMMAND_TIMEOUT_MS = 60_000;
 const EDIT_COMMAND_TIMEOUT_MS = 10_000;
@@ -1384,6 +1385,7 @@ export function registerDeltaExtension(
 
   pi.registerTool(
     defineTool<typeof GitDiffParameters, DeltaDetails, GitDiffRenderState>({
+      ...PROGRAMMATIC_READ_ONLY,
       name: "git_diff",
       label: "Delta Git diff",
       description:

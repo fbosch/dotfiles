@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { canAutoApproveInYolo } from "../../yolo";
 
 type PermissionState = "allow" | "deny" | "ask";
 
@@ -411,9 +412,133 @@ describe("pi-permission-system policy", () => {
   test("keeps privileged shell commands explicitly denied", async () => {
     const engine = createEngine();
 
-    for (const command of ["sudo id", "doas id", "pkexec id", "su root"]) {
+    for (const command of [
+      "sudo id",
+      "doas id",
+      "pkexec id",
+      "su root",
+      "sudo",
+      "su",
+      "/run/wrappers/bin/sudo id",
+      "command sudo id",
+      "env sudo id",
+      "env timeout 5 sudo id",
+      "busybox su root",
+      "s\\udo id",
+      "s'u'do id",
+      '"sudo" id',
+      "exec -a audit /usr/bin/sudo id",
+      "find . -exec sudo id \\;",
+      "printf ok; /usr/bin/su root",
+    ]) {
       expect((await checkBash(engine, command)).state, command).toBe("deny");
     }
+  });
+
+  test("denies disk destruction and power management through command aliases", async () => {
+    const engine = createEngine();
+    for (const command of [
+      "mkfs.ext4 /dev/sdX",
+      "command /sbin/mkfs.ext4 /dev/sdX",
+      "env wipefs -a /dev/sdX",
+      "shred ./audit.txt",
+      "dd if=/dev/zero of=/dev/sdX",
+      "shutdown -h now",
+      "env /sbin/reboot",
+      "poweroff",
+      "systemctl --user reboot",
+      "command systemctl --host audit poweroff",
+    ]) {
+      expect((await checkBash(engine, command)).state, command).toBe("deny");
+    }
+    expect((await checkBash(engine, "dd if=./audit.in of=./audit.out")).state).toBe("ask");
+  });
+
+  test("requires review for shell expansion and recursive content reads", async () => {
+    const engine = createEngine();
+    for (const command of [
+      "cat ./audit.en*",
+      "cat ./audit.[e]nv",
+      "cat ./audit.e\\nv",
+      `cat "\${AUDIT_SECRET_PATH}"`,
+      "cat ./audit.{env,txt}",
+      "grep -R . .",
+      "grep --recurs . .",
+      "grep -drecurse . .",
+      "grep --directories=recurse . .",
+      "env grep -rn . .",
+      "printf x > ./audit.en*",
+      "cat < ./audit.en*",
+      "PATH=./audit-bin git status",
+    ]) {
+      expect((await checkBash(engine, command)).state, command).toBe("ask");
+      expect(await canAutoApproveInYolo({ surface: "bash", command }), command).toBe(false);
+    }
+    for (const command of [
+      "cat ./audit.txt",
+      "grep 'a.*b' ./audit.txt",
+      "command -v sudo",
+      "printf '%s' 'sudo id'",
+    ]) {
+      expect((await checkBash(engine, command)).state, command).toBe("allow");
+    }
+    const direct = "cat ./audit.env";
+    const program = await modules.BashProgram.parse(direct, engine.normalizer);
+    expect(
+      modules.describeBashPathGate(
+        toolContext("bash", { command: direct }),
+        program,
+        engine.resolver,
+        engine.normalizer,
+      )?.preCheck?.state,
+    ).toBe("deny");
+  });
+
+  test("broad session approvals cannot skip mandatory shell review or configured denies", async () => {
+    const engine = createEngine();
+    engine.resolver = new modules.PermissionResolver(engine.manager, {
+      getRuleset: () => [
+        { surface: "bash", pattern: "*", action: "allow", origin: "session", layer: "session" },
+      ],
+    });
+    expect((await checkBash(engine, "pwd")).state).toBe("allow");
+    for (const command of ["cat ./audit.en*", "rm -rf .", "git reset --hard"]) {
+      expect((await checkBash(engine, command)).state, command).toBe("ask");
+    }
+    expect((await checkBash(engine, "command sudo id")).state).toBe("deny");
+    const grantedPaths = new modules.PermissionResolver(engine.manager, {
+      getRuleset: () => [
+        {
+          surface: "path_write",
+          pattern: "*",
+          action: "allow",
+          origin: "session",
+          layer: "session",
+        },
+      ],
+    });
+    expect(
+      grantedPaths.resolve({
+        kind: "path-values",
+        surface: "path_write",
+        values: [join(repoRoot, "audit.env")],
+      }).state,
+    ).toBe("deny");
+  });
+
+  test("protects Git metadata and raw device writes without restricting ordinary edits", () => {
+    const engine = createEngine();
+    for (const path of [
+      ".git/config",
+      ".git/hooks/pre-commit",
+      ".pi/agent/patches/example.patch",
+    ]) {
+      expect(pathGate(engine, "write", path)?.preCheck?.state, path).toBe("ask");
+    }
+    for (const path of ["/dev/sdX", "/dev/nvme0n1", "/dev/disk/by-id/audit"]) {
+      expect(pathGate(engine, "write", path)?.preCheck?.state, path).toBe("deny");
+    }
+    expect(pathGate(engine, "write", "src/audit.ts")).toBeNull();
   });
 
   test("denies credential paths through resolver path-values intents", () => {
@@ -650,7 +775,7 @@ describe("pi-permission-system policy", () => {
     expect(result.state).toBe("allow");
   });
 
-  test("/yolo can approve ordinary asks but the delegation envelope protects path asks", async () => {
+  test("/yolo preserves terminal review for destructive commands and path asks", async () => {
     const terminal: TerminalAuthorizer = {
       authorize: async () => ({
         approved: false,
@@ -660,8 +785,8 @@ describe("pi-permission-system policy", () => {
     };
     const query = {};
     const log = { review() {}, debug() {} };
-    const allow = modules.encloseInDelegationEnvelope(async () => ({
-      kind: "allow",
+    const allow = modules.encloseInDelegationEnvelope(async (details) => ({
+      kind: (await canAutoApproveInYolo(details)) ? "allow" : "defer",
     }));
     const chain = modules.composeAuthorizerChain(
       [{ name: "session-yolo", authorize: allow }],
@@ -689,7 +814,23 @@ describe("pi-permission-system policy", () => {
       },
     };
 
-    expect((await chain.authorize(ordinaryAsk)).approved).toBe(true);
+    expect((await chain.authorize(ordinaryAsk)).approved).toBe(false);
+    expect(
+      (await chain.authorize({ surface: "bash", command: "git status --short" })).approved,
+    ).toBe(true);
     expect((await chain.authorize(pathAsk)).approved).toBe(false);
+    const approvedByUser = modules.composeAuthorizerChain(
+      [{ name: "session-yolo", authorize: allow }],
+      {
+        authorize: async () => ({
+          approved: true,
+          state: "approved",
+          decidedBy: { kind: "terminal" },
+        }),
+      },
+      query,
+      log,
+    );
+    expect((await approvedByUser.authorize(ordinaryAsk)).approved).toBe(true);
   });
 });

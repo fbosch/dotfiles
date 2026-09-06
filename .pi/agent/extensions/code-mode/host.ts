@@ -1,6 +1,8 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 
 const MAX_FRAME_BYTES = 64 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_BYTES = 12 * 1024 * 1024;
+const DEFAULT_MAX_OUTPUT_ITEMS = 128;
 const STDERR_LIMIT_BYTES = 8 * 1024;
 
 interface ToolSourceInfo {
@@ -16,6 +18,7 @@ export interface CodeModeTool {
   description: string;
   inputSchema: unknown;
   sourceInfo: ToolSourceInfo;
+  registrationId: string;
 }
 
 export interface NestedToolValue {
@@ -46,6 +49,8 @@ export interface CodeModeExecutionOptions {
   hostCommand?: string;
   yieldTimeMs?: number;
   maxOutputTokens?: number;
+  maxOutputBytes?: number;
+  maxOutputItems?: number;
   maxNestedToolCalls?: number;
   invokeTool: (tool: CodeModeTool, input: unknown, signal: AbortSignal) => Promise<NestedToolValue>;
   onNotification?: (text: string) => void;
@@ -251,8 +256,11 @@ export async function executeCodeMode(
   const tools = new Map(options.tools.map((tool) => [tool.name, tool]));
   const delegateControllers = new Map<number, AbortController>();
   const maxNestedToolCalls = options.maxNestedToolCalls ?? 64;
+  const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const maxOutputItems = options.maxOutputItems ?? DEFAULT_MAX_OUTPUT_ITEMS;
   const yieldTimeMs = options.yieldTimeMs ?? 1_000;
   let nestedToolCalls = 0;
+  let outputBytes = 0;
   let terminate = false;
   let requestId = 0;
   let delegateQueue = Promise.resolve();
@@ -328,18 +336,32 @@ export async function executeCodeMode(
       });
   };
 
-  const nextProtocolMessage = async (signal: AbortSignal): Promise<Record<string, unknown>> => {
+  const nextProtocolMessage = async (
+    signal: AbortSignal,
+    allowDelegates: boolean,
+  ): Promise<Record<string, unknown>> => {
     for (;;) {
       const message = objectValue(await host.next(signal), "host message");
       if (message.type === "delegate/request") {
+        if (!allowDelegates) {
+          throw new Error("Code Mode host requested a tool outside an active execution.");
+        }
         handleDelegate(message);
         continue;
       }
       if (message.type === "delegate/cancel") {
+        if (!allowDelegates) {
+          throw new Error("Code Mode host cancelled a tool outside an active execution.");
+        }
         if (typeof message.id === "number") delegateControllers.get(message.id)?.abort();
         continue;
       }
-      if (message.type === "cell/closed") continue;
+      if (message.type === "cell/closed") {
+        if (!allowDelegates) {
+          throw new Error("Code Mode host closed a cell outside an active execution.");
+        }
+        continue;
+      }
       return message;
     }
   };
@@ -348,11 +370,12 @@ export async function executeCodeMode(
     request: Record<string, unknown>,
     expectedType: string,
     signal = options.signal,
+    allowDelegates = false,
   ): Promise<Record<string, unknown>> => {
     const id = ++requestId;
     await host.send({ type: "operation/request", id, request });
     for (;;) {
-      const message = await nextProtocolMessage(signal);
+      const message = await nextProtocolMessage(signal, allowDelegates);
       if (message.type !== "operation/response" || message.id !== id) {
         throw new Error(`Code Mode host returned an unexpected ${String(message.type)} message.`);
       }
@@ -367,7 +390,7 @@ export async function executeCodeMode(
       requiredCapabilities: [],
       optionalCapabilities: [],
     });
-    const hello = await nextProtocolMessage(options.signal);
+    const hello = objectValue(await host.next(options.signal), "connection response");
     if (hello.type === "connection/rejected") {
       throw new Error(
         `Code Mode host rejected protocol version 1: ${JSON.stringify(hello.reason)}`,
@@ -407,7 +430,7 @@ export async function executeCodeMode(
     let started = false;
     let runtime: RuntimeResponse | undefined;
     while (!started || !runtime) {
-      const message = await nextProtocolMessage(options.signal);
+      const message = await nextProtocolMessage(options.signal, started);
       if (message.type === "operation/response" && message.id === executeId) {
         responseType(unwrapResult(message.result, "execution/started"), "execution/started");
         started = true;
@@ -420,7 +443,22 @@ export async function executeCodeMode(
       throw new Error(`Code Mode host returned an unexpected ${String(message.type)} message.`);
     }
 
-    const contentItems = [...runtime.contentItems];
+    const contentItems: CodeModeOutputItem[] = [];
+    const appendContentItems = (nextItems: readonly CodeModeOutputItem[]) => {
+      if (contentItems.length + nextItems.length > maxOutputItems) {
+        throw new Error(`Code Mode output exceeds ${maxOutputItems} items.`);
+      }
+      outputBytes += nextItems.reduce((total, item) => {
+        if (item.type === "input_text") return total + Buffer.byteLength(item.text ?? "");
+        if (item.type === "input_image") return total + Buffer.byteLength(item.image_url ?? "");
+        return total + Buffer.byteLength(item.audio_url ?? "");
+      }, 0);
+      if (outputBytes > maxOutputBytes) {
+        throw new Error(`Code Mode output exceeds ${maxOutputBytes} bytes.`);
+      }
+      contentItems.push(...nextItems);
+    };
+    appendContentItems(runtime.contentItems);
     let hostDurationNs = runtime.hostDurationNs;
     while (runtime.kind === "Yielded") {
       const response = await operation(
@@ -430,16 +468,30 @@ export async function executeCodeMode(
           request: { cell_id: runtime.cellId, yield_time_ms: yieldTimeMs },
         },
         "wait/completed",
+        options.signal,
+        true,
       );
       const outcome = objectValue(response.outcome, "wait outcome");
       const next = outcome.LiveCell ?? outcome.MissingCell;
       if (!next) throw new Error("Code Mode host returned an invalid wait outcome.");
       runtime = parseRuntimeResponse(next);
-      contentItems.push(...runtime.contentItems);
+      appendContentItems(runtime.contentItems);
       hostDurationNs += runtime.hostDurationNs;
     }
 
-    await delegateQueue;
+    options.signal.throwIfAborted();
+    await new Promise<void>((resolve, reject) => {
+      const onAbort = () =>
+        reject(
+          options.signal.reason instanceof Error
+            ? options.signal.reason
+            : new Error("Code Mode cancelled."),
+        );
+      options.signal.addEventListener("abort", onAbort, { once: true });
+      void delegateQueue.then(resolve, reject).finally(() => {
+        options.signal.removeEventListener("abort", onAbort);
+      });
+    });
     const errorText =
       runtime.kind === "Terminated" ? "Code Mode execution was terminated." : runtime.errorText;
     return {

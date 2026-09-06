@@ -13,6 +13,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
+import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 import type {
   DiagnosticVerdict,
   LspDiagnosticEvidence,
@@ -247,6 +248,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
 
     pi.registerTool(
       defineTool<typeof LspParameters, LspToolDetails>({
+        ...PROGRAMMATIC_READ_ONLY,
         name: "lsp",
         label: "Language Server",
         description:

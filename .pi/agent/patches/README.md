@@ -2,6 +2,7 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 
+- `@ff-labs+pi-fff+0.10.6.patch` marks the bounded find and grep tools for read-only programmatic dispatch.
 - `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration and direct TypeScript import resolution.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
@@ -14,6 +15,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
 2. Install the pinned extensions:
 
    ```sh
+   pi install npm:@ff-labs/pi-fff@0.10.6
    pi install npm:@gotgenes/pi-permission-system@31.1.1
    pi install npm:pi-worktrunk@0.8.0
    ```

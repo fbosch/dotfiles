@@ -1,0 +1,8 @@
+diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/pi-fff/src/index.ts
+index 75d93cf..2052871 100644
+--- a/node_modules/@ff-labs/pi-fff/src/index.ts
++++ b/node_modules/@ff-labs/pi-fff/src/index.ts
+@@ -855,0 +856 @@ export default function fffExtension(pi: ExtensionAPI) {
++    ...{ programmatic: "read-only" as const },
+@@ -1045,0 +1047 @@ export default function fffExtension(pi: ExtensionAPI) {
++    ...{ programmatic: "read-only" as const },

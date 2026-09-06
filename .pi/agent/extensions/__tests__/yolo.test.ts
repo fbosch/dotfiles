@@ -20,7 +20,7 @@ type EventHandler = (value: unknown) => void;
 type PersistedEntry = { type: "custom"; customType: string; data: unknown };
 type EmittedEvent = { name: string; value: unknown };
 type AuthorizerVerdict = { kind: "allow" | "defer" };
-type Authorizer = (...args: never[]) => Promise<AuthorizerVerdict>;
+type Authorizer = (details: unknown) => Promise<AuthorizerVerdict>;
 
 interface YoloHarness {
   commandName: string;
@@ -40,7 +40,7 @@ interface PublishedPermissionService {
   registrations(): number;
   registeredName(): string;
   disposed(): boolean;
-  verdict(): Promise<AuthorizerVerdict>;
+  verdict(details?: unknown): Promise<AuthorizerVerdict>;
 }
 
 function createContext(
@@ -154,9 +154,9 @@ async function publishPermissionService(sessionId: string): Promise<PublishedPer
     registrations: () => registrationCount,
     registeredName: () => registeredName,
     disposed: () => isDisposed,
-    async verdict() {
+    async verdict(details: unknown = { surface: "synthetic-tool" }) {
       if (authorize === undefined) throw new Error("YOLO authorizer was not registered");
-      return authorize();
+      return authorize(details);
     },
   };
 }
@@ -247,8 +247,64 @@ describe("session YOLO mode", () => {
     ]);
     expect(notifications.map(([message]) => message)).toEqual([
       "Session YOLO mode disabled. Permission checks and MCP tool approvals prompt when required.",
-      "Session YOLO mode enabled. Ordinary ask-state permission checks and MCP tool approvals are auto-approved. Path-sensitive asks and explicit denies still block.",
+      "Session YOLO mode enabled. Low-risk permission prompts are auto-approved. Destructive or uncertain shell commands, MCP requests, worktree operations, and protected paths still require approval. Explicit denies still block.",
     ]);
+  });
+
+  test("restored YOLO defers destructive, opaque, path, MCP, and worktree requests", async () => {
+    const sessionId = "yolo-shell-review";
+    const harness = createHarness([
+      { type: "custom", customType: "yolo-mode", data: { sessionId, enabled: true } },
+    ]);
+    const permissions = await publishPermissionService(sessionId);
+    harness.sessionStart({}, createContext(sessionId, harness.entries, [], []));
+    harness.permissionsReady({ sessionId });
+    await settleRegistration();
+    for (const command of [
+      "rm -rf .",
+      "git -C . reset --hard",
+      "git push --force",
+      "git branch -D audit",
+      "git clean -fdx",
+      "wt remove audit",
+      "find . -delete",
+      "cat ./audit.en*",
+      "grep -R . .",
+      "bash -c 'rm -rf .'",
+      "python -c 'pass'",
+      "gh api -X DELETE repos/example/audit",
+      "aws s3 rm s3://example/audit",
+      "command sudo id",
+      "git branch audit-new-branch",
+      "unknown-shell-command --audit",
+      "./audit-script",
+      "export PATH=./audit-bin; git status",
+      "builtin eval 'sudo id'",
+    ]) {
+      expect(await permissions.verdict({ surface: "bash", command }), command).toEqual({
+        kind: "defer",
+      });
+    }
+    for (const surface of [
+      "path_write",
+      "external_directory_read",
+      "mcp",
+      "mcp__github",
+      "worktrunk",
+    ]) {
+      expect(await permissions.verdict({ surface }), surface).toEqual({ kind: "defer" });
+    }
+    expect(await permissions.verdict({ surface: "bash" })).toEqual({ kind: "defer" });
+    expect(
+      await permissions.verdict({
+        surface: "bash",
+        command: "git status",
+        accessIntent: { surface: "bash", matchValues: ["rm -rf ."] },
+      }),
+    ).toEqual({ kind: "defer" });
+    expect(await permissions.verdict({ surface: "bash", command: "git status --short" })).toEqual({
+      kind: "allow",
+    });
   });
 
   test("does not inherit requested state from another session", async () => {

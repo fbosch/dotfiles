@@ -26,6 +26,11 @@ interface PatchedPackage {
 
 const patchedPackages = [
   {
+    name: "@ff-labs/pi-fff",
+    version: "0.10.6",
+    patchFilename: "@ff-labs+pi-fff+0.10.6.patch",
+  },
+  {
     name: "@gotgenes/pi-permission-system",
     version: "31.1.1",
     patchFilename: "@gotgenes+pi-permission-system+31.1.1.patch",
