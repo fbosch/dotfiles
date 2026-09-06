@@ -221,7 +221,8 @@
       "*": "allow"
     },
     "external_directory": {
-      "/nix/store/4sy4w708kkyywcmmwdjrl90n5gcjrrwp-pi-0.85.0/libexec/*": "allow"
+      "/nix/store/4sy4w708kkyywcmmwdjrl90n5gcjrrwp-pi-0.85.0/libexec/*": "allow",
+      "/home/fbb/*": "allow"
     }
   }
 }

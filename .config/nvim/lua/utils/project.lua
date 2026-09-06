@@ -140,7 +140,7 @@ function M.resolve_mprocs_args()
 
 	return fn.classify(project_types, {
 		{
-			{ "typescript", "javascript", "react" },
+			{ "typescript", "javascript", "react", "vite" },
 			"--npm",
 		},
 	}) or ""
