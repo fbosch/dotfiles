@@ -4,6 +4,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 export const PLAN_MODE_STATUS = "Plan";
 
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
+const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
 
 export type ModeName = "build" | "plan";
@@ -172,6 +173,7 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   let enabled = false;
   let childSession = false;
   let selectingModeModel = false;
+  let switchingMode = false;
   let toolsBeforePlanMode: string[] | undefined;
   const configuredModeModels: Record<ModeName, string> = {
     build: MODES.build.model,
@@ -245,32 +247,48 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
   async function toggle(ctx: ExtensionContext): Promise<void> {
     if (childSession || isSubagentSession(ctx)) return;
+    if (switchingMode) return;
 
     if (ctx.isIdle() === false) {
       ctx.ui.notify("Wait for the current response to finish before switching modes.", "warning");
       return;
     }
 
-    refreshModeModels();
+    switchingMode = true;
+    try {
+      refreshModeModels();
 
-    if (enabled) {
-      if ((await selectModeModel("build", ctx)) === false) return;
+      if (enabled) {
+        if ((await selectModeModel("build", ctx)) === false) return;
 
-      pi.setActiveTools(toolsBeforePlanMode ?? pi.getActiveTools());
-      toolsBeforePlanMode = undefined;
-      enabled = false;
+        pi.setActiveTools(toolsBeforePlanMode ?? pi.getActiveTools());
+        toolsBeforePlanMode = undefined;
+        enabled = false;
+        updateStatus(ctx);
+        pi.setThinkingLevel(modeThinkingLevels.build);
+        // Queue the handoff for the next user turn instead of triggering an unsolicited response.
+        pi.sendMessage(
+          {
+            customType: MODE_TRANSITION_MESSAGE_TYPE,
+            content:
+              "Plan mode is now disabled. You are in build mode and the tools active before plan mode have been restored. Implement the user's request instead of producing another plan.",
+            display: false,
+          },
+          { deliverAs: "nextTurn" },
+        );
+        return;
+      }
+
+      if ((await selectModeModel("plan", ctx)) === false) return;
+
+      toolsBeforePlanMode = pi.getActiveTools();
+      pi.setActiveTools(toolsBeforePlanMode.filter((name) => MODES.plan.allowedTools.has(name)));
+      enabled = true;
       updateStatus(ctx);
-      pi.setThinkingLevel(modeThinkingLevels.build);
-      return;
+      pi.setThinkingLevel(modeThinkingLevels.plan);
+    } finally {
+      switchingMode = false;
     }
-
-    if ((await selectModeModel("plan", ctx)) === false) return;
-
-    toolsBeforePlanMode = pi.getActiveTools();
-    pi.setActiveTools(toolsBeforePlanMode.filter((name) => MODES.plan.allowedTools.has(name)));
-    enabled = true;
-    updateStatus(ctx);
-    pi.setThinkingLevel(modeThinkingLevels.plan);
   }
 
   pi.on("session_start", async (_event, ctx) => {

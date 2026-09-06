@@ -3,6 +3,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import planMode, { PLAN_MODE_STATUS } from "../plan-mode";
 
 type ToggleHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
+type ShortcutHandler = (ctx: ExtensionContext) => Promise<void>;
 
 const buildModel = { provider: "openai-codex", id: "gpt-5.6-luna-fast" };
 const planModel = { provider: "openai-codex", id: "gpt-5.6-sol" };
@@ -27,15 +28,21 @@ function createHarness(options: {
   entries?: PersistedEntry[];
   mode?: ExtensionContext["mode"];
   parentSession?: string;
+  setModel?: (model: unknown) => Promise<boolean>;
   systemPrompt?: string;
 }) {
   let activeTools = [...options.activeTools];
   let idle = options.idle ?? true;
   let toggle: ToggleHandler | undefined;
+  let shortcut: ShortcutHandler | undefined;
   const handlers = new Map<string, EventHandler>();
   const entries = options.entries ?? [];
   const sessionId = options.sessionId ?? "session-1";
   const selectedModels: unknown[] = [];
+  const sentMessages: Array<{
+    message: { customType: string; content: string; display: boolean };
+    options: { deliverAs?: string; triggerTurn?: boolean } | undefined;
+  }> = [];
   const thinkingLevels: string[] = [];
   const activeToolSets: string[][] = [];
   const statuses: Array<[string, string | undefined]> = [];
@@ -52,14 +59,22 @@ function createHarness(options: {
     registerCommand: (name: string, command: { handler: ToggleHandler }) => {
       if (name === "plan") toggle = command.handler;
     },
-    registerShortcut: () => undefined,
+    registerShortcut: (name: string, command: { handler: ShortcutHandler }) => {
+      if (name === "tab") shortcut = command.handler;
+    },
+    sendMessage: (
+      message: { customType: string; content: string; display: boolean },
+      sendOptions: { deliverAs?: string; triggerTurn?: boolean } | undefined,
+    ) => {
+      sentMessages.push({ message, options: sendOptions });
+    },
     setActiveTools: (tools: string[]) => {
       activeTools = [...tools];
       activeToolSets.push([...tools]);
     },
     setModel: async (model: unknown) => {
       selectedModels.push(model);
-      return true;
+      return options.setModel?.(model) ?? true;
     },
     setThinkingLevel: (level: string) => thinkingLevels.push(level),
   } as unknown as ExtensionAPI;
@@ -104,6 +119,7 @@ function createHarness(options: {
     entries,
     notifications,
     selectedModels,
+    sentMessages,
     setIdle(value: boolean) {
       idle = value;
     },
@@ -118,6 +134,10 @@ function createHarness(options: {
     },
     statuses,
     thinkingLevels,
+    async shortcut() {
+      if (shortcut === undefined) throw new Error("Tab shortcut was not registered");
+      await shortcut(ctx);
+    },
     async toggle() {
       if (toggle === undefined) throw new Error("Plan command was not registered");
       await toggle("", ctx);
@@ -211,6 +231,42 @@ describe("plan mode", () => {
     expect(harness.statuses).toEqual([
       ["plan-mode", PLAN_MODE_STATUS],
       ["plan-mode", undefined],
+    ]);
+  });
+
+  test("Tab toggles between plan and build mode", async () => {
+    const harness = createHarness({ activeTools: ["read", "write"] });
+
+    await harness.shortcut();
+    await harness.shortcut();
+
+    expect(harness.selectedModels).toEqual([planModel, buildModel]);
+    expect(harness.activeTools).toEqual(["read", "write"]);
+    expect(harness.statuses).toEqual([
+      ["plan-mode", PLAN_MODE_STATUS],
+      ["plan-mode", undefined],
+    ]);
+  });
+
+  test("queues build-mode context after leaving plan mode", async () => {
+    const harness = createHarness({ activeTools: ["read", "write"] });
+
+    await harness.toggle();
+    await harness.toggle();
+
+    expect(await harness.beforeAgentStart()).toEqual({
+      systemPrompt: expect.stringContaining("You are Pi's primary build agent."),
+    });
+    expect(harness.sentMessages).toEqual([
+      {
+        message: {
+          customType: "plan-mode-transition",
+          content:
+            "Plan mode is now disabled. You are in build mode and the tools active before plan mode have been restored. Implement the user's request instead of producing another plan.",
+          display: false,
+        },
+        options: { deliverAs: "nextTurn" },
+      },
     ]);
   });
 
@@ -330,6 +386,7 @@ describe("plan mode", () => {
     expect(harness.notifications).toEqual([
       ["Wait for the current response to finish before switching modes.", "warning"],
     ]);
+    expect(harness.sentMessages).toEqual([]);
 
     harness.setIdle(true);
     await harness.toggle();
@@ -341,5 +398,26 @@ describe("plan mode", () => {
       ["plan-mode", PLAN_MODE_STATUS],
       ["plan-mode", undefined],
     ]);
+  });
+
+  test("ignores a repeated toggle while model selection is pending", async () => {
+    let resolveModel!: (available: boolean) => void;
+    const modelSelection = new Promise<boolean>((resolve) => {
+      resolveModel = resolve;
+    });
+    const harness = createHarness({
+      activeTools: ["read", "write"],
+      setModel: async () => modelSelection,
+    });
+
+    const firstToggle = harness.shortcut();
+    await Promise.resolve();
+    const secondToggle = harness.shortcut();
+    resolveModel(true);
+    await Promise.all([firstToggle, secondToggle]);
+
+    expect(harness.selectedModels).toEqual([planModel]);
+    expect(harness.activeTools).toEqual(["read"]);
+    expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
   });
 });

@@ -114,6 +114,7 @@
     "ask_user_question": "allow",
     "todo": "allow",
     "just_tools": "allow",
+    "search_tools": "allow",
     "subagent": "allow",
     "get_subagent_result": "allow",
     "steer_subagent": "allow",

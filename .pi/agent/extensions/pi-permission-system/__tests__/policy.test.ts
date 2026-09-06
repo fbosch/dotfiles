@@ -313,6 +313,13 @@ describe("pi-permission-system policy", () => {
         input: { path: "src/example.ts", oldText: "before", newText: "after" },
       }).state,
     ).toBe("allow");
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "search_tools",
+        input: { query: "figma implementation" },
+      }).state,
+    ).toBe("allow");
 
     for (const command of [
       "set -o pipefail",
