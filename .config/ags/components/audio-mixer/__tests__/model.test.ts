@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import {
 	reconcileAudioSnapshot,
+	sliderPositionToVolume,
 	type AudioSnapshot,
+	volumeToSliderPosition,
 } from "../model";
 
 function snapshot(volume = 50): AudioSnapshot {
@@ -25,6 +27,20 @@ function snapshot(volume = 50): AudioSnapshot {
 		},
 	};
 }
+
+describe("volume slider mapping", () => {
+	test("gives lower volume values more slider space", () => {
+		expect(sliderPositionToVolume(0.5)).toBe(37.5);
+		expect(volumeToSliderPosition(37.5)).toBe(0.5);
+	});
+
+	test("keeps the slider endpoints stable", () => {
+		expect(sliderPositionToVolume(0)).toBe(0);
+		expect(sliderPositionToVolume(1)).toBe(150);
+		expect(volumeToSliderPosition(0)).toBe(0);
+		expect(volumeToSliderPosition(150)).toBe(1);
+	});
+});
 
 describe("reconcileAudioSnapshot", () => {
 	test("preserves active row wrappers when GTK rows can be reused", () => {

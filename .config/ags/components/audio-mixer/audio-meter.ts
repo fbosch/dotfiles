@@ -4,11 +4,12 @@ import tokens from "../../../../design-system/tokens.json";
 import {
 	clamp,
 	clampFloat,
-	maxVolume,
 	meterSegments,
+	sliderPositionToVolume,
 	type AudioBackend,
 	type AudioRow,
 	volumeLevelIcon,
+	volumeToSliderPosition,
 } from "./model";
 
 interface AudioMeter {
@@ -62,6 +63,7 @@ export function createAudioMeter(
 	registerScroll((delta) => update(volume + delta));
 	drawing.set_draw_func((_area, cr: any, width, height) => {
 		const visible = row.muted ? 0 : volume;
+		const visiblePosition = volumeToSliderPosition(visible);
 		const gap = 2;
 		const segmentHeight = 8;
 		const segmentY = Math.round((height - segmentHeight) / 2);
@@ -71,12 +73,15 @@ export function createAudioMeter(
 		);
 		for (let index = 0; index < meterSegments; index += 1) {
 			const x = index * (segmentWidth + gap);
-			const segmentStart = (index / meterSegments) * maxVolume;
-			const segmentEnd = ((index + 1) / meterSegments) * maxVolume;
+			const segmentStart = index / meterSegments;
+			const segmentEnd = (index + 1) / meterSegments;
 			const fillWidth =
 				Math.max(
 					0,
-					Math.min(1, (visible - segmentStart) / (segmentEnd - segmentStart)),
+					Math.min(
+						1,
+						(visiblePosition - segmentStart) / (segmentEnd - segmentStart),
+					),
 				) * segmentWidth;
 			cr.setSourceRGBA(1, 1, 1, 0.08);
 			roundedRect(cr, x, segmentY, segmentWidth, segmentHeight, 2);
@@ -89,7 +94,7 @@ export function createAudioMeter(
 		}
 		const thumbX = Math.max(
 			3,
-			Math.min(width - 3, (visible / maxVolume) * width),
+			Math.min(width - 3, visiblePosition * width),
 		);
 		cr.setSourceRGBA(0, 0, 0, 0.35);
 		roundedRect(cr, thumbX - 3, 3, 6, height - 6, 3);
@@ -143,7 +148,7 @@ function volumeFromX(
 	fallback: number,
 ): number {
 	const width = drawing.get_allocation().width;
-	return width > 0 ? (x / width) * maxVolume : fallback;
+	return width > 0 ? sliderPositionToVolume(x / width) : fallback;
 }
 
 function setSourceHex(cr: any, hex: string): void {

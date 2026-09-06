@@ -1,8 +1,14 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { accessSync, constants, realpathSync, statSync } from "node:fs";
+import { accessSync, constants, statSync } from "node:fs";
 import { delimiter, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  createBashTool,
+  type ExtensionAPI,
+  getAgentDir,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { appendCommandPrefix, providePiCommaBashPrefix } from "./integration";
 
 const STARTUP_TIMEOUT_MS = 1_000;
 const FORCE_KILL_DELAY_MS = 100;
@@ -158,19 +164,7 @@ export async function isCommaAvailable(
   });
 }
 
-// The local direnv wrapper delegates to createBashTool; its canonical source
-// path is the narrow provenance exception to the built-in-only policy.
-const DIRENV_EXTENSION_PATH = fileURLToPath(new URL("../direnv/index.ts", import.meta.url));
-
-function isDirenvLocalBashSource(path: string): boolean {
-  try {
-    return realpathSync(path) === realpathSync(DIRENV_EXTENSION_PATH);
-  } catch {
-    return false;
-  }
-}
-
-function isSupportedLocalBash(pi: ExtensionAPI): boolean {
+function hasBuiltInLocalBash(pi: ExtensionAPI): boolean {
   // Tool metadata is available only after Pi initializes the extension runtime.
   return (
     process.env.PI_CODING_AGENT === "true" &&
@@ -179,10 +173,8 @@ function isSupportedLocalBash(pi: ExtensionAPI): boolean {
       .some(
         (tool) =>
           tool.name === "bash" &&
-          ((tool.sourceInfo.source === "builtin" && tool.sourceInfo.path === "<builtin:bash>") ||
-            (tool.sourceInfo.source !== "builtin" &&
-              tool.sourceInfo.source !== "sdk" &&
-              isDirenvLocalBashSource(tool.sourceInfo.path))),
+          tool.sourceInfo.source === "builtin" &&
+          tool.sourceInfo.path === "<builtin:bash>",
       )
   );
 }
@@ -194,9 +186,27 @@ export default async function piCommaExtension(pi: ExtensionAPI): Promise<void> 
 
   const pickerPath = fileURLToPath(new URL("./ambiguous-picker.sh", import.meta.url));
   const setup = createSetupFragment({ commaPath, pickerPath });
+  const disposePrefixProvider = providePiCommaBashPrefix(pi, setup);
 
-  pi.on("tool_call", (event) => {
-    if (event.toolName !== "bash" || !isSupportedLocalBash(pi)) return;
-    event.input.command = `${setup}\n${event.input.command}`;
+  pi.on("session_start", (_event, ctx) => {
+    if (!hasBuiltInLocalBash(pi)) return;
+
+    const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+      projectTrusted: ctx.isProjectTrusted(),
+    });
+    const commandPrefix = appendCommandPrefix(settings.getShellCommandPrefix(), setup);
+    const shellPath = settings.getShellPath();
+    const bashTool = createBashTool(ctx.cwd, {
+      ...(commandPrefix === undefined ? {} : { commandPrefix }),
+      ...(shellPath === undefined ? {} : { shellPath }),
+    });
+
+    // Apply the setup after tool_call authorization while retaining Pi's local runner.
+    pi.registerTool({
+      ...bashTool,
+      execute: (id, params, signal, onUpdate) => bashTool.execute(id, params, signal, onUpdate),
+    });
   });
+
+  pi.on("session_shutdown", () => disposePrefixProvider());
 }

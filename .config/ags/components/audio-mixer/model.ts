@@ -41,6 +41,8 @@ export const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 export const maxVolume = 150;
 export const meterSegments = 12;
+// Give low-volume adjustments more physical slider travel without changing backend units.
+const volumeSliderExponent = 2;
 const volumeLevelIcons = [
 	"\uE992",
 	"\uE993",
@@ -119,6 +121,22 @@ export function clamp(value: number, max = maxVolume): number {
 
 export function clampFloat(value: number, max = maxVolume): number {
 	return Math.max(0, Math.min(max, value));
+}
+
+export function volumeToSliderPosition(
+	volume: number,
+	max = maxVolume,
+): number {
+	const normalized = clampFloat(volume, max) / max;
+	return Math.pow(normalized, 1 / volumeSliderExponent);
+}
+
+export function sliderPositionToVolume(
+	position: number,
+	max = maxVolume,
+): number {
+	const normalized = Math.max(0, Math.min(1, position));
+	return Math.pow(normalized, volumeSliderExponent) * max;
 }
 
 function asArray<T>(value: unknown): T[] {

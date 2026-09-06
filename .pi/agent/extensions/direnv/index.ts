@@ -4,6 +4,7 @@ import {
   getAgentDir,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { appendCommandPrefix, requestPiCommaBashPrefix } from "../pi-comma/integration";
 import {
   applyDirenvEnvironment,
   findProjectDirectory,
@@ -39,7 +40,10 @@ export default function direnvSessionEnvironment(pi: ExtensionAPI): void {
     const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
       projectTrusted: ctx.isProjectTrusted(),
     });
-    const commandPrefix = settings.getShellCommandPrefix();
+    const commandPrefix = appendCommandPrefix(
+      settings.getShellCommandPrefix(),
+      requestPiCommaBashPrefix(pi),
+    );
     const shellPath = settings.getShellPath();
     const bashTool = createBashTool(ctx.cwd, {
       ...(commandPrefix === undefined ? {} : { commandPrefix }),
