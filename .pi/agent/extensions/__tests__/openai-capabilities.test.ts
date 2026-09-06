@@ -87,11 +87,11 @@ describe("OpenAI capabilities", () => {
     );
   });
 
-  test("registers both Astra variants without adding priority routing to standard Astra", () => {
+  test("registers async tools only for both Astra variants without changing standard routing", () => {
     const harness = createCapabilitiesHarness();
     expect(harness.registrations).toEqual([
-      { provider: "openai-codex", model: "gpt-6-astra", asyncTools: true, steering: true },
-      { provider: "openai-codex", model: "gpt-6-astra-fast", asyncTools: true, steering: true },
+      { provider: "openai-codex", model: "gpt-6-astra", asyncTools: true, steering: false },
+      { provider: "openai-codex", model: "gpt-6-astra-fast", asyncTools: true, steering: false },
     ]);
     const standardPayload = { model: "gpt-6-astra", stream: true };
     expect(harness.emit("before_provider_request", { payload: standardPayload })).toBeUndefined();
@@ -127,7 +127,7 @@ describe("OpenAI capabilities", () => {
       { ui, model: { provider: "openai-codex", id: "gpt-6-astra-fast" } },
     );
     const warning = [
-      "Native async tools and mid-turn steering require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
+      "Native async tools require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
       "warning",
     ];
     expect(warnings).toEqual([warning]);

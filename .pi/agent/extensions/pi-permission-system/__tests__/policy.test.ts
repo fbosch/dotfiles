@@ -513,6 +513,36 @@ describe("pi-permission-system policy", () => {
     ).toBe("ask");
   });
 
+  test("allows direct Context7 tools for every Context7-enabled agent", () => {
+    const engine = createEngine();
+    for (const agentName of ["lookup", "research", "tutor"]) {
+      expect(
+        engine.manager.check({
+          kind: "tool",
+          surface: "mcp__context7",
+          input: {},
+          agentName,
+        }).state,
+        agentName,
+      ).toBe("allow");
+    }
+    expect(
+      engine.manager.check({
+        kind: "tool",
+        surface: "mcp__context7",
+        input: {},
+      }).state,
+    ).toBe("allow");
+  });
+
+  test("allows the shared tone file for reads without allowing writes", () => {
+    const engine = createEngine(join(repoRoot, "synthetic-unconfigured-project"));
+    const tonePath = "~/.config/fbb/TONE.md";
+
+    expect(externalDirectoryGate(engine, "read", tonePath)?.preCheck?.state).toBe("allow");
+    expect(externalDirectoryGate(engine, "write", tonePath)?.preCheck?.state).toBe("ask");
+  });
+
   test("asks for unregistered external access and allows /tmp reads and writes", () => {
     const engine = createEngine();
     const externalPath = "~/nixos/synthetic-fixture.txt";

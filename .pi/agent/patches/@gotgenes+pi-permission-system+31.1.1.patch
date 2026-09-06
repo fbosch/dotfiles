@@ -40,7 +40,7 @@ index f9f77a0..0cfdec8 100644
 @@ -75,6 +75,12 @@ interface PermissionsService {
    /** Whether every value under a tool's surface resolves to deny; use this to pre-filter a tool list. */
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
-
+ 
 +  /**
 +   * Register an absolute, literal directory that the built-in `read` tool may
 +   * access outside cwd without prompting. Returns a disposer.
@@ -53,7 +53,7 @@ index f9f77a0..0cfdec8 100644
 @@ -154,6 +160,23 @@ const usable = tools.filter((t) => !permissions.isToolFullyDenied(t, agentName))
  Rule ordering is honored (last-match-wins), so an exception written after a `deny` catch-all keeps the tool reachable while one written before it does not.
  It considers config-layer rules only; a runtime session approval does not change the answer.
-
+ 
 +#### `registerInfrastructureReadDirectory`
 +
 +Register an absolute, literal directory that Pi's built-in `read` tool may access outside the working directory without prompting.
@@ -72,7 +72,7 @@ index f9f77a0..0cfdec8 100644
 +Register again after `/reload` or session replacement.
 +
  #### `registerToolInputFormatter`
-
+ 
  Register a custom preview formatter for a specific tool name.
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
 index 17d1c09..be8feff 100644
@@ -81,7 +81,7 @@ index 17d1c09..be8feff 100644
 @@ -84,6 +84,18 @@ export class AccessPath {
      return this.canonical;
    }
-
+ 
 +  /**
 +   * Replace the canonical boundary with a tool-runtime-accurate value while
 +   * retaining the policy aliases already derived from the input.
@@ -97,6 +97,911 @@ index 17d1c09..be8feff 100644
    /**
     * Build an `AccessPath` for a tool-input or bash-token path, resolved against
     * `resolveBase` (the cd-folded effective directory; defaults to `cwd`).
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts
+index ab78538..79a8f13 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts
+@@ -406,6 +406,12 @@ export class ForwardedRequestServer implements InboxProcessor {
+         // The child records a subagent-scoped grant itself, so the width the
+         // human chose has to reach it (#813).
+         sessionGrantWidth: decision.sessionGrantWidth,
++        // A future-session approval is persisted by the requesting node after
++        // it relays this response, so its global agent directory is the one
++        // that receives the selected scope.
++        ...(decision.persistentApprovalScope
++          ? { persistentApprovalScope: decision.persistentApprovalScope }
++          : {}),
+       } satisfies ForwardedPermissionResponse);
+     } catch (error) {
+       logPermissionForwardingError(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarding-io.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/forwarding-io.ts
+index aebada8..f0222ef 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarding-io.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/forwarding-io.ts
+@@ -15,6 +15,7 @@ import {
+ import type { DebugReviewLogger } from "#src/logging/session-logger";
+ import { asPromptPayload } from "#src/presentation/prompt-payload";
+ import type { PermissionUiPromptSource } from "#src/service/permission-events";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ import {
+   type ApprovalGrant,
+   isSessionGrantWidth,
+@@ -52,6 +53,13 @@ function asNullableDisplayString(value: unknown): string | null | undefined {
+   return undefined;
+ }
+ 
++/** Narrow an unknown value to a persistent approval scope, or `undefined`. */
++function asPersistentApprovalScope(
++  value: unknown,
++): PersistentApprovalScope | undefined {
++  return value === "agent" || value === "global" ? value : undefined;
++}
++
+ /** Narrow an unknown value to an `ApprovalGrant`, or `undefined`. */
+ function asApprovalGrant(value: unknown): ApprovalGrant | undefined {
+   if (typeof value !== "object" || value === null) {
+@@ -502,6 +510,13 @@ export function readForwardedPermissionResponse(
+       sessionGrantWidth: isSessionGrantWidth(parsed.sessionGrantWidth)
+         ? parsed.sessionGrantWidth
+         : undefined,
++      ...(asPersistentApprovalScope(parsed.persistentApprovalScope)
++        ? {
++            persistentApprovalScope: asPersistentApprovalScope(
++              parsed.persistentApprovalScope,
++            ),
++          }
++        : {}),
+     };
+   } catch (error) {
+     logPermissionForwardingWarning(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
+index 66a3951..ec82a1e 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
+@@ -91,6 +91,10 @@ function buildRequestOptions(
+     ? buildDirectionalSessionLabels(direction, describeGrantTarget(grants))
+     : null;
+   const sessionLabel = widths?.sessionLabel ?? details.sessionLabel;
++  const agentName =
++    details.agentName && details.agentName !== "unknown"
++      ? details.agentName
++      : null;
+ 
+   const options: RequestPermissionOptions = {
+     ...(sessionLabel ? { sessionLabel } : {}),
+@@ -103,6 +107,16 @@ function buildRequestOptions(
+           ),
+         }
+       : {}),
++    ...(grants.length > 0
++      ? {
++          persistentScope: {
++            ...(agentName
++              ? { agentLabel: `This agent/mode: ${agentName}` }
++              : {}),
++            globalLabel: "All agents/modes",
++          },
++        }
++      : {}),
+   };
+   return Object.keys(options).length > 0 ? options : undefined;
+ }
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
+index bb69665..0ad29dc 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
+@@ -1,4 +1,5 @@
+ import type { SessionGrantWidth } from "#src/session/approval-grant";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ import type { DecisionSource } from "./decision-source";
+ 
+ export type PermissionDecisionState =
+@@ -34,6 +35,11 @@ export type PermissionPromptDecision = {
+    * direction the gate named, which is what every producer chose before #813.
+    */
+   sessionGrantWidth?: SessionGrantWidth;
++  /**
++   * Where an approval selected for future sessions should be persisted.
++   * Present only on the new persistent-approval prompt path.
++   */
++  persistentApprovalScope?: PersistentApprovalScope;
+   /**
+    * What decided this request, stamped by the site that decided it.
+    *
+@@ -60,10 +66,10 @@ export interface PermissionDecisionUi {
+   input(title: string, placeholder?: string): Promise<string | undefined>;
+ }
+ 
+-const APPROVE_OPTION = "Yes";
+-const APPROVE_FOR_SESSION_OPTION = "Yes, for this session";
+-const DENY_OPTION = "No";
+-const DENY_WITH_REASON_OPTION = "No, provide reason";
++const APPROVE_OPTION = "Allow once";
++const APPROVE_FOR_SESSION_OPTION = "Allow for this session";
++const DENY_OPTION = "Deny";
++const DENY_WITH_REASON_OPTION = "Deny with reason";
+ 
+ /**
+  * A session-granting decision, naming its width only when it is not the
+@@ -138,6 +144,11 @@ export interface RequestPermissionOptions {
+     subagentLabel: string;
+     servingSessionLabel: string;
+   };
++  /** Labels for the second step that scopes a future-session approval. */
++  persistentScope?: {
++    agentLabel?: string;
++    globalLabel: string;
++  };
+ }
+ 
+ export async function requestPermissionDecisionFromUi(
+@@ -148,10 +159,12 @@ export async function requestPermissionDecisionFromUi(
+ ): Promise<UnattributedDecision> {
+   const sessionOption = options?.sessionLabel ?? APPROVE_FOR_SESSION_OPTION;
+   const widthOption = options?.sessionWidth?.label;
++  const persistentOption = "Allow in future sessions…";
+   const decisionOptions = [
+     APPROVE_OPTION,
+     sessionOption,
+     ...(widthOption ? [widthOption] : []),
++    ...(options?.persistentScope ? [persistentOption] : []),
+     DENY_OPTION,
+     DENY_WITH_REASON_OPTION,
+   ];
+@@ -187,6 +200,38 @@ export async function requestPermissionDecisionFromUi(
+     return sessionApproval("approved_for_session", width);
+   }
+ 
++  if (selected === persistentOption && options?.persistentScope) {
++    const scopeOptions = [
++      ...(options.persistentScope.agentLabel
++        ? [options.persistentScope.agentLabel]
++        : []),
++      options.persistentScope.globalLabel,
++    ];
++    const scope = await ui.select(
++      `${title}\nAllow in future sessions for:`,
++      scopeOptions,
++    );
++    if (scope === options.persistentScope.globalLabel) {
++      return {
++        approved: true,
++        state: "approved",
++        persistentApprovalScope: "global",
++      };
++    }
++    if (
++      options.persistentScope.agentLabel &&
++      scope === options.persistentScope.agentLabel
++    ) {
++      return {
++        approved: true,
++        state: "approved",
++        persistentApprovalScope: "agent",
++      };
++    }
++    // A cancelled second step must not silently become a global grant.
++    return createDeniedPermissionDecision();
++  }
++
+   if (selected === DENY_WITH_REASON_OPTION) {
+     const denialReason = normalizePermissionDenialReason(
+       await ui.input(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-forwarding.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-forwarding.ts
+index da85a31..2ce9023 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-forwarding.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-forwarding.ts
+@@ -7,6 +7,7 @@ import type {
+ } from "#src/session/approval-grant";
+ import type { DecisionSource } from "./decision-source";
+ import type { PermissionDecisionState } from "./permission-dialog";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ import type { SubagentSessionRegistry } from "./subagent-registry";
+ 
+ export const PERMISSION_FORWARDING_POLL_INTERVAL_MS = 250;
+@@ -211,6 +212,8 @@ export type ForwardedPermissionResponse = {
+    * both landing on `"proven"`, the least-privilege width.
+    */
+   sessionGrantWidth?: SessionGrantWidth;
++  /** Where a future-session approval should be persisted by the requester. */
++  persistentApprovalScope?: PersistentApprovalScope;
+ };
+ 
+ export type PermissionForwardingLocation = {
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
+index a05f807..87cf5f4 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
+@@ -120,14 +120,15 @@ interface PromptTheme {
+   fg(color: string, text: string): string;
+ }
+ 
+-const DEFAULT_SESSION_LABEL = "Yes, for this session";
++const DEFAULT_SESSION_LABEL = "Allow for this session";
+ 
+ const OPTION_LABELS: Record<PromptKey, string> = {
+-  y: "Yes",
++  o: "Allow once",
+   s: DEFAULT_SESSION_LABEL,
+-  b: "Yes, for this session in both directions",
+-  n: "No",
+-  r: "No, provide reason",
++  b: "Allow both directions for this session",
++  f: "Allow in future sessions…",
++  n: "Deny",
++  r: "Deny with reason",
+ };
+ 
+ export function presentInlinePermissionPrompt(
+@@ -141,6 +142,7 @@ export function presentInlinePermissionPrompt(
+     sessionLabel: options?.sessionLabel ?? DEFAULT_SESSION_LABEL,
+     widthLabel: options?.sessionWidth?.label,
+     sessionScope: options?.sessionScope,
++    persistentScope: options?.persistentScope,
+   };
+   return view.ui.custom<UnattributedDecision>(
+     (tui, theme, keybindings, done) =>
+@@ -243,6 +245,8 @@ class PermissionPromptComponent implements Component {
+         return this.renderReason(width);
+       case "scope":
+         return this.renderScope();
++      case "persistent_scope":
++        return this.renderPersistentScope();
+     }
+   }
+ 
+@@ -393,6 +397,30 @@ class PermissionPromptComponent implements Component {
+     return lines;
+   }
+ 
++  private renderPersistentScope(): string[] {
++    const scope = this.config.persistentScope;
++    const rows = [
++      ...(scope?.agentLabel
++        ? [{ label: scope.agentLabel, value: "agent" as const }]
++        : []),
++      ...(scope ? [{ label: scope.globalLabel, value: "global" as const }] : []),
++    ];
++    const lines = [
++      this.theme.fg("accent", this.title),
++      "Allow in future sessions for:",
++      "",
++    ];
++    for (const row of rows) {
++      const selected = this.state.persistentScope === row.value;
++      const marker = selected ? "▶" : " ";
++      const text = `${marker} ${row.label}`;
++      lines.push(selected ? this.theme.fg("accent", text) : text);
++    }
++    lines.push("");
++    lines.push(this.theme.fg("muted", "↑/↓ move · enter confirm · esc back"));
++    return lines;
++  }
++
+   private renderScope(): string[] {
+     const scope = this.config.sessionScope;
+     const subagentLabel = scope?.subagentLabel ?? "This subagent only";
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
+index 7649514..593b3fa 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
+@@ -1,4 +1,5 @@
+ import type { SessionGrantWidth } from "#src/session/approval-grant";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ import {
+   createDeniedPermissionDecision,
+   normalizePermissionDenialReason,
+@@ -23,16 +24,16 @@ import {
+  * widened to both directions (#813), so the roster an ask actually offers
+  * comes from {@link visibleOptionKeys} rather than from this type.
+  */
+-export type PromptKey = "y" | "s" | "b" | "n" | "r";
++export type PromptKey = "o" | "s" | "b" | "f" | "n" | "r";
+ 
+ /** Which sub-view the dialog is showing. */
+-export type PromptStep = "decision" | "reason" | "scope";
++export type PromptStep =
++  | "decision"
++  | "reason"
++  | "scope"
++  | "persistent_scope";
+ 
+-const OPTION_ORDER: readonly PromptKey[] = ["y", "s", "b", "n", "r"];
+-
+-const NARROW_OPTION_ORDER: readonly PromptKey[] = OPTION_ORDER.filter(
+-  (key) => key !== "b",
+-);
++const OPTION_ORDER: readonly PromptKey[] = ["o", "s", "b", "f", "n", "r"];
+ 
+ /**
+  * The decision step's option keys, in display order.
+@@ -48,13 +49,18 @@ const NARROW_OPTION_ORDER: readonly PromptKey[] = OPTION_ORDER.filter(
+ export function visibleOptionKeys(
+   config: PromptModelConfig,
+ ): readonly PromptKey[] {
+-  return config.widthLabel ? OPTION_ORDER : NARROW_OPTION_ORDER;
++  return OPTION_ORDER.filter(
++    (key) =>
++      (key !== "b" || config.widthLabel !== undefined) &&
++      (key !== "f" || config.persistentScope !== undefined),
++  );
+ }
+ 
+ const OPTION_VERBS: Record<PromptKey, string> = {
+-  y: "approve",
+-  s: "approve for this session",
+-  b: "approve both directions for this session",
++  o: "allow once",
++  s: "allow for this session",
++  b: "allow both directions for this session",
++  f: "allow in future sessions",
+   n: "deny",
+   r: "deny with a reason",
+ };
+@@ -78,6 +84,10 @@ export interface PromptModelConfig {
+    * default) or the whole serving session.
+    */
+   sessionScope?: NonNullable<RequestPermissionOptions["sessionScope"]>;
++  /** When set, confirming `f` opens a second step choosing the durable scope. */
++  persistentScope?: NonNullable<
++    RequestPermissionOptions["persistentScope"]
++  >;
+ }
+ 
+ /** The re-render view state the component draws from. */
+@@ -86,12 +96,14 @@ export interface PromptViewState {
+   highlightedKey: PromptKey;
+   /** Set only while awaiting the confirming second press of a hotkey. */
+   armedKey?: PromptKey;
+-  /** "Press y again to approve." while armed; empty otherwise. */
++  /** Confirmation hint while a decision hotkey is armed; empty otherwise. */
+   hint: string;
+   /** Set when an empty reason submit is rejected. */
+   reasonError?: string;
+   /** Scope step: false = subagent-only (default), true = whole serving session. */
+   scopeServing: boolean;
++  /** Durable scope selected in the persistent-scope step. */
++  persistentScope: PersistentApprovalScope;
+   /**
+    * The width the session option chosen so far would grant.
+    *
+@@ -117,15 +129,16 @@ export type PromptOutcome =
+   | { kind: "decision"; decision: UnattributedDecision };
+ 
+ export function initialPromptState(
+-  _config: PromptModelConfig,
++  config: PromptModelConfig,
+ ): PromptViewState {
+   return {
+     step: "decision",
+-    highlightedKey: "y",
++    highlightedKey: "o",
+     armedKey: undefined,
+     hint: "",
+     reasonError: undefined,
+     scopeServing: false,
++    persistentScope: config.persistentScope?.agentLabel ? "agent" : "global",
+     grantWidth: "proven",
+   };
+ }
+@@ -150,6 +163,8 @@ export function reducePrompt(
+       return reduceReasonStep(state, event);
+     case "scope":
+       return reduceScopeStep(state, event);
++    case "persistent_scope":
++      return reducePersistentScopeStep(config, state, event);
+   }
+ }
+ 
+@@ -201,7 +216,7 @@ function commit(
+   key: PromptKey,
+ ): PromptOutcome {
+   switch (key) {
+-    case "y":
++    case "o":
+       return {
+         kind: "decision",
+         decision: { approved: true, state: "approved" },
+@@ -217,6 +232,17 @@ function commit(
+         hint: "",
+         reasonError: undefined,
+       });
++    case "f":
++      return render({
++        ...state,
++        step: "persistent_scope",
++        highlightedKey: "f",
++        armedKey: undefined,
++        hint: "",
++        persistentScope: config.persistentScope?.agentLabel
++          ? "agent"
++          : "global",
++      });
+     case "s":
+     case "b": {
+       // The two session options differ only in the width they grant; which
+@@ -290,6 +316,42 @@ function reduceReasonStep(
+   return render(state);
+ }
+ 
++function reducePersistentScopeStep(
++  config: PromptModelConfig,
++  state: PromptViewState,
++  event: PromptEvent,
++): PromptOutcome {
++  switch (event.type) {
++    case "nav":
++      if (!config.persistentScope?.agentLabel) return render(state);
++      return render({
++        ...state,
++        persistentScope: state.persistentScope === "agent" ? "global" : "agent",
++      });
++    case "confirm":
++      return {
++        kind: "decision",
++        decision: {
++          approved: true,
++          state: "approved",
++          persistentApprovalScope: state.persistentScope,
++        },
++      };
++    case "cancel":
++      return render({
++        ...state,
++        step: "decision",
++        armedKey: undefined,
++        hint: "",
++        persistentScope: config.persistentScope?.agentLabel
++          ? "agent"
++          : "global",
++      });
++    default:
++      return render(state);
++  }
++}
++
+ function reduceScopeStep(
+   state: PromptViewState,
+   event: PromptEvent,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompter.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompter.ts
+index ece4cf1..1258054 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompter.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompter.ts
+@@ -2,6 +2,7 @@ import type { ReviewLogger } from "#src/logging/session-logger";
+ import type { PromptPayload } from "#src/presentation/prompt-payload";
+ import { renderReviewLogFacts } from "#src/presentation/review-log-renderer";
+ import type { SessionGrantWidth } from "#src/session/approval-grant";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ import type { TerminalAuthorizer } from "./authorizer";
+ import type { DecisionSource } from "./decision-source";
+ import type { PermissionPromptDecision } from "./permission-dialog";
+@@ -154,6 +155,9 @@ export class PermissionPrompter implements PermissionPrompterApi {
+         denialReason: decision.denialReason,
+         decidedBy: decision.decidedBy,
+         sessionGrantWidth: recordedGrantWidth(decision),
++        ...(decision.persistentApprovalScope
++          ? { persistentApprovalScope: decision.persistentApprovalScope }
++          : {}),
+       },
+     );
+ 
+@@ -173,6 +177,7 @@ export class PermissionPrompter implements PermissionPrompterApi {
+       denialReason?: string;
+       decidedBy?: DecisionSource;
+       sessionGrantWidth?: SessionGrantWidth;
++      persistentApprovalScope?: PersistentApprovalScope;
+     },
+   ): void {
+     this.deps.logger.review(event, {
+@@ -180,6 +185,9 @@ export class PermissionPrompter implements PermissionPrompterApi {
+       ...(details.sessionGrantWidth
+         ? { sessionGrantWidth: details.sessionGrantWidth }
+         : {}),
++      ...(details.persistentApprovalScope
++        ? { persistentApprovalScope: details.persistentApprovalScope }
++        : {}),
+       requestId: details.requestId,
+       source: details.source,
+       agentName: details.agentName,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
+new file mode 100644
+index 0000000..e662d44
+--- /dev/null
++++ b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
+@@ -0,0 +1,288 @@
++import {
++  existsSync,
++  mkdirSync,
++  readFileSync,
++  realpathSync,
++  renameSync,
++  statSync,
++  unlinkSync,
++  writeFileSync,
++} from "node:fs";
++import { dirname, join } from "node:path";
++import type { ApprovalGrant } from "#src/session/approval-grant";
++import type {
++  PersistentApprovalRecorder,
++  PersistentApprovalScope,
++} from "#src/session/session-approval-recorder";
++import type { SessionApproval } from "#src/session/session-approval";
++import { stripJsonComments, validateUnifiedConfig } from "./config-loader";
++import { getGlobalConfigPath } from "./config-paths";
++import { parseSimpleYamlMap } from "./yaml-frontmatter";
++
++const OWNER_ONLY_FILE_MODE = 0o600;
++const OWNER_ONLY_DIRECTORY_MODE = 0o700;
++
++/**
++ * Persist approvals selected from the permission prompt.
++ *
++ * Global approvals are written to the extension config. Agent approvals are
++ * written to the named global agent's permission frontmatter, which is the
++ * same file the policy loader already uses. The writer resolves symlinks before
++ * renaming so Stow-managed files remain symlinks.
++ */
++export class PersistentApprovalStore implements PersistentApprovalRecorder {
++  constructor(private readonly agentDir: string) {}
++
++  persistApproval(
++    approval: SessionApproval,
++    scope: PersistentApprovalScope,
++    agentName?: string | null,
++  ): void {
++    if (!approval.isRecordable) {
++      throw new Error("Cannot persist an approval without any grants.");
++    }
++
++    if (scope === "global") {
++      this.persistGlobal(approval.grants);
++      return;
++    }
++
++    if (!agentName || !isSafeAgentName(agentName)) {
++      throw new Error(
++        "Cannot persist an agent approval without a valid agent name.",
++      );
++    }
++    this.persistAgent(agentName, approval.grants);
++  }
++
++  private persistGlobal(grants: readonly ApprovalGrant[]): void {
++    const configPath = getGlobalConfigPath(this.agentDir);
++    const config = readValidatedJsonConfig(configPath);
++    const next = {
++      ...config,
++      permission: mergeApprovalGrants(config.permission, grants),
++    };
++    writeTextFileAtomically(configPath, `${JSON.stringify(next, null, 2)}\n`);
++  }
++
++  private persistAgent(
++    agentName: string,
++    grants: readonly ApprovalGrant[],
++  ): void {
++    const agentPath = join(this.agentDir, "agents", `${agentName}.md`);
++    if (!existsSync(agentPath)) {
++      throw new Error(`Global agent profile '${agentName}' does not exist.`);
++    }
++
++    const markdown = readFileSync(agentPath, "utf-8");
++    const next = updateAgentPermissionFrontmatter(markdown, grants);
++    writeTextFileAtomically(agentPath, next);
++  }
++}
++
++/** Add exact allow entries without mutating the loaded config. */
++export function mergeApprovalGrants(
++  permissionValue: unknown,
++  grants: readonly ApprovalGrant[],
++): Record<string, unknown> {
++  const permission = isRecord(permissionValue) ? { ...permissionValue } : {};
++
++  for (const grant of grants) {
++    const current = permission[grant.surface];
++    const patterns: Record<string, unknown> =
++      typeof current === "string"
++        ? { "*": current }
++        : isRecord(current)
++          ? { ...current }
++          : {};
++    // Rules are last-match-wins. Reinsert an existing pattern so this explicit
++    // approval follows any wildcard that previously came after it.
++    delete patterns[grant.pattern];
++    patterns[grant.pattern] = "allow";
++    permission[grant.surface] = patterns;
++  }
++
++  return permission;
++}
++
++function readValidatedJsonConfig(configPath: string): Record<string, unknown> {
++  if (!existsSync(configPath)) return {};
++
++  let parsed: unknown;
++  try {
++    parsed = JSON.parse(stripJsonComments(readFileSync(configPath, "utf-8")));
++  } catch (error) {
++    throw new Error(
++      `Cannot persist approval because '${configPath}' is not valid JSON: ${formatError(error)}`,
++    );
++  }
++
++  if (!isRecord(parsed)) {
++    throw new Error(
++      `Cannot persist approval because '${configPath}' must contain a JSON object.`,
++    );
++  }
++
++  const validation = validateUnifiedConfig(parsed);
++  if (validation.issues.length > 0) {
++    throw new Error(
++      `Cannot persist approval because '${configPath}' is invalid: ${validation.issues.join(" ")}`,
++    );
++  }
++
++  // Keep the source shape, including unrelated fields, while validation above
++  // guarantees that the merge cannot turn a malformed file into a valid one.
++  return parsed;
++}
++
++function updateAgentPermissionFrontmatter(
++  markdown: string,
++  grants: readonly ApprovalGrant[],
++): string {
++  const normalized = markdown.replace(/\r\n/g, "\n");
++  if (!normalized.startsWith("---\n")) {
++    throw new Error(
++      "Cannot persist approval because the agent profile has no frontmatter.",
++    );
++  }
++
++  const closingIndex = normalized.indexOf("\n---", 4);
++  if (closingIndex === -1) {
++    throw new Error(
++      "Cannot persist approval because the agent frontmatter is unterminated.",
++    );
++  }
++
++  const frontmatter = normalized.slice(4, closingIndex);
++  const parsed = parseSimpleYamlMap(frontmatter);
++  const nextPermission = mergeApprovalGrants(parsed.permission, grants);
++  const renderedPermission = serializeYamlObject(
++    "permission",
++    nextPermission,
++    0,
++  );
++  const lines = frontmatter.split("\n");
++  const permissionLine = lines.findIndex((line) =>
++    /^permission\s*:/.test(line),
++  );
++
++  if (permissionLine === -1) {
++    const nextFrontmatter = [...lines, ...renderedPermission].join("\n");
++    return `${normalized.slice(0, 4)}${nextFrontmatter}${normalized.slice(closingIndex)}`;
++  }
++
++  let permissionEnd = permissionLine + 1;
++  while (permissionEnd < lines.length) {
++    const line = lines[permissionEnd] ?? "";
++    const trimmed = line.trim();
++    const indent = line.length - line.trimStart().length;
++    if (trimmed && !trimmed.startsWith("#") && indent === 0) break;
++    permissionEnd++;
++  }
++
++  const nextFrontmatter = [
++    ...lines.slice(0, permissionLine),
++    ...renderedPermission,
++    ...lines.slice(permissionEnd),
++  ].join("\n");
++  return `${normalized.slice(0, 4)}${nextFrontmatter}${normalized.slice(closingIndex)}`;
++}
++
++function serializeYamlObject(
++  key: string,
++  value: Record<string, unknown>,
++  indent: number,
++): string[] {
++  const padding = " ".repeat(indent);
++  const lines = [`${padding}${serializeYamlKey(key)}:`];
++  for (const [childKey, childValue] of Object.entries(value)) {
++    const childPadding = " ".repeat(indent + 2);
++    if (isRecord(childValue)) {
++      lines.push(`${childPadding}${serializeYamlKey(childKey)}:`);
++      lines.push(...serializeYamlEntries(childValue, indent + 4));
++    } else if (typeof childValue === "string") {
++      lines.push(
++        `${childPadding}${serializeYamlKey(childKey)}: ${JSON.stringify(childValue)}`,
++      );
++    } else {
++      throw new Error(
++        `Cannot persist approval because permission key '${childKey}' has an unsupported value.`,
++      );
++    }
++  }
++  return lines;
++}
++
++function serializeYamlEntries(
++  value: Record<string, unknown>,
++  indent: number,
++): string[] {
++  const lines: string[] = [];
++  for (const [key, childValue] of Object.entries(value)) {
++    const padding = " ".repeat(indent);
++    if (isRecord(childValue)) {
++      lines.push(`${padding}${serializeYamlKey(key)}:`);
++      lines.push(...serializeYamlEntries(childValue, indent + 2));
++    } else if (typeof childValue === "string") {
++      lines.push(
++        `${padding}${serializeYamlKey(key)}: ${JSON.stringify(childValue)}`,
++      );
++    } else {
++      throw new Error(
++        `Cannot persist approval because permission key '${key}' has an unsupported value.`,
++      );
++    }
++  }
++  return lines;
++}
++
++function serializeYamlKey(value: string): string {
++  return JSON.stringify(value);
++}
++
++function writeTextFileAtomically(filePath: string, contents: string): void {
++  const targetPath = existsSync(filePath) ? realpathSync(filePath) : filePath;
++  mkdirSync(dirname(targetPath), {
++    recursive: true,
++    mode: OWNER_ONLY_DIRECTORY_MODE,
++  });
++
++  let mode = OWNER_ONLY_FILE_MODE;
++  try {
++    mode = statSync(targetPath).mode & 0o777;
++  } catch {
++    // A new file keeps the owner-only default.
++  }
++
++  const temporaryPath = `${targetPath}.${process.pid}.${Date.now()}.tmp`;
++  try {
++    writeFileSync(temporaryPath, contents, { encoding: "utf-8", mode });
++    renameSync(temporaryPath, targetPath);
++  } catch (error) {
++    try {
++      unlinkSync(temporaryPath);
++    } catch {
++      // Ignore cleanup failures while preserving the original write error.
++    }
++    throw error;
++  }
++}
++
++function isSafeAgentName(value: string): boolean {
++  return (
++    value.trim().length > 0 &&
++    value !== "." &&
++    value !== ".." &&
++    !value.includes("/") &&
++    !value.includes("\\") &&
++    !value.includes("\0")
++  );
++}
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === "object" && value !== null && !Array.isArray(value);
++}
++
++function formatError(error: unknown): string {
++  return error instanceof Error ? error.message : String(error);
++}
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts b/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts
+index 64486c5..bfd6d7e 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts
+@@ -12,15 +12,12 @@ export function parseSimpleYamlMap(input: string): Record<string, unknown> {
+ 
+     const indent = rawLine.length - rawLine.trimStart().length;
+     const line = rawLine.trim();
+-    const separatorIndex = line.indexOf(":");
++    const separatorIndex = findKeySeparator(line);
+     if (separatorIndex <= 0) {
+       continue;
+     }
+ 
+-    const key = line
+-      .slice(0, separatorIndex)
+-      .trim()
+-      .replace(/^['"]|['"]$/g, "");
++    const key = parseScalar(line.slice(0, separatorIndex).trim());
+     const rawValue = line.slice(separatorIndex + 1).trim();
+ 
+     while (stack.length > 1 && indent <= stack[stack.length - 1].indent) {
+@@ -36,20 +33,61 @@ export function parseSimpleYamlMap(input: string): Record<string, unknown> {
+       continue;
+     }
+ 
+-    let scalar = rawValue;
+-    if (
+-      (scalar.startsWith('"') && scalar.endsWith('"')) ||
+-      (scalar.startsWith("'") && scalar.endsWith("'"))
+-    ) {
+-      scalar = scalar.slice(1, -1);
+-    }
+-
+-    current[key] = scalar;
++    current[key] = parseScalar(rawValue);
+   }
+ 
+   return root;
+ }
+ 
++function findKeySeparator(line: string): number {
++  let quote: '"' | "'" | undefined;
++  let escaped = false;
++  for (let index = 0; index < line.length; index++) {
++    const character = line[index];
++    if (quote === '"') {
++      if (escaped) {
++        escaped = false;
++      } else if (character === "\\") {
++        escaped = true;
++      } else if (character === quote) {
++        quote = undefined;
++      }
++      continue;
++    }
++    if (quote === "'") {
++      if (character === quote) {
++        if (line[index + 1] === quote) {
++          index++;
++        } else {
++          quote = undefined;
++        }
++      }
++      continue;
++    }
++    if (character === '"' || character === "'") {
++      quote = character;
++    } else if (character === ":") {
++      return index;
++    }
++  }
++  return -1;
++}
++
++function parseScalar(value: string): string {
++  if (value.startsWith('"') && value.endsWith('"')) {
++    try {
++      const parsed: unknown = JSON.parse(value);
++      return typeof parsed === "string" ? parsed : value.slice(1, -1);
++    } catch {
++      return value.slice(1, -1);
++    }
++  }
++  if (value.startsWith("'") && value.endsWith("'")) {
++    return value.slice(1, -1).replace(/''/g, "'");
++  }
++  return value;
++}
++
+ export function extractFrontmatter(markdown: string): string {
+   const normalized = markdown.replace(/\r\n/g, "\n");
+   if (!normalized.startsWith("---\n")) {
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts
+index 600d8fa..d22f3bb 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts
+@@ -137,6 +137,7 @@ export function describeBashPathGate(
+   const surface = worstEntry.surface;
+   const payload = buildPathAskPayload({
+     toolName: tcc.toolName,
++    command,
+     pathValue: worstToken,
+     agentName: tcc.agentName,
+     matchedPattern: worstCheck.matchedPattern,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
 index b9a2be9..ab21d36 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/external-directory.ts
@@ -112,7 +1017,7 @@ index b9a2be9..ab21d36 100644
 @@ -36,17 +37,20 @@ export function describeExternalDirectoryGate(
    );
    if (!externalDirectoryPath) return null;
-
+ 
 -  if (!normalizer.isOutsideWorkingDirectory(externalDirectoryPath)) {
 +  // The boundary decision and infrastructure-read containment use the actual
 +  // tool target's canonical path; pattern matching retains the policy aliases.
@@ -120,7 +1025,7 @@ index b9a2be9..ab21d36 100644
 +  if (!normalizer.isBoundaryOutsideWorkingDirectory(accessPath.boundaryValue())) {
      return null;
    }
-
+ 
 -  // The boundary decision (above) and the infrastructure-read containment
 -  // check (below) use the canonical, symlink-resolved path; pattern matching
 -  // uses the typed and resolved aliases (#418).
@@ -150,6 +1055,128 @@ index 0ab181e..da20de9 100644
    const check = resolver.resolve({
      kind: "access-path",
      surface,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/runner.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/runner.ts
+index 613c91f..49b0d04 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/runner.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/runner.ts
+@@ -11,7 +11,10 @@ import {
+   renderRefusal,
+ } from "#src/presentation/agent-renderer";
+ import { renderReviewLogFacts } from "#src/presentation/review-log-renderer";
+-import type { SessionApprovalRecorder } from "#src/session/session-approval-recorder";
++import type {
++  PersistentApprovalRecorder,
++  SessionApprovalRecorder,
++} from "#src/session/session-approval-recorder";
+ import type { PermissionCheckResult } from "#src/types";
+ import type {
+   DecisionEventFacts,
+@@ -37,6 +40,7 @@ export class GateRunner {
+   constructor(
+     private readonly resolver: ScopedPermissionResolver,
+     private readonly recorder: SessionApprovalRecorder,
++    private readonly persistentRecorder: PersistentApprovalRecorder,
+     private readonly prompter: AskEscalator,
+     private readonly reporter: DecisionReporter,
+     /**
+@@ -228,11 +232,46 @@ export class GateRunner {
+       messages,
+     });
+ 
+-    // 4. Determine whether session approval was granted, and at what width
++    // 4. Persist a future-session approval before granting the current call.
++    // A persistence failure must not silently degrade to an ephemeral grant.
++    if (gateResult.action === "allow" && gateResult.persistentApproval) {
++      const approval = descriptor.sessionApproval;
++      if (!approval) {
++        return this.failPersistentApproval(
++          requestId,
++          descriptor,
++          check,
++          agentName,
++          "The approval did not carry a persistable permission grant",
++        );
++      }
++      const persistentGrant = approval.atWidth(
++        gateResult.persistentApproval.width,
++      );
++      try {
++        this.persistentRecorder.persistApproval(
++          persistentGrant,
++          gateResult.persistentApproval.scope,
++          agentName,
++        );
++      } catch (error) {
++        return this.failPersistentApproval(
++          requestId,
++          descriptor,
++          check,
++          agentName,
++          `Could not save the approval: ${formatError(error)}`,
++        );
++      }
++    }
++
++    // 5. Determine whether session approval was granted, and at what width.
+     const sessionGrant =
+-      gateResult.action === "allow" ? gateResult.sessionGrant : undefined;
++      gateResult.action === "allow"
++        ? (gateResult.persistentApproval ?? gateResult.sessionGrant)
++        : undefined;
+ 
+-    // 5. Emit decision event
++    // 6. Emit decision event
+     this.emitDecision(
+       requestId,
+       buildDecisionEvent(
+@@ -247,7 +286,7 @@ export class GateRunner {
+       ),
+     );
+ 
+-    // 6. Record session approval — tell the store; it owns the per-pattern loop
++    // 7. Record session approval — tell the store; it owns the per-pattern loop
+     // A present grant already implies gateResult.action === "allow".
+     if (sessionGrant && descriptor.sessionApproval) {
+       this.recorder.recordSessionApproval(
+@@ -261,4 +300,38 @@ export class GateRunner {
+ 
+     return { action: "allow" };
+   }
++
++  private failPersistentApproval(
++    requestId: string,
++    descriptor: GateDescriptor,
++    check: PermissionCheckResult,
++    agentName: string | null,
++    reason: string,
++  ): GateOutcome {
++    const decidedBy: DecisionSource = { kind: "gate_error", reason };
++    this.reporter.writeReviewLog("permission_request.persistence_failed", {
++      ...descriptor.logContext,
++      ...renderReviewLogFacts(descriptor.payload),
++      agentName,
++      requestId,
++      resolution: "gate_error",
++      decidedBy,
++      reason,
++    });
++    this.emitDecision(
++      requestId,
++      buildDecisionEvent(
++        descriptor.decision,
++        check,
++        agentName,
++        "deny",
++        resolutionFor(decidedBy, { approved: false, forSession: false }),
++      ),
++    );
++    return { action: "block", reason };
++  }
++}
++
++function formatError(error: unknown): string {
++  return error instanceof Error ? error.message : String(error);
+ }
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
 index 9817c1f..931e503 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/tool-call-gate-pipeline.ts
@@ -172,7 +1199,7 @@ index 9817c1f..931e503 100644
        () =>
          describeBashExternalDirectoryGate(
 @@ -194,7 +197,7 @@ export class ToolCallGatePipeline {
-
+ 
      const filePath = getPathBearingToolPath(tcc.toolName, tcc.input);
      if (filePath !== null) {
 -      const accessPath = normalizer.forPath(filePath);
@@ -180,6 +1207,34 @@ index 9817c1f..931e503 100644
        return {
          pathAccess: {
            path: accessPath,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/index.ts b/node_modules/@gotgenes/pi-permission-system/src/index.ts
+index 245fe2a..5856fbf 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/index.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/index.ts
+@@ -37,6 +37,7 @@ import { getGlobalConfigPath } from "#src/config/config-paths";
+ import { ConfigStore } from "#src/config/config-store";
+ import { isYoloModeEnabled } from "#src/config/extension-config";
+ import { computeExtensionPaths } from "#src/config/extension-paths";
++import { PersistentApprovalStore } from "#src/config/persistent-approval-store";
+ import { GateRunner } from "#src/handlers/gates/runner";
+ import { SkillInputGatePipeline } from "#src/handlers/gates/skill-input-gate-pipeline";
+ import { ToolCallGatePipeline } from "#src/handlers/gates/tool-call-gate-pipeline";
+@@ -299,6 +300,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+   };
+ 
+   const audit = new DecisionAudit();
++  const persistentApprovals = new PersistentApprovalStore(agentDir);
+   const lifecycle = new SessionLifecycleHandler(
+     session,
+     resolver,
+@@ -324,6 +326,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+   const gateRunner = new GateRunner(
+     resolver,
+     sessionRules,
++    persistentApprovals,
+     authorizerSelection,
+     reporter,
+     isYoloEnabled,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
 index 3361354..a5b3f8d 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
@@ -196,7 +1251,7 @@ index 3361354..a5b3f8d 100644
 @@ -60,6 +62,26 @@ export class PathNormalizer {
      });
    }
-
+ 
 +  /**
 +   * Build the path a tool actually accesses. The built-in read tool preserves
 +   * quote characters, while policy literals historically strip them.
@@ -223,7 +1278,7 @@ index 3361354..a5b3f8d 100644
 @@ -157,6 +179,15 @@ export class PathNormalizer {
      return this.flavor.isWithin(pathValue, directory);
    }
-
+ 
 +  /**
 +   * Canonicalize an already-absolute literal path without policy-value cleanup.
 +   * Live directory registrations use this so quotes, at-signs, and wildcard
@@ -236,6 +1291,87 @@ index 3361354..a5b3f8d 100644
    /** Canonical (symlink-resolved) outside-cwd test against the baked cwd. */
    isOutsideWorkingDirectory(pathValue: string): boolean {
      const canonicalPath = canonicalNormalizePathForComparison(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-gate.ts b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-gate.ts
+index 77af06f..4934dfd 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-gate.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-gate.ts
+@@ -1,6 +1,7 @@
+ import type { DecisionSource } from "#src/authority/decision-source";
+ import type { PermissionPromptDecision } from "#src/authority/permission-dialog";
+ import type { SessionGrantWidth } from "#src/session/approval-grant";
++import type { PersistentApprovalScope } from "#src/session/session-approval-recorder";
+ 
+ /**
+  * Result of applying the permission gate.
+@@ -23,6 +24,11 @@ export type PermissionGateResult =
+        * a width for a grant that never happened.
+        */
+       sessionGrant?: { width: SessionGrantWidth };
++      /** Set when the human approved the exact grant for future sessions. */
++      persistentApproval?: {
++        scope: PersistentApprovalScope;
++        width: SessionGrantWidth;
++      };
+     }
+   | { action: "block"; decidedBy: DecisionSource; reason: string };
+ 
+@@ -127,6 +133,18 @@ export async function applyPermissionGate(
+         sessionGrant: { width: decision.sessionGrantWidth ?? "proven" },
+       };
+     }
++    if (decision.persistentApprovalScope && params.canGrantForSession) {
++      return {
++        action: "allow",
++        decidedBy,
++        persistentApproval: {
++          scope: decision.persistentApprovalScope,
++          // Persistent grants use the proven direction. Widening is a separate
++          // explicit session option and must not be smuggled into disk policy.
++          width: "proven",
++        },
++      };
++    }
+     return { action: "allow", decidedBy };
+   }
+ 
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts b/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts
+index 92869dd..e350003 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts
+@@ -12,6 +12,8 @@ export interface ExternalPathDisclosure {
+ /** The facts a path-shaped gate holds when it raises an ask. */
+ interface PathAskFacts {
+   toolName: string;
++  /** The full shell command when this path ask came from bash. */
++  command?: string;
+   /** The path as the caller typed it — what the user recognizes. */
+   pathValue: string;
+   agentName: string | null;
+@@ -26,7 +28,13 @@ interface PathAskFacts {
+ 
+ /** A tool ask gated by an explicit `path`-family rule. */
+ export function buildPathAskPayload(facts: PathAskFacts): PromptPayload {
+-  return pathPayload("path", facts, []);
++  return pathPayload(
++    "path",
++    facts,
++    facts.command
++      ? [{ label: "command", text: facts.command, detail: null }]
++      : [],
++  );
+ }
+ 
+ /** The facts the external-directory gate adds: the boundary and the alias. */
+@@ -42,6 +50,9 @@ export function buildExternalDirectoryAskPayload(
+   facts: ExternalDirectoryAskFacts,
+ ): PromptPayload {
+   return pathPayload("external_directory", facts, [
++    ...(facts.command
++      ? [{ label: "command", text: facts.command, detail: null }]
++      : []),
+     ...resolvedAliasEvidence(facts.resolvedPath),
+     workingDirectoryEvidence(facts.cwd),
+   ]);
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/service.ts b/node_modules/@gotgenes/pi-permission-system/src/service.ts
 index 3348223..5aa7410 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/service.ts
@@ -243,7 +1379,7 @@ index 3348223..5aa7410 100644
 @@ -148,6 +148,18 @@ export interface PermissionsService extends PermissionQuery {
     */
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
-
+ 
 +  /**
 +   * Register an absolute, literal directory that the built-in `read` tool may
 +   * access outside the working directory without prompting.
@@ -266,7 +1402,7 @@ index 52abe07..8d83eb8 100644
 @@ -28,9 +28,10 @@ interface ResolverForService {
    isToolFullyDenied(toolName: string, agentName?: string): boolean;
  }
-
+ 
 -/** Narrow session view: hands out the cwd-bound path normalizer. */
 -interface PathNormalizerProvider {
 +/** Narrow session view used by path queries and live read-directory registrations. */
@@ -274,7 +1410,7 @@ index 52abe07..8d83eb8 100644
    getPathNormalizer(): PathNormalizer;
 +  registerInfrastructureReadDirectory(directory: string): () => void;
  }
-
+ 
  /**
 @@ -46,7 +47,7 @@ interface PathNormalizerProvider {
  export class LocalPermissionsService implements PermissionsService {
@@ -288,7 +1424,7 @@ index 52abe07..8d83eb8 100644
 @@ -89,6 +90,12 @@ export class LocalPermissionsService implements PermissionsService {
      return this.resolver.isToolFullyDenied(toolName, agentName);
    }
-
+ 
 +  registerInfrastructureReadDirectory(
 +    directory: string,
 +  ): ReturnType<PermissionsService["registerInfrastructureReadDirectory"]> {
@@ -310,7 +1446,7 @@ index 04b5ad6..6656b4c 100644
 +    symbol,
 +    string
 +  >();
-
+ 
    constructor(
      private readonly paths: ExtensionPaths,
 @@ -125,6 +129,7 @@ export class PermissionSession implements ToolCallGateInputs {
@@ -320,10 +1456,10 @@ index 04b5ad6..6656b4c 100644
 +    this.infrastructureReadDirectoryRegistrations.clear();
      this.deactivate();
    }
-
+ 
 @@ -226,9 +231,32 @@ export class PermissionSession implements ToolCallGateInputs {
    // ── Infrastructure paths ───────────────────────────────────────────────
-
+ 
    /**
 -   * Combined infrastructure read directories: static paths from
 -   * `ExtensionPaths` plus config-derived paths.
@@ -356,3 +1492,26 @@ index 04b5ad6..6656b4c 100644
    getInfrastructureReadDirs(): string[] {
      return [
        ...this.paths.piInfrastructureDirs,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/session/session-approval-recorder.ts b/node_modules/@gotgenes/pi-permission-system/src/session/session-approval-recorder.ts
+index d22fe77..4bd55ea 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/session/session-approval-recorder.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/session/session-approval-recorder.ts
+@@ -1,6 +1,18 @@
+ import type { SessionApproval } from "./session-approval";
+ 
++/** Where a future-session approval is persisted. */
++export type PersistentApprovalScope = "agent" | "global";
++
+ /** Records a granted session-scoped approval into the session ruleset. */
+ export interface SessionApprovalRecorder {
+   recordSessionApproval(approval: SessionApproval): void;
+ }
++
++/** Records a granted approval in durable global or named-agent policy. */
++export interface PersistentApprovalRecorder {
++  persistApproval(
++    approval: SessionApproval,
++    scope: PersistentApprovalScope,
++    agentName?: string | null,
++  ): void;
++}

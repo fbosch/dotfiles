@@ -17,7 +17,7 @@ permission:
   external_directory_write: deny
   websearch: allow
   webfetch: allow
-  mcp__context7: ask
+  mcp__context7: allow
   mcp__github: ask
   external_directory: ask
 ---

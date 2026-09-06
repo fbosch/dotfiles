@@ -16,6 +16,9 @@ storybook-static
 
 # agent skills, codex ignored as selected for default skills.sh, symlinking is handled manually 
 .codex/**
+
+# Pi installs project-local packages here; .pi/settings.json pins them for other machines.
+.pi/npm/
 !.codex/skills/**/*
 .agents/skills/.system
 # Herdr publishes its skill from the repository root; keep only its skill entry point.

@@ -120,6 +120,7 @@
     "worktrunk": "ask",
     "context7_resolve-library-id": "allow",
     "context7_get-library-docs": "allow",
+    "mcp__context7": "allow",
     "ast-grep_ast-grep": "allow",
     "mcp": {
       "mcp_status": "allow",
@@ -192,6 +193,7 @@
     "skill": "allow",
     "external_directory_read": {
       "*": "ask",
+      "~/.config/fbb/TONE.md": "allow",
       "/tmp": "allow",
       "/tmp/*": "allow",
       "~/.config/opencode/*": "allow",

@@ -15,7 +15,7 @@ permission:
   ffgrep: allow
   websearch: allow
   webfetch: allow
-  mcp__context7: ask
+  mcp__context7: allow
   external_directory: ask
 ---
 

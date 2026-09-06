@@ -100,7 +100,7 @@ export default function openaiCapabilities(pi: OpenAICapabilitiesAPI): void {
         provider: "openai-codex",
         model,
         asyncTools: true,
-        steering: true,
+        steering: false,
       });
     }
   } else {
@@ -108,7 +108,7 @@ export default function openaiCapabilities(pi: OpenAICapabilitiesAPI): void {
     const warnIfAstra = (ctx: ExtensionContext) => {
       if (ctx.model?.provider !== "openai-codex" || !ASTRA_MODEL_IDS.has(ctx.model.id)) return;
       ctx.ui.notify(
-        "Native async tools and mid-turn steering require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
+        "Native async tools require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
         "warning",
       );
     };

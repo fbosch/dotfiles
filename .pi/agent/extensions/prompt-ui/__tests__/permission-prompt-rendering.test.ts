@@ -26,7 +26,7 @@ describe("permission prompt rendering", () => {
         "path              : \u001b[33m/usr/share/nvim/runtime/doc/api.txt\u001b[39m",
         "working directory : /home/fbb/dotfiles",
         "",
-        "▶ (y) Yes",
+        "▶ (o) Allow once",
       ],
       120,
       theme,
