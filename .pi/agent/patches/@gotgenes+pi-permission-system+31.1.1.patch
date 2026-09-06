@@ -187,7 +187,7 @@ index 66a3951..ec82a1e 100644
    return Object.keys(options).length > 0 ? options : undefined;
  }
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
-index bb69665..29177c3 100644
+index bb69665..48cb244 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
 @@ -1,4 +1,5 @@
@@ -235,7 +235,11 @@ index bb69665..29177c3 100644
  }
  
  export async function requestPermissionDecisionFromUi(
-@@ -148,10 +159,12 @@ export async function requestPermissionDecisionFromUi(
+@@ -145,13 +156,16 @@ export async function requestPermissionDecisionFromUi(
+   title: string,
+   message: string,
+   options?: RequestPermissionOptions,
++  scopeMessage = message,
  ): Promise<UnattributedDecision> {
    const sessionOption = options?.sessionLabel ?? APPROVE_FOR_SESSION_OPTION;
    const widthOption = options?.sessionWidth?.label;
@@ -248,7 +252,7 @@ index bb69665..29177c3 100644
      DENY_OPTION,
      DENY_WITH_REASON_OPTION,
    ];
-@@ -171,10 +184,13 @@ export async function requestPermissionDecisionFromUi(
+@@ -171,10 +185,13 @@ export async function requestPermissionDecisionFromUi(
      const width: SessionGrantWidth =
        selected === widthOption ? "family" : "proven";
      if (options?.sessionScope) {
@@ -257,7 +261,7 @@ index bb69665..29177c3 100644
 -        options.sessionScope.servingSessionLabel,
 -      ]);
 +      const scope = await ui.select(
-+        `${title}\n${message}\n\nApply this session grant to:`,
++        `${title}\n${scopeMessage}\n\nApply this session grant to:`,
 +        [
 +          options.sessionScope.subagentLabel,
 +          options.sessionScope.servingSessionLabel,
@@ -266,7 +270,7 @@ index bb69665..29177c3 100644
        return sessionApproval(
          // A cancelled scope select (undefined) falls back to the
          // least-privilege subagent scope.
-@@ -187,6 +203,38 @@ export async function requestPermissionDecisionFromUi(
+@@ -187,6 +204,38 @@ export async function requestPermissionDecisionFromUi(
      return sessionApproval("approved_for_session", width);
    }
  
@@ -278,7 +282,7 @@ index bb69665..29177c3 100644
 +      options.persistentScope.globalLabel,
 +    ];
 +    const scope = await ui.select(
-+      `${title}\n${message}\n\nAllow in future sessions for:`,
++      `${title}\n${scopeMessage}\n\nAllow in future sessions for:`,
 +      scopeOptions,
 +    );
 +    if (scope === options.persistentScope.globalLabel) {
@@ -327,10 +331,28 @@ index da85a31..2ce9023 100644
  
  export type PermissionForwardingLocation = {
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
-index a05f807..3bd624b 100644
+index a05f807..57281c8 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
-@@ -120,14 +120,15 @@ interface PromptTheme {
+@@ -93,12 +93,17 @@ export async function requestPermissionDecision(
+     ...view.budget,
+     width: FALLBACK_RENDER_WIDTH,
+   });
++  const scopeMessage =
++    options?.sessionScope || options?.persistentScope
++      ? renderPromptDialog(payload, completeViewBudget(FALLBACK_RENDER_WIDTH)).lines.join("\n")
++      : undefined;
+   return attributeToHuman(
+     await requestPermissionDecisionFromUi(
+       view.ui,
+       title,
+       rendered.lines.join("\n"),
+       options,
++      scopeMessage,
+     ),
+     "select",
+   );
+@@ -120,14 +125,15 @@ interface PromptTheme {
    fg(color: string, text: string): string;
  }
  
@@ -351,7 +373,7 @@ index a05f807..3bd624b 100644
  };
  
  export function presentInlinePermissionPrompt(
-@@ -141,6 +142,7 @@ export function presentInlinePermissionPrompt(
+@@ -141,6 +147,7 @@ export function presentInlinePermissionPrompt(
      sessionLabel: options?.sessionLabel ?? DEFAULT_SESSION_LABEL,
      widthLabel: options?.sessionWidth?.label,
      sessionScope: options?.sessionScope,
@@ -359,7 +381,7 @@ index a05f807..3bd624b 100644
    };
    return view.ui.custom<UnattributedDecision>(
      (tui, theme, keybindings, done) =>
-@@ -242,7 +244,9 @@ class PermissionPromptComponent implements Component {
+@@ -242,7 +249,9 @@ class PermissionPromptComponent implements Component {
        case "reason":
          return this.renderReason(width);
        case "scope":
@@ -370,7 +392,27 @@ index a05f807..3bd624b 100644
      }
    }
  
-@@ -393,7 +397,33 @@ class PermissionPromptComponent implements Component {
+@@ -253,9 +262,18 @@ class PermissionPromptComponent implements Component {
+    * of the width the host gives us, which a resize changes.
+    */
+   private renderAsk(width: number): DialogView {
++    if (this.expanded) return this.renderCompleteAsk(width);
+     return renderPromptDialog(
+       this.payload,
+-      this.expanded ? completeViewBudget(width) : { ...this.budget, width },
++      { ...this.budget, width },
++      (text) => this.theme.fg("warning", text),
++    );
++  }
++
++  private renderCompleteAsk(width: number): DialogView {
++    return renderPromptDialog(
++      this.payload,
++      completeViewBudget(width),
+       (text) => this.theme.fg("warning", text),
+     );
+   }
+@@ -393,7 +411,33 @@ class PermissionPromptComponent implements Component {
      return lines;
    }
  
@@ -385,7 +427,7 @@ index a05f807..3bd624b 100644
 +    ];
 +    const lines = [
 +      this.theme.fg("accent", this.title),
-+      ...this.renderAsk(width).lines,
++      ...this.renderCompleteAsk(width).lines,
 +      "",
 +      "Allow in future sessions for:",
 +      "",
@@ -405,11 +447,11 @@ index a05f807..3bd624b 100644
      const scope = this.config.sessionScope;
      const subagentLabel = scope?.subagentLabel ?? "This subagent only";
      const servingLabel = scope?.servingSessionLabel ?? "The whole session";
-@@ -403,6 +433,8 @@ class PermissionPromptComponent implements Component {
+@@ -403,6 +447,8 @@ class PermissionPromptComponent implements Component {
      ];
      const lines = [
        this.theme.fg("accent", this.title),
-+      ...this.renderAsk(width).lines,
++      ...this.renderCompleteAsk(width).lines,
 +      "",
        "Apply this session grant to:",
        "",
@@ -638,10 +680,10 @@ index ece4cf1..1258054 100644
        agentName: details.agentName,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
 new file mode 100644
-index 0000000..3789f49
+index 0000000..7e87654
 --- /dev/null
 +++ b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,388 @@
 +import { randomUUID } from "node:crypto";
 +import {
 +  closeSync,
@@ -888,62 +930,33 @@ index 0000000..3789f49
 +
 +function acquireFileUpdateLock(targetPath: string): FileUpdateLock {
 +  const path = `${targetPath}.approval.lock`;
-+  for (let attempt = 0; attempt < 2; attempt++) {
-+    let descriptor: number;
-+    try {
-+      descriptor = openSync(path, "wx", OWNER_ONLY_FILE_MODE);
-+    } catch (error) {
-+      if (isErrnoException(error, "EEXIST") && attempt === 0 && removeStaleLock(path)) {
-+        continue;
-+      }
-+      if (isErrnoException(error, "EEXIST")) {
-+        throw new Error(
-+          `Cannot persist approval because '${targetPath}' is already being updated.`,
-+        );
-+      }
-+      throw error;
-+    }
-+
-+    const token = randomUUID();
-+    try {
-+      writeFileSync(descriptor, `${JSON.stringify({ pid: process.pid, token })}\n`);
-+      return { descriptor, path, token };
-+    } catch (error) {
-+      if (closeFile(descriptor)) {
-+        try {
-+          unlinkSync(path);
-+        } catch {
-+          // Preserve the write failure; this process created the lock file.
-+        }
-+      }
-+      throw error;
-+    }
-+  }
-+  throw new Error(`Cannot acquire an update lock for '${targetPath}'.`);
-+}
-+
-+function removeStaleLock(lockPath: string): boolean {
-+  let pid: unknown;
++  let descriptor: number;
 +  try {
-+    const value: unknown = JSON.parse(readFileSync(lockPath, "utf-8"));
-+    pid = isRecord(value) ? value.pid : undefined;
-+  } catch {
-+    return false;
-+  }
-+  if (!Number.isSafeInteger(pid) || Number(pid) <= 0) return false;
-+
-+  try {
-+    process.kill(Number(pid), 0);
-+    return false;
++    descriptor = openSync(path, "wx", OWNER_ONLY_FILE_MODE);
 +  } catch (error) {
-+    if (!isErrnoException(error, "ESRCH")) return false;
++    if (isErrnoException(error, "EEXIST")) {
++      // Never reclaim here: two reclaimers can delete each other's live lock.
++      // A leftover lock fails closed and requires explicit operator cleanup.
++      throw new Error(
++        `Cannot persist approval because '${targetPath}' is already being updated or has a stale approval lock.`,
++      );
++    }
++    throw error;
 +  }
 +
++  const token = randomUUID();
 +  try {
-+    unlinkSync(lockPath);
-+    return true;
-+  } catch {
-+    return false;
++    writeFileSync(descriptor, `${JSON.stringify({ pid: process.pid, token })}\n`);
++    return { descriptor, path, token };
++  } catch (error) {
++    if (closeFile(descriptor)) {
++      try {
++        unlinkSync(path);
++      } catch {
++        // Preserve the write failure; this process created the lock file.
++      }
++    }
++    throw error;
 +  }
 +}
 +

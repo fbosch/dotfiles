@@ -23,6 +23,7 @@ const [
   runnerModule,
   pathPayloadModule,
   dialogRendererModule,
+  promptComponentModule,
 ] = await Promise.all([
   import(new URL("authority/permission-dialog.ts", sourceRoot).href),
   import(new URL("authority/permission-prompt-decision.ts", sourceRoot).href),
@@ -30,6 +31,7 @@ const [
   import(new URL("handlers/gates/runner.ts", sourceRoot).href),
   import(new URL("presentation/path-ask-payload.ts", sourceRoot).href),
   import(new URL("presentation/dialog-renderer.ts", sourceRoot).href),
+  import(new URL("authority/permission-prompt-component.ts", sourceRoot).href),
 ]);
 
 const temporaryDirectories: string[] = [];
@@ -87,6 +89,57 @@ describe("permission prompt details", () => {
       width: 120,
     });
     expect(rendered.lines).toContain("command : printf secret > .pi/mcp.json");
+  });
+
+  test("keeps complete request details in the fallback scope confirmation", async () => {
+    const command = `printf ${"x".repeat(500)} END_OF_COMMAND > .pi/mcp.json`;
+    const payload = pathPayloadModule.buildPathAskPayload({
+      toolName: "bash",
+      command,
+      pathValue: ".pi/mcp.json",
+      agentName: "lookup",
+      matchedPattern: "*/.pi/mcp.json",
+      surface: "path_write",
+    });
+    const titles: string[] = [];
+    const answers = ["Allow in future sessions…", "All agents/modes"];
+    const ui = {
+      select: async (title: string) => {
+        titles.push(title);
+        return answers.shift();
+      },
+      input: async () => undefined,
+      custom: async () => {
+        throw new Error("The RPC fallback must not open a custom TUI component.");
+      },
+      getToolsExpanded: () => false,
+      setToolsExpanded: () => {},
+    };
+    const view = {
+      mode: "rpc",
+      ui,
+      doublePressToConfirm: false,
+      budget: { maxRows: 4, fieldMaxWidth: 16 },
+    } as unknown as Parameters<typeof promptComponentModule.requestPermissionDecision>[0];
+
+    const decision = await promptComponentModule.requestPermissionDecision(
+      view,
+      "Permission Required",
+      payload,
+      {
+        persistentScope: {
+          agentLabel: "This agent/mode: lookup",
+          globalLabel: "All agents/modes",
+        },
+      },
+    );
+
+    expect(decision).toMatchObject({
+      approved: true,
+      persistentApprovalScope: "global",
+    });
+    expect(titles).toHaveLength(2);
+    expect(titles[1]).toContain("END_OF_COMMAND");
   });
 });
 

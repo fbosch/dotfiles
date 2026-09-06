@@ -203,6 +203,21 @@
       "*": "ask",
       "/tmp": "allow",
       "/tmp/*": "allow"
+    },
+    "figma_get_components": {
+      "*": "allow"
+    },
+    "figma_get_component_sets": {
+      "*": "allow"
+    },
+    "figma_get_node_summary": {
+      "*": "allow"
+    },
+    "figma_extract_assets": {
+      "*": "allow"
+    },
+    "figma_get_node_metadata": {
+      "*": "allow"
     }
   }
 }
