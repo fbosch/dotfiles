@@ -41,8 +41,8 @@ export const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 export const maxVolume = 150;
 export const meterSegments = 12;
-// Approximate Windows' gentle audio taper without changing backend units.
-const volumeSliderExponent = 1.7;
+// Approximate the measured Windows endpoint taper without changing backend units.
+const volumeSliderExponent = 1.75;
 const volumeLevelIcons = [
 	"\uE992",
 	"\uE993",

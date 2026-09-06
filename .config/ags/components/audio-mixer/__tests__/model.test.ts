@@ -30,8 +30,8 @@ function snapshot(volume = 50): AudioSnapshot {
 
 describe("volume slider mapping", () => {
 	test("gives lower volume values more slider space", () => {
-		expect(sliderPositionToVolume(0.5)).toBeCloseTo(46.17, 2);
-		expect(volumeToSliderPosition(46.17)).toBeCloseTo(0.5, 2);
+		expect(sliderPositionToVolume(0.5)).toBeCloseTo(44.5953, 3);
+		expect(volumeToSliderPosition(44.5953)).toBeCloseTo(0.5, 3);
 	});
 
 	test("keeps the slider endpoints stable", () => {
