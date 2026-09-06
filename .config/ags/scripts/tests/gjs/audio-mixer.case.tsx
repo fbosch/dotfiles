@@ -34,6 +34,7 @@ function request(
 test("Audio Mixer handles its complete request lifecycle", () => {
 	const controller = new AudioMixerController({
 		createBackend: () => fakeBackend(),
+		signalWaybar: () => {},
 	});
 	const handle = createRequestHandler(controller);
 	controller.init();

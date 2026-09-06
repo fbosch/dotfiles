@@ -1,6 +1,7 @@
 import app from "ags/gtk4/app";
 import GLib from "gi://GLib?version=2.0";
 import { createPreparationIntentClaims } from "@/services/preparation-intent";
+import { showWaybar } from "@/services/waybar-control";
 import { createAudioBackend } from "./audio-backend";
 import { AudioMixerView, type AudioMixerViewActions } from "./audio-mixer-view";
 import {
@@ -38,12 +39,7 @@ export class AudioMixerController {
 	readonly #signalWaybar: () => void;
 
 	constructor(options: AudioMixerControllerOptions = {}) {
-		this.#signalWaybar =
-			options.signalWaybar ??
-			(() =>
-				GLib.spawn_command_line_async(
-					"pkill -SIGUSR1 -f '(^|/)waybar( |$)'",
-				));
+		this.#signalWaybar = options.signalWaybar ?? showWaybar;
 		const createBackend = options.createBackend ?? createAudioBackend;
 		this.#backend = createBackend((snapshot) => {
 			this.#snapshot = snapshot;

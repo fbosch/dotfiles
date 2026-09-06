@@ -19,7 +19,7 @@ const profileState: ProfileState = {
 };
 
 test("Start Menu handles its complete request lifecycle", () => {
-	const controller = new StartMenuController();
+	const controller = new StartMenuController({ showWaybar: () => {} });
 	const handleRequest = createRequestHandler(controller);
 	controller.init();
 

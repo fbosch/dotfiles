@@ -19,6 +19,7 @@ import {
   type DeltaDetails,
   type DeltaResult,
   loadDeltaConfig,
+  normalizeHashlineDiffDetails,
   registerDeltaExtension,
   renderDiffLines,
   runDeltaEditDiff,
@@ -208,6 +209,18 @@ describe("Delta output handling", () => {
 
     expect(lines.length).toBeGreaterThan(1);
     expect(lines.every((line) => visibleWidth(line) <= 4)).toBeTrue();
+  });
+  test("hides hashline metadata from rendered diff details", () => {
+    const details = {
+      diff: " MSos│done\n+IPal│grep -Fq 'runtime/desktop/waybar-monitor.sh'",
+      diffLineNumbers: [65, 66],
+      classification: "applied",
+    };
+    expect(normalizeHashlineDiffDetails(details)).toEqual({
+      diff: " done\n+grep -Fq 'runtime/desktop/waybar-monitor.sh'",
+      diffLineNumbers: details.diffLineNumbers,
+      classification: details.classification,
+    });
   });
 });
 
@@ -475,6 +488,31 @@ describe("Delta extension", () => {
     expect(emptyRendered).toEqual([""]);
   });
 
+  test("normalizes hashline details through the tool result hook", () => {
+    let toolResultHandler: ((event: { toolName: string; details: unknown }) => unknown) | undefined;
+    const pi = {
+      registerEntryRenderer: () => {},
+      on(event: string, handler: (event: { toolName: string; details: unknown }) => unknown) {
+        if (event === "tool_result") toolResultHandler = handler;
+      },
+      registerTool: () => {},
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+    registerDeltaExtension(pi, { run: async () => diffResult });
+    if (toolResultHandler === undefined) throw new Error("tool_result handler was not registered");
+
+    const details = {
+      diff: " MSos│done\n+IPal│grep -Fq 'runtime/desktop/waybar-monitor.sh'",
+      diffLineNumbers: [65, 66],
+    };
+    expect(toolResultHandler({ toolName: "replace", details })).toEqual({
+      details: {
+        diff: " done\n+grep -Fq 'runtime/desktop/waybar-monitor.sh'",
+        diffLineNumbers: details.diffLineNumbers,
+      },
+    });
+  });
+
   test("rerenders full unified context when a diff is expanded", async () => {
     let tool: ToolDefinition | undefined;
     const requests: Array<{ context?: number }> = [];
@@ -553,7 +591,9 @@ describe("Delta extension", () => {
     await writeFile(filePath, "const value = 1;\n", "utf8");
 
     const tools = new Map<string, ToolDefinition>();
-    let sessionStart: ((event: unknown, context: ExtensionContext) => void) | undefined;
+    let sessionStart:
+      | ((event: unknown, context: ExtensionContext) => Promise<void> | void)
+      | undefined;
     const editDetails: DeltaDetails = {
       ...details,
       output: "\u001b[91m1 const value = 1;\u001b[0m\n\u001b[92m1 const value = 2;\u001b[0m",
@@ -563,7 +603,10 @@ describe("Delta extension", () => {
     let failEditDiff = false;
     const pi = {
       registerEntryRenderer: () => {},
-      on(_event: string, handler: (event: unknown, context: ExtensionContext) => void) {
+      on(
+        _event: string,
+        handler: (event: unknown, context: ExtensionContext) => Promise<void> | void,
+      ) {
         sessionStart = handler;
       },
       registerTool(definition: ToolDefinition) {
@@ -582,10 +625,13 @@ describe("Delta extension", () => {
           return editDetails;
         },
       });
-      sessionStart?.({ type: "session_start" }, { cwd: root } as ExtensionContext);
+      await sessionStart?.({ type: "session_start" }, { cwd: root } as ExtensionContext);
 
       const editTool = tools.get("edit");
       if (editTool === undefined) throw new Error("edit override was not registered");
+      const replaceTool = tools.get("replace");
+      if (replaceTool === undefined)
+        throw new Error("hashline replace override was not registered");
       const result = await editTool.execute(
         "edit-1",
         { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
@@ -611,6 +657,18 @@ describe("Delta extension", () => {
         getBgAnsi: () => "\u001b[48;2;34;34;34m",
         getFgAnsi: (color: string) => `<${color}>`,
       } as unknown as Theme;
+      const replaceRenderCall = replaceTool.renderCall;
+      if (replaceRenderCall === undefined)
+        throw new Error("hashline replace renderer was not registered");
+      expect(
+        replaceRenderCall(
+          { path: "sample.ts" },
+          theme,
+          {} as Parameters<typeof replaceRenderCall>[2],
+        )
+          .render(120)
+          .map((line) => line.trimEnd()),
+      ).toEqual(["replace sample.ts"]);
       const rendered = renderResult(result, { expanded: true, isPartial: false }, theme, {
         args: { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
         argsComplete: true,

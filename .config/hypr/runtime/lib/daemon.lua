@@ -223,6 +223,23 @@ function M.new(opts)
 			return server
 		end
 
+		local function receive_message(client)
+			local bytes = {}
+			for _ = 1, 4097 do
+				local byte, err = client:receive(1)
+				if not byte then
+					return nil, err or "incomplete-request"
+				end
+				if byte == "\n" then
+					return table.concat(bytes):gsub("\r$", "")
+				end
+				bytes[#bytes + 1] = byte
+				if #bytes > 4096 then
+					return nil, "request-too-large"
+				end
+			end
+			return nil, "request-too-large"
+		end
 		function control:handle_ready(handler)
 			assert(server, "control socket is closed")
 			local client = server:accept()
@@ -231,13 +248,20 @@ function M.new(opts)
 			end
 
 			client:settimeout(0.05)
-			local message = client:receive("*l")
+			local message, receive_error = receive_message(client)
 			local result
 			local response
-			if message == "restart" then
+			if not message then
+				response = "error: " .. receive_error
+			elseif message == "restart" then
 				result = "restart"
 			else
-				result, response = handler(message)
+				local handled, handler_result, handler_response = pcall(handler, message)
+				if handled then
+					result, response = handler_result, handler_response
+				else
+					response = "error: handler-failed"
+				end
 			end
 			client:send((response or "ok") .. "\n")
 			client:close()
@@ -268,6 +292,14 @@ function M.new(opts)
 		return content
 	end
 
+	function kit:remove_file(path)
+		local removed, err = remove(path)
+		if removed or (err and err:match("No such file")) then
+			return true
+		end
+		error(err or ("failed to remove " .. path), 0)
+	end
+
 	function kit:write_file(path, content)
 		local handle = assert(io.open(path, "w"))
 		handle:write(content)
@@ -278,9 +310,22 @@ function M.new(opts)
 		state_write_sequence = state_write_sequence + 1
 		local temporary = string.format("%s.%d.%d.tmp", path, os.time(), state_write_sequence)
 		local handle = assert(io.open(temporary, "w"))
-		handle:write(content)
-		handle:close()
-		assert(os.rename(temporary, path))
+		local written, write_error = handle:write(content)
+		if not written then
+			handle:close()
+			remove(temporary)
+			error(write_error, 0)
+		end
+		local closed, close_error = handle:close()
+		if not closed then
+			remove(temporary)
+			error(close_error, 0)
+		end
+		local renamed, rename_error = os.rename(temporary, path)
+		if not renamed then
+			remove(temporary)
+			error(rename_error, 0)
+		end
 	end
 
 	return kit

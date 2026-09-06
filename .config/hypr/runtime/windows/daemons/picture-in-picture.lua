@@ -229,8 +229,8 @@ local function handle_control(message)
 	-- then keep only the geometry for the resulting visibility state.
 	local next_waybar_visible = action == "waybar-show" or (action ~= "waybar-hide" and state.waybar_visible)
 	local transition_bars = current_bars
-	if action == "waybar-show" or action == "waybar-hide" then
-		transition_bars = refresh_bars(next_waybar_visible)
+	if action == "waybar-show" then
+		transition_bars = refresh_bars(true)
 	end
 	place(
 		socket.gettime(),

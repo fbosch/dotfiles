@@ -25,6 +25,7 @@ local window_state = loader.apply_window_rule_phase(config_dir, "window_state")
 
 require("environment")
 require("appearance")
+-- Config loading covers startup and reload; restore the in-session overlay without another reload.
 require("profiles").apply_current()
 require("rules.layer")
 require("input")

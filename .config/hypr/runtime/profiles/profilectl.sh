@@ -235,9 +235,11 @@ sync_lactd_for_profile() {
 
   if [[ "$profile" == "$GAMING_PROFILE" ]]; then
     action="start"
+  elif ! systemctl is-active --quiet "$LACTD_UNIT"; then
+    return
   fi
 
-  if systemctl "$action" "$LACTD_UNIT" >/dev/null 2>&1; then
+  if systemctl --no-ask-password "$action" "$LACTD_UNIT" >/dev/null 2>&1; then
     return
   fi
 

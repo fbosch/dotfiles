@@ -5,6 +5,8 @@ set -eu
 # Broad desktop-service recovery. Gamescope clipboard sync remains live because
 # it is independent of the desktop UI services restarted here.
 
+
+waybar_process="${HOME}/.config/hypr/runtime/desktop/waybar-process.sh"
 refresh_hyprland_instance_signature() {
   # Long-lived terminals can retain the signature of a replaced compositor.
   active_signature="$(
@@ -92,6 +94,19 @@ wait_for_waybar_monitor_shutdown() {
   done
 }
 
+wait_for_waybar_shutdown() {
+  attempts=0
+  while "$waybar_process" running >/dev/null 2>&1; do
+    if [ "$attempts" -ge 100 ]; then
+      printf 'restart-daemons: waybar did not stop\n' >&2
+      exit 1
+    fi
+
+    attempts=$((attempts + 1))
+    sleep 0.05
+  done
+}
+
 wait_for_window_capture_shutdown() {
   attempts=0
   while pgrep -f "window-capture-daemon\.(sh|lua)" >/dev/null 2>&1; do
@@ -148,7 +163,13 @@ refresh_hyprland_instance_signature
 hyprctl reload
 systemctl --user restart vicinae.service
 
-pkill -f '(^|/)waybar( |$)' 2>/dev/null || true
+# Stop the launch authority before Waybar so an accepted cold launch cannot escape recovery.
+pkill -f "waybar-monitor.sh" 2>/dev/null || true
+pkill -f "waybar-monitor.lua" 2>/dev/null || true
+wait_for_waybar_monitor_shutdown
+"$waybar_process" stop-unit 2>/dev/null || true
+"$waybar_process" signal TERM 2>/dev/null || true
+wait_for_waybar_shutdown
 pkill swaync 2>/dev/null || true
 pkill hyprpaper 2>/dev/null || true
 pkill hypridle 2>/dev/null || true
@@ -162,14 +183,11 @@ pkill -f "window-capture-daemon" 2>/dev/null || true
 pkill -f "gaming-session-watchdog" 2>/dev/null || true
 pkill -f "picture-in-picture.sh" 2>/dev/null || true
 pkill -f "picture-in-picture.lua" 2>/dev/null || true
-pkill -f "waybar-monitor.sh" 2>/dev/null || true
-pkill -f "waybar-monitor.lua" 2>/dev/null || true
 # Night light owns hyprsunset; wait for its cleanup before starting a replacement.
 pkill -f "night-light.sh daemon" 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 
 wait_for_pip_shutdown
-wait_for_waybar_monitor_shutdown
 wait_for_window_capture_shutdown
 wait_for_window_state_shutdown
 wait_for_night_light_shutdown
@@ -184,8 +202,7 @@ uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-ca
 uwsm-app -s b -- ~/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/picture-in-picture.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/desktop/night-light.sh daemon &
-uwsm-app -s s -- waybar &
+uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
 uwsm-app -s s -- hyprpaper &
 uwsm-app -s s -- swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css &
 uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
-uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &

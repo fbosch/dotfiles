@@ -8,7 +8,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   BorderedLoader,
@@ -55,6 +55,10 @@ const SIDE_BY_SIDE_MIN_WIDTH = 96;
 const COLLAPSED_LINES = 24;
 const MAX_PATHS = 100;
 const ENTRY_TYPE = "delta-git-diff";
+const HASHLINE_DIFF_TOOLS = new Set(["replace", "insert", "undo_last_change"]);
+// Hashline metadata addresses tool edits but should not appear in the renderer's source view.
+const HASHLINE_DIFF_ROW_PATTERN = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/mu;
+const HASHLINE_DIFF_ROW_REPLACEMENT = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/gmu;
 const ESCAPE = "\u001b";
 const SGR_SUFFIX_PATTERN = /^\[[0-9;]*m/;
 const SGR_PATTERN = new RegExp(`${ESCAPE}\\[([0-9;]*)m`, "g");
@@ -243,6 +247,137 @@ export function sanitizeTerminalOutput(value: string): string {
   }
 
   return output;
+}
+
+export function normalizeHashlineDiffDetails(details: unknown): unknown {
+  if (details === null || typeof details !== "object" || Array.isArray(details)) return details;
+  const record = details as Record<string, unknown>;
+  if (
+    typeof record.diff !== "string" ||
+    !Array.isArray(record.diffLineNumbers) ||
+    !HASHLINE_DIFF_ROW_PATTERN.test(record.diff)
+  ) {
+    return details;
+  }
+
+  const normalized = { ...record };
+  normalized.diff = record.diff.replace(HASHLINE_DIFF_ROW_REPLACEMENT, "$1");
+  return normalized;
+}
+
+type HashlineToolExecute = NonNullable<ToolDefinition["execute"]>;
+type HashlineDeltaDetails = Record<string, unknown> & { readonly delta?: DeltaDetails };
+
+function hashlinePath(value: unknown): string | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const path = (value as Record<string, unknown>).path;
+  return typeof path === "string" && path.length > 0 ? path : undefined;
+}
+
+async function readHashlineFile(path: string, cwd: string): Promise<string | undefined> {
+  try {
+    return await fsReadFile(resolve(cwd, path.replace(/^@/u, "")), "utf8");
+  } catch {
+    return undefined;
+  }
+}
+
+function isDeltaDetails(value: unknown): value is DeltaDetails {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    (record.display === "inline" || record.display === "side-by-side") &&
+    typeof record.noChanges === "boolean" &&
+    typeof record.output === "string" &&
+    typeof record.scope === "string" &&
+    typeof record.width === "number"
+  );
+}
+
+interface HashlineToolModule {
+  readonly buildToolDef?: () => ToolDefinition;
+  readonly buildInsertToolDef?: () => ToolDefinition;
+}
+
+async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
+  const tools: ToolDefinition[] = [];
+  try {
+    const replaceModule = (await import(
+      new URL("../../npm/node_modules/pi-hashline-edit-pro/src/replace.ts", import.meta.url).href
+    )) as unknown as HashlineToolModule;
+    if (replaceModule.buildToolDef !== undefined) tools.push(replaceModule.buildToolDef());
+  } catch {
+    return tools;
+  }
+
+  try {
+    const insertModule = (await import(
+      new URL("../../npm/node_modules/pi-hashline-edit-pro/src/insert.ts", import.meta.url).href
+    )) as unknown as HashlineToolModule;
+    if (insertModule.buildInsertToolDef !== undefined)
+      tools.push(insertModule.buildInsertToolDef());
+  } catch {
+    // Replace remains useful when the optional insert module is unavailable.
+  }
+  return tools;
+}
+function wrapHashlineTool(
+  tool: ToolDefinition,
+  cwd: string,
+  runEdit: EditDiffRunner,
+): ToolDefinition {
+  const originalExecute = tool.execute;
+  const originalRenderResult = tool.renderResult;
+  if (originalExecute === undefined || originalRenderResult === undefined) return tool;
+
+  const execute: HashlineToolExecute = async (toolCallId, params, signal, onUpdate, ctx) => {
+    const path = hashlinePath(params);
+    const oldContent = path === undefined ? undefined : await readHashlineFile(path, cwd);
+    const result = await originalExecute(toolCallId, params, signal, onUpdate, ctx);
+    if (path === undefined || oldContent === undefined) return result;
+
+    const newContent = await readHashlineFile(path, cwd);
+    if (newContent === undefined || newContent === oldContent) return result;
+
+    try {
+      const delta = await runEdit({ path, oldContent, newContent }, cwd, signal);
+      return {
+        ...result,
+        details: {
+          ...((result.details ?? {}) as Record<string, unknown>),
+          delta,
+        } as HashlineDeltaDetails,
+      };
+    } catch {
+      return result;
+    }
+  };
+
+  const renderCall: NonNullable<ToolDefinition["renderCall"]> = (args, theme) => {
+    const path = hashlinePath(args);
+    const label = theme.fg("toolTitle", theme.bold(tool.name));
+    return new Text(path === undefined ? label : `${label} ${theme.fg("accent", path)}`, 0, 0);
+  };
+
+  const renderResult: NonNullable<ToolDefinition["renderResult"]> = (
+    result,
+    options,
+    theme,
+    context,
+  ) => {
+    const details = result.details as HashlineDeltaDetails | undefined;
+    if (isDeltaDetails(details?.delta)) {
+      return renderEditDeltaResult(
+        { content: result.content as Array<{ type: string; text?: string }> },
+        details.delta,
+        options.expanded === true || context.expanded === true,
+        theme,
+      );
+    }
+    return originalRenderResult(result, options, theme, context);
+  };
+
+  return { ...tool, execute, renderCall, renderResult };
 }
 
 function stripSgr(value: string): string {
@@ -1363,6 +1498,13 @@ export function registerDeltaExtension(
   const previewControllers = new Set<AbortController>();
   const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
+  pi.on("tool_result", (event) => {
+    if (!HASHLINE_DIFF_TOOLS.has(event.toolName)) return;
+    const details = normalizeHashlineDiffDetails(event.details);
+    if (details === event.details) return;
+    return { details };
+  });
+
   pi.on("session_shutdown", () => {
     for (const controller of previewControllers) controller.abort();
     for (const controller of expansionControllers) controller.abort();
@@ -1370,9 +1512,12 @@ export function registerDeltaExtension(
     expansionControllers.clear();
   });
 
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", async (_event, ctx) => {
     if (shouldUseEditPreviews(ctx)) {
       pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
+      for (const tool of await loadHashlineDeltaTools()) {
+        pi.registerTool(wrapHashlineTool(tool, ctx.cwd, runEdit));
+      }
     }
   });
 

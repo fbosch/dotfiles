@@ -125,14 +125,20 @@ end)
 
 it("owns the one-line control socket lifecycle", function()
 	local calls = {}
-	local control_message = "quit"
+	local control_message = "quit\n"
+	local control_offset = 1
 	local client = {
 		settimeout = function(_, timeout)
 			calls.client_timeout = timeout
 		end,
 		receive = function(_, mode)
 			calls.receive_mode = mode
-			return control_message
+			local byte = control_message:sub(control_offset, control_offset)
+			if byte == "" then
+				return nil, "closed"
+			end
+			control_offset = control_offset + 1
+			return byte
 		end,
 		send = function(_, response)
 			calls.response = response
@@ -188,17 +194,20 @@ it("owns the one-line control socket lifecycle", function()
 		"quit result"
 	)
 	assert_equal(received, "quit", "one-line message")
-	assert_equal(calls.receive_mode, "*l", "line read mode")
+	assert_equal(calls.receive_mode, 1, "bounded byte read mode")
 	assert_equal(calls.client_timeout, 0.05, "bounded client read")
 	assert_equal(calls.response, "ok\n", "health acknowledgement")
 	assert_equal(calls.client_closed, true, "client closes after acknowledgement")
 
+	control_message = "feature\n"
+	control_offset = 1
 	control:handle_ready(function()
 		return false, "error"
 	end)
 	assert_equal(calls.response, "error\n", "feature-specific acknowledgement")
 
-	control_message = "restart"
+	control_message = "restart\n"
+	control_offset = 1
 	local feature_handler_called = false
 	assert_equal(
 		control:handle_ready(function()
@@ -209,6 +218,27 @@ it("owns the one-line control socket lifecycle", function()
 		"restart result"
 	)
 	assert_equal(feature_handler_called, false, "restart bypasses feature handlers")
+
+	control_message = ""
+	control_offset = 1
+	control:handle_ready(function()
+		error("incomplete requests must not reach the feature handler")
+	end)
+	assert_equal(calls.response, "error: closed\n", "incomplete request rejected")
+
+	control_message = string.rep("x", 4097) .. "\n"
+	control_offset = 1
+	control:handle_ready(function()
+		error("oversized requests must not reach the feature handler")
+	end)
+	assert_equal(calls.response, "error: request-too-large\n", "oversized request rejected")
+
+	control_message = "explode\n"
+	control_offset = 1
+	control:handle_ready(function()
+		error("simulated handler failure")
+	end)
+	assert_equal(calls.response, "error: handler-failed\n", "handler failure contained")
 
 	control:close()
 	control:close()

@@ -2,6 +2,7 @@ import app from "ags/gtk4/app";
 import Gio from "gi://Gio?version=2.0";
 import GLib from "gi://GLib?version=2.0";
 import { createPreparationIntentClaims } from "@/services/preparation-intent";
+import { showWaybar } from "@/services/waybar-control";
 import {
 	createCalendarBackend,
 	type CalendarBackend,
@@ -44,12 +45,7 @@ export class CalendarController {
 	#hiddenTeardownSource = 0;
 
 	constructor(dependencies: CalendarControllerDependencies = {}) {
-		this.#signalWaybar =
-			dependencies.signalWaybar ??
-			(() =>
-				GLib.spawn_command_line_async(
-					"pkill -SIGUSR1 -f '(^|/)waybar( |$)'",
-				));
+		this.#signalWaybar = dependencies.signalWaybar ?? showWaybar;
 		const createView =
 			dependencies.createView ??
 			((actions: CalendarViewActions) => new CalendarView(actions));

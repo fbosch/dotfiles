@@ -63,6 +63,13 @@ write_daemon_launcher() {
 write_daemon_launcher "$home_dir/.config/hypr/runtime/windows/daemons/picture-in-picture.sh"
 write_daemon_launcher "$home_dir/.config/hypr/runtime/desktop/waybar-monitor.sh"
 
+# shellcheck disable=SC2016
+printf '%s\n' \
+	'#!/bin/sh' \
+	'printf "%s %s\n" "${0##*/}" "$*" >> "$FIXTURE_LOG"' \
+	'[ "${1:-}" != "running" ] || [ -e "$WAYBAR_STARTED_FILE" ]' \
+	> "$home_dir/.config/hypr/runtime/desktop/waybar-process.sh"
+chmod +x "$home_dir/.config/hypr/runtime/desktop/waybar-process.sh"
 assert_contains() {
   local file="$1" expected="$2"
   if ! grep -Fqx "$expected" "$file"; then
@@ -147,7 +154,7 @@ SYSTEMD_HYPRLAND_INSTANCE_SIGNATURE=current-instance HYPRLAND_INSTANCE_SIGNATURE
   FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
 # The recovery script intentionally launches replacements in the background.
 # Wait for every launcher stub before assertions or fixture cleanup can race it.
-wait_for_log_count "$restart_log" uwsm-app 14
+wait_for_log_count "$restart_log" uwsm-app 13
 assert_contains "$restart_log" 'pkill -f gaming-session-watchdog'
 assert_contains "$restart_log" 'pgrep -f gaming-session-watchdog\.(sh|lua)'
 assert_contains "$restart_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh"
@@ -157,6 +164,7 @@ assert_contains "$restart_log" 'uwsm-app -s s -- atuin daemon start'
 assert_not_contains "$restart_log" 'minimized-state-daemon'
 assert_not_contains "$restart_log" 'pkill -f custom-layout-drag-resize'
 assert_not_contains "$restart_log" 'pkill -f gamescope-clipboard-sync'
+assert_not_contains "$restart_log" 'uwsm-app -s s -- waybar'
 
 # Make every normal shutdown probe take one second. The hyprpaper probe reports
 # a zombie; it must be ignored. Parallel waits keep reset below three seconds;
@@ -174,14 +182,15 @@ if (( SECONDS > 2 )); then
   printf 'reset-desktop shutdown waits ran serially (%ss)\n' "$SECONDS" >&2
   exit 1
 fi
-wait_for_log_count "$reset_log" uwsm-app 7
+wait_for_log_count "$reset_log" uwsm-app 6
 wait_for_log_count "$reset_log" swaync-client 2
-assert_contains "$reset_log" 'pgrep -f (^|/)waybar( |$)'
+assert_contains "$reset_log" 'waybar-process.sh running'
 assert_contains "$reset_log" 'hyprctl reload'
 assert_contains "$reset_log" 'pgrep -x hyprpaper'
 assert_contains "$reset_log" 'ps -o stat= -p 4242'
 assert_contains "$reset_log" 'pkill -CONT -f window-capture-daemon'
 assert_contains "$reset_log" 'uwsm-app -s s -- hyprpaper'
+assert_not_contains "$reset_log" 'uwsm-app -s s -- waybar'
 assert_not_contains "$reset_log" 'custom-layout-drag-resize'
 assert_not_contains "$reset_log" 'pkill -f minimized-state-daemon'
 assert_not_contains "$reset_log" 'pkill -f gaming-session-watchdog'

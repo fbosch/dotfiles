@@ -55,7 +55,8 @@
     "npm:@juicesharp/rpiv-todo@2.9.0",
     "npm:@narumitw/pi-btw@0.57.0",
     "npm:pi-worktrunk@0.8.0",
-    "npm:pi-mono-figma"
+    "npm:pi-mono-figma@0.2.2",
+    "npm:pi-hashline-edit-pro@3.0.4"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0

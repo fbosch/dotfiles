@@ -388,6 +388,20 @@ describe("picture-in-picture daemon adapter", function()
 		assert.same({}, result.reducer_inputs[3].bars)
 	end)
 
+	it("retains predicted bar geometry when a cold Waybar launch is withdrawn", function()
+		local result = run_daemon({
+			selected = { "control", "control", "control" },
+			control_messages = { "waybar-show", "waybar-hide", "quit" },
+		})
+
+		assert.equal("waybar-show", result.reducer_inputs[2].event.action)
+		assert.equal(1, #result.reducer_inputs[2].bars["DP-1"])
+		assert.equal("waybar-hide", result.reducer_inputs[3].event.action)
+		assert.same(result.reducer_inputs[2].bars, result.reducer_inputs[3].bars)
+		assert.equal("quit", result.reducer_inputs[4].event.action)
+		assert.same({}, result.reducer_inputs[4].bars)
+	end)
+
 	it("reconnects after an event socket closes and rate-limits a rejected placement acceptance", function()
 		local result = run_daemon({
 			selected = { "event", "control" },

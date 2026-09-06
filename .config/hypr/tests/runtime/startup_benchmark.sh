@@ -65,11 +65,19 @@ run_recorder mark complete-3 ags-component-host-main-complete 32.000000000
 [[ ! -e "$state_dir/armed" ]]
 grep -Fq 'n=3' < <(run_recorder report)
 
+runtime_dir="$state_dir/runtime"
+mkdir -p \
+	"$runtime_dir/hypr/login-lua" \
+	"$runtime_dir/hypr/unarmed-lua" \
+	"$runtime_dir/hypr/faulty-load" \
+	"$runtime_dir/hypr/faulty-callback"
+
 commands_file="$state_dir/commands"
 mkdir -p "$state_dir/home/.local/state/hypr-startup-benchmark"
 touch "$state_dir/home/.local/state/hypr-startup-benchmark/armed"
 HYPR_DIR="$hypr_dir" COMMANDS_FILE="$commands_file" HOME="$state_dir/home" \
-  XDG_STATE_HOME="$state_dir/home/.local/state" HYPRLAND_INSTANCE_SIGNATURE="login-lua" luajit - <<'LUA'
+  XDG_RUNTIME_DIR="$runtime_dir" XDG_STATE_HOME="$state_dir/home/.local/state" \
+  HYPRLAND_INSTANCE_SIGNATURE="login-lua" luajit - <<'LUA'
 local root = assert(os.getenv("HYPR_DIR"))
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 local events = {}
@@ -85,18 +93,38 @@ hl = {
 }
 require("autostart")
 assert(events["config.reloaded"] == nil)
+assert(type(events["layer.opened"]) == "function")
+assert(type(events["layer.closed"]) == "function")
 events["hyprland.start"]()
+local command_count = 0
+for _ in io.lines(assert(os.getenv("COMMANDS_FILE"))) do
+  command_count = command_count + 1
+end
+events["hyprland.start"]()
+local repeated_count = 0
+for _ in io.lines(assert(os.getenv("COMMANDS_FILE"))) do
+  repeated_count = repeated_count + 1
+end
+assert(repeated_count == command_count)
 events["layer.opened"]({ namespace = "waybar" })
+events["layer.closed"]({ namespace = "waybar" })
 LUA
 first_command="$(head -n 1 "$commands_file")"
 [[ "$first_command" == *"startup-recorder.sh' 'begin' 'login-lua'"* ]]
 [[ ! "$first_command" =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]
 grep -Fq "startup-recorder.sh' 'mark' 'login-lua' 'waybar-layer-mapped'" "$commands_file"
 grep -Fq "uwsm-app -s s -- env HYPR_STARTUP_BENCHMARK_SESSION='login-lua' ~/.config/ags/start-daemons.sh" "$commands_file"
+grep -Fq 'runtime/desktop/waybar-monitor.sh' "$commands_file"
+grep -Fq "waybar-monitor.sh' 'layer-opened'" "$commands_file"
+grep -Fq "waybar-monitor.sh' 'layer-closed'" "$commands_file"
+if grep -Fq 'uwsm-app -s s -- waybar' "$commands_file"; then
+  exit 1
+fi
 
 unarmed_commands="$state_dir/unarmed-commands"
 HYPR_DIR="$hypr_dir" COMMANDS_FILE="$unarmed_commands" HOME="$state_dir/unarmed-home" \
-  XDG_STATE_HOME="$state_dir/unarmed-home/.local/state" HYPRLAND_INSTANCE_SIGNATURE="unarmed-lua" luajit - <<'LUA'
+  XDG_RUNTIME_DIR="$runtime_dir" XDG_STATE_HOME="$state_dir/unarmed-home/.local/state" \
+  HYPRLAND_INSTANCE_SIGNATURE="unarmed-lua" luajit - <<'LUA'
 local root = assert(os.getenv("HYPR_DIR"))
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 local events = {}
@@ -111,17 +139,23 @@ hl = {
   end,
 }
 require("autostart")
-assert(events["layer.opened"] == nil)
+assert(type(events["layer.opened"]) == "function")
+assert(type(events["layer.closed"]) == "function")
 events["hyprland.start"]()
 LUA
 if grep -Fq 'startup-recorder.sh' "$unarmed_commands"; then
   exit 1
 fi
 grep -Fq 'uwsm-app -s s -- ~/.config/ags/start-daemons.sh' "$unarmed_commands"
+grep -Fq 'runtime/desktop/waybar-monitor.sh' "$unarmed_commands"
+if grep -Fq 'uwsm-app -s s -- waybar' "$unarmed_commands"; then
+  exit 1
+fi
 
 # Recorder load failures must not block the normal desktop launch path.
 faulty_load_commands="$state_dir/faulty-load-commands"
-HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_load_commands" HYPRLAND_INSTANCE_SIGNATURE="faulty-load" luajit - <<'LUA'
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_load_commands" XDG_RUNTIME_DIR="$runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE="faulty-load" luajit - <<'LUA'
 local root = assert(os.getenv("HYPR_DIR"))
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 package.preload["benchmarks.startup-recorder"] = function()
@@ -139,7 +173,8 @@ hl = {
   end,
 }
 require("autostart")
-assert(events["layer.opened"] == nil)
+assert(type(events["layer.opened"]) == "function")
+assert(type(events["layer.closed"]) == "function")
 events["hyprland.start"]()
 LUA
 grep -Fq 'uwsm-app -s s -- ~/.config/ags/start-daemons.sh' "$faulty_load_commands"
@@ -149,7 +184,8 @@ fi
 
 # Recorder generation and dispatch failures must not block app startup or escape event handlers.
 faulty_callback_commands="$state_dir/faulty-callback-commands"
-HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_callback_commands" HYPRLAND_INSTANCE_SIGNATURE="faulty-callback" luajit - <<'LUA'
+HYPR_DIR="$hypr_dir" COMMANDS_FILE="$faulty_callback_commands" XDG_RUNTIME_DIR="$runtime_dir" \
+  HYPRLAND_INSTANCE_SIGNATURE="faulty-callback" luajit - <<'LUA'
 local root = assert(os.getenv("HYPR_DIR"))
 package.path = root .. "/?.lua;" .. root .. "/?/init.lua;" .. package.path
 package.preload["benchmarks.startup-recorder"] = function()

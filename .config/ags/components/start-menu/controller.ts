@@ -26,6 +26,7 @@ import {
 import { aboutThisPCLifecycle } from "@/components/about-this-pc/lifecycle";
 import type { AboutThisPCPreparationSource } from "@/components/about-this-pc/isolated-component";
 import { openUtility, prepareUtility } from "@/services/utility-manager";
+import { showWaybar } from "@/services/waybar-control";
 import { dispatchStartMenuAction } from "./actions";
 import {
 	createMenuCommands,
@@ -41,6 +42,10 @@ import { UpdatesCache } from "./updates-cache";
 import type { UpdatesSnapshot } from "./updates-policy";
 
 type StartMenuActor = ActorRefFrom<typeof startMenuMachine>;
+
+interface StartMenuControllerOptions {
+	showWaybar?: () => void;
+}
 
 const emptyUpdates: UpdatesSnapshot = { flake: null, flatpak: null };
 const aboutThisPCPreparationSources = {
@@ -63,6 +68,7 @@ export class StartMenuController {
 		createPreparationIntentClaims<StartMenuPreparationSource>();
 	#cache = new UpdatesCache();
 	#commands = createMenuCommands();
+	readonly #showWaybarEffect: () => void;
 	#view = new StartMenuView({
 		getModel: () => ({
 			profileState: this.#profileState,
@@ -105,6 +111,10 @@ export class StartMenuController {
 		isMenuVisible: () => this.isVisible(),
 		isRecentItemsVisible: () => this.#recentItemsAreVisible(),
 	});
+
+	constructor(options: StartMenuControllerOptions = {}) {
+		this.#showWaybarEffect = options.showWaybar ?? showWaybar;
+	}
 
 	init(): void {
 		if (this.#actor === null) {
@@ -313,7 +323,7 @@ export class StartMenuController {
 
 	#showWaybar(): void {
 		try {
-			GLib.spawn_command_line_async("pkill -SIGUSR1 -f '(^|/)waybar( |$)'");
+			this.#showWaybarEffect();
 		} catch (error) {
 			console.error("Failed to show waybar:", error);
 		}

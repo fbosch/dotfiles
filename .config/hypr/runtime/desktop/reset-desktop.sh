@@ -6,10 +6,10 @@ set -u
 # gaming watchdog, Gamescope clipboard sync, and night light running because
 # they retain independent state or do not need the rebuilt desktop UI.
 
-waybar_process_pattern='(^|/)waybar( |$)'
+waybar_process="${HOME}/.config/hypr/runtime/desktop/waybar-process.sh"
 
 has_live_waybar() {
-  pgrep -f "$waybar_process_pattern" >/dev/null 2>&1
+  "$waybar_process" running
 }
 
 wait_for_shutdown() {
@@ -51,15 +51,13 @@ wait_for_shutdowns() {
   # A zombie cannot own a background layer and must not block recovery.
   wait_for_shutdown "hyprpaper" has_live_named_process hyprpaper &
   hyprpaper_pid=$!
-  wait_for_shutdown "waybar monitor" pgrep -f "waybar-monitor\.(sh|lua)" &
-  waybar_monitor_pid=$!
   wait_for_shutdown "window capture" pgrep -f "window-capture-daemon\.(sh|lua)" &
   window_capture_pid=$!
   wait_for_shutdown "window state" pgrep -f "window-state(-daemon)?\.(sh|lua)" &
   window_state_pid=$!
 
   status=0
-  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$waybar_monitor_pid" "$window_capture_pid" "$window_state_pid"; do
+  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$window_capture_pid" "$window_state_pid"; do
     if wait "$pid"; then
       continue
     fi
@@ -70,11 +68,16 @@ wait_for_shutdowns() {
   [ "$status" -eq 0 ]
 }
 
-pkill -f "$waybar_process_pattern" 2>/dev/null || true
-pkill gjs 2>/dev/null || true
-pkill -f "foot --server" 2>/dev/null || true
+# Stop the launch authority before Waybar so an accepted cold launch cannot escape recovery.
 pkill -f "waybar-monitor.sh" 2>/dev/null || true
 pkill -f "waybar-monitor.lua" 2>/dev/null || true
+if ! wait_for_shutdown "waybar monitor" pgrep -f "waybar-monitor\.(sh|lua)"; then
+  printf 'reset-desktop: continuing after incomplete waybar monitor shutdown\n' >&2
+fi
+"$waybar_process" stop-unit 2>/dev/null || true
+"$waybar_process" signal TERM 2>/dev/null || true
+pkill gjs 2>/dev/null || true
+pkill -f "foot --server" 2>/dev/null || true
 pkill -f window-state.sh 2>/dev/null || true
 pkill -f window-state-daemon.lua 2>/dev/null || true
 pkill -CONT -f window-capture-daemon 2>/dev/null || true
@@ -89,9 +92,8 @@ if ! hyprctl reload; then
   printf 'reset-desktop: Hyprland reload failed; continuing\n' >&2
 fi
 
-uwsm-app -s s -- waybar &
-uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s s -- ~/.config/hypr/runtime/desktop/waybar-monitor.sh &
+uwsm-app -s s -- ~/.config/ags/start-daemons.sh &
 uwsm-app -s b -- foot --server &
 swaync-client -R &
 swaync-client -rs &

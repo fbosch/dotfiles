@@ -1,5 +1,6 @@
 -- Autostart commands ported from autostart.conf.
 
+local command_util = require("lib.command")
 local paths = require("lib.paths")
 local startup_benchmark_ok, startup_benchmark = pcall(require, "benchmarks.startup-recorder")
 local system = require("lib.system")
@@ -33,6 +34,29 @@ local function record_benchmark(command)
 	end
 end
 
+local function claim_autostart()
+	local runtime_dir = os.getenv("XDG_RUNTIME_DIR")
+	local signature = os.getenv("HYPRLAND_INSTANCE_SIGNATURE")
+	if not runtime_dir or not signature or signature == "" then
+		return true
+	end
+
+	local marker = runtime_dir .. "/hypr/" .. signature .. "/autostart.claimed"
+	local existing = io.open(marker, "r")
+	if existing then
+		existing:close()
+		return false
+	end
+
+	local handle = io.open(marker, "w")
+	if not handle then
+		return false
+	end
+	handle:write(signature, "\n")
+	handle:close()
+	return true
+end
+
 local benchmark_armed = benchmark_is_armed()
 local ags_command = "~/.config/ags/start-daemons.sh"
 if benchmark_armed then
@@ -44,7 +68,10 @@ if benchmark_armed then
 	end
 end
 
+local waybar_monitor = paths.runtime_script("desktop/waybar-monitor.sh")
 local commands = {
+	-- Start the demand owner early; it does not launch Waybar until requested.
+	session(waybar_monitor),
 	session("atuin daemon start"),
 	background("foot --server"),
 	background("swayosd-server"),
@@ -54,12 +81,9 @@ local commands = {
 	background(paths.runtime_script("gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh")),
 	background(paths.runtime_script("gaming/gamescope-clipboard-sync.sh")),
 	session("hyprpaper"),
-	session("waybar"),
 	session("swaync -c ~/.config/swaync/config.json -s ~/.config/swaync/style.css"),
 	session(ags_command),
 	background(paths.runtime_script("desktop/night-light.sh") .. " daemon"),
-	-- Session-scoped because it coordinates Waybar, AGS, SwayNC, and PiP.
-	session(paths.runtime_script("desktop/waybar-monitor.sh")),
 	paths.runtime_script("startup/startup-desktop-ready.sh"),
 }
 
@@ -68,22 +92,36 @@ if host == "rvn-pc" then
 end
 
 local function run_commands()
-	for _, command in ipairs(commands) do
-		hl.exec_cmd(command)
+	for _, startup_command in ipairs(commands) do
+		hl.exec_cmd(startup_command)
 	end
 end
 
-if benchmark_armed then
-	hl.on("hyprland.start", function()
-		record_benchmark(startup_benchmark.begin)
-		run_commands()
-	end)
+local function notify_waybar_monitor(event)
+	pcall(hl.exec_cmd, command_util.line(waybar_monitor, event) .. " >/dev/null 2>&1")
+end
 
-	hl.on("layer.opened", function(layer)
-		if layer and layer.namespace == "waybar" then
+hl.on("hyprland.start", function()
+	if not claim_autostart() then
+		return
+	end
+	if benchmark_armed then
+		record_benchmark(startup_benchmark.begin)
+	end
+	run_commands()
+end)
+
+hl.on("layer.opened", function(layer)
+	if layer and layer.namespace == "waybar" then
+		notify_waybar_monitor("layer-opened")
+		if benchmark_armed then
 			record_benchmark(startup_benchmark.mark_waybar_layer_mapped)
 		end
-	end)
-else
-	hl.on("hyprland.start", run_commands)
-end
+	end
+end)
+
+hl.on("layer.closed", function(layer)
+	if layer and layer.namespace == "waybar" then
+		notify_waybar_monitor("layer-closed")
+	end
+end)

@@ -155,7 +155,10 @@ cat > "$bin_dir/systemctl" <<'EOF'
 #!/usr/bin/env bash
 printf '%s %s\n' "${0##*/}" "$*" >> "$ACTUATOR_LOG"
 
-if [[ "${PROFILECTL_TEST_FAIL_LACT_ACTION:-}" == "${1:-}" ]]; then
+if [[ "${1:-}" == "is-active" && "${PROFILECTL_TEST_LACT_ACTIVE:-1}" == "0" ]]; then
+  exit 3
+fi
+if [[ "${1:-}" == "--no-ask-password" && "${PROFILECTL_TEST_FAIL_LACT_ACTION:-}" == "${2:-}" ]]; then
   exit 1
 fi
 EOF
@@ -221,13 +224,18 @@ assert_absent "$runtime_dir/hypr-profiles/profile-overlay.mode"
 assert_absent "$runtime_dir/hypr-profiles/profile-overlay.active"
 assert_file_not_contains "$actuator_log" "ags request"
 assert_file_contains "$actuator_log" "window-capturectl.sh pause"
-assert_file_contains "$actuator_log" "systemctl stop lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
 json_status="$(run_profilectl status --json)"
 [[ "$json_status" == "$(< "$runtime_dir/hypr-profiles/state.json")" ]] || fail "JSON status did not return canonical state"
 
 reset_profile_state
+: > "$actuator_log"
+PROFILECTL_TEST_LACT_ACTIVE=0 run_profilectl clear-manual
+assert_file_not_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
+
+reset_profile_state
 run_profilectl sync-source gaming watchdog 1
-assert_file_contains "$actuator_log" "systemctl start lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password start lactd.service"
 state_before="$(< "$runtime_dir/hypr-profiles/state.json")"
 : > "$actuator_log"
 run_profilectl sync-source gaming watchdog 1
@@ -241,10 +249,10 @@ run_profilectl sync-source powersave idle 1
 run_profilectl sync-source gaming gamemode 1
 run_profilectl sync-source gaming watchdog 0
 assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"gaming"'
-assert_file_not_contains "$actuator_log" "systemctl stop lactd.service"
+assert_file_not_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
 run_profilectl sync-source gaming gamemode 0
 assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"powersave"'
-assert_file_contains "$actuator_log" "systemctl stop lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
 run_profilectl sync-source powersave idle 0
 assert_file_contains "$runtime_dir/hypr-profiles/state.json" '"resolved":"default"'
 
@@ -271,8 +279,8 @@ if PROFILECTL_TEST_FAIL_LACT_ACTION=start run_profilectl set-manual gaming >/dev
   fail "profilectl accepted a failed lactd activation"
 fi
 assert_absent "$runtime_dir/hypr-profiles/state.json"
-assert_file_contains "$actuator_log" "systemctl start lactd.service"
-assert_file_contains "$actuator_log" "systemctl stop lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password start lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
 
 reset_profile_state
 run_profilectl set-manual gaming
@@ -282,8 +290,8 @@ if PROFILECTL_TEST_FAIL_LACT_ACTION=stop run_profilectl set-manual default >/dev
   fail "profilectl accepted a failed lactd deactivation"
 fi
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
-assert_file_contains "$actuator_log" "systemctl stop lactd.service"
-assert_file_contains "$actuator_log" "systemctl start lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password start lactd.service"
 
 reset_profile_state
 if HYPRCTL_FAIL_GAMING=1 HYPRCTL_FAIL_DEFAULT=1 run_profilectl set-manual gaming >/dev/null 2>&1; then
@@ -388,8 +396,8 @@ fi
 assert_file_equals "$runtime_dir/hypr-profiles/state.json" "$state_before"
 assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("gaming")'
 assert_file_contains "$actuator_log" 'hyprctl eval require("profiles").apply("powersave")'
-assert_file_contains "$actuator_log" "systemctl start lactd.service"
-assert_file_contains "$actuator_log" "systemctl stop lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password start lactd.service"
+assert_file_contains "$actuator_log" "systemctl --no-ask-password stop lactd.service"
 
 if [[ "$(uname -s)" == Linux ]]; then
   if luajit "$home_dir/.config/hypr/runtime/profiles/profile-state.lua" encode 1 auto default >/dev/full 2>/dev/null; then
