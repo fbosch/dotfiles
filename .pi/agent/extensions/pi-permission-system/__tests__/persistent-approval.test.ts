@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -104,7 +105,7 @@ describe("persistent approval prompt", () => {
     const decision = await dialogModule.requestPermissionDecisionFromUi(
       ui,
       "Permission Required",
-      "Read a reference",
+      "command : printf secret > .pi/mcp.json",
       {
         persistentScope: {
           agentLabel: "This agent/mode: lookup",
@@ -126,6 +127,7 @@ describe("persistent approval prompt", () => {
       "Deny",
       "Deny with reason",
     ]);
+    expect(calls[1]?.title).toContain("command : printf secret > .pi/mcp.json");
     expect(calls[1]?.options).toEqual(["This agent/mode: lookup", "All agents/modes"]);
   });
 
@@ -380,16 +382,50 @@ describe("persistent approval storage", () => {
     );
     symlinkSync(target, profile);
 
-    new storeModule.PersistentApprovalStore(agentDir).persistApproval(
-      createApproval("bash", "git status:short"),
-      "agent",
-      "lookup",
-    );
+    const store = new storeModule.PersistentApprovalStore(agentDir);
+    store.persistApproval(createApproval("bash", "git status:short"), "agent", "lookup");
+    store.persistApproval(createApproval("bash", "git log"), "agent", "lookup");
 
     expect(existsSync(profile)).toBe(true);
-    expect(readFileSync(profile, "utf8")).toContain('"git status:short": "allow"');
-    expect(readFileSync(profile, "utf8")).toContain("Body remains intact.");
+    expect(lstatSync(profile).isSymbolicLink()).toBe(true);
+    const markdown = readFileSync(profile, "utf8");
+    expect(markdown).toContain('"git status:short": "allow"');
+    expect(markdown).toContain('"git log": "allow"');
+    expect(markdown.match(/^permission:/gm)).toHaveLength(1);
+    expect(markdown).toContain("Body remains intact.");
     expect(readFileSync(target, "utf8")).toContain("description: Lookup profile");
+  });
+
+  test("leaves a dangling global-config symlink untouched", () => {
+    const agentDir = createAgentDir();
+    const configPath = join(agentDir, "extensions/pi-permission-system/config.json");
+    symlinkSync(join(agentDir, "missing-config.json"), configPath);
+
+    expect(() =>
+      new storeModule.PersistentApprovalStore(agentDir).persistApproval(
+        createApproval("bash", "git status"),
+        "global",
+      ),
+    ).toThrow("has no readable target");
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true);
+  });
+
+  test("fails closed while another process owns the config update lock", () => {
+    const agentDir = createAgentDir();
+    const configPath = join(agentDir, "extensions/pi-permission-system/config.json");
+    writeFileSync(configPath, '{"permission":{"*":"ask"}}\n');
+    writeFileSync(
+      `${configPath}.approval.lock`,
+      `${JSON.stringify({ pid: process.pid, token: "active" })}\n`,
+    );
+
+    expect(() =>
+      new storeModule.PersistentApprovalStore(agentDir).persistApproval(
+        createApproval("bash", "git status"),
+        "global",
+      ),
+    ).toThrow("is already being updated");
+    expect(readFileSync(configPath, "utf8")).toBe('{"permission":{"*":"ask"}}\n');
   });
 
   test("refuses to overwrite an invalid global config", () => {
