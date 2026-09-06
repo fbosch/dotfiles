@@ -41,8 +41,8 @@ export const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 export const maxVolume = 150;
 export const meterSegments = 12;
-// Give low-volume adjustments more physical slider travel without changing backend units.
-const volumeSliderExponent = 2;
+// Approximate Windows' gentle audio taper without changing backend units.
+const volumeSliderExponent = 1.7;
 const volumeLevelIcons = [
 	"\uE992",
 	"\uE993",

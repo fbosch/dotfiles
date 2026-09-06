@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 const paths: string[] = [];
 const entry = join(import.meta.dir, "..", "index.ts");
+const integration = join(import.meta.dir, "..", "integration.ts");
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), "pi-comma-activation-"));
@@ -21,7 +22,8 @@ async function load(entryPath: string, path: string, platform?: string) {
      ${platform === undefined ? "" : `Object.defineProperty(process, "platform", { value: ${JSON.stringify(platform)} });`}
      let registrations = 0;
      await extension({
-       on() { registrations++; },
+       on(event) { if (event === "session_start") registrations++; },
+       events: { on() { return () => {}; } },
        getAllTools() { throw new Error("factory action method"); }
      });
      process.stdout.write(JSON.stringify({ registrations }));`,
@@ -70,6 +72,7 @@ test("missing optional direnv sibling and unsupported platforms are silent", asy
   const root = await fixture();
   const copiedEntry = join(root, "index.ts");
   await writeFile(copiedEntry, await readFile(entry, "utf8"));
+  await writeFile(join(root, "integration.ts"), await readFile(integration, "utf8"));
   expect(await load(copiedEntry, root)).toBe('{"registrations":0}');
   await writeFile(join(root, "comma"), "#!/bin/sh\nprintf should-not-run >&2\nexit 0\n");
   await chmod(join(root, "comma"), 0o755);
