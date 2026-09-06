@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -17,6 +18,7 @@ import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 import type { UsageStatusPayload } from "../usage-status-service";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
+type BeforeModelAvailabilityHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type ProviderResponseHandler = (
   event: { headers: Record<string, string>; status: number },
   ctx: ExtensionContext,
@@ -134,6 +136,7 @@ describe("auth profile prompt status", () => {
 
     const statuses: Array<[string, string | undefined]> = [];
     let failNextModelRefresh = false;
+    let reportNextModelRefreshError = false;
     let modelRefreshes = 0;
     const runtime = {
       credentials: { store: new FakeAuthStore() },
@@ -145,6 +148,13 @@ describe("auth profile prompt status", () => {
         runtime,
         refresh: async () => {
           modelRefreshes += 1;
+          if (reportNextModelRefreshError) {
+            reportNextModelRefreshError = false;
+            return {
+              aborted: false,
+              errors: new Map([["openai-codex", new Error("model refresh failed")]]),
+            };
+          }
           if (failNextModelRefresh) {
             failNextModelRefresh = false;
             throw new Error("model refresh failed");
@@ -197,6 +207,12 @@ describe("auth profile prompt status", () => {
     expect(statuses.at(-1)).toEqual(["auth-profile", "default"]);
     expect(modelRefreshes).toBe(5);
 
+    reportNextModelRefreshError = true;
+    await profileCommand?.("use work", ctx);
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
+    expect(statuses.at(-1)).toEqual(["auth-profile", "default"]);
+    expect(modelRefreshes).toBe(7);
+
     failNextModelRefresh = true;
     await profileCommand?.("use work", ctx);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
@@ -206,7 +222,94 @@ describe("auth profile prompt status", () => {
       customType: "auth-profile-override",
       data: { profile: null, sessionId: "session-2" },
     });
-    expect(modelRefreshes).toBe(7);
+    expect(modelRefreshes).toBe(9);
+  });
+
+  test("binds the selected profile before model availability refresh", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-startup-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const projectDir = join(root, "project");
+    await mkdir(projectDir);
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+
+    let beforeModelAvailability: BeforeModelAvailabilityHandler | undefined;
+    let sessionStart: SessionStartHandler | undefined;
+    const pi = {
+      on(event: string, handler: BeforeModelAvailabilityHandler | SessionStartHandler) {
+        if (event === "before_model_availability") {
+          beforeModelAvailability = handler as BeforeModelAvailabilityHandler;
+        }
+        if (event === "session_start") sessionStart = handler as SessionStartHandler;
+      },
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI;
+    const selection: ProfileSelection = {
+      profile: "work",
+      profileOrder: ["work", "default"],
+      source: "global default",
+      host: { name: "test-host", source: "system hostname" },
+      hostPreferences: ["work"],
+      repositoryPreferences: [],
+    };
+    const changedSelection: ProfileSelection = {
+      ...selection,
+      profile: "default",
+      profileOrder: ["default", "work"],
+      hostPreferences: ["default"],
+    };
+    const selections = [selection, changedSelection];
+    let profileSelections = 0;
+    authProfiles(pi, {
+      providerAdapter: testProviderAdapter(agentDir),
+      selectProfile: async () => {
+        profileSelections += 1;
+        return selections.shift() ?? changedSelection;
+      },
+    });
+
+    const runtime = { credentials: { store: new FakeAuthStore() } };
+    const sessionEntries: Array<{ type: "custom"; customType: string; data: unknown }> = [];
+    let modelRefreshes = 0;
+    const ctx = {
+      cwd: projectDir,
+      isProjectTrusted: () => true,
+      modelRegistry: {
+        runtime,
+        refresh: async () => {
+          modelRefreshes += 1;
+        },
+      },
+      sessionManager: {
+        getEntries: () => sessionEntries,
+        getHeader: () => ({ id: "startup-session" }),
+      },
+      ui: {
+        notify: () => undefined,
+        setStatus: () => undefined,
+      },
+    } as unknown as ExtensionContext;
+
+    expect(beforeModelAvailability).toBeDefined();
+    await beforeModelAvailability?.({ type: "before_model_availability", reason: "startup" }, ctx);
+
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));
+    expect(modelRefreshes).toBe(0);
+    expect(profileSelections).toBe(1);
+
+    sessionEntries.push({
+      type: "custom",
+      customType: "auth-profile-override",
+      data: { profile: "default", sessionId: "startup-session" },
+    });
+    await sessionStart?.({}, ctx);
+
+    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
+    expect(modelRefreshes).toBe(1);
+    expect(profileSelections).toBe(2);
+    expect(existsSync(authPathFor("default", agentDir))).toBe(false);
+    expect(existsSync(authPathFor("work", agentDir))).toBe(false);
   });
 
   test("reports usage and reset-token status for all profiles", async () => {

@@ -52,8 +52,9 @@ export { authPathFor } from "./profile-store";
  * New sessions start from automatic routing, and exhausted profiles rotate to the
  * next account with confirmed Codex usage without redeeming reset credits.
  *
- * The extension rebinds the live AuthStorage backend at session_start and on
- * /profile changes, so the built-in /login, /logout, and OAuth token refresh
+ * The extension resolves and binds the live AuthStorage backend before model
+ * availability is checked, then rebinds it at session_start and on /profile
+ * changes. The built-in /login, /logout, and OAuth token refresh therefore
  * all read and write the active profile's file — no restart required.
  *
  * Commands:
@@ -71,6 +72,16 @@ type InternalCredentials = { store?: CredentialStore };
 
 type InternalRuntime = {
   credentials?: InternalCredentials;
+};
+
+type BindProfileOptions = {
+  refresh?: boolean;
+};
+
+type StartupSelection = {
+  selection: ProfileSelection;
+  sessionId: string | undefined;
+  sessionProfile: string | undefined;
 };
 
 type AuthProfileDependencies = {
@@ -102,17 +113,36 @@ async function bindProfile(
   ctx: Pick<ExtensionContext, "modelRegistry">,
   profile: string,
   adapter: ProfileProviderAdapter,
+  options: BindProfileOptions = {},
 ): Promise<string> {
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
   credentials.store = await adapter.createCredentialStore(profile);
-  try {
+  if (options.refresh === false) return path;
+
+  const refresh = async (): Promise<void> => {
     // Keep provider availability in sync with the newly selected credential file.
-    await ctx.modelRegistry.refresh({ allowNetwork: false });
+    const errorBefore = ctx.modelRegistry.getError?.();
+    const result = await ctx.modelRegistry.refresh({ allowNetwork: false });
+    const errors = result?.errors;
+    if (errors !== undefined && errors.size > 0) {
+      throw new AggregateError(
+        [...errors.values()],
+        `Could not refresh auth profile ${profile} availability.`,
+      );
+    }
+    const errorAfter = ctx.modelRegistry.getError?.();
+    if (errorAfter !== undefined && errorAfter !== errorBefore) {
+      throw new Error(`Could not refresh auth profile ${profile} availability: ${errorAfter}`);
+    }
+  };
+
+  try {
+    await refresh();
   } catch (switchError) {
     credentials.store = store;
     try {
-      await ctx.modelRegistry.refresh({ allowNetwork: false });
+      await refresh();
     } catch (rollbackError) {
       throw new AggregateError(
         [switchError, rollbackError],
@@ -248,6 +278,7 @@ export default function authProfiles(
   const usageCollector = dependencies.usageCollector ?? collectUsageStatus;
   let activeProfile = DEFAULT_PROFILE;
   let sessionProfile: string | undefined;
+  let startupSelection: StartupSelection | undefined;
   let activeSelection: ProfileSelection | undefined;
   const exhaustedUntil = new Map<string, number>();
   let fallbackPromise: Promise<void> | undefined;
@@ -281,8 +312,9 @@ export default function authProfiles(
   const activateUnlocked = async (
     ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
     selection: ProfileSelection,
+    options: BindProfileOptions = {},
   ) => {
-    const path = await bindProfile(ctx, selection.profile, providerAdapter);
+    const path = await bindProfile(ctx, selection.profile, providerAdapter, options);
     activeProfile = selection.profile;
     activeSelection = selection;
     ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);
@@ -329,10 +361,32 @@ export default function authProfiles(
     return { accessToken: credential.accessToken, accountId: credential.identity };
   };
 
+  pi.on("before_model_availability", async (_event, ctx) => {
+    await serializeProfileOperation(async () => {
+      sessionProfile = restoreSessionProfile(ctx);
+      startupSelection = undefined;
+      const selection = await chooseCurrentProfile(ctx);
+      await activateUnlocked(ctx, selection, { refresh: false });
+      startupSelection = {
+        selection,
+        sessionId: ctx.sessionManager.getHeader()?.id,
+        sessionProfile,
+      };
+    });
+  });
+
   pi.on("session_start", async (_event, ctx) => {
     const resolution = await serializeProfileOperation(async () => {
       sessionProfile = restoreSessionProfile(ctx);
-      return activateUnlocked(ctx, await chooseCurrentProfile(ctx));
+      const cached = startupSelection;
+      startupSelection = undefined;
+      const selection =
+        cached !== undefined &&
+        cached.sessionId === ctx.sessionManager.getHeader()?.id &&
+        cached.sessionProfile === sessionProfile
+          ? cached.selection
+          : await chooseCurrentProfile(ctx);
+      return activateUnlocked(ctx, selection);
     });
     if (resolution.selectionWarning) {
       ctx.ui.notify(
