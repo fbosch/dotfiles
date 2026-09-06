@@ -13,7 +13,8 @@ esac
 unit="app-Hyprland-waybar-demand-${signature}.service"
 
 session_pids() {
-  for pid in $(pgrep -x waybar 2>/dev/null); do
+  # Nix keeps argv[0] as waybar but names the process .waybar-wrapped.
+  for pid in $(pgrep -x '(waybar|\.waybar-wrapped)' 2>/dev/null); do
     if tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
       | grep -Fqx "HYPRLAND_INSTANCE_SIGNATURE=$signature"; then
       printf '%s\n' "$pid"

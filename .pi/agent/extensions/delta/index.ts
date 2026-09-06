@@ -321,16 +321,13 @@ async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   }
   return tools;
 }
-function wrapHashlineTool(
-  tool: ToolDefinition,
-  cwd: string,
-  runEdit: EditDiffRunner,
-): ToolDefinition {
+function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDefinition {
   const originalExecute = tool.execute;
   const originalRenderResult = tool.renderResult;
   if (originalExecute === undefined || originalRenderResult === undefined) return tool;
 
   const execute: HashlineToolExecute = async (toolCallId, params, signal, onUpdate, ctx) => {
+    const cwd = ctx.cwd;
     const path = hashlinePath(params);
     const oldContent = path === undefined ? undefined : await readHashlineFile(path, cwd);
     const result = await originalExecute(toolCallId, params, signal, onUpdate, ctx);
@@ -1437,6 +1434,7 @@ interface DeltaExtensionDependencies {
   readonly executeDelta?: DeltaExecutor;
   readonly run?: GitDiffRunner;
   readonly runEdit?: EditDiffRunner;
+  readonly hashlineTools?: readonly ToolDefinition[];
 }
 
 export interface DeltaConfig {
@@ -1498,6 +1496,32 @@ export function registerDeltaExtension(
   const previewControllers = new Set<AbortController>();
   const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
+  let hashlineRegistration: Promise<void> | undefined;
+  const registerHashlineDeltaTools = (): Promise<void> => {
+    if (hashlineRegistration === undefined) {
+      const preloadedTools = dependencies.hashlineTools;
+      if (preloadedTools !== undefined) {
+        for (const tool of preloadedTools) {
+          pi.registerTool(wrapHashlineTool(tool, runEdit));
+        }
+        hashlineRegistration = Promise.resolve();
+      } else {
+        hashlineRegistration = (async () => {
+          for (const tool of await loadHashlineDeltaTools()) {
+            pi.registerTool(wrapHashlineTool(tool, runEdit));
+          }
+        })();
+      }
+    }
+    return hashlineRegistration;
+  };
+  if (
+    dependencies.editPreviews === undefined &&
+    dependencies.run === undefined &&
+    config.editPreviews === true
+  ) {
+    void registerHashlineDeltaTools();
+  }
   pi.on("tool_result", (event) => {
     if (!HASHLINE_DIFF_TOOLS.has(event.toolName)) return;
     const details = normalizeHashlineDiffDetails(event.details);
@@ -1515,9 +1539,7 @@ export function registerDeltaExtension(
   pi.on("session_start", async (_event, ctx) => {
     if (shouldUseEditPreviews(ctx)) {
       pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
-      for (const tool of await loadHashlineDeltaTools()) {
-        pi.registerTool(wrapHashlineTool(tool, ctx.cwd, runEdit));
-      }
+      await registerHashlineDeltaTools();
     }
   });
 
@@ -1638,6 +1660,7 @@ export function registerDeltaExtension(
   });
 }
 
-export default function deltaExtension(pi: ExtensionAPI): void {
-  registerDeltaExtension(pi);
+export default async function deltaExtension(pi: ExtensionAPI): Promise<void> {
+  const hashlineTools = await loadHashlineDeltaTools();
+  registerDeltaExtension(pi, { hashlineTools });
 }

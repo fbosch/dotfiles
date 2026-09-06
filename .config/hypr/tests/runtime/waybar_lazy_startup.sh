@@ -47,9 +47,23 @@ if grep -Fq 'session("waybar")' "$hypr_dir/autostart.lua"; then
 fi
 grep -Fq '"start_hidden": false' "$repo_root/.config/waybar/config"
 
-launch_owners="$(grep -R -l -F 'uwsm-app -s s -- waybar' "$hypr_dir/runtime" || true)"
+if [[ ! -x "$hypr_dir/runtime/desktop/waybar-process.sh" ]]; then
+  printf 'Waybar process helper must be executable\n' >&2
+  exit 1
+fi
+HYPRLAND_INSTANCE_SIGNATURE="fixture-instance" \
+  "$hypr_dir/runtime/desktop/waybar-process.sh" unit-name \
+  | grep -Fxq 'app-Hyprland-waybar-demand-fixture-instance.service'
+
+launch_owners="$(grep -R -l -F 'uwsm-app -s s -t service -u' "$hypr_dir/runtime" || true)"
 if [[ "$launch_owners" != "$hypr_dir/runtime/desktop/waybar-monitor.lua" ]]; then
   printf 'Waybar launch ownership is not exclusive to waybar-monitor.lua:\n%s\n' "$launch_owners" >&2
+  exit 1
+fi
+grep -Fq "app-Hyprland-waybar-demand-\${signature}.service" \
+  "$hypr_dir/runtime/desktop/waybar-process.sh"
+if grep -R -Fq 'uwsm-app -s s -- waybar' "$hypr_dir/runtime"; then
+  printf 'Waybar still has an unnamed scope launch path\n' >&2
   exit 1
 fi
 
