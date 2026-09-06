@@ -213,7 +213,8 @@
       "systemctl poweroff*": "deny",
       "systemctl halt*": "deny",
       "systemctl kexec*": "deny",
-      "systemctl soft-reboot*": "deny"
+      "systemctl soft-reboot*": "deny",
+      "mktemp *": "allow"
     },
     "skill": "allow",
     "external_directory_read": {

@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import { accessSync, constants, realpathSync } from "node:fs";
 import { delimiter, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -144,7 +144,19 @@ export async function isCommaAvailable(
   });
 }
 
-function isBuiltInLocalBash(pi: ExtensionAPI): boolean {
+const DIRENV_EXTENSION_PATH = realpathSync(
+  fileURLToPath(new URL("../direnv/index.ts", import.meta.url)),
+);
+
+function isDirenvLocalBashSource(path: string): boolean {
+  try {
+    return realpathSync(path) === DIRENV_EXTENSION_PATH;
+  } catch {
+    return false;
+  }
+}
+
+function isSupportedLocalBash(pi: ExtensionAPI): boolean {
   // Tool metadata is available only after Pi initializes the extension runtime.
   return (
     process.env.PI_CODING_AGENT === "true" &&
@@ -153,8 +165,8 @@ function isBuiltInLocalBash(pi: ExtensionAPI): boolean {
       .some(
         (tool) =>
           tool.name === "bash" &&
-          tool.sourceInfo.source === "builtin" &&
-          tool.sourceInfo.path === "<builtin:bash>",
+          ((tool.sourceInfo.source === "builtin" && tool.sourceInfo.path === "<builtin:bash>") ||
+            isDirenvLocalBashSource(tool.sourceInfo.path)),
       )
   );
 }
@@ -168,7 +180,7 @@ export default async function piCommaExtension(pi: ExtensionAPI): Promise<void> 
   const setup = createSetupFragment({ commaPath, pickerPath });
 
   pi.on("tool_call", (event) => {
-    if (event.toolName !== "bash" || !isBuiltInLocalBash(pi)) return;
+    if (event.toolName !== "bash" || !isSupportedLocalBash(pi)) return;
     event.input.command = `${setup}\n${event.input.command}`;
   });
 }

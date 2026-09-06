@@ -6,7 +6,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { encode } from "@toon-format/toon";
 
-const DEFAULT_ELIGIBLE_TOOLS = ["bash"];
+const DEFAULT_ELIGIBLE_TOOLS = ["bash", "exec"];
 const MAX_CACHED_OUTPUTS = 100;
 const MAX_CACHE_BYTES = 8_000_000;
 const MAX_JSON_BYTES = 1_000_000;
