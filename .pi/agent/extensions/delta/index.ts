@@ -363,10 +363,20 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
     context,
   ) => {
     const details = result.details as HashlineDeltaDetails | undefined;
-    if (isDeltaDetails(details?.delta)) {
-      return renderEditDeltaResult(
-        { content: result.content as Array<{ type: string; text?: string }> },
-        details.delta,
+    if (!context.isError && !options.isPartial && isDeltaDetails(details?.delta)) {
+      // Auto-read puts the anchored diff in content for the model, not a second UI preview.
+      const text = result.content
+        .filter((item) => item.type === "text")
+        .map((item) => item.text)
+        .join("\n");
+      const warning = [
+        details.delta.warning,
+        text.match(/(?:^|\n)Warnings:\n([\s\S]*)$/u)?.[1]?.trim(),
+      ]
+        .filter((value) => value !== undefined && value !== "")
+        .join("\n");
+      return diffComponent(
+        warning === "" ? details.delta : { ...details.delta, warning },
         options.expanded === true || context.expanded === true,
         theme,
       );
@@ -1497,9 +1507,9 @@ export function registerDeltaExtension(
   const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
   let hashlineRegistration: Promise<void> | undefined;
-  const registerHashlineDeltaTools = (): Promise<void> => {
-    if (hashlineRegistration === undefined) {
-      const preloadedTools = dependencies.hashlineTools;
+  const registerHashlineDeltaTools = (force = false): Promise<void> => {
+    const preloadedTools = dependencies.hashlineTools;
+    if (hashlineRegistration === undefined || (force && preloadedTools !== undefined)) {
       if (preloadedTools !== undefined) {
         for (const tool of preloadedTools) {
           pi.registerTool(wrapHashlineTool(tool, runEdit));
@@ -1515,15 +1525,10 @@ export function registerDeltaExtension(
     }
     return hashlineRegistration;
   };
-  if (
-    dependencies.editPreviews === undefined &&
-    dependencies.run === undefined &&
-    config.editPreviews === true
-  ) {
-    void registerHashlineDeltaTools();
-  }
   pi.on("tool_result", (event) => {
     if (!HASHLINE_DIFF_TOOLS.has(event.toolName)) return;
+    // Auto-read consumes diff after this hook; Delta-backed results need no UI normalization here.
+    if (isDeltaDetails((event.details as HashlineDeltaDetails | undefined)?.delta)) return;
     const details = normalizeHashlineDiffDetails(event.details);
     if (details === event.details) return;
     return { details };
@@ -1539,7 +1544,7 @@ export function registerDeltaExtension(
   pi.on("session_start", async (_event, ctx) => {
     if (shouldUseEditPreviews(ctx)) {
       pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
-      await registerHashlineDeltaTools();
+      await registerHashlineDeltaTools(true);
     }
   });
 
