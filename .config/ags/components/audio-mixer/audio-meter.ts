@@ -4,6 +4,7 @@ import tokens from "../../../../design-system/tokens.json";
 import {
 	clamp,
 	clampFloat,
+	maxVolume,
 	meterSegments,
 	sliderPositionToVolume,
 	type AudioBackend,
@@ -63,7 +64,7 @@ export function createAudioMeter(
 	registerScroll((delta) => update(volume + delta));
 	drawing.set_draw_func((_area, cr: any, width, height) => {
 		const visible = row.muted ? 0 : volume;
-		const visiblePosition = volumeToSliderPosition(visible);
+		const visiblePosition = volumeToSliderPosition(visible, maxVolume);
 		const gap = 2;
 		const segmentHeight = 8;
 		const segmentY = Math.round((height - segmentHeight) / 2);
@@ -148,7 +149,7 @@ function volumeFromX(
 	fallback: number,
 ): number {
 	const width = drawing.get_allocation().width;
-	return width > 0 ? sliderPositionToVolume(x / width) : fallback;
+	return width > 0 ? sliderPositionToVolume(x / width, maxVolume) : fallback;
 }
 
 function setSourceHex(cr: any, hex: string): void {

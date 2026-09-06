@@ -1,9 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { realpathSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import piCommaExtension, { createSetupFragment, isCommaAvailable } from "../index";
 
 const temporaryPaths: string[] = [];
@@ -40,9 +39,8 @@ async function runBash(
   };
 }
 
-const DIRENV_EXTENSION_PATH = realpathSync(join(import.meta.dir, "..", "..", "direnv", "index.ts"));
-
 type BashSource = { source: string; path: string };
+type EventHandler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
 
 function fakePi(
   sourceInfo: BashSource = { source: "builtin", path: "<builtin:bash>" },
@@ -50,10 +48,9 @@ function fakePi(
 ) {
   let runtimeReady = !rejectFactoryActions;
   let metadataCalls = 0;
-  const handlers = new Map<
-    string,
-    (event: { toolName: string; input: { command: string; timeout?: number } }) => void
-  >();
+  const handlers = new Map<string, EventHandler[]>();
+  const eventListeners = new Map<string, Set<(value: unknown) => void>>();
+  const registeredTools: Array<{ name: string }> = [];
   const pi = {
     getAllTools: () => {
       metadataCalls++;
@@ -68,22 +65,48 @@ function fakePi(
         },
       ];
     },
-    on: (
-      event: string,
-      handler: (event: { toolName: string; input: { command: string; timeout?: number } }) => void,
-    ) => {
-      handlers.set(event, handler);
+    on(event: string, handler: EventHandler) {
+      const eventHandlers = handlers.get(event) ?? [];
+      eventHandlers.push(handler);
+      handlers.set(event, eventHandlers);
+    },
+    events: {
+      on(event: string, listener: (value: unknown) => void) {
+        const listeners = eventListeners.get(event) ?? new Set();
+        listeners.add(listener);
+        eventListeners.set(event, listeners);
+        return () => listeners.delete(listener);
+      },
+      emit(event: string, value: unknown) {
+        for (const listener of eventListeners.get(event) ?? []) listener(value);
+      },
+    },
+    registerTool(tool: { name: string }) {
+      registeredTools.push(tool);
     },
   } as unknown as ExtensionAPI;
+  const context = (cwd: string) =>
+    ({ cwd, isProjectTrusted: () => true }) as unknown as ExtensionContext;
   return {
     handlers,
     pi,
+    registeredTools,
     get metadataCalls() {
       return metadataCalls;
     },
-    dispatchToolCall(event: { toolName: string; input: { command: string; timeout?: number } }) {
+    async dispatchSessionStart(cwd: string) {
       runtimeReady = true;
-      handlers.get("tool_call")?.(event);
+      for (const handler of handlers.get("session_start") ?? []) {
+        await handler({ type: "session_start", reason: "startup" }, context(cwd));
+      }
+    },
+    async dispatchToolCall(event: {
+      toolName: string;
+      input: { command: string; timeout?: number };
+    }) {
+      runtimeReady = true;
+      for (const handler of handlers.get("tool_call") ?? [])
+        await handler(event, context(tmpdir()));
     },
   };
 }
@@ -107,43 +130,36 @@ describe("pi-comma", () => {
     }
   });
 
-  test("defers metadata and accepts only built-in Bash or this direnv wrapper", async () => {
+  test("authorizes the original tool input before wrapping only built-in Bash", async () => {
     const originalPath = process.env.PATH;
     const originalPiMarker = process.env.PI_CODING_AGENT;
     const bin = await fixtureDirectory();
-    const direnvSymlink = join(await fixtureDirectory(), "index.ts");
     await executable(join(bin, "comma"), "#!/bin/sh\nexit 0\n");
-    await symlink(DIRENV_EXTENSION_PATH, direnvSymlink);
     process.env.PATH = bin;
     process.env.PI_CODING_AGENT = "true";
     try {
-      const cases: Array<{ sourceInfo: BashSource; mutates: boolean }> = [
-        { sourceInfo: { source: "builtin", path: "<builtin:bash>" }, mutates: true },
-        { sourceInfo: { source: "extension", path: DIRENV_EXTENSION_PATH }, mutates: true },
-        { sourceInfo: { source: "extension", path: direnvSymlink }, mutates: true },
-        {
-          sourceInfo: { source: "extension", path: "/tmp/unrelated/direnv/index.ts" },
-          mutates: false,
-        },
-        { sourceInfo: { source: "sdk", path: "/tmp/custom-bash.ts" }, mutates: false },
-        { sourceInfo: { source: "extension", path: "/missing/bash.ts" }, mutates: false },
-      ];
+      const builtIn = fakePi({ source: "builtin", path: "<builtin:bash>" }, true);
+      await piCommaExtension(builtIn.pi);
+      expect(builtIn.metadataCalls).toBe(0);
+      expect(builtIn.handlers.has("tool_call")).toBe(false);
 
-      for (const { sourceInfo, mutates } of cases) {
-        const harness = fakePi(sourceInfo, true);
-        await piCommaExtension(harness.pi);
-        expect(harness.metadataCalls).toBe(0);
+      const call = { toolName: "bash", input: { command: "echo original", timeout: 12_345 } };
+      await builtIn.dispatchToolCall(call);
+      expect(call.input).toEqual({ command: "echo original", timeout: 12_345 });
+      expect(builtIn.metadataCalls).toBe(0);
 
-        const call = { toolName: "bash", input: { command: "echo original", timeout: 12_345 } };
-        harness.dispatchToolCall(call);
-        expect(harness.metadataCalls).toBe(1);
-        expect(call.input.timeout).toBe(12_345);
-        if (mutates) {
-          expect(call.input.command).toContain("command_not_found_handle");
-          expect(call.input.command).toEndWith("\necho original");
-        } else {
-          expect(call.input.command).toBe("echo original");
-        }
+      await builtIn.dispatchSessionStart(bin);
+      expect(builtIn.metadataCalls).toBe(1);
+      expect(builtIn.registeredTools.map((tool) => tool.name)).toEqual(["bash"]);
+
+      for (const sourceInfo of [
+        { source: "extension", path: "/tmp/custom-bash.ts" },
+        { source: "sdk", path: "/tmp/custom-bash.ts" },
+      ]) {
+        const custom = fakePi(sourceInfo, true);
+        await piCommaExtension(custom.pi);
+        await custom.dispatchSessionStart(bin);
+        expect(custom.registeredTools).toEqual([]);
       }
     } finally {
       process.env.PATH = originalPath;
@@ -173,7 +189,8 @@ describe("pi-comma", () => {
       await executable(join(bin, "comma"), "#!/bin/sh\nexit 0\n");
       const after = fakePi();
       await piCommaExtension(after.pi);
-      expect(after.handlers.has("tool_call")).toBe(true);
+      expect(after.handlers.has("session_start")).toBe(true);
+      expect(after.handlers.has("tool_call")).toBe(false);
     } finally {
       process.env.PATH = originalPath;
     }
