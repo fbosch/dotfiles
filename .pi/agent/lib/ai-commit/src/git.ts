@@ -39,7 +39,7 @@ export type CommitError =
 function runGit(args: string[], options?: RunGitOptions): CmdResult {
   const result = spawnSync("git", args, {
     encoding: "utf8",
-    cwd: process.env.PWD,
+    cwd: process.cwd(),
     ...options,
   });
 
@@ -93,10 +93,7 @@ export function getStagedFiles(): Result<string[], GitError> {
 }
 
 function getStagedSnapshotWithOptions(options?: RunGitOptions): Result<string, GitError> {
-  return gitResult(
-    ["diff", "--cached", "--binary", "--full-index", "--no-ext-diff", "--no-textconv"],
-    options,
-  ).map((diff) => createHash("sha256").update(diff).digest("hex"));
+  return gitResult(["write-tree"], options);
 }
 
 export function getStagedSnapshot(): Result<string, GitError> {
@@ -328,7 +325,7 @@ function hashIndex(indexPath: string): string {
 
 function resolveIndexPath(): Result<string, GitError> {
   return gitResult(["rev-parse", "--git-path", "index"]).map((indexPath) =>
-    isAbsolute(indexPath) ? indexPath : resolve(process.env.PWD ?? process.cwd(), indexPath),
+    isAbsolute(indexPath) ? indexPath : resolve(process.cwd(), indexPath),
   );
 }
 

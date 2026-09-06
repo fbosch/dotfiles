@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +14,7 @@ import {
 } from "../src/git";
 
 const temporaryDirectories: string[] = [];
+const originalCwd = process.cwd();
 const originalPwd = process.env.PWD;
 
 function createRepository(): string {
@@ -20,6 +22,7 @@ function createRepository(): string {
   temporaryDirectories.push(directory);
   const result = spawnSync("git", ["init", "--quiet", directory], { encoding: "utf8" });
   if (result.status !== 0) throw new Error(result.stderr);
+  process.chdir(directory);
   process.env.PWD = directory;
   return directory;
 }
@@ -36,6 +39,7 @@ function gitOutput(cwd: string, args: string[]): string {
 }
 
 afterEach(() => {
+  process.chdir(originalCwd);
   process.env.PWD = originalPwd;
   for (const directory of temporaryDirectories.splice(0)) {
     rmSync(directory, { recursive: true, force: true });
@@ -55,6 +59,23 @@ describe("staged Git context", () => {
 
     git(repository, ["add", "value.ts"]);
     expect(getStagedSnapshot()._unsafeUnwrap()).not.toBe(before);
+  });
+
+  test("uses the process working directory when PWD is stale", () => {
+    const repository = createRepository();
+    writeFileSync(join(repository, "value.ts"), "export const value = 1;\n");
+    git(repository, ["add", "value.ts"]);
+    process.env.PWD = join(repository, "missing");
+
+    expect(getStagedSnapshot().isOk()).toBeTrue();
+  });
+
+  test("snapshots staged binary files without buffering their diff", () => {
+    const repository = createRepository();
+    writeFileSync(join(repository, "asset.bin"), randomBytes(2 * 1024 * 1024));
+    git(repository, ["add", "asset.bin"]);
+
+    expect(getStagedSnapshot().isOk()).toBeTrue();
   });
 
   test("bounds a large staged diff and marks truncation", () => {
