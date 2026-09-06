@@ -10,6 +10,10 @@ case "$command_name" in
     exit 2
     ;;
 esac
+if command -v -- "$command_name" >/dev/null; then
+  printf '%s\n' 'smoke: choose a command absent from PATH so Bash attempts recovery' >&2
+  exit 2
+fi
 command -v comma >/dev/null || {
   printf '%s\n' 'smoke: comma is not on PATH' >&2
   exit 2
@@ -30,4 +34,4 @@ setup=$(cd -- "$extension_dir" && PI_COMMA_PATH="$(command -v comma)" \
   ')
 
 printf 'smoke: resolving %s through comma; this may download or build software\n' "$command_name" >&2
-bash -c "$setup"$'\n''exec -- "$@"' pi-comma-smoke "$command_name" "$@"
+bash -c "$setup"$'\n''"$@"' pi-comma-smoke "$command_name" "$@"

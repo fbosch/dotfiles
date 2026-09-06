@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { accessSync, constants, realpathSync } from "node:fs";
+import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import { delimiter, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -52,11 +52,18 @@ if ! declare -F command_not_found_handle >/dev/null 2>&1; then
     local output resolved_path relative_path status
     local __PI_COMMA_RESOLVING=1
     printf 'pi-comma: resolving %s with comma\\n' "$command_name" >&2
-    # Command substitution does not consume this command's stdin. The record
-    # separator retains comma's status without a temporary file or mapfile.
+    # Reject NUL/oversized output before command substitution can discard bytes.
+    # The final separator preserves trailing newlines and comma's own exit status.
     output="$(
-      ${comma} --print-path --picker ${picker} -- "$command_name" </dev/null
-      printf '\\037%s' "$?"
+      set +e
+      ${comma} --print-path --picker ${picker} -- "$command_name" </dev/null | {
+        if IFS= builtin read -r -d '' -n 4097 resolved_path; then
+          builtin printf 'invalid resolver output'
+        else
+          builtin printf '%s' "$resolved_path"
+        fi
+      }
+      builtin printf '\\037%s' "\${PIPESTATUS[0]}"
     )"
     status="\${output##*$'\\037'}"
     resolved_path="\${output%$'\\037'*}"
@@ -75,12 +82,8 @@ if ! declare -F command_not_found_handle >/dev/null 2>&1; then
         ;;
     esac
     # Reject lexical escapes before touching the filesystem.
-    case "/$relative_path/" in
-      *'//'*)
-        printf 'pi-comma: comma returned an invalid executable path for %s\\n' "$command_name" >&2
-        return 127
-        ;;
-      *'/./'*|*'/../'*)
+    case "$relative_path" in
+      ""|/*|*/|*//*|.|..|./*|../*|*/./*|*/../*|*/.|*/..)
         printf 'pi-comma: comma returned an invalid executable path for %s\\n' "$command_name" >&2
         return 127
         ;;
@@ -103,7 +106,7 @@ function resolveCommaPath(path = process.env.PATH): string | undefined {
     const candidate = resolve(directory || ".", "comma");
     try {
       accessSync(candidate, constants.X_OK);
-      return candidate;
+      if (statSync(candidate).isFile()) return candidate;
     } catch {
       // Try the next PATH entry.
     }
@@ -144,13 +147,13 @@ export async function isCommaAvailable(
   });
 }
 
-const DIRENV_EXTENSION_PATH = realpathSync(
-  fileURLToPath(new URL("../direnv/index.ts", import.meta.url)),
-);
+// The local direnv wrapper delegates to createBashTool; its canonical source
+// path is the narrow provenance exception to the built-in-only policy.
+const DIRENV_EXTENSION_PATH = fileURLToPath(new URL("../direnv/index.ts", import.meta.url));
 
 function isDirenvLocalBashSource(path: string): boolean {
   try {
-    return realpathSync(path) === DIRENV_EXTENSION_PATH;
+    return realpathSync(path) === realpathSync(DIRENV_EXTENSION_PATH);
   } catch {
     return false;
   }
@@ -166,7 +169,9 @@ function isSupportedLocalBash(pi: ExtensionAPI): boolean {
         (tool) =>
           tool.name === "bash" &&
           ((tool.sourceInfo.source === "builtin" && tool.sourceInfo.path === "<builtin:bash>") ||
-            isDirenvLocalBashSource(tool.sourceInfo.path)),
+            (tool.sourceInfo.source !== "builtin" &&
+              tool.sourceInfo.source !== "sdk" &&
+              isDirenvLocalBashSource(tool.sourceInfo.path))),
       )
   );
 }

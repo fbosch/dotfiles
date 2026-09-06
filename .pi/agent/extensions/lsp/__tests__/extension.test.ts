@@ -3,6 +3,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   MessageEndEvent,
+  Theme,
   ToolDefinition,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
@@ -21,6 +22,7 @@ interface SentMessage {
 type RegisteredMessageRenderer = (
   message: { readonly content: unknown },
   options: { readonly expanded: boolean; readonly outputPad: number },
+  theme: Theme,
 ) => { render(width: number): readonly string[] };
 
 type RegisteredCommand = (args: string, context: ExtensionContext) => Promise<void>;
@@ -78,11 +80,15 @@ test("hides automatic diagnostics until lsp-output is enabled", async () => {
   if (setOutput === undefined) throw new Error("LSP output command handler was not registered");
 
   const output = "LSP diagnostics: issues. Diagnostics were reported for the current document.";
-  const component = renderer({ content: output }, { expanded: true, outputPad: 0 });
+  const theme = {
+    fg: (_color: string, text: string) => `[thinking:${text}]`,
+    italic: (text: string) => `[italic:${text}]`,
+  } as Theme;
+  const component = renderer({ content: output }, { expanded: true, outputPad: 1 }, theme);
   const render = () => component.render(200).join("\n");
 
   expect(command).toBe("lsp-output");
-  expect(render()).toContain("LSP diagnostics hidden");
+  expect(render()).toContain(" [italic:[thinking:LSP diagnostics hidden");
   expect(render()).not.toContain(output);
 
   let lspStatus: string | undefined = "visible";

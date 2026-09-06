@@ -7,6 +7,7 @@ import {
   isEditToolResult,
   isReadToolResult,
   isWriteToolResult,
+  type Theme,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -154,13 +155,17 @@ class LspDiagnosticsMessage {
   constructor(
     private readonly content: unknown,
     private readonly isVisible: () => boolean,
+    private readonly outputPad: number,
+    private readonly theme: Theme,
   ) {}
 
   render(width: number) {
     const text = this.isVisible()
       ? diagnosticMessageText(this.content)
-      : "LSP diagnostics hidden (/lsp-output on to show).";
-    return new Text(text, 0, 0).render(width);
+      : this.theme.italic(
+          this.theme.fg("thinkingText", "LSP diagnostics hidden (/lsp-output on to show)."),
+        );
+    return new Text(text, this.outputPad, 0).render(width);
   }
 
   invalidate(): void {}
@@ -186,7 +191,13 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     let showAutomaticDiagnostics = false;
     pi.registerMessageRenderer(
       "lsp-diagnostics",
-      (message) => new LspDiagnosticsMessage(message.content, () => showAutomaticDiagnostics),
+      (message, options, theme) =>
+        new LspDiagnosticsMessage(
+          message.content,
+          () => showAutomaticDiagnostics,
+          options.outputPad,
+          theme,
+        ),
     );
     pi.registerCommand("lsp-output", {
       description: "Show or hide automatic LSP diagnostics: /lsp-output on|off",

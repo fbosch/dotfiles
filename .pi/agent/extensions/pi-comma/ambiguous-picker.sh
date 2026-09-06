@@ -7,7 +7,10 @@ count=0
 while IFS= read -r candidate || [[ -n "$candidate" ]]; do
   count=$((count + 1))
   if (( count <= limit )); then
-    printf 'pi-comma: candidate: %s\n' "$candidate" >&2
+    printf 'pi-comma: candidate: %q\n' "${candidate:0:512}" >&2
+    if (( ${#candidate} > 512 )); then
+      printf '%s\n' 'pi-comma: candidate truncated at 512 characters' >&2
+    fi
   fi
 done
 

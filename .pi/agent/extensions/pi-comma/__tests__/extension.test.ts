@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -27,7 +28,8 @@ async function runBash(
   stderr: string;
 }> {
   const process = Bun.spawn(["bash", "-c", command], {
-    env: { ...Bun.env, ...environment },
+    cwd: environment.TMPDIR ?? tmpdir(),
+    env: { ...Bun.env, BASH_ENV: "", ENV: "", COMMA_ASK_TO_CONFIRM: "", ...environment },
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -38,12 +40,19 @@ async function runBash(
   };
 }
 
-function fakePi(source = "builtin", rejectFactoryActions = false) {
+const DIRENV_EXTENSION_PATH = realpathSync(join(import.meta.dir, "..", "..", "direnv", "index.ts"));
+
+type BashSource = { source: string; path: string };
+
+function fakePi(
+  sourceInfo: BashSource = { source: "builtin", path: "<builtin:bash>" },
+  rejectFactoryActions = false,
+) {
   let runtimeReady = !rejectFactoryActions;
   let metadataCalls = 0;
   const handlers = new Map<
     string,
-    (event: { toolName: string; input: { command: string } }) => void
+    (event: { toolName: string; input: { command: string; timeout?: number } }) => void
   >();
   const pi = {
     getAllTools: () => {
@@ -55,18 +64,13 @@ function fakePi(source = "builtin", rejectFactoryActions = false) {
           name: "bash",
           description: "Bash",
           parameters: {},
-          sourceInfo: {
-            source,
-            path: source === "builtin" ? "<builtin:bash>" : "<bash>",
-            scope: "temporary",
-            origin: "top-level",
-          },
+          sourceInfo: { ...sourceInfo, scope: "temporary", origin: "top-level" },
         },
       ];
     },
     on: (
       event: string,
-      handler: (event: { toolName: string; input: { command: string } }) => void,
+      handler: (event: { toolName: string; input: { command: string; timeout?: number } }) => void,
     ) => {
       handlers.set(event, handler);
     },
@@ -77,7 +81,7 @@ function fakePi(source = "builtin", rejectFactoryActions = false) {
     get metadataCalls() {
       return metadataCalls;
     },
-    dispatchToolCall(event: { toolName: string; input: { command: string } }) {
+    dispatchToolCall(event: { toolName: string; input: { command: string; timeout?: number } }) {
       runtimeReady = true;
       handlers.get("tool_call")?.(event);
     },
@@ -103,30 +107,44 @@ describe("pi-comma", () => {
     }
   });
 
-  test("defers backend metadata gating until tool_call and excludes custom Bash", async () => {
+  test("defers metadata and accepts only built-in Bash or this direnv wrapper", async () => {
     const originalPath = process.env.PATH;
     const originalPiMarker = process.env.PI_CODING_AGENT;
     const bin = await fixtureDirectory();
+    const direnvSymlink = join(await fixtureDirectory(), "index.ts");
     await executable(join(bin, "comma"), "#!/bin/sh\nexit 0\n");
+    await symlink(DIRENV_EXTENSION_PATH, direnvSymlink);
     process.env.PATH = bin;
     process.env.PI_CODING_AGENT = "true";
     try {
-      const builtIn = fakePi("builtin", true);
-      await piCommaExtension(builtIn.pi);
-      expect(builtIn.metadataCalls).toBe(0);
+      const cases: Array<{ sourceInfo: BashSource; mutates: boolean }> = [
+        { sourceInfo: { source: "builtin", path: "<builtin:bash>" }, mutates: true },
+        { sourceInfo: { source: "extension", path: DIRENV_EXTENSION_PATH }, mutates: true },
+        { sourceInfo: { source: "extension", path: direnvSymlink }, mutates: true },
+        {
+          sourceInfo: { source: "extension", path: "/tmp/unrelated/direnv/index.ts" },
+          mutates: false,
+        },
+        { sourceInfo: { source: "sdk", path: "/tmp/custom-bash.ts" }, mutates: false },
+        { sourceInfo: { source: "extension", path: "/missing/bash.ts" }, mutates: false },
+      ];
 
-      const builtInCall = { toolName: "bash", input: { command: "echo built-in" } };
-      builtIn.dispatchToolCall(builtInCall);
-      expect(builtIn.metadataCalls).toBe(1);
-      expect(builtInCall.input.command).toContain("command_not_found_handle");
-      expect(builtInCall.input.command).toEndWith("echo built-in");
+      for (const { sourceInfo, mutates } of cases) {
+        const harness = fakePi(sourceInfo, true);
+        await piCommaExtension(harness.pi);
+        expect(harness.metadataCalls).toBe(0);
 
-      const custom = fakePi("local", true);
-      await piCommaExtension(custom.pi);
-      const customCall = { toolName: "bash", input: { command: "echo custom" } };
-      custom.dispatchToolCall(customCall);
-      expect(custom.metadataCalls).toBe(1);
-      expect(customCall.input.command).toBe("echo custom");
+        const call = { toolName: "bash", input: { command: "echo original", timeout: 12_345 } };
+        harness.dispatchToolCall(call);
+        expect(harness.metadataCalls).toBe(1);
+        expect(call.input.timeout).toBe(12_345);
+        if (mutates) {
+          expect(call.input.command).toContain("command_not_found_handle");
+          expect(call.input.command).toEndWith("\necho original");
+        } else {
+          expect(call.input.command).toBe("echo original");
+        }
+      }
     } finally {
       process.env.PATH = originalPath;
       process.env.PI_CODING_AGENT = originalPiMarker;
@@ -247,6 +265,115 @@ describe("pi-comma", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('{"ok":true}\n');
     expect(result.stderr).toContain("pi-comma: resolving json-tool");
+  });
+
+  test.each([0, 7, 127])("preserves resolved exit %i without retrying", async (status) => {
+    const root = await fixtureDirectory();
+    const comma = join(root, "comma");
+    const tool = join(root, "tool");
+    await executable(tool, `#!/bin/sh\nprintf run >> "$TMPDIR/runs"\nexit ${status}\n`);
+    await executable(
+      comma,
+      `#!/bin/sh\nprintf lookup >> "$TMPDIR/lookups"\nprintf '%s\\n' '${tool}'\n`,
+    );
+    const setup = createSetupFragment({ commaPath: comma, pickerPath: comma, nixStore: root });
+    const result = await runBash(`${setup}\nprintf once >> before; pi-comma-status-fixture`, {
+      TMPDIR: root,
+    });
+    expect(result.exitCode).toBe(status);
+    expect(result.stdout).toBe("");
+    expect(await readFile(join(root, "runs"), "utf8")).toBe("run");
+    expect(await readFile(join(root, "lookups"), "utf8")).toBe("lookup");
+    expect(await readFile(join(root, "before"), "utf8")).toBe("once");
+  });
+
+  test.each([
+    "nul",
+    "empty",
+    "extra-newline",
+    "control",
+    "missing",
+    "not-executable",
+    "failed-build",
+    "missing-index",
+  ])("rejects %s resolver output before execution", async (failure) => {
+    const root = await fixtureDirectory();
+    const comma = join(root, "comma");
+    const tool = join(root, "tool");
+    await executable(tool, '#!/bin/sh\nprintf ran > "$TMPDIR/ran"\n');
+    if (failure === "not-executable") await chmod(tool, 0o644);
+    const outputs: Record<string, string> = {
+      nul: `printf '%s\\0\\n' '${tool}'`,
+      empty: "exit 0",
+      "extra-newline": `printf '%s\\n\\n' '${tool}'`,
+      control: `printf '%s\\r\\n' '${tool}'`,
+      missing: `printf '%s\\n' '${root}/disappeared'`,
+      "not-executable": `printf '%s\\n' '${tool}'`,
+      "failed-build": "printf '%s\\n' /bin/echo; printf 'build failed\\n' >&2; exit 1",
+      "missing-index": "printf 'index missing\\n' >&2; exit 1",
+    };
+    await executable(comma, `#!/bin/sh\n${outputs[failure]}\n`);
+    const setup = createSetupFragment({ commaPath: comma, pickerPath: comma, nixStore: root });
+    const result = await runBash(`${setup}\nset -e; pi-comma-failure-fixture`, { TMPDIR: root });
+    expect(result.exitCode).toBe(127);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("pi-comma:");
+    expect(await Bun.file(join(root, "ran")).exists()).toBe(false);
+  });
+
+  test("resolution cannot read redirected input, and helper failures cannot recurse", async () => {
+    const root = await fixtureDirectory();
+    const comma = join(root, "comma");
+    const tool = join(root, "tool");
+    await writeFile(join(root, "input"), "literal stdin\n");
+    await executable(tool, "#!/bin/sh\ncat\n");
+    await executable(
+      comma,
+      `#!/bin/sh\nif IFS= read -r line; then exit 9; fi\nprintf '%s\\n' '${tool}'\n`,
+    );
+    const setup = createSetupFragment({ commaPath: comma, pickerPath: comma, nixStore: root });
+    const result = await runBash(`${setup}\npi-comma-input-fixture < input`, { TMPDIR: root });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toBe("literal stdin\n");
+    await rm(comma);
+    const disappeared = await runBash(`${setup}\npi-comma-input-fixture`, { TMPDIR: root });
+    expect(disappeared.exitCode).toBe(127);
+    expect(disappeared.stderr.match(/pi-comma: resolving/g)).toHaveLength(1);
+  });
+
+  test("normal commands stay silent without relying on an existing handler", async () => {
+    const root = await fixtureDirectory();
+    const comma = join(root, "comma");
+    await executable(comma, '#!/bin/sh\nprintf called > "$TMPDIR/lookup"\nexit 1\n');
+    await executable(join(root, "existing"), "#!/bin/sh\nexit 127\n");
+    const setup = createSetupFragment({ commaPath: comma, pickerPath: comma, nixStore: root });
+    const result = await runBash(
+      `${setup}\nprintf ok; local_function() { return 0; }; local_function; existing`,
+      {
+        TMPDIR: root,
+        PATH: `${root}:${process.env.PATH}`,
+      },
+    );
+    expect(result.exitCode).toBe(127);
+    expect(result.stdout).toBe("ok");
+    expect(result.stderr).toBe("");
+    expect(await Bun.file(join(root, "lookup")).exists()).toBe(false);
+  });
+
+  test("smoke script reaches the handler without a download", async () => {
+    const root = await fixtureDirectory();
+    await executable(join(root, "comma"), '#!/bin/sh\nprintf lookup > "$TMPDIR/lookup"\nexit 1\n');
+    const smoke = join(import.meta.dir, "..", "smoke-real-comma.sh");
+    const result = await runBash(`'${smoke}' pi-comma-smoke-fixture`, {
+      TMPDIR: root,
+      PATH: `${root}:${process.env.PATH}`,
+      COMMA_ASK_TO_CONFIRM: "1",
+    });
+    expect(result.exitCode).toBe(127);
+    expect(result.stderr).toContain(
+      "pi-comma: automatic recovery cannot bypass COMMA_ASK_TO_CONFIRM",
+    );
+    expect(await Bun.file(join(root, "lookup")).exists()).toBe(false);
   });
 
   test("rejects traversal, multiline output, and confirmation-required recovery", async () => {

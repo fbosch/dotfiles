@@ -256,15 +256,23 @@ function createEngine(cwd = repoRoot): PermissionEngine {
   };
 }
 
-async function checkBash(engine: PermissionEngine, command: string): Promise<PermissionCheck> {
+async function checkBash(
+  engine: PermissionEngine,
+  command: string,
+  agentName?: string,
+): Promise<PermissionCheck> {
   const program = await modules.BashProgram.parse(command, engine.normalizer);
-  return modules.resolveBashCommandCheck(command, program.commands(), undefined, engine.resolver);
+  return modules.resolveBashCommandCheck(command, program.commands(), agentName, engine.resolver);
 }
 
-function toolContext(toolName: string, input: unknown): ToolCallContext {
+function toolContext(
+  toolName: string,
+  input: unknown,
+  agentName: string | null = null,
+): ToolCallContext {
   return {
     toolName,
-    agentName: null,
+    agentName,
     input,
     toolCallId: `synthetic-${toolName}`,
     cwd: repoRoot,
@@ -342,6 +350,80 @@ describe("pi-permission-system policy", () => {
 
     expect(pathGate(engine, "read", "src/example.ts")).toBeNull();
     expect(pathGate(engine, "edit", "src/example.ts")).toBeNull();
+  });
+
+  test("allows FFF infrastructure searches for primary and debug agents without granting writes", async () => {
+    const engine = createEngine();
+    const config = JSON.parse(
+      await readFile(join(agentDir, "extensions/pi-permission-system/config.json"), "utf8"),
+    ) as { piInfrastructureReadPaths: string[] };
+    const path = "/nix/store/synthetic-pi-0.85.1/libexec/pi";
+
+    for (const agentName of [null, "debug"]) {
+      for (const toolName of ["ffgrep", "fffind"]) {
+        const input = { path, pattern: "invokeTool" };
+        expect(
+          engine.resolver.resolve({
+            kind: "tool",
+            surface: toolName,
+            input,
+            agentName: agentName ?? undefined,
+          }).state,
+        ).toBe("allow");
+        expect(
+          modules.describeExternalDirectoryGate(
+            toolContext(toolName, input, agentName),
+            config.piInfrastructureReadPaths,
+            engine.resolver,
+            engine.normalizer,
+          ),
+          `${agentName ?? "primary"}: ${toolName}`,
+        ).toMatchObject({ action: "allow" });
+      }
+      for (const toolName of ["write", "edit", "unknown_search_tool"]) {
+        expect(
+          modules.describeExternalDirectoryGate(
+            toolContext(toolName, { path }, agentName),
+            config.piInfrastructureReadPaths,
+            engine.resolver,
+            engine.normalizer,
+          )?.preCheck?.state,
+          toolName,
+        ).toBe("ask");
+      }
+    }
+  });
+
+  test("FFF searches use read grants while preserving credential denies and external boundaries", () => {
+    const engine = createEngine(join(repoRoot, "synthetic-unconfigured-project"));
+    for (const toolName of ["ffgrep", "fffind"]) {
+      expect(externalDirectoryGate(engine, toolName, "~/.config/fbb/TONE.md")).toMatchObject({
+        surface: "external_directory_read",
+        preCheck: { state: "allow" },
+      });
+      expect(pathGate(engine, toolName, ".git/config")).toBeNull();
+      expect(
+        pathGate(engine, toolName, "/nix/store/synthetic-package/config.env")?.preCheck?.state,
+      ).toBe("deny");
+      expect(
+        externalDirectoryGate(engine, toolName, "~/unregistered-project/example.ts")?.preCheck
+          ?.state,
+      ).toBe("ask");
+    }
+    expect(externalDirectoryGate(engine, "edit", "~/.config/fbb/TONE.md")?.preCheck?.state).toBe(
+      "ask",
+    );
+  });
+
+  test("allows standalone mktemp calls for primary and debug agents without allowing chained mutations", async () => {
+    const engine = createEngine();
+    for (const agentName of [undefined, "debug"]) {
+      for (const command of ["mktemp", "mktemp -d", "mktemp -d /tmp/pi-permission-check.XXXXXX"]) {
+        expect((await checkBash(engine, command, agentName)).state, command).toBe("allow");
+      }
+      expect((await checkBash(engine, "mktemp -d; sudo id", agentName)).state).toBe("deny");
+      expect((await checkBash(engine, "mktemp -d; rm -rf .", agentName)).state).toBe("ask");
+    }
   });
 
   test("allows the bound Neovim tool without broadening other tool permissions", () => {

@@ -2108,3 +2108,16 @@ index c2a8ea0..e6e4c46 100644
      return mostRestrictiveOf([
        checkMember(first),
        ...rest.map((surface) => checkMember(surface)),
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
+index b7a05f4..a16645d 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
+@@ -9,6 +9,8 @@ export const READ_ONLY_PATH_BEARING_TOOLS: ReadonlySet<string> = new Set([
+   "find",
+   "grep",
+   "ls",
++  "fffind",
++  "ffgrep",
+ ]);
+
+ export const PATH_BEARING_TOOLS = new Set([
