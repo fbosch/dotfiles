@@ -470,7 +470,18 @@ function M.bind_session(binding)
 		then
 			return false
 		end
-		if binding.replacePending then
+		local replacing = binding.replacePending == true
+		-- In-process child agents inherit this launch ID; only the terminal session or an explicit replacement may bind.
+		if
+			not replacing
+			and (
+				(terminal_session_id ~= nil and terminal_session_id ~= session_id)
+				or (terminal_channel_id ~= nil and terminal_channel_id ~= binding.channelId)
+			)
+		then
+			return false
+		end
+		if replacing then
 			session_replaced(binding.launchId)
 		end
 	end
@@ -731,7 +742,7 @@ function M.prompt_available()
 	return true
 end
 
-function M.submit_prompt(text, location, source_window)
+function M.submit_prompt(text, location, prompt_window)
 	if not M.prompt_available() then
 		return false
 	end
@@ -740,7 +751,7 @@ function M.submit_prompt(text, location, source_window)
 		M.prompt_failed(stale)
 		return false
 	end
-	local terminal = ensure_started({ focus = false, focus_window = source_window })
+	local terminal = ensure_started({ focus = false, focus_window = prompt_window })
 	if terminal == nil then
 		return false
 	end
