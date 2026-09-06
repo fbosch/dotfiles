@@ -124,23 +124,34 @@ export async function isCommaAvailable(
     let timedOut = false;
     let child: ChildProcess;
     let forceKill: ReturnType<typeof setTimeout> | undefined;
+    const stop = (signal: NodeJS.Signals) => {
+      if (child.pid === undefined) return;
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        // The check process may already have exited.
+      }
+    };
     const finish = (available: boolean) => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       if (forceKill !== undefined) clearTimeout(forceKill);
+      stop("SIGKILL");
       resolve(available);
     };
     try {
-      child = spawn(commaPath, ["--version"], { stdio: "ignore", windowsHide: true });
+      // Own the short version check's process group so wrappers cannot leave children behind.
+      // Recovery itself stays in Pi's Bash process group.
+      child = spawn(commaPath, ["--version"], { stdio: "ignore", detached: true });
     } catch {
       resolve(false);
       return;
     }
     const timeout = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      forceKill = setTimeout(() => child.kill("SIGKILL"), FORCE_KILL_DELAY_MS);
+      stop("SIGTERM");
+      forceKill = setTimeout(() => stop("SIGKILL"), FORCE_KILL_DELAY_MS);
     }, timeoutMs);
     child.once("error", () => finish(false));
     child.once("exit", (code) => finish(!timedOut && code === 0));

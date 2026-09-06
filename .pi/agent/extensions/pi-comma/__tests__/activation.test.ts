@@ -76,6 +76,29 @@ test("missing optional direnv sibling and unsupported platforms are silent", asy
   expect(await load(copiedEntry, root, "win32")).toBe('{"registrations":0}');
 });
 
+test("timed-out startup wrappers do not leave child processes behind", async () => {
+  const root = await fixture();
+  const sleep = Bun.which("sleep");
+  if (sleep === null) throw new Error("sleep is required for process fixtures");
+  const comma = join(root, "comma");
+  await writeFile(comma, `#!/bin/sh\n'${sleep}' 30 &\nprintf '%s' "$!" > '${root}/pid'\nwait\n`);
+  await chmod(comma, 0o755);
+  expect(await load(entry, root)).toBe('{"registrations":0}');
+  const pid = Number(await readFile(join(root, "pid"), "utf8"));
+  expect(Number.isSafeInteger(pid) && pid > 1).toBe(true);
+  for (let attempt = 0; attempt < 100; attempt++) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      expect((error as NodeJS.ErrnoException).code).toBe("ESRCH");
+      return;
+    }
+    await Bun.sleep(10);
+  }
+  process.kill(pid, "SIGKILL");
+  throw new Error("startup child outlived the bounded availability check");
+});
+
 test("PATH lookup skips directories named comma", async () => {
   const first = await fixture();
   const second = await fixture();
