@@ -66,6 +66,7 @@
 ## Task tracking
 
 - Use `todo` for tasks with three or more steps or an explicit task list.
+- Batch independent todo creates with `multi_tool_use.parallel`; create sequentially only when later tasks need earlier task IDs for `blockedBy`.
 - Mark exactly one task `in_progress` before starting it.
 - Mark it `completed` immediately after its acceptance checks pass.
 - Keep tasks in progress when blocked or validation fails; record blockers separately.

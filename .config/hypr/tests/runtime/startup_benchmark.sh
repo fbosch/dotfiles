@@ -65,6 +65,59 @@ run_recorder mark complete-3 ags-component-host-main-complete 32.000000000
 [[ ! -e "$state_dir/armed" ]]
 grep -Fq 'n=3' < <(run_recorder report)
 
+fake_bin="$state_dir/bin"
+mkdir -p "$fake_bin"
+cat >"$fake_bin/hyprctl" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${FAKE_WAYBAR_MAPPED:-false}" == "true" ]]; then
+  printf '%s\n' '{"DP-2":{"levels":{"0":[{"namespace":"waybar"}]}}}'
+else
+  printf '%s\n' '{}'
+fi
+EOF
+cat >"$fake_bin/systemctl" <<'EOF'
+#!/usr/bin/env bash
+[[ "${FAKE_WAYBAR_SERVICE_ACTIVE:-false}" == "true" ]]
+EOF
+chmod +x "$fake_bin/hyprctl" "$fake_bin/systemctl"
+
+PATH="$fake_bin:$PATH" run_recorder arm lazy-waybar
+campaign="$state_dir/campaigns/$(<"$state_dir/current")"
+for run in 1 2 3; do
+  run_recorder begin "lazy-$run" "$((run * 10)).000000000"
+  PATH="$fake_bin:$PATH" run_recorder mark "lazy-$run" ags-component-host-main-complete "$((run * 10 + 2)).000000000"
+  [[ "$(<"$campaign/run-$run/waybar-at-ags-ready")" == "absent" ]]
+  [[ ! -e "$campaign/run-$run/waybar-layer-mapped" ]]
+done
+[[ ! -e "$state_dir/armed" ]]
+report="$(run_recorder report)"
+grep -Fq 'run-1: Waybar absent at AGS readiness; AGS component-host main complete 2000 ms' <<<"$report"
+grep -Fq 'Waybar absent at AGS readiness: 3/3 complete runs' <<<"$report"
+grep -Fq 'AGS component-host main complete: median 2000 ms; range 2000–2000 ms (n=3)' <<<"$report"
+
+PATH="$fake_bin:$PATH" run_recorder arm lazy-waybar
+campaign="$state_dir/campaigns/$(<"$state_dir/current")"
+run_recorder begin mapped-lazy 10.000000000
+FAKE_WAYBAR_MAPPED=true PATH="$fake_bin:$PATH" \
+  run_recorder mark mapped-lazy ags-component-host-main-complete 12.000000000
+[[ "$(<"$campaign/run-1/waybar-at-ags-ready")" == "mapped" ]]
+run_recorder begin service-lazy 20.000000000
+FAKE_WAYBAR_SERVICE_ACTIVE=true PATH="$fake_bin:$PATH" \
+  run_recorder mark service-lazy ags-component-host-main-complete 22.000000000
+[[ "$(<"$campaign/run-2/waybar-at-ags-ready")" == "service-active" ]]
+report="$(run_recorder report)"
+grep -Fq 'run-1: Waybar state at AGS readiness was mapped; excluded' <<<"$report"
+grep -Fq 'run-2: Waybar state at AGS readiness was service-active; excluded' <<<"$report"
+grep -Fq 'summary: no comparable complete runs' <<<"$report"
+run_recorder disarm
+
+set +e
+invalid_mode_output="$(run_recorder arm unknown 2>&1)"
+invalid_mode_status=$?
+set -e
+[[ "$invalid_mode_status" -eq 2 ]]
+[[ "$invalid_mode_output" == *'unknown capture mode: unknown'* ]]
+
 runtime_dir="$state_dir/runtime"
 mkdir -p \
 	"$runtime_dir/hypr/login-lua" \

@@ -51,6 +51,7 @@ local callbacks = {}
 local focuses = 0
 local shows = 0
 local toggles = 0
+local terminal_visible = true
 local terminal = {
 	buf = vim.api.nvim_create_buf(false, true),
 	buf_valid = function()
@@ -68,14 +69,16 @@ local terminal = {
 	end,
 	show = function(self)
 		shows = shows + 1
+		terminal_visible = true
 		return self
 	end,
 	toggle = function(self)
 		toggles = toggles + 1
+		terminal_visible = not terminal_visible
 		return self
 	end,
 	valid = function()
-		return true
+		return terminal_visible
 	end,
 }
 package.loaded["snacks.terminal"] = {
@@ -138,6 +141,7 @@ vim.api.nvim_win_close(pi_window, true)
 vim.api.nvim_win_close(decoy_window, true)
 assert(pi.toggle() == terminal, "Pi toggle did not reuse its live terminal")
 assert(toggles == 1, "Pi toggle did not toggle the live terminal exactly once")
+assert(terminal_visible == false, "Pi toggle did not hide the terminal window")
 
 local first_context = vim.deepcopy(recorded_source_context)
 local second_source = repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua"
@@ -185,6 +189,9 @@ assert(saved_metadata.pi_session_id == first_session_id, "bound Pi session ID wa
 assert(saved_metadata.pi_terminal_open == true, "bound Pi terminal was not persisted immediately")
 assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID changed after Pi binding")
 assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed after Pi binding")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+saved_metadata = session.get_metadata(nvim_session)
+assert(saved_metadata.pi_terminal_open == true, "hidden Pi terminal was not kept restorable")
 
 local restored_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 local restored_metadata = restored_session.get_metadata(nvim_session)
