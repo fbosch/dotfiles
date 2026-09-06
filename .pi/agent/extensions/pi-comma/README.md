@@ -3,17 +3,18 @@
 `pi-comma` lets Pi's built-in local `bash` tool recover a missing bare executable
 through [comma](https://github.com/nix-community/comma).
 
-Pi imports this module during extension discovery. It remains silent and registers
-no hook unless all of these checks pass on each startup or `/reload`:
+Pi imports this module during extension discovery. It registers no hook unless
+all of these availability checks pass on each startup or `/reload`:
 
-- the host is Linux or macOS;
-- Pi identifies the configured `bash` tool as its built-in tool; and
+- the host is Linux or macOS; and
 - `comma` is executable on inherited `PATH` and `comma --version` exits zero
   within one second.
 
-The built-in-tool check uses Pi's documented tool provenance and CLI process
-marker. The extension deliberately does not run for SDK-provided or custom
-backends because Pi exposes no supported backend-identity API for them.
+When a `bash` tool call occurs, the extension uses Pi's documented tool
+provenance and CLI process marker to confirm that the tool is Pi's built-in
+local Bash before mutating the command. This runtime check deliberately
+excludes SDK-provided and custom backends; Pi exposes no separate supported
+backend-identity API for them.
 
 ## Behavior
 

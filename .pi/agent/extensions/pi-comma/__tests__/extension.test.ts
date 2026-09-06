@@ -38,25 +38,32 @@ async function runBash(
   };
 }
 
-function fakePi(source = "builtin") {
+function fakePi(source = "builtin", rejectFactoryActions = false) {
+  let runtimeReady = !rejectFactoryActions;
+  let metadataCalls = 0;
   const handlers = new Map<
     string,
     (event: { toolName: string; input: { command: string } }) => void
   >();
   const pi = {
-    getAllTools: () => [
-      {
-        name: "bash",
-        description: "Bash",
-        parameters: {},
-        sourceInfo: {
-          source,
-          path: source === "builtin" ? "<builtin:bash>" : "<bash>",
-          scope: "temporary",
-          origin: "top-level",
+    getAllTools: () => {
+      metadataCalls++;
+      if (!runtimeReady)
+        throw new Error("action methods cannot be called during extension loading");
+      return [
+        {
+          name: "bash",
+          description: "Bash",
+          parameters: {},
+          sourceInfo: {
+            source,
+            path: source === "builtin" ? "<builtin:bash>" : "<bash>",
+            scope: "temporary",
+            origin: "top-level",
+          },
         },
-      },
-    ],
+      ];
+    },
     on: (
       event: string,
       handler: (event: { toolName: string; input: { command: string } }) => void,
@@ -64,7 +71,17 @@ function fakePi(source = "builtin") {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
-  return { handlers, pi };
+  return {
+    handlers,
+    pi,
+    get metadataCalls() {
+      return metadataCalls;
+    },
+    dispatchToolCall(event: { toolName: string; input: { command: string } }) {
+      runtimeReady = true;
+      handlers.get("tool_call")?.(event);
+    },
+  };
 }
 
 afterEach(async () => {
@@ -74,7 +91,7 @@ afterEach(async () => {
 });
 
 describe("pi-comma", () => {
-  test("stays inactive when comma is absent or the bash backend is custom", async () => {
+  test("stays inactive when comma is absent", async () => {
     const originalPath = process.env.PATH;
     process.env.PATH = await fixtureDirectory();
     try {
@@ -84,16 +101,35 @@ describe("pi-comma", () => {
     } finally {
       process.env.PATH = originalPath;
     }
+  });
 
+  test("defers backend metadata gating until tool_call and excludes custom Bash", async () => {
+    const originalPath = process.env.PATH;
+    const originalPiMarker = process.env.PI_CODING_AGENT;
     const bin = await fixtureDirectory();
     await executable(join(bin, "comma"), "#!/bin/sh\nexit 0\n");
     process.env.PATH = bin;
+    process.env.PI_CODING_AGENT = "true";
     try {
-      const custom = fakePi("local");
+      const builtIn = fakePi("builtin", true);
+      await piCommaExtension(builtIn.pi);
+      expect(builtIn.metadataCalls).toBe(0);
+
+      const builtInCall = { toolName: "bash", input: { command: "echo built-in" } };
+      builtIn.dispatchToolCall(builtInCall);
+      expect(builtIn.metadataCalls).toBe(1);
+      expect(builtInCall.input.command).toContain("command_not_found_handle");
+      expect(builtInCall.input.command).toEndWith("echo built-in");
+
+      const custom = fakePi("local", true);
       await piCommaExtension(custom.pi);
-      expect(custom.handlers.size).toBe(0);
+      const customCall = { toolName: "bash", input: { command: "echo custom" } };
+      custom.dispatchToolCall(customCall);
+      expect(custom.metadataCalls).toBe(1);
+      expect(customCall.input.command).toBe("echo custom");
     } finally {
       process.env.PATH = originalPath;
+      process.env.PI_CODING_AGENT = originalPiMarker;
     }
   });
 

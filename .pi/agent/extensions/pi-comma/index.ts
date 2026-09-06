@@ -145,8 +145,7 @@ export async function isCommaAvailable(
 }
 
 function isBuiltInLocalBash(pi: ExtensionAPI): boolean {
-  // ToolInfo provenance is Pi's supported ownership API. The CLI marker avoids
-  // changing SDK-provided Bash operations, for which no backend identity API exists.
+  // Tool metadata is available only after Pi initializes the extension runtime.
   return (
     process.env.PI_CODING_AGENT === "true" &&
     pi
@@ -162,7 +161,6 @@ function isBuiltInLocalBash(pi: ExtensionAPI): boolean {
 
 export default async function piCommaExtension(pi: ExtensionAPI): Promise<void> {
   if (process.platform !== "linux" && process.platform !== "darwin") return;
-  if (!isBuiltInLocalBash(pi)) return;
   const commaPath = resolveCommaPath();
   if (commaPath === undefined || !(await isCommaAvailable(commaPath))) return;
 
@@ -170,7 +168,7 @@ export default async function piCommaExtension(pi: ExtensionAPI): Promise<void> 
   const setup = createSetupFragment({ commaPath, pickerPath });
 
   pi.on("tool_call", (event) => {
-    if (event.toolName !== "bash") return;
+    if (event.toolName !== "bash" || !isBuiltInLocalBash(pi)) return;
     event.input.command = `${setup}\n${event.input.command}`;
   });
 }
