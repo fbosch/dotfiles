@@ -26,7 +26,7 @@ pre-commit:
         - ".config/hypr/scripts/*.sh"
         - ".config/rofi/launchers/type-3/launcher.sh"
         - ".config/vicinae/extensions/*.sh"
-      run: devenv --quiet shell shellcheck {staged_files}
+      run: devenv --quiet shell shellcheck -x {staged_files}
     fish:
       glob: ".config/fish/**/*.fish"
       run: devenv --quiet shell fish -n {staged_files}

@@ -214,7 +214,8 @@
       "systemctl halt*": "deny",
       "systemctl kexec*": "deny",
       "systemctl soft-reboot*": "deny",
-      "mktemp *": "allow"
+      "mktemp *": "allow",
+      "journalctl *": "allow"
     },
     "skill": "allow",
     "external_directory_read": {
