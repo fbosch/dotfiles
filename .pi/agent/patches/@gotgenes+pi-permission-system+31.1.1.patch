@@ -268,7 +268,7 @@ index bb69665..48cb244 100644
    /**
     * What decided this request, stamped by the site that decided it.
     *
-@@ -60,10 +66,10 @@ export interface PermissionDecisionUi {
+@@ -60,10 +66,12 @@ export interface PermissionDecisionUi {
    input(title: string, placeholder?: string): Promise<string | undefined>;
  }
  
@@ -332,7 +332,7 @@ index bb69665..48cb244 100644
        return sessionApproval(
          // A cancelled scope select (undefined) falls back to the
          // least-privilege subagent scope.
-@@ -187,6 +204,38 @@ export async function requestPermissionDecisionFromUi(
+@@ -187,6 +204,45 @@ export async function requestPermissionDecisionFromUi(
      return sessionApproval("approved_for_session", width);
    }
  
@@ -347,25 +347,32 @@ index bb69665..48cb244 100644
 +      `${title}\n${scopeMessage}\n\nAllow in future sessions for:`,
 +      scopeOptions,
 +    );
-+    if (scope === options.persistentScope.globalLabel) {
-+      return {
-+        approved: true,
-+        state: "approved",
-+        persistentApprovalScope: "global",
-+      };
++    const persistentApprovalScope: PersistentApprovalScope | undefined =
++      scope === options.persistentScope.globalLabel
++        ? "global"
++        : options.persistentScope.agentLabel && scope === options.persistentScope.agentLabel
++          ? "agent"
++          : undefined;
++    if (persistentApprovalScope === undefined) {
++      // A cancelled scope selection must not silently become a permanent grant.
++      return createDeniedPermissionDecision();
 +    }
-+    if (
-+      options.persistentScope.agentLabel &&
-+      scope === options.persistentScope.agentLabel
-+    ) {
-+      return {
-+        approved: true,
-+        state: "approved",
-+        persistentApprovalScope: "agent",
-+      };
++    const scopeLabel =
++      persistentApprovalScope === "global"
++        ? options.persistentScope.globalLabel
++        : (options.persistentScope.agentLabel ?? "this agent");
++    const confirmation = await ui.select(
++      `${title}\n${scopeMessage}\n\nThis will add the permission above to permanent rules for:\n${scopeLabel}.\nContinue?`,
++      [WRITE_PERMANENT_RULE_OPTION, CANCEL_PERMANENT_RULE_OPTION],
++    );
++    if (confirmation !== WRITE_PERMANENT_RULE_OPTION) {
++      return createDeniedPermissionDecision();
 +    }
-+    // A cancelled second step must not silently become a global grant.
-+    return createDeniedPermissionDecision();
++    return {
++      approved: true,
++      state: "approved",
++      persistentApprovalScope,
++    };
 +  }
 +
    if (selected === DENY_WITH_REASON_OPTION) {
@@ -443,7 +450,7 @@ index a05f807..57281c8 100644
    };
    return view.ui.custom<UnattributedDecision>(
      (tui, theme, keybindings, done) =>
-@@ -242,7 +249,9 @@ class PermissionPromptComponent implements Component {
+@@ -242,7 +249,11 @@ class PermissionPromptComponent implements Component {
        case "reason":
          return this.renderReason(width);
        case "scope":
@@ -451,6 +458,8 @@ index a05f807..57281c8 100644
 +        return this.renderScope(width);
 +      case "persistent_scope":
 +        return this.renderPersistentScope(width);
++      case "persistent_confirm":
++        return this.renderPersistentConfirm(width);
      }
    }
  
@@ -474,7 +483,25 @@ index a05f807..57281c8 100644
        (text) => this.theme.fg("warning", text),
      );
    }
-@@ -393,7 +411,33 @@ class PermissionPromptComponent implements Component {
+@@ -317,7 +335,15 @@ class PermissionPromptComponent implements Component {
+   private toEvent(data: string): PromptEvent | undefined {
+-    if (matchesKey(data, "up") || matchesKey(data, "k")) {
++    if (
++      matchesKey(data, "up") ||
++      matchesKey(data, "k") ||
++      matchesKey(data, "h")
++    ) {
+       return { type: "nav", direction: "up" };
+     }
+-    if (matchesKey(data, "down") || matchesKey(data, "j")) {
++    if (
++      matchesKey(data, "down") ||
++      matchesKey(data, "j") ||
++      matchesKey(data, "l")
++    ) {
+       return { type: "nav", direction: "down" };
+     }
+@@ -393,7 +411,52 @@ class PermissionPromptComponent implements Component {
      return lines;
    }
  
@@ -505,6 +532,25 @@ index a05f807..57281c8 100644
 +    return lines;
 +  }
 +
++  private renderPersistentConfirm(width: number): string[] {
++    const scope = this.config.persistentScope;
++    const scopeLabel =
++      this.state.persistentScope === "global"
++        ? scope?.globalLabel ?? "all agents"
++        : scope?.agentLabel ?? "this agent";
++    const lines = [
++      this.theme.fg("accent", this.title),
++      ...this.renderCompleteAsk(width).lines,
++      "",
++      this.theme.fg("warning", "Permanent rule"),
++      "This will add the permission above to permanent rules.",
++      this.theme.fg("accent", `Scope: ${scopeLabel}`),
++      "",
++      this.theme.fg("muted", "enter write rule · esc back"),
++    ];
++    return lines;
++  }
++
 +  private renderScope(width: number): string[] {
      const scope = this.config.sessionScope;
      const subagentLabel = scope?.subagentLabel ?? "This subagent only";
@@ -528,7 +574,7 @@ index 7649514..593b3fa 100644
  import {
    createDeniedPermissionDecision,
    normalizePermissionDenialReason,
-@@ -23,16 +24,16 @@ import {
+@@ -23,16 +24,17 @@ import {
   * widened to both directions (#813), so the roster an ask actually offers
   * comes from {@link visibleOptionKeys} rather than from this type.
   */
@@ -541,7 +587,8 @@ index 7649514..593b3fa 100644
 +  | "decision"
 +  | "reason"
 +  | "scope"
-+  | "persistent_scope";
++  | "persistent_scope"
++  | "persistent_confirm";
  
 -const OPTION_ORDER: readonly PromptKey[] = ["y", "s", "b", "n", "r"];
 -
@@ -621,12 +668,14 @@ index 7649514..593b3fa 100644
      grantWidth: "proven",
    };
  }
-@@ -150,6 +163,8 @@ export function reducePrompt(
+@@ -150,6 +163,10 @@ export function reducePrompt(
        return reduceReasonStep(state, event);
      case "scope":
        return reduceScopeStep(state, event);
 +    case "persistent_scope":
 +      return reducePersistentScopeStep(config, state, event);
++    case "persistent_confirm":
++      return reducePersistentConfirmStep(state, event);
    }
  }
  
@@ -657,7 +706,7 @@ index 7649514..593b3fa 100644
      case "s":
      case "b": {
        // The two session options differ only in the width they grant; which
-@@ -290,6 +316,42 @@ function reduceReasonStep(
+@@ -290,6 +316,66 @@ function reduceReasonStep(
    return render(state);
  }
  
@@ -674,6 +723,33 @@ index 7649514..593b3fa 100644
 +        persistentScope: state.persistentScope === "agent" ? "global" : "agent",
 +      });
 +    case "confirm":
++      return render({
++        ...state,
++        step: "persistent_confirm",
++        armedKey: undefined,
++        hint: "",
++      });
++    case "cancel":
++      return render({
++        ...state,
++        step: "decision",
++        armedKey: undefined,
++        hint: "",
++        persistentScope: config.persistentScope?.agentLabel
++          ? "agent"
++          : "global",
++      });
++    default:
++      return render(state);
++  }
++}
++
++function reducePersistentConfirmStep(
++  state: PromptViewState,
++  event: PromptEvent,
++): PromptOutcome {
++  switch (event.type) {
++    case "confirm":
 +      return {
 +        kind: "decision",
 +        decision: {
@@ -685,12 +761,9 @@ index 7649514..593b3fa 100644
 +    case "cancel":
 +      return render({
 +        ...state,
-+        step: "decision",
++        step: "persistent_scope",
 +        armedKey: undefined,
 +        hint: "",
-+        persistentScope: config.persistentScope?.agentLabel
-+          ? "agent"
-+          : "global",
 +      });
 +    default:
 +      return render(state);

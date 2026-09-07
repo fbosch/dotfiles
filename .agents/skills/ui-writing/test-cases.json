@@ -14,7 +14,7 @@
       ]
     },
     {
-      "id": "remove-and-delete-remain-distinct",
+      "id": "consequential-menu-terms-remain-distinct",
       "rule": "UI-01,UI-04,UI-07,CMP-02",
       "query": "Review four desktop application menu commands. ‘Remove from Favorites’ only removes a sidebar shortcut. ‘Delete Project…’ opens a confirmation and then moves the project to Recently Deleted for 30 days. ‘Close Window’ closes the active window while the application remains open. ‘Quit Application’ exits the user-facing application, although an independently managed upload helper may continue.",
       "expectedBehavior": [
@@ -50,7 +50,7 @@
     {
       "id": "menu-ellipsis-follows-established-convention",
       "rule": "PLAT-02",
-      "query": "A desktop application's design standard uses ellipses for menu commands that require more input before completion. Review these menu items: ‘Export’ opens a dialog that requires a filename and format; ‘Downloads…’ merely opens the Downloads view and performs no operation.",
+      "query": "A desktop application's design standard uses the single ellipsis character for menu commands that require more input before completion. Review these menu items: ‘Export’ opens a dialog that requires a filename and format; ‘Downloads…’ merely opens the Downloads view and performs no operation.",
       "expectedBehavior": [
         "Recommends an ellipsis for Export because required input follows",
         "Removes the ellipsis from Downloads because opening a window alone is insufficient",
@@ -117,10 +117,11 @@
     {
       "id": "placeholders-and-plurals-survive",
       "rule": "LOC-02,LOC-03",
-      "query": "An ICU MessageFormat resource says `delete_count = Erase {count, plural, one {# file} other {# files}} from <b>{folder}</b>?`. The operation only removes the selected files from that folder; the files remain in Library. Improve the visible wording without changing the message identifier, markup, variables, or plural branches.",
+      "query": "An ICU MessageFormat resource says `delete_count = From <b>{folder}</b>, erase {count, plural, one {# file} other {# files}}?`. The operation only removes the selected files from that folder; the files remain in Library. The product's confirmation pattern puts the operation and affected object before the source. Improve the visible wording without changing the message identifier, markup, variable bindings, or plural branches.",
       "expectedBehavior": [
         "Preserves delete_count exactly",
         "Preserves count, folder, b markup, and both plural branches",
+        "Allows the named folder and count expressions to move when their bindings remain intact",
         "Changes Erase to wording such as Remove that reflects the verified operation",
         "Does not flatten the plural structure or rename the internal message identifier"
       ]
