@@ -1,4 +1,7 @@
 function workitems_week --description 'Display calendar view of work items touched during the current or previous week'
+    if test "$argv[1]" = previous
+        set argv --previous $argv[2..-1]
+    end
     argparse -n workitems_week p/previous r/refresh -- $argv
     or return
 
