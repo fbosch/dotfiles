@@ -280,6 +280,8 @@ index bb69665..48cb244 100644
 +const APPROVE_FOR_SESSION_OPTION = "Allow for this session";
 +const DENY_OPTION = "Deny";
 +const DENY_WITH_REASON_OPTION = "Deny with reason";
++const WRITE_PERMANENT_RULE_OPTION = "Write permanent rule";
++const CANCEL_PERMANENT_RULE_OPTION = "Cancel";
  
  /**
   * A session-granting decision, naming its width only when it is not the

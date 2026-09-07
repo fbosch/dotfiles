@@ -5,39 +5,42 @@
     {
       "id": "unclear-action-uses-verified-behavior",
       "rule": "UI-01,UI-02,CMP-01",
-      "query": "In this macOS SwiftUI view, the primary button says ‘Process’. Its handler renders the selected document as a PDF and opens a save panel. Review only this label.",
+      "query": "In this desktop document editor, the primary button says ‘Process’. Its handler renders the selected document as a PDF and opens a save dialog. The project uses title-style capitalization for button labels. Review only this label.",
       "expectedBehavior": [
         "Inspects or uses the stated handler behavior before proposing wording",
         "Proposes a concise label that communicates PDF export rather than a generic action",
-        "Uses macOS button conventions only because the platform is specified",
+        "Uses the established project convention rather than assuming a universal casing rule",
         "Does not change the handler or claim that the file has already been saved"
       ]
     },
     {
       "id": "remove-and-delete-remain-distinct",
-      "rule": "UI-04,UI-07",
-      "query": "Review two macOS menu commands. ‘Remove from Favorites’ only removes a sidebar shortcut. ‘Delete Project…’ opens a confirmation and then moves the project to Recently Deleted for 30 days.",
+      "rule": "UI-01,UI-04,UI-07,CMP-02",
+      "query": "Review four desktop application menu commands. ‘Remove from Favorites’ only removes a sidebar shortcut. ‘Delete Project…’ opens a confirmation and then moves the project to Recently Deleted for 30 days. ‘Close Window’ closes the active window while the application remains open. ‘Quit Application’ exits the user-facing application, although an independently managed upload helper may continue.",
       "expectedBehavior": [
         "Keeps Remove and Delete distinct because the operations differ",
+        "Keeps Close and Quit distinct because the user-facing application lifecycle differs",
+        "Treats Quit relative to the user-facing application rather than an independent helper",
         "Preserves or recommends consequence text that accurately mentions Recently Deleted when material",
-        "Does not claim immediate permanent deletion",
-        "Does not perform a synonym-based consistency rewrite"
+        "Does not claim immediate permanent deletion or perform a synonym-based consistency rewrite"
       ]
     },
     {
       "id": "correct-copy-remains-unchanged",
-      "rule": "UI-12",
-      "query": "Review this macOS settings toggle: label ‘Download Updates Automatically’. When on, updates download in the background; when off, they do not. The project uses title-style capitalization for settings labels.",
+      "rule": "UI-01,UI-03,UI-04,UI-12,CMP-03",
+      "query": "Review these desktop settings controls. The project uses title-style labels. ‘Download Updates Automatically’ names a toggle's enabled condition. ‘Apply’ activates staged settings and keeps the window open. ‘Save Profile’ persists the named profile. ‘Clear Search’ empties only the current query. ‘Reset Defaults’ restores settings to their defined defaults. All labels match the implementation.",
       "expectedBehavior": [
-        "Accepts the wording as accurate and consistent",
+        "Accepts all wording as accurate and consistent",
+        "Keeps Apply and Save distinct because their operations differ",
+        "Keeps Clear and Reset distinct because their scopes differ",
         "Returns No changes needed or an equivalent no-change finding",
-        "Does not rewrite the label merely to produce a recommendation"
+        "Does not rewrite the labels merely to produce a recommendation"
       ]
     },
     {
       "id": "informational-ok-is-preserved",
       "rule": "UI-08",
-      "query": "A macOS alert displays ‘Version 4.2 is installed.’ It has one button labeled ‘OK’ that only dismisses the alert. Review the button text.",
+      "query": "An informational alert displays ‘Version 4.2 is installed.’ It has one button labeled ‘OK’ that only dismisses the alert. Review the button text.",
       "expectedBehavior": [
         "Recognizes the alert as purely informational",
         "Keeps OK rather than replacing it with a more specific action",
@@ -45,9 +48,9 @@
       ]
     },
     {
-      "id": "macos-menu-ellipsis-follows-input",
-      "rule": "MAC-02",
-      "query": "Review these macOS menu items: ‘Export’ opens a sheet that requires a filename and format before export; ‘Downloads…’ merely opens the Downloads window and performs no operation.",
+      "id": "menu-ellipsis-follows-established-convention",
+      "rule": "PLAT-02",
+      "query": "A desktop application's design standard uses ellipses for menu commands that require more input before completion. Review these menu items: ‘Export’ opens a dialog that requires a filename and format; ‘Downloads…’ merely opens the Downloads view and performs no operation.",
       "expectedBehavior": [
         "Recommends an ellipsis for Export because required input follows",
         "Removes the ellipsis from Downloads because opening a window alone is insufficient",
@@ -56,25 +59,36 @@
       ]
     },
     {
-      "id": "web-copy-does-not-inherit-macos-style",
-      "rule": "MAC-01,MAC-02,LOC-01",
-      "query": "Implement a button in an English web dashboard. The design system uses sentence case. The button opens a form for creating a report. Should it be ‘Create Report…’ because that is what the macOS app uses?",
+      "id": "web-copy-does-not-inherit-platform-style",
+      "rule": "PLAT-01,PLAT-03,LOC-01",
+      "query": "Implement a button in an English web dashboard whose design system uses sentence case. The button opens a form for creating a report. Should it be ‘Create Report…’ because a separate desktop product uses that label?",
       "expectedBehavior": [
-        "Does not apply macOS capitalization or ellipsis conventions automatically",
+        "Does not apply another product's capitalization or ellipsis conventions automatically",
         "Respects the web design system's sentence case",
         "Determines wording from web behavior and project conventions",
-        "Does not claim Apple HIG is a universal web requirement"
+        "Does not claim a platform-specific style guide is a universal web requirement"
       ]
     },
     {
       "id": "state-is-not-presented-as-action",
       "rule": "UI-03,A11Y-02",
-      "query": "An icon button currently shows the microphone is muted. Clicking it will unmute. Its visible tooltip and accessible label both say ‘Muted’. Review them.",
+      "query": "An ordinary icon-only command button is not a toggle and exposes no pressed or checked state. The microphone is currently muted, and clicking the button will unmute it. Its tooltip and accessible label both say ‘Muted’. Review them.",
       "expectedBehavior": [
         "Identifies the mismatch between current state wording and available action",
         "Proposes action-oriented wording such as Unmute for the interactive control",
         "Keeps tooltip and accessible purpose aligned",
         "Does not change the mute behavior"
+      ]
+    },
+    {
+      "id": "pressed-toggle-keeps-stable-name",
+      "rule": "UI-03,A11Y-02",
+      "query": "Review this web toggle button: `<button aria-label=\"Mute\" aria-pressed=\"true\">`. The pressed state means muting is on; activating it will turn muting off.",
+      "expectedBehavior": [
+        "Recognizes that aria-pressed exposes toggle state",
+        "Keeps the stable accessible name Mute while the pressed state changes",
+        "Does not rename the toggle to Unmute unless the component drops toggle semantics",
+        "Distinguishes the setting name from the currently available action"
       ]
     },
     {
@@ -91,29 +105,30 @@
     {
       "id": "accessible-name-contains-visible-label",
       "rule": "A11Y-01",
-      "query": "Review a web button with visible text ‘Search’ and aria-label ‘Find projects’. The control searches projects.",
+      "query": "Review two web buttons. Button A has visible text ‘Search’ and aria-label ‘Find projects’. Button B has visible text ‘Next…’ and computed accessible name ‘Next’. Both controls perform the actions their visible labels describe.",
       "expectedBehavior": [
-        "Identifies that the accessible name does not contain the visible label",
-        "Proposes an accessible name that contains Search, preferably starting with it",
+        "Identifies that Button A's accessible name does not contain the visible label",
+        "Proposes an accessible name for Button A that contains Search, preferably starting with it",
         "Distinguishes the WCAG containment requirement from the exact-match best practice",
+        "Does not report Button B's punctuation-only difference as a WCAG failure",
         "Does not remove useful project context if it remains after the visible label"
       ]
     },
     {
       "id": "placeholders-and-plurals-survive",
       "rule": "LOC-02,LOC-03",
-      "query": "Improve the ICU message `delete_count = Delete {count, plural, one {# file} other {# files}} from <b>{folder}</b>?` without changing its message identifier, markup, variables, or plural branches.",
+      "query": "An ICU MessageFormat resource says `delete_count = Erase {count, plural, one {# file} other {# files}} from <b>{folder}</b>?`. The operation only removes the selected files from that folder; the files remain in Library. Improve the visible wording without changing the message identifier, markup, variables, or plural branches.",
       "expectedBehavior": [
         "Preserves delete_count exactly",
         "Preserves count, folder, b markup, and both plural branches",
-        "Changes only human-facing words if a material improvement is justified",
-        "Does not flatten the plural structure into one English sentence"
+        "Changes Erase to wording such as Remove that reflects the verified operation",
+        "Does not flatten the plural structure or rename the internal message identifier"
       ]
     },
     {
       "id": "non-english-copy-keeps-locale-casing",
       "rule": "LOC-01",
-      "query": "Review the Danish macOS menu item ‘Åbn seneste’. An automated style pass proposes ‘Åbn Seneste’ to match English title-style capitalization.",
+      "query": "Review the Danish desktop menu item ‘Åbn seneste’. An automated style pass proposes ‘Åbn Seneste’ to match an English title-style convention.",
       "expectedBehavior": [
         "Rejects applying English title-style capitalization to Danish",
         "Preserves Å and the language-specific text",
@@ -148,7 +163,7 @@
       "query": "Rewrite the body of my Git commit message to be clearer. It contains no user-facing interface strings.",
       "expectedBehavior": [
         "Does not invoke or apply the ui-writing skill",
-        "Does not impose button, menu, alert, macOS, or accessibility-label rules on the commit message",
+        "Does not impose button, menu, alert, platform-style, or accessibility-label rules on the commit message",
         "Routes the task to ordinary prose or commit-message guidance instead"
       ]
     }

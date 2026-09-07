@@ -17,7 +17,11 @@ import { modalSelectedRow } from "../modal-frame";
 type CustomOptions = Parameters<ExtensionUIContext["custom"]>[1];
 type DialogComponent = Component & { dispose?(): void };
 
-function createUI() {
+type UIOptions = {
+  beforeInput?: (component: DialogComponent) => void;
+  autoInput?: string;
+};
+function createUI(createOptions: UIOptions = {}) {
   const calls: CustomOptions[] = [];
   const components: DialogComponent[] = [];
   const theme = {
@@ -47,7 +51,8 @@ function createUI() {
     });
     const component = await factory(tui, theme, {} as KeybindingsManager, finish);
     components.push(component);
-    component.handleInput?.("\r");
+    createOptions.beforeInput?.(component);
+    component.handleInput?.(createOptions.autoInput ?? "\r");
     const value = await result;
     component.dispose?.();
     return value;
@@ -148,5 +153,38 @@ describe("floating extension dialogs", () => {
     const narrow = components[0]?.render(3) ?? [];
     expect(narrow.map(stripTerminalSequences).at(-1)).toBe("▘▀▝");
     expect(narrow.every((line) => visibleWidth(line) === 3)).toBe(true);
+  });
+  test("maps h/l to horizontal choice navigation for permission prompts", async () => {
+    const handledInput: string[] = [];
+    const { ui } = createUI({
+      beforeInput: (component) => {
+        component.render(120);
+        component.handleInput?.("h");
+        component.handleInput?.("l");
+      },
+    });
+    installFloatingDialogs(ui);
+
+    await ui.custom(
+      (_tui, _theme, _keybindings, done) => ({
+        render: () => [
+          "Permission Required",
+          "surface : external_directory_read",
+          "rule : *",
+          "path : ~/.config/fbb",
+          "",
+          "▶ (o) Allow once",
+          "  (s) Allow for this session",
+        ],
+        handleInput: (data: string) => {
+          handledInput.push(data);
+          if (data === "\r") done("approved");
+        },
+        invalidate: () => {},
+      }),
+      { overlay: false },
+    );
+
+    expect(handledInput).toEqual(["k", "j", "\r"]);
   });
 });

@@ -49,12 +49,34 @@ describe("permission prompt rendering", () => {
       "",
       "─".repeat(120),
     ]);
-    expect(plain[8]).toMatch(/^Allow once {4}Allow session {4}Reject {4}Reject \+ reason/);
+    expect(plain[8]).toContain(" Allow once ");
+    expect(plain[8]).toContain(" Allow session ");
+    expect(plain[8]).toContain(" Reject ");
+    expect(plain[8]).toContain(" Reject + reason ");
     expect(plain[8]).toEndWith("↑/↓ select · enter confirm · esc deny");
     expect(lines[0]).toBe("\u001b[33m△ Permission required (Subagent)\u001b[39m");
     expect(lines[8]).toContain("\u001b[7m");
-    expect(lines[8]).toContain("\u001b[36mAllow once");
+    expect(lines[8]).toContain("\u001b[36m Allow once \u001b[39m");
     expect(plain).not.toContain("subagent          : review · session 01a06d9c");
+  });
+
+  test("emphasizes the command behind a path permission", () => {
+    const lines = renderPermissionPromptLines(
+      [
+        "Permission Required",
+        "surface : path_write",
+        "path : .pi/mcp.json",
+        "command : printf secret > .pi/mcp.json",
+        "rule : */.pi/mcp.json",
+      ],
+      120,
+      theme,
+    );
+    const plain = lines.map(stripTerminalSequences);
+
+    expect(plain[1]).toBe("    ← Write path .pi/mcp.json");
+    expect(plain[2]).toBe("      ↳ command printf secret > .pi/mcp.json");
+    expect(lines[2]).toContain("\u001b[33mprintf secret > .pi/mcp.json\u001b[39m");
   });
 
   test("compacts verbose approval labels without changing their order", () => {
@@ -79,7 +101,10 @@ describe("permission prompt rendering", () => {
         .map(stripTerminalSequences)
         .some(
           (line) =>
-            line.startsWith("Allow once    Allow session    Allow always    Reject") &&
+            line.includes(" Allow once ") &&
+            line.includes(" Allow session ") &&
+            line.includes(" Allow always ") &&
+            line.includes(" Reject ") &&
             line.endsWith("↑/↓ select · enter confirm · esc deny"),
         ),
     ).toBe(true);

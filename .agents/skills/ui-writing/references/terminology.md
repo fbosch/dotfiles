@@ -4,17 +4,17 @@ Use these distinctions only after inspecting the behavior. Project terminology w
 
 ## Remove and Delete
 
-- **Use `Remove` when:** The item stops appearing in a collection, relationship, account, sidebar, or current context, while the underlying item or data remains available elsewhere.
-- **Use `Delete` when:** The operation destroys the item or schedules its data for deletion according to the product's actual lifecycle.
-- **Verify:** Whether data remains, moves to Trash or Recently Deleted, can be restored, is deleted remotely, or only loses an association.
+- **Use `Remove` when:** The named object leaves a collection, relationship, account, sidebar, device, or other stated scope, while the source object remains available in another established scope.
+- **Use `Delete` when:** The named object enters the product's deletion lifecycle, whether deletion is immediate, delayed, or recoverable.
+- **Verify:** Which object and storage scope the label names; whether data remains elsewhere; whether it moves to Trash or Recently Deleted; and whether it can be restored.
 - **Exception:** Preserve a platform or domain convention such as `Move to Trash` when it describes the actual intermediate state more precisely.
 - **Related rules:** UI-01, UI-04, UI-07.
 
 ## Close and Quit
 
-- **Use `Close` when:** The operation dismisses a window, document, panel, view, or session while the app or broader process continues.
-- **Use `Quit` when:** The operation terminates the app on a platform where quitting is a user-visible app action.
-- **Verify:** Whether background work, other windows, menu-bar presence, or the app process continues.
+- **Use `Close` when:** The operation dismisses a window, document, panel, view, or session while the user-facing app continues.
+- **Use `Quit` when:** The operation terminates the user-facing app on a platform where quitting is an explicit app action.
+- **Verify:** Whether other app windows and the user-facing app process continue. Treat an independently managed helper as a separate lifecycle, and disclose its continued work only when that consequence is material.
 - **Exception:** A web sign-in session that ends is usually `Sign Out`, not `Quit`; a process-control interface may use domain-specific terms such as `Stop`.
 - **Related rules:** UI-01, UI-04, CMP-02.
 

@@ -139,7 +139,7 @@ describe("permission prompt details", () => {
       surface: "path_write",
     });
     const titles: string[] = [];
-    const answers = ["Allow in future sessions…", "All agents/modes"];
+    const answers = ["Allow in future sessions…", "All agents/modes", "Write permanent rule"];
     const ui = {
       select: async (title: string) => {
         titles.push(title);
@@ -175,15 +175,21 @@ describe("permission prompt details", () => {
       approved: true,
       persistentApprovalScope: "global",
     });
-    expect(titles).toHaveLength(2);
+    expect(titles).toHaveLength(3);
     expect(titles[1]).toContain("END_OF_COMMAND");
+    expect(titles[2]).toContain("All agents/modes");
+    expect(titles[2]).toContain("permanent rules");
   });
 });
 
 describe("persistent approval prompt", () => {
   test("asks for a durable scope after selecting future sessions", async () => {
     const calls: Array<{ title: string; options: string[] }> = [];
-    const answers = ["Allow in future sessions…", "This agent/mode: lookup"];
+    const answers = [
+      "Allow in future sessions…",
+      "This agent/mode: lookup",
+      "Write permanent rule",
+    ];
     const ui: PermissionUi = {
       select: async (title, options) => {
         calls.push({ title, options });
@@ -209,7 +215,7 @@ describe("persistent approval prompt", () => {
       state: "approved",
       persistentApprovalScope: "agent",
     });
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(3);
     expect(calls[0]?.options).toEqual([
       "Allow once",
       "Allow for this session",
@@ -219,6 +225,9 @@ describe("persistent approval prompt", () => {
     ]);
     expect(calls[1]?.title).toContain("command : printf secret > .pi/mcp.json");
     expect(calls[1]?.options).toEqual(["This agent/mode: lookup", "All agents/modes"]);
+    expect(calls[2]?.title).toContain("This agent/mode: lookup");
+    expect(calls[2]?.title).toContain("permanent rules");
+    expect(calls[2]?.options).toEqual(["Write permanent rule", "Cancel"]);
   });
 
   test("cancelling the durable scope does not grant globally", async () => {
@@ -269,7 +278,14 @@ describe("persistent approval decision model", () => {
       kind: "render",
       state: { step: "persistent_scope", persistentScope: "agent" },
     });
-    const decision = modelModule.reducePrompt(config, next.state, {
+    const confirmation = modelModule.reducePrompt(config, next.state, {
+      type: "confirm",
+    });
+    expect(confirmation).toMatchObject({
+      kind: "render",
+      state: { step: "persistent_confirm", persistentScope: "agent" },
+    });
+    const decision = modelModule.reducePrompt(config, confirmation.state, {
       type: "confirm",
     });
     expect(decision).toMatchObject({
@@ -291,7 +307,14 @@ describe("persistent approval decision model", () => {
       type: "nav",
       direction: "down",
     });
-    const decision = modelModule.reducePrompt(config, global.state, {
+    const confirmation = modelModule.reducePrompt(config, global.state, {
+      type: "confirm",
+    });
+    expect(confirmation).toMatchObject({
+      kind: "render",
+      state: { step: "persistent_confirm", persistentScope: "global" },
+    });
+    const decision = modelModule.reducePrompt(config, confirmation.state, {
       type: "confirm",
     });
     expect(decision).toMatchObject({
@@ -316,6 +339,24 @@ describe("persistent approval decision model", () => {
     expect(cancelled).toMatchObject({
       kind: "render",
       state: { step: "decision", persistentScope: "agent" },
+    });
+  });
+  test("requires explicit confirmation before returning a persistent approval", () => {
+    const state = modelModule.initialPromptState(config);
+    const persistent = modelModule.reducePrompt(config, state, {
+      type: "hotkey",
+      key: "f",
+    });
+    const confirmation = modelModule.reducePrompt(config, persistent.state, {
+      type: "confirm",
+    });
+    const cancelled = modelModule.reducePrompt(config, confirmation.state, {
+      type: "cancel",
+    });
+
+    expect(cancelled).toMatchObject({
+      kind: "render",
+      state: { step: "persistent_scope", persistentScope: "agent" },
     });
   });
 });

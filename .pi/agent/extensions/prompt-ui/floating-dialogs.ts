@@ -3,6 +3,7 @@ import {
   type Component,
   getKeybindings,
   Input,
+  matchesKey,
   type SelectItem,
   SelectList,
   Spacer,
@@ -22,7 +23,10 @@ import {
   ModalFrame,
   modalSelectListTheme,
 } from "./modal-frame";
-import { renderPermissionPromptLines } from "./permission-prompt-rendering";
+import {
+  isPermissionDecisionPromptLines,
+  renderPermissionPromptLines,
+} from "./permission-prompt-rendering";
 
 const FLOATING_DIALOG_OVERLAY = {
   anchor: "center" as const,
@@ -34,6 +38,7 @@ const installedContexts = new WeakSet<ExtensionUIContext>();
 const INLINE_DIALOG_PADDING_X = 1;
 
 class InlineDockDialog implements Component {
+  private permissionDecisionVisible = false;
   constructor(
     private readonly component: Component & { dispose?(): void },
     private readonly theme: Theme,
@@ -55,7 +60,11 @@ class InlineDockDialog implements Component {
   }
 
   render(width: number): string[] {
-    if (width <= DOCK_CHROME_WIDTH) return this.component.render(width);
+    if (width <= DOCK_CHROME_WIDTH) {
+      const rendered = this.component.render(width);
+      this.permissionDecisionVisible = isPermissionDecisionPromptLines(rendered);
+      return rendered;
+    }
 
     const availableWidth = width - DOCK_CHROME_WIDTH;
     const paddingX =
@@ -64,11 +73,11 @@ class InlineDockDialog implements Component {
     const backgroundAnsi = this.theme.getBgAnsi("userMessageBg");
     const rail = this.theme.fg("warning", DOCK_RAIL);
     const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
-    const content = renderPermissionPromptLines(
-      this.component.render(contentWidth),
-      contentWidth,
-      this.theme,
-    ).map((line) => `${" ".repeat(paddingX)}${line}`);
+    const rendered = this.component.render(contentWidth);
+    this.permissionDecisionVisible = isPermissionDecisionPromptLines(rendered);
+    const content = renderPermissionPromptLines(rendered, contentWidth, this.theme).map(
+      (line) => `${" ".repeat(paddingX)}${line}`,
+    );
     const rows = ["", ...content].map((line) =>
       paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
     );
@@ -85,6 +94,17 @@ class InlineDockDialog implements Component {
   }
 
   handleInput(data: string): void {
+    // The upstream prompt already handles j/k; only add h/l while choices are active so reason input remains normal text.
+    if (this.permissionDecisionVisible) {
+      if (matchesKey(data, "h")) {
+        this.component.handleInput?.("k");
+        return;
+      }
+      if (matchesKey(data, "l")) {
+        this.component.handleInput?.("j");
+        return;
+      }
+    }
     this.component.handleInput?.(data);
   }
 

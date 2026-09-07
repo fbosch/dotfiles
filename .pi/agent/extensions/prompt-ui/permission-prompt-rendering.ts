@@ -98,6 +98,13 @@ export function renderPermissionPromptLines(
   );
 }
 
+export function isPermissionDecisionPromptLines(lines: readonly string[]): boolean {
+  return (
+    isPermissionPrompt(lines) &&
+    lines.some((line, index) => index > 0 && parseOption(line) !== undefined)
+  );
+}
+
 function isPermissionPrompt(lines: readonly string[]): boolean {
   const title = lines[0];
   return title !== undefined && stripTerminalSequences(title).startsWith(PERMISSION_TITLE);
@@ -129,7 +136,7 @@ function renderPromptBase(
   theme: PermissionPromptTheme,
 ): string[] {
   const title = stripTerminalSequences(titleLine).replace(PERMISSION_TITLE, "Permission required");
-  const lines = [theme.fg("warning", `${WARNING_ICON} ${title}`), renderRequest(facts, theme)];
+  const lines = [theme.fg("warning", `${WARNING_ICON} ${title}`), ...renderRequest(facts, theme)];
   const patterns = facts.filter((fact) => fact.label.toLowerCase() === "rule");
 
   if (patterns.length > 0) {
@@ -140,16 +147,23 @@ function renderPromptBase(
   return lines;
 }
 
-function renderRequest(facts: readonly ParsedFact[], theme: PermissionPromptTheme): string {
+function renderRequest(facts: readonly ParsedFact[], theme: PermissionPromptTheme): string[] {
   const surface = factValue(facts, "surface") ?? factValue(facts, "tool") ?? "permission";
   const { base, action } = splitSurface(surface);
   const tool = factValue(facts, "tool");
   const value = requestValue(facts, base);
   const verb = requestVerb(base, action, tool);
   const noun = SURFACE_NOUNS[base] ?? humanize(base).toLowerCase();
-  const suffix = value === undefined ? "" : ` ${value}`;
-
-  return theme.fg("muted", `    ${REQUEST_ARROW} ${verb} ${noun}${suffix}`);
+  const prefix = theme.fg("muted", `    ${REQUEST_ARROW} ${verb} ${noun}`);
+  const lines =
+    value === undefined
+      ? [prefix]
+      : [`${prefix} ${theme.fg(base === "bash" ? "warning" : "accent", value)}`];
+  const command = factValue(facts, "command");
+  if (command !== undefined && base !== "bash") {
+    lines.push(`${theme.fg("muted", "      ↳ command")} ${theme.fg("warning", command)}`);
+  }
+  return lines;
 }
 
 function requestValue(facts: readonly ParsedFact[], surface: string): string | undefined {
@@ -190,14 +204,16 @@ function renderTail(lines: readonly string[], facts: readonly ParsedFact[]): str
   return lines.slice(lastFactIndex + 1).filter((line) => line.trim().length > 0);
 }
 
+/** Pad each action label horizontally so the selected background reads as a button. */
 function renderOptionRows(
   options: readonly ParsedOption[],
   width: number,
   theme: PermissionPromptTheme,
 ): string[] {
   const rendered = options.map((option) => {
-    const label = compactOptionLabel(option.label);
-    const text = option.selected ? theme.fg("accent", label) : theme.fg("muted", label);
+    const label = truncateToWidth(compactOptionLabel(option.label), Math.max(0, width - 2));
+    const paddedLabel = truncateToWidth(` ${label} `, width);
+    const text = theme.fg(option.selected ? "accent" : "muted", paddedLabel);
     return option.selected ? theme.inverse(text) : text;
   });
   const rows: string[] = [];
@@ -215,7 +231,6 @@ function renderOptionRows(
   if (current.length > 0) rows.push(current);
   return rows;
 }
-
 function fitColumns(left: string, right: string, width: number): string {
   const leftText = truncateToWidth(left, width, "");
   const remaining = Math.max(0, width - visibleWidth(leftText));

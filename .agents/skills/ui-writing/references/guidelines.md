@@ -2,6 +2,15 @@
 
 Checked against the linked sources on 2026-09-07.
 
+## Rule index
+
+- [General decisions](#general-decisions): UI-01 through UI-12
+- [Component decisions](#component-decisions): CMP-01 through CMP-07
+- [Platform and locale conventions](#platform-and-locale-conventions): PLAT-01 through PLAT-03
+- [Accessibility decisions](#accessibility-decisions): A11Y-01 and A11Y-02
+- [Locale and localization decisions](#locale-and-localization-decisions): LOC-01 through LOC-03
+- [Source and licensing boundaries](#source-and-licensing-boundaries)
+
 ## Governing principle
 
 Improve the wording without changing or misrepresenting the behavior.
@@ -55,7 +64,7 @@ Improve the wording without changing or misrepresenting the behavior.
 - **Applies to:** All platforms; help and instructional text; all locales.
 - **Instruction:** Name the interaction people actually perform on the target device.
 - **Boundary:** Cross-platform copy may need platform variants; do not choose `click` or `tap` as a universal replacement.
-- **Example:** Use `Click Add` on macOS and `Tap Add` on iPhone when each platform has its own string.
+- **Example:** Use `Click Add` for a pointer interaction and `Tap Add` for a touch interaction when each context has its own string.
 - **Basis:** **Source-backed recommendation.** [Apple HIG: Writing](https://developer.apple.com/design/human-interface-guidelines/writing), checked 2026-09-07.
 
 ### UI-07: Confirm with the operation and consequence
@@ -110,7 +119,7 @@ Improve the wording without changing or misrepresenting the behavior.
 
 ### CMP-01: Start button labels with an action when it improves clarity
 
-- **Applies to:** Apple platforms; text buttons; English.
+- **Applies to:** All platforms; text buttons; locales where action-led labels are grammatical.
 - **Instruction:** Keep labels to a few words and consider starting with a verb that describes the action.
 - **Boundary:** This is a recommendation, not a ban on conventional or stateful labels. Preserve `OK`, `Done`, or a well-understood setting label when it fits the component.
 - **Example:** Prefer `Add to Queue` to `Queue Addition` for a button that adds the selection.
@@ -134,7 +143,7 @@ Improve the wording without changing or misrepresenting the behavior.
 
 ### CMP-04: Structure alerts around the decision
 
-- **Applies to:** Apple platforms; alerts; English.
+- **Applies to:** All platforms; alerts and confirmation dialogs; all locales.
 - **Instruction:** Use a specific title for the situation or decision. Add informative text only for consequences or context the title and buttons do not already convey.
 - **Boundary:** Do not use an alert for routine status when a nonmodal message can communicate it, and do not explain self-evident buttons in the body.
 - **Example:** Title `Replace Existing Export?`; body `The previous PDF will be overwritten.`; buttons `Cancel` and `Replace`.
@@ -150,7 +159,7 @@ Improve the wording without changing or misrepresenting the behavior.
 
 ### CMP-06: Keep tooltips local to the control
 
-- **Applies to:** macOS and visionOS; tooltips; all locales.
+- **Applies to:** All platforms; tooltips and comparable hover or focus help; all locales.
 - **Instruction:** Briefly describe the indicated control's action or task, often beginning with a verb.
 - **Boundary:** Avoid repeating the visible name unless repetition is needed for clarity or accessibility. Do not turn a tooltip into instructions for a larger workflow.
 - **Example:** For an icon-only reset control, use `Restore default settings` rather than `Reset button for changing all preferences back to their defaults`.
@@ -164,49 +173,49 @@ Improve the wording without changing or misrepresenting the behavior.
 - **Example:** Add `8 characters minimum` only when the validator enforces that minimum.
 - **Basis:** **Source-backed recommendation plus our evidence boundary.** [Apple HIG: Writing](https://developer.apple.com/design/human-interface-guidelines/writing), checked 2026-09-07.
 
-## macOS English conventions
+## Platform and locale conventions
 
-### MAC-01: Use component-specific capitalization and punctuation
+### PLAT-01: Follow component-specific capitalization and punctuation
 
-- **Applies to:** macOS; buttons and menu commands; U.S. English.
-- **Instruction:** Prefer title-style capitalization for button and menu-command labels. Omit ending punctuation from these labels.
-- **Boundary:** Do not apply this as a global title-case transformation. Follow a more specific component rule, explicit project convention, product spelling, or locale rule.
-- **Example:** Use `Save a Copy` for a macOS command, while body text remains sentence case.
-- **Basis:** **Source-backed recommendation.** [Apple HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), [Apple HIG: Menus](https://developer.apple.com/design/human-interface-guidelines/menus), and [Apple Style Guide: About the guide](https://support.apple.com/guide/applestyleguide/about-the-guide-apsg1eef9171/web), checked 2026-09-07.
+- **Applies to:** All platforms; buttons and menu commands; all locales.
+- **Instruction:** Follow the target platform's or design system's documented casing and punctuation for the specific component.
+- **Boundary:** Do not apply one component's convention as a global transformation. A more specific component rule, explicit project convention, product spelling, or locale rule takes precedence.
+- **Example:** If a desktop design system specifies title-style command labels, use `Save a Copy` there while keeping body text in the locale's normal sentence casing.
+- **Basis:** **Our policy**, informed by [Apple HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), [Apple HIG: Menus](https://developer.apple.com/design/human-interface-guidelines/menus), and [Apple Style Guide: About the guide](https://support.apple.com/guide/applestyleguide/about-the-guide-apsg1eef9171/web), checked 2026-09-07.
 
-### MAC-02: Use menu ellipses for required follow-up input
+### PLAT-02: Use menu ellipses for required follow-up input
 
-- **Applies to:** macOS; menu commands; U.S. English.
-- **Instruction:** Append the single ellipsis character `…` when choosing the command requires more information or another choice before the command can complete.
+- **Applies to:** Platforms and design systems that define an ellipsis convention for menu commands; all supported locales.
+- **Instruction:** Use the convention's ellipsis when choosing the command requires more information or another choice before the command can complete.
 - **Boundary:** Do not add an ellipsis merely because a command opens a window or view. Omit it when the command is complete upon selection or the opened view only shows information.
-- **Example:** Use `Export…` when the next dialog requires a filename; use `Downloads` without an ellipsis when it only opens the Downloads window.
-- **Basis:** **Source-backed recommendation.** [Apple HIG: Menus](https://developer.apple.com/design/human-interface-guidelines/menus), checked 2026-09-07.
+- **Example:** Use `Export…` when the next dialog requires a filename; use `Downloads` without an ellipsis when it only opens the Downloads view.
+- **Basis:** **Source-backed example plus our scope boundary.** [Apple HIG: Menus](https://developer.apple.com/design/human-interface-guidelines/menus), checked 2026-09-07.
 
-### MAC-03: Use push-button ellipses only for a follow-up task
+### PLAT-03: Use button ellipses only for a follow-up task
 
-- **Applies to:** macOS; push buttons; U.S. English.
-- **Instruction:** Consider an ellipsis when the button opens another view, window, or app where people must provide additional input to complete the action.
-- **Boundary:** A disclosure, navigation, or informational window does not need an ellipsis solely because it opens.
+- **Applies to:** Platforms and design systems that define an ellipsis convention for buttons; all supported locales.
+- **Instruction:** Consider the convention's ellipsis when the button opens another view or application where people must provide additional input to complete the action.
+- **Boundary:** A disclosure, navigation, or informational view does not need an ellipsis solely because it opens.
 - **Example:** Use `Choose Folder…` when selection happens in a picker; keep `Show Details` when details simply appear.
-- **Basis:** **Source-backed recommendation.** [Apple HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), checked 2026-09-07.
+- **Basis:** **Source-backed example plus our scope boundary.** [Apple HIG: Buttons](https://developer.apple.com/design/human-interface-guidelines/buttons), checked 2026-09-07.
 
 ## Accessibility decisions
 
 ### A11Y-01: Keep the visible label in the accessible name
 
 - **Applies to:** Web content subject to WCAG 2.2; controls with visible text or images of text; all locales.
-- **Instruction:** The accessible name must contain the visible label text. Prefer an exact match; when extra context is useful, place the visible words first and in the same order.
-- **Boundary:** WCAG 2.5.3 does not govern controls with no visible text label, though other accessibility requirements still require an appropriate name. Exact matching and visible-label-first ordering are informative best practices, not the normative criterion.
-- **Example:** Visible `Search`; accessible `Search projects` passes the containment requirement. Accessible `Find projects` does not.
+- **Instruction:** The accessible name must contain the visible label text after the comparison conventions in WCAG's guidance are applied. Prefer an exact match; when extra context is useful, place the visible words first and in the same order.
+- **Boundary:** WCAG 2.5.3 does not govern controls with no visible text label, though other accessibility requirements still require an appropriate name. Capitalization and most punctuation differences do not fail this criterion; inspect the computed accessible name instead of using byte-for-byte comparison. Exact matching and visible-label-first ordering are informative best practices, not the normative criterion.
+- **Example:** Visible `Search…` with accessible `Search` passes. Visible `Search` with accessible `Find projects` does not.
 - **Basis:** **WCAG 2.2 Level A requirement plus W3C informative advice.** [WCAG 2.2 SC 2.5.3](https://www.w3.org/TR/WCAG22/#label-in-name) and [Understanding Label in Name](https://www.w3.org/WAI/WCAG22/Understanding/label-in-name.html), checked 2026-09-07.
 
 ### A11Y-02: Name unlabeled controls by purpose
 
 - **Applies to:** All platforms; icon-only and custom controls; all locales.
-- **Instruction:** Provide an accessible name that identifies the control's current purpose in context and update it when that purpose changes.
-- **Boundary:** Do not describe decorative imagery as a control, include the control type when the accessibility API already supplies it, or claim an action the control does not perform.
-- **Example:** Name an icon-only control `Mute`; after activation, update it to `Unmute` if that is now the available action.
-- **Basis:** **Source-backed recommendation.** [Apple HIG: VoiceOver](https://developer.apple.com/design/human-interface-guidelines/voiceover), checked 2026-09-07.
+- **Instruction:** Inspect the control's role and state model, then provide an accessible name that identifies its purpose in context.
+- **Boundary:** For an ordinary action button, update the name when the available action changes. For a web toggle button that exposes `aria-pressed`, keep a stable setting name such as `Mute`; the pressed state communicates whether it is on. Do not include the control type when the accessibility API already supplies it or claim an action the control does not perform.
+- **Example:** Name an ordinary icon-only action `Unmute` when selecting it unmutes. Keep `Mute` stable on a toggle whose `aria-pressed` value changes.
+- **Basis:** **Source-backed recommendation.** [Apple HIG: VoiceOver](https://developer.apple.com/design/human-interface-guidelines/voiceover) and [WAI-ARIA APG: Button Pattern](https://www.w3.org/WAI/ARIA/apg/patterns/button/), checked 2026-09-07.
 
 ## Locale and localization decisions
 
@@ -214,23 +223,23 @@ Improve the wording without changing or misrepresenting the behavior.
 
 - **Applies to:** All platforms; localized text; all locales.
 - **Instruction:** Follow the target language's grammar, casing, punctuation, and project locale guidance.
-- **Boundary:** Apple Style Guide casing and usage are U.S. English guidance. Do not title-case, reorder, strip articles from, or otherwise normalize non-English text with English rules.
+- **Boundary:** A style guide's casing and usage apply only to its stated language and locale. Do not title-case, reorder, strip articles from, or otherwise normalize non-English text with English rules.
 - **Example:** Leave Danish `Åbn seneste` in Danish sentence casing instead of changing it to `Åbn Seneste`.
 - **Basis:** **Source-backed scope statement plus our safeguard.** [Apple Style Guide: About the guide](https://support.apple.com/guide/applestyleguide/about-the-guide-apsg1eef9171/web), checked 2026-09-07.
 
 ### LOC-02: Preserve localization structure exactly
 
 - **Applies to:** All platforms; localization resources and localized code; all locales.
-- **Instruction:** Preserve placeholders, interpolation order or indices, plural and select branches, markup, escapes, message identifiers, product names, and language-specific characters unless the task explicitly requires a verified structural change.
-- **Boundary:** Words around placeholders may change when grammar requires it, but required variables and branches must remain valid. Do not rename internal keys while editing visible copy.
+- **Instruction:** Preserve placeholder identities, types, bindings, required occurrences, plural and select branches, markup, escapes, message identifiers, product names, and language-specific characters unless the task explicitly requires a verified structural change.
+- **Boundary:** Reorder named or explicitly indexed placeholders when the locale's grammar requires it and the formatter preserves their bindings. Preserve order when positional binding depends on it. Do not rename internal keys while editing visible copy.
 - **Example:** Rewrite `Delete {count, plural, one {# file} other {# files}}?` without removing `{count}` or either plural branch.
-- **Basis:** **Our policy**, supported by Apple's account of language-specific plural variants in [Localizing and varying text with a string catalog](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog), checked 2026-09-07.
+- **Basis:** **Our policy**, supported by the linked guidance on language-specific plural variants in [Localizing and varying text with a string catalog](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog), checked 2026-09-07.
 
 ### LOC-03: Validate every affected variant
 
 - **Applies to:** All platforms; plural, select, width, device, and locale variants; all locales.
 - **Instruction:** Check that each affected variant remains grammatical, semantically aligned, and structurally valid after an edit. Run the project's existing localization checks when available.
-- **Boundary:** Do not assume English singular/other categories, word order, or one platform string covers every locale and device variant.
+- **Boundary:** Do not assume English singular/other categories, word order, or one platform string covers every locale and device variant. Use established parsers and representative branch checks; do not claim exhaustive validation when combinatorial variants were not all exercised.
 - **Example:** After changing a count message, inspect Russian `one`, `few`, `many`, and `other` branches rather than editing only `other`.
 - **Basis:** **Source-backed technical guidance plus our validation policy.** [Localizing and varying text with a string catalog](https://developer.apple.com/documentation/xcode/localizing-and-varying-text-with-a-string-catalog), checked 2026-09-07.
 
