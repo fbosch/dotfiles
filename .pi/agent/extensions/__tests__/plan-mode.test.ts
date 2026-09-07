@@ -21,10 +21,12 @@ interface PersistedEntry {
 
 function createHarness(options: {
   activeTools: string[];
+  availableTools?: string[];
   idle?: boolean;
   planModelAvailable?: boolean;
   loadModes?: ModeConfigLoader;
   sessionId?: string;
+  sessionFile?: string;
   entries?: PersistedEntry[];
   mode?: ExtensionContext["mode"];
   parentSession?: string;
@@ -38,6 +40,7 @@ function createHarness(options: {
   const handlers = new Map<string, EventHandler>();
   const entries = options.entries ?? [];
   const sessionId = options.sessionId ?? "session-1";
+  const sessionFile = options.sessionFile ?? `/tmp/${sessionId}.jsonl`;
   const selectedModels: unknown[] = [];
   const sentMessages: Array<{
     message: { customType: string; content: string; display: boolean };
@@ -49,6 +52,11 @@ function createHarness(options: {
   const notifications: Array<[string, string]> = [];
 
   const pi = {
+    appendEntry: (customType: string, data: unknown) => {
+      entries.push({ type: "custom", customType, data });
+    },
+    getAllTools: () =>
+      [...new Set([...activeTools, ...(options.availableTools ?? [])])].map((name) => ({ name })),
     getActiveTools: () => [...activeTools],
     on: (event: string, handler: EventHandler) => {
       handlers.set(event, handler);
@@ -99,6 +107,7 @@ function createHarness(options: {
     sessionManager: {
       getEntries: () => [...entries],
       getHeader: () => ({ id: sessionId, parentSession: options.parentSession }),
+      getSessionFile: () => sessionFile,
     },
     ui: {
       notify: (message: string, level: string) => notifications.push([message, level]),
@@ -128,6 +137,9 @@ function createHarness(options: {
     },
     async startSession(reason: "new" | "reload" | "resume") {
       await handlers.get("session_start")?.({ reason } as never, ctx);
+    },
+    async shutdown() {
+      await handlers.get("session_shutdown")?.({} as never, ctx);
     },
     statuses,
     thinkingLevels,
@@ -177,6 +189,40 @@ describe("plan mode", () => {
     });
   });
 
+  test("inherits plan-mode tool restrictions in subagent sessions", async () => {
+    const parent = createHarness({
+      activeTools: ["read"],
+      availableTools: ["websearch", "context7_get-library-docs", "subagent"],
+      sessionFile: "/tmp/plan-parent.jsonl",
+    });
+
+    await parent.toggle();
+
+    const child = createHarness({
+      activeTools: ["read", "write", "edit", "bash"],
+      availableTools: ["websearch", "context7_get-library-docs", "subagent"],
+      parentSession: "/tmp/plan-parent.jsonl",
+      sessionFile: "/tmp/plan-child.jsonl",
+      systemPrompt: '<active_agent name="quick" />\n\n# Environment',
+    });
+
+    await child.startSession("new");
+
+    expect(child.activeTools).toEqual([
+      "read",
+      "websearch",
+      "context7_get-library-docs",
+      "subagent",
+    ]);
+    expect(child.selectedModels).toEqual([]);
+    expect(await child.beforeAgentStart()).toEqual({
+      systemPrompt: expect.stringContaining("You are in a read-only phase."),
+    });
+
+    await child.shutdown();
+    await parent.toggle();
+  });
+
   test("entering selects the configured plan model and thinking level and keeps only read-only tools", async () => {
     const harness = createHarness({
       activeTools: [
@@ -214,6 +260,66 @@ describe("plan mode", () => {
     expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
   });
 
+  test("loads read-only tools for plan mode and retains them in build mode", async () => {
+    const harness = createHarness({
+      activeTools: ["read"],
+      availableTools: [
+        "list_symbols",
+        "find_definition",
+        "find_callers",
+        "find_callees",
+        "get_symbol_body",
+        "lsp",
+        "git_diff",
+        "websearch",
+        "webfetch",
+        "read_session",
+        "get_subagent_result",
+        "subagent",
+        "context7_resolve-library-id",
+        "context7_get-library-docs",
+        "mcp__context7",
+        "ast-grep_ast-grep",
+        "write",
+        "exec",
+      ],
+    });
+
+    await harness.toggle();
+
+    expect(harness.activeTools).toEqual([
+      "read",
+      "list_symbols",
+      "find_definition",
+      "find_callers",
+      "find_callees",
+      "get_symbol_body",
+      "lsp",
+      "git_diff",
+      "websearch",
+      "webfetch",
+      "read_session",
+      "get_subagent_result",
+      "subagent",
+      "context7_resolve-library-id",
+      "context7_get-library-docs",
+      "mcp__context7",
+      "ast-grep_ast-grep",
+    ]);
+
+    await harness.toggle();
+
+    expect(harness.activeTools).toEqual(
+      expect.arrayContaining([
+        "websearch",
+        "webfetch",
+        "subagent",
+        "context7_get-library-docs",
+        "ast-grep_ast-grep",
+      ]),
+    );
+  });
+
   test("leaving restores the exact prior tools and configured build model and thinking level", async () => {
     const originalTools = ["read", "write", "custom", "exec", "read"];
     const harness = createHarness({ activeTools: originalTools });
@@ -224,7 +330,7 @@ describe("plan mode", () => {
     expect(harness.selectedModels).toEqual([planModel, buildModel]);
     expect(harness.thinkingLevels).toEqual(["high", "xhigh"]);
     expect(harness.activeTools).toEqual(originalTools);
-    expect(harness.activeToolSets).toEqual([["read", "read"], originalTools]);
+    expect(harness.activeToolSets).toEqual([["read"], originalTools]);
     expect(harness.statuses).toEqual([
       ["plan-mode", PLAN_MODE_STATUS],
       ["plan-mode", undefined],
@@ -259,7 +365,7 @@ describe("plan mode", () => {
         message: {
           customType: "plan-mode-transition",
           content:
-            "Plan mode is now disabled. You are in build mode and the tools active before plan mode have been restored. Implement the user's request instead of producing another plan.",
+            "Plan mode is now disabled. You are in build mode. The tools active before plan mode and its read-only tools are available. Implement the user's request instead of producing another plan.",
           display: false,
         },
         options: { deliverAs: "nextTurn" },

@@ -7,7 +7,25 @@ export const MODE_CHANGED_EVENT = "pi:mode-changed";
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
-const PLAN_RESEARCH_TOOLS = new Set(["websearch", "webfetch", "subagent"]);
+const PLAN_READ_ONLY_TOOLS = new Set([
+  "list_symbols",
+  "find_definition",
+  "find_callers",
+  "find_callees",
+  "get_symbol_body",
+  "lsp",
+  "git_diff",
+  "websearch",
+  "webfetch",
+  "read_session",
+  "get_subagent_result",
+  "subagent",
+  "mcp__context7",
+]);
+const PLAN_READ_ONLY_TOOL_PREFIXES = ["context7_", "mcp__context7_", "ast-grep_"] as const;
+
+// Child sessions receive their own agent tool list, so track active parent plan sessions explicitly.
+const PLAN_MODE_SESSION_FILES = new Set<string>();
 export type ModeName = "build" | "plan";
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -58,12 +76,41 @@ function isSubagentSession(ctx: ExtensionContext, systemPrompt = ctx.getSystemPr
   return systemPrompt.split("\n").some((line) => ACTIVE_AGENT_MARKER.test(line));
 }
 
+function getSessionFile(ctx: ExtensionContext): string | undefined {
+  const sessionFile = ctx.sessionManager.getSessionFile();
+  return typeof sessionFile === "string" && sessionFile.length > 0 ? sessionFile : undefined;
+}
+
+function isParentInPlanMode(ctx: ExtensionContext): boolean {
+  const parentSession = ctx.sessionManager.getHeader()?.parentSession;
+  return typeof parentSession === "string" && PLAN_MODE_SESSION_FILES.has(parentSession);
+}
+
+function setPlanModeSession(ctx: ExtensionContext, enabled: boolean): void {
+  const sessionFile = getSessionFile(ctx);
+  if (sessionFile === undefined) return;
+
+  if (enabled) {
+    PLAN_MODE_SESSION_FILES.add(sessionFile);
+  } else {
+    PLAN_MODE_SESSION_FILES.delete(sessionFile);
+  }
+}
+
 function isThinkingLevel(value: unknown): value is ThinkingLevel {
   return typeof value === "string" && THINKING_LEVELS.has(value);
 }
 
 function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
+function isPlanReadOnlyTool(name: string, configuredAllowedTools: ReadonlySet<string>): boolean {
+  return (
+    configuredAllowedTools.has(name) ||
+    PLAN_READ_ONLY_TOOLS.has(name) ||
+    PLAN_READ_ONLY_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix))
+  );
 }
 
 function isModelReference(value: unknown): value is string {
@@ -173,6 +220,7 @@ export function getModeColor(name: ModeName): string {
 export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader = loadModes): void {
   let enabled = false;
   let childSession = false;
+  let inheritedPlanMode = false;
   let selectingModeModel = false;
   let switchingMode = false;
   let toolsBeforePlanMode: string[] | undefined;
@@ -223,6 +271,17 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
   }
 
+  function getPlanModeTools(activeTools: readonly string[]): string[] {
+    const availablePlanTools = pi
+      .getAllTools()
+      .map((tool) => tool.name)
+      .filter((name) => isPlanReadOnlyTool(name, MODES.plan.allowedTools));
+
+    return [...new Set([...activeTools, ...availablePlanTools])].filter((name) =>
+      isPlanReadOnlyTool(name, MODES.plan.allowedTools),
+    );
+  }
+
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
     const modelReference = modeModelOverrides[name] ?? configuredModeModels[name];
     const [provider, modelId] = parseModel(modelReference);
@@ -262,7 +321,13 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
       if (enabled) {
         if ((await selectModeModel("build", ctx)) === false) return;
 
-        pi.setActiveTools(toolsBeforePlanMode ?? pi.getActiveTools());
+        // Build mode must not lose the read-only tools that plan mode loaded.
+        const toolsRestored = toolsBeforePlanMode ?? pi.getActiveTools();
+        const toolsLoadedByPlan = pi
+          .getActiveTools()
+          .filter((name) => !toolsRestored.includes(name));
+        pi.setActiveTools([...toolsRestored, ...toolsLoadedByPlan]);
+        setPlanModeSession(ctx, false);
         toolsBeforePlanMode = undefined;
         enabled = false;
         updateStatus(ctx);
@@ -272,7 +337,7 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
           {
             customType: MODE_TRANSITION_MESSAGE_TYPE,
             content:
-              "Plan mode is now disabled. You are in build mode and the tools active before plan mode have been restored. Implement the user's request instead of producing another plan.",
+              "Plan mode is now disabled. You are in build mode. The tools active before plan mode and its read-only tools are available. Implement the user's request instead of producing another plan.",
             display: false,
           },
           { deliverAs: "nextTurn" },
@@ -282,17 +347,10 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
       if ((await selectModeModel("plan", ctx)) === false) return;
 
-      toolsBeforePlanMode = pi.getActiveTools();
-      // Tool discovery defers network and delegation tools, but plan mode needs them for source-backed research.
-      const availableResearchTools = pi
-        .getAllTools()
-        .map((tool) => tool.name)
-        .filter((name) => PLAN_RESEARCH_TOOLS.has(name));
-      pi.setActiveTools(
-        [...new Set([...toolsBeforePlanMode, ...availableResearchTools])].filter(
-          (name) => MODES.plan.allowedTools.has(name) || PLAN_RESEARCH_TOOLS.has(name),
-        ),
-      );
+      const activeTools = pi.getActiveTools();
+      toolsBeforePlanMode = activeTools;
+      pi.setActiveTools(getPlanModeTools(activeTools));
+      setPlanModeSession(ctx, true);
       enabled = true;
       updateStatus(ctx);
       pi.setThinkingLevel(modeThinkingLevels.plan);
@@ -303,12 +361,24 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
   pi.on("session_start", async (_event, ctx) => {
     childSession = isSubagentSession(ctx);
-    if (childSession) return;
+    setPlanModeSession(ctx, false);
+    if (childSession) {
+      inheritedPlanMode = isParentInPlanMode(ctx);
+      if (inheritedPlanMode) {
+        setPlanModeSession(ctx, true);
+        pi.setActiveTools(getPlanModeTools(pi.getActiveTools()));
+      }
+      return;
+    }
 
     restoreModeModels(ctx);
     if ((await selectModeModel("build", ctx)) === false) return;
 
     pi.setThinkingLevel(modeThinkingLevels.build);
+  });
+
+  pi.on("session_shutdown", (_event, ctx) => {
+    setPlanModeSession(ctx, false);
   });
 
   pi.on("model_select", (event, ctx) => {
@@ -339,7 +409,13 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    if (childSession || isSubagentSession(ctx, event.systemPrompt)) return;
+    const child = childSession || isSubagentSession(ctx, event.systemPrompt);
+    if (child) {
+      if (inheritedPlanMode === false) return;
+      return {
+        systemPrompt: `${event.systemPrompt}\n\n${MODE_PROMPTS.plan}`,
+      };
+    }
 
     const modePrompt = MODE_PROMPTS[enabled ? "plan" : "build"];
 
