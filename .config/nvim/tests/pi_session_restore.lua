@@ -156,7 +156,12 @@ local exact_file_before = vim.fn.readfile(exact_path, "b")
 
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 pi.setup()
+local exit_autocmd = assert(vim.api.nvim_get_autocmds({ group = "PiSessionPersistence", event = "ExitPre" })[1])
 pi.setup()
+assert(
+	vim.api.nvim_get_autocmds({ group = "PiSessionPersistence", event = "ExitPre" })[1].id == exit_autocmd.id,
+	"repeated Pi setup reordered its editor-exit handler"
+)
 vim.api.nvim_exec_autocmds("SessionLoadPost", {})
 assert(#opened == 1, "SessionLoadPost did not restore exactly one Pi terminal")
 assert_exact_command(
@@ -450,7 +455,13 @@ assert(
 )
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
 assert(#opened == opened_before_session_reload + 2, "session load did not restore the wiped Pi terminal")
-terminal_callbacks.TermClose()
+vim.api.nvim_exec_autocmds("ExitPre", {})
+terminal_callbacks.BufWipeout()
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+assert(
+	session.get_metadata(nvim_session).pi_terminal_open == true,
+	"editor exit incorrectly persisted the restored Pi terminal as closed"
+)
 
 rawset(vim, "notify", original_notify)
 vim.env.PI_CODING_AGENT_DIR = previous_agent_dir

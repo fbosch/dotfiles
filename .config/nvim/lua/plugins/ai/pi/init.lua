@@ -22,6 +22,8 @@ local bound, terminal_closed, session_replaced, binding_unavailable
 local source_window
 local source_buffer
 local session_load_pending = false
+local editor_exiting = false
+local setup_complete = false
 local terminal_options = {
 	win = {
 		on_buf = function(terminal)
@@ -46,7 +48,7 @@ local function clear_terminal_state()
 	terminal_channel_id = nil
 	terminal_bound = false
 	terminal_closed(closed_launch_id)
-	if closed_owner ~= nil and not session_load_pending then
+	if closed_owner ~= nil and not session_load_pending and not editor_exiting then
 		session.set_pi_terminal_state(closed_session_id, false, closed_owner)
 	end
 end
@@ -321,6 +323,10 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 end
 
 local function save_terminal_state()
+	if editor_exiting then
+		return
+	end
+
 	local nvim_session = session.get_current()
 	if nvim_session == nil then
 		return
@@ -333,6 +339,12 @@ local function save_terminal_state()
 		return
 	end
 	session.set_pi_terminal_state(is_open and terminal_session_id or nil, is_open, nvim_session)
+end
+
+local function prepare_editor_exit()
+	-- Snacks wipes the terminal on ExitPre, before MiniSessions saves on VimLeavePre.
+	save_terminal_state()
+	editor_exiting = true
 end
 
 local function notify_restore_failure(reason)
@@ -547,7 +559,14 @@ local function restore_after_session_load()
 end
 
 function M.setup()
+	if setup_complete then
+		return
+	end
 	local group = vim.api.nvim_create_augroup("PiSessionPersistence", { clear = true })
+	vim.api.nvim_create_autocmd("ExitPre", {
+		group = group,
+		callback = prepare_editor_exit,
+	})
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
 		pattern = "SessionLoadPre",
@@ -570,6 +589,7 @@ function M.setup()
 		pattern = "SessionSavePre",
 		callback = save_terminal_state,
 	})
+	setup_complete = true
 end
 
 local function ensure_started(options)

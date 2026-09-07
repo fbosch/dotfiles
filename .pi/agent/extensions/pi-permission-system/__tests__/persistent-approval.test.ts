@@ -70,19 +70,22 @@ function createAgentDir(): string {
 }
 
 describe("persistent approval scope labels", () => {
-  test("uses the active mode for primary-session approvals", () => {
+  test("uses session-wide labels for primary-session approvals", () => {
     expect(
       localAuthorizerModule.buildPersistentApprovalScope(
         { agentName: null, forwarding: undefined },
-        "build",
+        false,
       ),
-    ).toEqual({ agentLabel: "build mode", globalLabel: "all modes" });
+    ).toEqual({ agentLabel: "this session", globalLabel: "all sessions" });
+  });
+
+  test("uses the active subagent for local approvals", () => {
     expect(
       localAuthorizerModule.buildPersistentApprovalScope(
-        { agentName: null, forwarding: undefined },
-        "plan",
+        { agentName: "explore", forwarding: undefined },
+        true,
       ),
-    ).toEqual({ agentLabel: "plan mode", globalLabel: "all modes" });
+    ).toEqual({ agentLabel: "explore agent", globalLabel: "all agents" });
   });
 
   test("uses the requesting subagent for forwarded approvals", () => {
@@ -95,7 +98,7 @@ describe("persistent approval scope labels", () => {
             requesterSessionId: "session-1",
           },
         },
-        "build",
+        false,
       ),
     ).toEqual({ agentLabel: "explore agent", globalLabel: "all agents" });
   });

@@ -7,7 +7,7 @@ export const MODE_CHANGED_EVENT = "pi:mode-changed";
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";
 const CONFIG_URL = new URL("../modes.json", import.meta.url);
-
+const PLAN_RESEARCH_TOOLS = new Set(["websearch", "webfetch", "subagent"]);
 export type ModeName = "build" | "plan";
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -221,8 +221,6 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
   function updateStatus(ctx: ExtensionContext): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
-    // Keep future-session approval labels aligned with the active mode.
-    pi.events.emit(MODE_CHANGED_EVENT, { mode: enabled ? "plan" : "build" });
   }
 
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {
@@ -285,7 +283,16 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
       if ((await selectModeModel("plan", ctx)) === false) return;
 
       toolsBeforePlanMode = pi.getActiveTools();
-      pi.setActiveTools(toolsBeforePlanMode.filter((name) => MODES.plan.allowedTools.has(name)));
+      // Tool discovery defers network and delegation tools, but plan mode needs them for source-backed research.
+      const availableResearchTools = pi
+        .getAllTools()
+        .map((tool) => tool.name)
+        .filter((name) => PLAN_RESEARCH_TOOLS.has(name));
+      pi.setActiveTools(
+        [...new Set([...toolsBeforePlanMode, ...availableResearchTools])].filter(
+          (name) => MODES.plan.allowedTools.has(name) || PLAN_RESEARCH_TOOLS.has(name),
+        ),
+      );
       enabled = true;
       updateStatus(ctx);
       pi.setThinkingLevel(modeThinkingLevels.plan);

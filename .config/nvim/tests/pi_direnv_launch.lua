@@ -1,6 +1,8 @@
 local repo_root = assert(vim.env.REPO_ROOT)
 local original_cwd = vim.fn.getcwd()
 local test_root = vim.fn.tempname()
+vim.fn.mkdir(test_root, "p")
+test_root = vim.uv.fs_realpath(test_root) or test_root
 local project = test_root .. "/project"
 local sibling = test_root .. "/sibling"
 vim.fn.mkdir(project .. "/.git", "p")
