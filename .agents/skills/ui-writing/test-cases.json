@@ -1,0 +1,156 @@
+{
+  "skill": "ui-writing",
+  "version": "1.0.0",
+  "testCases": [
+    {
+      "id": "unclear-action-uses-verified-behavior",
+      "rule": "UI-01,UI-02,CMP-01",
+      "query": "In this macOS SwiftUI view, the primary button says ‘Process’. Its handler renders the selected document as a PDF and opens a save panel. Review only this label.",
+      "expectedBehavior": [
+        "Inspects or uses the stated handler behavior before proposing wording",
+        "Proposes a concise label that communicates PDF export rather than a generic action",
+        "Uses macOS button conventions only because the platform is specified",
+        "Does not change the handler or claim that the file has already been saved"
+      ]
+    },
+    {
+      "id": "remove-and-delete-remain-distinct",
+      "rule": "UI-04,UI-07",
+      "query": "Review two macOS menu commands. ‘Remove from Favorites’ only removes a sidebar shortcut. ‘Delete Project…’ opens a confirmation and then moves the project to Recently Deleted for 30 days.",
+      "expectedBehavior": [
+        "Keeps Remove and Delete distinct because the operations differ",
+        "Preserves or recommends consequence text that accurately mentions Recently Deleted when material",
+        "Does not claim immediate permanent deletion",
+        "Does not perform a synonym-based consistency rewrite"
+      ]
+    },
+    {
+      "id": "correct-copy-remains-unchanged",
+      "rule": "UI-12",
+      "query": "Review this macOS settings toggle: label ‘Download Updates Automatically’. When on, updates download in the background; when off, they do not. The project uses title-style capitalization for settings labels.",
+      "expectedBehavior": [
+        "Accepts the wording as accurate and consistent",
+        "Returns No changes needed or an equivalent no-change finding",
+        "Does not rewrite the label merely to produce a recommendation"
+      ]
+    },
+    {
+      "id": "informational-ok-is-preserved",
+      "rule": "UI-08",
+      "query": "A macOS alert displays ‘Version 4.2 is installed.’ It has one button labeled ‘OK’ that only dismisses the alert. Review the button text.",
+      "expectedBehavior": [
+        "Recognizes the alert as purely informational",
+        "Keeps OK rather than replacing it with a more specific action",
+        "Does not treat OK as globally prohibited"
+      ]
+    },
+    {
+      "id": "macos-menu-ellipsis-follows-input",
+      "rule": "MAC-02",
+      "query": "Review these macOS menu items: ‘Export’ opens a sheet that requires a filename and format before export; ‘Downloads…’ merely opens the Downloads window and performs no operation.",
+      "expectedBehavior": [
+        "Recommends an ellipsis for Export because required input follows",
+        "Removes the ellipsis from Downloads because opening a window alone is insufficient",
+        "Uses the single ellipsis character rather than three periods",
+        "Explains the decision in terms of completion, not navigation alone"
+      ]
+    },
+    {
+      "id": "web-copy-does-not-inherit-macos-style",
+      "rule": "MAC-01,MAC-02,LOC-01",
+      "query": "Implement a button in an English web dashboard. The design system uses sentence case. The button opens a form for creating a report. Should it be ‘Create Report…’ because that is what the macOS app uses?",
+      "expectedBehavior": [
+        "Does not apply macOS capitalization or ellipsis conventions automatically",
+        "Respects the web design system's sentence case",
+        "Determines wording from web behavior and project conventions",
+        "Does not claim Apple HIG is a universal web requirement"
+      ]
+    },
+    {
+      "id": "state-is-not-presented-as-action",
+      "rule": "UI-03,A11Y-02",
+      "query": "An icon button currently shows the microphone is muted. Clicking it will unmute. Its visible tooltip and accessible label both say ‘Muted’. Review them.",
+      "expectedBehavior": [
+        "Identifies the mismatch between current state wording and available action",
+        "Proposes action-oriented wording such as Unmute for the interactive control",
+        "Keeps tooltip and accessible purpose aligned",
+        "Does not change the mute behavior"
+      ]
+    },
+    {
+      "id": "unknown-error-does-not-invent-recovery",
+      "rule": "UI-09",
+      "query": "The app knows only that uploading ‘Map.png’ failed. The API provides no cause and there is no verified retry behavior. Rewrite ‘Oops! Your internet failed, but your file is safe. Try again in a minute.’",
+      "expectedBehavior": [
+        "Removes the unsupported network cause, data-safety claim, timing, and recovery promise",
+        "States the known upload failure specifically",
+        "Does not add a Retry instruction when retry behavior is unverified",
+        "Preserves the filename if it is part of the available context"
+      ]
+    },
+    {
+      "id": "accessible-name-contains-visible-label",
+      "rule": "A11Y-01",
+      "query": "Review a web button with visible text ‘Search’ and aria-label ‘Find projects’. The control searches projects.",
+      "expectedBehavior": [
+        "Identifies that the accessible name does not contain the visible label",
+        "Proposes an accessible name that contains Search, preferably starting with it",
+        "Distinguishes the WCAG containment requirement from the exact-match best practice",
+        "Does not remove useful project context if it remains after the visible label"
+      ]
+    },
+    {
+      "id": "placeholders-and-plurals-survive",
+      "rule": "LOC-02,LOC-03",
+      "query": "Improve the ICU message `delete_count = Delete {count, plural, one {# file} other {# files}} from <b>{folder}</b>?` without changing its message identifier, markup, variables, or plural branches.",
+      "expectedBehavior": [
+        "Preserves delete_count exactly",
+        "Preserves count, folder, b markup, and both plural branches",
+        "Changes only human-facing words if a material improvement is justified",
+        "Does not flatten the plural structure into one English sentence"
+      ]
+    },
+    {
+      "id": "non-english-copy-keeps-locale-casing",
+      "rule": "LOC-01",
+      "query": "Review the Danish macOS menu item ‘Åbn seneste’. An automated style pass proposes ‘Åbn Seneste’ to match English title-style capitalization.",
+      "expectedBehavior": [
+        "Rejects applying English title-style capitalization to Danish",
+        "Preserves Å and the language-specific text",
+        "Requests or follows Danish locale guidance rather than inventing an English-derived rule"
+      ]
+    },
+    {
+      "id": "state-taxonomy-stays-distinct",
+      "rule": "UI-10,UI-11",
+      "query": "A results view shows ‘No projects’ while the request is still loading, after a network failure, and when active filters match nothing. Review the three states.",
+      "expectedBehavior": [
+        "Uses distinct loading, failed, and filtered-empty messages",
+        "Does not claim the collection is empty before loading succeeds",
+        "Does not disguise a failure as an empty result",
+        "Avoids unsupported progress timing or recovery claims"
+      ]
+    },
+    {
+      "id": "confirmation-does-not-overstate-deletion",
+      "rule": "UI-07,UI-09",
+      "query": "A confirmation says ‘Permanently delete backup? This cannot be undone.’ The implementation only removes the local reference; the cloud backup remains. Review the alert and confirm button.",
+      "expectedBehavior": [
+        "Flags the destructive wording as behaviorally false",
+        "Uses Remove rather than Delete if that matches project terminology",
+        "Removes unsupported permanence and irreversibility claims",
+        "Keeps the proposal limited to interface copy"
+      ]
+    },
+    {
+      "id": "outside-scope-does-not-activate",
+      "rule": "",
+      "query": "Rewrite the body of my Git commit message to be clearer. It contains no user-facing interface strings.",
+      "expectedBehavior": [
+        "Does not invoke or apply the ui-writing skill",
+        "Does not impose button, menu, alert, macOS, or accessibility-label rules on the commit message",
+        "Routes the task to ordinary prose or commit-message guidance instead"
+      ]
+    }
+  ]
+}

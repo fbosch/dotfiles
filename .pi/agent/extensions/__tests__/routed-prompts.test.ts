@@ -8,6 +8,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import {
   createRoutedPromptsExtension,
+  expandRoutedPromptShell,
   parseCommandArgs,
   resolveRoutedPrompt,
   substitutePromptArgs,
@@ -105,6 +106,45 @@ describe("routed prompts", () => {
     expect(substitutePromptArgs(template, args)).toBe(
       "one|two words|one two words three words|fallback|two words three words|two words",
     );
+    const shellPlaceholder = "$" + "{@}";
+    expect(substitutePromptArgs(`"${shellPlaceholder}"`, args)).toBe(`"${shellPlaceholder}"`);
+  });
+
+  test("expands routed shell substitutions with isolated arguments", async () => {
+    const shellPlaceholder = "$" + "{@}";
+    const routedPrompt = await expandRoutedPromptShell(
+      {
+        agent: "quick",
+        command: "example",
+        description: "Example",
+        prompt: `value: !\`printf '%s' "${shellPlaceholder}"\``,
+        options: { foreground: false },
+      },
+      ["two words"],
+      process.cwd(),
+    );
+
+    expect(routedPrompt.prompt).toBe("value: two words");
+  });
+
+  test("does not execute shell syntax injected through prompt arguments", async () => {
+    const injected = "!`printf injected`";
+    const content = `---
+agent: general
+---
+Argument: $ARGUMENTS
+Trusted: !\`printf '%s' trusted\``;
+    const invocation = `/decision "${injected}"`;
+    const routedPrompt = resolveRoutedPrompt(invocation, [promptCommand], () => content, true);
+    if (routedPrompt === undefined) throw new Error("prompt did not resolve");
+
+    const expanded = await expandRoutedPromptShell(
+      routedPrompt,
+      parseCommandArgs(`"${injected}"`),
+      process.cwd(),
+    );
+
+    expect(expanded.prompt).toBe(`Argument: ${injected}\nTrusted: trusted`);
   });
 
   test("resolves agent routing metadata from a loaded prompt", () => {

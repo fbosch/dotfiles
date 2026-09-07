@@ -1,0 +1,864 @@
+import { spawn } from "node:child_process";
+
+type Provider = "github" | "azure-devops";
+
+type CommandResult = {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+};
+
+type Remote = {
+  provider: Provider;
+  name: string;
+  owner?: string | undefined;
+  repo: string;
+  org?: string | undefined;
+  project?: string | undefined;
+};
+
+type Check = {
+  name: string;
+  state: string;
+  bucket: string;
+  link?: string | undefined;
+  description?: string | undefined;
+};
+
+const logLimit = 4_000;
+
+function runCommand(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CommandResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      resolve({ stdout, stderr, exitCode });
+    });
+  });
+}
+
+async function git(args: string[], cwd: string): Promise<string | null> {
+  const result = await runCommand("git", args, cwd);
+  const value = result.stdout.trim();
+  return result.exitCode === 0 && value.length > 0 ? value : null;
+}
+
+async function commandExists(command: string, cwd: string): Promise<boolean> {
+  return (
+    (await runCommand("sh", ["-c", `command -v ${command} >/dev/null 2>&1`], cwd)).exitCode === 0
+  );
+}
+
+function formatError(command: string, result: CommandResult): string {
+  const output =
+    result.stderr.trim() ||
+    result.stdout.trim() ||
+    `${command} failed with exit ${result.exitCode ?? "unknown"}`;
+  return `ERROR: ${output}`;
+}
+
+function parseRemote(name: string, url: string): Remote | null {
+  const github = url.match(
+    /^(?:git@github\.com:|ssh:\/\/git@github\.com\/|https?:\/\/github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/,
+  );
+  if (github?.[1] !== undefined && github[2] !== undefined) {
+    return { provider: "github", name, owner: github[1], repo: github[2] };
+  }
+
+  const ssh = url.match(/^[^@]+@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)$/);
+  if (ssh !== null) {
+    const organization = ssh[1];
+    const project = ssh[2];
+    const repository = ssh[3];
+    if (organization !== undefined && project !== undefined && repository !== undefined) {
+      return {
+        provider: "azure-devops",
+        name,
+        org: `https://dev.azure.com/${organization}`,
+        project: decodeURIComponent(project),
+        repo: stripGitSuffix(decodeURIComponent(repository)),
+      };
+    }
+  }
+
+  const legacySsh = url.match(/^[^@]+@vs-ssh\.visualstudio\.com:v3\/([^/]+)\/([^/]+)\/([^/]+)$/);
+  if (legacySsh !== null) {
+    const organization = legacySsh[1];
+    const project = legacySsh[2];
+    const repository = legacySsh[3];
+    if (organization !== undefined && project !== undefined && repository !== undefined) {
+      return {
+        provider: "azure-devops",
+        name,
+        org: `https://dev.azure.com/${organization}`,
+        project: decodeURIComponent(project),
+        repo: stripGitSuffix(decodeURIComponent(repository)),
+      };
+    }
+  }
+
+  try {
+    const parsed = new URL(url);
+    const segments = parsed.pathname.split("/").filter(Boolean).map(decodeURIComponent);
+    if (parsed.hostname.endsWith("dev.azure.com") && segments.length >= 4) {
+      const organization = segments[0];
+      const project = segments[1];
+      const repository = segments[3];
+      if (
+        segments[2] === "_git" &&
+        organization !== undefined &&
+        project !== undefined &&
+        repository !== undefined
+      ) {
+        return {
+          provider: "azure-devops",
+          name,
+          org: `https://dev.azure.com/${organization}`,
+          project,
+          repo: stripGitSuffix(repository),
+        };
+      }
+    }
+    if (parsed.hostname.endsWith("visualstudio.com") && segments.length >= 3) {
+      const organization = parsed.hostname.split(".")[0];
+      const project = segments[0];
+      const repository = segments[2];
+      if (
+        segments[1] !== "_git" ||
+        organization === undefined ||
+        project === undefined ||
+        repository === undefined
+      ) {
+        return null;
+      }
+      return {
+        provider: "azure-devops",
+        name,
+        org: `https://dev.azure.com/${organization}`,
+        project,
+        repo: stripGitSuffix(repository),
+      };
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function stripGitSuffix(value: string): string {
+  return value.endsWith(".git") ? value.slice(0, -4) : value;
+}
+
+async function detectRemote(cwd: string): Promise<Remote | null> {
+  const upstream = await git(
+    ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
+    cwd,
+  );
+  const trackedRemote = upstream?.split("/")[0];
+  const names = await git(["remote"], cwd);
+  if (names === null) {
+    return null;
+  }
+
+  const remotes: Remote[] = [];
+  for (const name of names.split("\n").filter(Boolean)) {
+    const url = await git(["remote", "get-url", name], cwd);
+    if (url === null) {
+      continue;
+    }
+    const remote = parseRemote(name, url);
+    if (remote !== null) {
+      remotes.push(remote);
+    }
+  }
+
+  return (
+    remotes.find((remote) => remote.name === trackedRemote) ??
+    remotes.find((remote) => remote.name === "origin") ??
+    remotes[0] ??
+    null
+  );
+}
+
+function parseJson(value: string): unknown | null {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function string(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function number(value: unknown): number | undefined {
+  return typeof value === "number" ? value : undefined;
+}
+
+function excerpt(value: string): string {
+  const trimmed = value.trim();
+  return trimmed.length <= logLimit ? trimmed : `${trimmed.slice(0, logLimit)}\n... log truncated`;
+}
+
+function githubCheck(value: unknown): Check | null {
+  if (isRecord(value) === false) {
+    return null;
+  }
+  const name = string(value.name);
+  const state = string(value.state);
+  const bucket = string(value.bucket);
+  if (name === undefined || state === undefined || bucket === undefined) {
+    return null;
+  }
+  return { name, state, bucket, link: string(value.link), description: string(value.description) };
+}
+
+function githubRunId(link: string | undefined): string | null {
+  const match = link?.match(/\/actions\/runs\/(\d+)/);
+  return match?.[1] ?? null;
+}
+
+function noPullRequestFound(result: CommandResult): boolean {
+  const output = `${result.stdout}\n${result.stderr}`.toLowerCase();
+  return output.includes("no pull request found") || output.includes("no pull requests found");
+}
+
+async function githubBranchReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  const repo = `${remote.owner}/${remote.repo}`;
+  const commit = await git(["rev-parse", "HEAD"], cwd);
+  if (commit === null) {
+    return "ERROR: Cannot inspect CI: current commit cannot be determined.";
+  }
+  const runsResult = await runCommand(
+    "gh",
+    [
+      "run",
+      "list",
+      "--branch",
+      branch,
+      "--commit",
+      commit,
+      "--repo",
+      repo,
+      "--limit",
+      "100",
+      "--json",
+      "databaseId,name,status,conclusion,url,workflowName",
+    ],
+    cwd,
+  );
+  const parsedRuns = parseJson(runsResult.stdout);
+  if (Array.isArray(parsedRuns) === false) {
+    return runsResult.exitCode === 0
+      ? "ERROR: Cannot inspect CI: gh run list returned invalid data."
+      : formatError("gh run list", runsResult);
+  }
+  const runs = parsedRuns.filter(isRecord);
+  const failed = runs.filter((run) =>
+    ["action_required", "cancelled", "failure", "startup_failure", "timed_out"].includes(
+      string(run.conclusion) ?? "",
+    ),
+  );
+  const pending = runs.filter((run) =>
+    ["in_progress", "pending", "queued", "requested", "waiting"].includes(string(run.status) ?? ""),
+  );
+  const passed = runs.filter((run) => string(run.conclusion) === "success");
+  const other = runs.length - failed.length - pending.length - passed.length;
+  const lines = [
+    "CI report",
+    "Provider: GitHub",
+    `Branch pipeline: ${branch}`,
+    `Summary: ${passed.length} passed, ${failed.length} failed, ${pending.length} pending, ${other} other`,
+  ];
+
+  if (failed.length > 0) {
+    lines.push("", "Failed checks:");
+    for (const run of failed) {
+      const runId = number(run.databaseId);
+      const name = string(run.workflowName) ?? string(run.name) ?? "Unnamed workflow";
+      const state = string(run.conclusion) ?? string(run.status) ?? "unknown";
+      const url = string(run.url);
+      lines.push(`- ${name} [${state}]${url === undefined ? "" : `\n  ${url}`}`);
+      if (runId === undefined) {
+        continue;
+      }
+      const logs = await runCommand(
+        "gh",
+        ["run", "view", String(runId), "--repo", repo, "--log-failed"],
+        cwd,
+      );
+      if (logs.exitCode === 0 && logs.stdout.trim().length > 0) {
+        lines.push(
+          `  Failed log:\n${excerpt(logs.stdout)
+            .split("\n")
+            .map((line) => `  ${line}`)
+            .join("\n")}`,
+        );
+      }
+    }
+  }
+
+  if (pending.length > 0) {
+    lines.push("", "Pending checks:");
+    for (const run of pending) {
+      const name = string(run.workflowName) ?? string(run.name) ?? "Unnamed workflow";
+      const state = string(run.status) ?? "unknown";
+      const url = string(run.url);
+      lines.push(`- ${name} [${state}]${url === undefined ? "" : `\n  ${url}`}`);
+    }
+  }
+
+  if (failed.length === 0 && pending.length === 0) {
+    lines.push("", "No failing or pending checks found.");
+  }
+  return lines.join("\n");
+}
+
+async function githubReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  if ((await commandExists("gh", cwd)) === false) {
+    return "ERROR: Cannot inspect CI: gh is not available.";
+  }
+
+  const prResult = await runCommand(
+    "gh",
+    ["pr", "view", "--json", "number,url,title,state,isDraft,headRefName,baseRefName"],
+    cwd,
+  );
+  if (prResult.exitCode !== 0) {
+    if (noPullRequestFound(prResult)) {
+      return githubBranchReport(remote, branch, cwd);
+    }
+    return formatError("gh pr view", prResult);
+  }
+  const pr = parseJson(prResult.stdout);
+  if (isRecord(pr) === false || number(pr.number) === undefined || string(pr.url) === undefined) {
+    return "ERROR: Cannot inspect CI: gh pr view returned an invalid PR.";
+  }
+
+  const repo = `${remote.owner}/${remote.repo}`;
+  const checksResult = await runCommand(
+    "gh",
+    [
+      "pr",
+      "checks",
+      String(pr.number),
+      "--repo",
+      repo,
+      "--json",
+      "name,state,bucket,link,description",
+    ],
+    cwd,
+  );
+  const parsedChecks = parseJson(checksResult.stdout);
+  if (Array.isArray(parsedChecks) === false) {
+    return checksResult.exitCode === 0
+      ? "ERROR: Cannot inspect CI: gh pr checks returned invalid data."
+      : formatError("gh pr checks", checksResult);
+  }
+  const checks = parsedChecks.map(githubCheck).filter((check): check is Check => check !== null);
+  const failed = checks.filter((check) => check.bucket === "fail");
+  const pending = checks.filter((check) => check.bucket === "pending");
+  const passed = checks.filter((check) => check.bucket === "pass");
+  const other = checks.length - failed.length - pending.length - passed.length;
+  const lines = [
+    "CI report",
+    `Provider: GitHub`,
+    `PR: #${pr.number} ${string(pr.title) ?? "(untitled)"}`,
+    `URL: ${string(pr.url)}`,
+    `Branch: ${string(pr.headRefName) ?? "(unknown)"} -> ${string(pr.baseRefName) ?? "(unknown)"}`,
+    `State: ${string(pr.state) ?? "(unknown)"}${pr.isDraft === true ? " (draft)" : ""}`,
+    `Summary: ${passed.length} passed, ${failed.length} failed, ${pending.length} pending, ${other} other`,
+  ];
+
+  if (failed.length > 0) {
+    lines.push("", "Failed checks:");
+    for (const check of failed) {
+      lines.push(
+        `- ${check.name} [${check.state}]${check.link === undefined ? "" : `\n  ${check.link}`}${check.description === undefined ? "" : `\n  ${check.description}`}`,
+      );
+      const runId = githubRunId(check.link);
+      if (runId === null) {
+        continue;
+      }
+      const logs = await runCommand(
+        "gh",
+        ["run", "view", runId, "--repo", repo, "--log-failed"],
+        cwd,
+      );
+      if (logs.exitCode === 0 && logs.stdout.trim().length > 0) {
+        lines.push(
+          `  Failed log:\n${excerpt(logs.stdout)
+            .split("\n")
+            .map((line) => `  ${line}`)
+            .join("\n")}`,
+        );
+      }
+    }
+  }
+
+  if (pending.length > 0) {
+    lines.push("", "Pending checks:");
+    for (const check of pending) {
+      lines.push(
+        `- ${check.name} [${check.state}]${check.link === undefined ? "" : `\n  ${check.link}`}`,
+      );
+    }
+  }
+
+  if (failed.length === 0 && pending.length === 0) {
+    lines.push("", "No failing or pending checks found.");
+  }
+  return lines.join("\n");
+}
+
+function azureResult(value: unknown): string {
+  return string(value) ?? "unknown";
+}
+
+function azureLogText(stdout: string): string {
+  const parsed = parseJson(stdout);
+  if (typeof parsed === "string") {
+    return parsed;
+  }
+  let lines: unknown[] | null = null;
+  if (Array.isArray(parsed)) {
+    lines = parsed;
+  } else if (isRecord(parsed) && Array.isArray(parsed.value)) {
+    lines = parsed.value;
+  }
+  if (lines === null) {
+    return stdout.trim();
+  }
+  return lines
+    .map((line) =>
+      typeof line === "string" ? line : isRecord(line) ? string(line.line) : undefined,
+    )
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
+}
+
+async function azureLogLineCounts(
+  remote: Remote,
+  runId: number,
+  cwd: string,
+): Promise<Map<number, number>> {
+  const result = await runCommand(
+    "az",
+    [
+      "devops",
+      "invoke",
+      "--area",
+      "build",
+      "--resource",
+      "logs",
+      "--route-parameters",
+      `project=${remote.project}`,
+      `buildId=${runId}`,
+      "--api-version",
+      "7.1",
+      "--org",
+      remote.org ?? "",
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" },
+  );
+  const parsed = parseJson(result.stdout);
+  let logs: unknown[] = [];
+  if (Array.isArray(parsed)) {
+    logs = parsed;
+  } else if (isRecord(parsed) && Array.isArray(parsed.value)) {
+    logs = parsed.value;
+  }
+  const lineCounts = new Map<number, number>();
+  for (const log of logs) {
+    if (isRecord(log) === false) {
+      continue;
+    }
+    const id = number(log.id);
+    const lineCount = number(log.lineCount);
+    if (id !== undefined && lineCount !== undefined) {
+      lineCounts.set(id, lineCount);
+    }
+  }
+  return lineCounts;
+}
+
+async function azureTimeline(remote: Remote, runId: number, cwd: string): Promise<string[]> {
+  const result = await runCommand(
+    "az",
+    [
+      "devops",
+      "invoke",
+      "--area",
+      "build",
+      "--resource",
+      "timeline",
+      "--route-parameters",
+      `project=${remote.project}`,
+      `buildId=${runId}`,
+      "--api-version",
+      "7.1",
+      "--org",
+      remote.org ?? "",
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" },
+  );
+  const timeline = parseJson(result.stdout);
+  if (
+    result.exitCode !== 0 ||
+    isRecord(timeline) === false ||
+    Array.isArray(timeline.records) === false
+  ) {
+    return [];
+  }
+
+  const lineCounts = await azureLogLineCounts(remote, runId, cwd);
+  const failures: string[] = [];
+  for (const record of timeline.records) {
+    if (isRecord(record) === false || azureResult(record.result) !== "failed") {
+      continue;
+    }
+    const name = string(record.name) ?? "Unnamed task";
+    const issues = Array.isArray(record.issues)
+      ? record.issues
+          .filter(isRecord)
+          .map((issue) => string(issue.message))
+          .filter((message): message is string => message !== undefined)
+      : [];
+    const log = isRecord(record.log) ? number(record.log.id) : undefined;
+    const endLine = log === undefined ? 200 : (lineCounts.get(log) ?? 200);
+    const startLine = Math.max(1, endLine - 199);
+    const logResult =
+      log === undefined
+        ? null
+        : await runCommand(
+            "az",
+            [
+              "devops",
+              "invoke",
+              "--area",
+              "build",
+              "--resource",
+              "logs",
+              "--route-parameters",
+              `project=${remote.project}`,
+              `buildId=${runId}`,
+              `logId=${log}`,
+              "--query-parameters",
+              `startLine=${startLine}`,
+              `endLine=${endLine}`,
+              "--api-version",
+              "7.1",
+              "--org",
+              remote.org ?? "",
+              "--output",
+              "json",
+              "--only-show-errors",
+            ],
+            cwd,
+            { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" },
+          );
+    const logText =
+      logResult === null || logResult.exitCode !== 0 ? "" : azureLogText(logResult.stdout);
+    const details = [...issues, ...(logText.length > 0 ? [excerpt(logText)] : [])];
+    failures.push(`- ${name}${details.length === 0 ? "" : `\n  ${details.join("\n  ")}`}`);
+  }
+  return failures;
+}
+
+async function azureBranchReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  const environment = { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" };
+  const commit = await git(["rev-parse", "HEAD"], cwd);
+  if (commit === null) {
+    return "ERROR: Cannot inspect CI: current commit cannot be determined.";
+  }
+  const repositoryResult = await runCommand(
+    "az",
+    [
+      "repos",
+      "show",
+      "--org",
+      remote.org ?? "",
+      "--project",
+      remote.project ?? "",
+      "--repository",
+      remote.repo,
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    environment,
+  );
+  const repository = parseJson(repositoryResult.stdout);
+  const repositoryId = isRecord(repository) ? string(repository.id) : undefined;
+  if (repositoryResult.exitCode !== 0 || repositoryId === undefined) {
+    return repositoryResult.exitCode === 0
+      ? "ERROR: Cannot inspect CI: Azure DevOps returned an invalid repository."
+      : formatError("az repos show", repositoryResult);
+  }
+  const runsResult = await runCommand(
+    "az",
+    [
+      "pipelines",
+      "runs",
+      "list",
+      "--org",
+      remote.org ?? "",
+      "--project",
+      remote.project ?? "",
+      "--branch",
+      `refs/heads/${branch}`,
+      "--query-order",
+      "StartTimeDesc",
+      "--top",
+      "100",
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    environment,
+  );
+  const runs = parseJson(runsResult.stdout);
+  if (runsResult.exitCode !== 0 || Array.isArray(runs) === false) {
+    return formatError("az pipelines runs list", runsResult);
+  }
+  const matchingRuns = runs
+    .filter(isRecord)
+    .filter(
+      (run) =>
+        isRecord(run.repository) &&
+        string(run.repository.id) === repositoryId &&
+        string(run.sourceVersion) === commit,
+    );
+  const failedRuns = matchingRuns.filter(
+    (run) =>
+      azureResult(run.result) === "failed" || azureResult(run.result) === "partiallySucceeded",
+  );
+  const pendingRuns = matchingRuns.filter((run) =>
+    ["notStarted", "postponed", "inProgress", "cancelling"].includes(azureResult(run.status)),
+  );
+  const passedRuns = matchingRuns.filter((run) => azureResult(run.result) === "succeeded");
+  const lines = [
+    "CI report",
+    "Provider: Azure DevOps",
+    `Branch pipeline: ${branch}`,
+    `Summary: ${passedRuns.length} passed, ${failedRuns.length} failed, ${pendingRuns.length} pending`,
+  ];
+
+  if (failedRuns.length > 0) {
+    lines.push("", "Failed checks:");
+    for (const run of failedRuns) {
+      const runId = number(run.id);
+      const definition = isRecord(run.definition) ? string(run.definition.name) : undefined;
+      lines.push(
+        `- ${definition ?? string(run.buildNumber) ?? "Unnamed pipeline"} [${azureResult(run.result)}]${runId === undefined ? "" : ` (run ${runId})`}`,
+      );
+      if (runId !== undefined) {
+        lines.push(...(await azureTimeline(remote, runId, cwd)));
+      }
+    }
+  }
+  if (pendingRuns.length > 0) {
+    lines.push("", "Pending checks:");
+    for (const run of pendingRuns) {
+      lines.push(
+        `- ${isRecord(run.definition) ? (string(run.definition.name) ?? "Unnamed pipeline") : "Unnamed pipeline"} [${azureResult(run.status)}]`,
+      );
+    }
+  }
+  if (failedRuns.length === 0 && pendingRuns.length === 0) {
+    lines.push("", "No failing or pending checks found.");
+  }
+  return lines.join("\n");
+}
+
+async function azureReport(remote: Remote, branch: string, cwd: string): Promise<string> {
+  if ((await commandExists("az", cwd)) === false) {
+    return "ERROR: Cannot inspect CI: az is not available.";
+  }
+  const environment = { ...process.env, AZURE_EXTENSION_USE_DYNAMIC_INSTALL: "yes_without_prompt" };
+  const prResult = await runCommand(
+    "az",
+    [
+      "repos",
+      "pr",
+      "list",
+      "--org",
+      remote.org ?? "",
+      "--project",
+      remote.project ?? "",
+      "--repository",
+      remote.repo,
+      "--source-branch",
+      branch,
+      "--status",
+      "active",
+      "--top",
+      "50",
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    environment,
+  );
+  const prs = parseJson(prResult.stdout);
+  if (prResult.exitCode !== 0) {
+    return formatError("az repos pr list", prResult);
+  }
+  if (Array.isArray(prs) === false || prs.length === 0) {
+    return azureBranchReport(remote, branch, cwd);
+  }
+  if (prs.length > 1) {
+    return "ERROR: Cannot inspect CI: multiple active pull requests found for the current branch.";
+  }
+  const pr = prs[0];
+  if (isRecord(pr) === false) {
+    return "ERROR: Cannot inspect CI: Azure DevOps returned an invalid pull request.";
+  }
+  const prId = number(pr.pullRequestId);
+  if (prId === undefined) {
+    return "ERROR: Cannot inspect CI: Azure DevOps returned an invalid pull request.";
+  }
+  const repositoryId = isRecord(pr.repository) ? string(pr.repository.id) : undefined;
+  const mergeCommit = isRecord(pr.lastMergeCommit)
+    ? string(pr.lastMergeCommit.commitId)
+    : undefined;
+  const runsResult = await runCommand(
+    "az",
+    [
+      "pipelines",
+      "runs",
+      "list",
+      "--org",
+      remote.org ?? "",
+      "--project",
+      remote.project ?? "",
+      "--branch",
+      `refs/pull/${prId}/merge`,
+      "--reason",
+      "pullRequest",
+      "--query-order",
+      "StartTimeDesc",
+      "--top",
+      "100",
+      "--output",
+      "json",
+      "--only-show-errors",
+    ],
+    cwd,
+    environment,
+  );
+  const runs = parseJson(runsResult.stdout);
+  if (runsResult.exitCode !== 0 || Array.isArray(runs) === false) {
+    return formatError("az pipelines runs list", runsResult);
+  }
+
+  const matchingRuns = runs.filter(isRecord).filter((run) => {
+    const runRepositoryId = isRecord(run.repository) ? string(run.repository.id) : undefined;
+    if (repositoryId !== undefined && runRepositoryId !== repositoryId) {
+      return false;
+    }
+    return mergeCommit === undefined || string(run.sourceVersion) === mergeCommit;
+  });
+  const failedRuns = matchingRuns.filter(
+    (run) =>
+      azureResult(run.result) === "failed" || azureResult(run.result) === "partiallySucceeded",
+  );
+  const pendingRuns = matchingRuns.filter((run) =>
+    ["notStarted", "postponed", "inProgress", "cancelling"].includes(azureResult(run.status)),
+  );
+  const passedRuns = matchingRuns.filter((run) => azureResult(run.result) === "succeeded");
+  const lines = [
+    "CI report",
+    "Provider: Azure DevOps",
+    `PR: #${prId} ${string(pr.title) ?? "(untitled)"}`,
+    `URL: ${string(pr.remoteUrl) ?? "(unavailable)"}`,
+    `Branch: ${string(pr.sourceRefName) ?? branch} -> ${string(pr.targetRefName) ?? "(unknown)"}`,
+    `State: ${string(pr.status) ?? "(unknown)"}${pr.isDraft === true ? " (draft)" : ""}`,
+    `Summary: ${passedRuns.length} passed, ${failedRuns.length} failed, ${pendingRuns.length} pending`,
+  ];
+
+  if (failedRuns.length > 0) {
+    lines.push("", "Failed checks:");
+    for (const run of failedRuns) {
+      const runId = number(run.id);
+      const definition = isRecord(run.definition) ? string(run.definition.name) : undefined;
+      lines.push(
+        `- ${definition ?? string(run.buildNumber) ?? "Unnamed pipeline"} [${azureResult(run.result)}]${runId === undefined ? "" : ` (run ${runId})`}`,
+      );
+      if (runId !== undefined) {
+        lines.push(...(await azureTimeline(remote, runId, cwd)));
+      }
+    }
+  }
+  if (pendingRuns.length > 0) {
+    lines.push("", "Pending checks:");
+    for (const run of pendingRuns) {
+      lines.push(
+        `- ${isRecord(run.definition) ? (string(run.definition.name) ?? "Unnamed pipeline") : "Unnamed pipeline"} [${azureResult(run.status)}]`,
+      );
+    }
+  }
+  if (failedRuns.length === 0 && pendingRuns.length === 0) {
+    lines.push("", "No failing or pending checks found.");
+  }
+  return lines.join("\n");
+}
+
+export async function getCiFailureContext(cwd: string = process.cwd()): Promise<string> {
+  const branch = await git(["branch", "--show-current"], cwd);
+  if (branch === null) {
+    return "ERROR: Cannot inspect CI: current branch cannot be determined.";
+  }
+
+  const remote = await detectRemote(cwd);
+  if (remote === null) {
+    return "ERROR: Cannot inspect CI: GitHub or Azure DevOps remote cannot be determined.";
+  }
+
+  return remote.provider === "github"
+    ? githubReport(remote, branch, cwd)
+    : azureReport(remote, branch, cwd);
+}
+
+if (import.meta.main) {
+  getCiFailureContext().then(
+    (report) => process.stdout.write(report),
+    (error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stdout.write(`ERROR: ${message}`);
+    },
+  );
+}

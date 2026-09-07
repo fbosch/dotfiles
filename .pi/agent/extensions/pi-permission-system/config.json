@@ -215,7 +215,8 @@
       "systemctl kexec*": "deny",
       "systemctl soft-reboot*": "deny",
       "mktemp *": "allow",
-      "journalctl *": "allow"
+      "journalctl *": "allow",
+      ".agents/skills/skill-creator/scripts/init_skill.py *": "allow"
     },
     "skill": "allow",
     "external_directory_read": {

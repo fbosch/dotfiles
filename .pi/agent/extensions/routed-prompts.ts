@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   type ExtensionAPI,
@@ -151,6 +152,66 @@ export function substitutePromptArgs(content: string, args: readonly string[]): 
   );
 }
 
+const SHELL_SUBSTITUTION = /!`([\s\S]*?)`/g;
+
+function runPromptShellCommand(
+  command: string,
+  cwd: string,
+  args: readonly string[],
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const child = spawn("sh", ["-c", command, "pi-prompt", ...args], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (exitCode) => {
+      if (exitCode !== 0) {
+        const output = stderr.trim() || stdout.trim() || `exit ${exitCode ?? "unknown"}`;
+        reject(new Error(`Prompt shell command failed: ${output}`));
+        return;
+      }
+      resolve(stdout.trimEnd());
+    });
+  });
+}
+
+export async function expandRoutedPromptShell(
+  routedPrompt: RoutedPrompt,
+  args: readonly string[],
+  cwd: string,
+): Promise<RoutedPrompt> {
+  const matches = [...routedPrompt.prompt.matchAll(SHELL_SUBSTITUTION)];
+  if (matches.length === 0) {
+    return { ...routedPrompt, prompt: substitutePromptArgs(routedPrompt.prompt, args) };
+  }
+
+  // Expand trusted template commands before injecting arguments into surrounding text.
+  let content = "";
+  let lastIndex = 0;
+  for (const match of matches) {
+    const command = match[1];
+    if (command === undefined || match.index === undefined) continue;
+    content += substitutePromptArgs(routedPrompt.prompt.slice(lastIndex, match.index), args);
+    content += await runPromptShellCommand(command, cwd, args);
+    lastIndex = match.index + match[0].length;
+  }
+  content += substitutePromptArgs(routedPrompt.prompt.slice(lastIndex), args);
+
+  return { ...routedPrompt, prompt: content };
+}
+
 function routeOptions(
   command: SlashCommandInfo,
   frontmatter: RoutedPromptFrontmatter,
@@ -177,6 +238,7 @@ export function resolveRoutedPrompt(
   text: string,
   commands: readonly SlashCommandInfo[],
   readPrompt: (path: string) => string = (path) => readFileSync(path, "utf8"),
+  deferArgumentSubstitution = false,
 ): RoutedPrompt | undefined {
   const invocation = parseCommandInvocation(text);
   if (invocation === undefined) return undefined;
@@ -199,7 +261,9 @@ export function resolveRoutedPrompt(
     agent,
     command: invocation.command,
     description: command.description ?? `Run /${invocation.command}`,
-    prompt: substitutePromptArgs(parsed.body, invocation.args),
+    prompt: deferArgumentSubstitution
+      ? parsed.body
+      : substitutePromptArgs(parsed.body, invocation.args),
     ...(usage === undefined || invocation.args.length > 0 ? {} : { usage }),
     options: routeOptions(command, parsed.frontmatter),
   };
@@ -237,12 +301,20 @@ export function createRoutedPromptsExtension(
       (message) => new Text(renderMessageContent(message.content), 0, 0),
     );
 
-    pi.on("input", (event: InputEvent, ctx): InputEventResult => {
+    pi.on("input", async (event: InputEvent, ctx): Promise<InputEventResult> => {
       if (event.source === "extension") return { action: "continue" };
 
       let routedPrompt: RoutedPrompt | undefined;
       try {
-        routedPrompt = resolveRoutedPrompt(event.text, pi.getCommands(), readPrompt);
+        const invocation = parseCommandInvocation(event.text);
+        routedPrompt = resolveRoutedPrompt(event.text, pi.getCommands(), readPrompt, true);
+        if (routedPrompt !== undefined) {
+          routedPrompt = await expandRoutedPromptShell(
+            routedPrompt,
+            invocation?.args ?? [],
+            ctx.cwd,
+          );
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Cannot route prompt: ${message}`, "error");
