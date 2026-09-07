@@ -81,7 +81,7 @@ async function generatePayload(
   signal: AbortSignal,
 ): Promise<HandoffPayload> {
   const model = ctx.model;
-  if (model === undefined) throw new Error("No model selected.");
+  if (model === undefined) throw new Error("Select a model before starting a handoff.");
   const fastRequest =
     model.provider === "openai-codex" ? resolveFastModelRequest(model.id) : undefined;
   const requestModel = fastRequest === undefined ? model : { ...model, id: fastRequest.modelId };
@@ -177,17 +177,17 @@ async function executeHandoff(
   generate: HandoffGenerator,
 ): Promise<void> {
   if (ctx.mode !== "tui") {
-    ctx.ui.notify("handoff requires interactive mode", "error");
+    ctx.ui.notify("The /handoff command requires interactive mode.", "error");
     return;
   }
   if (ctx.model === undefined) {
-    ctx.ui.notify("No model selected", "error");
+    ctx.ui.notify("Select a model before starting a handoff.", "error");
     return;
   }
 
   const goal = args.trim();
   if (goalByteLength(goal) > MAX_GOAL_BYTES) {
-    ctx.ui.notify("Handoff goal is too large", "error");
+    ctx.ui.notify("Handoff goal is too long. Shorten it and try again.", "error");
     return;
   }
 
@@ -197,7 +197,7 @@ async function executeHandoff(
   const sourceLeafId = ctx.sessionManager.getLeafId();
   const sourceEntries = ctx.sessionManager.buildContextEntries();
   if (sourceSessionFile === undefined || sourceLeafId === null || sourceEntries.length === 0) {
-    ctx.ui.notify("No persisted conversation to hand off", "error");
+    ctx.ui.notify("No conversation is available to hand off.", "error");
     return;
   }
   const payload = await generate(ctx, goal, sourceEntries);
@@ -288,7 +288,7 @@ export function createHandoffExtension(
       try {
         content = await buildSelectedFileContext(ctx.cwd, handoff.files, event.prompt);
       } catch {
-        ctx.ui.notify("Could not load handoff file context", "warning");
+        ctx.ui.notify("Could not load the files selected for the handoff.", "warning");
         return;
       }
       pi.appendEntry(HANDOFF_STATE_TYPE, { ...handoff, consumed: true });

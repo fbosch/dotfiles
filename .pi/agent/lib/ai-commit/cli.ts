@@ -32,7 +32,6 @@ type Args = {
   verbose: boolean;
   modelRef: string | undefined;
   debug: boolean;
-  restartServer: boolean;
 };
 
 export function parseArgs(argv: string[]): Args {
@@ -51,11 +50,6 @@ export function parseArgs(argv: string[]): Args {
     verbose: argv.includes("--verbose") || argv.includes("-v"),
     modelRef: modelRef && modelRef.length > 0 ? modelRef : undefined,
     debug: argv.includes("--debug"),
-    restartServer:
-      argv.includes("--restart-server") ||
-      argv.includes("--restart") ||
-      argv[0] === "restart-server" ||
-      argv[0] === "restart",
   };
 }
 
@@ -226,11 +220,6 @@ async function selectFallbackModel(
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-
-  if (args.restartServer) {
-    style(" Pi commit backend does not use a persistent server", 3);
-    return;
-  }
 
   if (!isInGitRepo()) {
     style(" Not in a git repository", 1);

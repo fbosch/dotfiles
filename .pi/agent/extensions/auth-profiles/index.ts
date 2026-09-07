@@ -390,7 +390,7 @@ export default function authProfiles(
     });
     if (resolution.selectionWarning) {
       ctx.ui.notify(
-        `Auth profile usage selection unavailable; using ${resolution.profile}: ${resolution.selectionWarning}`,
+        `No alternate profile was confirmed; using ${resolution.profile}: ${resolution.selectionWarning}`,
         "warning",
       );
     }
@@ -438,7 +438,7 @@ export default function authProfiles(
           ) {
             if (activeProfile === exhaustedProfile) {
               ctx.ui.notify(
-                `${exhaustedProfile} exhausted; no alternate auth profile has confirmed usage.`,
+                `${exhaustedProfile} reached its usage limit; no alternate profile has confirmed available usage.`,
                 "warning",
               );
             }
@@ -447,12 +447,12 @@ export default function authProfiles(
 
           await activateUnlocked(ctx, next);
           ctx.ui.notify(
-            `${exhaustedProfile} exhausted; switched to ${next.profile}. Retry the request.`,
+            `${exhaustedProfile} reached its usage limit; switched to ${next.profile}. Retry the request.`,
             "warning",
           );
         } catch (error) {
           ctx.ui.notify(
-            `${exhaustedProfile} exhausted; auth profile fallback failed: ${error instanceof Error ? error.message : String(error)}`,
+            `Could not switch profiles after ${exhaustedProfile} reached its usage limit: ${error instanceof Error ? error.message : String(error)}`,
             "error",
           );
         }

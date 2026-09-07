@@ -332,7 +332,7 @@ export function registerResetCreditCommand(
         : [],
     handler: async (args, ctx) => {
       if (ctx.hasUI === false) {
-        ctx.ui.notify("/reset-credit requires Pi's interactive UI.", "error");
+        ctx.ui.notify("The /reset-credit command requires the interactive UI.", "error");
         return;
       }
       if (ctx.isIdle() === false) {

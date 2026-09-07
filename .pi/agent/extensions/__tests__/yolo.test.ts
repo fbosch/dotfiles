@@ -193,7 +193,7 @@ describe("session YOLO mode", () => {
     expect(effectiveStates(harness, "yolo-not-ready")).toEqual([false]);
     expect(statuses).toEqual([[YOLO_STATUS_KEY, undefined]]);
     expect(notifications).toEqual([
-      ["Cannot enable session YOLO before permission-system is ready.", "error"],
+      ["Cannot enable YOLO until permission checks are ready.", "error"],
     ]);
   });
 
@@ -304,7 +304,7 @@ describe("session YOLO mode", () => {
     expect(harness.entries).toEqual([]);
     expect(notifications[0]?.[0]).toContain("Could not register session YOLO authorization");
     expect(notifications[1]).toEqual([
-      "Cannot enable session YOLO because permission-system registration failed.",
+      "Cannot enable YOLO because permission checks failed to start.",
       "error",
     ]);
 

@@ -111,12 +111,12 @@ async function registerSessionYoloAuthorizer(
 
 function unavailableEnableMessage(registrationState: SessionYoloRegistrationState): string {
   if (registrationState === "registering") {
-    return "Cannot enable session YOLO while permission-system registration is pending.";
+    return "Cannot enable YOLO while permission checks are still starting.";
   }
   if (registrationState === "failed") {
-    return "Cannot enable session YOLO because permission-system registration failed.";
+    return "Cannot enable YOLO because permission checks failed to start.";
   }
-  return "Cannot enable session YOLO before permission-system is ready.";
+  return "Cannot enable YOLO until permission checks are ready.";
 }
 
 export function registerYoloCommand(pi: ExtensionAPI): void {

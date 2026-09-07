@@ -195,7 +195,7 @@ export async function selectProfile(
   return selectedProfileIsExhausted
     ? {
         ...resolution,
-        selectionWarning: `${resolution.profile} is exhausted; no alternate profile has confirmed usage`,
+        selectionWarning: `${resolution.profile} reached its usage limit; no alternate profile has confirmed available usage`,
       }
     : resolution;
 }

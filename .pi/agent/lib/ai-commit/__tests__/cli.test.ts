@@ -22,13 +22,8 @@ describe("ai_commit arguments", () => {
       dryRun: true,
       verbose: true,
       debug: true,
-      restartServer: false,
       modelRef: "openai-codex/gpt-5.6-luna-fast",
     });
-  });
-
-  test("keeps the retired restart invocation as a harmless compatibility command", () => {
-    expect(parseArgs(["restart-server"]).restartServer).toBeTrue();
   });
 
   test("preserves the previous handling of unrelated arguments", () => {
@@ -36,7 +31,6 @@ describe("ai_commit arguments", () => {
       dryRun: false,
       verbose: false,
       debug: false,
-      restartServer: false,
       modelRef: undefined,
     });
   });

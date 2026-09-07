@@ -296,7 +296,8 @@ describe("automatic auth profile selection", () => {
 
     expect(selection).toMatchObject({
       profile: "fbb",
-      selectionWarning: "fbb is exhausted; no alternate profile has confirmed usage",
+      selectionWarning:
+        "fbb reached its usage limit; no alternate profile has confirmed available usage",
     });
     expect(selection.fallbackReason).toBeUndefined();
   });

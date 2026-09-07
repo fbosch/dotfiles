@@ -522,7 +522,9 @@ describe("auth profile prompt status", () => {
       ["auth-profile", "jpb"],
     ]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "jpb.json"));
-    expect(notifications.at(-1)).toBe("fbb exhausted; switched to jpb. Retry the request.");
+    expect(notifications.at(-1)).toBe(
+      "fbb reached its usage limit; switched to jpb. Retry the request.",
+    );
 
     await providerResponse?.(
       {
@@ -536,7 +538,9 @@ describe("auth profile prompt status", () => {
     );
     expect(statuses.at(-1)).toEqual(["auth-profile", "ct"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "ct.json"));
-    expect(notifications.at(-1)).toBe("jpb exhausted; switched to ct. Retry the request.");
+    expect(notifications.at(-1)).toBe(
+      "jpb reached its usage limit; switched to ct. Retry the request.",
+    );
   });
 
   test("reset-credit resolves a named profile without changing the active store", async () => {
