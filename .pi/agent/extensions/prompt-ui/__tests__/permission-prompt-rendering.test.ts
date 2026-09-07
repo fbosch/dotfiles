@@ -102,7 +102,7 @@ describe("permission prompt rendering", () => {
           (line) =>
             line.includes(" Allow once ") &&
             line.includes(" Allow session ") &&
-            line.includes(" Allow always ") &&
+            line.includes(" Allow in future sessions… ") &&
             line.includes(" Reject ") &&
             line.endsWith("↑/↓ select · enter confirm · esc deny"),
         ),

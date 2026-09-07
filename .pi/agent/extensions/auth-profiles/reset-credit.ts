@@ -437,7 +437,7 @@ export function registerResetCreditCommand(
           result = await consumeResetCredit(selectedCredential, credit.id, fetchFn);
         } catch (error) {
           ctx.ui.notify(
-            `${error instanceof Error ? error.message : String(error)}\nConsumption may have reached the server; inspect /reset-credit before retrying.`,
+            `${error instanceof Error ? error.message : String(error)}\nConsumption may have reached the server; check /profiles status before trying again.`,
             "error",
           );
           return;

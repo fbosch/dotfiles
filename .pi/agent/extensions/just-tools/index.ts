@@ -371,21 +371,24 @@ export function registerJustTools(
 
           const confirmation = await runAskUserQuestion(
             {
-              question: "Run Just recipe?",
+              question: `Run \`just ${currentRecipe.namepath}\`?`,
               details: confirmationMessage(currentRecipe, arguments_, ctx.cwd),
               options: [
-                { label: "Yes", value: "yes" },
-                { label: "No", value: "no" },
+                { label: "Run recipe", value: "yes" },
+                { label: "Cancel", value: "no" },
               ],
             },
             signal,
             ctx,
             { includeOther: false },
           );
-          if (
-            confirmation.details.status !== "answered" ||
-            confirmation.details.answers[0]?.value !== "yes"
-          ) {
+          if (confirmation.details.status === "cancelled") {
+            throw new Error(`Just recipe \`${recipe.namepath}\` was cancelled`);
+          }
+          if (confirmation.details.status !== "answered") {
+            throw new Error(`Just recipe \`${recipe.namepath}\` could not be confirmed`);
+          }
+          if (confirmation.details.answers[0]?.value !== "yes") {
             throw new Error(`Just recipe \`${recipe.namepath}\` was declined`);
           }
 

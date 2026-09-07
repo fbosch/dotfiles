@@ -244,7 +244,7 @@ function fitColumns(left: string, right: string, width: number): string {
 function compactOptionLabel(label: string): string {
   const normalized = label.trim();
   if (normalized === "Allow once") return normalized;
-  if (normalized === "Allow in future sessions…") return "Allow always";
+  if (normalized === "Allow in future sessions…") return normalized;
   if (normalized === "Deny") return "Reject";
   if (normalized === "Deny with reason") return "Reject + reason";
   if (/^(?:Yes, )?allow .+ and .+ for this session$/i.test(normalized)) return "Allow both";

@@ -205,7 +205,7 @@ export function createFileChangesExtension(
         if (action === "clear") {
           const count = trackedFiles.size;
           clearChanges(ctx);
-          report(ctx, `Cleared ${count} ${count === 1 ? "file" : "files"}`);
+          report(ctx, `Cleared file changes for ${count} ${count === 1 ? "file" : "files"}`);
           return;
         }
         if (action === "" || action === "show" || action === "hide") {

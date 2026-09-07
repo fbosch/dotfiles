@@ -612,8 +612,8 @@ export default async function (pi: ExtensionAPI) {
     name: "find_callers",
     label: "Find Callers",
     description:
-      "Find call sites of a function or method across the project, including module-level and recursive calls. Returns call-site lines, not declaration lines. Uses tree-sitter AST queries, not substring matching. Lua accepts exact qualified names (M.target, object:method) or bare member names.",
-    promptSnippet: "Find all call sites of a function or method across the project",
+      "Find call sites of a function or method across the project or a directory, including module-level and recursive calls. Returns call-site lines, not declaration lines. Uses tree-sitter AST queries, not substring matching. Lua accepts exact qualified names (M.target, object:method) or bare member names.",
+    promptSnippet: "Find all call sites of a function or method across the project or a directory",
     promptGuidelines: [
       "Use find_callers to find all places that call a specific function or method. This is more precise than grep because it uses AST queries and excludes false positives from comments/strings.",
     ],

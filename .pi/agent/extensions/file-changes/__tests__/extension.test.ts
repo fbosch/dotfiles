@@ -183,7 +183,7 @@ describe("file changes extension", () => {
     await harness.runCommand("clear");
     expect(harness.statuses.at(-1)).toBeUndefined();
     expect(harness.entries.at(-1)).toMatchObject({ customType: "file-changes:clear" });
-    expect(harness.notifications.at(-1)).toBe("Cleared 1 file");
+    expect(harness.notifications.at(-1)).toBe("Cleared file changes for 1 file");
   });
 
   test("honors the global setting and toggles it with /changes", async () => {

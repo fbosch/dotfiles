@@ -131,6 +131,7 @@ function context(
   confirmations: string[],
   confirmed = true,
   onConfirm?: () => void,
+  cancelled = false,
 ): ExtensionContext {
   return {
     cwd: "/repo",
@@ -140,9 +141,10 @@ function context(
     ui: {
       async select(title: string, options: string[]) {
         confirmations.push(title);
-        expect(options).toEqual(["1. Yes", "2. No"]);
+        expect(options).toEqual(["1. Run recipe", "2. Cancel"]);
+        if (cancelled) return undefined;
         onConfirm?.();
-        return confirmed ? "1. Yes" : "2. No";
+        return confirmed ? "1. Run recipe" : "2. Cancel";
       },
     },
   } as unknown as ExtensionContext;
@@ -229,6 +231,17 @@ describe("Just tools extension", () => {
     await expect(
       recipeTool.execute("recipe", {}, undefined, undefined, context([], false)),
     ).rejects.toThrow("was declined");
+    expect(harness.recipeExecutions).toEqual([]);
+  });
+
+  test("reports cancelled confirmation separately", async () => {
+    const harness = createHarness(dump());
+    registerJustTools(harness.pi, harness.recipeExecutor);
+    const recipeTool = await loadShellcheck(harness, context([], true, undefined, true));
+
+    await expect(
+      recipeTool.execute("recipe", {}, undefined, undefined, context([], true, undefined, true)),
+    ).rejects.toThrow("was cancelled");
     expect(harness.recipeExecutions).toEqual([]);
   });
 

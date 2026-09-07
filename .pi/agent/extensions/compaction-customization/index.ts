@@ -277,7 +277,7 @@ export default function compactionCustomization(pi: ExtensionAPI): void {
     if (applyPercentageCompaction(event, percent)) return;
     if (ctx.hasUI) {
       ctx.ui.notify(
-        `Cannot retain ${percent * 100}% of this context without discarding zero messages; compaction cancelled.`,
+        `Compaction cancelled: no messages were available to summarize while retaining ${percent * 100}% of the context.`,
         "warning",
       );
     }
