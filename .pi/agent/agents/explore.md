@@ -2,8 +2,8 @@
 description: Read-only codebase explorer
 tools: read, grep, find, ls, fffind, ffgrep
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna
-thinking: low
+model: openai-codex/gpt-5.6-luna-fast
+thinking: minimal
 permission:
   "*": deny
   external_directory: ask

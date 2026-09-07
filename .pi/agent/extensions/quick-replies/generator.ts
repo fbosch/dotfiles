@@ -80,6 +80,12 @@ Rules:
 - Never request a check the assistant says already passed unless the suggestion clearly names broader or different coverage.
 - Write in a high-signal, low-ceremony style. Terse directives, fragments, and direct questions are appropriate. Avoid praise, filler, generic chatbot phrasing, and forced enthusiasm.
 - Use clarification requests, corrections, or requests for more detail when action would otherwise require guessing.
+- Apply the project's UI-writing rules to every label and message:
+  - UI-01/UI-02: name the actual user action, question, or outcome; never imply sending, applying, completing, or opening unless the message does that.
+  - UI-03: use action wording for an available choice, not wording that describes a state that already holds.
+  - UI-04: use one consistent term for the same concept and preserve meaningful distinctions between different operations.
+  - UI-05/CMP-01: prefer familiar, literal, concise labels, usually starting with a specific verb and object when natural.
+
 - Every message must state the requested action or question explicitly. Never return a bare authorization such as "yes", "proceed", "continue", "go ahead", or "do it".
 - The message is sent verbatim when the user selects its label. Treat the label only as a preview of that exact message, never as a separate suggestion.
 - Each label must faithfully preserve its message's action or question, target, polarity, conditions, and scope. Never use a generic or positive label for a correction, refusal, alternative, conditional reply, or additional work.

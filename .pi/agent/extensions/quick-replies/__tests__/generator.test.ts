@@ -437,7 +437,7 @@ describe("quick reply model generation", () => {
     expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
     expect(calls[0]?.context).toMatchObject({
       systemPrompt: expect.stringMatching(
-        /untrusted data[\s\S]*styleSample[\s\S]*asks for a decision or missing information[\s\S]*blocked or reports a failure[\s\S]*completed work[\s\S]*Never ask it to repeat work[\s\S]*informational answer[\s\S]*generic preference for more work[\s\S]*sent verbatim[\s\S]*faithfully preserve[\s\S]*Call return_quick_replies exactly once/u,
+        /untrusted data[\s\S]*styleSample[\s\S]*asks for a decision or missing information[\s\S]*blocked or reports a failure[\s\S]*completed work[\s\S]*Never ask it to repeat work[\s\S]*informational answer[\s\S]*generic preference for more work[\s\S]*UI-01[\s\S]*UI-02[\s\S]*UI-03[\s\S]*UI-04[\s\S]*UI-05[\s\S]*CMP-01[\s\S]*sent verbatim[\s\S]*faithfully preserve[\s\S]*Call return_quick_replies exactly once/u,
       ),
       messages: [{ role: "user" }],
       tools: [
