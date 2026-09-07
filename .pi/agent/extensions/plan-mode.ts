@@ -221,6 +221,8 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
   function updateStatus(ctx: ExtensionContext): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
+    // Keep future-session approval labels aligned with the active mode.
+    pi.events.emit(MODE_CHANGED_EVENT, { mode: enabled ? "plan" : "build" });
   }
 
   async function selectModeModel(name: ModeName, ctx: ExtensionContext): Promise<boolean> {

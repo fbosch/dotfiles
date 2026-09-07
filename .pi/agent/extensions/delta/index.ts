@@ -297,9 +297,10 @@ function isDeltaDetails(value: unknown): value is DeltaDetails {
 interface HashlineToolModule {
   readonly buildToolDef?: () => ToolDefinition;
   readonly buildInsertToolDef?: () => ToolDefinition;
+  readonly regUndo?: (pi: ExtensionAPI) => void;
 }
 
-async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
+export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   const tools: ToolDefinition[] = [];
   try {
     const replaceModule = (await import(
@@ -318,6 +319,22 @@ async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
       tools.push(insertModule.buildInsertToolDef());
   } catch {
     // Replace remains useful when the optional insert module is unavailable.
+  }
+  try {
+    const undoModule = (await import(
+      new URL("../../npm/node_modules/pi-hashline-edit-pro/src/replace-undo.ts", import.meta.url)
+        .href
+    )) as unknown as HashlineToolModule;
+    const registeredTools: ToolDefinition[] = [];
+    // Hashline exposes undo through registration rather than a definition builder.
+    undoModule.regUndo?.({
+      registerTool(tool: ToolDefinition) {
+        registeredTools.push(tool);
+      },
+    } as unknown as ExtensionAPI);
+    tools.push(...registeredTools.filter((tool) => tool.name === "undo_last_change"));
+  } catch {
+    // Replace and insert remain useful when the optional undo module is unavailable.
   }
   return tools;
 }

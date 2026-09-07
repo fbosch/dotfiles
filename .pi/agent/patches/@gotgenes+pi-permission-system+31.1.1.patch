@@ -154,38 +154,101 @@ index aebada8..f0222ef 100644
      };
    } catch (error) {
      logPermissionForwardingWarning(
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
+index c73729c..7a12df1 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
+@@ -6,6 +6,7 @@ import { ParentAuthorizer } from "./approval-escalator";
+ import { DenyingAuthorizer } from "./denying-authorizer";
+ import type { TargetServingLookup } from "./forwarding-liveness";
+ import { LocalUserAuthorizer } from "./local-user-authorizer";
++import type { PermissionMode } from "./local-user-authorizer";
+ import type { PermissionPromptDecision } from "./permission-dialog";
+ import type {
+   PromptPreferences,
+@@ -100,6 +101,8 @@ export interface AuthorizerSelectionDeps {
+   detection: SubagentDetector;
+   /** Event bus used by `LocalUserAuthorizer` for the `permissions:ui_prompt` broadcast. */
+   events: PermissionEventBus;
++  /** Read the active semantic session mode for persistent-approval labels. */
++  getModeName: () => PermissionMode;
+   /** Read live at prompt time; threaded into `LocalUserAuthorizer`. */
+   getPromptPreferences: () => PromptPreferences;
+   /** Injected for testability; production callers pass the real function. */
+@@ -133,6 +136,7 @@ export function selectAuthorizer(
+       terminal: new LocalUserAuthorizer({
+         ui: ctx.ui,
+         mode: ctx.mode,
++        getModeName: deps.getModeName,
+         events: deps.events,
+         getPromptPreferences: deps.getPromptPreferences,
+         requestPermissionDecision: deps.requestPermissionDecision,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
-index 66a3951..ec82a1e 100644
+index 66a3951..7c5aaca 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
-@@ -91,6 +91,10 @@ function buildRequestOptions(
-     ? buildDirectionalSessionLabels(direction, describeGrantTarget(grants))
-     : null;
-   const sessionLabel = widths?.sessionLabel ?? details.sessionLabel;
-+  const agentName =
-+    details.agentName && details.agentName !== "unknown"
-+      ? details.agentName
-+      : null;
+@@ -22,10 +22,14 @@ import type {
+ } from "./permission-prompt-component";
+ import type { PromptPermissionDetails } from "./permission-prompter";
  
-   const options: RequestPermissionOptions = {
-     ...(sessionLabel ? { sessionLabel } : {}),
-@@ -103,6 +107,16 @@ function buildRequestOptions(
++export type PermissionMode = "build" | "plan";
++
+ /** Dependencies required by {@link LocalUserAuthorizer}. */
+ export interface LocalUserAuthorizerDeps {
+   /** The active session's UI surface (select/input plus the inline `custom` dialog). */
+   ui: PermissionPromptUi;
++  /** Read the active semantic session mode for persistent-approval labels. */
++  getModeName: () => PermissionMode;
+   /** The session run mode; the dispatcher renders the inline dialog only in `"tui"`. */
+   mode: ExtensionContext["mode"];
+   /** Event bus used for the `permissions:ui_prompt` broadcast. */
+@@ -64,7 +68,7 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
+         ? "Permission Required (Subagent)"
+         : "Permission Required",
+       details.payload,
+-      buildRequestOptions(details),
++      buildRequestOptions(details, this.deps.getModeName()),
+     );
+   }
+ }
+@@ -84,6 +88,7 @@ export class LocalUserAuthorizer implements TerminalAuthorizer {
+  */
+ function buildRequestOptions(
+   details: PromptPermissionDetails,
++  modeName: PermissionMode,
+ ): RequestPermissionOptions | undefined {
+   const grants = details.sessionApproval?.grants ?? [];
+   const direction = provenDirectionOf(grants);
+@@ -103,6 +108,29 @@ function buildRequestOptions(
            ),
          }
        : {}),
 +    ...(grants.length > 0
-+      ? {
-+          persistentScope: {
-+            ...(agentName
-+              ? { agentLabel: `This agent/mode: ${agentName}` }
-+              : {}),
-+            globalLabel: "All agents/modes",
-+          },
-+        }
++      ? { persistentScope: buildPersistentApprovalScope(details, modeName) }
 +      : {}),
    };
    return Object.keys(options).length > 0 ? options : undefined;
  }
++
++export function buildPersistentApprovalScope(
++  details: Pick<PromptPermissionDetails, "agentName" | "forwarding">,
++  modeName: PermissionMode,
++): NonNullable<RequestPermissionOptions["persistentScope"]> {
++  if (details.forwarding) {
++    const agentName =
++      details.forwarding.requesterAgentName ||
++      (details.agentName && details.agentName !== "unknown" ? details.agentName : null);
++    return {
++      ...(agentName ? { agentLabel: `${agentName} agent` } : {}),
++      globalLabel: "all agents",
++    };
++  }
++
++  return {
++    agentLabel: `${modeName} mode`,
++    globalLabel: "all modes",
++  };
++}
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
 index bb69665..48cb244 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
@@ -1383,7 +1446,7 @@ index 9817c1f..931e503 100644
          pathAccess: {
            path: accessPath,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/index.ts b/node_modules/@gotgenes/pi-permission-system/src/index.ts
-index 245fe2a..5856fbf 100644
+index 245fe2a..defec58 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/index.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/index.ts
 @@ -37,6 +37,7 @@ import { getGlobalConfigPath } from "#src/config/config-paths";
@@ -1394,7 +1457,41 @@ index 245fe2a..5856fbf 100644
  import { GateRunner } from "#src/handlers/gates/runner";
  import { SkillInputGatePipeline } from "#src/handlers/gates/skill-input-gate-pipeline";
  import { ToolCallGatePipeline } from "#src/handlers/gates/tool-call-gate-pipeline";
-@@ -299,6 +300,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+@@ -63,7 +64,25 @@ import {
+ } from "./handlers";
+ import { getPermissionsService, type PermissionsService } from "./service";
+ 
++type PermissionMode = "build" | "plan";
++const MODE_CHANGED_EVENT = "pi:mode-changed";
++type ModeChangedEvent = { mode: PermissionMode };
++
++function isModeChangedEvent(value: unknown): value is ModeChangedEvent {
++  return (
++    typeof value === "object" &&
++    value !== null &&
++    "mode" in value &&
++    (value.mode === "build" || value.mode === "plan")
++  );
++}
++
+ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
++  // Plan mode is a sibling extension, so observe its event rather than importing it.
++  let currentMode: PermissionMode = "build";
++  pi.events.on(MODE_CHANGED_EVENT, (value: unknown) => {
++    if (isModeChangedEvent(value)) currentMode = value.mode;
++  });
+   const agentDir = getAgentDir();
+   // getPackageDir() is Pi's own install dir; auto-allow it for read-only tools
+   // so the agent can read Pi's bundled docs/examples regardless of layout.
+@@ -150,6 +169,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+       doublePressToConfirm: configStore.current().doublePressToConfirm,
+       budget: resolveRenderBudget(configStore.current()),
+     }),
++    getModeName: () => currentMode,
+     requestPermissionDecision,
+     forwardingDir: paths.forwardingDir,
+     registry: subagentRegistry,
+@@ -299,6 +319,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
    };
  
    const audit = new DecisionAudit();
@@ -1402,7 +1499,7 @@ index 245fe2a..5856fbf 100644
    const lifecycle = new SessionLifecycleHandler(
      session,
      resolver,
-@@ -324,6 +326,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+@@ -324,6 +345,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
    const gateRunner = new GateRunner(
      resolver,
      sessionRules,
@@ -1410,6 +1507,20 @@ index 245fe2a..5856fbf 100644
      authorizerSelection,
      reporter,
      isYoloEnabled,
+@@ -357,9 +379,10 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+     gateRunner,
+   );
+ 
+-  pi.on("session_start", (event, ctx) =>
+-    lifecycle.handleSessionStart(event, ctx),
+-  );
++  pi.on("session_start", (event, ctx) => {
++    currentMode = "build";
++    return lifecycle.handleSessionStart(event, ctx);
++  });
+   pi.on("resources_discover", (event, ctx) =>
+     lifecycle.handleResourcesDiscover(event, ctx),
+   );
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts b/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts
 index 3361354..a5b3f8d 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/path/path-normalizer.ts

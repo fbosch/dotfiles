@@ -18,6 +18,7 @@ const sourceRoot = new URL(
 );
 const [
   dialogModule,
+  localAuthorizerModule,
   modelModule,
   storeModule,
   runnerModule,
@@ -26,6 +27,7 @@ const [
   promptComponentModule,
 ] = await Promise.all([
   import(new URL("authority/permission-dialog.ts", sourceRoot).href),
+  import(new URL("authority/local-user-authorizer.ts", sourceRoot).href),
   import(new URL("authority/permission-prompt-decision.ts", sourceRoot).href),
   import(new URL("config/persistent-approval-store.ts", sourceRoot).href),
   import(new URL("handlers/gates/runner.ts", sourceRoot).href),
@@ -66,6 +68,38 @@ function createAgentDir(): string {
   mkdirSync(join(root, "agents"), { recursive: true });
   return root;
 }
+
+describe("persistent approval scope labels", () => {
+  test("uses the active mode for primary-session approvals", () => {
+    expect(
+      localAuthorizerModule.buildPersistentApprovalScope(
+        { agentName: null, forwarding: undefined },
+        "build",
+      ),
+    ).toEqual({ agentLabel: "build mode", globalLabel: "all modes" });
+    expect(
+      localAuthorizerModule.buildPersistentApprovalScope(
+        { agentName: null, forwarding: undefined },
+        "plan",
+      ),
+    ).toEqual({ agentLabel: "plan mode", globalLabel: "all modes" });
+  });
+
+  test("uses the requesting subagent for forwarded approvals", () => {
+    expect(
+      localAuthorizerModule.buildPersistentApprovalScope(
+        {
+          agentName: "explore",
+          forwarding: {
+            requesterAgentName: "explore",
+            requesterSessionId: "session-1",
+          },
+        },
+        "build",
+      ),
+    ).toEqual({ agentLabel: "explore agent", globalLabel: "all agents" });
+  });
+});
 
 describe("permission prompt details", () => {
   test("includes the full bash command for a path ask", () => {

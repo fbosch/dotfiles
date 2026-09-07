@@ -5,6 +5,7 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 plugin_root="$(dirname "$script_dir")"
 repo_root="$(git -C "$script_dir" rev-parse --show-toplevel)"
 test_dir="$(mktemp -d)"
+test_dir="$(cd "$test_dir" && pwd -P)"
 trap 'rm -rf "$test_dir"' EXIT
 
 real_nvim="$(command -v nvim)"

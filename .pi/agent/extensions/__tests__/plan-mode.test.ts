@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import planMode, { PLAN_MODE_STATUS } from "../plan-mode";
+import planMode, { MODE_CHANGED_EVENT, PLAN_MODE_STATUS } from "../plan-mode";
 
 type ToggleHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 type ShortcutHandler = (ctx: ExtensionContext) => Promise<void>;
@@ -48,9 +48,15 @@ function createHarness(options: {
   const statuses: Array<[string, string | undefined]> = [];
   const notifications: Array<[string, string]> = [];
 
+  const modeChanges: Array<[string, unknown]> = [];
   const pi = {
     appendEntry: (customType: string, data: unknown) => {
       entries.push({ type: "custom", customType, data });
+    },
+    events: {
+      emit: (name: string, value: unknown) => {
+        modeChanges.push([name, value]);
+      },
     },
     getActiveTools: () => [...activeTools],
     on: (event: string, handler: EventHandler) => {
@@ -118,6 +124,7 @@ function createHarness(options: {
     activeToolSets,
     entries,
     notifications,
+    modeChanges,
     selectedModels,
     sentMessages,
     setIdle(value: boolean) {
@@ -245,6 +252,10 @@ describe("plan mode", () => {
     expect(harness.statuses).toEqual([
       ["plan-mode", PLAN_MODE_STATUS],
       ["plan-mode", undefined],
+    ]);
+    expect(harness.modeChanges).toEqual([
+      [MODE_CHANGED_EVENT, { mode: "plan" }],
+      [MODE_CHANGED_EVENT, { mode: "build" }],
     ]);
   });
 

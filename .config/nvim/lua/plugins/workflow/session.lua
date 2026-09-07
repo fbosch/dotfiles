@@ -52,6 +52,10 @@ return {
 				file = "",
 				hooks = {
 					pre = {
+						read = function()
+							-- Buffer wipes during a session read are replacement, not Pi closure.
+							vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPre" })
+						end,
 						write = function()
 							local tree_ok, tree_api = pcall(require, "nvim-tree.api")
 							if tree_ok then

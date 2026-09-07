@@ -21,6 +21,7 @@ local prompt_pending
 local bound, terminal_closed, session_replaced, binding_unavailable
 local source_window
 local source_buffer
+local session_load_pending = false
 local terminal_options = {
 	win = {
 		on_buf = function(terminal)
@@ -45,7 +46,7 @@ local function clear_terminal_state()
 	terminal_channel_id = nil
 	terminal_bound = false
 	terminal_closed(closed_launch_id)
-	if closed_owner ~= nil then
+	if closed_owner ~= nil and not session_load_pending then
 		session.set_pi_terminal_state(closed_session_id, false, closed_owner)
 	end
 end
@@ -258,6 +259,21 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 	return command .. " " .. session_flag .. " " .. vim.fn.shellescape(session_id)
 end
 
+local function snacks_terminal()
+	local ok, terminal = pcall(require, "snacks.terminal")
+	if ok then
+		return terminal
+	end
+
+	-- Session restoration can run before the lazy PackReady activation.
+	local loader = require("config.pack.loader")
+	local activated, reason = loader.activate("snacks.nvim", { source = "PiSessionRestore" })
+	if activated == false then
+		error("snacks.nvim is unavailable: " .. tostring(reason))
+	end
+	return require("snacks.terminal")
+end
+
 local function open_terminal(session_flag, session_id, session_dir, cwd, socket, owner, launch_options)
 	launch_options = launch_options or {}
 	local launch_id = next_launch_id()
@@ -271,10 +287,8 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 		-- Snacks auto-close deletes its event group before our cleanup can run.
 		auto_close = false,
 	}
-	local terminal = require("snacks.terminal").open(
-		launch_command(session_flag, session_id, session_dir, socket, launch_id),
-		options
-	)
+	local terminal =
+		snacks_terminal().open(launch_command(session_flag, session_id, session_dir, socket, launch_id), options)
 	terminal_instance = terminal
 	terminal_session_id = session_id
 	terminal_owner = owner
@@ -523,17 +537,33 @@ function M.bind_session(binding)
 	return identity
 end
 
+local function restore_after_session_load()
+	local ok, result = xpcall(M.restore, debug.traceback)
+	session_load_pending = false
+	if not ok then
+		error(result, 0)
+	end
+	return result
+end
+
 function M.setup()
 	local group = vim.api.nvim_create_augroup("PiSessionPersistence", { clear = true })
+	vim.api.nvim_create_autocmd("User", {
+		group = group,
+		pattern = "SessionLoadPre",
+		callback = function()
+			session_load_pending = true
+		end,
+	})
 	vim.api.nvim_create_autocmd("SessionLoadPost", {
 		group = group,
-		callback = M.restore,
+		callback = restore_after_session_load,
 	})
 	-- mini.sessions emits this bridge event because its deferred source path skips the native event.
 	vim.api.nvim_create_autocmd("User", {
 		group = group,
 		pattern = "SessionLoadPost",
-		callback = M.restore,
+		callback = restore_after_session_load,
 	})
 	vim.api.nvim_create_autocmd("User", {
 		group = group,

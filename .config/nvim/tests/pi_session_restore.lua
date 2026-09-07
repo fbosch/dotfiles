@@ -1,5 +1,7 @@
 local repo_root = assert(vim.env.REPO_ROOT)
 local test_root = vim.fn.tempname()
+vim.fn.mkdir(test_root, "p")
+test_root = vim.uv.fs_realpath(test_root) or test_root
 local agent_dir = test_root .. "/pi-agent"
 local encoded_repo = repo_root:gsub("^/", ""):gsub("[/:]", "-")
 local session_dir = agent_dir .. "/sessions/--" .. encoded_repo .. "--"
@@ -436,6 +438,19 @@ assert(pi.restore() == false, "limited Pi session search requested restoration")
 assert(#opened == opened_before, "limited Pi session search opened Pi")
 assert(has_notification("session search limit was reached"), "limited Pi session search was not reported")
 assert_metadata_unchanged(limited_metadata, "limited-session rejection changed metadata")
+vim.env.PI_CODING_AGENT_DIR = agent_dir
+set_metadata(exact_id, true)
+local opened_before_session_reload = #opened
+assert(pi.start() == terminal, "PiStart did not create the session-read fixture terminal")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPre" })
+terminal_callbacks.BufWipeout()
+assert(
+	session.get_metadata(nvim_session).pi_terminal_open == true,
+	"session read wipe incorrectly closed the Pi terminal"
+)
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+assert(#opened == opened_before_session_reload + 2, "session load did not restore the wiped Pi terminal")
+terminal_callbacks.TermClose()
 
 rawset(vim, "notify", original_notify)
 vim.env.PI_CODING_AGENT_DIR = previous_agent_dir

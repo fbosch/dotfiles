@@ -6,7 +6,7 @@ import type {
   Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { type DeltaDetails, registerDeltaExtension } from "../index";
+import { type DeltaDetails, loadHashlineDeltaTools, registerDeltaExtension } from "../index";
 
 type TextContent = { type: "text"; text: string };
 type ResultEvent = {
@@ -57,7 +57,13 @@ async function setup() {
     new URL("../../../npm/node_modules/pi-hashline-edit-pro/index.ts", import.meta.url).href
   )) as { default: (api: ExtensionAPI) => void };
   hashline.default(pi);
-  const hashlineTools = ["replace", "insert"].map((name) => {
+  const loadedHashlineTools = await loadHashlineDeltaTools();
+  expect(loadedHashlineTools.map((tool) => tool.name)).toEqual([
+    "replace",
+    "insert",
+    "undo_last_change",
+  ]);
+  const hashlineTools = loadedHashlineTools.map(({ name }) => {
     const tool = tools.get(name);
     if (tool === undefined) throw new Error(`${name} was not registered`);
     return tool;
@@ -116,7 +122,7 @@ function editResult(warnings: boolean) {
   };
 }
 
-for (const toolName of ["replace", "insert"]) {
+for (const toolName of ["replace", "insert", "undo_last_change"]) {
   describe(`${toolName} Delta result`, () => {
     test("preserves errors, partial updates and the non-Delta fallback", async () => {
       const { tools, hashlineTools } = await setup();
