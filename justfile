@@ -56,6 +56,8 @@ install-opencode-plugins:
 [group('dependencies')]
 install-pi:
     bun install --frozen-lockfile --cwd "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+    # Trigger Pi's normal startup reconciliation for exact package specs.
+    pi --approve --help >/dev/null
 
 # Install dependencies and build all Vicinae extensions for first use.
 [group('dependencies')]

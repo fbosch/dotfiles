@@ -132,6 +132,9 @@ local function parse_export(result)
 	if type(result.stdout) ~= "string" then
 		return "malformed", nil
 	end
+	if result.stdout == "" then
+		return "loaded", startup_path
+	end
 
 	local ok, exported = pcall(vim.json.decode, result.stdout)
 	if not ok or type(exported) ~= "table" then
