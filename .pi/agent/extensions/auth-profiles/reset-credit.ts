@@ -84,7 +84,7 @@ class CommandInputError extends Error {}
 
 class ResetCreditRequestError extends Error {
   constructor(readonly status: number) {
-    super(`reset credit request failed with ${status}`);
+    super(`banked reset request failed with ${status}`);
   }
 }
 
@@ -125,11 +125,11 @@ function validDate(value: unknown): string | null {
 
 function parseResetCredits(payload: unknown): ResetCredits {
   if (!isRecord(payload) || !Number.isInteger(payload.available_count)) {
-    throw new Error("reset credit response has an unexpected shape");
+    throw new Error("banked reset response has an unexpected shape");
   }
   const availableCount = payload.available_count;
   if (typeof availableCount !== "number" || availableCount < 0) {
-    throw new Error("reset credit response has an unexpected shape");
+    throw new Error("banked reset response has an unexpected shape");
   }
 
   const credits = Array.isArray(payload.credits)
@@ -232,7 +232,7 @@ function durationUntil(expiresAt: string | null, now: number): string {
 }
 
 function creditLabel(credit: ResetCredit, now: number): string {
-  const name = credit.title ?? credit.resetType ?? "Reset credit";
+  const name = credit.title ?? credit.resetType ?? "Banked reset";
   return `${name} (expires in ${durationUntil(credit.expiresAt, now)})`;
 }
 
@@ -276,11 +276,11 @@ async function consumeResetCredit(
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   if (!response.ok) {
-    throw new Error(`reset credit consume request failed with ${response.status}`);
+    throw new Error(`banked reset consume request failed with ${response.status}`);
   }
   const payload = await readBoundedJson(response);
   if (!isRecord(payload)) {
-    throw new Error("reset credit consume response has an unexpected shape");
+    throw new Error("banked reset consume response has an unexpected shape");
   }
   const code = boundedText(payload.code, 80);
   const windowsReset =
@@ -308,13 +308,13 @@ async function chooseProfile(
       label: cachedProfileLabel(profile, cachePath),
       value: profile,
     })),
-    "Cached availability is only a hint; credits are checked after selection.",
+    "Cached availability is only a hint; banked resets are checked after selection.",
   );
   if (selected === undefined) return undefined;
 
   const result = await requestProfileCredits(selected, ctx, resolveCredential, fetchFn);
   if (availableCredits(result.credits).length === 0) {
-    ctx.ui.notify(`No reset credits are currently available for profile ${selected}.`, "warning");
+    ctx.ui.notify(`No banked resets are currently available for profile ${selected}.`, "warning");
     return undefined;
   }
   return { profile: selected, ...result };
@@ -325,7 +325,7 @@ export function registerResetCreditCommand(
   options: ResetCreditCommandOptions,
 ): void {
   pi.registerCommand("reset-credit", {
-    description: "Select and consume a Pi auth-profile reset credit",
+    description: "Select and consume a banked reset for a Pi auth profile",
     getArgumentCompletions: (prefix) =>
       "--dry-run".startsWith(prefix)
         ? [{ value: "--dry-run", label: "--dry-run (preview only)" }]
@@ -337,7 +337,7 @@ export function registerResetCreditCommand(
       }
       if (ctx.isIdle() === false) {
         ctx.ui.notify(
-          "Wait for the current response to finish before consuming a reset credit.",
+          "Wait for the current response to finish before consuming a banked reset.",
           "warning",
         );
         return;
@@ -381,12 +381,12 @@ export function registerResetCreditCommand(
         const now = (options.now ?? Date.now)();
         const creditSelection = await askQuestion(
           ctx,
-          `Select a reset credit for ${selected.profile}`,
+          `Select a banked reset for ${selected.profile}`,
           credits.map((credit) => ({
             label: creditLabel(credit, now),
             value: credit.id,
           })),
-          "The credit ID is kept private and is not displayed.",
+          "The banked reset ID is kept private and is not displayed.",
         );
         if (creditSelection === undefined) return;
         const credit = credits.find((candidate) => candidate.id === creditSelection);
@@ -394,16 +394,16 @@ export function registerResetCreditCommand(
 
         const preview =
           `Profile: ${selected.profile}\n` +
-          `Credit: ${creditLabel(credit, now)}\n` +
+          `Banked reset: ${creditLabel(credit, now)}\n` +
           "Effect: reset the account's current usage windows.";
         const confirmation = await askQuestion(
           ctx,
-          `Type CONSUME to consume the selected credit for ${selected.profile}`,
+          `Type CONSUME to use the selected banked reset for ${selected.profile}`,
           undefined,
           preview,
         );
         if (confirmation !== "CONSUME") {
-          ctx.ui.notify("Cancelled: no reset credit was consumed.", "info");
+          ctx.ui.notify("Cancelled: no banked reset was consumed.", "info");
           return;
         }
 
@@ -420,7 +420,7 @@ export function registerResetCreditCommand(
         );
         if (!stillAvailable) {
           ctx.ui.notify(
-            "That reset credit is no longer available; nothing was consumed.",
+            "That banked reset is no longer available; nothing was consumed.",
             "warning",
           );
           return;
@@ -428,7 +428,7 @@ export function registerResetCreditCommand(
 
         if (commandOptions.dryRun) {
           ctx.ui.notify(preview, "info");
-          ctx.ui.notify("Dry run: no reset credit was consumed.", "info");
+          ctx.ui.notify("Dry run: no banked reset was consumed.", "info");
           return;
         }
 
@@ -449,7 +449,7 @@ export function registerResetCreditCommand(
             ? "usage windows refreshed"
             : `${result.windowsReset} usage windows reset`;
         ctx.ui.notify(
-          `Reset credit consumed for ${selected.profile}; ${resetDescription}.`,
+          `Banked reset consumed for ${selected.profile}; ${resetDescription}.`,
           "info",
         );
       } catch (error) {

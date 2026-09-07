@@ -385,11 +385,11 @@ describe("auth profile prompt status", () => {
           "<success>*</success> <accent><b>default</b></accent> <success>active</success>\n" +
           "  primary      <success>━━━━━━━━━━╸</success><dim>───</dim> <success>75% remaining</success><dim>  resets 3h</dim>\n" +
           "  secondary    <dim>──────────────</dim> <error>0% remaining</error><dim>  resets now</dim>\n" +
-          "  reset tokens <error>2 available</error><dim>  expires in 6h</dim>\n\n" +
+          "  banked resets <error>2 available</error><dim>  expires in 6h</dim>\n\n" +
           "<muted>-</muted> <accent><b>work</b></accent> <muted>inactive</muted>\n" +
           "  primary      <muted>unavailable</muted>\n" +
           "  secondary    <muted>unavailable</muted>\n" +
-          "  reset tokens <muted>unavailable</muted>\n\n" +
+          "  banked resets <muted>unavailable</muted>\n\n" +
           "<warning><b>Diagnostics</b></warning>\n" +
           "  <muted>work:</muted> usage request failed",
       },

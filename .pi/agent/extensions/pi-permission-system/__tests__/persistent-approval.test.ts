@@ -229,6 +229,33 @@ describe("persistent approval prompt", () => {
     expect(calls[2]?.title).toContain("permanent rules");
     expect(calls[2]?.options).toEqual(["Write permanent rule", "Cancel"]);
   });
+  test("skips durable scope selection when only one scope is available", async () => {
+    const calls: Array<{ title: string; options: string[] }> = [];
+    const answers = ["Allow in future sessions…", "Write permanent rule"];
+    const ui: PermissionUi = {
+      select: async (title, options) => {
+        calls.push({ title, options });
+        return answers.shift();
+      },
+      input: async () => undefined,
+    };
+
+    const decision = await dialogModule.requestPermissionDecisionFromUi(
+      ui,
+      "Permission Required",
+      "Read a reference",
+      { persistentScope: { globalLabel: "All sessions" } },
+    );
+
+    expect(decision).toMatchObject({
+      approved: true,
+      state: "approved",
+      persistentApprovalScope: "global",
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.title).toContain("All sessions");
+    expect(calls[1]?.options).toEqual(["Write permanent rule", "Cancel"]);
+  });
 
   test("cancelling the durable scope does not grant globally", async () => {
     let selectCount = 0;

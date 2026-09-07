@@ -331,7 +331,7 @@ index bb69665..48cb244 100644
        return sessionApproval(
          // A cancelled scope select (undefined) falls back to the
          // least-privilege subagent scope.
-@@ -187,6 +204,45 @@ export async function requestPermissionDecisionFromUi(
+@@ -187,6 +204,48 @@ export async function requestPermissionDecisionFromUi(
      return sessionApproval("approved_for_session", width);
    }
  
@@ -342,10 +342,13 @@ index bb69665..48cb244 100644
 +        : []),
 +      options.persistentScope.globalLabel,
 +    ];
-+    const scope = await ui.select(
-+      `${title}\n${scopeMessage}\n\nSave this permission for:`,
-+      scopeOptions,
-+    );
++    const scope =
++      scopeOptions.length === 1
++        ? scopeOptions[0]
++        : await ui.select(
++            `${title}\n${scopeMessage}\n\nSave this permission for:`,
++            scopeOptions,
++          );
 +    const persistentApprovalScope: PersistentApprovalScope | undefined =
 +      scope === options.persistentScope.globalLabel
 +        ? "global"

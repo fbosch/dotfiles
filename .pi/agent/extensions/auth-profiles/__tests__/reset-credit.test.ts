@@ -222,8 +222,8 @@ describe("/reset-credit", () => {
     expect(harness.getPopupInputCalls()).toBe(0);
     expect(harness.questionRenders[2]?.join("\n")).toContain("Type CONSUME");
     expect(harness.notifications).toEqual([
-      "Profile: work\nCredit: Work reset (expires in 6h)\nEffect: reset the account's current usage windows.",
-      "Dry run: no reset credit was consumed.",
+      "Profile: work\nBanked reset: Work reset (expires in 6h)\nEffect: reset the account's current usage windows.",
+      "Dry run: no banked reset was consumed.",
     ]);
     expect(harness.notifications.join("\n")).not.toContain("opaque-work-credit");
   });
@@ -301,7 +301,7 @@ describe("/reset-credit", () => {
     expect(harness.getPopupInputCalls()).toBe(0);
     expect(harness.questionRenders[2]?.join("\n")).toContain("Type CONSUME");
     expect(harness.notifications.at(-1)).toBe(
-      "Reset credit consumed for work; 2 usage windows reset.",
+      "Banked reset consumed for work; 2 usage windows reset.",
     );
     expect(await Bun.file(cachePath).exists()).toBe(false);
   });
@@ -323,7 +323,7 @@ describe("/reset-credit", () => {
 
     expect(harness.getPopupSelectCalls()).toBe(0);
     expect(harness.getPopupInputCalls()).toBe(0);
-    expect(harness.notifications[0]).toBe("reset credit response has an unexpected shape");
+    expect(harness.notifications[0]).toBe("banked reset response has an unexpected shape");
   });
 
   test("does not consume when confirmation is not exactly CONSUME", async () => {
@@ -355,6 +355,6 @@ describe("/reset-credit", () => {
     expect(consumed).toBe(false);
     expect(harness.getPopupSelectCalls()).toBe(0);
     expect(harness.getPopupInputCalls()).toBe(0);
-    expect(harness.notifications.at(-1)).toBe("Cancelled: no reset credit was consumed.");
+    expect(harness.notifications.at(-1)).toBe("Cancelled: no banked reset was consumed.");
   });
 });

@@ -224,6 +224,11 @@ function formatResetTokens(theme: Theme, profile: ProfileUsageStatus, currentTim
   return `${count}${expiresIn ? theme.fg("dim", `  expires in ${expiresIn}`) : ""}`;
 }
 
+function formatDiagnosticCode(code: string): string {
+  if (code === "reset-credits-request-failed") return "banked resets request failed";
+  return code.replaceAll("-", " ");
+}
+
 function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime: number): string {
   const profiles = [...status.profiles].sort(
     (left, right) =>
@@ -247,7 +252,7 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
     return [
       `${marker} ${name} ${state}`,
       ...usageLines,
-      `  ${"reset tokens".padEnd(13)}${formatResetTokens(theme, profile, currentTime)}`,
+      `  ${"banked resets".padEnd(14)}${formatResetTokens(theme, profile, currentTime)}`,
     ].join("\n");
   });
 
@@ -260,7 +265,7 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
         theme.fg("warning", theme.bold("Diagnostics")),
         ...status.diagnostics.map(
           ({ profileLabel, code }) =>
-            `  ${theme.fg("muted", `${profileLabel}:`)} ${code.replaceAll("-", " ")}`,
+            `  ${theme.fg("muted", `${profileLabel}:`)} ${formatDiagnosticCode(code)}`,
         ),
       ].join("\n"),
     );
@@ -503,7 +508,7 @@ export default function authProfiles(
   });
 
   pi.registerCommand("profiles", {
-    description: "Show usage and reset-token status for all auth profiles",
+    description: "Show usage and banked reset status for all auth profiles",
     getArgumentCompletions: (prefix) =>
       "status".startsWith(prefix) ? [{ value: "status", label: "status" }] : [],
     handler: async (args, ctx) => {

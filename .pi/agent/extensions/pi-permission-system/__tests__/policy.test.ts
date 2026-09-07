@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+
 type PermissionState = "allow" | "deny" | "ask";
 
 type PermissionCheck = {
@@ -320,6 +321,17 @@ describe("pi-permission-system policy", () => {
         input: { path: "src/example.ts", oldText: "before", newText: "after" },
       }).state,
     ).toBe("allow");
+    for (const surface of ["replace", "insert", "undo_last_change"]) {
+      expect(
+        engine.manager.check({
+          kind: "tool",
+          surface,
+          input: { path: "src/example.ts" },
+        }).state,
+        surface,
+      ).toBe("allow");
+    }
+
     expect(
       engine.manager.check({
         kind: "tool",
@@ -348,6 +360,9 @@ describe("pi-permission-system policy", () => {
 
     expect(pathGate(engine, "read", "src/example.ts")).toBeNull();
     expect(pathGate(engine, "edit", "src/example.ts")).toBeNull();
+    for (const toolName of ["replace", "insert", "undo_last_change"]) {
+      expect(pathGate(engine, toolName, "src/example.ts")).toBeNull();
+    }
   });
 
   test("allows FFF infrastructure searches for primary and debug agents without granting writes", async () => {
