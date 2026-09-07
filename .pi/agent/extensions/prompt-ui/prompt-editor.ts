@@ -52,6 +52,7 @@ const AUTOCOMPLETE_MAX_VISIBLE = 10;
 const INTERRUPT_CONFIRMATION_WINDOW_MS = 1_500;
 export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
+const MCP_ICON = "";
 
 export interface PromptEditorState {
   isWorking(): boolean;
@@ -121,7 +122,7 @@ export function renderMcpFooterStatus(
   if (connectedCount <= 0) return "";
 
   const iconColor = hasFailure ? "error" : "success";
-  return `${theme.fg(iconColor, "⊙")} ${theme.fg("text", `${connectedCount} MCP`)}`;
+  return `${theme.fg(iconColor, MCP_ICON)} ${theme.fg("text", `${connectedCount} MCP`)}`;
 }
 
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {

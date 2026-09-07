@@ -40,10 +40,10 @@ describe("permission prompt rendering", () => {
     const plain = lines.map(stripTerminalSequences);
 
     expect(plain.slice(0, 6)).toEqual([
-      "△ Permission required (Subagent)",
-      "    ← Access external directory /usr/share/nvim/runtime/doc/api.txt",
+      " Permission required (Subagent)",
       "Patterns",
       "- *",
+      " Access external directory /usr/share/nvim/runtime/doc/api.txt",
       "",
       "─".repeat(120),
     ]);
@@ -52,10 +52,45 @@ describe("permission prompt rendering", () => {
     expect(plain[6]).toContain(" Reject ");
     expect(plain[6]).toContain(" Reject + reason ");
     expect(plain[6]).toEndWith("↑/↓ select · enter confirm · esc deny");
-    expect(lines[0]).toBe("\u001b[33m△ Permission required (Subagent)\u001b[39m");
+    expect(lines[0]).toBe("\u001b[33m Permission required (Subagent)\u001b[39m");
     expect(lines[6]).toContain("\u001b[7m");
     expect(lines[6]).toContain("\u001b[36m Allow once \u001b[39m");
     expect(plain).not.toContain("subagent          : review · session 01a06d9c");
+  });
+
+  test("uses the command icon for execute requests", () => {
+    const lines = renderPermissionPromptLines(
+      ["Permission Required", "surface : bash", "command : pi --help"],
+      80,
+      theme,
+    );
+    const plain = lines.map(stripTerminalSequences);
+
+    expect(plain[1]).toBe(" Execute command pi --help");
+  });
+
+  test("uses matching icons for permission request categories", () => {
+    const requests = [
+      ["read", "path : src/example.ts", ""],
+      ["write", "path : src/example.ts", ""],
+      ["edit", "path : src/example.ts", ""],
+      ["delete", "path : src/example.ts", ""],
+      ["grep", "path : src/example.ts", ""],
+      ["external_directory_read", "path : /usr/share", ""],
+      ["webfetch", "path : https://example.com", ""],
+      ["mcp", "target : github", ""],
+      ["skill", "skill : docs", ""],
+    ] as const;
+
+    for (const [surface, fact, icon] of requests) {
+      const lines = renderPermissionPromptLines(
+        ["Permission Required", `surface : ${surface}`, fact],
+        120,
+        theme,
+      );
+
+      expect(stripTerminalSequences(lines[1] ?? ""), surface).toStartWith(`${icon} `);
+    }
   });
 
   test("emphasizes the command behind a path permission", () => {
@@ -72,9 +107,11 @@ describe("permission prompt rendering", () => {
     );
     const plain = lines.map(stripTerminalSequences);
 
-    expect(plain[1]).toBe("    ← Write path .pi/mcp.json");
-    expect(plain[2]).toBe("      ↳ command printf secret > .pi/mcp.json");
-    expect(lines[2]).toContain("\u001b[33mprintf secret > .pi/mcp.json\u001b[39m");
+    expect(plain[1]).toBe("Patterns");
+    expect(plain[2]).toBe("- */.pi/mcp.json");
+    expect(plain[3]).toBe(" Write path .pi/mcp.json");
+    expect(plain[4]).toBe("      ↳ command printf secret > .pi/mcp.json");
+    expect(lines[4]).toContain("\u001b[33mprintf secret > .pi/mcp.json\u001b[39m");
   });
 
   test("compacts verbose approval labels without changing their order", () => {

@@ -49,13 +49,13 @@ describe("prompt footer statuses", () => {
   });
 
   test("renders MCP status like OpenCode", () => {
-    expect(renderMcpFooterStatus(theme, 2)).toBe("success:⊙ text:2 MCP");
-    expect(renderMcpFooterStatus(theme, 2, true)).toBe("error:⊙ text:2 MCP");
+    expect(renderMcpFooterStatus(theme, 2)).toBe("success: text:2 MCP");
+    expect(renderMcpFooterStatus(theme, 2, true)).toBe("error: text:2 MCP");
     expect(renderMcpFooterStatus(theme, 0)).toBe("");
   });
 
   test("converts the adapter's compact status to the OpenCode rendering", () => {
-    expect(renderFooterStatus(theme, "mcp", "MCP 2/6")).toBe("success:⊙ text:2 MCP");
+    expect(renderFooterStatus(theme, "mcp", "MCP 2/6")).toBe("success: text:2 MCP");
     expect(renderFooterStatus(theme, "mcp", "MCP 0/6")).toBe("");
   });
 
@@ -95,7 +95,7 @@ describe("prompt footer statuses", () => {
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).toContain("permission status");
-    expect(plainLine.endsWith("2 files +40 -25 · ⊙ 2 MCP ")).toBe(true);
+    expect(plainLine.endsWith("2 files +40 -25 ·  2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });
 
@@ -111,7 +111,7 @@ describe("prompt footer statuses", () => {
     );
     const plainLine = stripTerminalSequences(line);
 
-    expect(plainLine.endsWith("⊙ 2 MCP ")).toBe(true);
+    expect(plainLine.endsWith(" 2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });
 
@@ -130,7 +130,7 @@ describe("prompt footer statuses", () => {
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).not.toContain("2 files");
-    expect(plainLine.endsWith("⊙ 2 MCP ")).toBe(true);
+    expect(plainLine.endsWith(" 2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(25);
   });
 

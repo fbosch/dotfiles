@@ -7,8 +7,34 @@ import {
 } from "@earendil-works/pi-tui";
 
 const PERMISSION_TITLE = "Permission Required";
-const WARNING_ICON = "△";
+const WARNING_ICON = "";
 const REQUEST_ARROW = "←";
+const EXECUTE_ICON = "";
+
+const ACTION_ICONS: Record<string, string> = {
+  delete: "",
+  edit: "",
+  execute: EXECUTE_ICON,
+  network: "",
+  read: "",
+  write: "",
+};
+
+const SURFACE_ICONS: Record<string, string> = {
+  bash: EXECUTE_ICON,
+  execute: EXECUTE_ICON,
+  external_directory: "",
+  find: "",
+  grep: "",
+  ls: "",
+  mcp: "",
+  path: "",
+  search: "",
+  skill: "",
+  tool: "",
+  webfetch: "",
+  websearch: "",
+};
 const OPTION_GAP = "    ";
 
 type PermissionPromptTheme = Pick<Theme, "fg" | "inverse">;
@@ -137,15 +163,15 @@ function renderPromptBase(
   theme: PermissionPromptTheme,
 ): string[] {
   const title = stripTerminalSequences(titleLine).replace(PERMISSION_TITLE, "Permission required");
-  const lines = [theme.fg("warning", `${WARNING_ICON} ${title}`), ...renderRequest(facts, theme)];
   const patterns = facts.filter((fact) => fact.label.toLowerCase() === "rule");
 
-  if (patterns.length > 0) {
-    lines.push(theme.fg("muted", "Patterns"));
-    lines.push(...patterns.map((pattern) => `- ${pattern.value}`));
-  }
-
-  return lines;
+  return [
+    theme.fg("warning", `${WARNING_ICON} ${title}`),
+    ...(patterns.length > 0
+      ? [theme.fg("muted", "Patterns"), ...patterns.map((pattern) => `- ${pattern.value}`)]
+      : []),
+    ...renderRequest(facts, theme),
+  ];
 }
 
 function renderRequest(facts: readonly ParsedFact[], theme: PermissionPromptTheme): string[] {
@@ -155,7 +181,8 @@ function renderRequest(facts: readonly ParsedFact[], theme: PermissionPromptThem
   const value = requestValue(facts, base);
   const verb = requestVerb(base, action, tool);
   const noun = SURFACE_NOUNS[base] ?? humanize(base).toLowerCase();
-  const prefix = theme.fg("muted", `    ${REQUEST_ARROW} ${verb} ${noun}`);
+  const icon = requestIcon(base, action, verb);
+  const prefix = theme.fg("muted", `${icon} ${verb} ${noun}`);
   const lines =
     value === undefined
       ? [prefix]
@@ -179,9 +206,24 @@ function requestValue(facts: readonly ParsedFact[], surface: string): string | u
     .find((candidate) => candidate !== undefined);
 }
 
+function requestIcon(base: string, action: string | undefined, verb: string): string {
+  // Keep resource requests recognizable even when they include an access action suffix.
+  if (base === "external_directory" || base === "mcp") {
+    return SURFACE_ICONS[base] ?? REQUEST_ARROW;
+  }
+  return (
+    ACTION_ICONS[action ?? ""] ??
+    ACTION_ICONS[base] ??
+    SURFACE_ICONS[base] ??
+    (verb === "Execute" ? EXECUTE_ICON : REQUEST_ARROW)
+  );
+}
+
 function requestVerb(base: string, action: string | undefined, tool: string | undefined): string {
   if (base === "external_directory") return "Access";
-  return ACTION_LABELS[action ?? ""] ?? ACTION_LABELS[tool ?? ""] ?? "Access";
+  return (
+    ACTION_LABELS[action ?? ""] ?? ACTION_LABELS[tool ?? ""] ?? ACTION_LABELS[base] ?? "Access"
+  );
 }
 
 function splitSurface(value: string): { base: string; action?: string } {
