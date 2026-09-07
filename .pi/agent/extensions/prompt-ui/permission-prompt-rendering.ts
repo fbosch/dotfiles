@@ -84,7 +84,8 @@ export function renderPermissionPromptLines(
   const options = lines
     .slice(optionStart)
     .map(parseOption)
-    .filter((option): option is ParsedOption => option !== undefined);
+    .filter((option): option is ParsedOption => option !== undefined)
+    .filter((option) => compactOptionLabel(option.label) !== "Allow both");
   const hint = theme.fg("muted", "↑/↓ select · enter confirm · esc deny");
   const optionRows = renderOptionRows(options, width, theme);
   const actionRows =
@@ -140,7 +141,7 @@ function renderPromptBase(
   const patterns = facts.filter((fact) => fact.label.toLowerCase() === "rule");
 
   if (patterns.length > 0) {
-    lines.push("", theme.fg("muted", "Patterns"), "");
+    lines.push(theme.fg("muted", "Patterns"));
     lines.push(...patterns.map((pattern) => `- ${pattern.value}`));
   }
 

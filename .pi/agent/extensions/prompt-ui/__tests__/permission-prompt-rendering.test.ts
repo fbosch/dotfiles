@@ -39,24 +39,22 @@ describe("permission prompt rendering", () => {
     );
     const plain = lines.map(stripTerminalSequences);
 
-    expect(plain.slice(0, 8)).toEqual([
+    expect(plain.slice(0, 6)).toEqual([
       "△ Permission required (Subagent)",
       "    ← Access external directory /usr/share/nvim/runtime/doc/api.txt",
-      "",
       "Patterns",
-      "",
       "- *",
       "",
       "─".repeat(120),
     ]);
-    expect(plain[8]).toContain(" Allow once ");
-    expect(plain[8]).toContain(" Allow session ");
-    expect(plain[8]).toContain(" Reject ");
-    expect(plain[8]).toContain(" Reject + reason ");
-    expect(plain[8]).toEndWith("↑/↓ select · enter confirm · esc deny");
+    expect(plain[6]).toContain(" Allow once ");
+    expect(plain[6]).toContain(" Allow session ");
+    expect(plain[6]).toContain(" Reject ");
+    expect(plain[6]).toContain(" Reject + reason ");
+    expect(plain[6]).toEndWith("↑/↓ select · enter confirm · esc deny");
     expect(lines[0]).toBe("\u001b[33m△ Permission required (Subagent)\u001b[39m");
-    expect(lines[8]).toContain("\u001b[7m");
-    expect(lines[8]).toContain("\u001b[36m Allow once \u001b[39m");
+    expect(lines[6]).toContain("\u001b[7m");
+    expect(lines[6]).toContain("\u001b[36m Allow once \u001b[39m");
     expect(plain).not.toContain("subagent          : review · session 01a06d9c");
   });
 
@@ -89,6 +87,7 @@ describe("permission prompt rendering", () => {
         "",
         "▶ (o) Allow once",
         '  (s) Yes, allow reads to "/Users/fbb/.config/fbb/*" for this session',
+        "  (b) Allow reads and writes for this session",
         "  (f) Allow in future sessions…",
         "  (n) Deny",
       ],
@@ -108,6 +107,7 @@ describe("permission prompt rendering", () => {
             line.endsWith("↑/↓ select · enter confirm · esc deny"),
         ),
     ).toBe(true);
+    expect(lines.map(stripTerminalSequences).join("\n")).not.toContain("Allow reads and writes");
   });
 
   test("keeps unrelated custom dialogs unchanged", () => {

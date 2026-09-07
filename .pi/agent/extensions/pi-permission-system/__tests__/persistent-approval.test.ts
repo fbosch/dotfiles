@@ -70,13 +70,13 @@ function createAgentDir(): string {
 }
 
 describe("persistent approval scope labels", () => {
-  test("uses session-wide labels for primary-session approvals", () => {
+  test("offers only a global durable scope for primary-session approvals", () => {
     expect(
       localAuthorizerModule.buildPersistentApprovalScope(
         { agentName: null, forwarding: undefined },
         false,
       ),
-    ).toEqual({ agentLabel: "this session", globalLabel: "all sessions" });
+    ).toEqual({ globalLabel: "all sessions" });
   });
 
   test("uses the active subagent for local approvals", () => {
@@ -255,6 +255,28 @@ describe("persistent approval prompt", () => {
     expect(decision).toMatchObject({ approved: false, state: "denied" });
     expect(decision).not.toHaveProperty("persistentApprovalScope");
   });
+  test("requires explicit confirmation before writing a permanent rule", async () => {
+    const answers = ["Allow in future sessions…", "All agents/modes", "Cancel"];
+    const ui: PermissionUi = {
+      select: async () => answers.shift(),
+      input: async () => undefined,
+    };
+
+    const decision = await dialogModule.requestPermissionDecisionFromUi(
+      ui,
+      "Permission Required",
+      "Read a reference",
+      {
+        persistentScope: {
+          agentLabel: "This agent/mode: lookup",
+          globalLabel: "All agents/modes",
+        },
+      },
+    );
+
+    expect(decision).toMatchObject({ approved: false, state: "denied" });
+    expect(decision).not.toHaveProperty("persistentApprovalScope");
+  });
 });
 
 describe("persistent approval decision model", () => {
@@ -266,6 +288,15 @@ describe("persistent approval decision model", () => {
       globalLabel: "All agents/modes",
     },
   };
+
+  test("does not offer the ambiguous both-directions action", () => {
+    expect(
+      modelModule.visibleOptionKeys({
+        ...config,
+        widthLabel: "Allow both directions for this session",
+      }),
+    ).toEqual(["o", "s", "f", "n", "r"]);
+  });
 
   test("offers the persistent option and defaults to the named agent", () => {
     expect(modelModule.visibleOptionKeys(config)).toEqual(["o", "s", "f", "n", "r"]);

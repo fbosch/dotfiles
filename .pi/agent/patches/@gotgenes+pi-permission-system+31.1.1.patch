@@ -216,7 +216,7 @@ index 66a3951..2bb6a37 100644
  ): RequestPermissionOptions | undefined {
    const grants = details.sessionApproval?.grants ?? [];
    const direction = provenDirectionOf(grants);
-@@ -103,6 +107,29 @@ function buildRequestOptions(
+@@ -103,6 +107,28 @@ function buildRequestOptions(
            ),
          }
        : {}),
@@ -242,7 +242,6 @@ index 66a3951..2bb6a37 100644
 +  }
 +
 +  return {
-+    agentLabel: "this session",
 +    globalLabel: "all sessions",
 +  };
 +}
@@ -344,7 +343,7 @@ index bb69665..48cb244 100644
 +      options.persistentScope.globalLabel,
 +    ];
 +    const scope = await ui.select(
-+      `${title}\n${scopeMessage}\n\nAllow in future sessions for:`,
++      `${title}\n${scopeMessage}\n\nSave this permission for:`,
 +      scopeOptions,
 +    );
 +    const persistentApprovalScope: PersistentApprovalScope | undefined =
@@ -518,7 +517,7 @@ index a05f807..57281c8 100644
 +      this.theme.fg("accent", this.title),
 +      ...this.renderCompleteAsk(width).lines,
 +      "",
-+      "Allow in future sessions for:",
++      "Save this permission for:",
 +      "",
 +    ];
 +    for (const row of rows) {
@@ -595,7 +594,7 @@ index 7649514..593b3fa 100644
 -const NARROW_OPTION_ORDER: readonly PromptKey[] = OPTION_ORDER.filter(
 -  (key) => key !== "b",
 -);
-+const OPTION_ORDER: readonly PromptKey[] = ["o", "s", "b", "f", "n", "r"];
++const OPTION_ORDER: readonly PromptKey[] = ["o", "s", "f", "n", "r"];
  
  /**
   * The decision step's option keys, in display order.
