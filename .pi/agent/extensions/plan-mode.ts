@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const PLAN_MODE_STATUS = "Plan";
+export const MODE_CHANGED_EVENT = "pi:mode-changed";
 
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";

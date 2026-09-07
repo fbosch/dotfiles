@@ -14,6 +14,7 @@ local project_b = test_root .. "/project-b"
 local missing = test_root .. "/missing"
 local null_path = test_root .. "/null-path"
 local absent_path = test_root .. "/absent-path"
+local unchanged = test_root .. "/unchanged"
 local blocked = test_root .. "/blocked"
 local unavailable = test_root .. "/unavailable"
 local malformed = test_root .. "/malformed"
@@ -24,6 +25,7 @@ for _, directory in ipairs({
 	missing,
 	null_path,
 	absent_path,
+	unchanged,
 	blocked,
 	unavailable,
 	malformed,
@@ -32,7 +34,17 @@ for _, directory in ipairs({
 	vim.fn.mkdir(directory, "p")
 end
 vim.fn.mkdir(test_root .. "/.git", "p")
-for _, directory in ipairs({ project_a, project_b, null_path, absent_path, blocked, unavailable, malformed, timed_out }) do
+for _, directory in ipairs({
+	project_a,
+	project_b,
+	null_path,
+	absent_path,
+	unchanged,
+	blocked,
+	unavailable,
+	malformed,
+	timed_out,
+}) do
 	vim.fn.writefile({ "# fixture; never executed" }, directory .. "/.envrc")
 end
 
@@ -56,6 +68,7 @@ local results = {
 	[project_b] = { code = 0, stdout = '{"PATH":"/project/b/bin"}' },
 	[null_path] = { code = 0, stdout = '{"PATH":null,"PROJECT_SECRET":"do-not-copy"}' },
 	[absent_path] = { code = 0, stdout = '{"PROJECT_SECRET":"do-not-copy"}' },
+	[unchanged] = { code = 0, stdout = "" },
 	[blocked] = { code = 1, stdout = "", stderr = "direnv: error .envrc is blocked" },
 	[unavailable] = { code = 1, stdout = "", stderr = "direnv failed" },
 	[malformed] = { code = 0, stdout = "not json" },
@@ -120,6 +133,13 @@ assert(first.ok == true and first.status == "loaded", "approved environment did 
 assert(vim.env.PATH == "/project/a/bin", "approved project PATH was not applied")
 assert(vim.env.DIRENV_TEST_SECRET == "inherited-secret", "loader copied a project variable into Neovim")
 assert(requests[baseline_request_count + 1].env.PATH == "/baseline/path", "resolver reused a project PATH")
+vim.cmd("cd " .. vim.fn.fnameescape(unchanged))
+local unchanged_result = assert(loader.synchronize(unchanged))
+assert(
+	unchanged_result.ok == true and unchanged_result.status == "loaded",
+	"empty direnv export was not treated as an unchanged environment"
+)
+assert(vim.env.PATH == "/baseline/path", "empty direnv export did not preserve the inherited PATH")
 
 vim.cmd("cd " .. vim.fn.fnameescape(project_b))
 local second = assert(loader.synchronize(project_b))

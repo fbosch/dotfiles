@@ -132,6 +132,7 @@ local function parse_export(result)
 	if type(result.stdout) ~= "string" then
 		return "malformed", nil
 	end
+	-- An empty export is a valid no-op when Neovim inherited this environment.
 	if result.stdout == "" then
 		return "loaded", startup_path
 	end
