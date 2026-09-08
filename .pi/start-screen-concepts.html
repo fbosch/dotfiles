@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pi - auth and integration health</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        background: #171717;
+        color: #ddd;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+      }
+      main {
+        max-width: 1100px;
+        margin: auto;
+        padding: 32px 20px 140px;
+      }
+      h1 {
+        font-size: 22px;
+        font-weight: 500;
+      }
+      h2 {
+        font-size: 15px;
+        font-weight: 500;
+      }
+      p {
+        font-size: 12px;
+        line-height: 1.7;
+        color: #aaa;
+        max-width: 860px;
+      }
+      section {
+        margin: 36px 0 48px;
+      }
+      section[hidden] {
+        display: none;
+      }
+      .terminal {
+        padding: 24px;
+        background: #101010;
+        border: 1px solid #333;
+        overflow-x: auto;
+      }
+      .terminal:focus-visible {
+        outline: 2px solid #ccc;
+      }
+      pre {
+        margin: 0;
+        font:
+          14px/1.5 ui-monospace,
+          SFMono-Regular,
+          Consolas,
+          monospace;
+        white-space: pre;
+        width: max-content;
+      }
+      .accent {
+        color: #d5ad83;
+      }
+      .muted {
+        color: #999;
+      }
+      .good {
+        color: #b6c8a1;
+      }
+      .warn {
+        color: #dbc17e;
+      }
+      .error {
+        color: #e6a49b;
+      }
+      .initial-context-system {
+        color: #f0c674;
+      }
+      .initial-context-tools {
+        color: #8abeb7;
+      }
+      .initial-context-mcp {
+        color: #81a2be;
+      }
+      .initial-context-memory {
+        color: #b5bd68;
+      }
+      .initial-context-skills {
+        color: #9575cd;
+      }
+      .initial-context-free {
+        color: #666666;
+      }
+      .border {
+        color: #777;
+      }
+      nav {
+        position: fixed;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 4px;
+        background: #282828;
+        border: 1px solid #555;
+        padding: 7px;
+        max-width: calc(100% - 20px);
+        width: max-content;
+      }
+      nav a {
+        color: #bbb;
+        font-size: 12px;
+        padding: 9px;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      nav a[aria-current="page"] {
+        background: #ddd;
+        color: #171717;
+      }
+      nav a:hover,
+      nav a:focus-visible {
+        background: #555;
+        color: #fff;
+      }
+      footer {
+        border-top: 1px solid #333;
+        padding-top: 12px;
+      }
+      @media (max-width: 600px) {
+        main {
+          padding: 22px 12px 150px;
+        }
+        .terminal {
+          padding: 16px;
+        }
+        pre {
+          font-size: 12px;
+        }
+        nav a {
+          font-size: 11px;
+          padding: 8px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Throwaway prototypes. All auth, health, timing, update and usage values are samples. No live probes. -->
+    <main>
+      <header>
+        <p>PI / AUTH AND INTEGRATION HEALTH</p>
+        <h1>Accounts in view. Problems where they matter.</h1>
+        <p>
+          Three terminal headers with every sample repo-relevant auth profile, the
+          next account in the chain, and a compact integration-health row.
+          Problems expand into an explanation and next step. Each layout
+          demonstrates a different health state.
+        </p>
+        <p id="view-label">
+          Showing all three concepts. All session data is fictional.
+        </p>
+        <p>Preview legend: ✓ checked/connected (as applicable), ! needs attention, ? not checked.</p>
+      </header>
+      <section data-variant="1" aria-labelledby="title-1">
+        <h2 id="title-1">01 / Compact session brief</h2>
+        <p>
+          Healthy integrated launch. Neovim, Direnv, and a checked LSP fit on
+          one row; no extra health details interrupt the account overview.
+        </p>
+        <div
+          class="terminal"
+          tabindex="0"
+          role="region"
+          aria-label="Compact session brief terminal preview"
+        >
+          <pre><span class="accent">pi</span> <span class="muted">v0.85.1</span>
+<span class="muted">Branch: main</span>
+
+<span class="good">nvim ✓</span>  <span class="good">direnv ✓</span>  <span class="good">lsp ✓</span>
+
+Formatters: biome, eslint, prettier
+LSP: tsc, nil, lua-ls
+
+<span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
+│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
+│ <span class="muted">API key</span>           │                │              │                  │
+<span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
+<span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
+<span class="muted">Startup 420 ms   </span><span class="warn">2 plugin updates</span>
+
+
+<span class="border">--------------------------------------------------------------------------------</span>
+_
+<span class="border">--------------------------------------------------------------------------------</span>
+<span class="muted">~/dotfiles (main)
+12k / 200k                                                         sample-model</span>
+</pre>
+        </div>
+      </section>
+      <section data-variant="2" aria-labelledby="title-2">
+        <h2 id="title-2">02 / Comparison table with an environment warning</h2>
+        <p>
+          A launch outside Neovim omits its status entirely. A blocked project
+          environment gets an explanation above the account table. An unchecked
+          LSP is not shown as healthy.
+        </p>
+        <div
+          class="terminal"
+          tabindex="0"
+          role="region"
+          aria-label="Comparison table with environment warning terminal preview"
+        >
+          <!-- Example 2 Pi-rendered Markdown table presentation is the agreed pattern for future variations. -->
+          <pre><span class="accent">    o   o       pi</span> <span class="muted">v0.85.1</span>
+<span class="accent"> ===========</span>
+<span class="muted">Branch: feat/pi-header</span>
+<span class="muted">Path: ~/dotfiles.pi-header</span>
+<span class="accent">   ||   ||</span>
+
+<span class="warn">direnv !</span>  <span class="muted">lsp ?</span>
+<span class="warn">! The project environment has not been approved.</span>
+  Review .envrc before approving it with direnv allow.
+
+Formatters: biome, eslint, prettier
+LSP: tsc, nil, lua-ls
+
+<span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
+│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
+│ <span class="muted">API key</span>           │                │              │                  │
+<span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
+<span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
+<span class="muted">Startup 420 ms   </span><span class="warn">2 plugin updates</span>
+
+
+<span class="border">--------------------------------------------------------------------------------</span>
+_
+<span class="border">--------------------------------------------------------------------------------</span>
+<span class="muted">~/dotfiles.pi-header (feat/pi-header)
+12k / 200k                                                         sample-model</span>
+</pre>
+        </div>
+      </section>
+      <section data-variant="3" aria-labelledby="title-3">
+        <h2 id="title-3">03 / Connection details and auth table</h2>
+        <p>
+          An integrated launch reports a workspace mismatch. Health problems
+          expand first; per-account connection details remain visible below.
+        </p>
+        <div
+          class="terminal"
+          tabindex="0"
+          role="region"
+          aria-label="Connection details and auth table terminal preview"
+        >
+          <pre><span class="accent">pi</span>
+<span class="muted">Branch: main</span>
+
+<span class="error">nvim !</span>  <span class="good">direnv ✓</span>  <span class="warn">lsp !</span>
+<span class="error">! Neovim is attached to a different workspace.</span>
+  Pi: ~/dotfiles   Neovim: ~/other-project
+  Open the intended workspace in Neovim, then launch Pi from there.
+<span class="warn">! Language-server diagnostics are unavailable.</span>
+  Check the project's language-server setup before relying on diagnostics.
+
+Formatters: biome, eslint, prettier
+LSP: tsc, nil, lua-ls
+
+<span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
+│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
+│ <span class="muted">OAuth</span>             │                │              │                  │
+<span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
+│ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
+│ <span class="muted">API key</span>           │                │              │                  │
+<span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
+<span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
+<span class="muted">Startup 420 ms   </span><span class="warn">2 plugin updates</span>
+
+
+<span class="border">--------------------------------------------------------------------------------</span>
+_
+<span class="border">--------------------------------------------------------------------------------</span>
+<span class="muted">~/dotfiles (main)
+12k / 200k                                                         sample-model</span>
+</pre>
+        </div>
+      </section>
+      <footer>
+        <p>
+          All names, membership, usage, reset times, health results, and session
+          metrics are fictional. No credentials or live account data were read.
+          The compact 14-cell initial-context strip uses /context glyphs and
+          category colors; its values and distribution are fictional, and ⛶ is free space.
+          No health checks, language servers, or environment approvals were
+          triggered.
+        </p>
+        <p>
+          Neovim appears only for launches through the configured integration.
+          Its connection status includes workspace identity. LSP refers to Pi's
+          disk-backed diagnostics, not Neovim's unsaved buffers; not checked,
+          unavailable, and confirmed results stay distinct.
+        </p>
+        <p>
+          [next] marks the next candidate in the sample auth chain, not a
+          promise of successful switching. Live selection must use the existing
+          resolver and usage checks. Allowances belong to individual accounts
+          and are not added together. Bars are rounded. Banked-reset values are
+          samples; next expiry is distinct from allowance reset. "Not reported"
+          does not mean zero or unlimited.
+        </p>
+        <p>
+          The empty editor and footer are identical in every concept. Scroll
+          each terminal horizontally on narrow screens. This is an HTML-only
+          preview; no Pi settings or extension behavior changed.
+          Branch and paths are sample values; linked paths appear only for linked
+          worktrees. Auth usage is shown in the agreed Pi-rendered Markdown table.
+        </p>
+      </footer>
+    </main>
+    <nav aria-label="Session header concepts">
+      <a href="?variant=all" data-view="all">All three</a>
+      <a href="?variant=1" data-view="1">01 Brief</a>
+      <a href="?variant=2" data-view="2">02 Table</a>
+      <a href="?variant=3" data-view="3">03 Details</a>
+    </nav>
+    <script>
+      const requested = new URLSearchParams(location.search).get("variant");
+      const active = ["1", "2", "3"].includes(requested) ? requested : "all";
+      for (const section of document.querySelectorAll("[data-variant]")) {
+        section.hidden = active !== "all" && section.dataset.variant !== active;
+      }
+      for (const link of document.querySelectorAll("[data-view]")) {
+        if (link.dataset.view === active)
+          link.setAttribute("aria-current", "page");
+      }
+      if (active !== "all") {
+        document.getElementById("view-label").textContent =
+          "Showing " +
+          document.querySelector(`[data-variant="${active}"] h2`).textContent +
+          ". All session data is fictional.";
+      }
+    </script>
+  </body>
+</html>

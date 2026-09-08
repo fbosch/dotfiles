@@ -59,6 +59,7 @@ local function run_scenario(options)
 		commands = {},
 		responses = {},
 		trace = {},
+		intervals = {},
 		workers = {},
 		cancellations = {},
 		steps = options.steps,
@@ -135,7 +136,8 @@ local function run_scenario(options)
 			return scenario.now / 1000
 		end,
 		sleep = function() end,
-		select = function()
+		select = function(_, _, interval)
+			scenario.intervals[#scenario.intervals + 1] = interval
 			scenario.step_index = scenario.step_index + 1
 			local step = assert(scenario.steps[scenario.step_index], "monitor did not terminate")
 			if step.advance then
@@ -234,9 +236,6 @@ local function run_scenario(options)
 			if value == "layers" then
 				return scenario.layers
 			end
-			if value == "monitors" then
-				return { { refreshRate = scenario.refresh_rate } }
-			end
 			if value == "workspace" then
 				return { name = "1" }
 			end
@@ -307,6 +306,17 @@ local function run_scenario(options)
 	end
 	return scenario
 end
+
+local one_shot_deadline = run_scenario({
+	steps = {
+		{ message = "pointer-zone show" },
+		{ advance = 199 },
+		{ advance = 1 },
+		{ message = "quit" },
+	},
+})
+assert(math.abs(one_shot_deadline.intervals[2] - 0.2) < 0.0001, "show must wait on its exact deadline")
+assert(math.abs(one_shot_deadline.intervals[3] - 0.001) < 0.0001, "early wakeups must retain the remaining deadline")
 
 local acknowledged_before_effects = run_scenario({
 	steps = {

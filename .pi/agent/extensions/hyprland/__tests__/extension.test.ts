@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { rm, writeFile } from "node:fs/promises";
 import type {
   ExtensionAPI,
+  ExtensionCommandContext,
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -17,15 +18,33 @@ const environment = {
   WAYLAND_DISPLAY: "wayland-1",
 };
 
+type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+
 function captureRegistration() {
   let tool: ToolDefinition | undefined;
+  let command: { handler: CommandHandler } | undefined;
+  let commandName = "";
+  const messages: Array<{ content: string; options?: unknown }> = [];
   const pi = {
     registerTool(definition: ToolDefinition) {
       tool = definition;
     },
+    registerCommand(name: string, definition: { handler: CommandHandler }) {
+      commandName = name;
+      command = definition;
+    },
+    sendUserMessage(content: string, options?: unknown) {
+      messages.push({ content, options });
+    },
   } as unknown as ExtensionAPI;
 
-  return { pi, getTool: () => tool };
+  return {
+    pi,
+    getTool: () => tool,
+    getCommand: () => command,
+    getCommandName: () => commandName,
+    getMessages: () => messages,
+  };
 }
 
 describe("Hyprland extension", () => {
@@ -40,12 +59,147 @@ describe("Hyprland extension", () => {
     expect(supportsHyprlandSession(environment)).toBeTrue();
   });
 
-  test("does not register tools outside Hyprland", () => {
-    const { pi, getTool } = captureRegistration();
+  test("keeps the hypr-prop command visible outside Hyprland while gating the tool", () => {
+    const { pi, getTool, getCommandName } = captureRegistration();
 
     registerHyprlandExtension(pi, { environment: {} });
 
     expect(getTool()).toBeUndefined();
+    expect(getCommandName()).toBe("hypr-prop");
+  });
+  test("recovers the session environment from systemd before running hyprprop", async () => {
+    const { pi, getCommand, getMessages } = captureRegistration();
+    const calls: Array<{
+      command: string;
+      args: string[];
+      cwd: string;
+      environment: Readonly<Record<string, string>> | undefined;
+    }> = [];
+    const commandRunner: HyprlandCommandRunner = async (
+      command,
+      args,
+      cwd,
+      _signal,
+      commandEnvironment,
+    ) => {
+      calls.push({ command, args, cwd, environment: commandEnvironment });
+      if (command === "systemctl") {
+        return {
+          stdout:
+            "HYPRLAND_INSTANCE_SIGNATURE=fixture\nXDG_RUNTIME_DIR=/run/user/1000\nWAYLAND_DISPLAY=wayland-1\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      return {
+        stdout: '{"class":"kitty"}\n',
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+
+    registerHyprlandExtension(pi, {
+      environment: { XDG_RUNTIME_DIR: "/run/user/1000" },
+      commandRunner,
+    });
+    const command = getCommand();
+    if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+    const notifications: string[] = [];
+    await command.handler("", {
+      cwd: "/tmp",
+      isIdle: () => true,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionCommandContext);
+
+    expect(calls).toEqual([
+      {
+        command: "systemctl",
+        args: ["--user", "show-environment"],
+        cwd: "/tmp",
+        environment: undefined,
+      },
+      {
+        command: "hyprprop",
+        args: ["--raw"],
+        cwd: "/tmp",
+        environment: {
+          HYPRLAND_INSTANCE_SIGNATURE: "fixture",
+          XDG_RUNTIME_DIR: "/run/user/1000",
+          WAYLAND_DISPLAY: "wayland-1",
+        },
+      },
+    ]);
+    expect(notifications).toEqual([]);
+    expect(getMessages()).toEqual([
+      {
+        content: expect.stringContaining('"class":"kitty"'),
+        options: { expandPromptTemplates: false },
+      },
+    ]);
+  });
+  test("runs hyprprop and sends compact selected-window properties to the agent", async () => {
+    const { pi, getCommand, getCommandName, getMessages } = captureRegistration();
+    const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+    const commandRunner: HyprlandCommandRunner = async (command, args, cwd) => {
+      calls.push({ command, args, cwd });
+      return {
+        stdout:
+          '{"address":"0x1","mapped":true,"hidden":false,"visible":true,"acceptsInput":true,"at":[1,2],"size":[3,4],"workspace":{"id":1,"name":"1"},"floating":false,"monitor":0,"class":"kitty","title":"Fixture","pid":42,"xwayland":false,"pinned":false,"fullscreen":0,"tags":[],"contentType":"none","stableId":"0xstable"}\n',
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const command = getCommand();
+    if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+    const notifications: string[] = [];
+    await command.handler("", {
+      cwd: "/tmp",
+      isIdle: () => true,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionCommandContext);
+
+    expect(getCommandName()).toBe("hypr-prop");
+    expect(calls).toEqual([{ command: "hyprprop", args: ["--raw"], cwd: "/tmp" }]);
+    expect(notifications).toEqual([]);
+    expect(getMessages()).toEqual([
+      {
+        content: expect.stringContaining(
+          '{"address":"0x1","at":[1,2],"size":[3,4],"workspace":{"id":1,"name":"1"},"monitor":0,"class":"kitty","title":"Fixture","pid":42,"stableId":"0xstable"}',
+        ),
+        options: { expandPromptTemplates: false },
+      },
+    ]);
+    expect(getMessages()[0]?.content).not.toContain('"hidden"');
+  });
+
+  test("sends the complete selected-window JSON in raw mode", async () => {
+    const { pi, getCommand, getMessages } = captureRegistration();
+    const rawOutput = '{"address":"0x1","hidden":false,"title":"Fixture","tags":[]}';
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: `${rawOutput}\n`,
+      stderr: "",
+      exitCode: 0,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const command = getCommand();
+    if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+    const notifications: string[] = [];
+    await command.handler("raw", {
+      cwd: "/tmp",
+      isIdle: () => true,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionCommandContext);
+
+    const message = getMessages()[0]?.content ?? "";
+    expect(message).toContain("Here is the selected window's raw JSON:");
+    expect(message).toContain(rawOutput);
+    expect(notifications).toEqual([]);
   });
 
   test("registers a screenshot tool and returns Pi image content", async () => {
@@ -166,6 +320,7 @@ describe("Hyprland extension", () => {
       registerTool(definition: ToolDefinition) {
         tool = definition;
       },
+      registerCommand() {},
       exec: async () => {
         throw new Error("spawn ENOENT");
       },

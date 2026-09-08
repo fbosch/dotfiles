@@ -1,4 +1,7 @@
 {
+  "app.clipboard.pasteImage": [
+    "ctrl+v"
+  ],
   "app.model.cycleForward": [],
   "app.models.toggleProvider": [],
   "app.session.togglePath": [],

@@ -47,6 +47,14 @@ describe("TOON transformer", () => {
     expect(content?.[0]?.type).toBe("text");
   });
 
+  test("compacts JSON from arbitrary tools by default", () => {
+    const transformer = createToonTransformer();
+    const content = transformer.transformResult(resultEvent({ toolName: "read" }));
+
+    expect(content).toBeDefined();
+    expect(content?.[0]?.type).toBe("text");
+  });
+
   test("leaves ineligible, failed, short, invalid, and mixed results unchanged", () => {
     const transformer = createToonTransformer("bash");
 

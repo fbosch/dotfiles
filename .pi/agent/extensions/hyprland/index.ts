@@ -7,6 +7,7 @@ import {
   type AgentToolResult,
   defineTool,
   type ExtensionAPI,
+  type ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -24,8 +25,8 @@ export type HyprlandCommandRunner = (
   args: string[],
   cwd: string,
   signal?: AbortSignal,
+  environment?: Readonly<Record<string, string>>,
 ) => Promise<CommandResult>;
-
 type Geometry = {
   x: number;
   y: number;
@@ -91,12 +92,21 @@ const CDP_REQUEST_TIMEOUT_MS = 5_000;
 const CDP_SOCKET_TIMEOUT_MS = 5_000;
 const CDP_CLEANUP_TIMEOUT_MS = 1_000;
 
-function createCommandRunner(pi: ExtensionAPI): HyprlandCommandRunner {
-  return async (command, args, cwd, signal) => {
+function createCommandRunner(pi: ExtensionAPI, timeoutMs?: number): HyprlandCommandRunner {
+  return async (command, args, cwd, signal, environment) => {
     try {
-      const result = await pi.exec(command, args, {
+      const executable = environment === undefined ? command : "env";
+      const executableArgs =
+        environment === undefined
+          ? args
+          : [
+              ...Object.entries(environment).map(([name, value]) => `${name}=${value}`),
+              command,
+              ...args,
+            ];
+      const result = await pi.exec(executable, executableArgs, {
         cwd,
-        timeout: COMMAND_TIMEOUT_MS,
+        ...(timeoutMs === undefined ? {} : { timeout: timeoutMs }),
         ...(signal === undefined ? {} : { signal }),
       });
       return { stdout: result.stdout, stderr: result.stderr, exitCode: result.code };
@@ -1164,12 +1174,252 @@ function createHyprWindowScreenshotTool(
   });
 }
 
-export function supportsHyprlandSession(environment: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(
-    environment.HYPRLAND_INSTANCE_SIGNATURE &&
-      environment.XDG_RUNTIME_DIR &&
-      environment.WAYLAND_DISPLAY,
+const HYPRPROP_COMMAND = "hyprprop";
+const HYPRPROP_ARGS = ["--raw"];
+const HYPRPROP_COMPACT_FIELDS = [
+  "address",
+  "at",
+  "size",
+  "workspace",
+  "monitor",
+  "class",
+  "title",
+  "pid",
+  "floating",
+  "pinned",
+  "fullscreen",
+  "tags",
+  "contentType",
+  "stableId",
+  "hidden",
+  "mapped",
+  "visible",
+  "acceptsInput",
+  "xwayland",
+];
+const HYPRPROP_DEFAULT_BOOLEAN_VALUES: Readonly<Record<string, boolean>> = {
+  hidden: false,
+  mapped: true,
+  visible: true,
+  acceptsInput: true,
+  floating: false,
+  pinned: false,
+  xwayland: false,
+};
+
+type HyprPropMode = "compact" | "raw";
+
+function parseHyprPropMode(args: string): HyprPropMode | null {
+  const mode = args.trim();
+  if (mode === "" || mode === "compact") return "compact";
+  if (mode === "raw" || mode === "--raw") return "raw";
+  return null;
+}
+
+function isCompactHyprPropValue(key: string, value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string") {
+    return value !== "" && !(key === "contentType" && value === "none");
+  }
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "boolean") {
+    const defaultValue = HYPRPROP_DEFAULT_BOOLEAN_VALUES[key];
+    return defaultValue === undefined || value !== defaultValue;
+  }
+  if (key === "fullscreen" && value === 0) return false;
+  return true;
+}
+
+function compactHyprPropOutput(output: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    throw new Error("hyprprop returned invalid JSON");
+  }
+  const properties = objectValue(parsed);
+  if (properties === null) throw new Error("hyprprop returned a JSON value instead of an object");
+  const compactProperties = Object.fromEntries(
+    HYPRPROP_COMPACT_FIELDS.flatMap((key) => {
+      const value = properties[key];
+      return isCompactHyprPropValue(key, value) ? [[key, value]] : [];
+    }),
   );
+  return JSON.stringify(compactProperties);
+}
+
+function hyprPropMessage(output: string, mode: HyprPropMode): string {
+  const description =
+    mode === "raw"
+      ? "Here is the selected window's raw JSON:"
+      : "Here are the selected window's compact properties:";
+  return [
+    `The \`hyprprop\` window selection completed. ${description}`,
+    "",
+    "```json",
+    output,
+    "```",
+  ].join("\n");
+}
+type HyprlandSessionEnvironment = {
+  readonly HYPRLAND_INSTANCE_SIGNATURE: string;
+  readonly XDG_RUNTIME_DIR: string;
+  readonly WAYLAND_DISPLAY: string;
+};
+
+function completeHyprlandSessionEnvironment(
+  environment: Readonly<Record<string, string | undefined>>,
+): HyprlandSessionEnvironment | null {
+  const signature = environment.HYPRLAND_INSTANCE_SIGNATURE;
+  const runtimeDirectory = environment.XDG_RUNTIME_DIR;
+  const waylandDisplay = environment.WAYLAND_DISPLAY;
+  if (signature === undefined || signature === "") return null;
+  if (runtimeDirectory === undefined || runtimeDirectory === "") return null;
+  if (waylandDisplay === undefined || waylandDisplay === "") return null;
+  return {
+    HYPRLAND_INSTANCE_SIGNATURE: signature,
+    XDG_RUNTIME_DIR: runtimeDirectory,
+    WAYLAND_DISPLAY: waylandDisplay,
+  };
+}
+
+function parseHyprlandSessionEnvironment(output: string): Record<string, string> {
+  const environment: Record<string, string> = {};
+  for (const line of output.split(/\r?\n/)) {
+    const separator = line.indexOf("=");
+    if (separator <= 0) continue;
+    const name = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    if (value === "") continue;
+    switch (name) {
+      case "HYPRLAND_INSTANCE_SIGNATURE":
+        environment.HYPRLAND_INSTANCE_SIGNATURE = value;
+        break;
+      case "XDG_RUNTIME_DIR":
+        environment.XDG_RUNTIME_DIR = value;
+        break;
+      case "WAYLAND_DISPLAY":
+        environment.WAYLAND_DISPLAY = value;
+        break;
+    }
+  }
+  return environment;
+}
+
+async function resolveHyprlandSessionEnvironment(
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+): Promise<HyprlandSessionEnvironment | null> {
+  // Neovim and Pi can outlive Hyprland startup or replacement, so refresh missing values from UWSM's user environment.
+  const inherited = completeHyprlandSessionEnvironment(environment);
+  if (inherited !== null) return inherited;
+
+  const result = await runCommand("systemctl", ["--user", "show-environment"], cwd);
+  if (result.exitCode !== 0) return null;
+  return completeHyprlandSessionEnvironment({
+    ...environment,
+    ...parseHyprlandSessionEnvironment(result.stdout),
+  });
+}
+
+function registerHyprPropCommand(
+  pi: ExtensionAPI,
+  environment: NodeJS.ProcessEnv,
+  runCommand: HyprlandCommandRunner,
+): void {
+  pi.registerCommand("hypr-prop", {
+    description: "Select a Hyprland window and send its properties to the agent",
+    handler: async (args, ctx: ExtensionCommandContext) => {
+      const mode = parseHyprPropMode(args);
+      if (mode === null) {
+        ctx.ui.notify("Usage: /hypr-prop [compact|raw]", "error");
+        return;
+      }
+
+      if (ctx.isIdle() === false) {
+        ctx.ui.notify("The agent is busy; run /hypr-prop when it is idle.", "warning");
+        return;
+      }
+
+      let sessionEnvironment: HyprlandSessionEnvironment | null;
+      try {
+        sessionEnvironment = await resolveHyprlandSessionEnvironment(
+          environment,
+          ctx.cwd,
+          runCommand,
+        );
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not resolve the active Hyprland environment: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+      if (sessionEnvironment === null) {
+        ctx.ui.notify(
+          "Pi could not access the active Hyprland environment; restart Pi from the current desktop session and try again.",
+          "error",
+        );
+        return;
+      }
+
+      let result: CommandResult;
+      try {
+        result = await runCommand(
+          HYPRPROP_COMMAND,
+          HYPRPROP_ARGS,
+          ctx.cwd,
+          undefined,
+          sessionEnvironment,
+        );
+      } catch (error) {
+        ctx.ui.notify(
+          `hyprprop failed: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+
+      if (result.exitCode !== 0) {
+        const detail =
+          result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`;
+        ctx.ui.notify(`hyprprop failed: ${detail}`, "error");
+        return;
+      }
+      const rawOutput = result.stdout.trim();
+      if (rawOutput === "") {
+        ctx.ui.notify("No window was selected.", "warning");
+        return;
+      }
+
+      let output = rawOutput;
+      if (mode === "compact") {
+        try {
+          output = compactHyprPropOutput(rawOutput);
+        } catch (error) {
+          ctx.ui.notify(
+            `Could not compact hyprprop results: ${error instanceof Error ? error.message : String(error)}`,
+            "error",
+          );
+          return;
+        }
+      }
+
+      try {
+        pi.sendUserMessage(hyprPropMessage(output, mode), { expandPromptTemplates: false });
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not send hyprprop results to the agent: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+      }
+    },
+  });
+}
+
+export function supportsHyprlandSession(environment: NodeJS.ProcessEnv = process.env): boolean {
+  return completeHyprlandSessionEnvironment(environment) !== null;
 }
 
 export interface HyprlandExtensionOptions {
@@ -1182,11 +1432,11 @@ export function registerHyprlandExtension(
   options: HyprlandExtensionOptions = {},
 ): void {
   const environment = options.environment ?? process.env;
+  const commandRunner = options.commandRunner ?? createCommandRunner(pi);
+  registerHyprPropCommand(pi, environment, commandRunner);
   if (supportsHyprlandSession(environment) === false) return;
-
-  pi.registerTool(
-    createHyprWindowScreenshotTool(options.commandRunner ?? createCommandRunner(pi), environment),
-  );
+  const runCommand = options.commandRunner ?? createCommandRunner(pi, COMMAND_TIMEOUT_MS);
+  pi.registerTool(createHyprWindowScreenshotTool(runCommand, environment));
 }
 
 export default function hyprlandExtension(pi: ExtensionAPI): void {

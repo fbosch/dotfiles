@@ -21,9 +21,29 @@ local function activate_tab_key(number, tab_index)
 	}
 end
 
+local function paste_clipboard(window, pane)
+	-- Pi must receive Ctrl+V to inspect image/png; WezTerm's paste action only sends text.
+	if pane:get_title():match("^π %-") then
+		window:perform_action(wezterm.action.SendKey({ key = "V", mods = "CTRL" }), pane)
+		return
+	end
+
+	window:perform_action(wezterm.action.PasteFrom("Clipboard"), pane)
+end
 return function(config)
 	config.keys = {
 		-- Herdr's legacy path cannot preserve Ctrl-Escape; use Ctrl-\\ end-to-end.
+		-- Keep the global screenshot chord from racing WezTerm's default copy action.
+		{
+			key = "C",
+			mods = "CTRL|SHIFT",
+			action = wezterm.action.DisableDefaultAssignment,
+		},
+		{
+			key = "V",
+			mods = "CTRL|SHIFT",
+			action = wezterm.action_callback(paste_clipboard),
+		},
 		{
 			key = "Escape",
 			mods = "CTRL",

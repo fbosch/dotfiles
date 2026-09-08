@@ -177,7 +177,7 @@ mkdir -p "${shots_dir}"
 timestamp="$(date '+%Y-%m-%d_%H-%M-%S')"
 file="${shots_dir}/screenshot-${mode}-${timestamp}.png"
 
-if ! grimblast save "${target}" "${file}"; then
+if ! grimblast copysave "${target}" "${file}"; then
     if [[ "${target}" == "area" && ! -f "${file}" ]]; then
         # Assume user cancelled the selection.
         exit 0
@@ -190,10 +190,6 @@ if ! grimblast save "${target}" "${file}"; then
         "Screenshot failed" \
         "Could not capture ${label,,}."
     exit 1
-fi
-
-if command -v wl-copy >/dev/null 2>&1; then
-    wl-copy < "${file}" || true
 fi
 
 if command -v notify-send >/dev/null 2>&1; then

@@ -21,16 +21,21 @@ if not is_loaded() then
 	return
 end
 
+---@type AdaptiveSoftShadowConfig
+local adaptive_soft_shadow_config = {
+	blend_mode = "soft-light",
+	color = "rgba(00000033)",
+	enabled = true,
+	range = 40,
+	render_power = 4,
+	offset = "0 2",
+	-- strength = 0.3,
+	active_strength = 0.8,
+	inactive_strength = 0.3,
+}
+
 hl.config({
 	plugin = {
-		adaptive_soft_shadow = {
-			blend_mode = "hard-light",
-			color = "rgba(00000040)",
-			enabled = true,
-			range = 40,
-			render_power = 2,
-			offset = "0 3",
-			strength = 1,
-		},
+		adaptive_soft_shadow = adaptive_soft_shadow_config,
 	},
 })

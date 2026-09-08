@@ -7,15 +7,18 @@ end
 
 hl.plugin.load(plugin_path)
 
+---@type InsetBorderConfig
+local inset_border_config = {
+	enabled = true,
+	thickness = 1,
+	inset = 0,
+	active_color = "rgba(ffffff73)",
+	inactive_color = "rgba(ffffff40)",
+	blend_mode = "soft-light",
+}
+
 hl.config({
 	plugin = {
-		inset_border = {
-			enabled = true,
-			thickness = 1,
-			inset = 0,
-			active_color = "rgba(ffffff73)",
-			inactive_color = "rgba(ffffff40)",
-			blend_mode = "soft-light",
-		},
+		inset_border = inset_border_config,
 	},
 })

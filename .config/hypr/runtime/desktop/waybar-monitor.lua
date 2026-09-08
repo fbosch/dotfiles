@@ -17,7 +17,7 @@ local show_delay_ms = 200
 local hide_delay_ms = 300
 local launch_timeout_ms = 10000
 local worker_shutdown_wait_ms = 500
-local fast_interval_ms = 83
+local worker_interval_ms = 83
 local slow_interval_ms = 1000
 local process_helper = config_dir .. "/runtime/desktop/waybar-process.sh"
 local pip_control_socket = "timeout --foreground 1s nc -w 1 -U "
@@ -605,6 +605,10 @@ local function handle_control(message)
 	return handler()
 end
 
+local function remaining_delay(started_at, delay, now)
+	return math.max(0, delay - (now - started_at))
+end
+
 local function update_visibility()
 	local now = now_ms()
 	if effective_visible ~= true then
@@ -615,14 +619,16 @@ local function update_visibility()
 		end
 
 		show_started_at = show_started_at or now
-		if
-			now - show_started_at >= show_delay_ms
-			and json.object(request("j/activeworkspace")).name ~= gaming.workspace
-		then
-			show_waybar()
-			show_started_at, hide_started_at = nil, nil
+		local remaining = remaining_delay(show_started_at, show_delay_ms, now)
+		if remaining > 0 then
+			return remaining
 		end
-		return fast_interval_ms
+
+		show_started_at = nil
+		if json.object(request("j/activeworkspace")).name ~= gaming.workspace then
+			show_waybar()
+		end
+		return slow_interval_ms
 	end
 
 	show_started_at = nil
@@ -632,11 +638,16 @@ local function update_visibility()
 	end
 
 	hide_started_at = hide_started_at or now
-	if now - hide_started_at >= hide_delay_ms and not hide_probe_worker then
-		start_hide_probe_worker()
-		hide_started_at = nil
+	local remaining = remaining_delay(hide_started_at, hide_delay_ms, now)
+	if remaining > 0 then
+		return remaining
 	end
-	return fast_interval_ms
+
+	if not hide_probe_worker then
+		start_hide_probe_worker()
+	end
+	hide_started_at = nil
+	return slow_interval_ms
 end
 
 local function stop_worker(worker)
@@ -702,6 +713,10 @@ local function run()
 		reconcile()
 		local interval = update_visibility()
 		reconcile()
+		-- Child completion has no readable FD; its polling must not quantize pointer deadlines.
+		if launch_worker or visibility_worker or pip_worker or hide_probe_worker then
+			interval = math.min(interval, worker_interval_ms)
+		end
 		local ready = socket.select({ control_socket:reader() }, nil, interval / 1000)
 		if #ready > 0 then
 			local action = control_socket:handle_ready(handle_control)

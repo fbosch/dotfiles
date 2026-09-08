@@ -6,7 +6,6 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { encode } from "@toon-format/toon";
 
-const DEFAULT_ELIGIBLE_TOOLS = ["bash", "exec"];
 const MAX_CACHED_OUTPUTS = 100;
 const MAX_CACHE_BYTES = 8_000_000;
 const MAX_JSON_BYTES = 1_000_000;
@@ -23,9 +22,12 @@ interface ConvertedOutput {
   toon: string;
 }
 
-function eligibleTools(raw: string | undefined): ReadonlySet<string> {
+function eligibleTools(raw: string | undefined): ReadonlySet<string> | undefined {
+  if (raw === undefined) return undefined;
+
   return new Set(
-    (raw === undefined ? DEFAULT_ELIGIBLE_TOOLS : raw.split(","))
+    raw
+      .split(",")
       .map((tool) => tool.trim().toLowerCase())
       .filter(Boolean),
   );
@@ -197,7 +199,11 @@ export function createToonTransformer(
     transformResult(
       event: Pick<ToolResultEvent, "content" | "isError" | "toolName">,
     ): ToolResultEvent["content"] | undefined {
-      if (event.isError || tools.has(event.toolName.toLowerCase()) === false) return undefined;
+      if (
+        event.isError ||
+        (tools !== undefined && tools.has(event.toolName.toLowerCase()) === false)
+      )
+        return undefined;
       if (event.content.length !== 1) return undefined;
 
       const content = event.content[0];

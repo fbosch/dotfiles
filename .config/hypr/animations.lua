@@ -26,15 +26,7 @@ hl.animation({ leaf = "border", enabled = true, speed = 1.75, spring = "windowQu
 hl.animation({ leaf = "windows", enabled = true, speed = 4.79, spring = "window" })
 M.restore_windows_move()
 
-if focus_animation.ready then
-	hl.animation({
-		leaf = "windowsFocus",
-		enabled = true,
-		speed = 3,
-		bezier = "windowFocus",
-		style = "popin 99.77%",
-	})
-end
+focus_animation.configure()
 hl.animation({ leaf = "windowsIn", enabled = true, speed = 1.5, spring = "windowQuick", style = "popin 96%" })
 hl.animation({ leaf = "windowsOut", enabled = true, speed = 0.8, spring = "windowInstant", style = "popin 94%" })
 hl.animation({ leaf = "fadeIn", enabled = true, speed = 1.73, spring = "windowQuick" })
