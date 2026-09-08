@@ -39,7 +39,7 @@
       "source": "Effect-TS/skills",
       "sourceType": "github",
       "skillPath": "skills/effect-ts/SKILL.md",
-      "computedHash": "261b9f3f0a89038cd7e4f581755b79c839ca747c7607c14b41c083db0ca467d6"
+      "computedHash": "6bdb9b95aa83071eca2f67ae947b7d398a22e9e6e08f6cfa35de9516b03efa6e"
     },
     "github-actions-docs": {
       "source": "xixu-me/skills",
@@ -69,7 +69,7 @@
       "source": "herdrdev/herdr",
       "sourceType": "github",
       "skillPath": "skills/herdr/SKILL.md",
-      "computedHash": "77b9fb624aebcbfccfbc84d7ef3b938c70ecb9198c8bbfee95b11751ba20bfb7"
+      "computedHash": "d2ee5846631446f22067c52980d100c9355df48106a679a04aab1c7a383b5f41"
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",

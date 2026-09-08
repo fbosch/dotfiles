@@ -79,7 +79,22 @@ end)
 
 describe("picture-in-picture identity", function()
 	it("matches only the exact class and title", function()
-		assert_equal(pip.matches({ class = pip.class, title = pip.title }), true, "exact identity")
+		assert_equal(pip.matches({ class = pip.class, title = pip.title }), true, "Zen identity")
+		assert_equal(
+			pip.matches({ class = "app.zen_browser.zen-pip", title = pip.title }),
+			true,
+			"relabeled Zen identity"
+		)
+		assert_equal(
+			pip.matches({ class = "one.ablaze.floorp-pip", title = pip.title }),
+			true,
+			"relabeled Floorp identity"
+		)
+		assert_equal(
+			pip.matches({ class = "helium-pip", title = "Picture in picture" }),
+			true,
+			"relabeled Helium identity"
+		)
 		assert_equal(pip.matches({ class = pip.class, title = "Browser" }), false, "different title")
 		assert_equal(pip.matches({ class = "other", title = pip.title }), false, "different class")
 		assert_equal(pip.matches(nil), false, "missing window")
@@ -99,7 +114,7 @@ describe("picture-in-picture window rules", function()
 		_G.hl = nil
 
 		local base_rule = rules[1]
-		assert_equal(base_rule.match.class, "^app[.]zen_browser[.]zen-pip$", "pre-map PiP identity")
+		assert_equal(base_rule.match.class, pip.pip_class_pattern, "pre-map PiP identity")
 		assert_equal(base_rule.match.title, nil, "current title")
 		assert_equal(base_rule.match.initial_title, nil, "initial title")
 		assert.is_true(base_rule.no_initial_focus)
@@ -110,6 +125,8 @@ describe("picture-in-picture window rules", function()
 		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
 		assert_equal(base_rule.persistent_size, nil, "persistent size")
 		assert_equal(rules[2].animation, "slide bottom", "default animation")
+		assert_equal(rules[2].match.class, pip.pip_class_pattern, "animation PiP identity")
+		assert_equal(rules[7].match.class, pip.pip_class_pattern, "placement PiP identity")
 		local corner_animations = {}
 		for index = 3, 6 do
 			corner_animations[rules[index].match.tag] = rules[index].animation

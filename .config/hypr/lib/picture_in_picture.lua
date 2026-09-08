@@ -1,8 +1,21 @@
 local json = require("lib.json")
 
 local M = {
-	class = "app.zen_browser.zen-pip",
+	class = "app.zen_browser.zen",
 	title = "Picture-in-Picture",
+	pip_class_pattern = "^(app[.]zen_browser[.]zen-pip|one[.]ablaze[.]floorp-pip|helium-pip)$",
+	classes = {
+		["app.zen_browser.zen"] = true,
+		["app.zen_browser.zen-pip"] = true,
+		["one.ablaze.floorp"] = true,
+		["one.ablaze.floorp-pip"] = true,
+		helium = true,
+		["helium-pip"] = true,
+	},
+	titles = {
+		["Picture-in-Picture"] = true,
+		["Picture in picture"] = true,
+	},
 	margin = 15,
 	overlap_gap = 15,
 	snap_vicinity = 100,
@@ -31,7 +44,7 @@ M.corner_moves = {
 M.normal_move = M.corner_moves["bottom-right"]
 
 function M.matches(window)
-	return window ~= nil and window.class == M.class and window.title == M.title
+	return window ~= nil and M.classes[window.class] == true and M.titles[window.title] == true
 end
 
 -- Control protocol for pip-monitor.sock. Single owner of the wire format:
@@ -151,7 +164,7 @@ end
 function M.register_window_rules()
 	-- Early static matching must float PiP before Hyprland predicts a tiled initial size.
 	hl.window_rule({
-		match = { class = "^app[.]zen_browser[.]zen-pip$" },
+		match = { class = M.pip_class_pattern },
 		float = true,
 		no_initial_focus = true,
 		focus_on_activate = false,
@@ -160,12 +173,12 @@ function M.register_window_rules()
 		suppress_event = "maximize",
 		rounding = M.rounding,
 	})
-	hl.window_rule({ match = { title = "([Pp]icture-in-[Pp]icture)" }, animation = M.default_animation })
+	hl.window_rule({ match = { class = M.pip_class_pattern }, animation = M.default_animation })
 	for _, corner in pairs(M.corners) do
 		hl.window_rule({ match = { tag = corner.tag }, animation = corner.animation })
 	end
 	hl.window_rule({
-		match = { initial_title = "(^(Picture-in-Picture)$)" },
+		match = { class = M.pip_class_pattern },
 		move = M.normal_move,
 	})
 end
