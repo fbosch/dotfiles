@@ -4,12 +4,11 @@ local bit = require("bit")
 pcall(
 	ffi.cdef,
 	[[
-typedef int pid_t;
-pid_t fork(void);
-int setpgid(pid_t pid, pid_t pgid);
-pid_t getpgid(pid_t pid);
-int kill(pid_t pid, int sig);
-pid_t waitpid(pid_t pid, int *status, int options);
+int fork(void);
+int setpgid(int pid, int pgid);
+int getpgid(int pid);
+int kill(int pid, int sig);
+int waitpid(int pid, int *status, int options);
 ]]
 )
 
@@ -65,7 +64,12 @@ function M.start(label, run, metadata)
 end
 
 function M.reap(worker)
-	return wait(worker, wnohang)
+	local finished, ok = wait(worker, wnohang)
+	if finished then
+		-- A command can outlive the Lua leader; completion retires the whole owned group.
+		ffi.C.kill(-worker.pid, sigkill)
+	end
+	return finished, ok
 end
 
 function M.terminate(worker)
@@ -78,6 +82,7 @@ end
 
 function M.wait(worker)
 	local _, ok = wait(worker, 0)
+	ffi.C.kill(-worker.pid, sigkill)
 	return ok
 end
 

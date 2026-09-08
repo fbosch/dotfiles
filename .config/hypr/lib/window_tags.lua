@@ -2,6 +2,7 @@ local M = {
 	non_resizable = "non-resizable",
 	passthrough_exempt = "passthrough-exempt",
 	intentionally_frozen = "intentionally-frozen",
+	pip = "pip",
 	popup = "popup",
 	privacy = "privacy",
 }

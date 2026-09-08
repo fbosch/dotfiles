@@ -41,6 +41,7 @@ local function run_scenario(options)
 		now = options.now or 0,
 		layers = options.layers or {},
 		visibility_state = options.visibility_state,
+		launch_state = options.launch_state,
 		process_running = options.process_running == true,
 		launch_ok = options.launch_ok ~= false,
 		signal_show_ok = options.signal_show_ok ~= false,
@@ -94,19 +95,30 @@ local function run_scenario(options)
 		return control
 	end
 	function kit:read_file(path)
-		assert(path == "/fixture/waybar-visibility.state")
-		return scenario.visibility_state
+		if path == "/fixture/waybar-visibility.state" then
+			return scenario.visibility_state
+		end
+		assert(path == "/fixture/waybar-launch.pending")
+		return scenario.launch_state
 	end
 	function kit:write_shared_file(path, content)
-		assert(path == "/fixture/waybar-visibility.state")
 		if scenario.fail_write then
 			error("simulated publication failure")
 		end
-		scenario.visibility_state = content
+		if path == "/fixture/waybar-visibility.state" then
+			scenario.visibility_state = content
+			return
+		end
+		assert(path == "/fixture/waybar-launch.pending")
+		scenario.launch_state = content
 	end
 	function kit:remove_file(path)
-		assert(path == "/fixture/waybar-visibility.state")
-		scenario.visibility_state = nil
+		if path == "/fixture/waybar-visibility.state" then
+			scenario.visibility_state = nil
+		else
+			assert(path == "/fixture/waybar-launch.pending")
+			scenario.launch_state = nil
+		end
 		return true
 	end
 
@@ -264,11 +276,19 @@ local function run_scenario(options)
 	package.loaded["runtime.desktop.waybar-workers"] = fake_workers
 
 	local original_exit = os.exit
+	local original_getenv = os.getenv
+	os.getenv = function(name)
+		if name == "HYPRLAND_INSTANCE_SIGNATURE" then
+			return "fixture-instance"
+		end
+		return original_getenv(name)
+	end
 	os.exit = function(status)
 		error({ exit_status = status })
 	end
 	local ok, result = pcall(dofile, monitor)
 	os.exit = original_exit
+	os.getenv = original_getenv
 	if not ok then
 		if type(result) ~= "table" or result.exit_status ~= 75 then
 			error(result, 0)
@@ -348,6 +368,7 @@ local hide_worker = hide_wins_before_mapping.workers[2]
 assert(hide_worker.metadata.visible == false)
 assert(type(hide_worker.metadata.layer_count) == "number")
 
+assert(hide_wins_before_mapping.launch_state == nil)
 local signal_retries = run_scenario({
 	layers = waybar_layers_on_outputs({ "DP-1" }),
 	visibility_state = "shown\n",
@@ -386,6 +407,32 @@ local duplicate_mapping = run_scenario({
 })
 assert(count_matching(duplicate_mapping.trace, "worker:visibility") == 1)
 
+local equal_count_replacement = run_scenario({
+	layers = waybar_layers_on_outputs({ "DP-1" }),
+	visibility_state = "shown\n",
+	steps = {
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{
+			message = "layer-opened",
+			before = function(scenario)
+				scenario.layers = waybar_layers_on_outputs({ "DP-2" })
+			end,
+		},
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{ message = "layer-opened" },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(equal_count_replacement.trace, "worker:visibility") == 2)
+assert(count_matching(equal_count_replacement.commands, "waybar%-process%.sh signal USR1") == 2)
 local output_readded = run_scenario({
 	layers = waybar_layers_on_outputs({ "DP-1" }),
 	visibility_state = "shown\n",
@@ -487,6 +534,168 @@ local visibility_cancelled_on_quit = run_scenario({
 	},
 })
 assert(contains(visibility_cancelled_on_quit.cancellations, "term:visibility"))
+
+local prewarm_preserves_show = run_scenario({
+	steps = {
+		{ message = "show" },
+		{ message = "prewarm" },
+		{ message = "quit" },
+	},
+})
+assert(prewarm_preserves_show.visibility_state == "shown\n")
+assert(prewarm_preserves_show.launch_state == "shown\n")
+
+local restored_prewarm = run_scenario({
+	visibility_state = "hidden\n",
+	launch_state = "hidden\n",
+	steps = {
+		{ message = "quit" },
+	},
+})
+assert(count_matching(restored_prewarm.trace, "worker:launch") == 1)
+assert(contains(restored_prewarm.cancellations, "term:launch"))
+
+local visibility_overrides_stale_launch_state = run_scenario({
+	visibility_state = "hidden\n",
+	launch_state = "shown\n",
+	steps = {
+		{
+			message = "layer-opened",
+			before = function(scenario)
+				scenario.layers = waybar_layers_on_outputs({ "DP-1" })
+			end,
+		},
+		{ message = "quit" },
+	},
+})
+assert(visibility_overrides_stale_launch_state.workers[2].metadata.visible == false)
+
+local hidden_launch_retries = run_scenario({
+	launch_ok = false,
+	steps = {
+		{ message = "show" },
+		{ message = "hide" },
+		{
+			before = function(scenario)
+				scenario:complete_worker("launch")
+			end,
+		},
+		{ advance = 10001 },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(hidden_launch_retries.trace, "worker:launch") == 2)
+
+local fulfilled_hidden_launch_stays_retired = run_scenario({
+	launch_ok = false,
+	steps = {
+		{ message = "show" },
+		{ message = "hide" },
+		{
+			message = "layer-opened",
+			before = function(scenario)
+				scenario.layers = waybar_layers_on_outputs({ "DP-1" })
+			end,
+		},
+		{
+			before = function(scenario)
+				scenario:complete_worker("launch")
+			end,
+		},
+		{
+			message = "layer-closed",
+			before = function(scenario)
+				scenario.layers = {}
+			end,
+		},
+		{ message = "quit" },
+	},
+})
+assert(count_matching(fulfilled_hidden_launch_stays_retired.trace, "worker:launch") == 1)
+
+local fresh_show_after_fulfilled_failure = run_scenario({
+	launch_ok = false,
+	steps = {
+		{ message = "show" },
+		{ message = "hide" },
+		{
+			message = "layer-opened",
+			before = function(scenario)
+				scenario.layers = waybar_layers_on_outputs({ "DP-1" })
+			end,
+		},
+		{
+			before = function(scenario)
+				scenario:complete_worker("launch")
+			end,
+		},
+		{
+			message = "layer-closed",
+			before = function(scenario)
+				scenario.layers = {}
+			end,
+		},
+		{ message = "show" },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(fresh_show_after_fulfilled_failure.trace, "worker:launch") == 2)
+
+local stale_visibility = run_scenario({
+	layers = waybar_layers_on_outputs({ "DP-1" }),
+	visibility_state = "hidden\n",
+	steps = {
+		{
+			message = "show",
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{ message = "hide" },
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{ message = "quit" },
+	},
+})
+assert(stale_visibility.visibility_state == "hidden\n")
+assert(count_matching(stale_visibility.commands, "waybar%-process%.sh signal USR1") == 1)
+assert(count_matching(stale_visibility.commands, "waybar%-process%.sh signal USR2") == 2)
+assert(not contains(stale_visibility.commands, "waybar%-show"))
+
+local stale_signal_is_compensated = run_scenario({
+	layers = waybar_layers_on_outputs({ "DP-1" }),
+	visibility_state = "hidden\n",
+	steps = {
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{ message = "show" },
+		{ message = "hide" },
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{
+			before = function(scenario)
+				scenario:complete_worker("visibility")
+			end,
+		},
+		{ message = "quit" },
+	},
+})
+assert(count_matching(stale_signal_is_compensated.commands, "waybar%-process%.sh signal USR1") == 1)
+assert(count_matching(stale_signal_is_compensated.commands, "waybar%-process%.sh signal USR2") == 2)
 
 local invalid = run_scenario({
 	steps = {
