@@ -22,10 +22,6 @@ declare module "@earendil-works/pi-coding-agent" {
       readonly available: number;
       readonly project: number;
     };
-    readonly updates: {
-      readonly coverage: "complete" | "partial" | "offline" | "failed";
-      readonly available: number;
-    };
   }
 
   type StartupContextCategory =
@@ -53,7 +49,6 @@ declare module "@earendil-works/pi-coding-agent" {
     readonly ownerRevision: number;
     readonly resources: StartupSnapshotValue<StartupResourceCounts>;
     readonly context: StartupSnapshotValue<StartupContextEstimate>;
-    readonly timing: StartupSnapshotValue<{ readonly durationMs: number }>;
   }
 
   interface StartupSnapshotAPI {

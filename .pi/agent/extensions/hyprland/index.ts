@@ -70,6 +70,47 @@ type Layer = Geometry & {
   level: string;
 };
 
+type LayerNode = Geometry & {
+  namespace: string;
+  monitor: string;
+  level: string;
+  redacted: boolean;
+};
+
+type LayerInspectionFilters = {
+  monitor?: string;
+  namespace?: string;
+  level?: string;
+  limit?: number;
+};
+
+type LayerInspectionQuery = {
+  monitor: string | null;
+  namespace: string | null;
+  level: string | null;
+  limit: number;
+};
+
+type LayerInspectionEntry = {
+  namespace: string;
+  monitor: string | null;
+  level: string | null;
+  geometry: Geometry;
+  screenShare: "unknown";
+};
+
+type LayerInspectionDetails = {
+  schemaVersion: 1;
+  query: LayerInspectionQuery;
+  redactedLayers: boolean;
+  layers: LayerInspectionEntry[];
+  total: number;
+  returned: number;
+  omitted: number;
+  truncated: boolean;
+  unavailable: DiagnosticFailure[];
+};
+
 type CaptureResult = {
   path: string;
   method: string;
@@ -303,40 +344,53 @@ function parseMonitors(value: unknown): Monitor[] {
   return monitors;
 }
 
-function collectLayers(value: unknown, monitor = "", level = "", layers: Layer[] = []): Layer[] {
-  const input = objectValue(value);
-  if (input === null) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        collectLayers(item, monitor, level, layers);
+function hasLayerScreenShareRedaction(input: Record<string, unknown>): boolean {
+  if (input.no_screen_share === true || input.noScreenShare === true) return true;
+  if (Array.isArray(input.tags) === false) return false;
+  return input.tags.some(
+    (tag) => typeof tag === "string" && SCREEN_SHARE_REDACTION_TAGS.has(tag.replace(/\*$/, "")),
+  );
+}
+
+function collectLayerNodes(value: unknown): LayerNode[] {
+  const layers: LayerNode[] = [];
+  const root = objectValue(value);
+  if (root === null) return layers;
+  for (const [monitor, rawMonitor] of Object.entries(root)) {
+    const monitorInput = objectValue(rawMonitor);
+    const levels = monitorInput === null ? null : objectValue(monitorInput.levels);
+    if (levels === null) continue;
+    for (const [level, rawLayers] of Object.entries(levels)) {
+      if (Array.isArray(rawLayers) === false) continue;
+      for (const rawLayer of rawLayers) {
+        const input = objectValue(rawLayer);
+        if (input === null) continue;
+        const x = numberValue(input.x);
+        const y = numberValue(input.y);
+        const width = numberValue(input.w) ?? numberValue(input.width);
+        const height = numberValue(input.h) ?? numberValue(input.height);
+        const namespace = stringValue(input.namespace);
+        if (x === null || y === null || width === null || height === null || namespace === "") {
+          continue;
+        }
+        layers.push({
+          x,
+          y,
+          width,
+          height,
+          namespace,
+          monitor,
+          level,
+          redacted: hasLayerScreenShareRedaction(input),
+        });
       }
     }
-    return layers;
   }
-
-  const x = numberValue(input.x);
-  const y = numberValue(input.y);
-  const width = numberValue(input.w) ?? numberValue(input.width);
-  const height = numberValue(input.h) ?? numberValue(input.height);
-  const namespace = stringValue(input.namespace);
-  if (x !== null && y !== null && width !== null && height !== null && namespace !== "") {
-    layers.push({ x, y, width, height, namespace, monitor, level });
-    return layers;
-  }
-
-  for (const [key, item] of Object.entries(input)) {
-    if (key === "levels") {
-      collectLayers(item, monitor, level, layers);
-    } else if (monitor === "" && objectValue(item)?.levels !== undefined) {
-      collectLayers(item, key, level, layers);
-    } else if (/^\d+$/.test(key)) {
-      collectLayers(item, monitor, key, layers);
-    } else {
-      collectLayers(item, monitor, level, layers);
-    }
-  }
-
   return layers;
+}
+
+function collectLayers(value: unknown): Layer[] {
+  return collectLayerNodes(value).flatMap(({ redacted, ...layer }) => (redacted ? [] : [layer]));
 }
 
 function normalizeToken(value: string): string {
@@ -1178,7 +1232,45 @@ function parseDiagnosticMonitors(value: unknown): Monitor[] | undefined {
 }
 
 function parseDiagnosticLayers(value: unknown): Layer[] | undefined {
-  return objectValue(value) !== null || Array.isArray(value) ? collectLayers(value) : undefined;
+  const layers = parseLayerNodes(value);
+  return layers?.flatMap(({ redacted, ...layer }) => (redacted ? [] : [layer]));
+}
+
+function isLayerSnapshot(value: unknown): boolean {
+  const root = objectValue(value);
+  if (root === null) return false;
+  for (const [monitor, rawMonitor] of Object.entries(root)) {
+    if (monitor === "") return false;
+    const monitorInput = objectValue(rawMonitor);
+    const levels = monitorInput === null ? null : objectValue(monitorInput.levels);
+    if (levels === null) return false;
+    for (const [level, rawLayers] of Object.entries(levels)) {
+      if (level === "" || Array.isArray(rawLayers) === false) return false;
+      for (const rawLayer of rawLayers) {
+        const layer = objectValue(rawLayer);
+        if (layer === null) return false;
+        const x = numberValue(layer.x);
+        const y = numberValue(layer.y);
+        const width = numberValue(layer.w) ?? numberValue(layer.width);
+        const height = numberValue(layer.h) ?? numberValue(layer.height);
+        if (
+          x === null ||
+          y === null ||
+          width === null ||
+          height === null ||
+          stringValue(layer.namespace) === ""
+        ) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+function parseLayerNodes(value: unknown): LayerNode[] | undefined {
+  if (isLayerSnapshot(value) === false) return undefined;
+  return collectLayerNodes(value);
 }
 
 function parseConfigErrors(output: string): string[] {
@@ -1499,6 +1591,14 @@ const MAX_DIAGNOSTIC_CONFIG_ERROR_LINES = 40;
 const MAX_DIAGNOSTIC_PRESENTATION_LINES = 40;
 const MAX_DIAGNOSTIC_CLAIMS = 40;
 const MAX_DIAGNOSTIC_FIELD_CHARS = 240;
+const DEFAULT_LAYER_INSPECTION_LIMIT = 100;
+const MAX_LAYER_INSPECTION_LIMIT = 100;
+
+function boundedLayerIdentifier(value: string): string {
+  return value.length <= MAX_DIAGNOSTIC_FIELD_CHARS
+    ? value
+    : `${value.slice(0, MAX_DIAGNOSTIC_FIELD_CHARS - 3)}...`;
+}
 
 function diagnosticField(value: string): string {
   const compact = value.replace(/\s+/g, " ").trim();
@@ -1647,6 +1747,148 @@ function formatDesktopDiagnostic(details: HyprlandDiagnosticDetails): string {
   return truncated.truncated ? `${truncated.content}${truncationSuffix}` : truncated.content;
 }
 
+function compareLayerText(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function compareLayerNodes(left: LayerNode, right: LayerNode): number {
+  if (left.redacted !== right.redacted) return left.redacted ? 1 : -1;
+  const fields: Array<[string, string]> = [
+    [left.monitor, right.monitor],
+    [left.level, right.level],
+    [left.namespace, right.namespace],
+  ];
+  for (const [leftValue, rightValue] of fields) {
+    const comparison = compareLayerText(leftValue, rightValue);
+    if (comparison !== 0) return comparison;
+  }
+  return (
+    left.x - right.x || left.y - right.y || left.width - right.width || left.height - right.height
+  );
+}
+
+function matchesLayerQuery(layer: LayerNode, query: LayerInspectionFilters): boolean {
+  return (
+    (query.monitor === undefined || layer.monitor === query.monitor) &&
+    (query.namespace === undefined || layer.namespace === query.namespace) &&
+    (query.level === undefined || layer.level === query.level)
+  );
+}
+
+function layerInspectionEntry(layer: LayerNode): LayerInspectionEntry {
+  return {
+    namespace: boundedLayerIdentifier(layer.namespace),
+    monitor: layer.monitor === "" ? null : boundedLayerIdentifier(layer.monitor),
+    level: layer.level === "" ? null : boundedLayerIdentifier(layer.level),
+    geometry: {
+      x: layer.x,
+      y: layer.y,
+      width: layer.width,
+      height: layer.height,
+    },
+    screenShare: "unknown",
+  };
+}
+
+async function gatherLayerInspection(
+  filters: LayerInspectionFilters,
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+): Promise<LayerInspectionDetails> {
+  const limit = filters.limit ?? DEFAULT_LAYER_INSPECTION_LIMIT;
+  const query: LayerInspectionQuery = {
+    monitor: filters.monitor ?? null,
+    namespace: filters.namespace ?? null,
+    level: filters.level ?? null,
+    limit,
+  };
+  const source = await runDiagnosticJson(
+    "layers",
+    "hyprctl",
+    ["layers", "-j"],
+    cwd,
+    runCommand,
+    signal,
+    parseLayerNodes,
+    completeHyprlandSessionEnvironment(environment) ?? undefined,
+  );
+  if (source.status === "unavailable") {
+    return {
+      schemaVersion: 1,
+      query,
+      redactedLayers: false,
+      layers: [],
+      total: 0,
+      returned: 0,
+      omitted: 0,
+      truncated: false,
+      unavailable: [{ source: "layers", error: source.error }],
+    };
+  }
+  const redactedLayers = source.value.some((layer) => layer.redacted);
+  const matchingLayers = source.value.filter(
+    (layer) => layer.redacted === false && matchesLayerQuery(layer, filters),
+  );
+  const selectedLayers = [...matchingLayers].sort(compareLayerNodes).slice(0, limit);
+  const omitted = matchingLayers.length - selectedLayers.length;
+  return {
+    schemaVersion: 1,
+    query,
+    redactedLayers,
+    layers: selectedLayers.map(layerInspectionEntry),
+    total: matchingLayers.length,
+    returned: selectedLayers.length,
+    omitted,
+    truncated: omitted > 0,
+    unavailable: [],
+  };
+}
+
+function formatLayerInspectionQuery(query: LayerInspectionQuery): string {
+  const filters = [
+    query.monitor === null ? null : `monitor=${diagnosticField(query.monitor)}`,
+    query.namespace === null ? null : `namespace=${diagnosticField(query.namespace)}`,
+    query.level === null ? null : `level=${diagnosticField(query.level)}`,
+  ].filter((filter): filter is string => filter !== null);
+  return filters.length === 0 ? "all layers" : filters.join(", ");
+}
+
+function formatLayerInspection(details: LayerInspectionDetails): string {
+  const lines = [
+    "Hyprland layer-shell inspection",
+    `Query: ${formatLayerInspectionQuery(details.query)}`,
+    "",
+  ];
+  if (details.unavailable.length > 0) {
+    lines.push("Layers: unavailable", "", "Unavailable sources:");
+    lines.push(...details.unavailable.map(({ error }) => `- ${error}`));
+  } else {
+    const suffix = details.omitted > 0 ? `, showing ${details.returned}` : "";
+    lines.push(`Layers (${details.total}${suffix}):`);
+    for (const layer of details.layers) {
+      lines.push(
+        `- ${diagnosticField(layer.namespace)} [${diagnosticField(layer.level ?? "unknown level")}] on ${diagnosticField(layer.monitor ?? "unknown monitor")} @ ${formatGeometry(layer.geometry)}`,
+      );
+    }
+    if (details.layers.length === 0) lines.push("- none");
+    if (details.redactedLayers) lines.push("- [redacted layer] (screen-share protected)");
+    if (details.omitted > 0) {
+      lines.push(`- ... ${details.omitted} more layer${details.omitted === 1 ? "" : "s"} omitted`);
+    }
+  }
+  const output = lines.join("\n");
+  const truncationNotice =
+    "[Layer inspection output truncated; structured details retain the remaining parsed state.]";
+  const truncationSuffix = `\n\n${truncationNotice}`;
+  const truncated = truncateHead(output, {
+    maxBytes: Math.max(1, DEFAULT_MAX_BYTES - Buffer.byteLength(truncationSuffix)),
+    maxLines: Math.max(1, DEFAULT_MAX_LINES - 2),
+  });
+  return truncated.truncated ? `${truncated.content}${truncationSuffix}` : truncated.content;
+}
+
 const HyprDesktopDiagnoseParameters = Type.Object({});
 
 function createHyprDesktopDiagnoseTool(
@@ -1676,6 +1918,73 @@ function createHyprDesktopDiagnoseTool(
       const details = await gatherDesktopDiagnostic(environment, ctx.cwd, runCommand, signal);
       return {
         content: [{ type: "text", text: formatDesktopDiagnostic(details) }],
+        details,
+      };
+    },
+  });
+}
+
+const HyprLayerInspectParameters = Type.Object(
+  {
+    monitor: Type.Optional(
+      Type.String({
+        minLength: 1,
+        maxLength: 200,
+        description: "Inspect only layers reported on this exact monitor name.",
+      }),
+    ),
+    namespace: Type.Optional(
+      Type.String({
+        minLength: 1,
+        maxLength: 200,
+        description: "Inspect only this exact layer namespace.",
+      }),
+    ),
+    level: Type.Optional(
+      Type.String({
+        minLength: 1,
+        maxLength: 32,
+        description: "Inspect only this exact Hyprland layer level.",
+      }),
+    ),
+    limit: Type.Optional(
+      Type.Integer({
+        minimum: 1,
+        maximum: MAX_LAYER_INSPECTION_LIMIT,
+        description: "Maximum number of matching layers to return.",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+function createHyprLayerInspectTool(
+  runCommand: HyprlandCommandRunner,
+  environment: NodeJS.ProcessEnv,
+) {
+  return defineTool<typeof HyprLayerInspectParameters, LayerInspectionDetails>({
+    name: "hypr_layer_inspect",
+    label: "Hyprland Layer Inspector",
+    description:
+      "Inspect read-only Hyprland layer-shell namespaces, levels, monitors, and geometry with privacy-safe bounded output.",
+    promptSnippet: "Inspect Hyprland layer-shell surfaces and stacking state",
+    promptGuidelines: [
+      "Use hypr_layer_inspect for layer-shell namespace, level, monitor, or geometry details that exceed the desktop diagnostic summary.",
+      "Treat unavailable layer data as unknown and respect the redactedLayers marker.",
+    ],
+    parameters: HyprLayerInspectParameters,
+    executionMode: "sequential",
+
+    async execute(_toolCallId, args, signal, _onUpdate, ctx) {
+      if (supportsHyprlandSession(environment) === false) {
+        throw new Error(
+          "Hyprland session variables are unavailable; this tool requires HYPRLAND_INSTANCE_SIGNATURE, XDG_RUNTIME_DIR, and WAYLAND_DISPLAY.",
+        );
+      }
+
+      const details = await gatherLayerInspection(args, environment, ctx.cwd, runCommand, signal);
+      return {
+        content: [{ type: "text", text: formatLayerInspection(details) }],
         details,
       };
     },
@@ -1884,12 +2193,37 @@ const HYPRPROP_DEFAULT_BOOLEAN_VALUES: Readonly<Record<string, boolean>> = {
 };
 
 type HyprPropMode = "compact" | "raw";
+type HyprPropRequest = {
+  mode: HyprPropMode;
+  windowId?: string;
+};
 
-function parseHyprPropMode(args: string): HyprPropMode | null {
-  const mode = args.trim();
-  if (mode === "" || mode === "compact") return "compact";
-  if (mode === "raw" || mode === "--raw") return "raw";
-  return null;
+const HYPRPROP_WINDOW_ID_PATTERN = /^0x[0-9a-f]+$/i;
+
+function parseHyprPropRequest(args: string): HyprPropRequest | null {
+  const tokens = args.trim() === "" ? [] : args.trim().split(/\s+/);
+  let mode: HyprPropMode = "compact";
+  let modeSpecified = false;
+  let windowId: string | undefined;
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token === "compact" || token === "raw" || token === "--raw") {
+      const nextMode = token === "compact" ? "compact" : "raw";
+      if (modeSpecified) return null;
+      mode = nextMode;
+      modeSpecified = true;
+      continue;
+    }
+    if (token === "--id" && windowId === undefined) {
+      const nextId = tokens[index + 1];
+      if (nextId === undefined || HYPRPROP_WINDOW_ID_PATTERN.test(nextId) === false) return null;
+      windowId = nextId;
+      index += 1;
+      continue;
+    }
+    return null;
+  }
+  return windowId === undefined ? { mode } : { mode, windowId };
 }
 
 function isCompactHyprPropValue(key: string, value: unknown): boolean {
@@ -1906,7 +2240,7 @@ function isCompactHyprPropValue(key: string, value: unknown): boolean {
   return true;
 }
 
-function compactHyprPropOutput(output: string): string {
+function parseHyprPropOutput(output: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(output);
@@ -1914,7 +2248,15 @@ function compactHyprPropOutput(output: string): string {
     throw new Error("hyprprop returned invalid JSON");
   }
   const properties = objectValue(parsed);
-  if (properties === null) throw new Error("hyprprop returned a JSON value instead of an object");
+  if (properties === null) {
+    throw new Error("hyprprop returned a JSON value instead of an object");
+  }
+  return properties;
+}
+
+const REDACTED_HYPRPROP_OUTPUT = JSON.stringify({ redacted: true });
+
+function compactHyprPropOutput(properties: Record<string, unknown>): string {
   const compactProperties = Object.fromEntries(
     HYPRPROP_COMPACT_FIELDS.flatMap((key) => {
       const value = properties[key];
@@ -1924,13 +2266,21 @@ function compactHyprPropOutput(output: string): string {
   return JSON.stringify(compactProperties);
 }
 
-function hyprPropMessage(output: string, mode: HyprPropMode): string {
-  const description =
-    mode === "raw"
+function hyprPropMessage(
+  output: string,
+  mode: HyprPropMode,
+  windowId?: string,
+  redacted = false,
+): string {
+  const selection =
+    windowId === undefined ? "window selection" : `selection for window ${windowId}`;
+  const description = redacted
+    ? "The selected window is protected; its properties were redacted:"
+    : mode === "raw"
       ? "Here is the selected window's raw JSON:"
       : "Here are the selected window's compact properties:";
   return [
-    `The \`hyprprop\` window selection completed. ${description}`,
+    `The \`hyprprop\` ${selection} completed. ${description}`,
     "",
     "```json",
     output,
@@ -2005,11 +2355,12 @@ function registerHyprPropCommand(
   runCommand: HyprlandCommandRunner,
 ): void {
   pi.registerCommand("hypr-prop", {
-    description: "Select a Hyprland window and send its properties to the agent",
+    description:
+      "Select a Hyprland window or inspect one by address and send its properties to the agent",
     handler: async (args, ctx: ExtensionCommandContext) => {
-      const mode = parseHyprPropMode(args);
-      if (mode === null) {
-        ctx.ui.notify("Usage: /hypr-prop [compact|raw]", "error");
+      const request = parseHyprPropRequest(args);
+      if (request === null) {
+        ctx.ui.notify("Usage: /hypr-prop [compact|raw] [--id <0xaddress>]", "error");
         return;
       }
 
@@ -2017,6 +2368,8 @@ function registerHyprPropCommand(
         ctx.ui.notify("The agent is busy; run /hypr-prop when it is idle.", "warning");
         return;
       }
+      const selectionDescription =
+        request.windowId === undefined ? "" : ` for window ${request.windowId}`;
 
       let sessionEnvironment: HyprlandSessionEnvironment | null;
       try {
@@ -2027,7 +2380,7 @@ function registerHyprPropCommand(
         );
       } catch (error) {
         ctx.ui.notify(
-          `Could not resolve the active Hyprland environment: ${error instanceof Error ? error.message : String(error)}`,
+          `Could not resolve the active Hyprland environment${selectionDescription}: ${diagnosticField(error instanceof Error ? error.message : String(error))}`,
           "error",
         );
         return;
@@ -2040,53 +2393,68 @@ function registerHyprPropCommand(
         return;
       }
 
+      const hyprpropArgs =
+        request.windowId === undefined
+          ? HYPRPROP_ARGS
+          : [...HYPRPROP_ARGS, "--id", request.windowId];
       let result: CommandResult;
       try {
         result = await runCommand(
           HYPRPROP_COMMAND,
-          HYPRPROP_ARGS,
+          hyprpropArgs,
           ctx.cwd,
           undefined,
           sessionEnvironment,
         );
       } catch (error) {
         ctx.ui.notify(
-          `hyprprop failed: ${error instanceof Error ? error.message : String(error)}`,
+          `hyprprop${selectionDescription} failed: ${diagnosticField(error instanceof Error ? error.message : String(error))}`,
           "error",
         );
         return;
       }
 
       if (result.exitCode !== 0) {
-        const detail =
-          result.stderr.trim() || result.stdout.trim() || `exit code ${result.exitCode}`;
-        ctx.ui.notify(`hyprprop failed: ${detail}`, "error");
+        const detail = diagnosticField(result.stderr.trim() || `exit code ${result.exitCode}`);
+        ctx.ui.notify(`hyprprop${selectionDescription} failed: ${detail}`, "error");
         return;
       }
       const rawOutput = result.stdout.trim();
       if (rawOutput === "") {
-        ctx.ui.notify("No window was selected.", "warning");
+        ctx.ui.notify(
+          request.windowId === undefined
+            ? "No window selected."
+            : `No window matched address ${request.windowId}.`,
+          "warning",
+        );
         return;
       }
 
       let output = rawOutput;
-      if (mode === "compact") {
-        try {
-          output = compactHyprPropOutput(rawOutput);
-        } catch (error) {
-          ctx.ui.notify(
-            `Could not compact hyprprop results: ${error instanceof Error ? error.message : String(error)}`,
-            "error",
-          );
-          return;
+      let redacted = false;
+      try {
+        const properties = parseHyprPropOutput(rawOutput);
+        redacted = hasScreenShareRedaction(properties);
+        if (redacted) {
+          output = REDACTED_HYPRPROP_OUTPUT;
+        } else if (request.mode === "compact") {
+          output = compactHyprPropOutput(properties);
         }
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not read hyprprop results${selectionDescription}: ${diagnosticField(error instanceof Error ? error.message : String(error))}`,
+          "error",
+        );
+        return;
       }
 
       try {
-        pi.sendUserMessage(hyprPropMessage(output, mode), { expandPromptTemplates: false });
+        pi.sendUserMessage(hyprPropMessage(output, request.mode, request.windowId, redacted), {
+          expandPromptTemplates: false,
+        });
       } catch (error) {
         ctx.ui.notify(
-          `Could not send hyprprop results to the agent: ${error instanceof Error ? error.message : String(error)}`,
+          `Could not send hyprprop results${selectionDescription} to the agent: ${diagnosticField(error instanceof Error ? error.message : String(error))}`,
           "error",
         );
       }
@@ -2113,6 +2481,7 @@ export function registerHyprlandExtension(
   if (supportsHyprlandSession(environment) === false) return;
   const runCommand = options.commandRunner ?? createCommandRunner(pi, COMMAND_TIMEOUT_MS);
   pi.registerTool(createHyprDesktopDiagnoseTool(runCommand, environment));
+  pi.registerTool(createHyprLayerInspectTool(runCommand, environment));
   pi.registerTool(createHyprWindowScreenshotTool(runCommand, environment));
 }
 

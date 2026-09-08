@@ -23,6 +23,7 @@ const DEFERRED_TOOL_NAMES = new Set([
   "read_session",
   "hypr_window_screenshot",
   "hypr_desktop_diagnose",
+  "hypr_layer_inspect",
   "worktrunk",
 ]);
 

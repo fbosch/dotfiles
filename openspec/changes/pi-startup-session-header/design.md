@@ -22,6 +22,21 @@ The header and its publishers belong in `.pi/agent/extensions/`. If a required f
 - No replacement of the resource listing, transcript, editor, prompt footer, auth resolver, or integration owners.
 - No persisted data migration or new dependency.
 
+## Source Ownership Audit
+
+| Header data | Preferred owner | Runtime patch |
+| --- | --- | --- |
+| Git branch and linked-worktree identity | Header extension using bounded, read-only Git metadata inspection | No |
+| Neovim, direnv, and LSP status | Existing local integration extensions | No |
+| Formatter and LSP candidates | Existing formatter and LSP extensions using bounded config matching | No |
+| Auth chain, windows, and deadlines | Existing auth-profiles extension | No |
+| Startup duration | Installed `@liborw/pi-startup-time` custom entry | No |
+| Extension and skill totals, project subsets, and extension load failures | Pi resource loader | Minimal aggregate only |
+| Frozen static initial-context categories, capacity, and reserve | `pi-context-view` semantics over runtime-owned startup inputs | Minimal aggregate only when public extension data is insufficient |
+| Package updates | Optional extension owner with an already completed check | No; omit when no owner has results |
+
+`ResourceLoader`, resolved load errors, startup `BuildSystemPromptOptions`, and compaction reserve are not available on the public `ExtensionAPI` or the `ExtensionContext` passed to `session_start`. The minimal runtime capability therefore publishes numeric resource and context aggregates only. It excludes startup timing, workspace inspection, integration state, auth state, candidate matching, update checks, raw paths, prompts, context files, skill content, tool schemas, messages, credentials, and errors.
+
 ## Decisions
 
 ### Prefer extension APIs and gate only optional runtime data

@@ -38,15 +38,28 @@ Do not use this skill for purely cosmetic theme edits without runtime failures.
 
 If a config edit is made during debugging, run `hyprctl configerrors` before continuing.
 
+## Pi Runtime Tools
+
+Start runtime investigations with `hypr_desktop_diagnose`. It provides a read-only snapshot of compositor and runtime state, including config errors, and reports source failures under `unavailable`. Do not treat an unavailable source as healthy.
+
+Use `hypr_layer_inspect` when namespace, monitor, level, or geometry details exceed the desktop snapshot. Its filters are exact matches and its result is bounded.
+
+Use `/hypr-prop` for interactive window selection. When the window address is known, use `/hypr-prop --id <0xaddress>` to avoid selecting the wrong window.
+
+Use `hypr_window_screenshot` only for visual confirmation. Prefer an explicit region or the smallest useful capture mode.
+
+These tools respect Hyprland privacy boundaries. Windows and layer-shell entries marked with `privacy` or `no_screen_share` are redacted. Do not use raw client output or another capture path to bypass that boundary.
+
 ## Failure Decision Tree
 
 1. If `hyprctl configerrors` is non-empty, resolve that first.
 2. If bind or action mismatch, inspect:
    - `.config/hypr/docs/agents/references/Binds.md`
    - `.config/hypr/docs/agents/references/Dispatchers.md`
-   - `hyprctl clients`
+   - `hypr_desktop_diagnose`
 3. If layer-shell behavior is wrong, inspect:
    - `hyprctl layers`
+   - `hypr_layer_inspect`
    - `.config/hypr/docs/agents/layer-rules.md`
    - `.config/hypr/docs/agents/references/Window-Rules.md`
 4. If monitor/workspace behavior is wrong, inspect:
@@ -59,8 +72,8 @@ If a config edit is made during debugging, run `hyprctl configerrors` before con
 ## Diagnostics Baseline
 
 Use the smallest command set that can prove or disprove the current hypothesis:
-
-- `hyprctl clients`
+- `hypr_desktop_diagnose`
+- `hypr_layer_inspect`
 - `hyprctl layers`
 - `hyprctl rollinglog -f`
 - `hyprctl getoption <section:option>`

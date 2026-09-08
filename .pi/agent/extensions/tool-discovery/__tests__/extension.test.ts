@@ -122,6 +122,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("find_definition")).toBe(true);
     expect(isDeferredToolName("worktrunk")).toBe(true);
     expect(isDeferredToolName("hypr_desktop_diagnose")).toBe(true);
+    expect(isDeferredToolName("hypr_layer_inspect")).toBe(true);
 
     expect(isDeferredToolName("read")).toBe(false);
     expect(isDeferredToolName("fffind")).toBe(false);

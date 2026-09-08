@@ -123,6 +123,7 @@
     "read_session": "allow",
     "hypr_window_screenshot": "allow",
     "hypr_desktop_diagnose": "allow",
+    "hypr_layer_inspect": "allow",
     "ask_user_question": "allow",
     "todo": "allow",
     "just_tools": "allow",

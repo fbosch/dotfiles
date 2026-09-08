@@ -35,12 +35,25 @@ Do not use this skill for generic Nix/Home Manager refactors unless the task inc
 
 If `hyprctl configerrors` reports issues, fix them before any further tuning.
 
+## Pi Runtime Tools
+
+For read-only runtime verification, start with `hypr_desktop_diagnose`. It returns one snapshot of compositor and runtime state and records source failures under `unavailable`; treat missing sources as unknown.
+
+Use `hypr_layer_inspect` for namespace, monitor, level, or geometry details beyond the desktop snapshot. Its filters are exact matches and its result is bounded.
+
+Use `/hypr-prop` for interactive window selection. When the window address is known, use `/hypr-prop --id <0xaddress>` to avoid selecting the wrong window.
+
+Use `hypr_window_screenshot` only when visual evidence is necessary. Prefer an explicit region or the smallest useful capture mode.
+
+All three tools respect Hyprland privacy boundaries. Windows and layer-shell entries marked with `privacy` or `no_screen_share` are redacted. Do not bypass that redaction with raw client queries or alternate capture commands.
+
 ## Failure Decision Tree
 
 1. If `hyprctl configerrors` is non-empty, fix syntax/rules first.
 2. If symptom is layer/input/overlay behavior, inspect:
    - `hyprctl layers`
-   - `hyprctl clients`
+   - `hypr_layer_inspect`
+   - `hypr_desktop_diagnose`
    - `.config/hypr/docs/agents/layer-rules.md`
 3. If symptom appears only after reload/startup, inspect live logs:
    - `hyprctl rollinglog -f`

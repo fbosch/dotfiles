@@ -1,7 +1,7 @@
 ## 1. Extension-first contracts and runtime gap audit
 
-- [ ] 1.1 Inventory each required field against Pi's public extension APIs, existing local owner state, `pi-context-view`, and `@liborw/pi-startup-time`; verification: every field maps to an extension-owned source or a documented runtime-only gap.
-- [ ] 1.2 Define immutable, session-scoped owner request, reply, and change envelopes plus optional publisher discovery; verification: contract tests cover absent publishers, incompatible publisher schemas, generation replacement, and revision ordering.
+- [x] 1.1 Inventory each required field against Pi's public extension APIs, existing local owner state, `pi-context-view`, and `@liborw/pi-startup-time`; verification: every field maps to an extension-owned source or a documented runtime-only gap.
+- [x] 1.2 Define immutable, session-scoped owner request, reply, and change envelopes plus optional publisher discovery; verification: contract tests cover absent publishers, incompatible publisher schemas, generation replacement, and revision ordering.
 - [ ] 1.3 If runtime-only gaps remain, align the local SDK with Pi 0.85.1 and add one narrow typed read-only capability for only those facts; verification: declarations compile with the pinned runtime and no extension-obtainable or startup-timing field appears in the capability.
 - [ ] 1.4 If task 1.3 adds a Pi patch, keep it behind the existing version assertion in `/home/fbb/nixos/modules/development/ai/pi/default.nix`; verification: the patch applies with zero fuzz and targeted Nix evaluation rejects unsupported Pi versions.
 - [ ] 1.5 Register the header independently of optional publishers and runtime capabilities; verification: no-patch, absent-publisher, incompatible-schema, and compatible-capability fixtures omit only unavailable sections without notices.

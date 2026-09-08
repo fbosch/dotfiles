@@ -203,6 +203,94 @@ describe("Hyprland extension", () => {
     expect(message).toContain(rawOutput);
     expect(notifications).toEqual([]);
   });
+  test("redacts protected windows before sending compact or raw properties", async () => {
+    for (const mode of ["", "raw"] as const) {
+      const { pi, getCommand, getMessages } = captureRegistration();
+      const commandRunner: HyprlandCommandRunner = async () => ({
+        stdout:
+          '{"address":"0xprivate","class":"secret-app","title":"Secret password","pid":42,"tags":["privacy*"]}\n',
+        stderr: "",
+        exitCode: 0,
+      });
+
+      registerHyprlandExtension(pi, { environment, commandRunner });
+      const command = getCommand();
+      if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+      await command.handler(mode, {
+        cwd: "/tmp",
+        isIdle: () => true,
+        ui: { notify: () => {} },
+      } as unknown as ExtensionCommandContext);
+
+      const message = getMessages()[0]?.content ?? "";
+      expect(message).toContain("The selected window is protected; its properties were redacted:");
+      expect(message).toContain('{"redacted":true}');
+      expect(message).not.toContain("0xprivate");
+      expect(message).not.toContain("secret-app");
+      expect(message).not.toContain("Secret password");
+    }
+  });
+
+  test("targets an exact window address and reports the selected target", async () => {
+    const { pi, getCommand, getMessages } = captureRegistration();
+    const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+    const commandRunner: HyprlandCommandRunner = async (command, args, cwd) => {
+      calls.push({ command, args, cwd });
+      return {
+        stdout:
+          '{"address":"0x2a","class":"kitty","title":"Fixture","workspace":{"id":1,"name":"1"}}\n',
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const command = getCommand();
+    if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+    const notifications: string[] = [];
+    await command.handler("--id 0x2a", {
+      cwd: "/tmp",
+      isIdle: () => true,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionCommandContext);
+
+    expect(calls).toEqual([{ command: "hyprprop", args: ["--raw", "--id", "0x2a"], cwd: "/tmp" }]);
+    expect(notifications).toEqual([]);
+    expect(getMessages()[0]?.content).toContain(
+      "The `hyprprop` selection for window 0x2a completed.",
+    );
+  });
+
+  test("reports targeted no-match and rejects invalid window addresses", async () => {
+    const { pi, getCommand } = captureRegistration();
+    const calls: string[][] = [];
+    const commandRunner: HyprlandCommandRunner = async (command, args) => {
+      calls.push([command, ...args]);
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const command = getCommand();
+    if (command === undefined) throw new Error("Hyprprop command was not registered");
+
+    const notifications: Array<{ message: string; level: string }> = [];
+    const context = {
+      cwd: "/tmp",
+      isIdle: () => true,
+      ui: { notify: (message: string, level: string) => notifications.push({ message, level }) },
+    } as unknown as ExtensionCommandContext;
+
+    await command.handler("--id 0xdead", context);
+    await command.handler("--id not-an-address", context);
+
+    expect(calls).toEqual([["hyprprop", "--raw", "--id", "0xdead"]]);
+    expect(notifications).toEqual([
+      { message: "No window matched address 0xdead.", level: "warning" },
+      { message: "Usage: /hypr-prop [compact|raw] [--id <0xaddress>]", level: "error" },
+    ]);
+  });
 
   test("registers a screenshot tool and returns Pi image content", async () => {
     const { pi, getTool } = captureRegistration();
@@ -374,7 +462,19 @@ describe("Hyprland extension", () => {
                   ? [{ x: 0, y: 0, width: 1920, height: 1080, name: "DP-1", focused: true, id: 1 }]
                   : {
                       "DP-1": {
-                        levels: { 2: [{ namespace: "waybar", x: 0, y: 1000, w: 1920, h: 80 }] },
+                        levels: {
+                          2: [
+                            { namespace: "waybar", x: 0, y: 1000, w: 1920, h: 80 },
+                            {
+                              namespace: "private-layer",
+                              x: 10,
+                              y: 20,
+                              w: 300,
+                              h: 200,
+                              no_screen_share: true,
+                            },
+                          ],
+                        },
                       },
                     };
         return { stdout: JSON.stringify(response), stderr: "", exitCode: 0 };
@@ -441,6 +541,7 @@ describe("Hyprland extension", () => {
     expect(text.text).toContain("- [redacted] [unknown]");
     expect(text.text).not.toContain("Secret password");
     expect(text.text).not.toContain("Private message");
+    expect(text.text).not.toContain("private-layer");
     expect(text.text).toContain("... 210 more presentation lines omitted");
     expect(calls.map(({ command, args }) => `${command} ${args.join(" ")}`)).toEqual(
       expect.arrayContaining([
@@ -461,6 +562,324 @@ describe("Hyprland extension", () => {
         .filter(({ command }) => command === "hyprctl")
         .every(({ environment }) => environment?.HYPRLAND_INSTANCE_SIGNATURE === "fixture"),
     ).toBeTrue();
+  });
+  test("inspects filtered layer-shell state with bounded privacy-safe output", async () => {
+    const { pi, getTool } = captureRegistration();
+    const calls: Array<{
+      command: string;
+      args: string[];
+      cwd: string;
+      environment: Readonly<Record<string, string>> | undefined;
+    }> = [];
+    const commandRunner: HyprlandCommandRunner = async (
+      command,
+      args,
+      cwd,
+      _signal,
+      commandEnvironment,
+    ) => {
+      calls.push({ command, args, cwd, environment: commandEnvironment });
+      if (command !== "hyprctl" || args[0] !== "layers" || args[1] !== "-j") {
+        return { stdout: "", stderr: "unexpected command", exitCode: 1 };
+      }
+      return {
+        stdout: `${JSON.stringify({
+          "DP-2": {
+            levels: {
+              "2": [
+                { namespace: "zeta", x: 30, y: 40, w: 300, h: 200 },
+                {
+                  namespace: "secret-layer",
+                  x: 50,
+                  y: 60,
+                  w: 400,
+                  h: 300,
+                  tags: ["privacy*"],
+                },
+                { namespace: "waybar", x: 0, y: 1000, w: 1920, h: 80 },
+              ],
+              "1": [{ namespace: "clock", x: 10, y: 20, w: 100, h: 40 }],
+            },
+          },
+          "HDMI-A-2": {
+            levels: { "2": [{ namespace: "other", x: 0, y: 0, w: 1, h: 1 }] },
+          },
+        })}
+`,
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const result = await tool.execute(
+      "call-1",
+      { monitor: "DP-2", level: "2", limit: 3 },
+      undefined,
+      undefined,
+      { cwd: "/tmp" } as ExtensionContext,
+    );
+    const details = result.details as {
+      schemaVersion: number;
+      query: {
+        monitor: string | null;
+        namespace: string | null;
+        level: string | null;
+        limit: number;
+      };
+      redactedLayers: boolean;
+      layers: Array<{
+        namespace?: string;
+        monitor?: string | null;
+        level?: string | null;
+        geometry?: { x: number; y: number; width: number; height: number };
+        screenShare: string;
+      }>;
+      total: number;
+      returned: number;
+      omitted: number;
+      truncated: boolean;
+      unavailable: Array<{ source: string; error: string }>;
+    };
+    const text = result.content[0];
+    if (text?.type !== "text") throw new Error("Layer inspector result did not contain text");
+
+    expect(details).toEqual({
+      schemaVersion: 1,
+      query: { monitor: "DP-2", namespace: null, level: "2", limit: 3 },
+      redactedLayers: true,
+      layers: [
+        {
+          namespace: "waybar",
+          monitor: "DP-2",
+          level: "2",
+          geometry: { x: 0, y: 1000, width: 1920, height: 80 },
+          screenShare: "unknown",
+        },
+        {
+          namespace: "zeta",
+          monitor: "DP-2",
+          level: "2",
+          geometry: { x: 30, y: 40, width: 300, height: 200 },
+          screenShare: "unknown",
+        },
+      ],
+      total: 2,
+      returned: 2,
+      omitted: 0,
+      truncated: false,
+      unavailable: [],
+    });
+    expect(text.text).toContain("Hyprland layer-shell inspection");
+    expect(text.text).toContain("- waybar [2] on DP-2 @ 0,1000 1920x80");
+    expect(text.text).toContain("- [redacted layer]");
+    expect(text.text).not.toContain("secret-layer");
+    expect(calls).toEqual([
+      {
+        command: "hyprctl",
+        args: ["layers", "-j"],
+        cwd: "/tmp",
+        environment,
+      },
+    ]);
+  });
+
+  test("does not reveal protected layer membership through filters", async () => {
+    const { pi, getTool } = captureRegistration();
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: `${JSON.stringify({
+        "DP-2": {
+          levels: {
+            "2": [{ namespace: "secret-layer", x: 1, y: 2, w: 3, h: 4, no_screen_share: true }],
+          },
+        },
+      })}\n`,
+      stderr: "",
+      exitCode: 0,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const secretResult = await tool.execute(
+      "call-1",
+      { namespace: "secret-layer" },
+      undefined,
+      undefined,
+      { cwd: "/tmp" } as ExtensionContext,
+    );
+    const otherResult = await tool.execute(
+      "call-2",
+      { namespace: "other-layer" },
+      undefined,
+      undefined,
+      { cwd: "/tmp" } as ExtensionContext,
+    );
+    const secretDetails = secretResult.details as {
+      redactedLayers: boolean;
+      layers: unknown[];
+      total: number;
+      returned: number;
+      omitted: number;
+      truncated: boolean;
+    };
+    const otherDetails = otherResult.details as {
+      redactedLayers: boolean;
+      layers: unknown[];
+      total: number;
+      returned: number;
+      omitted: number;
+      truncated: boolean;
+    };
+
+    expect({
+      redactedLayers: secretDetails.redactedLayers,
+      layers: secretDetails.layers,
+      total: secretDetails.total,
+      returned: secretDetails.returned,
+      omitted: secretDetails.omitted,
+      truncated: secretDetails.truncated,
+    }).toEqual({
+      redactedLayers: otherDetails.redactedLayers,
+      layers: otherDetails.layers,
+      total: otherDetails.total,
+      returned: otherDetails.returned,
+      omitted: otherDetails.omitted,
+      truncated: otherDetails.truncated,
+    });
+    expect(secretDetails.redactedLayers).toBeTrue();
+    expect(secretDetails.layers).toEqual([]);
+    expect(secretDetails.total).toBe(0);
+  });
+
+  test("rejects unsupported layer JSON instead of returning a healthy empty result", async () => {
+    const { pi, getTool } = captureRegistration();
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: `${JSON.stringify({ error: "unsupported layout" })}\n`,
+      stderr: "",
+      exitCode: 0,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const result = await tool.execute("call-1", {}, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+
+    expect(result.details).toMatchObject({
+      layers: [],
+      total: 0,
+      returned: 0,
+      omitted: 0,
+      truncated: false,
+      unavailable: [{ source: "layers", error: "layers: returned unexpected JSON" }],
+    });
+  });
+  test("bounds oversized layer fields in structured output", async () => {
+    const { pi, getTool } = captureRegistration();
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: `${JSON.stringify({
+        "DP-2": {
+          levels: { "2": [{ namespace: "n".repeat(10_000), x: 1, y: 2, w: 3, h: 4 }] },
+        },
+      })}\n`,
+      stderr: "",
+      exitCode: 0,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const result = await tool.execute("call-1", {}, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+    const details = result.details as { layers: Array<{ namespace: string }> };
+
+    expect(details.layers[0]?.namespace).toHaveLength(240);
+    expect(JSON.stringify(details).length).toBeLessThan(2_000);
+  });
+
+  test("preserves whitespace in layer identifiers while filtering exactly", async () => {
+    const { pi, getTool } = captureRegistration();
+    const name = "foo  bar";
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: `${JSON.stringify({
+        "DP-2": { levels: { "2": [{ namespace: name, x: 1, y: 2, w: 3, h: 4 }] } },
+      })}\n`,
+      stderr: "",
+      exitCode: 0,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const result = await tool.execute("call-1", { namespace: name }, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+    const details = result.details as {
+      layers: Array<{ namespace: string }>;
+      total: number;
+    };
+
+    expect(details.total).toBe(1);
+    expect(details.layers[0]?.namespace).toBe(name);
+  });
+
+  test("reports an unavailable layer source without presenting an empty healthy result", async () => {
+    const { pi, getTool } = captureRegistration();
+    const commandRunner: HyprlandCommandRunner = async () => ({
+      stdout: "",
+      stderr: "layers unavailable",
+      exitCode: 1,
+    });
+
+    registerHyprlandExtension(pi, { environment, commandRunner });
+    const tool = getTool("hypr_layer_inspect");
+    if (tool === undefined) throw new Error("Layer inspector was not registered");
+
+    const result = await tool.execute("call-1", {}, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+    const details = result.details as {
+      schemaVersion: number;
+      query: {
+        monitor: string | null;
+        namespace: string | null;
+        level: string | null;
+        limit: number;
+      };
+      redactedLayers: boolean;
+      layers: unknown[];
+      total: number;
+      returned: number;
+      omitted: number;
+      truncated: boolean;
+      unavailable: Array<{ source: string; error: string }>;
+    };
+    const text = result.content[0];
+    if (text?.type !== "text") throw new Error("Layer inspector result did not contain text");
+
+    expect(details).toEqual({
+      schemaVersion: 1,
+      query: { monitor: null, namespace: null, level: null, limit: 100 },
+      redactedLayers: false,
+      layers: [],
+      total: 0,
+      returned: 0,
+      omitted: 0,
+      truncated: false,
+      unavailable: [{ source: "layers", error: "layers: layers unavailable" }],
+    });
+    expect(text.text).toContain("Layers: unavailable");
+    expect(text.text).toContain("- layers: layers unavailable");
   });
 
   test("reports unavailable diagnostic sources without discarding healthy state", async () => {
