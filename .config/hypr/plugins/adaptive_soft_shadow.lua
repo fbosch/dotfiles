@@ -25,12 +25,12 @@ hl.config({
 	plugin = {
 		adaptive_soft_shadow = {
 			blend_mode = "hard-light",
-			color = "rgba(0000002A)",
+			color = "rgba(00000040)",
 			enabled = true,
-			range = 35,
-			render_power = 4,
-			offset = "1 3",
-			strength = 0.8,
+			range = 40,
+			render_power = 2,
+			offset = "0 3",
+			strength = 1,
 		},
 	},
 })
