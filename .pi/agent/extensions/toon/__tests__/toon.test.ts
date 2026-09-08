@@ -7,7 +7,11 @@ import type {
   ExtensionContext,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
-import toonExtension, { createToonTransformer, userMessageConversionEnabled } from "../index";
+import toonExtension, {
+  createToonTransformer,
+  findToonCandidates,
+  userMessageConversionEnabled,
+} from "../index";
 
 const LONG_JSON = JSON.stringify({
   users: Array.from({ length: 30 }, (_, index) => ({
@@ -31,6 +35,42 @@ function resultEvent(overrides: Partial<ToolResultEvent> = {}): ToolResultEvent 
 }
 
 describe("TOON transformer", () => {
+  test("ranks uniform object arrays and skips non-tabular arrays", () => {
+    const value = {
+      smallRows: [
+        { id: 1, name: "one" },
+        { id: 2, name: "two" },
+      ],
+      rows: Array.from({ length: 4 }, (_, id) => ({ id, name: `row-${id}` })),
+      primitive: [1, 2, 3],
+      empty: [],
+      singleton: [{ id: 1, name: "one" }],
+      mixed: [{ id: 1 }, { name: "two" }],
+    };
+    const analysis = findToonCandidates(value, JSON.stringify(value).length);
+
+    expect(analysis.candidates.map((candidate) => candidate.path)).toEqual([
+      ["rows"],
+      ["smallRows"],
+    ]);
+    expect(analysis.candidates[0]?.score).toBeGreaterThan(analysis.candidates[1]?.score ?? 0);
+    expect(analysis.recommended.map((candidate) => candidate.path)).toEqual([["rows"]]);
+  });
+
+  test("leaves 16-item primitive arrays unchanged", () => {
+    const transformer = createToonTransformer();
+    const json = JSON.stringify({
+      values: Array.from({ length: 16 }, (_, index) => `${index}-${"x".repeat(20)}`),
+    });
+
+    expect(json.length).toBeGreaterThanOrEqual(256);
+    expect(
+      transformer.transformResult(
+        resultEvent({ content: [{ type: "text", text: json }] }),
+      ),
+    ).toBeUndefined();
+  });
+
   test("compacts eligible JSON only when TOON is shorter", () => {
     const transformer = createToonTransformer("bash");
     const content = transformer.transformResult(resultEvent());

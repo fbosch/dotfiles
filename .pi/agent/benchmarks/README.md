@@ -123,3 +123,14 @@ Each run writes:
 - `pty-control.json` and `pty-control.md`: raw launcher-control results.
 
 Artifacts contain no credential contents or copied fixture files.
+
+## TOON heuristic benchmark
+
+Measure the baseline encoder, structural precheck, eager versus deferred lossy-number scanning, and optional tokenizer reference:
+
+```bash
+bun run --cwd .pi/agent benchmark:toon
+```
+
+The benchmark uses 100 warmups and 1,000 measured runs by default. Override them with `PI_TOON_BENCHMARK_WARMUPS` and `PI_TOON_BENCHMARK_RUNS`.
+The tokenizer reference is enabled by setting `PI_TOON_TOKEN_COUNTER_MODULE` to a module exporting `countTokens(text)`.

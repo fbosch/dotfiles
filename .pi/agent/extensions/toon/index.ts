@@ -20,6 +20,12 @@ const TOON_OPTIONS = {
 } as const;
 const JSON_FENCE = /```json[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/g;
 
+// Use repeated structure as a cheap gate; encoding and safety checks remain authoritative.
+const MIN_CANDIDATE_ROWS = 2;
+const JSON_KEY_SYNTAX_COST = 4;
+const TOON_HEADER_KEY_COST = 2;
+const TOON_ROW_OVERHEAD = 2;
+const MIN_EXPECTED_SAVINGS = 16;
 interface ConvertedOutput {
   bytes: number;
   json: string;
@@ -45,6 +51,126 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
+export type ToonPath = readonly (string | number)[];
+
+export interface ToonCandidate {
+  readonly path: ToonPath;
+  readonly rows: number;
+  readonly keys: readonly string[];
+  readonly repeatedKeyCost: number;
+  readonly estimatedToonOverhead: number;
+  readonly score: number;
+}
+
+export interface ToonCandidateAnalysis {
+  readonly candidates: readonly ToonCandidate[];
+  readonly recommended: readonly ToonCandidate[];
+}
+
+function analyzeObjectArray(items: readonly unknown[], path: ToonPath): ToonCandidate | undefined {
+  if (items.length < MIN_CANDIDATE_ROWS) return undefined;
+
+  const first = items[0];
+  if (first === undefined) return undefined;
+  if (isRecord(first) === false) return undefined;
+
+  const keys = Object.keys(first).sort();
+  if (keys.length === 0) return undefined;
+
+  for (const item of items) {
+    if (isRecord(item) === false) return undefined;
+    const itemKeys = Object.keys(item).sort();
+    if (itemKeys.length !== keys.length) return undefined;
+    for (let index = 0; index < keys.length; index += 1) {
+      if (itemKeys[index] !== keys[index]) return undefined;
+    }
+  }
+
+  const keyCost = keys.reduce((total, key) => total + key.length + JSON_KEY_SYNTAX_COST, 0);
+  const repeatedKeyCost = (items.length - 1) * keyCost;
+  const estimatedToonOverhead =
+    keys.length * TOON_HEADER_KEY_COST + (items.length - 1) * TOON_ROW_OVERHEAD;
+
+  return {
+    path,
+    rows: items.length,
+    keys,
+    repeatedKeyCost,
+    estimatedToonOverhead,
+    score: repeatedKeyCost - estimatedToonOverhead,
+  };
+}
+
+
+export function findToonCandidates(value: unknown, jsonLength: number): ToonCandidateAnalysis {
+  if (jsonLength < MIN_JSON_LENGTH) return { candidates: [], recommended: [] };
+
+  const candidates: ToonCandidate[] = [];
+  const pending: Array<{ value: unknown; path: ToonPath }> = [{ value, path: [] }];
+
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (current === undefined) continue;
+
+    if (Array.isArray(current.value)) {
+      const candidate = analyzeObjectArray(current.value, current.path);
+      if (candidate !== undefined) candidates.push(candidate);
+
+      for (let index = current.value.length - 1; index >= 0; index -= 1) {
+        pending.push({
+          value: current.value[index],
+          path: current.path.concat(index),
+        });
+      }
+      continue;
+    }
+
+    if (isRecord(current.value)) {
+      const entries = Object.entries(current.value);
+      for (let index = entries.length - 1; index >= 0; index -= 1) {
+        const entry = entries[index];
+        if (entry === undefined) continue;
+        pending.push({
+          value: entry[1],
+          path: current.path.concat(entry[0]),
+        });
+      }
+    }
+  }
+
+  candidates.sort((left, right) => right.score - left.score);
+  return {
+    candidates,
+    recommended: candidates.filter((candidate) => candidate.score >= MIN_EXPECTED_SAVINGS),
+  };
+}
+
+export function hasRecommendedToonCandidate(value: unknown, jsonLength: number): boolean {
+  if (jsonLength < MIN_JSON_LENGTH) return false;
+
+  const pending: unknown[] = [value];
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (Array.isArray(current)) {
+      const candidate = analyzeObjectArray(current, []);
+      if (candidate !== undefined && candidate.score >= MIN_EXPECTED_SAVINGS) {
+        return true;
+      }
+      for (const item of current) {
+        if (Array.isArray(item) || isRecord(item)) pending.push(item);
+      }
+      continue;
+    }
+
+    if (isRecord(current)) {
+      for (const child of Object.values(current)) {
+        if (Array.isArray(child) || isRecord(child)) pending.push(child);
+      }
+    }
+  }
+
+  return false;
+}
 interface ToonSettings {
   readonly convertToolResults: boolean;
   readonly convertUserMessages: boolean;
@@ -101,7 +227,7 @@ function shellSingleQuote(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-function containsLossyNumber(text: string): boolean {
+export function containsLossyNumber(text: string): boolean {
   let inString = false;
   let escaped = false;
 
@@ -243,7 +369,7 @@ export function createToonTransformer(
   function transformJson(text: string): string | undefined {
     const json = text.trim();
     if (json.length < MIN_JSON_LENGTH || looksLikeJson(json) === false) return undefined;
-    if (Buffer.byteLength(json) > MAX_JSON_BYTES || containsLossyNumber(json)) return undefined;
+    if (Buffer.byteLength(json) > MAX_JSON_BYTES) return undefined;
 
     let parsed: unknown;
     try {
@@ -251,6 +377,8 @@ export function createToonTransformer(
     } catch {
       return undefined;
     }
+    if (hasRecommendedToonCandidate(parsed, json.length) === false) return undefined;
+    if (containsLossyNumber(json)) return undefined;
 
     try {
       const toon = encode(parsed, TOON_OPTIONS);
