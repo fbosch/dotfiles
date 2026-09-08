@@ -36,6 +36,14 @@ local function contains(values, pattern)
 	return count_matching(values, pattern) > 0
 end
 
+local function worker_with_label(workers, label)
+	for _, worker in ipairs(workers) do
+		if worker.label == label then
+			return worker
+		end
+	end
+end
+
 local function run_scenario(options)
 	local scenario = {
 		now = options.now or 0,
@@ -226,6 +234,9 @@ local function run_scenario(options)
 			if value == "layers" then
 				return scenario.layers
 			end
+			if value == "monitors" then
+				return { { refreshRate = scenario.refresh_rate } }
+			end
 			if value == "workspace" then
 				return { name = "1" }
 			end
@@ -364,7 +375,7 @@ local hide_wins_before_mapping = run_scenario({
 })
 assert(count_matching(hide_wins_before_mapping.trace, "worker:launch") == 1)
 assert(count_matching(hide_wins_before_mapping.trace, "worker:visibility") == 1)
-local hide_worker = hide_wins_before_mapping.workers[2]
+local hide_worker = assert(worker_with_label(hide_wins_before_mapping.workers, "visibility"))
 assert(hide_worker.metadata.visible == false)
 assert(type(hide_worker.metadata.layer_count) == "number")
 
@@ -508,23 +519,29 @@ local remapped_after_zero = run_scenario({
 assert(count_matching(remapped_after_zero.trace, "worker:visibility") == 2)
 assert(count_matching(remapped_after_zero.commands, "waybar%-process%.sh signal USR1") == 2)
 
-local delayed_pip = run_scenario({
+local immediate_pip = run_scenario({
 	layers = waybar_layers_on_outputs({ "DP-1" }),
-	visibility_state = "shown\n",
+	visibility_state = "hidden\n",
 	steps = {
 		{
 			before = function(scenario)
 				scenario:complete_worker("visibility")
 			end,
 		},
-		{ message = "hide" },
-		{ message = "release" },
+		{
+			before = function(scenario)
+				scenario:complete_worker("pip")
+			end,
+		},
+		{ message = "show" },
 		{ message = "quit" },
 	},
 })
-assert(delayed_pip.responses[1] == "ok" and delayed_pip.responses[2] == "ok")
-assert(contains(delayed_pip.trace, "worker:pip"))
-assert(not contains(delayed_pip.commands, "waybar%-show"))
+assert(immediate_pip.responses[1] == "ok")
+assert(
+	count_matching(immediate_pip.trace, "worker:pip") == 2,
+	"PiP adjustment must start before Waybar signaling completes"
+)
 
 local visibility_cancelled_on_quit = run_scenario({
 	layers = waybar_layers_on_outputs({ "DP-1" }),
@@ -568,7 +585,9 @@ local visibility_overrides_stale_launch_state = run_scenario({
 		{ message = "quit" },
 	},
 })
-assert(visibility_overrides_stale_launch_state.workers[2].metadata.visible == false)
+local restored_visibility_worker =
+	assert(worker_with_label(visibility_overrides_stale_launch_state.workers, "visibility"))
+assert(restored_visibility_worker.metadata.visible == false)
 
 local hidden_launch_retries = run_scenario({
 	launch_ok = false,

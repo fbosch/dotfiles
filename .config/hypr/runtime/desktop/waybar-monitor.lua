@@ -201,6 +201,7 @@ local function read_visibility_state()
 	return read_state(visibility_state_file, "Waybar intent")
 end
 
+local schedule_pip_visibility
 local function record_visibility_intent(visible, requires_launch)
 	-- The acknowledgement means this atomic write completed; effects run later.
 	if not publish_visibility_state(visible) then
@@ -210,6 +211,7 @@ local function record_visibility_intent(visible, requires_launch)
 	if desired_visible ~= visible then
 		desired_visible = visible
 		intent_generation = intent_generation + 1
+		schedule_pip_visibility(visible)
 	end
 	local should_launch = requires_launch and not waybar_mapped
 	if (launch_requested or should_launch) and not publish_state(launch_state_file, "Waybar launch state", visible) then
@@ -296,7 +298,7 @@ local function start_hide_probe_worker()
 	return true
 end
 
-local function schedule_pip_visibility(visible)
+schedule_pip_visibility = function(visible)
 	pip_desired_visible = visible
 	pip_dirty = true
 	reconciliation_dirty = true

@@ -1,16 +1,3 @@
-diff --git a/node_modules/@gotgenes/pi-permission-system/package.json b/node_modules/@gotgenes/pi-permission-system/package.json
-index a46c836..1b9181a 100644
---- a/node_modules/@gotgenes/pi-permission-system/package.json
-+++ b/node_modules/@gotgenes/pi-permission-system/package.json
-@@ -10,7 +10,7 @@
-     }
-   },
-   "imports": {
--    "#src/*": "./src/*",
-+    "#src/*": "./src/*.ts",
-     "#test/*": "./test/*"
-   },
-   "files": [
 diff --git a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts b/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
 index 0e268df..89f6408 100644
 --- a/node_modules/@gotgenes/pi-permission-system/dist/public.d.ts
@@ -74,6 +61,19 @@ index f9f77a0..0cfdec8 100644
  #### `registerToolInputFormatter`
  
  Register a custom preview formatter for a specific tool name.
+diff --git a/node_modules/@gotgenes/pi-permission-system/package.json b/node_modules/@gotgenes/pi-permission-system/package.json
+index a46c836..1b9181a 100644
+--- a/node_modules/@gotgenes/pi-permission-system/package.json
++++ b/node_modules/@gotgenes/pi-permission-system/package.json
+@@ -10,7 +10,7 @@
+     }
+   },
+   "imports": {
+-    "#src/*": "./src/*",
++    "#src/*": "./src/*.ts",
+     "#test/*": "./test/*"
+   },
+   "files": [
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
 index 17d1c09..be8feff 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/access-path.ts
@@ -97,6 +97,453 @@ index 17d1c09..be8feff 100644
    /**
     * Build an `AccessPath` for a tool-input or bash-token path, resolved against
     * `resolveBase` (the cd-folded effective directory; defaults to `cwd`).
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
+index 3134210..f4319d1 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
+@@ -2,6 +2,7 @@ import type { BashCommandContext, FloorExemption } from "#src/types";
+ import { EXECUTION_HOST_TYPES, forEachExecutionIn } from "./nested-execution";
+ import { parseUnresolvedWithin, type TSNode } from "./parser";
+ import { redirectMayWriteFile } from "./redirect-analysis";
++import { literalShellWord, shellSafetyFacts, type ShellSafetyFacts } from "./shell-safety";
+ import {
+   type CommandWord,
+   classifyWrapperWords,
+@@ -22,7 +23,7 @@ export type { WrapperKind } from "./wrapper-analysis";
+  * The type is the stable extension point: #306 adds an execution `context`,
+  * #307 adds per-command path candidates and an effective working directory.
+  */
+-export interface BashCommand {
++export interface BashCommand extends ShellSafetyFacts {
+   readonly text: string;
+   /**
+    * Execution context for a nested command (substitution or subshell); absent
+@@ -78,6 +79,7 @@ interface UnitScope {
+    * withholds the floor exemption from any wrapper unit beneath it.
+    */
+   readonly writesViaRedirect: boolean;
++  readonly requiresConfirmation?: true;
+   /**
+    * True when the enclosing statement holds a region tree-sitter could not
+    * resolve, so every unit beneath it is floored rather than trusted (#840).
+@@ -328,9 +330,10 @@ function makeUnit(
+     executedUnit === undefined ? flagged : { ...flagged, executedUnit };
+   const exempted =
+     floorExemption === undefined ? named : { ...named, floorExemption };
++  const reviewed = scope.requiresConfirmation ? { ...exempted, requiresConfirmation: true as const } : exempted;
+   return scope.parseUnresolved
+-    ? { ...exempted, parseUnresolved: true }
+-    : exempted;
++    ? { ...reviewed, parseUnresolved: true }
++    : reviewed;
+ }
+ 
+ /**
+@@ -341,13 +344,21 @@ function makeUnit(
+ function makeCommandUnit(node: TSNode, scope: UnitScope): BashCommand {
+   const text = commandUnitText(node);
+   const words = readCommandWords(node);
+-  return makeUnit(text, scope, {
+-    wrapperKind: classifyWrapperWords(words),
+-    executedUnit: executedUnitOf(text, words) ?? undefined,
+-    floorExemption: isTransparentWrapper(words, scope)
+-      ? "core-reader"
+-      : undefined,
+-  });
++  const safety = shellSafetyFacts(words);
++  for (let index = 0; index < node.childCount; index++) {
++    const child = node.child(index);
++    if (child?.type === "variable_assignment" && /^(?:PATH|BASH_ENV|ENV|SHELLOPTS|BASHOPTS|GIT_[A-Z_]+|LD_[A-Z_]+|NODE_OPTIONS|BUN_OPTIONS)=/.test(child.text)) {
++      scope = { ...scope, requiresConfirmation: true };
++    }
++  }
++  return {
++    ...makeUnit(text, scope, {
++      wrapperKind: classifyWrapperWords(words),
++      executedUnit: executedUnitOf(text, words) ?? undefined,
++      floorExemption: isTransparentWrapper(words, scope) ? "core-reader" : undefined,
++    }),
++    ...safety,
++  };
+ }
+ 
+ /**
+@@ -361,15 +372,14 @@ function makeCommandUnit(node: TSNode, scope: UnitScope): BashCommand {
+  * redirect is a refusal rather than a proof.
+  */
+ function redirectedScope(node: TSNode, scope: UnitScope): UnitScope {
+-  if (scope.writesViaRedirect) return scope;
++  let next = scope;
+   for (let i = 0; i < node.childCount; i++) {
+     const child = node.child(i);
+     if (child?.type !== "file_redirect") continue;
+-    if (redirectMayWriteFile(child)) {
+-      return { ...scope, writesViaRedirect: true };
+-    }
++    if (redirectMayWriteFile(child)) next = { ...next, writesViaRedirect: true };
++    if (literalShellWord(child.text) === undefined) next = { ...next, requiresConfirmation: true };
+   }
+-  return scope;
++  return next;
+ }
+ 
+ /**
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
+index 8e9b7a8..805944b 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
+@@ -9,6 +9,20 @@ import { getParser } from "./parser";
+ 
+ export type { BashCommand, BashExternalPath, BashPathRuleCandidate };
+ 
++/** Review uncertain shell programs and potentially destructive operations even in session YOLO. */
++export async function requiresBashReview(command: string): Promise<boolean> {
++  const parser = await getParser();
++  const tree = parser.parse(command);
++  if (!tree) return true;
++  try {
++    const commands = collectCommands(tree.rootNode);
++    return tree.rootNode.hasError || commands.length === 0 || commands.some((unit) =>
++      !unit.denialCandidates?.length || unit.requiresConfirmation || unit.yoloUnsafe || unit.wrapperKind || unit.parseUnresolved);
++  } finally {
++    tree.delete();
++  }
++}
++
+ /**
+  * A bash command parsed once into a born-ready representation.
+  *
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
+new file mode 100644
+index 0000000..dd7c12d
+--- /dev/null
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
+@@ -0,0 +1,206 @@
++import { commandLayersOf, type CommandWord } from "./wrapper-analysis";
++
++export interface ShellSafetyFacts {
++  readonly denialCandidates?: readonly string[];
++  readonly requiresConfirmation?: true;
++  readonly yoloUnsafe?: true;
++}
++
++// Decode literal shell words only. Expansion is deliberately not evaluated:
++// doing so could execute substitutions or read secrets before authorization.
++export function literalShellWord(text: string): string | undefined {
++  let quote = "";
++  let value = "";
++  for (let index = 0; index < text.length; index++) {
++    const char = text[index];
++    if (quote === "'") {
++      if (char === "'") quote = "";
++      else value += char;
++      continue;
++    }
++    if (char === "\\") {
++      const next = text[++index];
++      if (next === undefined) return undefined;
++      if (next === "\n") continue;
++      if (quote === '"' && !["$", "`", '"', "\\"].includes(next)) value += "\\";
++      value += next;
++      continue;
++    }
++    if (char === quote) {
++      quote = "";
++      continue;
++    }
++    if (!quote && (char === "'" || char === '"')) {
++      quote = char;
++      continue;
++    }
++    if (char === "$" || char === "`" || (!quote && "*?[]{}".includes(char))) return undefined;
++    value += char;
++  }
++  return quote ? undefined : value;
++}
++
++const FILE_MUTATORS = new Set(["rm", "rmdir", "unlink", "truncate", "dd", "shred"]);
++// Unknown programs can delete data just as easily as rm. Only named readers
++// are eligible for automatic approval; explicitly allowed project tasks still
++// pass through the normal permission rules without consulting YOLO.
++const YOLO_READERS = new Set([
++  "pwd",
++  "true",
++  "false",
++  "echo",
++  "printf",
++  "test",
++  "command",
++  "uname",
++  "id",
++  "whoami",
++  "cd",
++  "ls",
++  "cat",
++  "nl",
++  "head",
++  "tail",
++  "wc",
++  "stat",
++  "basename",
++  "dirname",
++  "realpath",
++  "which",
++  "grep",
++  "egrep",
++  "fgrep",
++  "git",
++]);
++const GIT_READERS = new Set([
++  "status",
++  "diff",
++  "log",
++  "show",
++  "rev-parse",
++  "ls-files",
++  "ls-tree",
++  "grep",
++  "describe",
++  "blame",
++]);
++const POWER_ACTIONS = new Set(["reboot", "poweroff", "halt", "kexec", "soft-reboot"]);
++
++function withoutGlobalOptions(
++  args: readonly string[],
++  valueFlags: ReadonlySet<string>,
++): readonly string[] {
++  let index = 0;
++  while (index < args.length && args[index].startsWith("-")) {
++    if (args[index] === "--") return args.slice(index + 1);
++    index += valueFlags.has(args[index]) ? 2 : 1;
++  }
++  return args.slice(index);
++}
++const GIT_VALUE_FLAGS = new Set([
++  "-C",
++  "-c",
++  "--git-dir",
++  "--work-tree",
++  "--namespace",
++  "--config-env",
++]);
++const SYSTEMCTL_VALUE_FLAGS = new Set(["-H", "--host", "-M", "--machine", "--root", "--image"]);
++
++function needsConfirmation(name: string, args: readonly string[]): boolean {
++  if (FILE_MUTATORS.has(name)) return true;
++  if (name === "rg") return true; // Recursive by default; individual files are not permission-checked.
++  if (["grep", "egrep", "fgrep"].includes(name)) {
++    return args.some(
++      (arg, index) =>
++        /^-[^-]*[rR]/.test(arg) ||
++        (arg.startsWith("--") &&
++          arg.length > 2 &&
++          ["--recursive", "--dereference-recursive", "--directories"].some((option) =>
++            option.startsWith(arg.split("=")[0]),
++          )) ||
++        (["-d", "--directories"].includes(arg) && args[index + 1] === "recurse"),
++    );
++  }
++  if (name === "find" || name === "fd") {
++    return args.some((arg) =>
++      [
++        "-delete",
++        "-exec",
++        "-execdir",
++        "-ok",
++        "-okdir",
++        "-x",
++        "-X",
++        "--exec",
++        "--exec-batch",
++      ].includes(arg),
++    );
++  }
++  if (name === "wt") return true;
++  if (name !== "git") return false;
++  if (args.some((arg) => arg === "-c" || arg.startsWith("-c") || arg.startsWith("--config-env")))
++    return true;
++  const [verb, ...rest] = withoutGlobalOptions(args, GIT_VALUE_FLAGS);
++  if (GIT_READERS.has(verb))
++    return rest.some(
++      (arg) => arg.startsWith("--output") || ["--ext-diff", "--textconv"].includes(arg),
++    );
++  if (verb === "branch") {
++    if (
++      rest.some(
++        (arg) =>
++          /^-[^-]*[dDmMcCf]/.test(arg) || ["--delete", "--move", "--copy", "--force"].includes(arg),
++      )
++    )
++      return true;
++    return (
++      rest.length > 0 &&
++      !rest.includes("--list") &&
++      !rest.every((arg) =>
++        ["--show-current", "--all", "--remotes", "-a", "-r", "-v", "-vv"].includes(arg),
++      )
++    );
++  }
++  if (verb === "worktree" && rest[0] === "list") return false;
++  if (verb === "worktree" && rest[0] === "prune")
++    return !rest.includes("--dry-run") || rest.includes("--no-dry-run");
++  if (verb === "clean")
++    return (
++      !rest.some((arg) => arg === "--dry-run" || /^-[^-]*n/.test(arg)) ||
++      rest.includes("--no-dry-run")
++    );
++  return true;
++}
++
++export function shellSafetyFacts(words: readonly CommandWord[]): ShellSafetyFacts {
++  const literal = words.map((word) => literalShellWord(word.text));
++  const uncertain =
++    literal.some((word) => word === undefined) ||
++    words.some((word) => word.text.includes("\\") && !/^'[^']*'$/.test(word.text));
++  const normalized = words.map((word, index) => ({ ...word, text: literal[index] ?? word.text }));
++  const candidates: string[] = [];
++  let requiresConfirmation = uncertain;
++  let yoloUnsafe = uncertain;
++  for (const layer of commandLayersOf(normalized)) {
++    const head = literalShellWord(layer[0]?.text ?? "");
++    if (!head) {
++      yoloUnsafe = true;
++      continue;
++    }
++    const name = head.slice(head.lastIndexOf("/") + 1);
++    const args = layer.slice(1).map((word) => word.text);
++    candidates.push([name, ...args].join(" "));
++    if (name === "systemctl") {
++      const [verb] = withoutGlobalOptions(args, SYSTEMCTL_VALUE_FLAGS);
++      if (POWER_ACTIONS.has(verb)) candidates.push(`systemctl ${verb}`);
++    }
++    requiresConfirmation ||= needsConfirmation(name, args);
++    yoloUnsafe ||= head !== name || !YOLO_READERS.has(name);
++  }
++  return {
++    denialCandidates: candidates,
++    ...(requiresConfirmation ? { requiresConfirmation: true } : {}),
++    ...(yoloUnsafe ? { yoloUnsafe: true } : {}),
++  };
++}
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
+index 6844185..162158a 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
+@@ -125,6 +125,33 @@ export function isTransparentWrapper(
+   return proveCommandEffect(head, args).effect === "read";
+ }
+ 
++// Denial-only inspection keeps every wrapper layer, including a privileged
++// wrapper between two otherwise harmless prefixes. These candidates never grant access.
++export function commandLayersOf(words: readonly CommandWord[]): readonly (readonly CommandWord[])[] {
++  const layers: (readonly CommandWord[])[] = [words];
++  let current = words;
++  for (let depth = 0; depth < 16; depth++) {
++    const name = wrapperName(current);
++    let start: number;
++    if (name === "command" || name === "builtin" || name === "exec" || name === "busybox" || name === "toybox") {
++      if (name === "command" && current.slice(1).some((word) => /^-[^-]*[vV]/.test(word.text))) break;
++      start = 1;
++      while (current[start]?.text.startsWith("-")) {
++        const flag = current[start].text;
++        start += name === "exec" && flag === "-a" ? 2 : 1;
++        if (flag === "--") break;
++      }
++    } else {
++      if (classifyWrapperWords(current) !== "indirection") break;
++      start = innerCommandIndex(current);
++    }
++    if (start < 1 || start >= current.length) break;
++    current = rebase(current, start, execTerminatorIndex(current, start));
++    layers.push(current);
++  }
++  return layers;
++}
++
+ // ── Unwrapping ───────────────────────────────────────────────────────────────
+ 
+ /**
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
+index b7a05f4..a16645d 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
+@@ -9,6 +9,8 @@ export const READ_ONLY_PATH_BEARING_TOOLS: ReadonlySet<string> = new Set([
+   "find",
+   "grep",
+   "ls",
++  "fffind",
++  "ffgrep",
+ ]);
+ 
+ export const PATH_BEARING_TOOLS = new Set([
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
+index a54250c..58f535b 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
+@@ -153,7 +153,7 @@ export class AuthorizerSelection
+         continue;
+       }
+       resolved.push(name);
+-      links.push({ name, authorize: encloseInDelegationEnvelope(authorize) });
++      links.push({ name, authorize: encloseInDelegationEnvelope(name, authorize) });
+     }
+     if (resolved.length > 0) {
+       this.deps.logger.review("authorizer_chain_resolved", {
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
+index c73729c..dfb75b1 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
+@@ -128,11 +128,13 @@ export function selectAuthorizer(
+   ctx: ExtensionContext,
+   deps: AuthorizerSelectionDeps,
+ ): SelectedAuthority {
++  const isSubagent = deps.detection.isSubagent(ctx);
+   if (ctx.hasUI) {
+     return {
+       terminal: new LocalUserAuthorizer({
+         ui: ctx.ui,
+         mode: ctx.mode,
++        isSubagent,
+         events: deps.events,
+         getPromptPreferences: deps.getPromptPreferences,
+         requestPermissionDecision: deps.requestPermissionDecision,
+@@ -140,7 +142,7 @@ export function selectAuthorizer(
+       adjudicatesLocally: true,
+     };
+   }
+-  if (deps.detection.isSubagent(ctx)) {
++  if (isSubagent) {
+     return {
+       terminal: new ParentAuthorizer(ctx, {
+         forwardingDir: deps.forwardingDir,
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
+index 4b7ecd5..abb5611 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
+@@ -15,6 +15,10 @@
+  * family name resolves to members, and leaves *which* families are excluded
+  * independently relaxable (#620).
+  *
++ * The locally registered `session-yolo` link is the deliberate exception. It
++ * sees only `ask` decisions after policy resolution, so allowing it across all
++ * surfaces suppresses every prompt without weakening explicit `deny` rules.
++ *
+  * A finer secret-shaped-`path` exclusion (letting a link allow a non-secret
+  * path) is deferred to the allow-capable slice that needs it (#620); until then
+  * the conservative whole-family exclusion ships. The checkpoint is dormant
+@@ -38,8 +42,12 @@ export const DELEGATION_EXCLUDED_SURFACES: ReadonlySet<string> = new Set([
+  * are forwarded as-is.
+  */
+ export function encloseInDelegationEnvelope(
++  name: string,
+   authorize: Authorizer["authorize"],
+ ): Authorizer["authorize"] {
++  if (name === "session-yolo") {
++    return authorize;
++  }
+   return async (details, query, log) => {
+     const verdict = await authorize(details, query, log);
+     if (verdict.kind === "allow" && isExcludedSurface(details)) {
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts
 index ab78538..79a8f13 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/forwarded-request-server.ts
@@ -154,35 +601,8 @@ index aebada8..f0222ef 100644
      };
    } catch (error) {
      logPermissionForwardingWarning(
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
-index c73729c..dfb75b1 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
-@@ -128,11 +128,13 @@ export function selectAuthorizer(
-   ctx: ExtensionContext,
-   deps: AuthorizerSelectionDeps,
- ): SelectedAuthority {
-+  const isSubagent = deps.detection.isSubagent(ctx);
-   if (ctx.hasUI) {
-     return {
-       terminal: new LocalUserAuthorizer({
-         ui: ctx.ui,
-         mode: ctx.mode,
-+        isSubagent,
-         events: deps.events,
-         getPromptPreferences: deps.getPromptPreferences,
-         requestPermissionDecision: deps.requestPermissionDecision,
-@@ -140,7 +142,7 @@ export function selectAuthorizer(
-       adjudicatesLocally: true,
-     };
-   }
--  if (deps.detection.isSubagent(ctx)) {
-+  if (isSubagent) {
-     return {
-       terminal: new ParentAuthorizer(ctx, {
-         forwardingDir: deps.forwardingDir,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
-index 66a3951..2bb6a37 100644
+index 66a3951..57db44a 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/local-user-authorizer.ts
 @@ -22,10 +22,13 @@ import type {
@@ -246,7 +666,7 @@ index 66a3951..2bb6a37 100644
 +  };
 +}
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
-index bb69665..48cb244 100644
+index bb69665..19a4bbd 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-dialog.ts
 @@ -1,4 +1,5 @@
@@ -284,7 +704,7 @@ index bb69665..48cb244 100644
  
  /**
   * A session-granting decision, naming its width only when it is not the
-@@ -138,6 +144,11 @@ export interface RequestPermissionOptions {
+@@ -138,6 +146,11 @@ export interface RequestPermissionOptions {
      subagentLabel: string;
      servingSessionLabel: string;
    };
@@ -296,7 +716,7 @@ index bb69665..48cb244 100644
  }
  
  export async function requestPermissionDecisionFromUi(
-@@ -145,13 +156,16 @@ export async function requestPermissionDecisionFromUi(
+@@ -145,13 +158,16 @@ export async function requestPermissionDecisionFromUi(
    title: string,
    message: string,
    options?: RequestPermissionOptions,
@@ -313,7 +733,7 @@ index bb69665..48cb244 100644
      DENY_OPTION,
      DENY_WITH_REASON_OPTION,
    ];
-@@ -171,10 +185,13 @@ export async function requestPermissionDecisionFromUi(
+@@ -171,10 +187,13 @@ export async function requestPermissionDecisionFromUi(
      const width: SessionGrantWidth =
        selected === widthOption ? "family" : "proven";
      if (options?.sessionScope) {
@@ -331,7 +751,7 @@ index bb69665..48cb244 100644
        return sessionApproval(
          // A cancelled scope select (undefined) falls back to the
          // least-privilege subagent scope.
-@@ -187,6 +204,48 @@ export async function requestPermissionDecisionFromUi(
+@@ -187,6 +206,48 @@ export async function requestPermissionDecisionFromUi(
      return sessionApproval("approved_for_session", width);
    }
  
@@ -465,7 +885,7 @@ index a05f807..2b9f3cb 100644
      }
    }
  
-@@ -253,9 +262,18 @@ class PermissionPromptComponent implements Component {
+@@ -253,9 +264,18 @@ class PermissionPromptComponent implements Component {
     * of the width the host gives us, which a resize changes.
     */
    private renderAsk(width: number): DialogView {
@@ -485,7 +905,9 @@ index a05f807..2b9f3cb 100644
        (text) => this.theme.fg("warning", text),
      );
    }
-@@ -317,7 +335,17 @@ class PermissionPromptComponent implements Component {
+@@ -315,10 +335,20 @@ class PermissionPromptComponent implements Component {
+   }
+ 
    private toEvent(data: string): PromptEvent | undefined {
 -    if (matchesKey(data, "up") || matchesKey(data, "k")) {
 +    if (
@@ -505,7 +927,8 @@ index a05f807..2b9f3cb 100644
 +    ) {
        return { type: "nav", direction: "down" };
      }
-@@ -393,7 +411,52 @@ class PermissionPromptComponent implements Component {
+     if (matchesKey(data, "enter")) {
+@@ -393,7 +423,52 @@ class PermissionPromptComponent implements Component {
      return lines;
    }
  
@@ -559,7 +982,7 @@ index a05f807..2b9f3cb 100644
      const scope = this.config.sessionScope;
      const subagentLabel = scope?.subagentLabel ?? "This subagent only";
      const servingLabel = scope?.servingSessionLabel ?? "The whole session";
-@@ -403,6 +447,8 @@ class PermissionPromptComponent implements Component {
+@@ -403,6 +478,8 @@ class PermissionPromptComponent implements Component {
      ];
      const lines = [
        this.theme.fg("accent", this.title),
@@ -569,7 +992,7 @@ index a05f807..2b9f3cb 100644
        "",
      ];
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
-index 7649514..593b3fa 100644
+index 7649514..6b7c9ab 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-decision.ts
 @@ -1,4 +1,5 @@
@@ -603,7 +1026,7 @@ index 7649514..593b3fa 100644
  
  /**
   * The decision step's option keys, in display order.
-@@ -48,13 +49,18 @@ const NARROW_OPTION_ORDER: readonly PromptKey[] = OPTION_ORDER.filter(
+@@ -48,13 +50,18 @@ const NARROW_OPTION_ORDER: readonly PromptKey[] = OPTION_ORDER.filter(
  export function visibleOptionKeys(
    config: PromptModelConfig,
  ): readonly PromptKey[] {
@@ -626,7 +1049,7 @@ index 7649514..593b3fa 100644
    n: "deny",
    r: "deny with a reason",
  };
-@@ -78,6 +84,10 @@ export interface PromptModelConfig {
+@@ -78,6 +85,10 @@ export interface PromptModelConfig {
     * default) or the whole serving session.
     */
    sessionScope?: NonNullable<RequestPermissionOptions["sessionScope"]>;
@@ -637,7 +1060,7 @@ index 7649514..593b3fa 100644
  }
  
  /** The re-render view state the component draws from. */
-@@ -86,12 +96,14 @@ export interface PromptViewState {
+@@ -86,12 +97,14 @@ export interface PromptViewState {
    highlightedKey: PromptKey;
    /** Set only while awaiting the confirming second press of a hotkey. */
    armedKey?: PromptKey;
@@ -653,7 +1076,7 @@ index 7649514..593b3fa 100644
    /**
     * The width the session option chosen so far would grant.
     *
-@@ -117,15 +129,16 @@ export type PromptOutcome =
+@@ -117,15 +130,16 @@ export type PromptOutcome =
    | { kind: "decision"; decision: UnattributedDecision };
  
  export function initialPromptState(
@@ -672,7 +1095,7 @@ index 7649514..593b3fa 100644
      grantWidth: "proven",
    };
  }
-@@ -150,6 +163,10 @@ export function reducePrompt(
+@@ -150,6 +164,10 @@ export function reducePrompt(
        return reduceReasonStep(state, event);
      case "scope":
        return reduceScopeStep(state, event);
@@ -683,7 +1106,7 @@ index 7649514..593b3fa 100644
    }
  }
  
-@@ -201,7 +216,7 @@ function commit(
+@@ -201,7 +219,7 @@ function commit(
    key: PromptKey,
  ): PromptOutcome {
    switch (key) {
@@ -692,7 +1115,7 @@ index 7649514..593b3fa 100644
        return {
          kind: "decision",
          decision: { approved: true, state: "approved" },
-@@ -217,6 +232,17 @@ function commit(
+@@ -217,6 +235,17 @@ function commit(
          hint: "",
          reasonError: undefined,
        });
@@ -710,7 +1133,7 @@ index 7649514..593b3fa 100644
      case "s":
      case "b": {
        // The two session options differ only in the width they grant; which
-@@ -290,6 +316,66 @@ function reduceReasonStep(
+@@ -290,6 +319,66 @@ function reduceReasonStep(
    return render(state);
  }
  
@@ -1304,6 +1727,32 @@ index 64486c5..bfd6d7e 100644
  export function extractFrontmatter(markdown: string): string {
    const normalized = markdown.replace(/\r\n/g, "\n");
    if (!normalized.startsWith("---\n")) {
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
+index 5523c7a..cbe699b 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
+@@ -109,6 +109,21 @@ function resolveCommandUnit(
+   resolver: ScopedPermissionResolver,
+ ): PermissionCheckResult {
+   const base = resolveOnBashSurface(cmd.text, agentName, resolver);
++  // Canonical spellings only tighten a decision; they must never turn a
++  // wrapper or absolute executable into an allowlist exemption.
++  const denied = [base, ...(cmd.denialCandidates ?? []).map((candidate) =>
++    resolveOnBashSurface(candidate, agentName, resolver))].find((check) => check.state === "deny");
++  if (denied) return { ...denied, command: cmd.text };
++  if (cmd.requiresConfirmation) {
++    return {
++      ...base,
++      state: "ask",
++      source: "bash",
++      origin: "builtin",
++      command,
++      matchedPattern: "<shell-review-required>",
++    };
++  }
+   const floored =
+     cmd.wrapperKind && base.state === "allow"
+       ? resolveWrapperUnit(cmd, cmd.wrapperKind, base, agentName, resolver)
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts
 index 600d8fa..d22f3bb 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-path.ts
@@ -1648,6 +2097,32 @@ index 77af06f..4934dfd 100644
      return { action: "allow", decidedBy };
    }
  
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
+index c2a8ea0..e6e4c46 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
+@@ -95,13 +95,16 @@ export class PermissionResolver
+   ): PermissionCheckResult {
+     const resolved = toResolvedIntent(intent);
+     const sessionRuleset = this.sessionRules.getRuleset();
++    const checkMember = (surface: string): PermissionCheckResult => {
++      const candidate = { ...resolved, surface };
++      const configured = this.permissionManager.check(candidate);
++      // A remembered allow may satisfy an ask, never override a current deny.
++      if (configured.state === "deny" || sessionRuleset.length === 0) return configured;
++      return this.permissionManager.check(candidate, sessionRuleset);
++    };
+     const members = surfaceFamilyMembers(resolved.surface);
+-    if (members === null) {
+-      return this.permissionManager.check(resolved, sessionRuleset);
+-    }
++    if (members === null) return checkMember(resolved.surface);
+     const [first, ...rest] = members;
+-    const checkMember = (surface: string): PermissionCheckResult =>
+-      this.permissionManager.check({ ...resolved, surface }, sessionRuleset);
+     return mostRestrictiveOf([
+       checkMember(first),
+       ...rest.map((surface) => checkMember(surface)),
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts b/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts
 index 92869dd..e350003 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/presentation/path-ask-payload.ts
@@ -1829,475 +2304,3 @@ index d22fe77..4bd55ea 100644
 +    agentName?: string | null,
 +  ): void;
 +}
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
-index 3134210..f4319d1 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/command-enumeration.ts
-@@ -2,6 +2,7 @@ import type { BashCommandContext, FloorExemption } from "#src/types";
- import { EXECUTION_HOST_TYPES, forEachExecutionIn } from "./nested-execution";
- import { parseUnresolvedWithin, type TSNode } from "./parser";
- import { redirectMayWriteFile } from "./redirect-analysis";
-+import { literalShellWord, shellSafetyFacts, type ShellSafetyFacts } from "./shell-safety";
- import {
-   type CommandWord,
-   classifyWrapperWords,
-@@ -22,7 +23,7 @@ export type { WrapperKind } from "./wrapper-analysis";
-  * The type is the stable extension point: #306 adds an execution `context`,
-  * #307 adds per-command path candidates and an effective working directory.
-  */
--export interface BashCommand {
-+export interface BashCommand extends ShellSafetyFacts {
-   readonly text: string;
-   /**
-    * Execution context for a nested command (substitution or subshell); absent
-@@ -78,6 +79,7 @@ interface UnitScope {
-    * withholds the floor exemption from any wrapper unit beneath it.
-    */
-   readonly writesViaRedirect: boolean;
-+  readonly requiresConfirmation?: true;
-   /**
-    * True when the enclosing statement holds a region tree-sitter could not
-    * resolve, so every unit beneath it is floored rather than trusted (#840).
-@@ -328,9 +330,10 @@ function makeUnit(
-     executedUnit === undefined ? flagged : { ...flagged, executedUnit };
-   const exempted =
-     floorExemption === undefined ? named : { ...named, floorExemption };
-+  const reviewed = scope.requiresConfirmation ? { ...exempted, requiresConfirmation: true as const } : exempted;
-   return scope.parseUnresolved
--    ? { ...exempted, parseUnresolved: true }
--    : exempted;
-+    ? { ...reviewed, parseUnresolved: true }
-+    : reviewed;
- }
-
- /**
-@@ -341,13 +344,21 @@ function makeUnit(
- function makeCommandUnit(node: TSNode, scope: UnitScope): BashCommand {
-   const text = commandUnitText(node);
-   const words = readCommandWords(node);
--  return makeUnit(text, scope, {
--    wrapperKind: classifyWrapperWords(words),
--    executedUnit: executedUnitOf(text, words) ?? undefined,
--    floorExemption: isTransparentWrapper(words, scope)
--      ? "core-reader"
--      : undefined,
--  });
-+  const safety = shellSafetyFacts(words);
-+  for (let index = 0; index < node.childCount; index++) {
-+    const child = node.child(index);
-+    if (child?.type === "variable_assignment" && /^(?:PATH|BASH_ENV|ENV|SHELLOPTS|BASHOPTS|GIT_[A-Z_]+|LD_[A-Z_]+|NODE_OPTIONS|BUN_OPTIONS)=/.test(child.text)) {
-+      scope = { ...scope, requiresConfirmation: true };
-+    }
-+  }
-+  return {
-+    ...makeUnit(text, scope, {
-+      wrapperKind: classifyWrapperWords(words),
-+      executedUnit: executedUnitOf(text, words) ?? undefined,
-+      floorExemption: isTransparentWrapper(words, scope) ? "core-reader" : undefined,
-+    }),
-+    ...safety,
-+  };
- }
-
- /**
-@@ -361,15 +372,14 @@ function makeCommandUnit(node: TSNode, scope: UnitScope): BashCommand {
-  * redirect is a refusal rather than a proof.
-  */
- function redirectedScope(node: TSNode, scope: UnitScope): UnitScope {
--  if (scope.writesViaRedirect) return scope;
-+  let next = scope;
-   for (let i = 0; i < node.childCount; i++) {
-     const child = node.child(i);
-     if (child?.type !== "file_redirect") continue;
--    if (redirectMayWriteFile(child)) {
--      return { ...scope, writesViaRedirect: true };
--    }
-+    if (redirectMayWriteFile(child)) next = { ...next, writesViaRedirect: true };
-+    if (literalShellWord(child.text) === undefined) next = { ...next, requiresConfirmation: true };
-   }
--  return scope;
-+  return next;
- }
-
- /**
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-index 8e9b7a8..805944b 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-@@ -9,6 +9,20 @@ import { getParser } from "./parser";
-
- export type { BashCommand, BashExternalPath, BashPathRuleCandidate };
-
-+/** Review uncertain shell programs and potentially destructive operations even in session YOLO. */
-+export async function requiresBashReview(command: string): Promise<boolean> {
-+  const parser = await getParser();
-+  const tree = parser.parse(command);
-+  if (!tree) return true;
-+  try {
-+    const commands = collectCommands(tree.rootNode);
-+    return tree.rootNode.hasError || commands.length === 0 || commands.some((unit) =>
-+      !unit.denialCandidates?.length || unit.requiresConfirmation || unit.yoloUnsafe || unit.wrapperKind || unit.parseUnresolved);
-+  } finally {
-+    tree.delete();
-+  }
-+}
-+
- /**
-  * A bash command parsed once into a born-ready representation.
-  *
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
-new file mode 100644
-index 0000000..dd7c12d
---- /dev/null
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
-@@ -0,0 +1,206 @@
-+import { commandLayersOf, type CommandWord } from "./wrapper-analysis";
-+
-+export interface ShellSafetyFacts {
-+  readonly denialCandidates?: readonly string[];
-+  readonly requiresConfirmation?: true;
-+  readonly yoloUnsafe?: true;
-+}
-+
-+// Decode literal shell words only. Expansion is deliberately not evaluated:
-+// doing so could execute substitutions or read secrets before authorization.
-+export function literalShellWord(text: string): string | undefined {
-+  let quote = "";
-+  let value = "";
-+  for (let index = 0; index < text.length; index++) {
-+    const char = text[index];
-+    if (quote === "'") {
-+      if (char === "'") quote = "";
-+      else value += char;
-+      continue;
-+    }
-+    if (char === "\\") {
-+      const next = text[++index];
-+      if (next === undefined) return undefined;
-+      if (next === "\n") continue;
-+      if (quote === '"' && !["$", "`", '"', "\\"].includes(next)) value += "\\";
-+      value += next;
-+      continue;
-+    }
-+    if (char === quote) {
-+      quote = "";
-+      continue;
-+    }
-+    if (!quote && (char === "'" || char === '"')) {
-+      quote = char;
-+      continue;
-+    }
-+    if (char === "$" || char === "`" || (!quote && "*?[]{}".includes(char))) return undefined;
-+    value += char;
-+  }
-+  return quote ? undefined : value;
-+}
-+
-+const FILE_MUTATORS = new Set(["rm", "rmdir", "unlink", "truncate", "dd", "shred"]);
-+// Unknown programs can delete data just as easily as rm. Only named readers
-+// are eligible for automatic approval; explicitly allowed project tasks still
-+// pass through the normal permission rules without consulting YOLO.
-+const YOLO_READERS = new Set([
-+  "pwd",
-+  "true",
-+  "false",
-+  "echo",
-+  "printf",
-+  "test",
-+  "command",
-+  "uname",
-+  "id",
-+  "whoami",
-+  "cd",
-+  "ls",
-+  "cat",
-+  "nl",
-+  "head",
-+  "tail",
-+  "wc",
-+  "stat",
-+  "basename",
-+  "dirname",
-+  "realpath",
-+  "which",
-+  "grep",
-+  "egrep",
-+  "fgrep",
-+  "git",
-+]);
-+const GIT_READERS = new Set([
-+  "status",
-+  "diff",
-+  "log",
-+  "show",
-+  "rev-parse",
-+  "ls-files",
-+  "ls-tree",
-+  "grep",
-+  "describe",
-+  "blame",
-+]);
-+const POWER_ACTIONS = new Set(["reboot", "poweroff", "halt", "kexec", "soft-reboot"]);
-+
-+function withoutGlobalOptions(
-+  args: readonly string[],
-+  valueFlags: ReadonlySet<string>,
-+): readonly string[] {
-+  let index = 0;
-+  while (index < args.length && args[index].startsWith("-")) {
-+    if (args[index] === "--") return args.slice(index + 1);
-+    index += valueFlags.has(args[index]) ? 2 : 1;
-+  }
-+  return args.slice(index);
-+}
-+const GIT_VALUE_FLAGS = new Set([
-+  "-C",
-+  "-c",
-+  "--git-dir",
-+  "--work-tree",
-+  "--namespace",
-+  "--config-env",
-+]);
-+const SYSTEMCTL_VALUE_FLAGS = new Set(["-H", "--host", "-M", "--machine", "--root", "--image"]);
-+
-+function needsConfirmation(name: string, args: readonly string[]): boolean {
-+  if (FILE_MUTATORS.has(name)) return true;
-+  if (name === "rg") return true; // Recursive by default; individual files are not permission-checked.
-+  if (["grep", "egrep", "fgrep"].includes(name)) {
-+    return args.some(
-+      (arg, index) =>
-+        /^-[^-]*[rR]/.test(arg) ||
-+        (arg.startsWith("--") &&
-+          arg.length > 2 &&
-+          ["--recursive", "--dereference-recursive", "--directories"].some((option) =>
-+            option.startsWith(arg.split("=")[0]),
-+          )) ||
-+        (["-d", "--directories"].includes(arg) && args[index + 1] === "recurse"),
-+    );
-+  }
-+  if (name === "find" || name === "fd") {
-+    return args.some((arg) =>
-+      [
-+        "-delete",
-+        "-exec",
-+        "-execdir",
-+        "-ok",
-+        "-okdir",
-+        "-x",
-+        "-X",
-+        "--exec",
-+        "--exec-batch",
-+      ].includes(arg),
-+    );
-+  }
-+  if (name === "wt") return true;
-+  if (name !== "git") return false;
-+  if (args.some((arg) => arg === "-c" || arg.startsWith("-c") || arg.startsWith("--config-env")))
-+    return true;
-+  const [verb, ...rest] = withoutGlobalOptions(args, GIT_VALUE_FLAGS);
-+  if (GIT_READERS.has(verb))
-+    return rest.some(
-+      (arg) => arg.startsWith("--output") || ["--ext-diff", "--textconv"].includes(arg),
-+    );
-+  if (verb === "branch") {
-+    if (
-+      rest.some(
-+        (arg) =>
-+          /^-[^-]*[dDmMcCf]/.test(arg) || ["--delete", "--move", "--copy", "--force"].includes(arg),
-+      )
-+    )
-+      return true;
-+    return (
-+      rest.length > 0 &&
-+      !rest.includes("--list") &&
-+      !rest.every((arg) =>
-+        ["--show-current", "--all", "--remotes", "-a", "-r", "-v", "-vv"].includes(arg),
-+      )
-+    );
-+  }
-+  if (verb === "worktree" && rest[0] === "list") return false;
-+  if (verb === "worktree" && rest[0] === "prune")
-+    return !rest.includes("--dry-run") || rest.includes("--no-dry-run");
-+  if (verb === "clean")
-+    return (
-+      !rest.some((arg) => arg === "--dry-run" || /^-[^-]*n/.test(arg)) ||
-+      rest.includes("--no-dry-run")
-+    );
-+  return true;
-+}
-+
-+export function shellSafetyFacts(words: readonly CommandWord[]): ShellSafetyFacts {
-+  const literal = words.map((word) => literalShellWord(word.text));
-+  const uncertain =
-+    literal.some((word) => word === undefined) ||
-+    words.some((word) => word.text.includes("\\") && !/^'[^']*'$/.test(word.text));
-+  const normalized = words.map((word, index) => ({ ...word, text: literal[index] ?? word.text }));
-+  const candidates: string[] = [];
-+  let requiresConfirmation = uncertain;
-+  let yoloUnsafe = uncertain;
-+  for (const layer of commandLayersOf(normalized)) {
-+    const head = literalShellWord(layer[0]?.text ?? "");
-+    if (!head) {
-+      yoloUnsafe = true;
-+      continue;
-+    }
-+    const name = head.slice(head.lastIndexOf("/") + 1);
-+    const args = layer.slice(1).map((word) => word.text);
-+    candidates.push([name, ...args].join(" "));
-+    if (name === "systemctl") {
-+      const [verb] = withoutGlobalOptions(args, SYSTEMCTL_VALUE_FLAGS);
-+      if (POWER_ACTIONS.has(verb)) candidates.push(`systemctl ${verb}`);
-+    }
-+    requiresConfirmation ||= needsConfirmation(name, args);
-+    yoloUnsafe ||= head !== name || !YOLO_READERS.has(name);
-+  }
-+  return {
-+    denialCandidates: candidates,
-+    ...(requiresConfirmation ? { requiresConfirmation: true } : {}),
-+    ...(yoloUnsafe ? { yoloUnsafe: true } : {}),
-+  };
-+}
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
-index 6844185..162158a 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
-@@ -125,6 +125,33 @@ export function isTransparentWrapper(
-   return proveCommandEffect(head, args).effect === "read";
- }
-
-+// Denial-only inspection keeps every wrapper layer, including a privileged
-+// wrapper between two otherwise harmless prefixes. These candidates never grant access.
-+export function commandLayersOf(words: readonly CommandWord[]): readonly (readonly CommandWord[])[] {
-+  const layers: (readonly CommandWord[])[] = [words];
-+  let current = words;
-+  for (let depth = 0; depth < 16; depth++) {
-+    const name = wrapperName(current);
-+    let start: number;
-+    if (name === "command" || name === "builtin" || name === "exec" || name === "busybox" || name === "toybox") {
-+      if (name === "command" && current.slice(1).some((word) => /^-[^-]*[vV]/.test(word.text))) break;
-+      start = 1;
-+      while (current[start]?.text.startsWith("-")) {
-+        const flag = current[start].text;
-+        start += name === "exec" && flag === "-a" ? 2 : 1;
-+        if (flag === "--") break;
-+      }
-+    } else {
-+      if (classifyWrapperWords(current) !== "indirection") break;
-+      start = innerCommandIndex(current);
-+    }
-+    if (start < 1 || start >= current.length) break;
-+    current = rebase(current, start, execTerminatorIndex(current, start));
-+    layers.push(current);
-+  }
-+  return layers;
-+}
-+
- // ── Unwrapping ───────────────────────────────────────────────────────────────
-
- /**
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
-index 5523c7a..cbe699b 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/handlers/gates/bash-command.ts
-@@ -109,6 +109,21 @@ function resolveCommandUnit(
-   resolver: ScopedPermissionResolver,
- ): PermissionCheckResult {
-   const base = resolveOnBashSurface(cmd.text, agentName, resolver);
-+  // Canonical spellings only tighten a decision; they must never turn a
-+  // wrapper or absolute executable into an allowlist exemption.
-+  const denied = [base, ...(cmd.denialCandidates ?? []).map((candidate) =>
-+    resolveOnBashSurface(candidate, agentName, resolver))].find((check) => check.state === "deny");
-+  if (denied) return { ...denied, command: cmd.text };
-+  if (cmd.requiresConfirmation) {
-+    return {
-+      ...base,
-+      state: "ask",
-+      source: "bash",
-+      origin: "builtin",
-+      command,
-+      matchedPattern: "<shell-review-required>",
-+    };
-+  }
-   const floored =
-     cmd.wrapperKind && base.state === "allow"
-       ? resolveWrapperUnit(cmd, cmd.wrapperKind, base, agentName, resolver)
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
-index c2a8ea0..e6e4c46 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/policy/permission-resolver.ts
-@@ -95,13 +95,16 @@ export class PermissionResolver
-   ): PermissionCheckResult {
-     const resolved = toResolvedIntent(intent);
-     const sessionRuleset = this.sessionRules.getRuleset();
-+    const checkMember = (surface: string): PermissionCheckResult => {
-+      const candidate = { ...resolved, surface };
-+      const configured = this.permissionManager.check(candidate);
-+      // A remembered allow may satisfy an ask, never override a current deny.
-+      if (configured.state === "deny" || sessionRuleset.length === 0) return configured;
-+      return this.permissionManager.check(candidate, sessionRuleset);
-+    };
-     const members = surfaceFamilyMembers(resolved.surface);
--    if (members === null) {
--      return this.permissionManager.check(resolved, sessionRuleset);
--    }
-+    if (members === null) return checkMember(resolved.surface);
-     const [first, ...rest] = members;
--    const checkMember = (surface: string): PermissionCheckResult =>
--      this.permissionManager.check({ ...resolved, surface }, sessionRuleset);
-     return mostRestrictiveOf([
-       checkMember(first),
-       ...rest.map((surface) => checkMember(surface)),
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
-index b7a05f4..a16645d 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/path-surfaces.ts
-@@ -9,6 +9,8 @@ export const READ_ONLY_PATH_BEARING_TOOLS: ReadonlySet<string> = new Set([
-   "find",
-   "grep",
-   "ls",
-+  "fffind",
-+  "ffgrep",
- ]);
-
- export const PATH_BEARING_TOOLS = new Set([
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
-index a54250c..58f535b 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer-selection.ts
-@@ -153,7 +153,7 @@ export class AuthorizerSelection
-         continue;
-       }
-       resolved.push(name);
--      links.push({ name, authorize: encloseInDelegationEnvelope(authorize) });
-+      links.push({ name, authorize: encloseInDelegationEnvelope(name, authorize) });
-     }
-     if (resolved.length > 0) {
-       this.deps.logger.review("authorizer_chain_resolved", {
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
-index 4b7ecd5..abb5611 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
-@@ -15,6 +15,10 @@
-  * family name resolves to members, and leaves *which* families are excluded
-  * independently relaxable (#620).
-  *
-+ * The locally registered `session-yolo` link is the deliberate exception. It
-+ * sees only `ask` decisions after policy resolution, so allowing it across all
-+ * surfaces suppresses every prompt without weakening explicit `deny` rules.
-+ *
-  * A finer secret-shaped-`path` exclusion (letting a link allow a non-secret
-  * path) is deferred to the allow-capable slice that needs it (#620); until then
-  * the conservative whole-family exclusion ships. The checkpoint is dormant
-@@ -38,8 +42,12 @@ export const DELEGATION_EXCLUDED_SURFACES: ReadonlySet<string> = new Set([
-  * are forwarded as-is.
-  */
- export function encloseInDelegationEnvelope(
-+  name: string,
-   authorize: Authorizer["authorize"],
- ): Authorizer["authorize"] {
-+  if (name === "session-yolo") {
-+    return authorize;
-+  }
-   return async (details, query, log) => {
-     const verdict = await authorize(details, query, log);
-     if (verdict.kind === "allow" && isExcludedSurface(details)) {
