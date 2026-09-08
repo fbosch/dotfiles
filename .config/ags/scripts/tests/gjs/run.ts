@@ -17,6 +17,7 @@ import "./ai-pointer-view.case";
 import "./ai-pointer-workflow.case";
 import "./window-switcher.case";
 import "./window-switcher-preview-cache.case";
+import "@/services/__tests__/waybar-control.case";
 import { runSuite } from "./harness";
 
 app.register(null);

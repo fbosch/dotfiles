@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "entries": {
+    "[\"npx\",\"@mozilla/firefox-devtools-mcp@0.10.2\",\"\"]": {
+      "resolvedBin": "/home/fbb/.npm/_npx/9ba0ab92b7096326/node_modules/@mozilla/firefox-devtools-mcp/dist/index.js",
+      "resolvedAt": 1788857347432,
+      "packageVersion": "0.10.2",
+      "isJs": true
+    }
+  }
+}

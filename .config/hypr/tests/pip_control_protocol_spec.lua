@@ -99,13 +99,16 @@ describe("picture-in-picture window rules", function()
 		_G.hl = nil
 
 		local base_rule = rules[1]
+		assert_equal(base_rule.match.class, "^app[.]zen_browser[.]zen-pip$", "pre-map PiP identity")
+		assert_equal(base_rule.match.title, nil, "current title")
+		assert_equal(base_rule.match.initial_title, nil, "initial title")
 		assert.is_true(base_rule.no_initial_focus)
 		assert.is_false(base_rule.focus_on_activate)
 		assert_equal(base_rule.suppress_event, "maximize", "suppressed event")
 		assert_equal(base_rule.size, nil, "size")
 		assert_equal(base_rule.max_size, nil, "maximum size")
 		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
-		assert.is_true(base_rule.persistent_size)
+		assert_equal(base_rule.persistent_size, nil, "persistent size")
 		assert_equal(rules[2].animation, "slide bottom", "default animation")
 		local corner_animations = {}
 		for index = 3, 6 do

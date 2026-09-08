@@ -118,6 +118,26 @@
       "exposeResources": false,
       "approveTools": true
     },
+    "firefox-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@mozilla/firefox-devtools-mcp@0.10.2",
+        "--connect-existing",
+        "--marionette-port",
+        "2828",
+        "--tools",
+        "pages",
+        "snapshot",
+        "input",
+        "screenshot",
+        "script"
+      ],
+      "lifecycle": "lazy",
+      "directTools": false,
+      "exposeResources": false,
+      "approveTools": true
+    },
     "shared-todo": {
       "url": "http://192.168.1.46:8092/mcp",
       "protocolVersion": "auto",

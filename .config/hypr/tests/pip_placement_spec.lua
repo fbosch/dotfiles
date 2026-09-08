@@ -502,6 +502,15 @@ it("schedules resize reconciliation unless the PiP is being dragged or resized",
 	assert.equal(0, #of_kind(held, "move"))
 end)
 
+it("never resizes PiP from the compositor-reported opening rectangle", function()
+	local state = placement.new()
+	local window = client("0x1", rest_x, rest_y, 3440, 1440)
+	placement.place(state, input(0, { type = "compositor", name = "openwindow", address = window.address }))
+	local _, commands = placement.place(state, input(0.1, { type = "tick" }, { clients = { window } }))
+
+	assert.same({}, of_kind(commands, "resize"))
+end)
+
 it("coalesces queued reconciliations and preserves default-corner assignment", function()
 	local state = placement.new()
 	placement.place(state, input(0, { type = "compositor", name = "openwindow", address = "0x1" }))

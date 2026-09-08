@@ -25,13 +25,17 @@ daemon_supervisor_cleanup_paths="$(hypr_instance_path waybar-launch.pending) $(h
 . "${HOME}/.config/hypr/runtime/lib/daemon-supervisor.sh"
 
 case "${1:-}" in
-  show|hold|release|hide|prewarm|layer-opened|layer-closed)
+  layer-opened|layer-closed)
     if [ "$#" -ne 1 ]; then
-      daemon_supervisor_log "usage: ${0##*/} [start|restart|show|hold|release|hide|prewarm]"
+      daemon_supervisor_log "usage: ${0##*/} [start|restart|layer-opened|layer-closed]"
       exit 2
     fi
     daemon_supervisor_send "$1"
     exit $?
+    ;;
+  show|hide|prewarm|hold|release)
+    daemon_supervisor_log "public control intent must use waybar-control.sh"
+    exit 2
     ;;
 esac
 

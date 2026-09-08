@@ -1,7 +1,4 @@
 {
-  "skills": [
-    "-skills/agent-browser/SKILL.md"
-  ],
   "quickReplies": {
     "model": "openai-codex/gpt-5.6-luna"
   },

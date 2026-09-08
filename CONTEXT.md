@@ -41,6 +41,10 @@ should use these terms; new concepts named during design work land here.
   but is never reused by another instance.
 - **control socket** — instance-scoped command channel a daemon serves so
   keybind actions can drive it (e.g. `pip-monitor.sock`).
+- **Waybar control seam** — shared acceptance path for requests to show, hide,
+  prewarm, hold, or release Waybar. Acceptance records intent; visibility may
+  settle asynchronously. Launch ownership and compositor lifecycle events remain
+  outside this seam.
 - **query/dispatch IPC split** — read-only Hyprland queries use the query
   socket and may fall back once to `hyprctl`; state-changing dispatches use
   the explicit IPC path and never silently fall back.

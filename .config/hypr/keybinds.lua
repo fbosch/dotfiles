@@ -34,7 +34,8 @@ end
 local function release_super()
 	mouse_release.finish_all()
 	ai_pointer.consume_super_chord()
-	return window_switcher.release_super()
+	window_switcher.commit()
+	hl.dispatch(waybar.release)
 end
 
 local function release_super_right()

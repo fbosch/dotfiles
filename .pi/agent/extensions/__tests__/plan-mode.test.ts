@@ -51,6 +51,7 @@ function createHarness(options: {
   const statuses: Array<[string, string | undefined]> = [];
   const notifications: Array<[string, string]> = [];
 
+  let currentThinkingLevel = "off";
   const pi = {
     appendEntry: (customType: string, data: unknown) => {
       entries.push({ type: "custom", customType, data });
@@ -81,7 +82,11 @@ function createHarness(options: {
       selectedModels.push(model);
       return options.setModel?.(model) ?? true;
     },
-    setThinkingLevel: (level: string) => thinkingLevels.push(level),
+    getThinkingLevel: () => currentThinkingLevel,
+    setThinkingLevel: (level: string) => {
+      currentThinkingLevel = level;
+      thinkingLevels.push(level);
+    },
   } as unknown as ExtensionAPI;
   const ctx = {
     getSystemPrompt: () => options.systemPrompt ?? "base system prompt",
@@ -131,6 +136,10 @@ function createHarness(options: {
     },
     selectModel(model: { provider: string; id: string }) {
       void handlers.get("model_select")?.({ model, source: "set" } as never, ctx);
+    },
+    selectThinkingLevel(level: string) {
+      currentThinkingLevel = level;
+      void handlers.get("thinking_level_select")?.({ level, previousLevel: level } as never, ctx);
     },
     async beforeAgentStart(systemPrompt = options.systemPrompt ?? "base system prompt") {
       return handlers.get("before_agent_start")?.({ systemPrompt } as never, ctx);
@@ -411,9 +420,20 @@ describe("plan mode", () => {
 
     expect(harness.selectedModels).toEqual([planModel, alternateBuildModel]);
   });
+  test("resets a mode's thinking level to minimal when its model changes", async () => {
+    const harness = createHarness({ activeTools: ["read", "write"] });
+
+    harness.selectThinkingLevel("low");
+    harness.selectModel(alternateBuildModel);
+    await harness.toggle();
+    harness.selectThinkingLevel("minimal");
+    harness.selectModel(alternatePlanModel);
+
+    expect(harness.thinkingLevels).toEqual(["minimal", "high", "minimal"]);
+  });
 
   test.each(["reload", "resume"] as const)(
-    "restores build and plan model overrides after %s",
+    "restores build and plan model and thinking-level overrides after %s",
     async (reason) => {
       const entries: PersistedEntry[] = [];
       const initial = createHarness({
@@ -423,9 +443,11 @@ describe("plan mode", () => {
       });
 
       initial.selectModel(alternateBuildModel);
+      initial.selectThinkingLevel("low");
       await initial.toggle();
+      initial.selectThinkingLevel("minimal");
       initial.selectModel(alternatePlanModel);
-
+      initial.selectThinkingLevel("medium");
       const restored = createHarness({
         activeTools: ["read", "write"],
         entries,
@@ -435,6 +457,19 @@ describe("plan mode", () => {
       await restored.toggle();
 
       expect(restored.selectedModels).toEqual([alternateBuildModel, alternatePlanModel]);
+      expect(restored.thinkingLevels).toEqual(["low", "medium"]);
+      expect(entries[entries.length - 1]).toEqual({
+        type: "custom",
+        customType: "plan-mode-models",
+        data: {
+          sessionId: "session-a",
+          models: {
+            build: `${alternateBuildModel.provider}/${alternateBuildModel.id}`,
+            plan: `${alternatePlanModel.provider}/${alternatePlanModel.id}`,
+          },
+          thinkingLevels: { build: "low", plan: "medium" },
+        },
+      });
     },
   );
 

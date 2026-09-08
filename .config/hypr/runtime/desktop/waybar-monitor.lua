@@ -76,9 +76,13 @@ end
 
 local function taskbar_visible()
 	local component = ags_ipc.request("taskbar-visibility", '{"action":"visible-component"}')
-	if component ~= "" and component ~= "none" and not component:match("^error:") then
+	if component == "none" then
+		return false
+	end
+	if component ~= "" and not component:match("^error:") then
 		return true
 	end
+
 	for _, name in ipairs({ "start-menu", "calendar-widget", "audio-mixer-widget" }) do
 		if ags_ipc.request(name, '{"action":"is-visible"}') == "true" then
 			return true
@@ -261,31 +265,21 @@ end
 
 local function complete_mapped_launch(observed_visible)
 	waybar_mapped = true
-	if desired_visible then
-		-- Reveal after the hidden cold map so the exclusive-zone shift starts with the slide.
-		if not signal_waybar("USR1") then
-			effective_visible = observed_visible
-			notify_pip(observed_visible)
-			return false, "error: signal-failed"
-		end
-		effective_visible = true
-		if not publish_visibility_state(true) or not finish_launch_state() then
-			return false, "error: state-publication-failed"
-		end
-		notify_pip(true)
-		return false, "ok"
-	end
+	local visible = desired_visible
+	local signal = visible and "USR1" or "USR2"
 
-	if not signal_waybar("USR2") then
+	-- The initial map is hidden; reveal only when visibility was requested.
+	if not signal_waybar(signal) then
 		effective_visible = observed_visible
 		notify_pip(observed_visible)
 		return false, "error: signal-failed"
 	end
-	effective_visible = false
-	if not publish_visibility_state(false) or not finish_launch_state() then
+
+	effective_visible = visible
+	if not publish_visibility_state(visible) or not finish_launch_state() then
 		return false, "error: state-publication-failed"
 	end
-	notify_pip(false)
+	notify_pip(visible)
 	return false, "ok"
 end
 

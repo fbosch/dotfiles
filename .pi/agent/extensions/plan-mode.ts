@@ -45,9 +45,10 @@ interface ModesConfig {
   plan: PlanModeConfig;
 }
 
-interface PersistedModeModels {
+interface PersistedModeState {
   sessionId: string;
   models: Partial<Record<ModeName, string>>;
+  thinkingLevels?: Partial<Record<ModeName, ThinkingLevel>>;
 }
 
 const THINKING_LEVELS: ReadonlySet<string> = new Set([
@@ -230,6 +231,11 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
   };
   const modeModelOverrides: Partial<Record<ModeName, string>> = {};
 
+  const modeThinkingLevels: Record<ModeName, ThinkingLevel> = {
+    build: MODES.build.thinkingLevel,
+    plan: MODES.plan.thinkingLevel,
+  };
+
   function refreshModeModels(): void {
     const modes = readModes();
     configuredModeModels.build = modes.build.model;
@@ -244,11 +250,19 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
       if (entry.type !== "custom" || entry.customType !== MODE_MODELS_ENTRY_TYPE) continue;
       // Forks copy custom entries, so restore only state owned by the current session header.
       if (isRecord(entry.data) === false || entry.data.sessionId !== sessionId) continue;
-      if (isRecord(entry.data.models) === false) continue;
 
-      for (const name of ["build", "plan"] as const) {
-        const model = entry.data.models[name];
-        if (isModelReference(model)) modeModelOverrides[name] = model;
+      if (isRecord(entry.data.models)) {
+        for (const name of ["build", "plan"] as const) {
+          const model = entry.data.models[name];
+          if (isModelReference(model)) modeModelOverrides[name] = model;
+        }
+      }
+
+      if (isRecord(entry.data.thinkingLevels)) {
+        for (const name of ["build", "plan"] as const) {
+          const thinkingLevel = entry.data.thinkingLevels[name];
+          if (isThinkingLevel(thinkingLevel)) modeThinkingLevels[name] = thinkingLevel;
+        }
       }
     }
   }
@@ -257,15 +271,12 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
     const sessionId = ctx.sessionManager.getHeader()?.id;
     if (sessionId === undefined) return;
 
-    pi.appendEntry<PersistedModeModels>(MODE_MODELS_ENTRY_TYPE, {
+    pi.appendEntry<PersistedModeState>(MODE_MODELS_ENTRY_TYPE, {
       sessionId,
       models: { ...modeModelOverrides },
+      thinkingLevels: { ...modeThinkingLevels },
     });
   }
-  const modeThinkingLevels: Record<ModeName, ThinkingLevel> = {
-    build: MODES.build.thinkingLevel,
-    plan: MODES.plan.thinkingLevel,
-  };
 
   function updateStatus(ctx: ExtensionContext): void {
     ctx.ui.setStatus("plan-mode", enabled ? PLAN_MODE_STATUS : undefined);
@@ -387,6 +398,9 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
     const mode: ModeName = enabled ? "plan" : "build";
     modeModelOverrides[mode] = `${event.model.provider}/${event.model.id}`;
+    modeThinkingLevels[mode] = "minimal";
+    pi.setThinkingLevel(modeThinkingLevels[mode]);
+    modeThinkingLevels[mode] = pi.getThinkingLevel();
     persistModeModels(ctx);
   });
 
@@ -396,6 +410,7 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
     const mode: ModeName = enabled ? "plan" : "build";
     modeThinkingLevels[mode] = event.level;
+    persistModeModels(ctx);
   });
 
   pi.registerCommand("plan", {

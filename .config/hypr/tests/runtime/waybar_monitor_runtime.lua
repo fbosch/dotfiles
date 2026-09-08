@@ -58,6 +58,8 @@ local function run_scenario(options)
 		fail_write = options.fail_write == true,
 		commands = {},
 		responses = {},
+		ags_responses = options.ags_responses or {},
+		ags_requests = {},
 		steps = options.steps,
 		step_index = 0,
 		reader = {},
@@ -185,8 +187,9 @@ local function run_scenario(options)
 	end
 	package.loaded.socket = fake_socket
 	package.loaded["runtime.lib.ags-ipc"] = {
-		request = function()
-			return ""
+		request = function(component)
+			scenario.ags_requests[#scenario.ags_requests + 1] = component
+			return scenario.ags_responses[component] or ""
 		end,
 	}
 	package.loaded["lib.command"] = fake_command
@@ -434,6 +437,43 @@ local exited = run_scenario({
 	},
 })
 assert(command_index(exited.commands, "waybar%-hide") < math.huge)
+
+local aggregate_none = run_scenario({
+	layers = waybar_layers(1),
+	visibility_state = "shown\n",
+	ags_responses = { ["taskbar-visibility"] = "none" },
+	steps = {
+		{ message = "pointer-zone hide" },
+		{ advance = 300 },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(aggregate_none.commands, "waybar%-process%.sh signal USR2") == 1)
+assert(#aggregate_none.ags_requests == 1 and aggregate_none.ags_requests[1] == "taskbar-visibility")
+
+local unavailable_aggregate = run_scenario({
+	layers = waybar_layers(1),
+	visibility_state = "shown\n",
+	ags_responses = { ["taskbar-visibility"] = "error: unavailable", ["start-menu"] = "true" },
+	steps = {
+		{ message = "pointer-zone hide" },
+		{ advance = 300 },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(unavailable_aggregate.commands, "waybar%-process%.sh signal USR2") == 0)
+assert(unavailable_aggregate.ags_requests[1] == "taskbar-visibility")
+assert(unavailable_aggregate.ags_requests[2] == "start-menu")
+
+local released = run_scenario({
+	steps = {
+		{ message = "hold" },
+		{ message = "release" },
+		{ message = "quit" },
+	},
+})
+assert(released.responses[1] == "ok" and released.responses[2] == "ok")
+assert(count_matching(released.commands, "uwsm%-app %-s s") == 1)
 
 local invalid = run_scenario({
 	steps = {

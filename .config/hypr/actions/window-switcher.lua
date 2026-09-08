@@ -3,7 +3,6 @@
 
 local ags = require("lib.ags")
 local minimized_state = require("runtime.windows.minimized-state")
-local waybar = require("actions.waybar")
 
 local M = {}
 
@@ -103,11 +102,6 @@ end
 
 function M.commit()
 	switch_window("commit")
-end
-
-function M.release_super()
-	M.commit()
-	hl.dispatch(waybar.release)
 end
 
 function M.hide()
