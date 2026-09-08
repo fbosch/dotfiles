@@ -40,6 +40,7 @@ export type ProfileSelectionOptions = ResolveProfileOptions & {
   preferredProfile?: string;
   providerAdapter?: ProfileProviderAdapter;
   usageCollector?: UsageCollector;
+  onUsageStatus?: (status: UsageStatusPayload) => void;
 };
 
 function errorMessage(error: unknown): string {
@@ -179,6 +180,7 @@ export async function selectProfile(
     return { ...resolution, selectionWarning: errorMessage(error) };
   }
 
+  options.onUsageStatus?.(usage);
   const confirmed = eligibleProfiles.find((profile) => hasConfirmedUsage(usage, profile));
   if (confirmed !== undefined) return withFallback(resolution, confirmed, "confirmed usage");
 

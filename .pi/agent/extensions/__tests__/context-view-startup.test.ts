@@ -46,6 +46,11 @@ test("publishes only structured pi-context-view startup aggregates", () => {
   events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) => snapshots.push(value as StartupOwnerSnapshot));
 
   contextViewStartupPublisher(pi);
+  events.emit(
+    STARTUP_OWNER_REQUEST_EVENT,
+    createStartupOwnerRequest("session", "generation", "context"),
+  );
+  expect(snapshots.at(-1)).toMatchObject({ state: "unavailable" });
   (pi as ExtensionAPI & { startupSnapshot?: unknown }).startupSnapshot = capability;
   handlers.get("session_start")?.();
   events.emit(

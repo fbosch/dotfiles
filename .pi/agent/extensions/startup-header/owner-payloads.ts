@@ -58,7 +58,7 @@ export function createAuthStartupPayload(
     const label = sanitizeLabel(observation.profileLabel);
     if (label !== undefined && !byLabel.has(label)) byLabel.set(label, observation);
   }
-  const ordered = [...profileOrder.map(sanitizeLabel).filter(isDefined), ...byLabel.keys()];
+  const ordered = [active, ...profileOrder.map(sanitizeLabel).filter(isDefined)];
   const seen = new Set<string>();
   const profiles: AuthStartupProfile[] = [];
   for (const label of ordered) {

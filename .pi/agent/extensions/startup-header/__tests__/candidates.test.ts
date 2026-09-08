@@ -1,7 +1,10 @@
 import { describe, expect, spyOn, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { FormatterCommand, ResolvedFormatterSettings } from "../../formatter/settings";
 import type { LspServerSettings, ResolvedLspSettings } from "../../lsp/settings";
-import { resolveMarkerTarget } from "../candidate-adapter";
+import { markerExistsWithinDirectory, resolveMarkerTarget } from "../candidate-adapter";
 import {
   CANDIDATE_LIMITS,
   type CandidateInspectionInput,
@@ -176,5 +179,18 @@ describe("startup header tool candidates", () => {
     );
     expect(resolveMarkerTarget("/repo/project", "../.toolrc")).toBeUndefined();
     expect(resolveMarkerTarget("/repo/project", "/tmp/.toolrc")).toBeUndefined();
+
+    const base = mkdtempSync(join(tmpdir(), "startup-candidates-"));
+    try {
+      const root = join(base, "root");
+      const outside = join(base, "outside");
+      mkdirSync(root);
+      mkdirSync(outside);
+      writeFileSync(join(outside, ".toolrc"), "");
+      symlinkSync(outside, join(root, "config"));
+      expect(markerExistsWithinDirectory(root, "config/.toolrc")).toBe(false);
+    } finally {
+      rmSync(base, { recursive: true, force: true });
+    }
   });
 });

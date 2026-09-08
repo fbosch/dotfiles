@@ -92,10 +92,8 @@ function createHarness(startupSnapshot?: unknown) {
   const emit = (event: string) => {
     for (const handler of handlers.get(event) ?? []) handler({ type: event }, context);
   };
-  const render = (width = 120) => {
-    const component = headerFactory?.({ requestRender: () => renderRequests++ }, {
-      fg: (_color: string, text: string) => text,
-    } as Theme);
+  const render = (width = 120, theme = { fg: (_color: string, text: string) => text } as Theme) => {
+    const component = headerFactory?.({ requestRender: () => renderRequests++ }, theme);
     return component?.render(width) ?? [];
   };
 
@@ -120,6 +118,10 @@ describe("startup header registration", () => {
 
     expect(harness.render()).toEqual(["π Session"]);
     expect(harness.uiMutations).toEqual({ header: 1, footer: 0, editor: 0, status: 0 });
+    const light = { fg: (color: string, text: string) => `<light:${color}>${text}` } as Theme;
+    const dark = { fg: (color: string, text: string) => `<dark:${color}>${text}` } as Theme;
+    expect(harness.render(120, light)[0]).toContain("<light:accent>");
+    expect(harness.render(120, dark)[0]).toContain("<dark:accent>");
   });
 
   test("subscribes before requesting owners and rejects replies from replaced generations", () => {

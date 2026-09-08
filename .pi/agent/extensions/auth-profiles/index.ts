@@ -362,6 +362,12 @@ export default function authProfiles(
       ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
       providerAdapter,
       runGit,
+      onUsageStatus(status) {
+        authStartupState = {
+          ...authStartupState,
+          observations: authObservations(status, providerAdapter.providerId),
+        };
+      },
     });
 
   const activateUnlocked = async (

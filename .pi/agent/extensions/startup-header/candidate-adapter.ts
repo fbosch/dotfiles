@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
@@ -29,14 +29,7 @@ export async function inspectConfiguredCandidates(
       ancestors: buildAncestorChain(context.cwd, workspace.root),
       formatter: loadFormatterSettings(context),
       lsp: loadLspSettings(context),
-      markerReader: (directory, marker) => {
-        try {
-          const target = resolveMarkerTarget(directory, marker);
-          return target !== undefined && existsSync(target);
-        } catch {
-          return false;
-        }
-      },
+      markerReader: markerExistsWithinDirectory,
       projectTrusted: true,
     });
   } catch {
@@ -50,6 +43,19 @@ export function resolveMarkerTarget(directory: string, marker: string): string |
   const withinDirectory = relative(directory, target);
   if (withinDirectory.startsWith("..") || isAbsolute(withinDirectory)) return undefined;
   return target;
+}
+
+export function markerExistsWithinDirectory(directory: string, marker: string): boolean {
+  try {
+    const target = resolveMarkerTarget(directory, marker);
+    if (target === undefined || !existsSync(target)) return false;
+    const canonicalDirectory = realpathSync(directory);
+    const canonicalTarget = realpathSync(target);
+    const withinDirectory = relative(canonicalDirectory, canonicalTarget);
+    return !withinDirectory.startsWith("..") && !isAbsolute(withinDirectory);
+  } catch {
+    return false;
+  }
 }
 
 export function buildAncestorChain(cwd: string, root: string): CandidateAncestor[] {
