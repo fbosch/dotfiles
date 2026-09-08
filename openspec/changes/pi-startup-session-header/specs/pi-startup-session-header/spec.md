@@ -4,37 +4,37 @@ Define Pi's session-scoped startup header so an interactive session exposes work
 
 ## ADDED Requirements
 
-### Requirement: The header requires a compatible runtime capability
+### Requirement: The header is extension-first and optional integrations are isolated
 
-The runtime SHALL expose capability identifier `pi.startupSnapshot` with schema version `1` and typed declarations at `.pi/agent/lib/pi-coding-agent-startup.d.ts`. The header MUST verify both capability identifier and schema version before it calls `setHeader`. The existing Nix Pi version assertion SHALL remain in force. The runtime patch and aligned declarations MUST deploy before header registration is enabled.
+The header SHALL register through Pi's public `setHeader` extension API without requiring another extension or a Pi runtime patch. It SHALL obtain data through public extension APIs and structured extension-owned publishers whenever those interfaces can provide the required facts accurately and passively. A Pi runtime patch MAY expose only runtime-owned facts unavailable through those APIs. The header MUST verify any optional runtime capability identifier and schema version before consuming it. An absent or incompatible capability or optional extension MUST omit only its owned output without blocking header registration, emitting an incompatibility notice, or suppressing unrelated sections. If a runtime patch is added, the existing Nix Pi version assertion SHALL remain in force.
 
-#### Scenario: Capability is absent on unpatched pinned Pi
+#### Scenario: No runtime patch is installed
 
-- **WHEN** Pi 0.85.1 lacks `pi.startupSnapshot`
-- **THEN** the extension MUST NOT call `setHeader`, Pi's built-in header remains visible, and the extension emits one nonfatal incompatibility notice through supported Pi UI
+- **WHEN** Pi supports `setHeader` but exposes no optional startup runtime capability
+- **THEN** the extension installs the session header and omits only fields that require that capability
 
-#### Scenario: Runtime version is older
+#### Scenario: An optional publisher is absent
 
-- **WHEN** Pi 0.84.4 starts the extension
-- **THEN** the extension MUST retain Pi's built-in header and emit one nonfatal incompatibility notice without calling `setHeader`
+- **WHEN** an optional extension publisher is not installed
+- **THEN** the header omits that publisher's output without a placeholder or warning and continues rendering unrelated sections
 
-#### Scenario: Runtime schema is incompatible
+#### Scenario: An optional runtime schema is incompatible
 
-- **WHEN** Pi reports `pi.startupSnapshot` with a schema version other than `1`
-- **THEN** the extension MUST retain Pi's built-in header and emit one nonfatal incompatibility notice without calling `setHeader`
+- **WHEN** Pi exposes an optional startup capability with an unsupported schema version
+- **THEN** the header ignores that capability, omits its fields, and continues rendering without an incompatibility notice
 
 ### Requirement: The header replaces only the startup header
 
-The system SHALL replace Pi's startup header with one session header only after the capability handshake succeeds. It MUST preserve Pi's loaded-resource listing, transcript, editor, and prompt footer, and MUST NOT render a second model or thinking display.
+The system SHALL replace Pi's startup header with one session header when the extension initializes in a supported interactive UI. It MUST preserve Pi's loaded-resource listing, transcript, editor, and prompt footer, and MUST NOT render a second model or thinking display.
 
 #### Scenario: Ordinary startup
 
-- **WHEN** Pi reaches its initial interactive screen in an ordinary Git workspace with a compatible capability
+- **WHEN** Pi reaches its initial interactive screen in an ordinary Git workspace
 - **THEN** the session header appears above the existing resource listing and the existing transcript, editor, and prompt footer remain in their normal places
 
-### Requirement: Startup snapshots are authoritative, ordered, and session-scoped
+### Requirement: Published snapshots are authoritative, ordered, and session-scoped
 
-Every runtime snapshot and owner request, reply, and change SHALL carry `sessionId`, `generationId`, `ownerId`, and a monotonically increasing `ownerRevision`. `generationId` MUST change on reload or header-owner replacement. The header MUST subscribe before its initial request, accept only the active session and generation, and reject a revision older than the revision already displayed for that owner. It SHALL dispose subscriptions and local deadline timers when the session or owner changes.
+Every present owner snapshot, request, reply, and change SHALL carry `sessionId`, `generationId`, `ownerId`, and a monotonically increasing `ownerRevision`. This requirement includes data consumed from an optional runtime capability. `generationId` MUST change on reload or header-owner replacement. The header MUST subscribe before its initial request, accept only the active session and generation, and reject a revision older than the revision already displayed for that owner. It SHALL dispose subscriptions and local deadline timers when the session or owner changes.
 
 #### Scenario: A reload changes generation
 
@@ -55,10 +55,15 @@ Every runtime snapshot and owner request, reply, and change SHALL carry `session
 
 The header SHALL render published data only. It MUST NOT refresh or read raw credentials, fetch usage, start an LSP, run a formatter, approve or evaluate direnv beyond existing owner behavior, open a Neovim channel, create a synthetic model turn, poll, or mutate selection, files, buffers, or tools. Owner snapshots MUST carry independent observed-at, stale-at, and expiry deadlines. Owners SHALL schedule local one-shot deadline notifications and recompute deadlines from absolute timestamps after suspend or a clock change. A deadline transition MUST NOT fetch, refresh, or consume anything.
 
-#### Scenario: An owner has not published
+#### Scenario: An optional owner is absent
 
-- **WHEN** an integration owner has not published a result
-- **THEN** the header reports that field as unavailable or unchecked as applicable and performs no probe or side effect
+- **WHEN** an optional integration owner is not installed
+- **THEN** the header omits that owner's output and performs no probe or side effect
+
+#### Scenario: An installed owner has not published
+
+- **WHEN** an installed integration owner has not published a result for the active generation
+- **THEN** the header reports that owner's field as unavailable or unchecked as applicable and performs no probe or side effect
 
 #### Scenario: A session is idle past a deadline
 
@@ -211,7 +216,7 @@ The header SHALL count resolved enabled extension entrypoints, deduplicated by r
 
 ### Requirement: Initial context is a frozen base estimate
 
-The header SHALL render a compact 14 by 1 initial-context strip using `pi-context-view` category semantics and configured colors. It MUST use `■` for full cells, `◧` for partial cells, `▦` for compacted categories when relevant, `⛝` for configured auto-compact reserve, and `⛶` for free capacity. The estimate MUST include static loaded startup inputs only and exclude session messages and dynamic per-turn injections. The runtime SHALL capture sanitized category token totals without synthetic before-agent hooks or turns. Unknown capacity MUST render unavailable. The existing prompt footer owns current session usage.
+The header SHALL render a compact 14 by 1 initial-context strip using `pi-context-view` category semantics and configured colors. It MUST use `■` for full cells, `◧` for partial cells, `▦` for compacted categories when relevant, `⛝` for configured auto-compact reserve, and `⛶` for free capacity. The estimate MUST include static loaded startup inputs only and exclude session messages and dynamic per-turn injections. The implementation SHALL first use a structured `pi-context-view` extension publisher. If public extension APIs cannot provide an accurate passive startup estimate, a minimal runtime capability MAY provide sanitized category token totals and capacity only. Neither path may create synthetic before-agent hooks or turns. If neither source is present, the header MUST omit the strip. Unknown capacity from a present source MUST render unavailable. The existing prompt footer owns current session usage.
 
 #### Scenario: Six percent estimate includes reserve
 
@@ -225,22 +230,32 @@ The header SHALL render a compact 14 by 1 initial-context strip using `pi-contex
 
 #### Scenario: Capacity is unknown
 
-- **WHEN** the runtime cannot provide full context capacity
+- **WHEN** a present context source cannot provide full context capacity
 - **THEN** the initial-context strip reports unavailable and does not render every cell as free
 
-### Requirement: Startup timing has a fixed boundary
+### Requirement: Startup timing uses the installed startup-time package
 
-The header SHALL measure startup timing from Pi process start to completion of the initial interactive-ready render after resource discovery. It MUST freeze that measurement for the session. When the runtime cannot measure that boundary, the header MUST display startup timing as unavailable.
+The header SHALL consume the current `startup-time` custom session entry written by the installed `@liborw/pi-startup-time` extension. The displayed duration MUST retain that package's semantics: elapsed time from package module initialization, when it captures `bootAt` with `process.hrtime.bigint()`, to execution of its `session_start` handler. The header MUST NOT describe the value as Pi process startup time or time to first interactive render. It SHALL accept only a newly appended entry for the current `startup` or `reload` dispatch with a finite nonnegative `elapsedMs` and finite timestamp, then freeze the value for the active generation. It MUST NOT run an independent timer or poll. If the package is absent or no valid current entry is appended, the header MUST omit startup timing without a warning or placeholder.
 
 #### Scenario: Startup timing is measured
 
-- **WHEN** the runtime records Pi process start and completion of the initial interactive-ready render after resource discovery
-- **THEN** the header displays the measured duration and keeps it unchanged for the session
+- **WHEN** `@liborw/pi-startup-time` appends a valid measurement during the current `session_start` dispatch
+- **THEN** the header displays that module-load-to-`session_start` duration and keeps it unchanged for the active generation
 
-#### Scenario: Startup timing is unavailable
+#### Scenario: Reload produces a new measurement
 
-- **WHEN** the runtime cannot measure Pi process start or completion of the initial interactive-ready render after resource discovery
-- **THEN** the header displays startup timing as unavailable
+- **WHEN** the package appends a valid measurement with reason `reload` for a new header generation
+- **THEN** the header replaces the prior generation's startup duration with the new reload duration
+
+#### Scenario: The startup-time publisher is absent
+
+- **WHEN** `@liborw/pi-startup-time` is not installed or appends no valid measurement for the current dispatch
+- **THEN** the header omits startup timing, emits no warning or placeholder, and continues rendering unrelated sections
+
+#### Scenario: Only a prior measurement exists
+
+- **WHEN** the session contains a `startup-time` entry from a prior startup or reload but no new entry is appended during the current dispatch
+- **THEN** the header does not reuse the prior measurement and omits startup timing
 
 ### Requirement: Rendering remains usable across widths and failures
 

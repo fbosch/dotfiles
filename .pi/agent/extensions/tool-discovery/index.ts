@@ -22,6 +22,7 @@ const DEFERRED_TOOL_NAMES = new Set([
   "webfetch",
   "read_session",
   "hypr_window_screenshot",
+  "hypr_desktop_diagnose",
   "worktrunk",
 ]);
 

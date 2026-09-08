@@ -9,15 +9,17 @@ Pi's startup view does not show whether the workspace, integrations, or auth cha
 - List bounded formatter and language-server candidates that could apply, without scanning, executing, or claiming executable availability.
 - Show the effective repository auth chain, provider windows, reset and expiry deadlines, and explicit legacy-cache limitations.
 - Show a frozen base initial-context estimate, including configured auto-compact reserve and free capacity.
-- Show resolved extension and skill totals, coverage-qualified extension updates next to extensions, and completed startup duration.
-- Add a sanitized, read-only Pi runtime startup snapshot interface with a capability handshake, schema-version check, generation and revision ordering, and nonfatal fallback to Pi's built-in header.
+- Show resolved extension and skill totals and coverage-qualified extension updates next to extensions.
+- Show startup duration from the installed `@liborw/pi-startup-time` package, using its module-load-to-`session_start` measurement semantics.
+- Implement the header and its publishers as extensions. Missing optional extension publishers omit their output without preventing the rest of the header from rendering.
+- Add only the minimum sanitized, read-only Pi runtime capability needed for facts unavailable through public extension APIs.
 - Keep collection passive. The header does not fetch, refresh credentials, start services, run tools, poll, or create a model turn.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `pi-startup-session-header`: Defines the startup header's data contract, rendering, lifecycle, degraded states, passive integration requirements, and capability fallback.
+- `pi-startup-session-header`: Defines the extension-first startup header's data contract, optional publisher behavior, rendering, lifecycle, degraded states, and minimal runtime integration.
 
 ### Modified Capabilities
 
@@ -25,8 +27,8 @@ Pi's startup view does not show whether the workspace, integrations, or auth cha
 
 ## Impact
 
-- Affected dotfiles: a new extension under `.pi/agent/extensions/`, shared structured status exports from auth, Neovim, direnv, LSP, and formatter extensions, `pi-context-view` integration, and neighboring tests.
-- Affected Pi runtime: the pinned Pi package needs a typed read-only startup snapshot API. The integration must be maintained with the existing Pi patches in `/home/fbb/nixos/modules/development/ai/pi/` and reviewed whenever the pinned Pi version changes.
-- Affected interfaces: immutable versioned snapshots and session-scoped owner events. The runtime patch and aligned declarations deploy before the header is enabled.
+- Affected dotfiles: a new extension under `.pi/agent/extensions/`, shared structured status exports from auth, Neovim, direnv, LSP, and formatter extensions, `pi-context-view` integration, passive consumption of the installed `@liborw/pi-startup-time` measurement, and neighboring tests.
+- Affected Pi runtime: only runtime-owned facts that public extension APIs cannot provide may require a typed read-only capability in the pinned Pi package. Any patch remains guarded in `/home/fbb/nixos/modules/development/ai/pi/` and must be reviewed whenever the pinned Pi version changes.
+- Affected interfaces: immutable versioned owner snapshots and an optional minimal runtime capability. Header registration does not depend on optional publishers or the runtime capability.
 - Existing legacy auth cache remains readable without a persisted schema migration. It reports unavailable metadata rather than being reconstructed or fetched.
 - No new dependency is required. The approved prototype remains layout reference only at `references/start-screen-concepts.html`.

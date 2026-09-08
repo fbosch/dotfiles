@@ -122,6 +122,7 @@
     "webfetch": "allow",
     "read_session": "allow",
     "hypr_window_screenshot": "allow",
+    "hypr_desktop_diagnose": "allow",
     "ask_user_question": "allow",
     "todo": "allow",
     "just_tools": "allow",

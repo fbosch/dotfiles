@@ -1,20 +1,22 @@
-## 1. Runtime capability and snapshot contract
+## 1. Extension-first contracts and runtime gap audit
 
-- [x] 1.1 Align the local TypeScript SDK with the pinned Pi 0.85.1 runtime; add `.pi/agent/lib/pi-coding-agent-startup.d.ts` for the immutable startup snapshot capability identifier `pi.startupSnapshot` and schema version `1`; verification: SDK declarations and runtime package compile together.
-- [ ] 1.2 Add the guarded Nix patch that publishes sanitized immutable snapshots with session ID, generation ID, owner ID, owner revision, resource provenance, update coverage, startup timing, and static initial-context totals; verification: the patch applies with zero fuzz and runtime snapshot tests pass.
-- [ ] 1.3 Gate header registration on the capability and schema handshake before `setHeader`; retain Pi's built-in header and show one nonfatal supported-UI notice when incompatible; verification: tests cover unpatched 0.85.1, 0.84.4, schema-incompatible future Pi, and a compatible patched runtime.
-- [ ] 1.4 Keep the patch under `/home/fbb/nixos/modules/development/ai/pi/default.nix` behind the existing Pi version assertion; verification: targeted Nix evaluation rejects an unsupported Pi version.
+- [ ] 1.1 Inventory each required field against Pi's public extension APIs, existing local owner state, `pi-context-view`, and `@liborw/pi-startup-time`; verification: every field maps to an extension-owned source or a documented runtime-only gap.
+- [ ] 1.2 Define immutable, session-scoped owner request, reply, and change envelopes plus optional publisher discovery; verification: contract tests cover absent publishers, incompatible publisher schemas, generation replacement, and revision ordering.
+- [ ] 1.3 If runtime-only gaps remain, align the local SDK with Pi 0.85.1 and add one narrow typed read-only capability for only those facts; verification: declarations compile with the pinned runtime and no extension-obtainable or startup-timing field appears in the capability.
+- [ ] 1.4 If task 1.3 adds a Pi patch, keep it behind the existing version assertion in `/home/fbb/nixos/modules/development/ai/pi/default.nix`; verification: the patch applies with zero fuzz and targeted Nix evaluation rejects unsupported Pi versions.
+- [ ] 1.5 Register the header independently of optional publishers and runtime capabilities; verification: no-patch, absent-publisher, incompatible-schema, and compatible-capability fixtures omit only unavailable sections without notices.
 
 ## 2. Header lifecycle and baseline rendering
 
 - [ ] 2.1 Implement the startup header view model and lifecycle that subscribes before its initial request, filters session and generation IDs, and rejects older owner revisions; verification: tests cover reload generation replacement, stale revision rejection, and delayed A to B to A replies.
 - [ ] 2.2 Dispose subscriptions and local deadline timers when the session or header owner changes; verification: late replies and expired timers from disposed generations do not update the header.
-- [ ] 2.3 Render Git branch, linked-worktree path, resolved extension and skill totals, coverage-qualified updates adjacent to extensions, and frozen startup duration; verification: fixtures cover ordinary, linked, detached, non-Git, unavailable, load-failed, zero-project-subset, partial-update, and complete-zero-update states.
-- [ ] 2.4 Preserve Pi's loaded-resource listing, transcript, editor, and prompt footer without duplicating model or thinking state; verification: an interactive startup fixture contains each existing region once.
+- [ ] 2.3 Add a passive adapter for `@liborw/pi-startup-time` that accepts only a new valid `startup-time` entry from the current dispatch and preserves module-load-to-`session_start` semantics; verification: tests cover startup, reload, prior-entry rejection, invalid data, handler ordering, and absent-package omission without an independent timer.
+- [ ] 2.4 Render Git branch, linked-worktree path, available resolved extension and skill totals, coverage-qualified updates adjacent to extensions, and the optional frozen startup duration; verification: fixtures cover ordinary, linked, detached, non-Git, unavailable, load-failed, zero-project-subset, partial-update, complete-zero-update, and omitted startup states.
+- [ ] 2.5 Preserve Pi's loaded-resource listing, transcript, editor, and prompt footer without duplicating model or thinking state; verification: an interactive startup fixture contains each existing region once.
 
 ## 3. Structured publisher safety and integration status
 
-- [ ] 3.1 Define immutable structured owner request, reply, and change contracts with allowlisted fields and owner freshness timestamps; verification: publisher tests cover `unavailable`, `collecting`, `ready`, `degraded`, `disposed`, observed-at, stale-at, and expiry transitions.
+- [ ] 3.1 Define immutable structured owner request, reply, and change contracts with allowlisted fields, optional publisher discovery, and owner freshness timestamps; verification: publisher tests cover absent-owner omission plus installed-owner `unavailable`, `collecting`, `ready`, `degraded`, `disposed`, observed-at, stale-at, and expiry transitions.
 - [ ] 3.2 Sanitize every externally derived profile, provider, window, server, candidate, path, diagnostic, and next-step label before styling or width measurement; verification: OSC, CSI, ESC, C0, C1, line-separator, field-bound, and canary-secret tests pass with no command args, environment values, raw errors, or private IDs rendered.
 - [ ] 3.3 Implement passive publishers for Neovim, direnv, and LSP with visible `✓`, `!`, and `?` semantics; verification: fixtures cover standalone Neovim omission, unchecked LSP, observed-document LSP readiness, workspace mismatch, blocked, unavailable, and a problem without a verified next step.
 - [ ] 3.4 Prove the header does not create a Neovim channel, evaluate or approve direnv, start an LSP, infer health from silence, poll, or fetch; verification: integration no-side-effect spies remain unused.
@@ -35,14 +37,14 @@
 
 ## 6. Resource resolution and initial context
 
-- [ ] 6.1 Resolve enabled extension entrypoints and available skills by runtime identity and winning provenance; verification: duplicate, winning-project-scope, and explicit load-failed fixtures produce deduplicated totals and project subsets.
-- [ ] 6.2 Publish update coverage as `complete`, `partial`, `offline`, or `failed`; verification: tests show confirmed findings plus an incomplete label for partial coverage and show zero only for complete coverage.
-- [ ] 6.3 Share pure `pi-context-view` category, configured-color, and glyph semantics with the header without copying prototype colors; verification: full, partial, compacted, reserve, free, and overridden-color cases pass.
-- [ ] 6.4 Render the frozen 14 by 1 full-window base initial-context estimate from static loaded startup inputs without synthetic hooks or turns; verification: six-percent reserve allocation, resume exclusion of session messages, unknown capacity, and prompt-footer ownership fixtures pass.
-- [ ] 6.5 Prove runtime and header snapshots expose no raw prompt, tool schema, context-file content, skill content, message, or credential; verification: snapshot redaction tests pass.
+- [ ] 6.1 Resolve enabled extension entrypoints and available skills through extension APIs where possible, using a minimal runtime aggregate only for any proven gap; verification: duplicate, winning-project-scope, explicit load-failed, and absent-capability fixtures produce truthful output or omit the section.
+- [ ] 6.2 Publish update coverage as `complete`, `partial`, `offline`, or `failed` through an optional extension-owned publisher; verification: tests show confirmed findings plus an incomplete label for partial coverage, show zero only for complete coverage, and omit updates when the publisher is absent.
+- [ ] 6.3 Add a structured `pi-context-view` publisher that shares category, configured-color, and glyph semantics with the header without copying prototype colors; verification: full, partial, compacted, reserve, free, overridden-color, and absent-publisher cases pass.
+- [ ] 6.4 Render the frozen 14 by 1 full-window base initial-context estimate from static loaded startup inputs without synthetic hooks or turns; use a minimal runtime aggregate only if public extension APIs cannot provide the required totals; verification: six-percent reserve allocation, resume exclusion of session messages, unknown capacity, absent-source omission, and prompt-footer ownership fixtures pass.
+- [ ] 6.5 Prove runtime capabilities, extension-owner snapshots, and header state expose no raw prompt, tool schema, context-file content, skill content, message, or credential; verification: snapshot redaction tests pass.
 
 ## 7. Rendering and integration validation
 
 - [ ] 7.1 Implement width-aware section degradation and Pi theme updates without data probes; verification: representative wide and narrow normative fixtures preserve borders, readable output, visible status semantics, timestamps, and stale markers.
 - [ ] 7.2 Run neighboring extension tests and `devenv test`, then resolve any regression without weakening existing checks; verification: targeted tests and the relevant `devenv test` suite pass.
-- [ ] 7.3 Validate the patched Pi package through the NixOS repository's existing Pi package checks and normative startup fixtures; verification: compare baseline, linked-worktree, and integration-problem output with `references/start-screen-concepts.html` only where its layout and style do not conflict with the normative fixtures.
+- [ ] 7.3 Validate no-patch startup and, if a minimal Pi patch remains, run the NixOS repository's existing Pi package checks; verification: baseline, missing-optional-publisher, linked-worktree, and integration-problem fixtures compare with `references/start-screen-concepts.html` only where its layout and style do not conflict with normative behavior.

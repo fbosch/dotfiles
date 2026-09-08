@@ -57,6 +57,7 @@ type WindowInfo = {
   address: string;
   monitor: number | null;
   workspace: WorkspaceInfo | null;
+  redacted: boolean;
   position: [number, number] | null;
   size: [number, number] | null;
   visible: boolean;
@@ -233,6 +234,7 @@ function parseWindow(value: unknown): WindowInfo | null {
   if (input === null || Object.keys(input).length === 0) {
     return null;
   }
+  if (hasScreenShareRedaction(value)) return redactedWindow();
 
   const position = numberArray(input.at);
   const size = numberArray(input.size);
@@ -244,6 +246,7 @@ function parseWindow(value: unknown): WindowInfo | null {
     address: stringValue(input.address),
     monitor: numberValue(input.monitor),
     workspace: parseWorkspace(input.workspace),
+    redacted: false,
     position:
       position.length >= 2 && position[0] !== undefined && position[1] !== undefined
         ? [position[0], position[1]]
@@ -1012,6 +1015,7 @@ function formatGeometry(geometry: Geometry): string {
 }
 
 function formatWindow(window: WindowInfo): string {
+  if (window.redacted) return "[redacted]";
   return `${window.className || window.initialClass || "unknown"} - ${window.title || "untitled"}`;
 }
 
@@ -1116,11 +1120,41 @@ async function runDiagnosticJson<T>(
     : { status: "ok", value };
 }
 
+const SCREEN_SHARE_REDACTION_TAGS = new Set(["privacy", "no_screen_share"]);
+
+function hasScreenShareRedaction(value: unknown): boolean {
+  const input = objectValue(value);
+  if (input === null) return false;
+  if (input.no_screen_share === true || input.noScreenShare === true) return true;
+  if (Array.isArray(input.tags) === false) return false;
+  return input.tags.some(
+    (tag) => typeof tag === "string" && SCREEN_SHARE_REDACTION_TAGS.has(tag.replace(/\*$/, "")),
+  );
+}
+
+function redactedWindow(): WindowInfo {
+  return {
+    className: "",
+    initialClass: "",
+    title: "",
+    stableId: "",
+    address: "",
+    monitor: null,
+    workspace: null,
+    redacted: true,
+    position: null,
+    size: null,
+    visible: false,
+    mapped: false,
+  };
+}
+
 function parseDiagnosticWindow(value: unknown): WindowInfo | null | undefined {
   if (value === null) return null;
   const input = objectValue(value);
   if (input === null) return undefined;
   if (Object.keys(input).length === 0) return null;
+  if (hasScreenShareRedaction(value)) return redactedWindow();
   return parseWindow(value) ?? undefined;
 }
 
@@ -1133,7 +1167,10 @@ function parseDiagnosticWorkspace(value: unknown): WorkspaceInfo | null | undefi
 }
 
 function parseDiagnosticWindows(value: unknown): WindowInfo[] | undefined {
-  return Array.isArray(value) ? parseWindows(value) : undefined;
+  if (Array.isArray(value) === false) return undefined;
+  return value
+    .map((item) => (hasScreenShareRedaction(item) ? redactedWindow() : parseWindow(item)))
+    .filter((window): window is WindowInfo => window !== null);
 }
 
 function parseDiagnosticMonitors(value: unknown): Monitor[] | undefined {
@@ -1471,6 +1508,7 @@ function diagnosticField(value: string): string {
 }
 
 function formatDiagnosticWindow(window: WindowInfo): string {
+  if (window.redacted) return "[redacted]";
   const application = diagnosticField(window.className || window.initialClass || "unknown");
   const title = diagnosticField(window.title || "untitled");
   return `${application} - ${title}`;
@@ -1599,13 +1637,14 @@ function formatDesktopDiagnostic(details: HyprlandDiagnosticDetails): string {
   }
 
   const output = lines.join("\n");
+  const truncationNotice =
+    "[Diagnostic output truncated; structured details retain the remaining parsed state.]";
+  const truncationSuffix = `\n\n${truncationNotice}`;
   const truncated = truncateHead(output, {
-    maxBytes: DEFAULT_MAX_BYTES,
-    maxLines: DEFAULT_MAX_LINES,
+    maxBytes: Math.max(1, DEFAULT_MAX_BYTES - Buffer.byteLength(truncationSuffix)),
+    maxLines: Math.max(1, DEFAULT_MAX_LINES - 2),
   });
-  return truncated.truncated
-    ? `${truncated.content}\n\n[Diagnostic output truncated; structured details retain the remaining parsed state.]`
-    : truncated.content;
+  return truncated.truncated ? `${truncated.content}${truncationSuffix}` : truncated.content;
 }
 
 const HyprDesktopDiagnoseParameters = Type.Object({});

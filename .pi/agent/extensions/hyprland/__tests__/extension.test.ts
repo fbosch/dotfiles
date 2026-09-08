@@ -338,6 +338,18 @@ describe("Hyprland extension", () => {
       size: [300, 200],
       workspace: { id: 2, name: "2", monitor: "DP-1" },
     };
+    const privateClient = {
+      ...client,
+      class: "Bitwarden",
+      title: "Secret password",
+      tags: ["privacy*"],
+    };
+    const noScreenShareClient = {
+      ...client,
+      class: "Signal",
+      title: "Private message",
+      no_screen_share: true,
+    };
     const commandRunner: HyprlandCommandRunner = async (
       command,
       args,
@@ -357,7 +369,7 @@ describe("Hyprland extension", () => {
             : request === "activeworkspace"
               ? { id: 2, name: "2", monitor: "DP-1" }
               : request === "clients"
-                ? [client]
+                ? [client, privateClient, noScreenShareClient]
                 : request === "monitors"
                   ? [{ x: 0, y: 0, width: 1920, height: 1080, name: "DP-1", focused: true, id: 1 }]
                   : {
@@ -411,7 +423,7 @@ describe("Hyprland extension", () => {
       compositor: {
         activeWindow: { className: "kitty", workspace: { name: "2" } },
         activeWorkspace: { id: 2, name: "2", monitor: "DP-1" },
-        clients: [{ title: "Fixture" }],
+        clients: [{ title: "Fixture", redacted: false }, { redacted: true }, { redacted: true }],
         monitors: [{ name: "DP-1", focused: true }],
         layers: [{ namespace: "waybar", monitor: "DP-1", level: "2" }],
         configErrors: [],
@@ -426,6 +438,9 @@ describe("Hyprland extension", () => {
     expect(text.text).toContain("Hyprland desktop diagnostic");
     expect(text.text).toContain("Config errors: none");
     expect(text.text).toContain("resolved=gaming");
+    expect(text.text).toContain("- [redacted] [unknown]");
+    expect(text.text).not.toContain("Secret password");
+    expect(text.text).not.toContain("Private message");
     expect(text.text).toContain("... 210 more presentation lines omitted");
     expect(calls.map(({ command, args }) => `${command} ${args.join(" ")}`)).toEqual(
       expect.arrayContaining([
@@ -459,7 +474,7 @@ describe("Hyprland extension", () => {
         const request = args[0];
         const response =
           request === "activewindow"
-            ? { class: "kitty", title: "Fixture" }
+            ? { class: "kitty", title: "Fixture", no_screen_share: true }
             : request === "activeworkspace"
               ? { id: 1, name: "1", monitor: "DP-1" }
               : request === "clients"
@@ -496,7 +511,11 @@ describe("Hyprland extension", () => {
     };
 
     expect(result.details).toMatchObject({
-      compositor: { configErrors: null, activeWorkspace: { name: "1" } },
+      compositor: {
+        activeWindow: { redacted: true },
+        configErrors: null,
+        activeWorkspace: { name: "1" },
+      },
       runtime: { profile: null, presentation: "", windowCapture: null, waybar: "stopped" },
     });
     expect(diagnosticDetails.unavailable).toEqual(
