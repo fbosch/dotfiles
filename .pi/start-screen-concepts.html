@@ -153,22 +153,21 @@
     <!-- Throwaway prototypes. All auth, health, timing, update and usage values are samples. No live probes. -->
     <main>
       <header>
-        <p>PI / AUTH AND INTEGRATION HEALTH</p>
-        <h1>Accounts in view. Problems where they matter.</h1>
+        <p>PI / STARTUP HEADER CONCEPTS</p>
+        <h1>Session accounts and integration status.</h1>
         <p>
-          Three close variants of the same compact Pi session header: a baseline, a
-          linked worktree, and an attention state. Problems expand into an
-          explanation and next step. Each layout uses fictional sample data.
+          Three variants of the same compact Pi session header: baseline, linked-worktree,
+          and integration-problem states. The layouts use fictional sample data.
         </p>
         <p id="view-label">
-          Showing all three concepts. All session data is fictional.
+          Showing all three variants. All session data is fictional.
         </p>
-        <p>Preview legend: ✓ checked/connected (as applicable), ! needs attention, ? not checked.</p>
+        <p>Legend: ✓ check passed, ! needs attention, ? not checked.</p>
       </header>
       <section data-variant="1" aria-labelledby="title-1">
         <h2 id="title-1">01 / Baseline</h2>
         <p>
-          Healthy integrated launch with a compact status row and no expanded details.
+          Integrated launch with all checks passed and no expanded details.
         </p>
         <div
           class="terminal"
@@ -179,25 +178,26 @@
           <pre><span class="accent">pi</span> <span class="muted">v0.85.1</span>
 <span class="muted">Branch: main</span>
 
-<span class="good">nvim ✓</span>  <span class="good">direnv ✓</span>  <span class="good">lsp ✓</span>
+<span class="good" aria-label="nvim, connected">nvim ✓</span>  <span class="good" aria-label="direnv, loaded">direnv ✓</span>  <span class="good" aria-label="lsp, checked, no diagnostics">lsp ✓</span>
 
 Formatters: biome, eslint, prettier
 LSP: tsc, nil, lua-ls
 
 <span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
-│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+│ <strong class="muted">Profile / method</strong>  │ <strong class="muted">Window</strong>         │ <strong class="muted">Week</strong>         │ <strong class="muted">Banked resets</strong>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="good">personal [active]</span> │ 72% left       │ 38% left     │ <span class="error">2 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 2h14m   │ resets 3d6h  │ <span class="error">expires in 6h</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="accent">work [next]</span>       │ 95% left       │ 81% left     │ <span class="warn">1 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 4h02m   │ resets 5d1h  │ <span class="warn">expires in 2d</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
 │ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
 │ <span class="muted">API key</span>           │                │              │                  │
 <span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
 <span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
-<span class="muted">Extensions: 18 enabled, </span><span class="warn">2 updates</span><span class="muted">   Startup: 420 ms</span>
+<span class="muted">Extensions: 18 enabled (4 project), </span><span class="warn">2 updates available</span>
+<span class="muted">Skills: 37 available (6 project)   Startup: 420 ms</span>
 
 
 <span class="border">--------------------------------------------------------------------------------</span>
@@ -211,7 +211,7 @@ _
       <section data-variant="2" aria-labelledby="title-2">
         <h2 id="title-2">02 / Linked worktree</h2>
         <p>
-          The same healthy compact header for a linked worktree; only the path changes.
+          The same header in a linked worktree, with its branch and path shown.
         </p>
         <div
           class="terminal"
@@ -223,25 +223,26 @@ _
 <span class="muted">Branch: feat/pi-header</span>
 <span class="muted">Path: ~/dotfiles.pi-header</span>
 
-<span class="good">nvim ✓</span>  <span class="good">direnv ✓</span>  <span class="good">lsp ✓</span>
+<span class="good" aria-label="nvim, connected">nvim ✓</span>  <span class="good" aria-label="direnv, loaded">direnv ✓</span>  <span class="good" aria-label="lsp, checked, no diagnostics">lsp ✓</span>
 
 Formatters: biome, eslint, prettier
 LSP: tsc, nil, lua-ls
 
 <span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
-│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+│ <strong class="muted">Profile / method</strong>  │ <strong class="muted">Window</strong>         │ <strong class="muted">Week</strong>         │ <strong class="muted">Banked resets</strong>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="good">personal [active]</span> │ 72% left       │ 38% left     │ <span class="error">2 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 2h14m   │ resets 3d6h  │ <span class="error">expires in 6h</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="accent">work [next]</span>       │ 95% left       │ 81% left     │ <span class="warn">1 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 4h02m   │ resets 5d1h  │ <span class="warn">expires in 2d</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
 │ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
 │ <span class="muted">API key</span>           │                │              │                  │
 <span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
 <span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
-<span class="muted">Extensions: 18 enabled, </span><span class="warn">2 updates</span><span class="muted">   Startup: 420 ms</span>
+<span class="muted">Extensions: 18 enabled (4 project), </span><span class="warn">2 updates available</span>
+<span class="muted">Skills: 37 available (6 project)   Startup: 420 ms</span>
 
 
 <span class="border">--------------------------------------------------------------------------------</span>
@@ -253,20 +254,20 @@ _
         </div>
       </section>
       <section data-variant="3" aria-labelledby="title-3">
-        <h2 id="title-3">03 / Attention state</h2>
+        <h2 id="title-3">03 / Integration problems</h2>
         <p>
-          The same header with expanded Neovim and LSP problems; details stay visible.
+          The same header with details for a workspace mismatch and unavailable LSP.
         </p>
         <div
           class="terminal"
           tabindex="0"
           role="region"
-          aria-label="Attention state terminal preview"
+          aria-label="Integration problems terminal preview"
         >
           <pre><span class="accent">pi</span> <span class="muted">v0.85.1</span>
 <span class="muted">Branch: main</span>
 
-<span class="error">nvim !</span>  <span class="good">direnv ✓</span>  <span class="warn">lsp !</span>
+<span class="error" aria-label="nvim, workspace mismatch">nvim !</span>  <span class="good" aria-label="direnv, loaded">direnv ✓</span>  <span class="warn" aria-label="lsp, unavailable">lsp !</span>
 <span class="error">! Neovim is attached to a different workspace.</span>
   Pi: ~/dotfiles   Neovim: ~/other-project
   Open the intended workspace in Neovim, then launch Pi from there.
@@ -277,19 +278,20 @@ Formatters: biome, eslint, prettier
 LSP: tsc, nil, lua-ls
 
 <span class="border">┌───────────────────┬────────────────┬──────────────┬──────────────────┐</span>
-│ <strong class="muted">Profile / auth</strong>    │ <strong class="muted">Window / reset</strong> │ <strong class="muted">Week / reset</strong> │ <strong class="muted">Banked / expiry</strong>  │
+│ <strong class="muted">Profile / method</strong>  │ <strong class="muted">Window</strong>         │ <strong class="muted">Week</strong>         │ <strong class="muted">Banked resets</strong>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="good">personal [active]</span> │ 72% / 2h14m    │ 38% / 3d6h   │ <span class="error">2 available / 6h</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="good">personal [active]</span> │ 72% left       │ 38% left     │ <span class="error">2 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 2h14m   │ resets 3d6h  │ <span class="error">expires in 6h</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
-│ <span class="accent">work [next]</span>       │ 95% / 4h02m    │ 81% / 5d1h   │ <span class="warn">1 available / 2d</span> │
-│ <span class="muted">OAuth</span>             │                │              │                  │
+│ <span class="accent">work [next]</span>       │ 95% left       │ 81% left     │ <span class="warn">1 available</span>      │
+│ <span class="muted">OAuth</span>             │ resets 4h02m   │ resets 5d1h  │ <span class="warn">expires in 2d</span>    │
 <span class="border">├───────────────────┼────────────────┼──────────────┼──────────────────┤</span>
 │ api-key           │ <span class="muted">Not reported</span>   │ <span class="muted">Not reported</span> │ <span class="muted">Not reported</span>     │
 │ <span class="muted">API key</span>           │                │              │                  │
 <span class="border">└───────────────────┴────────────────┴──────────────┴──────────────────┘</span>
 <span class="muted">Initial context  <span class="initial-context-system" title="System prompt">■ ■ ■ ■ ■ ■</span> <span class="initial-context-tools" title="Custom tools">■ ■</span> <span class="initial-context-mcp" title="MCP">■</span> <span class="initial-context-memory" title="Context files and memory">■</span> <span class="initial-context-skills" title="Skills">■ ■ ■</span> <span class="initial-context-free" title="Free space">⛶</span> 12k / 200k (6%)</span>
-<span class="muted">Extensions: 18 enabled, </span><span class="warn">2 updates</span><span class="muted">   Startup: 420 ms</span>
+<span class="muted">Extensions: 18 enabled (4 project), </span><span class="warn">2 updates available</span>
+<span class="muted">Skills: 37 available (6 project)   Startup: 420 ms</span>
 
 
 <span class="border">--------------------------------------------------------------------------------</span>
@@ -302,6 +304,8 @@ _
       </section>
       <footer>
         <p>
+          Extension and skill counts are sample values; parenthetical project counts are subsets of the totals.
+          Available skills are not necessarily loaded or used. Extension updates refer to extensions.
           All names, membership, usage, reset times, health results, extension counts and update values, and session
           metrics are fictional. No credentials or live account data were read.
           The compact 14-cell initial-context strip uses /context glyphs and
@@ -333,10 +337,10 @@ _
       </footer>
     </main>
     <nav aria-label="Session header concepts">
-      <a href="?variant=all" data-view="all">All three</a>
+      <a href="?variant=all" data-view="all">All variants</a>
       <a href="?variant=1" data-view="1">01 Baseline</a>
       <a href="?variant=2" data-view="2">02 Linked worktree</a>
-      <a href="?variant=3" data-view="3">03 Attention</a>
+      <a href="?variant=3" data-view="3">03 Problems</a>
     </nav>
     <script>
       const requested = new URLSearchParams(location.search).get("variant");

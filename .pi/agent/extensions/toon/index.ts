@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
+import { join } from "node:path";
 import {
+  CONFIG_DIR_NAME,
   type ExtensionAPI,
   isToolCallEventType,
   type ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
 import { encode } from "@toon-format/toon";
+import { readLockedJsonFile } from "../../lib/locked-json-file";
 
 const MAX_CACHED_OUTPUTS = 100;
 const MAX_CACHE_BYTES = 8_000_000;
@@ -32,6 +35,56 @@ function eligibleTools(raw: string | undefined): ReadonlySet<string> | undefined
       .map((tool) => tool.trim().toLowerCase())
       .filter(Boolean),
   );
+}
+
+export function userMessageConversionEnabled(raw: string | undefined): boolean {
+  if (raw === undefined) return true;
+  return ["0", "false", "no", "off"].includes(raw.trim().toLowerCase()) === false;
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && Array.isArray(value) === false;
+}
+
+interface ToonSettings {
+  readonly convertToolResults: boolean;
+  readonly convertUserMessages: boolean;
+}
+
+function defaultToonSettings(environmentSetting: string | undefined): ToonSettings {
+  return {
+    convertToolResults: true,
+    convertUserMessages: userMessageConversionEnabled(environmentSetting),
+  };
+}
+
+function projectToonSettings(
+  cwd: string,
+  trusted: boolean,
+  environmentSetting: string | undefined,
+): ToonSettings {
+  const defaults = defaultToonSettings(environmentSetting);
+  if (trusted) {
+    try {
+      const settings = readLockedJsonFile(join(cwd, CONFIG_DIR_NAME, "settings.json"));
+      if (isRecord(settings) && isRecord(settings.toon)) {
+        const convertToolResults = settings.toon.convertToolResults;
+        const convertUserMessages = settings.toon.convertUserMessages;
+        return {
+          convertToolResults:
+            typeof convertToolResults === "boolean"
+              ? convertToolResults
+              : defaults.convertToolResults,
+          convertUserMessages:
+            typeof convertUserMessages === "boolean"
+              ? convertUserMessages
+              : defaults.convertUserMessages,
+        };
+      }
+    } catch {
+      // Fall back to environment and built-in defaults when project settings cannot be read.
+    }
+  }
+  return defaults;
 }
 
 function looksLikeJson(text: string): boolean {
@@ -260,6 +313,14 @@ export function createToonTransformer(
 
 export default function toonExtension(pi: ExtensionAPI): void {
   const transformer = createToonTransformer();
+  let toonSettings = defaultToonSettings(process.env.PI_TOON_EXTENSION_USER_MESSAGES);
+  pi.on("session_start", (_event, ctx) => {
+    toonSettings = projectToonSettings(
+      ctx.cwd,
+      ctx.isProjectTrusted(),
+      process.env.PI_TOON_EXTENSION_USER_MESSAGES,
+    );
+  });
 
   pi.on("tool_call", (event) => {
     if (isToolCallEventType("bash", event) === false) return;
@@ -269,11 +330,13 @@ export default function toonExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("tool_result", (event) => {
+    if (toonSettings.convertToolResults === false) return;
     const content = transformer.transformResult(event);
     return content === undefined ? undefined : { content };
   });
 
   pi.on("context", (event) => {
+    if (toonSettings.convertUserMessages === false) return;
     let changed = false;
     const messages = event.messages.map((message) => {
       if (message.role !== "user") return message;

@@ -2,6 +2,10 @@
   "quickReplies": {
     "model": "openai-codex/gpt-5.6-luna"
   },
+  "toon": {
+    "convertUserMessages": true,
+    "convertToolResults": true
+  },
   "references": {
     "nixos": {
       "path": "~/nixos",

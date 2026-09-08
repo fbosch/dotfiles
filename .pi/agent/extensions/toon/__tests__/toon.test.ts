@@ -1,10 +1,13 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
-import toonExtension, { createToonTransformer } from "../index";
+import toonExtension, { createToonTransformer, userMessageConversionEnabled } from "../index";
 
 const LONG_JSON = JSON.stringify({
   users: Array.from({ length: 30 }, (_, index) => ({
@@ -109,6 +112,14 @@ describe("TOON transformer", () => {
   test("an explicit empty tool list disables compaction", () => {
     const transformer = createToonTransformer("");
     expect(transformer.transformResult(resultEvent())).toBeUndefined();
+  });
+
+  test("user message conversion is enabled by default and can be disabled", () => {
+    expect(userMessageConversionEnabled(undefined)).toBe(true);
+    expect(userMessageConversionEnabled("true")).toBe(true);
+    for (const value of ["0", "false", "no", "off"]) {
+      expect(userMessageConversionEnabled(value)).toBe(false);
+    }
   });
 
   test("restores compacted output in a standalone single-quoted Bash argument", () => {
@@ -224,16 +235,60 @@ test("wires result compaction and Bash restoration into Pi hooks", () => {
 
   expect(call.input.command).toBe(`printf '%s' '${LONG_JSON}' | jq .`);
 
-  const inputHandler = handlers.get("input");
-  if (inputHandler === undefined) throw new Error("TOON input handler was not registered");
+  const contextHandler = handlers.get("context");
+  if (contextHandler === undefined) throw new Error("TOON context handler was not registered");
 
-  const transformedMessage = inputHandler(
-    { source: "extension", text: LONG_JSON } as never,
+  const fencedJson = `\`\`\`json\n${LONG_JSON}\n\`\`\``;
+  const contextMessages = [
+    {
+      role: "user" as const,
+      content: [{ type: "text" as const, text: fencedJson }],
+    },
+  ];
+  const transformedContext = contextHandler(
+    { messages: contextMessages } as never,
     {} as ExtensionContext,
-  ) as { action: "transform"; text: string } | undefined;
-  expect(transformedMessage?.action).toBe("transform");
-  expect(transformedMessage?.text).not.toBe(LONG_JSON);
-  expect(
-    inputHandler({ source: "interactive", text: LONG_JSON } as never, {} as ExtensionContext),
-  ).toBe(undefined);
+  ) as { messages: Array<{ content: Array<{ type: "text"; text: string }> }> } | undefined;
+  const transformedMessage = transformedContext?.messages[0]?.content[0]?.text;
+  expect(transformedMessage).toContain("```toon");
+  expect(transformedMessage).not.toContain("```json");
+  expect(contextMessages[0]?.content[0]?.text).toBe(fencedJson);
+});
+
+test("project TOON settings can disable both conversion paths", () => {
+  type Handler = (event: never, context: ExtensionContext) => unknown;
+  const root = mkdtempSync(join(tmpdir(), "toon-settings-"));
+  try {
+    mkdirSync(join(root, ".pi"));
+    writeFileSync(
+      join(root, ".pi", "settings.json"),
+      JSON.stringify({ toon: { convertToolResults: false, convertUserMessages: false } }),
+    );
+
+    const handlers = new Map<string, Handler>();
+    const pi = {
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+    } as unknown as ExtensionAPI;
+    toonExtension(pi);
+
+    const sessionStart = handlers.get("session_start");
+    const resultHandler = handlers.get("tool_result");
+    const contextHandler = handlers.get("context");
+    if (sessionStart === undefined || resultHandler === undefined || contextHandler === undefined) {
+      throw new Error("TOON settings handlers were not registered");
+    }
+
+    sessionStart({} as never, { cwd: root, isProjectTrusted: () => true } as ExtensionContext);
+    expect(resultHandler(resultEvent() as never, {} as ExtensionContext)).toBeUndefined();
+    expect(
+      contextHandler(
+        { messages: [{ role: "user", content: [{ type: "text", text: LONG_JSON }] }] } as never,
+        {} as ExtensionContext,
+      ),
+    ).toBeUndefined();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
