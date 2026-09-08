@@ -1,5 +1,4 @@
 #!/usr/bin/env luajit
-
 local socket = require("socket")
 
 local config_dir = os.getenv("HOME") .. "/.config/hypr"
@@ -12,30 +11,43 @@ local gaming = require("gaming.policies")
 local hypr_ipc = require("runtime.lib.hypr-ipc")
 local json = require("lib.json")
 local pip = require("lib.picture_in_picture")
+local workers = require("runtime.desktop.waybar-workers")
 
 local show_delay_ms = 200
 local hide_delay_ms = 300
 local launch_timeout_ms = 10000
+local worker_shutdown_wait_ms = 500
 local fast_interval_ms = 83
 local slow_interval_ms = 1000
 local process_helper = config_dir .. "/runtime/desktop/waybar-process.sh"
-local waybar_unit = "app-Hyprland-waybar-demand-" .. os.getenv("HYPRLAND_INSTANCE_SIGNATURE") .. ".service"
 local pip_control_socket = "timeout --foreground 1s nc -w 1 -U "
 	.. command.arg(hypr_ipc.instance_socket_path("pip-monitor.sock"))
 	.. " >/dev/null 2>&1"
 local kit = daemon.new({})
-local launch_state_file = kit:instance_path("waybar-launch.pending")
 local visibility_state_file = kit:instance_path("waybar-visibility.state")
 
 local pointer_zone = "neutral"
 local waybar_mapped = false
+local mapped_layer_count = 0
+local signaled_layer_count = 0
 local desired_visible = false
-local effective_visible = false
-local launch_requested_at = nil
+local effective_visible = nil
+local pip_effective_visible = nil
+local pip_desired_visible = false
+local pip_dirty = false
+local launch_requested = false
+local prewarm_requested = false
+local launch_started_at = nil
 local launch_timeout_reported = false
+local intent_generation = 0
+local reconciliation_dirty = false
+local mapping_dirty = true
 local super_held = false
 local show_started_at = nil
 local hide_started_at = nil
+local launch_worker = nil
+local visibility_worker = nil
+local pip_worker = nil
 local control_socket = nil
 
 local valid_zones = { show = true, neutral = true, hide = true }
@@ -59,19 +71,19 @@ end
 
 local function current_waybar_state()
 	local mapped = false
-	local visible = false
+	local count = 0
 	for _, monitor_layers in pairs(json.object(request("j/layers"))) do
 		for _, level in pairs(monitor_layers.levels or {}) do
 			for _, layer in ipairs(level) do
 				if layer.namespace == "waybar" then
 					mapped = true
-					visible = visible or (tonumber(layer.alpha) or 0) > 0
+					count = count + 1
 				end
 			end
 		end
 	end
 
-	return mapped, visible
+	return mapped, count
 end
 
 local function taskbar_visible()
@@ -94,65 +106,26 @@ end
 local function swaync_visible()
 	return command
 		.output(
-			"busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null"
+			"timeout --foreground 0.5s busctl --user call org.erikreider.swaync.cc /org/erikreider/swaync/cc org.erikreider.swaync.cc GetVisibility 2>/dev/null"
 		)
 		:match("b true") ~= nil
-end
-
-local function notify_pip(visible)
-	local action = pip.control.encode(visible and "waybar-show" or "waybar-hide")
-	return command.ok("printf '%s\\n' " .. command.arg(action) .. " | " .. pip_control_socket)
 end
 
 local function process_command(...)
 	return command.line(process_helper, ...)
 end
 
-local function signal_waybar(signal)
-	return command.ok(process_command("signal", signal) .. " >/dev/null 2>&1")
-end
-
 local function waybar_process_running()
-	return command.ok(process_command("running") .. " >/dev/null 2>&1")
-end
-
-local function stop_waybar_unit()
-	return command.ok("timeout --foreground 2s " .. process_command("stop-unit") .. " >/dev/null 2>&1")
-end
-
-local function clear_state_file(path, label)
-	local ok, err = pcall(kit.remove_file, kit, path)
-	if not ok then
-		log("failed to clear " .. label .. ": " .. tostring(err))
-		return false
-	end
-	return true
-end
-
-local function clear_launch_state()
-	return clear_state_file(launch_state_file, "pending launch state")
-end
-
-local function clear_visibility_state()
-	return clear_state_file(visibility_state_file, "visibility state")
-end
-
-local function publish_launch_state(visible)
-	local content = string.format("%d\t%s\n", launch_requested_at, visible and "show" or "hide")
-	local ok, err = pcall(kit.write_shared_file, kit, launch_state_file, content)
-	if not ok then
-		log("failed to publish pending launch state: " .. tostring(err))
-		return false
-	end
-	return true
+	return command.ok("timeout --foreground 0.5s " .. process_command("running") .. " >/dev/null 2>&1")
 end
 
 local function publish_visibility_state(visible)
 	local ok, err = pcall(kit.write_shared_file, kit, visibility_state_file, visible and "shown\n" or "hidden\n")
 	if not ok then
-		log("failed to publish visibility state: " .. tostring(err))
+		log("failed to record Waybar intent: " .. tostring(err))
 		return false
 	end
+
 	return true
 end
 
@@ -161,6 +134,7 @@ local function read_visibility_state()
 	if not content then
 		return nil
 	end
+
 	local state = content:match("^(%a+)%s*$")
 	if state == "shown" then
 		return true
@@ -168,277 +142,327 @@ local function read_visibility_state()
 	if state == "hidden" then
 		return false
 	end
-	clear_visibility_state()
+
+	local ok, err = pcall(kit.remove_file, kit, visibility_state_file)
+	if not ok then
+		log("failed to clear invalid Waybar intent: " .. tostring(err))
+	end
 	return nil
 end
 
-local function restore_launch_state()
-	local content = kit:read_file(launch_state_file)
-	if not content then
-		return
-	end
-
-	local timestamp, intent = content:match("^(%d+)%s+(%a+)%s*$")
-	timestamp = tonumber(timestamp)
-	if not timestamp or (intent ~= "show" and intent ~= "hide") then
-		clear_launch_state()
-		return
-	end
-
-	desired_visible = intent == "show"
-	effective_visible = desired_visible
-	local age = now_ms() - timestamp
-	if age >= 0 and age <= launch_timeout_ms then
-		launch_requested_at = timestamp
-		launch_timeout_reported = false
-		return
-	end
-
-	if waybar_process_running() then
-		launch_requested_at = now_ms()
-		launch_timeout_reported = true
-		publish_launch_state(desired_visible)
-	else
-		clear_launch_state()
-	end
-end
-
-local function finish_launch_state()
-	if not clear_launch_state() then
-		return false
-	end
-	launch_requested_at = nil
-	launch_timeout_reported = false
-	return true
-end
-
-local function abandon_launch(message)
-	if clear_launch_state() then
-		launch_requested_at = nil
-		launch_timeout_reported = false
-	end
-	waybar_mapped = false
-	desired_visible = false
-	effective_visible = false
-	clear_visibility_state()
-	notify_pip(false)
-	log(message)
-end
-
-local function begin_launch(visible)
-	launch_requested_at = now_ms()
-	launch_timeout_reported = false
-	desired_visible = visible
-	effective_visible = visible
-	if not publish_launch_state(visible) then
-		abandon_launch("Waybar launch was not attempted because ownership state could not be recorded")
-		return false
-	end
-
-	if waybar_process_running() then
-		return true
-	end
-	if not stop_waybar_unit() then
-		abandon_launch("failed to clear the previous Waybar unit")
-		return false
-	end
-
-	local launch = "timeout --foreground 5s uwsm-app -s s -t service -u "
-		.. command.arg(waybar_unit)
-		.. " -S both -- waybar >/dev/null 2>&1"
-	if not command.ok(launch) then
-		log("Waybar launch request did not complete; ownership retained")
-		return false
-	end
-	return true
-end
-
-local function prewarm_waybar()
-	if waybar_mapped or launch_requested_at or waybar_process_running() then
-		return false, "ok"
-	end
-	if not begin_launch(false) then
-		return false, "error: launch-failed"
-	end
-	return false, "ok"
-end
-
-local function complete_mapped_launch(observed_visible)
-	waybar_mapped = true
-	local visible = desired_visible
-	local signal = visible and "USR1" or "USR2"
-
-	-- The initial map is hidden; reveal only when visibility was requested.
-	if not signal_waybar(signal) then
-		effective_visible = observed_visible
-		notify_pip(observed_visible)
-		return false, "error: signal-failed"
-	end
-
-	effective_visible = visible
-	if not publish_visibility_state(visible) or not finish_launch_state() then
+local function record_visibility_intent(visible, requires_launch)
+	-- The acknowledgement means this atomic write completed; effects run later.
+	if not publish_visibility_state(visible) then
 		return false, "error: state-publication-failed"
 	end
-	notify_pip(visible)
+
+	desired_visible = visible
+	intent_generation = intent_generation + 1
+	if requires_launch then
+		launch_requested = true
+	end
+	reconciliation_dirty = true
 	return false, "ok"
 end
 
-local function reconcile_mapped_waybar(observed_visible)
-	waybar_mapped = true
-	local intent = read_visibility_state()
-	if intent == nil then
-		intent = observed_visible
-		publish_visibility_state(intent)
+local function start_launch_worker()
+	local launch = "uwsm-app -s s -t service -u "
+		.. command.arg("app-Hyprland-waybar-demand-" .. os.getenv("HYPRLAND_INSTANCE_SIGNATURE") .. ".service")
+		.. " -S both -- waybar"
+	local worker, err = workers.start("launch", function()
+		return command.ok(process_command("replace-unit", launch) .. " >/dev/null 2>&1")
+	end, {
+		generation = intent_generation,
+	})
+	if not worker then
+		log(err)
+		reconciliation_dirty = true
+		return false
 	end
-	desired_visible = intent
-	-- Waybar emits one layer-opened event per output; avoid restarting a global reveal.
-	if observed_visible ~= intent then
-		if not signal_waybar(intent and "USR1" or "USR2") then
-			effective_visible = observed_visible
-			notify_pip(observed_visible)
-			return false, "error: signal-failed"
+
+	launch_worker = worker
+	launch_started_at = now_ms()
+	launch_timeout_reported = false
+	return true
+end
+
+local function start_visibility_worker(visible)
+	local worker, err = workers.start("visibility", function()
+		local signal = visible and "USR1" or "USR2"
+		return command.ok("timeout --foreground 0.5s " .. process_command("signal", signal) .. " >/dev/null 2>&1")
+	end, {
+		generation = intent_generation,
+		visible = visible,
+		layer_count = mapped_layer_count,
+	})
+	if not worker then
+		log(err)
+		reconciliation_dirty = true
+		return false
+	end
+
+	visibility_worker = worker
+	return true
+end
+
+local function start_pip_worker(visible)
+	local worker, err = workers.start("pip", function()
+		local action = pip.control.encode(visible and "waybar-show" or "waybar-hide")
+		return command.ok("printf '%s\\n' " .. command.arg(action) .. " | " .. pip_control_socket)
+	end, {
+		generation = intent_generation,
+		visible = visible,
+	})
+	if not worker then
+		log(err)
+		reconciliation_dirty = true
+		return false
+	end
+
+	pip_worker = worker
+	return true
+end
+
+local function schedule_pip_visibility(visible)
+	pip_desired_visible = visible
+	pip_dirty = true
+	reconciliation_dirty = true
+end
+
+local function reap_launch_worker()
+	if not launch_worker then
+		return
+	end
+
+	local finished, succeeded = workers.reap(launch_worker)
+	if not finished then
+		return
+	end
+
+	launch_worker = nil
+	if succeeded then
+		return
+	end
+
+	log("Waybar launch worker failed")
+	launch_started_at = nil
+	launch_timeout_reported = false
+	launch_requested = desired_visible or prewarm_requested
+	reconciliation_dirty = true
+end
+
+local function reap_visibility_worker()
+	if not visibility_worker then
+		return
+	end
+
+	local worker = visibility_worker
+	local finished, succeeded = workers.reap(worker)
+	if not finished then
+		return
+	end
+
+	visibility_worker = nil
+	if not succeeded then
+		log("Waybar visibility signal failed; keeping confirmed visibility for retry")
+		reconciliation_dirty = true
+		return
+	end
+
+	effective_visible = worker.metadata.visible
+	signaled_layer_count = math.min(worker.metadata.layer_count, mapped_layer_count)
+	schedule_pip_visibility(effective_visible)
+end
+
+local function reap_pip_worker()
+	if not pip_worker then
+		return
+	end
+
+	local worker = pip_worker
+	local finished, succeeded = workers.reap(worker)
+	if not finished then
+		return
+	end
+
+	pip_worker = nil
+	if not succeeded then
+		log("Waybar PiP notification failed; keeping it dirty for retry")
+		reconciliation_dirty = true
+		return
+	end
+
+	pip_effective_visible = worker.metadata.visible
+	pip_dirty = pip_effective_visible ~= pip_desired_visible
+end
+
+local function reap_workers()
+	reap_launch_worker()
+	reap_visibility_worker()
+	reap_pip_worker()
+end
+
+local function refresh_mapping()
+	if not mapping_dirty then
+		return
+	end
+
+	mapping_dirty = false
+	local mapped, count = current_waybar_state()
+	count = tonumber(count) or 0
+	local was_mapped = waybar_mapped
+	waybar_mapped = mapped
+	mapped_layer_count = count
+
+	if not mapped then
+		signaled_layer_count = 0
+		if was_mapped or effective_visible == true then
+			effective_visible = false
+			schedule_pip_visibility(false)
 		end
+		if desired_visible then
+			launch_requested = true
+		end
+		reconciliation_dirty = true
+		return
 	end
-	effective_visible = intent
-	notify_pip(intent)
+
+	if not was_mapped then
+		signaled_layer_count = 0
+	else
+		signaled_layer_count = math.min(signaled_layer_count, count)
+	end
+	launch_requested = false
+	prewarm_requested = false
+	launch_started_at = nil
+	launch_timeout_reported = false
+	reconciliation_dirty = true
+end
+
+local function reconcile_launch(now)
+	if waybar_mapped or launch_worker then
+		return
+	end
+	if not launch_requested then
+		if not desired_visible then
+			return
+		end
+		launch_requested = true
+	end
+
+	if launch_started_at then
+		if now - launch_started_at < launch_timeout_ms then
+			return
+		end
+		if waybar_process_running() then
+			if not launch_timeout_reported then
+				log("Waybar process has not mapped within 10 seconds")
+				launch_timeout_reported = true
+			end
+			return
+		end
+
+		log("Waybar launch did not produce a mapped layer; retrying")
+		launch_started_at = nil
+		launch_timeout_reported = false
+	end
+
+	if waybar_process_running() then
+		launch_started_at = now
+		return
+	end
+
+	start_launch_worker()
+end
+
+local function reconcile_visibility()
+	if not waybar_mapped or visibility_worker then
+		return
+	end
+	if effective_visible == desired_visible and signaled_layer_count >= mapped_layer_count then
+		return
+	end
+
+	start_visibility_worker(desired_visible)
+end
+
+local function reconcile_pip()
+	if pip_worker or not pip_dirty then
+		return
+	end
+	if pip_effective_visible == pip_desired_visible then
+		pip_dirty = false
+		return
+	end
+
+	start_pip_worker(pip_desired_visible)
+end
+
+local function reconcile()
+	if not reconciliation_dirty and not mapping_dirty then
+		return
+	end
+
+	refresh_mapping()
+	local now = now_ms()
+	reconcile_launch(now)
+	reconcile_visibility()
+	reconcile_pip()
+	reconciliation_dirty = mapping_dirty
+		or launch_worker ~= nil
+		or visibility_worker ~= nil
+		or pip_worker ~= nil
+		or (not waybar_mapped and launch_requested)
+		or (waybar_mapped and (effective_visible ~= desired_visible or signaled_layer_count < mapped_layer_count))
+		or pip_dirty
+end
+
+local function handle_layer_event()
+	mapping_dirty = true
+	reconciliation_dirty = true
 	return false, "ok"
 end
 
 local function show_waybar()
-	desired_visible = true
-	notify_pip(true)
-
-	if launch_requested_at then
-		if launch_timeout_reported and not waybar_process_running() then
-			if not finish_launch_state() then
-				return false, "error: state-publication-failed"
-			end
-			waybar_mapped = false
-		elseif waybar_mapped then
-			return complete_mapped_launch(effective_visible)
-		else
-			effective_visible = true
-			if not publish_launch_state(true) then
-				return false, "error: state-publication-failed"
-			end
-			return false, "ok"
-		end
-	end
-
-	if waybar_mapped then
-		if not publish_visibility_state(true) then
-			return false, "error: state-publication-failed"
-		end
-		if signal_waybar("USR1") then
-			effective_visible = true
-			return false, "ok"
-		end
-
-		local mapped = current_waybar_state()
-		waybar_mapped = mapped
-		if mapped then
-			notify_pip(effective_visible)
-			log("failed to show mapped Waybar")
-			return false, "error: signal-failed"
-		end
-		clear_visibility_state()
-	end
-
-	effective_visible = true
-	if not begin_launch(true) then
-		return false, "error: launch-failed"
-	end
-	return false, "ok"
+	return record_visibility_intent(true, true)
 end
 
 local function hide_waybar()
-	desired_visible = false
-	notify_pip(false)
-
-	if launch_requested_at then
-		if launch_timeout_reported and not waybar_process_running() then
-			abandon_launch("Waybar exited before mapping")
-			return false, "ok"
-		end
-		effective_visible = false
-		if not publish_launch_state(false) then
-			return false, "error: state-publication-failed"
-		end
-		if waybar_mapped then
-			return complete_mapped_launch(true)
-		end
-		return false, "ok"
-	end
-	if not waybar_mapped then
-		effective_visible = false
-		clear_visibility_state()
-		return false, "ok"
-	end
-
-	if not publish_visibility_state(false) then
-		return false, "error: state-publication-failed"
-	end
-	if signal_waybar("USR2") then
-		effective_visible = false
-		return false, "ok"
-	end
-
-	local mapped = current_waybar_state()
-	waybar_mapped = mapped
-	if not mapped then
-		effective_visible = false
-		clear_visibility_state()
-		return false, "ok"
-	end
-	notify_pip(effective_visible)
-	log("failed to hide mapped Waybar")
-	return false, "error: signal-failed"
+	return record_visibility_intent(false, false)
 end
 
-local function handle_layer_opened()
-	local mapped, observed_visible = current_waybar_state()
-	if not mapped then
-		return false, "ok"
+local function prewarm_waybar()
+	local should_quit, response = record_visibility_intent(false, true)
+	if response == "ok" then
+		prewarm_requested = true
 	end
-	if launch_requested_at then
-		return complete_mapped_launch(observed_visible)
-	end
-	return reconcile_mapped_waybar(observed_visible)
+	return should_quit, response
 end
 
-local function handle_layer_closed()
-	local mapped = current_waybar_state()
-	waybar_mapped = mapped
-	if mapped or launch_requested_at then
-		return false, "ok"
+local function hold_waybar()
+	local should_quit, response = record_visibility_intent(true, true)
+	if response == "ok" then
+		super_held = true
 	end
-	if effective_visible then
-		notify_pip(false)
+	return should_quit, response
+end
+
+local function release_waybar()
+	local should_quit, response = record_visibility_intent(desired_visible, false)
+	if response == "ok" then
+		super_held = false
 	end
-	desired_visible = false
-	effective_visible = false
-	clear_visibility_state()
-	return false, "ok"
+	return should_quit, response
 end
 
 local control_handlers = {
 	show = show_waybar,
-	prewarm = prewarm_waybar,
-	hold = function()
-		super_held = true
-		local should_quit, response = show_waybar()
-		if response ~= "ok" then
-			super_held = false
-		end
-		return should_quit, response
-	end,
-	release = function()
-		super_held = false
-		return false, "ok"
-	end,
 	hide = hide_waybar,
-	["layer-opened"] = handle_layer_opened,
-	["layer-closed"] = handle_layer_closed,
+	prewarm = prewarm_waybar,
+	hold = hold_waybar,
+	release = release_waybar,
+	["layer-opened"] = handle_layer_event,
+	["layer-closed"] = handle_layer_event,
 	ping = function()
 		return false, "ok"
 	end,
@@ -467,34 +491,9 @@ local function handle_control(message)
 	return handler()
 end
 
-local function reconcile_launch_timeout(now)
-	if not launch_requested_at or now - launch_requested_at < launch_timeout_ms or launch_timeout_reported then
-		return
-	end
-
-	local mapped, observed_visible = current_waybar_state()
-	waybar_mapped = mapped
-	if mapped then
-		local _, response = complete_mapped_launch(observed_visible)
-		if response ~= "ok" then
-			launch_timeout_reported = true
-		end
-		return
-	end
-
-	if waybar_process_running() then
-		launch_timeout_reported = true
-		log("Waybar process has not mapped within 10 seconds")
-		return
-	end
-
-	abandon_launch("Waybar launch failed before mapping")
-end
-
 local function update_visibility()
 	local now = now_ms()
-	reconcile_launch_timeout(now)
-	if effective_visible == false then
+	if effective_visible ~= true then
 		hide_started_at = nil
 		if pointer_zone ~= "show" then
 			show_started_at = nil
@@ -528,6 +527,34 @@ local function update_visibility()
 	return fast_interval_ms
 end
 
+local function stop_worker(worker)
+	if not worker then
+		return
+	end
+
+	workers.terminate(worker)
+	local deadline = now_ms() + worker_shutdown_wait_ms
+	while now_ms() < deadline do
+		local finished = workers.reap(worker)
+		if finished then
+			return
+		end
+		socket.sleep(0.01)
+	end
+
+	workers.kill(worker)
+	workers.wait(worker)
+end
+
+local function cleanup_workers()
+	stop_worker(launch_worker)
+	stop_worker(visibility_worker)
+	stop_worker(pip_worker)
+	launch_worker = nil
+	visibility_worker = nil
+	pip_worker = nil
+end
+
 local function cleanup_control_socket()
 	if control_socket then
 		control_socket:close()
@@ -536,36 +563,37 @@ local function cleanup_control_socket()
 end
 
 local function run()
-	local mapped, observed_visible = current_waybar_state()
-	waybar_mapped = mapped
-	restore_launch_state()
-	if waybar_mapped then
-		if launch_requested_at then
-			complete_mapped_launch(observed_visible)
-		else
-			reconcile_mapped_waybar(observed_visible)
-		end
-	elseif not launch_requested_at then
-		clear_visibility_state()
+	local restored_visibility = read_visibility_state()
+	if restored_visibility ~= nil then
+		desired_visible = restored_visibility
 	end
-	notify_pip(effective_visible)
 
 	control_socket = kit:control_socket("waybar-monitor.sock")
-	command.ok("hyprctl eval " .. command.arg("hl.plugin.pointer_edge_hooks.sync()") .. " >/dev/null 2>&1")
+	command.ok(
+		"timeout --foreground 0.5s hyprctl eval "
+			.. command.arg("hl.plugin.pointer_edge_hooks.sync()")
+			.. " >/dev/null 2>&1"
+	)
 
 	while true do
+		reap_workers()
+		reconcile()
 		local interval = update_visibility()
+		reconcile()
 		local ready = socket.select({ control_socket:reader() }, nil, interval / 1000)
 		if #ready > 0 then
 			local action = control_socket:handle_ready(handle_control)
 			if action then
 				return action
 			end
+			-- handle_ready sent the response before returning, so public effects start here.
+			reconcile()
 		end
 	end
 end
 
 local ok, result = xpcall(run, debug.traceback)
+cleanup_workers()
 cleanup_control_socket()
 if ok == false then
 	log(result)

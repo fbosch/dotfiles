@@ -3,14 +3,15 @@ local json = require("lib.json")
 local M = {
 	class = "app.zen_browser.zen",
 	title = "Picture-in-Picture",
-	pip_class_pattern = "^(app[.]zen_browser[.]zen-pip|one[.]ablaze[.]floorp-pip|helium-pip)$",
+	pip_classes = {
+		"app.zen_browser.zen-pip",
+		"one.ablaze.floorp-pip",
+		"helium-pip",
+	},
 	classes = {
 		["app.zen_browser.zen"] = true,
-		["app.zen_browser.zen-pip"] = true,
 		["one.ablaze.floorp"] = true,
-		["one.ablaze.floorp-pip"] = true,
 		helium = true,
-		["helium-pip"] = true,
 	},
 	titles = {
 		["Picture-in-Picture"] = true,
@@ -28,6 +29,13 @@ local M = {
 		["bottom-right"] = { tag = "pip-bottom-right", animation = "slide bottom" },
 	},
 }
+
+local pip_class_patterns = {}
+for index, class in ipairs(M.pip_classes) do
+	pip_class_patterns[index] = class:gsub("%.", "[.]")
+	M.classes[class] = true
+end
+M.pip_class_pattern = "^(" .. table.concat(pip_class_patterns, "|") .. ")$"
 
 M.corner_tag_animations = {}
 for _, corner in pairs(M.corners) do

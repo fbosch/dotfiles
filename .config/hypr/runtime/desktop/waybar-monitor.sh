@@ -19,7 +19,7 @@ daemon_supervisor_health_attempts=2
 daemon_supervisor_shutdown_commands="quit"
 daemon_supervisor_shutdown_attempts=20
 daemon_supervisor_shutdown_interval=0.01
-daemon_supervisor_cleanup_paths="$(hypr_instance_path waybar-launch.pending) $(hypr_instance_path waybar-visibility.state)"
+daemon_supervisor_cleanup_paths="$(hypr_instance_path waybar-visibility.state)"
 
 # shellcheck disable=SC1091
 . "${HOME}/.config/hypr/runtime/lib/daemon-supervisor.sh"

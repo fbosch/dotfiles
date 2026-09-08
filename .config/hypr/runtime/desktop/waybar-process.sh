@@ -22,6 +22,17 @@ session_pids() {
   done
 }
 
+replace_unit() {
+  # One timeout covers stopping the exact prior unit and the monitor-owned launch command.
+  # shellcheck disable=SC2016
+  timeout --foreground --kill-after=1 5s sh -c '
+    if systemctl --user is-active --quiet "$1"; then
+      systemctl --user stop "$1" || exit $?
+    fi
+    exec sh -c "$2"
+  ' sh "$unit" "$1"
+}
+
 case "${1:-}" in
   running)
     [ "$#" -eq 1 ] || exit 2
@@ -42,6 +53,10 @@ case "${1:-}" in
     "$found" || exit 1
     exit "$status"
     ;;
+  replace-unit)
+    [ "$#" -eq 2 ] || exit 2
+    replace_unit "$2"
+    ;;
   stop-unit)
     [ "$#" -eq 1 ] || exit 2
     if systemctl --user is-active --quiet "$unit"; then
@@ -53,7 +68,7 @@ case "${1:-}" in
     printf '%s\n' "$unit"
     ;;
   *)
-    printf 'usage: %s {running|signal USR1|signal USR2|signal TERM|stop-unit|unit-name}\n' "${0##*/}" >&2
+    printf 'usage: %s {running|signal USR1|signal USR2|signal TERM|replace-unit COMMAND|stop-unit|unit-name}\n' "${0##*/}" >&2
     exit 2
     ;;
 esac

@@ -18,7 +18,7 @@ local function parse_busctl_string(response)
 
 	local quoted = response:match('^s "(.*)"$')
 	if quoted then
-		return (quoted:gsub('\\"', '"'):gsub('\\\\', '\\'))
+		return (quoted:gsub('\\"', '"'):gsub("\\\\", "\\"))
 	end
 
 	return response:match("^s (.*)$")
@@ -55,13 +55,15 @@ function M.request(component, payload, opts)
 		end
 	end
 
-	return command.output(table.concat({
-		"ags request -i",
-		command.arg(instance),
-		command.arg(component),
-		command.arg(payload),
-		"2>/dev/null",
-	}, " ")):gsub("%s+$", "")
+	return command
+		.output(table.concat({
+			"timeout --foreground " .. command.arg(tostring(timeout) .. "s") .. " ags request -i",
+			command.arg(instance),
+			command.arg(component),
+			command.arg(payload),
+			"2>/dev/null",
+		}, " "))
+		:gsub("%s+$", "")
 end
 
 return M

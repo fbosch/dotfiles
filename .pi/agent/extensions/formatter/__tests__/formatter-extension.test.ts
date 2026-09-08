@@ -234,6 +234,7 @@ test("loads the formatter runtime once for successful matching mutations", async
     } as unknown as ExtensionAPI;
     const formatted: string[] = [];
     let runtimeLoads = 0;
+    let hashlineRefreshLoads = 0;
     let settingsLoads = 0;
     const context = {
       cwd: directory,
@@ -263,6 +264,10 @@ test("loads the formatter runtime once for successful matching mutations", async
           },
         };
       },
+      loadHashlineRefresh: async () => {
+        hashlineRefreshLoads += 1;
+        throw new Error("hashline refresh must not load without the plugin");
+      },
       readSettings: () => {
         settingsLoads += 1;
         return settings;
@@ -283,9 +288,102 @@ test("loads the formatter runtime once for successful matching mutations", async
       toolResult(event(secondFile), context),
     ]);
     expect(runtimeLoads).toBe(1);
+    expect(hashlineRefreshLoads).toBe(0);
     expect(formatted).toHaveLength(2);
     expect(formatted).toContain(firstFile);
     expect(formatted).toContain(secondFile);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("refreshes hashline anchors after formatting when the plugin is loaded", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "pi-formatter-hashline-refresh-"));
+  try {
+    const filePath = join(directory, "example.ts");
+    await writeFile(filePath, "const value=1\n");
+    let sessionStart: SessionStartHandler | undefined;
+    let toolResult: ToolResultHandler | undefined;
+    let refreshCalls = 0;
+    const actions: string[] = [];
+    const pi = {
+      on(event: string, handler: SessionStartHandler | ToolResultHandler) {
+        if (event === "session_start") sessionStart = handler as SessionStartHandler;
+        if (event === "tool_result") toolResult = handler as ToolResultHandler;
+      },
+      getAllTools: () => [
+        {
+          name: "read",
+          sourceInfo: {
+            source: "package",
+            path: "/agent/npm/node_modules/pi-hashline-edit-pro/index.ts",
+            scope: "user",
+            origin: "package",
+          },
+        },
+      ],
+    } as unknown as ExtensionAPI;
+    const context = {
+      cwd: directory,
+      signal: undefined,
+      ui: { notify() {} },
+    } as unknown as ExtensionContext;
+    const settings: ResolvedFormatterSettings = {
+      timeoutMs: 1_000,
+      warnings: [],
+      rules: [
+        {
+          id: "typescript",
+          mode: "pipeline",
+          extensions: [".ts"],
+          fileNames: [],
+          commands: [],
+        },
+      ],
+    };
+    createFormatterExtension({
+      loadRuntime: async () => ({
+        execute: async () => ({ kind: "success" as const }),
+        formatFile: async () => {
+          actions.push("format");
+          return [];
+        },
+      }),
+      loadHashlineRefresh: async () => async (path) => {
+        expect(path).toBe("example.ts");
+        actions.push("read");
+        refreshCalls += 1;
+        return "HASH│const value = 1";
+      },
+      readSettings: () => settings,
+    })(pi);
+    if (sessionStart === undefined || toolResult === undefined) {
+      throw new Error("formatter handlers were not registered");
+    }
+    await sessionStart({} as never, context);
+    const result = await toolResult(
+      {
+        type: "tool_result",
+        toolCallId: "write-1",
+        toolName: "write",
+        input: { path: "example.ts", content: "const value=1\n" },
+        content: [{ type: "text", text: "wrote file" }],
+        details: undefined,
+        isError: false,
+      } as ToolResultEvent,
+      context,
+    );
+    expect(refreshCalls).toBe(1);
+    expect(actions).toEqual(["format", "read"]);
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "wrote file" },
+        {
+          type: "text",
+          text: "\n\n--- Post-format hashline anchors ---\nHASH│const value = 1",
+        },
+      ],
+    });
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

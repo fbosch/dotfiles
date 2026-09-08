@@ -1,6 +1,7 @@
 import { realpath, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
+  type ExtensionAPI,
   type ExtensionContext,
   type ExtensionFactory,
   getAgentDir,
@@ -11,6 +12,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import type { CommandAvailability, FormatterExecutor } from "./format-file";
+import {
+  type HashlineRefresh,
+  hashlinePluginPath,
+  isHashlinePluginLoaded,
+  loadHashlineRefresh,
+} from "./hashline-refresh";
 import {
   DEFAULT_FORMATTER_TIMEOUT_MS,
   matchesFormatterRule,
@@ -26,11 +33,14 @@ interface FormatterRuntime {
 }
 
 type FormatterRuntimeLoader = () => Promise<FormatterRuntime>;
+type HashlineRefreshLoader = (readToolPath?: string) => Promise<HashlineRefresh>;
 
 interface FormatterExtensionDependencies {
   readonly commandAvailable?: CommandAvailability;
   readonly execute?: FormatterExecutor;
   readonly loadRuntime?: FormatterRuntimeLoader;
+  readonly isHashlineLoaded?: (pi: ExtensionAPI) => boolean;
+  readonly loadHashlineRefresh?: HashlineRefreshLoader;
   readonly readSettings?: SettingsLoader;
 }
 
@@ -90,6 +100,22 @@ export function createFormatterExtension(
       });
       return loaded;
     }
+    const isHashlineLoaded = dependencies.isHashlineLoaded ?? isHashlinePluginLoaded;
+    const hashlineRefreshLoader = dependencies.loadHashlineRefresh ?? loadHashlineRefresh;
+    let hashlineRefreshPromise: Promise<HashlineRefresh> | undefined;
+
+    function hashlineRefresh(): Promise<HashlineRefresh> | undefined {
+      if (isHashlineLoaded(pi) === false) return undefined;
+      const readToolPath = hashlinePluginPath(pi);
+      if (hashlineRefreshPromise !== undefined) return hashlineRefreshPromise;
+
+      const loaded = Promise.resolve().then(() => hashlineRefreshLoader(readToolPath));
+      hashlineRefreshPromise = loaded;
+      void loaded.catch(() => {
+        if (hashlineRefreshPromise === loaded) hashlineRefreshPromise = undefined;
+      });
+      return loaded;
+    }
 
     function serialize<T>(keys: readonly string[], operation: () => Promise<T>): Promise<T> {
       const uniqueKeys = [...new Set(keys)];
@@ -133,12 +159,12 @@ export function createFormatterExtension(
         .then(({ dev, ino }) => `inode:${dev}:${ino}`)
         .catch(() => undefined);
 
-      const warnings = await serialize(
+      const result = await serialize(
         identity === undefined ? [`path:${queuePath}`] : [`path:${queuePath}`, identity],
         // The local queue covers hard links; Pi's queue also excludes native edit/write operations.
         () =>
-          withFileMutationQueue(filePath, () =>
-            formatterRuntime.formatFile({
+          withFileMutationQueue(filePath, async () => {
+            const warnings = await formatterRuntime.formatFile({
               cwd: context.cwd,
               // Pi 0.84.4's executor can leave timed-out children alive and buffer unbounded output.
               execute: formatterRuntime.execute,
@@ -148,13 +174,36 @@ export function createFormatterExtension(
                 ? {}
                 : { commandAvailable: dependencies.commandAvailable }),
               ...(context.signal === undefined ? {} : { signal: context.signal }),
-            }),
-          ),
+            });
+            const refresh = hashlineRefresh();
+            if (refresh === undefined) return { warnings, hashlineText: undefined };
+            try {
+              return { warnings, hashlineText: await (await refresh)(path, context) };
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              return {
+                warnings: [
+                  ...warnings,
+                  `Formatter: unable to refresh hashline anchors for ${path}: ${message}. Re-read the file before editing.`,
+                ],
+                hashlineText: undefined,
+              };
+            }
+          }),
       );
-      if (warnings.length === 0) return undefined;
-      return {
-        content: [...event.content, { type: "text", text: warnings.join("\n") }],
-      };
+      const postFormatText =
+        result.hashlineText === undefined
+          ? undefined
+          : `\n\n--- Post-format hashline anchors ---\n${result.hashlineText}`;
+      const content = [...event.content];
+      if (postFormatText !== undefined) {
+        content.push({ type: "text", text: postFormatText });
+      }
+      if (result.warnings.length > 0) {
+        content.push({ type: "text", text: result.warnings.join("\n") });
+      }
+      if (content.length === event.content.length) return undefined;
+      return { content };
     });
   };
 }

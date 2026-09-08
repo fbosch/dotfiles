@@ -28,6 +28,29 @@ local function default_unix_server()
 	return assert(unix())
 end
 
+local function production_clock()
+	local ffi_available, ffi = pcall(require, "ffi")
+	if ffi_available then
+		pcall(
+			ffi.cdef,
+			[[
+			typedef long time_t;
+			struct timespec { time_t tv_sec; long tv_nsec; };
+			int clock_gettime(int clockid, struct timespec *tp);
+		]]
+		)
+		local timespec = ffi.new("struct timespec[1]")
+		if ffi.C.clock_gettime(1, timespec) == 0 then
+			return function()
+				assert(ffi.C.clock_gettime(1, timespec) == 0, "clock_gettime failed")
+				return tonumber(timespec[0].tv_sec) + tonumber(timespec[0].tv_nsec) / 1000000000
+			end
+		end
+	end
+
+	return os.clock
+end
+
 local function number(value)
 	return tonumber(value) or 0
 end
@@ -114,6 +137,7 @@ function M.new(opts)
 	local spawn = opts.spawn or default_spawn
 	local unix_server = opts.unix_server or default_unix_server
 	local remove = opts.remove or os.remove
+	local clock = opts.clock or production_clock()
 
 	local monitors_cache = nil
 	local monitors_cached_at = -math.huge
@@ -224,11 +248,20 @@ function M.new(opts)
 		end
 
 		local function receive_message(client)
+			local deadline = clock() + 0.05
 			local bytes = {}
 			for _ = 1, 4097 do
+				local remaining = deadline - clock()
+				if remaining <= 0 then
+					return nil, "request-timeout"
+				end
+				client:settimeout(remaining)
 				local byte, err = client:receive(1)
 				if not byte then
 					return nil, err or "incomplete-request"
+				end
+				if clock() >= deadline then
+					return nil, "request-timeout"
 				end
 				if byte == "\n" then
 					return table.concat(bytes):gsub("\r$", "")
@@ -247,7 +280,6 @@ function M.new(opts)
 				return false
 			end
 
-			client:settimeout(0.05)
 			local message, receive_error = receive_message(client)
 			local result
 			local response

@@ -195,7 +195,7 @@ it("owns the one-line control socket lifecycle", function()
 	)
 	assert_equal(received, "quit", "one-line message")
 	assert_equal(calls.receive_mode, 1, "bounded byte read mode")
-	assert_equal(calls.client_timeout, 0.05, "bounded client read")
+	assert(calls.client_timeout > 0 and calls.client_timeout <= 0.05, "bounded client read")
 	assert_equal(calls.response, "ok\n", "health acknowledgement")
 	assert_equal(calls.client_closed, true, "client closes after acknowledgement")
 
@@ -309,4 +309,115 @@ it("clients with fallback normalizes the spawned response", function()
 	local clients = kit:clients({ fallback = true })
 	assert_equal(#clients, 1, "client count")
 	assert_equal(clients[1].at[1], 5, "x coerced after fallback")
+end)
+
+it("uses one absolute deadline for a fragmented control request", function()
+	local now = 0
+	local offset = 1
+	local timeouts = {}
+	local client = {
+		settimeout = function(_, timeout)
+			timeouts[#timeouts + 1] = timeout
+		end,
+		receive = function()
+			now = now + 0.03
+			local byte = ("show\n"):sub(offset, offset)
+			offset = offset + 1
+			return byte
+		end,
+		send = function(_, response)
+			assert_equal(response, "error: request-timeout\n", "deadline rejection")
+		end,
+		close = function() end,
+	}
+	local server = {
+		bind = function()
+			return true
+		end,
+		listen = function()
+			return true
+		end,
+		settimeout = function() end,
+		accept = function()
+			return client
+		end,
+		close = function() end,
+	}
+	local kit = daemon.new({
+		transport = fake_transport("[]", "[]"),
+		unix_server = function()
+			return server
+		end,
+		clock = function()
+			return now
+		end,
+	})
+
+	kit:control_socket("control.sock"):handle_ready(function()
+		error("a timed-out request must not reach the handler")
+	end)
+	assert_equal(timeouts[1], 0.05, "first receive gets full deadline")
+	assert(timeouts[2] < timeouts[1], "fragmented receive gets remaining deadline")
+end)
+
+it("rejects a newline that arrives after the control deadline", function()
+	local now = 0
+	local handler_called = false
+	local response
+	local client = {
+		settimeout = function() end,
+		receive = function()
+			now = 0.051
+			return "\n"
+		end,
+		send = function(_, value)
+			response = value
+		end,
+		close = function() end,
+	}
+	local server = {
+		bind = function()
+			return true
+		end,
+		listen = function()
+			return true
+		end,
+		settimeout = function() end,
+		accept = function()
+			return client
+		end,
+		close = function() end,
+	}
+	local kit = daemon.new({
+		transport = fake_transport("[]", "[]"),
+		unix_server = function()
+			return server
+		end,
+		clock = function()
+			return now
+		end,
+	})
+
+	kit:control_socket("control.sock"):handle_ready(function()
+		handler_called = true
+	end)
+	assert_equal(response, "error: request-timeout\n", "late newline rejection")
+	assert_equal(handler_called, false, "late newline must not reach the handler")
+end)
+
+it("loads without LuaSocket at module initialization", function()
+	local previous_daemon = package.loaded["runtime.lib.daemon"]
+	local previous_socket = package.loaded.socket
+	local previous_socket_loader = package.preload.socket
+	package.loaded["runtime.lib.daemon"] = nil
+	package.loaded.socket = nil
+	package.preload.socket = function()
+		error("LuaSocket must remain lazy")
+	end
+
+	local loaded, module = pcall(require, "runtime.lib.daemon")
+	package.loaded["runtime.lib.daemon"] = previous_daemon
+	package.loaded.socket = previous_socket
+	package.preload.socket = previous_socket_loader
+	assert(loaded, module)
 end)
