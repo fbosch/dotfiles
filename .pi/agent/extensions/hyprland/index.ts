@@ -5,9 +5,12 @@ import { join } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   type AgentToolResult,
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
   defineTool,
   type ExtensionAPI,
   type ExtensionCommandContext,
+  truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -40,6 +43,12 @@ type Monitor = Geometry & {
   id: number | null;
 };
 
+type WorkspaceInfo = {
+  id: number | null;
+  name: string;
+  monitor: string;
+};
+
 type WindowInfo = {
   className: string;
   initialClass: string;
@@ -47,6 +56,7 @@ type WindowInfo = {
   stableId: string;
   address: string;
   monitor: number | null;
+  workspace: WorkspaceInfo | null;
   position: [number, number] | null;
   size: [number, number] | null;
   visible: boolean;
@@ -66,6 +76,40 @@ type CaptureResult = {
   geometry?: Geometry;
   window?: WindowInfo;
   fallback?: string[];
+};
+
+type DiagnosticSource<T> = { status: "ok"; value: T } | { status: "unavailable"; error: string };
+type DiagnosticFailure = {
+  source: string;
+  error: string;
+};
+type ProfileStatus = {
+  generation: number;
+  resolved: string;
+  selection: string;
+  sources: Record<string, Record<string, number>>;
+};
+type WindowCaptureStatus = {
+  daemon: "running" | "paused" | "missing";
+  worker: "running" | "paused" | "missing";
+};
+type HyprlandDiagnosticDetails = {
+  timestamp: string;
+  compositor: {
+    activeWindow: WindowInfo | null;
+    activeWorkspace: WorkspaceInfo | null;
+    clients: WindowInfo[];
+    monitors: Monitor[];
+    layers: Layer[];
+    configErrors: string[] | null;
+  };
+  runtime: {
+    profile: ProfileStatus | null;
+    presentation: string | null;
+    windowCapture: WindowCaptureStatus | null;
+    waybar: "running" | "stopped" | null;
+  };
+  unavailable: DiagnosticFailure[];
 };
 
 const browserClasses = new Set([
@@ -168,6 +212,22 @@ async function hyprctlJson(
   }
 }
 
+function parseWorkspace(value: unknown): WorkspaceInfo | null {
+  const input = objectValue(value);
+  if (input === null || Object.keys(input).length === 0) {
+    return null;
+  }
+
+  const id = numberValue(input.id);
+  const name = stringValue(input.name);
+  const monitor = stringValue(input.monitor);
+  if (id === null && name === "") {
+    return null;
+  }
+
+  return { id, name, monitor };
+}
+
 function parseWindow(value: unknown): WindowInfo | null {
   const input = objectValue(value);
   if (input === null || Object.keys(input).length === 0) {
@@ -183,6 +243,7 @@ function parseWindow(value: unknown): WindowInfo | null {
     stableId: stringValue(input.stableId),
     address: stringValue(input.address),
     monitor: numberValue(input.monitor),
+    workspace: parseWorkspace(input.workspace),
     position:
       position.length >= 2 && position[0] !== undefined && position[1] !== undefined
         ? [position[0], position[1]]
@@ -1006,6 +1067,582 @@ async function gatherContext(
   };
 }
 
+function diagnosticError(result: CommandResult): string {
+  const detail = result.stderr.trim() || result.stdout.trim();
+  const firstLine = detail.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  if (firstLine === "") return `exit code ${result.exitCode}`;
+  return firstLine.length <= 300 ? firstLine : `${firstLine.slice(0, 297)}...`;
+}
+
+async function runDiagnosticText(
+  label: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+  environment?: Readonly<Record<string, string>>,
+): Promise<DiagnosticSource<string>> {
+  const result = await runCommand(command, args, cwd, signal, environment);
+  if (result.exitCode !== 0) {
+    return { status: "unavailable", error: `${label}: ${diagnosticError(result)}` };
+  }
+  return { status: "ok", value: result.stdout.trim() };
+}
+
+async function runDiagnosticJson<T>(
+  label: string,
+  command: string,
+  args: string[],
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+  parse: (value: unknown) => T | undefined,
+  environment?: Readonly<Record<string, string>>,
+): Promise<DiagnosticSource<T>> {
+  const text = await runDiagnosticText(label, command, args, cwd, runCommand, signal, environment);
+  if (text.status === "unavailable") return text;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.value);
+  } catch {
+    return { status: "unavailable", error: `${label}: returned invalid JSON` };
+  }
+
+  const value = parse(parsed);
+  return value === undefined
+    ? { status: "unavailable", error: `${label}: returned unexpected JSON` }
+    : { status: "ok", value };
+}
+
+function parseDiagnosticWindow(value: unknown): WindowInfo | null | undefined {
+  if (value === null) return null;
+  const input = objectValue(value);
+  if (input === null) return undefined;
+  if (Object.keys(input).length === 0) return null;
+  return parseWindow(value) ?? undefined;
+}
+
+function parseDiagnosticWorkspace(value: unknown): WorkspaceInfo | null | undefined {
+  if (value === null) return undefined;
+  const input = objectValue(value);
+  if (input === null) return undefined;
+  if (Object.keys(input).length === 0) return null;
+  return parseWorkspace(value) ?? undefined;
+}
+
+function parseDiagnosticWindows(value: unknown): WindowInfo[] | undefined {
+  return Array.isArray(value) ? parseWindows(value) : undefined;
+}
+
+function parseDiagnosticMonitors(value: unknown): Monitor[] | undefined {
+  return Array.isArray(value) ? parseMonitors(value) : undefined;
+}
+
+function parseDiagnosticLayers(value: unknown): Layer[] | undefined {
+  return objectValue(value) !== null || Array.isArray(value) ? collectLayers(value) : undefined;
+}
+
+function parseConfigErrors(output: string): string[] {
+  const trimmed = output.trim();
+  if (trimmed === "" || /^(no (config )?errors found|no errors)$/i.test(trimmed)) return [];
+  return trimmed
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function parseProfileStatus(value: unknown): ProfileStatus | undefined {
+  const input = objectValue(value);
+  if (input === null) return undefined;
+
+  const generation = numberValue(input.generation);
+  const resolved = stringValue(input.resolved);
+  const selection = stringValue(input.selection);
+  if (generation === null || resolved === "" || selection === "") return undefined;
+
+  const sources: Record<string, Record<string, number>> = {};
+  const sourceInput = objectValue(input.sources);
+  if (sourceInput !== null) {
+    for (const [profile, claimsValue] of Object.entries(sourceInput)) {
+      const claimsInput = objectValue(claimsValue);
+      if (claimsInput === null) continue;
+      const claims: Record<string, number> = {};
+      for (const [source, count] of Object.entries(claimsInput)) {
+        const numericCount = numberValue(count);
+        if (numericCount !== null) claims[source] = numericCount;
+      }
+      sources[profile] = claims;
+    }
+  }
+
+  return { generation, resolved, selection, sources };
+}
+
+type ProcessStatus = WindowCaptureStatus["daemon"];
+
+function isProcessStatus(value: string): value is ProcessStatus {
+  return value === "running" || value === "paused" || value === "missing";
+}
+
+function parseWindowCaptureStatus(output: string): WindowCaptureStatus | undefined {
+  const values: Partial<WindowCaptureStatus> = {};
+  for (const line of output.split(/\r?\n/)) {
+    const separator = line.indexOf("=");
+    if (separator <= 0) continue;
+    const key = line.slice(0, separator);
+    const value = line.slice(separator + 1);
+    if (key === "daemon" || key === "worker") {
+      if (!isProcessStatus(value)) return undefined;
+      values[key] = value;
+    }
+  }
+
+  return values.daemon !== undefined && values.worker !== undefined
+    ? { daemon: values.daemon, worker: values.worker }
+    : undefined;
+}
+
+function runtimeCommandEnvironment(
+  environment: NodeJS.ProcessEnv,
+): Readonly<Record<string, string>> | undefined {
+  const session = completeHyprlandSessionEnvironment(environment);
+  if (session === null) return undefined;
+  return {
+    ...session,
+    ...(environment.HOME === undefined ? {} : { HOME: environment.HOME }),
+  };
+}
+
+async function runRuntimeDiagnosticText(
+  relativePath: string,
+  args: string[],
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+): Promise<DiagnosticSource<string>> {
+  const home = environment.HOME;
+  if (home === undefined || home === "") {
+    return { status: "unavailable", error: "HOME is unavailable" };
+  }
+  return runDiagnosticText(
+    relativePath,
+    join(home, ".config/hypr", relativePath),
+    args,
+    cwd,
+    runCommand,
+    signal,
+    runtimeCommandEnvironment(environment),
+  );
+}
+
+async function runRuntimeDiagnosticJson<T>(
+  relativePath: string,
+  args: string[],
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+  parse: (value: unknown) => T | undefined,
+): Promise<DiagnosticSource<T>> {
+  const home = environment.HOME;
+  if (home === undefined || home === "") {
+    return { status: "unavailable", error: "HOME is unavailable" };
+  }
+  return runDiagnosticJson(
+    relativePath,
+    join(home, ".config/hypr", relativePath),
+    args,
+    cwd,
+    runCommand,
+    signal,
+    parse,
+    runtimeCommandEnvironment(environment),
+  );
+}
+
+async function runRuntimeDiagnosticAvailability(
+  relativePath: string,
+  args: string[],
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+): Promise<DiagnosticSource<"running" | "stopped">> {
+  const home = environment.HOME;
+  if (home === undefined || home === "") {
+    return { status: "unavailable", error: "HOME is unavailable" };
+  }
+
+  const result = await runCommand(
+    join(home, ".config/hypr", relativePath),
+    args,
+    cwd,
+    signal,
+    runtimeCommandEnvironment(environment),
+  );
+  if (result.exitCode === 0) return { status: "ok", value: "running" };
+  if (result.exitCode === 1) return { status: "ok", value: "stopped" };
+  return {
+    status: "unavailable",
+    error: `${relativePath}: ${diagnosticError(result)}`,
+  };
+}
+
+function diagnosticValue<T>(
+  source: DiagnosticSource<T>,
+  name: string,
+  fallback: T,
+  unavailable: DiagnosticFailure[],
+): T {
+  if (source.status === "ok") return source.value;
+  unavailable.push({ source: name, error: source.error });
+  return fallback;
+}
+
+async function gatherDesktopDiagnostic(
+  environment: NodeJS.ProcessEnv,
+  cwd: string,
+  runCommand: HyprlandCommandRunner,
+  signal: AbortSignal | undefined,
+): Promise<HyprlandDiagnosticDetails> {
+  const sessionEnvironment = completeHyprlandSessionEnvironment(environment) ?? undefined;
+  const [
+    activeWindowSource,
+    activeWorkspaceSource,
+    clientsSource,
+    monitorsSource,
+    layersSource,
+    configErrorsSource,
+    profileSource,
+    presentationSource,
+    windowCaptureSource,
+    waybarSource,
+  ] = await Promise.all([
+    runDiagnosticJson(
+      "activewindow",
+      "hyprctl",
+      ["activewindow", "-j"],
+      cwd,
+      runCommand,
+      signal,
+      parseDiagnosticWindow,
+      sessionEnvironment,
+    ),
+    runDiagnosticJson(
+      "activeworkspace",
+      "hyprctl",
+      ["activeworkspace", "-j"],
+      cwd,
+      runCommand,
+      signal,
+      parseDiagnosticWorkspace,
+      sessionEnvironment,
+    ),
+    runDiagnosticJson(
+      "clients",
+      "hyprctl",
+      ["clients", "-j"],
+      cwd,
+      runCommand,
+      signal,
+      parseDiagnosticWindows,
+      sessionEnvironment,
+    ),
+    runDiagnosticJson(
+      "monitors",
+      "hyprctl",
+      ["monitors", "-j"],
+      cwd,
+      runCommand,
+      signal,
+      parseDiagnosticMonitors,
+      sessionEnvironment,
+    ),
+    runDiagnosticJson(
+      "layers",
+      "hyprctl",
+      ["layers", "-j"],
+      cwd,
+      runCommand,
+      signal,
+      parseDiagnosticLayers,
+      sessionEnvironment,
+    ),
+    runDiagnosticText(
+      "configerrors",
+      "hyprctl",
+      ["configerrors"],
+      cwd,
+      runCommand,
+      signal,
+      sessionEnvironment,
+    ),
+    runRuntimeDiagnosticJson(
+      "runtime/profiles/profilectl.sh",
+      ["status", "--json"],
+      environment,
+      cwd,
+      runCommand,
+      signal,
+      parseProfileStatus,
+    ),
+    runRuntimeDiagnosticText(
+      "runtime/gaming/presentation-status.sh",
+      [],
+      environment,
+      cwd,
+      runCommand,
+      signal,
+    ),
+    runRuntimeDiagnosticText(
+      "runtime/windows/daemons/window-capture/window-capturectl.sh",
+      ["status"],
+      environment,
+      cwd,
+      runCommand,
+      signal,
+    ),
+    runRuntimeDiagnosticAvailability(
+      "runtime/desktop/waybar-process.sh",
+      ["running"],
+      environment,
+      cwd,
+      runCommand,
+      signal,
+    ),
+  ]);
+
+  const unavailable: DiagnosticFailure[] = [];
+  const presentation = diagnosticValue(presentationSource, "presentation", null, unavailable);
+  const windowCaptureText = diagnosticValue(
+    windowCaptureSource,
+    "window-capture",
+    null,
+    unavailable,
+  );
+  const waybar = diagnosticValue(waybarSource, "waybar", null, unavailable);
+
+  const windowCapture =
+    windowCaptureSource.status === "ok" ? parseWindowCaptureStatus(windowCaptureText ?? "") : null;
+  if (windowCaptureSource.status === "ok" && windowCapture === undefined) {
+    unavailable.push({
+      source: "window-capture",
+      error: "returned unexpected status output",
+    });
+  }
+  return {
+    timestamp: new Date().toISOString(),
+    compositor: {
+      activeWindow: diagnosticValue(activeWindowSource, "activewindow", null, unavailable),
+      activeWorkspace: diagnosticValue(activeWorkspaceSource, "activeworkspace", null, unavailable),
+      clients: diagnosticValue(clientsSource, "clients", [], unavailable),
+      monitors: diagnosticValue(monitorsSource, "monitors", [], unavailable),
+      layers: diagnosticValue(layersSource, "layers", [], unavailable),
+      configErrors:
+        configErrorsSource.status === "ok"
+          ? parseConfigErrors(configErrorsSource.value)
+          : diagnosticValue(configErrorsSource, "configerrors", null, unavailable),
+    },
+    runtime: {
+      profile: diagnosticValue(profileSource, "profile", null, unavailable),
+      presentation,
+      windowCapture: windowCapture ?? null,
+      waybar,
+    },
+    unavailable,
+  };
+}
+
+const MAX_DIAGNOSTIC_CLIENT_LINES = 40;
+const MAX_DIAGNOSTIC_LAYER_LINES = 40;
+const MAX_DIAGNOSTIC_CONFIG_ERROR_LINES = 40;
+const MAX_DIAGNOSTIC_PRESENTATION_LINES = 40;
+const MAX_DIAGNOSTIC_CLAIMS = 40;
+const MAX_DIAGNOSTIC_FIELD_CHARS = 240;
+
+function diagnosticField(value: string): string {
+  const compact = value.replace(/\s+/g, " ").trim();
+  return compact.length <= MAX_DIAGNOSTIC_FIELD_CHARS
+    ? compact
+    : `${compact.slice(0, MAX_DIAGNOSTIC_FIELD_CHARS - 3).trimEnd()}...`;
+}
+
+function formatDiagnosticWindow(window: WindowInfo): string {
+  const application = diagnosticField(window.className || window.initialClass || "unknown");
+  const title = diagnosticField(window.title || "untitled");
+  return `${application} - ${title}`;
+}
+
+function formatWorkspace(workspace: WorkspaceInfo | null): string {
+  if (workspace === null) return "unknown";
+  const name = diagnosticField(workspace.name);
+  const identity = name || (workspace.id === null ? "unnamed" : `#${workspace.id}`);
+  const monitor = diagnosticField(workspace.monitor);
+  return monitor === "" ? identity : `${identity} on ${monitor}`;
+}
+
+function formatDesktopDiagnostic(details: HyprlandDiagnosticDetails): string {
+  const { compositor, runtime } = details;
+  const lines = [`Hyprland desktop diagnostic (${details.timestamp})`, ""];
+  lines.push(`Active workspace: ${formatWorkspace(compositor.activeWorkspace)}`);
+  lines.push(
+    `Active window: ${compositor.activeWindow === null ? "none" : formatDiagnosticWindow(compositor.activeWindow)}`,
+  );
+  lines.push("");
+
+  lines.push(`Monitors (${compositor.monitors.length}):`);
+  for (const monitor of compositor.monitors) {
+    lines.push(
+      `- ${diagnosticField(monitor.name)} ${formatGeometry(monitor)}${monitor.focused ? " [focused]" : ""}`,
+    );
+  }
+  if (compositor.monitors.length === 0) lines.push("- none");
+  lines.push("");
+
+  lines.push(`Clients (${compositor.clients.length}):`);
+  for (const client of compositor.clients.slice(0, MAX_DIAGNOSTIC_CLIENT_LINES)) {
+    const geometry =
+      client.position !== null && client.size !== null
+        ? ` @ ${client.position[0]},${client.position[1]} ${client.size[0]}x${client.size[1]}`
+        : "";
+    lines.push(
+      `- ${formatDiagnosticWindow(client)} [${formatWorkspace(client.workspace)}]${geometry}`,
+    );
+  }
+  if (compositor.clients.length === 0) lines.push("- none");
+  if (compositor.clients.length > MAX_DIAGNOSTIC_CLIENT_LINES) {
+    lines.push(
+      `- ... ${compositor.clients.length - MAX_DIAGNOSTIC_CLIENT_LINES} more clients omitted`,
+    );
+  }
+  lines.push("");
+
+  lines.push(`Layers (${compositor.layers.length}):`);
+  for (const layer of compositor.layers.slice(0, MAX_DIAGNOSTIC_LAYER_LINES)) {
+    lines.push(
+      `- ${diagnosticField(layer.namespace)} [${diagnosticField(layer.level)}] on ${diagnosticField(layer.monitor || "unknown monitor")} @ ${formatGeometry(layer)}`,
+    );
+  }
+  if (compositor.layers.length === 0) lines.push("- none");
+  if (compositor.layers.length > MAX_DIAGNOSTIC_LAYER_LINES) {
+    lines.push(
+      `- ... ${compositor.layers.length - MAX_DIAGNOSTIC_LAYER_LINES} more layers omitted`,
+    );
+  }
+  lines.push("");
+
+  if (compositor.configErrors === null) {
+    lines.push("Config errors: unavailable");
+  } else if (compositor.configErrors.length === 0) {
+    lines.push("Config errors: none");
+  } else {
+    const errors = compositor.configErrors.slice(0, MAX_DIAGNOSTIC_CONFIG_ERROR_LINES);
+    lines.push(`Config errors (${compositor.configErrors.length}):`);
+    for (const error of errors) {
+      lines.push(`- ${diagnosticField(error)}`);
+    }
+    if (compositor.configErrors.length > MAX_DIAGNOSTIC_CONFIG_ERROR_LINES) {
+      lines.push(
+        `- ... ${compositor.configErrors.length - MAX_DIAGNOSTIC_CONFIG_ERROR_LINES} more config errors omitted`,
+      );
+    }
+  }
+  lines.push("");
+
+  lines.push("Runtime:");
+  if (runtime.profile === null) {
+    lines.push("- Profile: unavailable");
+  } else {
+    const allClaims = Object.entries(runtime.profile.sources).flatMap(([profile, sources]) =>
+      Object.entries(sources).map(
+        ([source, count]) => `${diagnosticField(profile)}/${diagnosticField(source)}=${count}`,
+      ),
+    );
+    const claims = allClaims.slice(0, MAX_DIAGNOSTIC_CLAIMS);
+    lines.push(
+      `- Profile: resolved=${diagnosticField(runtime.profile.resolved)}, selection=${diagnosticField(runtime.profile.selection)}, generation=${runtime.profile.generation}`,
+    );
+    lines.push(`  Claims: ${claims.length === 0 ? "none" : claims.join(", ")}`);
+    if (allClaims.length > MAX_DIAGNOSTIC_CLAIMS) {
+      lines.push(`  ... ${allClaims.length - MAX_DIAGNOSTIC_CLAIMS} more claims omitted`);
+    }
+  }
+  if (runtime.presentation === null) {
+    lines.push("- Presentation: unavailable");
+  } else {
+    const presentationLines = runtime.presentation.split(/\r?\n/);
+    lines.push("- Presentation:");
+    if (runtime.presentation === "") {
+      lines.push("  (no details)");
+    } else {
+      for (const line of presentationLines.slice(0, MAX_DIAGNOSTIC_PRESENTATION_LINES)) {
+        lines.push(`  ${diagnosticField(line)}`);
+      }
+      if (presentationLines.length > MAX_DIAGNOSTIC_PRESENTATION_LINES) {
+        lines.push(
+          `  ... ${presentationLines.length - MAX_DIAGNOSTIC_PRESENTATION_LINES} more presentation lines omitted`,
+        );
+      }
+    }
+  }
+  lines.push(
+    `- Window capture: ${runtime.windowCapture === null ? "unavailable" : `daemon=${runtime.windowCapture.daemon}, worker=${runtime.windowCapture.worker}`}`,
+  );
+  lines.push(`- Waybar: ${runtime.waybar ?? "unavailable"}`);
+
+  if (details.unavailable.length > 0) {
+    lines.push("", "Unavailable sources:");
+    lines.push(...details.unavailable.map(({ source, error }) => `- ${source}: ${error}`));
+  }
+
+  const output = lines.join("\n");
+  const truncated = truncateHead(output, {
+    maxBytes: DEFAULT_MAX_BYTES,
+    maxLines: DEFAULT_MAX_LINES,
+  });
+  return truncated.truncated
+    ? `${truncated.content}\n\n[Diagnostic output truncated; structured details retain the remaining parsed state.]`
+    : truncated.content;
+}
+
+const HyprDesktopDiagnoseParameters = Type.Object({});
+
+function createHyprDesktopDiagnoseTool(
+  runCommand: HyprlandCommandRunner,
+  environment: NodeJS.ProcessEnv,
+) {
+  return defineTool<typeof HyprDesktopDiagnoseParameters, HyprlandDiagnosticDetails>({
+    name: "hypr_desktop_diagnose",
+    label: "Hyprland Desktop Diagnostic",
+    description:
+      "Collect a read-only Hyprland desktop diagnostic snapshot, including compositor state, config errors, profile state, presentation state, window capture status, and Waybar availability.",
+    promptSnippet: "Inspect the current Hyprland desktop and runtime health",
+    promptGuidelines: [
+      "Use hypr_desktop_diagnose when diagnosing Hyprland configuration or runtime behavior before running separate state queries.",
+      "Treat unavailable diagnostic sources as unknown; do not infer that an unavailable component is healthy.",
+    ],
+    parameters: HyprDesktopDiagnoseParameters,
+    executionMode: "sequential",
+
+    async execute(_toolCallId, _args, signal, _onUpdate, ctx) {
+      if (supportsHyprlandSession(environment) === false) {
+        throw new Error(
+          "Hyprland session variables are unavailable; this tool requires HYPRLAND_INSTANCE_SIGNATURE, XDG_RUNTIME_DIR, and WAYLAND_DISPLAY.",
+        );
+      }
+
+      const details = await gatherDesktopDiagnostic(environment, ctx.cwd, runCommand, signal);
+      return {
+        content: [{ type: "text", text: formatDesktopDiagnostic(details) }],
+        details,
+      };
+    },
+  });
+}
+
 async function captureByMode(
   args: { mode: Mode; hint: string; format: Format; fullPage: boolean; region?: Geometry },
   cwd: string,
@@ -1436,6 +2073,7 @@ export function registerHyprlandExtension(
   registerHyprPropCommand(pi, environment, commandRunner);
   if (supportsHyprlandSession(environment) === false) return;
   const runCommand = options.commandRunner ?? createCommandRunner(pi, COMMAND_TIMEOUT_MS);
+  pi.registerTool(createHyprDesktopDiagnoseTool(runCommand, environment));
   pi.registerTool(createHyprWindowScreenshotTool(runCommand, environment));
 }
 

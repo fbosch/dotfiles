@@ -29,6 +29,7 @@ function createEditor() {
     focus: () => {},
     unfocus: () => {},
     isFocused: () => false,
+    getBounds: () => undefined,
   };
   const tui = {
     mode: "regular",

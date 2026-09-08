@@ -50,6 +50,7 @@ function createToolExecution(
   tui?: TUI,
 ): ToolExecutionComponent {
   return Object.assign(Object.create(ToolExecutionComponent.prototype), {
+    children: [],
     toolName,
     toolCallId: "tool-call-1",
     ...(tui === undefined ? {} : { ui: tui }),
@@ -87,6 +88,7 @@ function createClosingOverlayTui(
     focus: () => {},
     unfocus: () => {},
     isFocused: () => options.focused ?? true,
+    getBounds: () => undefined,
   };
   const tui = {
     mode: "fullscreen",

@@ -22,12 +22,14 @@ type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<vo
 
 function captureRegistration() {
   let tool: ToolDefinition | undefined;
+  const tools = new Map<string, ToolDefinition>();
   let command: { handler: CommandHandler } | undefined;
   let commandName = "";
   const messages: Array<{ content: string; options?: unknown }> = [];
   const pi = {
     registerTool(definition: ToolDefinition) {
       tool = definition;
+      tools.set(definition.name, definition);
     },
     registerCommand(name: string, definition: { handler: CommandHandler }) {
       commandName = name;
@@ -40,7 +42,7 @@ function captureRegistration() {
 
   return {
     pi,
-    getTool: () => tool,
+    getTool: (name?: string) => (name === undefined ? tool : tools.get(name)),
     getCommand: () => command,
     getCommandName: () => commandName,
     getMessages: () => messages,
@@ -312,6 +314,198 @@ describe("Hyprland extension", () => {
     } finally {
       if (outputPath !== undefined) await rm(outputPath, { force: true });
     }
+  });
+
+  test("collects compositor and runtime health in one diagnostic snapshot", async () => {
+    const { pi, getTool } = captureRegistration();
+    const diagnosticEnvironment = { ...environment, HOME: "/fixture" };
+    const calls: Array<{
+      command: string;
+      args: string[];
+      cwd: string;
+      environment: Readonly<Record<string, string>> | undefined;
+    }> = [];
+    const client = {
+      address: "0x1234",
+      stableId: "18000008",
+      mapped: true,
+      monitor: 1,
+      class: "kitty",
+      initialClass: "kitty",
+      title: "Fixture",
+      visible: true,
+      at: [10, 20],
+      size: [300, 200],
+      workspace: { id: 2, name: "2", monitor: "DP-1" },
+    };
+    const commandRunner: HyprlandCommandRunner = async (
+      command,
+      args,
+      cwd,
+      _signal,
+      commandEnvironment,
+    ) => {
+      calls.push({ command, args, cwd, environment: commandEnvironment });
+      if (command === "hyprctl") {
+        const request = args[0];
+        if (request === "configerrors") {
+          return { stdout: "no errors found\n", stderr: "", exitCode: 0 };
+        }
+        const response =
+          request === "activewindow"
+            ? client
+            : request === "activeworkspace"
+              ? { id: 2, name: "2", monitor: "DP-1" }
+              : request === "clients"
+                ? [client]
+                : request === "monitors"
+                  ? [{ x: 0, y: 0, width: 1920, height: 1080, name: "DP-1", focused: true, id: 1 }]
+                  : {
+                      "DP-1": {
+                        levels: { 2: [{ namespace: "waybar", x: 0, y: 1000, w: 1920, h: 80 }] },
+                      },
+                    };
+        return { stdout: JSON.stringify(response), stderr: "", exitCode: 0 };
+      }
+      if (command.endsWith("/profilectl.sh")) {
+        return {
+          stdout: JSON.stringify({
+            generation: 3,
+            resolved: "gaming",
+            selection: "auto",
+            sources: { gaming: { watchdog: 1 }, powersave: {} },
+          }),
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      if (command.endsWith("/presentation-status.sh")) {
+        return {
+          stdout: Array.from({ length: 250 }, (_, index) => `presentation line ${index}`).join(
+            "\n",
+          ),
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      if (command.endsWith("/window-capturectl.sh")) {
+        return { stdout: "daemon=running\nworker=paused\n", stderr: "", exitCode: 0 };
+      }
+      if (command.endsWith("/waybar-process.sh")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "unexpected command", exitCode: 1 };
+    };
+
+    registerHyprlandExtension(pi, { environment: diagnosticEnvironment, commandRunner });
+    const tool = getTool("hypr_desktop_diagnose");
+    if (tool === undefined) throw new Error("Hyprland diagnostic tool was not registered");
+
+    const result = await tool.execute("call-1", {}, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+    const text = result.content[0];
+    if (text?.type !== "text") throw new Error("Diagnostic result did not contain text");
+
+    expect(result.details).toMatchObject({
+      compositor: {
+        activeWindow: { className: "kitty", workspace: { name: "2" } },
+        activeWorkspace: { id: 2, name: "2", monitor: "DP-1" },
+        clients: [{ title: "Fixture" }],
+        monitors: [{ name: "DP-1", focused: true }],
+        layers: [{ namespace: "waybar", monitor: "DP-1", level: "2" }],
+        configErrors: [],
+      },
+      runtime: {
+        profile: { resolved: "gaming", selection: "auto" },
+        windowCapture: { daemon: "running", worker: "paused" },
+        waybar: "running",
+      },
+      unavailable: [],
+    });
+    expect(text.text).toContain("Hyprland desktop diagnostic");
+    expect(text.text).toContain("Config errors: none");
+    expect(text.text).toContain("resolved=gaming");
+    expect(text.text).toContain("... 210 more presentation lines omitted");
+    expect(calls.map(({ command, args }) => `${command} ${args.join(" ")}`)).toEqual(
+      expect.arrayContaining([
+        "hyprctl activewindow -j",
+        "hyprctl activeworkspace -j",
+        "hyprctl clients -j",
+        "hyprctl monitors -j",
+        "hyprctl layers -j",
+        "hyprctl configerrors",
+        "/fixture/.config/hypr/runtime/profiles/profilectl.sh status --json",
+        "/fixture/.config/hypr/runtime/gaming/presentation-status.sh ",
+        "/fixture/.config/hypr/runtime/windows/daemons/window-capture/window-capturectl.sh status",
+        "/fixture/.config/hypr/runtime/desktop/waybar-process.sh running",
+      ]),
+    );
+    expect(
+      calls
+        .filter(({ command }) => command === "hyprctl")
+        .every(({ environment }) => environment?.HYPRLAND_INSTANCE_SIGNATURE === "fixture"),
+    ).toBeTrue();
+  });
+
+  test("reports unavailable diagnostic sources without discarding healthy state", async () => {
+    const { pi, getTool } = captureRegistration();
+    const diagnosticEnvironment = { ...environment, HOME: "/fixture" };
+    const commandRunner: HyprlandCommandRunner = async (command, args) => {
+      if (command === "hyprctl" && args[0] === "configerrors") {
+        return { stdout: "", stderr: "config query failed", exitCode: 1 };
+      }
+      if (command === "hyprctl") {
+        const request = args[0];
+        const response =
+          request === "activewindow"
+            ? { class: "kitty", title: "Fixture" }
+            : request === "activeworkspace"
+              ? { id: 1, name: "1", monitor: "DP-1" }
+              : request === "clients"
+                ? []
+                : request === "monitors"
+                  ? [{ x: 0, y: 0, width: 1920, height: 1080, name: "DP-1", focused: true, id: 1 }]
+                  : {};
+        return { stdout: JSON.stringify(response), stderr: "", exitCode: 0 };
+      }
+      if (command.endsWith("/profilectl.sh")) {
+        return { stdout: "", stderr: "profile state unavailable", exitCode: 1 };
+      }
+      if (command.endsWith("/presentation-status.sh")) {
+        return { stdout: "", stderr: "", exitCode: 0 };
+      }
+      if (command.endsWith("/window-capturectl.sh")) {
+        return { stdout: "daemon=running\n", stderr: "", exitCode: 0 };
+      }
+      if (command.endsWith("/waybar-process.sh")) {
+        return { stdout: "", stderr: "", exitCode: 1 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    registerHyprlandExtension(pi, { environment: diagnosticEnvironment, commandRunner });
+    const tool = getTool("hypr_desktop_diagnose");
+    if (tool === undefined) throw new Error("Hyprland diagnostic tool was not registered");
+
+    const result = await tool.execute("call-1", {}, undefined, undefined, {
+      cwd: "/tmp",
+    } as ExtensionContext);
+    const diagnosticDetails = result.details as {
+      unavailable: Array<{ source: string; error: string }>;
+    };
+
+    expect(result.details).toMatchObject({
+      compositor: { configErrors: null, activeWorkspace: { name: "1" } },
+      runtime: { profile: null, presentation: "", windowCapture: null, waybar: "stopped" },
+    });
+    expect(diagnosticDetails.unavailable).toEqual(
+      expect.arrayContaining([
+        { source: "configerrors", error: "configerrors: config query failed" },
+        { source: "profile", error: "runtime/profiles/profilectl.sh: profile state unavailable" },
+        { source: "window-capture", error: "returned unexpected status output" },
+      ]),
+    );
   });
 
   test("reports missing capture commands as tool failures", async () => {

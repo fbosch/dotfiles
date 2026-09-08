@@ -1,6 +1,6 @@
 ## 1. Runtime capability and snapshot contract
 
-- [ ] 1.1 Align the local TypeScript SDK with the pinned Pi 0.85.1 runtime; add `.pi/agent/lib/pi-coding-agent-startup.d.ts` for the immutable startup snapshot capability identifier `pi.startupSnapshot` and schema version `1`; verification: SDK declarations and runtime package compile together.
+- [x] 1.1 Align the local TypeScript SDK with the pinned Pi 0.85.1 runtime; add `.pi/agent/lib/pi-coding-agent-startup.d.ts` for the immutable startup snapshot capability identifier `pi.startupSnapshot` and schema version `1`; verification: SDK declarations and runtime package compile together.
 - [ ] 1.2 Add the guarded Nix patch that publishes sanitized immutable snapshots with session ID, generation ID, owner ID, owner revision, resource provenance, update coverage, startup timing, and static initial-context totals; verification: the patch applies with zero fuzz and runtime snapshot tests pass.
 - [ ] 1.3 Gate header registration on the capability and schema handshake before `setHeader`; retain Pi's built-in header and show one nonfatal supported-UI notice when incompatible; verification: tests cover unpatched 0.85.1, 0.84.4, schema-incompatible future Pi, and a compatible patched runtime.
 - [ ] 1.4 Keep the patch under `/home/fbb/nixos/modules/development/ai/pi/default.nix` behind the existing Pi version assertion; verification: targeted Nix evaluation rejects an unsupported Pi version.
