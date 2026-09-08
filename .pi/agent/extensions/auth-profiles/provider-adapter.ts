@@ -16,8 +16,11 @@ export type ProfileCredentialReadResult =
   | { kind: "valid"; credential: ProfileProviderCredential };
 
 export type ProviderUsageWindow = {
+  /** Stable public provider-window identity, never an account identifier. */
+  windowId?: string;
   remaining: number;
   resetsIn?: string;
+  allowanceResetAt?: number;
 };
 
 export type ProviderUsageSnapshot = {

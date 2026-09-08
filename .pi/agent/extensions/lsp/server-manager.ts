@@ -230,9 +230,10 @@ export class LspServerManager {
     return [...configured, ...active].join("\n") || "No LSP servers configured";
   }
 
-  async warm(path: string): Promise<void> {
+  async warm(path: string): Promise<boolean> {
     const result = await this.matches(path, true, undefined);
     await Promise.all(result.matches.map(({ client, document }) => client.warm(document)));
+    return result.matches.length > 0;
   }
 
   async diagnostics(

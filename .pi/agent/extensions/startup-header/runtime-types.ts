@@ -20,7 +20,8 @@ export type StartupContextCategory =
   | "custom-tools"
   | "mcp-tools"
   | "context-files"
-  | "skills";
+  | "skills"
+  | "compacted-data";
 
 export interface StartupContextEstimate {
   readonly contextWindowTokens: number;

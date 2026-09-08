@@ -26,6 +26,12 @@ import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
 import {
+  type AuthProfileObservation,
+  AuthStartupOwner,
+  type AuthStartupState,
+} from "./startup-owner";
+import {
+  AUTH_USAGE_OBSERVATION,
   collectUsageStatus,
   type ProfileUsageStatus,
   type UsageStatusPayload,
@@ -273,6 +279,46 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
   return sections.join("\n\n");
 }
 
+function authObservations(
+  status: UsageStatusPayload,
+  providerId: string,
+): AuthProfileObservation[] {
+  const failures = new Set(status.diagnostics.map(({ profileLabel }) => profileLabel));
+  return status.profiles.flatMap((profile) => {
+    const observation = profile[AUTH_USAGE_OBSERVATION];
+    if (observation === undefined) return [];
+    const windows = observation.windows.flatMap((window) =>
+      window.windowId === undefined
+        ? []
+        : [
+            {
+              windowId: window.windowId,
+              remaining: window.remaining,
+              ...(window.allowanceResetAt === undefined
+                ? {}
+                : { allowanceResetAt: window.allowanceResetAt }),
+            },
+          ],
+    );
+    return [
+      {
+        profileLabel: profile.profileLabel,
+        provider: providerId,
+        windows,
+        ...(observation.bankedResetCount === undefined
+          ? {}
+          : { bankedResetCount: observation.bankedResetCount }),
+        ...(observation.bankedExpiryAt === undefined
+          ? {}
+          : { bankedExpiryAt: observation.bankedExpiryAt }),
+        observedAt: observation.observedAt,
+        staleAt: observation.staleAt,
+        ...(failures.has(profile.profileLabel) ? { error: "usage" as const } : {}),
+      },
+    ];
+  });
+}
+
 export default function authProfiles(
   pi: ExtensionAPI,
   dependencies: AuthProfileDependencies = {},
@@ -289,6 +335,10 @@ export default function authProfiles(
   let fallbackPromise: Promise<void> | undefined;
   let lastProviderResponseProfile: string | undefined;
   let profileOperationTail: Promise<void> = Promise.resolve();
+  let authStartupState: AuthStartupState = { profileOrder: [], observations: [] };
+  const authStartupOwner = pi.events
+    ? new AuthStartupOwner(pi.events, () => authStartupState)
+    : undefined;
   const runGit: GitRunner = async (cwd, args) => {
     const result = await pi.exec("git", ["-C", cwd, ...args], { timeout: 2_000 });
     if (result.code !== 0) return undefined;
@@ -322,6 +372,12 @@ export default function authProfiles(
     const path = await bindProfile(ctx, selection.profile, providerAdapter, options);
     activeProfile = selection.profile;
     activeSelection = selection;
+    authStartupState = {
+      ...authStartupState,
+      activeProfile,
+      profileOrder: selection.profileOrder,
+    };
+    authStartupOwner?.update();
     ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);
     publishWezTermChange(ctx, "profile", selection.profile);
     return { ...selection, path };
@@ -378,6 +434,10 @@ export default function authProfiles(
         sessionProfile,
       };
     });
+  });
+
+  pi.on("session_shutdown", () => {
+    authStartupOwner?.dispose();
   });
 
   pi.on("session_start", async (_event, ctx) => {
@@ -525,6 +585,12 @@ export default function authProfiles(
           includeDefault: true,
           providerAdapter,
         });
+        authStartupState = {
+          ...authStartupState,
+          activeProfile,
+          observations: authObservations(status, providerAdapter.providerId),
+        };
+        authStartupOwner?.update();
         ctx.ui.notify(
           formatUsageStatus(status, ctx.ui.theme, now()),
           status.diagnostics.length > 0 ? "warning" : "info",

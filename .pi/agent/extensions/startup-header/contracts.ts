@@ -107,14 +107,20 @@ export class StartupOwnerStore {
   private readonly snapshots = new Map<StartupOwnerId, StartupOwnerSnapshot>();
   private disposed = false;
 
-  public constructor(sessionId: string, generationId: string) {
+  public constructor(
+    sessionId: string,
+    generationId: string,
+    private readonly readSnapshot: (
+      value: unknown,
+    ) => StartupOwnerSnapshot | undefined = readStartupOwnerSnapshot,
+  ) {
     this.sessionId = sessionId;
     this.generationId = generationId;
   }
 
   public accept(value: unknown): boolean {
     if (this.disposed) return false;
-    const snapshot = readStartupOwnerSnapshot(value);
+    const snapshot = this.readSnapshot(value);
     if (snapshot === undefined) return false;
     if (snapshot.sessionId !== this.sessionId || snapshot.generationId !== this.generationId) {
       return false;

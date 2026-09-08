@@ -9,7 +9,13 @@ import startupHeader from "../index";
 import type { StartupRuntimeSnapshot, StartupSnapshotAPI } from "../runtime-types";
 
 type Handler = (event: unknown, context: unknown) => void;
-const dependencies = { inspectWorkspace: async () => undefined };
+const dependencies = {
+  inspectWorkspace: async () => undefined,
+  inspectCandidates: async () => ({
+    formatter: { state: "unavailable" as const, candidates: [], overflow: [] },
+    lsp: { state: "unavailable" as const, candidates: [], overflow: [] },
+  }),
+};
 
 function readySnapshot(overrides: Partial<StartupRuntimeSnapshot> = {}): StartupRuntimeSnapshot {
   return {
@@ -34,6 +40,7 @@ function createHarness(startupSnapshot?: unknown) {
   const busHandlers = new Map<string, Set<(value: unknown) => void>>();
   const emitted: { event: string; value: unknown }[] = [];
   const operations: string[] = [];
+  const uiMutations = { header: 0, footer: 0, editor: 0, status: 0 };
   let headerFactory:
     | ((tui: { requestRender(): void }, theme: Theme) => { render(width: number): string[] })
     | undefined;
@@ -68,7 +75,17 @@ function createHarness(startupSnapshot?: unknown) {
     },
     ui: {
       setHeader(factory: typeof headerFactory) {
+        uiMutations.header += 1;
         headerFactory = factory;
+      },
+      setFooter() {
+        uiMutations.footer += 1;
+      },
+      setEditorComponent() {
+        uiMutations.editor += 1;
+      },
+      setStatus() {
+        uiMutations.status += 1;
       },
     },
   };
@@ -86,6 +103,7 @@ function createHarness(startupSnapshot?: unknown) {
     pi,
     emitted,
     operations,
+    uiMutations,
     emit,
     render,
     get renderRequests() {
@@ -101,6 +119,7 @@ describe("startup header registration", () => {
     harness.emit("session_start");
 
     expect(harness.render()).toEqual(["π Session"]);
+    expect(harness.uiMutations).toEqual({ header: 1, footer: 0, editor: 0, status: 0 });
   });
 
   test("subscribes before requesting owners and rejects replies from replaced generations", () => {
@@ -180,7 +199,7 @@ describe("startup header registration", () => {
     startupHeader(harness.pi, dependencies);
     harness.emit("session_start");
 
-    expect(harness.render().join("\n")).toContain("18 extensions (3 project)");
+    expect(harness.render().join("\n")).toContain("18 extensions · 1 failed (3 project)");
     listener?.(readySnapshot({ ownerRevision: 2 }));
     expect(harness.renderRequests).toBe(1);
     harness.emit("session_shutdown");

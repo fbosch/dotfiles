@@ -385,7 +385,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
           warmedPaths.add(key);
           void getManager(context)
             .then(async (manager) => {
-              await manager.warm(path);
+              if (!(await manager.warm(path))) return;
               observedDocuments.add(key);
               refreshStartupEvidence(manager);
             })

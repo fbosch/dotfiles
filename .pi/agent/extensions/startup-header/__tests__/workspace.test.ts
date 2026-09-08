@@ -15,7 +15,7 @@ function gitReader(options: {
       return `${options.gitDir ?? "/repo/.git"}\n${options.commonDir ?? "/repo/.git"}\n`;
     }
     if (args.includes("symbolic-ref")) {
-      if (options.branch === undefined) throw new Error("detached");
+      if (options.branch === undefined) throw { code: 1 };
       return `${options.branch}\n`;
     }
     throw new Error("unexpected Git command");

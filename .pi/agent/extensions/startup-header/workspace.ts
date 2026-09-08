@@ -31,8 +31,9 @@ export async function inspectWorkspace(
     try {
       const candidate = (await readGit(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"])).trim();
       if (candidate.length > 0) branch = candidate;
-    } catch {
-      // A detached HEAD is a valid Git workspace state.
+    } catch (error) {
+      // Git uses status 1 for a valid detached HEAD; other failures leave workspace identity unavailable.
+      if (!isDetachedHeadError(error)) throw error;
     }
 
     return Object.freeze({
@@ -44,6 +45,10 @@ export async function inspectWorkspace(
   } catch {
     return undefined;
   }
+}
+
+function isDetachedHeadError(value: unknown): boolean {
+  return typeof value === "object" && value !== null && "code" in value && value.code === 1;
 }
 
 async function executeGit(cwd: string, args: readonly string[]): Promise<string> {

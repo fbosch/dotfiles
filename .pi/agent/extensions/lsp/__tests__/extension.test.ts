@@ -581,6 +581,7 @@ test("warms LSP diagnostics once after a successful native file read", async () 
   const fakeManager = {
     warm: async (path: string) => {
       warmedPaths.push(path);
+      return true;
     },
     shutdown: async () => {},
     status: () => "ready",

@@ -22,7 +22,6 @@ local M = {
 	margin = 15,
 	overlap_gap = 15,
 	snap_vicinity = 100,
-	initial_height = 360,
 	rounding = 8,
 	default_animation = "slide bottom",
 	corners = {
@@ -49,8 +48,6 @@ local function static_pip_matches()
 	}
 end
 M.pip_class_pattern = "^(" .. table.concat(pip_class_patterns, "|") .. ")$"
--- Set only the opening height; derive width from the client's initial media aspect ratio.
-M.initial_size = string.format("(window_w*%d/window_h) %d", M.initial_height, M.initial_height)
 
 for _, title in ipairs(M.pip_titles) do
 	M.titles[title] = true
@@ -197,7 +194,6 @@ function M.register_window_rules()
 			match = match,
 			tag = "+" .. window_tags.pip,
 			float = true,
-			size = M.initial_size,
 			no_initial_focus = true,
 			focus_on_activate = false,
 			pin = true,

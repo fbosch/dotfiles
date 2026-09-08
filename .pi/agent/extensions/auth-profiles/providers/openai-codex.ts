@@ -246,7 +246,7 @@ function formatReset(seconds: number | undefined): string | undefined {
   return `${Math.ceil(seconds / 86_400)}d`;
 }
 
-function usageWindow(value: unknown) {
+function usageWindow(value: unknown, windowId: "primary" | "secondary", now: number) {
   if (!isRecord(value)) return undefined;
   const usedPercent = finiteNumber(value.used_percent);
   if (usedPercent === undefined || usedPercent < 0 || usedPercent > 100) return undefined;
@@ -257,14 +257,24 @@ function usageWindow(value: unknown) {
       : undefined;
   const remaining = Math.max(0, Math.min(100, 100 - Math.floor(usedPercent)));
   const resetsIn = formatReset(validResetSeconds);
-  return resetsIn ? { remaining, resetsIn } : { remaining };
+  const allowanceResetAt =
+    validResetSeconds === undefined ? undefined : now + Math.ceil(validResetSeconds * 1_000);
+  return {
+    windowId,
+    remaining,
+    ...(resetsIn === undefined ? {} : { resetsIn }),
+    ...(allowanceResetAt === undefined ? {} : { allowanceResetAt }),
+  };
 }
 
-export function openAiCodexUsageFromPayload(payload: unknown): ProviderUsageSnapshot {
+export function openAiCodexUsageFromPayload(
+  payload: unknown,
+  now = Date.now(),
+): ProviderUsageSnapshot {
   if (!isRecord(payload) || !isRecord(payload.rate_limit)) {
     throw new Error("usage response has an unexpected shape");
   }
-  const primaryWindow = usageWindow(payload.rate_limit.primary_window);
+  const primaryWindow = usageWindow(payload.rate_limit.primary_window, "primary", now);
   if (primaryWindow === undefined) {
     throw new Error("usage response has an unexpected primary window");
   }
@@ -272,7 +282,7 @@ export function openAiCodexUsageFromPayload(payload: unknown): ProviderUsageSnap
   const secondaryWindow =
     secondaryValue === undefined || secondaryValue === null
       ? undefined
-      : usageWindow(secondaryValue);
+      : usageWindow(secondaryValue, "secondary", now);
   if (secondaryValue !== undefined && secondaryValue !== null && secondaryWindow === undefined) {
     throw new Error("usage response has an unexpected secondary window");
   }
@@ -459,7 +469,9 @@ export function createOpenAiCodexProfileAdapter(
       return resolveStoredCredential(profileLabel, expectedIdentity);
     },
     fetchUsage(credential, fetchFn) {
-      return fetchPayload(USAGE_URL, credential, fetchFn).then(openAiCodexUsageFromPayload);
+      return fetchPayload(USAGE_URL, credential, fetchFn).then((payload) =>
+        openAiCodexUsageFromPayload(payload, now()),
+      );
     },
     fetchCredits(credential, fetchFn, currentTime) {
       return fetchPayload(RESET_CREDITS_URL, credential, fetchFn).then((payload) =>

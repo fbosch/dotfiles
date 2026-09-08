@@ -9,7 +9,7 @@
 ## 2. Header lifecycle and baseline rendering
 
 - [x] 2.1 Implement the startup header view model and lifecycle that subscribes before its initial request, filters session and generation IDs, and rejects older owner revisions; verification: tests cover reload generation replacement, stale revision rejection, and delayed A to B to A replies.
-- [ ] 2.2 Dispose subscriptions and local deadline timers when the session or header owner changes; verification: late replies and expired timers from disposed generations do not update the header.
+- [x] 2.2 Dispose subscriptions and local deadline timers when the session or header owner changes; verification: late replies and expired timers from disposed generations do not update the header.
 - [x] 2.3 Add a passive adapter for `@liborw/pi-startup-time` that accepts only a new valid `startup-time` entry from the current dispatch and preserves module-load-to-`session_start` semantics; verification: tests cover startup, reload, prior-entry rejection, invalid data, handler ordering, and absent-package omission without an independent timer.
 - [x] 2.4 Render Git branch, linked-worktree path, available resolved extension and skill totals, coverage-qualified updates adjacent to extensions, and the optional frozen startup duration; verification: fixtures cover ordinary, linked, detached, non-Git, unavailable, load-failed, zero-project-subset, partial-update, complete-zero-update, and omitted startup states.
 - [ ] 2.5 Preserve Pi's loaded-resource listing, transcript, editor, and prompt footer without duplicating model or thinking state; verification: an interactive startup fixture contains each existing region once.
@@ -18,22 +18,22 @@
 
 - [x] 3.1 Define immutable structured owner request, reply, and change contracts with allowlisted fields, optional publisher discovery, and owner freshness timestamps; verification: publisher tests cover absent-owner omission plus installed-owner `unavailable`, `collecting`, `ready`, `degraded`, `disposed`, observed-at, stale-at, and expiry transitions.
 - [ ] 3.2 Sanitize every externally derived profile, provider, window, server, candidate, path, diagnostic, and next-step label before styling or width measurement; verification: OSC, CSI, ESC, C0, C1, line-separator, field-bound, and canary-secret tests pass with no command args, environment values, raw errors, or private IDs rendered.
-- [ ] 3.3 Implement passive publishers for Neovim, direnv, and LSP with visible `✓`, `!`, and `?` semantics; verification: fixtures cover standalone Neovim omission, unchecked LSP, observed-document LSP readiness, workspace mismatch, blocked, unavailable, and a problem without a verified next step.
-- [ ] 3.4 Prove the header does not create a Neovim channel, evaluate or approve direnv, start an LSP, infer health from silence, poll, or fetch; verification: integration no-side-effect spies remain unused.
+- [x] 3.3 Implement passive publishers for Neovim, direnv, and LSP with visible `✓`, `!`, and `?` semantics; verification: fixtures cover standalone Neovim omission, unchecked LSP, observed-document LSP readiness, workspace mismatch, blocked, unavailable, and a problem without a verified next step.
+- [x] 3.4 Prove the header does not create a Neovim channel, evaluate or approve direnv, start an LSP, infer health from silence, poll, or fetch; verification: integration no-side-effect spies remain unused.
 
 ## 4. Workspace identity and tool candidates
 
 - [x] 4.1 Resolve linked-worktree identity through common-dir and worktree metadata rather than a `.git` file alone; verification: linked-worktree, submodule, separate-gitdir, detached, non-Git, and inspection-failure fixtures pass.
-- [ ] 4.2 Extract formatter and LSP applicability into bounded pure matchers over canonical startup cwd ancestors up to canonical repository or worktree root; verification: tests enforce 32 ancestor levels, 256 configured entries, 16 markers per entry, 64 displayed unique candidates per kind, and no recursive scan.
-- [ ] 4.3 Preserve matching-file, root-marker, unconditional formatter, and first-available formatter-order semantics without executable claims; verification: marker, unconditional, fallback-order, and execution/spawn-unused tests pass.
-- [ ] 4.4 Render distinct trust-disabled, invalid-settings, incomplete or limit-reached, none, and unavailable candidate states; verification: fixtures cover each state and retain explicit overflow information.
+- [x] 4.2 Extract formatter and LSP applicability into bounded pure matchers over canonical startup cwd ancestors up to canonical repository or worktree root; verification: tests enforce 32 ancestor levels, 256 configured entries, 16 markers per entry, 64 displayed unique candidates per kind, and no recursive scan.
+- [x] 4.3 Preserve matching-file, root-marker, unconditional formatter, and first-available formatter-order semantics without executable claims; verification: marker, unconditional, fallback-order, and execution/spawn-unused tests pass.
+- [x] 4.4 Render distinct trust-disabled, invalid-settings, incomplete or limit-reached, none, and unavailable candidate states; verification: fixtures cover each state and retain explicit overflow information.
 
 ## 5. Auth observations and deadlines
 
-- [ ] 5.1 Extend in-memory provider usage snapshots with stable window identity and separate observed-at, stale-at, allowance-reset, and banked-expiry timestamps; verification: provider parsing, stale-data, reset, expiry, and zero-banked-reset tests pass.
-- [ ] 5.2 Schedule one-shot local deadline notifications and recompute from absolute timestamps after suspend or clock change; verification: idle-expiry and clock-change tests prove transitions do not poll, fetch, refresh, consume credits, or imply replenishment.
-- [ ] 5.3 Keep the existing legacy auth cache readable without migration, reconstruction, or fetch; verification: legacy-cache and downgrade tests render metadata-unavailable for window identity and absolute reset fields.
-- [ ] 5.4 Render the passive effective auth chain with active and next profiles, provider windows, and explicit missing, stale, errored, and not-reported states; verification: ordering, independent reset-expiry, sanitization, and narrow-width fixtures pass.
+- [x] 5.1 Extend in-memory provider usage snapshots with stable window identity and separate observed-at, stale-at, allowance-reset, and banked-expiry timestamps; verification: provider parsing, stale-data, reset, expiry, and zero-banked-reset tests pass.
+- [x] 5.2 Schedule one-shot local deadline notifications and recompute from absolute timestamps after suspend or clock change; verification: idle-expiry and clock-change tests prove transitions do not poll, fetch, refresh, consume credits, or imply replenishment.
+- [x] 5.3 Keep the existing legacy auth cache readable without migration, reconstruction, or fetch; verification: legacy-cache and downgrade tests render metadata-unavailable for window identity and absolute reset fields.
+- [x] 5.4 Render the passive effective auth chain with active and next profiles, provider windows, and explicit missing, stale, errored, and not-reported states; verification: ordering, independent reset-expiry, sanitization, and narrow-width fixtures pass.
 
 ## 6. Resource resolution and initial context
 

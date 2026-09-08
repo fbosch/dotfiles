@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ProfileProviderAdapter } from "../provider-adapter";
 import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
-import { collectUsageStatus, usageFromPayload } from "../usage-status";
+import { AUTH_USAGE_OBSERVATION, collectUsageStatus, usageFromPayload } from "../usage-status";
 
 const temporaryDirectories: string[] = [];
 const now = Date.parse("2026-09-02T10:00:00.000Z");
@@ -106,6 +106,11 @@ describe("auth profile usage status", () => {
         },
       ],
       diagnostics: [],
+    });
+    expect(payload.profiles[0]?.[AUTH_USAGE_OBSERVATION]).toMatchObject({
+      observedAt: now,
+      bankedResetCount: 2,
+      windows: [{ windowId: "primary", remaining: 43 }],
     });
     expect(requestedTokens).toEqual(["work-access-token", "work-access-token"]);
     expect(payload.profiles.some((profile) => profile.profileLabel === "default")).toBe(false);

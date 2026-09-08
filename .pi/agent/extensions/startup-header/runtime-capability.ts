@@ -13,6 +13,7 @@ const CONTEXT_CATEGORIES = new Set([
   "mcp-tools",
   "context-files",
   "skills",
+  "compacted-data",
 ]);
 
 export function readStartupSnapshotAPI(value: unknown): StartupSnapshotAPI | undefined {
@@ -28,9 +29,10 @@ export function readStartupRuntimeSnapshot(value: unknown): StartupRuntimeSnapsh
   if (value.ownerId !== "pi-runtime" || !isNonNegativeInteger(value.ownerRevision))
     return undefined;
 
-  const resources = readSnapshotValue(value.resources, readResourceCounts);
-  const context = readSnapshotValue(value.context, readContextEstimate);
-  if (resources === undefined || context === undefined) return undefined;
+  const resources =
+    readSnapshotValue(value.resources, readResourceCounts) ?? ({ status: "unavailable" } as const);
+  const context =
+    readSnapshotValue(value.context, readContextEstimate) ?? ({ status: "unavailable" } as const);
 
   return Object.freeze({
     sessionId: value.sessionId,
@@ -68,7 +70,7 @@ function readResourceCounts(value: unknown): StartupResourceCounts | undefined {
   });
 }
 
-function readContextEstimate(value: unknown): StartupContextEstimate | undefined {
+export function readContextEstimate(value: unknown): StartupContextEstimate | undefined {
   if (!isRecord(value) || !Array.isArray(value.categories)) return undefined;
   const { contextWindowTokens, autoCompactReserveTokens, estimatedTokens } = value;
   if (

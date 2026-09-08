@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { inspectConfiguredCandidates } from "./candidate-adapter";
+import type { CandidateInspection } from "./candidates";
+import { type ContextStripConfig, loadContextViewConfig } from "./context-strip";
 import {
   createStartupOwnerRequest,
   STARTUP_OWNER_IDS,
@@ -7,6 +10,7 @@ import {
   STARTUP_OWNER_SNAPSHOT_EVENT,
   StartupOwnerStore,
 } from "./contracts";
+import { readHeaderOwnerSnapshot } from "./header-snapshot";
 import { readStartupSnapshotAPI } from "./runtime-capability";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
 import { renderStartupHeader, StartupRuntimeStore } from "./view-model";
@@ -14,9 +18,13 @@ import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
 
 export interface StartupHeaderDependencies {
   readonly inspectWorkspace: typeof inspectWorkspace;
+  readonly inspectCandidates: typeof inspectConfiguredCandidates;
 }
 
-const DEFAULT_DEPENDENCIES: StartupHeaderDependencies = { inspectWorkspace };
+const DEFAULT_DEPENDENCIES: StartupHeaderDependencies = {
+  inspectWorkspace,
+  inspectCandidates: inspectConfiguredCandidates,
+};
 
 export default function startupHeader(
   pi: ExtensionAPI,
@@ -24,6 +32,7 @@ export default function startupHeader(
 ): void {
   let disposeSession = () => {};
   const startupBaselines = new Map<string, string | undefined>();
+  const contextViewConfigPromise = loadContextViewConfig();
 
   pi.on("before_model_availability", (_event, ctx) => {
     startupBaselines.set(
@@ -40,9 +49,11 @@ export default function startupHeader(
     const runtime = new StartupRuntimeStore();
     const sessionId = ctx.sessionManager.getSessionId();
     const generationId = randomUUID();
-    const owners = new StartupOwnerStore(sessionId, generationId);
+    const owners = new StartupOwnerStore(sessionId, generationId, readHeaderOwnerSnapshot);
     let active = true;
     let workspace: WorkspaceIdentity | undefined;
+    let candidates: CandidateInspection | undefined;
+    let contextViewConfig: ContextStripConfig | undefined;
     let requestRender = () => {};
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
@@ -76,11 +87,20 @@ export default function startupHeader(
       }
     }
 
-    void dependencies.inspectWorkspace(ctx.cwd).then((identity) => {
-      if (!active || identity === undefined) return;
-      workspace = identity;
+    void contextViewConfigPromise.then((config) => {
+      if (!active || config === undefined) return;
+      contextViewConfig = config;
       requestRender();
     });
+    void dependencies
+      .inspectWorkspace(ctx.cwd)
+      .then(async (identity) => {
+        if (!active) return;
+        workspace = identity;
+        candidates = await dependencies.inspectCandidates(ctx, identity);
+        if (active) requestRender();
+      })
+      .catch(() => {});
 
     ctx.ui.setHeader((tui, theme) => {
       requestRender = () => tui.requestRender();
@@ -93,6 +113,15 @@ export default function startupHeader(
             startupElapsedMs,
             workspace,
             owners.get("updates"),
+            {
+              neovim: owners.get("neovim"),
+              direnv: owners.get("direnv"),
+              lsp: owners.get("lsp"),
+            },
+            candidates,
+            owners.get("auth"),
+            contextViewConfig,
+            owners.get("context"),
           ),
         invalidate() {},
       };

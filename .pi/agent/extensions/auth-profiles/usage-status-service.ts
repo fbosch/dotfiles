@@ -9,6 +9,7 @@ import type {
   ProfileProviderAdapter,
   ProfileProviderCredential,
   ProviderFetch,
+  ProviderUsageSnapshot,
   ProviderUsageWindow,
   UsageUrgency,
 } from "./provider-adapter";
@@ -24,6 +25,7 @@ const MAX_CACHE_BYTES = 2 * 1024 * 1024;
 const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_REQUESTS = 4;
+const liveUsageByCredential = new Map<string, ProviderUsageSnapshot>();
 
 export type FetchFn = ProviderFetch;
 type Urgency = UsageUrgency;
@@ -39,6 +41,16 @@ export type DiagnosticCode =
   | "usage-cache-write-failed"
   | "usage-request-failed";
 
+export const AUTH_USAGE_OBSERVATION: unique symbol = Symbol("auth-usage-observation");
+
+export interface AuthUsageObservation {
+  readonly windows: readonly ProviderUsageWindow[];
+  readonly observedAt: number;
+  readonly staleAt: number;
+  readonly bankedResetCount?: number;
+  readonly bankedExpiryAt?: number;
+}
+
 export type UsageWindowStatus = ProviderUsageWindow;
 
 export type ProfileUsageStatus = {
@@ -48,6 +60,7 @@ export type ProfileUsageStatus = {
   nextExpiresAt?: string;
   urgency: Urgency;
   usage: UsageWindowStatus[];
+  readonly [AUTH_USAGE_OBSERVATION]?: AuthUsageObservation;
 };
 
 export type UsageStatusPayload = {
@@ -160,7 +173,24 @@ function parseUsageWindowStatus(value: unknown): UsageWindowStatus | undefined {
   ) {
     return undefined;
   }
-  return { remaining, ...(typeof resetsIn === "string" ? { resetsIn } : {}) };
+  const windowId =
+    typeof value.windowId === "string" && /^(?:primary|secondary)$/.test(value.windowId)
+      ? value.windowId
+      : undefined;
+  const allowanceResetAt = finiteNumber(value.allowanceResetAt);
+  if (
+    value.allowanceResetAt !== undefined &&
+    (allowanceResetAt === undefined || allowanceResetAt < 0)
+  ) {
+    return undefined;
+  }
+  // Legacy persisted windows lack stable IDs and absolute reset times; preserve that limitation.
+  return {
+    ...(windowId === undefined ? {} : { windowId }),
+    remaining,
+    ...(typeof resetsIn === "string" ? { resetsIn } : {}),
+    ...(allowanceResetAt === undefined ? {} : { allowanceResetAt }),
+  };
 }
 
 function parseUsageSnapshot(value: unknown): UsageSnapshot | undefined {
@@ -276,6 +306,7 @@ async function refreshAccount(
   const next: CachedAccount =
     cached?.credentialKey === credentialKey ? { ...cached } : { credentialKey };
   const errors: DiagnosticCode[] = [];
+  let liveUsage = liveUsageByCredential.get(credentialKey);
 
   if (credential.expiresAt <= now) {
     errors.push("credential-expired");
@@ -286,8 +317,14 @@ async function refreshAccount(
   ) {
     try {
       const usage = await adapter.fetchUsage(credential, fetchFn);
+      liveUsage = usage;
+      liveUsageByCredential.set(credentialKey, usage);
       next.usage = {
-        windows: usage.windows,
+        // The on-disk cache intentionally remains legacy-compatible and has no rich metadata.
+        windows: usage.windows.map(({ remaining, resetsIn }) => ({
+          remaining,
+          ...(resetsIn === undefined ? {} : { resetsIn }),
+        })),
         ...(usage.availableCreditCount === undefined
           ? {}
           : { availableCount: usage.availableCreditCount }),
@@ -321,21 +358,34 @@ async function refreshAccount(
 
   const availableCount = next.resetCredits?.availableCount ?? usageCount;
   const resetCredits =
-    availableCount && next.resetCredits?.availableCount === availableCount
+    availableCount !== undefined && next.resetCredits?.availableCount === availableCount
       ? next.resetCredits
       : undefined;
-  return {
-    cached: next,
-    profile: {
-      usage: next.usage?.windows ?? [],
-      ...(availableCount !== undefined ? { availableCount } : {}),
-      ...(typeof resetCredits?.nextExpiresAt === "string"
-        ? { nextExpiresAt: resetCredits.nextExpiresAt }
-        : {}),
-      urgency: resetCredits?.urgency ?? "unknown",
-    },
-    errors,
+  const bankedExpiryAt =
+    typeof resetCredits?.nextExpiresAt === "string"
+      ? Date.parse(resetCredits.nextExpiresAt)
+      : undefined;
+  const profile: AccountResult["profile"] = {
+    usage: next.usage?.windows ?? [],
+    ...(availableCount !== undefined ? { availableCount } : {}),
+    ...(typeof resetCredits?.nextExpiresAt === "string"
+      ? { nextExpiresAt: resetCredits.nextExpiresAt }
+      : {}),
+    urgency: resetCredits?.urgency ?? "unknown",
   };
+  if (next.usageCheckedAt !== undefined) {
+    const observation: AuthUsageObservation = Object.freeze({
+      windows: Object.freeze(liveUsage?.windows ?? []),
+      observedAt: next.usageCheckedAt,
+      staleAt: next.usageCheckedAt + USAGE_CACHE_MS,
+      ...(availableCount === undefined ? {} : { bankedResetCount: availableCount }),
+      ...(bankedExpiryAt === undefined || !Number.isFinite(bankedExpiryAt)
+        ? {}
+        : { bankedExpiryAt }),
+    });
+    Object.defineProperty(profile, AUTH_USAGE_OBSERVATION, { value: observation });
+  }
+  return { cached: next, profile, errors };
 }
 
 async function mapWithConcurrency<T, R>(
@@ -484,11 +534,16 @@ export async function collectUsageStatus(
       const result = resultsByKey.get(credentialKey);
       if (!result) return undefined;
       for (const code of result.errors) diagnostics.push({ profileLabel, code });
-      return {
+      const profile = {
         profileLabel,
         active: profileLabel === activeProfile,
         ...result.profile,
       } satisfies ProfileUsageStatus;
+      const observation = result.profile[AUTH_USAGE_OBSERVATION];
+      if (observation !== undefined) {
+        Object.defineProperty(profile, AUTH_USAGE_OBSERVATION, { value: observation });
+      }
+      return profile;
     })
     .filter((profile): profile is ProfileUsageStatus => profile !== undefined)
     .sort((left, right) =>
