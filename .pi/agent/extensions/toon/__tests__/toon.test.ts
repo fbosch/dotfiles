@@ -223,4 +223,17 @@ test("wires result compaction and Bash restoration into Pi hooks", () => {
   callHandler(call as never, {} as ExtensionContext);
 
   expect(call.input.command).toBe(`printf '%s' '${LONG_JSON}' | jq .`);
+
+  const inputHandler = handlers.get("input");
+  if (inputHandler === undefined) throw new Error("TOON input handler was not registered");
+
+  const transformedMessage = inputHandler(
+    { source: "extension", text: LONG_JSON } as never,
+    {} as ExtensionContext,
+  ) as { action: "transform"; text: string } | undefined;
+  expect(transformedMessage?.action).toBe("transform");
+  expect(transformedMessage?.text).not.toBe(LONG_JSON);
+  expect(
+    inputHandler({ source: "interactive", text: LONG_JSON } as never, {} as ExtensionContext),
+  ).toBe(undefined);
 });

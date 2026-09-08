@@ -15,6 +15,7 @@ const TOON_OPTIONS = {
   delimiter: "\t",
   keyFolding: "safe",
 } as const;
+const JSON_FENCE = /```json[ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*```/g;
 
 interface ConvertedOutput {
   bytes: number;
@@ -186,16 +187,58 @@ export function createToonTransformer(
     return replaced + command.slice(cursor);
   }
 
+  function transformJson(text: string): string | undefined {
+    const json = text.trim();
+    if (json.length < MIN_JSON_LENGTH || looksLikeJson(json) === false) return undefined;
+    if (Buffer.byteLength(json) > MAX_JSON_BYTES || containsLossyNumber(json)) return undefined;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(json);
+    } catch {
+      return undefined;
+    }
+
+    try {
+      const toon = encode(parsed, TOON_OPTIONS);
+      if (toon.length >= json.length) return undefined;
+      if (cacheConvertedOutput(toon, json) === false) return undefined;
+      return toon;
+    } catch {
+      return undefined;
+    }
+  }
+
+  function transformText(text: string): string | undefined {
+    const direct = transformJson(text);
+    if (direct !== undefined) return direct;
+
+    let changed = false;
+    const transformed = text.replace(JSON_FENCE, (block, body: string) => {
+      const toon = transformJson(body);
+      if (toon === undefined) return block;
+
+      const firstNewline = block.indexOf("\n");
+      const closingNewline = block.lastIndexOf("\n");
+      const toonBlock = `${block.slice(0, firstNewline + 1).replace(/^```json/, "```toon")}${toon}${block.slice(closingNewline)}`;
+      if (cacheConvertedOutput(toonBlock, block) === false) return block;
+
+      changed = true;
+      return toonBlock;
+    });
+
+    return changed ? transformed : undefined;
+  }
+
   return {
     clear(): void {
       convertedOutputs.clear();
       cachedBytes = 0;
     },
-
     restoreCommand(command: string): string {
       return replaceQuotedPayloads(command);
     },
-
+    transformText,
     transformResult(
       event: Pick<ToolResultEvent, "content" | "isError" | "toolName">,
     ): ToolResultEvent["content"] | undefined {
@@ -209,26 +252,8 @@ export function createToonTransformer(
       const content = event.content[0];
       if (content?.type !== "text") return undefined;
 
-      const json = content.text.trim();
-      if (json.length < MIN_JSON_LENGTH || looksLikeJson(json) === false) return undefined;
-      if (Buffer.byteLength(json) > MAX_JSON_BYTES || containsLossyNumber(json)) return undefined;
-
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(json);
-      } catch {
-        return undefined;
-      }
-
-      try {
-        const toon = encode(parsed, TOON_OPTIONS);
-        if (toon.length >= json.length) return undefined;
-        if (cacheConvertedOutput(toon, json) === false) return undefined;
-
-        return [{ ...content, text: toon }];
-      } catch {
-        return undefined;
-      }
+      const text = transformText(content.text);
+      return text === undefined ? undefined : [{ ...content, text }];
     },
   };
 }
@@ -246,6 +271,35 @@ export default function toonExtension(pi: ExtensionAPI): void {
   pi.on("tool_result", (event) => {
     const content = transformer.transformResult(event);
     return content === undefined ? undefined : { content };
+  });
+
+  pi.on("context", (event) => {
+    let changed = false;
+    const messages = event.messages.map((message) => {
+      if (message.role !== "user") return message;
+
+      if (typeof message.content === "string") {
+        const text = transformer.transformText(message.content);
+        if (text === undefined) return message;
+        changed = true;
+        return { ...message, content: text };
+      }
+
+      let messageChanged = false;
+      const content = message.content.map((part) => {
+        if (part.type !== "text") return part;
+        const text = transformer.transformText(part.text);
+        if (text === undefined) return part;
+        messageChanged = true;
+        return { ...part, text };
+      });
+      if (messageChanged === false) return message;
+
+      changed = true;
+      return { ...message, content };
+    });
+
+    return changed ? { messages } : undefined;
   });
 
   pi.on("session_shutdown", () => {

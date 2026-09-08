@@ -21,14 +21,25 @@ local function activate_tab_key(number, tab_index)
 	}
 end
 
-local function paste_clipboard(window, pane)
-	-- Pi must receive Ctrl+V to inspect image/png; WezTerm's paste action only sends text.
-	if pane:get_title():match("^π %-") then
-		window:perform_action(wezterm.action.SendKey({ key = "V", mods = "CTRL" }), pane)
+local function paste_clipboard(window, _pane)
+	-- Herdr owns the inner pane focus; WezTerm sees only Herdr's outer pane.
+	local focused_pi = wezterm.run_child_process({
+		"sh",
+		"-c",
+		[[herdr pane list | jq -e '.result.panes[] | select(.focused == true and .agent == "pi")' >/dev/null 2>&1]],
+	})
+	local image_clipboard = wezterm.run_child_process({
+		"sh",
+		"-c",
+		[[wl-paste --list-types 2>/dev/null | grep -q '^image/']],
+	})
+	if focused_pi and image_clipboard then
+		-- Pi must receive Ctrl+V to inspect image/png; WezTerm's paste action only sends text.
+		window:perform_action(wezterm.action.SendKey({ key = "V", mods = "CTRL" }), _pane)
 		return
 	end
 
-	window:perform_action(wezterm.action.PasteFrom("Clipboard"), pane)
+	window:perform_action(wezterm.action.PasteFrom("Clipboard"), _pane)
 end
 return function(config)
 	config.keys = {
