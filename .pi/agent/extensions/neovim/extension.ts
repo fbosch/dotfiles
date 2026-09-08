@@ -5,6 +5,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
+import type { NeovimStartupPayload } from "../startup-header/owner-payloads";
+import { installStartupOwnerPublisher, type StartupOwnerStatus } from "../startup-header/publisher";
 import { type NvimConnectionFactory, PiNeovimChannel } from "./channel";
 import {
   type BridgeResult,
@@ -218,6 +220,18 @@ export function initializeNeovim(
   let channel: PiNeovimChannel | undefined;
   let blockingPromptActive = false;
   let disposeFileLinks = () => {};
+  let startupStatus: StartupOwnerStatus<NeovimStartupPayload> = { state: "unavailable" };
+  let startupChannelConfirmed = false;
+  const startupPublisher =
+    typeof pi.events?.on === "function"
+      ? installStartupOwnerPublisher(pi.events, "neovim", () => startupStatus, {
+          responds: () => startupChannelConfirmed,
+        })
+      : undefined;
+  const publishStartupStatus = (status: StartupOwnerStatus<NeovimStartupPayload>) => {
+    startupStatus = status;
+    startupPublisher?.publish(status);
+  };
   const promptDispatcher = new PromptRequestDispatcher(pi, {
     binding: () => channel?.promptBinding(),
     blockingPromptActive: () => blockingPromptActive,
@@ -288,6 +302,7 @@ export function initializeNeovim(
     activeContext = context;
     blockingPromptActive = false;
     const bridge = channelFor(context);
+    publishStartupStatus({ state: "collecting" });
     const sessionId = context.sessionManager.getSessionId();
     const replacePending = event.previousSessionFile !== undefined;
     const result = await repeatPromiseWhile(
@@ -296,10 +311,24 @@ export function initializeNeovim(
       { delayMs: 50, maxAttempts: 10 },
     );
     if (result.ok === false) {
+      publishStartupStatus({
+        state: "degraded",
+        observedAt: Date.now(),
+        payload: {
+          problem:
+            result.error.code === "NVIM_WORKTREE_MISMATCH"
+              ? "workspace-mismatch"
+              : "channel-problem",
+        },
+      });
       context.ui.notify(
         `Could not bind Pi's session identity to Neovim: ${result.error.message}`,
         "warning",
       );
+    } else {
+      // bindSession verifies the existing Pi-owned channel and canonical workspace.
+      startupChannelConfirmed = true;
+      publishStartupStatus({ state: "ready", observedAt: Date.now() });
     }
     if (context.mode === "tui") {
       // A zero-row widget gives this extension the TUI and a disposal lifecycle
@@ -330,6 +359,8 @@ export function initializeNeovim(
     if (context.mode === "tui") context.ui.setWidget("neovim-file-links", undefined);
     activeContext = undefined;
     blockingPromptActive = false;
+    startupPublisher?.dispose();
+    startupChannelConfirmed = false;
     const activeChannel = channel;
     await activeChannel?.close();
     if (channel === activeChannel) channel = undefined;

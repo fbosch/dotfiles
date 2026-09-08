@@ -38,6 +38,16 @@ for index, class in ipairs(M.pip_classes) do
 	pip_class_patterns[index] = class:gsub("%.", "[.]")
 	M.classes[class] = true
 end
+
+local function static_pip_matches()
+	return {
+		{ class = M.pip_class_pattern },
+		{
+			class = "^" .. M.class:gsub("%.", "[.]") .. "$",
+			initial_title = "^" .. M.title .. "$",
+		},
+	}
+end
 M.pip_class_pattern = "^(" .. table.concat(pip_class_patterns, "|") .. ")$"
 -- Set only the opening height; derive width from the client's initial media aspect ratio.
 M.initial_size = string.format("(window_w*%d/window_h) %d", M.initial_height, M.initial_height)
@@ -179,27 +189,34 @@ function M.acceptance.decode(line)
 end
 
 function M.register_window_rules()
-	-- Early static matching must float PiP before Hyprland predicts a tiled initial size.
-	hl.window_rule({
-		match = { class = M.pip_class_pattern },
-		tag = "+" .. window_tags.pip,
-		float = true,
-		size = M.initial_size,
-		no_initial_focus = true,
-		focus_on_activate = false,
-		pin = true,
-		content = "video",
-		suppress_event = "maximize",
-		rounding = M.rounding,
-	})
-	hl.window_rule({ match = { class = M.pip_class_pattern }, animation = M.default_animation })
+	local static_matches = static_pip_matches()
+	-- Zen keeps its browser class for PiP; the initial title prevents normal tabs matching.
+	for _, match in ipairs(static_matches) do
+		-- Early static matching must float PiP before Hyprland predicts a tiled initial size.
+		hl.window_rule({
+			match = match,
+			tag = "+" .. window_tags.pip,
+			float = true,
+			size = M.initial_size,
+			no_initial_focus = true,
+			focus_on_activate = false,
+			pin = true,
+			content = "video",
+			suppress_event = "maximize",
+			rounding = M.rounding,
+		})
+	end
+	for _, match in ipairs(static_matches) do
+		hl.window_rule({ match = match, animation = M.default_animation })
+	end
 	for _, corner in pairs(M.corners) do
 		hl.window_rule({ match = { tag = corner.tag }, animation = corner.animation })
 	end
-	hl.window_rule({
-		match = { class = M.pip_class_pattern },
-		move = M.normal_move,
-	})
+	for _, match in ipairs(static_matches) do
+		hl.window_rule({
+			match = match,
+			move = M.normal_move,
+		})
+	end
 end
-
 return M

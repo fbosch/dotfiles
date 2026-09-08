@@ -7,6 +7,12 @@ import type {
   ToolDefinition,
   ToolResultEvent,
 } from "@earendil-works/pi-coding-agent";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
+import {
+  createStartupOwnerRequest,
+  STARTUP_OWNER_SNAPSHOT_EVENT,
+  type StartupOwnerSnapshot,
+} from "../../startup-header/contracts";
 import { createLspExtension } from "../index";
 import type { DiagnosticVerdict, LspServerManager } from "../server-manager";
 import type { ResolvedLspSettings } from "../settings";
@@ -614,4 +620,69 @@ test("warms LSP diagnostics once after a successful native file read", async () 
   await handlers.get("tool_result")?.({ ...readResult, toolCallId: "read-2" } as never, context);
 
   expect(warmedPaths).toEqual(["src/example.ts"]);
+});
+
+test("publishes unchecked LSP state before observed ready documents without starting one", async () => {
+  const events = createEventBus();
+  const snapshots: StartupOwnerSnapshot[] = [];
+  const handlers = new Map<string, Handler>();
+  let tool: ToolDefinition | undefined;
+  let managerCreations = 0;
+  const manager = {
+    diagnostics: async () => ({
+      diagnosticCount: 0,
+      diagnosticEvidence: [
+        { kind: "pull-report" as const, reportKind: "full" as const, serverId: "private" },
+      ],
+      diagnosticVerdict: "clean" as const,
+      matched: true,
+      text: "",
+      unconfirmedServers: [],
+      warnings: [],
+    }),
+    shutdown: async () => {},
+    startupEvidence: () => [{ documents: 1, state: "ready" as const }],
+    status: () => "ready",
+  } as unknown as LspServerManager;
+  events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) => snapshots.push(value as StartupOwnerSnapshot));
+  const pi = {
+    events,
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    registerCommand() {},
+    registerMessageRenderer() {},
+    registerTool(definition: ToolDefinition) {
+      tool = definition;
+    },
+  } as unknown as ExtensionAPI;
+  createLspExtension({
+    createManager: async () => {
+      managerCreations += 1;
+      return manager;
+    },
+    readSettings: () => ({
+      servers: [],
+      timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+      warnings: [],
+    }),
+  })(pi);
+  events.emit(
+    "dotfiles:pi-startup-header/request/v1",
+    createStartupOwnerRequest("session", "generation", "lsp"),
+  );
+  expect(snapshots.at(-1)).toMatchObject({ state: "collecting" });
+  expect(managerCreations).toBe(0);
+  if (tool === undefined) throw new Error("LSP tool was not registered");
+  await tool.execute(
+    "diagnostics",
+    { operation: "diagnostics", path: "src/main.ts" },
+    undefined,
+    undefined,
+    { cwd: "/project", isProjectTrusted: () => true } as ExtensionContext,
+  );
+  expect(snapshots.at(-1)).toMatchObject({
+    state: "ready",
+    payload: { observedDocuments: 1 },
+  });
 });

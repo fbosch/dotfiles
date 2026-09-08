@@ -1,32 +1,18 @@
-# Subagent routing
+# Subagent orchestration
 
-Use `Task` when specialist expertise, isolated context, or independent parallel work clearly reduces effort. Work directly for simple answers, obvious edits, narrow inspections, and work already understood in the parent context.
+Use the injected agent descriptions for role selection.
 
-Use each agent's frontmatter description for role selection. Available roles:
-`adversarial`, `analyze`, `backlog-planning`, `benchmark`, `commit`, `debug`,
-`docs`, `explore`, `general`, `ideate`, `lookup`, `patterns`, `pr-feedback`,
-`quick`, `refactor`, `research`, `review`, `spec`, `test`, `tutor`, `validate`.
+Use `subagent` only when specialist expertise, isolated context, or independent parallel work clearly reduces effort. Work directly for simple answers, obvious edits, narrow inspections, and work already understood in the parent context.
 
-## Dispatch
+Use the smallest effective set of agents: enough to reduce total effort, increase confidence, or shorten wall-clock time. Do not split work merely to create parallelism.
 
-- For discovery, use `fffind` for paths and `ffgrep` for identifiers or literals; use `find` and `grep` only as fallbacks, then read the source once paths are known.
-- Discover only enough to choose a role; do not duplicate delegated investigation.
-- Use the fewest agents needed, with distinct, non-overlapping deliverables. Children cannot spawn other children; the parent owns decomposition, sequencing, and integration.
-- Include user intent, known context, exact scope, edit authority, validation requirements, and expected output. Children do not inherit the parent conversation unless `inherit_context` is enabled.
-- Run independent work in parallel; use a foreground child for blocking work and background children only for independent work.
-- Resume the same child by its returned `task_id`; start a new task for a distinct question or when no ID was returned.
-- Handle `Parent approval required:` and `Parent handoff required:` responses before resuming the child. Do not silently substitute another child.
-- Prefer child-scoped permission approval. Do not bypass an agent denial with a whole-session rule.
-- A child cannot be stopped individually; steer it to wrap up when practical. Interrupting the parent aborts running and queued children.
-- Inspect every child result and diff. Integrate and verify results rather than forwarding them unverified.
-- Run one direct integration check before reporting success. Delegated validation is evidence, not proof.
+## Autonomous parallel work
 
-## Boundaries
+When a task contains multiple independently verifiable units, partition it internally and fan out without a separate manifest or approval step. Each unit must have one goal, exact owned files, symbols, or inputs, explicit exclusions, relevant context, acceptance criteria, validation, and a required result format.
 
-- `ideate` expands alternatives; `spec` defines the contract; `backlog-planning` turns scoped input into verifiable tasks.
-- `explore` locates unknown code; `analyze` explains known code; `patterns` finds precedents; `debug` diagnoses observed failures.
-- `review` independently audits; `adversarial` actively searches for failure modes.
-- `pr-feedback` handles existing review threads.
-- `validate` runs bounded checks; `test` owns test design, coverage, and test-failure diagnosis; `debug` owns unexplained runtime or environment failures.
-- `lookup` answers one narrow external question; `research` synthesizes multiple sources.
-- Use `quick` only for tightly scoped work with explicit acceptance criteria. Route substantial documentation to `docs`, contracts to `spec`, and mixed or cross-cutting implementation to `general`.
+- Parallelize only when write sets are disjoint and dependencies are absent. Default to read-only delegation; permit concurrent writes only when ownership is proven. Keep shared, generated, uncertain, or dependency-ordered work coordinator-owned and serial.
+- Use `quick` for independent, well-specified mechanical units. Route semantic or cross-cutting work to the appropriate specialist or keep it coordinator-owned.
+- Launch one `subagent` per unit with `subagent_type: "quick"` and `run_in_background: true` in one `multi_tool_use.parallel` batch. Use 2-4 workers by default, queue additional units, and respect configured concurrency.
+- Workers must not discover, claim, delegate, or expand work. They must stop before editing an unowned path or making a shared design decision.
+- Require each worker to return: `status`, `summary`, `evidence`, `changed_files`, `validation`, `blockers`, and `recommended_next_action`.
+- After each wave, the parent must compare actual changed paths with ownership, validate every unit, preserve failures and contradictions, resolve shared work serially, and run the final acceptance check. Delegated results are evidence, not proof.

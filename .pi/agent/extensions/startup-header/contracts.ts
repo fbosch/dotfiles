@@ -54,6 +54,21 @@ export function createStartupOwnerRequest(
   });
 }
 
+export function readStartupOwnerRequest(value: unknown): StartupOwnerRequest | undefined {
+  if (!isRecord(value) || value.type !== "request") return undefined;
+  if (value.schemaVersion !== STARTUP_OWNER_SCHEMA_VERSION) return undefined;
+  if (!isNonEmptyString(value.sessionId) || !isNonEmptyString(value.generationId)) return undefined;
+  if (!isStartupOwnerId(value.ownerId) || value.ownerRevision !== 0) return undefined;
+  return deepFreeze({
+    type: "request",
+    schemaVersion: STARTUP_OWNER_SCHEMA_VERSION,
+    sessionId: value.sessionId,
+    generationId: value.generationId,
+    ownerId: value.ownerId,
+    ownerRevision: 0,
+  });
+}
+
 export function readStartupOwnerSnapshot(value: unknown): StartupOwnerSnapshot | undefined {
   if (!isRecord(value)) return undefined;
   if (value.type !== "reply" && value.type !== "change") return undefined;

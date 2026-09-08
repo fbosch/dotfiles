@@ -15,6 +15,8 @@ import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { loadExtensionConfigLayers } from "../../lib/extension-config";
 import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
+import type { LspStartupPayload } from "../startup-header/owner-payloads";
+import { installStartupOwnerPublisher, type StartupOwnerStatus } from "../startup-header/publisher";
 import type {
   DiagnosticVerdict,
   LspDiagnosticEvidence,
@@ -89,6 +91,12 @@ function readPath(event: ToolResultEvent): string | undefined {
   if (event.isError || isReadToolResult(event) === false) return undefined;
   const path = event.input.path;
   return typeof path === "string" ? path : undefined;
+}
+
+function hasStartupEvidence(
+  manager: LspServerManager,
+): manager is LspServerManager & { startupEvidence(): readonly unknown[] } {
+  return "startupEvidence" in manager && typeof manager.startupEvidence === "function";
 }
 
 export function loadLspSettings(
@@ -213,6 +221,38 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       },
     });
 
+    let startupStatus: StartupOwnerStatus<LspStartupPayload> = { state: "collecting" };
+    const startupPublisher =
+      typeof pi.events?.on === "function"
+        ? installStartupOwnerPublisher(pi.events, "lsp", () => startupStatus)
+        : undefined;
+    const publishStartupStatus = (status: StartupOwnerStatus<LspStartupPayload>) => {
+      startupStatus = status;
+      startupPublisher?.publish(status);
+    };
+    const observedDocuments = new Set<string>();
+    const refreshStartupEvidence = (manager: LspServerManager) => {
+      if (!hasStartupEvidence(manager)) return;
+      const evidence = manager.startupEvidence();
+      if (evidence.some(({ state }) => state === "failed")) {
+        publishStartupStatus({
+          state: "degraded",
+          observedAt: Date.now(),
+          payload: { problem: "server-problem" },
+        });
+        return;
+      }
+      if (
+        observedDocuments.size > 0 &&
+        evidence.some(({ documents, state }) => state === "ready" && documents > 0)
+      ) {
+        publishStartupStatus({
+          state: "ready",
+          observedAt: Date.now(),
+          payload: { observedDocuments: Math.min(observedDocuments.size, 64) },
+        });
+      }
+    };
     let managerPromise: Promise<LspServerManager> | undefined;
     let mutationSequence = 0;
     let settings: ResolvedLspSettings | undefined;
@@ -293,6 +333,16 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
               manager.references(path, line, column, includeDeclaration ?? true, signal),
             )
             .exhaustive();
+          if (result.matched) {
+            observedDocuments.add(resolve(context.cwd, params.path));
+            refreshStartupEvidence(manager);
+          } else if (result.warnings.length > 0) {
+            publishStartupStatus({
+              state: "degraded",
+              observedAt: Date.now(),
+              payload: { problem: "workspace-mismatch" },
+            });
+          }
           if (params.operation !== "diagnostics") assertMatched(result);
           const diagnosticDetails =
             result.diagnosticVerdict === undefined
@@ -317,6 +367,11 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
     pi.on("session_start", (_event, context) => {
       const resolvedSettings = settingsFor(context);
       if (resolvedSettings.warnings.length > 0) {
+        publishStartupStatus({
+          state: "degraded",
+          observedAt: Date.now(),
+          payload: { problem: "server-problem" },
+        });
         context.ui.notify(`LSP settings:\n- ${resolvedSettings.warnings.join("\n- ")}`, "warning");
       }
     });
@@ -329,7 +384,11 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
         if (warmedPaths.has(key) === false) {
           warmedPaths.add(key);
           void getManager(context)
-            .then((manager) => manager.warm(path))
+            .then(async (manager) => {
+              await manager.warm(path);
+              observedDocuments.add(key);
+              refreshStartupEvidence(manager);
+            })
             .catch(() => undefined);
         }
       }
@@ -405,6 +464,8 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       automaticDiagnostics.clear();
       pendingMutations.clear();
       warmedPaths.clear();
+      observedDocuments.clear();
+      startupPublisher?.dispose();
       settings = undefined;
       settingsCwd = undefined;
       settingsTrusted = undefined;

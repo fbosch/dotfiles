@@ -193,6 +193,21 @@ export class LspServerManager {
     return new LspServerManager(await canonicalProjectRoot(cwd), settings);
   }
 
+  startupEvidence(): readonly {
+    readonly documents: number;
+    readonly state: ClientStatus["state"];
+  }[] {
+    return Object.freeze(
+      [...this.instances.values()].map((record) => {
+        const status = record.client?.status();
+        return {
+          documents: status?.documents ?? 0,
+          state: status?.state ?? (record.error === undefined ? "starting" : "failed"),
+        };
+      }),
+    );
+  }
+
   status(): string {
     const configured = this.settings.servers.map((server) =>
       `${server.id}: configured (${server.command} ${server.args.join(" ")})`.trim(),

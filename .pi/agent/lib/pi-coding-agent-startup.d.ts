@@ -1,4 +1,5 @@
 import type { ExtensionHandler } from "@earendil-works/pi-coding-agent";
+import type { StartupSnapshotAPI } from "../extensions/startup-header/runtime-types";
 
 declare module "@earendil-works/pi-coding-agent" {
   /** Compatibility declaration for the startup hook added to the packaged Pi runtime. */
@@ -6,56 +7,6 @@ declare module "@earendil-works/pi-coding-agent" {
     type: "before_model_availability";
     reason: SessionStartEvent["reason"];
     previousSessionFile?: string;
-  }
-
-  type StartupSnapshotValue<T> =
-    | { readonly status: "collecting" | "unavailable" }
-    | { readonly status: "ready"; readonly value: T };
-
-  interface StartupResourceCounts {
-    readonly extensions: {
-      readonly enabled: number;
-      readonly project: number;
-      readonly loadFailed: number;
-    };
-    readonly skills: {
-      readonly available: number;
-      readonly project: number;
-    };
-  }
-
-  type StartupContextCategory =
-    | "system-prompt"
-    | "system-tools"
-    | "custom-tools"
-    | "mcp-tools"
-    | "context-files"
-    | "skills";
-
-  interface StartupContextEstimate {
-    readonly contextWindowTokens: number;
-    readonly autoCompactReserveTokens: number;
-    readonly estimatedTokens: number;
-    readonly categories: readonly {
-      readonly id: StartupContextCategory;
-      readonly tokens: number;
-    }[];
-  }
-
-  interface StartupRuntimeSnapshot {
-    readonly sessionId: string;
-    readonly generationId: string;
-    readonly ownerId: "pi-runtime";
-    readonly ownerRevision: number;
-    readonly resources: StartupSnapshotValue<StartupResourceCounts>;
-    readonly context: StartupSnapshotValue<StartupContextEstimate>;
-  }
-
-  interface StartupSnapshotAPI {
-    readonly capability: "pi.startupSnapshot";
-    readonly schemaVersion: 1;
-    get(): Readonly<StartupRuntimeSnapshot>;
-    subscribe(listener: (snapshot: Readonly<StartupRuntimeSnapshot>) => void): () => void;
   }
 
   interface ExtensionAPI {

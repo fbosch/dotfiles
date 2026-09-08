@@ -102,7 +102,7 @@ describe("picture-in-picture identity", function()
 end)
 
 describe("picture-in-picture window rules", function()
-	it("applies static setup and slide animation to every PiP state", function()
+	it("applies static setup and slide animation to all supported PiP identities", function()
 		local rules = {}
 		_G.hl = {
 			window_rule = function(rule)
@@ -113,25 +113,57 @@ describe("picture-in-picture window rules", function()
 		pip.register_window_rules()
 		_G.hl = nil
 
-		local base_rule = rules[1]
-		assert_equal(base_rule.match.class, pip.pip_class_pattern, "pre-map PiP identity")
-		assert_equal(base_rule.tag, "+pip", "semantic PiP tag")
-		assert_equal(base_rule.match.title, nil, "current title")
-		assert_equal(base_rule.match.initial_title, nil, "initial title")
-		assert.is_true(base_rule.no_initial_focus)
-		assert.is_false(base_rule.focus_on_activate)
-		assert_equal(base_rule.suppress_event, "maximize", "suppressed event")
-		assert_equal(base_rule.size, "(window_w*360/window_h) 360", "initial size")
-		assert_equal(base_rule.max_size, nil, "maximum size")
-		assert_equal(base_rule.fullscreen_state, nil, "fullscreen state")
-		assert_equal(base_rule.persistent_size, nil, "persistent size")
-		assert_equal(rules[2].animation, "slide bottom", "default animation")
-		assert_equal(rules[2].match.class, pip.pip_class_pattern, "animation PiP identity")
-		assert_equal(rules[7].match.class, pip.pip_class_pattern, "placement PiP identity")
+		local setup_rules = {}
+		local default_animation_rules = {}
+		local placement_rules = {}
 		local corner_animations = {}
-		for index = 3, 6 do
-			corner_animations[rules[index].match.tag] = rules[index].animation
+		for _, rule in ipairs(rules) do
+			if rule.float == true then
+				setup_rules[#setup_rules + 1] = rule
+			elseif rule.animation == pip.default_animation then
+				default_animation_rules[#default_animation_rules + 1] = rule
+			elseif rule.move == pip.normal_move then
+				placement_rules[#placement_rules + 1] = rule
+			elseif rule.match.tag then
+				corner_animations[rule.match.tag] = rule.animation
+			end
 		end
+
+		local function find_class_rule(candidates, class_pattern)
+			for _, rule in ipairs(candidates) do
+				if rule.match.class == class_pattern then
+					return rule
+				end
+			end
+			error("missing static PiP rule for " .. class_pattern)
+		end
+
+		local relabeled_setup = find_class_rule(setup_rules, pip.pip_class_pattern)
+		assert_equal(relabeled_setup.tag, "+pip", "semantic PiP tag")
+		assert_equal(relabeled_setup.match.title, nil, "current title")
+		assert_equal(relabeled_setup.match.initial_title, nil, "relabeled initial title")
+		assert.is_true(relabeled_setup.no_initial_focus)
+		assert.is_false(relabeled_setup.focus_on_activate)
+		assert_equal(relabeled_setup.suppress_event, "maximize", "suppressed event")
+		assert_equal(relabeled_setup.size, "(window_w*360/window_h) 360", "initial size")
+		assert_equal(relabeled_setup.max_size, nil, "maximum size")
+		assert_equal(relabeled_setup.fullscreen_state, nil, "fullscreen state")
+		assert_equal(relabeled_setup.persistent_size, nil, "persistent size")
+
+		local zen_setup = find_class_rule(setup_rules, "^app[.]zen_browser[.]zen$")
+		assert_equal(zen_setup.match.initial_title, "^Picture-in-Picture$", "Zen PiP initial title")
+		assert_equal(zen_setup.tag, "+pip", "Zen semantic PiP tag")
+		assert_equal(zen_setup.size, "(window_w*360/window_h) 360", "Zen initial size")
+		assert_equal(zen_setup.max_size, nil, "Zen maximum size")
+
+		assert_equal(#default_animation_rules, 2, "default animation identities")
+		assert.is_not_nil(find_class_rule(default_animation_rules, pip.pip_class_pattern))
+		assert.is_not_nil(find_class_rule(default_animation_rules, "^app[.]zen_browser[.]zen$"))
+
+		assert_equal(#placement_rules, 2, "placement identities")
+		assert.is_not_nil(find_class_rule(placement_rules, pip.pip_class_pattern))
+		assert.is_not_nil(find_class_rule(placement_rules, "^app[.]zen_browser[.]zen$"))
+
 		assert_equal(corner_animations["pip-top-left"], "slide top", "top-left animation")
 		assert_equal(corner_animations["pip-top-right"], "slide top", "top-right animation")
 		assert_equal(corner_animations["pip-bottom-left"], "slide bottom", "bottom-left animation")

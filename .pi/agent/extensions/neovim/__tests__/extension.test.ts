@@ -6,8 +6,14 @@ import type {
   ExtensionUIContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
+import {
+  createStartupOwnerRequest,
+  STARTUP_OWNER_SNAPSHOT_EVENT,
+  type StartupOwnerSnapshot,
+} from "../../startup-header/contracts";
 import type { NvimConnection } from "../channel";
 import { bridgeLua, bridgeOperations } from "../channel";
 import { createNeovimExtension } from "../index";
@@ -21,6 +27,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
   closed = false;
   promptAcknowledgement: unknown;
   readonly openedPaths: unknown[] = [];
+  editorCwd = "/project";
 
   async close(): Promise<void> {
     this.closed = true;
@@ -35,7 +42,7 @@ class FakeConnection extends EventEmitter implements NvimConnection {
     const operation = (request as Record<string, unknown>).operation;
     const payload = (request as Record<string, unknown>).payload as Record<string, unknown>;
     if (operation === bridgeOperations.installNotifications) {
-      return { channelId: 12, cwd: "/project", pid: 80 };
+      return { channelId: 12, cwd: this.editorCwd, pid: 80 };
     }
     if (
       operation === bridgeOperations.diagnosticSummary ||
@@ -696,4 +703,53 @@ test("stays unloaded when the session has no Neovim launch binding", async () =>
   expect(registrations).toBe(0);
   expect(lifecycleHandlers).toBe(0);
   expect(connections).toBe(0);
+});
+
+test("publishes only confirmed existing Neovim channel status without header connection probes", async () => {
+  for (const [editorCwd, state] of [
+    ["/project", "ready"],
+    ["/other", "degraded"],
+  ] as const) {
+    const handlers = new Map<string, Handler>();
+    const events = createEventBus();
+    const snapshots: StartupOwnerSnapshot[] = [];
+    const connection = new FakeConnection();
+    connection.editorCwd = editorCwd;
+    let connections = 0;
+    events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) =>
+      snapshots.push(value as StartupOwnerSnapshot),
+    );
+    const pi = {
+      events,
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+      registerTool() {},
+    } as unknown as ExtensionAPI;
+    await createNeovimExtension({
+      createConnection: async () => {
+        connections += 1;
+        return connection;
+      },
+      socketPath: "/tmp/launching-nvim.sock",
+    })(pi);
+    events.emit(
+      "dotfiles:pi-startup-header/request/v1",
+      createStartupOwnerRequest("session", "generation", "neovim"),
+    );
+    expect(connections).toBe(0);
+    expect(snapshots).toEqual([]);
+    const context = {
+      cwd: "/project",
+      mode: "rpc",
+      sessionManager: { getSessionId: () => "session" },
+      ui: { notify() {}, setWidget() {} },
+    } as unknown as ExtensionContext;
+    await handlers.get("session_start")?.({} as never, context);
+    expect(connections).toBe(1);
+    expect(snapshots.at(-1)).toMatchObject({ state });
+    if (state === "degraded") {
+      expect(snapshots.at(-1)?.payload).toEqual({ problem: "workspace-mismatch" });
+    }
+  }
 });
