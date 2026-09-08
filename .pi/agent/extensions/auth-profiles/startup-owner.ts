@@ -44,6 +44,9 @@ export interface AuthStartupClock {
   clearTimeout(timer: unknown): void;
 }
 
+// Node clamps larger delays to 1 ms, so long deadlines must advance through safe one-shot checkpoints.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
 const systemClock: AuthStartupClock = {
   now: Date.now,
   setTimeout,
@@ -144,7 +147,7 @@ export class AuthStartupOwner {
         if (this.disposed || this.activeRequest?.generationId !== generationId) return;
         this.publish("change");
       },
-      Math.max(0, deadline - this.clock.now()),
+      Math.min(MAX_TIMER_DELAY_MS, Math.max(0, deadline - this.clock.now())),
     );
   }
 

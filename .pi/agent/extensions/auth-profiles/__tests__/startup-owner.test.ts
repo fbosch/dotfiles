@@ -32,6 +32,10 @@ class FakeClock {
   public get pending(): number {
     return this.timers.size;
   }
+  public get nextDelay(): number | undefined {
+    const next = Math.min(...[...this.timers.values()].map(({ at }) => at));
+    return Number.isFinite(next) ? next - this.current : undefined;
+  }
 }
 
 function state(overrides: Partial<AuthStartupState> = {}): AuthStartupState {
@@ -167,6 +171,38 @@ describe("auth startup owner", () => {
     expect(reads).toBe(2);
     owner.dispose();
     expect(clock.pending).toBe(0);
+  });
+
+  test("checkpoints deadlines beyond the runtime timer limit", () => {
+    const events = createEventBus();
+    const clock = new FakeClock();
+    const maximumDelay = 2_147_483_647;
+    const deadline = clock.current + maximumDelay + 5_000;
+    const owner = new AuthStartupOwner(
+      events,
+      () =>
+        state({
+          profileOrder: ["work"],
+          observations: [
+            {
+              profileLabel: "work",
+              windows: [{ windowId: "primary", remaining: 43, allowanceResetAt: deadline }],
+              observedAt: clock.current,
+              staleAt: deadline,
+            },
+          ],
+        }),
+      clock,
+    );
+    events.emit(
+      "dotfiles:pi-startup-header/request/v1",
+      createStartupOwnerRequest("s", "g", "auth"),
+    );
+
+    expect(clock.nextDelay).toBe(maximumDelay);
+    clock.advanceTo(clock.current + maximumDelay);
+    expect(clock.nextDelay).toBe(5_000);
+    owner.dispose();
   });
 
   test("uses the current profile when switches happen before and after a deadline", () => {
