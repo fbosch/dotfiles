@@ -45,7 +45,7 @@ if grep -Fq 'session("waybar")' "$hypr_dir/autostart.lua"; then
   printf 'Hyprland autostart still launches Waybar eagerly\n' >&2
   exit 1
 fi
-grep -Fq '"start_hidden": false' "$repo_root/.config/waybar/config"
+grep -Fq '"start_hidden": true' "$repo_root/.config/waybar/config"
 
 if [[ ! -x "$hypr_dir/runtime/desktop/waybar-process.sh" ]]; then
   printf 'Waybar process helper must be executable\n' >&2

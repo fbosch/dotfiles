@@ -154,13 +154,16 @@ describe("floating extension dialogs", () => {
     expect(narrow.map(stripTerminalSequences).at(-1)).toBe("▘▀▝");
     expect(narrow.every((line) => visibleWidth(line) === 3)).toBe(true);
   });
-  test("maps h/l to horizontal choice navigation for permission prompts", async () => {
+  test("maps horizontal keys to choice navigation for permission prompts", async () => {
     const handledInput: string[] = [];
     const { ui } = createUI({
       beforeInput: (component) => {
+        component.handleInput?.("\x1b[C");
         component.render(120);
         component.handleInput?.("h");
         component.handleInput?.("l");
+        component.handleInput?.("\x1b[D");
+        component.handleInput?.("\x1b[C");
       },
     });
     installFloatingDialogs(ui);
@@ -185,6 +188,6 @@ describe("floating extension dialogs", () => {
       { overlay: false },
     );
 
-    expect(handledInput).toEqual(["k", "j", "\r"]);
+    expect(handledInput).toEqual(["\x1b[C", "k", "j", "k", "j", "\r"]);
   });
 });

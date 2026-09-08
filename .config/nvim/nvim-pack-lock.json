@@ -114,7 +114,7 @@
       "src": "https://github.com/monkoose/matchparen.nvim.git"
     },
     "mini.ai": {
-      "rev": "25248c6aa002391936a6200f12d1466015987133",
+      "rev": "cb02c5444613475b7edf0c8dc98264c1c857aa6e",
       "src": "https://github.com/echasnovski/mini.ai.git"
     },
     "mini.sessions": {
@@ -151,7 +151,7 @@
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "84252f9832fb5b9024fe9f7258e7c2aff915e6fb",
+      "rev": "456f8cc94438de35ff2294454019e7b780b73514",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,7 +188,7 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "41416e81a6c7f4af4984395bfe0cd8d174e70976",
+      "rev": "5cb0114e6242625db56dd6440e945ed1ece10bc7",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -208,7 +208,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "0c7abbf2f4e64e56519cb036f01e62e83e2cdcf1",
+      "rev": "ec76708f1617ef9e2ac353357fe52d2c997a0f06",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {

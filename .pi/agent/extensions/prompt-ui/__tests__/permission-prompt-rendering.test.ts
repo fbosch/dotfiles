@@ -51,7 +51,7 @@ describe("permission prompt rendering", () => {
     expect(plain[6]).toContain(" Allow session ");
     expect(plain[6]).toContain(" Reject ");
     expect(plain[6]).toContain(" Reject + reason ");
-    expect(plain[6]).toEndWith("↑/↓ select · enter confirm · esc deny");
+    expect(plain[6]).toEndWith("←/→/↑/↓ select · enter confirm · esc deny");
     expect(lines[0]).toBe("\u001b[33m Permission required (Subagent)\u001b[39m");
     expect(lines[6]).toContain("\u001b[7m");
     expect(lines[6]).toContain("\u001b[36m Allow once \u001b[39m");
@@ -141,7 +141,7 @@ describe("permission prompt rendering", () => {
             line.includes(" Allow session ") &&
             line.includes(" Allow in future sessions… ") &&
             line.includes(" Reject ") &&
-            line.endsWith("↑/↓ select · enter confirm · esc deny"),
+            line.endsWith("←/→/↑/↓ select · enter confirm · esc deny"),
         ),
     ).toBe(true);
     expect(lines.map(stripTerminalSequences).join("\n")).not.toContain("Allow reads and writes");

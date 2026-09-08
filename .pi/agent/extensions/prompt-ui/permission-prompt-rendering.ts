@@ -112,7 +112,7 @@ export function renderPermissionPromptLines(
     .map(parseOption)
     .filter((option): option is ParsedOption => option !== undefined)
     .filter((option) => compactOptionLabel(option.label) !== "Allow both");
-  const hint = theme.fg("muted", "↑/↓ select · enter confirm · esc deny");
+  const hint = theme.fg("muted", "←/→/↑/↓ select · enter confirm · esc deny");
   const optionRows = renderOptionRows(options, width, theme);
   const actionRows =
     optionRows.length === 1

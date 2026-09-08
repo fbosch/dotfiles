@@ -94,13 +94,13 @@ class InlineDockDialog implements Component {
   }
 
   handleInput(data: string): void {
-    // The upstream prompt already handles j/k; only add h/l while choices are active so reason input remains normal text.
+    // Translate horizontal aliases only while the decision list is visible so reason text remains editable.
     if (this.permissionDecisionVisible) {
-      if (matchesKey(data, "h")) {
+      if (matchesKey(data, "h") || matchesKey(data, "left")) {
         this.component.handleInput?.("k");
         return;
       }
-      if (matchesKey(data, "l")) {
+      if (matchesKey(data, "l") || matchesKey(data, "right")) {
         this.component.handleInput?.("j");
         return;
       }

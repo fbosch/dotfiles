@@ -6,7 +6,7 @@
   "margin-right": 4,
   "margin-bottom": 4,
   "exclusive": false,
-  "start_hidden": false,
+  "start_hidden": true,
   "on-sigusr1": "show",
   "on-sigusr2": "hide",
   "passthrough": false,

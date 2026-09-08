@@ -46,7 +46,9 @@
       "~/.codex/auth.json": "deny",
       "~/.pi/agent/auth.json": "deny",
       "~/dotfiles/.pi/agent/auth.json": "deny",
-      "~/.local/share/opencode/auth.json": "deny"
+      "~/.local/share/opencode/auth.json": "deny",
+      "/home/fbb/dotfiles/.pi/agent/patches/*": "allow",
+      "/home/fbb/dotfiles/node_modules/@gotgenes/pi-permission-system/src/authority/*": "allow"
     },
     "path_write": {
       "*/.git": "ask",
@@ -147,7 +149,6 @@
       "true": "allow",
       "false": "allow",
       "echo *": "allow",
-      "printf *": "allow",
       "test *": "allow",
       "command -v *": "allow",
       "uname *": "allow",
@@ -166,7 +167,6 @@
       "dirname *": "allow",
       "realpath *": "allow",
       "which *": "allow",
-      "grep *": "allow",
       "egrep *": "allow",
       "fgrep *": "allow",
       "git status": "allow",
@@ -216,7 +216,21 @@
       "systemctl soft-reboot*": "deny",
       "mktemp *": "allow",
       "journalctl *": "allow",
-      ".agents/skills/skill-creator/scripts/init_skill.py *": "allow"
+      ".agents/skills/skill-creator/scripts/init_skill.py *": "allow",
+      "printf *": "allow",
+      "hyprctl *": "allow",
+      "git grep *": "allow",
+      "jq *": "allow",
+      "pgrep *": "allow",
+      "waybar *": "allow",
+      "grep *": "allow",
+      "git diff *": "allow",
+      "hostname": "allow",
+      "sed *": "allow",
+      "find *": "allow",
+      "git log *": "allow",
+      "gh run *": "allow",
+      "git show *": "allow"
     },
     "skill": "allow",
     "external_directory_read": {
@@ -225,7 +239,10 @@
       "/tmp": "allow",
       "/tmp/*": "allow",
       "~/.config/opencode/*": "allow",
-      "/dev/shm/opencode-window-screenshots/*": "allow"
+      "/dev/shm/opencode-window-screenshots/*": "allow",
+      "/nix/*": "allow",
+      "/home/fbb/*": "allow",
+      "/home/*": "allow"
     },
     "external_directory_write": {
       "*": "ask",
@@ -249,6 +266,12 @@
     },
     "figma_parse_url": {
       "*": "allow"
+    },
+    "figma_get_implementation_context": {
+      "*": "allow"
+    },
+    "external_directory": {
+      "/nix/store/*": "allow"
     }
   }
 }

@@ -231,6 +231,12 @@ local cold = run_scenario({
 		{
 			message = "layer-opened",
 			before = function(scenario)
+				scenario.layers = waybar_layers(0)
+			end,
+		},
+		{
+			message = "layer-opened",
+			before = function(scenario)
 				scenario.layers = waybar_layers(1)
 			end,
 		},
@@ -238,10 +244,16 @@ local cold = run_scenario({
 	},
 })
 assert(count_matching(cold.commands, "uwsm%-app %-s s") == 1)
-assert(count_matching(cold.commands, "waybar%-process%.sh signal USR1") == 0)
+assert(count_matching(cold.commands, "waybar%-process%.sh signal USR1") == 1)
 assert(command_index(cold.commands, "waybar%-show") < command_index(cold.commands, "uwsm%-app"))
 assert(cold.pending_state == nil)
-assert(cold.responses[1] == "ok" and cold.responses[2] == "ok" and cold.responses[3] == "ok")
+assert(
+	cold.responses[1] == "ok"
+		and cold.responses[2] == "ok"
+		and cold.responses[3] == "ok"
+		and cold.responses[4] == "ok"
+		and cold.responses[5] == "ok"
+)
 
 local warm = run_scenario({
 	layers = waybar_layers(0),

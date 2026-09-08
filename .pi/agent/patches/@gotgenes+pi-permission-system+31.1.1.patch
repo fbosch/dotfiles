@@ -402,7 +402,7 @@ index da85a31..2ce9023 100644
  
  export type PermissionForwardingLocation = {
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
-index a05f807..57281c8 100644
+index a05f807..2b9f3cb 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
 @@ -93,12 +93,17 @@ export async function requestPermissionDecision(
@@ -485,13 +485,14 @@ index a05f807..57281c8 100644
        (text) => this.theme.fg("warning", text),
      );
    }
-@@ -317,7 +335,15 @@ class PermissionPromptComponent implements Component {
+@@ -317,7 +335,17 @@ class PermissionPromptComponent implements Component {
    private toEvent(data: string): PromptEvent | undefined {
 -    if (matchesKey(data, "up") || matchesKey(data, "k")) {
 +    if (
 +      matchesKey(data, "up") ||
 +      matchesKey(data, "k") ||
-+      matchesKey(data, "h")
++      matchesKey(data, "h") ||
++      matchesKey(data, "left")
 +    ) {
        return { type: "nav", direction: "up" };
      }
@@ -499,7 +500,8 @@ index a05f807..57281c8 100644
 +    if (
 +      matchesKey(data, "down") ||
 +      matchesKey(data, "j") ||
-+      matchesKey(data, "l")
++      matchesKey(data, "l") ||
++      matchesKey(data, "right")
 +    ) {
        return { type: "nav", direction: "down" };
      }

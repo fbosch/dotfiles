@@ -252,6 +252,12 @@ end
 local function complete_mapped_launch(observed_visible)
 	waybar_mapped = true
 	if desired_visible then
+		-- Reveal after the hidden cold map so the exclusive-zone shift starts with the slide.
+		if not signal_waybar("USR1") then
+			effective_visible = observed_visible
+			notify_pip(observed_visible)
+			return false, "error: signal-failed"
+		end
 		effective_visible = true
 		if not publish_visibility_state(true) or not finish_launch_state() then
 			return false, "error: state-publication-failed"
@@ -281,10 +287,13 @@ local function reconcile_mapped_waybar(observed_visible)
 		publish_visibility_state(intent)
 	end
 	desired_visible = intent
-	if not signal_waybar(intent and "USR1" or "USR2") then
-		effective_visible = observed_visible
-		notify_pip(observed_visible)
-		return false, "error: signal-failed"
+	-- Waybar emits one layer-opened event per output; avoid restarting a global reveal.
+	if observed_visible ~= intent then
+		if not signal_waybar(intent and "USR1" or "USR2") then
+			effective_visible = observed_visible
+			notify_pip(observed_visible)
+			return false, "error: signal-failed"
+		end
 	end
 	effective_visible = intent
 	notify_pip(intent)
