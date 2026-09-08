@@ -101,7 +101,6 @@ function analyzeObjectArray(items: readonly unknown[], path: ToonPath): ToonCand
   };
 }
 
-
 export function findToonCandidates(value: unknown, jsonLength: number): ToonCandidateAnalysis {
   if (jsonLength < MIN_JSON_LENGTH) return { candidates: [], recommended: [] };
 

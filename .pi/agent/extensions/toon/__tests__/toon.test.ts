@@ -65,9 +65,7 @@ describe("TOON transformer", () => {
 
     expect(json.length).toBeGreaterThanOrEqual(256);
     expect(
-      transformer.transformResult(
-        resultEvent({ content: [{ type: "text", text: json }] }),
-      ),
+      transformer.transformResult(resultEvent({ content: [{ type: "text", text: json }] })),
     ).toBeUndefined();
   });
 
@@ -204,7 +202,7 @@ describe("TOON transformer", () => {
   test("does not rewrite quote-like text inside a shell comment", () => {
     const transformer = createToonTransformer("bash");
     const prettyJson = JSON.stringify(
-      { values: Array.from({ length: 40 }, () => "$(printf COMMENT_PWNED)") },
+      { values: Array.from({ length: 40 }, () => ({ value: "$(printf COMMENT_PWNED)" })) },
       undefined,
       2,
     );
