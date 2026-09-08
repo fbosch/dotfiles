@@ -116,7 +116,6 @@ function M.load_selectors(path)
 					and selector.pattern == "^" .. pip.title .. "$"
 					and per_monitor == false
 					and restore_monitor == true
-					and restore_size ~= false
 				)
 			local valid_exclude = exclude == nil
 				or (

@@ -263,7 +263,7 @@ describe("window-state rules", function()
 		assert.equal("pip", pip_selector.geometry_authority)
 		assert.is_false(pip_selector.per_monitor)
 		assert.is_true(pip_selector.restore_monitor)
-		assert.is_true(pip_selector.restore_size)
+		assert.is_false(pip_selector.restore_size)
 		assert.is_false(pip_selector.force_windowed)
 		assert.are.same(
 			{ "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
@@ -305,7 +305,7 @@ describe("window-state rules", function()
 
 			local rule = assert(generated_rule(options.rules_lua_file, nil))
 			assert.equal(expected_move, rule.effects.move)
-			assert.equal("640 360", rule.effects.size)
+			assert.is_nil(rule.effects.size)
 		end
 	end)
 

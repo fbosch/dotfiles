@@ -221,12 +221,12 @@ local function abandon_launch(message)
 	log(message)
 end
 
-local function begin_launch()
+local function begin_launch(visible)
 	launch_requested_at = now_ms()
 	launch_timeout_reported = false
-	desired_visible = true
-	effective_visible = true
-	if not publish_launch_state(true) then
+	desired_visible = visible
+	effective_visible = visible
+	if not publish_launch_state(visible) then
 		abandon_launch("Waybar launch was not attempted because ownership state could not be recorded")
 		return false
 	end
@@ -247,6 +247,16 @@ local function begin_launch()
 		return false
 	end
 	return true
+end
+
+local function prewarm_waybar()
+	if waybar_mapped or launch_requested_at or waybar_process_running() then
+		return false, "ok"
+	end
+	if not begin_launch(false) then
+		return false, "error: launch-failed"
+	end
+	return false, "ok"
 end
 
 local function complete_mapped_launch(observed_visible)
@@ -341,7 +351,7 @@ local function show_waybar()
 	end
 
 	effective_visible = true
-	if not begin_launch() then
+	if not begin_launch(true) then
 		return false, "error: launch-failed"
 	end
 	return false, "ok"
@@ -419,6 +429,7 @@ end
 
 local control_handlers = {
 	show = show_waybar,
+	prewarm = prewarm_waybar,
 	hold = function()
 		super_held = true
 		local should_quit, response = show_waybar()

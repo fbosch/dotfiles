@@ -17,6 +17,7 @@ local function control(message)
 end
 
 M.hold = control("hold")
+M.prewarm = control("prewarm")
 M.release = control("release")
 
 return M

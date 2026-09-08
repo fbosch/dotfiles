@@ -161,7 +161,7 @@ describe("window-state publication", function()
 			geometry_authority = "pip",
 			per_monitor = false,
 			restore_monitor = true,
-			restore_size = true,
+			restore_size = false,
 			persist_tags = { "pip-top-left", "pip-top-right", "pip-bottom-left", "pip-bottom-right" },
 		}
 		local selectors = { pip_selector, selector("Test") }
@@ -214,7 +214,7 @@ describe("window-state publication", function()
 		assert.same({ "pip-bottom-right" }, pip_rule.tags)
 		assert.equal("+pip-bottom-right", pip_rule.effects.tag)
 		assert.equal("(monitor_w-window_w-15) (monitor_h-window_h-15)", pip_rule.effects.move)
-		assert.equal("640 360", pip_rule.effects.size)
+		assert.is_nil(pip_rule.effects.size)
 
 		local cleanup_tags = {}
 		for _, rule in ipairs(rules) do

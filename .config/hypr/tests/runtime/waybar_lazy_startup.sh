@@ -46,6 +46,10 @@ if grep -Fq 'session("waybar")' "$hypr_dir/autostart.lua"; then
   exit 1
 fi
 grep -Fq '"start_hidden": true' "$repo_root/.config/waybar/config"
+grep -Fq 'M.prewarm = control("prewarm")' "$hypr_dir/actions/waybar.lua"
+grep -Fq 'bind.register(main("SUPER_L"), waybar.prewarm)' "$hypr_dir/keybinds.lua"
+grep -Fq 'prewarm = prewarm_waybar' "$hypr_dir/runtime/desktop/waybar-monitor.lua"
+grep -Fq 'hide|prewarm|layer-opened' "$hypr_dir/runtime/desktop/waybar-monitor.sh"
 
 if [[ ! -x "$hypr_dir/runtime/desktop/waybar-process.sh" ]]; then
   printf 'Waybar process helper must be executable\n' >&2

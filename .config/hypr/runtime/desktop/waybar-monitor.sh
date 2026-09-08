@@ -25,9 +25,9 @@ daemon_supervisor_cleanup_paths="$(hypr_instance_path waybar-launch.pending) $(h
 . "${HOME}/.config/hypr/runtime/lib/daemon-supervisor.sh"
 
 case "${1:-}" in
-  show|hold|release|hide|layer-opened|layer-closed)
+  show|hold|release|hide|prewarm|layer-opened|layer-closed)
     if [ "$#" -ne 1 ]; then
-      daemon_supervisor_log "usage: ${0##*/} [start|restart|show|hold|release|hide]"
+      daemon_supervisor_log "usage: ${0##*/} [start|restart|show|hold|release|hide|prewarm]"
       exit 2
     fi
     daemon_supervisor_send "$1"

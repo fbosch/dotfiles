@@ -51,6 +51,7 @@ local function release_mouse_modifier()
 end
 
 -- Window switching
+bind.register(main("SUPER_L"), waybar.prewarm)
 bind.register(
 	main("SUPER_L"),
 	-- Keep the Waybar toggle out of the gaming workspace.

@@ -255,6 +255,31 @@ assert(
 		and cold.responses[5] == "ok"
 )
 
+local prewarm = run_scenario({
+	process_starts = true,
+	steps = {
+		{ message = "prewarm" },
+		{
+			message = "layer-opened",
+			before = function(scenario)
+				scenario.layers = waybar_layers(0)
+			end,
+		},
+		{ message = "hold" },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(prewarm.commands, "uwsm%-app %-s s") == 1)
+assert(count_matching(prewarm.commands, "waybar%-process%.sh signal USR2") == 1)
+assert(count_matching(prewarm.commands, "waybar%-process%.sh signal USR1") == 1)
+assert(prewarm.pending_state == nil and prewarm.visibility_state == "shown\n")
+assert(
+	prewarm.responses[1] == "ok"
+		and prewarm.responses[2] == "ok"
+		and prewarm.responses[3] == "ok"
+		and prewarm.responses[4] == "ok"
+)
+
 local warm = run_scenario({
 	layers = waybar_layers(0),
 	steps = {

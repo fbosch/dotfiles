@@ -62,7 +62,7 @@ return {
 		persist_tag_animations = pip.corner_tag_animations,
 		per_monitor = false,
 		restore_monitor = true,
-		restore_size = true,
+		restore_size = false,
 		force_windowed = false,
 	},
 	{ matcher = "match:class", pattern = [=[^com\.github\.tchx84\.Flatseal$]=] },
