@@ -1,5 +1,10 @@
-import type { FormatterCommand, ResolvedFormatterSettings } from "../formatter/settings";
-import type { LspServerSettings, ResolvedLspSettings } from "../lsp/settings";
+import { basename, extname } from "node:path";
+import {
+  type FormatterCommand,
+  matchesFormatterRule,
+  type ResolvedFormatterSettings,
+} from "../formatter/settings";
+import type { LspLanguage, LspServerSettings, ResolvedLspSettings } from "../lsp/settings";
 import { sanitizeHeaderField } from "./sanitize";
 
 export const CANDIDATE_LIMITS = {
@@ -7,6 +12,7 @@ export const CANDIDATE_LIMITS = {
   configuredEntries: 256,
   markersPerEntry: 16,
   displayedCandidates: 64,
+  repositoryFiles: 4_096,
 } as const;
 
 export type CandidateKind = "formatter" | "lsp";
@@ -17,7 +23,12 @@ export type CandidateState =
   | "none"
   | "unavailable"
   | "ready";
-export type CandidateOverflow = "ancestors" | "configured-entries" | "markers" | "candidates";
+export type CandidateOverflow =
+  | "ancestors"
+  | "configured-entries"
+  | "files"
+  | "markers"
+  | "candidates";
 
 export interface CandidateAncestor {
   readonly markers?: readonly string[];
@@ -26,6 +37,8 @@ export interface CandidateAncestor {
 
 export interface CandidateInspectionInput {
   readonly ancestors: readonly CandidateAncestor[];
+  readonly files?: readonly string[];
+  readonly filesTruncated?: boolean;
   readonly formatter?: ResolvedFormatterSettings;
   readonly lsp?: ResolvedLspSettings;
   readonly markerReader?: (directory: string, marker: string) => boolean;
@@ -63,8 +76,22 @@ export function inspectToolCandidates(input: CandidateInspectionInput): Candidat
   const ancestors = input.ancestors.slice(0, CANDIDATE_LIMITS.ancestors);
   const ancestorOverflow = input.ancestors.length > CANDIDATE_LIMITS.ancestors;
   return {
-    formatter: inspectFormatters(input.formatter, ancestors, input.markerReader, ancestorOverflow),
-    lsp: inspectLsp(input.lsp, ancestors, input.markerReader, ancestorOverflow),
+    formatter: inspectFormatters(
+      input.formatter,
+      input.files,
+      ancestors,
+      input.markerReader,
+      ancestorOverflow,
+      input.filesTruncated === true,
+    ),
+    lsp: inspectLsp(
+      input.lsp,
+      input.files,
+      ancestors,
+      input.markerReader,
+      ancestorOverflow,
+      input.filesTruncated === true,
+    ),
   };
 }
 
@@ -96,16 +123,20 @@ export function formatCandidateView(view: CandidateViewModel): string {
 
 function inspectFormatters(
   settings: ResolvedFormatterSettings | undefined,
+  files: readonly string[] | undefined,
   ancestors: readonly CandidateAncestor[],
   markerReader: CandidateInspectionInput["markerReader"],
   ancestorOverflow: boolean,
+  filesTruncated: boolean,
 ): CandidateResult {
   if (settings === undefined) return fixedResult("unavailable");
   if (settings.warnings.length > 0) return fixedResult("invalid-settings");
 
   const collector = createCollector(ancestorOverflow);
+  if (filesTruncated) collector.overflow("files");
   let entries = 0;
   for (const rule of settings.rules) {
+    if (files !== undefined && !files.some((file) => matchesFormatterRule(rule, file))) continue;
     for (const command of rule.commands) {
       if (entries >= CANDIDATE_LIMITS.configuredEntries) {
         collector.overflow("configured-entries");
@@ -122,22 +153,38 @@ function inspectFormatters(
 
 function inspectLsp(
   settings: ResolvedLspSettings | undefined,
+  files: readonly string[] | undefined,
   ancestors: readonly CandidateAncestor[],
   markerReader: CandidateInspectionInput["markerReader"],
   ancestorOverflow: boolean,
+  filesTruncated: boolean,
 ): CandidateResult {
   if (settings === undefined) return fixedResult("unavailable");
   if (settings.warnings.length > 0) return fixedResult("invalid-settings");
 
   const collector = createCollector(ancestorOverflow);
+  if (filesTruncated) collector.overflow("files");
   for (const [index, server] of settings.servers.entries()) {
     if (index >= CANDIDATE_LIMITS.configuredEntries) {
       collector.overflow("configured-entries");
       return collector.result();
     }
+    if (
+      files !== undefined &&
+      !server.languages.some((language) => files.some((file) => languageApplies(language, file)))
+    ) {
+      continue;
+    }
     if (serverApplies(server, ancestors, markerReader, collector)) collector.add(server.id);
   }
   return collector.result();
+}
+
+function languageApplies(language: LspLanguage, filePath: string): boolean {
+  return (
+    language.extensions.includes(extname(filePath)) ||
+    language.fileNames.includes(basename(filePath))
+  );
 }
 
 function formatterCommandApplies(

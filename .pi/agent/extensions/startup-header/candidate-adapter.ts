@@ -1,6 +1,10 @@
+import { execFile } from "node:child_process";
 import { existsSync, realpathSync } from "node:fs";
 import { dirname, isAbsolute, relative, resolve } from "node:path";
+import { promisify } from "node:util";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ResolvedFormatterSettings } from "../formatter/settings";
+import type { ResolvedLspSettings } from "../lsp/settings";
 import {
   CANDIDATE_LIMITS,
   type CandidateAncestor,
@@ -9,6 +13,9 @@ import {
 } from "./candidates";
 import type { WorkspaceIdentity } from "./workspace";
 
+const execFileAsync = promisify(execFile);
+const FILE_LIST_MAX_BUFFER = 512 * 1024;
+const MAX_TARGETED_PATHSPECS = 8;
 export async function inspectConfiguredCandidates(
   context: ExtensionContext,
   workspace: WorkspaceIdentity | undefined,
@@ -25,10 +32,19 @@ export async function inspectConfiguredCandidates(
       import("../formatter/index"),
       import("../lsp/index"),
     ]);
+    const formatter = loadFormatterSettings(context);
+    const lsp = loadLspSettings(context);
+    const ancestors = buildAncestorChain(context.cwd, workspace.root);
+    const repositoryFiles = await discoverRepositoryFiles(
+      workspace.root,
+      candidatePathspecs(formatter, lsp, ancestors),
+    );
     return inspectToolCandidates({
-      ancestors: buildAncestorChain(context.cwd, workspace.root),
-      formatter: loadFormatterSettings(context),
-      lsp: loadLspSettings(context),
+      ancestors,
+      files: repositoryFiles.files,
+      filesTruncated: repositoryFiles.truncated,
+      formatter,
+      lsp,
       markerReader: markerExistsWithinDirectory,
       projectTrusted: true,
     });
@@ -56,6 +72,85 @@ export function markerExistsWithinDirectory(directory: string, marker: string): 
   } catch {
     return false;
   }
+}
+function markersExist(
+  markers: readonly string[],
+  ancestors: readonly CandidateAncestor[],
+): boolean {
+  return ancestors.some((ancestor) =>
+    markers
+      .slice(0, CANDIDATE_LIMITS.markersPerEntry)
+      .some((marker) => markerExistsWithinDirectory(ancestor.path, marker)),
+  );
+}
+
+export function candidatePathspecs(
+  formatter: ResolvedFormatterSettings,
+  lsp: ResolvedLspSettings,
+  ancestors: readonly CandidateAncestor[],
+): readonly string[] | undefined {
+  const extensions = new Set<string>();
+  const fileNames = new Set<string>();
+  for (const rule of formatter.rules) {
+    if (
+      !rule.commands.some(
+        (command) =>
+          command.requireRootMarker === false || markersExist(command.rootMarkers, ancestors),
+      )
+    ) {
+      continue;
+    }
+    for (const extension of rule.extensions) extensions.add(extension);
+    for (const fileName of rule.fileNames) fileNames.add(fileName);
+  }
+  for (const server of lsp.servers) {
+    if (!markersExist(server.rootMarkers, ancestors)) continue;
+    for (const language of server.languages) {
+      for (const extension of language.extensions) extensions.add(extension);
+      for (const fileName of language.fileNames) fileNames.add(fileName);
+    }
+  }
+  const safeLiteral = /^[A-Za-z0-9._+-]+$/u;
+  if (
+    [...extensions].some(
+      (extension) => !extension.startsWith(".") || !safeLiteral.test(extension),
+    ) ||
+    [...fileNames].some((fileName) => !safeLiteral.test(fileName))
+  ) {
+    return undefined;
+  }
+  return Object.freeze([
+    ...[...extensions].sort().map((extension) => `:(glob)**/*${extension}`),
+    ...[...fileNames].sort().map((fileName) => `:(glob)**/${fileName}`),
+  ]);
+}
+
+export async function discoverRepositoryFiles(
+  root: string,
+  pathspecs: readonly string[] | undefined,
+): Promise<{ readonly files: readonly string[]; readonly truncated: boolean }> {
+  if (pathspecs?.length === 0) return { files: Object.freeze([]), truncated: false };
+  // Git's pathspec evaluation costs more than parsing the full list once the set grows large.
+  const targetedPathspecs =
+    pathspecs !== undefined && pathspecs.length <= MAX_TARGETED_PATHSPECS ? pathspecs : undefined;
+  const { stdout } = await execFileAsync(
+    "git",
+    [
+      "-C",
+      root,
+      "ls-files",
+      "--cached",
+      "--others",
+      "--exclude-standard",
+      ...(targetedPathspecs === undefined ? [] : ["--", ...targetedPathspecs]),
+    ],
+    { encoding: "utf8", maxBuffer: FILE_LIST_MAX_BUFFER, timeout: 1_000 },
+  );
+  const allFiles = stdout.split(/\r?\n/u).filter((file) => file !== "");
+  return {
+    files: Object.freeze(allFiles.slice(0, CANDIDATE_LIMITS.repositoryFiles)),
+    truncated: allFiles.length > CANDIDATE_LIMITS.repositoryFiles,
+  };
 }
 
 export function buildAncestorChain(cwd: string, root: string): CandidateAncestor[] {

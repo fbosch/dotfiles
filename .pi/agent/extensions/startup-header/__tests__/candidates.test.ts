@@ -50,6 +50,7 @@ describe("startup header tool candidates", () => {
     const result = inspectToolCandidates(
       input({
         formatter: formatter([command("biome", true, ["biome.json"])]),
+        files: ["src/index.ts"],
         lsp: lsp([server("typescript", ["package.json"])]),
         ancestors: [
           { path: "/repo/src", markers: ["biome.json"] },
@@ -59,6 +60,20 @@ describe("startup header tool candidates", () => {
     );
     expect(result.formatter).toMatchObject({ state: "ready", candidates: ["biome"] });
     expect(result.lsp).toMatchObject({ state: "ready", candidates: ["typescript"] });
+  });
+
+  test("excludes marker-matched tools without compatible repository files", () => {
+    const result = inspectToolCandidates(
+      input({
+        files: ["README.md"],
+        formatter: formatter([command("biome", true, ["package.json"])]),
+        lsp: lsp([server("typescript", ["package.json"])]),
+        ancestors: [{ path: "/repo", markers: ["package.json"] }],
+      }),
+    );
+
+    expect(result.formatter).toMatchObject({ state: "none", candidates: [] });
+    expect(result.lsp).toMatchObject({ state: "none", candidates: [] });
   });
 
   test("keeps unconditional formatter commands and first-available fallback order without duplicates", () => {
