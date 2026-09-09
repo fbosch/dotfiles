@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   analyzeDangerousCommand,
+  areDangerousCommandTargetsSafeInLocations,
   dangerousCommandMatch,
   isDangerousCommandSafeInLocations,
 } from "../dangerous-command";
@@ -72,6 +73,35 @@ describe("dangerousCommandMatch", () => {
       "rm -rf /tmp/example && echo done",
     ]) {
       expect(await isSafe(command), command).toBe(false);
+    }
+  });
+  test("allows literal destructive targets below the working directory", async () => {
+    const workingDirectory = "/workspace/project";
+    const safeLocations = [workingDirectory];
+
+    for (const command of [
+      "rm .pi/agent/modes.json",
+      "rm ./generated && git diff -- .pi/agent/settings.json",
+      "rm -rf /workspace/project/nested/output",
+    ]) {
+      expect(
+        await areDangerousCommandTargetsSafeInLocations(command, safeLocations, workingDirectory),
+        command,
+      ).toBe(true);
+    }
+
+    for (const command of [
+      "rm .",
+      "rm ../outside",
+      "rm -rf /workspace/project",
+      'rm "$TARGET"',
+      "cd /tmp && rm generated",
+      "rm /workspace/project/generated /outside/file",
+    ]) {
+      expect(
+        await areDangerousCommandTargetsSafeInLocations(command, safeLocations, workingDirectory),
+        command,
+      ).toBe(false);
     }
   });
 

@@ -58,7 +58,7 @@ independent, so disposing one consumer cannot remove another consumer's access.
 
 ## Automatic permission mode
 
-The `session-permissions-mode` authorizer is exempt from the package's path-family delegation cap. Permission gates resolve policy first, so it receives only `ask` decisions. In normal mode it allows those requests unless the Codex detector matches a dangerous command or Bash parsing is inconclusive. Strict mode defers every request to the prompt. Explicit `deny` rules still block before authorization, and other authorizers retain the delegation cap.
+The `session-permissions-mode` authorizer is exempt from the package's path-family delegation cap. Permission gates resolve policy first, so it receives only `ask` decisions. In normal mode it allows ordinary requests and literal destructive commands whose targets remain below the active working directory; configured build agents also retain the `/tmp` safe root. It defers destructive commands with external or ambiguous targets and unclassifiable Bash. Strict mode defers every request to the prompt. Explicit `deny` rules still block before authorization, and other authorizers retain the delegation cap.
 
 ## Permission-system imports
 

@@ -1,5 +1,32 @@
 # Chart extension
 
+## Line charts
+
+The `chart` tool renders one line series. Use an explicit x-axis mode:
+
+```json
+{
+  "type": "line",
+  "xType": "numeric",
+  "title": "Build time",
+  "xLabel": "Commit",
+  "yLabel": "Seconds",
+  "data": [
+    { "x": 0, "y": 42 },
+    { "x": 1, "y": null },
+    { "x": 2, "y": 37 }
+  ]
+}
+```
+
+`xType: "numeric"` requires finite numeric `x` values. `xType: "temporal"` requires UTC ISO dates (`YYYY-MM-DD`) or UTC datetimes ending in `Z`. Values must be strictly increasing. The tool rejects duplicate or out-of-order values rather than sorting them.
+
+Each `y` is a finite number or `null`. A `null` creates a gap in the line. Charts need 2 to 200 rows and at least one numeric y value. `markers` is optional and defaults to `false`; set it to `true` to draw a marker for every numeric y value. `title`, `xLabel`, and `yLabel` are optional.
+
+The y domain follows the observed values with modest padding. It does not force zero into the range. Numeric and temporal x positions use a linear scale, so elapsed time and numeric distance are preserved.
+
+## Font configuration
+
 Configure the chart font in Pi’s global `~/.pi/agent/settings.json`, or in a trusted project’s `.pi/settings.json`:
 
 ```json

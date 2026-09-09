@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import {
   analyzeDangerousCommand,
-  isDangerousCommandSafeInLocations,
+  areDangerousCommandTargetsSafeInLocations,
 } from "./pi-permission-system/dangerous-command";
 
 export const PERMISSIONS_STRICT_STATUS_KEY = "permissions-strict";
@@ -149,13 +149,16 @@ async function isParseableShell(command: string): Promise<boolean> {
 }
 
 /**
- * Normal mode allows policy prompts unless Codex identifies a dangerous Bash
- * command, except when a build agent's dangerous command has path evidence
- * confined to one of the shared safe locations. Strict mode is checked first
- * by the authorizer and always defers. Missing details and parser/import
- * failures remain interactive.
+ * Normal mode allows ordinary policy asks automatically. Dangerous Bash is also
+ * allowed when every literal destructive target stays below the session CWD, or
+ * when a build agent uses one of the shared safe roots. Strict mode is checked
+ * first by the authorizer and always defers. Missing details, ambiguous paths,
+ * and parser/import failures remain interactive.
  */
-export async function canAutoApprovePermission(details: unknown): Promise<boolean> {
+export async function canAutoApprovePermission(
+  details: unknown,
+  workingDirectory = process.cwd(),
+): Promise<boolean> {
   if (!isRecord(details)) return false;
   const surface = permissionSurface(details);
   if (typeof surface !== "string") return false;
@@ -165,16 +168,24 @@ export async function canAutoApprovePermission(details: unknown): Promise<boolea
   const commands = commandTexts(details);
   if (commands.length === 0) return false;
 
+  const safeLocations = [
+    workingDirectory,
+    ...(agentName !== undefined && BUILD_AGENT_NAMES.has(agentName)
+      ? SAFE_DANGEROUS_COMMAND_PATHS
+      : []),
+  ];
+
   try {
     for (const command of new Set(commands)) {
       if (!(await isParseableShell(command))) return false;
       const analysis = await analyzeDangerousCommand(["bash", "-lc", command]);
-      const safeLocationBypass =
-        agentName !== undefined &&
-        BUILD_AGENT_NAMES.has(agentName) &&
+      if (analysis.kind === "unknown") return false;
+      if (
         analysis.kind === "dangerous" &&
-        (await isDangerousCommandSafeInLocations(command, analysis, SAFE_DANGEROUS_COMMAND_PATHS));
-      if (analysis.kind !== "no_match" && !safeLocationBypass) return false;
+        !(await areDangerousCommandTargetsSafeInLocations(command, safeLocations, workingDirectory))
+      ) {
+        return false;
+      }
     }
     return true;
   } catch {
@@ -191,6 +202,7 @@ async function registerSessionAuthorizer(
   sessionId: string,
   isCurrent: () => boolean,
   strictEnabled: () => boolean,
+  workingDirectory: () => string,
 ): Promise<() => void> {
   const serviceModule = (await import(
     PERMISSION_SERVICE_MODULE_URL
@@ -202,7 +214,7 @@ async function registerSessionAuthorizer(
 
   return permissions.registerAuthorizer(SESSION_PERMISSIONS_AUTHORIZER, async (details) => {
     if (!isCurrent() || strictEnabled()) return { kind: "defer" };
-    const allowed = await canAutoApprovePermission(details);
+    const allowed = await canAutoApprovePermission(details, workingDirectory());
     return isCurrent() && !strictEnabled() && allowed ? { kind: "allow" } : { kind: "defer" };
   });
 }
@@ -241,6 +253,7 @@ export function registerPermissionsMode(pi: ExtensionAPI): void {
         sessionId === activeSessionId &&
         registrationState === "registered",
       () => strictEnabled,
+      () => activeContext?.cwd ?? process.cwd(),
     )
       .then((dispose) => {
         if (generation !== lifecycleGeneration || sessionId !== activeSessionId) {
@@ -297,7 +310,7 @@ export function registerPermissionsMode(pi: ExtensionAPI): void {
         ctx.ui.notify(
           strictEnabled
             ? "Strict permissions enabled. Every permission request requires confirmation."
-            : "Normal permissions enabled. Only dangerous or unclassifiable commands require confirmation.",
+            : "Normal permissions enabled. Destructive commands outside approved roots and unclassifiable commands require confirmation.",
           "info",
         );
       } catch (error) {

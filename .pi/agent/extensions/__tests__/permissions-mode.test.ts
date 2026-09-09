@@ -179,19 +179,22 @@ describe("permissions mode", () => {
       { surface: "bash", command: "bash -lc 'sudo rm --force /tmp/example'" },
       { surface: "bash", command: "if then" },
       { surface: "bash", command: "bash -lc 'if then'" },
-      {
+      { surface: "bash" },
+      {},
+    ]) {
+      expect(await permissions.verdict(details)).toEqual({ kind: "defer" });
+    }
+
+    expect(
+      await permissions.verdict({
         surface: "bash",
         command: "sleep 0",
         payload: {
           request: { value: "sleep 0" },
           evidence: [{ label: "full command", text: "sleep 0; rm -rf ./victim", detail: null }],
         },
-      },
-      { surface: "bash" },
-      {},
-    ]) {
-      expect(await permissions.verdict(details)).toEqual({ kind: "defer" });
-    }
+      }),
+    ).toEqual({ kind: "allow" });
   });
 
   test("normal mode auto-approves rm under the shared safe root for build agents", async () => {
@@ -240,6 +243,29 @@ describe("permissions mode", () => {
     }
   });
 
+  test("normal mode auto-approves literal destructive targets inside the CWD", async () => {
+    const workingDirectory = "/workspace/project";
+
+    for (const agentName of [undefined, "explore", "research", "general"]) {
+      for (const command of [
+        "rm .pi/agent/modes.json",
+        "rm ./generated && git diff -- .pi/agent/settings.json",
+      ]) {
+        expect(
+          await canAutoApprovePermission({ surface: "bash", command, agentName }, workingDirectory),
+          `${agentName ?? "primary"}: ${command}`,
+        ).toBe(true);
+      }
+    }
+
+    for (const command of ["rm ../outside", "rm .", "rm /workspace/project"]) {
+      expect(
+        await canAutoApprovePermission({ surface: "bash", command }, workingDirectory),
+        command,
+      ).toBe(false);
+    }
+  });
+
   test("strict mode defers every permission request until normal mode is restored", async () => {
     const sessionId = "permissions-strict";
     const statuses: Array<[string, string | undefined]> = [];
@@ -256,8 +282,7 @@ describe("permissions mode", () => {
     expect(
       await permissions.verdict({
         surface: "bash",
-        command: "rm -rf /tmp/example",
-        agentName: "general",
+        command: "rm .pi/agent/modes.json",
       }),
     ).toEqual({ kind: "defer" });
     expect(statuses.at(-1)).toEqual([
@@ -270,7 +295,7 @@ describe("permissions mode", () => {
     expect(statuses.at(-1)).toEqual([PERMISSIONS_STRICT_STATUS_KEY, undefined]);
     expect(notifications.map(([message]) => message)).toEqual([
       "Strict permissions enabled. Every permission request requires confirmation.",
-      "Normal permissions enabled. Only dangerous or unclassifiable commands require confirmation.",
+      "Normal permissions enabled. Destructive commands outside approved roots and unclassifiable commands require confirmation.",
     ]);
     expect(strictStates(harness, sessionId)).toEqual([false, true, false]);
   });

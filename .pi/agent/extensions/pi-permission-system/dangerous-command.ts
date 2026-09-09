@@ -64,15 +64,15 @@ export async function dangerousCommandMatch(
 /**
  * Check whether a dangerous command's path evidence is confined to safe roots.
  *
- * The dangerous-command detector supplies path values for location-scoped rules;
- * this policy helper does not need to know which executable produced the rule.
- * A single fully literal command is required so wrappers, chains, and dynamic
- * targets cannot hide another operation behind the location exception.
+ * Relative targets are resolved against `workingDirectory` when supplied. The
+ * working directory itself is not considered a descendant of a safe root, so
+ * `rm .` and `rm <cwd>` still require confirmation.
  */
 export async function isDangerousCommandSafeInLocations(
   command: string,
   analysis: DangerousCommandAnalysis,
   safeLocations: readonly string[],
+  workingDirectory?: string,
 ): Promise<boolean> {
   const pathValues = analysis.kind === "dangerous" ? analysis.pathValues : undefined;
   if (pathValues === undefined || pathValues.length === 0) return false;
@@ -82,9 +82,78 @@ export async function isDangerousCommandSafeInLocations(
     return false;
   }
 
-  return pathValues.every((target) =>
-    safeLocations.some((location) => isPathDescendant(target, location)),
+  return dangerousPathValuesAreSafe(pathValues, safeLocations, workingDirectory);
+}
+
+/**
+ * Check every literal command in a shell program that contains a dangerous
+ * command. This permits CWD-local destructive commands in a chain such as
+ * `rm ./generated && git diff`, while preserving the stricter single-command
+ * rule for shared safe roots such as `/tmp`.
+ */
+export async function areDangerousCommandTargetsSafeInLocations(
+  command: string,
+  safeLocations: readonly string[],
+  workingDirectory?: string,
+): Promise<boolean> {
+  const parsed = await parseShellLcLiteralCommands(["bash", "-lc", command]);
+  if (
+    parsed.kind !== "parsed" ||
+    parsed.hasUnresolvedCommands ||
+    parsed.commands.length === 0 ||
+    containsDirectoryChange(command)
+  ) {
+    return false;
+  }
+
+  let foundDangerousCommand = false;
+  let allDangerousTargetsInWorkingDirectory = true;
+  for (const literalCommand of parsed.commands) {
+    const analysis = await analyzeDangerousCommand(literalCommand);
+    if (analysis.kind === "unknown") return false;
+    if (analysis.kind !== "dangerous") continue;
+
+    foundDangerousCommand = true;
+    if (!dangerousPathValuesAreSafe(analysis.pathValues, safeLocations, workingDirectory)) {
+      return false;
+    }
+    allDangerousTargetsInWorkingDirectory &&=
+      workingDirectory !== undefined &&
+      dangerousPathValuesAreSafe(analysis.pathValues, [workingDirectory], workingDirectory);
+  }
+
+  return (
+    foundDangerousCommand && (parsed.commands.length === 1 || allDangerousTargetsInWorkingDirectory)
   );
+}
+
+function dangerousPathValuesAreSafe(
+  pathValues: readonly string[] | undefined,
+  safeLocations: readonly string[],
+  workingDirectory?: string,
+): boolean {
+  if (pathValues === undefined || pathValues.length === 0) return false;
+
+  return pathValues.every((target) => {
+    const resolvedTarget = resolveDangerousTarget(target, workingDirectory);
+    return (
+      resolvedTarget !== undefined &&
+      safeLocations.some((location) => isPathDescendant(resolvedTarget, location))
+    );
+  });
+}
+
+function resolveDangerousTarget(target: string, workingDirectory?: string): string | undefined {
+  if (posixPath.isAbsolute(target)) return target;
+  if (workingDirectory === undefined || !posixPath.isAbsolute(workingDirectory)) return undefined;
+  return posixPath.resolve(workingDirectory, target);
+}
+
+function containsDirectoryChange(command: string): boolean {
+  // A relative target cannot be safely resolved after a shell-level `cd`;
+  // conservatively reject the whole auto-approval when one appears. This
+  // also covers literal shell payloads such as `bash -lc 'cd /tmp && rm x'`.
+  return /(?:^|[;&|()'"]|\n)\s*(?:command\s+)?cd(?:\s|$)/.test(command);
 }
 
 async function analyzeDangerousCommandAtDepth(
