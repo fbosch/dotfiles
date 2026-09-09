@@ -12,7 +12,7 @@ import {
   setThemeInstance,
   theme,
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import { YOLO_STATUS_TEXT } from "../../yolo";
+import { PERMISSIONS_STRICT_STATUS_TEXT } from "../../permissions-mode";
 import { PromptEditor, type PromptEditorState } from "../prompt-editor";
 
 const tui = {
@@ -21,7 +21,7 @@ const tui = {
 } as unknown as TUI;
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 
-test("renders YOLO after the thinking level in the model row", () => {
+test("renders strict permissions after the thinking level in the model row", () => {
   setThemeInstance(
     loadThemeFromPath(new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname),
   );
@@ -32,7 +32,7 @@ test("renders YOLO after the thinking level in the model row", () => {
     getWorkingMarker: () => "●",
     getBranch: () => null,
     getProfileName: () => undefined,
-    getStatuses: () => [theme.fg("error", YOLO_STATUS_TEXT)],
+    getStatuses: () => [theme.fg("warning", PERMISSIONS_STRICT_STATUS_TEXT)],
   };
   const editor = new PromptEditor(
     tui,
@@ -52,8 +52,8 @@ test("renders YOLO after the thinking level in the model row", () => {
 
   const rendered = editor.render(100).join("\n");
   expect(stripTerminalSequences(rendered)).toContain(
-    `Build · Test OpenAI · xhigh · ${YOLO_STATUS_TEXT}`,
+    `Build · Test OpenAI · xhigh · ${PERMISSIONS_STRICT_STATUS_TEXT}`,
   );
-  expect(rendered).toContain(`${theme.getFgAnsi("error")}${YOLO_STATUS_TEXT}`);
+  expect(rendered).toContain(`${theme.getFgAnsi("warning")}${PERMISSIONS_STRICT_STATUS_TEXT}`);
   editor.dispose();
 });

@@ -47,6 +47,8 @@ function isBlocked(error: unknown): boolean {
 }
 
 function parseEnvironment(output: string): DirenvEnvironment | undefined {
+  // direnv emits an empty diff when the parent process already has the loaded environment.
+  if (output.trim() === "") return Object.create(null);
   try {
     const parsed: unknown = JSON.parse(output);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return undefined;

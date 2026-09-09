@@ -1,6 +1,6 @@
 ---
 name: ui-writing
-description: Write, implement, or review user-facing interface text for buttons, menus, navigation, settings, dialogs, errors, status and progress feedback, empty states, tooltips, help text, and accessibility labels. Apply during UI implementation whenever visible or assistive copy is added or changed, even when wording is not the explicit task. Use platform, component, design-system, and locale conventions only when the target context establishes them. Do not activate for documentation, code comments, internal identifiers, logs, or commit messages unless the task also includes interface copy.
+description: Write, implement, or review visible and assistive interface text, including labels, navigation, settings, dialogs, errors, progress, empty states, help, and accessibility copy. Apply whenever UI copy changes; not for documentation, comments, logs, internal identifiers, or commit messages.
 ---
 
 # UI Writing

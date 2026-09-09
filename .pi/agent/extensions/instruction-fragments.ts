@@ -6,11 +6,18 @@ import { globalExtensionConfigPath, readJsonConfig } from "../lib/extension-conf
 export const INSTRUCTION_FRAGMENTS_START = "<global_instruction_fragments>";
 export const INSTRUCTION_FRAGMENTS_END = "</global_instruction_fragments>";
 
-export type InstructionFragmentApplicability = "always" | "orchestrator";
+export interface InstructionFragmentToolCondition {
+  any?: string[];
+  all?: string[];
+}
+
+export interface InstructionFragmentCondition {
+  tools: InstructionFragmentToolCondition;
+}
 
 export interface InstructionFragmentConfig {
   path: string;
-  applies: InstructionFragmentApplicability;
+  when?: InstructionFragmentCondition;
 }
 
 export interface LoadedInstructionFragment extends InstructionFragmentConfig {
@@ -30,6 +37,37 @@ function instructionFragmentPath(value: unknown, path: string): string {
   throw new Error(`${path}: expected a non-empty string`);
 }
 
+function toolNames(value: unknown, path: string): string[] {
+  if (Array.isArray(value) === false || value.length === 0) {
+    throw new Error(`${path}: expected a non-empty array`);
+  }
+  return value.map((tool, index) => instructionFragmentPath(tool, `${path}[${index}]`));
+}
+
+function instructionFragmentCondition(value: unknown, path: string): InstructionFragmentCondition {
+  if (isRecord(value) === false) throw new Error(`${path}: expected an object`);
+  const unknownWhenFields = Object.keys(value).filter((field) => field !== "tools");
+  if (unknownWhenFields.length > 0) {
+    throw new Error(`${path}.${unknownWhenFields[0]}: unknown field`);
+  }
+  if (isRecord(value.tools) === false) throw new Error(`${path}.tools: expected an object`);
+  const tools = value.tools;
+
+  const unknownToolFields = Object.keys(tools).filter(
+    (field) => field !== "any" && field !== "all",
+  );
+  if (unknownToolFields.length > 0) {
+    throw new Error(`${path}.tools.${unknownToolFields[0]}: unknown field`);
+  }
+
+  const selectors = ["any", "all"].filter((field) => tools[field] !== undefined);
+  if (selectors.length !== 1) {
+    throw new Error(`${path}.tools: expected exactly one of any or all`);
+  }
+  const selector = selectors[0] as "any" | "all";
+  return { tools: { [selector]: toolNames(tools[selector], `${path}.tools.${selector}`) } };
+}
+
 function parseInstructionFragmentConfig(value: unknown): InstructionFragmentConfig[] {
   if (Array.isArray(value) === false) {
     throw new Error("instruction-fragments config: expected an array");
@@ -38,26 +76,26 @@ function parseInstructionFragmentConfig(value: unknown): InstructionFragmentConf
   return value.map((entry, index) => {
     const path = `instruction-fragments config[${index}]`;
     if (typeof entry === "string") {
-      return { path: instructionFragmentPath(entry, path), applies: "always" };
+      return { path: instructionFragmentPath(entry, path) };
     }
     if (isRecord(entry) === false) {
       throw new Error(`${path}: expected a path string or object`);
     }
 
     const unknownFields = Object.keys(entry).filter(
-      (field) => field !== "path" && field !== "applies",
+      (field) => field !== "path" && field !== "when",
     );
     if (unknownFields.length > 0) {
       throw new Error(`${path}.${unknownFields[0]}: unknown field`);
     }
 
     const fragmentPath = instructionFragmentPath(entry.path, `${path}.path`);
-    const applies = entry.applies ?? "always";
-    if (applies !== "always" && applies !== "orchestrator") {
-      throw new Error(`${path}.applies: expected always or orchestrator`);
-    }
+    const when =
+      entry.when === undefined
+        ? undefined
+        : instructionFragmentCondition(entry.when, `${path}.when`);
 
-    return { path: fragmentPath, applies };
+    return { path: fragmentPath, ...(when === undefined ? {} : { when }) };
   });
 }
 
@@ -75,7 +113,7 @@ function discoverInstructionFragmentConfig(
         return discoverInstructionFragmentConfig(entryPath, path);
       }
       if (entry.isFile() === false || entry.name.endsWith(".md") === false) return [];
-      return [{ path, applies: "always" }];
+      return [{ path }];
     });
 }
 
@@ -157,14 +195,23 @@ export function loadGlobalInstructionFragments(
   return loadConfiguredInstructionFragments(instructionsDirectory, fragmentConfig);
 }
 
+function matchesActiveTools(
+  fragment: LoadedInstructionFragment,
+  activeTools: ReadonlySet<string>,
+): boolean {
+  const tools = fragment.when?.tools;
+  if (tools === undefined) return true;
+  if (tools.any !== undefined) return tools.any.some((tool) => activeTools.has(tool));
+  return tools.all?.every((tool) => activeTools.has(tool)) ?? false;
+}
+
 export function instructionFragmentsForTools(
   fragments: readonly LoadedInstructionFragment[],
   activeTools: readonly string[],
 ): string {
-  // Pi exposes tool capabilities rather than agent roles; the subagent tool identifies the orchestrator.
-  const hasSubagentTool = activeTools.includes("subagent");
+  const activeToolSet = new Set(activeTools);
   return fragments
-    .filter((fragment) => fragment.applies === "always" || hasSubagentTool)
+    .filter((fragment) => matchesActiveTools(fragment, activeToolSet))
     .map((fragment) => fragment.content)
     .join("\n\n");
 }

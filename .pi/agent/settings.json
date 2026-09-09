@@ -39,7 +39,7 @@
     "+extensions/typo-abolish/index.ts",
     "+extensions/webfetch/index.ts",
     "+extensions/websearch.ts",
-    "+extensions/yolo.ts"
+    "+extensions/permissions-mode.ts"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.5",

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 export const PLAN_MODE_STATUS = "Plan";
-export const MODE_CHANGED_EVENT = "pi:mode-changed";
 
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";
@@ -27,6 +26,7 @@ const PLAN_READ_ONLY_TOOL_PREFIXES = ["context7_", "mcp__context7_", "ast-grep_"
 // Child sessions receive their own agent tool list, so track active parent plan sessions explicitly.
 const PLAN_MODE_SESSION_FILES = new Set<string>();
 export type ModeName = "build" | "plan";
+
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 interface ModeConfig {

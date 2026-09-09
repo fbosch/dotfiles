@@ -1,16 +1,6 @@
 ---
 name: tsconfig
-description: |
-  TypeScript tsconfig.json expert. Use when:
-  - Explaining what tsconfig options mean or do
-  - Configuring tsconfig for a specific use case (Node.js app, bundler project, npm library, monorepo, React app, strict mode)
-  - Diagnosing tsconfig-related errors or unexpected behavior (type errors from resolution, module format issues, decorator problems, class field issues)
-  - Comparing tradeoffs between compiler options (e.g., esModuleInterop vs verbatimModuleSyntax, isolatedModules vs verbatimModuleSyntax)
-  - Generating, reviewing, or auditing a tsconfig.json
-  - Understanding how top-level fields (include, exclude, extends, references) work
-  - Choosing between module/moduleResolution combinations
-  - Setting up project references / composite builds
-  - Understanding what @tsconfig/bases packages provide
+description: Configure, explain, review, or debug TypeScript `tsconfig.json`, including module resolution, strictness, emit behavior, decorators, class fields, project references, and app, library, bundler, or monorepo configurations.
 ---
 
 # TSConfig Skill

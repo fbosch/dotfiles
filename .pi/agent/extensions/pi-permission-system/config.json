@@ -4,7 +4,7 @@
   "permissionReviewLog": false,
   "doublePressToConfirm": false,
   "authorizerChain": [
-    "session-yolo"
+    "session-permissions-mode"
   ],
   "piInfrastructureReadPaths": [
     "~/.agents/skills/*",
@@ -67,7 +67,7 @@
       "*/.pi/settings.json": "ask",
       "*/.pi/agent/mcp.json": "ask",
       "*/.pi/mcp.json": "ask",
-      "*/.pi/agent/extensions/yolo.ts": "ask",
+      "*/.pi/agent/extensions/permissions-mode.ts": "ask",
       "*/.pi/agent/agents/*": "ask",
       "*/.pi/agents/*": "ask",
       "*.env": "deny",

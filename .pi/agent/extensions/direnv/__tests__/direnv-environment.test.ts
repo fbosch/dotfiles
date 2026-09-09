@@ -63,6 +63,18 @@ test("loads the nearest envrc inside the repository", async () => {
   });
 });
 
+test("treats an empty successful export as a loaded environment", async () => {
+  const project = await temporaryProject();
+  await writeFile(join(project, ".envrc"), "");
+
+  const result = await loadDirenvEnvironment(project, project, async () => "");
+
+  expect(result).toEqual({
+    status: "loaded",
+    environment: {},
+  });
+});
+
 test("reports blocked envrcs without loading their environment", async () => {
   const project = await temporaryProject();
   await writeFile(join(project, ".envrc"), "");

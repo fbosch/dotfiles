@@ -294,6 +294,30 @@ export function cachedResetCreditStatusForAccount(
   return { ...cached.resetCredits, checkedAt: cached.resetCreditsCheckedAt };
 }
 
+function positionalWindowId(index: number): string {
+  if (index === 0) return "primary";
+  if (index === 1) return "secondary";
+  return `window-${index + 1}`;
+}
+
+function observedUsageWindows(
+  windows: readonly ProviderUsageWindow[] | undefined,
+): ProviderUsageWindow[] {
+  return (windows ?? []).map((window, index) => ({
+    ...window,
+    ...(window.windowId === undefined ? { windowId: positionalWindowId(index) } : {}),
+  }));
+}
+
+function displayUsageWindows(
+  windows: readonly ProviderUsageWindow[] | undefined,
+): UsageWindowStatus[] {
+  return (windows ?? []).map(({ remaining, resetsIn }) => ({
+    remaining,
+    ...(resetsIn === undefined ? {} : { resetsIn }),
+  }));
+}
+
 async function refreshAccount(
   adapter: ProfileProviderAdapter,
   credentialKey: string,
@@ -321,11 +345,8 @@ async function refreshAccount(
       liveUsage = usage;
       liveUsageByCredential.set(credentialKey, usage);
       next.usage = {
-        // The on-disk cache intentionally remains legacy-compatible and has no rich metadata.
-        windows: usage.windows.map(({ remaining, resetsIn }) => ({
-          remaining,
-          ...(resetsIn === undefined ? {} : { resetsIn }),
-        })),
+        // Preserve provider window identity and absolute reset deadlines for the next process.
+        windows: usage.windows,
         ...(usage.availableCreditCount === undefined
           ? {}
           : { availableCount: usage.availableCreditCount }),
@@ -368,7 +389,7 @@ async function refreshAccount(
       ? Date.parse(resetCredits.nextExpiresAt)
       : undefined;
   const profile: AccountResult["profile"] = {
-    usage: next.usage?.windows ?? [],
+    usage: displayUsageWindows(next.usage?.windows),
     ...(availableCount !== undefined ? { availableCount } : {}),
     ...(typeof resetCredits?.nextExpiresAt === "string"
       ? { nextExpiresAt: resetCredits.nextExpiresAt }
@@ -377,7 +398,7 @@ async function refreshAccount(
   };
   if (next.usageCheckedAt !== undefined) {
     const observation: AuthUsageObservation = Object.freeze({
-      windows: Object.freeze(liveUsage?.windows ?? []),
+      windows: Object.freeze(observedUsageWindows(liveUsage?.windows ?? next.usage?.windows)),
       observedAt: next.usageCheckedAt,
       staleAt: next.usageCheckedAt + USAGE_CACHE_MS,
       ...(availableCount === undefined ? {} : { bankedResetCount: availableCount }),

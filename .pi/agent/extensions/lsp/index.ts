@@ -230,6 +230,14 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
       startupStatus = status;
       startupPublisher?.publish(status);
     };
+    const publishStartupFailure = (cause: unknown) => {
+      if (cause instanceof Error && cause.name === "AbortError") return;
+      publishStartupStatus({
+        state: "degraded",
+        observedAt: Date.now(),
+        payload: { problem: "server-problem" },
+      });
+    };
     const observedDocuments = new Set<string>();
     const refreshStartupEvidence = (manager: LspServerManager) => {
       if (!hasStartupEvidence(manager)) return;
@@ -389,7 +397,7 @@ export function createLspExtension(dependencies: LspExtensionDependencies = {}) 
               observedDocuments.add(key);
               refreshStartupEvidence(manager);
             })
-            .catch(() => undefined);
+            .catch(publishStartupFailure);
         }
       }
       const changedPath = mutationPath(event);

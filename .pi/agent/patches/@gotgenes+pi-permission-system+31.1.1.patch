@@ -524,7 +524,7 @@ index 4b7ecd5..abb5611 100644
   * family name resolves to members, and leaves *which* families are excluded
   * independently relaxable (#620).
   *
-+ * The locally registered `session-yolo` link is the deliberate exception. It
++ * The locally registered `session-permissions-mode` link is the deliberate exception. It
 + * sees only `ask` decisions after policy resolution, so allowing it across all
 + * surfaces suppresses every prompt without weakening explicit `deny` rules.
 + *
@@ -538,7 +538,7 @@ index 4b7ecd5..abb5611 100644
 +  name: string,
    authorize: Authorizer["authorize"],
  ): Authorizer["authorize"] {
-+  if (name === "session-yolo") {
++  if (name === "session-permissions-mode") {
 +    return authorize;
 +  }
    return async (details, query, log) => {

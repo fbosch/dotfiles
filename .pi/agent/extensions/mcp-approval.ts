@@ -1,6 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { runAskUserQuestion } from "./ask-user-question";
-import { isYoloEffectiveStateEvent, YOLO_EFFECTIVE_STATE_CHANNEL } from "./yolo";
+import {
+  isPermissionsStrictStateEvent,
+  PERMISSIONS_STRICT_STATE_CHANNEL,
+} from "./permissions-mode";
 
 // Pi packages have isolated module roots, so local extensions consume the
 // adapter's broker contract structurally through the shared event bus.
@@ -73,11 +76,11 @@ function decisionFromAnswer(
 function routeApprovalRequest(
   value: unknown,
   ctx: ExtensionContext | undefined,
-  yoloEnabled: boolean,
+  strictEnabled: boolean,
 ): boolean {
-  if (!isMcpToolApprovalRequest(value)) return false;
-  if (yoloEnabled) {
-    // Keep approvals uncached so disabling YOLO affects the next request.
+  if (!isMcpToolApprovalRequest(value) || ctx === undefined) return false;
+  if (!strictEnabled) {
+    // Do not cache normal-mode approval so enabling strict mode affects the next request.
     return value.claim(() => "allow_once");
   }
   if (ctx?.hasUI !== true) return false;
@@ -109,26 +112,26 @@ function routeApprovalRequest(
 export function registerMcpApprovalRouting(pi: ExtensionAPI): void {
   let activeContext: ExtensionContext | undefined;
   let activeSessionId: string | undefined;
-  let yoloEnabled = false;
+  let strictEnabled = false;
 
   pi.on("session_start", (_event, ctx) => {
     activeContext = ctx;
     activeSessionId = ctx.sessionManager.getHeader()?.id;
-    yoloEnabled = false;
+    strictEnabled = false;
   });
   pi.on("session_shutdown", () => {
     activeContext = undefined;
     activeSessionId = undefined;
-    yoloEnabled = false;
+    strictEnabled = false;
   });
   // The shared bus is trusted in-process; exact session matching prevents
   // lifecycle bleed but is not an authentication boundary between extensions.
-  pi.events.on(YOLO_EFFECTIVE_STATE_CHANNEL, (value) => {
-    if (!isYoloEffectiveStateEvent(value) || value.sessionId !== activeSessionId) return;
-    yoloEnabled = value.effectiveEnabled;
+  pi.events.on(PERMISSIONS_STRICT_STATE_CHANNEL, (value) => {
+    if (!isPermissionsStrictStateEvent(value) || value.sessionId !== activeSessionId) return;
+    strictEnabled = value.strictEnabled;
   });
   pi.events.on(MCP_TOOL_APPROVAL_REQUEST_EVENT, (value) => {
-    routeApprovalRequest(value, activeContext, yoloEnabled);
+    routeApprovalRequest(value, activeContext, strictEnabled);
   });
 }
 

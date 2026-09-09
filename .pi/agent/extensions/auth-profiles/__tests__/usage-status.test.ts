@@ -160,6 +160,60 @@ describe("auth profile usage status", () => {
     );
   });
 
+  test("preserves reset deadlines when publishing a cached snapshot in a fresh process", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-cached-deadline-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const cachePath = join(root, "usage.json");
+    const profilePath = join(agentDir, "auth-profiles", "work.json");
+    const accountId = `cached-${root.split("/").at(-1)}`;
+    const credentialKey = createHash("sha256")
+      .update("openai-codex")
+      .update("\0")
+      .update(accountId)
+      .digest("hex");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await writeCredential(profilePath, { access: "cached-access-token", accountId });
+    await writeFile(
+      cachePath,
+      JSON.stringify({
+        schema: "fbb.pi-auth-profiles-usage-cache/v2",
+        accounts: {
+          [credentialKey]: {
+            credentialKey,
+            usage: {
+              windows: [
+                {
+                  windowId: "primary",
+                  remaining: 2,
+                  resetsIn: "3h",
+                  allowanceResetAt: now + 3 * 60 * 60 * 1_000,
+                },
+              ],
+            },
+            usageCheckedAt: now,
+          },
+        },
+      }),
+    );
+
+    const payload = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cacheOnly: true,
+      cachePath,
+      fetchFn: async () => {
+        throw new Error("cache-only collection must not fetch");
+      },
+      includeResetCredits: false,
+      now: () => now + 1_000,
+    });
+
+    expect(payload.profiles[0]?.[AUTH_USAGE_OBSERVATION]?.windows).toMatchObject([
+      { windowId: "primary", remaining: 2, allowanceResetAt: now + 3 * 60 * 60 * 1_000 },
+    ]);
+  });
+
   test("refreshes instead of using a partially malformed cached snapshot", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-malformed-cache-"));
     temporaryDirectories.push(root);
@@ -361,7 +415,16 @@ describe("auth profile usage status", () => {
       },
       async fetchUsage(receivedCredential) {
         expect(receivedCredential).toEqual(credential);
-        return { windows: [{ remaining: 73, resetsIn: "2h" }] };
+        return {
+          windows: [
+            {
+              windowId: "primary",
+              remaining: 73,
+              resetsIn: "2h",
+              allowanceResetAt: 1_000_000 + 2 * 60 * 60 * 1_000,
+            },
+          ],
+        };
       },
       usageLimitResetAt: () => undefined,
       usageLimitResetAtFromMessage: () => undefined,
@@ -383,6 +446,17 @@ describe("auth profile usage status", () => {
         profileLabel: "default",
         urgency: "unknown",
         usage: [{ remaining: 73, resetsIn: "2h" }],
+      },
+    ]);
+    const cache = JSON.parse(await readFile(join(root, "usage-cache.json"), "utf8")) as {
+      accounts: Record<string, { usage?: { windows?: unknown[] } }>;
+    };
+    expect(Object.values(cache.accounts)[0]?.usage?.windows).toEqual([
+      {
+        windowId: "primary",
+        remaining: 73,
+        resetsIn: "2h",
+        allowanceResetAt: 1_000_000 + 2 * 60 * 60 * 1_000,
       },
     ]);
   });

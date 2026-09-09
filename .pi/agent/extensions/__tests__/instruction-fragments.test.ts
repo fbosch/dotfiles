@@ -44,8 +44,8 @@ describe("instruction fragments", () => {
     writeFileSync(join(directory, "first.md"), "First instruction.\n");
 
     const fragments = loadInstructionFragments(directory, [
-      { path: "first.md", applies: "always" },
-      { path: "second.md", applies: "orchestrator" },
+      { path: "first.md" },
+      { path: "second.md", when: { tools: { all: ["subagent"] } } },
     ]);
 
     expect(fragments.map((fragment) => fragment.content)).toEqual([
@@ -65,53 +65,93 @@ describe("instruction fragments", () => {
 
     const fragments = loadGlobalInstructionFragments(agentDirectory);
 
-    expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
-      { path: "nested/first.md", applies: "always", content: "First instruction." },
-      { path: "second.md", applies: "always", content: "Second instruction." },
+    expect(fragments.map(({ path, when, content }) => ({ path, when, content }))).toEqual([
+      { path: "nested/first.md", when: undefined, content: "First instruction." },
+      { path: "second.md", when: undefined, content: "Second instruction." },
     ]);
   });
 
-  test("loads configured paths and preserves their applicability", () => {
+  test("loads configured paths and preserves their conditions", () => {
     const root = temporaryDirectory();
     const agentDirectory = join(root, "agent");
     const instructionsDirectory = join(agentDirectory, "instructions");
     mkdirSync(instructionsDirectory, { recursive: true });
     writeFileSync(
       join(agentDirectory, "instruction-fragments.json"),
-      `${JSON.stringify(["second.md", { path: "first.md", applies: "orchestrator" }])}\n`,
+      `${JSON.stringify([
+        "second.md",
+        { path: "first.md", when: { tools: { all: ["subagent", "todo"] } } },
+      ])}\n`,
     );
     writeFileSync(join(instructionsDirectory, "second.md"), "Second instruction.\n");
     writeFileSync(join(instructionsDirectory, "first.md"), "First instruction.\n");
 
     const fragments = loadGlobalInstructionFragments(agentDirectory);
 
-    expect(fragments.map(({ path, applies, content }) => ({ path, applies, content }))).toEqual([
-      { path: "second.md", applies: "always", content: "Second instruction." },
-      { path: "first.md", applies: "orchestrator", content: "First instruction." },
+    expect(fragments.map(({ path, when, content }) => ({ path, when, content }))).toEqual([
+      { path: "second.md", when: undefined, content: "Second instruction." },
+      {
+        path: "first.md",
+        when: { tools: { all: ["subagent", "todo"] } },
+        content: "First instruction.",
+      },
     ]);
   });
 
+  test("rejects invalid tool conditions", () => {
+    const root = temporaryDirectory();
+    const agentDirectory = join(root, "agent");
+    const instructionsDirectory = join(agentDirectory, "instructions");
+    mkdirSync(instructionsDirectory, { recursive: true });
+    writeFileSync(join(instructionsDirectory, "fragment.md"), "Instruction.\n");
+
+    const writeConfig = (entry: unknown) =>
+      writeFileSync(
+        join(agentDirectory, "instruction-fragments.json"),
+        `${JSON.stringify([entry])}\n`,
+      );
+
+    writeConfig({ path: "fragment.md", when: { tools: {} } });
+    expect(() => loadGlobalInstructionFragments(agentDirectory)).toThrow(
+      "expected exactly one of any or all",
+    );
+
+    writeConfig({ path: "fragment.md", when: { tools: { any: [], all: ["todo"] } } });
+    expect(() => loadGlobalInstructionFragments(agentDirectory)).toThrow(
+      "expected exactly one of any or all",
+    );
+
+    writeConfig({ path: "fragment.md", when: { tools: { any: [] } } });
+    expect(() => loadGlobalInstructionFragments(agentDirectory)).toThrow(
+      "expected a non-empty array",
+    );
+
+    writeConfig({ path: "fragment.md", when: { tools: { any: [""] } } });
+    expect(() => loadGlobalInstructionFragments(agentDirectory)).toThrow(
+      "expected a non-empty string",
+    );
+  });
   test("rejects missing, empty, duplicate, and non-file fragments", () => {
     const directory = createInstructionsDirectory();
     writeFileSync(join(directory, "empty.md"), " \n");
     writeFileSync(join(directory, "valid.md"), "Valid instruction.");
     mkdirSync(join(directory, "nested.md"));
 
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "missing.md", applies: "always" }]),
-    ).toThrow("missing.md");
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "empty.md", applies: "always" }]),
-    ).toThrow("Instruction fragment is empty: empty.md");
+    expect(() => loadInstructionFragments(directory, [{ path: "missing.md" }])).toThrow(
+      "missing.md",
+    );
+    expect(() => loadInstructionFragments(directory, [{ path: "empty.md" }])).toThrow(
+      "Instruction fragment is empty: empty.md",
+    );
     expect(() =>
       loadInstructionFragments(directory, [
-        { path: "valid.md", applies: "always" },
-        { path: "valid.md", applies: "orchestrator" },
+        { path: "valid.md" },
+        { path: "valid.md", when: { tools: { any: ["todo"] } } },
       ]),
     ).toThrow("Duplicate instruction fragment: valid.md");
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "nested.md", applies: "always" }]),
-    ).toThrow("Instruction fragment must be a regular file: nested.md");
+    expect(() => loadInstructionFragments(directory, [{ path: "nested.md" }])).toThrow(
+      "Instruction fragment must be a regular file: nested.md",
+    );
   });
 
   test("rejects direct and symlink path escapes", () => {
@@ -122,32 +162,42 @@ describe("instruction fragments", () => {
     writeFileSync(outside, "Outside instruction.");
     symlinkSync(outside, join(directory, "linked.md"));
 
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "../outside.md", applies: "always" }]),
-    ).toThrow("Instruction fragment escapes its directory: ../outside.md");
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "linked.md", applies: "always" }]),
-    ).toThrow("Instruction fragment symlink escapes its directory: linked.md");
+    expect(() => loadInstructionFragments(directory, [{ path: "../outside.md" }])).toThrow(
+      "Instruction fragment escapes its directory: ../outside.md",
+    );
+    expect(() => loadInstructionFragments(directory, [{ path: "linked.md" }])).toThrow(
+      "Instruction fragment symlink escapes its directory: linked.md",
+    );
   });
 
   test("rejects reserved markers in fragment content", () => {
     const directory = createInstructionsDirectory();
     writeFileSync(join(directory, "marked.md"), INSTRUCTION_FRAGMENTS_START);
 
-    expect(() =>
-      loadInstructionFragments(directory, [{ path: "marked.md", applies: "always" }]),
-    ).toThrow("Instruction fragment contains a reserved marker: marked.md");
+    expect(() => loadInstructionFragments(directory, [{ path: "marked.md" }])).toThrow(
+      "Instruction fragment contains a reserved marker: marked.md",
+    );
   });
 
-  test("selects always-on fragments and adds orchestrator fragments when available", () => {
+  test("selects unconditional fragments and matches any or all active tools", () => {
     const fragments = [
-      { path: "orchestration.md", applies: "orchestrator" as const, content: "Routing." },
-      { path: "code-search.md", applies: "always" as const, content: "Search." },
+      {
+        path: "orchestration.md",
+        when: { tools: { all: ["subagent", "todo"] } },
+        content: "Routing.",
+      },
+      {
+        path: "code-search.md",
+        when: { tools: { any: ["fffind", "ffgrep"] } },
+        content: "Search.",
+      },
+      { path: "global.md", content: "Global." },
     ];
 
-    expect(instructionFragmentsForTools(fragments, ["read"])).toBe("Search.");
-    expect(instructionFragmentsForTools(fragments, ["read", "subagent"])).toBe(
-      "Routing.\n\nSearch.",
+    expect(instructionFragmentsForTools(fragments, ["read"])).toBe("Global.");
+    expect(instructionFragmentsForTools(fragments, ["read", "ffgrep"])).toBe("Search.\n\nGlobal.");
+    expect(instructionFragmentsForTools(fragments, ["subagent", "todo", "fffind"])).toBe(
+      "Routing.\n\nSearch.\n\nGlobal.",
     );
   });
 
@@ -160,14 +210,14 @@ describe("instruction fragments", () => {
     expect(appendInstructionFragments(appended, "Routing instructions.")).toBe(appended);
   });
 
-  test("injects always-on fragments and limits routing to sessions with the subagent tool", () => {
+  test("injects fragments whose active-tool conditions match", () => {
     let handler:
       | ((
           event: BeforeAgentStartEvent,
           ctx: ExtensionContext,
         ) => BeforeAgentStartEventResult | undefined)
       | undefined;
-    let activeTools = ["subagent"];
+    let activeTools = ["subagent", "todo", "fffind"];
     const pi = {
       getActiveTools: () => activeTools,
       on(event: string, registeredHandler: typeof handler) {
@@ -184,13 +234,16 @@ describe("instruction fragments", () => {
 
     const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
     expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(systemPrompt).toContain("# Subagent Routing");
+    expect(systemPrompt).toContain("# Subagent orchestration");
     expect(systemPrompt).toContain("# Code Search");
 
+    activeTools = ["ffgrep"];
+    const searchSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+    expect(searchSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
+    expect(searchSystemPrompt).toContain("# Code Search");
+    expect(searchSystemPrompt).not.toContain("# Subagent orchestration");
+
     activeTools = ["read"];
-    const childSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(childSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(childSystemPrompt).toContain("# Code Search");
-    expect(childSystemPrompt).not.toContain("# Subagent Routing");
+    expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
   });
 });

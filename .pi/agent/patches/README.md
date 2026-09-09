@@ -3,7 +3,7 @@
 Tracked patches preserve local changes to pinned Pi extensions:
 
 - `@ff-labs+pi-fff+0.10.6.patch` marks the bounded find and grep tools for read-only programmatic dispatch.
-- `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration, direct TypeScript import resolution, and full session-YOLO prompt approval.
+- `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration, direct TypeScript import resolution, and normal-mode prompt authorization.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
@@ -54,9 +54,9 @@ normal policy.
 Registrations are removed on session shutdown. Duplicate registrations remain
 independent, so disposing one consumer cannot remove another consumer's access.
 
-## Session YOLO
+## Automatic permission mode
 
-The `session-yolo` authorizer is exempt from the package's path-family delegation cap. Permission gates resolve policy first, so the authorizer receives only `ask` decisions: session YOLO auto-accepts every prompt while explicit `deny` rules still block before authorization. Other authorizers retain the delegation cap.
+The `session-permissions-mode` authorizer is exempt from the package's path-family delegation cap. Permission gates resolve policy first, so it receives only `ask` decisions. In normal mode it allows those requests unless the Codex detector matches a dangerous command or Bash parsing is inconclusive. Strict mode defers every request to the prompt. Explicit `deny` rules still block before authorization, and other authorizers retain the delegation cap.
 
 ## Permission-system imports
 

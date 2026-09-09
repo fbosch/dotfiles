@@ -38,11 +38,11 @@ describe("prompt footer statuses", () => {
     expect(line).toContain("warning:esc again to interrupt");
   });
 
-  test("renders the session YOLO status with its icon and error color", () => {
-    expect(renderFooterStatus(theme, "session-yolo", "yolo")).toBe("error:󱚝 yolo");
+  test("renders strict permission status with its icon and warning color", () => {
+    expect(renderFooterStatus(theme, "permissions-strict", "strict")).toBe("warning: strict");
   });
 
-  test("preserves the permission-system status when session YOLO is disabled", () => {
+  test("preserves the permission-system status in normal mode", () => {
     expect(renderFooterStatus(theme, "pi-permission-system", "permission status")).toBe(
       "permission status",
     );
@@ -66,14 +66,14 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
-  test("omits YOLO from the lower footer", () => {
+  test("omits strict permission status from the lower footer", () => {
     const state = {
       ...promptState,
-      getStatuses: () => [renderFooterStatus(ansiTheme, "session-yolo", "yolo")],
+      getStatuses: () => [renderFooterStatus(ansiTheme, "permissions-strict", "strict")],
     };
     const line = renderPromptHints(ansiTheme, keybindings, state, "~/dotfiles", 50);
 
-    expect(stripTerminalSequences(line)).not.toContain("yolo");
+    expect(stripTerminalSequences(line)).not.toContain("strict");
   });
 
   test("keeps file changes and MCP together on the right", () => {

@@ -687,3 +687,64 @@ test("publishes unchecked LSP state before observed ready documents without star
     payload: { observedDocuments: 1 },
   });
 });
+
+test("publishes a degraded status when lazy server startup fails", async () => {
+  const events = createEventBus();
+  const snapshots: StartupOwnerSnapshot[] = [];
+  const handlers = new Map<string, Handler>();
+  const manager = {
+    warm: async () => {
+      throw new Error("server unavailable");
+    },
+    shutdown: async () => {},
+  } as unknown as LspServerManager;
+  const pi = {
+    events,
+    on(event: string, handler: Handler) {
+      handlers.set(event, handler);
+    },
+    registerCommand() {},
+    registerMessageRenderer() {},
+    registerTool() {},
+  } as unknown as ExtensionAPI;
+  const context = {
+    cwd: "/project",
+    isProjectTrusted: () => true,
+    ui: { notify() {} },
+  } as unknown as ExtensionContext;
+
+  events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) => snapshots.push(value as StartupOwnerSnapshot));
+  createLspExtension({
+    createManager: async () => manager,
+    readSettings: () => ({
+      servers: [],
+      timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+      warnings: [],
+    }),
+  })(pi);
+  await handlers.get("session_start")?.({} as never, context);
+  events.emit(
+    "dotfiles:pi-startup-header/request/v1",
+    createStartupOwnerRequest("session", "generation", "lsp"),
+  );
+  expect(snapshots.at(-1)).toMatchObject({ state: "collecting" });
+
+  await handlers.get("tool_result")?.(
+    {
+      type: "tool_result",
+      toolCallId: "read-1",
+      toolName: "read",
+      input: { path: "src/example.ts" },
+      content: [{ type: "text", text: "source" }],
+      details: undefined,
+      isError: false,
+    } as never,
+    context,
+  );
+  await Bun.sleep(0);
+
+  expect(snapshots.at(-1)).toMatchObject({
+    state: "degraded",
+    payload: { problem: "server-problem" },
+  });
+});

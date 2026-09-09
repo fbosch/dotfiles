@@ -869,7 +869,7 @@ describe("pi-permission-system policy", () => {
     expect(result.state).toBe("allow");
   });
 
-  test("/yolo approves every ask without weakening explicit denials", async () => {
+  test("normal permission mode can approve asks without weakening explicit denials", async () => {
     const engine = createEngine();
     expect((await checkBash(engine, "command sudo id")).state).toBe("deny");
     expect(
@@ -887,11 +887,11 @@ describe("pi-permission-system policy", () => {
         decidedBy: { kind: "terminal" },
       }),
     };
-    const allow = modules.encloseInDelegationEnvelope("session-yolo", async () => ({
+    const allow = modules.encloseInDelegationEnvelope("session-permissions-mode", async () => ({
       kind: "allow",
     }));
     const chain = modules.composeAuthorizerChain(
-      [{ name: "session-yolo", authorize: allow }],
+      [{ name: "session-permissions-mode", authorize: allow }],
       terminal,
       {},
       { review() {}, debug() {} },

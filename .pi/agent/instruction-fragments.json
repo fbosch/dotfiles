@@ -1,10 +1,22 @@
 [
   {
     "path": "orchestration.md",
-    "applies": "orchestrator"
+    "when": {
+      "tools": {
+        "any": [
+          "subagent"
+        ]
+      }
+    }
   },
   {
-    "path": "code-search.md",
-    "applies": "always"
+    "path": "task-tracking.md",
+    "when": {
+      "tools": {
+        "any": [
+          "todo"
+        ]
+      }
+    }
   }
 ]

@@ -1,6 +1,6 @@
 ---
 name: gjs
-description: "Author, review, debug, port, and package code that explicitly runs under GJS (GNOME JavaScript), including GNOME Shell extensions and JavaScript or TypeScript projects using `gi://`, `resource:///org/gnome/`, legacy `imports.gi`, `GObject.registerClass()`, Gio/GLib/GObject, GTK/Adwaita, GSettings, or GJS D-Bus. Use only when the request, repository, imports, or target process establishes GJS/GNOME runtime context. Do not use for ordinary JavaScript or TypeScript, browser/frontend code, Node.js, Bun, Deno, Electron, generic language/tooling questions, or GNOME APIs used from C, Rust, Python, Vala, or another non-GJS language."
+description: Author, review, debug, port, or package JavaScript and TypeScript that explicitly runs under GJS or GNOME Shell. Use when code imports GNOME resources or `gi://` APIs, uses GObject/Gio/GLib/GTK/Adwaita, or targets GJS; not for browser, Node.js, Bun, Deno, or Electron code.
 ---
 
 # GJS
