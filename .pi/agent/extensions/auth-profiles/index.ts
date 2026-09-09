@@ -377,9 +377,10 @@ export default function authProfiles(
       },
     });
 
-  const collectAndPublishUsage = async (): Promise<UsageStatusPayload> => {
+  const collectAndPublishUsage = async (cacheOnly = false): Promise<UsageStatusPayload> => {
     const status = await usageCollector({
       activeProfile,
+      cacheOnly,
       includeDefault: true,
       providerAdapter,
     });
@@ -482,7 +483,14 @@ export default function authProfiles(
       return activateUnlocked(ctx, selection);
     });
     // Usage can update the header after activation; it must not hold up interactive startup.
-    void serializeProfileOperation(collectAndPublishUsage).catch(() => {});
+    void serializeProfileOperation(async () => {
+      try {
+        await collectAndPublishUsage(true);
+      } catch {
+        // A missing cache does not prevent the live refresh.
+      }
+      await collectAndPublishUsage();
+    }).catch(() => {});
     if (resolution.selectionWarning) {
       ctx.ui.notify(
         `No alternate profile was confirmed; using ${resolution.profile}: ${resolution.selectionWarning}`,

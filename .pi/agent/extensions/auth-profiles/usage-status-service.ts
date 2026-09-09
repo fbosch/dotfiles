@@ -113,6 +113,7 @@ export type CollectUsageStatusOptions = {
   activeProfile?: string;
   agentDir?: string;
   cachePath?: string;
+  cacheOnly?: boolean;
   fetchFn?: FetchFn;
   forceUsageRefresh?: boolean;
   includeDefault?: boolean;
@@ -302,6 +303,7 @@ async function refreshAccount(
   fetchFn: FetchFn,
   forceUsageRefresh: boolean,
   includeResetCredits: boolean,
+  cacheOnly: boolean,
 ): Promise<AccountResult> {
   const next: CachedAccount =
     cached?.credentialKey === credentialKey ? { ...cached } : { credentialKey };
@@ -311,9 +313,8 @@ async function refreshAccount(
   if (credential.expiresAt <= now) {
     errors.push("credential-expired");
   } else if (
-    forceUsageRefresh ||
-    !next.usageCheckedAt ||
-    now - next.usageCheckedAt >= USAGE_CACHE_MS
+    !cacheOnly &&
+    (forceUsageRefresh || !next.usageCheckedAt || now - next.usageCheckedAt >= USAGE_CACHE_MS)
   ) {
     try {
       const usage = await adapter.fetchUsage(credential, fetchFn);
@@ -344,6 +345,7 @@ async function refreshAccount(
     (next.resetCredits?.availableCount ?? 0) > 0 && next.resetCredits?.nextExpiresAt === undefined;
   if (
     includeResetCredits &&
+    !cacheOnly &&
     credential.expiresAt > now &&
     adapter.fetchCredits !== undefined &&
     (resetCreditsAreStale || resetCreditsCountChanged || resetCreditsExpiryMissing)
@@ -444,7 +446,11 @@ export async function collectUsageStatus(
         diagnostics.push({ profileLabel, code: "credential-read-failed" });
         return undefined;
       }
-      if (result.kind === "valid" && result.credential.expiresAt <= now) {
+      if (
+        result.kind === "valid" &&
+        result.credential.expiresAt <= now &&
+        options.cacheOnly !== true
+      ) {
         const expectedIdentity = result.credential.identity;
         let refreshed: ProfileProviderCredential;
         try {
@@ -509,6 +515,7 @@ export async function collectUsageStatus(
         fetchFn,
         options.forceUsageRefresh === true,
         options.includeResetCredits !== false,
+        options.cacheOnly === true,
       ),
   );
   const resultsByKey = new Map<string, AccountResult>();
@@ -523,10 +530,12 @@ export async function collectUsageStatus(
   for (const [credentialKey, result] of resultsByKey) {
     nextCache.accounts[credentialKey] = result.cached;
   }
-  try {
-    writeUsageCache(cachePath, nextCache);
-  } catch {
-    diagnostics.push({ profileLabel: "cache", code: "usage-cache-write-failed" });
+  if (options.cacheOnly !== true) {
+    try {
+      writeUsageCache(cachePath, nextCache);
+    } catch {
+      diagnostics.push({ profileLabel: "cache", code: "usage-cache-write-failed" });
+    }
   }
 
   const profiles = profileCredentials

@@ -132,6 +132,19 @@ describe("auth profile usage status", () => {
     expect(cacheMiss).toBe(false);
     expect(cached).toEqual(payload);
 
+    const cacheBeforePassiveRead = await readFile(cachePath, "utf8");
+    const staleCached = await collectUsageStatus({
+      activeProfile: "work",
+      agentDir,
+      cacheOnly: true,
+      cachePath,
+      fetchFn: async () => {
+        throw new Error("cache-only collection must not fetch");
+      },
+      now: () => now + 20_000,
+    });
+    expect(staleCached.profiles[0]?.usage).toEqual(payload.profiles[0]?.usage);
+    expect(await readFile(cachePath, "utf8")).toBe(cacheBeforePassiveRead);
     const inactive = await collectUsageStatus({
       activeProfile: "default",
       agentDir,
