@@ -16,14 +16,15 @@ import {
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
-import chartExtension, {
+import chartExtension from "../index";
+import { ChartComponent, rasterizeSvg, resolveChartFontFamily } from "../types";
+import {
   getPieChartLayout,
-  PieChartComponent,
+  pieChartRenderer,
   pieChartVariant,
-  rasterizeSvg,
   renderPieChartSvg,
   validatePieChartInput,
-} from "../index";
+} from "../types/pie";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -58,6 +59,8 @@ function pngHeader(widthPx = 540, heightPx = 360): string {
   header.writeUInt32BE(heightPx, 20);
   return header.toString("base64");
 }
+
+type SettingsStorage = Parameters<typeof SettingsManager.fromStorage>[0];
 
 type ToolResult = {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
@@ -156,6 +159,24 @@ const rows = validatePieChartInput({
   ],
 });
 
+function settingsManager(
+  globalSettings: unknown,
+  projectSettings: unknown,
+  projectTrusted: boolean,
+): SettingsManager {
+  const values: Record<"global" | "project", string> = {
+    global: JSON.stringify(globalSettings),
+    project: JSON.stringify(projectSettings),
+  };
+  const storage: SettingsStorage = {
+    withLock(scope, update) {
+      const next = update(values[scope]);
+      if (next !== undefined) values[scope] = next;
+    },
+  };
+  return SettingsManager.fromStorage(storage, { projectTrusted });
+}
+
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
   const promise = new Promise<T>((next) => {
@@ -227,6 +248,48 @@ describe("pie chart", () => {
     ).toBe(false);
   });
 
+  test("uses the existing sans-serif default and safely applies a custom font", () => {
+    const svg = renderPieChartSvg(rows, theme);
+    expect(svg).toContain('font-family="sans-serif"');
+
+    const customFont = `A < B & C "quoted" '`;
+    const customSvg = renderPieChartSvg(rows, theme, undefined, undefined, customFont);
+    expect(customSvg).toContain('font-family="A &lt; B &amp; C &quot;quoted&quot; &apos;"');
+    expect(customSvg).not.toContain(`font-family="${customFont}"`);
+  });
+
+  test("merges trusted project chart configuration over global configuration", () => {
+    const manager = settingsManager(
+      { charts: { fontFamily: "Global Font" } },
+      { charts: { fontFamily: "Project Font" } },
+      true,
+    );
+    expect(resolveChartFontFamily(manager.getGlobalSettings(), manager.getProjectSettings())).toBe(
+      "Project Font",
+    );
+
+    const untrustedManager = settingsManager(
+      { charts: { fontFamily: "Global Font" } },
+      { charts: { fontFamily: "Project Font" } },
+      false,
+    );
+    expect(
+      resolveChartFontFamily(
+        untrustedManager.getGlobalSettings(),
+        untrustedManager.getProjectSettings(),
+      ),
+    ).toBe("Global Font");
+  });
+
+  test("rejects invalid chart font configuration", () => {
+    expect(() => resolveChartFontFamily({ charts: { fontFamily: "   " } }, {})).toThrow(
+      "global charts.fontFamily",
+    );
+    expect(() => resolveChartFontFamily({}, { charts: { unexpected: "value" } })).toThrow(
+      "project charts.unexpected: unknown field",
+    );
+  });
+
   test("derives compact logical height from pie and legend layout", () => {
     const wide = getPieChartLayout();
     const narrow = getPieChartLayout({ widthPx: 9, heightPx: 18 }, 28, 2);
@@ -289,7 +352,12 @@ describe("pie chart", () => {
     expect(tuiResult.content).toEqual([
       { type: "text", text: "Status pie chart: Open 3 (75.0%); Closed 1 (25.0%)" },
     ]);
-    expect(tuiResult.details).toEqual({ rows, title: "Status", imageWidthCells: 60 });
+    expect(tuiResult.details).toEqual({
+      rows,
+      title: "Status",
+      imageWidthCells: 60,
+      fontFamily: "sans-serif",
+    });
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 1080, heightPx: 440 });
@@ -299,10 +367,11 @@ describe("pie chart", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
     const requestedSvg: string[] = [];
-    const component = new PieChartComponent(
+    const component = new ChartComponent(
       { rows, imageWidthCells: 60 },
       theme,
       () => undefined,
+      pieChartRenderer,
       async (svg) => {
         requestedSvg.push(svg);
         const dimensions = /<svg[^>]*width="(\d+)" height="(\d+)"/.exec(svg);
@@ -332,12 +401,13 @@ describe("pie chart", () => {
     const second = deferred<string>();
     const signals: AbortSignal[] = [];
     let invalidations = 0;
-    const component = new PieChartComponent(
+    const component = new ChartComponent(
       { rows, imageWidthCells: 60 },
       theme,
       () => {
         invalidations++;
       },
+      pieChartRenderer,
       (_svg, signal) => {
         if (signal === undefined) throw new Error("expected cancellation signal");
         signals.push(signal);
@@ -361,10 +431,11 @@ describe("pie chart", () => {
   test("shows a sticky error instead of retrying a failed raster until invalidated", async () => {
     setCellDimensions({ widthPx: 9, heightPx: 18 });
     let calls = 0;
-    const component = new PieChartComponent(
+    const component = new ChartComponent(
       { rows, imageWidthCells: 60 },
       theme,
       () => undefined,
+      pieChartRenderer,
       async () => {
         calls++;
         throw new Error("rsvg-convert failed");
@@ -386,10 +457,11 @@ describe("pie chart", () => {
   test("invalidates cached rasters when the theme identity changes", async () => {
     setCellDimensions({ widthPx: 9, heightPx: 18 });
     const requestedSvg: string[] = [];
-    const component = new PieChartComponent(
+    const component = new ChartComponent(
       { rows, imageWidthCells: 60 },
       theme,
       () => undefined,
+      pieChartRenderer,
       async (svg) => {
         requestedSvg.push(svg);
         return pngHeader();
@@ -424,14 +496,15 @@ describe("pie chart", () => {
         context: { lastComponent?: unknown; invalidate: () => void },
       ) {
         const previous = context.lastComponent;
-        if (previous instanceof PieChartComponent) {
+        if (previous instanceof ChartComponent) {
           previous.update(renderTheme);
           return previous;
         }
-        return new PieChartComponent(
+        return new ChartComponent(
           result.details as { rows: typeof rows; imageWidthCells: number },
           renderTheme,
           context.invalidate,
+          pieChartRenderer,
           async () => {
             rasterCalls++;
             return raster.promise;
