@@ -1,6 +1,6 @@
 # Chart extension
 
-Configure the pie-chart font in Pi’s global `~/.pi/agent/settings.json`, or in a trusted project’s `.pi/settings.json`:
+Configure the chart font in Pi’s global `~/.pi/agent/settings.json`, or in a trusted project’s `.pi/settings.json`:
 
 ```json
 {

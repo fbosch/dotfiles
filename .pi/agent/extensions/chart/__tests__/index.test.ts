@@ -16,12 +16,11 @@ import {
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
-import chartExtension from "../index";
+import chartExtension, { chartParameters } from "../index";
 import { ChartComponent, rasterizeSvg, resolveChartFontFamily } from "../types";
 import {
   getPieChartLayout,
   pieChartRenderer,
-  pieChartVariant,
   renderPieChartSvg,
   validatePieChartInput,
 } from "../types/pie";
@@ -231,21 +230,28 @@ describe("pie chart", () => {
     ).toThrow("duplicates");
   });
 
-  test("registers chart with the pie variant schema", () => {
+  test("registers chart with the provider-compatible pie and bar schema", () => {
     const tool = registerTool();
 
     expect(tool.name).toBe("chart");
-    expect(tool.parameters).toBe(pieChartVariant);
-    expect(Value.Check(pieChartVariant, { type: "pie", data: rows, title: "Status" })).toBe(true);
-    expect(Value.Check(pieChartVariant, { type: "bar", data: rows })).toBe(false);
+    expect(tool.parameters).toBe(chartParameters);
+    expect(Value.Check(chartParameters, { type: "pie", data: rows, title: "Status" })).toBe(true);
+    expect(Value.Check(chartParameters, { type: "bar", data: rows })).toBe(true);
     expect(
-      Value.Check(pieChartVariant, {
+      Value.Check(chartParameters, {
         type: "pie",
         data: rows,
         labels: ["Open", "Closed"],
         values: [3, 1],
       }),
     ).toBe(false);
+  });
+
+  test("replays pie details saved before chart types were introduced", () => {
+    expect(pieChartRenderer.deserializeDetails({ rows, imageWidthCells: 60 })).toEqual({
+      rows,
+      imageWidthCells: 60,
+    });
   });
 
   test("uses the existing sans-serif default and safely applies a custom font", () => {

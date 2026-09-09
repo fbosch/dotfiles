@@ -65,6 +65,8 @@ export type PieChartLayout = ChartLayout & {
   stacked: boolean;
 };
 export type PieChartDetails = ChartDetails & {
+  /** Missing on results persisted before chart types were introduced. */
+  type?: "pie";
   rows: PieChartRow[];
   title?: string;
 };
