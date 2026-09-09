@@ -1,12 +1,12 @@
-import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
-import { pie, polar, radialArc } from "@tanstack/charts/polar";
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
-import { Type } from "typebox";
+import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { spawn } from "node:child_process";
+import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
+import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
+import { pie, polar, radialArc } from "@tanstack/charts/polar";
+import { Type } from "typebox";
 
 const WIDTH = 640;
 const HEIGHT = 360;

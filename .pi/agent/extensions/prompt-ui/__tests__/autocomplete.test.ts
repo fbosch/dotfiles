@@ -103,6 +103,7 @@ describe("prompt autocomplete", () => {
     ];
 
     expect(getSuggestionGitStatus("  \u001b[1m.pi/\u001b[22mmodified.ts", items)).toBe("modified");
+    expect(getSuggestionGitStatus("   \u001b[1m.pi/\u001b[22mmodified.ts", items)).toBe("modified");
     expect(getSuggestionGitStatus(" → \u001b[1m.pi/\u001b[22mmodified.ts", items)).toBe("modified");
     expect(getSuggestionGitStatus("  (1/20)", items)).toBeUndefined();
   });

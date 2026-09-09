@@ -32,7 +32,7 @@ export function getSuggestionGitStatus(
 ): string | undefined {
   const plainLine = stripTerminalSequences(line);
   const selectedMatch = /^\s*→\s+(.*)$/.exec(plainLine);
-  const unselectedMatch = /^ {2}(.*)$/.exec(plainLine);
+  const unselectedMatch = /^ {2,}(.*)$/.exec(plainLine);
   const display = (selectedMatch?.[1] ?? unselectedMatch?.[1])?.trimEnd();
   if (
     display === undefined ||
