@@ -1,7 +1,6 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
-import { globalExtensionConfigPath, readJsonConfig } from "../lib/extension-config";
+import { type ExtensionAPI, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
 
 export const INSTRUCTION_FRAGMENTS_START = "<global_instruction_fragments>";
 export const INSTRUCTION_FRAGMENTS_END = "</global_instruction_fragments>";
@@ -17,11 +16,15 @@ export interface InstructionFragmentCondition {
 
 export interface InstructionFragmentConfig {
   path: string;
-  when?: InstructionFragmentCondition;
 }
 
 export interface LoadedInstructionFragment extends InstructionFragmentConfig {
+  when?: InstructionFragmentCondition;
   content: string;
+}
+
+interface InstructionFragmentFrontmatter extends Record<string, unknown> {
+  when?: unknown;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -68,41 +71,7 @@ function instructionFragmentCondition(value: unknown, path: string): Instruction
   return { tools: { [selector]: toolNames(tools[selector], `${path}.tools.${selector}`) } };
 }
 
-function parseInstructionFragmentConfig(value: unknown): InstructionFragmentConfig[] {
-  if (Array.isArray(value) === false) {
-    throw new Error("instruction-fragments config: expected an array");
-  }
-
-  return value.map((entry, index) => {
-    const path = `instruction-fragments config[${index}]`;
-    if (typeof entry === "string") {
-      return { path: instructionFragmentPath(entry, path) };
-    }
-    if (isRecord(entry) === false) {
-      throw new Error(`${path}: expected a path string or object`);
-    }
-
-    const unknownFields = Object.keys(entry).filter(
-      (field) => field !== "path" && field !== "when",
-    );
-    if (unknownFields.length > 0) {
-      throw new Error(`${path}.${unknownFields[0]}: unknown field`);
-    }
-
-    const fragmentPath = instructionFragmentPath(entry.path, `${path}.path`);
-    const when =
-      entry.when === undefined
-        ? undefined
-        : instructionFragmentCondition(entry.when, `${path}.when`);
-
-    return { path: fragmentPath, ...(when === undefined ? {} : { when }) };
-  });
-}
-
-function discoverInstructionFragmentConfig(
-  directory: string,
-  basePath = "",
-): InstructionFragmentConfig[] {
+function discoverInstructionFragmentPaths(directory: string, basePath = ""): string[] {
   return readdirSync(directory, { withFileTypes: true })
     .sort((left, right) => left.name.localeCompare(right.name))
     .flatMap((entry) => {
@@ -110,10 +79,10 @@ function discoverInstructionFragmentConfig(
       const entryPath = join(directory, entry.name);
 
       if (entry.isDirectory()) {
-        return discoverInstructionFragmentConfig(entryPath, path);
+        return discoverInstructionFragmentPaths(entryPath, path);
       }
       if (entry.isFile() === false || entry.name.endsWith(".md") === false) return [];
-      return [{ path }];
+      return [path];
     });
 }
 
@@ -122,22 +91,69 @@ function pathEscapesDirectory(directory: string, path: string): boolean {
   return relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath);
 }
 
+function parseInstructionFragment(
+  rawContent: string,
+  fragmentPath: string,
+): { when?: InstructionFragmentCondition; content: string } {
+  let parsed: ReturnType<typeof parseFrontmatter<InstructionFragmentFrontmatter>>;
+  try {
+    parsed = parseFrontmatter<InstructionFragmentFrontmatter>(rawContent);
+  } catch (error) {
+    throw new Error(
+      `Cannot parse instruction fragment frontmatter: ${fragmentPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  if (isRecord(parsed.frontmatter) === false) {
+    throw new Error(`Instruction fragment frontmatter must be an object: ${fragmentPath}`);
+  }
+
+  const unknownFields = Object.keys(parsed.frontmatter).filter((field) => field !== "when");
+  if (unknownFields.length > 0) {
+    throw new Error(
+      `Instruction fragment frontmatter.${unknownFields[0]}: unknown field: ${fragmentPath}`,
+    );
+  }
+
+  const when =
+    parsed.frontmatter.when === undefined
+      ? undefined
+      : instructionFragmentCondition(
+          parsed.frontmatter.when,
+          `Instruction fragment frontmatter.when in ${fragmentPath}`,
+        );
+  const content = parsed.body.trim();
+  if (content.length === 0) {
+    throw new Error(`Instruction fragment is empty: ${fragmentPath}`);
+  }
+
+  if (
+    content.includes(INSTRUCTION_FRAGMENTS_START) ||
+    content.includes(INSTRUCTION_FRAGMENTS_END)
+  ) {
+    throw new Error(`Instruction fragment contains a reserved marker: ${fragmentPath}`);
+  }
+
+  return { ...(when === undefined ? {} : { when }), content };
+}
+
 function loadInstructionFragmentsFromPaths(
   instructionsDirectory: string,
   fragmentConfig: readonly InstructionFragmentConfig[],
-  allowExternalPaths: boolean,
 ): LoadedInstructionFragment[] {
   const resolvedDirectory = realpathSync(instructionsDirectory);
   const loadedPaths = new Set<string>();
 
   return fragmentConfig.map((fragment) => {
     const requestedPath = resolve(resolvedDirectory, fragment.path);
-    if (!allowExternalPaths && pathEscapesDirectory(resolvedDirectory, requestedPath)) {
+    if (pathEscapesDirectory(resolvedDirectory, requestedPath)) {
       throw new Error(`Instruction fragment escapes its directory: ${fragment.path}`);
     }
 
     const resolvedPath = realpathSync(requestedPath);
-    if (!allowExternalPaths && pathEscapesDirectory(resolvedDirectory, resolvedPath)) {
+    if (pathEscapesDirectory(resolvedDirectory, resolvedPath)) {
       throw new Error(`Instruction fragment symlink escapes its directory: ${fragment.path}`);
     }
 
@@ -150,49 +166,25 @@ function loadInstructionFragmentsFromPaths(
       throw new Error(`Instruction fragment must be a regular file: ${fragment.path}`);
     }
 
-    const content = readFileSync(resolvedPath, "utf8").trim();
-    if (content.length === 0) {
-      throw new Error(`Instruction fragment is empty: ${fragment.path}`);
-    }
-
-    if (
-      content.includes(INSTRUCTION_FRAGMENTS_START) ||
-      content.includes(INSTRUCTION_FRAGMENTS_END)
-    ) {
-      throw new Error(`Instruction fragment contains a reserved marker: ${fragment.path}`);
-    }
-
-    return { ...fragment, content };
+    const parsed = parseInstructionFragment(readFileSync(resolvedPath, "utf8"), fragment.path);
+    return { path: fragment.path, ...parsed };
   });
 }
 
 export function loadInstructionFragments(
   instructionsDirectory: string,
-  fragmentConfig: readonly InstructionFragmentConfig[],
+  fragmentPaths = discoverInstructionFragmentPaths(instructionsDirectory),
 ): LoadedInstructionFragment[] {
-  return loadInstructionFragmentsFromPaths(instructionsDirectory, fragmentConfig, false);
-}
-
-export function loadConfiguredInstructionFragments(
-  instructionsDirectory: string,
-  fragmentConfig: readonly InstructionFragmentConfig[],
-): LoadedInstructionFragment[] {
-  return loadInstructionFragmentsFromPaths(instructionsDirectory, fragmentConfig, true);
+  return loadInstructionFragmentsFromPaths(
+    instructionsDirectory,
+    fragmentPaths.map((path) => ({ path: instructionFragmentPath(path, "instruction fragment") })),
+  );
 }
 
 export function loadGlobalInstructionFragments(
   agentDirectory = getAgentDir(),
 ): LoadedInstructionFragment[] {
-  const instructionsDirectory = join(agentDirectory, "instructions");
-  const configuredFragments = readJsonConfig(
-    globalExtensionConfigPath("instruction-fragments", agentDirectory),
-  );
-  const fragmentConfig =
-    configuredFragments === undefined
-      ? discoverInstructionFragmentConfig(instructionsDirectory)
-      : parseInstructionFragmentConfig(configuredFragments);
-
-  return loadConfiguredInstructionFragments(instructionsDirectory, fragmentConfig);
+  return loadInstructionFragments(join(agentDirectory, "instructions"));
 }
 
 function matchesActiveTools(

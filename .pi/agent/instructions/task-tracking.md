@@ -1,3 +1,10 @@
+---
+when:
+  tools:
+    any:
+      - todo
+---
+
 # Task tracking
 
 - Batch independent task creation calls. Create dependent tasks sequentially when prerequisite IDs are needed.

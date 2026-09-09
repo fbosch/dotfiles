@@ -1,3 +1,10 @@
+---
+when:
+  tools:
+    any:
+      - subagent
+---
+
 # Subagent orchestration
 
 - Delegate only when specialist expertise, isolated context, or independent work justifies the overhead. Otherwise work directly.
