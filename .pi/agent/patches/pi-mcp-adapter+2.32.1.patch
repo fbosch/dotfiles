@@ -1,0 +1,25 @@
+diff --git a/node_modules/pi-mcp-adapter/tool-approval.ts b/node_modules/pi-mcp-adapter/tool-approval.ts
+index 8747e6a..adce33d 100644
+--- a/node_modules/pi-mcp-adapter/tool-approval.ts
++++ b/node_modules/pi-mcp-adapter/tool-approval.ts
+@@ -151,10 +151,6 @@
+   const argsHash = createHash("sha256").update(stableStringify(args ?? {})).digest("hex");
+   const cacheKey = `${serverName}\u0000${toolMeta.originalName}\u0000${argsHash}`;
+   const approvedToolCalls = state.approvedToolCalls ??= new Map<string, true>();
+-  if (approvedToolCalls.has(cacheKey)) {
+-    return { ok: true };
+-  }
+-
+   const brokerDecision = await requestBrokerApproval(state, serverName, toolMeta, args, origin, signal);
+   if (brokerDecision === "allow_once") return { ok: true };
+   if (brokerDecision === "allow_for_session") {
+@@ -163,6 +159,9 @@
+   }
+   if (brokerDecision === "deny") return { ok: false, reason: "denied" };
+ 
++  if (approvedToolCalls.has(cacheKey)) {
++    return { ok: true };
++  }
+   if (!isToolCallApprovalRequired(state.config, serverName, toolMeta, approvalMetadata ?? state.toolMetadata)) {
+     return { ok: true };
+   }

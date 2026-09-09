@@ -235,13 +235,13 @@ describe("instruction fragments", () => {
     const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
     expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
     expect(systemPrompt).toContain("# Subagent orchestration");
-    expect(systemPrompt).toContain("# Code Search");
+    expect(systemPrompt).toContain("# Task tracking");
 
-    activeTools = ["ffgrep"];
-    const searchSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(searchSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(searchSystemPrompt).toContain("# Code Search");
-    expect(searchSystemPrompt).not.toContain("# Subagent orchestration");
+    activeTools = ["todo"];
+    const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+    expect(taskSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
+    expect(taskSystemPrompt).toContain("# Task tracking");
+    expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
 
     activeTools = ["read"];
     expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();

@@ -139,7 +139,7 @@ describe("MCP approval routing", () => {
     harness.start(
       createSelectContext(async (_title, options) => {
         prompts += 1;
-        return options[1];
+        return options[0];
       }, "mcp-active"),
     );
 
@@ -152,7 +152,7 @@ describe("MCP approval routing", () => {
     harness.emitStrictState({ sessionId: "mcp-active", strictEnabled: true });
     const strictApproval = createApprovalRequest();
     harness.emitApproval(strictApproval.request);
-    expect(await strictApproval.decision()).toBe("allow_for_session");
+    expect(await strictApproval.decision()).toBe("allow_once");
 
     harness.emitStrictState({ sessionId: "mcp-active", strictEnabled: false });
     const normalAgain = createApprovalRequest();
@@ -165,7 +165,7 @@ describe("MCP approval routing", () => {
     let prompt: { title: string; options: string[] } | undefined;
     const context = createSelectContext(async (title, options) => {
       prompt = { title, options };
-      return options[1];
+      return options[0];
     });
     const harness = createRoutingHarness();
     const approval = createApprovalRequest({
@@ -178,10 +178,10 @@ describe("MCP approval routing", () => {
     harness.emitApproval(approval.request);
 
     expect(approval.claimCount()).toBe(1);
-    expect(await approval.decision()).toBe("allow_for_session");
+    expect(await approval.decision()).toBe("allow_once");
     expect(prompt?.title).toContain("MCP: github spoof wants to run search _code");
     expect(prompt?.title).toContain("Arguments:");
-    expect(prompt?.options).toEqual(["1. Allow once", "2. Allow for session", "3. Deny"]);
+    expect(prompt?.options).toEqual(["1. Allow once", "2. Deny"]);
   });
 
   test("leaves fallback ownership to the adapter outside an active session", async () => {
@@ -198,10 +198,51 @@ describe("MCP approval routing", () => {
     harness.emitApproval(headless.request);
     expect(await headless.decision()).toBe("allow_once");
 
+    harness.emitStrictState({ sessionId: "headless", strictEnabled: true });
+    const strictHeadless = createApprovalRequest();
+    harness.emitApproval(strictHeadless.request);
+    expect(await strictHeadless.decision()).toBe("deny");
+
     harness.shutdown();
     const afterShutdown = createApprovalRequest();
     harness.emitApproval(afterShutdown.request);
     expect(afterShutdown.claimCount()).toBe(0);
+  });
+
+  test("strict broker decisions override cached MCP session grants", async () => {
+    const { ensureToolCallApproved } = await import(
+      "../../npm/node_modules/pi-mcp-adapter/tool-approval.ts"
+    );
+    let decision: McpToolApprovalDecision = "allow_for_session";
+    const state = {
+      config: { mcpServers: {} },
+      approvalEvents: {
+        emit(_name: string, value: unknown) {
+          const request = value as McpToolApprovalRequest;
+          request.claim(() => decision);
+        },
+      },
+    };
+    const metadata = { name: "github_search_code", originalName: "search_code" };
+
+    expect(
+      await ensureToolCallApproved(
+        state as never,
+        "github",
+        metadata as never,
+        { query: "repo:example" },
+      ),
+    ).toEqual({ ok: true });
+
+    decision = "deny";
+    expect(
+      await ensureToolCallApproved(
+        state as never,
+        "github",
+        metadata as never,
+        { query: "repo:example" },
+      ),
+    ).toEqual({ ok: false, reason: "denied" });
   });
 
   test("returns to normal mode on a new session", async () => {

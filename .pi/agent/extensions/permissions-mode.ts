@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { dangerousCommandMatch } from "./pi-permission-system/dangerous-command";
+import { analyzeDangerousCommand } from "./pi-permission-system/dangerous-command";
 
 export const PERMISSIONS_STRICT_STATUS_KEY = "permissions-strict";
 export const PERMISSIONS_STRICT_STATUS_TEXT = " strict";
@@ -100,9 +100,20 @@ function permissionSurface(details: Record<string, unknown>): unknown {
 
 function commandTexts(details: Record<string, unknown>): string[] {
   const intent = isRecord(details.accessIntent) ? details.accessIntent : undefined;
+  const payload = isRecord(details.payload) ? details.payload : undefined;
+  const request = isRecord(payload?.request) ? payload.request : undefined;
+  const evidence = Array.isArray(payload?.evidence) ? payload.evidence : [];
+  const fullCommands = evidence.flatMap((item) => {
+    if (!isRecord(item) || item.label !== "full command" || typeof item.text !== "string") {
+      return [];
+    }
+    return [item.text];
+  });
   return [
     details.command,
     details.value,
+    request?.value,
+    ...fullCommands,
     ...(Array.isArray(intent?.matchValues) ? intent.matchValues : []),
   ].filter((value): value is string => typeof value === "string" && value.trim().length > 0);
 }
@@ -134,7 +145,9 @@ export async function canAutoApprovePermission(details: unknown): Promise<boolea
   try {
     for (const command of new Set(commands)) {
       if (!(await isParseableShell(command))) return false;
-      if ((await dangerousCommandMatch(["bash", "-lc", command])) !== undefined) return false;
+      if ((await analyzeDangerousCommand(["bash", "-lc", command])).kind !== "no_match") {
+        return false;
+      }
     }
     return true;
   } catch {

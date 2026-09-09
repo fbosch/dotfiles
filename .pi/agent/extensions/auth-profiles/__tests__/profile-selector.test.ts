@@ -357,6 +357,9 @@ describe("Codex usage-limit headers", () => {
         1_000_000,
       ),
     ).toBe(1_060_000);
+    expect(
+      codexUsageLimitResetAtFromMessage("Codex error: The usage limit has been reached", 1_000_000),
+    ).toBe(1_060_000);
     expect(codexUsageLimitResetAtFromMessage("Too many requests", 1_000_000)).toBeUndefined();
   });
 

@@ -1974,14 +1974,25 @@ diff --git a/node_modules/@gotgenes/pi-permission-system/src/index.ts b/node_mod
 index 245fe2a..5856fbf 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/index.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/index.ts
-@@ -37,6 +37,7 @@ import { getGlobalConfigPath } from "#src/config/config-paths";
+@@ -37,6 +37,6 @@ import { getGlobalConfigPath } from "#src/config/config-paths";
  import { ConfigStore } from "#src/config/config-store";
- import { isYoloModeEnabled } from "#src/config/extension-config";
+-import { isYoloModeEnabled } from "#src/config/extension-config";
  import { computeExtensionPaths } from "#src/config/extension-paths";
 +import { PersistentApprovalStore } from "#src/config/persistent-approval-store";
  import { GateRunner } from "#src/handlers/gates/runner";
  import { SkillInputGatePipeline } from "#src/handlers/gates/skill-input-gate-pipeline";
  import { ToolCallGatePipeline } from "#src/handlers/gates/tool-call-gate-pipeline";
+@@ -106,7 +106,5 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+-  // Declared after the `configStore` forward declaration so the reader can
+-  // close over it; every call runs after configStore is assigned below. yolo is
+-  // a composition-stage ask→allow rewrite (#526) that the gate runner extends
+-  // to asks synthesized after resolution (#712), so both share this reader.
+-  const isYoloEnabled = (): boolean => isYoloModeEnabled(configStore.current());
++  // Automatic permission mode is the only prompt bypass. Keep the package's
++  // legacy global YOLO switch disabled so strict mode cannot be bypassed.
++  const isYoloEnabled = (): boolean => false;
+ 
+   const permissionManager = new PermissionManager({
 @@ -299,6 +300,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
    };
  
@@ -2304,3 +2315,77 @@ index d22fe77..4bd55ea 100644
 +    agentName?: string | null,
 +  ): void;
 +}
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts b/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts
+index a7c1fc4..81e11f8 100644
+@@ -34,7 +34,7 @@
+   {
+     value: "reset",
+     label: "Reset defaults",
+-    description: "Restore default yolo/logging settings and persist them",
++    description: "Restore default logging settings and persist them",
+   },
+   {
+     value: "help",
+@@ -77,7 +77,6 @@
+   rules?: Ruleset,
+ ): string {
+   const knobs = [
+-    `yoloMode=${toOnOff(config.yoloMode)}`,
+     `permissionReviewLog=${toOnOff(config.permissionReviewLog)}`,
+     `debugLog=${toOnOff(config.debugLog)}`,
+   ].join(", ");
+@@ -90,14 +89,6 @@
+ ): SettingItem[] {
+   return [
+     {
+-      id: "yoloMode",
+-      label: "YOLO mode",
+-      description:
+-        "Auto-approve ask-state permission checks, including subagent approval forwarding",
+-      currentValue: toOnOff(config.yoloMode),
+-      values: ON_OFF,
+-    },
+-    {
+       id: "permissionReviewLog",
+       label: "Permission review log",
+       description:
+@@ -130,8 +121,6 @@
+   value: string,
+ ): PermissionSystemExtensionConfig {
+   switch (id) {
+-    case "yoloMode":
+-      return { ...config, yoloMode: value === "on" };
+     case "permissionReviewLog":
+       return { ...config, permissionReviewLog: value === "on" };
+     case "debugLog":
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/status.ts b/node_modules/@gotgenes/pi-permission-system/src/config/status.ts
+index ef2cfe4..1d5edc2 100644
+@@ -3,25 +3,18 @@
+   ExtensionContext,
+ } from "@earendil-works/pi-coding-agent";
+ 
+-import {
+-  EXTENSION_ID,
+-  isYoloModeEnabled,
+-  type PermissionSystemExtensionConfig,
+-} from "./extension-config";
++import { EXTENSION_ID, type PermissionSystemExtensionConfig } from "./extension-config";
+ 
+ export const PERMISSION_SYSTEM_STATUS_KEY = EXTENSION_ID;
+-export const PERMISSION_SYSTEM_YOLO_STATUS_VALUE = "yolo";
+ 
+ type PermissionStatusContext =
+   | Pick<ExtensionContext, "hasUI" | "ui">
+   | Pick<ExtensionCommandContext, "ui">;
+ 
+ export function getPermissionSystemStatus(
+-  config: PermissionSystemExtensionConfig,
++  _config: PermissionSystemExtensionConfig,
+ ): string | undefined {
+-  return isYoloModeEnabled(config)
+-    ? PERMISSION_SYSTEM_YOLO_STATUS_VALUE
+-    : undefined;
++  return undefined;
+ }
+ 
+ export function syncPermissionSystemStatus(

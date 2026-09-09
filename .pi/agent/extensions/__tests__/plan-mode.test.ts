@@ -202,7 +202,7 @@ describe("plan mode", () => {
     const parent = createHarness({
       activeTools: ["read"],
       availableTools: ["websearch", "context7_get-library-docs", "subagent"],
-      sessionFile: "/tmp/plan-parent.jsonl",
+      sessionId: "plan-parent-id",
     });
 
     await parent.toggle();
@@ -210,7 +210,7 @@ describe("plan mode", () => {
     const child = createHarness({
       activeTools: ["read", "write", "edit", "bash"],
       availableTools: ["websearch", "context7_get-library-docs", "subagent"],
-      parentSession: "/tmp/plan-parent.jsonl",
+      parentSession: "plan-parent-id",
       sessionFile: "/tmp/plan-child.jsonl",
       systemPrompt: '<active_agent name="quick" />\n\n# Environment',
     });
@@ -225,7 +225,7 @@ describe("plan mode", () => {
     ]);
     expect(child.selectedModels).toEqual([]);
     expect(await child.beforeAgentStart()).toEqual({
-      systemPrompt: expect.stringContaining("You are in a read-only phase."),
+      systemPrompt: expect.stringContaining("Plan mode is active. Work read-only"),
     });
 
     await child.shutdown();

@@ -12,7 +12,10 @@
 
 /** The dangerous-command rule matched by a POSIX command invocation. */
 export type DangerousCommandMatch = "forced-rm" | "other";
-
+export type DangerousCommandAnalysis =
+  | { kind: "dangerous"; match: DangerousCommandMatch }
+  | { kind: "no_match" }
+  | { kind: "unknown" };
 const MAX_WRAPPER_DEPTH = 8;
 const BASH_PARSER_MODULE_URL = new URL(
   "../../npm/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/parser.ts",
@@ -36,56 +39,62 @@ interface BashParserModule {
   getParser(): Promise<BashParser>;
 }
 
-/**
- * Classifies a tokenized POSIX command using the pinned Codex rules.
- *
- * This includes literal commands nested in `sh`, `bash`, or `zsh` `-c`/`-lc`
- * source. `undefined` means no dangerous rule matched, not that the command is
- * safe. Parser failures also return `undefined`, so callers must fail closed.
- * This detector is deliberately not wired into Build-mode approval decisions.
- */
+/** Classifies a tokenized POSIX command using the pinned Codex rules. */
+export async function analyzeDangerousCommand(
+  command: readonly string[],
+): Promise<DangerousCommandAnalysis> {
+  return analyzeDangerousCommandAtDepth(command, 0);
+}
+
+/** Returns the matched rule while preserving the detector's original convenience API. */
 export async function dangerousCommandMatch(
   command: readonly string[],
 ): Promise<DangerousCommandMatch | undefined> {
-  return dangerousCommandMatchAtDepth(command, 0);
+  const analysis = await analyzeDangerousCommand(command);
+  return analysis.kind === "dangerous" ? analysis.match : undefined;
 }
 
-async function dangerousCommandMatchAtDepth(
+async function analyzeDangerousCommandAtDepth(
   command: readonly string[],
   wrapperDepth: number,
-): Promise<DangerousCommandMatch | undefined> {
-  if (wrapperDepth > MAX_WRAPPER_DEPTH) return "other";
+): Promise<DangerousCommandAnalysis> {
+  if (wrapperDepth > MAX_WRAPPER_DEPTH) return { kind: "dangerous", match: "other" };
 
   const directMatch = await dangerousCommandMatchForExecutable(command, wrapperDepth);
-  if (directMatch !== undefined) return directMatch;
+  if (directMatch.kind !== "no_match") return directMatch;
 
-  const literalCommands = await parseShellLcLiteralCommands(command);
-  for (const literalCommand of literalCommands ?? []) {
-    const match = await dangerousCommandMatchAtDepth(literalCommand, wrapperDepth + 1);
-    if (match !== undefined) return match;
+  const parsed = await parseShellLcLiteralCommands(command);
+  if (parsed.kind === "unknown") return parsed;
+  for (const literalCommand of parsed.commands) {
+    const analysis = await analyzeDangerousCommandAtDepth(literalCommand, wrapperDepth + 1);
+    if (analysis.kind !== "no_match") return analysis;
   }
-  return undefined;
+  return { kind: "no_match" };
 }
-
 async function dangerousCommandMatchForExecutable(
   command: readonly string[],
   wrapperDepth: number,
-): Promise<DangerousCommandMatch | undefined> {
+): Promise<DangerousCommandAnalysis> {
   const executable = executableName(command[0]);
-  if (executable === "rm" && includesForceOption(command.slice(1))) return "forced-rm";
+  if (executable === "rm" && includesForceOption(command.slice(1))) {
+    return { kind: "dangerous", match: "forced-rm" };
+  }
   if (executable === "sudo") {
-    return dangerousCommandMatchAtDepth(command.slice(1), wrapperDepth + 1);
+    return analyzeDangerousCommandAtDepth(command.slice(1), wrapperDepth + 1);
   }
   if (executable === "env") {
-    return dangerousCommandMatchAtDepth(command.slice(envCommandIndex(command)), wrapperDepth + 1);
+    return analyzeDangerousCommandAtDepth(
+      command.slice(envCommandIndex(command)),
+      wrapperDepth + 1,
+    );
   }
   if (executable === "trap") {
     const action = trapAction(command);
     return action === undefined
-      ? undefined
-      : dangerousCommandMatchAtDepth(["sh", "-c", action], wrapperDepth + 1);
+      ? { kind: "no_match" }
+      : analyzeDangerousCommandAtDepth(["sh", "-c", action], wrapperDepth + 1);
   }
-  return undefined;
+  return { kind: "no_match" };
 }
 
 function executableName(raw: string | undefined): string | undefined {
@@ -130,24 +139,28 @@ function trapAction(command: readonly string[]): string | undefined {
   return action === undefined || action.startsWith("-") ? undefined : action;
 }
 
+type ParsedLiteralCommands =
+  | { kind: "parsed"; commands: string[][] }
+  | { kind: "unknown" };
+
 async function parseShellLcLiteralCommands(
   command: readonly string[],
-): Promise<string[][] | undefined> {
+): Promise<ParsedLiteralCommands> {
   const script = shellScript(command);
-  if (script === undefined) return undefined;
+  if (script === undefined) return { kind: "parsed", commands: [] };
 
   try {
     const { getParser } = (await import(BASH_PARSER_MODULE_URL)) as BashParserModule;
     const tree = (await getParser()).parse(script);
-    if (tree === null) return undefined;
+    if (tree === null) return { kind: "unknown" };
     try {
-      if (tree.rootNode.hasError) return undefined;
-      return literalCommands(tree.rootNode);
+      if (tree.rootNode.hasError) return { kind: "unknown" };
+      return { kind: "parsed", commands: literalCommands(tree.rootNode) };
     } finally {
       tree.delete();
     }
   } catch {
-    return undefined;
+    return { kind: "unknown" };
   }
 }
 

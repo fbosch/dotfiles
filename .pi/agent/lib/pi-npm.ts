@@ -36,6 +36,11 @@ const patchedPackages = [
     patchFilename: "@gotgenes+pi-permission-system+31.1.1.patch",
   },
   {
+    name: "pi-mcp-adapter",
+    version: "2.32.1",
+    patchFilename: "pi-mcp-adapter+2.32.1.patch",
+  },
+  {
     name: "pi-worktrunk",
     version: "0.8.0",
     patchFilename: "pi-worktrunk+0.8.0.patch",

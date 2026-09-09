@@ -83,8 +83,7 @@ function routeApprovalRequest(
     // Do not cache normal-mode approval so enabling strict mode affects the next request.
     return value.claim(() => "allow_once");
   }
-  if (ctx?.hasUI !== true) return false;
-
+  if (ctx.hasUI !== true) return value.claim(() => "deny");
   const serverName = sanitizeDisplayText(value.serverName, false);
   const toolName = sanitizeDisplayText(value.originalToolName, false);
   const details = formatArguments(value.args);
@@ -97,7 +96,6 @@ function routeApprovalRequest(
         details: `Arguments:\n${details}`,
         options: [
           { label: "Allow once", value: "allow_once" },
-          { label: "Allow for session", value: "allow_for_session" },
           { label: "Deny", value: "deny" },
         ],
       },

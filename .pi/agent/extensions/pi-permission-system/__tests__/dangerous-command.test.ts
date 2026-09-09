@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { dangerousCommandMatch } from "../dangerous-command";
+import { analyzeDangerousCommand, dangerousCommandMatch } from "../dangerous-command";
 
 describe("dangerousCommandMatch", () => {
   test("matches upstream forced-rm variants", async () => {
@@ -63,8 +63,11 @@ describe("dangerousCommandMatch", () => {
     expect(await dangerousCommandMatch(beyondLimit)).toBe("other");
   });
 
-  test("treats unmatched and invalid shell source as unknown, not safe", async () => {
-    expect(await dangerousCommandMatch(["git", "status"])).toBeUndefined();
+  test("distinguishes unmatched commands from invalid nested shell source", async () => {
+    expect(await analyzeDangerousCommand(["git", "status"])).toEqual({ kind: "no_match" });
+    expect(
+      await analyzeDangerousCommand(["bash", "-lc", "if then rm -rf /tmp/example"]),
+    ).toEqual({ kind: "unknown" });
     expect(
       await dangerousCommandMatch(["bash", "-lc", "if then rm -rf /tmp/example"]),
     ).toBeUndefined();

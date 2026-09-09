@@ -177,6 +177,17 @@ describe("permissions mode", () => {
       { surface: "bash", command: "rm -rf /tmp/example" },
       { surface: "bash", command: "bash -lc 'sudo rm --force /tmp/example'" },
       { surface: "bash", command: "if then" },
+      { surface: "bash", command: "bash -lc 'if then'" },
+      {
+        surface: "bash",
+        command: "sleep 0",
+        payload: {
+          request: { value: "sleep 0" },
+          evidence: [
+            { label: "full command", text: "sleep 0; rm -rf ./victim", detail: null },
+          ],
+        },
+      },
       { surface: "bash" },
       {},
     ]) {

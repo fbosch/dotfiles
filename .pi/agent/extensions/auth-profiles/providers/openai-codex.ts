@@ -382,9 +382,10 @@ export function openAiCodexUsageLimitResetAtFromMessage(
   errorMessage: string | undefined,
   currentTime = Date.now(),
 ): number | undefined {
-  return errorMessage?.startsWith("You have hit your ChatGPT usage limit")
-    ? currentTime + UNKNOWN_USAGE_COOLDOWN_MS
-    : undefined;
+  const isUsageLimit =
+    errorMessage?.startsWith("You have hit your ChatGPT usage limit") ||
+    errorMessage?.includes("usage limit has been reached");
+  return isUsageLimit ? currentTime + UNKNOWN_USAGE_COOLDOWN_MS : undefined;
 }
 
 export function createOpenAiCodexProfileAdapter(

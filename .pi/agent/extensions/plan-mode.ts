@@ -23,8 +23,15 @@ const PLAN_READ_ONLY_TOOLS = new Set([
 ]);
 const PLAN_READ_ONLY_TOOL_PREFIXES = ["context7_", "mcp__context7_", "ast-grep_"] as const;
 
-// Child sessions receive their own agent tool list, so track active parent plan sessions explicitly.
-const PLAN_MODE_SESSION_FILES = new Set<string>();
+// Pi loads extensions in isolated module contexts, so parent and child sessions
+// share active Plan state through a process-global registry.
+const PLAN_MODE_SESSIONS_KEY = Symbol.for("dotfiles:pi-plan-mode-sessions");
+const PLAN_MODE_SESSIONS = (() => {
+  const globalState = globalThis as typeof globalThis & {
+    [PLAN_MODE_SESSIONS_KEY]?: Set<string>;
+  };
+  return globalState[PLAN_MODE_SESSIONS_KEY] ??= new Set<string>();
+})();
 export type ModeName = "build" | "plan";
 
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -77,27 +84,26 @@ function isSubagentSession(ctx: ExtensionContext, systemPrompt = ctx.getSystemPr
   return systemPrompt.split("\n").some((line) => ACTIVE_AGENT_MARKER.test(line));
 }
 
-function getSessionFile(ctx: ExtensionContext): string | undefined {
-  const sessionFile = ctx.sessionManager.getSessionFile();
-  return typeof sessionFile === "string" && sessionFile.length > 0 ? sessionFile : undefined;
+function getSessionId(ctx: ExtensionContext): string | undefined {
+  const sessionId = ctx.sessionManager.getHeader()?.id;
+  return typeof sessionId === "string" && sessionId.length > 0 ? sessionId : undefined;
 }
 
 function isParentInPlanMode(ctx: ExtensionContext): boolean {
   const parentSession = ctx.sessionManager.getHeader()?.parentSession;
-  return typeof parentSession === "string" && PLAN_MODE_SESSION_FILES.has(parentSession);
+  return typeof parentSession === "string" && PLAN_MODE_SESSIONS.has(parentSession);
 }
 
 function setPlanModeSession(ctx: ExtensionContext, enabled: boolean): void {
-  const sessionFile = getSessionFile(ctx);
-  if (sessionFile === undefined) return;
+  const sessionId = getSessionId(ctx);
+  if (sessionId === undefined) return;
 
   if (enabled) {
-    PLAN_MODE_SESSION_FILES.add(sessionFile);
+    PLAN_MODE_SESSIONS.add(sessionId);
   } else {
-    PLAN_MODE_SESSION_FILES.delete(sessionFile);
+    PLAN_MODE_SESSIONS.delete(sessionId);
   }
 }
-
 function isThinkingLevel(value: unknown): value is ThinkingLevel {
   return typeof value === "string" && THINKING_LEVELS.has(value);
 }

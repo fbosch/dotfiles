@@ -1,6 +1,6 @@
 ---
 name: xstate
-description: Build, refactor, review, debug, test, or migrate XState state machines, actor systems, and `@xstate/store` state management in JavaScript or TypeScript. Use whenever a repository imports `xstate`, a core framework adapter such as `@xstate/react`, or any `@xstate/store*` package, or when work involves statecharts, actors, invoke/spawn, machine context, Store context, guards, actions, persistence, inspection, selectors, or XState model-based testing. Apply stable XState v5 guidance by default; treat XState v6 as alpha unless the project explicitly installs it.
+description: Build, review, debug, test, or migrate XState machines, actors, and `@xstate/store` state. Use when a project imports XState packages or work involves statecharts, actors, machine context, guards, actions, persistence, selectors, or model-based testing. Default to stable XState v5 unless the project explicitly installs v6.
 ---
 
 # XState
