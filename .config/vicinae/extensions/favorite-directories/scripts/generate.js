@@ -57,7 +57,7 @@ const DIRECTORIES = [
   {
     name: "games",
     title: "Games",
-    path: "~/Games",
+    path: "/mnt/games",
     icon: "folder-games",
   },
   {

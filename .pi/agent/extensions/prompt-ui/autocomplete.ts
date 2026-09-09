@@ -20,10 +20,10 @@ type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
 type MatchFormatter = (text: string) => string;
 type GitStatusFormatter = (status: string) => string;
 
-type AutocompleteItemWithMetadata = AutocompleteItem & { fffGitStatus?: unknown };
+type AutocompleteItemWithMetadata = AutocompleteItem & { gitStatus?: unknown };
 
-function getFffGitStatus(item: AutocompleteItem): string | undefined {
-  const status = (item as AutocompleteItemWithMetadata).fffGitStatus;
+function getGitStatus(item: AutocompleteItem): string | undefined {
+  const status = (item as AutocompleteItemWithMetadata).gitStatus;
   return typeof status === "string" ? status : undefined;
 }
 
@@ -41,7 +41,7 @@ export function prioritizeChangedFiles(items: readonly AutocompleteItem[]): Auto
   const changed: AutocompleteItem[] = [];
   const unchanged: AutocompleteItem[] = [];
   for (const item of items) {
-    (CHANGED_GIT_STATUSES.has(getFffGitStatus(item) ?? "") ? changed : unchanged).push(item);
+    (CHANGED_GIT_STATUSES.has(getGitStatus(item) ?? "") ? changed : unchanged).push(item);
   }
   return [...changed, ...unchanged];
 }
@@ -179,7 +179,7 @@ export function createPathDisplayAutocompleteProvider(
               ? `${item.description}/`
               : item.description;
           const formattedPath = formatPathMatches(displayPath, query, formatMatch);
-          const status = getFffGitStatus(item);
+          const status = getGitStatus(item);
           const statusIndicator = status === undefined ? "" : formatGitStatus(status);
           const formattedItem: AutocompleteItem = {
             ...item,

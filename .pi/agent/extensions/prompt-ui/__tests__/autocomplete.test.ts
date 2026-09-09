@@ -92,10 +92,10 @@ describe("prompt autocomplete", () => {
 
   test("promotes changed FFF files while preserving native order within each group", () => {
     const items = [
-      { value: "@clean-a.ts", label: "clean-a.ts", fffGitStatus: "clean" },
-      { value: "@modified.ts", label: "modified.ts", fffGitStatus: "modified" },
-      { value: "@clean-b.ts", label: "clean-b.ts", fffGitStatus: "clean" },
-      { value: "@new.ts", label: "new.ts", fffGitStatus: "untracked" },
+      { value: "@clean-a.ts", label: "clean-a.ts", gitStatus: "clean" },
+      { value: "@modified.ts", label: "modified.ts", gitStatus: "modified" },
+      { value: "@clean-b.ts", label: "clean-b.ts", gitStatus: "clean" },
+      { value: "@new.ts", label: "new.ts", gitStatus: "untracked" },
     ];
 
     expect(prioritizeChangedFiles(items).map((item) => item.value)).toEqual([
@@ -110,7 +110,7 @@ describe("prompt autocomplete", () => {
       value: "@.pi/agent/extensions/prompt-ui/autocomplete.ts",
       label: "autocomplete.ts",
       description: ".pi/agent/extensions/prompt-ui/autocomplete.ts",
-      fffGitStatus: "modified",
+      gitStatus: "modified",
     };
     let appliedItem: typeof fileItem | undefined;
     const provider: AutocompleteProvider = {
@@ -134,7 +134,7 @@ describe("prompt autocomplete", () => {
     expect(suggestion).toEqual({
       value: fileItem.value,
       label: "<modified> \u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
-      fffGitStatus: "modified",
+      gitStatus: "modified",
     } as AutocompleteItem);
     if (suggestion === undefined) throw new Error("Expected a path suggestion");
     autocomplete.applyCompletion(["@.pi/"], 0, 5, suggestion, "@.pi/");

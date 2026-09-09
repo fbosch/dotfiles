@@ -41,7 +41,7 @@
       "name": "open-games",
       "title": "Games",
       "subtitle": "Open Games folder",
-      "description": "Open ~/Games in file manager",
+      "description": "Open /mnt/games in file manager",
       "mode": "no-view",
       "icon": "folder-games.png"
     },

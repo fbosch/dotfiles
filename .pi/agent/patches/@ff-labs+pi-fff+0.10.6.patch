@@ -1,8 +1,15 @@
 diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/pi-fff/src/index.ts
-index 75d93cf..73f39b1 100644
 --- a/node_modules/@ff-labs/pi-fff/src/index.ts
 +++ b/node_modules/@ff-labs/pi-fff/src/index.ts
-@@ -853,6 +853,7 @@ export default function fffExtension(pi: ExtensionAPI) {
+@@ -577,6 +577,7 @@
+         value: buildAtCompletionValue(mixed.item.relativePath),
+         label: mixed.item.fileName,
+         description: mixed.item.relativePath,
++        gitStatus: mixed.item.gitStatus,
+       };
+     });
+   }
+@@ -853,6 +854,7 @@
    });
  
    queueTool(() => toolNames.grep, {
@@ -10,7 +17,7 @@ index 75d93cf..73f39b1 100644
      description: `Grep file contents. Smart-case, auto-detects regex vs literal, git-aware. Results are ranked by frecency (most-accessed files first); matches within a file stay in source order. Default limit ${DEFAULT_GREP_LIMIT}.`,
      promptSnippet: "Grep contents",
      promptGuidelines: (names) => [
-@@ -1043,6 +1044,7 @@ export default function fffExtension(pi: ExtensionAPI) {
+@@ -1043,6 +1045,7 @@
    });
  
    queueTool(() => toolNames.find, {

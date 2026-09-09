@@ -2,7 +2,7 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 
-- `@ff-labs+pi-fff+0.10.6.patch` marks the bounded find and grep tools for read-only programmatic dispatch.
+- `@ff-labs+pi-fff+0.10.6.patch` forwards FFF Git-status metadata for `@` suggestions and marks the bounded find and grep tools for read-only programmatic dispatch.
 - `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration, direct TypeScript import resolution, and normal-mode prompt authorization.
 - `pi-mcp-adapter+2.32.1.patch` lets the session approval broker override cached MCP grants, so strict mode can require confirmation for every call.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
