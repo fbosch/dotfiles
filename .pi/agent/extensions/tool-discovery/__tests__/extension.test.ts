@@ -202,14 +202,17 @@ describe("tool discovery", () => {
     expect(harness.activeToolSets).toEqual([["read", "search_tools", "websearch"]]);
   });
 
-  test("keeps large descriptions out of search output", async () => {
+  test("searches full descriptions but keeps large output bounded", async () => {
     const harness = createHarness({
       tools: [
-        dummyTool("worktrunk", `Manage Git worktrees safely.\n${"large reference ".repeat(3_000)}`),
+        dummyTool(
+          "worktrunk",
+          `Manage Git worktrees safely.\nSupports workspace sessions.\n${"large reference ".repeat(3_000)}`,
+        ),
       ],
     });
 
-    const result = await harness.search("worktrees");
+    const result = await harness.search("workspace sessions");
     const text = result.content
       .flatMap((item) => (item.type === "text" && item.text ? [item.text] : []))
       .join("\n");

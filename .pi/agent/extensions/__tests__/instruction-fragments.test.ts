@@ -201,13 +201,17 @@ describe("instruction fragments", () => {
     );
   });
 
-  test("appends one marked block without changing the existing prompt", () => {
+  test("appends and replaces the marked instruction block", () => {
     const appended = appendInstructionFragments("base prompt", "Routing instructions.");
-
     expect(appended).toBe(
       `base prompt\n\n${INSTRUCTION_FRAGMENTS_START}\nRouting instructions.\n${INSTRUCTION_FRAGMENTS_END}`,
     );
-    expect(appendInstructionFragments(appended, "Routing instructions.")).toBe(appended);
+    expect(
+      appendInstructionFragments(`${appended}\n\nAfter instructions.`, "Search instructions."),
+    ).toBe(
+      `base prompt\n\n${INSTRUCTION_FRAGMENTS_START}\nSearch instructions.\n${INSTRUCTION_FRAGMENTS_END}\n\nAfter instructions.`,
+    );
+    expect(appendInstructionFragments(appended, "")).toBe("base prompt");
   });
 
   test("injects fragments whose active-tool conditions match", () => {

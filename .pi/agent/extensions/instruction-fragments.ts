@@ -217,14 +217,23 @@ export function instructionFragmentsForTools(
 }
 
 export function appendInstructionFragments(systemPrompt: string, fragments: string): string {
-  if (
-    systemPrompt.includes(INSTRUCTION_FRAGMENTS_START) ||
-    systemPrompt.includes(INSTRUCTION_FRAGMENTS_END)
-  ) {
+  const markedStart = systemPrompt.indexOf(INSTRUCTION_FRAGMENTS_START);
+  const markedEnd = systemPrompt.indexOf(INSTRUCTION_FRAGMENTS_END);
+  const marked = markedStart !== -1 || markedEnd !== -1;
+  const block =
+    fragments.length === 0
+      ? ""
+      : `${INSTRUCTION_FRAGMENTS_START}\n${fragments}\n${INSTRUCTION_FRAGMENTS_END}`;
+
+  if (!marked) {
+    return block.length === 0 ? systemPrompt : `${systemPrompt}\n\n${block}`;
+  }
+  if (markedStart === -1 || markedEnd === -1 || markedEnd < markedStart) {
     return systemPrompt;
   }
-
-  return `${systemPrompt}\n\n${INSTRUCTION_FRAGMENTS_START}\n${fragments}\n${INSTRUCTION_FRAGMENTS_END}`;
+  const before = systemPrompt.slice(0, markedStart).trimEnd();
+  const after = systemPrompt.slice(markedEnd + INSTRUCTION_FRAGMENTS_END.length).trimStart();
+  return [before, block, after].filter((part) => part.length > 0).join("\n\n");
 }
 
 // Load one coherent snapshot per extension generation; /reload imports a fresh generation.
@@ -236,10 +245,11 @@ export default function instructionFragments(pi: ExtensionAPI): void {
       GLOBAL_INSTRUCTION_FRAGMENTS,
       pi.getActiveTools(),
     );
-    if (fragments.length === 0) return;
+    const systemPrompt = appendInstructionFragments(event.systemPrompt, fragments);
+    if (systemPrompt === event.systemPrompt) return;
 
     return {
-      systemPrompt: appendInstructionFragments(event.systemPrompt, fragments),
+      systemPrompt,
     };
   });
 }

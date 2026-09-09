@@ -83,7 +83,7 @@ function queryTerms(query: string): string[] {
 function scoreTool(tool: ToolInfo, terms: readonly string[]): number {
   const name = tool.name.toLowerCase();
   const nameTokens = name.split(/[^a-z0-9]+/).filter(Boolean);
-  const description = compactDescription(tool.description, 500).toLowerCase();
+  const description = tool.description.toLowerCase();
 
   return terms.reduce((score, term) => {
     if (name === term) return score + 16;
@@ -119,11 +119,10 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
       name: "search_tools",
       label: "Search tools",
-      description:
-        "Search for and enable specialized tools such as Figma, code intelligence, MCP, web, Worktrunk, screenshots, session transcripts, and diff inspection.",
-      promptSnippet: "Search for specialized tools that are not currently active.",
+      description: "Find and enable inactive specialized tools.",
+      promptSnippet: "Find inactive specialized tools",
       promptGuidelines: [
-        "Use search_tools when the current tools cannot perform the requested task or a skill references a tool that is not active.",
+        "Use search_tools when the current tools cannot perform the task or a needed tool is not active.",
       ],
       parameters: ToolSearchParameters,
       executionMode: "sequential",
