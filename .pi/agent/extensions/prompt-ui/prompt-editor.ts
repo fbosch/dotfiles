@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type AutocompleteProvider,
+  type AutocompleteItem,
   type EditorTheme,
   stripTerminalSequences,
   type TUI,
@@ -31,6 +32,7 @@ import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-aboli
 import {
   AutocompleteOverlay,
   createPromptAutocompleteProvider,
+  getSuggestionGitStatus,
   splitEditorLines,
 } from "./autocomplete";
 import { contextIndicator } from "./context-health";
@@ -59,19 +61,19 @@ export function formatFffGitStatus(theme: Theme, status: string): string {
   switch (status) {
     case "untracked":
     case "unknown":
-      return theme.fg("success", "┆");
+      return theme.fg("success", DOCK_RAIL);
     case "modified":
-      return theme.fg("warning", "┃");
+      return theme.fg("warning", DOCK_RAIL);
     case "deleted":
     case "staged_deleted":
-      return theme.fg("error", "▁");
+      return theme.fg("error", DOCK_RAIL);
     case "renamed":
-      return theme.fg("accent", "┃");
+      return theme.fg("accent", DOCK_RAIL);
     case "staged_new":
     case "staged_modified":
-      return theme.fg("success", "┃");
+      return theme.fg("success", DOCK_RAIL);
     case "ignored":
-      return theme.fg("dim", "┆");
+      return theme.fg("dim", DOCK_RAIL);
     default:
       return "";
   }
@@ -228,6 +230,7 @@ export class PromptEditor extends CustomEditor {
   private readonly typoRules: TypoCorrectionRules;
   private readonly agentMentions: readonly AgentMention[];
   private readonly projectReferences: readonly ProjectReference[];
+  private autocompleteItems: readonly AutocompleteItem[] = [];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
   private interruptConfirmationTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -286,19 +289,29 @@ export class PromptEditor extends CustomEditor {
       "#",
       ...(provider.triggerCharacters ?? []),
     ]);
-    super.setAutocompleteProvider(
-      createPromptAutocompleteProvider(
-        provider,
-        this.agentMentions,
-        this.projectReferences,
-        (mention, text) =>
-          mention.color === undefined
-            ? this.ctx.ui.theme.fg("accent", text)
-            : colorizeHex(this.ctx.ui.theme, mention.color)(text),
-        (text) => this.ctx.ui.theme.bold(text),
-        (status) => formatFffGitStatus(this.ctx.ui.theme, status),
-      ),
+    const promptProvider = createPromptAutocompleteProvider(
+      provider,
+      this.agentMentions,
+      this.projectReferences,
+      (mention, text) =>
+        mention.color === undefined
+          ? this.ctx.ui.theme.fg("accent", text)
+          : colorizeHex(this.ctx.ui.theme, mention.color)(text),
+      (text) => this.ctx.ui.theme.bold(text),
     );
+    super.setAutocompleteProvider({
+      ...promptProvider,
+      getSuggestions: async (lines, cursorLine, cursorCol, options) => {
+        const suggestions = await promptProvider.getSuggestions(
+          lines,
+          cursorLine,
+          cursorCol,
+          options,
+        );
+        this.autocompleteItems = suggestions?.items ?? [];
+        return suggestions;
+      },
+    });
   }
 
   private armInterruptConfirmation(): void {
@@ -455,7 +468,11 @@ export class PromptEditor extends CustomEditor {
     );
     const promptLayout = [...dockRows, bottomEdge];
 
-    this.autocompleteOverlay.update(suggestions, width, promptLayout.length, {
+    const suggestionRails = suggestions.map((line) => {
+      const status = getSuggestionGitStatus(line, this.autocompleteItems);
+      return (status === undefined ? "" : formatFffGitStatus(theme, status)) || suggestionsRail;
+    });
+    this.autocompleteOverlay.update(suggestions, suggestionRails, width, promptLayout.length, {
       rail: suggestionsRail,
       rightBorder,
       backgroundAnsi,

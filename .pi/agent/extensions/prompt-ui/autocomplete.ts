@@ -18,13 +18,30 @@ import { fitColumns, paintDockRow } from "./dock-rendering";
 type Color = (text: string) => string;
 type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
 type MatchFormatter = (text: string) => string;
-type GitStatusFormatter = (status: string) => string;
 
 type AutocompleteItemWithMetadata = AutocompleteItem & { gitStatus?: unknown };
 
 function getGitStatus(item: AutocompleteItem): string | undefined {
   const status = (item as AutocompleteItemWithMetadata).gitStatus;
   return typeof status === "string" ? status : undefined;
+}
+
+export function getSuggestionGitStatus(
+  line: string,
+  items: readonly AutocompleteItem[],
+): string | undefined {
+  const plainLine = stripTerminalSequences(line);
+  const match = /^(?:→ |  )(.*)$/.exec(plainLine);
+  if (match === null) return undefined;
+
+  const display = match[1]?.trimEnd() ?? "";
+  if (display.length === 0 || display.startsWith("(") || display.startsWith("───")) return undefined;
+
+  const item = items.find((candidate) => {
+    const label = stripTerminalSequences(candidate.label || candidate.value);
+    return label === display || label.startsWith(display) || display.startsWith(label);
+  });
+  return item === undefined ? undefined : getGitStatus(item);
 }
 
 const CHANGED_GIT_STATUSES = new Set([
@@ -53,8 +70,13 @@ interface AutocompleteOverlayStyle {
   selectedForegroundAnsi: string;
 }
 
+interface SuggestionRow {
+  line: string;
+  rail: string;
+}
+
 interface AutocompleteOverlayComponent extends Component, AutocompleteOverlayStyle {
-  lines: string[];
+  rows: SuggestionRow[];
 }
 
 function preserveBold(text: string): string {
@@ -155,7 +177,6 @@ function normalizedCompletionPath(value: string): string {
 export function createPathDisplayAutocompleteProvider(
   provider: AutocompleteProvider,
   formatMatch: MatchFormatter,
-  formatGitStatus: GitStatusFormatter = () => "",
 ): AutocompleteProvider {
   const originalItems = new WeakMap<AutocompleteItem, AutocompleteItem>();
   const pathProvider: AutocompleteProvider = {
@@ -179,11 +200,9 @@ export function createPathDisplayAutocompleteProvider(
               ? `${item.description}/`
               : item.description;
           const formattedPath = formatPathMatches(displayPath, query, formatMatch);
-          const status = getGitStatus(item);
-          const statusIndicator = status === undefined ? "" : formatGitStatus(status);
           const formattedItem: AutocompleteItem = {
             ...item,
-            label: statusIndicator ? `${statusIndicator} ${formattedPath}` : formattedPath,
+            label: formattedPath,
           };
           delete formattedItem.description;
           originalItems.set(formattedItem, item);
@@ -327,12 +346,10 @@ export function createPromptAutocompleteProvider(
   projectReferences: readonly ProjectReference[],
   formatAgentMention: AgentMentionFormatter,
   formatPathMatch: MatchFormatter = (text) => text,
-  formatGitStatus: GitStatusFormatter = () => "",
 ): AutocompleteProvider {
   const pathProvider = createPathDisplayAutocompleteProvider(
     provider,
     formatPathMatch,
-    formatGitStatus,
   );
   const aliasProvider = createAliasAutocompleteProvider(
     pathProvider,
@@ -355,7 +372,7 @@ export class AutocompleteOverlay {
   constructor(tui: TUI) {
     this.tui = tui;
     this.component = {
-      lines: [],
+      rows: [],
       rail: "",
       rightBorder: "",
       backgroundAnsi: "",
@@ -366,14 +383,14 @@ export class AutocompleteOverlay {
           0,
           width - visibleWidth(this.rail) - visibleWidth(this.rightBorder),
         );
-        return this.lines.map((line) => {
+        return this.rows.map(({ line, rail }) => {
           const styledLine = styleSelectedSuggestion(
             line,
             contentWidth,
             this.selectedBackgroundAnsi,
             this.selectedForegroundAnsi,
           );
-          return paintDockRow(styledLine, width, this.rail, this.backgroundAnsi, this.rightBorder);
+          return paintDockRow(styledLine, width, rail, this.backgroundAnsi, this.rightBorder);
         });
       },
       invalidate() {},
@@ -382,11 +399,15 @@ export class AutocompleteOverlay {
 
   update(
     suggestions: readonly string[],
+    suggestionRails: readonly string[],
     width: number,
     dockRowCount: number,
     style: AutocompleteOverlayStyle,
   ): void {
-    this.component.lines = [...suggestions];
+    this.component.rows = suggestions.map((line, index) => ({
+      line,
+      rail: suggestionRails[index] ?? style.rail,
+    }));
     if (suggestions.length === 0) {
       this.handle?.setHidden(true);
       return;

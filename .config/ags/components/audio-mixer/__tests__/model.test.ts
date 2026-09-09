@@ -29,9 +29,17 @@ function snapshot(volume = 50): AudioSnapshot {
 }
 
 describe("volume slider mapping", () => {
-	test("gives lower volume values more slider space", () => {
-		expect(sliderPositionToVolume(0.5)).toBeCloseTo(44.5953, 3);
-		expect(volumeToSliderPosition(44.5953)).toBeCloseTo(0.5, 3);
+	test("uses the stronger low-volume Bézier taper", () => {
+		const points = [
+			[0.25, 7.6171875],
+			[0.5, 32.8125],
+			[0.75, 79.1015625],
+		] as const;
+
+		for (const [position, volume] of points) {
+			expect(sliderPositionToVolume(position)).toBeCloseTo(volume, 6);
+			expect(volumeToSliderPosition(volume)).toBeCloseTo(position, 6);
+		}
 	});
 
 	test("keeps the slider endpoints stable", () => {

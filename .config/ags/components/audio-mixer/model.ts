@@ -41,8 +41,9 @@ export const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 export const maxVolume = 150;
 export const meterSegments = 12;
-// Approximate the measured Windows endpoint taper without changing backend units.
-const volumeSliderExponent = 1.75;
+// Keep low-volume values spread across more slider travel than the current power curve.
+const volumeSliderBezierStart = 0;
+const volumeSliderBezierEnd = 0.25;
 const volumeLevelIcons = [
 	"\uE992",
 	"\uE993",
@@ -123,12 +124,31 @@ export function clampFloat(value: number, max = maxVolume): number {
 	return Math.max(0, Math.min(max, value));
 }
 
+function sliderCurveValue(position: number): number {
+	const remaining = 1 - position;
+	return (
+		3 * remaining * remaining * position * volumeSliderBezierStart +
+		3 * remaining * position * position * volumeSliderBezierEnd +
+		position * position * position
+	);
+}
+
 export function volumeToSliderPosition(
 	volume: number,
 	max = maxVolume,
 ): number {
-	const normalized = clampFloat(volume, max) / max;
-	return Math.pow(normalized, 1 / volumeSliderExponent);
+	const target = clampFloat(volume, max) / max;
+	if (target === 0 || target === 1) return target;
+
+	let low = 0;
+	let high = 1;
+	// A general Bézier curve has no simple inverse, so solve its monotonic range numerically.
+	for (let iteration = 0; iteration < 24; iteration += 1) {
+		const midpoint = (low + high) / 2;
+		if (sliderCurveValue(midpoint) < target) low = midpoint;
+		else high = midpoint;
+	}
+	return (low + high) / 2;
 }
 
 export function sliderPositionToVolume(
@@ -136,7 +156,7 @@ export function sliderPositionToVolume(
 	max = maxVolume,
 ): number {
 	const normalized = Math.max(0, Math.min(1, position));
-	return Math.pow(normalized, volumeSliderExponent) * max;
+	return sliderCurveValue(normalized) * max;
 }
 
 function asArray<T>(value: unknown): T[] {

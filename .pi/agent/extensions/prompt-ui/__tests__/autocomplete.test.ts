@@ -12,6 +12,7 @@ import {
   findBottomBorder,
   formatPathMatches,
   prioritizeChangedFiles,
+  getSuggestionGitStatus,
   splitEditorLines,
   styleSelectedSuggestion,
   suggestionOverlayOffset,
@@ -89,6 +90,22 @@ describe("prompt autocomplete", () => {
     expect(formatted).toBe("<d>ocs/<a>gents/<p>lans/change.md");
   });
 
+  test("finds FFF status for rendered suggestion rows without changing labels", () => {
+    const items = [
+      {
+        value: "@.pi/modified.ts",
+        label: "\u001b[1m.pi/\u001b[22mmodified.ts",
+        gitStatus: "modified",
+      },
+      { value: "@.pi/clean.ts", label: ".pi/clean.ts", gitStatus: "clean" },
+    ];
+
+    expect(
+      getSuggestionGitStatus("  \u001b[1m.pi/\u001b[22mmodified.ts", items),
+    ).toBe("modified");
+    expect(getSuggestionGitStatus("  (1/20)", items)).toBeUndefined();
+  });
+
 
   test("promotes changed FFF files while preserving native order within each group", () => {
     const items = [
@@ -123,7 +140,6 @@ describe("prompt autocomplete", () => {
     const autocomplete = createPathDisplayAutocompleteProvider(
       provider,
       (text) => `\u001b[1m${text}\u001b[22m`,
-      (status) => `<${status}>`,
     );
 
     const suggestions = await autocomplete.getSuggestions(["@.pi/"], 0, 5, {
@@ -133,7 +149,7 @@ describe("prompt autocomplete", () => {
 
     expect(suggestion).toEqual({
       value: fileItem.value,
-      label: "<modified> \u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
+      label: "\u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
       gitStatus: "modified",
     } as AutocompleteItem);
     if (suggestion === undefined) throw new Error("Expected a path suggestion");
