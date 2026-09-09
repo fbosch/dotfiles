@@ -133,8 +133,8 @@ describe("bar chart", () => {
 
     const wideSvg = renderBarChartSvg(rows, theme, wide, "Balance");
     const narrowSvg = renderBarChartSvg(rows, theme, narrow, "Balance");
-    expect(wideSvg).toContain('width="1080" height="228" viewBox="0 0 540 114"');
-    expect(narrowSvg).toContain('width="504" height="228" viewBox="0 0 252 114"');
+    expect(wideSvg).toContain('width="540" height="114" viewBox="0 0 540 114"');
+    expect(narrowSvg).toContain('width="252" height="114" viewBox="0 0 252 114"');
   });
 
   test("routes bar results through TUI replay details and non-TUI PNG output", async () => {
@@ -156,7 +156,7 @@ describe("bar chart", () => {
     });
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 1080, heightPx: 228 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 114 });
   });
 
   test("deserializes only persisted bar details", () => {

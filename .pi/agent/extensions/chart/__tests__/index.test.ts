@@ -319,13 +319,13 @@ describe("pie chart", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
 
-    expect(nativeImageCellSize(64, 1080, 440, 60, 13)).toEqual({ columns: 60, rows: 13 });
-    expect(nativeImageCellSize(30, 504, 502, 28, 14)).toEqual({ columns: 28, rows: 14 });
+    expect(nativeImageCellSize(64, 540, 220, 60, 13)).toEqual({ columns: 60, rows: 13 });
+    expect(nativeImageCellSize(30, 252, 251, 28, 14)).toEqual({ columns: 28, rows: 14 });
   });
 
   test("renders a transparent themed SVG with matching slice and legend colors", () => {
     const svg = renderPieChartSvg(rows, theme);
-    expect(svg).toContain('width="1080" height="440"');
+    expect(svg).toContain('width="540" height="220"');
     expect(svg).toContain('viewBox="0 0 540 220"');
     expect(svg).toContain("rgb(102, 165, 173)");
     expect(svg).toContain("rgb(129, 155, 105)");
@@ -366,10 +366,10 @@ describe("pie chart", () => {
     });
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 1080, heightPx: 440 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 220 });
   });
 
-  test("rasterizes at 2x logical dimensions and displays compact wide and narrow cell heights", async () => {
+  test("rasterizes at native logical dimensions and displays compact wide and narrow cell heights", async () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
     const requestedSvg: string[] = [];
@@ -389,14 +389,14 @@ describe("pie chart", () => {
     expect(component.render(64)).toEqual(["Rendering pie chart…"]);
     await Promise.resolve();
     const wide = component.render(64)[0] ?? "";
-    expect(requestedSvg[0]).toContain('width="1080" height="440" viewBox="0 0 540 220"');
+    expect(requestedSvg[0]).toContain('width="540" height="220" viewBox="0 0 540 220"');
     expect(/(?:^|,)c=60(?:,|;)/.test(wide)).toBe(true);
     expect(/(?:^|,)r=13(?:,|;)/.test(wide)).toBe(true);
 
     expect(component.render(30)).toEqual(["Rendering pie chart…"]);
     await Promise.resolve();
     const narrow = component.render(30)[0] ?? "";
-    expect(requestedSvg[1]).toContain('width="504" height="502" viewBox="0 0 252 251"');
+    expect(requestedSvg[1]).toContain('width="252" height="251" viewBox="0 0 252 251"');
     expect(/(?:^|,)c=28(?:,|;)/.test(narrow)).toBe(true);
     expect(/(?:^|,)r=14(?:,|;)/.test(narrow)).toBe(true);
   });
