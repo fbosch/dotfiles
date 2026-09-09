@@ -30,7 +30,12 @@ const PLAN_MODE_SESSIONS = (() => {
   const globalState = globalThis as typeof globalThis & {
     [PLAN_MODE_SESSIONS_KEY]?: Set<string>;
   };
-  return globalState[PLAN_MODE_SESSIONS_KEY] ??= new Set<string>();
+  const existing = globalState[PLAN_MODE_SESSIONS_KEY];
+  if (existing !== undefined) return existing;
+
+  const sessions = new Set<string>();
+  globalState[PLAN_MODE_SESSIONS_KEY] = sessions;
+  return sessions;
 })();
 export type ModeName = "build" | "plan";
 

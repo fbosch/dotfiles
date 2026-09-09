@@ -210,9 +210,18 @@ describe("MCP approval routing", () => {
   });
 
   test("strict broker decisions override cached MCP session grants", async () => {
-    const { ensureToolCallApproved } = await import(
-      "../../npm/node_modules/pi-mcp-adapter/tool-approval.ts"
-    );
+    const moduleUrl = new URL(
+      "../../npm/node_modules/pi-mcp-adapter/tool-approval.ts",
+      import.meta.url,
+    ).href;
+    const { ensureToolCallApproved } = (await import(moduleUrl)) as {
+      ensureToolCallApproved(
+        state: unknown,
+        serverName: string,
+        metadata: unknown,
+        args: Record<string, unknown>,
+      ): Promise<{ ok: true } | { ok: false; reason: string }>;
+    };
     let decision: McpToolApprovalDecision = "allow_for_session";
     const state = {
       config: { mcpServers: {} },
@@ -226,22 +235,16 @@ describe("MCP approval routing", () => {
     const metadata = { name: "github_search_code", originalName: "search_code" };
 
     expect(
-      await ensureToolCallApproved(
-        state as never,
-        "github",
-        metadata as never,
-        { query: "repo:example" },
-      ),
+      await ensureToolCallApproved(state as never, "github", metadata as never, {
+        query: "repo:example",
+      }),
     ).toEqual({ ok: true });
 
     decision = "deny";
     expect(
-      await ensureToolCallApproved(
-        state as never,
-        "github",
-        metadata as never,
-        { query: "repo:example" },
-      ),
+      await ensureToolCallApproved(state as never, "github", metadata as never, {
+        query: "repo:example",
+      }),
     ).toEqual({ ok: false, reason: "denied" });
   });
 

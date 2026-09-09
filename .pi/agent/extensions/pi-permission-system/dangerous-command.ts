@@ -139,9 +139,7 @@ function trapAction(command: readonly string[]): string | undefined {
   return action === undefined || action.startsWith("-") ? undefined : action;
 }
 
-type ParsedLiteralCommands =
-  | { kind: "parsed"; commands: string[][] }
-  | { kind: "unknown" };
+type ParsedLiteralCommands = { kind: "parsed"; commands: string[][] } | { kind: "unknown" };
 
 async function parseShellLcLiteralCommands(
   command: readonly string[],

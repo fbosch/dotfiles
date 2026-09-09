@@ -65,9 +65,9 @@ describe("dangerousCommandMatch", () => {
 
   test("distinguishes unmatched commands from invalid nested shell source", async () => {
     expect(await analyzeDangerousCommand(["git", "status"])).toEqual({ kind: "no_match" });
-    expect(
-      await analyzeDangerousCommand(["bash", "-lc", "if then rm -rf /tmp/example"]),
-    ).toEqual({ kind: "unknown" });
+    expect(await analyzeDangerousCommand(["bash", "-lc", "if then rm -rf /tmp/example"])).toEqual({
+      kind: "unknown",
+    });
     expect(
       await dangerousCommandMatch(["bash", "-lc", "if then rm -rf /tmp/example"]),
     ).toBeUndefined();

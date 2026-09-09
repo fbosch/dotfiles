@@ -183,9 +183,7 @@ describe("permissions mode", () => {
         command: "sleep 0",
         payload: {
           request: { value: "sleep 0" },
-          evidence: [
-            { label: "full command", text: "sleep 0; rm -rf ./victim", detail: null },
-          ],
+          evidence: [{ label: "full command", text: "sleep 0; rm -rf ./victim", detail: null }],
         },
       },
       { surface: "bash" },
