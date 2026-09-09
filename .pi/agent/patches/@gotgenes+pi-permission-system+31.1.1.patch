@@ -170,7 +170,7 @@ diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/authorize
 index c73729c..dfb75b1 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/authorizer.ts
-@@ -130,0 +131 @@ export function selectAuthorizer(
+@@ -131,0 +132 @@ export function selectAuthorizer(
 +  const isSubagent = deps.detection.isSubagent(ctx);
 @@ -135,0 +137 @@ export function selectAuthorizer(
 +        isSubagent,
@@ -250,7 +250,7 @@ index aebada8..f0222ef 100644
 +  return value === "agent" || value === "global" ? value : undefined;
 +}
 +
-@@ -504,0 +513,7 @@ export function readForwardedPermissionResponse(
+@@ -505,0 +514,7 @@ export function readForwardedPermissionResponse(
 +      ...(asPersistentApprovalScope(parsed.persistentApprovalScope)
 +        ? {
 +            persistentApprovalScope: asPersistentApprovalScope(
@@ -272,11 +272,11 @@ index 66a3951..57db44a 100644
 +      buildRequestOptions(details, this.deps.isSubagent),
 @@ -86,0 +90 @@ function buildRequestOptions(
 +  isSubagent: boolean,
-@@ -105,0 +110,3 @@ function buildRequestOptions(
+@@ -106,0 +111,3 @@ function buildRequestOptions(
 +    ...(grants.length > 0
 +      ? { persistentScope: buildPersistentApprovalScope(details, isSubagent) }
 +      : {}),
-@@ -108,0 +116,19 @@ function buildRequestOptions(
+@@ -109,0 +118,19 @@ function buildRequestOptions(
 +
 +export function buildPersistentApprovalScope(
 +  details: Pick<PromptPermissionDetails, "agentName" | "forwarding">,

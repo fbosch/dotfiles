@@ -132,6 +132,46 @@ describe("prompt autocomplete", () => {
       "@clean-b.ts",
     ]);
   });
+
+  test("puts changed files before agents and project references", async () => {
+    const provider: AutocompleteProvider = {
+      getSuggestions: async () => ({
+        items: [
+          {
+            value: "@modified.ts",
+            label: "modified.ts",
+            description: "modified.ts",
+            gitStatus: "modified",
+          },
+          {
+            value: "@clean.ts",
+            label: "clean.ts",
+            description: "clean.ts",
+            gitStatus: "clean",
+          },
+        ],
+        prefix: "@",
+      }),
+      applyCompletion: (lines, cursorLine, cursorCol) => ({ lines, cursorLine, cursorCol }),
+    };
+    const autocomplete = createPromptAutocompleteProvider(
+      provider,
+      [{ name: "subagent", description: "Subagent" }],
+      [{ name: "docs", path: "/tmp/docs", description: "Documentation" }],
+      (_mention, text) => text,
+    );
+
+    const suggestions = await autocomplete.getSuggestions(["@"], 0, 1, {
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestions?.items.map((item) => item.value)).toEqual([
+      "@modified.ts",
+      "@docs",
+      "@subagent",
+      "@clean.ts",
+    ]);
+  });
   test("shows one highlighted full path while preserving the original completion item", async () => {
     const fileItem = {
       value: "@.pi/agent/extensions/prompt-ui/autocomplete.ts",

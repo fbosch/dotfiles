@@ -360,7 +360,23 @@ export function createPromptAutocompleteProvider(
     agentMentions,
     formatAgentMention,
   );
-  return createReferenceAutocompleteProvider(aliasProvider, projectReferences);
+  const composedProvider = createReferenceAutocompleteProvider(aliasProvider, projectReferences);
+  return {
+    ...composedProvider,
+    getSuggestions: async (lines, cursorLine, cursorCol, options) => {
+      const suggestions = await composedProvider.getSuggestions(
+        lines,
+        cursorLine,
+        cursorCol,
+        options,
+      );
+      if (suggestions === null) return null;
+      return {
+        ...suggestions,
+        items: prioritizeChangedFiles(suggestions.items),
+      };
+    },
+  };
 }
 
 export class AutocompleteOverlay {

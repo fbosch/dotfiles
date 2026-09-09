@@ -3,34 +3,63 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { type CellDimensions, getCellDimensions, Text } from "@earendil-works/pi-tui";
 import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
 import { Type } from "typebox";
 
-const WIDTH = 640;
-const HEIGHT = 360;
+const DEFAULT_IMAGE_WIDTH_CELLS = 60;
+const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
+const CHART_HEIGHT_CELLS = 20;
+const CHART_WIDTH_RATIO = 0.62;
 const MAX_SLICES = 12;
-const MAX_LABEL_LENGTH = 80;
+const MAX_LABEL_LENGTH = 22;
 const MAX_SVG_BYTES = 64 * 1024;
 const MAX_PNG_BYTES = 4 * 1024 * 1024;
-const SLICE_COLORS = [
-  "#60a5fa",
-  "#a78bfa",
-  "#f472b6",
-  "#fb923c",
-  "#facc15",
-  "#4ade80",
-  "#2dd4bf",
-  "#22d3ee",
-  "#818cf8",
-  "#e879f9",
-  "#fb7185",
-  "#a3e635",
+const RASTERIZE_TIMEOUT_MS = 10_000;
+const SLICE_COLOR_TOKENS = [
+  "accent",
+  "success",
+  "warning",
+  "error",
+  "mdLink",
+  "syntaxFunction",
+  "syntaxString",
+  "syntaxNumber",
+  "syntaxType",
+  "thinkingLow",
+  "thinkingMedium",
+  "thinkingHigh",
 ] as const;
 
 type PieChartInput = { labels: string[]; values: number[] };
 type ChartRow = { label: string; value: number };
+export type PieChartLayout = {
+  widthPx: number;
+  heightPx: number;
+  chartWidthPx: number;
+  legendX: number;
+};
+
+export function getPieChartLayout(cellDimensions?: CellDimensions): PieChartLayout {
+  const cellWidth = cellDimensions?.widthPx;
+  const cellHeight = cellDimensions?.heightPx;
+  const validDimensions =
+    typeof cellWidth === "number" &&
+    Number.isFinite(cellWidth) &&
+    cellWidth > 0 &&
+    typeof cellHeight === "number" &&
+    Number.isFinite(cellHeight) &&
+    cellHeight > 0;
+  const dimensions = validDimensions
+    ? { widthPx: cellWidth, heightPx: cellHeight }
+    : FALLBACK_CELL_DIMENSIONS;
+  const widthPx = Math.round(DEFAULT_IMAGE_WIDTH_CELLS * dimensions.widthPx);
+  const heightPx = Math.round(CHART_HEIGHT_CELLS * dimensions.heightPx);
+  const chartWidthPx = Math.round(widthPx * CHART_WIDTH_RATIO);
+
+  return { widthPx, heightPx, chartWidthPx, legendX: chartWidthPx + 20 };
+}
 
 export function validatePieChartInput(input: PieChartInput): ChartRow[] {
   if (input.labels.length !== input.values.length) {
@@ -40,19 +69,30 @@ export function validatePieChartInput(input: PieChartInput): ChartRow[] {
     throw new Error(`provide between 2 and ${MAX_SLICES} slices`);
   }
 
+  const labels = new Set<string>();
   const rows = input.labels.map((label, index) => {
     const value = input.values[index];
-    if (typeof label !== "string" || label.trim().length === 0 || label.length > MAX_LABEL_LENGTH) {
+    const normalizedLabel = label.trim();
+    if (
+      typeof label !== "string" ||
+      normalizedLabel.length === 0 ||
+      normalizedLabel.length > MAX_LABEL_LENGTH
+    ) {
       throw new Error(`label ${index + 1} must be 1-${MAX_LABEL_LENGTH} characters`);
     }
+    if (labels.has(normalizedLabel)) {
+      throw new Error(`label ${index + 1} duplicates an earlier label`);
+    }
+    labels.add(normalizedLabel);
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       throw new Error(`value ${index + 1} must be a finite nonnegative number`);
     }
-    return { label, value };
+    return { label: normalizedLabel, value };
   });
 
-  if (rows.reduce((total, row) => total + row.value, 0) <= 0) {
-    throw new Error("values must have a positive total");
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  if (!Number.isFinite(total) || total <= 0) {
+    throw new Error("values must have a finite positive total");
   }
   return rows;
 }
@@ -97,16 +137,20 @@ function escapeXml(value: string): string {
   return value.replace(
     /[<>&'"]/g,
     (character) =>
-      ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", "'": "&apos;", '"': "&quot;" })[character] ??
-      character,
+      ({ "<": "&lt;", ">": "&gt;", "&": "&apos;", '"': "&quot;" })[character] ?? character,
   );
 }
 
 export function renderPieChartSvg(
   rows: ChartRow[],
   theme: Pick<Theme, "getFgAnsi" | "getBgAnsi">,
+  layout = getPieChartLayout(),
 ): string {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
+  const sliceColors = SLICE_COLOR_TOKENS.map((token) =>
+    ansiColor(theme.getFgAnsi(token), "currentColor"),
+  );
   const definition = defineChart({
     marks: [
       polar({
@@ -114,7 +158,6 @@ export function renderPieChartSvg(
         radiusRatio: 0.86,
         marks: [
           radialArc(slices, {
-            innerRadius: ({ radius }) => radius * 0.5,
             color: "label",
             key: "label",
           }),
@@ -123,34 +166,31 @@ export function renderPieChartSvg(
       }),
     ],
     scales: { x: null, y: null },
-    color: { domain: rows.map((row) => row.label), range: SLICE_COLORS },
+    color: { domain: rows.map((row) => row.label), range: sliceColors },
   });
-  const scene = createChartScene(definition, { width: WIDTH, height: HEIGHT });
-  const chart = renderChartSvg(scene, {
-    ariaLabel: "Pie chart",
-    ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
-    idPrefix: "pi-pie",
+  const scene = createChartScene(definition, {
+    width: layout.chartWidthPx,
+    height: layout.heightPx,
   });
-  const foreground = ansiColor(theme.getFgAnsi("text"), "#e5e7eb");
-  const background = ansiColor(theme.getBgAnsi("toolSuccessBg"), "#111827");
+  const chart = renderChartSvg(scene, { ariaLabel: "Pie chart", idPrefix: "pi-pie" });
+  const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
+  const background = ansiColor(theme.getBgAnsi("toolSuccessBg"), "transparent");
   const legend = rows
     .map((row, index) => {
-      const y = 24 + index * 25;
-      const percentage = (
-        (row.value / rows.reduce((total, item) => total + item.value, 0)) *
-        100
-      ).toFixed(1);
-      return `<rect x="432" y="${y - 11}" width="10" height="10" rx="2" fill="${SLICE_COLORS[index] ?? SLICE_COLORS[0]}"/><text x="448" y="${y}" fill="${foreground}" font-family="sans-serif" font-size="12">${escapeXml(row.label)} ${percentage}%</text>`;
+      const y = 24 + index * 27;
+      const percentage = ((row.value / total) * 100).toFixed(1);
+      const color = sliceColors[index] ?? "currentColor";
+      return `<rect x="${layout.legendX}" y="${y - 11}" width="10" height="10" rx="2" fill="${color}"/><text x="${layout.legendX + 16}" y="${y}" fill="${foreground}" font-family="sans-serif" font-size="12">${escapeXml(row.label)}</text><text x="${layout.legendX + 16}" y="${y + 11}" fill="${foreground}" font-family="sans-serif" font-size="10">${percentage}%</text>`;
     })
     .join("");
-  return chart
-    .replace(">", `><rect width="100%" height="100%" fill="${background}"/>`)
-    .replace("</svg>", `<g>${legend}</g></svg>`);
+  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx}" height="${layout.heightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><rect width="100%" height="100%" fill="${background}"/><g>${chartBody}</g><g>${legend}</g></svg>`;
 }
 
-async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
-  if (Buffer.byteLength(svg) > MAX_SVG_BYTES)
+export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
+  if (Buffer.byteLength(svg) > MAX_SVG_BYTES) {
     throw new Error("chart SVG exceeded the resource limit");
+  }
   signal?.throwIfAborted();
   const directory = await mkdtemp(join(tmpdir(), "pi-chart-"));
   const input = join(directory, "chart.svg");
@@ -161,15 +201,36 @@ async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> 
       const child = spawn("rsvg-convert", ["--format", "png", "--output", output, input], {
         stdio: "ignore",
       });
-      const abort = () => child.kill("SIGTERM");
-      signal?.addEventListener("abort", abort, { once: true });
-      child.once("error", reject);
-      child.once("exit", (code) => {
+      let settled = false;
+      const finish = (error?: Error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         signal?.removeEventListener("abort", abort);
-        if (signal?.aborted) reject(new DOMException("Aborted", "AbortError"));
-        else if (code === 0) resolve();
-        else reject(new Error(`rsvg-convert exited with code ${code ?? "unknown"}`));
-      });
+        child.removeListener("error", onError);
+        child.removeListener("exit", onExit);
+        if (error) reject(error);
+        else resolve();
+      };
+      const abort = () => {
+        child.kill("SIGKILL");
+        finish(new DOMException("Aborted", "AbortError"));
+      };
+      const onError = (error: Error) => finish(error);
+      const onExit = (code: number | null) => {
+        if (signal?.aborted) finish(new DOMException("Aborted", "AbortError"));
+        else if (code === 0) finish();
+        else finish(new Error(`rsvg-convert exited with code ${code ?? "unknown"}`));
+      };
+      const timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        finish(new Error(`rsvg-convert timed out after ${RASTERIZE_TIMEOUT_MS}ms`));
+      }, RASTERIZE_TIMEOUT_MS);
+
+      child.once("error", onError);
+      child.once("exit", onExit);
+      signal?.addEventListener("abort", abort, { once: true });
+      if (signal?.aborted) abort();
     });
     signal?.throwIfAborted();
     const png = await readFile(output);
@@ -199,7 +260,12 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const rows = validatePieChartInput(params);
-      const png = await rasterizeSvg(renderPieChartSvg(rows, ctx.ui.theme), signal);
+      // Pi's Image component applies the actual tool-content-width clamp at render time.
+      const dimensions = ctx.mode === "tui" ? getCellDimensions() : undefined;
+      const png = await rasterizeSvg(
+        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(dimensions)),
+        signal,
+      );
       return {
         content: [{ type: "image", data: png, mimeType: "image/png" }],
         details: { slices: rows.length },
