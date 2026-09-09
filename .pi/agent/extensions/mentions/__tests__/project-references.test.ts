@@ -22,6 +22,7 @@ import projectReferences, {
   createReferenceAutocompleteProvider,
   formatProjectReferences,
   loadProjectReferences,
+  PROJECT_REFERENCES_END,
   PROJECT_REFERENCES_START,
 } from "../project-references";
 
@@ -169,12 +170,16 @@ describe("project references", () => {
     ).toThrow('Project reference "plan" conflicts with agent mention @Plan.');
   });
 
-  test("formats escaped reference metadata and appends it once", () => {
+  test("formats keyed JSON metadata and appends it once", () => {
     const references = [{ name: "docs", path: "/tmp/a&b", description: "Docs <current>" }];
     const formatted = formatProjectReferences(references);
+    const start =
+      formatted.indexOf(`${PROJECT_REFERENCES_START}\n`) + PROJECT_REFERENCES_START.length + 1;
+    const end = formatted.indexOf(`\n${PROJECT_REFERENCES_END}`);
 
-    expect(formatted).toContain("<path>/tmp/a&amp;b</path>");
-    expect(formatted).toContain("<description>Docs &lt;current&gt;</description>");
+    expect(JSON.parse(formatted.slice(start, end))).toEqual({
+      docs: { path: "/tmp/a&b", description: "Docs <current>" },
+    });
     const appended = appendProjectReferences("base prompt", references);
     expect(appended).toContain(PROJECT_REFERENCES_START);
     expect(appendProjectReferences(appended, references)).toBe(appended);
@@ -307,8 +312,7 @@ describe("project references", () => {
       } as BeforeAgentStartEvent,
       context,
     );
-    expect(result?.systemPrompt).toContain("<name>reference-material</name>");
-    expect(result?.systemPrompt).toContain(join(cwd, ".docs", "reference-material"));
+    expect(result?.systemPrompt).toContain('"reference-material":{"path":');
     const rendered = new UserMessageComponent("Inspect @reference-material and screenshot.png")
       .render(80)
       .join("\n");
