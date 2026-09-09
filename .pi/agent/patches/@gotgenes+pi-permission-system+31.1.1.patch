@@ -188,243 +188,6 @@ index 3134210..f4319d1 100644
  }
  
  /**
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-index 8e9b7a8..805944b 100644
---- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/program.ts
-@@ -9,6 +9,20 @@ import { getParser } from "./parser";
- 
- export type { BashCommand, BashExternalPath, BashPathRuleCandidate };
- 
-+/** Review uncertain shell programs and potentially destructive operations even in session YOLO. */
-+export async function requiresBashReview(command: string): Promise<boolean> {
-+  const parser = await getParser();
-+  const tree = parser.parse(command);
-+  if (!tree) return true;
-+  try {
-+    const commands = collectCommands(tree.rootNode);
-+    return tree.rootNode.hasError || commands.length === 0 || commands.some((unit) =>
-+      !unit.denialCandidates?.length || unit.requiresConfirmation || unit.yoloUnsafe || unit.wrapperKind || unit.parseUnresolved);
-+  } finally {
-+    tree.delete();
-+  }
-+}
-+
- /**
-  * A bash command parsed once into a born-ready representation.
-  *
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
-new file mode 100644
-index 0000000..dd7c12d
---- /dev/null
-+++ b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/shell-safety.ts
-@@ -0,0 +1,206 @@
-+import { commandLayersOf, type CommandWord } from "./wrapper-analysis";
-+
-+export interface ShellSafetyFacts {
-+  readonly denialCandidates?: readonly string[];
-+  readonly requiresConfirmation?: true;
-+  readonly yoloUnsafe?: true;
-+}
-+
-+// Decode literal shell words only. Expansion is deliberately not evaluated:
-+// doing so could execute substitutions or read secrets before authorization.
-+export function literalShellWord(text: string): string | undefined {
-+  let quote = "";
-+  let value = "";
-+  for (let index = 0; index < text.length; index++) {
-+    const char = text[index];
-+    if (quote === "'") {
-+      if (char === "'") quote = "";
-+      else value += char;
-+      continue;
-+    }
-+    if (char === "\\") {
-+      const next = text[++index];
-+      if (next === undefined) return undefined;
-+      if (next === "\n") continue;
-+      if (quote === '"' && !["$", "`", '"', "\\"].includes(next)) value += "\\";
-+      value += next;
-+      continue;
-+    }
-+    if (char === quote) {
-+      quote = "";
-+      continue;
-+    }
-+    if (!quote && (char === "'" || char === '"')) {
-+      quote = char;
-+      continue;
-+    }
-+    if (char === "$" || char === "`" || (!quote && "*?[]{}".includes(char))) return undefined;
-+    value += char;
-+  }
-+  return quote ? undefined : value;
-+}
-+
-+const FILE_MUTATORS = new Set(["rm", "rmdir", "unlink", "truncate", "dd", "shred"]);
-+// Unknown programs can delete data just as easily as rm. Only named readers
-+// are eligible for automatic approval; explicitly allowed project tasks still
-+// pass through the normal permission rules without consulting YOLO.
-+const YOLO_READERS = new Set([
-+  "pwd",
-+  "true",
-+  "false",
-+  "echo",
-+  "printf",
-+  "test",
-+  "command",
-+  "uname",
-+  "id",
-+  "whoami",
-+  "cd",
-+  "ls",
-+  "cat",
-+  "nl",
-+  "head",
-+  "tail",
-+  "wc",
-+  "stat",
-+  "basename",
-+  "dirname",
-+  "realpath",
-+  "which",
-+  "grep",
-+  "egrep",
-+  "fgrep",
-+  "git",
-+]);
-+const GIT_READERS = new Set([
-+  "status",
-+  "diff",
-+  "log",
-+  "show",
-+  "rev-parse",
-+  "ls-files",
-+  "ls-tree",
-+  "grep",
-+  "describe",
-+  "blame",
-+]);
-+const POWER_ACTIONS = new Set(["reboot", "poweroff", "halt", "kexec", "soft-reboot"]);
-+
-+function withoutGlobalOptions(
-+  args: readonly string[],
-+  valueFlags: ReadonlySet<string>,
-+): readonly string[] {
-+  let index = 0;
-+  while (index < args.length && args[index].startsWith("-")) {
-+    if (args[index] === "--") return args.slice(index + 1);
-+    index += valueFlags.has(args[index]) ? 2 : 1;
-+  }
-+  return args.slice(index);
-+}
-+const GIT_VALUE_FLAGS = new Set([
-+  "-C",
-+  "-c",
-+  "--git-dir",
-+  "--work-tree",
-+  "--namespace",
-+  "--config-env",
-+]);
-+const SYSTEMCTL_VALUE_FLAGS = new Set(["-H", "--host", "-M", "--machine", "--root", "--image"]);
-+
-+function needsConfirmation(name: string, args: readonly string[]): boolean {
-+  if (FILE_MUTATORS.has(name)) return true;
-+  if (name === "rg") return true; // Recursive by default; individual files are not permission-checked.
-+  if (["grep", "egrep", "fgrep"].includes(name)) {
-+    return args.some(
-+      (arg, index) =>
-+        /^-[^-]*[rR]/.test(arg) ||
-+        (arg.startsWith("--") &&
-+          arg.length > 2 &&
-+          ["--recursive", "--dereference-recursive", "--directories"].some((option) =>
-+            option.startsWith(arg.split("=")[0]),
-+          )) ||
-+        (["-d", "--directories"].includes(arg) && args[index + 1] === "recurse"),
-+    );
-+  }
-+  if (name === "find" || name === "fd") {
-+    return args.some((arg) =>
-+      [
-+        "-delete",
-+        "-exec",
-+        "-execdir",
-+        "-ok",
-+        "-okdir",
-+        "-x",
-+        "-X",
-+        "--exec",
-+        "--exec-batch",
-+      ].includes(arg),
-+    );
-+  }
-+  if (name === "wt") return true;
-+  if (name !== "git") return false;
-+  if (args.some((arg) => arg === "-c" || arg.startsWith("-c") || arg.startsWith("--config-env")))
-+    return true;
-+  const [verb, ...rest] = withoutGlobalOptions(args, GIT_VALUE_FLAGS);
-+  if (GIT_READERS.has(verb))
-+    return rest.some(
-+      (arg) => arg.startsWith("--output") || ["--ext-diff", "--textconv"].includes(arg),
-+    );
-+  if (verb === "branch") {
-+    if (
-+      rest.some(
-+        (arg) =>
-+          /^-[^-]*[dDmMcCf]/.test(arg) || ["--delete", "--move", "--copy", "--force"].includes(arg),
-+      )
-+    )
-+      return true;
-+    return (
-+      rest.length > 0 &&
-+      !rest.includes("--list") &&
-+      !rest.every((arg) =>
-+        ["--show-current", "--all", "--remotes", "-a", "-r", "-v", "-vv"].includes(arg),
-+      )
-+    );
-+  }
-+  if (verb === "worktree" && rest[0] === "list") return false;
-+  if (verb === "worktree" && rest[0] === "prune")
-+    return !rest.includes("--dry-run") || rest.includes("--no-dry-run");
-+  if (verb === "clean")
-+    return (
-+      !rest.some((arg) => arg === "--dry-run" || /^-[^-]*n/.test(arg)) ||
-+      rest.includes("--no-dry-run")
-+    );
-+  return true;
-+}
-+
-+export function shellSafetyFacts(words: readonly CommandWord[]): ShellSafetyFacts {
-+  const literal = words.map((word) => literalShellWord(word.text));
-+  const uncertain =
-+    literal.some((word) => word === undefined) ||
-+    words.some((word) => word.text.includes("\\") && !/^'[^']*'$/.test(word.text));
-+  const normalized = words.map((word, index) => ({ ...word, text: literal[index] ?? word.text }));
-+  const candidates: string[] = [];
-+  let requiresConfirmation = uncertain;
-+  let yoloUnsafe = uncertain;
-+  for (const layer of commandLayersOf(normalized)) {
-+    const head = literalShellWord(layer[0]?.text ?? "");
-+    if (!head) {
-+      yoloUnsafe = true;
-+      continue;
-+    }
-+    const name = head.slice(head.lastIndexOf("/") + 1);
-+    const args = layer.slice(1).map((word) => word.text);
-+    candidates.push([name, ...args].join(" "));
-+    if (name === "systemctl") {
-+      const [verb] = withoutGlobalOptions(args, SYSTEMCTL_VALUE_FLAGS);
-+      if (POWER_ACTIONS.has(verb)) candidates.push(`systemctl ${verb}`);
-+    }
-+    requiresConfirmation ||= needsConfirmation(name, args);
-+    yoloUnsafe ||= head !== name || !YOLO_READERS.has(name);
-+  }
-+  return {
-+    denialCandidates: candidates,
-+    ...(requiresConfirmation ? { requiresConfirmation: true } : {}),
-+    ...(yoloUnsafe ? { yoloUnsafe: true } : {}),
-+  };
-+}
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts b/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
 index 6844185..162158a 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/access-intent/bash/wrapper-analysis.ts
@@ -517,7 +280,7 @@ index c73729c..dfb75b1 100644
        terminal: new ParentAuthorizer(ctx, {
          forwardingDir: deps.forwardingDir,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
-index 4b7ecd5..abb5611 100644
+index 4b7ecd5..9787d42 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/delegation-envelope.ts
 @@ -15,6 +15,10 @@
@@ -822,7 +585,7 @@ index da85a31..2ce9023 100644
  
  export type PermissionForwardingLocation = {
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
-index a05f807..2b9f3cb 100644
+index a05f807..ce3a275 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/authority/permission-prompt-component.ts
 @@ -93,12 +93,17 @@ export async function requestPermissionDecision(
@@ -905,7 +668,7 @@ index a05f807..2b9f3cb 100644
        (text) => this.theme.fg("warning", text),
      );
    }
-@@ -315,10 +335,20 @@ class PermissionPromptComponent implements Component {
+@@ -315,10 +335,18 @@ class PermissionPromptComponent implements Component {
    }
  
    private toEvent(data: string): PromptEvent | undefined {
@@ -913,8 +676,7 @@ index a05f807..2b9f3cb 100644
 +    if (
 +      matchesKey(data, "up") ||
 +      matchesKey(data, "k") ||
-+      matchesKey(data, "h") ||
-+      matchesKey(data, "left")
++      matchesKey(data, "h")
 +    ) {
        return { type: "nav", direction: "up" };
      }
@@ -922,13 +684,12 @@ index a05f807..2b9f3cb 100644
 +    if (
 +      matchesKey(data, "down") ||
 +      matchesKey(data, "j") ||
-+      matchesKey(data, "l") ||
-+      matchesKey(data, "right")
++      matchesKey(data, "l")
 +    ) {
        return { type: "nav", direction: "down" };
      }
      if (matchesKey(data, "enter")) {
-@@ -393,7 +423,52 @@ class PermissionPromptComponent implements Component {
+@@ -393,7 +421,52 @@ class PermissionPromptComponent implements Component {
      return lines;
    }
  
@@ -982,7 +743,7 @@ index a05f807..2b9f3cb 100644
      const scope = this.config.sessionScope;
      const subagentLabel = scope?.subagentLabel ?? "This subagent only";
      const servingLabel = scope?.servingSessionLabel ?? "The whole session";
-@@ -403,6 +478,8 @@ class PermissionPromptComponent implements Component {
+@@ -403,6 +476,8 @@ class PermissionPromptComponent implements Component {
      ];
      const lines = [
        this.theme.fg("accent", this.title),
@@ -1240,400 +1001,84 @@ index ece4cf1..1258054 100644
        requestId: details.requestId,
        source: details.source,
        agentName: details.agentName,
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
-new file mode 100644
-index 0000000..7e87654
---- /dev/null
-+++ b/node_modules/@gotgenes/pi-permission-system/src/config/persistent-approval-store.ts
-@@ -0,0 +1,388 @@
-+import { randomUUID } from "node:crypto";
-+import {
-+  closeSync,
-+  lstatSync,
-+  mkdirSync,
-+  openSync,
-+  readFileSync,
-+  realpathSync,
-+  renameSync,
-+  statSync,
-+  unlinkSync,
-+  writeFileSync,
-+} from "node:fs";
-+import { basename, dirname, join } from "node:path";
-+import type { ApprovalGrant } from "#src/session/approval-grant";
-+import type {
-+  PersistentApprovalRecorder,
-+  PersistentApprovalScope,
-+} from "#src/session/session-approval-recorder";
-+import type { SessionApproval } from "#src/session/session-approval";
-+import { stripJsonComments, validateUnifiedConfig } from "./config-loader";
-+import { getGlobalConfigPath } from "./config-paths";
-+import { parseSimpleYamlMap } from "./yaml-frontmatter";
-+
-+const OWNER_ONLY_FILE_MODE = 0o600;
-+const OWNER_ONLY_DIRECTORY_MODE = 0o700;
-+
-+/**
-+ * Persist approvals selected from the permission prompt.
-+ *
-+ * Global approvals are written to the extension config. Agent approvals are
-+ * written to the named global agent's permission frontmatter, which is the
-+ * same file the policy loader already uses. The writer resolves symlinks before
-+ * renaming so Stow-managed files remain symlinks.
-+ */
-+export class PersistentApprovalStore implements PersistentApprovalRecorder {
-+  constructor(private readonly agentDir: string) {}
-+
-+  persistApproval(
-+    approval: SessionApproval,
-+    scope: PersistentApprovalScope,
-+    agentName?: string | null,
-+  ): void {
-+    if (!approval.isRecordable) {
-+      throw new Error("Cannot persist an approval without any grants.");
-+    }
-+
-+    if (scope === "global") {
-+      this.persistGlobal(approval.grants);
-+      return;
-+    }
-+
-+    if (!agentName || !isSafeAgentName(agentName)) {
-+      throw new Error("Cannot persist an agent approval without a valid agent name.");
-+    }
-+    this.persistAgent(agentName, approval.grants);
-+  }
-+
-+  private persistGlobal(grants: readonly ApprovalGrant[]): void {
-+    const configPath = getGlobalConfigPath(this.agentDir);
-+    const targetPath = resolveWriteTarget(configPath);
-+    withFileUpdateLock(targetPath, () => {
-+      const config = readValidatedJsonConfig(targetPath);
-+      const next = {
-+        ...config,
-+        permission: mergeApprovalGrants(config.permission, grants),
-+      };
-+      writeTextFileAtomically(targetPath, `${JSON.stringify(next, null, 2)}\n`);
-+    });
-+  }
-+
-+  private persistAgent(agentName: string, grants: readonly ApprovalGrant[]): void {
-+    const agentPath = join(this.agentDir, "agents", `${agentName}.md`);
-+    if (!pathEntryExists(agentPath)) {
-+      throw new Error(`Global agent profile '${agentName}' does not exist.`);
-+    }
-+
-+    const targetPath = resolveWriteTarget(agentPath);
-+    withFileUpdateLock(targetPath, () => {
-+      const markdown = readFileSync(targetPath, "utf-8");
-+      const next = updateAgentPermissionFrontmatter(markdown, grants);
-+      writeTextFileAtomically(targetPath, next);
-+    });
-+  }
-+}
-+
-+/** Add exact allow entries without mutating the loaded config. */
-+export function mergeApprovalGrants(
-+  permissionValue: unknown,
-+  grants: readonly ApprovalGrant[],
-+): Record<string, unknown> {
-+  const permission = isRecord(permissionValue) ? { ...permissionValue } : {};
-+
-+  for (const grant of grants) {
-+    const current = permission[grant.surface];
-+    const patterns: Record<string, unknown> =
-+      typeof current === "string" ? { "*": current } : isRecord(current) ? { ...current } : {};
-+    // Rules are last-match-wins. Reinsert an existing pattern so this explicit
-+    // approval follows any wildcard that previously came after it.
-+    delete patterns[grant.pattern];
-+    patterns[grant.pattern] = "allow";
-+    permission[grant.surface] = patterns;
-+  }
-+
-+  return permission;
-+}
-+
-+function readValidatedJsonConfig(configPath: string): Record<string, unknown> {
-+  if (!pathEntryExists(configPath)) return {};
-+
-+  let parsed: unknown;
-+  try {
-+    parsed = JSON.parse(stripJsonComments(readFileSync(configPath, "utf-8")));
-+  } catch (error) {
-+    throw new Error(
-+      `Cannot persist approval because '${configPath}' is not valid JSON: ${formatError(error)}`,
-+    );
-+  }
-+
-+  if (!isRecord(parsed)) {
-+    throw new Error(`Cannot persist approval because '${configPath}' must contain a JSON object.`);
-+  }
-+
-+  const validation = validateUnifiedConfig(parsed);
-+  if (validation.issues.length > 0) {
-+    throw new Error(
-+      `Cannot persist approval because '${configPath}' is invalid: ${validation.issues.join(" ")}`,
-+    );
-+  }
-+
-+  // Keep the source shape, including unrelated fields, while validation above
-+  // guarantees that the merge cannot turn a malformed file into a valid one.
-+  return parsed;
-+}
-+
-+function updateAgentPermissionFrontmatter(
-+  markdown: string,
-+  grants: readonly ApprovalGrant[],
-+): string {
-+  const normalized = markdown.replace(/\r\n/g, "\n");
-+  if (!normalized.startsWith("---\n")) {
-+    throw new Error("Cannot persist approval because the agent profile has no frontmatter.");
-+  }
-+
-+  const closingIndex = normalized.indexOf("\n---", 4);
-+  if (closingIndex === -1) {
-+    throw new Error("Cannot persist approval because the agent frontmatter is unterminated.");
-+  }
-+
-+  const frontmatter = normalized.slice(4, closingIndex);
-+  const parsed = parseSimpleYamlMap(frontmatter);
-+  const nextPermission = mergeApprovalGrants(parsed.permission, grants);
-+  const renderedPermission = serializeYamlObject("permission", nextPermission, 0);
-+  const lines = frontmatter.split("\n");
-+  const permissionLine = lines.findIndex((line) =>
-+    /^(?:permission|"permission"|'permission')\s*:/.test(line),
-+  );
-+
-+  if (permissionLine === -1) {
-+    const nextFrontmatter = [...lines, ...renderedPermission].join("\n");
-+    return `${normalized.slice(0, 4)}${nextFrontmatter}${normalized.slice(closingIndex)}`;
-+  }
-+
-+  let permissionEnd = permissionLine + 1;
-+  while (permissionEnd < lines.length) {
-+    const line = lines[permissionEnd] ?? "";
-+    const trimmed = line.trim();
-+    const indent = line.length - line.trimStart().length;
-+    if (trimmed && !trimmed.startsWith("#") && indent === 0) break;
-+    permissionEnd++;
-+  }
-+
-+  const nextFrontmatter = [
-+    ...lines.slice(0, permissionLine),
-+    ...renderedPermission,
-+    ...lines.slice(permissionEnd),
-+  ].join("\n");
-+  return `${normalized.slice(0, 4)}${nextFrontmatter}${normalized.slice(closingIndex)}`;
-+}
-+
-+function serializeYamlObject(
-+  key: string,
-+  value: Record<string, unknown>,
-+  indent: number,
-+): string[] {
-+  const padding = " ".repeat(indent);
-+  const lines = [`${padding}${key}:`];
-+  for (const [childKey, childValue] of Object.entries(value)) {
-+    const childPadding = " ".repeat(indent + 2);
-+    if (isRecord(childValue)) {
-+      lines.push(`${childPadding}${serializeYamlKey(childKey)}:`);
-+      lines.push(...serializeYamlEntries(childValue, indent + 4));
-+    } else if (typeof childValue === "string") {
-+      lines.push(`${childPadding}${serializeYamlKey(childKey)}: ${JSON.stringify(childValue)}`);
-+    } else {
-+      throw new Error(
-+        `Cannot persist approval because permission key '${childKey}' has an unsupported value.`,
-+      );
-+    }
-+  }
-+  return lines;
-+}
-+
-+function serializeYamlEntries(value: Record<string, unknown>, indent: number): string[] {
-+  const lines: string[] = [];
-+  for (const [key, childValue] of Object.entries(value)) {
-+    const padding = " ".repeat(indent);
-+    if (isRecord(childValue)) {
-+      lines.push(`${padding}${serializeYamlKey(key)}:`);
-+      lines.push(...serializeYamlEntries(childValue, indent + 2));
-+    } else if (typeof childValue === "string") {
-+      lines.push(`${padding}${serializeYamlKey(key)}: ${JSON.stringify(childValue)}`);
-+    } else {
-+      throw new Error(
-+        `Cannot persist approval because permission key '${key}' has an unsupported value.`,
-+      );
-+    }
-+  }
-+  return lines;
-+}
-+
-+function serializeYamlKey(value: string): string {
-+  return JSON.stringify(value);
-+}
-+
-+interface FileUpdateLock {
-+  descriptor: number;
-+  path: string;
-+  token: string;
-+}
-+
-+function withFileUpdateLock<T>(targetPath: string, update: () => T): T {
-+  mkdirSync(dirname(targetPath), {
-+    recursive: true,
-+    mode: OWNER_ONLY_DIRECTORY_MODE,
-+  });
-+  const lock = acquireFileUpdateLock(targetPath);
-+  try {
-+    return update();
-+  } finally {
-+    releaseFileUpdateLock(lock);
-+  }
-+}
-+
-+function acquireFileUpdateLock(targetPath: string): FileUpdateLock {
-+  const path = `${targetPath}.approval.lock`;
-+  let descriptor: number;
-+  try {
-+    descriptor = openSync(path, "wx", OWNER_ONLY_FILE_MODE);
-+  } catch (error) {
-+    if (isErrnoException(error, "EEXIST")) {
-+      // Never reclaim here: two reclaimers can delete each other's live lock.
-+      // A leftover lock fails closed and requires explicit operator cleanup.
-+      throw new Error(
-+        `Cannot persist approval because '${targetPath}' is already being updated or has a stale approval lock.`,
-+      );
-+    }
-+    throw error;
-+  }
-+
-+  const token = randomUUID();
-+  try {
-+    writeFileSync(descriptor, `${JSON.stringify({ pid: process.pid, token })}\n`);
-+    return { descriptor, path, token };
-+  } catch (error) {
-+    if (closeFile(descriptor)) {
-+      try {
-+        unlinkSync(path);
-+      } catch {
-+        // Preserve the write failure; this process created the lock file.
-+      }
-+    }
-+    throw error;
-+  }
-+}
-+
-+function releaseFileUpdateLock(lock: FileUpdateLock): void {
-+  if (!closeFile(lock.descriptor)) return;
-+  try {
-+    const value: unknown = JSON.parse(readFileSync(lock.path, "utf-8"));
-+    if (isRecord(value) && value.token === lock.token) {
-+      unlinkSync(lock.path);
-+    }
-+  } catch {
-+    // Persistence already completed or failed; lock cleanup must not replace
-+    // that outcome with a less useful cleanup error.
-+  }
-+}
-+
-+function resolveWriteTarget(filePath: string): string {
-+  let entry;
-+  try {
-+    entry = lstatSync(filePath);
-+  } catch (error) {
-+    if (isErrnoException(error, "ENOENT")) return filePath;
-+    throw error;
-+  }
-+  if (!entry.isSymbolicLink()) return filePath;
-+
-+  try {
-+    return realpathSync(filePath);
-+  } catch (error) {
-+    throw new Error(
-+      `Cannot persist approval because symlink '${filePath}' has no readable target: ${formatError(error)}`,
-+    );
-+  }
-+}
-+
-+function pathEntryExists(filePath: string): boolean {
-+  try {
-+    lstatSync(filePath);
-+    return true;
-+  } catch (error) {
-+    if (isErrnoException(error, "ENOENT")) return false;
-+    throw error;
-+  }
-+}
-+
-+function writeTextFileAtomically(targetPath: string, contents: string): void {
-+  mkdirSync(dirname(targetPath), {
-+    recursive: true,
-+    mode: OWNER_ONLY_DIRECTORY_MODE,
-+  });
-+
-+  let mode = OWNER_ONLY_FILE_MODE;
-+  try {
-+    mode = statSync(targetPath).mode & 0o777;
-+  } catch {
-+    // A new file keeps the owner-only default.
-+  }
-+
-+  const temporaryPath = join(dirname(targetPath), `.${basename(targetPath)}.${randomUUID()}.tmp`);
-+  let descriptor: number | undefined;
-+  let temporaryCreated = false;
-+  try {
-+    descriptor = openSync(temporaryPath, "wx", mode);
-+    temporaryCreated = true;
-+    writeFileSync(descriptor, contents, { encoding: "utf-8" });
-+    try {
-+      closeSync(descriptor);
-+    } finally {
-+      descriptor = undefined;
-+    }
-+    renameSync(temporaryPath, targetPath);
-+  } catch (error) {
-+    if (descriptor !== undefined) closeFile(descriptor);
-+    if (temporaryCreated) {
-+      try {
-+        unlinkSync(temporaryPath);
-+      } catch {
-+        // Ignore cleanup failures while preserving the original write error.
-+      }
-+    }
-+    throw error;
-+  }
-+}
-+
-+function closeFile(descriptor: number): boolean {
-+  try {
-+    closeSync(descriptor);
-+    return true;
-+  } catch {
-+    return false;
-+  }
-+}
-+
-+function isSafeAgentName(value: string): boolean {
-+  return (
-+    value.trim().length > 0 &&
-+    value !== "." &&
-+    value !== ".." &&
-+    !value.includes("/") &&
-+    !value.includes("\\") &&
-+    !value.includes("\0")
-+  );
-+}
-+
-+function isRecord(value: unknown): value is Record<string, unknown> {
-+  return typeof value === "object" && value !== null && !Array.isArray(value);
-+}
-+
-+function isErrnoException(error: unknown, code: string): boolean {
-+  return isRecord(error) && error.code === code;
-+}
-+
-+function formatError(error: unknown): string {
-+  return error instanceof Error ? error.message : String(error);
-+}
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts b/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts
+index a7c1fc4..81e11f8 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts
+@@ -34,7 +34,7 @@ const COMMAND_ARGUMENTS = [
+   {
+     value: "reset",
+     label: "Reset defaults",
+-    description: "Restore default yolo/logging settings and persist them",
++    description: "Restore default logging settings and persist them",
+   },
+   {
+     value: "help",
+@@ -77,7 +77,6 @@ function summarizeConfig(
+   rules?: Ruleset,
+ ): string {
+   const knobs = [
+-    `yoloMode=${toOnOff(config.yoloMode)}`,
+     `permissionReviewLog=${toOnOff(config.permissionReviewLog)}`,
+     `debugLog=${toOnOff(config.debugLog)}`,
+   ].join(", ");
+@@ -89,14 +88,6 @@ function buildSettingItems(
+   config: PermissionSystemExtensionConfig,
+ ): SettingItem[] {
+   return [
+-    {
+-      id: "yoloMode",
+-      label: "YOLO mode",
+-      description:
+-        "Auto-approve ask-state permission checks, including subagent approval forwarding",
+-      currentValue: toOnOff(config.yoloMode),
+-      values: ON_OFF,
+-    },
+     {
+       id: "permissionReviewLog",
+       label: "Permission review log",
+@@ -130,8 +121,6 @@ function applySetting(
+   value: string,
+ ): PermissionSystemExtensionConfig {
+   switch (id) {
+-    case "yoloMode":
+-      return { ...config, yoloMode: value === "on" };
+     case "permissionReviewLog":
+       return { ...config, permissionReviewLog: value === "on" };
+     case "debugLog":
+diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/status.ts b/node_modules/@gotgenes/pi-permission-system/src/config/status.ts
+index ef2cfe4..1d5edc2 100644
+--- a/node_modules/@gotgenes/pi-permission-system/src/config/status.ts
++++ b/node_modules/@gotgenes/pi-permission-system/src/config/status.ts
+@@ -3,25 +3,18 @@ import type {
+   ExtensionContext,
+ } from "@earendil-works/pi-coding-agent";
+ 
+-import {
+-  EXTENSION_ID,
+-  isYoloModeEnabled,
+-  type PermissionSystemExtensionConfig,
+-} from "./extension-config";
++import { EXTENSION_ID, type PermissionSystemExtensionConfig } from "./extension-config";
+ 
+ export const PERMISSION_SYSTEM_STATUS_KEY = EXTENSION_ID;
+-export const PERMISSION_SYSTEM_YOLO_STATUS_VALUE = "yolo";
+ 
+ type PermissionStatusContext =
+   | Pick<ExtensionContext, "hasUI" | "ui">
+   | Pick<ExtensionCommandContext, "ui">;
+ 
+ export function getPermissionSystemStatus(
+-  config: PermissionSystemExtensionConfig,
++  _config: PermissionSystemExtensionConfig,
+ ): string | undefined {
+-  return isYoloModeEnabled(config)
+-    ? PERMISSION_SYSTEM_YOLO_STATUS_VALUE
+-    : undefined;
++  return undefined;
+ }
+ 
+ export function syncPermissionSystemStatus(
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts b/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts
 index 64486c5..bfd6d7e 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/config/yaml-frontmatter.ts
@@ -1971,10 +1416,12 @@ index 9817c1f..931e503 100644
          pathAccess: {
            path: accessPath,
 diff --git a/node_modules/@gotgenes/pi-permission-system/src/index.ts b/node_modules/@gotgenes/pi-permission-system/src/index.ts
-index 245fe2a..5856fbf 100644
+index 245fe2a..3ff676a 100644
 --- a/node_modules/@gotgenes/pi-permission-system/src/index.ts
 +++ b/node_modules/@gotgenes/pi-permission-system/src/index.ts
-@@ -37,6 +37,6 @@ import { getGlobalConfigPath } from "#src/config/config-paths";
+@@ -35,8 +35,8 @@ import { getSubagentSessionRegistry } from "#src/authority/subagent-registry";
+ import { registerPermissionSystemCommand } from "#src/config/config-modal";
+ import { getGlobalConfigPath } from "#src/config/config-paths";
  import { ConfigStore } from "#src/config/config-store";
 -import { isYoloModeEnabled } from "#src/config/extension-config";
  import { computeExtensionPaths } from "#src/config/extension-paths";
@@ -1982,7 +1429,10 @@ index 245fe2a..5856fbf 100644
  import { GateRunner } from "#src/handlers/gates/runner";
  import { SkillInputGatePipeline } from "#src/handlers/gates/skill-input-gate-pipeline";
  import { ToolCallGatePipeline } from "#src/handlers/gates/tool-call-gate-pipeline";
-@@ -106,7 +106,5 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+@@ -103,11 +103,9 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+   // eslint-disable-next-line prefer-const -- forward-declared let; `const` requires an initializer
+   let session: PermissionSession;
+ 
 -  // Declared after the `configStore` forward declaration so the reader can
 -  // close over it; every call runs after configStore is assigned below. yolo is
 -  // a composition-stage ask→allow rewrite (#526) that the gate runner extends
@@ -1993,7 +1443,8 @@ index 245fe2a..5856fbf 100644
 +  const isYoloEnabled = (): boolean => false;
  
    const permissionManager = new PermissionManager({
-@@ -299,6 +300,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+     agentDir,
+@@ -299,6 +297,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
    };
  
    const audit = new DecisionAudit();
@@ -2001,7 +1452,7 @@ index 245fe2a..5856fbf 100644
    const lifecycle = new SessionLifecycleHandler(
      session,
      resolver,
-@@ -324,6 +326,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
+@@ -324,6 +323,7 @@ export default function piPermissionSystemExtension(pi: ExtensionAPI): void {
    const gateRunner = new GateRunner(
      resolver,
      sessionRules,
@@ -2315,77 +1766,3 @@ index d22fe77..4bd55ea 100644
 +    agentName?: string | null,
 +  ): void;
 +}
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts b/node_modules/@gotgenes/pi-permission-system/src/config/config-modal.ts
-index a7c1fc4..81e11f8 100644
-@@ -34,7 +34,7 @@
-   {
-     value: "reset",
-     label: "Reset defaults",
--    description: "Restore default yolo/logging settings and persist them",
-+    description: "Restore default logging settings and persist them",
-   },
-   {
-     value: "help",
-@@ -77,7 +77,6 @@
-   rules?: Ruleset,
- ): string {
-   const knobs = [
--    `yoloMode=${toOnOff(config.yoloMode)}`,
-     `permissionReviewLog=${toOnOff(config.permissionReviewLog)}`,
-     `debugLog=${toOnOff(config.debugLog)}`,
-   ].join(", ");
-@@ -90,14 +89,6 @@
- ): SettingItem[] {
-   return [
-     {
--      id: "yoloMode",
--      label: "YOLO mode",
--      description:
--        "Auto-approve ask-state permission checks, including subagent approval forwarding",
--      currentValue: toOnOff(config.yoloMode),
--      values: ON_OFF,
--    },
--    {
-       id: "permissionReviewLog",
-       label: "Permission review log",
-       description:
-@@ -130,8 +121,6 @@
-   value: string,
- ): PermissionSystemExtensionConfig {
-   switch (id) {
--    case "yoloMode":
--      return { ...config, yoloMode: value === "on" };
-     case "permissionReviewLog":
-       return { ...config, permissionReviewLog: value === "on" };
-     case "debugLog":
-diff --git a/node_modules/@gotgenes/pi-permission-system/src/config/status.ts b/node_modules/@gotgenes/pi-permission-system/src/config/status.ts
-index ef2cfe4..1d5edc2 100644
-@@ -3,25 +3,18 @@
-   ExtensionContext,
- } from "@earendil-works/pi-coding-agent";
- 
--import {
--  EXTENSION_ID,
--  isYoloModeEnabled,
--  type PermissionSystemExtensionConfig,
--} from "./extension-config";
-+import { EXTENSION_ID, type PermissionSystemExtensionConfig } from "./extension-config";
- 
- export const PERMISSION_SYSTEM_STATUS_KEY = EXTENSION_ID;
--export const PERMISSION_SYSTEM_YOLO_STATUS_VALUE = "yolo";
- 
- type PermissionStatusContext =
-   | Pick<ExtensionContext, "hasUI" | "ui">
-   | Pick<ExtensionCommandContext, "ui">;
- 
- export function getPermissionSystemStatus(
--  config: PermissionSystemExtensionConfig,
-+  _config: PermissionSystemExtensionConfig,
- ): string | undefined {
--  return isYoloModeEnabled(config)
--    ? PERMISSION_SYSTEM_YOLO_STATUS_VALUE
--    : undefined;
-+  return undefined;
- }
- 
- export function syncPermissionSystemStatus(

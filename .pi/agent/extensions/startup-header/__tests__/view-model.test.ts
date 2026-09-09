@@ -254,6 +254,53 @@ describe("startup header baseline", () => {
     );
     expect(narrowTable.every((line) => visibleWidth(line) <= 76)).toBe(true);
   });
+  test("skips exhausted profiles when marking the next profile", () => {
+    const now = Date.now();
+    const auth = integration("auth", "ready", {
+      activeProfile: "jpb",
+      profiles: [
+        {
+          profileLabel: "jpb",
+          status: "reported",
+          provider: "openai-codex",
+          windows: [{ windowId: "primary", remaining: 23 }],
+          observedAt: now,
+          staleAt: now + 10_000,
+        },
+        {
+          profileLabel: "fbb",
+          status: "reported",
+          provider: "openai-codex",
+          windows: [{ windowId: "primary", remaining: 0 }],
+          observedAt: now,
+          staleAt: now + 10_000,
+        },
+        {
+          profileLabel: "ct",
+          status: "reported",
+          provider: "openai-codex",
+          windows: [{ windowId: "primary", remaining: 86 }],
+          observedAt: now,
+          staleAt: now + 10_000,
+        },
+      ],
+    });
+    const rendered = renderStartupHeader(
+      theme,
+      500,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      auth,
+    ).join("\n");
+
+    expect(rendered).toContain("jpb [active]");
+    expect(rendered).not.toContain("fbb [next]");
+    expect(rendered).toContain("ct [next]");
+  });
 
   test("keeps update coverage adjacent to extensions and omits absent updates", () => {
     expect(

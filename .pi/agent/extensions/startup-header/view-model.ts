@@ -183,7 +183,9 @@ function renderAuthStatus(
   const profiles = payload.profiles.filter((profile) => profile.profileLabel !== "default");
   if (profiles.length === 0) return [];
   const nextProfile = profiles.find(
-    (profile) => profile.profileLabel !== payload.activeProfile,
+    (profile) =>
+      profile.profileLabel !== payload.activeProfile &&
+      !profile.windows.some((window) => window.remaining <= 0),
   )?.profileLabel;
   const stale =
     snapshot.state === "degraded"

@@ -7,6 +7,11 @@
       "skillPath": "skills/agent-browser/SKILL.md",
       "computedHash": "80161e6836b3b40f4e83730a290deb40ac14d877d38c97ad5f6d71be37ce74c3"
     },
+    "ascii-visualizer": {
+      "source": "./.agents/skills",
+      "sourceType": "local",
+      "computedHash": "3fd2c84278c06b60fb965dab30a133161b1726a70efc229286f24d154ee3fea1"
+    },
     "ast-grep": {
       "source": "ast-grep/agent-skill",
       "sourceType": "github",
@@ -17,12 +22,7 @@
       "source": "ast-grep/agent-skill",
       "sourceType": "github",
       "skillPath": "ast-grep/skills/outline/SKILL.md",
-      "computedHash": "688ee8a93a82da5788b733c06d899d7e0f0b5d5e5e8b40356054f7afa33ed69c"
-    },
-    "ascii-visualizer": {
-      "source": "./.agents/skills",
-      "sourceType": "local",
-      "computedHash": "3fd2c84278c06b60fb965dab30a133161b1726a70efc229286f24d154ee3fea1"
+      "computedHash": "5fca6734ddf196a61f9f58701668428420680d2052e762355dd9a18136699465"
     },
     "bun": {
       "source": "bun.sh",
