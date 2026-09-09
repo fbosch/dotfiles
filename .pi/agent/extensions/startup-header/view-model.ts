@@ -180,7 +180,9 @@ function renderAuthStatus(
     ];
   }
 
-  const nextProfile = payload.profiles.find(
+  const profiles = payload.profiles.filter((profile) => profile.profileLabel !== "default");
+  if (profiles.length === 0) return [];
+  const nextProfile = profiles.find(
     (profile) => profile.profileLabel !== payload.activeProfile,
   )?.profileLabel;
   const stale =
@@ -190,14 +192,7 @@ function renderAuthStatus(
         : " degraded"
       : "";
   if (width < 76)
-    return renderCompactAuth(
-      theme,
-      payload.profiles,
-      payload.activeProfile,
-      nextProfile,
-      stale,
-      now,
-    );
+    return renderCompactAuth(theme, profiles, payload.activeProfile, nextProfile, stale, now);
 
   const columns = [17, 14, 12, 16] as const;
   const border = (left: string, join: string, right: string) =>
@@ -216,7 +211,7 @@ function renderAuthStatus(
     border("├", "┼", "┤"),
   ];
 
-  for (const [profileIndex, profile] of payload.profiles.entries()) {
+  for (const [profileIndex, profile] of profiles.entries()) {
     if (profileIndex > 0) lines.push(border("├", "┼", "┤"));
     const active = profile.profileLabel === payload.activeProfile;
     const next = profile.profileLabel === nextProfile;

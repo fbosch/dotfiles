@@ -185,6 +185,15 @@ describe("startup header baseline", () => {
           status: "not-reported",
           windows: [],
         },
+        {
+          profileLabel: "default",
+          status: "reported",
+          provider: "openai-codex",
+          method: "oauth",
+          windows: [{ windowId: "primary", remaining: 99 }],
+          observedAt: now,
+          staleAt: now + 10_000,
+        },
       ],
     });
     const rendered = renderStartupHeader(
@@ -205,6 +214,13 @@ describe("startup header baseline", () => {
     expect(rendered.join("\n")).toContain("resets");
     expect(rendered.join("\n")).toContain("personal [next] !");
     expect(rendered.join("\n")).toContain("backup");
+    expect(rendered.join("\n")).not.toContain("default");
+    expect(rendered.join("\n").indexOf("work")).toBeLessThan(
+      rendered.join("\n").indexOf("personal"),
+    );
+    expect(rendered.join("\n").indexOf("personal")).toBeLessThan(
+      rendered.join("\n").indexOf("backup"),
+    );
     expect(rendered.join("\n")).not.toContain("Not reported");
     const allowanceTheme = {
       fg: (color: string, text: string) =>
