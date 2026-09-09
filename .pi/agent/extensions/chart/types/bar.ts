@@ -20,6 +20,8 @@ import {
   escapeXml,
   getChartColors,
   MAX_CHART_HEIGHT_CELLS,
+  MAX_FONT_SIZE_PX,
+  MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
   validCellDimensions,
 } from "../types";
@@ -127,6 +129,14 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
   }
   if (value.title !== undefined && typeof value.title !== "string") return undefined;
   if (value.fontFamily !== undefined && typeof value.fontFamily !== "string") return undefined;
+  if (
+    value.fontSize !== undefined &&
+    (typeof value.fontSize !== "number" ||
+      !Number.isFinite(value.fontSize) ||
+      value.fontSize < MIN_FONT_SIZE_PX ||
+      value.fontSize > MAX_FONT_SIZE_PX)
+  )
+    return undefined;
 
   return {
     type: "bar",
@@ -134,6 +144,7 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
     imageWidthCells: value.imageWidthCells,
     ...(value.title === undefined ? {} : { title: value.title }),
     ...(value.fontFamily === undefined ? {} : { fontFamily: value.fontFamily }),
+    ...(value.fontSize === undefined ? {} : { fontSize: value.fontSize }),
   };
 }
 
@@ -142,21 +153,29 @@ export function getBarChartLayout(
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
   rowCount = 2,
   hasTitle = false,
+  fontSize?: number,
 ): BarChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const labelFontSizePx = clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
-  const titleHeightPx = hasTitle ? Math.round(dimensions.heightPx * 1.25) : 0;
-  const rowHeightPx = Math.max(Math.round(dimensions.heightPx * 1.25), labelFontSizePx + 7);
+  const labelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
+  const titleHeightPx = hasTitle
+    ? fontSize === undefined
+      ? Math.round(dimensions.heightPx * 1.25)
+      : labelFontSizePx + paddingPx
+    : 0;
+  const rowHeightPx =
+    fontSize === undefined
+      ? Math.max(Math.round(dimensions.heightPx * 1.25), labelFontSizePx + 7)
+      : labelFontSizePx + Math.max(7, Math.round(labelFontSizePx * 0.35));
   const maxPlotHeightPx =
     Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx) - paddingPx * 2 - titleHeightPx;
   const plotHeightPx = Math.min(maxPlotHeightPx, rowCount * rowHeightPx);
   const labelWidthPx = clamp(
     Math.round(widthPx * 0.42),
-    Math.round(dimensions.widthPx * 8),
+    fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7),
     Math.round(widthPx * 0.48),
   );
   const plotWidthPx = Math.max(
@@ -180,6 +199,11 @@ export function getBarChartLayout(
 
 function formatValue(value: number): string {
   return String(value);
+}
+
+function truncateLabel(value: string, widthPx: number, fontSizePx: number): string {
+  const maximumCharacters = Math.max(3, Math.floor(widthPx / (fontSizePx * 0.58)));
+  return value.length > maximumCharacters ? `${value.slice(0, maximumCharacters - 1)}…` : value;
 }
 
 export function renderBarChartSvg(
@@ -225,7 +249,7 @@ export function renderBarChartSvg(
   const labels = rows
     .map((row, index) => {
       const y = layout.plotY + layout.rowHeightPx * (index + 0.5) + layout.labelFontSizePx * 0.35;
-      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(`${row.label}: ${formatValue(row.value)}`)}</text>`;
+      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(`${row.label}: ${formatValue(row.value)}`, layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
     })
     .join("");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
@@ -262,6 +286,7 @@ export const barChartRenderer: ChartType<
       ...(data.title === undefined ? {} : { title: data.title }),
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
+      ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
     };
   },
   getCallHeader(parameters: BarChartInput): string {
@@ -275,6 +300,7 @@ export const barChartRenderer: ChartType<
       widthCells,
       details.rows.length,
       details.title !== undefined,
+      details.fontSize,
     );
   },
   renderSvg(details, theme, layout): string {

@@ -7,7 +7,7 @@ import type {
   ThemeColor,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { SettingsManager } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
   getPngDimensions,
   Image,
@@ -16,8 +16,18 @@ import {
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
-import chartExtension, { chartParameters } from "../index";
-import { ChartComponent, rasterizeSvg, resolveChartFontFamily } from "../types";
+import chartExtension, {
+  chartBarParameters,
+  chartLineParameters,
+  chartPieParameters,
+  chartScatterParameters,
+} from "../index";
+import {
+  ChartComponent,
+  rasterizeSvg,
+  resolveChartFontFamily,
+  resolveChartSettings,
+} from "../types";
 import {
   getPieChartLayout,
   pieChartRenderer,
@@ -65,22 +75,29 @@ type ToolResult = {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
   details: unknown;
 };
+type PieChartParameters = Omit<
+  { type: "pie"; data: Array<{ label: string; value: number }>; title?: string },
+  "type"
+>;
 type PieChartExecute = (
   toolCallId: string,
-  params: { type: "pie"; data: Array<{ label: string; value: number }>; title?: string },
+  params: PieChartParameters,
   signal?: AbortSignal,
   onUpdate?: undefined,
   ctx?: ExtensionContext,
 ) => Promise<ToolResult>;
 
-function registerTool(): ToolDefinition {
-  let tool: ToolDefinition | undefined;
+function registerTools(): ToolDefinition[] {
+  const tools: ToolDefinition[] = [];
   chartExtension({
-    registerTool: (definition: ToolDefinition) => {
-      tool = definition;
-    },
+    registerTool: (definition: ToolDefinition) => tools.push(definition),
   } as unknown as ExtensionAPI);
-  if (tool === undefined) throw new Error("chart was not registered");
+  return tools;
+}
+
+function registerTool(name = "chart_pie"): ToolDefinition {
+  const tool = registerTools().find((definition) => definition.name === name);
+  if (tool === undefined) throw new Error("chart tool was not registered");
   return tool;
 }
 
@@ -158,6 +175,12 @@ const rows = validatePieChartInput({
   ],
 });
 
+function currentChartFontFamily(): string {
+  const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: false });
+  return resolveChartSettings(settings.getGlobalSettings(), settings.getProjectSettings())
+    .fontFamily;
+}
+
 function settingsManager(
   globalSettings: unknown,
   projectSettings: unknown,
@@ -230,28 +253,90 @@ describe("pie chart", () => {
     ).toThrow("duplicates");
   });
 
-  test("registers chart with the provider-compatible pie and bar schema", () => {
-    const tool = registerTool();
+  test("registers focused chart tools with public schemas that omit type", () => {
+    const pie = registerTool();
+    const bar = registerTool("chart_bar");
+    const scatter = registerTool("chart_scatter");
+    const line = registerTool("chart_line");
 
-    expect(tool.name).toBe("chart");
-    expect(tool.parameters).toBe(chartParameters);
-    expect(Value.Check(chartParameters, { type: "pie", data: rows, title: "Status" })).toBe(true);
-    expect(Value.Check(chartParameters, { type: "bar", data: rows })).toBe(true);
+    expect(registerTools().map((tool) => tool.name)).toEqual([
+      "chart_pie",
+      "chart_bar",
+      "chart_scatter",
+      "chart_line",
+    ]);
+    expect([pie.name, bar.name, scatter.name, line.name]).toEqual([
+      "chart_pie",
+      "chart_bar",
+      "chart_scatter",
+      "chart_line",
+    ]);
+    expect(registerTools().some((tool) => tool.name === "chart")).toBe(false);
+    expect(pie.parameters).toBe(chartPieParameters);
+    expect(bar.parameters).toBe(chartBarParameters);
+    expect(scatter.parameters).toBe(chartScatterParameters);
+    expect(line.parameters).toBe(chartLineParameters);
+    expect(Value.Check(chartPieParameters, { data: rows, title: "Status" })).toBe(true);
+    expect(Value.Check(chartBarParameters, { data: rows })).toBe(true);
     expect(
-      Value.Check(chartParameters, {
-        type: "pie",
-        data: rows,
-        labels: ["Open", "Closed"],
-        values: [3, 1],
+      Value.Check(chartScatterParameters, {
+        data: [
+          { x: 2, y: 1, label: "CLI" },
+          { x: 1, y: 2 },
+        ],
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(chartScatterParameters, {
+        data: [
+          { x: 2, y: 1 },
+          { x: 1, y: 2 },
+        ],
+        type: "scatter",
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(chartScatterParameters, {
+        data: [
+          { x: 2, y: 1 },
+          { x: 1, y: 2 },
+        ],
+        series: "tools",
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(chartLineParameters, {
+        xType: "numeric",
+        data: [
+          { x: 1, y: 2 },
+          { x: 2, y: null },
+        ],
+      }),
+    ).toBe(true);
+    expect(Value.Check(chartPieParameters, { type: "pie", data: rows })).toBe(false);
+    expect(Value.Check(chartBarParameters, { type: "bar", data: rows })).toBe(false);
+    expect(
+      Value.Check(chartLineParameters, {
+        type: "line",
+        xType: "numeric",
+        data: [
+          { x: 1, y: 2 },
+          { x: 2, y: null },
+        ],
       }),
     ).toBe(false);
   });
 
-  test("replays pie details saved before chart types were introduced", () => {
-    expect(pieChartRenderer.deserializeDetails({ rows, imageWidthCells: 60 })).toEqual({
-      rows,
-      imageWidthCells: 60,
-    });
+  test("replays pie details without a type through chart_pie", () => {
+    const tool = registerTool();
+    const component = tool.renderResult?.(
+      { content: [{ type: "text", text: "summary" }], details: { rows, imageWidthCells: 60 } },
+      { expanded: false, isPartial: false },
+      theme,
+      { invalidate: () => undefined } as never,
+    );
+
+    expect(component).toBeInstanceOf(ChartComponent);
   });
 
   test("uses the existing sans-serif default and safely applies a custom font", () => {
@@ -386,21 +471,23 @@ describe("pie chart", () => {
   test("returns TUI chart data without a native image and retains an image outside TUI", async () => {
     const tool = registerTool();
     const execute = tool.execute as PieChartExecute;
-    const params = { type: "pie" as const, data: rows, title: "Status" };
+    const params = { data: rows, title: "Status" };
     const [tuiResult, printResult] = await Promise.all([
-      execute("chart", params, undefined, undefined, tuiContext),
-      execute("chart", params, undefined, undefined, printContext),
+      execute("chart_pie", params, undefined, undefined, tuiContext),
+      execute("chart_pie", params, undefined, undefined, printContext),
     ]);
 
     expect(tuiResult.content).toEqual([
       { type: "text", text: "Status pie chart: Open 3 (75.0%); Closed 1 (25.0%)" },
     ]);
-    expect(tuiResult.details).toEqual({
-      rows,
-      title: "Status",
-      imageWidthCells: 60,
-      fontFamily: "sans-serif",
-    });
+    expect(tuiResult.details).toEqual(
+      expect.objectContaining({
+        rows,
+        title: "Status",
+        imageWidthCells: 60,
+        fontFamily: currentChartFontFamily(),
+      }),
+    );
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 220 });
@@ -585,7 +672,7 @@ describe("pie chart", () => {
     const execute = registerTool().execute as PieChartExecute;
 
     await expect(
-      execute("chart", { type: "pie", data: rows }, controller.signal, undefined, printContext),
+      execute("chart_pie", { data: rows }, controller.signal, undefined, printContext),
     ).rejects.toThrow("aborted");
   });
 });

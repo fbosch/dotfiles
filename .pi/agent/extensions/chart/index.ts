@@ -1,4 +1,3 @@
-import { StringEnum } from "@earendil-works/pi-ai";
 import {
   type ExtensionAPI,
   getAgentDir,
@@ -6,7 +5,6 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
 import { Value } from "typebox/value";
 import {
@@ -14,7 +12,7 @@ import {
   type ChartSettings,
   rasterizeSvg,
   renderChartSvg,
-  resolveChartFontFamily,
+  resolveChartSettings,
 } from "./types";
 import {
   type BarChartDetails,
@@ -34,87 +32,109 @@ import {
   pieChartRenderer,
   pieChartVariant,
 } from "./types/pie";
+import {
+  type ScatterChartDetails,
+  type ScatterChartInput,
+  scatterChartRenderer,
+  scatterChartVariant,
+} from "./types/scatter";
 
-const MAX_ROWS = 200;
-const MAX_LABEL_LENGTH = 22;
-const MAX_TITLE_LENGTH = 80;
-const MAX_AXIS_LABEL_LENGTH = 40;
-
-/** Provider-compatible object schema; each discriminated variant is checked again at the chart boundary. */
-export const chartParameters = Type.Object(
+export const chartPieParameters = Type.Object(
   {
-    type: StringEnum(["pie", "bar", "line"] as const),
     data: Type.Array(
-      Type.Union([
-        Type.Object(
-          {
-            label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
-            value: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
-          },
-          { additionalProperties: false },
-        ),
-        Type.Object(
-          { x: Type.Number(), y: Type.Union([Type.Number(), Type.Null()]) },
-          { additionalProperties: false },
-        ),
-        Type.Object(
-          { x: Type.String(), y: Type.Union([Type.Number(), Type.Null()]) },
-          { additionalProperties: false },
-        ),
-      ]),
-      { minItems: 2, maxItems: MAX_ROWS },
+      Type.Object(
+        {
+          label: Type.String({ minLength: 1, maxLength: 22 }),
+          value: Type.Number({ minimum: 0, maximum: 1_000_000_000 }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 2, maxItems: 12 },
     ),
-    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
-    xType: Type.Optional(StringEnum(["numeric", "temporal"] as const)),
-    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
-    yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+  },
+  { additionalProperties: false },
+);
+export const chartBarParameters = Type.Object(
+  {
+    data: Type.Array(
+      Type.Object(
+        {
+          label: Type.String({ minLength: 1, maxLength: 22 }),
+          value: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 2, maxItems: 12 },
+    ),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+  },
+  { additionalProperties: false },
+);
+
+/** Provider-compatible: xType is explicit and runtime validation correlates it with each row's x value. */
+export const chartScatterParameters = Type.Object(
+  {
+    data: Type.Array(
+      Type.Object(
+        {
+          x: Type.Number(),
+          y: Type.Number(),
+          label: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 2, maxItems: 200 },
+    ),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
+    yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
+  },
+  { additionalProperties: false },
+);
+
+export const chartLineParameters = Type.Object(
+  {
+    xType: Type.Union([Type.Literal("numeric"), Type.Literal("temporal")]),
+    data: Type.Array(
+      Type.Object(
+        {
+          x: Type.Union([Type.Number(), Type.String()]),
+          y: Type.Union([Type.Number(), Type.Null()]),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 2, maxItems: 200 },
+    ),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
+    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
+    yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
     markers: Type.Optional(Type.Boolean()),
   },
   { additionalProperties: false },
 );
 
-type ChartParameters = Static<typeof chartParameters>;
-type ChartReplayDetails = PieChartDetails | BarChartDetails | LineChartDetails;
+type PieParameters = Static<typeof chartPieParameters>;
+type BarParameters = Static<typeof chartBarParameters>;
+type LineParameters = Static<typeof chartLineParameters>;
+type ScatterParameters = Static<typeof chartScatterParameters>;
+type ChartReplayDetails =
+  | PieChartDetails
+  | BarChartDetails
+  | LineChartDetails
+  | ScatterChartDetails;
 
 function createSettings(cwd: string, trusted: boolean): ChartSettings {
   const settings = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: trusted });
   return {
     imageWidthCells: settings.getImageWidthCells(),
-    fontFamily: resolveChartFontFamily(settings.getGlobalSettings(), settings.getProjectSettings()),
+    ...resolveChartSettings(settings.getGlobalSettings(), settings.getProjectSettings()),
   };
-}
-
-function isPieChartInput(value: unknown): value is PieChartInput {
-  return Value.Check(pieChartVariant, value);
-}
-
-function isBarChartInput(value: unknown): value is BarChartInput {
-  return Value.Check(barChartVariant, value);
-}
-
-function isLineChartInput(value: unknown): value is LineChartInput {
-  return Value.Check(lineChartVariant, value);
-}
-
-function getCallHeader(parameters: ChartParameters): string {
-  return match(parameters)
-    .with({ type: "pie" }, (input) => {
-      if (!isPieChartInput(input)) throw new Error("invalid pie chart parameters");
-      return pieChartRenderer.getCallHeader(input);
-    })
-    .with({ type: "bar" }, (input) => {
-      if (!isBarChartInput(input)) throw new Error("invalid bar chart parameters");
-      return barChartRenderer.getCallHeader(input);
-    })
-    .with({ type: "line" }, (input) => {
-      if (!isLineChartInput(input)) throw new Error("invalid line chart parameters");
-      return lineChartRenderer.getCallHeader(input);
-    })
-    .exhaustive();
 }
 
 function deserializeDetails(value: unknown): ChartReplayDetails | undefined {
   return (
+    scatterChartRenderer.deserializeDetails(value) ??
     lineChartRenderer.deserializeDetails(value) ??
     barChartRenderer.deserializeDetails(value) ??
     pieChartRenderer.deserializeDetails(value)
@@ -128,103 +148,232 @@ function createChartComponent(
 ):
   | ChartComponent<PieChartDetails, ReturnType<typeof pieChartRenderer.getLayout>>
   | ChartComponent<BarChartDetails, ReturnType<typeof barChartRenderer.getLayout>>
-  | ChartComponent<LineChartDetails, ReturnType<typeof lineChartRenderer.getLayout>> {
+  | ChartComponent<LineChartDetails, ReturnType<typeof lineChartRenderer.getLayout>>
+  | ChartComponent<ScatterChartDetails, ReturnType<typeof scatterChartRenderer.getLayout>> {
+  if (details.type === "scatter")
+    return new ChartComponent(details, theme, invalidate, scatterChartRenderer);
   if (details.type === "line")
     return new ChartComponent(details, theme, invalidate, lineChartRenderer);
   if (details.type === "bar")
     return new ChartComponent(details, theme, invalidate, barChartRenderer);
-  // Persisted pie charts predate the type discriminator.
+  // Persisted pie charts predate the internal type discriminator.
   return new ChartComponent(details, theme, invalidate, pieChartRenderer);
 }
 
+function renderResult(
+  result: { content: Array<{ type: string; text?: string }>; details?: unknown },
+  theme: Theme,
+  context: { lastComponent?: unknown; invalidate: () => void },
+) {
+  const details = deserializeDetails(result.details);
+  if (details === undefined) {
+    const text = result.content.find((content) => content.type === "text");
+    return new Text(text?.type === "text" ? (text.text ?? "") : "", 0, 0);
+  }
+  const previous = context.lastComponent;
+  const renderer =
+    details.type === "scatter"
+      ? scatterChartRenderer
+      : details.type === "line"
+        ? lineChartRenderer
+        : details.type === "bar"
+          ? barChartRenderer
+          : pieChartRenderer;
+  if (previous instanceof ChartComponent && previous.matches(renderer)) {
+    previous.update(theme);
+    return previous;
+  }
+  return createChartComponent(details, theme, context.invalidate);
+}
+
 export default function (pi: ExtensionAPI) {
-  pi.registerTool<typeof chartParameters, ChartReplayDetails>({
-    name: "chart",
-    label: "Chart",
-    description: "Render a compact pie, horizontal bar, or single-series line chart.",
-    promptSnippet: "Render compact pie, horizontal bar, or single-series line charts",
-    parameters: chartParameters,
-    async execute(_toolCallId, parameters, signal, _onUpdate, ctx) {
+  pi.registerTool<typeof chartPieParameters, PieChartDetails>({
+    name: "chart_pie",
+    label: "Chart pie",
+    description: "Render a compact pie chart from labeled nonnegative values.",
+    promptSnippet: "Render compact pie charts",
+    parameters: chartPieParameters,
+    async execute(_toolCallId, parameters: PieParameters, signal, _onUpdate, ctx) {
+      const input: PieChartInput = { ...parameters, type: "pie" };
+      if (!Value.Check(pieChartVariant, input)) throw new Error("invalid pie chart parameters");
       const settings = createSettings(ctx.cwd, ctx.isProjectTrusted());
-      return match(parameters)
-        .with({ type: "pie" }, async (input) => {
-          if (!isPieChartInput(input)) throw new Error("invalid pie chart parameters");
-          const data = pieChartRenderer.parseParameters(input);
-          const details = pieChartRenderer.createDetails(data, settings);
-          const text = pieChartRenderer.getSummary(details);
-          if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-          const png = await rasterizeSvg(
-            renderChartSvg(pieChartRenderer, details, ctx.ui.theme),
-            signal,
-            { fontFamily: settings.fontFamily },
-          );
-          return {
-            content: [
-              { type: "text" as const, text },
-              { type: "image" as const, data: png, mimeType: "image/png" },
-            ],
-            details,
-          };
-        })
-        .with({ type: "bar" }, async (input) => {
-          if (!isBarChartInput(input)) throw new Error("invalid bar chart parameters");
-          const data = barChartRenderer.parseParameters(input);
-          const details = barChartRenderer.createDetails(data, settings);
-          const text = barChartRenderer.getSummary(details);
-          if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-          const png = await rasterizeSvg(
-            renderChartSvg(barChartRenderer, details, ctx.ui.theme),
-            signal,
-            { fontFamily: settings.fontFamily },
-          );
-          return {
-            content: [
-              { type: "text" as const, text },
-              { type: "image" as const, data: png, mimeType: "image/png" },
-            ],
-            details,
-          };
-        })
-        .with({ type: "line" }, async (input) => {
-          if (!isLineChartInput(input)) throw new Error("invalid line chart parameters");
-          const data = lineChartRenderer.parseParameters(input);
-          const details = lineChartRenderer.createDetails(data, settings);
-          const text = lineChartRenderer.getSummary(details);
-          if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-          const png = await rasterizeSvg(
-            renderChartSvg(lineChartRenderer, details, ctx.ui.theme),
-            signal,
-            { fontFamily: settings.fontFamily },
-          );
-          return {
-            content: [
-              { type: "text" as const, text },
-              { type: "image" as const, data: png, mimeType: "image/png" },
-            ],
-            details,
-          };
-        })
-        .exhaustive();
+      const details = pieChartRenderer.createDetails(
+        pieChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = pieChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await rasterizeSvg(
+        renderChartSvg(pieChartRenderer, details, ctx.ui.theme),
+        signal,
+        {
+          fontFamily: settings.fontFamily,
+        },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
     },
     renderCall(args, theme) {
-      return new Text(theme.fg("toolTitle", theme.bold(getCallHeader(args))), 0, 0);
+      return new Text(
+        theme.fg("toolTitle", theme.bold(pieChartRenderer.getCallHeader({ ...args, type: "pie" }))),
+        0,
+        0,
+      );
     },
     renderResult(result, _options, theme, context) {
-      const details = deserializeDetails(result.details);
-      if (details === undefined) {
-        const text = result.content.find((content) => content.type === "text");
-        return new Text(text?.type === "text" ? text.text : "", 0, 0);
-      }
-      const previous = context.lastComponent;
-      const renderer = match(details)
-        .with({ type: "line" }, () => lineChartRenderer)
-        .with({ type: "bar" }, () => barChartRenderer)
-        .otherwise(() => pieChartRenderer);
-      if (previous instanceof ChartComponent && previous.matches(renderer)) {
-        previous.update(theme);
-        return previous;
-      }
-      return createChartComponent(details, theme, context.invalidate);
+      return renderResult(result, theme, context);
+    },
+  });
+
+  pi.registerTool<typeof chartBarParameters, BarChartDetails>({
+    name: "chart_bar",
+    label: "Chart bar",
+    description: "Render a compact horizontal bar chart from labeled signed values.",
+    promptSnippet: "Render compact horizontal bar charts",
+    parameters: chartBarParameters,
+    async execute(_toolCallId, parameters: BarParameters, signal, _onUpdate, ctx) {
+      const input: BarChartInput = { ...parameters, type: "bar" };
+      if (!Value.Check(barChartVariant, input)) throw new Error("invalid bar chart parameters");
+      const settings = createSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = barChartRenderer.createDetails(
+        barChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = barChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await rasterizeSvg(
+        renderChartSvg(barChartRenderer, details, ctx.ui.theme),
+        signal,
+        {
+          fontFamily: settings.fontFamily,
+        },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderCall(args, theme) {
+      return new Text(
+        theme.fg("toolTitle", theme.bold(barChartRenderer.getCallHeader({ ...args, type: "bar" }))),
+        0,
+        0,
+      );
+    },
+    renderResult(result, _options, theme, context) {
+      return renderResult(result, theme, context);
+    },
+  });
+
+  pi.registerTool<typeof chartScatterParameters, ScatterChartDetails>({
+    name: "chart_scatter",
+    label: "Chart scatter",
+    description:
+      "Render a single-series scatter chart with fixed-size dots and optional point labels.",
+    promptSnippet: "Render single-series scatter charts",
+    parameters: chartScatterParameters,
+    async execute(_toolCallId, parameters: ScatterParameters, signal, _onUpdate, ctx) {
+      const input: ScatterChartInput = { ...parameters, type: "scatter" };
+      if (!Value.Check(scatterChartVariant, input))
+        throw new Error("invalid scatter chart parameters");
+      const settings = createSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = scatterChartRenderer.createDetails(
+        scatterChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = scatterChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await rasterizeSvg(
+        renderChartSvg(scatterChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderCall(args, theme) {
+      const input = { ...args, type: "scatter" as const };
+      return new Text(
+        theme.fg(
+          "toolTitle",
+          theme.bold(
+            Value.Check(scatterChartVariant, input)
+              ? scatterChartRenderer.getCallHeader(input)
+              : "chart_scatter",
+          ),
+        ),
+        0,
+        0,
+      );
+    },
+    renderResult(result, _options, theme, context) {
+      return renderResult(result, theme, context);
+    },
+  });
+
+  pi.registerTool<typeof chartLineParameters, LineChartDetails>({
+    name: "chart_line",
+    label: "Chart line",
+    description:
+      "Render a single-series numeric or temporal line chart with optional gaps and markers.",
+    promptSnippet: "Render single-series line charts",
+    parameters: chartLineParameters,
+    async execute(_toolCallId, parameters: LineParameters, signal, _onUpdate, ctx) {
+      const input = { ...parameters, type: "line" as const };
+      if (!Value.Check(lineChartVariant, input)) throw new Error("invalid line chart parameters");
+      const lineInput: LineChartInput = input;
+      const settings = createSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = lineChartRenderer.createDetails(
+        lineChartRenderer.parseParameters(lineInput),
+        settings,
+      );
+      const text = lineChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await rasterizeSvg(
+        renderChartSvg(lineChartRenderer, details, ctx.ui.theme),
+        signal,
+        {
+          fontFamily: settings.fontFamily,
+        },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderCall(args, theme) {
+      const input = { ...args, type: "line" as const };
+      return new Text(
+        theme.fg(
+          "toolTitle",
+          theme.bold(
+            Value.Check(lineChartVariant, input)
+              ? lineChartRenderer.getCallHeader(input)
+              : "chart_line",
+          ),
+        ),
+        0,
+        0,
+      );
+    },
+    renderResult(result, _options, theme, context) {
+      return renderResult(result, theme, context);
     },
   });
 }

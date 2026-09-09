@@ -19,6 +19,8 @@ import {
   escapeXml,
   getChartColors,
   MAX_CHART_HEIGHT_CELLS,
+  MAX_FONT_SIZE_PX,
+  MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
   validCellDimensions,
 } from "../types";
@@ -217,7 +219,12 @@ export function deserializeLineChartDetails(value: unknown): LineChartDetails | 
     (value.title !== undefined && typeof value.title !== "string") ||
     (value.xLabel !== undefined && typeof value.xLabel !== "string") ||
     (value.yLabel !== undefined && typeof value.yLabel !== "string") ||
-    (value.fontFamily !== undefined && typeof value.fontFamily !== "string")
+    (value.fontFamily !== undefined && typeof value.fontFamily !== "string") ||
+    (value.fontSize !== undefined &&
+      (typeof value.fontSize !== "number" ||
+        !Number.isFinite(value.fontSize) ||
+        value.fontSize < MIN_FONT_SIZE_PX ||
+        value.fontSize > MAX_FONT_SIZE_PX))
   ) {
     return undefined;
   }
@@ -230,32 +237,47 @@ export function getLineChartLayout(
   hasTitle = false,
   hasXLabel = false,
   hasYLabel = false,
+  fontSize?: number,
 ): LineChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.2));
-  const tickFontSizePx = clamp(Math.round(dimensions.heightPx * 0.61), 10, 14);
-  const axisLabelFontSizePx = clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
-  const titleFontSizePx = clamp(Math.round(dimensions.heightPx * 0.75), 11, 16);
+  const tickFontSizePx =
+    fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.61), 10, 14)
+      : Math.round(fontSize * 0.85);
+  const axisLabelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
+  const titleFontSizePx =
+    fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.75), 11, 16)
+      : Math.round(fontSize * 1.1);
   const titleHeightPx = hasTitle ? titleFontSizePx + paddingPx : 0;
   const xLabelHeightPx = hasXLabel ? axisLabelFontSizePx + paddingPx : 0;
   const yLabelWidthPx = hasYLabel ? axisLabelFontSizePx + paddingPx : 0;
   const tickLabelHeightPx = tickFontSizePx + paddingPx;
-  const tickLabelWidthPx = Math.max(Math.round(dimensions.widthPx * 6), tickFontSizePx * 4);
+  const tickLabelWidthPx =
+    fontSize === undefined
+      ? Math.max(Math.round(dimensions.widthPx * 6), tickFontSizePx * 4)
+      : Math.max(Math.round(dimensions.widthPx * 6), Math.round(tickFontSizePx * 4));
   const plotX = paddingPx + yLabelWidthPx + tickLabelWidthPx;
   const plotY = paddingPx + titleHeightPx;
   const plotWidthPx = Math.max(Math.round(dimensions.widthPx * 10), widthPx - plotX - paddingPx);
-  const plotHeightPx = clamp(
-    Math.round(dimensions.heightPx * 8),
-    Math.round(dimensions.heightPx * 5),
+  const availablePlotHeightPx =
     Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx) -
-      plotY -
-      tickLabelHeightPx -
-      xLabelHeightPx -
-      paddingPx,
-  );
+    plotY -
+    tickLabelHeightPx -
+    xLabelHeightPx -
+    paddingPx;
+  const plotHeightPx =
+    fontSize === undefined
+      ? clamp(
+          Math.round(dimensions.heightPx * 8),
+          Math.round(dimensions.heightPx * 5),
+          availablePlotHeightPx,
+        )
+      : Math.max(1, Math.min(Math.round(dimensions.heightPx * 8), availablePlotHeightPx));
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
   return {
     widthPx,
@@ -304,6 +326,7 @@ export function renderLineChartSvg(
     details.title !== undefined,
     details.xLabel !== undefined,
     details.yLabel !== undefined,
+    details.fontSize,
   ),
   fontFamily = DEFAULT_FONT_FAMILY,
 ): string {
@@ -387,6 +410,7 @@ export const lineChartRenderer: ChartType<
       ...data,
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
+      ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
     };
   },
   getCallHeader(parameters: LineChartInput): string {
@@ -401,6 +425,7 @@ export const lineChartRenderer: ChartType<
       details.title !== undefined,
       details.xLabel !== undefined,
       details.yLabel !== undefined,
+      details.fontSize,
     );
   },
   renderSvg(details, theme, layout): string {

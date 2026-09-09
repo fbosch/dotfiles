@@ -17,6 +17,8 @@ export const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
 export const MAX_CHART_HEIGHT_CELLS = 18;
 export const RASTER_DENSITY = 1;
 export const DEFAULT_FONT_FAMILY = "sans-serif";
+export const MIN_FONT_SIZE_PX = 8;
+export const MAX_FONT_SIZE_PX = 32;
 
 const MAX_FONT_FAMILY_LENGTH = 200;
 const MAX_SVG_BYTES = 64 * 1024;
@@ -50,11 +52,14 @@ export type ChartDetails = {
   imageWidthCells: number;
   /** Optional only for chart results saved before font configuration existed. */
   fontFamily?: string;
+  /** Optional only for chart results saved before font-size configuration existed. */
+  fontSize?: number;
 };
 
 export type ChartSettings = {
   imageWidthCells: number;
   fontFamily: string;
+  fontSize?: number;
 };
 
 export interface ChartRenderer<TDetails extends ChartDetails, TLayout extends ChartLayout> {
@@ -169,41 +174,64 @@ type RasterKey = {
   cellHeightPx: number;
 };
 
-export function resolveChartFontFamily(globalSettings: unknown, projectSettings: unknown): string {
-  return (
-    configuredChartFontFamily(projectSettings, "project") ??
-    configuredChartFontFamily(globalSettings, "global") ??
-    DEFAULT_FONT_FAMILY
-  );
+export function resolveChartSettings(
+  globalSettings: unknown,
+  projectSettings: unknown,
+): Pick<ChartSettings, "fontFamily" | "fontSize"> {
+  const global = configuredChartSettings(globalSettings, "global");
+  const project = configuredChartSettings(projectSettings, "project");
+  return {
+    fontFamily: project.fontFamily ?? global.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ...(project.fontSize === undefined && global.fontSize === undefined
+      ? {}
+      : { fontSize: project.fontSize ?? global.fontSize }),
+  };
 }
 
-function configuredChartFontFamily(
+/** @deprecated Use resolveChartSettings to resolve all chart configuration together. */
+export function resolveChartFontFamily(globalSettings: unknown, projectSettings: unknown): string {
+  return resolveChartSettings(globalSettings, projectSettings).fontFamily;
+}
+
+function configuredChartSettings(
   settings: unknown,
   scope: "global" | "project",
-): string | undefined {
-  if (isRecord(settings) === false || settings.charts === undefined) return undefined;
-  if (isRecord(settings.charts) === false) {
-    throw new Error(`${scope} charts: expected an object`);
-  }
+): Partial<Pick<ChartSettings, "fontFamily" | "fontSize">> {
+  if (isRecord(settings) === false || settings.charts === undefined) return {};
+  if (isRecord(settings.charts) === false) throw new Error(`${scope} charts: expected an object`);
 
-  const unknownFields = Object.keys(settings.charts).filter((field) => field !== "fontFamily");
-  if (unknownFields.length > 0) {
+  const unknownFields = Object.keys(settings.charts).filter(
+    (field) => field !== "fontFamily" && field !== "fontSize",
+  );
+  if (unknownFields.length > 0)
     throw new Error(`${scope} charts.${unknownFields[0]}: unknown field`);
-  }
 
+  const result: Partial<Pick<ChartSettings, "fontFamily" | "fontSize">> = {};
   const fontFamily = settings.charts.fontFamily;
-  if (fontFamily === undefined) return undefined;
-  if (typeof fontFamily !== "string") {
-    throw new Error(`${scope} charts.fontFamily: expected a string`);
+  if (fontFamily !== undefined) {
+    if (typeof fontFamily !== "string")
+      throw new Error(`${scope} charts.fontFamily: expected a string`);
+    const normalized = fontFamily.trim();
+    if (normalized.length === 0 || normalized.length > MAX_FONT_FAMILY_LENGTH) {
+      throw new Error(
+        `${scope} charts.fontFamily: expected a non-empty string of at most ${MAX_FONT_FAMILY_LENGTH} characters`,
+      );
+    }
+    result.fontFamily = normalized;
   }
-
-  const normalized = fontFamily.trim();
-  if (normalized.length === 0 || normalized.length > MAX_FONT_FAMILY_LENGTH) {
-    throw new Error(
-      `${scope} charts.fontFamily: expected a non-empty string of at most ${MAX_FONT_FAMILY_LENGTH} characters`,
-    );
+  const fontSize = settings.charts.fontSize;
+  if (fontSize !== undefined) {
+    if (typeof fontSize !== "number" || Number.isFinite(fontSize) === false) {
+      throw new Error(`${scope} charts.fontSize: expected a finite number of logical pixels`);
+    }
+    if (fontSize < MIN_FONT_SIZE_PX || fontSize > MAX_FONT_SIZE_PX) {
+      throw new Error(
+        `${scope} charts.fontSize: expected a number between ${MIN_FONT_SIZE_PX} and ${MAX_FONT_SIZE_PX} logical pixels`,
+      );
+    }
+    result.fontSize = fontSize;
   }
-  return normalized;
+  return result;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,9 +5,11 @@ import type {
   Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getPngDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import chartExtension from "../index";
+import { resolveChartSettings } from "../types";
 import {
   type BarChartInput,
   barChartRenderer,
@@ -53,7 +55,9 @@ type ChartExecute = (
 function registerTool(): ToolDefinition {
   let tool: ToolDefinition | undefined;
   chartExtension({
-    registerTool: (definition: ToolDefinition) => (tool = definition),
+    registerTool: (definition: ToolDefinition) => {
+      if (definition.name === "chart_bar") tool = definition;
+    },
   } as unknown as ExtensionAPI);
   if (tool === undefined) throw new Error("chart was not registered");
   return tool;
@@ -67,6 +71,12 @@ const tuiContext = {
 } as unknown as ExtensionContext;
 
 const printContext = { ...tuiContext, mode: "print" } as unknown as ExtensionContext;
+
+function currentChartFontFamily(): string {
+  const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: false });
+  return resolveChartSettings(settings.getGlobalSettings(), settings.getProjectSettings())
+    .fontFamily;
+}
 
 describe("bar chart", () => {
   const rows = [
@@ -147,16 +157,24 @@ describe("bar chart", () => {
     expect(tuiResult.content).toEqual([
       { type: "text", text: "Balance bar chart: Loss -4; Neutral 0; Gain 6" },
     ]);
-    expect(tuiResult.details).toEqual({
-      type: "bar",
-      rows,
-      title: "Balance",
-      imageWidthCells: 60,
-      fontFamily: "sans-serif",
-    });
+    expect(tuiResult.details).toEqual(
+      expect.objectContaining({
+        type: "bar",
+        rows,
+        title: "Balance",
+        imageWidthCells: 60,
+        fontFamily: currentChartFontFamily(),
+      }),
+    );
+    const details = barChartRenderer.deserializeDetails(tuiResult.details);
+    if (details === undefined) throw new Error("bar result must include replay details");
+    const layout = barChartRenderer.getLayout(details, undefined, details.imageWidthCells);
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 114 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({
+      widthPx: layout.widthPx,
+      heightPx: layout.heightPx,
+    });
   });
 
   test("deserializes only persisted bar details", () => {

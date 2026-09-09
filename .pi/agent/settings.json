@@ -83,6 +83,10 @@
     "model": "openai-codex/gpt-5.6-luna-fast",
     "thinkingLevel": "off"
   },
+  "charts": {
+    "fontFamily": "Zenbones Brainy",
+    "fontSize": 16
+  },
   "packages": [
     "npm:@gotgenes/pi-permission-system@31.1.1",
     "npm:@ff-labs/pi-fff@0.10.6",

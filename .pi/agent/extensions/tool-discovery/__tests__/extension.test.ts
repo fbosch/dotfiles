@@ -115,6 +115,9 @@ function createHarness(options?: {
 
 describe("tool discovery", () => {
   test("classifies only known specialist tool names", () => {
+    expect(isDeferredToolName("chart_pie")).toBe(true);
+    expect(isDeferredToolName("chart_bar")).toBe(true);
+    expect(isDeferredToolName("chart_line")).toBe(true);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -147,6 +150,26 @@ describe("tool discovery", () => {
     await harness.discoverResources();
 
     expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "search_tools"]);
+  });
+
+  test("defers charts initially and loads only the requested chart", async () => {
+    const harness = createHarness({
+      tools: [
+        dummyTool("read", "Read files"),
+        dummyTool("chart_pie", "Render a compact pie chart from labeled nonnegative values"),
+        dummyTool("chart_bar", "Render a compact horizontal bar chart from labeled signed values"),
+        dummyTool("chart_line", "Render a single-series numeric or temporal line chart"),
+      ],
+      activeTools: ["read", "chart_pie", "chart_bar", "chart_line"],
+    });
+
+    await harness.discoverResources();
+    expect(harness.activeTools).toEqual(["read", "search_tools"]);
+    expect((await harness.search("chart line", 1)).details).toEqual({
+      matches: ["chart_line"],
+      added: ["chart_line"],
+    });
+    expect(harness.activeTools).toEqual(["read", "search_tools", "chart_line"]);
   });
 
   test("loads the highest-scoring matches additively", async () => {

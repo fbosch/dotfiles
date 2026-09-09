@@ -5,8 +5,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { getPngDimensions } from "@earendil-works/pi-tui";
-import { Value } from "typebox/value";
-import chartExtension, { chartParameters } from "../index";
+import chartExtension from "../index";
 import {
   getLineChartLayout,
   type LineChartInput,
@@ -39,7 +38,9 @@ function chartPoints(svg: string): Array<[number, number]> {
 function registerTool(): ToolDefinition {
   let tool: ToolDefinition | undefined;
   chartExtension({
-    registerTool: (definition: ToolDefinition) => (tool = definition),
+    registerTool: (definition: ToolDefinition) => {
+      if (definition.name === "chart_line") tool = definition;
+    },
   } as unknown as ExtensionAPI);
   if (tool === undefined) throw new Error("chart was not registered");
   return tool;
@@ -155,7 +156,6 @@ describe("line chart", () => {
 
   test("routes a line call through replay details and PNG output", async () => {
     const tool = registerTool();
-    expect(Value.Check(chartParameters, numeric)).toBe(true);
     const context = {
       mode: "print",
       cwd: process.cwd(),

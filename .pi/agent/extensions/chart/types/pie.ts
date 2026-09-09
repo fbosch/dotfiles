@@ -18,6 +18,8 @@ import {
   escapeXml,
   getChartColors,
   MAX_CHART_HEIGHT_CELLS,
+  MAX_FONT_SIZE_PX,
+  MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
   validCellDimensions,
 } from "../types";
@@ -79,14 +81,18 @@ export function getPieChartLayout(
   cellDimensions?: CellDimensions,
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
   sliceCount = 2,
+  fontSize?: number,
 ): PieChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const markerSizePx = Math.max(8, Math.round(dimensions.heightPx * 0.5));
-  const labelFontSizePx = clamp(Math.round(dimensions.heightPx * 0.72), 11, 16);
+  const labelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.72), 11, 16);
+  const markerSizePx =
+    fontSize === undefined
+      ? Math.max(8, Math.round(dimensions.heightPx * 0.5))
+      : Math.max(8, Math.round(labelFontSizePx * 0.7));
   const legendRowHeightPx = Math.round(
     Math.max(labelFontSizePx, markerSizePx) + dimensions.heightPx * 0.32,
   );
@@ -97,18 +103,14 @@ export function getPieChartLayout(
 
   if (stacked) {
     const legendHeightPx = legendRows * legendRowHeightPx;
-    const pieDiameterPx = Math.max(
-      Math.round(dimensions.heightPx * 7),
-      Math.min(
-        widthPx - paddingPx * 2,
-        Math.round(dimensions.heightPx * 10),
-        maxHeightPx - paddingPx * 3 - legendHeightPx,
-      ),
+    // Reserve legend space before choosing the pie diameter so configured text is never clipped.
+    const availablePieHeightPx = Math.max(1, maxHeightPx - paddingPx * 3 - legendHeightPx);
+    const pieDiameterPx = Math.min(
+      widthPx - paddingPx * 2,
+      Math.round(dimensions.heightPx * 10),
+      availablePieHeightPx,
     );
-    const heightPx = Math.min(
-      maxHeightPx,
-      Math.round(paddingPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx),
-    );
+    const heightPx = Math.round(paddingPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx);
     return {
       widthPx,
       heightPx,
@@ -231,10 +233,20 @@ export function deserializePieChartDetails(value: unknown): PieChartDetails | un
   if (title !== undefined && typeof title !== "string") return undefined;
   const fontFamily = value.fontFamily;
   if (fontFamily !== undefined && typeof fontFamily !== "string") return undefined;
+  const fontSize = value.fontSize;
+  if (
+    fontSize !== undefined &&
+    (typeof fontSize !== "number" ||
+      !Number.isFinite(fontSize) ||
+      fontSize < MIN_FONT_SIZE_PX ||
+      fontSize > MAX_FONT_SIZE_PX)
+  )
+    return undefined;
 
   const details: PieChartDetails = { rows: value.rows, imageWidthCells };
   if (title !== undefined) details.title = title;
   if (fontFamily !== undefined) details.fontFamily = fontFamily;
+  if (fontSize !== undefined) details.fontSize = fontSize;
   return details;
 }
 
@@ -326,6 +338,7 @@ export const pieChartRenderer: ChartType<
       ...(data.title === undefined ? {} : { title: data.title }),
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
+      ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
     };
   },
   getCallHeader(parameters: PieChartInput): string {
@@ -334,7 +347,7 @@ export const pieChartRenderer: ChartType<
   },
   getSummary: getPieChartSummary,
   getLayout(details, cellDimensions, widthCells): PieChartLayout {
-    return getPieChartLayout(cellDimensions, widthCells, details.rows.length);
+    return getPieChartLayout(cellDimensions, widthCells, details.rows.length, details.fontSize);
   },
   renderSvg(details, theme, layout): string {
     return renderPieChartSvg(details.rows, theme, layout, details.title, details.fontFamily);

@@ -27,7 +27,14 @@ const DEFERRED_TOOL_NAMES = new Set([
   "worktrunk",
 ]);
 
-const DEFERRED_TOOL_PREFIXES = ["figma_", "serena_", "context7_", "ast-grep_", "mcp__"] as const;
+const DEFERRED_TOOL_PREFIXES = [
+  "chart_",
+  "figma_",
+  "serena_",
+  "context7_",
+  "ast-grep_",
+  "mcp__",
+] as const;
 
 const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"[^"\r\n]+"|'[^'\r\n]+')[^>]*\/>\s*$/u;
 
