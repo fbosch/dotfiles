@@ -61,9 +61,11 @@ describe("startup header baseline", () => {
         linkedWorktree: true,
       }),
     ).toEqual([
-      "π Session · 42.5ms",
-      "topic · worktree /worktrees/topic",
-      "18 extensions (3 project) · 25 skills (2 project)",
+      "pi",
+      "Branch: topic · Worktree: /worktrees/topic",
+      "Extensions: 18 enabled (3 project)",
+      "Skills: 25 available (2 project)",
+      "Startup: 42.5ms",
     ]);
   });
 
@@ -76,7 +78,12 @@ describe("startup header baseline", () => {
       { detached: true, root: "/repo", linkedWorktree: false },
     );
 
-    expect(lines).toEqual(["π Session", "detached", "4 extensions · 1 failed · 7 skills"]);
+    expect(lines).toEqual([
+      "pi",
+      "Branch: detached HEAD",
+      "Extensions: 4 enabled, 1 failed",
+      "Skills: 7 available",
+    ]);
     expect(lines.join("\n")).not.toContain("(0 project)");
   });
 
@@ -86,14 +93,38 @@ describe("startup header baseline", () => {
       direnv: integration("direnv", "degraded", { problem: "blocked" }),
       lsp: integration("lsp", "collecting"),
     });
-    expect(lines).toEqual(["π Session", "nvim ✓ · direnv ! · lsp ?"]);
+    expect(lines).toEqual(["pi", "", "nvim ✓  direnv !  lsp ?"]);
 
     const observed = renderStartupHeader(theme, 160, undefined, undefined, undefined, undefined, {
       neovim: undefined,
       direnv: undefined,
       lsp: integration("lsp", "ready", { observedDocuments: 2 }),
     });
-    expect(observed).toEqual(["π Session", "lsp ✓"]);
+    expect(observed).toEqual(["pi", "", "lsp ✓"]);
+  });
+
+  test("uses Pi theme roles for status and table evidence", () => {
+    const coloredTheme = {
+      fg: (color: string, text: string) =>
+        `\u001b[${color === "success" ? 32 : color === "warning" ? 33 : color === "accent" ? 36 : 37}m${text}\u001b[0m`,
+    } as Theme;
+    const rendered = renderStartupHeader(
+      coloredTheme,
+      160,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        neovim: integration("neovim", "ready"),
+        direnv: integration("direnv", "degraded"),
+        lsp: integration("lsp", "collecting"),
+      },
+    ).join("\n");
+
+    expect(rendered).toContain("\u001b[32mnvim ✓");
+    expect(rendered).toContain("\u001b[33mdirenv !");
+    expect(rendered).toContain("\u001b[36mpi");
   });
 
   test("renders candidate states without executable claims", () => {
@@ -115,8 +146,10 @@ describe("startup header baseline", () => {
       },
     );
     expect(lines).toEqual([
-      "π Session",
-      "formatters: biome, prettier · lsp candidates: incomplete (ancestors): typescript",
+      "pi",
+      "",
+      "Formatters: biome, prettier",
+      "LSP: incomplete (ancestors): typescript",
     ]);
     expect(lines.join("\n")).not.toMatch(/installed|executable|available on path/i);
   });
@@ -135,7 +168,7 @@ describe("startup header baseline", () => {
             { windowId: "primary", remaining: 43, allowanceResetAt: now + 60_000 },
             { windowId: "secondary", remaining: 70, allowanceResetAt: now + 120_000 },
           ],
-          bankedResetCount: 0,
+          bankedResetCount: 2,
           bankedExpiryAt: now + 3_600_000,
           observedAt: now,
           staleAt: now + 10_000,
@@ -164,24 +197,62 @@ describe("startup header baseline", () => {
       undefined,
       undefined,
       auth,
-    )[1];
-    expect(rendered).toContain(
-      "auth: work* [openai-codex/oauth]: primary 43% reset 1m, secondary 70% reset 2m · 0 banked",
     );
-    expect(rendered).toContain("personal [next] !: no usage");
-    expect(rendered).toContain("backup: not reported");
+    expect(rendered.some((line) => line.startsWith("┌") && line.includes("┬"))).toBe(true);
+    expect(rendered.join("\n")).toContain("work [active]");
+    expect(rendered.join("\n")).toContain("43% left");
+    expect(rendered.join("\n")).toContain("70% left");
+    expect(rendered.join("\n")).toContain("resets");
+    expect(rendered.join("\n")).toContain("personal [next] !");
+    expect(rendered.join("\n")).toContain("backup");
+    expect(rendered.join("\n")).not.toContain("Not reported");
+    const allowanceTheme = {
+      fg: (color: string, text: string) =>
+        `\u001b[${color === "success" ? 32 : color === "warning" ? 33 : color === "error" ? 31 : 37}m${text}\u001b[0m`,
+    } as Theme;
+    const colored = renderStartupHeader(
+      allowanceTheme,
+      500,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      auth,
+    ).join("\n");
+    expect(colored).toContain("\u001b[33m43% left");
+    expect(colored).toContain("\u001b[32m70% left");
+    expect(colored).toContain("\u001b[31m2 available");
+    expect(colored).toContain("\u001b[31mexpires in");
+    const narrowTable = renderStartupHeader(
+      theme,
+      76,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      auth,
+    );
+    expect(narrowTable.every((line) => visibleWidth(line) <= 76)).toBe(true);
   });
 
   test("keeps update coverage adjacent to extensions and omits absent updates", () => {
     expect(
-      renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("partial", 2))[1],
-    ).toBe("18 extensions (3 project) · 2 updates (incomplete) · 25 skills (2 project)");
+      renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("partial", 2)).find(
+        (line) => line.startsWith("Extensions:"),
+      ),
+    ).toBe("Extensions: 18 enabled (3 project), 2 updates available (incomplete)");
     expect(
-      renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("complete", 0))[1],
-    ).toBe("18 extensions (3 project) · 0 updates · 25 skills (2 project)");
-    expect(renderStartupHeader(theme, 160, runtime())[1]).toBe(
-      "18 extensions (3 project) · 25 skills (2 project)",
-    );
+      renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("complete", 0)).find(
+        (line) => line.startsWith("Extensions:"),
+      ),
+    ).toBe("Extensions: 18 enabled (3 project), 0 updates available");
+    expect(
+      renderStartupHeader(theme, 160, runtime()).find((line) => line.startsWith("Extensions:")),
+    ).toBe("Extensions: 18 enabled (3 project)");
   });
 
   test("omits unavailable resource and startup fields without placeholders", () => {
@@ -191,7 +262,7 @@ describe("startup header baseline", () => {
     };
     const rendered = renderStartupHeader(theme, 160, unavailable).join("\n");
 
-    expect(rendered).toBe("π Session");
+    expect(rendered).toBe("pi");
     expect(rendered).not.toMatch(/unavailable|unknown|warning/i);
   });
 
@@ -226,8 +297,9 @@ describe("startup header baseline", () => {
 
     expect(lines.every((line) => visibleWidth(line) <= 28)).toBe(true);
     expect(lines).toContain("lsp ?");
-    expect(lines.some((line) => line.startsWith("auth stale:"))).toBe(true);
-    expect(lines.some((line) => line.startsWith("formatters: incomplete"))).toBe(true);
-    expect(lines.some((line) => line.startsWith("4 extensions · 1 failed"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("auth stale"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("Formatters: incomplete"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("Extensions: 4 enabled"))).toBe(true);
+    expect(lines.some((line) => line.includes("failed"))).toBe(true);
   });
 });

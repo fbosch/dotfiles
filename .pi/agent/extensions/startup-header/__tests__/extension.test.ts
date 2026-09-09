@@ -116,7 +116,7 @@ describe("startup header registration", () => {
     startupHeader(harness.pi, dependencies);
     harness.emit("session_start");
 
-    expect(harness.render()).toEqual(["π Session"]);
+    expect(harness.render()).toEqual(["pi"]);
     expect(harness.uiMutations).toEqual({ header: 1, footer: 0, editor: 0, status: 0 });
     const light = { fg: (color: string, text: string) => `<light:${color}>${text}` } as Theme;
     const dark = { fg: (color: string, text: string) => `<dark:${color}>${text}` } as Theme;
@@ -178,7 +178,7 @@ describe("startup header registration", () => {
       harness.emit("session_start");
 
       const rendered = harness.render().join("\n");
-      expect(rendered).toBe("π Session");
+      expect(rendered).toBe("pi");
       expect(rendered).not.toMatch(/unavailable|warning|capability/i);
     }
   });
@@ -201,7 +201,7 @@ describe("startup header registration", () => {
     startupHeader(harness.pi, dependencies);
     harness.emit("session_start");
 
-    expect(harness.render().join("\n")).toContain("18 extensions · 1 failed (3 project)");
+    expect(harness.render().join("\n")).toContain("Extensions: 18 enabled, 1 failed (3 project)");
     listener?.(readySnapshot({ ownerRevision: 2 }));
     expect(harness.renderRequests).toBe(1);
     harness.emit("session_shutdown");

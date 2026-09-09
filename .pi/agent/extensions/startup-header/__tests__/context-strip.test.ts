@@ -11,10 +11,10 @@ function estimate(overrides: Partial<StartupContextEstimate> = {}): StartupConte
   return {
     contextWindowTokens: 200_000,
     autoCompactReserveTokens: 12_000,
-    estimatedTokens: 160_000,
+    estimatedTokens: 12_000,
     categories: [
-      { id: "system-prompt", tokens: 100_000 },
-      { id: "system-tools", tokens: 60_000 },
+      { id: "system-prompt", tokens: 6_000 },
+      { id: "system-tools", tokens: 5_500 },
     ],
     ...overrides,
   };
@@ -43,21 +43,35 @@ async function harness() {
 }
 
 describe("initial context strip", () => {
-  test("uses pi-context-view allocation, colors, glyphs, reserve, and free semantics", async () => {
+  test("renders the first slice of pi-context-view's full map with shared colors and glyphs", async () => {
     const { colors, config, theme } = await harness();
     const rendered = renderInitialContextStrip(theme, estimate(), config);
-    const cells = rendered.split(" ")[1] ?? "";
+    const cells = rendered.match(/[■◧▦⛝⛶]/g) ?? [];
 
-    expect([...cells]).toHaveLength(14);
+    expect(cells).toHaveLength(14);
     expect(cells).toContain("■");
     expect(cells).toContain("◧");
-    expect(cells).toContain("⛝");
     expect(cells).toContain("⛶");
-    expect(rendered).toEndWith("160k/200k · reserve 12k");
+    expect(cells).not.toContain("⛝");
+    expect(rendered).toEndWith("12k / 200k (6%)");
     expect(colors).toContain("error");
     expect(colors).toContain("warning");
-    expect(colors).toContain("dim");
     expect(colors).toContain("muted");
+  });
+
+  test("allocates the full context map before selecting its first row", async () => {
+    const { config, theme } = await harness();
+    let dimensions: readonly [number | undefined, number | undefined] | undefined;
+    const observedConfig: ContextStripConfig = {
+      ...config,
+      buildUsageMap: (usage, columns, rows) => {
+        dimensions = [columns, rows];
+        return config.buildUsageMap(usage, columns, rows);
+      },
+    };
+
+    renderInitialContextStrip(theme, estimate(), observedConfig);
+    expect(dimensions).toEqual([14, 14]);
   });
 
   test("clamps over-capacity estimates without exposing source content", async () => {
@@ -71,7 +85,7 @@ describe("initial context strip", () => {
       config,
     );
 
-    expect([...((rendered.split(" ")[1] as string) ?? "")]).toHaveLength(14);
+    expect(rendered.match(/[■◧▦⛝⛶]/g)).toHaveLength(14);
     expect(
       renderInitialContextStrip(
         theme,
@@ -82,7 +96,7 @@ describe("initial context strip", () => {
         config,
       ),
     ).toContain("▦");
-    expect(rendered).toContain("240k/200k");
+    expect(rendered).toContain("240k / 200k");
     expect(rendered).not.toMatch(/prompt text|tool schema|file content|skill content/i);
   });
 });

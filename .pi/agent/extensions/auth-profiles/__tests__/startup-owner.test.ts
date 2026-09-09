@@ -5,8 +5,10 @@ import {
   STARTUP_OWNER_SNAPSHOT_EVENT,
   type StartupOwnerSnapshot,
 } from "../../startup-header/contracts";
+import { authObservations } from "../index";
 import { openAiCodexUsageFromPayload } from "../providers/openai-codex";
 import { AuthStartupOwner, type AuthStartupState } from "../startup-owner";
+import { AUTH_USAGE_OBSERVATION, type UsageStatusPayload } from "../usage-status-service";
 
 class FakeClock {
   public current = 100;
@@ -82,6 +84,31 @@ describe("auth startup owner", () => {
     ).toEqual([
       { windowId: "primary", remaining: 80, resetsIn: "30s", allowanceResetAt: 30_100 },
       { windowId: "secondary", remaining: 60, resetsIn: "1m", allowanceResetAt: 60_100 },
+    ]);
+  });
+
+  test("publishes cached /profiles status windows with the same positional labels", () => {
+    const profile: UsageStatusPayload["profiles"][number] = {
+      profileLabel: "work",
+      active: true,
+      urgency: "unknown",
+      usage: [
+        { remaining: 74, resetsIn: "2h" },
+        { remaining: 88, resetsIn: "5d" },
+      ],
+    };
+    Object.defineProperty(profile, AUTH_USAGE_OBSERVATION, {
+      value: { windows: [], observedAt: 100, staleAt: 200 },
+    });
+
+    expect(
+      authObservations(
+        { schema: "fbb.pi-auth-profiles-usage/v1", profiles: [profile], diagnostics: [] },
+        "openai-codex",
+      )[0]?.windows,
+    ).toEqual([
+      { windowId: "primary", remaining: 74 },
+      { windowId: "secondary", remaining: 88 },
     ]);
   });
   test("publishes only sanitized observed state in resolver and provider-window order", () => {

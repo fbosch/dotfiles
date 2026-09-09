@@ -1,7 +1,8 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import type { StartupContextEstimate } from "./runtime-types";
 
-const STRIP_CELLS = 14;
+const STRIP_COLUMNS = 14;
+const FULL_MAP_ROWS = 14;
 const CONFIG_MODULE_URL = new URL(
   "../../npm/node_modules/pi-context-view/src/config.ts",
   import.meta.url,
@@ -99,12 +100,13 @@ export function renderInitialContextStrip(
       estimatedTokens: estimate.estimatedTokens,
       autoCompactReserveTokens: estimate.autoCompactReserveTokens,
     },
-    STRIP_CELLS,
-    1,
+    STRIP_COLUMNS,
+    FULL_MAP_ROWS,
   );
   if (map === undefined) return "";
 
   const cells = map.cells
+    .slice(0, STRIP_COLUMNS)
     .map((cell) => {
       const categoryId =
         cell.fill === "buffer"
@@ -128,9 +130,15 @@ export function renderInitialContextStrip(
         glyph,
       );
     })
-    .join("");
-  const reserve = estimate.autoCompactReserveTokens;
-  return `context ${cells} ${formatTokens(estimate.estimatedTokens)}/${formatTokens(estimate.contextWindowTokens)}${reserve === 0 ? "" : ` · reserve ${formatTokens(reserve)}`}`;
+    .join(" ");
+  const usagePercent =
+    estimate.contextWindowTokens === 0
+      ? 0
+      : Math.round((estimate.estimatedTokens / estimate.contextWindowTokens) * 100);
+  return `${theme.fg("muted", "Initial context  ")}${cells}${theme.fg(
+    "muted",
+    ` ${formatTokens(estimate.estimatedTokens)} / ${formatTokens(estimate.contextWindowTokens)} (${usagePercent}%)`,
+  )}`;
 }
 
 function formatTokens(tokens: number): string {

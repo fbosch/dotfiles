@@ -1,6 +1,7 @@
 {
   "lastChangelogVersion": "0.85.1",
   "theme": "zenwritten-dark",
+  "quietStartup": true,
   "extensions": [
     "!extensions/**",
     "+extensions/ask-user-question.ts",

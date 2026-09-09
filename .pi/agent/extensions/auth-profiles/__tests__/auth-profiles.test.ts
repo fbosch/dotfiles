@@ -132,7 +132,14 @@ describe("auth profile prompt status", () => {
         if (name === "reset-credit") resetCreditCommand = command.handler;
       },
     } as unknown as ExtensionAPI;
-    authProfiles(pi, { providerAdapter: testProviderAdapter(agentDir) });
+    let startupUsageCalls = 0;
+    authProfiles(pi, {
+      providerAdapter: testProviderAdapter(agentDir),
+      usageCollector: async () => {
+        startupUsageCalls += 1;
+        return { schema: "fbb.pi-auth-profiles-usage/v1", profiles: [], diagnostics: [] };
+      },
+    });
 
     const statuses: Array<[string, string | undefined]> = [];
     let failNextModelRefresh = false;
@@ -179,6 +186,7 @@ describe("auth profile prompt status", () => {
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
     expect(modelRefreshes).toBe(1);
 
+    expect(startupUsageCalls).toBe(1);
     await profileCommand?.("use work", ctx);
     expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));

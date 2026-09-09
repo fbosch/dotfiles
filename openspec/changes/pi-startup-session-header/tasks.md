@@ -12,7 +12,7 @@
 - [x] 2.2 Dispose subscriptions and local deadline timers when the session or header owner changes; verification: late replies and expired timers from disposed generations do not update the header.
 - [x] 2.3 Add a passive adapter for `@liborw/pi-startup-time` that accepts only a new valid `startup-time` entry from the current dispatch and preserves module-load-to-`session_start` semantics; verification: tests cover startup, reload, prior-entry rejection, invalid data, handler ordering, and absent-package omission without an independent timer.
 - [x] 2.4 Render Git branch, linked-worktree path, available resolved extension and skill totals, coverage-qualified updates adjacent to extensions, and the optional frozen startup duration; verification: fixtures cover ordinary, linked, detached, non-Git, unavailable, load-failed, zero-project-subset, partial-update, complete-zero-update, and omitted startup states.
-- [ ] 2.5 Preserve Pi's loaded-resource listing, transcript, editor, and prompt footer without duplicating model or thinking state; verification: an interactive startup fixture contains each existing region once.
+- [x] 2.5 Preserve Pi's loaded-resource listing, transcript, editor, and prompt footer without duplicating model or thinking state; verification: an interactive startup fixture contains each existing region once.
 
 ## 3. Structured publisher safety and integration status
 

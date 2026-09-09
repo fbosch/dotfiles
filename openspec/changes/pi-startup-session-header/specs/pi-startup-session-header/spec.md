@@ -52,8 +52,7 @@ Every present owner snapshot, request, reply, and change SHALL carry `sessionId`
 - **THEN** the header ignores revision 8
 
 ### Requirement: Collection and freshness transitions remain passive
-
-The header SHALL render published data only. It MUST NOT refresh or read raw credentials, fetch usage, start an LSP, run a formatter, approve or evaluate direnv beyond existing owner behavior, open a Neovim channel, create a synthetic model turn, poll, or mutate selection, files, buffers, or tools. Owner snapshots MUST carry independent observed-at, stale-at, and expiry deadlines. Owners SHALL schedule local one-shot deadline notifications and recompute deadlines from absolute timestamps after suspend or a clock change. A deadline transition MUST NOT fetch, refresh, or consume anything.
+The header SHALL render published data only. It MUST NOT directly refresh or read raw credentials, fetch usage, start an LSP, run a formatter, approve or evaluate direnv beyond existing owner behavior, open a Neovim channel, create a synthetic model turn, poll, or mutate selection, files, buffers, or tools. The auth owner SHALL refresh through the same cached usage collector as `/profiles status` during `session_start`; this owner-managed refresh MAY read credentials and fetch only under that collector's existing cache and freshness rules. Owner snapshots MUST carry independent observed-at, stale-at, and expiry deadlines. Owners SHALL schedule local one-shot deadline notifications and recompute deadlines from absolute timestamps after suspend or a clock change. A deadline transition MUST NOT fetch, refresh, or consume anything.
 
 #### Scenario: An optional owner is absent
 
@@ -173,7 +172,7 @@ The header SHALL list formatter and LSP candidates using existing settings, file
 
 ### Requirement: Auth status preserves observation and cache limits
 
-The header SHALL show the effective repository and session auth chain in resolver order, with actual active profile distinct from next candidate. `[next]` identifies the next resolver candidate and MUST NOT promise a successful switch. Each profile SHALL show its method, provider-window label, remaining allowance, and reset when reported. Allowances for separate provider windows MUST NOT be summed. An unreported allowance MUST NOT be displayed as zero or unlimited. In-memory owner observations SHALL carry stable provider-window identity and separate observed-at, stale-at, allowance-reset, banked-reset count, and banked-expiry deadlines. Expiry MUST NOT imply replenishment. Zero banked resets MUST suppress expiry. The existing legacy cache MUST remain readable without migration, reconstruction, or fetch; its missing window identity and absolute reset data SHALL display as metadata-unavailable.
+The header SHALL show the effective repository and session auth chain in resolver order, with actual active profile distinct from next candidate. `[next]` identifies the next resolver candidate and MUST NOT promise a successful switch. Each profile SHALL show its method, provider-window label, remaining allowance, and reset when reported. Allowances for separate provider windows MUST NOT be summed. An unreported allowance MUST NOT be displayed as zero or unlimited. In-memory owner observations SHALL carry stable provider-window identity and separate observed-at, stale-at, allowance-reset, banked-reset count, and banked-expiry deadlines. Expiry MUST NOT imply replenishment. Zero banked resets MUST suppress expiry. The existing legacy cache MUST remain readable without migration. Cached usage windows SHALL use the same positional `primary`, `secondary`, and subsequent-window labels as `/profiles status`; missing absolute reset data SHALL remain omitted.
 
 #### Scenario: Auth chain has active and next profiles
 
@@ -182,8 +181,8 @@ The header SHALL show the effective repository and session auth chain in resolve
 
 #### Scenario: Legacy auth cache is read
 
-- **WHEN** the owner reads an existing legacy auth cache without window identity or absolute reset metadata
-- **THEN** the header retains the cache's supported selection information and renders window identity and absolute reset metadata as unavailable without fetching or reconstructing them
+- **WHEN** the owner reads an existing legacy auth cache with positional windows but without stable provider identity or absolute reset metadata
+- **THEN** the header renders the cached remaining allowances under the same positional labels as `/profiles status` and omits unavailable absolute reset timestamps without migrating the cache
 
 #### Scenario: Downgrade reads the old cache
 

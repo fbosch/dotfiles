@@ -279,7 +279,7 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
   return sections.join("\n\n");
 }
 
-function authObservations(
+export function authObservations(
   status: UsageStatusPayload,
   providerId: string,
 ): AuthProfileObservation[] {
@@ -287,7 +287,14 @@ function authObservations(
   return status.profiles.flatMap((profile) => {
     const observation = profile[AUTH_USAGE_OBSERVATION];
     if (observation === undefined) return [];
-    const windows = observation.windows.flatMap((window) =>
+    const observedWindows =
+      observation.windows.length > 0
+        ? observation.windows
+        : profile.usage.map((window, index) => ({
+            ...window,
+            windowId: index === 0 ? "primary" : index === 1 ? "secondary" : `window-${index + 1}`,
+          }));
+    const windows = observedWindows.flatMap((window) =>
       window.windowId === undefined
         ? []
         : [
@@ -369,6 +376,21 @@ export default function authProfiles(
         };
       },
     });
+
+  const collectAndPublishUsage = async (): Promise<UsageStatusPayload> => {
+    const status = await usageCollector({
+      activeProfile,
+      includeDefault: true,
+      providerAdapter,
+    });
+    authStartupState = {
+      ...authStartupState,
+      activeProfile,
+      observations: authObservations(status, providerAdapter.providerId),
+    };
+    authStartupOwner?.update();
+    return status;
+  };
 
   const activateUnlocked = async (
     ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
@@ -457,7 +479,13 @@ export default function authProfiles(
         cached.sessionProfile === sessionProfile
           ? cached.selection
           : await chooseCurrentProfile(ctx);
-      return activateUnlocked(ctx, selection);
+      const activated = await activateUnlocked(ctx, selection);
+      try {
+        await collectAndPublishUsage();
+      } catch {
+        // Selection remains usable when the optional startup usage refresh fails.
+      }
+      return activated;
     });
     if (resolution.selectionWarning) {
       ctx.ui.notify(
@@ -586,17 +614,7 @@ export default function authProfiles(
 
       try {
         await profileOperationTail;
-        const status = await usageCollector({
-          activeProfile,
-          includeDefault: true,
-          providerAdapter,
-        });
-        authStartupState = {
-          ...authStartupState,
-          activeProfile,
-          observations: authObservations(status, providerAdapter.providerId),
-        };
-        authStartupOwner?.update();
+        const status = await collectAndPublishUsage();
         ctx.ui.notify(
           formatUsageStatus(status, ctx.ui.theme, now()),
           status.diagnostics.length > 0 ? "warning" : "info",
