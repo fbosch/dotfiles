@@ -28,6 +28,10 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - `just stow-check`
 - Add and run tests through `devenv test`.
 
+## Pi Extensions
+
+- Local Pi extensions are deny-by-default in `.pi/agent/settings.json`. When adding an extension, add its `+extensions/<path>` entry to the allowlist; `/reload` alone will not enable it.
+
 ## OpenCode Plugins
 
 - Local plugins live in `.config/opencode/plugins/` and are auto-loaded by OpenCode; npm plugins are configured in `opencode.json`.

@@ -14,9 +14,12 @@ import {
   setCapabilities,
   setCellDimensions,
 } from "@earendil-works/pi-tui";
+import { Value } from "typebox/value";
+import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import chartExtension, {
   getPieChartLayout,
   PieChartComponent,
+  pieChartVariant,
   rasterizeSvg,
   renderPieChartSvg,
   validatePieChartInput,
@@ -24,6 +27,7 @@ import chartExtension, {
 
 const theme = {
   fg: (_color: string, text: string) => text,
+  bg: (_color: string, text: string) => text,
   bold: (text: string) => text,
   getFgAnsi: (color: string) => {
     const colors: Record<string, string> = {
@@ -61,7 +65,7 @@ type ToolResult = {
 };
 type PieChartExecute = (
   toolCallId: string,
-  params: { labels: string[]; values: number[] },
+  params: { type: "pie"; data: Array<{ label: string; value: number }>; title?: string },
   signal?: AbortSignal,
   onUpdate?: undefined,
   ctx?: ExtensionContext,
@@ -74,7 +78,7 @@ function registerTool(): ToolDefinition {
       tool = definition;
     },
   } as unknown as ExtensionAPI);
-  if (tool === undefined) throw new Error("pie_chart was not registered");
+  if (tool === undefined) throw new Error("chart was not registered");
   return tool;
 }
 
@@ -144,7 +148,13 @@ const tuiContext = {
   ui: { theme },
 } as unknown as ExtensionContext;
 
-const rows = validatePieChartInput({ labels: ["Open", "Closed"], values: [3, 1] });
+const rows = validatePieChartInput({
+  type: "pie",
+  data: [
+    { label: "Open", value: 3 },
+    { label: "Closed", value: 1 },
+  ],
+});
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => undefined;
@@ -156,20 +166,65 @@ function deferred<T>() {
 
 describe("pie chart", () => {
   test("validates bounded nonnegative values, a finite total, and unique labels", () => {
-    expect(validatePieChartInput({ labels: [" Open ", "Closed"], values: [3, 1] })).toEqual([
+    expect(
+      validatePieChartInput({
+        type: "pie",
+        data: [
+          { label: " Open ", value: 3 },
+          { label: "Closed", value: 1 },
+        ],
+      }),
+    ).toEqual([
       { label: "Open", value: 3 },
       { label: "Closed", value: 1 },
     ]);
-    expect(() => validatePieChartInput({ labels: ["Open"], values: [1] })).toThrow("between 2");
-    expect(() => validatePieChartInput({ labels: ["Open", "Closed"], values: [1, -1] })).toThrow(
-      "finite nonnegative",
-    );
-    expect(() => validatePieChartInput({ labels: ["Open", "Closed"], values: [0, 0] })).toThrow(
-      "finite positive total",
-    );
-    expect(() => validatePieChartInput({ labels: ["Open", " Open "], values: [1, 2] })).toThrow(
-      "duplicates",
-    );
+    expect(() =>
+      validatePieChartInput({ type: "pie", data: [{ label: "Open", value: 1 }] }),
+    ).toThrow("between 2");
+    expect(() =>
+      validatePieChartInput({
+        type: "pie",
+        data: [
+          { label: "Open", value: 1 },
+          { label: "Closed", value: -1 },
+        ],
+      }),
+    ).toThrow("finite nonnegative");
+    expect(() =>
+      validatePieChartInput({
+        type: "pie",
+        data: [
+          { label: "Open", value: 0 },
+          { label: "Closed", value: 0 },
+        ],
+      }),
+    ).toThrow("finite positive total");
+    expect(() =>
+      validatePieChartInput({
+        type: "pie",
+        data: [
+          { label: "Open", value: 1 },
+          { label: " Open ", value: 2 },
+        ],
+      }),
+    ).toThrow("duplicates");
+  });
+
+  test("registers chart with the pie variant schema", () => {
+    const tool = registerTool();
+
+    expect(tool.name).toBe("chart");
+    expect(tool.parameters).toBe(pieChartVariant);
+    expect(Value.Check(pieChartVariant, { type: "pie", data: rows, title: "Status" })).toBe(true);
+    expect(Value.Check(pieChartVariant, { type: "bar", data: rows })).toBe(false);
+    expect(
+      Value.Check(pieChartVariant, {
+        type: "pie",
+        data: rows,
+        labels: ["Open", "Closed"],
+        values: [3, 1],
+      }),
+    ).toBe(false);
   });
 
   test("derives compact logical height from pie and legend layout", () => {
@@ -208,6 +263,10 @@ describe("pie chart", () => {
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
     expect(svg).toContain('aria-label="Pie chart"');
     expect(fills(svg, "path")).toEqual(fills(svg, "rect"));
+
+    const titledSvg = renderPieChartSvg(rows, theme, undefined, "Status");
+    expect(titledSvg).toContain('aria-label="Pie chart: Status"');
+    expect(titledSvg).toContain("<title>Status</title>");
   });
 
   test("keeps the SVG and rasterized PNG background transparent", async () => {
@@ -221,16 +280,16 @@ describe("pie chart", () => {
   test("returns TUI chart data without a native image and retains an image outside TUI", async () => {
     const tool = registerTool();
     const execute = tool.execute as PieChartExecute;
-    const params = { labels: ["Open", "Closed"], values: [3, 1] };
+    const params = { type: "pie" as const, data: rows, title: "Status" };
     const [tuiResult, printResult] = await Promise.all([
       execute("chart", params, undefined, undefined, tuiContext),
       execute("chart", params, undefined, undefined, printContext),
     ]);
 
     expect(tuiResult.content).toEqual([
-      { type: "text", text: "Pie chart: Open 3 (75.0%); Closed 1 (25.0%)" },
+      { type: "text", text: "Status pie chart: Open 3 (75.0%); Closed 1 (25.0%)" },
     ]);
-    expect(tuiResult.details).toEqual({ rows, imageWidthCells: 60 });
+    expect(tuiResult.details).toEqual({ rows, title: "Status", imageWidthCells: 60 });
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
     expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 1080, heightPx: 440 });
@@ -320,8 +379,8 @@ describe("pie chart", () => {
     expect(calls).toBe(1);
 
     component.invalidate();
-    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
-    expect(calls).toBe(2);
+    expect(component.render(64)).toEqual(["Pie chart unavailable"]);
+    expect(calls).toBe(1);
   });
 
   test("invalidates cached rasters when the theme identity changes", async () => {
@@ -351,19 +410,66 @@ describe("pie chart", () => {
     expect(requestedSvg[1]).toContain("rgb(255, 0, 0)");
   });
 
+  test("keeps a completed raster across the real tool-row invalidation lifecycle", async () => {
+    Reflect.set(globalThis, Symbol.for("@earendil-works/pi-coding-agent:theme"), theme);
+    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    const raster = deferred<string>();
+    let rasterCalls = 0;
+    const renderers = {
+      renderResult(
+        result: { details?: unknown },
+        _options: unknown,
+        renderTheme: Theme,
+        context: { lastComponent?: unknown; invalidate: () => void },
+      ) {
+        const previous = context.lastComponent;
+        if (previous instanceof PieChartComponent) {
+          previous.update(renderTheme);
+          return previous;
+        }
+        return new PieChartComponent(
+          result.details as { rows: typeof rows; imageWidthCells: number },
+          renderTheme,
+          context.invalidate,
+          async () => {
+            rasterCalls++;
+            return raster.promise;
+          },
+        );
+      },
+    };
+    const toolRow = new ToolExecutionComponent(
+      "chart",
+      "chart-1",
+      {},
+      { showImages: false },
+      renderers,
+      { requestRender: () => undefined } as never,
+      process.cwd(),
+    );
+    toolRow.updateResult({
+      content: [{ type: "text", text: "summary" }],
+      details: { rows, imageWidthCells: 60 },
+      isError: false,
+    });
+
+    expect(toolRow.render(66).join("\n")).toContain("Rendering pie chart…");
+    expect(rasterCalls).toBe(1);
+    raster.resolve(pngHeader());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    expect(toolRow.render(66).join("\n")).toContain("\u001b_G");
+    expect(rasterCalls).toBe(1);
+  });
+
   test("honors an already-aborted non-TUI tool call", async () => {
     const controller = new AbortController();
     controller.abort();
     const execute = registerTool().execute as PieChartExecute;
 
     await expect(
-      execute(
-        "chart",
-        { labels: ["Open", "Closed"], values: [3, 1] },
-        controller.signal,
-        undefined,
-        printContext,
-      ),
+      execute("chart", { type: "pie", data: rows }, controller.signal, undefined, printContext),
     ).rejects.toThrow("aborted");
   });
 });

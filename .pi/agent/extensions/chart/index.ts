@@ -19,7 +19,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
-import { Type } from "typebox";
+import { type Static, Type } from "typebox";
 
 const DEFAULT_IMAGE_WIDTH_CELLS = 60;
 const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
@@ -28,6 +28,7 @@ const RASTER_DENSITY = 2;
 const NARROW_LAYOUT_CELLS = 36;
 const MAX_SLICES = 12;
 const MAX_LABEL_LENGTH = 22;
+const MAX_TITLE_LENGTH = 80;
 const MAX_SVG_BYTES = 64 * 1024;
 const MAX_PNG_BYTES = 4 * 1024 * 1024;
 const RASTERIZE_TIMEOUT_MS = 10_000;
@@ -45,7 +46,25 @@ const SLICE_COLOR_TOKENS = [
   "bashMode",
 ] as const satisfies readonly ThemeColor[];
 
-type PieChartInput = { labels: string[]; values: number[] };
+export const pieChartVariant = Type.Object(
+  {
+    type: Type.Literal("pie"),
+    data: Type.Array(
+      Type.Object(
+        {
+          label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
+          value: Type.Number({ minimum: 0, maximum: 1_000_000_000 }),
+        },
+        { additionalProperties: false },
+      ),
+      { minItems: 2, maxItems: MAX_SLICES },
+    ),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
+  },
+  { additionalProperties: false },
+);
+
+export type PieChartInput = Static<typeof pieChartVariant>;
 type ChartRow = { label: string; value: number };
 export type PieChartLayout = {
   widthPx: number;
@@ -65,6 +84,7 @@ export type PieChartLayout = {
 };
 export type PieChartDetails = {
   rows: ChartRow[];
+  title?: string;
   imageWidthCells: number;
 };
 type Rasterize = (svg: string, signal?: AbortSignal) => Promise<string>;
@@ -172,16 +192,12 @@ export function getPieChartLayout(
 }
 
 export function validatePieChartInput(input: PieChartInput): ChartRow[] {
-  if (input.labels.length !== input.values.length) {
-    throw new Error("labels and values must have the same length");
-  }
-  if (input.labels.length < 2 || input.labels.length > MAX_SLICES) {
+  if (input.data.length < 2 || input.data.length > MAX_SLICES) {
     throw new Error(`provide between 2 and ${MAX_SLICES} slices`);
   }
 
   const labels = new Set<string>();
-  const rows = input.labels.map((label, index) => {
-    const value = input.values[index];
+  const rows = input.data.map(({ label, value }, index) => {
     const normalizedLabel = label.trim();
     if (
       typeof label !== "string" ||
@@ -205,6 +221,15 @@ export function validatePieChartInput(input: PieChartInput): ChartRow[] {
     throw new Error("values must have a finite positive total");
   }
   return rows;
+}
+
+function normalizeChartTitle(title: string | undefined): string | undefined {
+  if (title === undefined) return undefined;
+  const normalizedTitle = title.trim();
+  if (normalizedTitle.length === 0 || normalizedTitle.length > MAX_TITLE_LENGTH) {
+    throw new Error(`title must be 1-${MAX_TITLE_LENGTH} characters`);
+  }
+  return normalizedTitle;
 }
 
 function ansiColor(ansi: string, fallback: string): string {
@@ -263,6 +288,7 @@ export function renderPieChartSvg(
   rows: ChartRow[],
   theme: Pick<Theme, "getFgAnsi">,
   layout = getPieChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows.length),
+  title?: string,
 ): string {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
@@ -288,7 +314,8 @@ export function renderPieChartSvg(
     width: layout.pieDiameterPx,
     height: layout.pieDiameterPx,
   });
-  const chart = renderChartSvg(scene, { ariaLabel: "Pie chart", idPrefix: "pi-pie" });
+  const accessibleName = title === undefined ? "Pie chart" : `Pie chart: ${title}`;
+  const chart = renderChartSvg(scene, { ariaLabel: accessibleName, idPrefix: "pi-pie" });
   const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
   const maxLabelWidth = Math.max(1, layout.legendColumnWidthPx - layout.markerSizePx - 8);
   const truncateLabel = (label: string) => {
@@ -312,7 +339,7 @@ export function renderPieChartSvg(
   const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}">${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g></svg>`;
 }
 
 export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
@@ -402,10 +429,15 @@ export class PieChartComponent implements Component {
   update(theme: Theme): void {
     if (this.theme === theme) return;
     this.theme = theme;
-    this.invalidate();
+    this.resetRasters();
   }
 
   invalidate(): void {
+    // Pi also invalidates the whole tool row to request async redraws. Keep the
+    // completed raster; update() resets it when the renderer's theme changes.
+  }
+
+  private resetRasters(): void {
     this.cache.clear();
     this.errors.clear();
     this.pending?.controller.abort();
@@ -458,7 +490,7 @@ export class PieChartComponent implements Component {
       key.widthCells,
       this.details.rows.length,
     );
-    const svg = renderPieChartSvg(this.details.rows, this.theme, layout);
+    const svg = renderPieChartSvg(this.details.rows, this.theme, layout, this.details.title);
 
     void this.rasterize(svg, controller.signal)
       .then((png) => {
@@ -480,37 +512,32 @@ export class PieChartComponent implements Component {
   }
 }
 
-function chartText(rows: ChartRow[]): string {
+function chartText(rows: ChartRow[], title?: string): string {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
-  return `Pie chart: ${rows
+  return `${title === undefined ? "Pie chart" : `${title} pie chart`}: ${rows
     .map((row) => `${row.label} ${row.value} (${((row.value / total) * 100).toFixed(1)}%)`)
     .join("; ")}`;
 }
 
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
-    name: "pie_chart",
-    label: "Pie Chart",
-    description:
-      "Render a compact pie chart from matching JSON-safe labels and nonnegative numeric values.",
-    promptSnippet: "Render simple pie charts from labels and values",
-    parameters: Type.Object({
-      labels: Type.Array(Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }), {
-        minItems: 2,
-        maxItems: MAX_SLICES,
-      }),
-      values: Type.Array(Type.Number({ minimum: 0, maximum: 1_000_000_000 }), {
-        minItems: 2,
-        maxItems: MAX_SLICES,
-      }),
-    }),
+    name: "chart",
+    label: "Chart",
+    description: "Render a compact pie chart from labeled nonnegative values.",
+    promptSnippet: "Render simple pie charts from labeled values",
+    parameters: pieChartVariant,
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const rows = validatePieChartInput(params);
+      const title = normalizeChartTitle(params.title);
       const imageWidthCells = SettingsManager.create(ctx.cwd, getAgentDir(), {
         projectTrusted: ctx.isProjectTrusted(),
       }).getImageWidthCells();
-      const details: PieChartDetails = { rows, imageWidthCells };
-      const text = chartText(rows);
+      const details: PieChartDetails = {
+        rows,
+        ...(title === undefined ? {} : { title }),
+        imageWidthCells,
+      };
+      const text = chartText(rows, title);
       if (ctx.mode === "tui") {
         // Pi 0.85.1 always appends content images after renderResult; details retain replay data instead.
         return { content: [{ type: "text", text }], details };
@@ -521,6 +548,7 @@ export default function (pi: ExtensionAPI) {
           rows,
           ctx.ui.theme,
           getPieChartLayout(undefined, imageWidthCells, rows.length),
+          title,
         ),
         signal,
       );
@@ -533,7 +561,9 @@ export default function (pi: ExtensionAPI) {
       };
     },
     renderCall(_args, theme) {
-      return new Text(theme.fg("toolTitle", theme.bold("pie_chart")), 0, 0);
+      const title = normalizeChartTitle(_args.title);
+      const header = title === undefined ? "chart" : `chart — ${title}`;
+      return new Text(theme.fg("toolTitle", theme.bold(header)), 0, 0);
     },
     renderResult(result, _options, theme, context) {
       const details = result.details as PieChartDetails | undefined;

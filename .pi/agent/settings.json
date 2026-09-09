@@ -6,6 +6,7 @@
     "!extensions/**",
     "+extensions/ask-user-question.ts",
     "+extensions/auth-profiles/index.ts",
+    "+extensions/chart/index.ts",
     "+extensions/code-blocks/index.ts",
     "+extensions/code-mode/index.ts",
     "+extensions/command-aliases.ts",
