@@ -54,6 +54,28 @@ export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
 const MCP_ICON = "";
 
+
+export function formatFffGitStatus(theme: Theme, status: string): string {
+  switch (status) {
+    case "untracked":
+    case "unknown":
+      return theme.fg("success", "┆");
+    case "modified":
+      return theme.fg("warning", "┃");
+    case "deleted":
+    case "staged_deleted":
+      return theme.fg("error", "▁");
+    case "renamed":
+      return theme.fg("accent", "┃");
+    case "staged_new":
+    case "staged_modified":
+      return theme.fg("success", "┃");
+    case "ignored":
+      return theme.fg("dim", "┆");
+    default:
+      return "";
+  }
+}
 export interface PromptEditorState {
   isWorking(): boolean;
   isInterruptPending(): boolean;
@@ -274,6 +296,7 @@ export class PromptEditor extends CustomEditor {
             ? this.ctx.ui.theme.fg("accent", text)
             : colorizeHex(this.ctx.ui.theme, mention.color)(text),
         (text) => this.ctx.ui.theme.bold(text),
+        (status) => formatFffGitStatus(this.ctx.ui.theme, status),
       ),
     );
   }

@@ -13,7 +13,9 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Do not edit generated state/lock files (e.g. `nvim-pack-lock.json`, AGS GIR typings, Fish auto-generated dirs).
 - Follow symlinks when reading docs.
 - Dotfiles repo root is `~/dotfiles`.
-- Canonical skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
+- Shared skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
+- Dotfiles-specific Pi skills live in `.pi/skills/`.
+- OpenCode-specific skills live in `.opencode/skills/` and may be linked from `.pi/skills/` when Pi must expose them.
 
 ## OpenSpec
 

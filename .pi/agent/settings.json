@@ -33,6 +33,7 @@
     "+extensions/quick-replies/index.ts",
     "+extensions/routed-prompts.ts",
     "+extensions/startup-header/index.ts",
+    "+extensions/skill-tweaks/index.ts",
     "+extensions/tool-discovery/index.ts",
     "+extensions/toon/index.ts",
     "+extensions/tree-sitter/index.ts",
@@ -100,5 +101,14 @@
     "npm:@liborw/pi-startup-time"
   ],
   "autocompleteMaxVisible": 10,
-  "editorPaddingX": 0
+  "editorPaddingX": 0,
+  "skillTweaks": {
+    "disableModelInvocation": [
+      "grilling",
+      "herdr",
+      "skill-creator",
+      "opencode-subagent-patterns",
+      "opencode-command-authoring"
+    ]
+  }
 }

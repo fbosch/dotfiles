@@ -41,7 +41,18 @@ local function close_all_but_visible_and_terminals()
 			end
 		end
 	end
-	vim.cmd("BufferCloseAllButVisible")
+	local state = require("barbar.state")
+	local render = state.update_callback
+	-- Barbar re-enters its render/cleanup loop once per buffer during bulk close.
+	state.update_callback = function() end
+	local ok, err = xpcall(function()
+		vim.cmd("BufferCloseAllButVisible")
+	end, debug.traceback)
+	state.update_callback = render
+	if not ok then
+		error(err)
+	end
+	render()
 end
 
 local function buffer_index_keys()

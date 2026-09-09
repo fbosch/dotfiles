@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { analyzeDangerousCommand, dangerousCommandMatch } from "../dangerous-command";
+import {
+  analyzeDangerousCommand,
+  dangerousCommandMatch,
+  isDangerousCommandSafeInLocations,
+} from "../dangerous-command";
 
 describe("dangerousCommandMatch", () => {
   test("matches upstream forced-rm variants", async () => {
@@ -40,14 +44,60 @@ describe("dangerousCommandMatch", () => {
     );
   });
 
-  test("does not match upstream non-forced or non-literal forms", async () => {
+  test("applies configured safe locations to location-scoped dangerous commands", async () => {
+    const safeLocations = ["/tmp", "/var/tmp"];
+    const isSafe = async (command: string) =>
+      isDangerousCommandSafeInLocations(
+        command,
+        await analyzeDangerousCommand(["bash", "-lc", command]),
+        safeLocations,
+      );
+
+    for (const command of [
+      "rm /tmp/example",
+      "rm -rf /tmp/example",
+      "/bin/rm -r -f -- /tmp/example",
+      "rm --recursive --force /tmp/example /tmp/other",
+      "rm /var/tmp/example",
+    ]) {
+      expect(await isSafe(command), command).toBe(true);
+    }
+
+    for (const command of [
+      "rm -rf /tmp",
+      "rm -rf /tmp/",
+      "rm -rf /tmp/example/../../outside",
+      "rm -rf /home/example",
+      'rm -rf "$TARGET"',
+      "rm -rf /tmp/example && echo done",
+    ]) {
+      expect(await isSafe(command), command).toBe(false);
+    }
+  });
+
+  test("uses supplied path evidence instead of an executable-specific rule", async () => {
+    expect(
+      await isDangerousCommandSafeInLocations(
+        "printf /tmp/example",
+        { kind: "dangerous", match: "other", pathValues: ["/tmp/example"] },
+        ["/tmp"],
+      ),
+    ).toBe(true);
+  });
+
+  test("matches regular rm and ignores non-literal forms", async () => {
     for (const command of [
       ["rm", "-r", "/tmp/example"],
       ["rm", "--", "-f"],
+      ["env", "TARGET=/tmp/example", "rm", "-r", "/tmp/example"],
+    ]) {
+      expect(await dangerousCommandMatch(command), command.join(" ")).toBe("rm");
+    }
+
+    for (const command of [
       ["bash", "-lc", "echo 'rm -rf /tmp/example'"],
       ["bash", "-lc", "cmd=rm; $cmd -rf /tmp/example"],
       ["bash", "-lc", "if then rm -rf /tmp/example"],
-      ["env", "TARGET=/tmp/example", "rm", "-r", "/tmp/example"],
       ["env", "==x", "rm", "-f", "/tmp/example"],
       ["bash", "-lc", "trap 'echo rm -rf /tmp/example' EXIT"],
     ]) {

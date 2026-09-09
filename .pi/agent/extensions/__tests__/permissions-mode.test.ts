@@ -5,6 +5,7 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import {
+  canAutoApprovePermission,
   isPermissionsStrictStateEvent,
   PERMISSIONS_STRICT_STATE_CHANNEL,
   PERMISSIONS_STRICT_STATUS_KEY,
@@ -193,6 +194,52 @@ describe("permissions mode", () => {
     }
   });
 
+  test("normal mode auto-approves rm under the shared safe root for build agents", async () => {
+    for (const agentName of [
+      "adversarial",
+      "benchmark",
+      "debug",
+      "docs",
+      "general",
+      "pr-feedback",
+      "quick",
+      "refactor",
+      "test",
+      "validate",
+    ]) {
+      for (const command of ["rm /tmp/example", "rm -rf /tmp/example"]) {
+        expect(
+          await canAutoApprovePermission({ surface: "bash", command, agentName }),
+          `${agentName}: ${command}`,
+        ).toBe(true);
+      }
+    }
+
+    for (const agentName of [undefined, "explore", "research"]) {
+      expect(
+        await canAutoApprovePermission({
+          surface: "bash",
+          command: "rm -rf /tmp/example",
+          agentName,
+        }),
+        agentName ?? "primary",
+      ).toBe(false);
+    }
+
+    for (const command of [
+      "rm -rf /tmp",
+      "rm -rf /home/example",
+      "rm -rf /tmp/example /home/example",
+      'rm -rf "$TARGET"',
+      "rm -rf /tmp/example && echo done",
+    ]) {
+      expect(
+        await canAutoApprovePermission({ surface: "bash", command, agentName: "general" }),
+        command,
+      ).toBe(false);
+    }
+  });
+
   test("strict mode defers every permission request until normal mode is restored", async () => {
     const sessionId = "permissions-strict";
     const statuses: Array<[string, string | undefined]> = [];
@@ -206,6 +253,13 @@ describe("permissions mode", () => {
 
     await harness.handler("strict", ctx as ExtensionCommandContext);
     expect(await permissions.verdict({ surface: "synthetic-tool" })).toEqual({ kind: "defer" });
+    expect(
+      await permissions.verdict({
+        surface: "bash",
+        command: "rm -rf /tmp/example",
+        agentName: "general",
+      }),
+    ).toEqual({ kind: "defer" });
     expect(statuses.at(-1)).toEqual([
       PERMISSIONS_STRICT_STATUS_KEY,
       `warning:${PERMISSIONS_STRICT_STATUS_TEXT}`,

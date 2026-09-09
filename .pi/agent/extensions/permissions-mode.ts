@@ -1,5 +1,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { analyzeDangerousCommand } from "./pi-permission-system/dangerous-command";
+import {
+  analyzeDangerousCommand,
+  isDangerousCommandSafeInLocations,
+} from "./pi-permission-system/dangerous-command";
 
 export const PERMISSIONS_STRICT_STATUS_KEY = "permissions-strict";
 export const PERMISSIONS_STRICT_STATUS_TEXT = " strict";
@@ -8,6 +11,22 @@ export const PERMISSIONS_STRICT_STATE_CHANNEL = "pi-permissions:strict-state";
 const PERMISSIONS_MODE_ENTRY_TYPE = "permissions-mode";
 const SESSION_PERMISSIONS_AUTHORIZER = "session-permissions-mode";
 const PERMISSIONS_READY_CHANNEL = "permissions:ready";
+
+const BUILD_AGENT_NAMES = new Set([
+  "adversarial",
+  "benchmark",
+  "debug",
+  "docs",
+  "general",
+  "pr-feedback",
+  "quick",
+  "refactor",
+  "test",
+  "validate",
+]);
+
+// Safe roots are shared by every supported dangerous command rule.
+export const SAFE_DANGEROUS_COMMAND_PATHS = ["/tmp"] as const;
 const PERMISSION_SERVICE_MODULE_URL = new URL(
   "../npm/node_modules/@gotgenes/pi-permission-system/src/service.ts",
   import.meta.url,
@@ -131,7 +150,10 @@ async function isParseableShell(command: string): Promise<boolean> {
 
 /**
  * Normal mode allows policy prompts unless Codex identifies a dangerous Bash
- * command. Missing details and parser/import failures remain interactive.
+ * command, except when a build agent's dangerous command has path evidence
+ * confined to one of the shared safe locations. Strict mode is checked first
+ * by the authorizer and always defers. Missing details and parser/import
+ * failures remain interactive.
  */
 export async function canAutoApprovePermission(details: unknown): Promise<boolean> {
   if (!isRecord(details)) return false;
@@ -139,15 +161,20 @@ export async function canAutoApprovePermission(details: unknown): Promise<boolea
   if (typeof surface !== "string") return false;
   if (surface !== "bash") return true;
 
+  const agentName = typeof details.agentName === "string" ? details.agentName : undefined;
   const commands = commandTexts(details);
   if (commands.length === 0) return false;
 
   try {
     for (const command of new Set(commands)) {
       if (!(await isParseableShell(command))) return false;
-      if ((await analyzeDangerousCommand(["bash", "-lc", command])).kind !== "no_match") {
-        return false;
-      }
+      const analysis = await analyzeDangerousCommand(["bash", "-lc", command]);
+      const safeLocationBypass =
+        agentName !== undefined &&
+        BUILD_AGENT_NAMES.has(agentName) &&
+        analysis.kind === "dangerous" &&
+        (await isDangerousCommandSafeInLocations(command, analysis, SAFE_DANGEROUS_COMMAND_PATHS));
+      if (analysis.kind !== "no_match" && !safeLocationBypass) return false;
     }
     return true;
   } catch {

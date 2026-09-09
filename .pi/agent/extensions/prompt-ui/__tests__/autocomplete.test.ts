@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type AutocompleteItem,
   type AutocompleteProvider,
   stripTerminalSequences,
   visibleWidth,
@@ -10,6 +11,7 @@ import {
   createPromptAutocompleteProvider,
   findBottomBorder,
   formatPathMatches,
+  prioritizeChangedFiles,
   splitEditorLines,
   styleSelectedSuggestion,
   suggestionOverlayOffset,
@@ -87,11 +89,28 @@ describe("prompt autocomplete", () => {
     expect(formatted).toBe("<d>ocs/<a>gents/<p>lans/change.md");
   });
 
+
+  test("promotes changed FFF files while preserving native order within each group", () => {
+    const items = [
+      { value: "@clean-a.ts", label: "clean-a.ts", fffGitStatus: "clean" },
+      { value: "@modified.ts", label: "modified.ts", fffGitStatus: "modified" },
+      { value: "@clean-b.ts", label: "clean-b.ts", fffGitStatus: "clean" },
+      { value: "@new.ts", label: "new.ts", fffGitStatus: "untracked" },
+    ];
+
+    expect(prioritizeChangedFiles(items).map((item) => item.value)).toEqual([
+      "@modified.ts",
+      "@new.ts",
+      "@clean-a.ts",
+      "@clean-b.ts",
+    ]);
+  });
   test("shows one highlighted full path while preserving the original completion item", async () => {
     const fileItem = {
       value: "@.pi/agent/extensions/prompt-ui/autocomplete.ts",
       label: "autocomplete.ts",
       description: ".pi/agent/extensions/prompt-ui/autocomplete.ts",
+      fffGitStatus: "modified",
     };
     let appliedItem: typeof fileItem | undefined;
     const provider: AutocompleteProvider = {
@@ -104,6 +123,7 @@ describe("prompt autocomplete", () => {
     const autocomplete = createPathDisplayAutocompleteProvider(
       provider,
       (text) => `\u001b[1m${text}\u001b[22m`,
+      (status) => `<${status}>`,
     );
 
     const suggestions = await autocomplete.getSuggestions(["@.pi/"], 0, 5, {
@@ -113,8 +133,9 @@ describe("prompt autocomplete", () => {
 
     expect(suggestion).toEqual({
       value: fileItem.value,
-      label: "\u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
-    });
+      label: "<modified> \u001b[1m.pi/\u001b[22magent/extensions/prompt-ui/autocomplete.ts",
+      fffGitStatus: "modified",
+    } as AutocompleteItem);
     if (suggestion === undefined) throw new Error("Expected a path suggestion");
     autocomplete.applyCompletion(["@.pi/"], 0, 5, suggestion, "@.pi/");
     expect(appliedItem).toBe(fileItem);

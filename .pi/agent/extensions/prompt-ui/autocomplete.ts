@@ -18,7 +18,33 @@ import { fitColumns, paintDockRow } from "./dock-rendering";
 type Color = (text: string) => string;
 type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
 type MatchFormatter = (text: string) => string;
+type GitStatusFormatter = (status: string) => string;
 
+type AutocompleteItemWithMetadata = AutocompleteItem & { fffGitStatus?: unknown };
+
+function getFffGitStatus(item: AutocompleteItem): string | undefined {
+  const status = (item as AutocompleteItemWithMetadata).fffGitStatus;
+  return typeof status === "string" ? status : undefined;
+}
+
+const CHANGED_GIT_STATUSES = new Set([
+  "untracked",
+  "modified",
+  "deleted",
+  "renamed",
+  "staged_new",
+  "staged_modified",
+  "staged_deleted",
+]);
+
+export function prioritizeChangedFiles(items: readonly AutocompleteItem[]): AutocompleteItem[] {
+  const changed: AutocompleteItem[] = [];
+  const unchanged: AutocompleteItem[] = [];
+  for (const item of items) {
+    (CHANGED_GIT_STATUSES.has(getFffGitStatus(item) ?? "") ? changed : unchanged).push(item);
+  }
+  return [...changed, ...unchanged];
+}
 interface AutocompleteOverlayStyle {
   rail: string;
   rightBorder: string;
@@ -129,6 +155,7 @@ function normalizedCompletionPath(value: string): string {
 export function createPathDisplayAutocompleteProvider(
   provider: AutocompleteProvider,
   formatMatch: MatchFormatter,
+  formatGitStatus: GitStatusFormatter = () => "",
 ): AutocompleteProvider {
   const originalItems = new WeakMap<AutocompleteItem, AutocompleteItem>();
   const pathProvider: AutocompleteProvider = {
@@ -139,7 +166,7 @@ export function createPathDisplayAutocompleteProvider(
 
       return {
         ...suggestions,
-        items: suggestions.items.map((item) => {
+        items: prioritizeChangedFiles(suggestions.items.map((item) => {
           if (
             item.description === undefined ||
             normalizedCompletionPath(item.value) !== normalizePath(item.description)
@@ -151,14 +178,17 @@ export function createPathDisplayAutocompleteProvider(
             item.label.endsWith("/") && item.description.endsWith("/") === false
               ? `${item.description}/`
               : item.description;
+          const formattedPath = formatPathMatches(displayPath, query, formatMatch);
+          const status = getFffGitStatus(item);
+          const statusIndicator = status === undefined ? "" : formatGitStatus(status);
           const formattedItem: AutocompleteItem = {
             ...item,
-            label: formatPathMatches(displayPath, query, formatMatch),
+            label: statusIndicator ? `${statusIndicator} ${formattedPath}` : formattedPath,
           };
           delete formattedItem.description;
           originalItems.set(formattedItem, item);
           return formattedItem;
-        }),
+        })),
       };
     },
     applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
@@ -297,8 +327,13 @@ export function createPromptAutocompleteProvider(
   projectReferences: readonly ProjectReference[],
   formatAgentMention: AgentMentionFormatter,
   formatPathMatch: MatchFormatter = (text) => text,
+  formatGitStatus: GitStatusFormatter = () => "",
 ): AutocompleteProvider {
-  const pathProvider = createPathDisplayAutocompleteProvider(provider, formatPathMatch);
+  const pathProvider = createPathDisplayAutocompleteProvider(
+    provider,
+    formatPathMatch,
+    formatGitStatus,
+  );
   const aliasProvider = createAliasAutocompleteProvider(
     pathProvider,
     agentMentions,

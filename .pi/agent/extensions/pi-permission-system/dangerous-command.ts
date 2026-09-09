@@ -1,3 +1,5 @@
+import { posix as posixPath } from "node:path";
+
 /*
  * Derived from OpenAI Codex's command_safety/is_dangerous_command.rs and bash.rs at
  * https://github.com/openai/codex/tree/634ebc1865c6ac840ed3ba118f040d527bf4b55d/codex-rs/shell-command/src
@@ -11,9 +13,14 @@
  */
 
 /** The dangerous-command rule matched by a POSIX command invocation. */
-export type DangerousCommandMatch = "forced-rm" | "other";
+export type DangerousCommandMatch = "rm" | "forced-rm" | "other";
 export type DangerousCommandAnalysis =
-  | { kind: "dangerous"; match: DangerousCommandMatch }
+  | {
+      kind: "dangerous";
+      match: DangerousCommandMatch;
+      /** Literal path operands eligible for a safe-location policy. */
+      pathValues?: readonly string[];
+    }
   | { kind: "no_match" }
   | { kind: "unknown" };
 const MAX_WRAPPER_DEPTH = 8;
@@ -54,6 +61,32 @@ export async function dangerousCommandMatch(
   return analysis.kind === "dangerous" ? analysis.match : undefined;
 }
 
+/**
+ * Check whether a dangerous command's path evidence is confined to safe roots.
+ *
+ * The dangerous-command detector supplies path values for location-scoped rules;
+ * this policy helper does not need to know which executable produced the rule.
+ * A single fully literal command is required so wrappers, chains, and dynamic
+ * targets cannot hide another operation behind the location exception.
+ */
+export async function isDangerousCommandSafeInLocations(
+  command: string,
+  analysis: DangerousCommandAnalysis,
+  safeLocations: readonly string[],
+): Promise<boolean> {
+  const pathValues = analysis.kind === "dangerous" ? analysis.pathValues : undefined;
+  if (pathValues === undefined || pathValues.length === 0) return false;
+
+  const parsed = await parseShellLcLiteralCommands(["bash", "-lc", command]);
+  if (parsed.kind !== "parsed" || parsed.hasUnresolvedCommands || parsed.commands.length !== 1) {
+    return false;
+  }
+
+  return pathValues.every((target) =>
+    safeLocations.some((location) => isPathDescendant(target, location)),
+  );
+}
+
 async function analyzeDangerousCommandAtDepth(
   command: readonly string[],
   wrapperDepth: number,
@@ -76,8 +109,12 @@ async function dangerousCommandMatchForExecutable(
   wrapperDepth: number,
 ): Promise<DangerousCommandAnalysis> {
   const executable = executableName(command[0]);
-  if (executable === "rm" && includesForceOption(command.slice(1))) {
-    return { kind: "dangerous", match: "forced-rm" };
+  if (executable === "rm") {
+    return {
+      kind: "dangerous",
+      match: includesForceOption(command.slice(1)) ? "forced-rm" : "rm",
+      pathValues: commandOperands(command),
+    };
   }
   if (executable === "sudo") {
     return analyzeDangerousCommandAtDepth(command.slice(1), wrapperDepth + 1);
@@ -110,6 +147,36 @@ function includesForceOption(args: readonly string[]): boolean {
   });
 }
 
+function commandOperands(command: readonly string[]): string[] {
+  let options = true;
+  const operands: string[] = [];
+
+  for (const argument of command.slice(1)) {
+    if (options && argument === "--") {
+      options = false;
+      continue;
+    }
+    if (options && argument.startsWith("-") && argument !== "-") continue;
+    operands.push(argument);
+  }
+
+  return operands;
+}
+
+function isPathDescendant(target: string, safeLocation: string): boolean {
+  if (!posixPath.isAbsolute(target) || !posixPath.isAbsolute(safeLocation)) return false;
+
+  const normalizedTarget = normalizeAbsolutePath(target);
+  const normalizedLocation = normalizeAbsolutePath(safeLocation);
+  if (normalizedLocation === "/" || normalizedTarget === normalizedLocation) return false;
+  return normalizedTarget.startsWith(`${normalizedLocation}/`);
+}
+
+function normalizeAbsolutePath(path: string): string {
+  const normalized = posixPath.normalize(path);
+  return normalized.length > 1 && normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+}
+
 function envCommandIndex(command: readonly string[]): number {
   let index = 1;
   while (index < command.length) {
@@ -139,13 +206,16 @@ function trapAction(command: readonly string[]): string | undefined {
   return action === undefined || action.startsWith("-") ? undefined : action;
 }
 
-type ParsedLiteralCommands = { kind: "parsed"; commands: string[][] } | { kind: "unknown" };
-
+type ParsedLiteralCommands =
+  | { kind: "parsed"; commands: string[][]; hasUnresolvedCommands: boolean }
+  | { kind: "unknown" };
 async function parseShellLcLiteralCommands(
   command: readonly string[],
 ): Promise<ParsedLiteralCommands> {
   const script = shellScript(command);
-  if (script === undefined) return { kind: "parsed", commands: [] };
+  if (script === undefined) {
+    return { kind: "parsed", commands: [], hasUnresolvedCommands: false };
+  }
 
   try {
     const { getParser } = (await import(BASH_PARSER_MODULE_URL)) as BashParserModule;
@@ -153,7 +223,7 @@ async function parseShellLcLiteralCommands(
     if (tree === null) return { kind: "unknown" };
     try {
       if (tree.rootNode.hasError) return { kind: "unknown" };
-      return { kind: "parsed", commands: literalCommands(tree.rootNode) };
+      return { kind: "parsed", ...literalCommands(tree.rootNode) };
     } finally {
       tree.delete();
     }
@@ -168,7 +238,10 @@ function shellScript(command: readonly string[]): string | undefined {
   return ["sh", "bash", "zsh"].includes(executableName(shell) ?? "") ? script : undefined;
 }
 
-function literalCommands(root: SyntaxNode): string[][] {
+function literalCommands(root: SyntaxNode): {
+  commands: string[][];
+  hasUnresolvedCommands: boolean;
+} {
   const commandNodes: SyntaxNode[] = [];
   const stack = [root];
   while (stack.length > 0) {
@@ -181,10 +254,11 @@ function literalCommands(root: SyntaxNode): string[][] {
     }
   }
 
-  return commandNodes.flatMap((node) => {
-    const words = literalCommandWords(node);
-    return words === undefined ? [] : [words];
-  });
+  const commands = commandNodes.map(literalCommandWords);
+  return {
+    commands: commands.filter((words): words is string[] => words !== undefined),
+    hasUnresolvedCommands: commands.some((words) => words === undefined),
+  };
 }
 
 function literalCommandWords(command: SyntaxNode): string[] | undefined {
