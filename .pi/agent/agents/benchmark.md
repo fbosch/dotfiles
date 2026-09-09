@@ -2,8 +2,8 @@
 color: "#f2d066"
 description: Runs performance benchmarks, profiles code, and compares before/after results. Use when measuring performance, identifying bottlenecks, or validating optimizations.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-terra
-thinking: medium
+model: openai-codex/gpt-5.6-luna
+thinking: max
 max_turns: 16
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:

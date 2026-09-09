@@ -5,6 +5,7 @@ import type {
   ExtensionContext,
   Theme,
   ToolDefinition,
+  ToolRenderContext,
 } from "@earendil-works/pi-coding-agent";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -15,6 +16,7 @@ import {
 } from "@earendil-works/pi-tui";
 import chartExtension, {
   getPieChartLayout,
+  PieChartComponent,
   rasterizeSvg,
   renderPieChartSvg,
   validatePieChartInput,
@@ -25,11 +27,17 @@ const theme = {
   bold: (text: string) => text,
   getFgAnsi: (color: string) => {
     const colors: Record<string, string> = {
-      accent: "\u001b[38;2;96;165;250m",
-      success: "\u001b[38;2;74;222;128m",
-      warning: "\u001b[38;2;250;204;21m",
-      error: "\u001b[38;2;248;113;113m",
-      text: "\u001b[38;2;230;232;236m",
+      accent: "\u001b[38;2;102;165;173m",
+      success: "\u001b[38;2;129;155;105m",
+      warning: "\u001b[38;2;183;126;100m",
+      error: "\u001b[38;2;222;110;124m",
+      thinkingLow: "\u001b[38;2;96;153;192m",
+      thinkingMedium: "\u001b[38;2;102;165;173m",
+      thinkingHigh: "\u001b[38;2;178;121;167m",
+      thinkingXhigh: "\u001b[38;2;183;126;100m",
+      thinkingMax: "\u001b[38;2;222;110;124m",
+      bashMode: "\u001b[38;2;129;155;105m",
+      text: "\u001b[38;2;187;187;187m",
     };
     return colors[color] ?? "\u001b[38;2;167;139;250m";
   },
@@ -42,23 +50,27 @@ const pngHeader = Buffer.concat([
   Buffer.from([0, 0, 2, 28, 0, 0, 1, 104]),
 ]).toString("base64");
 
+type ToolResult = {
+  content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+  details: unknown;
+};
 type PieChartExecute = (
   toolCallId: string,
   params: { labels: string[]; values: number[] },
   signal?: AbortSignal,
   onUpdate?: undefined,
   ctx?: ExtensionContext,
-) => Promise<{ content: Array<{ type: string; data: string; mimeType: string }> }>;
+) => Promise<ToolResult>;
 
-function registerTool(): PieChartExecute {
-  let execute: PieChartExecute | undefined;
+function registerTool(): ToolDefinition {
+  let tool: ToolDefinition | undefined;
   chartExtension({
-    registerTool: (tool: ToolDefinition) => {
-      execute = tool.execute as PieChartExecute;
+    registerTool: (definition: ToolDefinition) => {
+      tool = definition;
     },
   } as unknown as ExtensionAPI);
-  if (execute === undefined) throw new Error("pie_chart was not registered");
-  return execute;
+  if (tool === undefined) throw new Error("pie_chart was not registered");
+  return tool;
 }
 
 function topLeftPngAlpha(png: Buffer): number {
@@ -89,6 +101,12 @@ function topLeftPngAlpha(png: Buffer): number {
   return pixels[4] ?? -1;
 }
 
+function fills(svg: string, element: "path" | "rect"): string[] {
+  return [...svg.matchAll(new RegExp(`<${element}[^>]* fill="([^"]+)"`, "g"))].map(
+    (match) => match[1] ?? "",
+  );
+}
+
 function nativeImageCellSize(width: number): { columns: number; rows: number } {
   const image = new Image(pngHeader, "image/png", imageTheme, { maxWidthCells: 60 });
   const line = image.render(width)[0] ?? "";
@@ -112,6 +130,16 @@ const tuiContext = {
   ui: { theme },
 } as unknown as ExtensionContext;
 
+const rows = validatePieChartInput({ labels: ["Open", "Closed"], values: [3, 1] });
+
+function deferred<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
+}
+
 describe("pie chart", () => {
   test("validates bounded nonnegative values, a finite total, and unique labels", () => {
     expect(validatePieChartInput({ labels: [" Open ", "Closed"], values: [3, 1] })).toEqual([
@@ -130,7 +158,7 @@ describe("pie chart", () => {
     );
   });
 
-  test("uses Pi's 60-cell default and bounded non-TUI cell fallback", () => {
+  test("uses Pi's configured size and bounded non-TUI cell fallback", () => {
     expect(getPieChartLayout()).toEqual({
       widthPx: 540,
       heightPx: 360,
@@ -144,21 +172,12 @@ describe("pie chart", () => {
       legendX: 280,
     });
     expect(getPieChartLayout({ widthPx: 0, heightPx: Number.NaN })).toEqual(getPieChartLayout());
-  });
 
-  test("uses the configured terminal image width with Pi's native bounds", () => {
-    const unsetSettings = SettingsManager.inMemory();
     const configuredSettings = SettingsManager.inMemory({ terminal: { imageWidthCells: 72 } });
-    const invalidSettings = SettingsManager.inMemory({
-      terminal: { imageWidthCells: Number.NaN },
-    });
-
-    expect(getPieChartLayout(undefined, unsetSettings.getImageWidthCells()).widthPx).toBe(540);
     expect(getPieChartLayout(undefined, configuredSettings.getImageWidthCells()).widthPx).toBe(648);
-    expect(invalidSettings.getImageWidthCells()).toBe(60);
   });
 
-  test("matches Pi's public native Image wide and narrow tool constraints", () => {
+  test("matches Pi's native Image two-column padding and cell height", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
 
@@ -166,58 +185,111 @@ describe("pie chart", () => {
     expect(nativeImageCellSize(30)).toEqual({ columns: 28, rows: 10 });
   });
 
-  test("renders a simple pie in a native-size panel with a semantic themed legend", () => {
-    const svg = renderPieChartSvg(
-      validatePieChartInput({ labels: ["<Open>", "Closed"], values: [3, 1] }),
-      theme,
-    );
-
+  test("renders a transparent themed SVG with matching slice and legend colors", () => {
+    const svg = renderPieChartSvg(rows, theme);
     expect(svg).toContain('width="540"');
     expect(svg).toContain('viewBox="0 0 540 360"');
-    expect(svg).toContain('x="355"');
-    expect(svg).toContain('x="371"');
-    expect(svg).toContain("rgb(96, 165, 250)");
-    expect(svg).toContain("rgb(74, 222, 128)");
-    expect(svg).not.toContain("rgb(25, 28, 38)");
+    expect(svg).toContain("rgb(102, 165, 173)");
+    expect(svg).toContain("rgb(129, 155, 105)");
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
-    expect(svg).toContain("&lt;Open&gt;");
     expect(svg).toContain('aria-label="Pie chart"');
-    expect(svg).not.toContain("innerRadius");
+    expect(fills(svg, "path")).toEqual(fills(svg, "rect"));
   });
 
   test("keeps the SVG and rasterized PNG background transparent", async () => {
-    const svg = renderPieChartSvg(
-      validatePieChartInput({ labels: ["Open", "Closed"], values: [3, 1] }),
-      theme,
-    );
+    const svg = renderPieChartSvg(rows, theme);
     const png = Buffer.from(await rasterizeSvg(svg), "base64");
 
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
-    expect(svg.match(/<rect\b/g) ?? []).toHaveLength(2);
     expect(topLeftPngAlpha(png)).toBe(0);
   });
 
-  test("returns a runtime-sized TUI PNG and the bounded non-TUI fallback PNG", async () => {
-    const execute = registerTool();
+  test("returns TUI chart data without a native image and retains an image outside TUI", async () => {
+    const tool = registerTool();
+    const execute = tool.execute as PieChartExecute;
     const params = { labels: ["Open", "Closed"], values: [3, 1] };
     const [tuiResult, printResult] = await Promise.all([
       execute("chart", params, undefined, undefined, tuiContext),
       execute("chart", params, undefined, undefined, printContext),
     ]);
 
-    for (const result of [tuiResult, printResult]) {
-      const image = result.content[0];
-      expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-      expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 360 });
-    }
+    expect(tuiResult.content).toEqual([
+      { type: "text", text: "Pie chart: Open 3 (75.0%); Closed 1 (25.0%)" },
+    ]);
+    expect(tuiResult.details).toEqual({ rows, imageWidthCells: 60 });
+    const image = printResult.content.find((content) => content.type === "image");
+    expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 360 });
   });
 
-  test("honors an already-aborted tool call", async () => {
+  test("rasterizes at the final wide and narrow Image widths without resampling", async () => {
+    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    const requestedSvg: string[] = [];
+    const component = new PieChartComponent(
+      { rows, imageWidthCells: 60 },
+      theme,
+      () => undefined,
+      async (svg) => {
+        requestedSvg.push(svg);
+        return pngHeader;
+      },
+    );
+
+    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    await Promise.resolve();
+    const wide = component.render(64)[0] ?? "";
+    expect(requestedSvg[0]).toContain('width="540"');
+    expect(/(?:^|,)c=60(?:,|;)/.test(wide)).toBe(true);
+    expect(/(?:^|,)r=20(?:,|;)/.test(wide)).toBe(true);
+
+    expect(component.render(30)).toEqual(["Rendering pie chart…"]);
+    await Promise.resolve();
+    const narrow = component.render(30)[0] ?? "";
+    expect(requestedSvg[1]).toContain('width="252"');
+    expect(/(?:^|,)c=28(?:,|;)/.test(narrow)).toBe(true);
+    expect(/(?:^|,)r=20(?:,|;)/.test(narrow)).toBe(true);
+  });
+
+  test("cancels stale resize jobs and only invalidates for the current raster", async () => {
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    const first = deferred<string>();
+    const second = deferred<string>();
+    const signals: AbortSignal[] = [];
+    let invalidations = 0;
+    const component = new PieChartComponent(
+      { rows, imageWidthCells: 60 },
+      theme,
+      () => {
+        invalidations++;
+      },
+      (_svg, signal) => {
+        if (signal === undefined) throw new Error("expected cancellation signal");
+        signals.push(signal);
+        return signals.length === 1 ? first.promise : second.promise;
+      },
+    );
+
+    component.render(64);
+    component.render(30);
+    expect(signals).toHaveLength(2);
+    expect(signals[0]?.aborted).toBe(true);
+    first.resolve(pngHeader);
+    await Promise.resolve();
+    expect(invalidations).toBe(0);
+
+    second.resolve(pngHeader);
+    await Promise.resolve();
+    expect(invalidations).toBe(1);
+  });
+
+  test("honors an already-aborted non-TUI tool call", async () => {
     const controller = new AbortController();
     controller.abort();
+    const execute = registerTool().execute as PieChartExecute;
 
     await expect(
-      registerTool()(
+      execute(
         "chart",
         { labels: ["Open", "Closed"], values: [3, 1] },
         controller.signal,

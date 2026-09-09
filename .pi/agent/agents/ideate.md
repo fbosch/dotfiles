@@ -2,8 +2,8 @@
 color: "#78b456"
 description: Spitballs ideas, alternatives, and directions within a given scope. Use before converging on a spec or implementation.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-terra
-thinking: medium
+model: openai-codex/gpt-5.6-sol
+thinking: low
 tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch
 permission:
   "*": deny

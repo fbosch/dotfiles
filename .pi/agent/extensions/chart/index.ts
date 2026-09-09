@@ -7,8 +7,16 @@ import {
   getAgentDir,
   SettingsManager,
   type Theme,
+  type ThemeColor,
 } from "@earendil-works/pi-coding-agent";
-import { type CellDimensions, getCellDimensions, Text } from "@earendil-works/pi-tui";
+import {
+  type CellDimensions,
+  getCellDimensions,
+  Image,
+  Text,
+  truncateToWidth,
+  type Component,
+} from "@earendil-works/pi-tui";
 import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
 import { Type } from "typebox";
@@ -22,20 +30,19 @@ const MAX_LABEL_LENGTH = 22;
 const MAX_SVG_BYTES = 64 * 1024;
 const MAX_PNG_BYTES = 4 * 1024 * 1024;
 const RASTERIZE_TIMEOUT_MS = 10_000;
+const MAX_CACHED_RASTERS = 4;
 const SLICE_COLOR_TOKENS = [
   "accent",
   "success",
   "warning",
   "error",
-  "mdLink",
-  "syntaxFunction",
-  "syntaxString",
-  "syntaxNumber",
-  "syntaxType",
   "thinkingLow",
   "thinkingMedium",
   "thinkingHigh",
-] as const;
+  "thinkingXhigh",
+  "thinkingMax",
+  "bashMode",
+] as const satisfies readonly ThemeColor[];
 
 type PieChartInput = { labels: string[]; values: number[] };
 type ChartRow = { label: string; value: number };
@@ -44,6 +51,17 @@ export type PieChartLayout = {
   heightPx: number;
   chartWidthPx: number;
   legendX: number;
+};
+export type PieChartDetails = {
+  rows: ChartRow[];
+  imageWidthCells: number;
+};
+type Rasterize = (svg: string, signal?: AbortSignal) => Promise<string>;
+
+type RasterKey = {
+  widthCells: number;
+  cellWidthPx: number;
+  cellHeightPx: number;
 };
 
 export function getPieChartLayout(
@@ -141,6 +159,14 @@ function ansiColor(ansi: string, fallback: string): string {
   return `rgb(${channel(Math.floor(cube / 36))}, ${channel(Math.floor((cube % 36) / 6))}, ${channel(cube % 6)})`;
 }
 
+function getSliceColors(theme: Pick<Theme, "getFgAnsi">): string[] {
+  const colors = new Set<string>();
+  for (const token of SLICE_COLOR_TOKENS) {
+    colors.add(ansiColor(theme.getFgAnsi(token), "currentColor"));
+  }
+  return [...colors];
+}
+
 function escapeXml(value: string): string {
   return value.replace(
     /[<>&'"]/g,
@@ -156,9 +182,7 @@ export function renderPieChartSvg(
 ): string {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
-  const sliceColors = SLICE_COLOR_TOKENS.map((token) =>
-    ansiColor(theme.getFgAnsi(token), "currentColor"),
-  );
+  const sliceColors = getSliceColors(theme);
   const definition = defineChart({
     marks: [
       polar({
@@ -186,7 +210,7 @@ export function renderPieChartSvg(
     .map((row, index) => {
       const y = 24 + index * 27;
       const percentage = ((row.value / total) * 100).toFixed(1);
-      const color = sliceColors[index] ?? "currentColor";
+      const color = sliceColors[index % sliceColors.length] ?? "currentColor";
       return `<rect x="${layout.legendX}" y="${y - 11}" width="10" height="10" rx="2" fill="${color}"/><text x="${layout.legendX + 16}" y="${y}" fill="${foreground}" font-family="sans-serif" font-size="12">${escapeXml(row.label)}</text><text x="${layout.legendX + 16}" y="${y + 11}" fill="${foreground}" font-family="sans-serif" font-size="10">${percentage}%</text>`;
     })
     .join("");
@@ -248,6 +272,105 @@ export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<s
   }
 }
 
+function validCellDimensions(dimensions: CellDimensions): CellDimensions {
+  return Number.isFinite(dimensions.widthPx) &&
+    dimensions.widthPx > 0 &&
+    Number.isFinite(dimensions.heightPx) &&
+    dimensions.heightPx > 0
+    ? dimensions
+    : FALLBACK_CELL_DIMENSIONS;
+}
+
+function rasterKeyString(key: RasterKey): string {
+  return `${key.widthCells}:${key.cellWidthPx}:${key.cellHeightPx}`;
+}
+
+/** Renders only from the stored data so resizing never mutates the tool result. */
+export class PieChartComponent implements Component {
+  private readonly cache = new Map<string, string>();
+  private pending?: { key: string; controller: AbortController; generation: number };
+  private generation = 0;
+  private theme: Theme;
+
+  constructor(
+    private readonly details: PieChartDetails,
+    theme: Theme,
+    private readonly requestRender: () => void,
+    private readonly rasterize: Rasterize = rasterizeSvg,
+  ) {
+    this.theme = theme;
+  }
+
+  update(theme: Theme): void {
+    this.theme = theme;
+  }
+
+  invalidate(): void {
+    this.cache.clear();
+  }
+
+  render(width: number): string[] {
+    const dimensions = validCellDimensions(getCellDimensions());
+    // Image reserves two columns from its input width before applying maxWidthCells.
+    const widthCells = Math.max(1, Math.min(this.details.imageWidthCells, width - 2));
+    const key = {
+      widthCells,
+      cellWidthPx: dimensions.widthPx,
+      cellHeightPx: dimensions.heightPx,
+    };
+    const cacheKey = rasterKeyString(key);
+    const png = this.cache.get(cacheKey);
+    if (png) {
+      return new Image(
+        png,
+        "image/png",
+        { fallbackColor: (text) => this.theme.fg("toolOutput", text) },
+        { maxWidthCells: widthCells },
+      ).render(width);
+    }
+
+    this.startRaster(cacheKey, key);
+    return [truncateToWidth(this.theme.fg("muted", "Rendering pie chart…"), width)];
+  }
+
+  private startRaster(cacheKey: string, key: RasterKey): void {
+    if (this.pending?.key === cacheKey) return;
+    this.pending?.controller.abort();
+    const controller = new AbortController();
+    const generation = ++this.generation;
+    this.pending = { key: cacheKey, controller, generation };
+    const layout = getPieChartLayout(
+      { widthPx: key.cellWidthPx, heightPx: key.cellHeightPx },
+      key.widthCells,
+    );
+    const svg = renderPieChartSvg(this.details.rows, this.theme, layout);
+
+    void this.rasterize(svg, controller.signal)
+      .then((png) => {
+        if (controller.signal.aborted || this.pending?.generation !== generation) return;
+        this.cache.set(cacheKey, png);
+        while (this.cache.size > MAX_CACHED_RASTERS) {
+          const oldestKey = this.cache.keys().next().value;
+          if (oldestKey !== undefined) this.cache.delete(oldestKey);
+        }
+        this.pending = undefined;
+        this.requestRender();
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || this.pending?.generation !== generation) return;
+        this.pending = undefined;
+        this.requestRender();
+      });
+  }
+}
+
+function chartText(rows: ChartRow[]): string {
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  return `Pie chart: ${rows
+    .map((row) => `${row.label} ${row.value} (${((row.value / total) * 100).toFixed(1)}%)`)
+    .join("; ")}`;
+}
+
 export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "pie_chart",
@@ -267,22 +390,43 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, signal, _onUpdate, ctx) {
       const rows = validatePieChartInput(params);
-      // Pi's Image component applies the actual tool-content-width clamp at render time.
-      const dimensions = ctx.mode === "tui" ? getCellDimensions() : undefined;
       const imageWidthCells = SettingsManager.create(ctx.cwd, getAgentDir(), {
         projectTrusted: ctx.isProjectTrusted(),
       }).getImageWidthCells();
+      const details: PieChartDetails = { rows, imageWidthCells };
+      const text = chartText(rows);
+      if (ctx.mode === "tui") {
+        // Pi 0.85.1 always appends content images after renderResult; details retain replay data instead.
+        return { content: [{ type: "text", text }], details };
+      }
+
       const png = await rasterizeSvg(
-        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(dimensions, imageWidthCells)),
+        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(undefined, imageWidthCells)),
         signal,
       );
       return {
-        content: [{ type: "image", data: png, mimeType: "image/png" }],
-        details: { slices: rows.length },
+        content: [
+          { type: "text", text },
+          { type: "image", data: png, mimeType: "image/png" },
+        ],
+        details,
       };
     },
     renderCall(_args, theme) {
       return new Text(theme.fg("toolTitle", theme.bold("pie_chart")), 0, 0);
+    },
+    renderResult(result, _options, theme, context) {
+      const details = result.details as PieChartDetails | undefined;
+      if (!details || !Array.isArray(details.rows)) {
+        const text = result.content.find((content) => content.type === "text");
+        return new Text(text?.type === "text" ? text.text : "", 0, 0);
+      }
+      const previous = context.lastComponent;
+      if (previous instanceof PieChartComponent) {
+        previous.update(theme);
+        return previous;
+      }
+      return new PieChartComponent(details, theme, context.invalidate);
     },
   });
 }
