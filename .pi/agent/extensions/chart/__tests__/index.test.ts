@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { inflateSync } from "node:zlib";
 import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
   getPngDimensions,
   Image,
@@ -13,6 +15,7 @@ import {
 } from "@earendil-works/pi-tui";
 import chartExtension, {
   getPieChartLayout,
+  rasterizeSvg,
   renderPieChartSvg,
   validatePieChartInput,
 } from "../index";
@@ -58,6 +61,34 @@ function registerTool(): PieChartExecute {
   return execute;
 }
 
+function topLeftPngAlpha(png: Buffer): number {
+  let offset = 8;
+  const idat: Buffer[] = [];
+  let bitDepth = 0;
+  let colorType = 0;
+
+  while (offset < png.length) {
+    const length = png.readUInt32BE(offset);
+    const type = png.subarray(offset + 4, offset + 8).toString("ascii");
+    const data = png.subarray(offset + 8, offset + 8 + length);
+    offset += length + 12;
+
+    if (type === "IHDR") {
+      bitDepth = data[8] ?? 0;
+      colorType = data[9] ?? 0;
+    } else if (type === "IDAT") {
+      idat.push(data);
+    } else if (type === "IEND") {
+      break;
+    }
+  }
+
+  expect(bitDepth).toBe(8);
+  expect(colorType).toBe(6);
+  const pixels = inflateSync(Buffer.concat(idat));
+  return pixels[4] ?? -1;
+}
+
 function nativeImageCellSize(width: number): { columns: number; rows: number } {
   const image = new Image(pngHeader, "image/png", imageTheme, { maxWidthCells: 60 });
   const line = image.render(width)[0] ?? "";
@@ -68,8 +99,18 @@ function nativeImageCellSize(width: number): { columns: number; rows: number } {
   return { columns: Number(columns), rows: Number(rows) };
 }
 
-const printContext = { mode: "print", ui: { theme } } as unknown as ExtensionContext;
-const tuiContext = { mode: "tui", ui: { theme } } as unknown as ExtensionContext;
+const printContext = {
+  mode: "print",
+  cwd: process.cwd(),
+  isProjectTrusted: () => false,
+  ui: { theme },
+} as unknown as ExtensionContext;
+const tuiContext = {
+  mode: "tui",
+  cwd: process.cwd(),
+  isProjectTrusted: () => false,
+  ui: { theme },
+} as unknown as ExtensionContext;
 
 describe("pie chart", () => {
   test("validates bounded nonnegative values, a finite total, and unique labels", () => {
@@ -105,6 +146,18 @@ describe("pie chart", () => {
     expect(getPieChartLayout({ widthPx: 0, heightPx: Number.NaN })).toEqual(getPieChartLayout());
   });
 
+  test("uses the configured terminal image width with Pi's native bounds", () => {
+    const unsetSettings = SettingsManager.inMemory();
+    const configuredSettings = SettingsManager.inMemory({ terminal: { imageWidthCells: 72 } });
+    const invalidSettings = SettingsManager.inMemory({
+      terminal: { imageWidthCells: Number.NaN },
+    });
+
+    expect(getPieChartLayout(undefined, unsetSettings.getImageWidthCells()).widthPx).toBe(540);
+    expect(getPieChartLayout(undefined, configuredSettings.getImageWidthCells()).widthPx).toBe(648);
+    expect(invalidSettings.getImageWidthCells()).toBe(60);
+  });
+
   test("matches Pi's public native Image wide and narrow tool constraints", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
@@ -125,10 +178,23 @@ describe("pie chart", () => {
     expect(svg).toContain('x="371"');
     expect(svg).toContain("rgb(96, 165, 250)");
     expect(svg).toContain("rgb(74, 222, 128)");
-    expect(svg).toContain("rgb(25, 28, 38)");
+    expect(svg).not.toContain("rgb(25, 28, 38)");
+    expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
     expect(svg).toContain("&lt;Open&gt;");
     expect(svg).toContain('aria-label="Pie chart"');
     expect(svg).not.toContain("innerRadius");
+  });
+
+  test("keeps the SVG and rasterized PNG background transparent", async () => {
+    const svg = renderPieChartSvg(
+      validatePieChartInput({ labels: ["Open", "Closed"], values: [3, 1] }),
+      theme,
+    );
+    const png = Buffer.from(await rasterizeSvg(svg), "base64");
+
+    expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
+    expect(svg.match(/<rect\b/g) ?? []).toHaveLength(2);
+    expect(topLeftPngAlpha(png)).toBe(0);
   });
 
   test("returns a runtime-sized TUI PNG and the bounded non-TUI fallback PNG", async () => {

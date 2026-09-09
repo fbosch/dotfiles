@@ -2,7 +2,12 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  getAgentDir,
+  SettingsManager,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import { type CellDimensions, getCellDimensions, Text } from "@earendil-works/pi-tui";
 import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
@@ -41,7 +46,10 @@ export type PieChartLayout = {
   legendX: number;
 };
 
-export function getPieChartLayout(cellDimensions?: CellDimensions): PieChartLayout {
+export function getPieChartLayout(
+  cellDimensions?: CellDimensions,
+  imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
+): PieChartLayout {
   const cellWidth = cellDimensions?.widthPx;
   const cellHeight = cellDimensions?.heightPx;
   const validDimensions =
@@ -54,7 +62,7 @@ export function getPieChartLayout(cellDimensions?: CellDimensions): PieChartLayo
   const dimensions = validDimensions
     ? { widthPx: cellWidth, heightPx: cellHeight }
     : FALLBACK_CELL_DIMENSIONS;
-  const widthPx = Math.round(DEFAULT_IMAGE_WIDTH_CELLS * dimensions.widthPx);
+  const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const heightPx = Math.round(CHART_HEIGHT_CELLS * dimensions.heightPx);
   const chartWidthPx = Math.round(widthPx * CHART_WIDTH_RATIO);
 
@@ -143,7 +151,7 @@ function escapeXml(value: string): string {
 
 export function renderPieChartSvg(
   rows: ChartRow[],
-  theme: Pick<Theme, "getFgAnsi" | "getBgAnsi">,
+  theme: Pick<Theme, "getFgAnsi">,
   layout = getPieChartLayout(),
 ): string {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
@@ -174,7 +182,6 @@ export function renderPieChartSvg(
   });
   const chart = renderChartSvg(scene, { ariaLabel: "Pie chart", idPrefix: "pi-pie" });
   const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
-  const background = ansiColor(theme.getBgAnsi("toolSuccessBg"), "transparent");
   const legend = rows
     .map((row, index) => {
       const y = 24 + index * 27;
@@ -184,7 +191,7 @@ export function renderPieChartSvg(
     })
     .join("");
   const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx}" height="${layout.heightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><rect width="100%" height="100%" fill="${background}"/><g>${chartBody}</g><g>${legend}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx}" height="${layout.heightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><g>${chartBody}</g><g>${legend}</g></svg>`;
 }
 
 export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
@@ -262,8 +269,11 @@ export default function (pi: ExtensionAPI) {
       const rows = validatePieChartInput(params);
       // Pi's Image component applies the actual tool-content-width clamp at render time.
       const dimensions = ctx.mode === "tui" ? getCellDimensions() : undefined;
+      const imageWidthCells = SettingsManager.create(ctx.cwd, getAgentDir(), {
+        projectTrusted: ctx.isProjectTrusted(),
+      }).getImageWidthCells();
       const png = await rasterizeSvg(
-        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(dimensions)),
+        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(dimensions, imageWidthCells)),
         signal,
       );
       return {
