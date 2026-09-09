@@ -47,12 +47,6 @@
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
       "computedHash": "a11713c0ff7870efa3c331b2e273f09116158485246edc89ae5088eefd1b0b48"
     },
-    "effect-ts": {
-      "source": "Effect-TS/skills",
-      "sourceType": "github",
-      "skillPath": "skills/effect-ts/SKILL.md",
-      "computedHash": "6bdb9b95aa83071eca2f67ae947b7d398a22e9e6e08f6cfa35de9516b03efa6e"
-    },
     "github-actions-docs": {
       "source": "xixu-me/skills",
       "sourceType": "github",

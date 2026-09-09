@@ -107,8 +107,9 @@
       "grilling",
       "herdr",
       "skill-creator",
-      "opencode-subagent-patterns",
-      "opencode-command-authoring"
+      "codebase-design",
+      "improve-codebase-architecture",
+      "grill-me"
     ]
   }
 }

@@ -11,11 +11,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type CellDimensions,
+  type Component,
   getCellDimensions,
   Image,
   Text,
   truncateToWidth,
-  type Component,
 } from "@earendil-works/pi-tui";
 import { createChartScene, defineChart, renderChartSvg } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
@@ -23,8 +23,9 @@ import { Type } from "typebox";
 
 const DEFAULT_IMAGE_WIDTH_CELLS = 60;
 const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
-const CHART_HEIGHT_CELLS = 20;
-const CHART_WIDTH_RATIO = 0.62;
+const MAX_CHART_HEIGHT_CELLS = 18;
+const RASTER_DENSITY = 2;
+const NARROW_LAYOUT_CELLS = 36;
 const MAX_SLICES = 12;
 const MAX_LABEL_LENGTH = 22;
 const MAX_SVG_BYTES = 64 * 1024;
@@ -49,8 +50,18 @@ type ChartRow = { label: string; value: number };
 export type PieChartLayout = {
   widthPx: number;
   heightPx: number;
-  chartWidthPx: number;
+  heightCells: number;
+  pieDiameterPx: number;
+  pieX: number;
+  pieY: number;
   legendX: number;
+  legendY: number;
+  legendColumns: number;
+  legendColumnWidthPx: number;
+  legendRowHeightPx: number;
+  labelFontSizePx: number;
+  markerSizePx: number;
+  stacked: boolean;
 };
 export type PieChartDetails = {
   rows: ChartRow[];
@@ -64,9 +75,14 @@ type RasterKey = {
   cellHeightPx: number;
 };
 
+function clamp(value: number, minimum: number, maximum: number): number {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
 export function getPieChartLayout(
   cellDimensions?: CellDimensions,
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
+  sliceCount = 2,
 ): PieChartLayout {
   const cellWidth = cellDimensions?.widthPx;
   const cellHeight = cellDimensions?.heightPx;
@@ -81,10 +97,78 @@ export function getPieChartLayout(
     ? { widthPx: cellWidth, heightPx: cellHeight }
     : FALLBACK_CELL_DIMENSIONS;
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
-  const heightPx = Math.round(CHART_HEIGHT_CELLS * dimensions.heightPx);
-  const chartWidthPx = Math.round(widthPx * CHART_WIDTH_RATIO);
+  const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
+  const markerSizePx = Math.max(8, Math.round(dimensions.heightPx * 0.5));
+  const labelFontSizePx = clamp(Math.round(dimensions.heightPx * 0.72), 11, 16);
+  const legendRowHeightPx = Math.round(
+    Math.max(labelFontSizePx, markerSizePx) + dimensions.heightPx * 0.32,
+  );
+  const stacked = imageWidthCells <= NARROW_LAYOUT_CELLS;
+  const legendColumns = stacked ? (sliceCount > 4 ? 2 : 1) : sliceCount > 6 ? 2 : 1;
+  const legendRows = Math.ceil(sliceCount / legendColumns);
+  const maxHeightPx = Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx);
 
-  return { widthPx, heightPx, chartWidthPx, legendX: chartWidthPx + 20 };
+  if (stacked) {
+    const legendHeightPx = legendRows * legendRowHeightPx;
+    const pieDiameterPx = Math.max(
+      Math.round(dimensions.heightPx * 7),
+      Math.min(
+        widthPx - paddingPx * 2,
+        Math.round(dimensions.heightPx * 10),
+        maxHeightPx - paddingPx * 3 - legendHeightPx,
+      ),
+    );
+    const heightPx = Math.min(
+      maxHeightPx,
+      Math.round(paddingPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx),
+    );
+    return {
+      widthPx,
+      heightPx,
+      heightCells: Math.ceil(heightPx / dimensions.heightPx),
+      pieDiameterPx,
+      pieX: Math.round((widthPx - pieDiameterPx) / 2),
+      pieY: paddingPx,
+      legendX: paddingPx,
+      legendY: Math.round(paddingPx + pieDiameterPx + paddingPx + labelFontSizePx),
+      legendColumns,
+      legendColumnWidthPx: Math.floor((widthPx - paddingPx * 2) / legendColumns),
+      legendRowHeightPx,
+      labelFontSizePx,
+      markerSizePx,
+      stacked,
+    };
+  }
+
+  const legendWidthPx = Math.round(widthPx * 0.54) - paddingPx;
+  const pieDiameterPx = Math.max(
+    Math.round(dimensions.heightPx * 7),
+    Math.min(
+      Math.round(widthPx * 0.42),
+      Math.round(dimensions.heightPx * 11),
+      maxHeightPx - paddingPx * 2,
+    ),
+  );
+  const heightPx = Math.min(
+    maxHeightPx,
+    Math.max(pieDiameterPx + paddingPx * 2, legendRows * legendRowHeightPx + paddingPx * 2),
+  );
+  return {
+    widthPx,
+    heightPx,
+    heightCells: Math.ceil(heightPx / dimensions.heightPx),
+    pieDiameterPx,
+    pieX: paddingPx,
+    pieY: Math.round((heightPx - pieDiameterPx) / 2),
+    legendX: widthPx - legendWidthPx,
+    legendY: Math.round((heightPx - legendRows * legendRowHeightPx) / 2 + labelFontSizePx),
+    legendColumns,
+    legendColumnWidthPx: Math.floor(legendWidthPx / legendColumns),
+    legendRowHeightPx,
+    labelFontSizePx,
+    markerSizePx,
+    stacked,
+  };
 }
 
 export function validatePieChartInput(input: PieChartInput): ChartRow[] {
@@ -178,7 +262,7 @@ function escapeXml(value: string): string {
 export function renderPieChartSvg(
   rows: ChartRow[],
   theme: Pick<Theme, "getFgAnsi">,
-  layout = getPieChartLayout(),
+  layout = getPieChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows.length),
 ): string {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
@@ -186,8 +270,8 @@ export function renderPieChartSvg(
   const definition = defineChart({
     marks: [
       polar({
-        inset: 18,
-        radiusRatio: 0.86,
+        inset: Math.max(8, Math.round(layout.pieDiameterPx * 0.08)),
+        radiusRatio: 0.9,
         marks: [
           radialArc(slices, {
             color: "label",
@@ -201,21 +285,34 @@ export function renderPieChartSvg(
     color: { domain: rows.map((row) => row.label), range: sliceColors },
   });
   const scene = createChartScene(definition, {
-    width: layout.chartWidthPx,
-    height: layout.heightPx,
+    width: layout.pieDiameterPx,
+    height: layout.pieDiameterPx,
   });
   const chart = renderChartSvg(scene, { ariaLabel: "Pie chart", idPrefix: "pi-pie" });
   const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
+  const maxLabelWidth = Math.max(1, layout.legendColumnWidthPx - layout.markerSizePx - 8);
+  const truncateLabel = (label: string) => {
+    const maximumCharacters = Math.max(
+      3,
+      Math.floor(maxLabelWidth / (layout.labelFontSizePx * 0.58)),
+    );
+    return label.length > maximumCharacters ? `${label.slice(0, maximumCharacters - 1)}…` : label;
+  };
   const legend = rows
     .map((row, index) => {
-      const y = 24 + index * 27;
+      const column = index % layout.legendColumns;
+      const legendRow = Math.floor(index / layout.legendColumns);
+      const x = layout.legendX + column * layout.legendColumnWidthPx;
+      const y = layout.legendY + legendRow * layout.legendRowHeightPx;
       const percentage = ((row.value / total) * 100).toFixed(1);
       const color = sliceColors[index % sliceColors.length] ?? "currentColor";
-      return `<rect x="${layout.legendX}" y="${y - 11}" width="10" height="10" rx="2" fill="${color}"/><text x="${layout.legendX + 16}" y="${y}" fill="${foreground}" font-family="sans-serif" font-size="12">${escapeXml(row.label)}</text><text x="${layout.legendX + 16}" y="${y + 11}" fill="${foreground}" font-family="sans-serif" font-size="10">${percentage}%</text>`;
+      return `<rect x="${x}" y="${y - layout.markerSizePx + 2}" width="${layout.markerSizePx}" height="${layout.markerSizePx}" rx="2" fill="${color}"/><text x="${x + layout.markerSizePx + 6}" y="${y}" fill="${foreground}" font-family="sans-serif" font-size="${layout.labelFontSizePx}">${escapeXml(`${truncateLabel(row.label)} ${percentage}%`)}</text>`;
     })
     .join("");
   const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx}" height="${layout.heightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><g>${chartBody}</g><g>${legend}</g></svg>`;
+  const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
+  const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" aria-label="Pie chart" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}"><g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g></svg>`;
 }
 
 export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
@@ -288,7 +385,8 @@ function rasterKeyString(key: RasterKey): string {
 /** Renders only from the stored data so resizing never mutates the tool result. */
 export class PieChartComponent implements Component {
   private readonly cache = new Map<string, string>();
-  private pending?: { key: string; controller: AbortController; generation: number };
+  private readonly errors = new Set<string>();
+  private pending: { key: string; controller: AbortController; generation: number } | undefined;
   private generation = 0;
   private theme: Theme;
 
@@ -302,11 +400,17 @@ export class PieChartComponent implements Component {
   }
 
   update(theme: Theme): void {
+    if (this.theme === theme) return;
     this.theme = theme;
+    this.invalidate();
   }
 
   invalidate(): void {
     this.cache.clear();
+    this.errors.clear();
+    this.pending?.controller.abort();
+    this.pending = undefined;
+    this.generation++;
   }
 
   render(width: number): string[] {
@@ -325,8 +429,18 @@ export class PieChartComponent implements Component {
         png,
         "image/png",
         { fallbackColor: (text) => this.theme.fg("toolOutput", text) },
-        { maxWidthCells: widthCells },
+        {
+          maxWidthCells: widthCells,
+          maxHeightCells: getPieChartLayout(
+            { widthPx: dimensions.widthPx, heightPx: dimensions.heightPx },
+            widthCells,
+            this.details.rows.length,
+          ).heightCells,
+        },
       ).render(width);
+    }
+    if (this.errors.has(cacheKey)) {
+      return [truncateToWidth(this.theme.fg("error", "Pie chart unavailable"), width)];
     }
 
     this.startRaster(cacheKey, key);
@@ -342,6 +456,7 @@ export class PieChartComponent implements Component {
     const layout = getPieChartLayout(
       { widthPx: key.cellWidthPx, heightPx: key.cellHeightPx },
       key.widthCells,
+      this.details.rows.length,
     );
     const svg = renderPieChartSvg(this.details.rows, this.theme, layout);
 
@@ -356,8 +471,9 @@ export class PieChartComponent implements Component {
         this.pending = undefined;
         this.requestRender();
       })
-      .catch((error: unknown) => {
+      .catch((_error: unknown) => {
         if (controller.signal.aborted || this.pending?.generation !== generation) return;
+        this.errors.add(cacheKey);
         this.pending = undefined;
         this.requestRender();
       });
@@ -401,7 +517,11 @@ export default function (pi: ExtensionAPI) {
       }
 
       const png = await rasterizeSvg(
-        renderPieChartSvg(rows, ctx.ui.theme, getPieChartLayout(undefined, imageWidthCells)),
+        renderPieChartSvg(
+          rows,
+          ctx.ui.theme,
+          getPieChartLayout(undefined, imageWidthCells, rows.length),
+        ),
         signal,
       );
       return {

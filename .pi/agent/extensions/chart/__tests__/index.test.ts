@@ -4,8 +4,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
   Theme,
+  ThemeColor,
   ToolDefinition,
-  ToolRenderContext,
 } from "@earendil-works/pi-coding-agent";
 import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -45,10 +45,15 @@ const theme = {
 } as unknown as Theme;
 
 const imageTheme = { fallbackColor: (text: string) => text };
-const pngHeader = Buffer.concat([
-  Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
-  Buffer.from([0, 0, 2, 28, 0, 0, 1, 104]),
-]).toString("base64");
+function pngHeader(widthPx = 540, heightPx = 360): string {
+  const header = Buffer.concat([
+    Buffer.from("89504e470d0a1a0a0000000d49484452", "hex"),
+    Buffer.alloc(8),
+  ]);
+  header.writeUInt32BE(widthPx, 16);
+  header.writeUInt32BE(heightPx, 20);
+  return header.toString("base64");
+}
 
 type ToolResult = {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
@@ -107,8 +112,17 @@ function fills(svg: string, element: "path" | "rect"): string[] {
   );
 }
 
-function nativeImageCellSize(width: number): { columns: number; rows: number } {
-  const image = new Image(pngHeader, "image/png", imageTheme, { maxWidthCells: 60 });
+function nativeImageCellSize(
+  width: number,
+  widthPx = 540,
+  heightPx = 360,
+  maxWidthCells = 60,
+  maxHeightCells?: number,
+): { columns: number; rows: number } {
+  const image = new Image(pngHeader(widthPx, heightPx), "image/png", imageTheme, {
+    maxWidthCells,
+    ...(maxHeightCells === undefined ? {} : { maxHeightCells }),
+  });
   const line = image.render(width)[0] ?? "";
   const columns = /(?:^|,)c=(\d+)/.exec(line)?.[1];
   const rows = /(?:^|,)r=(\d+)/.exec(line)?.[1];
@@ -158,37 +172,37 @@ describe("pie chart", () => {
     );
   });
 
-  test("uses Pi's configured size and bounded non-TUI cell fallback", () => {
-    expect(getPieChartLayout()).toEqual({
-      widthPx: 540,
-      heightPx: 360,
-      chartWidthPx: 335,
-      legendX: 355,
-    });
-    expect(getPieChartLayout({ widthPx: 7, heightPx: 14 })).toEqual({
-      widthPx: 420,
-      heightPx: 280,
-      chartWidthPx: 260,
-      legendX: 280,
-    });
-    expect(getPieChartLayout({ widthPx: 0, heightPx: Number.NaN })).toEqual(getPieChartLayout());
+  test("derives compact logical height from pie and legend layout", () => {
+    const wide = getPieChartLayout();
+    const narrow = getPieChartLayout({ widthPx: 9, heightPx: 18 }, 28, 2);
+    const narrowTwelveSlices = getPieChartLayout({ widthPx: 9, heightPx: 18 }, 28, 12);
+
+    expect(wide).toMatchObject({ widthPx: 540, heightPx: 220, heightCells: 13, stacked: false });
+    expect(narrow).toMatchObject({ widthPx: 252, heightPx: 251, heightCells: 14, stacked: true });
+    expect(narrow.heightCells).toBeLessThanOrEqual(18);
+    expect(narrow.legendY).toBeGreaterThan(narrow.pieY + narrow.pieDiameterPx);
+    expect(narrowTwelveSlices).toMatchObject({ heightCells: 18, legendColumns: 2, stacked: true });
+    expect(narrowTwelveSlices.legendRowHeightPx).toBeGreaterThan(
+      narrowTwelveSlices.labelFontSizePx,
+    );
+    expect(getPieChartLayout({ widthPx: 0, heightPx: Number.NaN })).toEqual(wide);
 
     const configuredSettings = SettingsManager.inMemory({ terminal: { imageWidthCells: 72 } });
     expect(getPieChartLayout(undefined, configuredSettings.getImageWidthCells()).widthPx).toBe(648);
   });
 
-  test("matches Pi's native Image two-column padding and cell height", () => {
+  test("matches Pi Image intrinsic aspect ratio and explicit logical cell bounds", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
 
-    expect(nativeImageCellSize(64)).toEqual({ columns: 60, rows: 20 });
-    expect(nativeImageCellSize(30)).toEqual({ columns: 28, rows: 10 });
+    expect(nativeImageCellSize(64, 1080, 440, 60, 13)).toEqual({ columns: 60, rows: 13 });
+    expect(nativeImageCellSize(30, 504, 502, 28, 14)).toEqual({ columns: 28, rows: 14 });
   });
 
   test("renders a transparent themed SVG with matching slice and legend colors", () => {
     const svg = renderPieChartSvg(rows, theme);
-    expect(svg).toContain('width="540"');
-    expect(svg).toContain('viewBox="0 0 540 360"');
+    expect(svg).toContain('width="1080" height="440"');
+    expect(svg).toContain('viewBox="0 0 540 220"');
     expect(svg).toContain("rgb(102, 165, 173)");
     expect(svg).toContain("rgb(129, 155, 105)");
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
@@ -219,10 +233,10 @@ describe("pie chart", () => {
     expect(tuiResult.details).toEqual({ rows, imageWidthCells: 60 });
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 360 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 1080, heightPx: 440 });
   });
 
-  test("rasterizes at the final wide and narrow Image widths without resampling", async () => {
+  test("rasterizes at 2x logical dimensions and displays compact wide and narrow cell heights", async () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
     const requestedSvg: string[] = [];
@@ -232,23 +246,25 @@ describe("pie chart", () => {
       () => undefined,
       async (svg) => {
         requestedSvg.push(svg);
-        return pngHeader;
+        const dimensions = /<svg[^>]*width="(\d+)" height="(\d+)"/.exec(svg);
+        if (dimensions === null) throw new Error("expected SVG dimensions");
+        return pngHeader(Number(dimensions[1]), Number(dimensions[2]));
       },
     );
 
     expect(component.render(64)).toEqual(["Rendering pie chart…"]);
     await Promise.resolve();
     const wide = component.render(64)[0] ?? "";
-    expect(requestedSvg[0]).toContain('width="540"');
+    expect(requestedSvg[0]).toContain('width="1080" height="440" viewBox="0 0 540 220"');
     expect(/(?:^|,)c=60(?:,|;)/.test(wide)).toBe(true);
-    expect(/(?:^|,)r=20(?:,|;)/.test(wide)).toBe(true);
+    expect(/(?:^|,)r=13(?:,|;)/.test(wide)).toBe(true);
 
     expect(component.render(30)).toEqual(["Rendering pie chart…"]);
     await Promise.resolve();
     const narrow = component.render(30)[0] ?? "";
-    expect(requestedSvg[1]).toContain('width="252"');
+    expect(requestedSvg[1]).toContain('width="504" height="502" viewBox="0 0 252 251"');
     expect(/(?:^|,)c=28(?:,|;)/.test(narrow)).toBe(true);
-    expect(/(?:^|,)r=20(?:,|;)/.test(narrow)).toBe(true);
+    expect(/(?:^|,)r=14(?:,|;)/.test(narrow)).toBe(true);
   });
 
   test("cancels stale resize jobs and only invalidates for the current raster", async () => {
@@ -274,13 +290,65 @@ describe("pie chart", () => {
     component.render(30);
     expect(signals).toHaveLength(2);
     expect(signals[0]?.aborted).toBe(true);
-    first.resolve(pngHeader);
+    first.resolve(pngHeader());
     await Promise.resolve();
     expect(invalidations).toBe(0);
 
-    second.resolve(pngHeader);
+    second.resolve(pngHeader());
     await Promise.resolve();
     expect(invalidations).toBe(1);
+  });
+
+  test("shows a sticky error instead of retrying a failed raster until invalidated", async () => {
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    let calls = 0;
+    const component = new PieChartComponent(
+      { rows, imageWidthCells: 60 },
+      theme,
+      () => undefined,
+      async () => {
+        calls++;
+        throw new Error("rsvg-convert failed");
+      },
+    );
+
+    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(component.render(64)).toEqual(["Pie chart unavailable"]);
+    expect(component.render(64)).toEqual(["Pie chart unavailable"]);
+    expect(calls).toBe(1);
+
+    component.invalidate();
+    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    expect(calls).toBe(2);
+  });
+
+  test("invalidates cached rasters when the theme identity changes", async () => {
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    const requestedSvg: string[] = [];
+    const component = new PieChartComponent(
+      { rows, imageWidthCells: 60 },
+      theme,
+      () => undefined,
+      async (svg) => {
+        requestedSvg.push(svg);
+        return pngHeader();
+      },
+    );
+
+    component.render(64);
+    await Promise.resolve();
+    component.render(64);
+    component.update({
+      ...theme,
+      getFgAnsi: (color: ThemeColor) =>
+        color === "accent" ? "\u001b[38;2;255;0;0m" : theme.getFgAnsi(color),
+    } as unknown as Theme);
+
+    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    expect(requestedSvg).toHaveLength(2);
+    expect(requestedSvg[1]).toContain("rgb(255, 0, 0)");
   });
 
   test("honors an already-aborted non-TUI tool call", async () => {
