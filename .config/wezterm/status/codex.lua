@@ -55,6 +55,21 @@ local function pane_cwd(pane)
 	end
 	return nil
 end
+local function pane_active_profile(pane)
+	if pane == nil then
+		return nil
+	end
+
+	local vars_ok, user_vars = pcall(function()
+		return pane:get_user_vars()
+	end)
+	if not vars_ok or type(user_vars) ~= "table" then
+		return nil
+	end
+
+	local profile = user_vars.pi_profile_changed
+	return type(profile) == "string" and profile ~= "" and profile or nil
+end
 
 local function usage_color(remaining)
 	if remaining >= 75 then
@@ -145,6 +160,8 @@ local function append_usage(items, windows)
 end
 
 local function append(items, pane)
+	-- The CLI only knows the pane CWD; the pane user variable carries session overrides.
+	local active_profile = pane_active_profile(pane)
 	local accounts = get_accounts(pane_cwd(pane))
 	if #accounts == 0 then
 		return
@@ -155,10 +172,11 @@ local function append(items, pane)
 			table.insert(items, { Foreground = { Color = palette.semantic.separator } })
 			table.insert(items, { Text = " ▏ " })
 		end
-		local profile_color = account.active and palette.ansi.magenta or palette.semantic.muted
+		local is_active = active_profile == nil and account.active or account.profileLabel == active_profile
+		local profile_color = is_active and palette.ansi.magenta or palette.semantic.muted
 		table.insert(items, { Foreground = { Color = profile_color } })
 		table.insert(items, { Text = account.profileLabel })
-		if account.active then
+		if is_active then
 			table.insert(items, { Foreground = { Color = palette.ansi.magenta } })
 			table.insert(items, { Text = "*" })
 		end

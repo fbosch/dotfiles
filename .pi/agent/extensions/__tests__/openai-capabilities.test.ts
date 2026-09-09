@@ -87,12 +87,9 @@ describe("OpenAI capabilities", () => {
     );
   });
 
-  test("registers async tools only for both Astra variants without changing standard routing", () => {
+  test("does not register async tools for Astra without changing standard routing", () => {
     const harness = createCapabilitiesHarness();
-    expect(harness.registrations).toEqual([
-      { provider: "openai-codex", model: "gpt-6-astra", asyncTools: true, steering: false },
-      { provider: "openai-codex", model: "gpt-6-astra-fast", asyncTools: true, steering: false },
-    ]);
+    expect(harness.registrations).toEqual([]);
     const standardPayload = { model: "gpt-6-astra", stream: true };
     expect(harness.emit("before_provider_request", { payload: standardPayload })).toBeUndefined();
     expect(standardPayload).toEqual({ model: "gpt-6-astra", stream: true });
@@ -105,38 +102,12 @@ describe("OpenAI capabilities", () => {
     expect(payload.model).toBe("gpt-6-astra-fast");
     expect(payload.tools).toEqual([{ name: "read" }]);
   });
-
-  test("keeps fast aliases usable before the Nix patch is deployed and warns for Astra", () => {
+  test("keeps fast aliases usable without Astra registration", () => {
     const harness = createCapabilitiesHarness(false);
-    const warnings: unknown[][] = [];
-    const ui = { notify: (...args: unknown[]) => warnings.push(args) };
     expect(harness.registrations).toEqual([]);
     expect(
       harness.emit("before_provider_request", { payload: { model: "gpt-5.6-luna-fast" } }),
     ).toEqual({ model: "gpt-5.6-luna", service_tier: "priority" });
-    harness.emit(
-      "session_start",
-      {},
-      { ui, model: { provider: "openai-codex", id: "gpt-5.6-luna-fast" } },
-    );
-    harness.emit("model_select", {}, { ui, model: { provider: "other", id: "gpt-6-astra-fast" } });
-    expect(warnings).toEqual([]);
-    harness.emit(
-      "model_select",
-      {},
-      { ui, model: { provider: "openai-codex", id: "gpt-6-astra-fast" } },
-    );
-    const warning = [
-      "Native async tools require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
-      "warning",
-    ];
-    expect(warnings).toEqual([warning]);
-    harness.emit(
-      "session_start",
-      {},
-      { ui, model: { provider: "openai-codex", id: "gpt-6-astra" } },
-    );
-    expect(warnings).toEqual([warning, warning]);
   });
 
   test("rejects malformed fast-model configuration", () => {

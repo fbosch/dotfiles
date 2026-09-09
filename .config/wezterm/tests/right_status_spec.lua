@@ -187,12 +187,13 @@ os.date = function(format)
 	return original_os_date(format)
 end
 
+local active_profile = "ct"
 local active_pane = {
 	get_current_working_dir = function()
 		return { scheme = "file", file_path = "/Users/fbb/dotfiles" }
 	end,
 	get_user_vars = function()
-		return { first_login = "09:00:00" }
+		return { first_login = "09:00:00", pi_profile_changed = active_profile }
 	end,
 }
 
@@ -223,6 +224,17 @@ assert_eq(find_text(captured_status, "[working] 2 "), false, "Herdr working coun
 assert_eq(find_text(captured_status, "[end] 6.5 "), true, "workhours indicator rendered")
 assert_eq(find_text(captured_status, "ct"), true, "active Codex profile alias rendered")
 assert_eq(find_text(captured_status, "*"), true, "active Codex profile indicator rendered")
+assert_eq(color_before_text(captured_status, "ct"), "#B279A7", "automatic Codex profile is initially active")
+assert_eq(color_before_text(captured_status, "kk"), "#636363", "other Codex profile is initially muted")
+active_profile = "kk"
+captured_status = nil
+user_var_changed(window, active_pane, "pi_profile_changed")
+assert_eq(color_before_text(captured_status, "ct"), "#636363", "session Codex profile change mutes the old profile")
+assert_eq(
+	color_before_text(captured_status, "kk"),
+	"#B279A7",
+	"session Codex profile change activates the selected profile"
+)
 assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
 assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")

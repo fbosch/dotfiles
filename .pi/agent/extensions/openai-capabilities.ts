@@ -1,21 +1,11 @@
 import { readFileSync } from "node:fs";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 const MODELS_CONFIG_URL = new URL("../models.json", import.meta.url);
 const FAST_SERVICE_TIER = "priority";
 const FAST_SUFFIX = "-fast";
-const ASTRA_MODEL_IDS = new Set(["gpt-6-astra", "gpt-6-astra-fast"]);
 
-interface NativeOpenAICapabilityRegistration {
-  provider: string;
-  model: string;
-  asyncTools: boolean;
-  steering: boolean;
-}
-
-type OpenAICapabilitiesAPI = Pick<ExtensionAPI, "on"> & {
-  registerOpenAICapabilities?: (registration: NativeOpenAICapabilityRegistration) => void;
-};
+type OpenAICapabilitiesAPI = Pick<ExtensionAPI, "on">;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
@@ -94,28 +84,6 @@ export function applyFastServiceTierForPayload(
 }
 
 export default function openaiCapabilities(pi: OpenAICapabilitiesAPI): void {
-  if (pi.registerOpenAICapabilities) {
-    for (const model of ASTRA_MODEL_IDS) {
-      pi.registerOpenAICapabilities({
-        provider: "openai-codex",
-        model,
-        asyncTools: true,
-        steering: false,
-      });
-    }
-  } else {
-    // Stow and Nix deploy independently; remove this guard once all hosts run the patched Pi build.
-    const warnIfAstra = (ctx: ExtensionContext) => {
-      if (ctx.model?.provider !== "openai-codex" || !ASTRA_MODEL_IDS.has(ctx.model.id)) return;
-      ctx.ui.notify(
-        "Native async tools require the patched Pi build from ~/nixos. Rebuild Pi and restart this session.",
-        "warning",
-      );
-    };
-    pi.on("session_start", (_event, ctx) => warnIfAstra(ctx));
-    pi.on("model_select", (_event, ctx) => warnIfAstra(ctx));
-  }
-
   pi.on("before_provider_request", (event) => {
     return applyFastServiceTierForPayload(event.payload);
   });
