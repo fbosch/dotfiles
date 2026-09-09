@@ -275,6 +275,7 @@ describe("auth profile prompt status", () => {
         profileSelections += 1;
         return selections.shift() ?? changedSelection;
       },
+      usageCollector: () => new Promise(() => {}),
     });
 
     const runtime = { credentials: { store: new FakeAuthStore() } };

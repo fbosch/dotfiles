@@ -479,14 +479,10 @@ export default function authProfiles(
         cached.sessionProfile === sessionProfile
           ? cached.selection
           : await chooseCurrentProfile(ctx);
-      const activated = await activateUnlocked(ctx, selection);
-      try {
-        await collectAndPublishUsage();
-      } catch {
-        // Selection remains usable when the optional startup usage refresh fails.
-      }
-      return activated;
+      return activateUnlocked(ctx, selection);
     });
+    // Usage can update the header after activation; it must not hold up interactive startup.
+    void serializeProfileOperation(collectAndPublishUsage).catch(() => {});
     if (resolution.selectionWarning) {
       ctx.ui.notify(
         `No alternate profile was confirmed; using ${resolution.profile}: ${resolution.selectionWarning}`,

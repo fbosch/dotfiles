@@ -8,17 +8,15 @@ function gitReader(options: {
   branch?: string;
   fail?: boolean;
 }): GitReader {
-  return async (_cwd, args) => {
+  return async () => {
     if (options.fail) throw new Error("inspection failed");
-    if (args.includes("--show-toplevel")) return `${options.root ?? "/repo"}\n`;
-    if (args.includes("--git-common-dir")) {
-      return `${options.gitDir ?? "/repo/.git"}\n${options.commonDir ?? "/repo/.git"}\n`;
-    }
-    if (args.includes("symbolic-ref")) {
-      if (options.branch === undefined) throw { code: 1 };
-      return `${options.branch}\n`;
-    }
-    throw new Error("unexpected Git command");
+    return [
+      options.root ?? "/repo",
+      options.gitDir ?? "/repo/.git",
+      options.commonDir ?? "/repo/.git",
+      options.branch ?? "HEAD",
+      "",
+    ].join("\n");
   };
 }
 

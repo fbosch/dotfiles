@@ -32,7 +32,7 @@ export default function startupHeader(
 ): void {
   let disposeSession = () => {};
   const startupBaselines = new Map<string, string | undefined>();
-  const contextViewConfigPromise = loadContextViewConfig();
+  let contextViewConfigPromise: Promise<ContextStripConfig | undefined> | undefined;
 
   pi.on("before_model_availability", (_event, ctx) => {
     startupBaselines.set(
@@ -87,6 +87,8 @@ export default function startupHeader(
       }
     }
 
+    // Wait until every extension module has loaded so pi-context-view's config module is already cached.
+    contextViewConfigPromise ??= loadContextViewConfig();
     void contextViewConfigPromise.then((config) => {
       if (!active || config === undefined) return;
       contextViewConfig = config;

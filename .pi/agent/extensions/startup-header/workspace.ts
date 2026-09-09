@@ -17,38 +17,34 @@ export async function inspectWorkspace(
   readGit: GitReader = executeGit,
 ): Promise<WorkspaceIdentity | undefined> {
   try {
-    const [root, directories] = await Promise.all([
-      readGit(cwd, ["rev-parse", "--show-toplevel"]),
-      readGit(cwd, ["rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"]),
+    const output = await readGit(cwd, [
+      "rev-parse",
+      "--show-toplevel",
+      "--path-format=absolute",
+      "--git-dir",
+      "--git-common-dir",
+      "--abbrev-ref",
+      "HEAD",
     ]);
-    const [gitDir, commonDir] = nonEmptyLines(directories);
-    const canonicalRoot = root.trim();
-    if (canonicalRoot.length === 0 || gitDir === undefined || commonDir === undefined) {
+    const [root, gitDir, commonDir, branchName] = nonEmptyLines(output);
+    if (
+      root === undefined ||
+      gitDir === undefined ||
+      commonDir === undefined ||
+      branchName === undefined
+    ) {
       return undefined;
     }
-
-    let branch: string | undefined;
-    try {
-      const candidate = (await readGit(cwd, ["symbolic-ref", "--quiet", "--short", "HEAD"])).trim();
-      if (candidate.length > 0) branch = candidate;
-    } catch (error) {
-      // Git uses status 1 for a valid detached HEAD; other failures leave workspace identity unavailable.
-      if (!isDetachedHeadError(error)) throw error;
-    }
-
+    const branch = branchName === "HEAD" ? undefined : branchName;
     return Object.freeze({
       ...(branch === undefined ? {} : { branch }),
       detached: branch === undefined,
-      root: canonicalRoot,
+      root,
       linkedWorktree: gitDir !== commonDir,
     });
   } catch {
     return undefined;
   }
-}
-
-function isDetachedHeadError(value: unknown): boolean {
-  return typeof value === "object" && value !== null && "code" in value && value.code === 1;
 }
 
 async function executeGit(cwd: string, args: readonly string[]): Promise<string> {
