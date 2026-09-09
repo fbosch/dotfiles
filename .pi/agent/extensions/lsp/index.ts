@@ -80,9 +80,17 @@ interface PendingMutation {
   readonly sequence: number;
 }
 
+const HASHLINE_MUTATION_TOOL_NAMES = new Set(["replace", "insert", "undo_last_change"]);
+
 function mutationPath(event: ToolResultEvent): string | undefined {
   if (event.isError) return undefined;
-  if (isEditToolResult(event) === false && isWriteToolResult(event) === false) return undefined;
+  if (
+    isEditToolResult(event) === false &&
+    isWriteToolResult(event) === false &&
+    HASHLINE_MUTATION_TOOL_NAMES.has(event.toolName) === false
+  ) {
+    return undefined;
+  }
   const path = event.input.path;
   return typeof path === "string" ? path : undefined;
 }

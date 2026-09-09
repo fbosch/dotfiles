@@ -435,6 +435,62 @@ test("starts diagnostics after formatting and suppresses empty results", async (
   expect(deliveryModes).toEqual(["steer"]);
 });
 
+test.each(["replace", "insert", "undo_last_change"] as const)(
+  "starts automatic diagnostics after a successful hashline %s",
+  async (toolName) => {
+    const handlers = new Map<string, Handler>();
+    const diagnosticPaths: string[] = [];
+    const fakeManager = {
+      diagnostics: async (path: string) => {
+        diagnosticPaths.push(path);
+        return {
+          diagnosticCount: 0,
+          diagnosticEvidence: [{ kind: "pull-report", reportKind: "full", serverId: "fake" }],
+          diagnosticVerdict: "clean" as const,
+          matched: true,
+          text: "LSP diagnostics: none",
+          unconfirmedServers: [],
+          warnings: [],
+        };
+      },
+      shutdown: async () => {},
+      status: () => "ready",
+    } as unknown as LspServerManager;
+    const settings: ResolvedLspSettings = {
+      servers: [],
+      timeouts: { diagnosticsMs: 100, requestMs: 100, shutdownMs: 100, startupMs: 100 },
+      warnings: [],
+    };
+    const pi = {
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+      registerTool() {},
+      registerMessageRenderer() {},
+      registerCommand() {},
+    } as unknown as ExtensionAPI;
+    const context = {
+      cwd: "/project",
+      isProjectTrusted: () => true,
+      signal: undefined,
+      ui: { notify() {} },
+    } as unknown as ExtensionContext;
+    createLspExtension({ createManager: async () => fakeManager, readSettings: () => settings })(
+      pi,
+    );
+    await handlers.get("session_start")?.({} as never, context);
+
+    const toolCallId = `${toolName}-call`;
+    await handlers.get("tool_result")?.(
+      { ...mutationResult(toolCallId, `${toolName}.ts`), toolName } as never,
+      context,
+    );
+    await handlers.get("message_end")?.(mutationMessage(toolCallId) as never, context);
+
+    expect(diagnosticPaths).toEqual([`${toolName}.ts`]);
+  },
+);
+
 test("cancels superseded automatic diagnostics for the same file", async () => {
   const handlers = new Map<string, Handler>();
   const sentMessages: SentMessage[] = [];
