@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   type AutocompleteItem,
   type AutocompleteProvider,
@@ -11,12 +12,13 @@ import {
   createPromptAutocompleteProvider,
   findBottomBorder,
   formatPathMatches,
-  prioritizeChangedFiles,
   getSuggestionGitStatus,
+  prioritizeChangedFiles,
   splitEditorLines,
   styleSelectedSuggestion,
   suggestionOverlayOffset,
 } from "../autocomplete";
+import { formatFffGitStatus } from "../prompt-editor";
 
 const border = (text: string) => `\u001b[90m${text}\u001b[39m`;
 const borderCells = (text: string) => [...text].map(border).join("");
@@ -100,12 +102,19 @@ describe("prompt autocomplete", () => {
       { value: "@.pi/clean.ts", label: ".pi/clean.ts", gitStatus: "clean" },
     ];
 
-    expect(
-      getSuggestionGitStatus("  \u001b[1m.pi/\u001b[22mmodified.ts", items),
-    ).toBe("modified");
+    expect(getSuggestionGitStatus("  \u001b[1m.pi/\u001b[22mmodified.ts", items)).toBe("modified");
+    expect(getSuggestionGitStatus(" → \u001b[1m.pi/\u001b[22mmodified.ts", items)).toBe("modified");
     expect(getSuggestionGitStatus("  (1/20)", items)).toBeUndefined();
   });
 
+  test("colors FFF status in the suggestion side rail", () => {
+    const theme: Pick<Theme, "fg"> = {
+      fg: (color, text) => `${color}:${text}`,
+    };
+
+    expect(formatFffGitStatus(theme, "modified")).toBe("warning:▌");
+    expect(formatFffGitStatus(theme, "clean")).toBe("");
+  });
 
   test("promotes changed FFF files while preserving native order within each group", () => {
     const items = [

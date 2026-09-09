@@ -9,6 +9,7 @@ import {
 	getList,
 	objectId,
 	readVolume,
+	snapToNormalVolume,
 	sameAudioObject,
 	type AudioBackend,
 	type AudioMixerTab,
@@ -255,7 +256,7 @@ export function createAudioBackend(
 			pendingDefault = null;
 		},
 		setVolume: (value, volume) => {
-			value.volume = clamp(volume);
+			value.volume = clamp(snapToNormalVolume(volume));
 			const backendVolume = value.volume / 100;
 			if (typeof value.object?.set_volume === "function")
 				value.object.set_volume(backendVolume);

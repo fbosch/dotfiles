@@ -6,8 +6,8 @@ import {
   type Theme,
 } from "@earendil-works/pi-coding-agent";
 import {
-  type AutocompleteProvider,
   type AutocompleteItem,
+  type AutocompleteProvider,
   type EditorTheme,
   stripTerminalSequences,
   type TUI,
@@ -56,8 +56,7 @@ export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
 const MCP_ICON = "";
 
-
-export function formatFffGitStatus(theme: Theme, status: string): string {
+export function formatFffGitStatus(theme: Pick<Theme, "fg">, status: string): string {
   switch (status) {
     case "untracked":
     case "unknown":
@@ -283,6 +282,7 @@ export class PromptEditor extends CustomEditor {
   }
 
   setAutocompleteProvider(provider: AutocompleteProvider): void {
+    this.autocompleteItems = [];
     this.autocompleteTokenPrefixes = new Set([
       "/",
       "@",

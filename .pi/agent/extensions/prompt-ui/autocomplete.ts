@@ -31,11 +31,16 @@ export function getSuggestionGitStatus(
   items: readonly AutocompleteItem[],
 ): string | undefined {
   const plainLine = stripTerminalSequences(line);
-  const match = /^(?:→ |  )(.*)$/.exec(plainLine);
-  if (match === null) return undefined;
-
-  const display = match[1]?.trimEnd() ?? "";
-  if (display.length === 0 || display.startsWith("(") || display.startsWith("───")) return undefined;
+  const selectedMatch = /^\s*→\s+(.*)$/.exec(plainLine);
+  const unselectedMatch = /^ {2}(.*)$/.exec(plainLine);
+  const display = (selectedMatch?.[1] ?? unselectedMatch?.[1])?.trimEnd();
+  if (
+    display === undefined ||
+    display.length === 0 ||
+    display.startsWith("(") ||
+    display.startsWith("───")
+  )
+    return undefined;
 
   const item = items.find((candidate) => {
     const label = stripTerminalSequences(candidate.label || candidate.value);
@@ -187,27 +192,29 @@ export function createPathDisplayAutocompleteProvider(
 
       return {
         ...suggestions,
-        items: prioritizeChangedFiles(suggestions.items.map((item) => {
-          if (
-            item.description === undefined ||
-            normalizedCompletionPath(item.value) !== normalizePath(item.description)
-          ) {
-            return item;
-          }
+        items: prioritizeChangedFiles(
+          suggestions.items.map((item) => {
+            if (
+              item.description === undefined ||
+              normalizedCompletionPath(item.value) !== normalizePath(item.description)
+            ) {
+              return item;
+            }
 
-          const displayPath =
-            item.label.endsWith("/") && item.description.endsWith("/") === false
-              ? `${item.description}/`
-              : item.description;
-          const formattedPath = formatPathMatches(displayPath, query, formatMatch);
-          const formattedItem: AutocompleteItem = {
-            ...item,
-            label: formattedPath,
-          };
-          delete formattedItem.description;
-          originalItems.set(formattedItem, item);
-          return formattedItem;
-        })),
+            const displayPath =
+              item.label.endsWith("/") && item.description.endsWith("/") === false
+                ? `${item.description}/`
+                : item.description;
+            const formattedPath = formatPathMatches(displayPath, query, formatMatch);
+            const formattedItem: AutocompleteItem = {
+              ...item,
+              label: formattedPath,
+            };
+            delete formattedItem.description;
+            originalItems.set(formattedItem, item);
+            return formattedItem;
+          }),
+        ),
       };
     },
     applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
@@ -347,10 +354,7 @@ export function createPromptAutocompleteProvider(
   formatAgentMention: AgentMentionFormatter,
   formatPathMatch: MatchFormatter = (text) => text,
 ): AutocompleteProvider {
-  const pathProvider = createPathDisplayAutocompleteProvider(
-    provider,
-    formatPathMatch,
-  );
+  const pathProvider = createPathDisplayAutocompleteProvider(provider, formatPathMatch);
   const aliasProvider = createAliasAutocompleteProvider(
     pathProvider,
     agentMentions,

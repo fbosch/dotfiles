@@ -41,9 +41,11 @@ export const tabs: Array<{ id: AudioMixerTab; label: string; icon: string }> = [
 
 export const maxVolume = 150;
 export const meterSegments = 12;
-// Keep low-volume values spread across more slider travel than the current power curve.
-const volumeSliderBezierStart = 0;
-const volumeSliderBezierEnd = 0.25;
+export const normalVolume = 100;
+const normalVolumeSnapThreshold = 2;
+// Curve the normal range, then keep the 100–150% amplification range linear.
+const volumeSliderBezierStart = 0.35;
+const volumeSliderBezierEnd = 0.65;
 const volumeLevelIcons = [
 	"\uE992",
 	"\uE993",
@@ -124,7 +126,13 @@ export function clampFloat(value: number, max = maxVolume): number {
 	return Math.max(0, Math.min(max, value));
 }
 
-function sliderCurveValue(position: number): number {
+export function snapToNormalVolume(value: number): number {
+	return Math.abs(value - normalVolume) <= normalVolumeSnapThreshold
+		? normalVolume
+		: value;
+}
+
+function cubicBezierValue(position: number): number {
 	const remaining = 1 - position;
 	return (
 		3 * remaining * remaining * position * volumeSliderBezierStart +
@@ -133,22 +141,34 @@ function sliderCurveValue(position: number): number {
 	);
 }
 
+function sliderCurveValue(position: number, max: number): number {
+	const normalPosition = Math.min(1, normalVolume / max);
+	if (normalPosition === 1) return cubicBezierValue(position);
+	if (position <= normalPosition)
+		return cubicBezierValue(position / normalPosition) * normalPosition;
+
+	const upperPosition = (position - normalPosition) / (1 - normalPosition);
+	return normalPosition + upperPosition * (1 - normalPosition);
+}
+
 export function volumeToSliderPosition(
 	volume: number,
 	max = maxVolume,
 ): number {
+	const normalPosition = Math.min(1, normalVolume / max);
 	const target = clampFloat(volume, max) / max;
-	if (target === 0 || target === 1) return target;
+	if (target === 0 || target >= normalPosition) return target;
 
+	const lowerTarget = target / normalPosition;
 	let low = 0;
 	let high = 1;
 	// A general Bézier curve has no simple inverse, so solve its monotonic range numerically.
 	for (let iteration = 0; iteration < 24; iteration += 1) {
 		const midpoint = (low + high) / 2;
-		if (sliderCurveValue(midpoint) < target) low = midpoint;
+		if (cubicBezierValue(midpoint) < lowerTarget) low = midpoint;
 		else high = midpoint;
 	}
-	return (low + high) / 2;
+	return ((low + high) / 2) * normalPosition;
 }
 
 export function sliderPositionToVolume(
@@ -156,7 +176,7 @@ export function sliderPositionToVolume(
 	max = maxVolume,
 ): number {
 	const normalized = Math.max(0, Math.min(1, position));
-	return sliderCurveValue(normalized) * max;
+	return sliderCurveValue(normalized, max) * max;
 }
 
 function asArray<T>(value: unknown): T[] {

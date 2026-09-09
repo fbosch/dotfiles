@@ -5,6 +5,8 @@ import {
 	clamp,
 	clampFloat,
 	maxVolume,
+	normalVolume,
+	snapToNormalVolume,
 	meterSegments,
 	sliderPositionToVolume,
 	type AudioBackend,
@@ -47,7 +49,7 @@ export function createAudioMeter(
 	drawing.set_cursor_from_name("pointer");
 
 	const update = (next: number, immediate = false) => {
-		volume = clampFloat(next);
+		volume = snapToNormalVolume(clampFloat(next));
 		row.volume = clamp(volume);
 		label.set_label(row.muted ? "Muted" : `${row.volume}%`);
 		mute?.set_label(volumeLevelIcon(volume, row.muted));
@@ -64,6 +66,7 @@ export function createAudioMeter(
 	registerScroll((delta) => update(volume + delta));
 	drawing.set_draw_func((_area, cr: any, width, height) => {
 		const visible = row.muted ? 0 : volume;
+		// Render in control-position space so the nonlinear volume mapping stays hidden.
 		const visiblePosition = volumeToSliderPosition(visible, maxVolume);
 		const gap = 2;
 		const segmentHeight = 8;
@@ -88,7 +91,12 @@ export function createAudioMeter(
 			roundedRect(cr, x, segmentY, segmentWidth, segmentHeight, 2);
 			cr.fill();
 			if (fillWidth > 0) {
-				setSourceHex(cr, tokens.colors.accent.primary.value);
+				setSourceHex(
+					cr,
+					segmentStart >= normalVolume / maxVolume
+						? tokens.colors.state.error.value
+						: tokens.colors.accent.primary.value,
+				);
 				roundedRect(cr, x, segmentY, fillWidth, segmentHeight, 2);
 				cr.fill();
 			}

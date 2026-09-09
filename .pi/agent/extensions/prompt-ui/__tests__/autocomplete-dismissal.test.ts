@@ -5,7 +5,13 @@ import type {
   ExtensionContext,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, type OverlayHandle, type TUI } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  getKeybindings,
+  type OverlayHandle,
+  stripTerminalSequences,
+  type TUI,
+} from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
   loadThemeFromPath,
@@ -18,6 +24,7 @@ const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 
 function createEditor() {
   let overlayHidden = false;
+  let overlayComponent: Component | undefined;
   const overlayHandle: OverlayHandle = {
     hide: () => {
       overlayHidden = true;
@@ -35,7 +42,10 @@ function createEditor() {
     mode: "regular",
     terminal: { rows: 40, columns: 120 },
     requestRender: () => {},
-    showOverlay: () => overlayHandle,
+    showOverlay: (component: Component) => {
+      overlayComponent = component;
+      return overlayHandle;
+    },
   } as unknown as TUI;
   const state: PromptEditorState = {
     isWorking: () => false,
@@ -71,7 +81,11 @@ function createEditor() {
     applyCompletion: () => ({ lines: ["/reset-credit"], cursorLine: 0, cursorCol: 13 }),
   });
 
-  return { editor, isOverlayHidden: () => overlayHidden };
+  return {
+    editor,
+    isOverlayHidden: () => overlayHidden,
+    renderOverlay: () => overlayComponent?.render(100) ?? [],
+  };
 }
 
 test("hides slash suggestions before the selected command is submitted", async () => {
@@ -89,5 +103,40 @@ test("hides slash suggestions before the selected command is submitted", async (
   fixture.editor.handleInput("\r");
 
   expect(overlayHiddenAtSubmit).toBeTrue();
+  fixture.editor.dispose();
+});
+
+test("renders modified FFF files with a warning-colored side rail", async () => {
+  const fixture = createEditor();
+  fixture.editor.setAutocompleteProvider({
+    getSuggestions: async () => ({
+      items: [
+        {
+          value: "@.pi/agent/extensions/prompt-ui/autocomplete.ts",
+          label: "autocomplete.ts",
+          description: ".pi/agent/extensions/prompt-ui/autocomplete.ts",
+          gitStatus: "modified",
+        },
+        {
+          value: "@.pi/agent/extensions/prompt-ui/prompt-editor.ts",
+          label: "prompt-editor.ts",
+          description: ".pi/agent/extensions/prompt-ui/prompt-editor.ts",
+          gitStatus: "untracked",
+        },
+      ],
+      prefix: "@.pi/",
+    }),
+    applyCompletion: () => ({ lines: ["@.pi/"], cursorLine: 0, cursorCol: 5 }),
+  });
+
+  for (const character of "@.pi/") fixture.editor.handleInput(character);
+  await Bun.sleep(30);
+  fixture.editor.render(100);
+
+  const overlayLines = fixture.renderOverlay();
+  expect(overlayLines).toHaveLength(2);
+  expect(stripTerminalSequences(overlayLines[0] ?? "")).toStartWith("▌ ");
+  expect(overlayLines[0]).toContain(theme.getFgAnsi("warning"));
+  expect(overlayLines[1]).toContain(theme.getFgAnsi("success"));
   fixture.editor.dispose();
 });

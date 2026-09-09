@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
 	reconcileAudioSnapshot,
+	meterSegments,
+	snapToNormalVolume,
 	sliderPositionToVolume,
 	type AudioSnapshot,
 	volumeToSliderPosition,
@@ -29,17 +31,25 @@ function snapshot(volume = 50): AudioSnapshot {
 }
 
 describe("volume slider mapping", () => {
-	test("uses the stronger low-volume Bézier taper", () => {
+	test("curves the normal range and keeps amplification linear", () => {
 		const points = [
-			[0.25, 7.6171875],
-			[0.5, 32.8125],
-			[0.75, 79.1015625],
+			[0.25, 37.79296875],
+			[0.5, 74.53125],
+			[8 / meterSegments, 100],
+			[0.75, 112.5],
 		] as const;
 
 		for (const [position, volume] of points) {
 			expect(sliderPositionToVolume(position)).toBeCloseTo(volume, 6);
 			expect(volumeToSliderPosition(volume)).toBeCloseTo(position, 6);
 		}
+	});
+
+	test("snaps adjustments within two percentage points of normal volume", () => {
+		expect(snapToNormalVolume(98)).toBe(100);
+		expect(snapToNormalVolume(102)).toBe(100);
+		expect(snapToNormalVolume(97.99)).toBe(97.99);
+		expect(snapToNormalVolume(102.01)).toBe(102.01);
 	});
 
 	test("keeps the slider endpoints stable", () => {
