@@ -346,6 +346,43 @@ describe("pie chart", () => {
     expect(topLeftPngAlpha(png)).toBe(0);
   });
 
+  test("uses a readable fallback when the configured font cannot be matched", async () => {
+    const svg = renderPieChartSvg(rows, theme, undefined, "Dansk: æøå");
+    const png = Buffer.from(
+      await rasterizeSvg(svg, undefined, { fontFamily: "chart-font-that-does-not-exist" }),
+      "base64",
+    );
+
+    expect(getPngDimensions(png.toString("base64"))).toEqual({ widthPx: 540, heightPx: 220 });
+    expect(topLeftPngAlpha(png)).toBe(0);
+  });
+
+  test("rejects a mid-flight abort promptly and discards the native result", async () => {
+    const svg = renderPieChartSvg(rows, theme);
+    await rasterizeSvg(svg); // Warm the cached font resolution so the native render has started.
+
+    const controller = new AbortController();
+    const pending = rasterizeSvg(svg, controller.signal);
+    await Promise.resolve();
+    controller.abort();
+
+    await expect(pending).rejects.toThrow("Aborted");
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  });
+
+  test("bounds a slow raster and safely ignores its eventual completion", async () => {
+    const circles = Array.from(
+      { length: 900 },
+      (_, index) => `<circle cx="${index % 540}" cy="${index % 220}" r="${(index % 7) + 1}"/>`,
+    ).join("");
+    const svg = renderPieChartSvg(rows, theme).replace("</svg>", `${circles}</svg>`);
+
+    await expect(rasterizeSvg(svg, undefined, { timeoutMs: 1 })).rejects.toThrow(
+      "timed out after 1ms",
+    );
+    await new Promise<void>((resolve) => setTimeout(resolve, 20));
+  });
+
   test("returns TUI chart data without a native image and retains an image outside TUI", async () => {
     const tool = registerTool();
     const execute = tool.execute as PieChartExecute;

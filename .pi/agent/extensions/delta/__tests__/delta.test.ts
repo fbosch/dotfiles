@@ -40,11 +40,11 @@ const diffResult: DeltaResult = {
   details,
 };
 
-test("loads edit preview and syntax theme settings from the dedicated config file", async () => {
+test("loads edit preview and syntax theme settings from the global settings file", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-delta-config-"));
   try {
     await writeFile(
-      join(root, "delta.json"),
+      join(root, "settings.json"),
       '{"editPreviews":true,"syntaxTheme":"Zenwritten Dark"}',
       "utf8",
     );
@@ -57,11 +57,11 @@ test("loads edit preview and syntax theme settings from the dedicated config fil
   }
 });
 
-test("rejects unknown Delta config fields", async () => {
+test("rejects invalid Delta setting values", async () => {
   const root = await mkdtemp(join(tmpdir(), "pi-delta-config-invalid-"));
   try {
-    await writeFile(join(root, "delta.json"), '{"decorateHeaders":true}', "utf8");
-    expect(() => loadDeltaConfig(root)).toThrow("delta config.decorateHeaders: unknown field");
+    await writeFile(join(root, "settings.json"), '{"editPreviews":"true"}', "utf8");
+    expect(() => loadDeltaConfig(root)).toThrow("settings.editPreviews: expected a boolean");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -585,7 +585,7 @@ describe("Delta extension", () => {
     expect(expanded.render(120).join("\n")).not.toContain("..\n");
   });
 
-  test("enables Delta edit previews from the dedicated config option", async () => {
+  test("enables Delta edit previews from the global settings option", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-delta-test-"));
     const filePath = join(root, "sample.ts");
     await writeFile(filePath, "const value = 1;\n", "utf8");
@@ -844,7 +844,7 @@ describe("Delta extension", () => {
     expect(notifications).toEqual([
       {
         message:
-          "Usage: /delta\n\nShow unstaged working-tree changes using Delta.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `editPreviews` to true in ~/.pi/agent/delta.json to use Delta for edit previews.",
+          "Usage: /delta\n\nShow unstaged working-tree changes using Delta.\nAsk the agent to use `git_diff` for staged changes, revisions, or path filters.\nSet `editPreviews` to true in ~/.pi/agent/settings.json to use Delta for edit previews.",
         level: "info",
       },
     ]);

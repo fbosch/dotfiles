@@ -94,6 +94,7 @@ export default function (pi: ExtensionAPI) {
           const png = await rasterizeSvg(
             renderChartSvg(pieChartRenderer, details, ctx.ui.theme),
             signal,
+            { fontFamily: settings.fontFamily },
           );
           return {
             content: [
@@ -111,6 +112,7 @@ export default function (pi: ExtensionAPI) {
           const png = await rasterizeSvg(
             renderChartSvg(barChartRenderer, details, ctx.ui.theme),
             signal,
+            { fontFamily: settings.fontFamily },
           );
           return {
             content: [

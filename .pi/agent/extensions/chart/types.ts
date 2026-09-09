@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { access } from "node:fs/promises";
+import { promisify } from "node:util";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
   type CellDimensions,
@@ -10,6 +9,7 @@ import {
   Image,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
+import { type ResvgRenderOptions, renderAsync } from "@resvg/resvg-js";
 import type { Static, TSchema } from "typebox";
 
 export const DEFAULT_IMAGE_WIDTH_CELLS = 60;
@@ -22,6 +22,8 @@ const MAX_FONT_FAMILY_LENGTH = 200;
 const MAX_SVG_BYTES = 64 * 1024;
 const MAX_PNG_BYTES = 4 * 1024 * 1024;
 const RASTERIZE_TIMEOUT_MS = 10_000;
+
+const execFileAsync = promisify(execFile);
 const MAX_CACHED_RASTERS = 4;
 const CHART_COLOR_TOKENS = [
   "accent",
@@ -80,7 +82,86 @@ export interface ChartType<
   deserializeDetails(value: unknown): TDetails | undefined;
 }
 
-export type Rasterize = (svg: string, signal?: AbortSignal) => Promise<string>;
+export type RasterizeOptions = {
+  /** The configured family is forwarded explicitly; SVG is never parsed for renderer settings. */
+  fontFamily?: string;
+  /** Test and integration override; production callers use the bounded default. */
+  timeoutMs?: number;
+  /** Internal component identity used to coalesce obsolete resize work. */
+  coalesceKey?: object;
+};
+
+export type Rasterize = (
+  svg: string,
+  signal?: AbortSignal,
+  options?: RasterizeOptions,
+) => Promise<string>;
+
+type MatchedFont = {
+  family: string;
+  file: string;
+};
+
+type ResvgFontOptions = NonNullable<ResvgRenderOptions["font"]>;
+
+const fontOptionsCache = new Map<string, Promise<ResvgFontOptions>>();
+
+type NativeJob = {
+  svg: string;
+  font: ResvgFontOptions;
+  isObsolete: () => boolean;
+  coalesceKey?: object;
+  resolve: (png: Buffer | undefined) => void;
+  reject: (error: unknown) => void;
+};
+
+let nativeRenderActive = false;
+const queuedNativeRenders: NativeJob[] = [];
+
+function runNativeRender(job: NativeJob): void {
+  nativeRenderActive = true;
+  void renderAsync(job.svg, { font: job.font })
+    .then(
+      (image) => (job.isObsolete() ? undefined : image.asPng()),
+      (error: unknown) => {
+        throw error;
+      },
+    )
+    .then(job.resolve, job.reject)
+    .finally(() => {
+      nativeRenderActive = false;
+      const next = queuedNativeRenders.shift();
+      if (next !== undefined) runNativeRender(next);
+    });
+}
+
+/** Keeps one native renderer active and coalesces obsolete resize work into the latest request. */
+function enqueueNativeRender(
+  svg: string,
+  font: ResvgFontOptions,
+  isObsolete: () => boolean,
+  coalesceKey: object | undefined,
+): Promise<Buffer | undefined> {
+  return new Promise((resolve, reject) => {
+    const job = {
+      svg,
+      font,
+      isObsolete,
+      ...(coalesceKey === undefined ? {} : { coalesceKey }),
+      resolve,
+      reject,
+    };
+    if (nativeRenderActive) {
+      if (coalesceKey !== undefined) {
+        const index = queuedNativeRenders.findIndex((queued) => queued.coalesceKey === coalesceKey);
+        if (index !== -1) queuedNativeRenders.splice(index, 1)[0]?.resolve(undefined);
+      }
+      queuedNativeRenders.push(job);
+      return;
+    }
+    runNativeRender(job);
+  });
+}
 
 type RasterKey = {
   widthCells: number;
@@ -182,57 +263,123 @@ export function escapeXml(value: string): string {
   );
 }
 
-export async function rasterizeSvg(svg: string, signal?: AbortSignal): Promise<string> {
+async function findFont(pattern: string): Promise<MatchedFont | undefined> {
+  try {
+    const { stdout } = await execFileAsync("fc-match", ["-f", "%{family}\t%{file}\n", pattern], {
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    const [family, file] = stdout.trim().split("\t", 2);
+    if (family === undefined || file === undefined || family.length === 0 || file.length === 0)
+      return undefined;
+    await access(file);
+    return { family: family.split(",")[0] ?? family, file };
+  } catch {
+    return undefined;
+  }
+}
+
+async function resolveFontOptions(fontFamily: string): Promise<ResvgFontOptions> {
+  const selected = await findFont(fontFamily);
+  const sans = await findFont("sans-serif");
+  const monospace = await findFont("monospace");
+  const matches = [selected, sans, monospace].filter(
+    (match): match is MatchedFont => match !== undefined,
+  );
+
+  if (matches.length === 0) {
+    // Fontconfig is unavailable on some hosts; let resvg use its platform registry rather than fail charts.
+    return {
+      loadSystemFonts: true,
+      defaultFontFamily: fontFamily,
+      sansSerifFamily: "sans-serif",
+      monospaceFamily: "monospace",
+    };
+  }
+
+  return {
+    loadSystemFonts: false,
+    fontFiles: [...new Set(matches.map((match) => match.file))],
+    defaultFontFamily: selected?.family ?? fontFamily,
+    sansSerifFamily: sans?.family ?? selected?.family ?? fontFamily,
+    monospaceFamily: monospace?.family ?? selected?.family ?? fontFamily,
+  };
+}
+
+function getFontOptions(fontFamily: string): Promise<ResvgFontOptions> {
+  const cached = fontOptionsCache.get(fontFamily);
+  if (cached !== undefined) return cached;
+  const options = resolveFontOptions(fontFamily);
+  fontOptionsCache.set(fontFamily, options);
+  return options;
+}
+
+function abortError(): DOMException {
+  return new DOMException("Aborted", "AbortError");
+}
+
+/**
+ * Renders on resvg's native async worker. Abort and timeout reject the caller promptly,
+ * but resvg 2.6.2 does not reliably stop in-flight native work, so late output is discarded.
+ */
+export async function rasterizeSvg(
+  svg: string,
+  signal?: AbortSignal,
+  options: RasterizeOptions = {},
+): Promise<string> {
   if (Buffer.byteLength(svg) > MAX_SVG_BYTES) {
     throw new Error("chart SVG exceeded the resource limit");
   }
   signal?.throwIfAborted();
-  const directory = await mkdtemp(join(tmpdir(), "pi-chart-"));
-  const input = join(directory, "chart.svg");
-  const output = join(directory, "chart.png");
-  try {
-    await writeFile(input, svg, "utf8");
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn("rsvg-convert", ["--format", "png", "--output", output, input], {
-        stdio: "ignore",
-      });
-      let settled = false;
-      const finish = (error?: Error) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        signal?.removeEventListener("abort", abort);
-        child.removeListener("error", onError);
-        child.removeListener("exit", onExit);
-        if (error) reject(error);
-        else resolve();
-      };
-      const abort = () => {
-        child.kill("SIGKILL");
-        finish(new DOMException("Aborted", "AbortError"));
-      };
-      const onError = (error: Error) => finish(error);
-      const onExit = (code: number | null) => {
-        if (signal?.aborted) finish(new DOMException("Aborted", "AbortError"));
-        else if (code === 0) finish();
-        else finish(new Error(`rsvg-convert exited with code ${code ?? "unknown"}`));
-      };
-      const timeout = setTimeout(() => {
-        child.kill("SIGKILL");
-        finish(new Error(`rsvg-convert timed out after ${RASTERIZE_TIMEOUT_MS}ms`));
-      }, RASTERIZE_TIMEOUT_MS);
 
-      child.once("error", onError);
-      child.once("exit", onExit);
-      signal?.addEventListener("abort", abort, { once: true });
-      if (signal?.aborted) abort();
-    });
+  const timeoutMs = options.timeoutMs ?? RASTERIZE_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > RASTERIZE_TIMEOUT_MS) {
+    throw new Error(`chart rasterization timeout must be between 1 and ${RASTERIZE_TIMEOUT_MS}ms`);
+  }
+
+  let settled = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let rejectPending: ((reason: Error) => void) | undefined;
+  const pending = new Promise<never>((_resolve, reject) => {
+    rejectPending = reject;
+  });
+  const abort = () => {
+    if (settled) return;
+    settled = true;
+    rejectPending?.(abortError());
+  };
+  signal?.addEventListener("abort", abort, { once: true });
+  if (signal?.aborted) abort();
+  timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    rejectPending?.(new Error(`chart rasterization timed out after ${timeoutMs}ms`));
+  }, timeoutMs);
+
+  try {
+    const font = await Promise.race([
+      getFontOptions(options.fontFamily ?? DEFAULT_FONT_FAMILY),
+      pending,
+    ]);
+    if (settled) throw abortError();
     signal?.throwIfAborted();
-    const png = await readFile(output);
+
+    // Do not call asPng after logical cancellation: encoding is synchronous on the JS thread.
+    const nativeRender = enqueueNativeRender(
+      svg,
+      font,
+      () => settled || signal?.aborted === true,
+      options.coalesceKey,
+    );
+    const png = await Promise.race([nativeRender, pending]);
+    if (png === undefined || settled || signal?.aborted) throw abortError();
     if (png.byteLength > MAX_PNG_BYTES) throw new Error("chart PNG exceeded the resource limit");
+    settled = true;
     return png.toString("base64");
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    settled = true;
+    if (timeout !== undefined) clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
   }
 }
 
@@ -264,6 +411,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
 {
   private readonly cache = new Map<string, string>();
   private readonly errors = new Set<string>();
+  private readonly rasterQueueKey = {};
   private pending: { key: string; controller: AbortController; generation: number } | undefined;
   private generation = 0;
   private theme: Theme;
@@ -345,7 +493,10 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     );
     const svg = this.renderer.renderSvg(this.details, this.theme, layout);
 
-    void this.rasterize(svg, controller.signal)
+    void this.rasterize(svg, controller.signal, {
+      coalesceKey: this.rasterQueueKey,
+      ...(this.details.fontFamily === undefined ? {} : { fontFamily: this.details.fontFamily }),
+    })
       .then((png) => {
         if (controller.signal.aborted || this.pending?.generation !== generation) return;
         this.cache.set(cacheKey, png);

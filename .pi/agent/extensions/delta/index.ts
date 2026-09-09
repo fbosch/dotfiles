@@ -39,7 +39,7 @@ import {
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
-import { globalExtensionConfigPath, readJsonConfig } from "../../lib/extension-config";
+import { readJsonConfig } from "../../lib/extension-config";
 import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 
 const COMMAND_TIMEOUT_MS = 60_000;
@@ -1450,7 +1450,7 @@ function commandHelp(): string {
     "",
     "Show unstaged working-tree changes using Delta.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
-    "Set `editPreviews` to true in ~/.pi/agent/delta.json to use Delta for edit previews.",
+    "Set `editPreviews` to true in ~/.pi/agent/settings.json to use Delta for edit previews.",
   ].join("\n");
 }
 
@@ -1470,26 +1470,26 @@ export interface DeltaConfig {
 }
 
 export function loadDeltaConfig(agentDirectory = getAgentDir()): DeltaConfig {
-  const value = readJsonConfig(globalExtensionConfigPath("delta", agentDirectory));
+  const value = readJsonConfig(join(agentDirectory, "settings.json"));
   if (value === undefined) return {};
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error("delta config: expected an object");
+    throw new Error("Pi settings: expected an object");
   }
 
-  const config = value as Record<string, unknown>;
-  const knownFields = new Set(["editPreviews", "syntaxTheme"]);
-  const unknownField = Object.keys(config).find((field) => !knownFields.has(field));
-  if (unknownField !== undefined) {
-    throw new Error(`delta config.${unknownField}: unknown field`);
+  const settings = value as Record<string, unknown>;
+  const config: Record<string, unknown> = {};
+  for (const field of ["editPreviews", "syntaxTheme"]) {
+    if (settings[field] !== undefined) config[field] = settings[field];
   }
+
   if (config.editPreviews !== undefined && typeof config.editPreviews !== "boolean") {
-    throw new Error("delta config.editPreviews: expected a boolean");
+    throw new Error("settings.editPreviews: expected a boolean");
   }
   if (config.syntaxTheme !== undefined) {
     if (typeof config.syntaxTheme !== "string" || config.syntaxTheme.trim() === "") {
-      throw new Error("delta config.syntaxTheme: expected a non-empty string");
+      throw new Error("settings.syntaxTheme: expected a non-empty string");
     }
-    safeInput(config.syntaxTheme, "delta config.syntaxTheme");
+    safeInput(config.syntaxTheme, "settings.syntaxTheme");
   }
 
   return config as DeltaConfig;

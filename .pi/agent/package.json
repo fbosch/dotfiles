@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@clack/prompts": "0.11.0",
+    "@resvg/resvg-js": "2.6.2",
     "@tanstack/charts": "0.16.2",
     "@toon-format/toon": "2.1.0",
     "effect": "4.0.0-beta.107",

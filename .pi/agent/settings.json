@@ -44,7 +44,7 @@
     "+extensions/permissions-mode.ts"
   ],
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
+  "defaultModel": "gpt-5.6-sol",
   "quickReplies": {
     "enabled": true
   },
@@ -112,5 +112,7 @@
       "improve-codebase-architecture",
       "grill-me"
     ]
-  }
+  },
+  "editPreviews": true,
+  "syntaxTheme": "Zenwritten Dark"
 }
