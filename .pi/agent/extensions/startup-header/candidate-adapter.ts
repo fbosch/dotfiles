@@ -16,9 +16,15 @@ import type { WorkspaceIdentity } from "./workspace";
 const execFileAsync = promisify(execFile);
 const FILE_LIST_MAX_BUFFER = 512 * 1024;
 const MAX_TARGETED_PATHSPECS = 8;
+export interface RepositoryFiles {
+  readonly files: readonly string[];
+  readonly truncated: boolean;
+}
+
 export async function inspectConfiguredCandidates(
   context: ExtensionContext,
   workspace: WorkspaceIdentity | undefined,
+  discoveredFiles?: RepositoryFiles,
 ): Promise<CandidateInspection> {
   if (context.isProjectTrusted() === false) {
     return inspectToolCandidates({ ancestors: [], projectTrusted: false });
@@ -35,10 +41,12 @@ export async function inspectConfiguredCandidates(
     const formatter = loadFormatterSettings(context);
     const lsp = loadLspSettings(context);
     const ancestors = buildAncestorChain(context.cwd, workspace.root);
-    const repositoryFiles = await discoverRepositoryFiles(
-      workspace.root,
-      candidatePathspecs(formatter, lsp, ancestors),
-    );
+    const repositoryFiles =
+      discoveredFiles ??
+      (await discoverRepositoryFiles(
+        workspace.root,
+        candidatePathspecs(formatter, lsp, ancestors),
+      ));
     return inspectToolCandidates({
       ancestors,
       files: repositoryFiles.files,
@@ -128,7 +136,7 @@ export function candidatePathspecs(
 export async function discoverRepositoryFiles(
   root: string,
   pathspecs: readonly string[] | undefined,
-): Promise<{ readonly files: readonly string[]; readonly truncated: boolean }> {
+): Promise<RepositoryFiles> {
   if (pathspecs?.length === 0) return { files: Object.freeze([]), truncated: false };
   // Git's pathspec evaluation costs more than parsing the full list once the set grows large.
   const targetedPathspecs =

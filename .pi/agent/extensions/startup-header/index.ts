@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { inspectConfiguredCandidates } from "./candidate-adapter";
+import {
+  discoverRepositoryFiles,
+  inspectConfiguredCandidates,
+  type RepositoryFiles,
+} from "./candidate-adapter";
 import type { CandidateInspection } from "./candidates";
 import { type ContextStripConfig, loadContextViewConfig } from "./context-strip";
 import {
@@ -19,11 +23,13 @@ import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
 export interface StartupHeaderDependencies {
   readonly inspectWorkspace: typeof inspectWorkspace;
   readonly inspectCandidates: typeof inspectConfiguredCandidates;
+  readonly inspectRepositoryFiles?: (cwd: string) => Promise<RepositoryFiles>;
 }
 
 const DEFAULT_DEPENDENCIES: StartupHeaderDependencies = {
   inspectWorkspace,
   inspectCandidates: inspectConfiguredCandidates,
+  inspectRepositoryFiles: (cwd) => discoverRepositoryFiles(cwd, undefined),
 };
 
 export default function startupHeader(
@@ -94,12 +100,15 @@ export default function startupHeader(
       contextViewConfig = config;
       requestRender();
     });
-    void dependencies
-      .inspectWorkspace(ctx.cwd)
-      .then(async (identity) => {
+    const workspacePromise = dependencies.inspectWorkspace(ctx.cwd);
+    const repositoryFilesPromise = (
+      dependencies.inspectRepositoryFiles ?? ((cwd) => discoverRepositoryFiles(cwd, undefined))
+    )(ctx.cwd);
+    void Promise.all([workspacePromise, repositoryFilesPromise])
+      .then(async ([identity, repositoryFiles]) => {
         if (!active) return;
         workspace = identity;
-        candidates = await dependencies.inspectCandidates(ctx, identity);
+        candidates = await dependencies.inspectCandidates(ctx, identity, repositoryFiles);
         if (active) requestRender();
       })
       .catch(() => {});

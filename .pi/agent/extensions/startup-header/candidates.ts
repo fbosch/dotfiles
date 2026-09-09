@@ -136,14 +136,16 @@ function inspectFormatters(
   if (filesTruncated) collector.overflow("files");
   let entries = 0;
   for (const rule of settings.rules) {
-    if (files !== undefined && !files.some((file) => matchesFormatterRule(rule, file))) continue;
     for (const command of rule.commands) {
       if (entries >= CANDIDATE_LIMITS.configuredEntries) {
         collector.overflow("configured-entries");
         return collector.result();
       }
       entries += 1;
-      if (formatterCommandApplies(command, ancestors, markerReader, collector)) {
+      if (
+        formatterCommandApplies(command, ancestors, markerReader, collector) &&
+        (files === undefined || files.some((file) => matchesFormatterRule(rule, file)))
+      ) {
         collector.add(command.command);
       }
     }
@@ -169,13 +171,14 @@ function inspectLsp(
       collector.overflow("configured-entries");
       return collector.result();
     }
+    if (!serverApplies(server, ancestors, markerReader, collector)) continue;
     if (
       files !== undefined &&
       !server.languages.some((language) => files.some((file) => languageApplies(language, file)))
     ) {
       continue;
     }
-    if (serverApplies(server, ancestors, markerReader, collector)) collector.add(server.id);
+    collector.add(server.id);
   }
   return collector.result();
 }
