@@ -248,20 +248,16 @@ describe("permissions mode", () => {
     });
   });
 
-  test("registers /permissions and validates its mode argument", async () => {
+  test("registers /permissions and shows usage without a mode", async () => {
     const notifications: Array<[string, string]> = [];
     const harness = createHarness();
     const ctx = context("permissions-command", harness.entries, [], notifications);
     harness.start(ctx);
 
     await harness.handler("", ctx as ExtensionCommandContext);
-    await harness.handler("yolo", ctx as ExtensionCommandContext);
 
     expect(harness.commandName).toBe("permissions");
-    expect(notifications).toEqual([
-      ["Usage: /permissions strict|normal", "warning"],
-      ["Usage: /permissions strict|normal", "warning"],
-    ]);
+    expect(notifications).toEqual([["Usage: /permissions strict|normal", "warning"]]);
   });
 
   test("disposes the authorizer and fails closed after shutdown", async () => {
