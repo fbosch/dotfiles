@@ -1,11 +1,17 @@
 import { readFileSync } from "node:fs";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { join } from "node:path";
+import {
+  getAgentDir,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { readJsonConfig } from "../lib/extension-config";
 
 export const PLAN_MODE_STATUS = "Plan";
 
 const MODE_MODELS_ENTRY_TYPE = "plan-mode-models";
 const MODE_TRANSITION_MESSAGE_TYPE = "plan-mode-transition";
-const CONFIG_URL = new URL("../modes.json", import.meta.url);
+const PROMPTS_URL = new URL("../", import.meta.url);
 const PLAN_READ_ONLY_TOOLS = new Set([
   "list_symbols",
   "find_definition",
@@ -184,10 +190,14 @@ function loadAllowedTools(value: unknown): ReadonlySet<string> {
 }
 
 function loadModes(): ModesConfig {
-  const config: unknown = JSON.parse(readFileSync(CONFIG_URL, "utf8"));
+  const settings = readJsonConfig(join(getAgentDir(), "settings.json"));
+  if (isRecord(settings) === false) {
+    throw new Error("Pi settings must be an object");
+  }
 
+  const config = settings.modes;
   if (isRecord(config) === false) {
-    throw new Error("Mode config must be an object");
+    throw new Error("Mode config must be an object: settings.modes");
   }
 
   const build = loadModeObject("build", config.build);
@@ -203,7 +213,7 @@ function loadModes(): ModesConfig {
 }
 
 function loadPrompt(path: string): string {
-  const prompt = readFileSync(new URL(path, CONFIG_URL), "utf8").trim();
+  const prompt = readFileSync(new URL(path, PROMPTS_URL), "utf8").trim();
 
   if (prompt.length === 0) {
     throw new Error(`Mode prompt is empty: ${path}`);
