@@ -234,7 +234,9 @@
       "gh run*": "allow",
       "git show*": "allow",
       "just*": "allow",
-      "skills*": "allow"
+      "skills*": "allow",
+      "sandbox=$(mktemp *": "allow",
+      "set *": "allow"
     },
     "skill": "allow",
     "external_directory_read": {

@@ -69,16 +69,26 @@ function worktree_clone --description 'Bare-clone a repo and open the first work
     echo (set_color cyan)"Creating first worktree..."(set_color normal)
 
     set -l target_ref "$default_branch"
+    set -l create_orphan_branch false
     git -C "$name/.bare" show-ref --verify --quiet "refs/heads/$default_branch"
     if test $status -ne 0
-        set target_ref "origin/$default_branch"
+        git -C "$name/.bare" show-ref --verify --quiet "refs/remotes/origin/$default_branch"
+        if test $status -eq 0
+            set target_ref "origin/$default_branch"
+        else
+            set create_orphan_branch true
+        end
     end
 
     set -l repo_dir "$orig_dir/$name"
     set -l bare_dir "$repo_dir/.bare"
     set -l worktree_dir "$repo_dir/$default_branch"
 
-    git -C "$bare_dir" worktree add "$worktree_dir" "$target_ref"
+    if test "$create_orphan_branch" = true
+        git -C "$bare_dir" worktree add --orphan -b "$default_branch" "$worktree_dir"
+    else
+        git -C "$bare_dir" worktree add "$worktree_dir" "$target_ref"
+    end
     or begin
         cd "$orig_dir"
         rm -rf "$name"
