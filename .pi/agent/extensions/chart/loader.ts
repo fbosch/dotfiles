@@ -42,3 +42,15 @@ export function loadChartRuntime(): Promise<typeof import("./types")> {
   sharedRuntimePromise ??= import("./types");
   return sharedRuntimePromise;
 }
+
+export async function shutdownChartRuntime(): Promise<void> {
+  if (
+    sharedRuntimePromise === undefined &&
+    cachedPieModule === undefined &&
+    cachedBarModule === undefined &&
+    cachedLineModule === undefined &&
+    cachedScatterModule === undefined
+  )
+    return;
+  (await loadChartRuntime()).shutdownRasterizer();
+}

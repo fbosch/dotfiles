@@ -87,8 +87,8 @@
     "thinkingLevel": "off"
   },
   "charts": {
-    "fontFamily": "Zenbones Brainy",
-    "fontSize": 16
+    "fontFamily": "JetBrainsMono NF",
+    "fontSize": 14
   },
   "packages": [
     "npm:@gotgenes/pi-permission-system@31.1.1",

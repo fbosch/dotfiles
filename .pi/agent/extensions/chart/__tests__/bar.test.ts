@@ -55,6 +55,7 @@ type ChartExecute = (
 function registerTool(): ToolDefinition {
   let tool: ToolDefinition | undefined;
   chartExtension({
+    on: () => {},
     registerTool: (definition: ToolDefinition) => {
       if (definition.name === "chart_bar") tool = definition;
     },

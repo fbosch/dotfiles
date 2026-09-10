@@ -15,7 +15,7 @@ describe("lazy chart architecture", () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
-      "extension.default({ registerTool(tool) { names.push(tool.name); } });",
+      "extension.default({ on() {}, registerTool(tool) { names.push(tool.name); } });",
       'console.log(JSON.stringify({ names, native: process.moduleLoadList.filter((name) => name.toLowerCase().includes("resvg")) }));',
     ].join("\n");
     const child = Bun.spawn(

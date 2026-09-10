@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { promisify } from "node:util";
+import { Worker } from "node:worker_threads";
 import { getAgentDir, SettingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   type CellDimensions,
@@ -9,7 +10,7 @@ import {
   Image,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
-import { type ResvgRenderOptions, renderAsync } from "@resvg/resvg-js";
+import type { ResvgRenderOptions } from "@resvg/resvg-js";
 import type { Static, TSchema } from "typebox";
 import { CHART_COMPONENT_MARKER } from "./component-marker";
 
@@ -117,28 +118,79 @@ type NativeJob = {
   font: ResvgFontOptions;
   isObsolete: () => boolean;
   coalesceKey?: object;
-  resolve: (png: Buffer | undefined) => void;
+  cancelled: Int32Array;
+  resolve: (png: string | undefined) => void;
   reject: (error: unknown) => void;
 };
 
 let nativeRenderActive = false;
 const queuedNativeRenders: NativeJob[] = [];
 
+let rasterWorker: Worker | undefined;
+let activeJob: NativeJob | undefined;
+let rasterGeneration = 0;
+
+function finishNativeRender(error?: unknown, base64?: string): void {
+  const job = activeJob;
+  activeJob = undefined;
+  nativeRenderActive = false;
+  if (error !== undefined) job?.reject(error);
+  else job?.resolve(base64);
+  const next = queuedNativeRenders.shift();
+  if (next !== undefined) runNativeRender(next);
+}
+
+export function shutdownRasterizer(): void {
+  rasterGeneration++;
+  for (const job of queuedNativeRenders.splice(0)) job.reject(abortError());
+  const worker = rasterWorker;
+  rasterWorker = undefined;
+  if (activeJob !== undefined) Atomics.store(activeJob.cancelled, 0, 1);
+  finishNativeRender(abortError());
+  // Native work may finish before termination; never block Pi shutdown waiting for it.
+  if (worker !== undefined) void worker.terminate().catch(() => {});
+}
+
+function getRasterWorker(): Worker {
+  if (rasterWorker !== undefined) return rasterWorker;
+  const worker = new Worker(new URL("./raster-worker.cjs", import.meta.url));
+  rasterWorker = worker;
+  worker.on("message", (message: { base64?: string; error?: string }) => {
+    if (rasterWorker !== worker) return;
+    finishNativeRender(
+      message.error === undefined ? undefined : new Error(message.error),
+      message.base64,
+    );
+  });
+  const failed = (error: unknown) => {
+    if (rasterWorker !== worker) return;
+    rasterWorker = undefined;
+    finishNativeRender(error);
+  };
+  worker.on("error", failed);
+  worker.on("exit", (code) => failed(new Error(`chart raster worker exited (${code})`)));
+  // Raster callers own bounded timers; an idle or logically cancelled worker must not keep Pi alive.
+  worker.unref();
+  return worker;
+}
+
 function runNativeRender(job: NativeJob): void {
   nativeRenderActive = true;
-  void renderAsync(job.svg, { font: job.font })
-    .then(
-      (image) => (job.isObsolete() ? undefined : image.asPng()),
-      (error: unknown) => {
-        throw error;
-      },
-    )
-    .then(job.resolve, job.reject)
-    .finally(() => {
-      nativeRenderActive = false;
-      const next = queuedNativeRenders.shift();
-      if (next !== undefined) runNativeRender(next);
+  activeJob = job;
+  if (job.isObsolete()) {
+    finishNativeRender();
+    return;
+  }
+  try {
+    getRasterWorker().postMessage({
+      svg: job.svg,
+      font: job.font,
+      cancelled: job.cancelled,
+      maxPngBytes: MAX_PNG_BYTES,
     });
+  } catch (error) {
+    finishNativeRender(error);
+  }
 }
 
 /** Keeps one native renderer active and coalesces obsolete resize work into the latest request. */
@@ -147,12 +199,14 @@ function enqueueNativeRender(
   font: ResvgFontOptions,
   isObsolete: () => boolean,
   coalesceKey: object | undefined,
-): Promise<Buffer | undefined> {
+  cancelled: Int32Array,
+): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
     const job = {
       svg,
       font,
       isObsolete,
+      cancelled,
       ...(coalesceKey === undefined ? {} : { coalesceKey }),
       resolve,
       reject,
@@ -348,8 +402,8 @@ function abortError(): DOMException {
 }
 
 /**
- * Renders on resvg's native async worker. Abort and timeout reject the caller promptly,
- * but resvg 2.6.2 does not reliably stop in-flight native work, so late output is discarded.
+ * Rasterization, PNG encoding and base64 conversion stay in one lazy worker.
+ * Cancellation rejects promptly; shared flags skip remaining stages and late output is discarded.
  */
 export async function rasterizeSvg(
   svg: string,
@@ -366,6 +420,8 @@ export async function rasterizeSvg(
     throw new Error(`chart rasterization timeout must be between 1 and ${RASTERIZE_TIMEOUT_MS}ms`);
   }
 
+  const generation = rasterGeneration;
+  const cancelled = new Int32Array(new SharedArrayBuffer(4));
   let settled = false;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let rejectPending: ((reason: Error) => void) | undefined;
@@ -375,6 +431,7 @@ export async function rasterizeSvg(
   const abort = () => {
     if (settled) return;
     settled = true;
+    Atomics.store(cancelled, 0, 1);
     rejectPending?.(abortError());
   };
   signal?.addEventListener("abort", abort, { once: true });
@@ -382,6 +439,7 @@ export async function rasterizeSvg(
   timeout = setTimeout(() => {
     if (settled) return;
     settled = true;
+    Atomics.store(cancelled, 0, 1);
     rejectPending?.(new Error(`chart rasterization timed out after ${timeoutMs}ms`));
   }, timeoutMs);
 
@@ -390,23 +448,23 @@ export async function rasterizeSvg(
       getFontOptions(options.fontFamily ?? DEFAULT_FONT_FAMILY),
       pending,
     ]);
-    if (settled) throw abortError();
+    if (settled || generation !== rasterGeneration) throw abortError();
     signal?.throwIfAborted();
 
-    // Do not call asPng after logical cancellation: encoding is synchronous on the JS thread.
     const nativeRender = enqueueNativeRender(
       svg,
       font,
       () => settled || signal?.aborted === true,
       options.coalesceKey,
+      cancelled,
     );
     const png = await Promise.race([nativeRender, pending]);
     if (png === undefined || settled || signal?.aborted) throw abortError();
-    if (png.byteLength > MAX_PNG_BYTES) throw new Error("chart PNG exceeded the resource limit");
     settled = true;
-    return png.toString("base64");
+    return png;
   } finally {
     settled = true;
+    Atomics.store(cancelled, 0, 1);
     if (timeout !== undefined) clearTimeout(timeout);
     signal?.removeEventListener("abort", abort);
   }
@@ -474,7 +532,8 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     return typeof value === "object" && value !== null && CHART_COMPONENT_MARKER in value;
   }
 
-  private readonly cache = new Map<string, string>();
+  // Stable Image identity lets Pi reuse Kitty uploads across unrelated input redraws.
+  private readonly cache = new Map<string, Image>();
   private readonly errors = new Set<string>();
   private readonly rasterQueueKey = {};
   private pending: { key: string; controller: AbortController; generation: number } | undefined;
@@ -517,19 +576,8 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
       cellHeightPx: dimensions.heightPx,
     };
     const cacheKey = rasterKeyString(key);
-    const png = this.cache.get(cacheKey);
-    if (png) {
-      const layout = this.renderer.getLayout(this.details, dimensions, widthCells);
-      return new Image(
-        png,
-        "image/png",
-        { fallbackColor: (text) => this.theme.fg("toolOutput", text) },
-        {
-          maxWidthCells: widthCells,
-          maxHeightCells: layout.heightCells,
-        },
-      ).render(width);
-    }
+    const image = this.cache.get(cacheKey);
+    if (image) return image.render(width);
     if (this.errors.has(cacheKey)) {
       return [truncateToWidth(this.theme.fg("error", this.renderer.unavailableText), width)];
     }
@@ -568,7 +616,15 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     })
       .then((png) => {
         if (controller.signal.aborted || this.pending?.generation !== generation) return;
-        this.cache.set(cacheKey, png);
+        this.cache.set(
+          cacheKey,
+          new Image(
+            png,
+            "image/png",
+            { fallbackColor: (text) => this.theme.fg("toolOutput", text) },
+            { maxWidthCells: key.widthCells, maxHeightCells: layout.heightCells },
+          ),
+        );
         while (this.cache.size > MAX_CACHED_RASTERS) {
           const oldestKey = this.cache.keys().next().value;
           if (oldestKey !== undefined) this.cache.delete(oldestKey);

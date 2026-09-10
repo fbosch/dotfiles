@@ -38,6 +38,7 @@ function chartPoints(svg: string): Array<[number, number]> {
 function registerTool(): ToolDefinition {
   let tool: ToolDefinition | undefined;
   chartExtension({
+    on: () => {},
     registerTool: (definition: ToolDefinition) => {
       if (definition.name === "chart_line") tool = definition;
     },

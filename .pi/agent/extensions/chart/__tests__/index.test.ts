@@ -95,6 +95,7 @@ type PieChartExecute = (
 function registerTools(): ToolDefinition[] {
   const tools: ToolDefinition[] = [];
   chartExtension({
+    on: () => {},
     registerTool: (definition: ToolDefinition) => tools.push(definition),
   } as unknown as ExtensionAPI);
   return tools;
