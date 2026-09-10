@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers four tools in a fresh process without loading the native renderer", async () => {
+  test("registers five tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -36,7 +36,7 @@ describe("lazy chart architecture", () => {
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
     expect(JSON.parse(stdout)).toEqual({
-      names: ["chart_pie", "chart_bar", "chart_scatter", "chart_line"],
+      names: ["chart_pie", "chart_bar", "chart_scatter", "chart_line", "chart_histogram"],
       native: [],
     });
   });
@@ -77,6 +77,7 @@ describe("lazy chart architecture", () => {
       );
       expect(staticGraph.join("\n")).not.toContain("@resvg/resvg-js");
       expect(staticGraph.join("\n")).not.toContain("@tanstack/charts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
         fileName.endsWith(".js"),
       );
@@ -98,17 +99,20 @@ describe("lazy chart architecture", () => {
       expect(
         outputSources.some((source) => source.includes("// extensions/chart/types/scatter.ts")),
       ).toBe(true);
+      expect(
+        outputSources.some((source) => source.includes("// extensions/chart/types/histogram.ts")),
+      ).toBe(true);
     } finally {
       await rm(outputDirectory, { recursive: true, force: true });
     }
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
-    const adapter = loadChartType("bar");
+    const adapter = loadChartType("histogram");
     const runtime = loadChartRuntime();
-    expect(loadChartType("bar")).toBe(adapter);
+    expect(loadChartType("histogram")).toBe(adapter);
     expect(loadChartRuntime()).toBe(runtime);
-    expect(await loadChartType("bar")).toBe(await adapter);
+    expect(await loadChartType("histogram")).toBe(await adapter);
     expect(await loadChartRuntime()).toBe(await runtime);
   });
 

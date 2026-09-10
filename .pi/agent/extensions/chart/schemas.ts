@@ -151,3 +151,28 @@ export type NumericLineChartInput = Static<typeof numericLineChartVariant>;
 export type TemporalLineChartInput = Static<typeof temporalLineChartVariant>;
 export type LineChartInput = Static<typeof lineChartVariant>;
 export type ScatterChartInput = Static<typeof scatterChartVariant>;
+
+export const MAX_HISTOGRAM_SAMPLES = 200;
+export const MAX_HISTOGRAM_BINS = 50;
+const histogramOptions = {
+  data: Type.Array(Type.Number(), { minItems: 1, maxItems: MAX_HISTOGRAM_SAMPLES }),
+  bins: Type.Optional(
+    Type.Integer({
+      minimum: 1,
+      maximum: MAX_HISTOGRAM_BINS,
+      description:
+        "Equal-width bin count; defaults to ceil(sqrt(sample count)). Constant samples use one bin.",
+    }),
+  ),
+  title: chartTitle,
+  ...axisLabels,
+};
+export const chartHistogramParameters = Type.Object(histogramOptions, {
+  additionalProperties: false,
+});
+export const histogramChartVariant = Type.Object(
+  { type: Type.Literal("histogram"), ...histogramOptions },
+  { additionalProperties: false },
+);
+export type HistogramParameters = Static<typeof chartHistogramParameters>;
+export type HistogramChartInput = Static<typeof histogramChartVariant>;

@@ -1,15 +1,17 @@
-export type ChartTypeId = "pie" | "bar" | "line" | "scatter";
+export type ChartTypeId = "pie" | "bar" | "line" | "scatter" | "histogram";
 
 export type ChartModules = {
   pie: typeof import("./types/pie");
   bar: typeof import("./types/bar");
   line: typeof import("./types/line");
+  histogram: typeof import("./types/histogram");
   scatter: typeof import("./types/scatter");
 };
 
 let cachedPieModule: Promise<ChartModules["pie"]> | undefined;
 let cachedBarModule: Promise<ChartModules["bar"]> | undefined;
 let cachedLineModule: Promise<ChartModules["line"]> | undefined;
+let cachedHistogramModule: Promise<ChartModules["histogram"]> | undefined;
 let cachedScatterModule: Promise<ChartModules["scatter"]> | undefined;
 let sharedRuntimePromise: Promise<typeof import("./types")> | undefined;
 
@@ -21,6 +23,7 @@ export function loadChartType(type: "pie"): Promise<ChartModules["pie"]>;
 export function loadChartType(type: "bar"): Promise<ChartModules["bar"]>;
 export function loadChartType(type: "line"): Promise<ChartModules["line"]>;
 export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>;
+export function loadChartType(type: "histogram"): Promise<ChartModules["histogram"]>;
 export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartTypeId]> {
   switch (type) {
     case "pie":
@@ -32,6 +35,9 @@ export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartType
     case "line":
       cachedLineModule ??= import("./types/line");
       return cachedLineModule;
+    case "histogram":
+      cachedHistogramModule ??= import("./types/histogram");
+      return cachedHistogramModule;
     case "scatter":
       cachedScatterModule ??= import("./types/scatter");
       return cachedScatterModule;
@@ -49,7 +55,8 @@ export async function shutdownChartRuntime(): Promise<void> {
     cachedPieModule === undefined &&
     cachedBarModule === undefined &&
     cachedLineModule === undefined &&
-    cachedScatterModule === undefined
+    cachedScatterModule === undefined &&
+    cachedHistogramModule === undefined
   )
     return;
   (await loadChartRuntime()).shutdownRasterizer();

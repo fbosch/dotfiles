@@ -4,12 +4,14 @@ import { registerChartTools } from "./metadata";
 
 export type {
   BarParameters,
+  HistogramParameters,
   LineParameters,
   PieParameters,
   ScatterParameters,
 } from "./metadata";
 export {
   chartBarParameters,
+  chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,

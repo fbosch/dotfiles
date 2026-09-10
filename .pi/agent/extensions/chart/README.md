@@ -1,13 +1,14 @@
 # Chart extension
 
-The enabled chart extension registers four focused tools:
+The enabled chart extension registers five focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
 - `chart_line` renders numeric or temporal points as a single-series line chart. It accepts `null` y values as gaps and optional `markers`.
 - `chart_scatter` renders one numeric x/y series as uniform, fixed-size dots. Points retain their input order; unordered and duplicate coordinates are valid. Optional point `label` values are shown beside their dots.
+- `chart_histogram` bins raw numeric samples into a count histogram.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. Pi's existing prefix-based discovery still finds the four `chart_*` tools. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. Pi's existing prefix-based discovery still finds the five `chart_*` tools. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -18,6 +19,20 @@ Result rendering remains synchronous for Pi. The result slot starts loading on i
 ## Scatter charts
 
 `chart_scatter` accepts between 2 and 200 rows of `{ x, y, label? }`. Both positions must be finite numbers. `title`, `xLabel`, and `yLabel` are optional. It has no series, grouping, color, or bubble-size channels.
+
+## Histograms
+
+`chart_histogram` accepts `data` as 1–200 finite numeric samples. Optional `bins` is an integer from 1 through 50. The default is `ceil(sqrt(sample count))`, capped at 50. Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Labels are trimmed and cannot be blank. The Y axis always shows integer counts and defaults to the label `Count`.
+
+Bins divide the observed minimum-to-maximum range equally. Each interval includes its lower boundary and excludes its upper boundary, except the last bin, which includes the maximum. Exact internal boundaries go to the bin on their right. Negative samples and duplicates are retained; input order does not affect counts. Empty bins are retained.
+
+Constant samples use one centered bin, even when `bins` is supplied, with padding `max(0.5, abs(value) * 0.01)` on each side. Ranges that overflow, or bin boundaries that collapse at floating-point precision, fail explicitly. Rescale the samples or request fewer bins. Text summaries and saved details retain exact computed boundaries and counts; axis ticks are abbreviated for display.
+
+```json
+{ "data": [-2, -1, 0, 0, 2], "bins": 4, "title": "Samples", "xLabel": "Value" }
+```
+
+This produces counts `1, 1, 2, 1` for `[-2, -1)`, `[-1, 0)`, `[0, 1)`, and `[1, 2]`.
 
 ## Font configuration
 

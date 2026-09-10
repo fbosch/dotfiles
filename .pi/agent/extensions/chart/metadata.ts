@@ -7,26 +7,31 @@ import { type ChartTypeId, loadChartRuntime, loadChartType } from "./loader";
 import {
   type BarParameters,
   chartBarParameters,
+  chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  type HistogramParameters,
   type LineParameters,
   type PieParameters,
   type ScatterParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
+import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 
 export type {
   BarParameters,
+  HistogramParameters,
   LineParameters,
   PieParameters,
   ScatterParameters,
 } from "./schemas";
 export {
   chartBarParameters,
+  chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
@@ -42,7 +47,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
   return details.type === "pie" ||
     details.type === "bar" ||
     details.type === "line" ||
-    details.type === "scatter"
+    details.type === "scatter" ||
+    details.type === "histogram"
     ? details.type
     : fallback;
 }
@@ -287,9 +293,58 @@ export function createScatterChartTool(): ToolDefinition<
   };
 }
 
+export function createHistogramChartTool(): ToolDefinition<
+  typeof chartHistogramParameters,
+  HistogramChartDetails
+> {
+  return {
+    name: "chart_histogram",
+    label: "Chart histogram",
+    description:
+      "Render a count histogram from 1-200 finite numeric samples with automatic equal-width bins or an optional bin count (1-50). Optional title, xLabel, and yLabel (default Count).",
+    promptSnippet: "Render count histograms from numeric samples",
+    parameters: chartHistogramParameters,
+    async execute(_toolCallId, parameters: HistogramParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartHistogramParameters, parameters))
+        throw new Error("invalid histogram chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("histogram")]);
+      signal?.throwIfAborted();
+      const input: HistogramChartInput = { ...parameters, type: "histogram" };
+      if (!Value.Check(module.histogramChartVariant, input))
+        throw new Error("invalid histogram chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.histogramChartRenderer.createDetails(
+        module.histogramChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.histogramChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.histogramChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("histogram", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
   pi.registerTool(createScatterChartTool());
   pi.registerTool(createLineChartTool());
+  pi.registerTool(createHistogramChartTool());
 }

@@ -268,20 +268,23 @@ describe("pie chart", () => {
     const bar = registerTool("chart_bar");
     const scatter = registerTool("chart_scatter");
     const line = registerTool("chart_line");
+    const histogram = registerTool("chart_histogram");
 
     expect(registerTools().map((tool) => tool.name)).toEqual([
       "chart_pie",
       "chart_bar",
       "chart_scatter",
       "chart_line",
+      "chart_histogram",
     ]);
-    expect([pie.name, bar.name, scatter.name, line.name]).toEqual([
+    expect([pie.name, bar.name, scatter.name, line.name, histogram.name]).toEqual([
       "chart_pie",
       "chart_bar",
       "chart_scatter",
       "chart_line",
+      "chart_histogram",
     ]);
-    for (const tool of [pie, bar, scatter, line]) {
+    for (const tool of [pie, bar, scatter, line, histogram]) {
       expect(tool.renderShell).toBe("self");
       const renderCall = tool.renderCall;
       if (renderCall === undefined) throw new Error(`${tool.name} call renderer is missing`);

@@ -95,6 +95,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "histogram": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("histogram"),
+          ]);
+          const details = module.histogramChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.histogramChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.histogramChartRenderer,
+          );
+          break;
+        }
         case "line": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
           const details = module.lineChartRenderer.deserializeDetails(this.details);

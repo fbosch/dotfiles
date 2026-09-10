@@ -119,6 +119,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("chart_bar")).toBe(false);
     expect(isDeferredToolName("chart_line")).toBe(false);
     expect(isDeferredToolName("chart_scatter")).toBe(false);
+    expect(isDeferredToolName("chart_histogram")).toBe(false);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -160,8 +161,9 @@ describe("tool discovery", () => {
         dummyTool("chart_pie", "Render a compact pie chart from labeled nonnegative values"),
         dummyTool("chart_bar", "Render a compact horizontal bar chart from labeled signed values"),
         dummyTool("chart_line", "Render a single-series numeric or temporal line chart"),
+        dummyTool("chart_histogram", "Render a count histogram from numeric samples"),
       ],
-      activeTools: ["read", "chart_pie", "chart_bar", "chart_line"],
+      activeTools: ["read", "chart_pie", "chart_bar", "chart_line", "chart_histogram"],
     });
 
     await harness.discoverResources();
@@ -170,6 +172,7 @@ describe("tool discovery", () => {
       "chart_pie",
       "chart_bar",
       "chart_line",
+      "chart_histogram",
       "search_tools",
     ]);
     expect((await harness.search("chart line", 1)).details).toEqual({
@@ -181,6 +184,7 @@ describe("tool discovery", () => {
       "chart_pie",
       "chart_bar",
       "chart_line",
+      "chart_histogram",
       "search_tools",
     ]);
   });

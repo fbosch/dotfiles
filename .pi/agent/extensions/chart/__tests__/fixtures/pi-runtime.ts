@@ -77,6 +77,23 @@ export default function (pi: ExtensionAPI): void {
       const { barChartRenderer: bar } = await loadChartType("bar");
       await check(pie, pie.createDetails(data, settings), ctx.ui.theme);
       await check(bar, bar.createDetails(data, settings), ctx.ui.theme);
+      const { histogramChartRenderer: histogram } = await loadChartType("histogram");
+      assert.ok(pi.getActiveTools().includes("chart_histogram"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_histogram"));
+      await check(
+        histogram,
+        histogram.createDetails(
+          histogram.parseParameters({
+            type: "histogram",
+            data: [-2, -1, 0, 0, 2],
+            bins: 4,
+            title: "Samples",
+            xLabel: "Value",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();
