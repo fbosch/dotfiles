@@ -198,9 +198,13 @@ describe("instruction fragments", () => {
 
   test("injects fragments for available tools, including inactive deferred tools", () => {
     let handler:
-      | ((event: BeforeAgentStartEvent, ctx: ExtensionContext) => BeforeAgentStartEventResult | undefined)
+      | ((
+          event: BeforeAgentStartEvent,
+          ctx: ExtensionContext,
+        ) => BeforeAgentStartEventResult | undefined)
       | undefined;
     let availableTools = ["subagent", "todo", "ffgrep"];
+    const pi = {
       getAllTools: () => availableTools.map((name) => ({ name })),
       on(event: string, registeredHandler: typeof handler) {
         if (event === "before_agent_start") handler = registeredHandler;
@@ -219,10 +223,10 @@ describe("instruction fragments", () => {
     expect(systemPrompt).toContain("# Subagent orchestration");
     expect(systemPrompt).toContain("# Task tracking");
 
-    activeTools = ["read"];
-    const inactiveButAvailablePrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(inactiveButAvailablePrompt).toContain("# Subagent orchestration");
-    expect(inactiveButAvailablePrompt).toContain("# Task tracking");
+    availableTools = ["todo"];
+    const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+    expect(taskSystemPrompt).toContain("# Task tracking");
+    expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
 
     availableTools = ["read"];
     expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();

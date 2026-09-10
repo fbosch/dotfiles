@@ -163,6 +163,7 @@ describe("gantt chart", () => {
 
   test("retains narrow progress fills and allocates wrapped legends and tick bands", () => {
     const narrowInput: GanttChartInput = {
+      type: "gantt",
       tasks: Array.from({ length: 8 }, (_, index) => ({
         id: `task-${index}`,
         label: `Task ${index}`,
@@ -177,15 +178,13 @@ describe("gantt chart", () => {
       { imageWidthCells: 20, fontFamily: "sans-serif" },
     );
     const layout = ganttChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, 20);
-    const svg = ganttChartRenderer.renderSvg(
-      details,
-      theme,
-      layout,
-    );
+    const svg = ganttChartRenderer.renderSvg(details, theme, layout);
     expect(svg).toContain("progress-task-0");
     expect(svg).not.toContain("progress-label-task-0");
     for (let index = 0; index < 8; index += 1) expect(svg).toContain(`group-${index}`);
-    const textY = Array.from(svg.matchAll(/<text\\b[^>]*\\by="([0-9.e+-]+)"/g), (match) => Number(match[1]));
+    const textY = Array.from(svg.matchAll(/<text\\b[^>]*\\by="([0-9.e+-]+)"/g), (match) =>
+      Number(match[1]),
+    );
     expect(Math.min(...textY)).toBeGreaterThanOrEqual(0);
     expect(Math.max(...textY)).toBeLessThanOrEqual(layout.heightPx);
     expect(layout.plotY).toBeGreaterThan(layout.titleHeightPx + layout.tickHeightPx);
