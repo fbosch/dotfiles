@@ -11,7 +11,6 @@
     "+extensions/code-mode/index.ts",
     "+extensions/command-aliases.ts",
     "+extensions/command-palette/index.ts",
-    "+extensions/compaction-customization/index.ts",
     "+extensions/context-view-startup.ts",
     "+extensions/delta/index.ts",
     "+extensions/direnv/index.ts",
@@ -69,10 +68,6 @@
     "exec bun --no-install \"${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/lib/pi-npm.ts\" \"$@\"",
     "pi-npm"
   ],
-  "compaction": {
-    "threshold": 0.25,
-    "keepRecentPercent": 0.25
-  },
   "compactionModel": {
     "model": "openai-codex/gpt-5.6-luna",
     "thinkingLevel": "low",

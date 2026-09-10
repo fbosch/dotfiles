@@ -35,8 +35,8 @@ import {
   clamp,
   ESTIMATED_CHARACTER_WIDTH,
   finalizeChartLayout,
-  normalizeUniqueLabel,
   isRecord,
+  normalizeUniqueLabel,
   renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
@@ -194,7 +194,6 @@ function normalizePieChartTitle(title: string | undefined): string | undefined {
   }
   return normalizedTitle;
 }
-
 
 function isPieChartRow(value: unknown): value is PieChartRow {
   return (

@@ -41,8 +41,8 @@ import type { BarChartDetails, BarChartInput } from "./types/bar";
 import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
 import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
 import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell";
-import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
 import type { GanttChartDetails, GanttChartInput } from "./types/gantt";
+import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { NetworkChartDetails, NetworkChartInput } from "./types/network";
@@ -800,7 +800,7 @@ export function createNetworkChartTool(): ToolDefinition<
     name: "chart_network",
     label: "Chart network",
     description:
-      "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. Optional title.",
+      "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. Optional title and maxHeightCells (8-64 terminal cells); omitted maxHeightCells preserves the natural network height.",
     promptSnippet: "Render layered network and call-graph charts",
     parameters: chartNetworkParameters,
     async execute(_toolCallId, parameters: NetworkParameters, signal, _onUpdate, ctx) {

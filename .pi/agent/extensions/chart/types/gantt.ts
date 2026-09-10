@@ -34,12 +34,12 @@ import {
 } from "../types";
 
 import {
+  deserializeChartDetails,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
   formatNumber,
   getAccessibleDescription,
-  isRecord,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -197,23 +197,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeGanttChartDetails(value: unknown): GanttChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !isFiniteDetailsWidth(value)) return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "gantt",
-      ...validateGanttChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
-}
-
-function isFiniteDetailsWidth(value: unknown): value is { imageWidthCells: number } {
-  return isRecord(value) && Number.isFinite(value.imageWidthCells);
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateGanttChartInput(input as GanttChartInput),
+    (data, settings) => ({ type: "gantt", ...data, ...settings }),
+  );
 }
 
 export function getGanttDomain(details: GanttChartData): [number, number] {

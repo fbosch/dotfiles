@@ -24,7 +24,14 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  FIXED_CHART_PALETTE,
+  finalizeChartLayout,
+  normalizeUniqueLabels,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { StackedBarChartInput };
 export { stackedBarChartVariant };
@@ -41,19 +48,11 @@ export type StackedBarChartLayout = ChartLayout & {
 };
 
 // Fixed series-index colors keep identity stable across rows, including all-zero series.
-const COLORS = ["#579aca", "#e69f57", "#70ad89", "#b48ac6", "#d76d85", "#c3b45b"];
-
 export function validateStackedBarChartInput(input: StackedBarChartInput): StackedBarChartData {
   if (!Value.Check(stackedBarChartVariant, input))
     throw new Error("invalid stacked bar chart parameters");
-  const labels = (values: string[], name: string) => {
-    const normalized = values.map((value) => value.trim());
-    if (normalized.some((value) => !value) || new Set(normalized).size !== normalized.length)
-      throw new Error(`${name} must contain unique nonblank labels after trimming`);
-    return normalized;
-  };
-  const categories = labels(input.categories, "categories");
-  labels(
+  const categories = normalizeUniqueLabels(input.categories, "categories");
+  normalizeUniqueLabels(
     input.series.map((series) => series.name),
     "series names",
   );
@@ -98,20 +97,12 @@ const detailsSchema = Type.Object(
 export function deserializeStackedBarChartDetails(
   value: unknown,
 ): StackedBarChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !Number.isFinite(value.imageWidthCells))
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "stacked_bar",
-      ...validateStackedBarChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateStackedBarChartInput(input as StackedBarChartInput),
+    (data, settings) => ({ type: "stacked_bar", ...data, ...settings }),
+  );
 }
 
 export function getStackedBarTotals(details: StackedBarChartData): number[] {
@@ -187,7 +178,7 @@ export function renderStackedBarChartSvg(
   });
   const scene = createChartScene(
     defineChart({
-      marks: COLORS.slice(0, details.series.length).map((color, index) =>
+      marks: FIXED_CHART_PALETTE.slice(0, details.series.length).map((color, index) =>
         rect(
           segments.filter((segment) => segment.series === index),
           {
@@ -268,7 +259,7 @@ export function renderStackedBarChartSvg(
       const y = layout.heightPx - font * (0.5 + (details.series.length - 1 - index) * 1.4);
       const size = Math.min(font * 0.7, layout.widthPx * 0.1);
       return (
-        `<rect x="0" y="${y - size}" width="${size}" height="${size}" fill="${COLORS[index]}"/>` +
+        `<rect x="0" y="${y - size}" width="${size}" height="${size}" fill="${FIXED_CHART_PALETTE[index]}"/>` +
         text(
           shorten(series.name, layout.widthPx - size - font * 0.5),
           size + font * 0.3,

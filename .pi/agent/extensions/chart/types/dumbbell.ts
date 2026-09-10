@@ -25,7 +25,12 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  finalizeChartLayout,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { DumbbellChartInput };
 export { dumbbellChartVariant };
@@ -91,20 +96,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeDumbbellChartDetails(value: unknown): DumbbellChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !Number.isFinite(value.imageWidthCells))
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "dumbbell",
-      ...validateDumbbellChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateDumbbellChartInput(input as DumbbellChartInput),
+    (data, settings) => ({ type: "dumbbell", ...data, ...settings }),
+  );
 }
 
 export function getDumbbellDomain(details: DumbbellChartData): [number, number] {

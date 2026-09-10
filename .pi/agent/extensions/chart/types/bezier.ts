@@ -28,7 +28,12 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  finalizeChartLayout,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { BezierChartInput };
 export { bezierChartVariant };
@@ -91,15 +96,16 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeBezierChartDetails(value: unknown): BezierChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value)) return undefined;
-  const { imageWidthCells: _width, fontFamily, fontSize: _size, ...input } = value;
-  if (!Number.isFinite(_width) || fontFamily.trim().length === 0) return undefined;
-  try {
-    validateBezierChartInput(input);
-    return value;
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateBezierChartInput(input as BezierChartInput),
+    (_data, _settings, rawDetails) => rawDetails as unknown as BezierChartDetails,
+    {
+      validateSettings: (settings) =>
+        settings.fontFamily !== undefined && settings.fontFamily.trim().length > 0,
+    },
+  );
 }
 
 export function getBezierChartLayout(

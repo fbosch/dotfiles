@@ -64,6 +64,33 @@ describe("network chart", () => {
     expect(Value.Check(networkChartVariant, input)).toBe(true);
   });
 
+  test("validates and preserves the optional bounded height cap", () => {
+    expect(
+      Value.Check(chartNetworkParameters, {
+        nodes: input.nodes,
+        edges: input.edges,
+        maxHeightCells: 32,
+      }),
+    ).toBe(true);
+    expect(validateNetworkChartInput({ ...input, maxHeightCells: 32 })).toMatchObject({
+      maxHeightCells: 32,
+    });
+    expect(
+      Value.Check(chartNetworkParameters, {
+        nodes: input.nodes,
+        edges: input.edges,
+        maxHeightCells: 7,
+      }),
+    ).toBe(false);
+    expect(
+      Value.Check(chartNetworkParameters, {
+        nodes: input.nodes,
+        edges: input.edges,
+        maxHeightCells: 65,
+      }),
+    ).toBe(false);
+  });
+
   test("supports multiple parents, disconnected nodes, cycles, and self-loops", () => {
     expect(() => validateNetworkChartInput(input)).not.toThrow();
     expect(
@@ -231,9 +258,35 @@ describe("network chart", () => {
     );
     expect(result.content.map((part) => part.type)).toEqual(["text", "image"]);
   });
+  test("compacts broad layers to the requested height while retaining nodes", () => {
+    const nodes = Array.from({ length: 12 }, (_, index) => ({
+      id: `node-${index}`,
+      label: `Node ${index}`,
+    }));
+    const edges = nodes.slice(1).map((node, index) => ({
+      source: nodes[0]?.id ?? "",
+      target: node.id,
+      label: `edge-${index}`,
+    }));
+    const details = networkChartRenderer.createDetails(
+      networkChartRenderer.parseParameters({
+        type: "network",
+        nodes,
+        edges,
+        maxHeightCells: 8,
+      }),
+      { imageWidthCells: 60, fontFamily: "sans-serif" },
+    );
+    const layout = networkChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, 60);
+    const svg = networkChartRenderer.renderSvg(details, theme, layout);
+    expect(layout.heightCells).toBeLessThanOrEqual(8);
+    expect(svg.match(/<circle /g)?.length).toBe(12);
+    expect(svg.match(/>edge-\d+</g)?.length).toBeLessThan(edges.length);
+  });
+
   test("round-trips replay details and rejects malformed graph structures", () => {
     const details = networkChartRenderer.createDetails(
-      networkChartRenderer.parseParameters(input),
+      networkChartRenderer.parseParameters({ ...input, maxHeightCells: 24 }),
       { imageWidthCells: 60, fontFamily: "sans-serif", fontSize: 16 },
     );
     expect(networkChartRenderer.deserializeDetails(details)).toEqual(details);

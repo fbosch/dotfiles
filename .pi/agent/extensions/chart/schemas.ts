@@ -513,6 +513,8 @@ export type TreeChartInput = Static<typeof treeChartVariant>;
 
 export const MAX_NETWORK_NODES = 64;
 export const MAX_NETWORK_EDGES = 128;
+export const MIN_NETWORK_HEIGHT_CELLS = 8;
+export const MAX_NETWORK_HEIGHT_CELLS = 64;
 export const MAX_NETWORK_ID_LENGTH = 120;
 export const MAX_NETWORK_LABEL_LENGTH = 40;
 export const MAX_NETWORK_GROUP_LENGTH = 22;
@@ -565,6 +567,14 @@ const networkOptions = {
     description: "Directed edges; source calls or depends on target.",
   }),
   title: chartTitle,
+  maxHeightCells: Type.Optional(
+    Type.Integer({
+      minimum: MIN_NETWORK_HEIGHT_CELLS,
+      maximum: MAX_NETWORK_HEIGHT_CELLS,
+      description:
+        "Maximum rendered height in terminal cells; defaults to the natural network height.",
+    }),
+  ),
 };
 export const chartNetworkParameters = Type.Object(networkOptions, { additionalProperties: false });
 export const networkChartVariant = Type.Object(

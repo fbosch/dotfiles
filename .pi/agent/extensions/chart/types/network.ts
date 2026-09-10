@@ -36,12 +36,12 @@ import {
 } from "../types";
 
 import {
+  deserializeChartDetails,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
   fitTextToWidth,
   getAccessibleDescription,
-  isRecord,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -66,6 +66,7 @@ export type NetworkChartData = {
   nodes: NetworkChartNode[];
   edges: NetworkChartEdge[];
   title?: string;
+  maxHeightCells?: number;
 };
 
 export type NetworkChartDetails = ChartDetails &
@@ -80,6 +81,7 @@ export type NetworkChartLayout = ChartLayout & {
   plotHeightPx: number;
   labelWidthPx: number;
   fontSizePx: number;
+  edgeLabelLimit: number;
 };
 
 type NetworkComponent = {
@@ -185,7 +187,12 @@ export function validateNetworkChartInput(input: NetworkChartInput): NetworkChar
   }
 
   const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
-  return title === undefined ? { nodes, edges } : { nodes, edges, title };
+  return {
+    nodes,
+    edges,
+    ...(title === undefined ? {} : { title }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+  };
 }
 
 const detailsSchema = Type.Object(
@@ -199,26 +206,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeNetworkChartDetails(value: unknown): NetworkChartDetails | undefined {
-  if (
-    !isRecord(value) ||
-    value.type !== "network" ||
-    !Value.Check(detailsSchema, value) ||
-    !Number.isFinite(value.imageWidthCells)
-  ) {
-    return undefined;
-  }
-  const { type: _type, imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "network",
-      ...validateNetworkChartInput({ type: "network", ...input }),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateNetworkChartInput(input as NetworkChartInput),
+    (data, settings) => ({ type: "network", ...data, ...settings }),
+  );
 }
 
 function computeNetworkTopology(data: NetworkChartData): NetworkTopology {
@@ -628,11 +621,14 @@ function renderNetworkEdgeLabels(
   fontSizePx: number,
   plotHeightPx: number,
   plotWidthPx: number,
+  edgeLabelLimit: number,
 ): string {
   const size = Math.max(8, Math.round(fontSizePx * 0.85));
+  let labelsRendered = 0;
   return edges
     .flatMap((edge) => {
-      if (edge.label === undefined) return [];
+      if (edge.label === undefined || labelsRendered >= edgeLabelLimit) return [];
+      labelsRendered += 1;
       const y1 = plotHeightPx - edge.y1;
       const y2 = plotHeightPx - edge.y2;
       const above = y1 > 32;
@@ -694,7 +690,19 @@ export function getNetworkChartLayout(
   const topology = computeNetworkTopology(details);
   const maxBreadth = Math.max(1, ...topology.layers.map((layer) => layer.length));
   // Expand broad layers instead of compressing nodes into overlapping labels. The node bound keeps this finite.
-  const plotHeightPx = Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
+  const naturalPlotHeightPx = Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
+  const maxHeightPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(details.maxHeightCells * cells.heightPx);
+  const maxPlotHeightPx = Math.max(1, maxHeightPx - paddingPx * 2 - titleHeightPx);
+  // Pack broad layers into the requested bound; node positions remain ordered and inside the viewport.
+  const plotHeightPx = Math.min(naturalPlotHeightPx, maxPlotHeightPx);
+  const compacted = plotHeightPx < naturalPlotHeightPx;
+  const edgeLabelSizePx = Math.max(8, Math.round(fontSizePx * 0.85));
+  const edgeLabelLimit = compacted
+    ? Math.max(1, Math.floor(plotHeightPx / (edgeLabelSizePx * 1.5)))
+    : details.edges.length;
   const minimumLabelWidthPx = Math.round(cells.widthPx * 8);
   const labelWidthPx = Math.min(
     Math.round(widthPx * 0.4),
@@ -718,6 +726,7 @@ export function getNetworkChartLayout(
       plotHeightPx,
       labelWidthPx,
       fontSizePx,
+      edgeLabelLimit,
     },
     cells.heightPx,
   );
@@ -781,6 +790,7 @@ export function renderNetworkChartSvg(
     layout.fontSizePx,
     layout.plotHeightPx,
     layout.plotWidthPx,
+    layout.edgeLabelLimit,
   )}${nodeBody}`;
   const summary = getNetworkChartSummary(details);
   const accessibleDescription = getAccessibleDescription(

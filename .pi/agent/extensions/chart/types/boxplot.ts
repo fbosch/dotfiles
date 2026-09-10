@@ -27,7 +27,12 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  finalizeChartLayout,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { BoxplotChartInput };
 export { boxplotChartVariant };
@@ -83,20 +88,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeBoxplotChartDetails(value: unknown): BoxplotChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !Number.isFinite(value.imageWidthCells))
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "boxplot",
-      ...validateBoxplotChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateBoxplotChartInput(input as BoxplotChartInput),
+    (data, settings) => ({ type: "boxplot", ...data, ...settings }),
+  );
 }
 
 export function getBoxplotStatistics(values: readonly number[]) {

@@ -204,7 +204,7 @@ Task order is authored order. TanStack rectangle marks render the interval and c
 
 ## Layered network and call-graph charts
 
-`chart_network` accepts `nodes` and `edges`. There must be 1–64 nodes and at most 128 directed edges. Each node has a unique trimmed `id`, a trimmed `label`, and an optional trimmed `group`. Each edge references existing node IDs and may have a trimmed `label`. Duplicate directed edges are rejected. Empty edge lists, multiple parents, disconnected nodes, duplicate display labels, cycles, and self-loops are valid. Optional `title` is 1–80 characters.
+`chart_network` accepts `nodes` and `edges`. There must be 1–64 nodes and at most 128 directed edges. Each node has a unique trimmed `id`, a trimmed `label`, and an optional trimmed `group`. Each edge references existing node IDs and may have a trimmed `label`. Duplicate directed edges are rejected. Empty edge lists, multiple parents, disconnected nodes, duplicate display labels, cycles, and self-loops are valid. Optional `title` is 1–80 characters. `maxHeightCells` optionally caps the rendered height at 8–64 terminal cells; when omitted, the natural network height is used. Dense layers are compacted to fit the requested cap, retaining all nodes; edge labels are reduced deterministically when vertical space is constrained.
 
 ```json
 {
@@ -218,7 +218,8 @@ Task order is authored order. TanStack rectangle marks render the interval and c
     { "source": "cli", "target": "shared" },
     { "source": "parser", "target": "shared" }
   ],
-  "title": "Call graph"
+  "title": "Call graph",
+  "maxHeightCells": 32
 }
 ```
 

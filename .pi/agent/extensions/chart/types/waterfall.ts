@@ -25,7 +25,12 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  finalizeChartLayout,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { WaterfallChartInput };
 export { waterfallChartVariant };
@@ -77,20 +82,12 @@ const detailsSchema = Type.Object(
 export function deserializeWaterfallChartDetails(
   value: unknown,
 ): WaterfallChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !Number.isFinite(value.imageWidthCells))
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "waterfall",
-      ...validateWaterfallChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateWaterfallChartInput(input as WaterfallChartInput),
+    (data, settings) => ({ type: "waterfall", ...data, ...settings }),
+  );
 }
 
 export function getWaterfallRows(data: WaterfallChartData) {

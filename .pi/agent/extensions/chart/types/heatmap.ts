@@ -24,7 +24,13 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  finalizeChartLayout,
+  normalizeUniqueLabels,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { HeatmapChartInput };
 export { heatmapChartVariant };
@@ -43,17 +49,8 @@ export type HeatmapChartLayout = ChartLayout & {
 
 export function validateHeatmapChartInput(input: HeatmapChartInput): HeatmapChartData {
   if (!Value.Check(heatmapChartVariant, input)) throw new Error("invalid heatmap chart parameters");
-  const labels = (values: string[], name: string) => {
-    const normalized = values.map((value) => value.trim());
-    if (
-      normalized.some((value) => value.length === 0) ||
-      new Set(normalized).size !== normalized.length
-    )
-      throw new Error(`${name} must contain unique nonblank labels after trimming`);
-    return normalized;
-  };
-  const rows = labels(input.rows, "rows");
-  const columns = labels(input.columns, "columns");
+  const rows = normalizeUniqueLabels(input.rows, "rows");
+  const columns = normalizeUniqueLabels(input.columns, "columns");
   if (input.data.length !== rows.length || input.data.some((row) => row.length !== columns.length))
     throw new Error("heatmap data must match the rows and columns as a rectangular matrix");
   if (input.data.some((row) => row.some((value) => value !== null && !Number.isFinite(value))))
@@ -85,20 +82,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeHeatmapChartDetails(value: unknown): HeatmapChartDetails | undefined {
-  if (!Value.Check(detailsSchema, value) || !Number.isFinite(value.imageWidthCells))
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "heatmap",
-      ...validateHeatmapChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateHeatmapChartInput(input as HeatmapChartInput),
+    (data, settings) => ({ type: "heatmap", ...data, ...settings }),
+  );
 }
 
 export function getHeatmapDomain(details: HeatmapChartData): [number, number] | undefined {

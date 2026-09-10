@@ -57,6 +57,16 @@ export function normalizeUniqueLabel(
   return normalized;
 }
 
+export function normalizeUniqueLabels(values: readonly string[], name: string): string[] {
+  const normalized = values.map((value) => value.trim());
+  if (
+    normalized.some((value) => value.length === 0) ||
+    new Set(normalized).size !== normalized.length
+  ) {
+    throw new Error(`${name} must contain unique nonblank labels after trimming`);
+  }
+  return normalized;
+}
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
@@ -120,33 +130,44 @@ export function renderSvgDocument(options: SvgDocumentOptions): string {
 
 type DeserializedChartSettings = {
   imageWidthCells: number;
-  fontFamily: string | undefined;
+  fontFamily?: string;
   fontSize?: number;
 };
 
 type ChartDetailsFactory<TData, TDetails extends ChartDetails> = (
   data: TData,
   settings: DeserializedChartSettings,
+  rawDetails: Record<string, unknown>,
 ) => TDetails;
+
+type DeserializeChartDetailsOptions = {
+  precondition?: (value: unknown) => boolean;
+  validateSettings?: (settings: DeserializedChartSettings) => boolean;
+};
 
 export function deserializeChartDetails<TData, TDetails extends ChartDetails>(
   value: unknown,
   schema: TSchema,
   validate: (input: Record<string, unknown>) => TData,
   createDetails: ChartDetailsFactory<TData, TDetails>,
+  options?: DeserializeChartDetailsOptions,
 ): TDetails | undefined {
+  if (options?.precondition !== undefined && !options.precondition(value)) return undefined;
   if (!Value.Check(schema, value) || !isRecord(value)) return undefined;
   const { imageWidthCells, fontFamily, fontSize, ...input } = value;
   if (typeof imageWidthCells !== "number" || !Number.isFinite(imageWidthCells)) return undefined;
   if (fontFamily !== undefined && typeof fontFamily !== "string") return undefined;
   if (fontSize !== undefined && typeof fontSize !== "number") return undefined;
+  const settings = {
+    imageWidthCells,
+    ...(fontFamily === undefined ? {} : { fontFamily }),
+    ...(fontSize === undefined ? {} : { fontSize }),
+  };
+  if (options?.validateSettings !== undefined && !options.validateSettings(settings))
+    return undefined;
   try {
     const data = validate(input);
-    return createDetails(data, {
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    });
+    return createDetails(data, settings, value);
   } catch {
     return undefined;
   }

@@ -41,8 +41,8 @@ import {
   isRecord,
   normalizeBoundedText,
   paddedDomain,
-  renderSvgDocument,
   renderCartesianAxes,
+  renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
 

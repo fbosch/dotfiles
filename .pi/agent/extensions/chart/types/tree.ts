@@ -16,6 +16,7 @@ import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
+  MAX_TITLE_LENGTH,
   MAX_TREE_ID_LENGTH,
   MAX_TREE_LABEL_LENGTH,
   type TreeChartInput,
@@ -39,11 +40,11 @@ import {
 } from "../types";
 
 import {
+  deserializeChartDetails,
   estimateTextWidthPx,
   finalizeChartLayout,
   fitTextToWidth,
   getAccessibleDescription,
-  isRecord,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -76,8 +77,6 @@ export type TreeChartLayout = ChartLayout & {
 
 type TreeNode = TreeLayoutNode<TreeChartRow> & { label: string };
 type TreeLink = TreeLayoutLink<TreeChartRow>;
-
-const MAX_TITLE_LENGTH = 80;
 
 function normalizeRow(row: TreeChartInput["data"][number], index: number): TreeChartRow {
   const id = row.id.trim();
@@ -162,26 +161,12 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeTreeChartDetails(value: unknown): TreeChartDetails | undefined {
-  if (
-    !isRecord(value) ||
-    value.type !== "tree" ||
-    !Value.Check(detailsSchema, value) ||
-    !Number.isFinite(value.imageWidthCells)
-  ) {
-    return undefined;
-  }
-  const { type: _type, imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "tree",
-      ...validateTreeChartInput({ type: "tree", ...input }),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateTreeChartInput(input as TreeChartInput),
+    (data, settings) => ({ type: "tree", ...data, ...settings }),
+  );
 }
 
 function paddedDomain(values: readonly number[]): [number, number] {

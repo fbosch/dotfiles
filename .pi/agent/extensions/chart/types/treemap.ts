@@ -30,7 +30,13 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  deserializeChartDetails,
+  FIXED_CHART_PALETTE,
+  finalizeChartLayout,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { TreemapChartInput };
 export { treemapChartVariant };
@@ -41,8 +47,7 @@ export type TreemapChartLayout = ChartLayout & {
   plotHeightPx: number;
   fontSizePx: number;
 };
-const COLORS = ["#579aca", "#e69f57", "#70ad89", "#b48ac6", "#d76d85", "#c3b45b"];
-
+// Fixed group-index colors keep hierarchy identity stable across leaves.
 export function validateTreemapChartInput(input: TreemapChartInput): TreemapChartData {
   if (!hasBoundedTreemapHierarchy(input) || !Value.Check(treemapChartVariant, input))
     throw new Error("invalid treemap chart parameters");
@@ -88,24 +93,13 @@ const detailsSchema = Type.Object(
 );
 
 export function deserializeTreemapChartDetails(value: unknown): TreemapChartDetails | undefined {
-  if (
-    !hasBoundedTreemapHierarchy(value) ||
-    !Value.Check(detailsSchema, value) ||
-    !Number.isFinite(value.imageWidthCells)
-  )
-    return undefined;
-  const { imageWidthCells, fontFamily, fontSize, ...input } = value;
-  try {
-    return {
-      type: "treemap",
-      ...validateTreemapChartInput(input),
-      imageWidthCells,
-      fontFamily,
-      ...(fontSize === undefined ? {} : { fontSize }),
-    };
-  } catch {
-    return undefined;
-  }
+  return deserializeChartDetails(
+    value,
+    detailsSchema,
+    (input) => validateTreemapChartInput(input as TreemapChartInput),
+    (data, settings) => ({ type: "treemap", ...data, ...settings }),
+    { precondition: hasBoundedTreemapHierarchy },
+  );
 }
 
 type HierarchyRow = {
@@ -207,7 +201,7 @@ export function createTreemapScene(
           parentId: "parentId",
           // Unit contributions prevent squarify's squared-value arithmetic overflowing or underflowing.
           value: (row) => row.contribution / total,
-          fill: (node) => COLORS[node.data?.group ?? 0] ?? "#579aca",
+          fill: (node) => FIXED_CHART_PALETTE[node.data?.group ?? 0] ?? "#579aca",
           // Integer pixels avoid epsilon overshoot rejected by TanStack's strict layout bounds check.
           round: true,
           inset: 0,
@@ -277,7 +271,7 @@ export function renderTreemapChartSvg(
     .map((row, i) => {
       const y = layout.plotY + layout.plotHeightPx + font * (1.4 + i * 1.4);
       return (
-        `<rect x="0" y="${y - font * 0.7}" width="${font * 0.7}" height="${font * 0.7}" fill="${COLORS[row.group]}"/>` +
+        `<rect x="0" y="${y - font * 0.7}" width="${font * 0.7}" height="${font * 0.7}" fill="${FIXED_CHART_PALETTE[row.group]}"/>` +
         text(
           `${row.path[0]}: ${readable(row.total)}${details.unit ? ` ${details.unit}` : ""}`,
           font,
