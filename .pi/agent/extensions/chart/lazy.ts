@@ -131,6 +131,42 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "heatmap": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("heatmap"),
+          ]);
+          const details = module.heatmapChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.heatmapChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.heatmapChartRenderer,
+          );
+          break;
+        }
+        case "boxplot": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("boxplot"),
+          ]);
+          const details = module.boxplotChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.boxplotChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.boxplotChartRenderer,
+          );
+          break;
+        }
         case "line": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
           const details = module.lineChartRenderer.deserializeDetails(this.details);

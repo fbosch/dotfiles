@@ -271,6 +271,8 @@ describe("pie chart", () => {
     const line = registerTool("chart_line");
     const histogram = registerTool("chart_histogram");
     const bezier = registerTool("chart_bezier");
+    const heatmap = registerTool("chart_heatmap");
+    const boxplot = registerTool("chart_boxplot");
 
     expect(registerTools().map((tool) => tool.name)).toEqual([
       "chart_pie",
@@ -279,16 +281,29 @@ describe("pie chart", () => {
       "chart_line",
       "chart_histogram",
       "chart_bezier",
+      "chart_heatmap",
+      "chart_boxplot",
     ]);
-    expect([pie.name, bar.name, scatter.name, line.name, histogram.name, bezier.name]).toEqual([
+    expect([
+      pie.name,
+      bar.name,
+      scatter.name,
+      line.name,
+      histogram.name,
+      bezier.name,
+      heatmap.name,
+      boxplot.name,
+    ]).toEqual([
       "chart_pie",
       "chart_bar",
       "chart_scatter",
       "chart_line",
       "chart_histogram",
       "chart_bezier",
+      "chart_heatmap",
+      "chart_boxplot",
     ]);
-    for (const tool of [pie, bar, scatter, line, histogram, bezier]) {
+    for (const tool of [pie, bar, scatter, line, histogram, bezier, heatmap, boxplot]) {
       expect(tool.renderShell).toBe("self");
       const renderCall = tool.renderCall;
       if (renderCall === undefined) throw new Error(`${tool.name} call renderer is missing`);

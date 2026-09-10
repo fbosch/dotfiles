@@ -42,15 +42,27 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
         "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     usage = {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0,
              "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "total": 0}}
+    heatmap_parameters = {"rows": ["æ", "ø"], "columns": ["A", "B", "C"],
+                          "data": [[-2, 0, None], [1, 2, 4]], "colorScale": "diverging", "showValues": True}
+    heatmap_details = {"type": "heatmap", **heatmap_parameters,
+                       "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
+    boxplot_parameters = {"groups": [{"label": "æ", "values": [-2, 0, 0, 0, 1, 30]}, {"label": "ø", "values": [3]}], "showOutliers": True}
+    boxplot_details = {"type": "boxplot", **boxplot_parameters,
+                       "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     for index in range(32):
+        tool_name = "chart_heatmap" if index % 2 else "chart_histogram"
+        arguments = heatmap_parameters if index % 2 else {"data": [42, 146]}
+        saved_details = heatmap_details if index % 2 else details
+        if index % 3 == 2:
+            tool_name, arguments, saved_details = "chart_boxplot", boxplot_parameters, boxplot_details
         append({"role": "user", "content": "Show a histogram"})
         append({"role": "assistant", "api": "openai-responses", "provider": "openai",
                 "model": "gpt-4o", "usage": usage, "stopReason": "toolUse",
                 "content": [{"type": "toolCall", "id": f"chart-{index}",
-                             "name": "chart_histogram", "arguments": {"data": [42, 146]}}]})
+                             "name": tool_name, "arguments": arguments}]})
         append({"role": "toolResult", "toolCallId": f"chart-{index}",
-                "toolName": "chart_histogram", "content": [{"type": "text", "text": "Saved histogram"}],
-                "details": details, "isError": False})
+                "toolName": tool_name, "content": [{"type": "text", "text": "Saved histogram"}],
+                "details": saved_details, "isError": False})
     session.write_text("\n".join(json.dumps(entry) for entry in entries) + "\n")
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 60, 110, 1760, 2280))
@@ -71,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
             if select.select([master], [], [], 0.05)[0]:
                 os.read(master, 65536)
             events = [json.loads(line) for line in report.read_text().splitlines()] if report.exists() else []
-            assert not any(event["status"] == "unavailable" for event in events), "Histogram unavailable on session replay"
+            assert not any(event["status"] == "unavailable" for event in events), "Chart unavailable on session replay"
             reason = "reload" if reloaded else "startup"
             images = sum(event == {"reason": reason, "status": "image"} for event in events)
             if images == 32:

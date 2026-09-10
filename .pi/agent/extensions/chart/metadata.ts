@@ -7,12 +7,16 @@ import { type ChartTypeId, loadChartRuntime, loadChartType } from "./loader";
 import {
   type BarParameters,
   type BezierParameters,
+  type BoxplotParameters,
   chartBarParameters,
   chartBezierParameters,
+  chartBoxplotParameters,
+  chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  type HeatmapParameters,
   type HistogramParameters,
   type LineParameters,
   type PieParameters,
@@ -20,6 +24,8 @@ import {
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
 import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
+import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
+import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
@@ -28,6 +34,8 @@ import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 export type {
   BarParameters,
   BezierParameters,
+  BoxplotParameters,
+  HeatmapParameters,
   HistogramParameters,
   LineParameters,
   PieParameters,
@@ -36,6 +44,8 @@ export type {
 export {
   chartBarParameters,
   chartBezierParameters,
+  chartBoxplotParameters,
+  chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
@@ -54,7 +64,9 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "line" ||
     details.type === "scatter" ||
     details.type === "histogram" ||
-    details.type === "bezier"
+    details.type === "bezier" ||
+    details.type === "heatmap" ||
+    details.type === "boxplot"
     ? details.type
     : fallback;
 }
@@ -395,6 +407,102 @@ export function createBezierChartTool(): ToolDefinition<
   };
 }
 
+export function createHeatmapChartTool(): ToolDefinition<
+  typeof chartHeatmapParameters,
+  HeatmapChartDetails
+> {
+  return {
+    name: "chart_heatmap",
+    label: "Chart heatmap",
+    description:
+      "Render a labeled heatmap: rows and columns each contain 1-12 unique nonblank labels (1-22 characters, trimmed). Data is a matching rectangular number|null matrix (at most 144 cells), finite values ±1,000,000,000; null means missing, not zero. Optional colorScale sequential (default) or diverging (symmetric about zero), showValues (default false, at most 36 cells), title (1-80 characters). Includes a color legend and exact text summary.",
+    promptSnippet: "Render labeled matrix heatmaps with explicit missing cells",
+    parameters: chartHeatmapParameters,
+    async execute(_toolCallId, parameters: HeatmapParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartHeatmapParameters, parameters))
+        throw new Error("invalid heatmap chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("heatmap")]);
+      signal?.throwIfAborted();
+      const input: HeatmapChartInput = { ...parameters, type: "heatmap" };
+      if (!Value.Check(module.heatmapChartVariant, input))
+        throw new Error("invalid heatmap chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.heatmapChartRenderer.createDetails(
+        module.heatmapChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.heatmapChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.heatmapChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("heatmap", result, theme, context);
+    },
+  };
+}
+
+export function createBoxplotChartTool(): ToolDefinition<
+  typeof chartBoxplotParameters,
+  BoxplotChartDetails
+> {
+  return {
+    name: "chart_boxplot",
+    label: "Chart box plot",
+    description:
+      "Render horizontal box plots from groups of raw samples: 1-12 groups with unique trimmed nonblank labels (1-22 characters), each with 1-200 finite values within ±1,000,000,000. Type-7 quartiles, actual-sample whiskers within 1.5×IQR fences. Optional showOutliers (default true; hidden outliers retain the domain), title (1-80), xLabel and yLabel (1-40).",
+    promptSnippet: "Render box plots comparing sample distributions",
+    parameters: chartBoxplotParameters,
+    async execute(_toolCallId, parameters: BoxplotParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartBoxplotParameters, parameters))
+        throw new Error("invalid boxplot chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("boxplot")]);
+      signal?.throwIfAborted();
+      const input: BoxplotChartInput = { ...parameters, type: "boxplot" };
+      if (!Value.Check(module.boxplotChartVariant, input))
+        throw new Error("invalid boxplot chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.boxplotChartRenderer.createDetails(
+        module.boxplotChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.boxplotChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.boxplotChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("boxplot", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -402,4 +510,6 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createLineChartTool());
   pi.registerTool(createHistogramChartTool());
   pi.registerTool(createBezierChartTool());
+  pi.registerTool(createHeatmapChartTool());
+  pi.registerTool(createBoxplotChartTool());
 }

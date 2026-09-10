@@ -52,6 +52,10 @@ test.skipIf(!executable)(
       expect(stdout).toContain("CHART_RUNTIME_OK reload ");
       expect(stdout).toContain("CHART_REDRAW startup Rendering bezier chart");
       expect(stdout).toContain("CHART_REDRAW reload Rendering bezier chart");
+      expect(stdout).toContain("CHART_REDRAW startup Rendering heatmap");
+      expect(stdout).toContain("CHART_REDRAW reload Rendering heatmap");
+      expect(stdout).toContain("CHART_REDRAW startup Rendering box plot");
+      expect(stdout).toContain("CHART_REDRAW reload Rendering box plot");
     } finally {
       await rm(agentDir, { recursive: true, force: true });
     }

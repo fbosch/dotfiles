@@ -121,6 +121,48 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
         true,
       );
+      const { heatmapChartRenderer: heatmap } = await loadChartType("heatmap");
+      assert.ok(pi.getActiveTools().includes("chart_heatmap"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_heatmap"));
+      await check(
+        heatmap,
+        heatmap.createDetails(
+          heatmap.parseParameters({
+            type: "heatmap",
+            rows: ["æ", "ø"],
+            columns: ["A", "B", "C"],
+            data: [
+              [-2, 0, null],
+              [1, 2, 3],
+            ],
+            colorScale: "diverging",
+            showValues: true,
+            title: "Matrix",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
+      const { boxplotChartRenderer: boxplot } = await loadChartType("boxplot");
+      assert.ok(pi.getActiveTools().includes("chart_boxplot"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_boxplot"));
+      await check(
+        boxplot,
+        boxplot.createDetails(
+          boxplot.parseParameters({
+            type: "boxplot",
+            groups: [
+              { label: "æ", values: [-2, 0, 0, 0, 1, 30] },
+              { label: "ø", values: [3] },
+            ],
+            title: "Distributions",
+            xLabel: "Value",
+            yLabel: "Group",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();

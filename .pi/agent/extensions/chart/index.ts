@@ -5,6 +5,8 @@ import { registerChartTools } from "./metadata";
 export type {
   BarParameters,
   BezierParameters,
+  BoxplotParameters,
+  HeatmapParameters,
   HistogramParameters,
   LineParameters,
   PieParameters,
@@ -13,6 +15,8 @@ export type {
 export {
   chartBarParameters,
   chartBezierParameters,
+  chartBoxplotParameters,
+  chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,

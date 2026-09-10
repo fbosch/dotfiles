@@ -121,6 +121,8 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("chart_scatter")).toBe(false);
     expect(isDeferredToolName("chart_histogram")).toBe(false);
     expect(isDeferredToolName("chart_bezier")).toBe(false);
+    expect(isDeferredToolName("chart_heatmap")).toBe(false);
+    expect(isDeferredToolName("chart_boxplot")).toBe(false);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -164,6 +166,8 @@ describe("tool discovery", () => {
         dummyTool("chart_line", "Render a single-series numeric or temporal line chart"),
         dummyTool("chart_histogram", "Render a count histogram from numeric samples"),
         dummyTool("chart_bezier", "Render an exact cubic Bezier segment"),
+        dummyTool("chart_heatmap", "Render a labeled matrix heatmap"),
+        dummyTool("chart_boxplot", "Render sample distributions as box plots"),
       ],
       activeTools: [
         "read",
@@ -172,6 +176,8 @@ describe("tool discovery", () => {
         "chart_line",
         "chart_histogram",
         "chart_bezier",
+        "chart_heatmap",
+        "chart_boxplot",
       ],
     });
 
@@ -183,6 +189,8 @@ describe("tool discovery", () => {
       "chart_line",
       "chart_histogram",
       "chart_bezier",
+      "chart_heatmap",
+      "chart_boxplot",
       "search_tools",
     ]);
     expect((await harness.search("chart line", 1)).details).toEqual({
@@ -196,6 +204,8 @@ describe("tool discovery", () => {
       "chart_line",
       "chart_histogram",
       "chart_bezier",
+      "chart_heatmap",
+      "chart_boxplot",
       "search_tools",
     ]);
   });

@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers six tools in a fresh process without loading the native renderer", async () => {
+  test("registers eight tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -43,6 +43,8 @@ describe("lazy chart architecture", () => {
         "chart_line",
         "chart_histogram",
         "chart_bezier",
+        "chart_heatmap",
+        "chart_boxplot",
       ],
       native: [],
     });
@@ -84,6 +86,7 @@ describe("lazy chart architecture", () => {
       );
       expect(staticGraph.join("\n")).not.toContain("@resvg/resvg-js");
       expect(staticGraph.join("\n")).not.toContain("@tanstack/charts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/boxplot.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
@@ -119,6 +122,12 @@ describe("lazy chart architecture", () => {
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
+    const boxplot = loadChartType("boxplot");
+    expect(loadChartType("boxplot")).toBe(boxplot);
+    expect(await loadChartType("boxplot")).toBe(await boxplot);
+    const heatmap = loadChartType("heatmap");
+    expect(loadChartType("heatmap")).toBe(heatmap);
+    expect(await loadChartType("heatmap")).toBe(await heatmap);
     const bezier = loadChartType("bezier");
     expect(loadChartType("bezier")).toBe(bezier);
     expect(await loadChartType("bezier")).toBe(await bezier);

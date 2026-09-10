@@ -204,3 +204,76 @@ export const bezierChartVariant = Type.Object(
 );
 export type BezierParameters = Static<typeof chartBezierParameters>;
 export type BezierChartInput = Static<typeof bezierChartVariant>;
+
+export const MAX_HEATMAP_SIZE = 12;
+export const MAX_HEATMAP_VALUE = 1_000_000_000;
+export const MAX_HEATMAP_VALUE_CELLS = 36;
+const heatmapLabels = Type.Array(
+  Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+  { minItems: 1, maxItems: MAX_HEATMAP_SIZE, uniqueItems: true },
+);
+const heatmapOptions = {
+  rows: heatmapLabels,
+  columns: heatmapLabels,
+  data: Type.Array(
+    Type.Array(
+      Type.Union([
+        Type.Number({ minimum: -MAX_HEATMAP_VALUE, maximum: MAX_HEATMAP_VALUE }),
+        Type.Null(),
+      ]),
+      { minItems: 1, maxItems: MAX_HEATMAP_SIZE },
+    ),
+    { minItems: 1, maxItems: MAX_HEATMAP_SIZE },
+  ),
+  colorScale: Type.Optional(
+    Type.Union([Type.Literal("sequential"), Type.Literal("diverging")], {
+      description:
+        "Sequential (default): observed min to max. Diverging: symmetric about zero. Null is missing, never zero.",
+    }),
+  ),
+  showValues: Type.Optional(
+    Type.Boolean({
+      description:
+        "Default false. Allowed for at most 36 cells; values are abbreviated and omitted when cells are too narrow.",
+    }),
+  ),
+  title: chartTitle,
+};
+export const chartHeatmapParameters = Type.Object(heatmapOptions, { additionalProperties: false });
+export const heatmapChartVariant = Type.Object(
+  { type: Type.Literal("heatmap"), ...heatmapOptions },
+  { additionalProperties: false },
+);
+export type HeatmapParameters = Static<typeof chartHeatmapParameters>;
+export type HeatmapChartInput = Static<typeof heatmapChartVariant>;
+
+const boxplotOptions = {
+  groups: Type.Array(
+    Type.Object(
+      {
+        label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+        values: Type.Array(Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }), {
+          minItems: 1,
+          maxItems: 200,
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    { minItems: 1, maxItems: 12 },
+  ),
+  showOutliers: Type.Optional(
+    Type.Boolean({
+      description:
+        "Show outlier dots (default true). Hidden outliers still affect the axis domain.",
+    }),
+  ),
+  title: chartTitle,
+  ...axisLabels,
+};
+export const chartBoxplotParameters = Type.Object(boxplotOptions, { additionalProperties: false });
+export const boxplotChartVariant = Type.Object(
+  { type: Type.Literal("boxplot"), ...boxplotOptions },
+  { additionalProperties: false },
+);
+export type BoxplotParameters = Static<typeof chartBoxplotParameters>;
+export type BoxplotChartInput = Static<typeof boxplotChartVariant>;
