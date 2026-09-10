@@ -13,6 +13,7 @@ export type {
   PieParameters,
   ScatterParameters,
   StackedBarParameters,
+  TreemapParameters,
   WaterfallParameters,
 } from "./metadata";
 export {
@@ -26,6 +27,7 @@ export {
   chartPieParameters,
   chartScatterParameters,
   chartStackedBarParameters,
+  chartTreemapParameters,
   chartWaterfallParameters,
 } from "./metadata";
 

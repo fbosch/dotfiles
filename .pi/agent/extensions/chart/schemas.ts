@@ -387,3 +387,89 @@ export const stackedBarChartVariant = Type.Object(
 );
 export type StackedBarParameters = Static<typeof chartStackedBarParameters>;
 export type StackedBarChartInput = Static<typeof stackedBarChartVariant>;
+
+export const MAX_TREEMAP_NODES = 64;
+export const MAX_TREEMAP_DEPTH = 4;
+const treemapLabel = Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" });
+const treemapLeaf = Type.Object(
+  { label: treemapLabel, value: Type.Number({ minimum: 0 }) },
+  { additionalProperties: false },
+);
+// Unroll the bounded hierarchy: provider schemas need no recursive references, and validation cannot recurse indefinitely.
+const treemapLevel3 = Type.Union([
+  treemapLeaf,
+  Type.Object(
+    {
+      label: treemapLabel,
+      children: Type.Array(treemapLeaf, { minItems: 1, maxItems: MAX_TREEMAP_NODES }),
+    },
+    { additionalProperties: false },
+  ),
+]);
+const treemapLevel2 = Type.Union([
+  treemapLeaf,
+  Type.Object(
+    {
+      label: treemapLabel,
+      children: Type.Array(treemapLevel3, { minItems: 1, maxItems: MAX_TREEMAP_NODES }),
+    },
+    { additionalProperties: false },
+  ),
+]);
+const treemapLevel1 = Type.Union([
+  treemapLeaf,
+  Type.Object(
+    {
+      label: treemapLabel,
+      children: Type.Array(treemapLevel2, { minItems: 1, maxItems: MAX_TREEMAP_NODES }),
+    },
+    { additionalProperties: false },
+  ),
+]);
+const treemapOptions = {
+  data: Type.Array(treemapLevel1, {
+    minItems: 1,
+    maxItems: 6,
+    description:
+      "1-6 top-level groups or leaves. At most 64 nodes total and 4 levels. Each node has label and exactly one of value or nonempty children. Sibling labels must be unique after trimming. Parents sum children; at least one leaf must be positive.",
+  }),
+  title: chartTitle,
+  unit: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" })),
+};
+export const chartTreemapParameters = Type.Object(treemapOptions, { additionalProperties: false });
+export const treemapChartVariant = Type.Object(
+  { type: Type.Literal("treemap"), ...treemapOptions },
+  { additionalProperties: false },
+);
+export type TreemapParameters = Static<typeof chartTreemapParameters>;
+export type TreemapChartInput = Static<typeof treemapChartVariant>;
+export type TreemapNodeInput = TreemapParameters["data"][number];
+
+/** Bound total traversal before TypeBox checks the nested shape, including persisted replay. */
+export function hasBoundedTreemapHierarchy(input: unknown): boolean {
+  if (
+    typeof input !== "object" ||
+    input === null ||
+    !("data" in input) ||
+    !Array.isArray(input.data)
+  )
+    return false;
+  const pending: { nodes: unknown[]; depth: number }[] = [{ nodes: input.data, depth: 1 }];
+  let count = 0;
+  while (pending.length) {
+    const level = pending.pop();
+    if (!level || level.depth > MAX_TREEMAP_DEPTH) return false;
+    count += level.nodes.length;
+    if (count > MAX_TREEMAP_NODES) return false;
+    for (const node of level.nodes) {
+      if (
+        typeof node === "object" &&
+        node !== null &&
+        "children" in node &&
+        Array.isArray(node.children)
+      )
+        pending.push({ nodes: node.children, depth: level.depth + 1 });
+    }
+  }
+  return true;
+}

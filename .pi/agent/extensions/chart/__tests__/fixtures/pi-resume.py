@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
                         "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     stacked_parameters = {"categories": ["æ", "ø", "å"], "series": [
         {"name": "First", "values": [1, 6, 0]}, {"name": "Second", "values": [3, 2, 0]}, {"name": "Empty", "values": [0, 0, 0]}]}
+    treemap_parameters = {"data": [{"label": "src", "children": [{"label": "æ.ts", "value": 12}, {"label": "ø.ts", "value": 8}, {"label": "å.ts", "value": 0}]}, {"label": "vendor", "value": 30}], "unit": "kB"}
+    treemap_details = {"type": "treemap", **treemap_parameters,
+                       "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     for index in range(32):
         tool_name = "chart_heatmap" if index % 2 else "chart_histogram"
         arguments = heatmap_parameters if index % 2 else {"data": [42, 146]}
@@ -73,6 +76,8 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
             saved_details = {"type": "stacked_bar", **arguments,
                              "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
             tool_name = "chart_stacked_bar"
+        if index % 7 == 6:
+            tool_name, arguments, saved_details = "chart_treemap", treemap_parameters, treemap_details
         append({"role": "user", "content": "Show a chart"})
         append({"role": "assistant", "api": "openai-responses", "provider": "openai",
                 "model": "gpt-4o", "usage": usage, "stopReason": "toolUse",

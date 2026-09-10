@@ -18,14 +18,17 @@ import {
   chartPieParameters,
   chartScatterParameters,
   chartStackedBarParameters,
+  chartTreemapParameters,
   chartWaterfallParameters,
   type DumbbellParameters,
   type HeatmapParameters,
   type HistogramParameters,
+  hasBoundedTreemapHierarchy,
   type LineParameters,
   type PieParameters,
   type ScatterParameters,
   type StackedBarParameters,
+  type TreemapParameters,
   type WaterfallParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
@@ -38,6 +41,7 @@ import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 import type { StackedBarChartDetails, StackedBarChartInput } from "./types/stacked-bar";
+import type { TreemapChartDetails, TreemapChartInput } from "./types/treemap";
 import type { WaterfallChartDetails, WaterfallChartInput } from "./types/waterfall";
 
 export type {
@@ -51,6 +55,7 @@ export type {
   PieParameters,
   ScatterParameters,
   StackedBarParameters,
+  TreemapParameters,
   WaterfallParameters,
 } from "./schemas";
 export {
@@ -64,6 +69,7 @@ export {
   chartPieParameters,
   chartScatterParameters,
   chartStackedBarParameters,
+  chartTreemapParameters,
   chartWaterfallParameters,
 } from "./schemas";
 
@@ -84,7 +90,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "boxplot" ||
     details.type === "waterfall" ||
     details.type === "dumbbell" ||
-    details.type === "stacked_bar"
+    details.type === "stacked_bar" ||
+    details.type === "treemap"
     ? details.type
     : fallback;
 }
@@ -668,6 +675,57 @@ export function createStackedBarChartTool(): ToolDefinition<
   };
 }
 
+export function createTreemapChartTool(): ToolDefinition<
+  typeof chartTreemapParameters,
+  TreemapChartDetails
+> {
+  return {
+    name: "chart_treemap",
+    label: "Chart treemap",
+    description:
+      "Render hierarchical bundle, directory, or module sizes as area-proportional treemap tiles. Data is 1-6 top-level nodes, at most 64 nodes total and 4 levels. Each node has label (1-22 characters, trimmed and unique among siblings) and exactly one of finite nonnegative value or nonempty children. Parents aggregate children without double-counting; aggregate totals must be finite and at least one leaf positive. Top-level colors, fitted hierarchical labels and sizes, exact summary including hidden/zero leaves. Optional title (1-80) and unit (1-22), trimmed and nonblank.",
+    promptSnippet: "Render hierarchical sizes as treemaps",
+    parameters: chartTreemapParameters,
+    async execute(_toolCallId, parameters: TreemapParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (
+        !hasBoundedTreemapHierarchy(parameters) ||
+        !Value.Check(chartTreemapParameters, parameters)
+      )
+        throw new Error("invalid treemap chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("treemap")]);
+      signal?.throwIfAborted();
+      const input: TreemapChartInput = { ...parameters, type: "treemap" };
+      if (!Value.Check(module.treemapChartVariant, input))
+        throw new Error("invalid treemap chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.treemapChartRenderer.createDetails(
+        module.treemapChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.treemapChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.treemapChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("treemap", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -680,4 +738,5 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createWaterfallChartTool());
   pi.registerTool(createDumbbellChartTool());
   pi.registerTool(createStackedBarChartTool());
+  pi.registerTool(createTreemapChartTool());
 }

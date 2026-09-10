@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers eleven focused tools:
+The enabled chart extension registers twelve focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -13,8 +13,9 @@ The enabled chart extension registers eleven focused tools:
 - `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
 - `chart_dumbbell` compares two values per labeled row with connected dots.
 - `chart_stacked_bar` compares nonnegative compositions across labeled categories.
+- `chart_treemap` compares hierarchical bundle, directory, or module sizes by area.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All eleven `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. All twelve `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -176,6 +177,35 @@ Values must be finite numbers from 0 through 1,000,000,000 inclusive. These are 
 Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text bounds apply before trimming; supplied text cannot be blank. Unknown fields and a caller-supplied `type` are rejected. Visible labels are shortened or omitted when space is insufficient, tick count decreases at narrow widths, and each legend entry gets its own line. Colors identify series consistently across rows, including all-zero series. The SVG description and tool summary always retain full labels, exact raw values, and exact raw category totals, even in normalized mode.
 
 TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG renderer own bar geometry. Unit coordinates protect subnormal raw domains from scale overflow. Saved details contain trimmed labels, original values, resolved `normalize`, and shared chart settings; replay revalidates them and recomputes stacks and totals. The lazy loader, full-resolution worker, cached image identities, and resume queue deadlines are unchanged.
+
+## Treemaps
+
+`chart_treemap` accepts `data`, an array of 1–6 top-level nodes. Each node has a `label` and exactly one of `value` or nonempty `children`. Labels are 1–22 characters, trimmed, nonblank, and unique among siblings after trimming. The tree has at most 64 nodes and four levels, counting top-level nodes as level one. The provider schema unrolls these levels without recursive references. A bounded traversal checks execution and replay inputs before schema validation.
+
+```json
+{
+  "data": [
+    { "label": "src", "children": [
+      { "label": "core", "children": [
+        { "label": "parse.ts", "value": 24 },
+        { "label": "render.ts", "value": 16 }
+      ] },
+      { "label": "empty.ts", "value": 0 }
+    ] },
+    { "label": "vendor", "value": 60 }
+  ],
+  "title": "Bundle sizes",
+  "unit": "kB"
+}
+```
+
+Leaves contain finite nonnegative numbers. Parents sum their children using JavaScript numbers without intermediate rounding; callers cannot supply parent values. Each aggregate and the overall total must be finite. All-zero trees are rejected with `treemap requires at least one positive leaf value`. Zero leaves retain their exact entries in the summary but consume no area. Optional `title` is 1–80 characters and `unit` is 1–22; both are trimmed and nonblank. Length bounds apply before trimming. Unknown fields, null values, and caller-supplied `type` are rejected.
+
+The installed TanStack `hierarchy/treemap` mark owns squarified tiling, parent containment, and fitted in-cell labels. The adapter supplies opaque positional node IDs, explicit parent IDs, and zero contributions for structural nodes, preventing double-counting. Leaf contributions are divided by the total for layout arithmetic; raw values remain unchanged. Authored sibling order is preserved. Native pixel rounding prevents floating-point edge overshoot from failing TanStack’s strict bounds check. Pixel rounding can hide subpixel leaves, and extreme ratios can underflow; neither changes the saved data or exact summary.
+
+Colors identify top-level groups in input order, including zero-valued groups in the legend. Tiles show hierarchical paths and sizes rounded to three significant digits when the label fits. TanStack omits labels that do not fit, and scene clip groups keep retained labels inside their own tiles when font substitution differs from text measurement. Legend entries occupy separate lines and shorten at narrow widths. The summary and SVG description retain every complete path as a JSON label array, each exact leaf value and parent total, and the overall total. Units are labels only; values are not converted.
+
+TanStack scenes and its SVG renderer feed the existing lazy loader and full-resolution worker. Saved details contain normalized input and shared font settings; replay validates the hierarchy and recomputes totals and layout. Raster scheduling, cached image identities, and resume deadlines are unchanged.
 
 ## Font configuration
 

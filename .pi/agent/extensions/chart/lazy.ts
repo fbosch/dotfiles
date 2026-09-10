@@ -203,6 +203,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "treemap": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("treemap"),
+          ]);
+          const details = module.treemapChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.treemapChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.treemapChartRenderer,
+          );
+          break;
+        }
         case "stacked_bar": {
           const [runtime, module] = await Promise.all([
             loadChartRuntime(),

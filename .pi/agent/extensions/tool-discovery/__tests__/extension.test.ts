@@ -126,6 +126,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("chart_waterfall")).toBe(false);
     expect(isDeferredToolName("chart_dumbbell")).toBe(false);
     expect(isDeferredToolName("chart_stacked_bar")).toBe(false);
+    expect(isDeferredToolName("chart_treemap")).toBe(false);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -174,6 +175,7 @@ describe("tool discovery", () => {
         dummyTool("chart_waterfall", "Render cumulative changes as a waterfall"),
         dummyTool("chart_dumbbell", "Render paired values as a dumbbell"),
         dummyTool("chart_stacked_bar", "Render nonnegative compositions as stacked bars"),
+        dummyTool("chart_treemap", "Render hierarchical sizes as treemaps"),
       ],
       activeTools: [
         "read",
@@ -187,6 +189,7 @@ describe("tool discovery", () => {
         "chart_waterfall",
         "chart_dumbbell",
         "chart_stacked_bar",
+        "chart_treemap",
       ],
     });
 
@@ -203,6 +206,7 @@ describe("tool discovery", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_treemap",
       "search_tools",
     ]);
     expect((await harness.search("chart line", 1)).details).toEqual({
@@ -221,6 +225,7 @@ describe("tool discovery", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_treemap",
       "search_tools",
     ]);
   });

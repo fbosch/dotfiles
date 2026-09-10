@@ -233,6 +233,32 @@ export default function (pi: ExtensionAPI): void {
           ctx.ui.theme,
         );
       }
+      const { treemapChartRenderer: treemap } = await loadChartType("treemap");
+      assert.ok(pi.getActiveTools().includes("chart_treemap"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_treemap"));
+      await check(
+        treemap,
+        treemap.createDetails(
+          treemap.parseParameters({
+            type: "treemap",
+            title: "Bundle sizes",
+            unit: "kB",
+            data: [
+              {
+                label: "src",
+                children: [
+                  { label: "æ.ts", value: 12 },
+                  { label: "ø.ts", value: 8 },
+                  { label: "å.ts", value: 0 },
+                ],
+              },
+              { label: "vendor", value: 30 },
+            ],
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();

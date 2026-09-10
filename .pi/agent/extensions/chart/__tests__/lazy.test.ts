@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers eleven tools in a fresh process without loading the native renderer", async () => {
+  test("registers twelve tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -48,6 +48,7 @@ describe("lazy chart architecture", () => {
         "chart_waterfall",
         "chart_dumbbell",
         "chart_stacked_bar",
+        "chart_treemap",
       ],
       native: [],
     });
@@ -93,6 +94,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/waterfall.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/dumbbell.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/stacked-bar.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/treemap.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
@@ -128,6 +130,9 @@ describe("lazy chart architecture", () => {
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
+    const treemap = loadChartType("treemap");
+    expect(loadChartType("treemap")).toBe(treemap);
+    expect(await loadChartType("treemap")).toBe(await treemap);
     const stackedBar = loadChartType("stacked_bar");
     expect(loadChartType("stacked_bar")).toBe(stackedBar);
     expect(await loadChartType("stacked_bar")).toBe(await stackedBar);
