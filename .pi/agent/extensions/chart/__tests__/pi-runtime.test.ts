@@ -60,6 +60,8 @@ test.skipIf(!executable)(
       expect(stdout).toContain("CHART_REDRAW reload Rendering waterfall");
       expect(stdout).toContain("CHART_REDRAW startup Rendering dumbbell chart");
       expect(stdout).toContain("CHART_REDRAW reload Rendering dumbbell chart");
+      expect(stdout).toContain("CHART_REDRAW startup Rendering stacked bar chart");
+      expect(stdout).toContain("CHART_REDRAW reload Rendering stacked bar chart");
     } finally {
       await rm(agentDir, { recursive: true, force: true });
     }

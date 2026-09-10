@@ -12,6 +12,7 @@ export type {
   LineParameters,
   PieParameters,
   ScatterParameters,
+  StackedBarParameters,
   WaterfallParameters,
 } from "./metadata";
 export {
@@ -24,6 +25,7 @@ export {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartStackedBarParameters,
   chartWaterfallParameters,
 } from "./metadata";
 

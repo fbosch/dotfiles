@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers ten focused tools:
+The enabled chart extension registers eleven focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -12,8 +12,9 @@ The enabled chart extension registers ten focused tools:
 - `chart_boxplot` compares labeled sample distributions with horizontal boxes and whiskers.
 - `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
 - `chart_dumbbell` compares two values per labeled row with connected dots.
+- `chart_stacked_bar` compares nonnegative compositions across labeled categories.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All ten `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. All eleven `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -151,6 +152,30 @@ Blue open rings identify the before series and smaller orange dots identify the 
 The domain covers both series with padding `max(span * 0.05, abs(min) * 1e-12, abs(max) * 1e-12, 1e-12)` on both sides. It does not force zero into the range. Constant, negative-only, and subnormal values remain valid. Marker gutters prevent endpoint clipping. Labels shorten to fit, tick count decreases at narrow widths, and row height grows with the configured font size and difference visibility.
 
 TanStack dot marks, scene rules, and its SVG renderer own the plot. Saved details contain normalized input, resolved series names and `showDifferences`, and shared chart settings. Replay revalidates details and recomputes the domain and differences. The lazy loader, full-resolution worker rasterizer, cached image identities, and resume queue deadlines are unchanged.
+
+## Stacked bar charts
+
+`chart_stacked_bar` requires `categories` (1–12 labels) and `series` (1–6 `{ name, values }` objects). Each values array must match the category count. Category labels and series names are 1–22 characters, trimmed, nonblank, and unique within their respective arrays after trimming. Categories run top to bottom; series stack left to right and appear in the legend in input order. X represents value and Y represents category.
+
+Values must be finite numbers from 0 through 1,000,000,000 inclusive. These are nonnegative composition values, not signed changes; use `chart_waterfall` for signed cumulative changes. Each category total must be finite and can reach 6,000,000,000. Totals use JavaScript addition in series order without rounding.
+
+```json
+{
+  "categories": ["North", "South", "No sales"],
+  "series": [
+    { "name": "Online", "values": [1, 6, 0] },
+    { "name": "Store", "values": [3, 2, 0] },
+    { "name": "Other", "values": [0, 0, 0] }
+  ],
+  "xLabel": "Sales"
+}
+```
+
+`normalize` defaults to `false`. The example uses a raw domain of `[0, 8]`, with category totals 4, 8, and 0. Set `normalize: true` to display each nonzero total as 100% on a `[0, 100]` domain with percent ticks: North becomes 25% Online and 75% Store, South becomes 75% Online and 25% Store. Zero totals stay zero without division. Zero segments have zero width; their series remain in the legend. An all-zero raw chart uses `[0, 1]` without inventing nonzero bars.
+
+Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text bounds apply before trimming; supplied text cannot be blank. Unknown fields and a caller-supplied `type` are rejected. Visible labels are shortened or omitted when space is insufficient, tick count decreases at narrow widths, and each legend entry gets its own line. Colors identify series consistently across rows, including all-zero series. The SVG description and tool summary always retain full labels, exact raw values, and exact raw category totals, even in normalized mode.
+
+TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG renderer own bar geometry. Unit coordinates protect subnormal raw domains from scale overflow. Saved details contain trimmed labels, original values, resolved `normalize`, and shared chart settings; replay revalidates them and recomputes stacks and totals. The lazy loader, full-resolution worker, cached image identities, and resume queue deadlines are unchanged.
 
 ## Font configuration
 

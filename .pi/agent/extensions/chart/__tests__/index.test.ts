@@ -275,6 +275,7 @@ describe("pie chart", () => {
     const boxplot = registerTool("chart_boxplot");
     const waterfall = registerTool("chart_waterfall");
     const dumbbell = registerTool("chart_dumbbell");
+    const stackedBar = registerTool("chart_stacked_bar");
 
     expect(registerTools().map((tool) => tool.name)).toEqual([
       "chart_pie",
@@ -287,6 +288,7 @@ describe("pie chart", () => {
       "chart_boxplot",
       "chart_waterfall",
       "chart_dumbbell",
+      "chart_stacked_bar",
     ]);
     expect([
       pie.name,
@@ -299,6 +301,7 @@ describe("pie chart", () => {
       boxplot.name,
       waterfall.name,
       dumbbell.name,
+      stackedBar.name,
     ]).toEqual([
       "chart_pie",
       "chart_bar",
@@ -310,6 +313,7 @@ describe("pie chart", () => {
       "chart_boxplot",
       "chart_waterfall",
       "chart_dumbbell",
+      "chart_stacked_bar",
     ]);
     for (const tool of [
       pie,
@@ -322,6 +326,7 @@ describe("pie chart", () => {
       boxplot,
       waterfall,
       dumbbell,
+      stackedBar,
     ]) {
       expect(tool.renderShell).toBe("self");
       const renderCall = tool.renderCall;

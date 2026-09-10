@@ -203,6 +203,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "stacked_bar": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("stacked_bar"),
+          ]);
+          const details = module.stackedBarChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.stackedBarChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.stackedBarChartRenderer,
+          );
+          break;
+        }
         case "line": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
           const details = module.lineChartRenderer.deserializeDetails(this.details);

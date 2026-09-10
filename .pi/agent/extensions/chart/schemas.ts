@@ -339,3 +339,51 @@ export const dumbbellChartVariant = Type.Object(
 );
 export type DumbbellParameters = Static<typeof chartDumbbellParameters>;
 export type DumbbellChartInput = Static<typeof dumbbellChartVariant>;
+
+const stackedBarOptions = {
+  categories: Type.Array(
+    Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+    {
+      minItems: 1,
+      maxItems: 12,
+      uniqueItems: true,
+      description: "Unique nonblank category labels after trimming; displayed top to bottom.",
+    },
+  ),
+  series: Type.Array(
+    Type.Object(
+      {
+        name: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+        values: Type.Array(Type.Number({ minimum: 0, maximum: 1_000_000_000 }), {
+          minItems: 1,
+          maxItems: 12,
+          description:
+            "Finite nonnegative composition values aligned with categories. Signed changes are not supported; use chart_waterfall for those.",
+        }),
+      },
+      { additionalProperties: false },
+    ),
+    {
+      minItems: 1,
+      maxItems: 6,
+      description: "Unique names after trimming; input order determines stack and legend order.",
+    },
+  ),
+  normalize: Type.Optional(
+    Type.Boolean({
+      description:
+        "Default false. True displays each nonzero category total as 100%; zero totals stay zero. Raw values and totals remain in the summary.",
+    }),
+  ),
+  title: chartTitle,
+  ...axisLabels,
+};
+export const chartStackedBarParameters = Type.Object(stackedBarOptions, {
+  additionalProperties: false,
+});
+export const stackedBarChartVariant = Type.Object(
+  { type: Type.Literal("stacked_bar"), ...stackedBarOptions },
+  { additionalProperties: false },
+);
+export type StackedBarParameters = Static<typeof chartStackedBarParameters>;
+export type StackedBarChartInput = Static<typeof stackedBarChartVariant>;

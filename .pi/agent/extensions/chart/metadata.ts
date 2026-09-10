@@ -17,6 +17,7 @@ import {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartStackedBarParameters,
   chartWaterfallParameters,
   type DumbbellParameters,
   type HeatmapParameters,
@@ -24,6 +25,7 @@ import {
   type LineParameters,
   type PieParameters,
   type ScatterParameters,
+  type StackedBarParameters,
   type WaterfallParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
@@ -35,6 +37,7 @@ import type { HistogramChartDetails, HistogramChartInput } from "./types/histogr
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
+import type { StackedBarChartDetails, StackedBarChartInput } from "./types/stacked-bar";
 import type { WaterfallChartDetails, WaterfallChartInput } from "./types/waterfall";
 
 export type {
@@ -47,6 +50,7 @@ export type {
   LineParameters,
   PieParameters,
   ScatterParameters,
+  StackedBarParameters,
   WaterfallParameters,
 } from "./schemas";
 export {
@@ -59,6 +63,7 @@ export {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartStackedBarParameters,
   chartWaterfallParameters,
 } from "./schemas";
 
@@ -78,7 +83,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "heatmap" ||
     details.type === "boxplot" ||
     details.type === "waterfall" ||
-    details.type === "dumbbell"
+    details.type === "dumbbell" ||
+    details.type === "stacked_bar"
     ? details.type
     : fallback;
 }
@@ -611,6 +617,57 @@ export function createDumbbellChartTool(): ToolDefinition<
   };
 }
 
+export function createStackedBarChartTool(): ToolDefinition<
+  typeof chartStackedBarParameters,
+  StackedBarChartDetails
+> {
+  return {
+    name: "chart_stacked_bar",
+    label: "Chart stacked bar",
+    description:
+      "Render horizontal stacked bars for nonnegative composition: 1-12 unique trimmed categories and 1-6 uniquely named series {name, values}, each aligned with categories. Labels are 1-22 characters; values are finite 0..1,000,000,000 and category totals must be finite. Signed changes belong in chart_waterfall. Optional normalize (default false) displays 100% per nonzero category; zero totals stay zero. Includes every series in the legend and exact raw values/totals in the summary. Optional title (1-80), xLabel/yLabel (1-40); all text trimmed and nonblank.",
+    promptSnippet: "Render nonnegative compositions as stacked bar charts",
+    parameters: chartStackedBarParameters,
+    async execute(_toolCallId, parameters: StackedBarParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartStackedBarParameters, parameters))
+        throw new Error("invalid stacked bar chart parameters");
+      const [runtime, module] = await Promise.all([
+        loadChartRuntime(),
+        loadChartType("stacked_bar"),
+      ]);
+      signal?.throwIfAborted();
+      const input: StackedBarChartInput = { ...parameters, type: "stacked_bar" };
+      if (!Value.Check(module.stackedBarChartVariant, input))
+        throw new Error("invalid stacked bar chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.stackedBarChartRenderer.createDetails(
+        module.stackedBarChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.stackedBarChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.stackedBarChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("stacked_bar", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -622,4 +679,5 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createBoxplotChartTool());
   pi.registerTool(createWaterfallChartTool());
   pi.registerTool(createDumbbellChartTool());
+  pi.registerTool(createStackedBarChartTool());
 }

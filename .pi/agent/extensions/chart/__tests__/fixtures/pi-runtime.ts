@@ -208,6 +208,31 @@ export default function (pi: ExtensionAPI): void {
         ),
         ctx.ui.theme,
       );
+      const { stackedBarChartRenderer: stackedBar } = await loadChartType("stacked_bar");
+      assert.ok(pi.getActiveTools().includes("chart_stacked_bar"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_stacked_bar"));
+      for (const normalize of [false, true]) {
+        await check(
+          stackedBar,
+          stackedBar.createDetails(
+            stackedBar.parseParameters({
+              type: "stacked_bar",
+              categories: ["æ", "ø", "å"],
+              series: [
+                { name: "First", values: [1, 6, 0] },
+                { name: "Second", values: [3, 2, 0] },
+                { name: "Empty", values: [0, 0, 0] },
+              ],
+              normalize,
+              title: "Composition",
+              xLabel: "Value",
+              yLabel: "Category",
+            }),
+            settings,
+          ),
+          ctx.ui.theme,
+        );
+      }
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();

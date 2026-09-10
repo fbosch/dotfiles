@@ -56,6 +56,8 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
                            "beforeLabel": "Baseline", "afterLabel": "Current", "showDifferences": True}
     dumbbell_details = {"type": "dumbbell", **dumbbell_parameters,
                         "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
+    stacked_parameters = {"categories": ["æ", "ø", "å"], "series": [
+        {"name": "First", "values": [1, 6, 0]}, {"name": "Second", "values": [3, 2, 0]}, {"name": "Empty", "values": [0, 0, 0]}]}
     for index in range(32):
         tool_name = "chart_heatmap" if index % 2 else "chart_histogram"
         arguments = heatmap_parameters if index % 2 else {"data": [42, 146]}
@@ -66,6 +68,11 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
             tool_name, arguments, saved_details = "chart_waterfall", waterfall_parameters, waterfall_details
         if index % 5 == 4:
             tool_name, arguments, saved_details = "chart_dumbbell", dumbbell_parameters, dumbbell_details
+        if index % 6 == 5:
+            arguments = {**stacked_parameters, "normalize": index % 12 == 5}
+            saved_details = {"type": "stacked_bar", **arguments,
+                             "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
+            tool_name = "chart_stacked_bar"
         append({"role": "user", "content": "Show a chart"})
         append({"role": "assistant", "api": "openai-responses", "provider": "openai",
                 "model": "gpt-4o", "usage": usage, "stopReason": "toolUse",
