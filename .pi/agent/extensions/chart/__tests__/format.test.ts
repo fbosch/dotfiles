@@ -14,7 +14,7 @@ import {
   type HeatmapChartInput,
   type WaterfallChartInput,
 } from "../schemas";
-import { barChartRenderer, renderBarChartSvg, validateBarChartInput } from "../types/bar";
+import { barChartRenderer, renderBarChartSvg } from "../types/bar";
 import {
   boxplotChartRenderer,
   renderBoxplotChartSvg,
@@ -129,7 +129,7 @@ describe("chart numeric formatting", () => {
       settings,
     );
     const lineSvg = renderLineChartSvg(line, theme);
-    expect(lineSvg).toContain(">25%<");
+    expect(lineSvg).toContain(">40%<");
     expect(lineSvg).toContain(">50%<");
     const scatter = scatterChartRenderer.createDetails(
       validateScatterChartInput({
@@ -144,7 +144,7 @@ describe("chart numeric formatting", () => {
       settings,
     );
     const scatterSvg = renderScatterChartSvg(scatter, theme);
-    expect(scatterSvg).toContain(">25%<");
+    expect(scatterSvg).toContain(">40%<");
     expect(scatterSvg).toContain(">50%<");
     expect(
       renderLineChartSvg(
@@ -189,7 +189,7 @@ describe("chart numeric formatting", () => {
       groups: [{ label: "A", values: [0.25, 0.5] }],
     };
     const box = boxplotChartRenderer.createDetails(validateBoxplotChartInput(boxInput), settings);
-    expect(renderBoxplotChartSvg(box, theme)).toMatch(/>25%<|>50%<|>75%<|>0%<|>100%</);
+    expect(renderBoxplotChartSvg(box, theme)).toContain(">23.7%<");
     expect(boxplotChartRenderer.deserializeDetails(JSON.parse(JSON.stringify(box)))).toEqual(box);
 
     const waterfallInput: WaterfallChartInput = {
@@ -202,7 +202,7 @@ describe("chart numeric formatting", () => {
       validateWaterfallChartInput(waterfallInput),
       settings,
     );
-    expect(renderWaterfallChartSvg(waterfall, theme)).toMatch(/>25%<|>50%<|>75%</);
+    expect(renderWaterfallChartSvg(waterfall, theme)).toContain(">37.5%<");
     expect(
       waterfallChartRenderer.deserializeDetails(JSON.parse(JSON.stringify(waterfall))),
     ).toEqual(waterfall);
@@ -217,7 +217,7 @@ describe("chart numeric formatting", () => {
       validateDumbbellChartInput(dumbbellInput),
       settings,
     );
-    expect(renderDumbbellChartSvg(dumbbell, theme)).toContain("Δ 25%");
+    expect(renderDumbbellChartSvg(dumbbell, theme)).toContain("Δ +25%");
     expect(dumbbellChartRenderer.deserializeDetails(JSON.parse(JSON.stringify(dumbbell)))).toEqual(
       dumbbell,
     );

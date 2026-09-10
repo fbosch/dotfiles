@@ -8,7 +8,10 @@ export const MAX_POINT_LABEL_LENGTH = 40;
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_AXIS_LABEL_LENGTH = 40;
 
-export const numericFormat = Type.Union([Type.Literal("number"), Type.Literal("percent")]);
+export const numericFormat = Type.Union(
+  [Type.Literal("number"), Type.Literal("percent")],
+  { description: '"number" preserves the current numeric labels; "percent" formats fractional values as percentages.' },
+);
 export type NumericFormat = Static<typeof numericFormat>;
 
 const chartTitle = Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH }));
@@ -391,7 +394,7 @@ const dumbbellOptions = {
   ),
   showDifferences: Type.Optional(
     Type.Boolean({
-      description: "Show signed after - before differences (not percentages); default false.",
+      description: "Show signed after - before differences; valueFormat percent displays percentage-point changes; default false.",
     }),
   ),
   title: chartTitle,

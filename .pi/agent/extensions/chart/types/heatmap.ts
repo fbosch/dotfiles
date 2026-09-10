@@ -310,7 +310,7 @@ export function renderHeatmapChartSvg(
       ? text("No numeric data", layout.plotX, legendY + font, "start")
       : domain[0] === domain[1]
         ? `<rect x="${layout.plotX}" y="${legendY}" width="${font}" height="${font}" fill="${color(domain[0], domain, diverging)}"/>${text(`Constant: ${formatNumeric(domain[0], details.valueFormat, compact)}`, layout.plotX + font * 1.4, legendY + font, "start")}`
-        : `<rect data-color-ramp="true" x="${layout.plotX}" y="${legendY}" width="${legendWidth}" height="${font}" fill="url(#pi-heatmap-ramp)"/>${text(formatNumeric(domain[0], details.valueFormat, compact), layout.plotX, legendY + font * 2.2, "start")}${diverging ? text("0", layout.plotX + legendWidth / 2, legendY + font * 2.2) : ""}${text(formatNumeric(domain[1], details.valueFormat, compact), layout.plotX + legendWidth, legendY + font * 2.2, "end")}`;
+        : `<rect data-color-ramp="true" x="${layout.plotX}" y="${legendY}" width="${legendWidth}" height="${font}" fill="url(#pi-heatmap-ramp)"/>${text(formatNumeric(domain[0], details.valueFormat, compact), layout.plotX, legendY + font * 2.2, "start")}${diverging ? text(formatNumeric(0, details.valueFormat, compact), layout.plotX + legendWidth / 2, legendY + font * 2.2) : ""}${text(formatNumeric(domain[1], details.valueFormat, compact), layout.plotX + legendWidth, legendY + font * 2.2, "end")}`;
   const missing = `<rect x="${layout.plotX}" y="${legendY + font * 2.6}" width="${font}" height="${font}" fill="url(#pi-heatmap-missing)"/>${text("Missing (null)", layout.plotX + font * 1.4, legendY + font * 3.5, "start")}`;
   const name = details.title ?? "Heatmap";
   return renderSvgDocument({

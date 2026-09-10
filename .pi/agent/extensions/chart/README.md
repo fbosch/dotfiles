@@ -29,10 +29,13 @@ Result rendering remains synchronous for Pi. The result slot starts loading on i
 ## Line charts
 
 `chart_line` requires `xType`. `numeric` uses finite numeric `x` values; `temporal` uses UTC ISO dates (`YYYY-MM-DD`) or UTC datetimes ending in `Z`. Points must be strictly increasing. `y` values are finite numbers or `null`; a `null` creates a gap.
+Numeric line charts accept optional `xFormat` and `yFormat`. Numeric x values support both formats; temporal x values support `yFormat` only. Each accepts `"number"` (the default) or `"percent"`. Percent formatting treats each input as a fraction and multiplies it by 100, so `0.667` is displayed as `66.7%`; it does not change stored data, geometry, or summaries.
 
 ## Scatter charts
 
 `chart_scatter` accepts between 2 and 200 rows of `{ x, y, label? }`. Both positions must be finite numbers. `title`, `xLabel`, and `yLabel` are optional. It has no series, grouping, color, or bubble-size channels.
+`xFormat` and `yFormat` optionally accept `"number"` (the default) or `"percent"`. Percent formatting treats each coordinate as a fraction and multiplies it by 100 for axis labels only; it does not change point positions or stored values.
+The following charts accept `valueFormat`: `chart_bar` formats row values; `chart_boxplot`, `chart_waterfall`, and `chart_dumbbell` format numeric axis ticks (and dumbbell difference annotations); `chart_heatmap` formats visible cell values and color-scale endpoints. The options use the same `"number"`/`"percent"` behavior. `chart_stacked_bar` already uses percent ticks when `normalize` is `true`, so it has no redundant format option.
 
 ## Histograms
 
@@ -140,7 +143,7 @@ The domain includes zero and every intermediate total, with padding `max(span * 
 
 Optional `beforeLabel` and `afterLabel` name the series and default to `Before` and `After`. Each is 1–22 characters. Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text length bounds apply before trimming; all supplied text is trimmed and cannot be blank.
 
-`showDifferences` defaults to `false`. When true, each row reserves a separate line for `Δ after - before`, signed with `+` for positive differences, `-` for negative differences, and `0` for equality. Differences are absolute changes, not percentages; they may reach ±2,000,000,000. Arithmetic uses JavaScript numbers without intermediate rounding. Narrow displays shorten annotations with an ellipsis or omit them when no character fits. The SVG description and tool summary always retain full labels, both exact values, and exact signed differences, even when visible differences are disabled. Zero values are retained.
+`showDifferences` defaults to `false`. When true, each row reserves a separate line for `Δ after - before`, signed with `+` for positive differences, `-` for negative differences, and `0` for equality. Differences are absolute changes, not relative percentages; with `valueFormat: "percent"`, they are displayed as percentage-point changes. They may reach ±2,000,000,000. Arithmetic uses JavaScript numbers without intermediate rounding. Narrow displays shorten annotations with an ellipsis or omit them when no character fits. The SVG description and tool summary always retain full labels, both exact values, and exact signed differences, even when visible differences are disabled. Zero values are retained.
 
 ```json
 {

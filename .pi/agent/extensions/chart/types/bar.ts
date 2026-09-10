@@ -99,15 +99,17 @@ function isBarChartRow(value: unknown): value is BarChartRow {
 }
 
 export function deserializeBarChartDetails(value: unknown): BarChartDetails | undefined {
+  if (isRecord(value) === false) return undefined;
   if (
-    isRecord(value) === false ||
     value.type !== "bar" ||
     Array.isArray(value.rows) === false ||
     value.rows.every(isBarChartRow) === false ||
     typeof value.imageWidthCells !== "number" ||
     Number.isFinite(value.imageWidthCells) === false ||
     value.imageWidthCells <= 0 ||
-    (value.valueFormat !== undefined && value.valueFormat !== "number" && value.valueFormat !== "percent") ||
+    (value.valueFormat !== undefined &&
+      value.valueFormat !== "number" &&
+      value.valueFormat !== "percent") ||
     (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells))
   ) {
     return undefined;
@@ -128,6 +130,7 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
     rows: value.rows,
     imageWidthCells: value.imageWidthCells,
     ...(value.title === undefined ? {} : { title: value.title }),
+    ...(value.valueFormat === undefined ? {} : { valueFormat: value.valueFormat }),
     ...(value.fontFamily === undefined ? {} : { fontFamily: value.fontFamily }),
     ...(value.fontSize === undefined ? {} : { fontSize: value.fontSize }),
     ...(value.maxHeightCells === undefined ? {} : { maxHeightCells: value.maxHeightCells }),

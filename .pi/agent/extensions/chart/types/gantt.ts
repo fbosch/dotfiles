@@ -35,12 +35,12 @@ import {
 
 import {
   deserializeChartDetails,
-  getChartHeightLimitPx,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
   formatNumber,
   getAccessibleDescription,
+  getChartHeightLimitPx,
   isValidChartHeight,
   normalizeBoundedText,
   renderSvgDocument,
