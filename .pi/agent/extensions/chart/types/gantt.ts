@@ -131,8 +131,7 @@ function normalizeLabel(value: string, name: string): string {
   return normalized;
 }
 
-export function validateGanttChartInput(input: GanttChartInput): GanttChartData {
-  if (!Value.Check(ganttChartVariant, input)) throw new Error("invalid gantt chart parameters");
+function normalizeGanttChartInput(input: GanttChartInput): GanttChartData {
   if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
     throw new Error("invalid chart height");
 
@@ -192,6 +191,11 @@ export function validateGanttChartInput(input: GanttChartInput): GanttChartData 
   };
 }
 
+export function validateGanttChartInput(input: GanttChartInput): GanttChartData {
+  if (!Value.Check(ganttChartVariant, input)) throw new Error("invalid gantt chart parameters");
+  return normalizeGanttChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...ganttChartVariant.properties,
@@ -206,7 +210,7 @@ export function deserializeGanttChartDetails(value: unknown): GanttChartDetails 
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateGanttChartInput(input as GanttChartInput),
+    (input) => normalizeGanttChartInput(input as GanttChartInput),
     (data, settings) => ({ type: "gantt", ...data, ...settings }),
   );
 }

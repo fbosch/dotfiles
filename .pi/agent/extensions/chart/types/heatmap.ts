@@ -48,8 +48,7 @@ export type HeatmapChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 
-export function validateHeatmapChartInput(input: HeatmapChartInput): HeatmapChartData {
-  if (!Value.Check(heatmapChartVariant, input)) throw new Error("invalid heatmap chart parameters");
+function normalizeHeatmapChartInput(input: HeatmapChartInput): HeatmapChartData {
   const rows = normalizeUniqueLabels(input.rows, "rows");
   const columns = normalizeUniqueLabels(input.columns, "columns");
   if (input.data.length !== rows.length || input.data.some((row) => row.length !== columns.length))
@@ -71,6 +70,11 @@ export function validateHeatmapChartInput(input: HeatmapChartInput): HeatmapChar
   };
 }
 
+export function validateHeatmapChartInput(input: HeatmapChartInput): HeatmapChartData {
+  if (!Value.Check(heatmapChartVariant, input)) throw new Error("invalid heatmap chart parameters");
+  return normalizeHeatmapChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...heatmapChartVariant.properties,
@@ -87,7 +91,7 @@ export function deserializeHeatmapChartDetails(value: unknown): HeatmapChartDeta
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateHeatmapChartInput(input as HeatmapChartInput),
+    (input) => normalizeHeatmapChartInput(input as HeatmapChartInput),
     (data, settings) => ({ type: "heatmap", ...data, ...settings }),
   );
 }

@@ -52,9 +52,7 @@ export type DumbbellChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 
-export function validateDumbbellChartInput(input: DumbbellChartInput): DumbbellChartData {
-  if (!Value.Check(dumbbellChartVariant, input))
-    throw new Error("invalid dumbbell chart parameters");
+function normalizeDumbbellChartInput(input: DumbbellChartInput): DumbbellChartData {
   const labels = new Set<string>();
   const data = input.data.map(({ label, before, after }) => {
     const normalized = label.trim();
@@ -84,6 +82,12 @@ export function validateDumbbellChartInput(input: DumbbellChartInput): DumbbellC
   };
 }
 
+export function validateDumbbellChartInput(input: DumbbellChartInput): DumbbellChartData {
+  if (!Value.Check(dumbbellChartVariant, input))
+    throw new Error("invalid dumbbell chart parameters");
+  return normalizeDumbbellChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...dumbbellChartVariant.properties,
@@ -101,7 +105,7 @@ export function deserializeDumbbellChartDetails(value: unknown): DumbbellChartDe
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateDumbbellChartInput(input as DumbbellChartInput),
+    (input) => normalizeDumbbellChartInput(input as DumbbellChartInput),
     (data, settings) => ({ type: "dumbbell", ...data, ...settings }),
   );
 }

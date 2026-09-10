@@ -62,8 +62,7 @@ function normalizeText(value: string | undefined, name: string): string | undefi
   return text;
 }
 
-export function validateBezierChartInput(input: BezierChartInput): BezierChartData {
-  if (!Value.Check(bezierChartVariant, input)) throw new Error("invalid bezier chart parameters");
+function normalizeBezierChartInput(input: BezierChartInput): BezierChartData {
   for (const name of pointNames) {
     if (!Number.isFinite(input[name].x) || !Number.isFinite(input[name].y))
       throw new Error(`${name} coordinates must be finite numbers`);
@@ -86,6 +85,11 @@ export function validateBezierChartInput(input: BezierChartInput): BezierChartDa
   return data;
 }
 
+export function validateBezierChartInput(input: BezierChartInput): BezierChartData {
+  if (!Value.Check(bezierChartVariant, input)) throw new Error("invalid bezier chart parameters");
+  return normalizeBezierChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...bezierChartVariant.properties,
@@ -101,7 +105,7 @@ export function deserializeBezierChartDetails(value: unknown): BezierChartDetail
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateBezierChartInput(input as BezierChartInput),
+    (input) => normalizeBezierChartInput(input as BezierChartInput),
     (_data, _settings, rawDetails) => rawDetails as unknown as BezierChartDetails,
     {
       validateSettings: (settings) =>

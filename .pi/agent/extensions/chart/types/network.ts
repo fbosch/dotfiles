@@ -163,8 +163,7 @@ function normalizeEdge(row: NetworkChartInput["edges"][number], index: number): 
   return label === undefined ? { source, target } : { source, target, label };
 }
 
-export function validateNetworkChartInput(input: NetworkChartInput): NetworkChartData {
-  if (!Value.Check(networkChartVariant, input)) throw new Error("invalid network chart parameters");
+function normalizeNetworkChartInput(input: NetworkChartInput): NetworkChartData {
   if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
     throw new Error("invalid chart height");
   const nodes = input.nodes.map(normalizeNode);
@@ -199,6 +198,11 @@ export function validateNetworkChartInput(input: NetworkChartInput): NetworkChar
   };
 }
 
+export function validateNetworkChartInput(input: NetworkChartInput): NetworkChartData {
+  if (!Value.Check(networkChartVariant, input)) throw new Error("invalid network chart parameters");
+  return normalizeNetworkChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...networkChartVariant.properties,
@@ -213,7 +217,7 @@ export function deserializeNetworkChartDetails(value: unknown): NetworkChartDeta
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateNetworkChartInput(input as NetworkChartInput),
+    (input) => normalizeNetworkChartInput(input as NetworkChartInput),
     (data, settings) => ({ type: "network", ...data, ...settings }),
   );
 }

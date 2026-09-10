@@ -601,7 +601,14 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
       return [truncateToWidth(this.theme.fg("error", this.renderer.unavailableText), width)];
     }
 
-    this.startRaster(cacheKey, key);
+    try {
+      this.startRaster(cacheKey, key);
+    } catch {
+      // Chart adapters run during TUI rendering; convert sync failures to a sticky error state.
+      this.pending = undefined;
+      this.errors.add(cacheKey);
+      this.requestRender();
+    }
     return [];
   }
 

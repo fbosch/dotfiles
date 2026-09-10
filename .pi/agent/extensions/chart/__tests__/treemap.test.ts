@@ -127,6 +127,26 @@ describe("treemap", () => {
     }
   });
 
+  test("keeps rounded coordinates inside a fractional height cap", () => {
+    const d = details({
+      data: [
+        {
+          label: "a",
+          children: [
+            { label: "x", value: 1 },
+            { label: "y", value: 1 },
+          ],
+        },
+        { label: "b", value: 1 },
+      ],
+      maxHeightCells: 8,
+    });
+    const layout = getTreemapChartLayout(d, { widthPx: 16, heightPx: 4 }, 4);
+
+    expect(Number.isInteger(layout.plotHeightPx)).toBe(true);
+    expect(() => createTreemapScene(d, layout)).not.toThrow();
+  });
+
   test("rejects invalid hierarchy at execution and replay boundaries, including hostile depth and cycles", async () => {
     const { type: _type, ...parameters } = input;
     expect(Value.Check(chartTreemapParameters, parameters)).toBe(true);

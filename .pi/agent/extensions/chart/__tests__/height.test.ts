@@ -370,15 +370,24 @@ function withoutType(input: object): object {
   return Object.fromEntries(Object.entries(input).filter(([key]) => key !== "type"));
 }
 
-
 describe("chart height option", () => {
   test("uses one bounded option in every public chart schema", () => {
     for (const chart of heightCases) {
-      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 8 })).toBe(true);
-      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 64 })).toBe(true);
-      expect(Value.Check(chart.schema, { ...chart.input, maxHeightCells: 7 })).toBe(false);
-      expect(Value.Check(chart.schema, { ...chart.input, maxHeightCells: 65 })).toBe(false);
-      expect(Value.Check(chart.schema, { ...chart.input, maxHeightCells: 8.5 })).toBe(false);
+      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 8 })).toBe(
+        true,
+      );
+      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 64 })).toBe(
+        true,
+      );
+      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 7 })).toBe(
+        false,
+      );
+      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 65 })).toBe(
+        false,
+      );
+      expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 8.5 })).toBe(
+        false,
+      );
     }
   });
 

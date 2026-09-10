@@ -45,9 +45,7 @@ export type WaterfallChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 
-export function validateWaterfallChartInput(input: WaterfallChartInput): WaterfallChartData {
-  if (!Value.Check(waterfallChartVariant, input))
-    throw new Error("invalid waterfall chart parameters");
+function normalizeWaterfallChartInput(input: WaterfallChartInput): WaterfallChartData {
   const text = (value: string | undefined, name: string) => {
     if (value?.trim() === "") throw new Error(`${name} must not be blank`);
     return value?.trim();
@@ -71,6 +69,12 @@ export function validateWaterfallChartInput(input: WaterfallChartInput): Waterfa
   return data;
 }
 
+export function validateWaterfallChartInput(input: WaterfallChartInput): WaterfallChartData {
+  if (!Value.Check(waterfallChartVariant, input))
+    throw new Error("invalid waterfall chart parameters");
+  return normalizeWaterfallChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...waterfallChartVariant.properties,
@@ -87,7 +91,7 @@ export function deserializeWaterfallChartDetails(
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateWaterfallChartInput(input as WaterfallChartInput),
+    (input) => normalizeWaterfallChartInput(input as WaterfallChartInput),
     (data, settings) => ({ type: "waterfall", ...data, ...settings }),
   );
 }

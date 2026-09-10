@@ -50,9 +50,7 @@ export type TreemapChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 // Fixed group-index colors keep hierarchy identity stable across leaves.
-export function validateTreemapChartInput(input: TreemapChartInput): TreemapChartData {
-  if (!hasBoundedTreemapHierarchy(input) || !Value.Check(treemapChartVariant, input))
-    throw new Error("invalid treemap chart parameters");
+function normalizeTreemapChartInput(input: TreemapChartInput): TreemapChartData {
   if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
     throw new Error("invalid chart height");
   const normalize = (nodes: TreemapNodeInput[]): void => {
@@ -87,6 +85,12 @@ export function validateTreemapChartInput(input: TreemapChartInput): TreemapChar
   return result;
 }
 
+export function validateTreemapChartInput(input: TreemapChartInput): TreemapChartData {
+  if (!hasBoundedTreemapHierarchy(input) || !Value.Check(treemapChartVariant, input))
+    throw new Error("invalid treemap chart parameters");
+  return normalizeTreemapChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...treemapChartVariant.properties,
@@ -101,7 +105,7 @@ export function deserializeTreemapChartDetails(value: unknown): TreemapChartDeta
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateTreemapChartInput(input as TreemapChartInput),
+    (input) => normalizeTreemapChartInput(input as TreemapChartInput),
     (data, settings) => ({ type: "treemap", ...data, ...settings }),
     { precondition: hasBoundedTreemapHierarchy },
   );
@@ -179,16 +183,21 @@ export function getTreemapChartLayout(
     Math.round(Math.min(widthPx * 0.65, cells.heightPx * 12)),
   );
   const fixedHeightPx = plotY + fontSizePx * (1 + details.data.length * 1.4);
-  const plotHeightPx =
-    details.maxHeightCells === undefined
-      ? naturalPlotHeightPx
-      : clampChartPlotHeightPx(
-          naturalPlotHeightPx,
-          details.maxHeightCells,
-          cells.heightPx,
-          fixedHeightPx,
-          undefined,
-        );
+  // TanStack rounds tile coordinates; integral dimensions keep rounded edges inside the plot.
+  const plotHeightPx = Math.max(
+    1,
+    Math.floor(
+      details.maxHeightCells === undefined
+        ? naturalPlotHeightPx
+        : clampChartPlotHeightPx(
+            naturalPlotHeightPx,
+            details.maxHeightCells,
+            cells.heightPx,
+            fixedHeightPx,
+            undefined,
+          ),
+    ),
+  );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (1 + details.data.length * 1.4));
   return finalizeChartLayout(
     {

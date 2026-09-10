@@ -49,8 +49,7 @@ export type BoxplotChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 
-export function validateBoxplotChartInput(input: BoxplotChartInput): BoxplotChartData {
-  if (!Value.Check(boxplotChartVariant, input)) throw new Error("invalid boxplot chart parameters");
+function normalizeBoxplotChartInput(input: BoxplotChartInput): BoxplotChartData {
   const labels = new Set<string>();
   const groups = input.groups.map(({ label, values }) => {
     const normalized = label.trim();
@@ -78,6 +77,11 @@ export function validateBoxplotChartInput(input: BoxplotChartInput): BoxplotChar
   };
 }
 
+export function validateBoxplotChartInput(input: BoxplotChartInput): BoxplotChartData {
+  if (!Value.Check(boxplotChartVariant, input)) throw new Error("invalid boxplot chart parameters");
+  return normalizeBoxplotChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...boxplotChartVariant.properties,
@@ -93,7 +97,7 @@ export function deserializeBoxplotChartDetails(value: unknown): BoxplotChartDeta
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateBoxplotChartInput(input as BoxplotChartInput),
+    (input) => normalizeBoxplotChartInput(input as BoxplotChartInput),
     (data, settings) => ({ type: "boxplot", ...data, ...settings }),
   );
 }

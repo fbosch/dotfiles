@@ -23,8 +23,8 @@ import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi
 import chartExtension, {
   chartBarParameters,
   chartBezierParameters,
-  chartLineParameters,
   chartGanttParameters,
+  chartLineParameters,
   chartNetworkParameters,
   chartPieParameters,
   chartScatterParameters,
@@ -722,6 +722,28 @@ describe("pie chart", () => {
     component.invalidate();
     expect(component.render(64)).toEqual(["Pie chart unavailable"]);
     expect(calls).toBe(1);
+  });
+
+  test("contains synchronous SVG failures instead of escaping render", () => {
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    let invalidations = 0;
+    const component = new ChartComponent(
+      { rows, imageWidthCells: 60 },
+      theme,
+      () => {
+        invalidations++;
+      },
+      {
+        ...pieChartRenderer,
+        renderSvg: () => {
+          throw new Error("invalid chart SVG");
+        },
+      },
+    );
+
+    expect(() => component.render(64)).not.toThrow();
+    expect(component.render(64)).toEqual(["Pie chart unavailable"]);
+    expect(invalidations).toBe(1);
   });
 
   test("invalidates cached rasters when the theme identity changes", async () => {

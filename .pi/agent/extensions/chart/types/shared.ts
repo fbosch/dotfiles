@@ -54,7 +54,19 @@ export function clampChartPlotHeightPx(
 }
 
 export function stripTanStackSvg(svg: string): string {
-  return svg.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const nextCharacter = svg.charCodeAt(4);
+  const isWordCharacter =
+    (nextCharacter >= 48 && nextCharacter <= 57) ||
+    (nextCharacter >= 65 && nextCharacter <= 90) ||
+    nextCharacter === 95 ||
+    (nextCharacter >= 97 && nextCharacter <= 122);
+  let start = 0;
+  if (svg.startsWith("<svg") && !isWordCharacter) {
+    const openingTagEnd = svg.indexOf(">", 4);
+    if (openingTagEnd !== -1) start = openingTagEnd + 1;
+  }
+  const end = svg.endsWith("</svg>") ? svg.length - "</svg>".length : svg.length;
+  return start === 0 && end === svg.length ? svg : svg.slice(start, end);
 }
 
 export function finalizeChartLayout<TLayout extends Omit<ChartLayout, "heightCells">>(
@@ -97,12 +109,15 @@ export function normalizeUniqueLabel(
 }
 
 export function normalizeUniqueLabels(values: readonly string[], name: string): string[] {
-  const normalized = values.map((value) => value.trim());
-  if (
-    normalized.some((value) => value.length === 0) ||
-    new Set(normalized).size !== normalized.length
-  ) {
-    throw new Error(`${name} must contain unique nonblank labels after trimming`);
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    const label = value.trim();
+    if (label.length === 0 || seen.has(label)) {
+      throw new Error(`${name} must contain unique nonblank labels after trimming`);
+    }
+    seen.add(label);
+    normalized.push(label);
   }
   return normalized;
 }
@@ -119,6 +134,7 @@ export function fitTextToWidth(value: string, maximumWidthPx: number, fontSizePx
     1,
     Math.floor((maximumWidthPx - 8) / (fontSizePx * ESTIMATED_CHARACTER_WIDTH)),
   );
+  if (value.length <= maximumCharacters) return value;
   const characters = Array.from(value);
   if (characters.length <= maximumCharacters) return value;
   if (maximumCharacters === 1) return "…";
@@ -187,7 +203,7 @@ type DeserializeChartDetailsOptions = {
 export function deserializeChartDetails<TData, TDetails extends ChartDetails>(
   value: unknown,
   schema: TSchema,
-  validate: (input: Record<string, unknown>) => TData,
+  normalize: (input: Record<string, unknown>) => TData,
   createDetails: ChartDetailsFactory<TData, TDetails>,
   options?: DeserializeChartDetailsOptions,
 ): TDetails | undefined {
@@ -205,7 +221,7 @@ export function deserializeChartDetails<TData, TDetails extends ChartDetails>(
   if (options?.validateSettings !== undefined && !options.validateSettings(settings))
     return undefined;
   try {
-    const data = validate(input);
+    const data = normalize(input);
     return createDetails(data, settings, value);
   } catch {
     return undefined;
@@ -240,17 +256,16 @@ export function renderCartesianAxes(options: CartesianAxesOptions): {
   const xSpan = xDomain[1] - xDomain[0];
   const ySpan = yDomain[1] - yDomain[0];
   const xAxisY = layout.plotY + layout.plotHeightPx;
-  const xAxis = options.xTicks
-    .map((value) => {
-      const x = layout.plotX + ((value - xDomain[0]) / xSpan) * layout.plotWidthPx;
-      return `<line x1="${x}" x2="${x}" y1="${xAxisY}" y2="${xAxisY + 4}" stroke="${options.foreground}"/><text x="${x}" y="${xAxisY + layout.tickFontSizePx + 6}" text-anchor="middle" fill="${options.foreground}" font-family="${escapeXml(options.fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(options.formatXTick(value))}</text>`;
-    })
-    .join("");
-  const yAxis = options.yTicks
-    .map((value) => {
-      const y = layout.plotY + (1 - (value - yDomain[0]) / ySpan) * layout.plotHeightPx;
-      return `<line x1="${layout.plotX - 4}" x2="${layout.plotX}" y1="${y}" y2="${y}" stroke="${options.foreground}"/><text x="${layout.plotX - 7}" y="${y + layout.tickFontSizePx * 0.35}" text-anchor="end" fill="${options.foreground}" font-family="${escapeXml(options.fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(options.formatYTick(value))}</text>`;
-    })
-    .join("");
+  const fontFamily = escapeXml(options.fontFamily);
+  let xAxis = "";
+  for (const value of options.xTicks) {
+    const x = layout.plotX + ((value - xDomain[0]) / xSpan) * layout.plotWidthPx;
+    xAxis += `<line x1="${x}" x2="${x}" y1="${xAxisY}" y2="${xAxisY + 4}" stroke="${options.foreground}"/><text x="${x}" y="${xAxisY + layout.tickFontSizePx + 6}" text-anchor="middle" fill="${options.foreground}" font-family="${fontFamily}" font-size="${layout.tickFontSizePx}">${escapeXml(options.formatXTick(value))}</text>`;
+  }
+  let yAxis = "";
+  for (const value of options.yTicks) {
+    const y = layout.plotY + (1 - (value - yDomain[0]) / ySpan) * layout.plotHeightPx;
+    yAxis += `<line x1="${layout.plotX - 4}" x2="${layout.plotX}" y1="${y}" y2="${y}" stroke="${options.foreground}"/><text x="${layout.plotX - 7}" y="${y + layout.tickFontSizePx * 0.35}" text-anchor="end" fill="${options.foreground}" font-family="${fontFamily}" font-size="${layout.tickFontSizePx}">${escapeXml(options.formatYTick(value))}</text>`;
+  }
   return { xAxis, yAxis };
 }

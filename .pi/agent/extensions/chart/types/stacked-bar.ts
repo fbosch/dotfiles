@@ -50,9 +50,7 @@ export type StackedBarChartLayout = ChartLayout & {
 };
 
 // Fixed series-index colors keep identity stable across rows, including all-zero series.
-export function validateStackedBarChartInput(input: StackedBarChartInput): StackedBarChartData {
-  if (!Value.Check(stackedBarChartVariant, input))
-    throw new Error("invalid stacked bar chart parameters");
+function normalizeStackedBarChartInput(input: StackedBarChartInput): StackedBarChartData {
   if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
     throw new Error("invalid chart height");
   const categories = normalizeUniqueLabels(input.categories, "categories");
@@ -88,6 +86,12 @@ export function validateStackedBarChartInput(input: StackedBarChartInput): Stack
   return data;
 }
 
+export function validateStackedBarChartInput(input: StackedBarChartInput): StackedBarChartData {
+  if (!Value.Check(stackedBarChartVariant, input))
+    throw new Error("invalid stacked bar chart parameters");
+  return normalizeStackedBarChartInput(input);
+}
+
 const detailsSchema = Type.Object(
   {
     ...stackedBarChartVariant.properties,
@@ -105,7 +109,7 @@ export function deserializeStackedBarChartDetails(
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateStackedBarChartInput(input as StackedBarChartInput),
+    (input) => normalizeStackedBarChartInput(input as StackedBarChartInput),
     (data, settings) => ({ type: "stacked_bar", ...data, ...settings }),
   );
 }

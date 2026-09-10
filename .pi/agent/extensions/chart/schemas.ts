@@ -22,7 +22,7 @@ const chartHeightOptions = {
       minimum: MIN_CHART_HEIGHT_CELLS,
       maximum: MAX_REQUESTED_CHART_HEIGHT_CELLS,
       description:
-        "Maximum rendered height in terminal cells; omitted uses the renderer's natural height.",
+        "Maximum rendered height in terminal cells; omitted keeps the renderer's existing default sizing.",
     }),
   ),
 } as const;
@@ -150,7 +150,13 @@ export const barChartVariant = Type.Object(
 );
 
 export const scatterChartVariant = Type.Object(
-  { type: Type.Literal("scatter"), data: scatterData, title: chartTitle, ...axisLabels, ...chartHeightOptions },
+  {
+    type: Type.Literal("scatter"),
+    data: scatterData,
+    title: chartTitle,
+    ...axisLabels,
+    ...chartHeightOptions,
+  },
   { additionalProperties: false },
 );
 

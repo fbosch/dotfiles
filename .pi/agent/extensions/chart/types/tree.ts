@@ -145,8 +145,7 @@ function assertTreeStructure(rows: readonly TreeChartRow[]): void {
   if (visited.size !== rows.length) throw new Error("tree data must form one connected hierarchy");
 }
 
-export function validateTreeChartInput(input: TreeChartInput): TreeChartData {
-  if (!Value.Check(treeChartVariant, input)) throw new Error("invalid tree chart parameters");
+function normalizeTreeChartInput(input: TreeChartInput): TreeChartData {
   if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
     throw new Error("invalid chart height");
   const data = input.data.map(normalizeRow);
@@ -157,6 +156,11 @@ export function validateTreeChartInput(input: TreeChartInput): TreeChartData {
     ...(title === undefined ? {} : { title }),
     ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
+}
+
+export function validateTreeChartInput(input: TreeChartInput): TreeChartData {
+  if (!Value.Check(treeChartVariant, input)) throw new Error("invalid tree chart parameters");
+  return normalizeTreeChartInput(input);
 }
 
 const detailsSchema = Type.Object(
@@ -173,7 +177,7 @@ export function deserializeTreeChartDetails(value: unknown): TreeChartDetails | 
   return deserializeChartDetails(
     value,
     detailsSchema,
-    (input) => validateTreeChartInput(input as TreeChartInput),
+    (input) => normalizeTreeChartInput(input as TreeChartInput),
     (data, settings) => ({ type: "tree", ...data, ...settings }),
   );
 }
