@@ -24,6 +24,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { HeatmapChartInput };
 export { heatmapChartVariant };
 export type HeatmapChartData = Omit<HeatmapChartInput, "type" | "colorScale" | "showValues"> & {
@@ -162,16 +164,18 @@ export function getHeatmapChartLayout(
   // Reserve a readable row for every label rather than squeezing dense matrices below the configured font.
   const plotHeightPx = details.rows.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.25);
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * 5);
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 export function getHeatmapChartSummary(details: HeatmapChartDetails): string {
@@ -223,9 +227,9 @@ export function renderHeatmapChartSvg(
     }),
     { width: layout.plotWidthPx, height: layout.plotHeightPx },
   );
-  const plot = renderTanStackChartSvg(scene, { ariaLabel: "Heatmap cells", idPrefix: "pi-heatmap" })
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(scene, { ariaLabel: "Heatmap cells", idPrefix: "pi-heatmap" }),
+  );
   const font = layout.fontSizePx;
   const text = (
     value: string,
@@ -302,7 +306,15 @@ export function renderHeatmapChartSvg(
         : `<rect data-color-ramp="true" x="${layout.plotX}" y="${legendY}" width="${legendWidth}" height="${font}" fill="url(#pi-heatmap-ramp)"/>${text(compact(domain[0]), layout.plotX, legendY + font * 2.2, "start")}${diverging ? text("0", layout.plotX + legendWidth / 2, legendY + font * 2.2) : ""}${text(compact(domain[1]), layout.plotX + legendWidth, legendY + font * 2.2, "end")}`;
   const missing = `<rect x="${layout.plotX}" y="${legendY + font * 2.6}" width="${font}" height="${font}" fill="url(#pi-heatmap-missing)"/>${text("Missing (null)", layout.plotX + font * 1.4, legendY + font * 3.5, "start")}`;
   const name = details.title ?? "Heatmap";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getHeatmapChartSummary(details))}</desc><defs><pattern id="pi-heatmap-missing" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#bdbdbd"/><path d="M 0 6 L 6 0" stroke="#666666"/></pattern><linearGradient id="pi-heatmap-ramp">${stops}</linearGradient></defs><g data-heatmap-cells="true" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${rowLabels}${columnLabels}${values}${legend}${missing}${details.title ? text(shorten(details.title, layout.widthPx - 16), 8, font, "start") : ""}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getHeatmapChartSummary(details))}</desc><defs><pattern id="pi-heatmap-missing" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#bdbdbd"/><path d="M 0 6 L 6 0" stroke="#666666"/></pattern><linearGradient id="pi-heatmap-ramp">${stops}</linearGradient></defs><g data-heatmap-cells="true" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${rowLabels}${columnLabels}${values}${legend}${missing}${details.title ? text(shorten(details.title, layout.widthPx - 16), 8, font, "start") : ""}`,
+  });
 }
 
 export const heatmapChartRenderer: ChartType<

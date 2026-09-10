@@ -7,8 +7,13 @@ import {
 } from "@tanstack/charts";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import type { BarChartInput } from "../schemas";
-import { barChartVariant } from "../schemas";
+import {
+  type BarChartInput,
+  barChartVariant,
+  MAX_BARS,
+  MAX_LABEL_LENGTH,
+  MAX_TITLE_LENGTH,
+} from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -28,15 +33,21 @@ import {
   validCellDimensions,
 } from "../types";
 
+import {
+  clamp,
+  ESTIMATED_CHARACTER_WIDTH,
+  estimateTextWidthPx,
+  finalizeChartLayout,
+  isRecord,
+  normalizeBoundedText,
+  normalizeUniqueLabel,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
+
 export type { BarChartInput };
 export { barChartVariant };
 
-const MAX_BARS = 12;
-const MAX_LABEL_LENGTH = 22;
-const MAX_TITLE_LENGTH = 80;
-
-// Keep layout sizing and truncation on the same approximate font-width model.
-const ESTIMATED_CHARACTER_WIDTH = 0.58;
 export type BarChartRow = { label: string; value: number };
 export type BarChartData = { rows: BarChartRow[]; title?: string };
 export type BarChartLayout = ChartLayout & {
@@ -54,19 +65,6 @@ export type BarChartDetails = ChartDetails & {
   title?: string;
 };
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function normalizeTitle(title: string | undefined): string | undefined {
-  if (title === undefined) return undefined;
-  const normalized = title.trim();
-  if (normalized.length === 0 || normalized.length > MAX_TITLE_LENGTH) {
-    throw new Error(`title must be 1-${MAX_TITLE_LENGTH} characters`);
-  }
-  return normalized;
-}
-
 export function validateBarChartInput(input: BarChartInput): BarChartRow[] {
   if (input.data.length < 2 || input.data.length > MAX_BARS) {
     throw new Error(`provide between 2 and ${MAX_BARS} bars`);
@@ -74,23 +72,12 @@ export function validateBarChartInput(input: BarChartInput): BarChartRow[] {
 
   const labels = new Set<string>();
   return input.data.map(({ label, value }, index) => {
-    const normalizedLabel = label.trim();
-    if (normalizedLabel.length === 0 || normalizedLabel.length > MAX_LABEL_LENGTH) {
-      throw new Error(`label ${index + 1} must be 1-${MAX_LABEL_LENGTH} characters`);
-    }
-    if (labels.has(normalizedLabel)) {
-      throw new Error(`label ${index + 1} duplicates an earlier label`);
-    }
-    labels.add(normalizedLabel);
+    const normalizedLabel = normalizeUniqueLabel(label, index, MAX_LABEL_LENGTH, labels);
     if (Number.isFinite(value) === false) {
       throw new Error(`value ${index + 1} must be a finite number`);
     }
     return { label: normalizedLabel, value };
   });
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
 function isBarChartRow(value: unknown): value is BarChartRow {
@@ -176,18 +163,20 @@ export function getBarChartLayout(
     widthPx - paddingPx * 2 - labelWidthPx,
   );
   const heightPx = paddingPx + titleHeightPx + plotHeightPx + paddingPx;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / dimensions.heightPx),
-    labelWidthPx,
-    plotHeightPx,
-    plotWidthPx,
-    plotX: paddingPx + labelWidthPx,
-    plotY: paddingPx + titleHeightPx,
-    rowHeightPx,
-    labelFontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      labelWidthPx,
+      plotHeightPx,
+      plotWidthPx,
+      plotX: paddingPx + labelWidthPx,
+      plotY: paddingPx + titleHeightPx,
+      rowHeightPx,
+      labelFontSizePx,
+    },
+    dimensions.heightPx,
+  );
 }
 
 function formatValue(value: number): string {
@@ -196,10 +185,6 @@ function formatValue(value: number): string {
 
 function formatBarLabel(row: BarChartRow): string {
   return `${row.label}: ${formatValue(row.value)}`;
-}
-
-function estimateTextWidthPx(value: string, fontSizePx: number): number {
-  return value.length * fontSizePx * ESTIMATED_CHARACTER_WIDTH;
 }
 
 function truncateLabel(value: string, widthPx: number, fontSizePx: number): string {
@@ -248,7 +233,7 @@ export function renderBarChartSvg(
   });
   const accessibleName = title === undefined ? "Bar chart" : `Bar chart: ${title}`;
   const chart = renderTanStackChartSvg(scene, { ariaLabel: accessibleName, idPrefix: "pi-bar" });
-  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const chartBody = stripTanStackSvg(chart);
   const baselineX = ((0 - domain[0]) / (domain[1] - domain[0])) * layout.plotWidthPx;
   const labels = rows
     .map((row, index) => {
@@ -258,7 +243,16 @@ export function renderBarChartSvg(
     .join("");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}">${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}<line x1="${baselineX}" x2="${baselineX}" y1="0" y2="${layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.72"/></g>${title === undefined ? "" : `<text x="${layout.plotX}" y="${layout.plotY - Math.round(layout.labelFontSizePx * 0.55)}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(title)}</text>`}${labels}</svg>`;
+  return renderSvgDocument({
+    widthPx: rasterWidthPx,
+    heightPx: rasterHeightPx,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: accessibleName,
+    ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
+    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}<line x1="${baselineX}" x2="${baselineX}" y1="0" y2="${layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.72"/></g>${title === undefined ? "" : `<text x="${layout.plotX}" y="${layout.plotY - Math.round(layout.labelFontSizePx * 0.55)}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(title)}</text>`}${labels}`,
+  });
 }
 
 export function getBarChartSummary(details: BarChartDetails): string {
@@ -269,7 +263,7 @@ export function getBarChartSummary(details: BarChartDetails): string {
 
 function parseBarChartInput(input: BarChartInput): BarChartData {
   const rows = validateBarChartInput(input);
-  const title = normalizeTitle(input.title);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
   return title === undefined ? { rows } : { rows, title };
 }
 
@@ -294,7 +288,7 @@ export const barChartRenderer: ChartType<
     };
   },
   getCallHeader(parameters: BarChartInput): string {
-    const title = normalizeTitle(parameters.title);
+    const title = normalizeBoundedText(parameters.title, "title", MAX_TITLE_LENGTH);
     return title === undefined ? "chart" : `chart — ${title}`;
   },
   getSummary: getBarChartSummary,

@@ -30,6 +30,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { TreemapChartInput };
 export { treemapChartVariant };
 export type TreemapChartData = Omit<TreemapChartInput, "type">;
@@ -175,14 +177,16 @@ export function getTreemapChartLayout(
   const plotY = details.title ? fontSizePx * 2 : 0;
   const plotHeightPx = Math.max(1, Math.round(Math.min(widthPx * 0.65, cells.heightPx * 12)));
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (1 + details.data.length * 1.4));
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotY,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotY,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 function readable(value: number): string {
@@ -256,9 +260,9 @@ export function renderTreemapChartSvg(
   layout = getTreemapChartLayout(details),
 ): string {
   const scene = createTreemapScene(details, layout);
-  const plot = renderTanStackChartSvg(scene, { idPrefix: "pi-treemap", ariaLabel: "Treemap tiles" })
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(scene, { idPrefix: "pi-treemap", ariaLabel: "Treemap tiles" }),
+  );
   const font = layout.fontSizePx;
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
   const shorten = (value: string) => {
@@ -283,7 +287,15 @@ export function renderTreemapChartSvg(
     })
     .join("");
   const name = details.title ?? "Treemap";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? "sans-serif")}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getTreemapChartSummary(details))}</desc><g transform="translate(0 ${layout.plotY})">${plot}</g>${details.title ? text(details.title, 0, font) : ""}${legend}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? "sans-serif",
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getTreemapChartSummary(details))}</desc><g transform="translate(0 ${layout.plotY})">${plot}</g>${details.title ? text(details.title, 0, font) : ""}${legend}`,
+  });
 }
 
 export const treemapChartRenderer: ChartType<

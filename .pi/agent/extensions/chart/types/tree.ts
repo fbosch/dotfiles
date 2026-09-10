@@ -38,6 +38,17 @@ import {
   validCellDimensions,
 } from "../types";
 
+import {
+  estimateTextWidthPx,
+  finalizeChartLayout,
+  fitTextToWidth,
+  getAccessibleDescription,
+  isRecord,
+  normalizeBoundedText,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
+
 export type { TreeChartInput };
 export { treeChartVariant };
 
@@ -67,25 +78,6 @@ type TreeNode = TreeLayoutNode<TreeChartRow> & { label: string };
 type TreeLink = TreeLayoutLink<TreeChartRow>;
 
 const MAX_TITLE_LENGTH = 80;
-const CHARACTER_WIDTH = 0.58;
-const MAX_ACCESSIBLE_DESCRIPTION_BYTES = 16 * 1024;
-
-function normalizeText(
-  value: string | undefined,
-  name: string,
-  maximum: number,
-): string | undefined {
-  if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > maximum) {
-    throw new Error(`${name} must be 1-${maximum} characters`);
-  }
-  return normalized;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
 
 function normalizeRow(row: TreeChartInput["data"][number], index: number): TreeChartRow {
   const id = row.id.trim();
@@ -155,7 +147,7 @@ export function validateTreeChartInput(input: TreeChartInput): TreeChartData {
   if (!Value.Check(treeChartVariant, input)) throw new Error("invalid tree chart parameters");
   const data = input.data.map(normalizeRow);
   assertTreeStructure(data);
-  const title = normalizeText(input.title, "title", MAX_TITLE_LENGTH);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
   return title === undefined ? { data } : { data, title };
 }
 
@@ -190,21 +182,6 @@ export function deserializeTreeChartDetails(value: unknown): TreeChartDetails | 
   } catch {
     return undefined;
   }
-}
-
-function estimateTextWidthPx(value: string, fontSizePx: number): number {
-  return value.length * fontSizePx * CHARACTER_WIDTH;
-}
-
-function fitTreeLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
-  const maximumCharacters = Math.max(
-    1,
-    Math.floor((maximumWidthPx - 8) / (fontSizePx * CHARACTER_WIDTH)),
-  );
-  const characters = Array.from(value);
-  if (characters.length <= maximumCharacters) return value;
-  if (maximumCharacters === 1) return "…";
-  return `${characters.slice(0, maximumCharacters - 1).join("")}…`;
 }
 
 function paddedDomain(values: readonly number[]): [number, number] {
@@ -248,17 +225,19 @@ export function getTreeChartLayout(
     widthPx - paddingPx * 2 - labelWidthPx,
   );
   const heightPx = paddingPx + titleHeightPx + plotHeightPx + paddingPx;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX: paddingPx,
-    plotY: paddingPx + titleHeightPx,
-    plotWidthPx,
-    plotHeightPx,
-    labelWidthPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX: paddingPx,
+      plotY: paddingPx + titleHeightPx,
+      plotWidthPx,
+      plotHeightPx,
+      labelWidthPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 function formatTreeSummaryRow(row: TreeChartRow): string {
@@ -297,7 +276,7 @@ function createTreeRows(
         : Math.max(8, (childX - node.x) * pixelsPerUnit - 7 - 5);
     return {
       ...node,
-      label: fitTreeLabel(
+      label: fitTextToWidth(
         node.data?.label ?? node.name,
         Math.min(layout.labelWidthPx, availableLabelWidth),
         layout.fontSizePx,
@@ -379,27 +358,36 @@ export function renderTreeChartSvg(
   layout = getTreeChartLayout(details),
 ): string {
   const scene = createTreeScene(details, theme, layout);
-  const chartBody = renderTanStackChartSvg(scene, {
-    ariaLabel: details.title === undefined ? "Tree chart" : `Tree chart: ${details.title}`,
-    idPrefix: "pi-tree",
-  })
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "")
+  const chartBody = stripTanStackSvg(
+    renderTanStackChartSvg(scene, {
+      ariaLabel: details.title === undefined ? "Tree chart" : `Tree chart: ${details.title}`,
+      idPrefix: "pi-tree",
+    }),
+  )
     // Node IDs are nonvisual keys; dropping them keeps escaped user IDs out of the raster payload.
     .replace(/ data-ts-key="[^"]*"/g, "");
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
   const accessibleName =
     details.title === undefined ? "Tree chart" : `Tree chart: ${details.title}`;
   const summary = getTreeChartSummary(details);
-  const accessibleDescription =
-    Buffer.byteLength(summary, "utf8") <= MAX_ACCESSIBLE_DESCRIPTION_BYTES
-      ? summary
-      : `Tree chart with ${details.data.length} nodes. The accompanying text result contains the exact node IDs and parent relationships.`;
+  const accessibleDescription = getAccessibleDescription(
+    summary,
+    `Tree chart with ${details.data.length} nodes. The accompanying text result contains the exact node IDs and parent relationships.`,
+  );
   const title =
     details.title === undefined
       ? ""
       : `<text x="${layout.plotX}" y="${layout.plotY - Math.round(layout.fontSizePx * 0.55)}" fill="${foreground}" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" font-size="${layout.fontSizePx}">${escapeXml(details.title)}</text>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(accessibleDescription)}">${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g>${title}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: accessibleName,
+    ariaDescription: accessibleDescription,
+    content: `${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g>${title}`,
+  });
 }
 
 export const treeChartRenderer: ChartType<

@@ -25,6 +25,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { DumbbellChartInput };
 export { dumbbellChartVariant };
 export type DumbbellChartData = Omit<
@@ -136,16 +138,18 @@ export function getDumbbellChartLayout(
   );
   const plotHeightPx = details.data.length * rowHeight;
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 6.5 : 5));
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 function signed(value: number): string {
@@ -216,12 +220,12 @@ export function renderDumbbellChartSvg(
     y2: (row.index + rowPosition) * rowHeight,
     style: { stroke: foreground, strokeWidth: 1, strokeOpacity: 0.5 },
   }));
-  const plot = renderTanStackChartSvg(
-    { ...scene, nodes: [...rules, ...scene.nodes] },
-    { ariaLabel: "Dumbbell", idPrefix: "pi-dumbbell" },
-  )
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(
+      { ...scene, nodes: [...rules, ...scene.nodes] },
+      { ariaLabel: "Dumbbell", idPrefix: "pi-dumbbell" },
+    ),
+  );
   const text = (value: string, px: number, py: number, anchor = "middle", extra = "") =>
     `<text x="${px}" y="${py}" font-size="${font}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
   const shorten = (value: string, space: number) => {
@@ -295,7 +299,15 @@ export function renderDumbbellChartSvg(
     })
     .join("");
   const name = details.title ?? "Dumbbell";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getDumbbellChartSummary(details))}</desc><g transform="translate(${layout.plotX + gutter} ${layout.plotY})">${plot}</g>${labels}${differences}${ticks}${annotations}${legend}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getDumbbellChartSummary(details))}</desc><g transform="translate(${layout.plotX + gutter} ${layout.plotY})">${plot}</g>${labels}${differences}${ticks}${annotations}${legend}`,
+  });
 }
 
 export const dumbbellChartRenderer: ChartType<

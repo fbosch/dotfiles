@@ -1,12 +1,12 @@
 import { type Static, Type } from "typebox";
 
-const MAX_SLICES = 12;
-const MAX_BARS = 12;
-const MAX_ROWS = 200;
-const MAX_LABEL_LENGTH = 22;
-const MAX_POINT_LABEL_LENGTH = 40;
-const MAX_TITLE_LENGTH = 80;
-const MAX_AXIS_LABEL_LENGTH = 40;
+export const MAX_SLICES = 12;
+export const MAX_BARS = 12;
+export const MAX_ROWS = 200;
+export const MAX_LABEL_LENGTH = 22;
+export const MAX_POINT_LABEL_LENGTH = 40;
+export const MAX_TITLE_LENGTH = 80;
+export const MAX_AXIS_LABEL_LENGTH = 40;
 
 const chartTitle = Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH }));
 const axisLabels = {

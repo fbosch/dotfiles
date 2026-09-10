@@ -28,6 +28,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { BezierChartInput };
 export { bezierChartVariant };
 
@@ -131,17 +133,19 @@ export function getBezierChartLayout(
   const plotHeightPx = plotWidthPx;
   const widthPx = plotX + plotWidthPx + padding;
   const heightPx = plotY + plotHeightPx + bottom;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    axisLabelFontSizePx,
-    titleFontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      axisLabelFontSizePx,
+      titleFontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 function axisExtent(values: number[]): { center: number; span: number } {
@@ -275,7 +279,7 @@ export function renderBezierChartSvg(
       idPrefix: "pi-bezier",
     },
   );
-  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const chartBody = stripTanStackSvg(chart);
   const title =
     details.title === undefined
       ? ""
@@ -301,7 +305,15 @@ export function renderBezierChartSvg(
           layout.axisLabelFontSizePx,
           `text-anchor="middle" transform="rotate(-90 ${layout.axisLabelFontSizePx} ${labelY})"`,
         );
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${font}" aria-label="${escapeXml(details.title === undefined ? "Bezier chart" : `Bezier chart: ${details.title}`)}"><desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${chartBody}${title}${xLabel}${yLabel}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: font,
+    ariaLabel: details.title === undefined ? "Bezier chart" : `Bezier chart: ${details.title}`,
+    content: `<desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${chartBody}${title}${xLabel}${yLabel}`,
+  });
 }
 
 export const bezierChartRenderer: ChartType<

@@ -24,6 +24,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { StackedBarChartInput };
 export { stackedBarChartVariant };
 export type StackedBarChartData = Omit<StackedBarChartInput, "type" | "normalize"> & {
@@ -143,16 +145,18 @@ export function getStackedBarChartLayout(
   const heightPx = Math.ceil(
     plotY + plotHeightPx + fontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4),
   );
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 export function getStackedBarChartSummary(details: StackedBarChartDetails): string {
@@ -207,12 +211,12 @@ export function renderStackedBarChartSvg(
     }),
     { width: layout.plotWidthPx, height: layout.plotHeightPx },
   );
-  const plot = renderTanStackChartSvg(scene, {
-    ariaLabel: "Stacked bars",
-    idPrefix: "pi-stacked-bar",
-  })
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(scene, {
+      ariaLabel: "Stacked bars",
+      idPrefix: "pi-stacked-bar",
+    }),
+  );
   const text = (value: string, x: number, y: number, anchor = "middle", extra = "") =>
     `<text x="${x}" y="${y}" font-size="${font}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
   const shorten = (value: string, space: number) => {
@@ -275,7 +279,15 @@ export function renderStackedBarChartSvg(
     })
     .join("");
   const name = details.title ?? "Stacked bar";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getStackedBarChartSummary(details))}</desc><g data-stacked-bars="true" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}${legend}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getStackedBarChartSummary(details))}</desc><g data-stacked-bars="true" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}${legend}`,
+  });
 }
 
 export const stackedBarChartRenderer: ChartType<

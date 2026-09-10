@@ -25,6 +25,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { WaterfallChartInput };
 export { waterfallChartVariant };
 export type WaterfallChartData = Omit<WaterfallChartInput, "type">;
@@ -138,16 +140,18 @@ export function getWaterfallChartLayout(
   const plotHeightPx =
     (details.deltas.length + 2) * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 7.5 : 6));
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 export function getWaterfallChartSummary(details: WaterfallChartDetails): string {
@@ -234,12 +238,12 @@ export function renderWaterfallChartSvg(
         ),
       );
   }
-  const plot = renderTanStackChartSvg(
-    { ...scene, nodes: [...rules, ...scene.nodes] },
-    { ariaLabel: "Waterfall", idPrefix: "pi-waterfall" },
-  )
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(
+      { ...scene, nodes: [...rules, ...scene.nodes] },
+      { ariaLabel: "Waterfall", idPrefix: "pi-waterfall" },
+    ),
+  );
   const font = layout.fontSizePx;
   const text = (value: string, px: number, py: number, anchor = "middle", extra = "") =>
     `<text x="${px}" y="${py}" font-size="${font}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
@@ -298,7 +302,15 @@ export function renderWaterfallChartSvg(
     })
     .join("");
   const name = details.title ?? "Waterfall";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getWaterfallChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}${legend}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getWaterfallChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}${legend}`,
+  });
 }
 
 export const waterfallChartRenderer: ChartType<

@@ -15,6 +15,7 @@ import {
   MAX_NETWORK_GROUP_LENGTH,
   MAX_NETWORK_ID_LENGTH,
   MAX_NETWORK_LABEL_LENGTH,
+  MAX_TITLE_LENGTH,
   type NetworkChartInput,
   networkChartVariant,
 } from "../schemas";
@@ -33,6 +34,18 @@ import {
   scaleChartFontSize,
   validCellDimensions,
 } from "../types";
+
+import {
+  ESTIMATED_CHARACTER_WIDTH,
+  estimateTextWidthPx,
+  finalizeChartLayout,
+  fitTextToWidth,
+  getAccessibleDescription,
+  isRecord,
+  normalizeBoundedText,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { NetworkChartInput };
 export { networkChartVariant };
@@ -109,9 +122,6 @@ type NetworkRows = {
   manualEdges: PositionedNetworkEdge[];
 };
 
-const MAX_TITLE_LENGTH = 80;
-const CHARACTER_WIDTH = 0.58;
-const MAX_ACCESSIBLE_DESCRIPTION_BYTES = 16 * 1024;
 const NODE_RADIUS_PX = 4;
 const LABEL_OFFSET_PX = 7;
 const LABEL_EDGE_GAP_PX = 5;
@@ -119,23 +129,10 @@ const TARGET_EDGE_GAP_PX = 4;
 const MANUAL_EDGE_BEND_PX = 18;
 
 const SELF_LOOP_LABEL_MARGIN_PX = 4;
-function normalizeText(
-  value: string | undefined,
-  name: string,
-  maximum: number,
-): string | undefined {
-  if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > maximum) {
-    throw new Error(`${name} must be 1-${maximum} characters`);
-  }
-  return normalized;
-}
-
 function normalizeNode(row: NetworkChartInput["nodes"][number], index: number): NetworkChartNode {
   const id = row.id.trim();
   const label = row.label.trim();
-  const group = normalizeText(row.group, `group ${index + 1}`, MAX_NETWORK_GROUP_LENGTH);
+  const group = normalizeBoundedText(row.group, `group ${index + 1}`, MAX_NETWORK_GROUP_LENGTH);
   if (id.length === 0 || id.length > MAX_NETWORK_ID_LENGTH) {
     throw new Error(`id ${index + 1} must be 1-${MAX_NETWORK_ID_LENGTH} characters`);
   }
@@ -154,7 +151,11 @@ function normalizeEdge(row: NetworkChartInput["edges"][number], index: number): 
   if (target.length === 0 || target.length > MAX_NETWORK_ID_LENGTH) {
     throw new Error(`edge target ${index + 1} must be 1-${MAX_NETWORK_ID_LENGTH} characters`);
   }
-  const label = normalizeText(row.label, `edge label ${index + 1}`, MAX_NETWORK_EDGE_LABEL_LENGTH);
+  const label = normalizeBoundedText(
+    row.label,
+    `edge label ${index + 1}`,
+    MAX_NETWORK_EDGE_LABEL_LENGTH,
+  );
   return label === undefined ? { source, target } : { source, target, label };
 }
 
@@ -183,7 +184,7 @@ export function validateNetworkChartInput(input: NetworkChartInput): NetworkChar
     edgeKeys.add(key);
   }
 
-  const title = normalizeText(input.title, "title", MAX_TITLE_LENGTH);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
   return title === undefined ? { nodes, edges } : { nodes, edges, title };
 }
 
@@ -218,25 +219,6 @@ export function deserializeNetworkChartDetails(value: unknown): NetworkChartDeta
   } catch {
     return undefined;
   }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
-
-function estimateTextWidthPx(value: string, fontSizePx: number): number {
-  return value.length * fontSizePx * CHARACTER_WIDTH;
-}
-
-function fitNetworkLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
-  const maximumCharacters = Math.max(
-    1,
-    Math.floor((maximumWidthPx - 8) / (fontSizePx * CHARACTER_WIDTH)),
-  );
-  const characters = Array.from(value);
-  if (characters.length <= maximumCharacters) return value;
-  if (maximumCharacters === 1) return "…";
-  return `${characters.slice(0, maximumCharacters - 1).join("")}…`;
 }
 
 function computeNetworkTopology(data: NetworkChartData): NetworkTopology {
@@ -427,7 +409,7 @@ function createNetworkRows(
       layer: position.layer,
       x: position.x,
       y: position.y,
-      displayLabel: fitNetworkLabel(
+      displayLabel: fitTextToWidth(
         node.label,
         Math.min(layout.labelWidthPx, availableLabelWidth),
         layout.fontSizePx,
@@ -682,8 +664,8 @@ function renderNetworkEdgeLabels(
                 ),
               )
             : Math.min(120, Math.max(0, Math.abs(edge.x2 - edge.x1) - 12));
-      if (availableWidth < size * CHARACTER_WIDTH) return [];
-      const label = fitNetworkLabel(edge.label, availableWidth, size);
+      if (availableWidth < size * ESTIMATED_CHARACTER_WIDTH) return [];
+      const label = fitTextToWidth(edge.label, availableWidth, size);
       const labelWidth = estimateTextWidthPx(label, size);
       const labelX =
         edge.kind === "self"
@@ -726,17 +708,19 @@ export function getNetworkChartLayout(
     widthPx - paddingPx * 2 - labelWidthPx,
   );
   const heightPx = paddingPx + titleHeightPx + plotHeightPx + paddingPx;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX: paddingPx,
-    plotY: paddingPx + titleHeightPx,
-    plotWidthPx,
-    plotHeightPx,
-    labelWidthPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX: paddingPx,
+      plotY: paddingPx + titleHeightPx,
+      plotWidthPx,
+      plotHeightPx,
+      labelWidthPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 export function getNetworkChartSummary(details: NetworkChartDetails): string {
@@ -774,12 +758,12 @@ export function renderNetworkChartSvg(
   const chartLabel =
     details.title === undefined ? "Network chart" : `Network chart: ${details.title}`;
   const renderBody = (includeLinks: boolean, includeNodes: boolean): string =>
-    renderTanStackChartSvg(
-      createNetworkSceneFromRows(rows, theme, layout, includeLinks, includeNodes),
-      { ariaLabel: chartLabel, idPrefix: "pi-network" },
+    stripTanStackSvg(
+      renderTanStackChartSvg(
+        createNetworkSceneFromRows(rows, theme, layout, includeLinks, includeNodes),
+        { ariaLabel: chartLabel, idPrefix: "pi-network" },
+      ),
     )
-      .replace(/^<svg\b[^>]*>/, "")
-      .replace(/<\/svg>$/, "")
       .replace(/ data-ts-key="[^"]*"/g, "")
       .replace(/<line\b/g, '<line marker-end="url(#pi-network-arrow)"');
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
@@ -799,10 +783,10 @@ export function renderNetworkChartSvg(
     layout.plotWidthPx,
   )}${nodeBody}`;
   const summary = getNetworkChartSummary(details);
-  const accessibleDescription =
-    Buffer.byteLength(summary, "utf8") <= MAX_ACCESSIBLE_DESCRIPTION_BYTES
-      ? summary
-      : `Network chart with ${details.nodes.length} nodes and ${details.edges.length} directed edges. The accompanying text result contains the exact graph.`;
+  const accessibleDescription = getAccessibleDescription(
+    summary,
+    `Network chart with ${details.nodes.length} nodes and ${details.edges.length} directed edges. The accompanying text result contains the exact graph.`,
+  );
   const title =
     details.title === undefined
       ? ""
@@ -810,7 +794,16 @@ export function renderNetworkChartSvg(
   const marker = `<defs><marker id="pi-network-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M 0 0 L 6 3 L 0 6 z" fill="${foreground}"/></marker></defs>`;
   const accessibleName =
     details.title === undefined ? "Network chart" : `Network chart: ${details.title}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(accessibleDescription)}">${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${marker}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g>${title}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: accessibleName,
+    ariaDescription: accessibleDescription,
+    content: `${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${marker}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g>${title}`,
+  });
 }
 
 export const networkChartRenderer: ChartType<

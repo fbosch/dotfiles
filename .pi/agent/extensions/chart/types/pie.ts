@@ -5,8 +5,13 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
-import type { PieChartInput } from "../schemas";
-import { pieChartVariant } from "../schemas";
+import {
+  MAX_LABEL_LENGTH,
+  MAX_SLICES,
+  MAX_TITLE_LENGTH,
+  type PieChartInput,
+  pieChartVariant,
+} from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -26,14 +31,20 @@ import {
   validCellDimensions,
 } from "../types";
 
+import {
+  clamp,
+  ESTIMATED_CHARACTER_WIDTH,
+  finalizeChartLayout,
+  normalizeUniqueLabel,
+  isRecord,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
+
 export type { PieChartInput };
 export { pieChartVariant };
 
 const NARROW_LAYOUT_CELLS = 36;
-const MAX_SLICES = 12;
-const MAX_LABEL_LENGTH = 22;
-const MAX_TITLE_LENGTH = 80;
-const ESTIMATED_CHARACTER_WIDTH = 0.58;
 const LEGEND_TEXT_GAP_PX = 6;
 const LEGEND_COLUMN_GAP_PX = 8;
 
@@ -61,10 +72,6 @@ export type PieChartDetails = ChartDetails & {
   rows: PieChartRow[];
   title?: string;
 };
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
 
 export function getPieChartLayout(
   cellDimensions?: CellDimensions,
@@ -103,22 +110,24 @@ export function getPieChartLayout(
       availablePieHeightPx,
     );
     const heightPx = Math.round(paddingPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx);
-    return {
-      widthPx,
-      heightPx,
-      heightCells: Math.ceil(heightPx / dimensions.heightPx),
-      pieDiameterPx,
-      pieX: Math.round((widthPx - pieDiameterPx) / 2),
-      pieY: paddingPx,
-      legendX: paddingPx,
-      legendY: Math.round(paddingPx + pieDiameterPx + paddingPx + labelFontSizePx),
-      legendColumns,
-      legendColumnWidthPx: Math.floor((widthPx - paddingPx * 2) / legendColumns),
-      legendRowHeightPx,
-      labelFontSizePx,
-      markerSizePx,
-      stacked,
-    };
+    return finalizeChartLayout(
+      {
+        widthPx,
+        heightPx,
+        pieDiameterPx,
+        pieX: Math.round((widthPx - pieDiameterPx) / 2),
+        pieY: paddingPx,
+        legendX: paddingPx,
+        legendY: Math.round(paddingPx + pieDiameterPx + paddingPx + labelFontSizePx),
+        legendColumns,
+        legendColumnWidthPx: Math.floor((widthPx - paddingPx * 2) / legendColumns),
+        legendRowHeightPx,
+        labelFontSizePx,
+        markerSizePx,
+        stacked,
+      },
+      dimensions.heightPx,
+    );
   }
 
   const pieDiameterPx = Math.max(
@@ -136,22 +145,24 @@ export function getPieChartLayout(
     maxHeightPx,
     Math.max(pieDiameterPx + paddingPx * 2, legendRows * legendRowHeightPx + paddingPx * 2),
   );
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / dimensions.heightPx),
-    pieDiameterPx,
-    pieX: paddingPx,
-    pieY: Math.round((heightPx - pieDiameterPx) / 2),
-    legendX,
-    legendY: Math.round((heightPx - legendRows * legendRowHeightPx) / 2 + labelFontSizePx),
-    legendColumns,
-    legendColumnWidthPx: Math.floor(legendWidthPx / legendColumns),
-    legendRowHeightPx,
-    labelFontSizePx,
-    markerSizePx,
-    stacked,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      pieDiameterPx,
+      pieX: paddingPx,
+      pieY: Math.round((heightPx - pieDiameterPx) / 2),
+      legendX,
+      legendY: Math.round((heightPx - legendRows * legendRowHeightPx) / 2 + labelFontSizePx),
+      legendColumns,
+      legendColumnWidthPx: Math.floor(legendWidthPx / legendColumns),
+      legendRowHeightPx,
+      labelFontSizePx,
+      markerSizePx,
+      stacked,
+    },
+    dimensions.heightPx,
+  );
 }
 
 export function validatePieChartInput(input: PieChartInput): PieChartRow[] {
@@ -161,18 +172,7 @@ export function validatePieChartInput(input: PieChartInput): PieChartRow[] {
 
   const labels = new Set<string>();
   const rows = input.data.map(({ label, value }, index) => {
-    const normalizedLabel = label.trim();
-    if (
-      typeof label !== "string" ||
-      normalizedLabel.length === 0 ||
-      normalizedLabel.length > MAX_LABEL_LENGTH
-    ) {
-      throw new Error(`label ${index + 1} must be 1-${MAX_LABEL_LENGTH} characters`);
-    }
-    if (labels.has(normalizedLabel)) {
-      throw new Error(`label ${index + 1} duplicates an earlier label`);
-    }
-    labels.add(normalizedLabel);
+    const normalizedLabel = normalizeUniqueLabel(label, index, MAX_LABEL_LENGTH, labels);
     if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
       throw new Error(`value ${index + 1} must be a finite nonnegative number`);
     }
@@ -195,9 +195,6 @@ function normalizePieChartTitle(title: string | undefined): string | undefined {
   return normalizedTitle;
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
 
 function isPieChartRow(value: unknown): value is PieChartRow {
   return (
@@ -304,10 +301,19 @@ export function renderPieChartSvg(
       return `<rect x="${x}" y="${y - layout.markerSizePx + 2}" width="${layout.markerSizePx}" height="${layout.markerSizePx}" rx="2" fill="${color}"/><text x="${x + layout.markerSizePx + LEGEND_TEXT_GAP_PX}" y="${y}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(legendLabel)}</text>`;
     })
     .join("");
-  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const chartBody = stripTanStackSvg(chart);
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(rows.map((row) => `${row.label}: ${row.value}`).join(", "))}">${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g></svg>`;
+  return renderSvgDocument({
+    widthPx: rasterWidthPx,
+    heightPx: rasterHeightPx,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: accessibleName,
+    ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
+    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g>`,
+  });
 }
 
 export function getPieChartSummary(details: PieChartDetails): string {

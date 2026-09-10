@@ -6,8 +6,15 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import type { LineChartInput } from "../schemas";
-import { lineChartVariant, numericLineChartVariant, temporalLineChartVariant } from "../schemas";
+import {
+  type LineChartInput,
+  lineChartVariant,
+  MAX_AXIS_LABEL_LENGTH,
+  MAX_ROWS,
+  MAX_TITLE_LENGTH,
+  numericLineChartVariant,
+  temporalLineChartVariant,
+} from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -27,12 +34,21 @@ import {
   validCellDimensions,
 } from "../types";
 
+import {
+  clamp,
+  finalizeChartLayout,
+  formatNumber,
+  isRecord,
+  normalizeBoundedText,
+  paddedDomain,
+  renderSvgDocument,
+  renderCartesianAxes,
+  stripTanStackSvg,
+} from "./shared";
+
 export type { LineChartInput };
 export { lineChartVariant, numericLineChartVariant, temporalLineChartVariant };
 
-const MAX_ROWS = 200;
-const MAX_TITLE_LENGTH = 80;
-const MAX_AXIS_LABEL_LENGTH = 40;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_UTC_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
@@ -58,23 +74,6 @@ export type LineChartDetails = ChartDetails &
   LineChartData & {
     type: "line";
   };
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function normalizeText(
-  value: string | undefined,
-  name: string,
-  maximum: number,
-): string | undefined {
-  if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > maximum) {
-    throw new Error(`${name} must be 1-${maximum} characters`);
-  }
-  return normalized;
-}
 
 function parseTemporalX(value: string, index: number): number {
   const date = ISO_DATE.exec(value);
@@ -127,9 +126,9 @@ export function validateLineChartInput(input: LineChartInput): LineChartData {
   });
   if (rows.every((row) => row.y === null)) throw new Error("provide at least one numeric y value");
 
-  const title = normalizeText(input.title, "title", MAX_TITLE_LENGTH);
-  const xLabel = normalizeText(input.xLabel, "xLabel", MAX_AXIS_LABEL_LENGTH);
-  const yLabel = normalizeText(input.yLabel, "yLabel", MAX_AXIS_LABEL_LENGTH);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
+  const xLabel = normalizeBoundedText(input.xLabel, "xLabel", MAX_AXIS_LABEL_LENGTH);
+  const yLabel = normalizeBoundedText(input.yLabel, "yLabel", MAX_AXIS_LABEL_LENGTH);
   return {
     xType: input.xType,
     rows,
@@ -138,10 +137,6 @@ export function validateLineChartInput(input: LineChartInput): LineChartData {
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
 function isLineChartRow(value: unknown): value is LineChartRow {
@@ -246,35 +241,20 @@ export function getLineChartLayout(
         )
       : Math.max(1, Math.min(Math.round(dimensions.heightPx * 8), availablePlotHeightPx));
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / dimensions.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    tickFontSizePx,
-    axisLabelFontSizePx,
-    titleFontSizePx,
-  };
-}
-
-function paddedDomain(values: number[]): [number, number] {
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  if (minimum === maximum) {
-    const padding = Math.abs(minimum) * 0.06 || 1;
-    return [minimum - padding, maximum + padding];
-  }
-  const padding = (maximum - minimum) * 0.06;
-  return [minimum - padding, maximum + padding];
-}
-
-function formatNumber(value: number): string {
-  return Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.01)
-    ? value.toExponential(1)
-    : Number(value.toFixed(2)).toString();
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      tickFontSizePx,
+      axisLabelFontSizePx,
+      titleFontSizePx,
+    },
+    dimensions.heightPx,
+  );
 }
 
 function formatTemporalTick(epoch: number, span: number): string {
@@ -319,26 +299,24 @@ export function renderLineChartSvg(
   const accessibleName =
     details.title === undefined ? "Line chart" : `Line chart: ${details.title}`;
   const chart = renderTanStackChartSvg(scene, { ariaLabel: accessibleName, idPrefix: "pi-line" });
-  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const chartBody = stripTanStackSvg(chart);
+  const xAxisY = layout.plotY + layout.plotHeightPx;
   const xTicks = xScale.ticks(layout.plotWidthPx < 250 ? 3 : 5);
   const yTicks = yScale.ticks(5);
   const xSpan = xDomain[1] - xDomain[0];
   const tickText = (value: number) =>
     details.xType === "temporal" ? formatTemporalTick(value, xSpan) : formatNumber(value);
-  const xAxisY = layout.plotY + layout.plotHeightPx;
-  const xAxis = xTicks
-    .map((value) => {
-      const x = layout.plotX + ((value - xDomain[0]) / xSpan) * layout.plotWidthPx;
-      return `<line x1="${x}" x2="${x}" y1="${xAxisY}" y2="${xAxisY + 4}" stroke="${foreground}"/><text x="${x}" y="${xAxisY + layout.tickFontSizePx + 6}" text-anchor="middle" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(tickText(value))}</text>`;
-    })
-    .join("");
-  const yAxis = yTicks
-    .map((value) => {
-      const y =
-        layout.plotY + (1 - (value - yDomain[0]) / (yDomain[1] - yDomain[0])) * layout.plotHeightPx;
-      return `<line x1="${layout.plotX - 4}" x2="${layout.plotX}" y1="${y}" y2="${y}" stroke="${foreground}"/><text x="${layout.plotX - 7}" y="${y + layout.tickFontSizePx * 0.35}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(formatNumber(value))}</text>`;
-    })
-    .join("");
+  const { xAxis, yAxis } = renderCartesianAxes({
+    layout,
+    xDomain,
+    yDomain,
+    xTicks,
+    yTicks,
+    foreground,
+    fontFamily,
+    formatXTick: tickText,
+    formatYTick: formatNumber,
+  });
   const title =
     details.title === undefined
       ? ""
@@ -354,7 +332,16 @@ export function renderLineChartSvg(
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
   const description = details.rows.map((row) => `${row.xLabel}: ${row.y ?? "no value"}`).join(", ");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${rasterWidthPx}" height="${rasterHeightPx}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(description)}">${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g><line x1="${layout.plotX}" x2="${layout.plotX + layout.plotWidthPx}" y1="${xAxisY}" y2="${xAxisY}" stroke="${foreground}"/><line x1="${layout.plotX}" x2="${layout.plotX}" y1="${layout.plotY}" y2="${xAxisY}" stroke="${foreground}"/>${xAxis}${yAxis}${title}${xLabel}${yLabel}</svg>`;
+  return renderSvgDocument({
+    widthPx: rasterWidthPx,
+    heightPx: rasterHeightPx,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: accessibleName,
+    ariaDescription: description,
+    content: `${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g><line x1="${layout.plotX}" x2="${layout.plotX + layout.plotWidthPx}" y1="${xAxisY}" y2="${xAxisY}" stroke="${foreground}"/><line x1="${layout.plotX}" x2="${layout.plotX}" y1="${layout.plotY}" y2="${xAxisY}" stroke="${foreground}"/>${xAxis}${yAxis}${title}${xLabel}${yLabel}`,
+  });
 }
 
 export function getLineChartSummary(details: LineChartDetails): string {
@@ -381,7 +368,7 @@ export const lineChartRenderer: ChartType<
     };
   },
   getCallHeader(parameters: LineChartInput): string {
-    const title = normalizeText(parameters.title, "title", MAX_TITLE_LENGTH);
+    const title = normalizeBoundedText(parameters.title, "title", MAX_TITLE_LENGTH);
     return title === undefined ? "chart" : `chart — ${title}`;
   },
   getSummary: getLineChartSummary,

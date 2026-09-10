@@ -6,8 +6,14 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import type { ScatterChartInput } from "../schemas";
-import { scatterChartVariant } from "../schemas";
+import {
+  MAX_AXIS_LABEL_LENGTH,
+  MAX_POINT_LABEL_LENGTH,
+  MAX_ROWS,
+  MAX_TITLE_LENGTH,
+  type ScatterChartInput,
+  scatterChartVariant,
+} from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -25,13 +31,21 @@ import {
   validCellDimensions,
 } from "../types";
 
+import {
+  clamp,
+  finalizeChartLayout,
+  formatNumber,
+  isRecord,
+  normalizeBoundedText,
+  paddedDomain,
+  renderSvgDocument,
+  renderCartesianAxes,
+  stripTanStackSvg,
+} from "./shared";
+
 export type { ScatterChartInput };
 export { scatterChartVariant };
 
-const MAX_ROWS = 200;
-const MAX_TITLE_LENGTH = 80;
-const MAX_AXIS_LABEL_LENGTH = 40;
-const MAX_POINT_LABEL_LENGTH = 40;
 const DOT_RADIUS_PX = 4;
 
 export type ScatterChartRow = { x: number; y: number; label?: string };
@@ -53,23 +67,6 @@ export type ScatterChartLayout = ChartLayout & {
 };
 export type ScatterChartDetails = ChartDetails & ScatterChartData & { type: "scatter" };
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function normalizeText(
-  value: string | undefined,
-  name: string,
-  maximum: number,
-): string | undefined {
-  if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > maximum) {
-    throw new Error(`${name} must be 1-${maximum} characters`);
-  }
-  return normalized;
-}
-
 export function validateScatterChartInput(input: ScatterChartInput): ScatterChartData {
   if (input.data.length < 2 || input.data.length > MAX_ROWS) {
     throw new Error(`provide between 2 and ${MAX_ROWS} rows`);
@@ -77,22 +74,18 @@ export function validateScatterChartInput(input: ScatterChartInput): ScatterChar
   const rows = input.data.map((row, index) => {
     if (Number.isFinite(row.x) === false) throw new Error(`x ${index + 1} must be a finite number`);
     if (Number.isFinite(row.y) === false) throw new Error(`y ${index + 1} must be a finite number`);
-    const label = normalizeText(row.label, `label ${index + 1}`, MAX_POINT_LABEL_LENGTH);
+    const label = normalizeBoundedText(row.label, `label ${index + 1}`, MAX_POINT_LABEL_LENGTH);
     return { x: row.x, y: row.y, ...(label === undefined ? {} : { label }) };
   });
-  const title = normalizeText(input.title, "title", MAX_TITLE_LENGTH);
-  const xLabel = normalizeText(input.xLabel, "xLabel", MAX_AXIS_LABEL_LENGTH);
-  const yLabel = normalizeText(input.yLabel, "yLabel", MAX_AXIS_LABEL_LENGTH);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
+  const xLabel = normalizeBoundedText(input.xLabel, "xLabel", MAX_AXIS_LABEL_LENGTH);
+  const yLabel = normalizeBoundedText(input.yLabel, "yLabel", MAX_AXIS_LABEL_LENGTH);
   return {
     rows,
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
 function isScatterChartRow(value: unknown): value is ScatterChartRow {
@@ -175,36 +168,21 @@ export function getScatterChartLayout(
     Math.min(Math.round(dimensions.heightPx * 8), availablePlotHeightPx),
   );
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / dimensions.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    tickFontSizePx,
-    axisLabelFontSizePx,
-    titleFontSizePx,
-    pointLabelFontSizePx: Math.max(8, Math.round(tickFontSizePx * 0.9)),
-  };
-}
-
-function paddedDomain(values: number[]): [number, number] {
-  const minimum = Math.min(...values);
-  const maximum = Math.max(...values);
-  if (minimum === maximum) {
-    const padding = Math.abs(minimum) * 0.06 || 1;
-    return [minimum - padding, maximum + padding];
-  }
-  const padding = (maximum - minimum) * 0.06;
-  return [minimum - padding, maximum + padding];
-}
-
-function formatNumber(value: number): string {
-  return Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.01)
-    ? value.toExponential(1)
-    : Number(value.toFixed(2)).toString();
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      tickFontSizePx,
+      axisLabelFontSizePx,
+      titleFontSizePx,
+      pointLabelFontSizePx: Math.max(8, Math.round(tickFontSizePx * 0.9)),
+    },
+    dimensions.heightPx,
+  );
 }
 
 function wrapLabel(label: string, maximum = 16): string[] {
@@ -267,24 +245,23 @@ export function renderScatterChartSvg(
     ariaLabel: accessibleName,
     idPrefix: "pi-scatter",
   });
-  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
+  const chartBody = stripTanStackSvg(chart);
   const xSpan = xDomain[1] - xDomain[0];
   const ySpan = yDomain[1] - yDomain[0];
   const xAxisY = layout.plotY + layout.plotHeightPx;
   const xTicks = xScale.ticks(layout.plotWidthPx < 250 ? 3 : 5);
   const yTicks = yScale.ticks(5);
-  const xAxis = xTicks
-    .map((value) => {
-      const x = layout.plotX + ((value - xDomain[0]) / xSpan) * layout.plotWidthPx;
-      return `<line x1="${x}" x2="${x}" y1="${xAxisY}" y2="${xAxisY + 4}" stroke="${foreground}"/><text x="${x}" y="${xAxisY + layout.tickFontSizePx + 6}" text-anchor="middle" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(formatNumber(value))}</text>`;
-    })
-    .join("");
-  const yAxis = yTicks
-    .map((value) => {
-      const y = layout.plotY + (1 - (value - yDomain[0]) / ySpan) * layout.plotHeightPx;
-      return `<line x1="${layout.plotX - 4}" x2="${layout.plotX}" y1="${y}" y2="${y}" stroke="${foreground}"/><text x="${layout.plotX - 7}" y="${y + layout.tickFontSizePx * 0.35}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.tickFontSizePx}">${escapeXml(formatNumber(value))}</text>`;
-    })
-    .join("");
+  const { xAxis, yAxis } = renderCartesianAxes({
+    layout,
+    xDomain,
+    yDomain,
+    xTicks,
+    yTicks,
+    foreground,
+    fontFamily,
+    formatXTick: formatNumber,
+    formatYTick: formatNumber,
+  });
   const labels = details.rows
     .map((row, index) => {
       if (row.label === undefined) return "";
@@ -321,7 +298,16 @@ export function renderScatterChartSvg(
   const description = details.rows
     .map((row) => `${row.label === undefined ? "point" : row.label}: ${row.x}, ${row.y}`)
     .join(", ");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(accessibleName)}" aria-description="${escapeXml(description)}">${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g><g data-scatter-labels="true">${labels}</g><line x1="${layout.plotX}" x2="${layout.plotX + layout.plotWidthPx}" y1="${xAxisY}" y2="${xAxisY}" stroke="${foreground}"/><line x1="${layout.plotX}" x2="${layout.plotX}" y1="${layout.plotY}" y2="${xAxisY}" stroke="${foreground}"/>${xAxis}${yAxis}${title}${xLabel}${yLabel}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: accessibleName,
+    ariaDescription: description,
+    content: `${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}</g><g data-scatter-labels="true">${labels}</g><line x1="${layout.plotX}" x2="${layout.plotX + layout.plotWidthPx}" y1="${xAxisY}" y2="${xAxisY}" stroke="${foreground}"/><line x1="${layout.plotX}" x2="${layout.plotX}" y1="${layout.plotY}" y2="${xAxisY}" stroke="${foreground}"/>${xAxis}${yAxis}${title}${xLabel}${yLabel}`,
+  });
 }
 
 export function getScatterChartSummary(details: ScatterChartDetails): string {
@@ -348,7 +334,7 @@ export const scatterChartRenderer: ChartType<
     };
   },
   getCallHeader(parameters) {
-    const title = normalizeText(parameters.title, "title", MAX_TITLE_LENGTH);
+    const title = normalizeBoundedText(parameters.title, "title", MAX_TITLE_LENGTH);
     return title === undefined ? "chart" : `chart — ${title}`;
   },
   getSummary: getScatterChartSummary,

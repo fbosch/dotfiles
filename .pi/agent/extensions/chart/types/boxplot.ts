@@ -27,6 +27,8 @@ import {
   validCellDimensions,
 } from "../types";
 
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+
 export type { BoxplotChartInput };
 export { boxplotChartVariant };
 export type BoxplotChartData = Omit<BoxplotChartInput, "type" | "showOutliers"> & {
@@ -154,16 +156,18 @@ export function getBoxplotChartLayout(
   const plotWidthPx = Math.max(1, widthPx - plotX - fontSizePx);
   const plotHeightPx = details.groups.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 3.5 : 2));
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    fontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      fontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 export function getBoxplotChartSummary(details: BoxplotChartDetails): string {
@@ -244,12 +248,12 @@ export function renderBoxplotChartSvg(
       rule("median", row.median, row.median, y - rowHeight * 0.25, y + rowHeight * 0.25),
     ];
   });
-  const plot = renderTanStackChartSvg(
-    { ...scene, nodes: [...scene.nodes, ...rules] },
-    { ariaLabel: "Box plot", idPrefix: "pi-boxplot" },
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(
+      { ...scene, nodes: [...scene.nodes, ...rules] },
+      { ariaLabel: "Box plot", idPrefix: "pi-boxplot" },
+    ),
   )
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "")
     // TanStack owns every dot coordinate. Drop nonvisual per-dot metadata and inherit fill to
     // fit all 1,176 possible distinct outliers inside the shared 64 KiB worker input budget.
     .replace(/<circle\b[^>]*\/>/g, (circle) =>
@@ -300,7 +304,15 @@ export function renderBoxplotChartSvg(
         )
       : "");
   const name = details.title ?? "Box plot";
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getBoxplotChartSummary(details))}</desc><g fill="${escapeXml(color)}" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: details.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getBoxplotChartSummary(details))}</desc><g fill="${escapeXml(color)}" transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${labels}${ticks}${annotations}`,
+  });
 }
 
 export const boxplotChartRenderer: ChartType<

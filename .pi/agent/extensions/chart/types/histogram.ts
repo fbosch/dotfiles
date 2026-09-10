@@ -11,8 +11,10 @@ import { Value } from "typebox/value";
 import {
   type HistogramChartInput,
   histogramChartVariant,
+  MAX_AXIS_LABEL_LENGTH,
   MAX_HISTOGRAM_BINS,
   MAX_HISTOGRAM_SAMPLES,
+  MAX_TITLE_LENGTH,
 } from "../schemas";
 import {
   ansiColor,
@@ -31,6 +33,8 @@ import {
   scaleChartFontSize,
   validCellDimensions,
 } from "../types";
+
+import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
 
 export type { HistogramChartInput };
 export { histogramChartVariant };
@@ -122,9 +126,9 @@ const detailsSchema = Type.Object(
       ),
       { minItems: 1, maxItems: MAX_HISTOGRAM_BINS },
     ),
-    title: Type.Optional(Type.String({ minLength: 1, maxLength: 80 })),
-    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 40 })),
-    yLabel: Type.String({ minLength: 1, maxLength: 40 }),
+    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
+    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+    yLabel: Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH }),
     imageWidthCells: Type.Number({ exclusiveMinimum: 0 }),
     fontFamily: Type.Optional(Type.String()),
     fontSize: Type.Optional(Type.Number({ minimum: MIN_FONT_SIZE_PX, maximum: MAX_FONT_SIZE_PX })),
@@ -180,18 +184,20 @@ export function getHistogramChartLayout(
     Math.min(cells.heightPx * 8, MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottomHeightPx),
   );
   const heightPx = Math.ceil(plotY + plotHeightPx + bottomHeightPx);
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY,
-    plotWidthPx,
-    plotHeightPx,
-    tickFontSizePx,
-    axisLabelFontSizePx,
-    titleFontSizePx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY,
+      plotWidthPx,
+      plotHeightPx,
+      tickFontSizePx,
+      axisLabelFontSizePx,
+      titleFontSizePx,
+    },
+    cells.heightPx,
+  );
 }
 
 function interval(row: HistogramBin, last: boolean): string {
@@ -248,11 +254,10 @@ export function renderHistogramChartSvg(
     }),
     { width: layout.plotWidthPx, height: layout.plotHeightPx },
   );
-  const chart = renderTanStackChartSvg(scene, { ariaLabel: "Histogram", idPrefix: "pi-histogram" });
   let binIndex = 0;
-  const bars = chart
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "")
+  const bars = stripTanStackSvg(
+    renderTanStackChartSvg(scene, { ariaLabel: "Histogram", idPrefix: "pi-histogram" }),
+  )
     // TanStack owns rectangle geometry; retain the existing per-bin SVG titles and identities.
     .replace(/<rect\b([^>]*)\/>/g, (_rectangle, attributes: string) => {
       const index = binIndex++;
@@ -306,7 +311,15 @@ export function renderHistogramChartSvg(
       ? ""
       : text(details.title, layout.plotX, layout.plotY - 8, layout.titleFontSizePx, "start"));
   const name = details.title === undefined ? "Histogram" : `Histogram: ${details.title}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${bars}</g><path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: name,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${bars}</g><path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}`,
+  });
 }
 
 export const histogramChartRenderer: ChartType<

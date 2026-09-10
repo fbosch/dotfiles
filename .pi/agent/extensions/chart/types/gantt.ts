@@ -10,11 +10,12 @@ import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
+  type GanttChartInput,
+  ganttChartVariant,
   MAX_GANTT_GROUP_LENGTH,
   MAX_GANTT_ID_LENGTH,
   MAX_GANTT_LABEL_LENGTH,
-  type GanttChartInput,
-  ganttChartVariant,
+  MAX_TITLE_LENGTH,
 } from "../schemas";
 import {
   ansiColor,
@@ -31,6 +32,18 @@ import {
   scaleChartFontSize,
   validCellDimensions,
 } from "../types";
+
+import {
+  ESTIMATED_CHARACTER_WIDTH,
+  estimateTextWidthPx,
+  finalizeChartLayout,
+  formatNumber,
+  getAccessibleDescription,
+  isRecord,
+  normalizeBoundedText,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { GanttChartInput };
 export { ganttChartVariant };
@@ -94,30 +107,12 @@ type LegendEntry = {
   kind: "group" | "dependency";
 };
 
-const MAX_ACCESSIBLE_DESCRIPTION_BYTES = 16 * 1024;
-const CHARACTER_WIDTH = 0.58;
 const MIN_TIME_SPAN = Number.EPSILON;
 const LEGEND_GAP_PX = 18;
 const LEGEND_SWATCH_PX = 8;
 const DEPENDENCY_ROUTE_GAP_PX = 12;
 const MILESTONE_SIZE_PX = 7;
 const MILESTONE_GAP_PX = 8;
-
-function estimateTextWidthPx(value: string, fontSizePx: number): number {
-  return value.length * fontSizePx * CHARACTER_WIDTH;
-}
-
-function normalizeText(
-  value: string | undefined,
-  name: string,
-  maximum: number,
-): string | undefined {
-  if (value === undefined) return undefined;
-  const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > maximum)
-    throw new Error(`${name} must be 1-${maximum} characters`);
-  return normalized;
-}
 
 function normalizeId(value: string, name: string): string {
   const normalized = value.trim();
@@ -139,7 +134,11 @@ export function validateGanttChartInput(input: GanttChartInput): GanttChartData 
   const tasks = input.tasks.map((task, index) => {
     const id = normalizeId(task.id, `task ${index + 1} id`);
     const label = normalizeLabel(task.label, `task ${index + 1} label`);
-    const group = normalizeText(task.group, `task ${index + 1} group`, MAX_GANTT_GROUP_LENGTH);
+    const group = normalizeBoundedText(
+      task.group,
+      `task ${index + 1} group`,
+      MAX_GANTT_GROUP_LENGTH,
+    );
     if (!Number.isFinite(task.start) || !Number.isFinite(task.end) || task.start >= task.end)
       throw new Error(`task ${index + 1} must have finite start < end`);
     const progress = task.progress ?? 0;
@@ -177,8 +176,8 @@ export function validateGanttChartInput(input: GanttChartInput): GanttChartData 
     if (!Number.isFinite(milestone.at)) throw new Error(`milestone ${index + 1} must be finite`);
     return { label, at: milestone.at } satisfies GanttMilestone;
   });
-  const title = normalizeText(input.title, "title", 80);
-  const xLabel = normalizeText(input.xLabel, "xLabel", 40);
+  const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
+  const xLabel = normalizeBoundedText(input.xLabel, "xLabel", 40);
   return {
     tasks,
     milestones,
@@ -217,10 +216,6 @@ function isFiniteDetailsWidth(value: unknown): value is { imageWidthCells: numbe
   return isRecord(value) && Number.isFinite(value.imageWidthCells);
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 export function getGanttDomain(details: GanttChartData): [number, number] {
   const values = [
     ...details.tasks.flatMap((task) => [task.start, task.end]),
@@ -229,12 +224,6 @@ export function getGanttDomain(details: GanttChartData): [number, number] {
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
   return maximum - minimum < MIN_TIME_SPAN ? [minimum, minimum + 1] : [minimum, maximum];
-}
-
-function formatNumber(value: number): string {
-  return Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.01)
-    ? value.toExponential(1)
-    : Number(value.toFixed(2)).toString();
 }
 
 export function getGanttChartSummary(details: GanttChartDetails): string {
@@ -326,22 +315,24 @@ export function getGanttChartLayout(
   const heightPx = Math.ceil(
     paddingPx + titleHeightPx + tickHeightPx + plotHeightPx + annotationHeightPx + legendHeightPx,
   );
-  return {
-    widthPx,
-    heightPx,
-    heightCells: Math.ceil(heightPx / cells.heightPx),
-    plotX,
-    plotY: paddingPx + titleHeightPx + tickHeightPx,
-    plotWidthPx,
-    plotHeightPx,
-    rowHeightPx,
-    labelWidthPx,
-    titleHeightPx,
-    tickHeightPx,
-    fontSizePx,
-    annotationHeightPx,
-    legendHeightPx,
-  };
+  return finalizeChartLayout(
+    {
+      widthPx,
+      heightPx,
+      plotX,
+      plotY: paddingPx + titleHeightPx + tickHeightPx,
+      plotWidthPx,
+      plotHeightPx,
+      rowHeightPx,
+      labelWidthPx,
+      titleHeightPx,
+      tickHeightPx,
+      fontSizePx,
+      annotationHeightPx,
+      legendHeightPx,
+    },
+    cells.heightPx,
+  );
 }
 
 function getGanttColors(
@@ -443,7 +434,7 @@ function createGanttScene(rows: readonly PositionedGanttTask[], layout: GanttCha
 
 function fitLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
   const maxCharacters = Math.floor(
-    Math.max(0, maximumWidthPx - 8) / (fontSizePx * CHARACTER_WIDTH),
+    Math.max(0, maximumWidthPx - 8) / (fontSizePx * ESTIMATED_CHARACTER_WIDTH),
   );
   if (maxCharacters <= 0) return "";
   if (Array.from(value).length <= maxCharacters) return value;
@@ -621,17 +612,17 @@ export function renderGanttChartSvg(
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
   const fontFamily = details.fontFamily ?? DEFAULT_FONT_FAMILY;
   const rows = createGanttRows(details, theme);
-  const plot = renderTanStackChartSvg(createGanttScene(rows, layout), {
-    ariaLabel: details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`,
-    idPrefix: "pi-gantt",
-  })
-    .replace(/^<svg\b[^>]*>/, "")
-    .replace(/<\/svg>$/, "");
+  const plot = stripTanStackSvg(
+    renderTanStackChartSvg(createGanttScene(rows, layout), {
+      ariaLabel: details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`,
+      idPrefix: "pi-gantt",
+    }),
+  );
   const summary = getGanttChartSummary(details);
-  const accessibleDescription =
-    Buffer.byteLength(summary, "utf8") <= MAX_ACCESSIBLE_DESCRIPTION_BYTES
-      ? summary
-      : `Gantt chart with ${details.tasks.length} tasks and ${details.milestones.length} milestones. The accompanying text result contains the exact schedule.`;
+  const accessibleDescription = getAccessibleDescription(
+    summary,
+    `Gantt chart with ${details.tasks.length} tasks and ${details.milestones.length} milestones. The accompanying text result contains the exact schedule.`,
+  );
   const title =
     details.title === undefined
       ? ""
@@ -658,7 +649,16 @@ export function renderGanttChartSvg(
   const style = `<style>.pi-gantt-dependency{fill:none;stroke:${foreground};stroke-opacity:.7;stroke-width:1.5;stroke-dasharray:4 3}</style>`;
   const marker = `<defs><marker id="pi-gantt-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M 0 0 L 7 3.5 L 0 7 z" fill="${foreground}"/></marker></defs>`;
   const name = details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(name)}" aria-description="${escapeXml(accessibleDescription)}">${style}${marker}<title>${escapeXml(name)}</title>${renderGrid(details, layout, foreground)}${renderDependencies(rows, layout)}<g transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${renderTaskLabels(details, layout, foreground)}${renderMilestones(details, layout, fontFamily)}${xLabel}${title}${renderLegend(details, layout, theme, fontFamily, foreground)}</svg>`;
+  return renderSvgDocument({
+    widthPx: layout.widthPx * RASTER_DENSITY,
+    heightPx: layout.heightPx * RASTER_DENSITY,
+    viewBoxWidthPx: layout.widthPx,
+    viewBoxHeightPx: layout.heightPx,
+    fontFamily: fontFamily,
+    ariaLabel: name,
+    ariaDescription: accessibleDescription,
+    content: `${style}${marker}<title>${escapeXml(name)}</title>${renderGrid(details, layout, foreground)}${renderDependencies(rows, layout)}<g transform="translate(${layout.plotX} ${layout.plotY})">${plot}</g>${renderTaskLabels(details, layout, foreground)}${renderMilestones(details, layout, fontFamily)}${xLabel}${title}${renderLegend(details, layout, theme, fontFamily, foreground)}`,
+  });
 }
 
 export const ganttChartRenderer: ChartType<
