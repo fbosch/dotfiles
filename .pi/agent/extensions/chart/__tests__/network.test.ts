@@ -288,7 +288,8 @@ describe("network chart", () => {
     const svg = networkChartRenderer.renderSvg(details, theme, layout);
     expect(layout.heightCells).toBeLessThanOrEqual(8);
     expect(svg.match(/<circle /g)?.length).toBe(12);
-    expect(svg.match(/>edge-\d+</g)?.length).toBeLessThan(edges.length);
+    expect(svg.match(/>edge-\d+</g)?.length ?? 0).toBeLessThan(edges.length);
+    expect(svg.match(/<text\b[^>]*>Node \d+</g) ?? []).toHaveLength(1);
   });
 
   test("round-trips replay details and rejects malformed graph structures", () => {

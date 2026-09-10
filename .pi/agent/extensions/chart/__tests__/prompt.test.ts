@@ -51,6 +51,9 @@ describe("chart prompt guidance", () => {
     expect(result?.systemPrompt).toContain(CHART_GUIDANCE_START);
     expect(result?.systemPrompt).toContain("timelines");
     expect(result?.systemPrompt).toContain("search_tools");
+    expect(result?.systemPrompt).toContain("12 nodes");
+    expect(result?.systemPrompt).toContain("32 nodes");
+    expect(result?.systemPrompt).toContain("balanced values");
     expect(result?.systemPrompt).toContain("chart_");
     expect(result?.systemPrompt).not.toContain("chart_gantt");
     expect(result?.systemPrompt).toContain(CHART_GUIDANCE_END);

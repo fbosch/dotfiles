@@ -34,8 +34,8 @@ import {
 } from "../types";
 
 import {
-  clampChartPlotHeightPx,
   deserializeChartDetails,
+  getChartHeightLimitPx,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
@@ -90,6 +90,7 @@ export type GanttChartLayout = ChartLayout & {
   tickHeightPx: number;
   annotationHeightPx: number;
   legendHeightPx: number;
+  legendEntryLimit: number;
 };
 
 type PositionedGanttTask = GanttTask & {
@@ -259,6 +260,7 @@ function getLegendRowCount(
   widthPx: number,
   fontSizePx: number,
 ): number {
+  if (entries.length === 0) return 0;
   const availableWidth = Math.max(1, widthPx);
   let rows = 1;
   let used = 0;
@@ -276,6 +278,32 @@ function getLegendRowCount(
   return rows;
 }
 
+function getLegendEntriesForRows(
+  entries: readonly LegendEntry[],
+  widthPx: number,
+  fontSizePx: number,
+  maximumRows: number,
+): LegendEntry[] {
+  if (maximumRows <= 0) return [];
+  const availableWidth = Math.max(1, widthPx);
+  let rows = 1;
+  let used = 0;
+  const visible: LegendEntry[] = [];
+  for (const entry of entries) {
+    const entryWidth =
+      estimateTextWidthPx(entry.label, fontSizePx) +
+      (entry.kind === "dependency" ? 58 : LEGEND_SWATCH_PX + 28);
+    if (used > 0 && used + entryWidth > availableWidth) {
+      rows += 1;
+      used = 0;
+    }
+    if (rows > maximumRows) break;
+    visible.push(entry);
+    used += entryWidth + LEGEND_GAP_PX;
+  }
+  return visible;
+}
+
 export function getGanttChartLayout(
   details: GanttChartDetails,
   cellDimensions?: CellDimensions,
@@ -289,7 +317,7 @@ export function getGanttChartLayout(
   const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const titleHeightPx = details.title === undefined ? 0 : fontSizePx + paddingPx;
   const tickHeightPx = Math.ceil(fontSizePx * 1.5);
-  const rowHeightPx = Math.max(Math.round(cells.heightPx * 1.4), Math.ceil(fontSizePx * 1.8));
+  const baseRowHeightPx = Math.max(Math.round(cells.heightPx * 1.4), Math.ceil(fontSizePx * 1.8));
   const labelWidthPx = Math.min(
     Math.round(requestedWidthPx * 0.42),
     Math.max(
@@ -301,28 +329,50 @@ export function getGanttChartLayout(
   const minimumPlotWidthPx = Math.round(cells.widthPx * 16);
   const plotWidthPx = Math.max(minimumPlotWidthPx, requestedWidthPx - plotX - paddingPx);
   const widthPx = Math.max(requestedWidthPx, plotX + plotWidthPx + paddingPx);
-  const naturalPlotHeightPx = Math.max(rowHeightPx * 2, details.tasks.length * rowHeightPx);
+  const naturalPlotHeightPx = Math.max(baseRowHeightPx * 2, details.tasks.length * baseRowHeightPx);
   const annotationHeightPx = Math.max(
     fontSizePx * 2.4,
     details.xLabel === undefined ? 0 : fontSizePx * 3.2,
     details.milestones.length === 0 ? 0 : fontSizePx * 2.8,
   );
+  const legendEntries = getLegendEntries(details);
+  const legendRowHeightPx = Math.ceil(fontSizePx * 1.7);
+  const legendWidthPx = widthPx - plotX;
+  const fullLegendRows = getLegendRowCount(legendEntries, legendWidthPx, fontSizePx);
+  const fixedWithoutLegendPx = paddingPx + titleHeightPx + tickHeightPx + annotationHeightPx;
+  const heightLimitPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : getChartHeightLimitPx(details.maxHeightCells, cells.heightPx, undefined);
+  const maximumLegendRows = Number.isFinite(heightLimitPx)
+    ? Math.max(
+        0,
+        Math.floor(
+          Math.max(0, heightLimitPx - fixedWithoutLegendPx - 1 - paddingPx) / legendRowHeightPx,
+        ),
+      )
+    : fullLegendRows;
+  const visibleLegendEntries = getLegendEntriesForRows(
+    legendEntries,
+    legendWidthPx,
+    fontSizePx,
+    maximumLegendRows,
+  );
+  const legendEntryLimit = visibleLegendEntries.length;
   const legendHeightPx =
-    getLegendRowCount(getLegendEntries(details), widthPx - plotX, fontSizePx) *
-      Math.ceil(fontSizePx * 1.7) +
-    paddingPx;
-  const fixedHeightPx =
-    paddingPx + titleHeightPx + tickHeightPx + annotationHeightPx + legendHeightPx;
-  const plotHeightPx =
+    legendEntryLimit === 0
+      ? 0
+      : getLegendRowCount(visibleLegendEntries, legendWidthPx, fontSizePx) * legendRowHeightPx +
+        paddingPx;
+  const fixedHeightPx = fixedWithoutLegendPx + legendHeightPx;
+  const plotHeightPx = Math.max(
+    1,
     details.maxHeightCells === undefined
       ? naturalPlotHeightPx
-      : clampChartPlotHeightPx(
-          naturalPlotHeightPx,
-          details.maxHeightCells,
-          cells.heightPx,
-          fixedHeightPx,
-          undefined,
-        );
+      : Math.min(naturalPlotHeightPx, Math.max(1, heightLimitPx - fixedHeightPx)),
+  );
+  // Use the actual pitch after height compaction so overlays share TanStack's row coordinates.
+  const rowHeightPx = plotHeightPx / details.tasks.length;
   const heightPx = Math.ceil(fixedHeightPx + plotHeightPx);
   return finalizeChartLayout(
     {
@@ -339,6 +389,7 @@ export function getGanttChartLayout(
       fontSizePx,
       annotationHeightPx,
       legendHeightPx,
+      legendEntryLimit,
     },
     cells.heightPx,
     details.maxHeightCells,
@@ -386,7 +437,9 @@ function createGanttScene(rows: readonly PositionedGanttTask[], layout: GanttCha
   const groups = [...new Set(rows.map((row) => row.group))];
   const progressFillRows = rows.filter((row) => row.progress > 0);
   const progressLabelRows = rows.filter(
-    (row) => (row.x2 - row.x1) * layout.plotWidthPx >= layout.fontSizePx * 2.5,
+    (row) =>
+      layout.rowHeightPx >= layout.fontSizePx * 1.35 &&
+      (row.x2 - row.x1) * layout.plotWidthPx >= layout.fontSizePx * 2.5,
   );
   return createChartScene(
     defineChart({
@@ -498,12 +551,19 @@ function renderTaskLabels(
   layout: GanttChartLayout,
   foreground: string,
 ): string {
+  const labelFontSize = Math.min(
+    layout.fontSizePx,
+    Math.max(MIN_FONT_SIZE_PX, layout.rowHeightPx * 0.72),
+  );
+  // Below this pitch, labels would be closer than a readable glyph height; bars and the exact summary remain.
+  if (layout.rowHeightPx < MIN_FONT_SIZE_PX / 0.72) return "";
+  const showGroups = layout.rowHeightPx >= layout.fontSizePx * 1.7;
   return details.tasks
     .map((task, index) => {
       const centerY = layout.plotY + (index + 0.5) * layout.rowHeightPx;
-      const label = fitLabel(task.label, layout.labelWidthPx - 8, layout.fontSizePx);
+      const label = fitLabel(task.label, layout.labelWidthPx - 8, labelFontSize);
       const group = task.group ?? "ungrouped";
-      return `${renderText(label, layout.plotX - 8, centerY - 2, layout.fontSizePx, details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end")}${renderText(group, layout.plotX - 8, centerY + layout.fontSizePx * 0.95, Math.max(8, layout.fontSizePx * 0.72), details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end")}`;
+      return `${renderText(label, layout.plotX - 8, centerY + labelFontSize * 0.35, labelFontSize, details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end")}${showGroups ? renderText(group, layout.plotX - 8, centerY + layout.fontSizePx * 0.95, Math.max(8, layout.fontSizePx * 0.72), details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end") : ""}`;
     })
     .join("");
 }
@@ -522,7 +582,10 @@ function renderDependencies(
         const x2 = layout.plotX + target.x1 * layout.plotWidthPx;
         const y1 = layout.plotY + (source.index + 0.5) * layout.rowHeightPx;
         const y2 = layout.plotY + (target.index + 0.5) * layout.rowHeightPx;
-        const mid = x2 >= x1 ? (x1 + x2) / 2 : x1 + DEPENDENCY_ROUTE_GAP_PX;
+        const mid =
+          x2 >= x1
+            ? (x1 + x2) / 2
+            : Math.min(layout.plotX + layout.plotWidthPx, x1 + DEPENDENCY_ROUTE_GAP_PX);
         return [
           `<path d="M ${x1} ${y1} H ${mid} V ${y2} H ${x2}" class="pi-gantt-dependency" marker-end="url(#pi-gantt-arrow)"/>`,
         ];
@@ -561,7 +624,7 @@ function renderLegend(
   fontFamily: string,
   foreground: string,
 ): string {
-  const entries = getLegendEntries(details);
+  const entries = getLegendEntries(details).slice(0, layout.legendEntryLimit);
   const colors = getGanttColors(details, theme);
   const availableWidth = layout.widthPx - layout.plotX;
   const startY = layout.heightPx - layout.legendHeightPx + layout.fontSizePx;

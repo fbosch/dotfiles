@@ -37,7 +37,7 @@ import {
   clamp,
   clampChartPlotHeightPx,
   finalizeChartLayout,
-  formatNumber,
+  formatNumeric,
   getChartHeightLimitPx,
   isRecord,
   isValidChartHeight,
@@ -63,6 +63,8 @@ export type LineChartData = {
   yLabel?: string;
   markers: boolean;
   maxHeightCells?: number;
+  xFormat?: "number" | "percent";
+  yFormat?: "number" | "percent";
 };
 export type LineChartLayout = ChartLayout & {
   plotX: number;
@@ -140,6 +142,8 @@ export function validateLineChartInput(input: LineChartInput): LineChartData {
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
     ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+    ...(input.xType === "numeric" && input.xFormat !== undefined ? { xFormat: input.xFormat } : {}),
+    ...(input.yFormat === undefined ? {} : { yFormat: input.yFormat }),
   };
 }
 
@@ -184,6 +188,10 @@ export function deserializeLineChartDetails(value: unknown): LineChartDetails | 
     (value.yLabel !== undefined && typeof value.yLabel !== "string") ||
     (value.fontFamily !== undefined && typeof value.fontFamily !== "string") ||
     (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells)) ||
+    (value.xFormat !== undefined &&
+      (value.xType === "temporal" ||
+        (value.xFormat !== "number" && value.xFormat !== "percent"))) ||
+    (value.yFormat !== undefined && value.yFormat !== "number" && value.yFormat !== "percent") ||
     (value.fontSize !== undefined &&
       (typeof value.fontSize !== "number" ||
         !Number.isFinite(value.fontSize) ||
@@ -314,7 +322,9 @@ export function renderLineChartSvg(
   const yTicks = yScale.ticks(5);
   const xSpan = xDomain[1] - xDomain[0];
   const tickText = (value: number) =>
-    details.xType === "temporal" ? formatTemporalTick(value, xSpan) : formatNumber(value);
+    details.xType === "temporal"
+      ? formatTemporalTick(value, xSpan)
+      : formatNumeric(value, details.xFormat);
   const { xAxis, yAxis } = renderCartesianAxes({
     layout,
     xDomain,
@@ -324,7 +334,7 @@ export function renderLineChartSvg(
     foreground,
     fontFamily,
     formatXTick: tickText,
-    formatYTick: formatNumber,
+    formatYTick: (value) => formatNumeric(value, details.yFormat),
   });
   const title =
     details.title === undefined

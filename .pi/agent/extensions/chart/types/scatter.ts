@@ -35,7 +35,7 @@ import {
   clamp,
   clampChartPlotHeightPx,
   finalizeChartLayout,
-  formatNumber,
+  formatNumeric,
   isRecord,
   isValidChartHeight,
   normalizeBoundedText,
@@ -57,6 +57,8 @@ export type ScatterChartData = {
   xLabel?: string;
   yLabel?: string;
   maxHeightCells?: number;
+  xFormat?: "number" | "percent";
+  yFormat?: "number" | "percent";
 };
 export type ScatterChartLayout = ChartLayout & {
   plotX: number;
@@ -89,6 +91,8 @@ export function validateScatterChartInput(input: ScatterChartInput): ScatterChar
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
     ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+    ...(input.xFormat === undefined ? {} : { xFormat: input.xFormat }),
+    ...(input.yFormat === undefined ? {} : { yFormat: input.yFormat }),
   };
 }
 
@@ -115,6 +119,8 @@ export function deserializeScatterChartDetails(value: unknown): ScatterChartDeta
     Number.isFinite(value.imageWidthCells) === false ||
     value.imageWidthCells <= 0 ||
     (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells)) ||
+    (value.xFormat !== undefined && value.xFormat !== "number" && value.xFormat !== "percent") ||
+    (value.yFormat !== undefined && value.yFormat !== "number" && value.yFormat !== "percent") ||
     (value.title !== undefined && typeof value.title !== "string") ||
     (value.xLabel !== undefined && typeof value.xLabel !== "string") ||
     (value.yLabel !== undefined && typeof value.yLabel !== "string") ||
@@ -266,8 +272,8 @@ export function renderScatterChartSvg(
     yTicks,
     foreground,
     fontFamily,
-    formatXTick: formatNumber,
-    formatYTick: formatNumber,
+    formatXTick: (value) => formatNumeric(value, details.xFormat),
+    formatYTick: (value) => formatNumeric(value, details.yFormat),
   });
   const labels = details.rows
     .map((row, index) => {

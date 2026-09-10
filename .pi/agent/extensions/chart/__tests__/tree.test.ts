@@ -134,6 +134,37 @@ describe("tree chart", () => {
     expect(svg.match(/<text /g)?.length).toBe(5);
     expect(layout.plotWidthPx).toBeGreaterThan(0);
   });
+  test("spaces labels in a compact broad hierarchy without overlap", () => {
+    const details = treeChartRenderer.createDetails(
+      treeChartRenderer.parseParameters({
+        type: "tree",
+        maxHeightCells: 8,
+        data: [
+          { id: "root", label: "Root" },
+          ...Array.from({ length: 40 }, (_, index) => ({
+            id: `child-${index}`,
+            parentId: "root",
+            label: `Child ${index}`,
+          })),
+        ],
+      }),
+      { imageWidthCells: 60, fontFamily: "sans-serif" },
+    );
+    const layout = treeChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, 60);
+    const svg = treeChartRenderer.renderSvg(details, theme, layout);
+    const childLabelY = Array.from(
+      svg.matchAll(/<text\b[^>]*\by="([0-9.e+-]+)"[^>]*>Child/g),
+      (match) => Number(match[1]),
+    ).sort((left, right) => left - right);
+    expect(childLabelY.length).toBeGreaterThan(0);
+    for (let index = 1; index < childLabelY.length; index += 1) {
+      const previous = childLabelY[index - 1];
+      const current = childLabelY[index];
+      if (previous === undefined || current === undefined) continue;
+      expect(current - previous).toBeGreaterThanOrEqual(layout.fontSizePx);
+    }
+    expect(svg).toContain("child-0");
+  });
 
   test("keeps escape-heavy maximum hierarchies below the raster payload limit", () => {
     const rootId = `${"&".repeat(119)}r`;

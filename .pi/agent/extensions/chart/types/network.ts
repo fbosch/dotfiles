@@ -105,6 +105,7 @@ type PositionedNetworkNode = NetworkChartNode & {
   x: number;
   y: number;
   displayLabel: string;
+  labelAnchor: "start" | "end";
   color: string;
 };
 
@@ -133,6 +134,11 @@ const TARGET_EDGE_GAP_PX = 4;
 const MANUAL_EDGE_BEND_PX = 18;
 
 const SELF_LOOP_LABEL_MARGIN_PX = 4;
+function fitNetworkLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
+  if (maximumWidthPx < fontSizePx * 3.2) return "";
+  return fitTextToWidth(value, maximumWidthPx, fontSizePx);
+}
+
 function normalizeNode(row: NetworkChartInput["nodes"][number], index: number): NetworkChartNode {
   const id = row.id.trim();
   const label = row.label.trim();
@@ -362,9 +368,14 @@ function createNetworkRows(
   const verticalSpan = Math.max(0, layout.plotHeightPx - NODE_RADIUS_PX * 2);
   const xStep = maxLayer === 0 ? 0 : horizontalSpan / maxLayer;
   const basePositions = new Map<string, { layer: number; x: number; y: number }>();
+  const labelVisibleByLayer = new Map<number, boolean>();
   for (let layer = 0; layer < topology.layers.length; layer += 1) {
     const nodeIndexes = topology.layers[layer] ?? [];
     const yStep = nodeIndexes.length <= 1 ? 0 : verticalSpan / (nodeIndexes.length - 1);
+    labelVisibleByLayer.set(
+      layer,
+      nodeIndexes.length <= 1 || yStep >= Math.max(10, layout.fontSizePx * 1.05),
+    );
     for (let order = 0; order < nodeIndexes.length; order += 1) {
       const ordinal = nodeIndexes[order];
       const node = ordinal === undefined ? undefined : details.nodes[ordinal];
@@ -399,10 +410,18 @@ function createNetworkRows(
     const component = topology.componentByNode[ordinal] ?? 0;
     const colorIndex = node.group === undefined ? 0 : (groupIndexes.get(node.group) ?? 0) + 1;
     const nextTargetX = firstForwardTargetX.get(node.id);
-    const availableLabelWidth =
+    const rightAvailableWidth = Math.max(0, layout.plotWidthPx - position.x - LABEL_OFFSET_PX);
+    const leftAvailableWidth = Math.max(0, position.x - LABEL_OFFSET_PX);
+    const gapWidth =
       nextTargetX === undefined
-        ? layout.labelWidthPx
-        : Math.max(8, nextTargetX - position.x - LABEL_OFFSET_PX - LABEL_EDGE_GAP_PX);
+        ? rightAvailableWidth
+        : Math.max(0, nextTargetX - position.x - LABEL_OFFSET_PX - LABEL_EDGE_GAP_PX);
+    const canFitRight = gapWidth >= layout.fontSizePx * ESTIMATED_CHARACTER_WIDTH;
+    const labelAnchor: PositionedNetworkNode["labelAnchor"] =
+      canFitRight || leftAvailableWidth < layout.fontSizePx * ESTIMATED_CHARACTER_WIDTH
+        ? "start"
+        : "end";
+    const availableLabelWidth = labelAnchor === "end" ? leftAvailableWidth : gapWidth;
     return {
       ...node,
       ordinal,
@@ -410,11 +429,15 @@ function createNetworkRows(
       layer: position.layer,
       x: position.x,
       y: position.y,
-      displayLabel: fitTextToWidth(
-        node.label,
-        Math.min(layout.labelWidthPx, availableLabelWidth),
-        layout.fontSizePx,
-      ),
+      displayLabel:
+        labelVisibleByLayer.get(position.layer) === false
+          ? ""
+          : fitNetworkLabel(
+              node.label,
+              Math.min(layout.labelWidthPx, availableLabelWidth),
+              layout.fontSizePx,
+            ),
+      labelAnchor,
       color: colors[colorIndex % Math.max(1, colors.length)] ?? "#579aca",
     };
   });
@@ -503,6 +526,32 @@ function createNetworkDotMarks(nodes: readonly PositionedNetworkNode[]) {
   );
 }
 
+function createNetworkLabelMarks(
+  nodes: readonly PositionedNetworkNode[],
+  foreground: string,
+  fontSizePx: number,
+) {
+  return (["start", "end"] as const).flatMap((anchor) => {
+    const visibleNodes = nodes.filter(
+      (node) => node.displayLabel.length > 0 && node.labelAnchor === anchor,
+    );
+    return visibleNodes.length === 0
+      ? []
+      : [
+          text(visibleNodes, {
+            x: "x",
+            y: "y",
+            text: "displayLabel",
+            key: "id",
+            fill: foreground,
+            fontSize: fontSizePx,
+            anchor,
+            dx: anchor === "start" ? LABEL_OFFSET_PX : -LABEL_OFFSET_PX,
+          }),
+        ];
+  });
+}
+
 function createNetworkSceneFromRows(
   rows: NetworkRows,
   theme: ChartTheme,
@@ -527,16 +576,7 @@ function createNetworkSceneFromRows(
             strokeWidth: 1.5,
           }),
           ...createNetworkDotMarks(rows.nodes),
-          text(rows.nodes, {
-            x: "x",
-            y: "y",
-            text: "displayLabel",
-            key: "id",
-            fill: foreground,
-            fontSize: layout.fontSizePx,
-            anchor: "start",
-            dx: LABEL_OFFSET_PX,
-          }),
+          ...createNetworkLabelMarks(rows.nodes, foreground, layout.fontSizePx),
         ],
         scales,
         guides: false,
@@ -575,16 +615,7 @@ function createNetworkSceneFromRows(
     defineChart({
       marks: [
         ...createNetworkDotMarks(rows.nodes),
-        text(rows.nodes, {
-          x: "x",
-          y: "y",
-          text: "displayLabel",
-          key: "id",
-          fill: foreground,
-          fontSize: layout.fontSizePx,
-          anchor: "start",
-          dx: LABEL_OFFSET_PX,
-        }),
+        ...createNetworkLabelMarks(rows.nodes, foreground, layout.fontSizePx),
       ],
       scales,
       guides: false,
@@ -615,7 +646,7 @@ function renderManualEdges(
         return `<path d="M ${edge.x1} ${y1} C ${edge.x1 + side * 22} ${y1 + direction * 24}, ${edge.x1 + side * 22} ${y1 + direction * 24}, ${edge.x1 + side * 6} ${y1 + direction * 6}" fill="none" stroke="${foreground}" stroke-opacity="0.8" stroke-width="1.5" stroke-linecap="round"${dash} marker-end="url(#pi-network-arrow)"/>`;
       }
       if (edge.kind === "same-layer") {
-        const bendX = edge.x1 - edge.bendPx;
+        const bendX = Math.max(0, Math.min(plotWidthPx, edge.x1 - edge.bendPx));
         return `<path d="M ${edge.x1} ${y1} C ${bendX} ${y1}, ${bendX} ${y2}, ${edge.x2} ${y2}" fill="none" stroke="${foreground}" stroke-opacity="0.8" stroke-width="1.5" stroke-linecap="round"${dash} marker-end="url(#pi-network-arrow)"/>`;
       }
       return `<path d="M ${edge.x1} ${y1} L ${edge.x2} ${y2}" fill="none" stroke="${foreground}" stroke-opacity="0.8" stroke-width="1.5" stroke-linecap="round" marker-end="url(#pi-network-arrow)"/>`;
@@ -641,7 +672,7 @@ function renderNetworkEdgeLabels(
       const y2 = plotHeightPx - edge.y2;
       const above = y1 > 32;
       const direction = above ? -1 : 1;
-      const routeX = edge.x1 - edge.bendPx;
+      const routeX = Math.max(0, Math.min(plotWidthPx, edge.x1 - edge.bendPx));
       const x =
         edge.kind === "self"
           ? edge.x1
@@ -709,9 +740,13 @@ export function getNetworkChartLayout(
   const plotHeightPx = Math.min(naturalPlotHeightPx, maxPlotHeightPx);
   const compacted = plotHeightPx < naturalPlotHeightPx;
   const edgeLabelSizePx = Math.max(8, Math.round(fontSizePx * 0.85));
-  const edgeLabelLimit = compacted
-    ? Math.max(1, Math.floor(plotHeightPx / (edgeLabelSizePx * 1.5)))
-    : details.edges.length;
+  const edgeLabelLimit =
+    details.edges.length > 25 ||
+    (compacted && plotHeightPx / Math.max(1, maxBreadth - 1) < edgeLabelSizePx * 1.5)
+      ? 0
+      : compacted
+        ? Math.max(1, Math.floor(plotHeightPx / (edgeLabelSizePx * 1.5)))
+        : details.edges.length;
   const minimumLabelWidthPx = Math.round(cells.widthPx * 8);
   const labelWidthPx = Math.min(
     Math.round(widthPx * 0.4),

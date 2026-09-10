@@ -31,6 +31,7 @@ import {
   clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
+  formatNumeric,
   renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
@@ -70,6 +71,7 @@ function normalizeBoxplotChartInput(input: BoxplotChartInput): BoxplotChartData 
   return {
     groups,
     showOutliers: input.showOutliers ?? true,
+    ...(input.valueFormat === undefined ? {} : { valueFormat: input.valueFormat }),
     ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
@@ -291,7 +293,11 @@ export function renderBoxplotChartSvg(
     .join("");
   const ticks = Array.from({ length: 3 }, (_, i) =>
     text(
-      Number((min + ((max - min) * i) / 2).toPrecision(3)).toString(),
+      formatNumeric(
+        Number((min + ((max - min) * i) / 2).toPrecision(3)),
+        details.valueFormat,
+        String,
+      ),
       layout.plotX + (layout.plotWidthPx * i) / 2,
       layout.plotY + layout.plotHeightPx + font * 1.3,
       i === 0 ? "start" : i === 2 ? "end" : "middle",

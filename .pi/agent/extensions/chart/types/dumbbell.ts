@@ -29,6 +29,7 @@ import {
   clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
+  formatNumeric,
   renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
@@ -72,6 +73,7 @@ function normalizeDumbbellChartInput(input: DumbbellChartInput): DumbbellChartDa
   const yLabel = text(input.yLabel, "yLabel");
   return {
     data,
+    ...(input.valueFormat === undefined ? {} : { valueFormat: input.valueFormat }),
     beforeLabel: text(input.beforeLabel, "beforeLabel") ?? "Before",
     afterLabel: text(input.afterLabel, "afterLabel") ?? "After",
     showDifferences: input.showDifferences ?? false,
@@ -258,7 +260,10 @@ export function renderDumbbellChartSvg(
     ? rows
         .map((row) =>
           text(
-            shorten(`Δ ${signed(row.after - row.before)}`, layout.plotWidthPx),
+            shorten(
+              `Δ ${formatNumeric(row.after - row.before, details.valueFormat, signed)}`,
+              layout.plotWidthPx,
+            ),
             layout.plotX + layout.plotWidthPx / 2,
             layout.plotY + (row.index + 0.8) * rowHeight,
           ),
@@ -271,7 +276,11 @@ export function renderDumbbellChartSvg(
     const ratio = tickCount === 1 ? 0.5 : i / (tickCount - 1);
     return text(
       shorten(
-        Number((min + (max - min) * ratio).toPrecision(3)).toString(),
+        formatNumeric(
+          Number((min + (max - min) * ratio).toPrecision(3)),
+          details.valueFormat,
+          String,
+        ),
         innerWidth / tickCount,
       ),
       layout.plotX + gutter + innerWidth * ratio,

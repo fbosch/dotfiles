@@ -72,7 +72,7 @@ Bézier rendering uses the installed `@tanstack/charts` scene and SVG renderer: 
 
 ## Heatmaps
 
-`chart_heatmap` requires `rows` and `columns`, each containing 1–12 labels of 1–22 characters. Labels are trimmed and must be nonblank and unique within their axis after trimming. Input order is preserved: rows run top to bottom, columns left to right. `data` must be a rectangular `number | null` matrix matching both label arrays, with at most 144 cells. Numeric values must be finite and between −1,000,000,000 and 1,000,000,000 inclusive. `null` means missing, never zero; missing cells use a gray hatch and a separate legend key.
+`chart_heatmap` requires `rows` and `columns`, each containing 1–12 labels of 1–22 characters. Labels are trimmed and must be nonblank and unique within their axis after trimming. Input order is preserved: rows run top to bottom, columns left to right. `data` must be a rectangular `number | null` matrix matching both label arrays, with at most 144 cells. Numeric values must be finite and between −1,000,000,000 and 1,000,000,000 inclusive. `null` means missing, never zero; missing cells use a gray hatch and a separate legend key. For readable output, prefer modest row/column counts and bounded value ranges; normalize or summarize extreme dynamic ranges.
 
 `colorScale` defaults to `sequential`, a light-to-dark blue ramp across the observed numeric minimum and maximum. `diverging` uses blue for negative values, a light midpoint at zero, and red for positive values, with domain `[-max(abs(values)), max(abs(values))]`. Nulls do not affect either domain. Constant sequential data and zero-only diverging data use the midpoint color and one labeled constant swatch rather than a fictional range. Constant nonzero diverging data retains its symmetric domain. All-null data shows only missing cells and `No numeric data`, without a numeric ramp.
 
@@ -188,7 +188,7 @@ TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG ren
 
 ## Gantt charts
 
-`chart_gantt` requires `tasks`, an ordered array of 1–64 task intervals. Each task has a unique trimmed `id`, a trimmed `label`, finite bounded `start` and `end` values with `start < end`, and optional `group`, `progress` from 0 through 1, and up to eight task IDs in `dependencies`. Optional `milestones` contain a trimmed `label` and finite bounded `at` value. `title` and `xLabel` are optional. Unknown fields and a caller-supplied `type` are rejected.
+`chart_gantt` requires `tasks`, an ordered array of 1–64 task intervals. Each task has a unique trimmed `id`, a trimmed `label`, finite bounded `start` and `end` values with `start < end`, and optional `group`, `progress` from 0 through 1, and up to eight task IDs in `dependencies`. Optional `milestones` contain a trimmed `label` and finite bounded `at` value. `title` and `xLabel` are optional. Unknown fields and a caller-supplied `type` are rejected. For readable output, prefer about 16 tasks and modest milestone counts, especially with `maxHeightCells`.
 
 ```json
 {
@@ -202,11 +202,11 @@ TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG ren
 }
 ```
 
-Task order is authored order. TanStack rectangle marks render the interval and completed portion; text marks show progress when the interval is wide enough. Dependency paths, milestone diamonds, grid lines, labels, and the timeline shell are deterministic SVG overlays. The summary and SVG description retain exact normalized task values, dependencies, and milestones even when visible labels are shortened.
+Task order is authored order. TanStack rectangle marks render the interval and completed portion; text marks show progress when the interval is wide enough. Dependency paths, milestone diamonds, grid lines, labels, and the timeline shell are deterministic SVG overlays. Height caps compact the row pitch; progress, group, and task labels are omitted when they would overlap. The summary and SVG description retain exact normalized task values, dependencies, and milestones even when visible labels are shortened or omitted.
 
 ## Layered network and call-graph charts
 
-`chart_network` accepts `nodes` and `edges`. There must be 1–64 nodes and at most 128 directed edges. Each node has a unique trimmed `id`, a trimmed `label`, and an optional trimmed `group`. Each edge references existing node IDs and may have a trimmed `label`. Duplicate directed edges are rejected. Empty edge lists, multiple parents, disconnected nodes, duplicate display labels, cycles, and self-loops are valid. Optional `title` is 1–80 characters. `maxHeightCells` optionally caps the rendered height at 8–64 terminal cells; when omitted, the natural network height is used. Dense layers are compacted to fit the requested cap, retaining all nodes; edge labels are reduced deterministically when vertical space is constrained.
+`chart_network` accepts `nodes` and `edges`. There must be 1–64 nodes and at most 128 directed edges. Each node has a unique trimmed `id`, a trimmed `label`, and an optional trimmed `group`. Each edge references existing node IDs and may have a trimmed `label`. Duplicate directed edges are rejected. Empty edge lists, multiple parents, disconnected nodes, duplicate display labels, cycles, and self-loops are valid. Optional `title` is 1–80 characters. `maxHeightCells` optionally caps the rendered height at 8–64 terminal cells; when omitted, the natural network height is used. For readable output, prefer about 12 nodes and 25 edges or fewer; dense reciprocal or self-loop graphs can overlap, so use short labels or split the graph.
 
 ```json
 {
@@ -226,13 +226,13 @@ Task order is authored order. TanStack rectangle marks render the interval and c
 ```
 
 The layout is deterministic and does not use force simulation. Strongly connected components are condensed for layering, so cycles stay together while acyclic component links grow from left to right. Nodes within a layer retain authored node order. Forward links use scene lines; backward links, same-layer links, and self-loops use stable curved paths with arrowheads. Same-layer and self-loop paths are dashed. Group colors follow first appearance order.
-Broad layers expand vertically instead of compressing node centers into overlapping labels; the bounded node count keeps the result finite.
+Broad layers expand vertically when no cap is requested. A height cap compacts node positions while preserving order; labels are omitted when the available vertical or horizontal space is too small, and dense graphs omit edge labels rather than stacking unreadable text.
 
-Labels are shortened with an ellipsis when the available gap is too small. Edge labels are included when they fit. The exact node IDs, labels, groups, edge endpoints, and edge labels remain in the text summary and bounded SVG accessibility description. Replay revalidates the saved graph before rebuilding the same layout.
+Labels are shortened with an ellipsis when the available gap is too small. Edge labels are included when they fit and graph density allows. The exact node IDs, labels, groups, edge endpoints, and edge labels remain in the text summary and bounded SVG accessibility description. Replay revalidates the saved graph before rebuilding the same layout.
 
 ## Tidy hierarchy trees
 
-`chart_tree` accepts `data`, an array of 1–64 flat `{ id, parentId?, label }` nodes. IDs are trimmed, nonblank, unique, and at most 120 characters; labels are trimmed, nonblank, and at most 40 characters. The rows must form one connected acyclic hierarchy with exactly one root. An explicit `null` `parentId` is also accepted for the root. Optional `title` is 1–80 characters and is trimmed and nonblank.
+`chart_tree` accepts `data`, an array of 1–64 flat `{ id, parentId?, label }` nodes. IDs are trimmed, nonblank, unique, and at most 120 characters; labels are trimmed, nonblank, and at most 40 characters. The rows must form one connected acyclic hierarchy with exactly one root. An explicit `null` `parentId` is also accepted for the root. Optional `title` is 1–80 characters and is trimmed and nonblank. For readable output, prefer about 32 nodes or fewer and split broad or deep hierarchies; use short labels.
 
 ```json
 {
@@ -246,11 +246,11 @@ Labels are shortened with an ellipsis when the available gap is too small. Edge 
 }
 ```
 
-The installed TanStack `hierarchy/tree` transform computes a deterministic tidy layout. The adapter renders parent-child links first, then nodes and labels, with the root at the left and descendants growing to the right. Labels are fitted to their available parent-to-child gap, and outgoing links are offset beyond the source label when space permits, so connectors do not paint through text or dots. Input order controls sibling order. The text summary and bounded SVG description retain every exact ID, parent relationship, and label.
+The installed TanStack `hierarchy/tree` transform computes a deterministic tidy layout. The adapter renders parent-child links first, then nodes and labels, with the root at the left and descendants growing to the right. Labels are fitted to their available parent-to-child gap and the plot boundary, and overlapping labels are omitted; outgoing links are offset beyond the source label when space permits, so connectors do not paint through text or dots. Input order controls sibling order. The text summary and bounded SVG description retain every exact ID, parent relationship, and label.
 
 ## Treemaps
 
-`chart_treemap` accepts `data`, an array of 1–6 top-level nodes. Each node has a `label` and exactly one of `value` or nonempty `children`. Labels are 1–22 characters, trimmed, nonblank, and unique among siblings after trimming. The tree has at most 64 nodes and four levels, counting top-level nodes as level one. The provider schema unrolls these levels without recursive references. A bounded traversal checks execution and replay inputs before schema validation.
+`chart_treemap` accepts `data`, an array of 1–6 top-level nodes. Each node has a `label` and exactly one of `value` or nonempty `children`. Labels are 1–22 characters, trimmed, nonblank, and unique among siblings after trimming. The tree has at most 64 nodes and four levels, counting top-level nodes as level one. The provider schema unrolls these levels without recursive references. A bounded traversal checks execution and replay inputs before schema validation. For readable output, use short labels and balanced values; extreme value skew makes small tiles disappear.
 
 ```json
 {

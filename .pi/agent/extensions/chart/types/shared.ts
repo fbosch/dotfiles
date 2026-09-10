@@ -1,5 +1,6 @@
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
+import type { NumericFormat } from "../schemas";
 import { MAX_REQUESTED_CHART_HEIGHT_CELLS, MIN_CHART_HEIGHT_CELLS } from "../schemas";
 import { type ChartDetails, type ChartLayout, escapeXml, MAX_CHART_HEIGHT_CELLS } from "../types";
 
@@ -156,6 +157,14 @@ export function formatNumber(value: number): string {
   return Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.01)
     ? value.toExponential(1)
     : Number(value.toFixed(2)).toString();
+}
+
+export function formatNumeric(
+  value: number,
+  format: NumericFormat | undefined,
+  defaultFormatter: (value: number) => string = formatNumber,
+): string {
+  return format === "percent" ? `${defaultFormatter(value * 100)}%` : defaultFormatter(value);
 }
 
 export function getAccessibleDescription(summary: string, fallback: string): string {

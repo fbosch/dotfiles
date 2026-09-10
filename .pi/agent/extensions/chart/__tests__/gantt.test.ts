@@ -3,6 +3,7 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
 import { createGanttChartTool } from "../metadata";
 import { chartGanttParameters } from "../schemas";
+import { rasterizeSvg } from "../types";
 import {
   type GanttChartInput,
   ganttChartRenderer,
@@ -59,8 +60,8 @@ const input: GanttChartInput = {
   milestones: [{ label: "Release", at: 15 }],
 };
 
-const scanTask = input.tasks[0]!;
-const astTask = input.tasks[1]!;
+const [scanTask, astTask] = input.tasks;
+if (scanTask === undefined || astTask === undefined) throw new Error("invalid test fixture");
 
 describe("gantt chart", () => {
   test("validates and normalizes ordered tasks, dependencies, and milestones", () => {
@@ -182,13 +183,43 @@ describe("gantt chart", () => {
     expect(svg).toContain("progress-task-0");
     expect(svg).not.toContain("progress-label-task-0");
     for (let index = 0; index < 8; index += 1) expect(svg).toContain(`group-${index}`);
-    const textY = Array.from(svg.matchAll(/<text\\b[^>]*\\by="([0-9.e+-]+)"/g), (match) =>
+    const textY = Array.from(svg.matchAll(/<text\b[^>]*\by="([0-9.e+-]+)"/g), (match) =>
       Number(match[1]),
     );
     expect(Math.min(...textY)).toBeGreaterThanOrEqual(0);
     expect(Math.max(...textY)).toBeLessThanOrEqual(layout.heightPx);
     expect(layout.plotY).toBeGreaterThan(layout.titleHeightPx + layout.tickHeightPx);
   });
+  test("compacts dense rows and keeps dependency overlays inside the capped SVG", async () => {
+    const denseInput: GanttChartInput = {
+      type: "gantt",
+      tasks: Array.from({ length: 32 }, (_, index) => ({
+        id: `task-${index}`,
+        label: `Task ${index}`,
+        start: index,
+        end: index + 2,
+        group: index % 2 === 0 ? "build" : "test",
+        progress: index % 3 === 0 ? 1 : 0.5,
+        dependencies: index === 0 ? [] : [`task-${index - 1}`],
+      })),
+      milestones: [{ label: "Release", at: 34 }],
+      maxHeightCells: 24,
+    };
+    const details = ganttChartRenderer.createDetails(
+      ganttChartRenderer.parseParameters(denseInput),
+      { imageWidthCells: 60, fontFamily: "sans-serif" },
+    );
+    const layout = ganttChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, 60);
+    const svg = ganttChartRenderer.renderSvg(details, theme, layout);
+    const textY = Array.from(svg.matchAll(/<text\b[^>]*\by="([0-9.e+-]+)"/g), (match) =>
+      Number(match[1]),
+    );
+    expect(layout.heightCells).toBeLessThanOrEqual(24);
+    expect(layout.rowHeightPx).toBeLessThan(26);
+    expect(Math.max(...textY)).toBeLessThanOrEqual(layout.heightPx);
+    expect(svg).not.toMatch(/NaN|Infinity|undefined/);
+    expect(await rasterizeSvg(svg)).toBeTruthy();
+  }, 15_000);
 
   test("keeps output deterministic and round-trips replay details", () => {
     const details = ganttChartRenderer.createDetails(ganttChartRenderer.parseParameters(input), {

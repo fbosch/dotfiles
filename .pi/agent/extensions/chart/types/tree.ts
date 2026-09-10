@@ -78,7 +78,15 @@ export type TreeChartLayout = ChartLayout & {
   fontSizePx: number;
 };
 
-type TreeNode = TreeLayoutNode<TreeChartRow> & { label: string };
+function fitTreeLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
+  if (maximumWidthPx < fontSizePx * 3.2) return "";
+  return fitTextToWidth(value, maximumWidthPx, fontSizePx);
+}
+
+type TreeNode = TreeLayoutNode<TreeChartRow> & {
+  label: string;
+  labelAnchor: "start" | "end";
+};
 type TreeLink = TreeLayoutLink<TreeChartRow>;
 
 function normalizeRow(row: TreeChartInput["data"][number], index: number): TreeChartRow {
@@ -262,25 +270,66 @@ function createTreeRows(
   });
   const xDomain = paddedDomain(hierarchy.nodes.map((node) => node.x));
   const pixelsPerUnit = layout.plotWidthPx / Math.max(xDomain[1] - xDomain[0], Number.EPSILON);
+  const yDomain = paddedDomain(hierarchy.nodes.map((node) => node.y));
+  const pixelsPerY = layout.plotHeightPx / Math.max(yDomain[1] - yDomain[0], Number.EPSILON);
   const firstChildX = new Map<string, number>();
   for (const linkRow of hierarchy.links) {
     const current = firstChildX.get(linkRow.source);
     if (current === undefined || linkRow.x2 < current) firstChildX.set(linkRow.source, linkRow.x2);
   }
-  const nodes = hierarchy.nodes.map((node) => {
+  const candidates = hierarchy.nodes.map((node) => {
     const childX = firstChildX.get(node.id);
-    const availableLabelWidth =
+    const nodeX = (node.x - xDomain[0]) * pixelsPerUnit;
+    const rightAvailableWidth =
       childX === undefined
-        ? layout.labelWidthPx
-        : Math.max(8, (childX - node.x) * pixelsPerUnit - 7 - 5);
+        ? Math.max(0, layout.plotWidthPx - nodeX - 7)
+        : Math.max(0, (childX - node.x) * pixelsPerUnit - 7 - 5);
+    const leftAvailableWidth = Math.max(0, nodeX - 7);
+    const canFitRight = rightAvailableWidth >= layout.fontSizePx * 3.2;
+    const labelAnchor: TreeNode["labelAnchor"] =
+      childX === undefined && !canFitRight && leftAvailableWidth >= layout.fontSizePx * 3.2
+        ? "end"
+        : "start";
+    const availableLabelWidth = labelAnchor === "end" ? leftAvailableWidth : rightAvailableWidth;
     return {
-      ...node,
-      label: fitTextToWidth(
+      node,
+      nodeX,
+      nodeY: (node.y - yDomain[0]) * pixelsPerY,
+      label: fitTreeLabel(
         node.data?.label ?? node.name,
         Math.min(layout.labelWidthPx, availableLabelWidth),
         layout.fontSizePx,
       ),
+      labelAnchor,
     };
+  });
+  const occupied: Array<{ left: number; right: number; top: number; bottom: number }> = [];
+  const nodes = candidates.map(({ node, nodeX, nodeY, label, labelAnchor }) => {
+    const labelWidth = estimateTextWidthPx(label, layout.fontSizePx);
+    const left = labelAnchor === "end" ? nodeX - 7 - labelWidth : nodeX + 7;
+    const right = labelAnchor === "end" ? nodeX - 7 : left + labelWidth;
+    const top = nodeY - layout.fontSizePx;
+    const bottom = nodeY + 2;
+    const overlaps =
+      label.length > 0 &&
+      occupied.some(
+        (previous) =>
+          previous.left < right + 2 &&
+          previous.right + 2 > left &&
+          previous.top < bottom + 2 &&
+          previous.bottom + 2 > top,
+      );
+    const visibleLabel = overlaps ? "" : label;
+    if (visibleLabel.length > 0) {
+      const visibleWidth = estimateTextWidthPx(visibleLabel, layout.fontSizePx);
+      occupied.push({
+        left: labelAnchor === "end" ? nodeX - 7 - visibleWidth : nodeX + 7,
+        right: labelAnchor === "end" ? nodeX - 7 : nodeX + 7 + visibleWidth,
+        top,
+        bottom,
+      });
+    }
+    return { ...node, label: visibleLabel, labelAnchor };
   });
   const labelsById = new Map(nodes.map((node) => [node.id, node.label]));
   // Keep straight links out of their source labels while preserving node positions and authored order.
@@ -292,6 +341,28 @@ function createTreeRows(
     return { ...linkRow, x1: linkRow.x1 + offsetPx / pixelsPerUnit };
   });
   return { nodes, links };
+}
+
+function createTreeLabelMarks(nodes: readonly TreeNode[], foreground: string, fontSizePx: number) {
+  return (["start", "end"] as const).flatMap((anchor) => {
+    const visibleNodes = nodes.filter(
+      (node) => node.label.length > 0 && node.labelAnchor === anchor,
+    );
+    return visibleNodes.length === 0
+      ? []
+      : [
+          text(visibleNodes, {
+            x: "x",
+            y: "y",
+            text: "label",
+            key: "id",
+            fill: foreground,
+            fontSize: fontSizePx,
+            anchor,
+            dx: anchor === "start" ? 7 : -7,
+          }),
+        ];
+  });
 }
 
 export function createTreeScene(
@@ -327,16 +398,7 @@ export function createTreeScene(
           fill: nodeColor,
           r: 4,
         }),
-        text(nodes, {
-          x: "x",
-          y: "y",
-          text: "label",
-          key: "id",
-          fill: foreground,
-          fontSize: layout.fontSizePx,
-          anchor: "start",
-          dx: 7,
-        }),
+        ...createTreeLabelMarks(nodes, foreground, layout.fontSizePx),
       ],
       scales: {
         x: { scale: xScale, axis: false },

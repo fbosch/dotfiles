@@ -458,7 +458,7 @@ export function createHeatmapChartTool(): ToolDefinition<
     name: "chart_heatmap",
     label: "Chart heatmap",
     description:
-      "Render a labeled heatmap: rows and columns each contain 1-12 unique nonblank labels (1-22 characters, trimmed). Data is a matching rectangular number|null matrix (at most 144 cells), finite values ±1,000,000,000; null means missing, not zero. Optional colorScale sequential (default) or diverging (symmetric about zero), showValues (default false, at most 36 cells), title (1-80 characters). Includes a color legend and exact text summary.",
+      "Render a labeled heatmap: rows and columns each contain 1-12 unique nonblank labels (1-22 characters, trimmed). Data is a matching rectangular number|null matrix (at most 144 cells), finite values ±1,000,000,000; null means missing, not zero. Optional colorScale sequential (default) or diverging (symmetric about zero), showValues (default false, at most 36 cells), title (1-80 characters). For readable output, prefer modest row/column counts and bounded value ranges; normalize or summarize extreme dynamic ranges. Includes a color legend and exact text summary.",
     promptSnippet: "Render labeled matrix heatmaps with explicit missing cells",
     parameters: chartHeatmapParameters,
     async execute(_toolCallId, parameters: HeatmapParameters, signal, _onUpdate, ctx) {
@@ -701,7 +701,7 @@ export function createTreemapChartTool(): ToolDefinition<
     name: "chart_treemap",
     label: "Chart treemap",
     description:
-      "Render hierarchical bundle, directory, or module sizes as area-proportional treemap tiles. Data is 1-6 top-level nodes, at most 64 nodes total and 4 levels. Each node has label (1-22 characters, trimmed and unique among siblings) and exactly one of finite nonnegative value or nonempty children. Parents aggregate children without double-counting; aggregate totals must be finite and at least one leaf positive. Top-level colors, fitted hierarchical labels and sizes, exact summary including hidden/zero leaves. Optional title (1-80) and unit (1-22), trimmed and nonblank.",
+      "Render hierarchical bundle, directory, or module sizes as area-proportional treemap tiles. Data is 1-6 top-level nodes, at most 64 nodes total and 4 levels. Each node has label (1-22 characters, trimmed and unique among siblings) and exactly one of finite nonnegative value or nonempty children. Parents aggregate children without double-counting; aggregate totals must be finite and at least one leaf positive. Top-level colors, fitted hierarchical labels and sizes, exact summary including hidden/zero leaves. For readable output, use short labels and balanced values; extreme value skew makes small tiles disappear. Optional title (1-80) and unit (1-22), trimmed and nonblank.",
     promptSnippet: "Render hierarchical sizes as treemaps",
     parameters: chartTreemapParameters,
     async execute(_toolCallId, parameters: TreemapParameters, signal, _onUpdate, ctx) {
@@ -752,7 +752,7 @@ export function createGanttChartTool(): ToolDefinition<
     name: "chart_gantt",
     label: "Chart Gantt",
     description:
-      "Render a deterministic task timeline from 1-64 ordered tasks. Tasks have finite start/end values, optional groups and progress, optional dependencies, and named milestones. Uses TanStack interval marks with dependency overlays. Optional title and xLabel.",
+      "Render a deterministic task timeline from 1-64 ordered tasks. Tasks have finite start/end values, optional groups and progress, optional dependencies, and named milestones. Uses TanStack interval marks with dependency overlays. For readable output, prefer about 16 tasks and modest milestone counts, especially with maxHeightCells. Optional title and xLabel.",
     promptSnippet: "Render deterministic Gantt task timelines",
     parameters: chartGanttParameters,
     async execute(_toolCallId, parameters: GanttParameters, signal, _onUpdate, ctx) {
@@ -800,7 +800,7 @@ export function createNetworkChartTool(): ToolDefinition<
     name: "chart_network",
     label: "Chart network",
     description:
-      "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. Optional title and maxHeightCells (8-64 terminal cells); omitted maxHeightCells preserves the natural network height.",
+      "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. For readable output, prefer about 12 nodes and 25 edges or fewer; dense reciprocal or self-loop graphs can overlap, so use short labels or split the graph. Optional title and maxHeightCells (8-64 terminal cells); omitted maxHeightCells preserves the natural network height.",
     promptSnippet: "Render layered network and call-graph charts",
     parameters: chartNetworkParameters,
     async execute(_toolCallId, parameters: NetworkParameters, signal, _onUpdate, ctx) {
@@ -848,7 +848,7 @@ export function createTreeChartTool(): ToolDefinition<
     name: "chart_tree",
     label: "Chart tree",
     description:
-      "Render a left-to-right tidy hierarchy tree from 1-64 flat parent-reference nodes. Each node has a unique trimmed id, optional parentId, and trimmed label. The data must form one connected acyclic hierarchy with exactly one root. Optional title (1-80 characters).",
+      "Render a left-to-right tidy hierarchy tree from 1-64 flat parent-reference nodes. Each node has a unique trimmed id, optional parentId, and trimmed label. The data must form one connected acyclic hierarchy with exactly one root. For readable output, prefer about 32 nodes or fewer and split broad or deep hierarchies; use short labels. Optional title (1-80 characters).",
     promptSnippet: "Render tidy hierarchy trees from parent-reference nodes",
     parameters: chartTreeParameters,
     async execute(_toolCallId, parameters: TreeParameters, signal, _onUpdate, ctx) {

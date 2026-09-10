@@ -8,6 +8,9 @@ export const MAX_POINT_LABEL_LENGTH = 40;
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_AXIS_LABEL_LENGTH = 40;
 
+export const numericFormat = Type.Union([Type.Literal("number"), Type.Literal("percent")]);
+export type NumericFormat = Static<typeof numericFormat>;
+
 const chartTitle = Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH }));
 const axisLabels = {
   xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
@@ -65,14 +68,6 @@ const temporalLineData = Type.Array(
   { minItems: 2, maxItems: MAX_ROWS },
 );
 
-const mixedLineData = Type.Array(
-  Type.Object(
-    { x: Type.Union([Type.Number(), Type.String()]), y: Type.Union([Type.Number(), Type.Null()]) },
-    { additionalProperties: false },
-  ),
-  { minItems: 2, maxItems: MAX_ROWS },
-);
-
 const scatterData = Type.Array(
   Type.Object(
     {
@@ -92,6 +87,15 @@ const lineOptions = {
   ...chartHeightOptions,
 } as const;
 
+const numericLineFormatOptions = {
+  xFormat: Type.Optional(numericFormat),
+  yFormat: Type.Optional(numericFormat),
+} as const;
+
+const temporalLineFormatOptions = {
+  yFormat: Type.Optional(numericFormat),
+} as const;
+
 /** Public provider schemas intentionally omit the internal chart discriminator. */
 export const chartPieParameters = Type.Object(
   { data: pieData, title: chartTitle, ...chartHeightOptions },
@@ -99,23 +103,47 @@ export const chartPieParameters = Type.Object(
 );
 
 export const chartBarParameters = Type.Object(
-  { data: barData, title: chartTitle, ...chartHeightOptions },
+  {
+    data: barData,
+    title: chartTitle,
+    valueFormat: Type.Optional(numericFormat),
+    ...chartHeightOptions,
+  },
   { additionalProperties: false },
 );
 
 export const chartScatterParameters = Type.Object(
-  { data: scatterData, title: chartTitle, ...axisLabels, ...chartHeightOptions },
-  { additionalProperties: false },
-);
-
-export const chartLineParameters = Type.Object(
   {
-    xType: Type.Union([Type.Literal("numeric"), Type.Literal("temporal")]),
-    data: mixedLineData,
-    ...lineOptions,
+    data: scatterData,
+    title: chartTitle,
+    ...axisLabels,
+    xFormat: Type.Optional(numericFormat),
+    yFormat: Type.Optional(numericFormat),
+    ...chartHeightOptions,
   },
   { additionalProperties: false },
 );
+
+export const chartLineParameters = Type.Union([
+  Type.Object(
+    {
+      xType: Type.Literal("numeric"),
+      data: numericLineData,
+      ...lineOptions,
+      ...numericLineFormatOptions,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      xType: Type.Literal("temporal"),
+      data: temporalLineData,
+      ...lineOptions,
+      ...temporalLineFormatOptions,
+    },
+    { additionalProperties: false },
+  ),
+]);
 
 export const numericLineChartVariant = Type.Object(
   {
@@ -123,6 +151,7 @@ export const numericLineChartVariant = Type.Object(
     xType: Type.Literal("numeric"),
     data: numericLineData,
     ...lineOptions,
+    ...numericLineFormatOptions,
   },
   { additionalProperties: false },
 );
@@ -133,6 +162,7 @@ export const temporalLineChartVariant = Type.Object(
     xType: Type.Literal("temporal"),
     data: temporalLineData,
     ...lineOptions,
+    ...temporalLineFormatOptions,
   },
   { additionalProperties: false },
 );
@@ -145,7 +175,13 @@ export const pieChartVariant = Type.Object(
 );
 
 export const barChartVariant = Type.Object(
-  { type: Type.Literal("bar"), data: barData, title: chartTitle, ...chartHeightOptions },
+  {
+    type: Type.Literal("bar"),
+    data: barData,
+    title: chartTitle,
+    valueFormat: Type.Optional(numericFormat),
+    ...chartHeightOptions,
+  },
   { additionalProperties: false },
 );
 
@@ -155,6 +191,8 @@ export const scatterChartVariant = Type.Object(
     data: scatterData,
     title: chartTitle,
     ...axisLabels,
+    xFormat: Type.Optional(numericFormat),
+    yFormat: Type.Optional(numericFormat),
     ...chartHeightOptions,
   },
   { additionalProperties: false },
@@ -235,6 +273,7 @@ const heatmapLabels = Type.Array(
   { minItems: 1, maxItems: MAX_HEATMAP_SIZE, uniqueItems: true },
 );
 const heatmapOptions = {
+  valueFormat: Type.Optional(numericFormat),
   rows: heatmapLabels,
   columns: heatmapLabels,
   data: Type.Array(
@@ -271,6 +310,7 @@ export type HeatmapParameters = Static<typeof chartHeatmapParameters>;
 export type HeatmapChartInput = Static<typeof heatmapChartVariant>;
 
 const boxplotOptions = {
+  valueFormat: Type.Optional(numericFormat),
   groups: Type.Array(
     Type.Object(
       {
@@ -304,6 +344,7 @@ export type BoxplotChartInput = Static<typeof boxplotChartVariant>;
 
 export const MAX_WATERFALL_VALUE = 1_000_000_000;
 const waterfallOptions = {
+  valueFormat: Type.Optional(numericFormat),
   start: Type.Number({ minimum: -MAX_WATERFALL_VALUE, maximum: MAX_WATERFALL_VALUE }),
   deltas: Type.Array(
     Type.Object(
@@ -330,6 +371,7 @@ export type WaterfallParameters = Static<typeof chartWaterfallParameters>;
 export type WaterfallChartInput = Static<typeof waterfallChartVariant>;
 
 const dumbbellOptions = {
+  valueFormat: Type.Optional(numericFormat),
   data: Type.Array(
     Type.Object(
       {

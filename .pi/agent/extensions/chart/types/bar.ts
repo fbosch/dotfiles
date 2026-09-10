@@ -38,6 +38,7 @@ import {
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
+  formatNumeric,
   isRecord,
   isValidChartHeight,
   normalizeBoundedText,
@@ -50,7 +51,12 @@ export type { BarChartInput };
 export { barChartVariant };
 
 export type BarChartRow = { label: string; value: number };
-export type BarChartData = { rows: BarChartRow[]; title?: string; maxHeightCells?: number };
+export type BarChartData = {
+  rows: BarChartRow[];
+  title?: string;
+  valueFormat?: "number" | "percent";
+  maxHeightCells?: number;
+};
 export type BarChartLayout = ChartLayout & {
   labelWidthPx: number;
   plotHeightPx: number;
@@ -64,6 +70,7 @@ export type BarChartDetails = ChartDetails & {
   type: "bar";
   rows: BarChartRow[];
   title?: string;
+  valueFormat?: "number" | "percent";
 };
 
 export function validateBarChartInput(input: BarChartInput): BarChartRow[] {
@@ -100,6 +107,7 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
     typeof value.imageWidthCells !== "number" ||
     Number.isFinite(value.imageWidthCells) === false ||
     value.imageWidthCells <= 0 ||
+    (value.valueFormat !== undefined && value.valueFormat !== "number" && value.valueFormat !== "percent") ||
     (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells))
   ) {
     return undefined;
@@ -133,6 +141,7 @@ export function getBarChartLayout(
   hasTitle = false,
   fontSize?: number,
   maxHeightCells?: number,
+  valueFormat?: "number" | "percent",
 ): BarChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -163,7 +172,10 @@ export function getBarChartLayout(
     fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7);
   const contentLabelWidthPx = Math.max(
     minimumLabelWidthPx,
-    ...rows.map((row) => Math.ceil(estimateTextWidthPx(formatBarLabel(row), labelFontSizePx)) + 6),
+    ...rows.map(
+      (row) =>
+        Math.ceil(estimateTextWidthPx(formatBarLabel(row, valueFormat), labelFontSizePx)) + 6,
+    ),
   );
   const labelWidthPx = clamp(contentLabelWidthPx, minimumLabelWidthPx, Math.round(widthPx * 0.48));
   const plotWidthPx = Math.max(
@@ -188,12 +200,12 @@ export function getBarChartLayout(
   );
 }
 
-function formatValue(value: number): string {
-  return String(value);
+function formatValue(value: number, valueFormat?: "number" | "percent"): string {
+  return formatNumeric(value, valueFormat, String);
 }
 
-function formatBarLabel(row: BarChartRow): string {
-  return `${row.label}: ${formatValue(row.value)}`;
+function formatBarLabel(row: BarChartRow, valueFormat?: "number" | "percent"): string {
+  return `${row.label}: ${formatValue(row.value, valueFormat)}`;
 }
 
 function truncateLabel(value: string, widthPx: number, fontSizePx: number): string {
@@ -210,6 +222,7 @@ export function renderBarChartSvg(
   layout = getBarChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows),
   title?: string,
   fontFamily = DEFAULT_FONT_FAMILY,
+  valueFormat?: "number" | "percent",
 ): string {
   const minimum = Math.min(0, ...rows.map((row) => row.value));
   const maximum = Math.max(0, ...rows.map((row) => row.value));
@@ -247,7 +260,7 @@ export function renderBarChartSvg(
   const labels = rows
     .map((row, index) => {
       const y = layout.plotY + layout.rowHeightPx * (index + 0.5) + layout.labelFontSizePx * 0.35;
-      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(formatBarLabel(row), layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
+      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(formatBarLabel(row, valueFormat), layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
     })
     .join("");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
@@ -276,6 +289,7 @@ function parseBarChartInput(input: BarChartInput): BarChartData {
   return {
     rows,
     ...(title === undefined ? {} : { title }),
+    ...(input.valueFormat === undefined ? {} : { valueFormat: input.valueFormat }),
     ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
 }
@@ -295,6 +309,7 @@ export const barChartRenderer: ChartType<
       type: "bar",
       rows: data.rows,
       ...(data.title === undefined ? {} : { title: data.title }),
+      ...(data.valueFormat === undefined ? {} : { valueFormat: data.valueFormat }),
       ...(data.maxHeightCells === undefined ? {} : { maxHeightCells: data.maxHeightCells }),
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
@@ -314,10 +329,18 @@ export const barChartRenderer: ChartType<
       details.title !== undefined,
       details.fontSize,
       details.maxHeightCells,
+      details.valueFormat,
     );
   },
   renderSvg(details, theme, layout): string {
-    return renderBarChartSvg(details.rows, theme, layout, details.title, details.fontFamily);
+    return renderBarChartSvg(
+      details.rows,
+      theme,
+      layout,
+      details.title,
+      details.fontFamily,
+      details.valueFormat,
+    );
   },
   deserializeDetails: deserializeBarChartDetails,
 };
