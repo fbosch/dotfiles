@@ -24,6 +24,7 @@ import {
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
+  scaleChartFontSize,
   validCellDimensions,
 } from "../types";
 
@@ -145,7 +146,10 @@ export function getBarChartLayout(
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const labelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
+  const labelFontSizePx =
+    fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.66), 10, scaleChartFontSize(15, dimensions))
+      : scaleChartFontSize(fontSize, dimensions);
   const titleHeightPx = hasTitle
     ? fontSize === undefined
       ? Math.round(dimensions.heightPx * 1.25)

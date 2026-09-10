@@ -179,7 +179,7 @@ describe("line chart", () => {
     const image = result.content.find((content) => content.type === "image");
     expect(image?.type).toBe("image");
     if (image?.type !== "image") throw new Error("expected PNG image");
-    expect(getPngDimensions(image.data)).toMatchObject({ widthPx: 540 });
+    expect(getPngDimensions(image.data)).toMatchObject({ widthPx: 720 });
 
     const tuiResult = await tool.execute(
       "chart",

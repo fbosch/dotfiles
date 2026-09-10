@@ -22,6 +22,7 @@ import {
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
+  scaleChartFontSize,
   validCellDimensions,
 } from "../types";
 
@@ -73,7 +74,10 @@ export function getPieChartLayout(
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const labelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.72), 11, 16);
+  const labelFontSizePx =
+    fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.72), 11, scaleChartFontSize(16, dimensions))
+      : scaleChartFontSize(fontSize, dimensions);
   const markerSizePx =
     fontSize === undefined
       ? Math.max(8, Math.round(dimensions.heightPx * 0.5))

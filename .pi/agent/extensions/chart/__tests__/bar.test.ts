@@ -162,7 +162,7 @@ describe("bar chart", () => {
         type: "bar",
         rows,
         title: "Balance",
-        imageWidthCells: 60,
+        imageWidthCells: 80,
         fontFamily: currentChartFontFamily(),
       }),
     );

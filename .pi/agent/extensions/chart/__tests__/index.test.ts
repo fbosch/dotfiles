@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { inflateSync } from "node:zlib";
 import type {
   ExtensionAPI,
@@ -480,6 +483,30 @@ describe("pie chart", () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 20));
   });
 
+  test("reads terminal image width from the Pi settings file", async () => {
+    const agentDir = await mkdtemp(join(tmpdir(), "pi-chart-settings-"));
+    const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
+    try {
+      await writeFile(
+        join(agentDir, "settings.json"),
+        JSON.stringify({ terminal: { imageWidthCells: 73 } }),
+      );
+      process.env.PI_CODING_AGENT_DIR = agentDir;
+      const result = await (registerTool().execute as PieChartExecute)(
+        "chart_pie",
+        { data: rows },
+        undefined,
+        undefined,
+        tuiContext,
+      );
+      expect(result.details).toMatchObject({ imageWidthCells: 73 });
+    } finally {
+      if (previousAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDir;
+      await rm(agentDir, { recursive: true, force: true });
+    }
+  });
+
   test("returns TUI chart data without a native image and retains an image outside TUI", async () => {
     const tool = registerTool();
     const execute = tool.execute as PieChartExecute;
@@ -496,13 +523,13 @@ describe("pie chart", () => {
       expect.objectContaining({
         rows,
         title: "Status",
-        imageWidthCells: 60,
+        imageWidthCells: 80,
         fontFamily: currentChartFontFamily(),
       }),
     );
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 540, heightPx: 220 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 720, heightPx: 220 });
   });
 
   test("rasterizes at native logical dimensions and displays compact wide and narrow cell heights", async () => {
@@ -525,14 +552,14 @@ describe("pie chart", () => {
     expect(component.render(64)).toEqual([]);
     await Promise.resolve();
     const wide = component.render(64)[0] ?? "";
-    expect(requestedSvg[0]).toContain('width="540" height="220" viewBox="0 0 540 220"');
+    expect(requestedSvg[0]).toContain('width="540" height="234" viewBox="0 0 540 220"');
     expect(/(?:^|,)c=60(?:,|;)/.test(wide)).toBe(true);
     expect(/(?:^|,)r=13(?:,|;)/.test(wide)).toBe(true);
 
     expect(component.render(30)).toEqual([]);
     await Promise.resolve();
     const narrow = component.render(30)[0] ?? "";
-    expect(requestedSvg[1]).toContain('width="252" height="251" viewBox="0 0 252 251"');
+    expect(requestedSvg[1]).toContain('width="252" height="252" viewBox="0 0 252 251"');
     expect(/(?:^|,)c=28(?:,|;)/.test(narrow)).toBe(true);
     expect(/(?:^|,)r=14(?:,|;)/.test(narrow)).toBe(true);
   });

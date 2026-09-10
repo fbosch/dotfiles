@@ -421,6 +421,15 @@ export function validCellDimensions(dimensions: CellDimensions): CellDimensions 
     : FALLBACK_CELL_DIMENSIONS;
 }
 
+/** Convert the logical chart font setting to pixels for the current terminal cell density. */
+export function scaleChartFontSize(fontSize: number, cellDimensions: CellDimensions): number {
+  const dimensions = validCellDimensions(cellDimensions);
+  return Math.max(
+    1,
+    Math.round((fontSize * dimensions.heightPx) / FALLBACK_CELL_DIMENSIONS.heightPx),
+  );
+}
+
 function rasterKeyString(key: RasterKey): string {
   return `${key.widthCells}:${key.cellWidthPx}:${key.cellHeightPx}`;
 }
@@ -440,6 +449,21 @@ export function renderChartSvg<TDetails extends ChartDetails, TLayout extends Ch
 ): string {
   const layout = renderer.getLayout(details, undefined, details.imageWidthCells);
   return renderer.renderSvg(details, theme, layout);
+}
+function padSvgToCellGrid(svg: string, targetHeightPx: number): string {
+  const openingTagEnd = svg.indexOf(">");
+  if (openingTagEnd === -1) return svg;
+  const openingTag = svg.slice(0, openingTagEnd + 1);
+  const heightMatch = openingTag.match(/\sheight="(\d+(?:\.\d+)?)"/);
+  if (heightMatch === null) return svg;
+  const currentHeightPx = Number(heightMatch[1]);
+  if (!Number.isFinite(currentHeightPx) || targetHeightPx <= currentHeightPx) return svg;
+
+  const paddedTag = openingTag
+    .replace(/\sheight="[^"]*"/, ` height="${targetHeightPx}"`)
+    .replace(/\spreserveAspectRatio="[^"]*"/, "")
+    .replace(/>$/, ' preserveAspectRatio="xMidYMin meet">');
+  return `${paddedTag}${svg.slice(openingTagEnd + 1)}`;
 }
 
 /** Renders only from the stored data so resizing never mutates the tool result. */
@@ -533,7 +557,10 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
       { widthPx: key.cellWidthPx, heightPx: key.cellHeightPx },
       key.widthCells,
     );
-    const svg = this.renderer.renderSvg(this.details, this.theme, layout);
+    const svg = padSvgToCellGrid(
+      this.renderer.renderSvg(this.details, this.theme, layout),
+      layout.heightCells * key.cellHeightPx,
+    );
 
     void this.rasterize(svg, controller.signal, {
       coalesceKey: this.rasterQueueKey,

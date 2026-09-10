@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { getPngDimensions } from "@earendil-works/pi-tui";
-import { rasterizeSvg, resolveChartSettings } from "../types";
+import { rasterizeSvg, resolveChartSettings, scaleChartFontSize } from "../types";
 import { barChartRenderer, getBarChartLayout } from "../types/bar";
 import { getLineChartLayout, lineChartRenderer } from "../types/line";
 import { getPieChartLayout, pieChartRenderer } from "../types/pie";
+import { getScatterChartLayout } from "../types/scatter";
 
 const theme = {
   getFgAnsi: (color: string) =>
@@ -31,6 +32,20 @@ describe("chart font size", () => {
         "global charts.fontSize",
       );
     }
+  });
+
+  test("scales logical font sizes with terminal cell density", () => {
+    const baseline = { widthPx: 9, heightPx: 18 };
+    const highDensity = { widthPx: 16, heightPx: 38 };
+    expect(scaleChartFontSize(16, baseline)).toBe(16);
+    expect(scaleChartFontSize(16, highDensity)).toBe(34);
+
+    expect(getPieChartLayout(highDensity, 28, 2, 16).labelFontSizePx).toBe(34);
+    expect(getBarChartLayout(highDensity, 28, 2, true, 16).labelFontSizePx).toBe(34);
+    expect(getLineChartLayout(highDensity, 28, true, true, true, 16).axisLabelFontSizePx).toBe(34);
+    expect(getScatterChartLayout(highDensity, 28, true, true, true, 16).axisLabelFontSizePx).toBe(
+      34,
+    );
   });
 
   test("persists a configured size and replays prior details without one", () => {

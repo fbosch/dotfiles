@@ -60,6 +60,9 @@
     "session": 120
   },
   "fullscreenExitOutput": "resume-hint",
+  "terminal": {
+    "imageWidthCells": 80
+  },
   "npmCommand": [
     "bash",
     "-c",

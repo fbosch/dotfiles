@@ -23,6 +23,7 @@ import {
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
+  scaleChartFontSize,
   validCellDimensions,
 } from "../types";
 
@@ -209,13 +210,16 @@ export function getLineChartLayout(
   const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.2));
   const tickFontSizePx =
     fontSize === undefined
-      ? clamp(Math.round(dimensions.heightPx * 0.61), 10, 14)
-      : Math.round(fontSize * 0.85);
-  const axisLabelFontSizePx = fontSize ?? clamp(Math.round(dimensions.heightPx * 0.66), 10, 15);
+      ? clamp(Math.round(dimensions.heightPx * 0.61), 10, scaleChartFontSize(14, dimensions))
+      : Math.round(scaleChartFontSize(fontSize, dimensions) * 0.85);
+  const axisLabelFontSizePx =
+    fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.66), 10, scaleChartFontSize(15, dimensions))
+      : scaleChartFontSize(fontSize, dimensions);
   const titleFontSizePx =
     fontSize === undefined
-      ? clamp(Math.round(dimensions.heightPx * 0.75), 11, 16)
-      : Math.round(fontSize * 1.1);
+      ? clamp(Math.round(dimensions.heightPx * 0.75), 11, scaleChartFontSize(16, dimensions))
+      : Math.round(scaleChartFontSize(fontSize, dimensions) * 1.1);
   const titleHeightPx = hasTitle ? titleFontSizePx + paddingPx : 0;
   const xLabelHeightPx = hasXLabel ? axisLabelFontSizePx + paddingPx : 0;
   const yLabelWidthPx = hasYLabel ? axisLabelFontSizePx + paddingPx : 0;
