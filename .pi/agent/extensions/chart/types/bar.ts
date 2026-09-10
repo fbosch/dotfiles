@@ -7,7 +7,8 @@ import {
 } from "@tanstack/charts";
 import { scaleBand } from "@tanstack/charts/scales/band";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { type Static, Type } from "typebox";
+import type { BarChartInput } from "../schemas";
+import { barChartVariant } from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -26,29 +27,13 @@ import {
   validCellDimensions,
 } from "../types";
 
+export type { BarChartInput };
+export { barChartVariant };
+
 const MAX_BARS = 12;
 const MAX_LABEL_LENGTH = 22;
 const MAX_TITLE_LENGTH = 80;
 
-export const barChartVariant = Type.Object(
-  {
-    type: Type.Literal("bar"),
-    data: Type.Array(
-      Type.Object(
-        {
-          label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
-          value: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
-        },
-        { additionalProperties: false },
-      ),
-      { minItems: 2, maxItems: MAX_BARS },
-    ),
-    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
-  },
-  { additionalProperties: false },
-);
-
-export type BarChartInput = Static<typeof barChartVariant>;
 export type BarChartRow = { label: string; value: number };
 export type BarChartData = { rows: BarChartRow[]; title?: string };
 export type BarChartLayout = ChartLayout & {

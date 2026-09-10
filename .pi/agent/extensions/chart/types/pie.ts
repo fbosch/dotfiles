@@ -5,7 +5,8 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { pie, polar, radialArc } from "@tanstack/charts/polar";
-import { type Static, Type } from "typebox";
+import type { PieChartInput } from "../schemas";
+import { pieChartVariant } from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -24,30 +25,14 @@ import {
   validCellDimensions,
 } from "../types";
 
+export type { PieChartInput };
+export { pieChartVariant };
+
 const NARROW_LAYOUT_CELLS = 36;
 const MAX_SLICES = 12;
 const MAX_LABEL_LENGTH = 22;
 const MAX_TITLE_LENGTH = 80;
 
-export const pieChartVariant = Type.Object(
-  {
-    type: Type.Literal("pie"),
-    data: Type.Array(
-      Type.Object(
-        {
-          label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
-          value: Type.Number({ minimum: 0, maximum: 1_000_000_000 }),
-        },
-        { additionalProperties: false },
-      ),
-      { minItems: 2, maxItems: MAX_SLICES },
-    ),
-    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
-  },
-  { additionalProperties: false },
-);
-
-export type PieChartInput = Static<typeof pieChartVariant>;
 export type PieChartRow = { label: string; value: number };
 export type PieChartData = {
   rows: PieChartRow[];

@@ -13,6 +13,7 @@ import {
   Image,
   setCapabilities,
   setCellDimensions,
+  Text,
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
@@ -34,6 +35,7 @@ import {
   renderPieChartSvg,
   validatePieChartInput,
 } from "../types/pie";
+import { scatterChartRenderer } from "../types/scatter";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -174,6 +176,10 @@ const rows = validatePieChartInput({
     { label: "Closed", value: 1 },
   ],
 });
+const scatterRows = [
+  { x: 1, y: 2 },
+  { x: 2, y: 1 },
+];
 
 function currentChartFontFamily(): string {
   const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: false });
@@ -271,6 +277,12 @@ describe("pie chart", () => {
       "chart_scatter",
       "chart_line",
     ]);
+    for (const tool of [pie, bar, scatter, line]) {
+      expect(tool.renderShell).toBe("self");
+      const renderCall = tool.renderCall;
+      if (renderCall === undefined) throw new Error(`${tool.name} call renderer is missing`);
+      expect(renderCall({} as never, theme, {} as never).render(80)).toEqual([]);
+    }
     expect(registerTools().some((tool) => tool.name === "chart")).toBe(false);
     expect(pie.parameters).toBe(chartPieParameters);
     expect(bar.parameters).toBe(chartBarParameters);
@@ -510,14 +522,14 @@ describe("pie chart", () => {
       },
     );
 
-    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    expect(component.render(64)).toEqual([]);
     await Promise.resolve();
     const wide = component.render(64)[0] ?? "";
     expect(requestedSvg[0]).toContain('width="540" height="220" viewBox="0 0 540 220"');
     expect(/(?:^|,)c=60(?:,|;)/.test(wide)).toBe(true);
     expect(/(?:^|,)r=13(?:,|;)/.test(wide)).toBe(true);
 
-    expect(component.render(30)).toEqual(["Rendering pie chart…"]);
+    expect(component.render(30)).toEqual([]);
     await Promise.resolve();
     const narrow = component.render(30)[0] ?? "";
     expect(requestedSvg[1]).toContain('width="252" height="251" viewBox="0 0 252 251"');
@@ -572,7 +584,7 @@ describe("pie chart", () => {
       },
     );
 
-    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    expect(component.render(64)).toEqual([]);
     await Promise.resolve();
     await Promise.resolve();
     expect(component.render(64)).toEqual(["Pie chart unavailable"]);
@@ -607,7 +619,7 @@ describe("pie chart", () => {
         color === "accent" ? "\u001b[38;2;255;0;0m" : theme.getFgAnsi(color),
     } as unknown as Theme);
 
-    expect(component.render(64)).toEqual(["Rendering pie chart…"]);
+    expect(component.render(64)).toEqual([]);
     expect(requestedSvg).toHaveLength(2);
     expect(requestedSvg[1]).toContain("rgb(255, 0, 0)");
   });
@@ -619,6 +631,74 @@ describe("pie chart", () => {
     const raster = deferred<string>();
     let rasterCalls = 0;
     const renderers = {
+      renderShell: "self" as const,
+      renderCall() {
+        return new Text("", 0, 0);
+      },
+      renderResult(
+        result: { details?: unknown },
+        _options: unknown,
+        renderTheme: Theme,
+        context: { lastComponent?: unknown; invalidate: () => void },
+      ) {
+        const previous = context.lastComponent;
+        if (previous instanceof ChartComponent) {
+          previous.update(renderTheme);
+          return previous;
+        }
+        return new ChartComponent(
+          result.details as { rows: typeof scatterRows; imageWidthCells: number },
+          renderTheme,
+          context.invalidate,
+          scatterChartRenderer,
+          async () => {
+            rasterCalls++;
+            return raster.promise;
+          },
+        );
+      },
+    };
+    const toolRow = new ToolExecutionComponent(
+      "chart",
+      "chart-1",
+      {},
+      { showImages: false },
+      renderers,
+      { requestRender: () => undefined } as never,
+      process.cwd(),
+    );
+    expect(toolRow.render(66)).toEqual([]);
+    toolRow.markExecutionStarted();
+    toolRow.setArgsComplete();
+    expect(toolRow.render(66)).toEqual([]);
+    toolRow.updateResult({
+      content: [{ type: "text", text: "summary" }],
+      details: { rows: scatterRows, imageWidthCells: 60 },
+      isError: false,
+    });
+
+    expect(toolRow.render(66)).toEqual([]);
+    expect(rasterCalls).toBe(1);
+    raster.resolve(pngHeader());
+    await new Promise<void>((resolve) => setImmediate(resolve));
+
+    const ready = toolRow.render(66);
+    expect(ready.join("\n")).toContain("\u001b_G");
+    expect(ready.join("\n")).not.toContain("Rendering scatter chart…");
+    expect(ready.join("\n")).not.toContain("chart");
+    expect(ready.length).toBeGreaterThan(1);
+    expect(toolRow.render(66)).toHaveLength(ready.length);
+    expect(rasterCalls).toBe(1);
+  });
+
+  test("keeps raster errors visible after hiding the pending tool row", async () => {
+    Reflect.set(globalThis, Symbol.for("@earendil-works/pi-coding-agent:theme"), theme);
+    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    let rasterCalls = 0;
+    const renderers = {
+      renderShell: "self" as const,
+      renderCall: () => new Text("", 0, 0),
       renderResult(
         result: { details?: unknown },
         _options: unknown,
@@ -637,14 +717,14 @@ describe("pie chart", () => {
           pieChartRenderer,
           async () => {
             rasterCalls++;
-            return raster.promise;
+            throw new Error("rsvg-convert failed");
           },
         );
       },
     };
     const toolRow = new ToolExecutionComponent(
       "chart",
-      "chart-1",
+      "chart-error",
       {},
       { showImages: false },
       renderers,
@@ -657,12 +737,10 @@ describe("pie chart", () => {
       isError: false,
     });
 
-    expect(toolRow.render(66).join("\n")).toContain("Rendering pie chart…");
-    expect(rasterCalls).toBe(1);
-    raster.resolve(pngHeader());
+    expect(toolRow.render(66)).toEqual([]);
     await new Promise<void>((resolve) => setImmediate(resolve));
 
-    expect(toolRow.render(66).join("\n")).toContain("\u001b_G");
+    expect(toolRow.render(66).join("\n")).toContain("Pie chart unavailable");
     expect(rasterCalls).toBe(1);
   });
 

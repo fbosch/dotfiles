@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { promisify } from "node:util";
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, SettingsManager, type Theme } from "@earendil-works/pi-coding-agent";
 import {
   type CellDimensions,
   type Component,
@@ -11,6 +11,7 @@ import {
 } from "@earendil-works/pi-tui";
 import { type ResvgRenderOptions, renderAsync } from "@resvg/resvg-js";
 import type { Static, TSchema } from "typebox";
+import { CHART_COMPONENT_MARKER } from "./component-marker";
 
 export const DEFAULT_IMAGE_WIDTH_CELLS = 60;
 export const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
@@ -424,6 +425,14 @@ function rasterKeyString(key: RasterKey): string {
   return `${key.widthCells}:${key.cellWidthPx}:${key.cellHeightPx}`;
 }
 
+export function createChartSettings(cwd: string, trusted: boolean): ChartSettings {
+  const settings = SettingsManager.create(cwd, getAgentDir(), { projectTrusted: trusted });
+  return {
+    imageWidthCells: settings.getImageWidthCells(),
+    ...resolveChartSettings(settings.getGlobalSettings(), settings.getProjectSettings()),
+  };
+}
+
 export function renderChartSvg<TDetails extends ChartDetails, TLayout extends ChartLayout>(
   renderer: ChartRenderer<TDetails, TLayout>,
   details: TDetails,
@@ -437,6 +446,10 @@ export function renderChartSvg<TDetails extends ChartDetails, TLayout extends Ch
 export class ChartComponent<TDetails extends ChartDetails, TLayout extends ChartLayout>
   implements Component
 {
+  static [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === "object" && value !== null && CHART_COMPONENT_MARKER in value;
+  }
+
   private readonly cache = new Map<string, string>();
   private readonly errors = new Set<string>();
   private readonly rasterQueueKey = {};
@@ -452,6 +465,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     private readonly rasterize: Rasterize = rasterizeSvg,
   ) {
     this.theme = theme;
+    Object.defineProperty(this, CHART_COMPONENT_MARKER, { value: true });
   }
 
   update(theme: Theme): void {
@@ -497,7 +511,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     }
 
     this.startRaster(cacheKey, key);
-    return [truncateToWidth(this.theme.fg("muted", this.renderer.renderingText), width)];
+    return [];
   }
 
   private resetRasters(): void {

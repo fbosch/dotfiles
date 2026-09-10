@@ -6,7 +6,8 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { type Static, Type } from "typebox";
+import type { ScatterChartInput } from "../schemas";
+import { scatterChartVariant } from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -23,34 +24,15 @@ import {
   validCellDimensions,
 } from "../types";
 
+export type { ScatterChartInput };
+export { scatterChartVariant };
+
 const MAX_ROWS = 200;
 const MAX_TITLE_LENGTH = 80;
 const MAX_AXIS_LABEL_LENGTH = 40;
 const MAX_POINT_LABEL_LENGTH = 40;
 const DOT_RADIUS_PX = 4;
 
-export const scatterChartVariant = Type.Object(
-  {
-    type: Type.Literal("scatter"),
-    data: Type.Array(
-      Type.Object(
-        {
-          x: Type.Number(),
-          y: Type.Number(),
-          label: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_POINT_LABEL_LENGTH })),
-        },
-        { additionalProperties: false },
-      ),
-      { minItems: 2, maxItems: MAX_ROWS },
-    ),
-    title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
-    xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
-    yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
-  },
-  { additionalProperties: false },
-);
-
-export type ScatterChartInput = Static<typeof scatterChartVariant>;
 export type ScatterChartRow = { x: number; y: number; label?: string };
 export type ScatterChartData = {
   rows: ScatterChartRow[];

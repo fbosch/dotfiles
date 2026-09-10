@@ -1,0 +1,153 @@
+import { type Static, Type } from "typebox";
+
+const MAX_SLICES = 12;
+const MAX_BARS = 12;
+const MAX_ROWS = 200;
+const MAX_LABEL_LENGTH = 22;
+const MAX_POINT_LABEL_LENGTH = 40;
+const MAX_TITLE_LENGTH = 80;
+const MAX_AXIS_LABEL_LENGTH = 40;
+
+const chartTitle = Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH }));
+const axisLabels = {
+  xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+  yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+} as const;
+
+const pieData = Type.Array(
+  Type.Object(
+    {
+      label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
+      value: Type.Number({ minimum: 0, maximum: 1_000_000_000 }),
+    },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_SLICES },
+);
+
+const barData = Type.Array(
+  Type.Object(
+    {
+      label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
+      value: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
+    },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_BARS },
+);
+
+const numericLineData = Type.Array(
+  Type.Object(
+    { x: Type.Number(), y: Type.Union([Type.Number(), Type.Null()]) },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_ROWS },
+);
+
+const temporalLineData = Type.Array(
+  Type.Object(
+    { x: Type.String(), y: Type.Union([Type.Number(), Type.Null()]) },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_ROWS },
+);
+
+const mixedLineData = Type.Array(
+  Type.Object(
+    { x: Type.Union([Type.Number(), Type.String()]), y: Type.Union([Type.Number(), Type.Null()]) },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_ROWS },
+);
+
+const scatterData = Type.Array(
+  Type.Object(
+    {
+      x: Type.Number(),
+      y: Type.Number(),
+      label: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_POINT_LABEL_LENGTH })),
+    },
+    { additionalProperties: false },
+  ),
+  { minItems: 2, maxItems: MAX_ROWS },
+);
+
+const lineOptions = {
+  title: chartTitle,
+  ...axisLabels,
+  markers: Type.Optional(Type.Boolean()),
+} as const;
+
+/** Public provider schemas intentionally omit the internal chart discriminator. */
+export const chartPieParameters = Type.Object(
+  { data: pieData, title: chartTitle },
+  { additionalProperties: false },
+);
+
+export const chartBarParameters = Type.Object(
+  { data: barData, title: chartTitle },
+  { additionalProperties: false },
+);
+
+export const chartScatterParameters = Type.Object(
+  { data: scatterData, title: chartTitle, ...axisLabels },
+  { additionalProperties: false },
+);
+
+export const chartLineParameters = Type.Object(
+  {
+    xType: Type.Union([Type.Literal("numeric"), Type.Literal("temporal")]),
+    data: mixedLineData,
+    ...lineOptions,
+  },
+  { additionalProperties: false },
+);
+
+export const numericLineChartVariant = Type.Object(
+  {
+    type: Type.Literal("line"),
+    xType: Type.Literal("numeric"),
+    data: numericLineData,
+    ...lineOptions,
+  },
+  { additionalProperties: false },
+);
+
+export const temporalLineChartVariant = Type.Object(
+  {
+    type: Type.Literal("line"),
+    xType: Type.Literal("temporal"),
+    data: temporalLineData,
+    ...lineOptions,
+  },
+  { additionalProperties: false },
+);
+
+export const lineChartVariant = Type.Union([numericLineChartVariant, temporalLineChartVariant]);
+
+export const pieChartVariant = Type.Object(
+  { type: Type.Literal("pie"), data: pieData, title: chartTitle },
+  { additionalProperties: false },
+);
+
+export const barChartVariant = Type.Object(
+  { type: Type.Literal("bar"), data: barData, title: chartTitle },
+  { additionalProperties: false },
+);
+
+export const scatterChartVariant = Type.Object(
+  { type: Type.Literal("scatter"), data: scatterData, title: chartTitle, ...axisLabels },
+  { additionalProperties: false },
+);
+
+export type PieParameters = Static<typeof chartPieParameters>;
+export type BarParameters = Static<typeof chartBarParameters>;
+export type LineParameters = Static<typeof chartLineParameters>;
+export type ScatterParameters = Static<typeof chartScatterParameters>;
+
+export type PieChartInput = Static<typeof pieChartVariant>;
+export type BarChartInput = Static<typeof barChartVariant>;
+export type NumericLineChartInput = Static<typeof numericLineChartVariant>;
+export type TemporalLineChartInput = Static<typeof temporalLineChartVariant>;
+export type LineChartInput = Static<typeof lineChartVariant>;
+export type ScatterChartInput = Static<typeof scatterChartVariant>;

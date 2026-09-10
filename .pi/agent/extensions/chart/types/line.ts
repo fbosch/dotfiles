@@ -6,7 +6,8 @@ import {
   renderChartSvg as renderTanStackChartSvg,
 } from "@tanstack/charts";
 import { scaleLinear } from "@tanstack/charts/scales/linear";
-import { type Static, Type } from "typebox";
+import type { LineChartInput } from "../schemas";
+import { lineChartVariant, numericLineChartVariant, temporalLineChartVariant } from "../schemas";
 import {
   ansiColor,
   type ChartDetails,
@@ -25,53 +26,15 @@ import {
   validCellDimensions,
 } from "../types";
 
+export type { LineChartInput };
+export { lineChartVariant, numericLineChartVariant, temporalLineChartVariant };
+
 const MAX_ROWS = 200;
 const MAX_TITLE_LENGTH = 80;
 const MAX_AXIS_LABEL_LENGTH = 40;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const ISO_UTC_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/;
 
-const lineOptions = {
-  title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
-  xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
-  yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
-  markers: Type.Optional(Type.Boolean()),
-} as const;
-
-export const numericLineChartVariant = Type.Object(
-  {
-    type: Type.Literal("line"),
-    xType: Type.Literal("numeric"),
-    data: Type.Array(
-      Type.Object(
-        { x: Type.Number(), y: Type.Union([Type.Number(), Type.Null()]) },
-        { additionalProperties: false },
-      ),
-      { minItems: 2, maxItems: MAX_ROWS },
-    ),
-    ...lineOptions,
-  },
-  { additionalProperties: false },
-);
-
-export const temporalLineChartVariant = Type.Object(
-  {
-    type: Type.Literal("line"),
-    xType: Type.Literal("temporal"),
-    data: Type.Array(
-      Type.Object(
-        { x: Type.String(), y: Type.Union([Type.Number(), Type.Null()]) },
-        { additionalProperties: false },
-      ),
-      { minItems: 2, maxItems: MAX_ROWS },
-    ),
-    ...lineOptions,
-  },
-  { additionalProperties: false },
-);
-
-export const lineChartVariant = Type.Union([numericLineChartVariant, temporalLineChartVariant]);
-export type LineChartInput = Static<typeof lineChartVariant>;
 export type LineChartRow = { x: number; y: number | null; xLabel: string };
 export type LineChartData = {
   xType: "numeric" | "temporal";
