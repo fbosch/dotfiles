@@ -573,3 +573,75 @@ export const networkChartVariant = Type.Object(
 );
 export type NetworkParameters = Static<typeof chartNetworkParameters>;
 export type NetworkChartInput = Static<typeof networkChartVariant>;
+
+export const MAX_GANTT_TASKS = 64;
+export const MAX_GANTT_MILESTONES = 16;
+export const MAX_GANTT_DEPENDENCIES = 8;
+export const MAX_GANTT_ID_LENGTH = 120;
+export const MAX_GANTT_LABEL_LENGTH = 40;
+export const MAX_GANTT_GROUP_LENGTH = 22;
+export const MAX_GANTT_TIME = 1_000_000_000;
+const ganttId = Type.String({
+  minLength: 1,
+  maxLength: MAX_GANTT_ID_LENGTH,
+  pattern: "\\S",
+});
+const ganttTime = Type.Number({ minimum: -MAX_GANTT_TIME, maximum: MAX_GANTT_TIME });
+const ganttLabel = Type.String({
+  minLength: 1,
+  maxLength: MAX_GANTT_LABEL_LENGTH,
+  pattern: "\\S",
+});
+const ganttGroup = Type.Optional(
+  Type.String({
+    minLength: 1,
+    maxLength: MAX_GANTT_GROUP_LENGTH,
+    pattern: "\\S",
+  }),
+);
+const ganttTask = Type.Object(
+  {
+    id: ganttId,
+    label: ganttLabel,
+    start: ganttTime,
+    end: ganttTime,
+    group: ganttGroup,
+    progress: Type.Optional(Type.Number({ minimum: 0, maximum: 1 })),
+    dependencies: Type.Optional(
+      Type.Array(ganttId, {
+        maxItems: MAX_GANTT_DEPENDENCIES,
+        description: "Task IDs that must complete before this task.",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+const ganttMilestone = Type.Object(
+  {
+    label: ganttLabel,
+    at: ganttTime,
+  },
+  { additionalProperties: false },
+);
+const ganttOptions = {
+  tasks: Type.Array(ganttTask, {
+    minItems: 1,
+    maxItems: MAX_GANTT_TASKS,
+    description: "Ordered task intervals with optional progress and dependencies.",
+  }),
+  milestones: Type.Optional(
+    Type.Array(ganttMilestone, {
+      maxItems: MAX_GANTT_MILESTONES,
+      description: "Named timeline milestones.",
+    }),
+  ),
+  title: chartTitle,
+  xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+};
+export const chartGanttParameters = Type.Object(ganttOptions, { additionalProperties: false });
+export const ganttChartVariant = Type.Object(
+  { type: Type.Literal("gantt"), ...ganttOptions },
+  { additionalProperties: false },
+);
+export type GanttParameters = Static<typeof chartGanttParameters>;
+export type GanttChartInput = Static<typeof ganttChartVariant>;

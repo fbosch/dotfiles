@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers fourteen tools in a fresh process without loading the native renderer", async () => {
+  test("registers fifteen tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -48,6 +48,7 @@ describe("lazy chart architecture", () => {
         "chart_waterfall",
         "chart_dumbbell",
         "chart_stacked_bar",
+        "chart_gantt",
         "chart_network",
         "chart_tree",
         "chart_treemap",

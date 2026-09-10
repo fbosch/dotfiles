@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers fourteen focused tools:
+The enabled chart extension registers fifteen focused specialist tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -13,13 +13,16 @@ The enabled chart extension registers fourteen focused tools:
 - `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
 - `chart_dumbbell` compares two values per labeled row with connected dots.
 - `chart_stacked_bar` compares nonnegative compositions across labeled categories.
+- `chart_gantt` renders deterministic task timelines with progress, milestones, and dependency connectors.
 - `chart_network` renders deterministic layered directed networks and call graphs, including multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels.
 - `chart_tree` renders tidy parent-child hierarchy trees for repository, AST, dependency, and task structures.
 - `chart_treemap` compares hierarchical bundle, directory, or module sizes by area.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All fourteen `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly, but `chart_*` tools are specialist tools deferred from the initial active set. Use `search_tools` to discover and activate them. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
+
+`toolDiscovery.deferredToolPrefixes` in `.pi/agent/settings.json` controls which tool-name prefixes are treated as specialist tools. The default configuration includes `chart_`, `figma_`, `serena_`, `context7_`, `ast-grep_`, and `mcp__`.
 
 ## Line charts
 
@@ -179,6 +182,25 @@ Values must be finite numbers from 0 through 1,000,000,000 inclusive. These are 
 Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text bounds apply before trimming; supplied text cannot be blank. Unknown fields and a caller-supplied `type` are rejected. Visible labels are shortened or omitted when space is insufficient, tick count decreases at narrow widths, and each legend entry gets its own line. Colors identify series consistently across rows, including all-zero series. The SVG description and tool summary always retain full labels, exact raw values, and exact raw category totals, even in normalized mode.
 
 TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG renderer own bar geometry. Unit coordinates protect subnormal raw domains from scale overflow. Saved details contain trimmed labels, original values, resolved `normalize`, and shared chart settings; replay revalidates them and recomputes stacks and totals. The lazy loader, full-resolution worker, cached image identities, and resume queue deadlines are unchanged.
+
+
+## Gantt charts
+
+`chart_gantt` requires `tasks`, an ordered array of 1–64 task intervals. Each task has a unique trimmed `id`, a trimmed `label`, finite bounded `start` and `end` values with `start < end`, and optional `group`, `progress` from 0 through 1, and up to eight task IDs in `dependencies`. Optional `milestones` contain a trimmed `label` and finite bounded `at` value. `title` and `xLabel` are optional. Unknown fields and a caller-supplied `type` are rejected.
+
+```json
+{
+  "tasks": [
+    { "id": "scan", "label": "Scan repository", "start": 0, "end": 3, "progress": 1 },
+    { "id": "index", "label": "Build index", "start": 2, "end": 6, "group": "analysis", "progress": 0.5, "dependencies": ["scan"] }
+  ],
+  "milestones": [{ "label": "Release", "at": 7 }],
+  "title": "Repository plan",
+  "xLabel": "Day"
+}
+```
+
+Task order is authored order. TanStack rectangle marks render the interval and completed portion; text marks show progress when the interval is wide enough. Dependency paths, milestone diamonds, grid lines, labels, and the timeline shell are deterministic SVG overlays. The summary and SVG description retain exact normalized task values, dependencies, and milestones even when visible labels are shortened.
 
 ## Layered network and call-graph charts
 

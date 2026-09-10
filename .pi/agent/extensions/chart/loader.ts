@@ -12,12 +12,14 @@ export type ChartTypeId =
   | "stacked_bar"
   | "treemap"
   | "tree"
-  | "network";
+  | "network"
+  | "gantt";
 
 export type ChartModules = {
   treemap: typeof import("./types/treemap");
   tree: typeof import("./types/tree");
   network: typeof import("./types/network");
+  gantt: typeof import("./types/gantt");
   stacked_bar: typeof import("./types/stacked-bar");
   dumbbell: typeof import("./types/dumbbell");
   waterfall: typeof import("./types/waterfall");
@@ -32,6 +34,7 @@ export type ChartModules = {
 };
 
 let cachedNetworkModule: Promise<ChartModules["network"]> | undefined;
+let cachedGanttModule: Promise<ChartModules["gantt"]> | undefined;
 let cachedTreeModule: Promise<ChartModules["tree"]> | undefined;
 let cachedTreemapModule: Promise<ChartModules["treemap"]> | undefined;
 let cachedStackedBarModule: Promise<ChartModules["stacked_bar"]> | undefined;
@@ -51,6 +54,7 @@ let sharedRuntimePromise: Promise<typeof import("./types")> | undefined;
  * Dynamic imports are cached as promises, including rejected promises. A failed native/runtime
  * load stays visible as a stable chart error instead of retrying on every TUI render.
  */
+export function loadChartType(type: "gantt"): Promise<ChartModules["gantt"]>;
 export function loadChartType(type: "network"): Promise<ChartModules["network"]>;
 export function loadChartType(type: "tree"): Promise<ChartModules["tree"]>;
 export function loadChartType(type: "treemap"): Promise<ChartModules["treemap"]>;
@@ -67,6 +71,9 @@ export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>
 export function loadChartType(type: "histogram"): Promise<ChartModules["histogram"]>;
 export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartTypeId]> {
   switch (type) {
+    case "gantt":
+      cachedGanttModule ??= import("./types/gantt");
+      return cachedGanttModule;
     case "network":
       cachedNetworkModule ??= import("./types/network");
       return cachedNetworkModule;
@@ -131,6 +138,7 @@ export async function shutdownChartRuntime(): Promise<void> {
     cachedDumbbellModule === undefined &&
     cachedStackedBarModule === undefined &&
     cachedTreeModule === undefined &&
+    cachedGanttModule === undefined &&
     cachedNetworkModule === undefined &&
     cachedTreemapModule === undefined &&
     cachedBezierModule === undefined

@@ -196,16 +196,12 @@ describe("instruction fragments", () => {
     expect(appendInstructionFragments(appended, "")).toBe("base prompt");
   });
 
-  test("injects fragments whose active-tool conditions match", () => {
+  test("injects fragments for available tools, including inactive deferred tools", () => {
     let handler:
-      | ((
-          event: BeforeAgentStartEvent,
-          ctx: ExtensionContext,
-        ) => BeforeAgentStartEventResult | undefined)
+      | ((event: BeforeAgentStartEvent, ctx: ExtensionContext) => BeforeAgentStartEventResult | undefined)
       | undefined;
-    let activeTools = ["subagent", "todo", "fffind"];
-    const pi = {
-      getActiveTools: () => activeTools,
+    let availableTools = ["subagent", "todo", "ffgrep"];
+      getAllTools: () => availableTools.map((name) => ({ name })),
       on(event: string, registeredHandler: typeof handler) {
         if (event === "before_agent_start") handler = registeredHandler;
       },
@@ -222,15 +218,13 @@ describe("instruction fragments", () => {
     expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
     expect(systemPrompt).toContain("# Subagent orchestration");
     expect(systemPrompt).toContain("# Task tracking");
-    expect(systemPrompt).not.toContain("when:");
-
-    activeTools = ["todo"];
-    const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(taskSystemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(taskSystemPrompt).toContain("# Task tracking");
-    expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
 
     activeTools = ["read"];
+    const inactiveButAvailablePrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+    expect(inactiveButAvailablePrompt).toContain("# Subagent orchestration");
+    expect(inactiveButAvailablePrompt).toContain("# Task tracking");
+
+    availableTools = ["read"];
     expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
   });
 });

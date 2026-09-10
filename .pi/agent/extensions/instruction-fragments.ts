@@ -233,9 +233,10 @@ const GLOBAL_INSTRUCTION_FRAGMENTS = loadGlobalInstructionFragments();
 
 export default function instructionFragments(pi: ExtensionAPI): void {
   pi.on("before_agent_start", (event) => {
+    // Deferred tools remain available in Pi's registry; excluded tools are removed before this hook runs.
     const fragments = instructionFragmentsForTools(
       GLOBAL_INSTRUCTION_FRAGMENTS,
-      pi.getActiveTools(),
+      pi.getAllTools().map((tool) => tool.name),
     );
     const systemPrompt = appendInstructionFragments(event.systemPrompt, fragments);
     if (systemPrompt === event.systemPrompt) return;

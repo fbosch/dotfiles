@@ -12,6 +12,7 @@ import {
   chartBezierParameters,
   chartBoxplotParameters,
   chartDumbbellParameters,
+  chartGanttParameters,
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
@@ -23,6 +24,7 @@ import {
   chartTreeParameters,
   chartWaterfallParameters,
   type DumbbellParameters,
+  type GanttParameters,
   type HeatmapParameters,
   type HistogramParameters,
   hasBoundedTreemapHierarchy,
@@ -40,6 +42,7 @@ import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
 import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
 import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell";
 import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
+import type { GanttChartDetails, GanttChartInput } from "./types/gantt";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { NetworkChartDetails, NetworkChartInput } from "./types/network";
@@ -55,6 +58,7 @@ export type {
   BezierParameters,
   BoxplotParameters,
   DumbbellParameters,
+  GanttParameters,
   HeatmapParameters,
   HistogramParameters,
   LineParameters,
@@ -71,6 +75,7 @@ export {
   chartBezierParameters,
   chartBoxplotParameters,
   chartDumbbellParameters,
+  chartGanttParameters,
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
@@ -103,6 +108,7 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "stacked_bar" ||
     details.type === "network" ||
     details.type === "treemap" ||
+    details.type === "gantt" ||
     details.type === "tree"
     ? details.type
     : fallback;
@@ -738,6 +744,54 @@ export function createTreemapChartTool(): ToolDefinition<
   };
 }
 
+export function createGanttChartTool(): ToolDefinition<
+  typeof chartGanttParameters,
+  GanttChartDetails
+> {
+  return {
+    name: "chart_gantt",
+    label: "Chart Gantt",
+    description:
+      "Render a deterministic task timeline from 1-64 ordered tasks. Tasks have finite start/end values, optional groups and progress, optional dependencies, and named milestones. Uses TanStack interval marks with dependency overlays. Optional title and xLabel.",
+    promptSnippet: "Render deterministic Gantt task timelines",
+    parameters: chartGanttParameters,
+    async execute(_toolCallId, parameters: GanttParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartGanttParameters, parameters))
+        throw new Error("invalid gantt chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("gantt")]);
+      signal?.throwIfAborted();
+      const input: GanttChartInput = { ...parameters, type: "gantt" };
+      if (!Value.Check(module.ganttChartVariant, input))
+        throw new Error("invalid gantt chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.ganttChartRenderer.createDetails(
+        module.ganttChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.ganttChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.ganttChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("gantt", result, theme, context);
+    },
+  };
+}
+
 export function createNetworkChartTool(): ToolDefinition<
   typeof chartNetworkParameters,
   NetworkChartDetails
@@ -846,6 +900,7 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createWaterfallChartTool());
   pi.registerTool(createDumbbellChartTool());
   pi.registerTool(createStackedBarChartTool());
+  pi.registerTool(createGanttChartTool());
   pi.registerTool(createNetworkChartTool());
   pi.registerTool(createTreeChartTool());
   pi.registerTool(createTreemapChartTool());

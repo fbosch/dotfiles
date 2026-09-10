@@ -203,6 +203,21 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "gantt": {
+          const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("gantt")]);
+          const details = module.ganttChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.ganttChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.ganttChartRenderer,
+          );
+          break;
+        }
         case "network": {
           const [runtime, module] = await Promise.all([
             loadChartRuntime(),

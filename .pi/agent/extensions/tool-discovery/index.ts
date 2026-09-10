@@ -1,5 +1,7 @@
 import {
   defineTool,
+  getAgentDir,
+  SettingsManager,
   type ExtensionAPI,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
@@ -8,6 +10,8 @@ import { Type } from "typebox";
 const DEFAULT_MATCHES = 3;
 const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
+const MAX_DEFERRED_PREFIXES = 32;
+const MAX_DEFERRED_PREFIX_LENGTH = 120;
 
 const DEFERRED_TOOL_NAMES = new Set([
   "exec",
@@ -27,8 +31,14 @@ const DEFERRED_TOOL_NAMES = new Set([
   "worktrunk",
 ]);
 
-// Chart tools expose eager schemas; their renderer modules remain lazy per invocation.
-const DEFERRED_TOOL_PREFIXES = ["figma_", "serena_", "context7_", "ast-grep_", "mcp__"] as const;
+const DEFAULT_DEFERRED_TOOL_PREFIXES = [
+  "chart_",
+  "figma_",
+  "serena_",
+  "context7_",
+  "ast-grep_",
+  "mcp__",
+] as const;
 
 const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"[^"\r\n]+"|'[^'\r\n]+')[^>]*\/>\s*$/u;
 
@@ -51,11 +61,46 @@ interface ToolSearchDetails {
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
 
-export function isDeferredToolName(name: string): boolean {
+type SettingsRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is SettingsRecord {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function getConfiguredPrefixes(settings: unknown): string[] | undefined {
+  if (!isRecord(settings) || !isRecord(settings.toolDiscovery)) return undefined;
+  const value = settings.toolDiscovery.deferredToolPrefixes;
+  if (!Array.isArray(value) || value.length > MAX_DEFERRED_PREFIXES) return undefined;
+  if (
+    value.some(
+      (prefix) =>
+        typeof prefix !== "string" ||
+        prefix.trim().length === 0 ||
+        prefix.trim().length > MAX_DEFERRED_PREFIX_LENGTH,
+    )
+  )
+    return undefined;
+  const prefixes = value.map((prefix) => prefix.trim());
+  return new Set(prefixes).size === prefixes.length ? prefixes : undefined;
+}
+
+export function resolveDeferredToolPrefixes(
+  globalSettings: unknown,
+  projectSettings?: unknown,
+): readonly string[] {
   return (
-    DEFERRED_TOOL_NAMES.has(name) ||
-    DEFERRED_TOOL_PREFIXES.some((prefix) => name.startsWith(prefix))
+    getConfiguredPrefixes(projectSettings) ??
+    getConfiguredPrefixes(globalSettings) ??
+    DEFAULT_DEFERRED_TOOL_PREFIXES
   );
+}
+
+export function isDeferredToolName(
+  name: string,
+  prefixes: readonly string[] = DEFAULT_DEFERRED_TOOL_PREFIXES,
+): boolean {
+  if (name === "search_tools") return false;
+  return DEFERRED_TOOL_NAMES.has(name) || prefixes.some((prefix) => name.startsWith(prefix));
 }
 
 function isSubagentSession(ctx: ExtensionContext): boolean {
@@ -100,12 +145,13 @@ export function searchDeferredTools(
   tools: readonly ToolInfo[],
   query: string,
   limit = DEFAULT_MATCHES,
+  prefixes: readonly string[] = DEFAULT_DEFERRED_TOOL_PREFIXES,
 ): ToolInfo[] {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
 
   return tools
-    .filter((tool) => isDeferredToolName(tool.name))
+    .filter((tool) => isDeferredToolName(tool.name, prefixes))
     .map((tool) => ({ tool, score: scoreTool(tool, terms) }))
     .filter(({ score }) => score > 0)
     .sort(
@@ -115,6 +161,12 @@ export function searchDeferredTools(
     .map(({ tool }) => tool);
 }
 
+function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly string[] {
+  const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+    projectTrusted: ctx.isProjectTrusted(),
+  });
+  return resolveDeferredToolPrefixes(settings.getGlobalSettings(), settings.getProjectSettings());
+}
 export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
@@ -128,11 +180,12 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
       parameters: ToolSearchParameters,
       executionMode: "sequential",
 
-      async execute(_toolCallId, params) {
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const matches = searchDeferredTools(
           pi.getAllTools(),
           params.query,
           params.limit ?? DEFAULT_MATCHES,
+          getConfiguredDeferredToolPrefixes(ctx),
         );
 
         if (matches.length === 0) {
@@ -176,10 +229,11 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   pi.on("resources_discover", (_event, ctx) => {
     if (isSubagentSession(ctx)) return;
 
+    const deferredPrefixes = getConfiguredDeferredToolPrefixes(ctx);
     const deferredNames = new Set(
       pi
         .getAllTools()
-        .filter((tool) => isDeferredToolName(tool.name))
+        .filter((tool) => isDeferredToolName(tool.name, deferredPrefixes))
         .map((tool) => tool.name),
     );
     const active = pi.getActiveTools();

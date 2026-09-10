@@ -90,6 +90,16 @@
     "fontFamily": "JetBrainsMono NF",
     "fontSize": 14
   },
+  "toolDiscovery": {
+    "deferredToolPrefixes": [
+      "chart_",
+      "figma_",
+      "serena_",
+      "context7_",
+      "ast-grep_",
+      "mcp__"
+    ]
+  },
   "packages": [
     "npm:@gotgenes/pi-permission-system@31.1.1",
     "npm:@ff-labs/pi-fff@0.10.6",

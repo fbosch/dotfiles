@@ -5,7 +5,11 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import toolDiscoveryExtension, { isDeferredToolName, searchDeferredTools } from "../index";
+import toolDiscoveryExtension, {
+  isDeferredToolName,
+  resolveDeferredToolPrefixes,
+  searchDeferredTools,
+} from "../index";
 
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
 
@@ -79,6 +83,8 @@ function createHarness(options?: {
   } as unknown as ExtensionAPI;
 
   const ctx = {
+    cwd: process.cwd(),
+    isProjectTrusted: () => false,
     getSystemPrompt: () => options?.systemPrompt ?? "base system prompt",
     sessionManager: {
       getHeader: () => ({
@@ -115,18 +121,21 @@ function createHarness(options?: {
 
 describe("tool discovery", () => {
   test("classifies only known specialist tool names", () => {
-    expect(isDeferredToolName("chart_pie")).toBe(false);
-    expect(isDeferredToolName("chart_bar")).toBe(false);
-    expect(isDeferredToolName("chart_line")).toBe(false);
-    expect(isDeferredToolName("chart_scatter")).toBe(false);
-    expect(isDeferredToolName("chart_histogram")).toBe(false);
-    expect(isDeferredToolName("chart_bezier")).toBe(false);
-    expect(isDeferredToolName("chart_heatmap")).toBe(false);
-    expect(isDeferredToolName("chart_boxplot")).toBe(false);
-    expect(isDeferredToolName("chart_waterfall")).toBe(false);
-    expect(isDeferredToolName("chart_dumbbell")).toBe(false);
-    expect(isDeferredToolName("chart_stacked_bar")).toBe(false);
-    expect(isDeferredToolName("chart_treemap")).toBe(false);
+    expect(isDeferredToolName("chart_pie")).toBe(true);
+    expect(isDeferredToolName("chart_bar")).toBe(true);
+    expect(isDeferredToolName("chart_line")).toBe(true);
+    expect(isDeferredToolName("chart_scatter")).toBe(true);
+    expect(isDeferredToolName("chart_histogram")).toBe(true);
+    expect(isDeferredToolName("chart_bezier")).toBe(true);
+    expect(isDeferredToolName("chart_heatmap")).toBe(true);
+    expect(isDeferredToolName("chart_boxplot")).toBe(true);
+    expect(isDeferredToolName("chart_waterfall")).toBe(true);
+    expect(isDeferredToolName("chart_dumbbell")).toBe(true);
+    expect(isDeferredToolName("chart_stacked_bar")).toBe(true);
+    expect(isDeferredToolName("chart_gantt")).toBe(true);
+    expect(isDeferredToolName("chart_network")).toBe(true);
+    expect(isDeferredToolName("chart_tree")).toBe(true);
+    expect(isDeferredToolName("chart_treemap")).toBe(true);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -141,6 +150,23 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("just_tools")).toBe(false);
     expect(isDeferredToolName("mcp")).toBe(false);
     expect(isDeferredToolName("neovim")).toBe(false);
+  });
+  test("reads deferred prefixes from tool discovery settings", () => {
+    expect(
+      resolveDeferredToolPrefixes({
+        toolDiscovery: { deferredToolPrefixes: ["custom_", "chart_"] },
+      }),
+    ).toEqual(["custom_", "chart_"]);
+    expect(
+      resolveDeferredToolPrefixes(
+        { toolDiscovery: { deferredToolPrefixes: ["global_"] } },
+        { toolDiscovery: { deferredToolPrefixes: [] } },
+      ),
+    ).toEqual([]);
+    expect(
+      resolveDeferredToolPrefixes({ toolDiscovery: { deferredToolPrefixes: [""] } }),
+    ).toContain("chart_");
+    expect(isDeferredToolName("search_tools", ["search_"])).toBe(false);
   });
 
   test("removes specialist tools from the initial parent tool set", async () => {
@@ -161,73 +187,25 @@ describe("tool discovery", () => {
     expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "search_tools"]);
   });
 
-  test("keeps chart tools active while deferring other specialists", async () => {
+  test("defers chart tools and discovers them on demand", async () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
-        dummyTool("chart_pie", "Render a compact pie chart from labeled nonnegative values"),
-        dummyTool("chart_bar", "Render a compact horizontal bar chart from labeled signed values"),
-        dummyTool("chart_line", "Render a single-series numeric or temporal line chart"),
-        dummyTool("chart_histogram", "Render a count histogram from numeric samples"),
-        dummyTool("chart_bezier", "Render an exact cubic Bezier segment"),
-        dummyTool("chart_heatmap", "Render a labeled matrix heatmap"),
-        dummyTool("chart_boxplot", "Render sample distributions as box plots"),
-        dummyTool("chart_waterfall", "Render cumulative changes as a waterfall"),
-        dummyTool("chart_dumbbell", "Render paired values as a dumbbell"),
-        dummyTool("chart_stacked_bar", "Render nonnegative compositions as stacked bars"),
-        dummyTool("chart_treemap", "Render hierarchical sizes as treemaps"),
+        dummyTool("chart_pie", "Render a compact pie chart"),
+        dummyTool("chart_line", "Render a single-series line chart"),
+        dummyTool("chart_gantt", "Render deterministic task timelines"),
+        dummyTool("chart_network", "Render layered network and call-graph charts"),
       ],
-      activeTools: [
-        "read",
-        "chart_pie",
-        "chart_bar",
-        "chart_line",
-        "chart_histogram",
-        "chart_bezier",
-        "chart_heatmap",
-        "chart_boxplot",
-        "chart_waterfall",
-        "chart_dumbbell",
-        "chart_stacked_bar",
-        "chart_treemap",
-      ],
+      activeTools: ["read", "chart_pie", "chart_line", "chart_gantt", "chart_network"],
     });
 
     await harness.discoverResources();
-    expect(harness.activeTools).toEqual([
-      "read",
-      "chart_pie",
-      "chart_bar",
-      "chart_line",
-      "chart_histogram",
-      "chart_bezier",
-      "chart_heatmap",
-      "chart_boxplot",
-      "chart_waterfall",
-      "chart_dumbbell",
-      "chart_stacked_bar",
-      "chart_treemap",
-      "search_tools",
-    ]);
-    expect((await harness.search("chart line", 1)).details).toEqual({
-      matches: [],
-      added: [],
+    expect(harness.activeTools).toEqual(["read", "search_tools"]);
+    expect((await harness.search("chart timeline", 1)).details).toEqual({
+      matches: ["chart_gantt"],
+      added: ["chart_gantt"],
     });
-    expect(harness.activeTools).toEqual([
-      "read",
-      "chart_pie",
-      "chart_bar",
-      "chart_line",
-      "chart_histogram",
-      "chart_bezier",
-      "chart_heatmap",
-      "chart_boxplot",
-      "chart_waterfall",
-      "chart_dumbbell",
-      "chart_stacked_bar",
-      "chart_treemap",
-      "search_tools",
-    ]);
+    expect(harness.activeTools).toEqual(["read", "search_tools", "chart_gantt"]);
   });
 
   test("loads the highest-scoring matches additively", async () => {

@@ -24,6 +24,7 @@ import chartExtension, {
   chartBarParameters,
   chartBezierParameters,
   chartLineParameters,
+  chartGanttParameters,
   chartNetworkParameters,
   chartPieParameters,
   chartScatterParameters,
@@ -278,6 +279,7 @@ describe("pie chart", () => {
     const waterfall = registerTool("chart_waterfall");
     const dumbbell = registerTool("chart_dumbbell");
     const stackedBar = registerTool("chart_stacked_bar");
+    const gantt = registerTool("chart_gantt");
     const network = registerTool("chart_network");
     const tree = registerTool("chart_tree");
     const treemap = registerTool("chart_treemap");
@@ -294,6 +296,7 @@ describe("pie chart", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_gantt",
       "chart_network",
       "chart_tree",
       "chart_treemap",
@@ -310,6 +313,7 @@ describe("pie chart", () => {
       waterfall.name,
       dumbbell.name,
       stackedBar.name,
+      gantt.name,
       network.name,
       tree.name,
       treemap.name,
@@ -325,6 +329,7 @@ describe("pie chart", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_gantt",
       "chart_network",
       "chart_tree",
       "chart_treemap",
@@ -341,6 +346,7 @@ describe("pie chart", () => {
       waterfall,
       dumbbell,
       stackedBar,
+      gantt,
       network,
       tree,
       treemap,
@@ -358,6 +364,7 @@ describe("pie chart", () => {
     expect(bezier.parameters).toBe(chartBezierParameters);
     expect(tree.parameters).toBe(chartTreeParameters);
     expect(network.parameters).toBe(chartNetworkParameters);
+    expect(gantt.parameters).toBe(chartGanttParameters);
     expect(Value.Check(chartPieParameters, { data: rows, title: "Status" })).toBe(true);
     expect(Value.Check(chartBarParameters, { data: rows })).toBe(true);
     expect(
