@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers nine focused tools:
+The enabled chart extension registers ten focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -11,8 +11,9 @@ The enabled chart extension registers nine focused tools:
 - `chart_heatmap` renders a labeled numeric matrix with explicit missing cells.
 - `chart_boxplot` compares labeled sample distributions with horizontal boxes and whiskers.
 - `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
+- `chart_dumbbell` compares two values per labeled row with connected dots.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All nine `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. All ten `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -123,6 +124,33 @@ This produces Start `100`, Sales `100 → 140`, Costs `140 → 115`, and Total `
 Horizontal bars run top to bottom with connectors at the preceding running total. Start and Total bars extend from zero, including negative totals. Blue means increase, orange means decrease, and the foreground color identifies Start, Total, and zero changes. The legend describes direction, not whether a change is good or bad. Zero-width bars receive a visible rule at their exact position.
 
 The domain includes zero and every intermediate total, with padding `max(span * 0.05, 1e-12)` on both sides. This also handles zero-only and subnormal data. Visible ticks are abbreviated to three significant digits and labels are shortened to fit. Height grows with the number of steps and configured font size. TanStack rectangle marks, scene rules, and its SVG renderer own plot geometry. Waterfalls use the shared lazy loader, full-resolution raster worker, cached image identities, and resume queue deadlines unchanged.
+
+## Dumbbell charts
+
+`chart_dumbbell` requires `data`, an array of 1–12 `{ label, before, after }` objects. Labels are 1–22 characters, trimmed, nonblank, and unique after trimming. Both coordinates must be finite numbers within ±1,000,000,000. Rows remain independent and run top to bottom in input order. X represents value; Y represents labeled rows. Unknown fields and a caller-supplied `type` are rejected.
+
+Optional `beforeLabel` and `afterLabel` name the series and default to `Before` and `After`. Each is 1–22 characters. Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text length bounds apply before trimming; all supplied text is trimmed and cannot be blank.
+
+`showDifferences` defaults to `false`. When true, each row reserves a separate line for `Δ after - before`, signed with `+` for positive differences, `-` for negative differences, and `0` for equality. Differences are absolute changes, not percentages; they may reach ±2,000,000,000. Arithmetic uses JavaScript numbers without intermediate rounding. Narrow displays shorten annotations with an ellipsis or omit them when no character fits. The SVG description and tool summary always retain full labels, both exact values, and exact signed differences, even when visible differences are disabled. Zero values are retained.
+
+```json
+{
+  "data": [
+    { "label": "North", "before": -10, "after": 20 },
+    { "label": "South", "before": 5, "after": 5 }
+  ],
+  "beforeLabel": "Baseline",
+  "afterLabel": "Current",
+  "showDifferences": true,
+  "xLabel": "Value"
+}
+```
+
+Blue open rings identify the before series and smaller orange dots identify the after series, with a two-entry legend. Colors identify series, not improvement or deterioration. Equal values share the same position; the orange dot remains visible inside the blue ring. A neutral connector joins each pair without connecting separate rows.
+
+The domain covers both series with padding `max(span * 0.05, abs(min) * 1e-12, abs(max) * 1e-12, 1e-12)` on both sides. It does not force zero into the range. Constant, negative-only, and subnormal values remain valid. Marker gutters prevent endpoint clipping. Labels shorten to fit, tick count decreases at narrow widths, and row height grows with the configured font size and difference visibility.
+
+TanStack dot marks, scene rules, and its SVG renderer own the plot. Saved details contain normalized input, resolved series names and `showDifferences`, and shared chart settings. Replay revalidates details and recomputes the domain and differences. The lazy loader, full-resolution worker rasterizer, cached image identities, and resume queue deadlines are unchanged.
 
 ## Font configuration
 

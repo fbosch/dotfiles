@@ -52,6 +52,10 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
     waterfall_parameters = {"start": -10, "deltas": [{"label": "æ", "value": 30}, {"label": "ø", "value": -50}, {"label": "å", "value": 0}]}
     waterfall_details = {"type": "waterfall", **waterfall_parameters,
                          "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
+    dumbbell_parameters = {"data": [{"label": "æ", "before": -10, "after": 20}, {"label": "ø", "before": 0, "after": 0}],
+                           "beforeLabel": "Baseline", "afterLabel": "Current", "showDifferences": True}
+    dumbbell_details = {"type": "dumbbell", **dumbbell_parameters,
+                        "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     for index in range(32):
         tool_name = "chart_heatmap" if index % 2 else "chart_histogram"
         arguments = heatmap_parameters if index % 2 else {"data": [42, 146]}
@@ -60,6 +64,8 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
             tool_name, arguments, saved_details = "chart_boxplot", boxplot_parameters, boxplot_details
         if index % 4 == 3:
             tool_name, arguments, saved_details = "chart_waterfall", waterfall_parameters, waterfall_details
+        if index % 5 == 4:
+            tool_name, arguments, saved_details = "chart_dumbbell", dumbbell_parameters, dumbbell_details
         append({"role": "user", "content": "Show a chart"})
         append({"role": "assistant", "api": "openai-responses", "provider": "openai",
                 "model": "gpt-4o", "usage": usage, "stopReason": "toolUse",

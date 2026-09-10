@@ -11,12 +11,14 @@ import {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
+  chartDumbbellParameters,
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
   chartWaterfallParameters,
+  type DumbbellParameters,
   type HeatmapParameters,
   type HistogramParameters,
   type LineParameters,
@@ -27,6 +29,7 @@ import {
 import type { BarChartDetails, BarChartInput } from "./types/bar";
 import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
 import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
+import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell";
 import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
@@ -38,6 +41,7 @@ export type {
   BarParameters,
   BezierParameters,
   BoxplotParameters,
+  DumbbellParameters,
   HeatmapParameters,
   HistogramParameters,
   LineParameters,
@@ -49,6 +53,7 @@ export {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
+  chartDumbbellParameters,
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
@@ -72,7 +77,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "bezier" ||
     details.type === "heatmap" ||
     details.type === "boxplot" ||
-    details.type === "waterfall"
+    details.type === "waterfall" ||
+    details.type === "dumbbell"
     ? details.type
     : fallback;
 }
@@ -557,6 +563,54 @@ export function createWaterfallChartTool(): ToolDefinition<
   };
 }
 
+export function createDumbbellChartTool(): ToolDefinition<
+  typeof chartDumbbellParameters,
+  DumbbellChartDetails
+> {
+  return {
+    name: "chart_dumbbell",
+    label: "Chart dumbbell",
+    description:
+      "Render independent horizontal paired dots from data: 1-12 {label, before, after} rows. Unique trimmed nonblank labels (1-22 characters); finite coordinates ±1,000,000,000. Optional beforeLabel/afterLabel (1-22, defaults Before/After), showDifferences (default false; signed after - before, not percent), title (1-80), xLabel/yLabel (1-40). Blue Before ring and orange After dot, with a legend; colors identify series, not good/bad. Exact values remain in the text summary.",
+    promptSnippet: "Render paired values as dumbbell charts",
+    parameters: chartDumbbellParameters,
+    async execute(_toolCallId, parameters: DumbbellParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartDumbbellParameters, parameters))
+        throw new Error("invalid dumbbell chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("dumbbell")]);
+      signal?.throwIfAborted();
+      const input: DumbbellChartInput = { ...parameters, type: "dumbbell" };
+      if (!Value.Check(module.dumbbellChartVariant, input))
+        throw new Error("invalid dumbbell chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.dumbbellChartRenderer.createDetails(
+        module.dumbbellChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.dumbbellChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.dumbbellChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("dumbbell", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -567,4 +621,5 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createHeatmapChartTool());
   pi.registerTool(createBoxplotChartTool());
   pi.registerTool(createWaterfallChartTool());
+  pi.registerTool(createDumbbellChartTool());
 }

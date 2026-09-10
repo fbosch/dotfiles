@@ -124,6 +124,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("chart_heatmap")).toBe(false);
     expect(isDeferredToolName("chart_boxplot")).toBe(false);
     expect(isDeferredToolName("chart_waterfall")).toBe(false);
+    expect(isDeferredToolName("chart_dumbbell")).toBe(false);
     expect(isDeferredToolName("figma_parse_url")).toBe(true);
     expect(isDeferredToolName("serena_find_symbol")).toBe(true);
     expect(isDeferredToolName("mcp__github")).toBe(true);
@@ -170,6 +171,7 @@ describe("tool discovery", () => {
         dummyTool("chart_heatmap", "Render a labeled matrix heatmap"),
         dummyTool("chart_boxplot", "Render sample distributions as box plots"),
         dummyTool("chart_waterfall", "Render cumulative changes as a waterfall"),
+        dummyTool("chart_dumbbell", "Render paired values as a dumbbell"),
       ],
       activeTools: [
         "read",
@@ -181,6 +183,7 @@ describe("tool discovery", () => {
         "chart_heatmap",
         "chart_boxplot",
         "chart_waterfall",
+        "chart_dumbbell",
       ],
     });
 
@@ -195,6 +198,7 @@ describe("tool discovery", () => {
       "chart_heatmap",
       "chart_boxplot",
       "chart_waterfall",
+      "chart_dumbbell",
       "search_tools",
     ]);
     expect((await harness.search("chart line", 1)).details).toEqual({
@@ -211,6 +215,7 @@ describe("tool discovery", () => {
       "chart_heatmap",
       "chart_boxplot",
       "chart_waterfall",
+      "chart_dumbbell",
       "search_tools",
     ]);
   });

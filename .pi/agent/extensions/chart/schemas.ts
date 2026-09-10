@@ -303,3 +303,39 @@ export const waterfallChartVariant = Type.Object(
 );
 export type WaterfallParameters = Static<typeof chartWaterfallParameters>;
 export type WaterfallChartInput = Static<typeof waterfallChartVariant>;
+
+const dumbbellOptions = {
+  data: Type.Array(
+    Type.Object(
+      {
+        label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+        before: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
+        after: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
+      },
+      { additionalProperties: false },
+    ),
+    { minItems: 1, maxItems: 12 },
+  ),
+  beforeLabel: Type.Optional(
+    Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+  ),
+  afterLabel: Type.Optional(
+    Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+  ),
+  showDifferences: Type.Optional(
+    Type.Boolean({
+      description: "Show signed after - before differences (not percentages); default false.",
+    }),
+  ),
+  title: chartTitle,
+  ...axisLabels,
+};
+export const chartDumbbellParameters = Type.Object(dumbbellOptions, {
+  additionalProperties: false,
+});
+export const dumbbellChartVariant = Type.Object(
+  { type: Type.Literal("dumbbell"), ...dumbbellOptions },
+  { additionalProperties: false },
+);
+export type DumbbellParameters = Static<typeof chartDumbbellParameters>;
+export type DumbbellChartInput = Static<typeof dumbbellChartVariant>;

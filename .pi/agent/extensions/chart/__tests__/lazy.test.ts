@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers nine tools in a fresh process without loading the native renderer", async () => {
+  test("registers ten tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -46,6 +46,7 @@ describe("lazy chart architecture", () => {
         "chart_heatmap",
         "chart_boxplot",
         "chart_waterfall",
+        "chart_dumbbell",
       ],
       native: [],
     });
@@ -89,6 +90,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("@tanstack/charts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/boxplot.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/waterfall.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/dumbbell.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
@@ -124,6 +126,9 @@ describe("lazy chart architecture", () => {
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
+    const dumbbell = loadChartType("dumbbell");
+    expect(loadChartType("dumbbell")).toBe(dumbbell);
+    expect(await loadChartType("dumbbell")).toBe(await dumbbell);
     const waterfall = loadChartType("waterfall");
     expect(loadChartType("waterfall")).toBe(waterfall);
     expect(await loadChartType("waterfall")).toBe(await waterfall);

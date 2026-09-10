@@ -185,6 +185,29 @@ export default function (pi: ExtensionAPI): void {
         ),
         ctx.ui.theme,
       );
+      const { dumbbellChartRenderer: dumbbell } = await loadChartType("dumbbell");
+      assert.ok(pi.getActiveTools().includes("chart_dumbbell"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_dumbbell"));
+      await check(
+        dumbbell,
+        dumbbell.createDetails(
+          dumbbell.parseParameters({
+            type: "dumbbell",
+            data: [
+              { label: "æ", before: -10, after: 20 },
+              { label: "ø", before: 0, after: 0 },
+            ],
+            beforeLabel: "Baseline",
+            afterLabel: "Current",
+            showDifferences: true,
+            title: "Paired values",
+            xLabel: "Value",
+            yLabel: "Group",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();

@@ -185,6 +185,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "dumbbell": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("dumbbell"),
+          ]);
+          const details = module.dumbbellChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.dumbbellChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.dumbbellChartRenderer,
+          );
+          break;
+        }
         case "line": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
           const details = module.lineChartRenderer.deserializeDetails(this.details);
