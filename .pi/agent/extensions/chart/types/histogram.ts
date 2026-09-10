@@ -1,4 +1,11 @@
 import type { CellDimensions } from "@earendil-works/pi-tui";
+import {
+  createChartScene,
+  defineChart,
+  rect,
+  renderChartSvg as renderTanStackChartSvg,
+} from "@tanstack/charts";
+import { scaleLinear } from "@tanstack/charts/scales/linear";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
@@ -218,12 +225,41 @@ export function renderHistogramChartSvg(
   const x = (value: number) => layout.plotX + ((value - first.lower) / span) * layout.plotWidthPx;
   const text = (value: string, x: number, y: number, size: number, anchor = "middle", extra = "") =>
     `<text x="${x}" y="${y}" font-size="${size}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
-  const bars = details.rows
-    .map((row, index) => {
-      const height = (row.count / peak) * layout.plotHeightPx;
-      return `<rect data-bin="${index}" x="${x(row.lower)}" y="${baseline - height}" width="${x(row.upper) - x(row.lower)}" height="${height}" fill="${color}"><title>${escapeXml(interval(row, index === details.rows.length - 1))}: ${row.count}</title></rect>`;
-    })
-    .join("");
+  const scene = createChartScene(
+    defineChart({
+      marks: [
+        rect(details.rows, {
+          x1: (row) => (row.lower - first.lower) / span,
+          x2: (row) => (row.upper - first.lower) / span,
+          y1: () => 0,
+          y2: "count",
+          key: (_row, context) => context.index,
+          fill: color,
+          inset: 0,
+        }),
+      ],
+      // Normalize only the display coordinates so subnormal and extreme stored ranges stay safe.
+      scales: {
+        x: { scale: scaleLinear().domain([0, 1]), axis: false },
+        y: { scale: scaleLinear().domain([0, peak]), axis: false },
+      },
+      margin: 0,
+      focus: false,
+    }),
+    { width: layout.plotWidthPx, height: layout.plotHeightPx },
+  );
+  const chart = renderTanStackChartSvg(scene, { ariaLabel: "Histogram", idPrefix: "pi-histogram" });
+  let binIndex = 0;
+  const bars = chart
+    .replace(/^<svg\b[^>]*>/, "")
+    .replace(/<\/svg>$/, "")
+    // TanStack owns rectangle geometry; retain the existing per-bin SVG titles and identities.
+    .replace(/<rect\b([^>]*)\/>/g, (_rectangle, attributes: string) => {
+      const index = binIndex++;
+      const row = details.rows[index];
+      if (!row) throw new Error("histogram rectangle has no bin");
+      return `<rect data-bin="${index}"${attributes}><title>${escapeXml(interval(row, index === details.rows.length - 1))}: ${row.count}</title></rect>`;
+    });
   const tickCount = layout.plotWidthPx < 300 ? 2 : 4;
   const xTicks = Array.from({ length: tickCount + 1 }, (_, index) => {
     const value = index === tickCount ? last.upper : first.lower + span * (index / tickCount);
@@ -270,7 +306,7 @@ export function renderHistogramChartSvg(
       ? ""
       : text(details.title, layout.plotX, layout.plotY - 8, layout.titleFontSizePx, "start"));
   const name = details.title === undefined ? "Histogram" : `Histogram: ${details.title}`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc>${bars}<path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${escapeXml(fontFamily)}" aria-label="${escapeXml(name)}"><title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${bars}</g><path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}</svg>`;
 }
 
 export const histogramChartRenderer: ChartType<

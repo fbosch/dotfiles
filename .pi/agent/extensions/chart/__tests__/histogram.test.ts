@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
@@ -30,6 +31,28 @@ const context = (mode: "tui" | "print") =>
     isProjectTrusted: () => false,
     ui: { theme },
   }) as unknown as ExtensionContext;
+
+function binRectangles(svg: string) {
+  return [...svg.matchAll(/<rect\b([^>]*)>/g)]
+    .map((match) =>
+      Object.fromEntries(
+        [...match[0].matchAll(/([\w-]+)="([^"]*)"/g)].map((attribute) => [
+          attribute[1],
+          attribute[2],
+        ]),
+      ),
+    )
+    .filter((attributes) => attributes["data-bin"] !== undefined)
+    .map((attributes) => ({
+      index: Number(attributes["data-bin"]),
+      key: attributes["data-ts-key"],
+      x: Number(attributes.x),
+      y: Number(attributes.y),
+      width: Number(attributes.width),
+      height: Number(attributes.height),
+      fill: attributes.fill,
+    }));
+}
 
 describe("histogram", () => {
   test("counts exact edges to the right and includes the maximum in the last bin", () => {
@@ -153,11 +176,7 @@ describe("histogram", () => {
     expect(svg).toContain("Events &amp; count");
     expect(svg).not.toMatch(/NaN|Infinity/);
     expect(renderHistogramChartSvg(details, theme)).toContain(">Count</text>");
-    const rectangles = [
-      ...svg.matchAll(
-        /<rect data-bin="\d+" x="([^"]+)" y="[^"]+" width="([^"]+)" height="([^"]+)"/g,
-      ),
-    ].map((match) => ({ x: Number(match[1]), width: Number(match[2]), height: Number(match[3]) }));
+    const rectangles = binRectangles(svg);
     expect(rectangles).toHaveLength(4);
     expect(rectangles.map((rect) => rect.height)).toEqual([72, 72, 144, 72]);
     for (let index = 1; index < rectangles.length; index++) {
@@ -180,6 +199,65 @@ describe("histogram", () => {
     expect(
       getPngDimensions(await rasterizeSvg(renderHistogramChartSvg(maximum, theme))),
     ).not.toBeNull();
+  });
+
+  test.each([
+    { name: "empty bins", data: parse([0, 0, 0, 5], 5) },
+    { name: "constant samples", data: parse([-100, -100], 50) },
+    { name: "subnormal range", data: parse([0, Number.MIN_VALUE], 1) },
+    { name: "extreme range", data: parse([1e308, Number.MAX_VALUE], 2) },
+    {
+      name: "unequal persisted boundaries",
+      data: {
+        yLabel: "Count",
+        rows: [
+          { lower: -2, upper: -1, count: 3 },
+          { lower: -1, upper: 2, count: 0 },
+          { lower: 2, upper: 8, count: 1 },
+        ],
+      },
+    },
+  ])("renders $name through TanStack without rebinning replayed counts", ({ data }) => {
+    const original = histogramChartRenderer.createDetails(
+      { ...data, rows: [...data.rows] },
+      settings,
+    );
+    const replay = deserializeHistogramChartDetails(JSON.parse(JSON.stringify(original)));
+    if (!replay) throw new Error("valid histogram details did not deserialize");
+    for (const width of [28, 60]) {
+      const layout = getHistogramChartLayout({ widthPx: 16, heightPx: 38 }, width);
+      const svg = renderHistogramChartSvg(replay, theme, layout);
+      expect(svg).toContain('class="ts-chart__rect"');
+      expect(svg).toContain(`transform="translate(${layout.plotX} ${layout.plotY})"`);
+      expect(svg).toBe(renderHistogramChartSvg(original, theme, layout));
+      const rectangles = binRectangles(svg);
+      expect(rectangles).toHaveLength(data.rows.length);
+      const first = data.rows[0];
+      const last = data.rows.at(-1);
+      assert(first && last);
+      const lower = first.lower;
+      const span = last.upper - lower;
+      const peak = Math.max(...data.rows.map((row) => row.count));
+      for (const [index, row] of data.rows.entries()) {
+        const rectangle = rectangles[index];
+        assert(rectangle);
+        const left = ((row.lower - lower) / span) * layout.plotWidthPx;
+        const right = ((row.upper - lower) / span) * layout.plotWidthPx;
+        const height = (row.count / peak) * layout.plotHeightPx;
+        expect(rectangle.index).toBe(index);
+        expect(rectangle.key).toBe(`rect-0:object:null:number:${index}`);
+        expect(rectangle.x).toBeCloseTo(left, 2);
+        expect(rectangle.width).toBeCloseTo(right - left, 2);
+        expect(rectangle.y).toBeCloseTo(layout.plotHeightPx - height, 2);
+        expect(rectangle.height).toBeCloseTo(height, 2);
+        expect(rectangle.fill).toBe("rgb(102, 165, 173)");
+        expect(svg).toContain(
+          `<title>[${row.lower}, ${row.upper}${index === data.rows.length - 1 ? "]" : ")"}: ${row.count}</title>`,
+        );
+      }
+      expect(svg).not.toMatch(/NaN|Infinity/);
+    }
+    expect(replay).toEqual(original);
   });
 
   test("executes in TUI and print modes and reuses the result component", async () => {
