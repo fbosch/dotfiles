@@ -7,8 +7,8 @@ import { type ChartTypeId, loadChartRuntime, loadChartType } from "./loader";
 import {
   type BarParameters,
   type BezierParameters,
-  chartBezierParameters,
   chartBarParameters,
+  chartBezierParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,
@@ -26,16 +26,16 @@ import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 
 export type {
-  BezierParameters,
   BarParameters,
+  BezierParameters,
   HistogramParameters,
   LineParameters,
   PieParameters,
   ScatterParameters,
 } from "./schemas";
 export {
-  chartBezierParameters,
   chartBarParameters,
+  chartBezierParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,

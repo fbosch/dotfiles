@@ -85,6 +85,47 @@ describe("chart raster worker", () => {
     expect(measurement.maxGap).toBeLessThan(150);
   }, 15_000);
 
+  test("gives each queued historical render its own execution deadline", async () => {
+    const output = await nodeProbe(
+      `${loadRuntime}
+      import assert from "node:assert/strict";
+      await runtime.rasterizeSvg(svg);
+      const results = await Promise.all(Array.from({ length: 3 }, () =>
+        runtime.rasterizeSvg(svg, undefined, { timeoutMs: 1000 })));
+      assert.deepEqual(results, ["cG5n", "cG5n", "cG5n"]);
+      runtime.shutdownRasterizer();
+      console.log("queued renders completed");
+      `,
+      new URL("./fixtures/slow-resvg.cjs", import.meta.url).pathname,
+    );
+    expect(output).toBe("queued renders completed");
+  }, 15_000);
+
+  test("releases queued work after a hung render times out, including cancelled callers", async () => {
+    const output = await nodeProbe(
+      `${loadRuntime}
+      import assert from "node:assert/strict";
+      await runtime.rasterizeSvg(svg);
+      for (const cancel of [false, true]) {
+        const controller = new AbortController();
+        const hung = runtime.rasterizeSvg("hang", controller.signal, { timeoutMs: 100 });
+        const rejected = assert.rejects(hung, cancel ? { name: "AbortError" } : /timed out/);
+        const queued = runtime.rasterizeSvg(svg);
+        if (cancel) {
+          await new Promise(resolve => setTimeout(resolve, 30));
+          controller.abort();
+        }
+        await rejected;
+        assert.equal(await queued, "cG5n");
+      }
+      runtime.shutdownRasterizer();
+      console.log("queue recovered");
+      `,
+      new URL("./fixtures/slow-resvg.cjs", import.meta.url).pathname,
+    );
+    expect(output).toBe("queue recovered");
+  }, 15_000);
+
   test("cancels active and queued work promptly, coalesces resize jobs, and restarts after shutdown", async () => {
     const output = await nodeProbe(
       `${loadRuntime}

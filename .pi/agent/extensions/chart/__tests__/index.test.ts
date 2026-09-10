@@ -22,6 +22,7 @@ import { Value } from "typebox/value";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import chartExtension, {
   chartBarParameters,
+  chartBezierParameters,
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
@@ -269,6 +270,7 @@ describe("pie chart", () => {
     const scatter = registerTool("chart_scatter");
     const line = registerTool("chart_line");
     const histogram = registerTool("chart_histogram");
+    const bezier = registerTool("chart_bezier");
 
     expect(registerTools().map((tool) => tool.name)).toEqual([
       "chart_pie",
@@ -276,15 +278,17 @@ describe("pie chart", () => {
       "chart_scatter",
       "chart_line",
       "chart_histogram",
+      "chart_bezier",
     ]);
-    expect([pie.name, bar.name, scatter.name, line.name, histogram.name]).toEqual([
+    expect([pie.name, bar.name, scatter.name, line.name, histogram.name, bezier.name]).toEqual([
       "chart_pie",
       "chart_bar",
       "chart_scatter",
       "chart_line",
       "chart_histogram",
+      "chart_bezier",
     ]);
-    for (const tool of [pie, bar, scatter, line, histogram]) {
+    for (const tool of [pie, bar, scatter, line, histogram, bezier]) {
       expect(tool.renderShell).toBe("self");
       const renderCall = tool.renderCall;
       if (renderCall === undefined) throw new Error(`${tool.name} call renderer is missing`);
@@ -295,6 +299,7 @@ describe("pie chart", () => {
     expect(bar.parameters).toBe(chartBarParameters);
     expect(scatter.parameters).toBe(chartScatterParameters);
     expect(line.parameters).toBe(chartLineParameters);
+    expect(bezier.parameters).toBe(chartBezierParameters);
     expect(Value.Check(chartPieParameters, { data: rows, title: "Status" })).toBe(true);
     expect(Value.Check(chartBarParameters, { data: rows })).toBe(true);
     expect(

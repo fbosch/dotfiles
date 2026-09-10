@@ -15,6 +15,7 @@ Module._load = function (id, ...args) {
       constructor(svg) {
         this.oversized = svg === "oversized";
         if (svg === "exit") process.exit(7);
+        if (svg === "hang") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0);
       }
       render() {
         block();

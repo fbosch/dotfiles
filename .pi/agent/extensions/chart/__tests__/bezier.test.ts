@@ -4,7 +4,7 @@ import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-
 import { Value } from "typebox/value";
 import { LazyChartComponent } from "../lazy";
 import { createBezierChartTool, createPieChartTool } from "../metadata";
-import { chartBezierParameters, type BezierChartInput } from "../schemas";
+import { type BezierChartInput, chartBezierParameters } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
   bezierChartRenderer,
@@ -37,7 +37,7 @@ const context = (mode: "tui" | "print" | "json" | "rpc") =>
   }) as unknown as ExtensionContext;
 
 function path(svg: string): string {
-  const match = /<path data-bezier="true" d="([^"]+)"/.exec(svg);
+  const match = /<path data-ts-key="bezier"[^>]* d="([^"]+)"/.exec(svg);
   if (!match?.[1]) throw new Error("missing cubic path");
   return match[1];
 }
@@ -96,12 +96,77 @@ describe("bezier", () => {
     const svg = renderBezierChartSvg(details, theme, layout);
     expect(path(svg)).toBe(`M ${a?.x} ${a?.y} C ${b?.x} ${b?.y}, ${c?.x} ${c?.y}, ${d?.x} ${d?.y}`);
     expect(svg.match(/<path /g)).toHaveLength(1);
-    expect(svg).not.toContain("data-control");
+    expect(svg).not.toContain("control-guide-");
     const guided = renderBezierChartSvg({ ...details, showControls: true }, theme, layout);
     expect(path(guided)).toBe(path(svg));
-    expect(guided).toContain('data-control-guides="true"');
-    expect(guided.match(/data-control="/g)).toHaveLength(2);
-    expect(svg.match(/data-endpoint="/g)).toHaveLength(2);
+    expect(guided.match(/data-ts-key="control-guide-/g)).toHaveLength(2);
+    expect(guided).toContain('stroke-opacity="0.35"');
+    expect(guided).not.toContain("stroke-dasharray");
+    expect(guided.match(/data-ts-key="control-\d"/g)).toHaveLength(2);
+    expect(svg.match(/<circle /g)).toHaveLength(2);
+  });
+
+  test("defaults to a compact square without axes or visible labels", () => {
+    for (const cells of [
+      { widthPx: 9, heightPx: 18 },
+      { widthPx: 16, heightPx: 38 },
+    ]) {
+      for (const width of [12, 28, 60, 80]) {
+        const layout = getBezierChartLayout(cells, width);
+        expect(layout.widthPx).toBe(layout.heightPx);
+        expect(layout.plotWidthPx).toBe(layout.plotHeightPx);
+        expect(layout.widthPx).toBeLessThanOrEqual(width * cells.widthPx);
+        expect(layout.heightCells).toBeLessThanOrEqual(11);
+        expect(layout.plotX).toBeLessThanOrEqual(cells.widthPx);
+        expect(layout.plotY).toBe(layout.plotX);
+        const svg = renderBezierChartSvg(details, theme, layout);
+        expect(svg).not.toMatch(/<text|<title|<line /);
+        expect(svg).toContain("<desc>Bezier chart:");
+        expect(svg).toContain('class="ts-chart__dot"');
+        const cubic = path(svg)
+          .match(/-?\d+(?:\.\d+)?/g)
+          ?.map(Number);
+        const endpoints = [...svg.matchAll(/<circle [^>]*cx="([^"]+)" cy="([^"]+)"/g)];
+        expect(endpoints).toHaveLength(2);
+        // TanStack formats dot coordinates to two decimals; the cubic retains full precision.
+        for (const [index, offset] of [0, 6].entries()) {
+          expect(
+            Math.abs(Number(endpoints[index]?.[1]) - (cubic?.[offset] ?? NaN)),
+          ).toBeLessThanOrEqual(0.005001);
+          expect(
+            Math.abs(Number(endpoints[index]?.[2]) - (cubic?.[offset + 1] ?? NaN)),
+          ).toBeLessThanOrEqual(0.005001);
+        }
+      }
+    }
+  });
+
+  test("reserves space only for supplied labels and title while keeping the plot square", () => {
+    const plain = getBezierChartLayout();
+    for (const [title, xLabel, yLabel] of [
+      [true, false, false],
+      [false, true, false],
+      [false, false, true],
+      [true, true, true],
+    ] as const) {
+      const layout = getBezierChartLayout(undefined, 60, title, xLabel, yLabel);
+      expect(layout.plotWidthPx).toBe(layout.plotHeightPx);
+      expect(layout.plotX > plain.plotX).toBe(yLabel);
+      expect(layout.plotY > plain.plotY).toBe(title);
+      const svg = renderBezierChartSvg(
+        {
+          ...details,
+          ...(title ? { title: "Curve" } : {}),
+          ...(xLabel ? { xLabel: "Time" } : {}),
+          ...(yLabel ? { yLabel: "Progress" } : {}),
+        },
+        theme,
+        layout,
+      );
+      expect(svg.match(/<text /g) ?? []).toHaveLength(
+        Number(title) + Number(xLabel) + Number(yLabel),
+      );
+    }
   });
 
   test("uses equal pixel scales and keeps the whole control polygon in view across layouts", () => {
@@ -188,7 +253,7 @@ describe("bezier", () => {
     expect(svg).toContain("X &lt;value&gt;");
     expect(svg).toContain("Y &amp; value");
     expect(getPngDimensions(await rasterizeSvg(svg))).toEqual({
-      widthPx: 1280,
+      widthPx: layout.widthPx,
       heightPx: layout.heightPx,
     });
   });

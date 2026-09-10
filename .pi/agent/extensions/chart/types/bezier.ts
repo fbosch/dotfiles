@@ -1,4 +1,12 @@
 import type { CellDimensions } from "@earendil-works/pi-tui";
+import {
+  createChartScene,
+  defineChart,
+  dot,
+  renderChartSvg as renderTanStackChartSvg,
+} from "@tanstack/charts";
+import { scaleLinear } from "@tanstack/charts/scales/linear";
+import type { SceneNode } from "@tanstack/charts/types";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { type BezierChartInput, bezierChartVariant } from "../schemas";
@@ -33,7 +41,6 @@ export type BezierChartLayout = ChartLayout & {
   plotY: number;
   plotWidthPx: number;
   plotHeightPx: number;
-  tickFontSizePx: number;
   axisLabelFontSizePx: number;
   titleFontSizePx: number;
 };
@@ -104,20 +111,26 @@ export function getBezierChartLayout(
   const cells = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
-  const widthPx = Math.round(imageWidthCells * cells.widthPx);
-  const padding = Math.max(8, Math.round(cells.widthPx * 1.2));
+  const padding = Math.max(4, Math.round(cells.widthPx * 0.5));
   const axisLabelFontSizePx = scaleChartFontSize(fontSize ?? 13, cells);
-  const tickFontSizePx = Math.round(axisLabelFontSizePx * 0.85);
   const titleFontSizePx = Math.round(axisLabelFontSizePx * 1.1);
-  const plotX = padding + tickFontSizePx * 5 + (hasYLabel ? axisLabelFontSizePx + padding : 0);
+  const plotX = padding + (hasYLabel ? axisLabelFontSizePx + padding : 0);
   const plotY = padding + (hasTitle ? titleFontSizePx + padding : 0);
-  const plotWidthPx = Math.max(1, widthPx - plotX - padding);
-  const bottom = tickFontSizePx + padding * 2 + (hasXLabel ? axisLabelFontSizePx + padding : 0);
-  const plotHeightPx = Math.max(
+  const bottom = padding + (hasXLabel ? axisLabelFontSizePx + padding : 0);
+  // A compact square in physical pixels, not terminal cells; labels reserve only their own space.
+  const plotWidthPx = Math.max(
     1,
-    Math.min(8 * cells.heightPx, MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottom),
+    Math.floor(
+      Math.min(
+        imageWidthCells * cells.widthPx - plotX - padding,
+        10 * cells.heightPx,
+        MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottom,
+      ),
+    ),
   );
-  const heightPx = Math.ceil(plotY + plotHeightPx + bottom);
+  const plotHeightPx = plotWidthPx;
+  const widthPx = plotX + plotWidthPx + padding;
+  const heightPx = plotY + plotHeightPx + bottom;
   return {
     widthPx,
     heightPx,
@@ -126,7 +139,6 @@ export function getBezierChartLayout(
     plotY,
     plotWidthPx,
     plotHeightPx,
-    tickFontSizePx,
     axisLabelFontSizePx,
     titleFontSizePx,
   };
@@ -172,12 +184,6 @@ export function getBezierChartGeometry(data: BezierChartData, layout: BezierChar
   return { xDomain, yDomain, unitsPerPixel, project };
 }
 
-function formatTick(value: number): string {
-  return Math.abs(value) >= 1000 || (Math.abs(value) > 0 && Math.abs(value) < 0.01)
-    ? value.toExponential(1)
-    : Number(value.toFixed(2)).toString();
-}
-
 export function getBezierChartSummary(details: BezierChartDetails): string {
   return `${details.title === undefined ? "Bezier chart" : `${details.title} bezier chart`}: ${pointNames.map((name) => `${name} (${details[name].x}, ${details[name].y})`).join("; ")}`;
 }
@@ -195,7 +201,7 @@ export function renderBezierChartSvg(
   ),
 ): string {
   const geometry = getBezierChartGeometry(details, layout);
-  const { project, xDomain, yDomain } = geometry;
+  const { project } = geometry;
   const start = project(details.start);
   const control1 = project(details.control1);
   const control2 = project(details.control2);
@@ -203,24 +209,73 @@ export function renderBezierChartSvg(
   const color = getChartColors(theme)[0] ?? "#6aa5ad";
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
   const font = escapeXml(details.fontFamily ?? DEFAULT_FONT_FAMILY);
-  const bottom = layout.plotY + layout.plotHeightPx;
   const text = (x: number, y: number, content: string, size: number, attributes = "") =>
     `<text x="${x}" y="${y}" fill="${foreground}" font-size="${size}" ${attributes}>${escapeXml(content)}</text>`;
-  const ticks = Array.from({ length: 5 }, (_, index) => {
-    const fraction = index / 4;
-    const x = layout.plotX + fraction * layout.plotWidthPx;
-    const y = bottom - fraction * layout.plotHeightPx;
-    return `<line x1="${x}" x2="${x}" y1="${bottom}" y2="${bottom + 4}" stroke="${foreground}"/>${text(x, bottom + layout.tickFontSizePx + 6, formatTick(xDomain[0] + (xDomain[1] - xDomain[0]) * fraction), layout.tickFontSizePx, 'text-anchor="middle"')}<line x1="${layout.plotX - 4}" x2="${layout.plotX}" y1="${y}" y2="${y}" stroke="${foreground}"/>${text(layout.plotX - 7, y + layout.tickFontSizePx * 0.35, formatTick(yDomain[0] + (yDomain[1] - yDomain[0]) * fraction), layout.tickFontSizePx, 'text-anchor="end"')}`;
-  }).join("");
-  const guides = details.showControls
-    ? `<polyline data-control-guides="true" points="${[start, control1, control2, end].map((point) => `${point.x},${point.y}`).join(" ")}" fill="none" stroke="${foreground}" stroke-dasharray="4 4"/>${[control1, control2].map((point, index) => `<rect data-control="${index + 1}" x="${point.x - 3}" y="${point.y - 3}" width="6" height="6" fill="none" stroke="${foreground}"/>`).join("")}`
-    : "";
-  const endpoints = [start, end]
-    .map(
-      (point, index) =>
-        `<circle data-endpoint="${index}" cx="${point.x}" cy="${point.y}" r="3" fill="${color}"/>`,
-    )
-    .join("");
+  const scene = createChartScene(
+    defineChart({
+      marks: [
+        dot([start, end], {
+          x: "x",
+          y: "y",
+          key: (_point, context) => context.index,
+          r: 3,
+          fill: color,
+        }),
+      ],
+      // Projection already uses one centered scale to keep subnormal and near-coincident inputs safe.
+      scales: {
+        x: { scale: scaleLinear().domain([0, layout.widthPx]), axis: false },
+        y: { scale: scaleLinear().domain([layout.heightPx, 0]), axis: false },
+      },
+      margin: 0,
+      focus: false,
+    }),
+    { width: layout.widthPx, height: layout.heightPx },
+  );
+  const guides: SceneNode[] = details.showControls
+    ? [
+        ...[
+          { anchor: start, control: control1 },
+          { anchor: end, control: control2 },
+        ].map(
+          ({ anchor, control }, index): SceneNode => ({
+            kind: "rule",
+            key: `control-guide-${index}`,
+            x1: anchor.x,
+            y1: anchor.y,
+            x2: control.x,
+            y2: control.y,
+            style: { stroke: foreground, strokeOpacity: 0.35, strokeWidth: 1 },
+          }),
+        ),
+        ...[control1, control2].map(
+          (point, index): SceneNode => ({
+            kind: "dot",
+            key: `control-${index}`,
+            x: point.x,
+            y: point.y,
+            radius: 3,
+            style: { fill: foreground, fillOpacity: 0.5 },
+          }),
+        ),
+      ]
+    : [];
+  // TanStack scene paths accept an exact cubic; a sampled line mark would change its geometry.
+  const curve: SceneNode = {
+    kind: "polyline",
+    key: "bezier",
+    points: [],
+    path: `M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}`,
+    style: { fill: "none", stroke: color, strokeWidth: 2, lineCap: "round" },
+  };
+  const chart = renderTanStackChartSvg(
+    { ...scene, nodes: [...guides, curve, ...scene.nodes] },
+    {
+      ariaLabel: "Bezier chart",
+      idPrefix: "pi-bezier",
+    },
+  );
+  const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
   const title =
     details.title === undefined
       ? ""
@@ -246,7 +301,7 @@ export function renderBezierChartSvg(
           layout.axisLabelFontSizePx,
           `text-anchor="middle" transform="rotate(-90 ${layout.axisLabelFontSizePx} ${labelY})"`,
         );
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${font}" aria-label="${escapeXml(details.title === undefined ? "Bezier chart" : `Bezier chart: ${details.title}`)}"><desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}<line x1="${layout.plotX}" x2="${layout.plotX + layout.plotWidthPx}" y1="${bottom}" y2="${bottom}" stroke="${foreground}"/><line x1="${layout.plotX}" x2="${layout.plotX}" y1="${layout.plotY}" y2="${bottom}" stroke="${foreground}"/>${ticks}${guides}<path data-bezier="true" d="M ${start.x} ${start.y} C ${control1.x} ${control1.y}, ${control2.x} ${control2.y}, ${end.x} ${end.y}" fill="none" stroke="${color}" stroke-width="2"/>${endpoints}${title}${xLabel}${yLabel}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${layout.widthPx * RASTER_DENSITY}" height="${layout.heightPx * RASTER_DENSITY}" viewBox="0 0 ${layout.widthPx} ${layout.heightPx}" role="img" font-family="${font}" aria-label="${escapeXml(details.title === undefined ? "Bezier chart" : `Bezier chart: ${details.title}`)}"><desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${chartBody}${title}${xLabel}${yLabel}</svg>`;
 }
 
 export const bezierChartRenderer: ChartType<

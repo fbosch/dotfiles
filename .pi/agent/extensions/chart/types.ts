@@ -92,7 +92,7 @@ export interface ChartType<
 export type RasterizeOptions = {
   /** The configured family is forwarded explicitly; SVG is never parsed for renderer settings. */
   fontFamily?: string;
-  /** Test and integration override; production callers use the bounded default. */
+  /** Bounds font lookup and active worker execution separately, excluding queue wait. */
   timeoutMs?: number;
   /** Internal component identity used to coalesce obsolete resize work. */
   coalesceKey?: object;
@@ -117,6 +117,7 @@ type NativeJob = {
   svg: string;
   font: ResvgFontOptions;
   isObsolete: () => boolean;
+  timeoutMs: number;
   coalesceKey?: object;
   cancelled: Int32Array;
   resolve: (png: string | undefined) => void;
@@ -128,9 +129,12 @@ const queuedNativeRenders: NativeJob[] = [];
 
 let rasterWorker: Worker | undefined;
 let activeJob: NativeJob | undefined;
+let activeTimeout: ReturnType<typeof setTimeout> | undefined;
 let rasterGeneration = 0;
 
 function finishNativeRender(error?: unknown, base64?: string): void {
+  clearTimeout(activeTimeout);
+  activeTimeout = undefined;
   const job = activeJob;
   activeJob = undefined;
   nativeRenderActive = false;
@@ -169,7 +173,7 @@ function getRasterWorker(): Worker {
   };
   worker.on("error", failed);
   worker.on("exit", (code) => failed(new Error(`chart raster worker exited (${code})`)));
-  // Raster callers own bounded timers; an idle or logically cancelled worker must not keep Pi alive.
+  // The active slot owns a bounded timer; an idle worker must not keep Pi alive.
   worker.unref();
   return worker;
 }
@@ -182,6 +186,13 @@ function runNativeRender(job: NativeJob): void {
     return;
   }
   try {
+    // The execution deadline belongs to the worker slot, even if its caller cancels.
+    activeTimeout = setTimeout(() => {
+      const worker = rasterWorker;
+      rasterWorker = undefined;
+      if (worker !== undefined) void worker.terminate().catch(() => {});
+      finishNativeRender(new Error(`chart rasterization timed out after ${job.timeoutMs}ms`));
+    }, job.timeoutMs);
     getRasterWorker().postMessage({
       svg: job.svg,
       font: job.font,
@@ -200,12 +211,14 @@ function enqueueNativeRender(
   isObsolete: () => boolean,
   coalesceKey: object | undefined,
   cancelled: Int32Array,
+  timeoutMs: number,
 ): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
     const job = {
       svg,
       font,
       isObsolete,
+      timeoutMs,
       cancelled,
       ...(coalesceKey === undefined ? {} : { coalesceKey }),
       resolve,
@@ -451,12 +464,16 @@ export async function rasterizeSvg(
     if (settled || generation !== rasterGeneration) throw abortError();
     signal?.throwIfAborted();
 
+    // Restored rows share one worker: queue wait is not time spent rendering this chart.
+    clearTimeout(timeout);
+    timeout = undefined;
     const nativeRender = enqueueNativeRender(
       svg,
       font,
       () => settled || signal?.aborted === true,
       options.coalesceKey,
       cancelled,
+      timeoutMs,
     );
     const png = await Promise.race([nativeRender, pending]);
     if (png === undefined || settled || signal?.aborted) throw abortError();

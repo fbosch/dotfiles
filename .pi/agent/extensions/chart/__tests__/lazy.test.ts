@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers five tools in a fresh process without loading the native renderer", async () => {
+  test("registers six tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -36,7 +36,14 @@ describe("lazy chart architecture", () => {
     expect(exitCode).toBe(0);
     expect(stderr).toBe("");
     expect(JSON.parse(stdout)).toEqual({
-      names: ["chart_pie", "chart_bar", "chart_scatter", "chart_line", "chart_histogram"],
+      names: [
+        "chart_pie",
+        "chart_bar",
+        "chart_scatter",
+        "chart_line",
+        "chart_histogram",
+        "chart_bezier",
+      ],
       native: [],
     });
   });
@@ -78,6 +85,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("@resvg/resvg-js");
       expect(staticGraph.join("\n")).not.toContain("@tanstack/charts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
         fileName.endsWith(".js"),
       );
@@ -102,12 +110,18 @@ describe("lazy chart architecture", () => {
       expect(
         outputSources.some((source) => source.includes("// extensions/chart/types/histogram.ts")),
       ).toBe(true);
+      expect(
+        outputSources.some((source) => source.includes("// extensions/chart/types/bezier.ts")),
+      ).toBe(true);
     } finally {
       await rm(outputDirectory, { recursive: true, force: true });
     }
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
+    const bezier = loadChartType("bezier");
+    expect(loadChartType("bezier")).toBe(bezier);
+    expect(await loadChartType("bezier")).toBe(await bezier);
     const adapter = loadChartType("histogram");
     const runtime = loadChartRuntime();
     expect(loadChartType("histogram")).toBe(adapter);

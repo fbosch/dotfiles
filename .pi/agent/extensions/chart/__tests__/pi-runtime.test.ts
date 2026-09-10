@@ -50,9 +50,28 @@ test.skipIf(!executable)(
       expect(stderr).toBe("");
       expect(stdout).toContain("CHART_RUNTIME_OK startup ");
       expect(stdout).toContain("CHART_RUNTIME_OK reload ");
+      expect(stdout).toContain("CHART_REDRAW startup Rendering bezier chart");
+      expect(stdout).toContain("CHART_REDRAW reload Rendering bezier chart");
     } finally {
       await rm(agentDir, { recursive: true, force: true });
     }
   },
   30_000,
+);
+
+const python = Bun.which("python3");
+test.skipIf(!executable || !python || process.platform === "win32")(
+  "restores a saved chart backlog in installed Pi interactive startup and /reload",
+  async () => {
+    if (!executable || !python) throw new Error("Pi and Python are required");
+    const { stdout, stderr } = await execFileAsync(
+      python,
+      [fileURLToPath(new URL("./fixtures/pi-resume.py", import.meta.url)), executable],
+      { encoding: "utf8", timeout: 80_000 },
+    );
+    expect(stderr).toBe("");
+    expect(stdout).toContain("CHART_RESUME_OK startup 32");
+    expect(stdout).toContain("CHART_RESUME_OK reload 32");
+  },
+  85_000,
 );

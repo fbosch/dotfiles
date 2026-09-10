@@ -3,16 +3,16 @@ import { shutdownChartRuntime } from "./loader";
 import { registerChartTools } from "./metadata";
 
 export type {
-  BezierParameters,
   BarParameters,
+  BezierParameters,
   HistogramParameters,
   LineParameters,
   PieParameters,
   ScatterParameters,
 } from "./metadata";
 export {
-  chartBezierParameters,
   chartBarParameters,
+  chartBezierParameters,
   chartHistogramParameters,
   chartLineParameters,
   chartPieParameters,

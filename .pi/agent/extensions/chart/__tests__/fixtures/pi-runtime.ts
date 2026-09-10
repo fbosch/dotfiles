@@ -23,6 +23,7 @@ export default function (pi: ExtensionAPI): void {
         renderer: ChartRenderer<T, L>,
         details: T,
         theme: Theme,
+        compact = false,
       ): Promise<void> {
         const svg = runtime.renderChartSvg(renderer, details, theme);
         // Await the raw boundary too: ChartComponent deliberately catches raster failures.
@@ -51,7 +52,11 @@ export default function (pi: ExtensionAPI): void {
           widthPx: layout.widthPx,
           heightPx: layout.heightCells * cells.heightPx,
         });
-        assert.equal(Number(/(?:^|,)c=(\d+)/.exec(lines)?.[1]), details.imageWidthCells);
+        assert.equal(
+          Number(/(?:^|,)c=(\d+)/.exec(lines)?.[1]),
+          compact ? Math.ceil(layout.widthPx / cells.widthPx) : details.imageWidthCells,
+        );
+        if (compact) assert.ok(layout.widthPx < details.imageWidthCells * cells.widthPx);
         assert.equal(Number(/(?:^|,)r=(\d+)/.exec(lines)?.[1]), layout.heightCells);
         assert.ok(!lines.includes(renderer.unavailableText), lines);
         for (const fullscreen of [false, true]) {
@@ -93,6 +98,28 @@ export default function (pi: ExtensionAPI): void {
           settings,
         ),
         ctx.ui.theme,
+      );
+      const { bezierChartRenderer: bezier } = await loadChartType("bezier");
+      assert.ok(pi.getActiveTools().includes("chart_bezier"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_bezier"));
+      await check(
+        bezier,
+        bezier.createDetails(
+          bezier.parseParameters({
+            type: "bezier",
+            start: { x: 0, y: 0 },
+            control1: { x: 4, y: 8 },
+            control2: { x: -4, y: 8 },
+            end: { x: 2, y: 0 },
+            showControls: true,
+            title: "Cubic",
+            xLabel: "X",
+            yLabel: "Y",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+        true,
       );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {

@@ -177,7 +177,6 @@ export const histogramChartVariant = Type.Object(
 export type HistogramParameters = Static<typeof chartHistogramParameters>;
 export type HistogramChartInput = Static<typeof histogramChartVariant>;
 
-
 const bezierPoint = Type.Object(
   {
     x: Type.Number({ minimum: -1_000_000_000, maximum: 1_000_000_000 }),
@@ -190,7 +189,11 @@ const bezierOptions = {
   control1: bezierPoint,
   control2: bezierPoint,
   end: bezierPoint,
-  showControls: Type.Optional(Type.Boolean({ description: "Show control-point markers and connecting guides; defaults to false." })),
+  showControls: Type.Optional(
+    Type.Boolean({
+      description: "Show control-point markers and connecting guides; defaults to false.",
+    }),
+  ),
   title: chartTitle,
   ...axisLabels,
 };
