@@ -25,9 +25,11 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   FIXED_CHART_PALETTE,
   finalizeChartLayout,
+  isValidChartHeight,
   normalizeUniqueLabels,
   renderSvgDocument,
   stripTanStackSvg,
@@ -51,6 +53,8 @@ export type StackedBarChartLayout = ChartLayout & {
 export function validateStackedBarChartInput(input: StackedBarChartInput): StackedBarChartData {
   if (!Value.Check(stackedBarChartVariant, input))
     throw new Error("invalid stacked bar chart parameters");
+  if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
+    throw new Error("invalid chart height");
   const categories = normalizeUniqueLabels(input.categories, "categories");
   normalizeUniqueLabels(
     input.series.map((series) => series.name),
@@ -77,6 +81,7 @@ export function validateStackedBarChartInput(input: StackedBarChartInput): Stack
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
   if (getStackedBarTotals(data).some((total) => !Number.isFinite(total)))
     throw new Error("stacked bar category totals must be finite");
@@ -131,7 +136,20 @@ export function getStackedBarChartLayout(
   );
   const plotY = fontSizePx * (details.title ? 2.5 : 1);
   const plotWidthPx = Math.max(1, widthPx - plotX - Math.min(fontSizePx, widthPx * 0.1));
-  const plotHeightPx = details.categories.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.8);
+  const naturalPlotHeightPx =
+    details.categories.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.8);
+  const fixedHeightPx =
+    plotY + fontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4);
+  const plotHeightPx =
+    details.maxHeightCells === undefined
+      ? naturalPlotHeightPx
+      : clampChartPlotHeightPx(
+          naturalPlotHeightPx,
+          details.maxHeightCells,
+          cells.heightPx,
+          fixedHeightPx,
+          undefined,
+        );
   // One legend entry per line avoids collisions without hiding zero-valued series.
   const heightPx = Math.ceil(
     plotY + plotHeightPx + fontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4),
@@ -147,6 +165,7 @@ export function getStackedBarChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

@@ -56,6 +56,8 @@ export type ChartDetails = {
   fontFamily?: string;
   /** Optional only for chart results saved before font-size configuration existed. */
   fontSize?: number;
+  /** Optional per-call upper bound for the rendered height in terminal cells. */
+  maxHeightCells?: number;
 };
 
 export type ChartSettings = {

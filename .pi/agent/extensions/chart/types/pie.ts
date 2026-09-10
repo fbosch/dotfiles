@@ -23,7 +23,6 @@ import {
   DEFAULT_IMAGE_WIDTH_CELLS,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -35,7 +34,9 @@ import {
   clamp,
   ESTIMATED_CHARACTER_WIDTH,
   finalizeChartLayout,
+  getChartHeightLimitPx,
   isRecord,
+  isValidChartHeight,
   normalizeUniqueLabel,
   renderSvgDocument,
   stripTanStackSvg,
@@ -52,6 +53,7 @@ export type PieChartRow = { label: string; value: number };
 export type PieChartData = {
   rows: PieChartRow[];
   title?: string;
+  maxHeightCells?: number;
 };
 export type PieChartLayout = ChartLayout & {
   pieDiameterPx: number;
@@ -78,6 +80,7 @@ export function getPieChartLayout(
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
   sliceCount = 2,
   fontSize?: number,
+  maxHeightCells?: number,
 ): PieChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -98,7 +101,7 @@ export function getPieChartLayout(
   const stacked = imageWidthCells <= NARROW_LAYOUT_CELLS;
   const legendColumns = stacked ? (sliceCount > 4 ? 2 : 1) : sliceCount > 6 ? 2 : 1;
   const legendRows = Math.ceil(sliceCount / legendColumns);
-  const maxHeightPx = Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx);
+  const maxHeightPx = getChartHeightLimitPx(maxHeightCells, dimensions.heightPx);
 
   if (stacked) {
     const legendHeightPx = legendRows * legendRowHeightPx;
@@ -127,6 +130,7 @@ export function getPieChartLayout(
         stacked,
       },
       dimensions.heightPx,
+      maxHeightCells,
     );
   }
 
@@ -162,6 +166,7 @@ export function getPieChartLayout(
       stacked,
     },
     dimensions.heightPx,
+    maxHeightCells,
   );
 }
 
@@ -207,7 +212,12 @@ function isPieChartRow(value: unknown): value is PieChartRow {
 }
 
 export function deserializePieChartDetails(value: unknown): PieChartDetails | undefined {
-  if (isRecord(value) === false || !Array.isArray(value.rows) || !value.rows.every(isPieChartRow)) {
+  if (
+    isRecord(value) === false ||
+    !Array.isArray(value.rows) ||
+    !value.rows.every(isPieChartRow) ||
+    (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells))
+  ) {
     return undefined;
   }
   const imageWidthCells = value.imageWidthCells;
@@ -237,6 +247,7 @@ export function deserializePieChartDetails(value: unknown): PieChartDetails | un
   if (title !== undefined) details.title = title;
   if (fontFamily !== undefined) details.fontFamily = fontFamily;
   if (fontSize !== undefined) details.fontSize = fontSize;
+  if (value.maxHeightCells !== undefined) details.maxHeightCells = value.maxHeightCells;
   return details;
 }
 
@@ -325,7 +336,11 @@ export function getPieChartSummary(details: PieChartDetails): string {
 function parsePieChartInput(input: PieChartInput): PieChartData {
   const rows = validatePieChartInput(input);
   const title = normalizePieChartTitle(input.title);
-  return title === undefined ? { rows } : { rows, title };
+  return {
+    rows,
+    ...(title === undefined ? {} : { title }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+  };
 }
 
 export const pieChartRenderer: ChartType<
@@ -342,6 +357,7 @@ export const pieChartRenderer: ChartType<
     return {
       rows: data.rows,
       ...(data.title === undefined ? {} : { title: data.title }),
+      ...(data.maxHeightCells === undefined ? {} : { maxHeightCells: data.maxHeightCells }),
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
       ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
@@ -353,7 +369,13 @@ export const pieChartRenderer: ChartType<
   },
   getSummary: getPieChartSummary,
   getLayout(details, cellDimensions, widthCells): PieChartLayout {
-    return getPieChartLayout(cellDimensions, widthCells, details.rows.length, details.fontSize);
+    return getPieChartLayout(
+      cellDimensions,
+      widthCells,
+      details.rows.length,
+      details.fontSize,
+      details.maxHeightCells,
+    );
   },
   renderSvg(details, theme, layout): string {
     return renderPieChartSvg(details.rows, theme, layout, details.title, details.fontFamily);

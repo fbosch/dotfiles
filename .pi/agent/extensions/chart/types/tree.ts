@@ -40,11 +40,13 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   estimateTextWidthPx,
   finalizeChartLayout,
   fitTextToWidth,
   getAccessibleDescription,
+  isValidChartHeight,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -61,6 +63,7 @@ export type TreeChartRow = {
 export type TreeChartData = {
   data: TreeChartRow[];
   title?: string;
+  maxHeightCells?: number;
 };
 export type TreeChartDetails = ChartDetails &
   TreeChartData & {
@@ -144,10 +147,16 @@ function assertTreeStructure(rows: readonly TreeChartRow[]): void {
 
 export function validateTreeChartInput(input: TreeChartInput): TreeChartData {
   if (!Value.Check(treeChartVariant, input)) throw new Error("invalid tree chart parameters");
+  if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
+    throw new Error("invalid chart height");
   const data = input.data.map(normalizeRow);
   assertTreeStructure(data);
   const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
-  return title === undefined ? { data } : { data, title };
+  return {
+    data,
+    ...(title === undefined ? {} : { title }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+  };
 }
 
 const detailsSchema = Type.Object(
@@ -189,13 +198,13 @@ export function getTreeChartLayout(
   const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const titleHeightPx = details.title === undefined ? 0 : fontSizePx + paddingPx;
   const rowHeightPx = Math.max(Math.round(cells.heightPx * 1.25), fontSizePx + 7);
-  const maxPlotHeightPx = Math.max(
-    1,
-    Math.round(MAX_CHART_HEIGHT_CELLS * cells.heightPx) - paddingPx * 2 - titleHeightPx,
-  );
-  const plotHeightPx = Math.min(
-    maxPlotHeightPx,
-    Math.max(rowHeightPx * 2, details.data.length * rowHeightPx),
+  const naturalPlotHeightPx = Math.max(rowHeightPx * 2, details.data.length * rowHeightPx);
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    details.maxHeightCells,
+    cells.heightPx,
+    paddingPx * 2 + titleHeightPx,
+    MAX_CHART_HEIGHT_CELLS,
   );
   const minimumLabelWidthPx = Math.round(cells.widthPx * 8);
   const labelWidthPx = Math.min(
@@ -222,6 +231,7 @@ export function getTreeChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

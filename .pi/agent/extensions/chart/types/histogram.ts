@@ -14,7 +14,9 @@ import {
   MAX_AXIS_LABEL_LENGTH,
   MAX_HISTOGRAM_BINS,
   MAX_HISTOGRAM_SAMPLES,
+  MAX_REQUESTED_CHART_HEIGHT_CELLS,
   MAX_TITLE_LENGTH,
+  MIN_CHART_HEIGHT_CELLS,
 } from "../schemas";
 import {
   ansiColor,
@@ -34,7 +36,13 @@ import {
   validCellDimensions,
 } from "../types";
 
-import { finalizeChartLayout, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  clampChartPlotHeightPx,
+  finalizeChartLayout,
+  isValidChartHeight,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { HistogramChartInput };
 export { histogramChartVariant };
@@ -45,6 +53,7 @@ export type HistogramChartData = {
   title?: string;
   xLabel?: string;
   yLabel: string;
+  maxHeightCells?: number;
 };
 export type HistogramChartDetails = ChartDetails & HistogramChartData & { type: "histogram" };
 export type HistogramChartLayout = ChartLayout & {
@@ -109,6 +118,7 @@ export function validateHistogramChartInput(input: HistogramChartInput): Histogr
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     yLabel: normalizeText(input.yLabel, "yLabel") ?? "Count",
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
 }
 
@@ -129,6 +139,9 @@ const detailsSchema = Type.Object(
     title: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH })),
     xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
     yLabel: Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH }),
+    maxHeightCells: Type.Optional(
+      Type.Integer({ minimum: MIN_CHART_HEIGHT_CELLS, maximum: MAX_REQUESTED_CHART_HEIGHT_CELLS }),
+    ),
     imageWidthCells: Type.Number({ exclusiveMinimum: 0 }),
     fontFamily: Type.Optional(Type.String()),
     fontSize: Type.Optional(Type.Number({ minimum: MIN_FONT_SIZE_PX, maximum: MAX_FONT_SIZE_PX })),
@@ -142,6 +155,8 @@ export function deserializeHistogramChartDetails(
   if (!Value.Check(detailsSchema, value)) return undefined;
   const total = value.rows.reduce((sum, row) => sum + row.count, 0);
   if (total < 1 || total > MAX_HISTOGRAM_SAMPLES || !Number.isFinite(value.imageWidthCells))
+    return undefined;
+  if (!isValidChartHeight(value.maxHeightCells) && value.maxHeightCells !== undefined)
     return undefined;
   if (
     value.rows.some(
@@ -165,6 +180,7 @@ export function getHistogramChartLayout(
   hasTitle = false,
   hasXLabel = false,
   fontSize?: number,
+  maxHeightCells?: number,
 ): HistogramChartLayout {
   const cells = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -179,9 +195,16 @@ export function getHistogramChartLayout(
   const plotWidthPx = Math.max(1, widthPx - plotX - padding * 3);
   const bottomHeightPx =
     tickFontSizePx + padding * 2 + (hasXLabel ? axisLabelFontSizePx + padding : 0);
-  const plotHeightPx = Math.max(
+  const naturalPlotHeightPx = Math.max(
     1,
     Math.min(cells.heightPx * 8, MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottomHeightPx),
+  );
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    maxHeightCells,
+    cells.heightPx,
+    plotY + bottomHeightPx,
+    MAX_CHART_HEIGHT_CELLS,
   );
   const heightPx = Math.ceil(plotY + plotHeightPx + bottomHeightPx);
   return finalizeChartLayout(
@@ -197,6 +220,7 @@ export function getHistogramChartLayout(
       titleFontSizePx,
     },
     cells.heightPx,
+    maxHeightCells,
   );
 }
 
@@ -217,6 +241,7 @@ export function renderHistogramChartSvg(
     details.title !== undefined,
     details.xLabel !== undefined,
     details.fontSize,
+    details.maxHeightCells,
   ),
   fontFamily = details.fontFamily ?? DEFAULT_FONT_FAMILY,
 ): string {
@@ -346,6 +371,7 @@ export const histogramChartRenderer: ChartType<
       details.title !== undefined,
       details.xLabel !== undefined,
       details.fontSize,
+      details.maxHeightCells,
     );
   },
   renderSvg: renderHistogramChartSvg,

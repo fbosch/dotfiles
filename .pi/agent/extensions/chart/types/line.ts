@@ -26,7 +26,6 @@ import {
   DEFAULT_IMAGE_WIDTH_CELLS,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -36,9 +35,12 @@ import {
 
 import {
   clamp,
+  clampChartPlotHeightPx,
   finalizeChartLayout,
   formatNumber,
+  getChartHeightLimitPx,
   isRecord,
+  isValidChartHeight,
   normalizeBoundedText,
   paddedDomain,
   renderCartesianAxes,
@@ -60,6 +62,7 @@ export type LineChartData = {
   xLabel?: string;
   yLabel?: string;
   markers: boolean;
+  maxHeightCells?: number;
 };
 export type LineChartLayout = ChartLayout & {
   plotX: number;
@@ -136,6 +139,7 @@ export function validateLineChartInput(input: LineChartInput): LineChartData {
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
 }
 
@@ -179,6 +183,7 @@ export function deserializeLineChartDetails(value: unknown): LineChartDetails | 
     (value.xLabel !== undefined && typeof value.xLabel !== "string") ||
     (value.yLabel !== undefined && typeof value.yLabel !== "string") ||
     (value.fontFamily !== undefined && typeof value.fontFamily !== "string") ||
+    (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells)) ||
     (value.fontSize !== undefined &&
       (typeof value.fontSize !== "number" ||
         !Number.isFinite(value.fontSize) ||
@@ -197,6 +202,7 @@ export function getLineChartLayout(
   hasXLabel = false,
   hasYLabel = false,
   fontSize?: number,
+  maxHeightCells?: number,
 ): LineChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -226,20 +232,22 @@ export function getLineChartLayout(
   const plotX = paddingPx + yLabelWidthPx + tickLabelWidthPx;
   const plotY = paddingPx + titleHeightPx;
   const plotWidthPx = Math.max(Math.round(dimensions.widthPx * 10), widthPx - plotX - paddingPx);
-  const availablePlotHeightPx =
-    Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx) -
-    plotY -
-    tickLabelHeightPx -
-    xLabelHeightPx -
-    paddingPx;
+  const fixedHeightPx = plotY + tickLabelHeightPx + xLabelHeightPx + paddingPx;
+  const naturalPlotHeightPx = Math.round(dimensions.heightPx * 8);
+  const clampedPlotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    maxHeightCells,
+    dimensions.heightPx,
+    fixedHeightPx,
+  );
   const plotHeightPx =
-    fontSize === undefined
+    maxHeightCells === undefined
       ? clamp(
-          Math.round(dimensions.heightPx * 8),
+          clampedPlotHeightPx,
           Math.round(dimensions.heightPx * 5),
-          availablePlotHeightPx,
+          getChartHeightLimitPx(undefined, dimensions.heightPx) - fixedHeightPx,
         )
-      : Math.max(1, Math.min(Math.round(dimensions.heightPx * 8), availablePlotHeightPx));
+      : clampedPlotHeightPx;
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
   return finalizeChartLayout(
     {
@@ -254,6 +262,7 @@ export function getLineChartLayout(
       titleFontSizePx,
     },
     dimensions.heightPx,
+    maxHeightCells,
   );
 }
 
@@ -380,6 +389,7 @@ export const lineChartRenderer: ChartType<
       details.xLabel !== undefined,
       details.yLabel !== undefined,
       details.fontSize,
+      details.maxHeightCells,
     );
   },
   renderSvg(details, theme, layout): string {

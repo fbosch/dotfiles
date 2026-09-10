@@ -42,6 +42,8 @@ import {
   finalizeChartLayout,
   fitTextToWidth,
   getAccessibleDescription,
+  getChartHeightLimitPx,
+  isValidChartHeight,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -163,6 +165,8 @@ function normalizeEdge(row: NetworkChartInput["edges"][number], index: number): 
 
 export function validateNetworkChartInput(input: NetworkChartInput): NetworkChartData {
   if (!Value.Check(networkChartVariant, input)) throw new Error("invalid network chart parameters");
+  if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
+    throw new Error("invalid chart height");
   const nodes = input.nodes.map(normalizeNode);
   const ids = new Set<string>();
   for (const node of nodes) {
@@ -691,10 +695,11 @@ export function getNetworkChartLayout(
   const maxBreadth = Math.max(1, ...topology.layers.map((layer) => layer.length));
   // Expand broad layers instead of compressing nodes into overlapping labels. The node bound keeps this finite.
   const naturalPlotHeightPx = Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
-  const maxHeightPx =
-    details.maxHeightCells === undefined
-      ? Number.POSITIVE_INFINITY
-      : Math.floor(details.maxHeightCells * cells.heightPx);
+  const maxHeightPx = getChartHeightLimitPx(
+    details.maxHeightCells,
+    cells.heightPx,
+    Number.POSITIVE_INFINITY,
+  );
   const maxPlotHeightPx = Math.max(1, maxHeightPx - paddingPx * 2 - titleHeightPx);
   // Pack broad layers into the requested bound; node positions remain ordered and inside the viewport.
   const plotHeightPx = Math.min(naturalPlotHeightPx, maxPlotHeightPx);
@@ -729,6 +734,7 @@ export function getNetworkChartLayout(
       edgeLabelLimit,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 
@@ -833,6 +839,7 @@ export const networkChartRenderer: ChartType<
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
       ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
+      ...(data.maxHeightCells === undefined ? {} : { maxHeightCells: data.maxHeightCells }),
     };
   },
   getCallHeader: (parameters) => {

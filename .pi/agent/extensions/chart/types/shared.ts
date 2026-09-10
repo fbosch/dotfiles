@@ -1,7 +1,7 @@
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
-import type { ChartDetails, ChartLayout } from "../types";
-import { escapeXml } from "../types";
+import { MAX_REQUESTED_CHART_HEIGHT_CELLS, MIN_CHART_HEIGHT_CELLS } from "../schemas";
+import { type ChartDetails, type ChartLayout, escapeXml, MAX_CHART_HEIGHT_CELLS } from "../types";
 
 export const MAX_SVG_ACCESSIBLE_DESCRIPTION_BYTES = 16 * 1024;
 export const ESTIMATED_CHARACTER_WIDTH = 0.58;
@@ -18,6 +18,41 @@ export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+export function isValidChartHeight(value: unknown): value is number {
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_CHART_HEIGHT_CELLS &&
+    value <= MAX_REQUESTED_CHART_HEIGHT_CELLS
+  );
+}
+
+/** Resolve a requested cell height to pixels, retaining a renderer-specific default cap. */
+export function getChartHeightLimitPx(
+  maxHeightCells: number | undefined,
+  cellHeightPx: number,
+  defaultMaxHeightCells: number | undefined = MAX_CHART_HEIGHT_CELLS,
+): number {
+  const heightCells = maxHeightCells ?? defaultMaxHeightCells;
+  return heightCells === undefined
+    ? Number.POSITIVE_INFINITY
+    : Math.floor(heightCells * cellHeightPx);
+}
+
+export function clampChartPlotHeightPx(
+  naturalPlotHeightPx: number,
+  maxHeightCells: number | undefined,
+  cellHeightPx: number,
+  fixedHeightPx: number,
+  defaultMaxHeightCells: number | undefined = MAX_CHART_HEIGHT_CELLS,
+): number {
+  const maxPlotHeightPx = Math.max(
+    1,
+    getChartHeightLimitPx(maxHeightCells, cellHeightPx, defaultMaxHeightCells) - fixedHeightPx,
+  );
+  return Math.min(naturalPlotHeightPx, maxPlotHeightPx);
+}
+
 export function stripTanStackSvg(svg: string): string {
   return svg.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");
 }
@@ -25,10 +60,14 @@ export function stripTanStackSvg(svg: string): string {
 export function finalizeChartLayout<TLayout extends Omit<ChartLayout, "heightCells">>(
   layout: TLayout,
   cellHeightPx: number,
+  maxHeightCells?: number,
 ): TLayout & ChartLayout {
-  return { ...layout, heightCells: Math.ceil(layout.heightPx / cellHeightPx) };
+  const heightPx =
+    maxHeightCells === undefined
+      ? layout.heightPx
+      : Math.min(layout.heightPx, Math.max(1, Math.floor(maxHeightCells * cellHeightPx)));
+  return { ...layout, heightPx, heightCells: Math.ceil(heightPx / cellHeightPx) };
 }
-
 export function normalizeBoundedText(
   value: string | undefined,
   name: string,

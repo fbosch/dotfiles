@@ -72,6 +72,13 @@ describe("network chart", () => {
         maxHeightCells: 32,
       }),
     ).toBe(true);
+    expect(
+      Value.Check(chartNetworkParameters, {
+        nodes: input.nodes,
+        edges: input.edges,
+        maxHeightCells: 64,
+      }),
+    ).toBe(true);
     expect(validateNetworkChartInput({ ...input, maxHeightCells: 32 })).toMatchObject({
       maxHeightCells: 32,
     });

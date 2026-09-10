@@ -26,6 +26,7 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   renderSvgDocument,
@@ -76,6 +77,7 @@ export function validateDumbbellChartInput(input: DumbbellChartInput): DumbbellC
     beforeLabel: text(input.beforeLabel, "beforeLabel") ?? "Before",
     afterLabel: text(input.afterLabel, "afterLabel") ?? "After",
     showDifferences: input.showDifferences ?? false,
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
@@ -133,7 +135,15 @@ export function getDumbbellChartLayout(
     cells.heightPx * 1.5,
     fontSizePx * (details.showDifferences ? 3.4 : 1.8),
   );
-  const plotHeightPx = details.data.length * rowHeight;
+  const naturalPlotHeightPx = details.data.length * rowHeight;
+  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 6.5 : 5);
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    details.maxHeightCells,
+    cells.heightPx,
+    fixedHeightPx,
+    undefined,
+  );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 6.5 : 5));
   return finalizeChartLayout(
     {
@@ -146,6 +156,7 @@ export function getDumbbellChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

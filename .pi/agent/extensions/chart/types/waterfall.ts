@@ -26,6 +26,7 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   renderSvgDocument,
@@ -61,6 +62,7 @@ export function validateWaterfallChartInput(input: WaterfallChartInput): Waterfa
   const data = {
     start: input.start,
     deltas,
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
@@ -134,8 +136,16 @@ export function getWaterfallChartLayout(
   );
   const plotY = fontSizePx * (details.title ? 2.5 : 1);
   const plotWidthPx = Math.max(1, widthPx - plotX - fontSizePx);
-  const plotHeightPx =
+  const naturalPlotHeightPx =
     (details.deltas.length + 2) * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
+  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 7.5 : 6);
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    details.maxHeightCells,
+    cells.heightPx,
+    fixedHeightPx,
+    undefined,
+  );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 7.5 : 6));
   return finalizeChartLayout(
     {
@@ -148,6 +158,7 @@ export function getWaterfallChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

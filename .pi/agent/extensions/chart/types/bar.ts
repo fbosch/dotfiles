@@ -25,7 +25,6 @@ import {
   DEFAULT_IMAGE_WIDTH_CELLS,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -35,10 +34,12 @@ import {
 
 import {
   clamp,
+  clampChartPlotHeightPx,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
   isRecord,
+  isValidChartHeight,
   normalizeBoundedText,
   normalizeUniqueLabel,
   renderSvgDocument,
@@ -49,7 +50,7 @@ export type { BarChartInput };
 export { barChartVariant };
 
 export type BarChartRow = { label: string; value: number };
-export type BarChartData = { rows: BarChartRow[]; title?: string };
+export type BarChartData = { rows: BarChartRow[]; title?: string; maxHeightCells?: number };
 export type BarChartLayout = ChartLayout & {
   labelWidthPx: number;
   plotHeightPx: number;
@@ -98,7 +99,8 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
     value.rows.every(isBarChartRow) === false ||
     typeof value.imageWidthCells !== "number" ||
     Number.isFinite(value.imageWidthCells) === false ||
-    value.imageWidthCells <= 0
+    value.imageWidthCells <= 0 ||
+    (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells))
   ) {
     return undefined;
   }
@@ -120,6 +122,7 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
     ...(value.title === undefined ? {} : { title: value.title }),
     ...(value.fontFamily === undefined ? {} : { fontFamily: value.fontFamily }),
     ...(value.fontSize === undefined ? {} : { fontSize: value.fontSize }),
+    ...(value.maxHeightCells === undefined ? {} : { maxHeightCells: value.maxHeightCells }),
   };
 }
 
@@ -129,6 +132,7 @@ export function getBarChartLayout(
   rows: readonly BarChartRow[] = [],
   hasTitle = false,
   fontSize?: number,
+  maxHeightCells?: number,
 ): BarChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -148,9 +152,13 @@ export function getBarChartLayout(
     fontSize === undefined
       ? Math.max(Math.round(dimensions.heightPx * 1.25), labelFontSizePx + 7)
       : labelFontSizePx + Math.max(7, Math.round(labelFontSizePx * 0.35));
-  const maxPlotHeightPx =
-    Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx) - paddingPx * 2 - titleHeightPx;
-  const plotHeightPx = Math.min(maxPlotHeightPx, rows.length * rowHeightPx);
+  const fixedHeightPx = paddingPx * 2 + titleHeightPx;
+  const plotHeightPx = clampChartPlotHeightPx(
+    rows.length * rowHeightPx,
+    maxHeightCells,
+    dimensions.heightPx,
+    fixedHeightPx,
+  );
   const minimumLabelWidthPx =
     fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7);
   const contentLabelWidthPx = Math.max(
@@ -176,6 +184,7 @@ export function getBarChartLayout(
       labelFontSizePx,
     },
     dimensions.heightPx,
+    maxHeightCells,
   );
 }
 
@@ -264,7 +273,11 @@ export function getBarChartSummary(details: BarChartDetails): string {
 function parseBarChartInput(input: BarChartInput): BarChartData {
   const rows = validateBarChartInput(input);
   const title = normalizeBoundedText(input.title, "title", MAX_TITLE_LENGTH);
-  return title === undefined ? { rows } : { rows, title };
+  return {
+    rows,
+    ...(title === undefined ? {} : { title }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
+  };
 }
 
 export const barChartRenderer: ChartType<
@@ -282,6 +295,7 @@ export const barChartRenderer: ChartType<
       type: "bar",
       rows: data.rows,
       ...(data.title === undefined ? {} : { title: data.title }),
+      ...(data.maxHeightCells === undefined ? {} : { maxHeightCells: data.maxHeightCells }),
       imageWidthCells: settings.imageWidthCells,
       fontFamily: settings.fontFamily,
       ...(settings.fontSize === undefined ? {} : { fontSize: settings.fontSize }),
@@ -299,6 +313,7 @@ export const barChartRenderer: ChartType<
       details.rows,
       details.title !== undefined,
       details.fontSize,
+      details.maxHeightCells,
     );
   },
   renderSvg(details, theme, layout): string {

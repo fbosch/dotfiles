@@ -33,9 +33,11 @@ import {
 
 import {
   clamp,
+  clampChartPlotHeightPx,
   finalizeChartLayout,
   formatNumber,
   isRecord,
+  isValidChartHeight,
   normalizeBoundedText,
   paddedDomain,
   renderCartesianAxes,
@@ -54,6 +56,7 @@ export type ScatterChartData = {
   title?: string;
   xLabel?: string;
   yLabel?: string;
+  maxHeightCells?: number;
 };
 export type ScatterChartLayout = ChartLayout & {
   plotX: number;
@@ -85,6 +88,7 @@ export function validateScatterChartInput(input: ScatterChartInput): ScatterChar
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
 }
 
@@ -110,6 +114,7 @@ export function deserializeScatterChartDetails(value: unknown): ScatterChartDeta
     typeof value.imageWidthCells !== "number" ||
     Number.isFinite(value.imageWidthCells) === false ||
     value.imageWidthCells <= 0 ||
+    (value.maxHeightCells !== undefined && !isValidChartHeight(value.maxHeightCells)) ||
     (value.title !== undefined && typeof value.title !== "string") ||
     (value.xLabel !== undefined && typeof value.xLabel !== "string") ||
     (value.yLabel !== undefined && typeof value.yLabel !== "string") ||
@@ -132,6 +137,7 @@ export function getScatterChartLayout(
   hasXLabel = false,
   hasYLabel = false,
   fontSize?: number,
+  maxHeightCells?: number,
 ): ScatterChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -161,11 +167,12 @@ export function getScatterChartLayout(
   const plotX = paddingPx + yLabelWidthPx + tickLabelWidthPx;
   const plotY = paddingPx + titleHeightPx;
   const plotWidthPx = Math.max(Math.round(dimensions.widthPx * 10), widthPx - plotX - paddingPx);
-  const availablePlotHeightPx =
-    Math.round(18 * dimensions.heightPx) - plotY - tickLabelHeightPx - xLabelHeightPx - paddingPx;
-  const plotHeightPx = Math.max(
-    1,
-    Math.min(Math.round(dimensions.heightPx * 8), availablePlotHeightPx),
+  const fixedHeightPx = plotY + tickLabelHeightPx + xLabelHeightPx + paddingPx;
+  const plotHeightPx = clampChartPlotHeightPx(
+    Math.round(dimensions.heightPx * 8),
+    maxHeightCells,
+    dimensions.heightPx,
+    fixedHeightPx,
   );
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
   return finalizeChartLayout(
@@ -346,6 +353,7 @@ export const scatterChartRenderer: ChartType<
       details.xLabel !== undefined,
       details.yLabel !== undefined,
       details.fontSize,
+      details.maxHeightCells,
     );
   },
   renderSvg(details, theme, layout) {

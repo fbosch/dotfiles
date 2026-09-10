@@ -14,6 +14,19 @@ const axisLabels = {
   yLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
 } as const;
 
+export const MIN_CHART_HEIGHT_CELLS = 8;
+export const MAX_REQUESTED_CHART_HEIGHT_CELLS = 64;
+const chartHeightOptions = {
+  maxHeightCells: Type.Optional(
+    Type.Integer({
+      minimum: MIN_CHART_HEIGHT_CELLS,
+      maximum: MAX_REQUESTED_CHART_HEIGHT_CELLS,
+      description:
+        "Maximum rendered height in terminal cells; omitted uses the renderer's natural height.",
+    }),
+  ),
+} as const;
+
 const pieData = Type.Array(
   Type.Object(
     {
@@ -76,21 +89,22 @@ const lineOptions = {
   title: chartTitle,
   ...axisLabels,
   markers: Type.Optional(Type.Boolean()),
+  ...chartHeightOptions,
 } as const;
 
 /** Public provider schemas intentionally omit the internal chart discriminator. */
 export const chartPieParameters = Type.Object(
-  { data: pieData, title: chartTitle },
+  { data: pieData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
 export const chartBarParameters = Type.Object(
-  { data: barData, title: chartTitle },
+  { data: barData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
 export const chartScatterParameters = Type.Object(
-  { data: scatterData, title: chartTitle, ...axisLabels },
+  { data: scatterData, title: chartTitle, ...axisLabels, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
@@ -126,17 +140,17 @@ export const temporalLineChartVariant = Type.Object(
 export const lineChartVariant = Type.Union([numericLineChartVariant, temporalLineChartVariant]);
 
 export const pieChartVariant = Type.Object(
-  { type: Type.Literal("pie"), data: pieData, title: chartTitle },
+  { type: Type.Literal("pie"), data: pieData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
 export const barChartVariant = Type.Object(
-  { type: Type.Literal("bar"), data: barData, title: chartTitle },
+  { type: Type.Literal("bar"), data: barData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
 export const scatterChartVariant = Type.Object(
-  { type: Type.Literal("scatter"), data: scatterData, title: chartTitle, ...axisLabels },
+  { type: Type.Literal("scatter"), data: scatterData, title: chartTitle, ...axisLabels, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
@@ -166,6 +180,7 @@ const histogramOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartHistogramParameters = Type.Object(histogramOptions, {
   additionalProperties: false,
@@ -196,6 +211,7 @@ const bezierOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartBezierParameters = Type.Object(bezierOptions, { additionalProperties: false });
 export const bezierChartVariant = Type.Object(
@@ -238,6 +254,7 @@ const heatmapOptions = {
     }),
   ),
   title: chartTitle,
+  ...chartHeightOptions,
 };
 export const chartHeatmapParameters = Type.Object(heatmapOptions, { additionalProperties: false });
 export const heatmapChartVariant = Type.Object(
@@ -269,6 +286,7 @@ const boxplotOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartBoxplotParameters = Type.Object(boxplotOptions, { additionalProperties: false });
 export const boxplotChartVariant = Type.Object(
@@ -293,6 +311,7 @@ const waterfallOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartWaterfallParameters = Type.Object(waterfallOptions, {
   additionalProperties: false,
@@ -329,6 +348,7 @@ const dumbbellOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartDumbbellParameters = Type.Object(dumbbellOptions, {
   additionalProperties: false,
@@ -377,6 +397,7 @@ const stackedBarOptions = {
   ),
   title: chartTitle,
   ...axisLabels,
+  ...chartHeightOptions,
 };
 export const chartStackedBarParameters = Type.Object(stackedBarOptions, {
   additionalProperties: false,
@@ -435,6 +456,7 @@ const treemapOptions = {
   }),
   title: chartTitle,
   unit: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" })),
+  ...chartHeightOptions,
 };
 export const chartTreemapParameters = Type.Object(treemapOptions, { additionalProperties: false });
 export const treemapChartVariant = Type.Object(
@@ -502,6 +524,7 @@ const treeOptions = {
       "Flat parent-reference rows. IDs must form one acyclic hierarchy with exactly one root.",
   }),
   title: chartTitle,
+  ...chartHeightOptions,
 };
 export const chartTreeParameters = Type.Object(treeOptions, { additionalProperties: false });
 export const treeChartVariant = Type.Object(
@@ -513,8 +536,8 @@ export type TreeChartInput = Static<typeof treeChartVariant>;
 
 export const MAX_NETWORK_NODES = 64;
 export const MAX_NETWORK_EDGES = 128;
-export const MIN_NETWORK_HEIGHT_CELLS = 8;
-export const MAX_NETWORK_HEIGHT_CELLS = 64;
+export const MIN_NETWORK_HEIGHT_CELLS = MIN_CHART_HEIGHT_CELLS;
+export const MAX_NETWORK_HEIGHT_CELLS = MAX_REQUESTED_CHART_HEIGHT_CELLS;
 export const MAX_NETWORK_ID_LENGTH = 120;
 export const MAX_NETWORK_LABEL_LENGTH = 40;
 export const MAX_NETWORK_GROUP_LENGTH = 22;
@@ -567,14 +590,7 @@ const networkOptions = {
     description: "Directed edges; source calls or depends on target.",
   }),
   title: chartTitle,
-  maxHeightCells: Type.Optional(
-    Type.Integer({
-      minimum: MIN_NETWORK_HEIGHT_CELLS,
-      maximum: MAX_NETWORK_HEIGHT_CELLS,
-      description:
-        "Maximum rendered height in terminal cells; defaults to the natural network height.",
-    }),
-  ),
+  ...chartHeightOptions,
 };
 export const chartNetworkParameters = Type.Object(networkOptions, { additionalProperties: false });
 export const networkChartVariant = Type.Object(
@@ -647,6 +663,7 @@ const ganttOptions = {
   ),
   title: chartTitle,
   xLabel: Type.Optional(Type.String({ minLength: 1, maxLength: MAX_AXIS_LABEL_LENGTH })),
+  ...chartHeightOptions,
 };
 export const chartGanttParameters = Type.Object(ganttOptions, { additionalProperties: false });
 export const ganttChartVariant = Type.Object(

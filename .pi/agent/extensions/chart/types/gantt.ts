@@ -34,12 +34,14 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   ESTIMATED_CHARACTER_WIDTH,
   estimateTextWidthPx,
   finalizeChartLayout,
   formatNumber,
   getAccessibleDescription,
+  isValidChartHeight,
   normalizeBoundedText,
   renderSvgDocument,
   stripTanStackSvg,
@@ -68,6 +70,7 @@ export type GanttChartData = {
   milestones: GanttMilestone[];
   title?: string;
   xLabel?: string;
+  maxHeightCells?: number;
 };
 
 export type GanttChartDetails = ChartDetails &
@@ -130,6 +133,8 @@ function normalizeLabel(value: string, name: string): string {
 
 export function validateGanttChartInput(input: GanttChartInput): GanttChartData {
   if (!Value.Check(ganttChartVariant, input)) throw new Error("invalid gantt chart parameters");
+  if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
+    throw new Error("invalid chart height");
 
   const tasks = input.tasks.map((task, index) => {
     const id = normalizeId(task.id, `task ${index + 1} id`);
@@ -183,6 +188,7 @@ export function validateGanttChartInput(input: GanttChartInput): GanttChartData 
     milestones,
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
 }
 
@@ -291,7 +297,7 @@ export function getGanttChartLayout(
   const minimumPlotWidthPx = Math.round(cells.widthPx * 16);
   const plotWidthPx = Math.max(minimumPlotWidthPx, requestedWidthPx - plotX - paddingPx);
   const widthPx = Math.max(requestedWidthPx, plotX + plotWidthPx + paddingPx);
-  const plotHeightPx = Math.max(rowHeightPx * 2, details.tasks.length * rowHeightPx);
+  const naturalPlotHeightPx = Math.max(rowHeightPx * 2, details.tasks.length * rowHeightPx);
   const annotationHeightPx = Math.max(
     fontSizePx * 2.4,
     details.xLabel === undefined ? 0 : fontSizePx * 3.2,
@@ -301,9 +307,19 @@ export function getGanttChartLayout(
     getLegendRowCount(getLegendEntries(details), widthPx - plotX, fontSizePx) *
       Math.ceil(fontSizePx * 1.7) +
     paddingPx;
-  const heightPx = Math.ceil(
-    paddingPx + titleHeightPx + tickHeightPx + plotHeightPx + annotationHeightPx + legendHeightPx,
-  );
+  const fixedHeightPx =
+    paddingPx + titleHeightPx + tickHeightPx + annotationHeightPx + legendHeightPx;
+  const plotHeightPx =
+    details.maxHeightCells === undefined
+      ? naturalPlotHeightPx
+      : clampChartPlotHeightPx(
+          naturalPlotHeightPx,
+          details.maxHeightCells,
+          cells.heightPx,
+          fixedHeightPx,
+          undefined,
+        );
+  const heightPx = Math.ceil(fixedHeightPx + plotHeightPx);
   return finalizeChartLayout(
     {
       widthPx,
@@ -321,6 +337,7 @@ export function getGanttChartLayout(
       legendHeightPx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

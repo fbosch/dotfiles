@@ -29,6 +29,7 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   renderSvgDocument,
@@ -76,6 +77,7 @@ export function validateBezierChartInput(input: BezierChartInput): BezierChartDa
     control2: { ...input.control2 },
     end: { ...input.end },
     showControls: input.showControls ?? false,
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
@@ -115,6 +117,7 @@ export function getBezierChartLayout(
   hasXLabel = false,
   hasYLabel = false,
   fontSize?: number,
+  maxHeightCells?: number,
 ): BezierChartLayout {
   const cells = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
@@ -126,7 +129,7 @@ export function getBezierChartLayout(
   const plotY = padding + (hasTitle ? titleFontSizePx + padding : 0);
   const bottom = padding + (hasXLabel ? axisLabelFontSizePx + padding : 0);
   // A compact square in physical pixels, not terminal cells; labels reserve only their own space.
-  const plotWidthPx = Math.max(
+  const naturalPlotWidthPx = Math.max(
     1,
     Math.floor(
       Math.min(
@@ -135,6 +138,13 @@ export function getBezierChartLayout(
         MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottom,
       ),
     ),
+  );
+  const plotWidthPx = clampChartPlotHeightPx(
+    naturalPlotWidthPx,
+    maxHeightCells,
+    cells.heightPx,
+    plotY + bottom,
+    MAX_CHART_HEIGHT_CELLS,
   );
   const plotHeightPx = plotWidthPx;
   const widthPx = plotX + plotWidthPx + padding;
@@ -151,6 +161,7 @@ export function getBezierChartLayout(
       titleFontSizePx,
     },
     cells.heightPx,
+    maxHeightCells,
   );
 }
 
@@ -208,6 +219,7 @@ export function renderBezierChartSvg(
     details.xLabel !== undefined,
     details.yLabel !== undefined,
     details.fontSize,
+    details.maxHeightCells,
   ),
 ): string {
   const geometry = getBezierChartGeometry(details, layout);
@@ -348,6 +360,7 @@ export const bezierChartRenderer: ChartType<
       details.xLabel !== undefined,
       details.yLabel !== undefined,
       details.fontSize,
+      details.maxHeightCells,
     );
   },
   renderSvg: renderBezierChartSvg,

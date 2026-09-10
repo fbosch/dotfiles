@@ -31,9 +31,11 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   FIXED_CHART_PALETTE,
   finalizeChartLayout,
+  isValidChartHeight,
   renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
@@ -51,6 +53,8 @@ export type TreemapChartLayout = ChartLayout & {
 export function validateTreemapChartInput(input: TreemapChartInput): TreemapChartData {
   if (!hasBoundedTreemapHierarchy(input) || !Value.Check(treemapChartVariant, input))
     throw new Error("invalid treemap chart parameters");
+  if (input.maxHeightCells !== undefined && !isValidChartHeight(input.maxHeightCells))
+    throw new Error("invalid chart height");
   const normalize = (nodes: TreemapNodeInput[]): void => {
     const labels = new Set<string>();
     for (const node of nodes) {
@@ -76,6 +80,7 @@ export function validateTreemapChartInput(input: TreemapChartInput): TreemapChar
     data,
     ...(title === undefined ? {} : { title }),
     ...(unit === undefined ? {} : { unit }),
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
   };
   const { total } = getTreemapHierarchy(result);
   if (total === 0) throw new Error("treemap requires at least one positive leaf value");
@@ -169,7 +174,21 @@ export function getTreemapChartLayout(
   const widthPx = Math.max(1, Math.round(width * cells.widthPx));
   const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const plotY = details.title ? fontSizePx * 2 : 0;
-  const plotHeightPx = Math.max(1, Math.round(Math.min(widthPx * 0.65, cells.heightPx * 12)));
+  const naturalPlotHeightPx = Math.max(
+    1,
+    Math.round(Math.min(widthPx * 0.65, cells.heightPx * 12)),
+  );
+  const fixedHeightPx = plotY + fontSizePx * (1 + details.data.length * 1.4);
+  const plotHeightPx =
+    details.maxHeightCells === undefined
+      ? naturalPlotHeightPx
+      : clampChartPlotHeightPx(
+          naturalPlotHeightPx,
+          details.maxHeightCells,
+          cells.heightPx,
+          fixedHeightPx,
+          undefined,
+        );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (1 + details.data.length * 1.4));
   return finalizeChartLayout(
     {
@@ -180,6 +199,7 @@ export function getTreemapChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

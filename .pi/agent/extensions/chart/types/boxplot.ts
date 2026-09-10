@@ -28,6 +28,7 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   renderSvgDocument,
@@ -70,6 +71,7 @@ export function validateBoxplotChartInput(input: BoxplotChartInput): BoxplotChar
   return {
     groups,
     showOutliers: input.showOutliers ?? true,
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
     ...(xLabel === undefined ? {} : { xLabel }),
     ...(yLabel === undefined ? {} : { yLabel }),
@@ -151,7 +153,16 @@ export function getBoxplotChartLayout(
   );
   const plotY = fontSizePx * (details.title ? 2.5 : 1);
   const plotWidthPx = Math.max(1, widthPx - plotX - fontSizePx);
-  const plotHeightPx = details.groups.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
+  const naturalPlotHeightPx =
+    details.groups.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
+  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 3.5 : 2);
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    details.maxHeightCells,
+    cells.heightPx,
+    fixedHeightPx,
+    undefined,
+  );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 3.5 : 2));
   return finalizeChartLayout(
     {
@@ -164,6 +175,7 @@ export function getBoxplotChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 

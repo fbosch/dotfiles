@@ -25,6 +25,7 @@ import {
 } from "../types";
 
 import {
+  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   normalizeUniqueLabels,
@@ -65,6 +66,7 @@ export function validateHeatmapChartInput(input: HeatmapChartInput): HeatmapChar
     data: input.data.map((row) => [...row]),
     colorScale: input.colorScale ?? "sequential",
     showValues: input.showValues ?? false,
+    ...(input.maxHeightCells === undefined ? {} : { maxHeightCells: input.maxHeightCells }),
     ...(title === undefined ? {} : { title }),
   };
 }
@@ -151,7 +153,16 @@ export function getHeatmapChartLayout(
     ) + (details.title ? fontSizePx * 1.5 : 0);
   const plotWidthPx = Math.max(1, widthPx - plotX - padding);
   // Reserve a readable row for every label rather than squeezing dense matrices below the configured font.
-  const plotHeightPx = details.rows.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.25);
+  const naturalPlotHeightPx =
+    details.rows.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.25);
+  const fixedHeightPx = plotY + fontSizePx * 5;
+  const plotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
+    details.maxHeightCells,
+    cells.heightPx,
+    fixedHeightPx,
+    undefined,
+  );
   const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * 5);
   return finalizeChartLayout(
     {
@@ -164,6 +175,7 @@ export function getHeatmapChartLayout(
       fontSizePx,
     },
     cells.heightPx,
+    details.maxHeightCells,
   );
 }
 
