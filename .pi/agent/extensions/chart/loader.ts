@@ -11,11 +11,13 @@ export type ChartTypeId =
   | "dumbbell"
   | "stacked_bar"
   | "treemap"
-  | "tree";
+  | "tree"
+  | "network";
 
 export type ChartModules = {
   treemap: typeof import("./types/treemap");
   tree: typeof import("./types/tree");
+  network: typeof import("./types/network");
   stacked_bar: typeof import("./types/stacked-bar");
   dumbbell: typeof import("./types/dumbbell");
   waterfall: typeof import("./types/waterfall");
@@ -29,6 +31,7 @@ export type ChartModules = {
   scatter: typeof import("./types/scatter");
 };
 
+let cachedNetworkModule: Promise<ChartModules["network"]> | undefined;
 let cachedTreeModule: Promise<ChartModules["tree"]> | undefined;
 let cachedTreemapModule: Promise<ChartModules["treemap"]> | undefined;
 let cachedStackedBarModule: Promise<ChartModules["stacked_bar"]> | undefined;
@@ -48,6 +51,7 @@ let sharedRuntimePromise: Promise<typeof import("./types")> | undefined;
  * Dynamic imports are cached as promises, including rejected promises. A failed native/runtime
  * load stays visible as a stable chart error instead of retrying on every TUI render.
  */
+export function loadChartType(type: "network"): Promise<ChartModules["network"]>;
 export function loadChartType(type: "tree"): Promise<ChartModules["tree"]>;
 export function loadChartType(type: "treemap"): Promise<ChartModules["treemap"]>;
 export function loadChartType(type: "stacked_bar"): Promise<ChartModules["stacked_bar"]>;
@@ -63,6 +67,9 @@ export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>
 export function loadChartType(type: "histogram"): Promise<ChartModules["histogram"]>;
 export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartTypeId]> {
   switch (type) {
+    case "network":
+      cachedNetworkModule ??= import("./types/network");
+      return cachedNetworkModule;
     case "tree":
       cachedTreeModule ??= import("./types/tree");
       return cachedTreeModule;
@@ -124,6 +131,7 @@ export async function shutdownChartRuntime(): Promise<void> {
     cachedDumbbellModule === undefined &&
     cachedStackedBarModule === undefined &&
     cachedTreeModule === undefined &&
+    cachedNetworkModule === undefined &&
     cachedTreemapModule === undefined &&
     cachedBezierModule === undefined
   )

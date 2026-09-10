@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers thirteen tools in a fresh process without loading the native renderer", async () => {
+  test("registers fourteen tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -48,6 +48,7 @@ describe("lazy chart architecture", () => {
         "chart_waterfall",
         "chart_dumbbell",
         "chart_stacked_bar",
+        "chart_network",
         "chart_tree",
         "chart_treemap",
       ],
@@ -96,6 +97,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/dumbbell.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/stacked-bar.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/tree.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/network.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/treemap.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
@@ -126,12 +128,18 @@ describe("lazy chart architecture", () => {
       expect(
         outputSources.some((source) => source.includes("// extensions/chart/types/bezier.ts")),
       ).toBe(true);
+      expect(
+        outputSources.some((source) => source.includes("// extensions/chart/types/network.ts")),
+      ).toBe(true);
     } finally {
       await rm(outputDirectory, { recursive: true, force: true });
     }
   });
 
   test("coalesces concurrent requests for one chart adapter and the shared runtime", async () => {
+    const network = loadChartType("network");
+    expect(loadChartType("network")).toBe(network);
+    expect(await loadChartType("network")).toBe(await network);
     const treemap = loadChartType("treemap");
     expect(loadChartType("treemap")).toBe(treemap);
     expect(await loadChartType("treemap")).toBe(await treemap);

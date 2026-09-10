@@ -24,6 +24,7 @@ import chartExtension, {
   chartBarParameters,
   chartBezierParameters,
   chartLineParameters,
+  chartNetworkParameters,
   chartPieParameters,
   chartScatterParameters,
   chartTreeParameters,
@@ -277,6 +278,7 @@ describe("pie chart", () => {
     const waterfall = registerTool("chart_waterfall");
     const dumbbell = registerTool("chart_dumbbell");
     const stackedBar = registerTool("chart_stacked_bar");
+    const network = registerTool("chart_network");
     const tree = registerTool("chart_tree");
     const treemap = registerTool("chart_treemap");
 
@@ -292,6 +294,7 @@ describe("pie chart", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_network",
       "chart_tree",
       "chart_treemap",
     ]);
@@ -307,6 +310,7 @@ describe("pie chart", () => {
       waterfall.name,
       dumbbell.name,
       stackedBar.name,
+      network.name,
       tree.name,
       treemap.name,
     ]).toEqual([
@@ -321,6 +325,7 @@ describe("pie chart", () => {
       "chart_waterfall",
       "chart_dumbbell",
       "chart_stacked_bar",
+      "chart_network",
       "chart_tree",
       "chart_treemap",
     ]);
@@ -336,6 +341,7 @@ describe("pie chart", () => {
       waterfall,
       dumbbell,
       stackedBar,
+      network,
       tree,
       treemap,
     ]) {
@@ -351,6 +357,7 @@ describe("pie chart", () => {
     expect(line.parameters).toBe(chartLineParameters);
     expect(bezier.parameters).toBe(chartBezierParameters);
     expect(tree.parameters).toBe(chartTreeParameters);
+    expect(network.parameters).toBe(chartNetworkParameters);
     expect(Value.Check(chartPieParameters, { data: rows, title: "Status" })).toBe(true);
     expect(Value.Check(chartBarParameters, { data: rows })).toBe(true);
     expect(

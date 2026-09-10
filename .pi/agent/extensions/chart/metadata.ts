@@ -15,6 +15,7 @@ import {
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
+  chartNetworkParameters,
   chartPieParameters,
   chartScatterParameters,
   chartStackedBarParameters,
@@ -26,6 +27,7 @@ import {
   type HistogramParameters,
   hasBoundedTreemapHierarchy,
   type LineParameters,
+  type NetworkParameters,
   type PieParameters,
   type ScatterParameters,
   type StackedBarParameters,
@@ -40,6 +42,7 @@ import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell"
 import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
+import type { NetworkChartDetails, NetworkChartInput } from "./types/network";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 import type { StackedBarChartDetails, StackedBarChartInput } from "./types/stacked-bar";
@@ -55,6 +58,7 @@ export type {
   HeatmapParameters,
   HistogramParameters,
   LineParameters,
+  NetworkParameters,
   PieParameters,
   ScatterParameters,
   StackedBarParameters,
@@ -70,6 +74,7 @@ export {
   chartHeatmapParameters,
   chartHistogramParameters,
   chartLineParameters,
+  chartNetworkParameters,
   chartPieParameters,
   chartScatterParameters,
   chartStackedBarParameters,
@@ -96,6 +101,7 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "waterfall" ||
     details.type === "dumbbell" ||
     details.type === "stacked_bar" ||
+    details.type === "network" ||
     details.type === "treemap" ||
     details.type === "tree"
     ? details.type
@@ -732,6 +738,54 @@ export function createTreemapChartTool(): ToolDefinition<
   };
 }
 
+export function createNetworkChartTool(): ToolDefinition<
+  typeof chartNetworkParameters,
+  NetworkChartDetails
+> {
+  return {
+    name: "chart_network",
+    label: "Chart network",
+    description:
+      "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. Optional title.",
+    promptSnippet: "Render layered network and call-graph charts",
+    parameters: chartNetworkParameters,
+    async execute(_toolCallId, parameters: NetworkParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartNetworkParameters, parameters))
+        throw new Error("invalid network chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("network")]);
+      signal?.throwIfAborted();
+      const input: NetworkChartInput = { ...parameters, type: "network" };
+      if (!Value.Check(module.networkChartVariant, input))
+        throw new Error("invalid network chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.networkChartRenderer.createDetails(
+        module.networkChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.networkChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.networkChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("network", result, theme, context);
+    },
+  };
+}
+
 export function createTreeChartTool(): ToolDefinition<
   typeof chartTreeParameters,
   TreeChartDetails
@@ -792,6 +846,7 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createWaterfallChartTool());
   pi.registerTool(createDumbbellChartTool());
   pi.registerTool(createStackedBarChartTool());
+  pi.registerTool(createNetworkChartTool());
   pi.registerTool(createTreeChartTool());
   pi.registerTool(createTreemapChartTool());
 }

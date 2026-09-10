@@ -510,3 +510,66 @@ export const treeChartVariant = Type.Object(
 );
 export type TreeParameters = Static<typeof chartTreeParameters>;
 export type TreeChartInput = Static<typeof treeChartVariant>;
+
+export const MAX_NETWORK_NODES = 64;
+export const MAX_NETWORK_EDGES = 128;
+export const MAX_NETWORK_ID_LENGTH = 120;
+export const MAX_NETWORK_LABEL_LENGTH = 40;
+export const MAX_NETWORK_GROUP_LENGTH = 22;
+export const MAX_NETWORK_EDGE_LABEL_LENGTH = 40;
+const networkId = Type.String({
+  minLength: 1,
+  maxLength: MAX_NETWORK_ID_LENGTH,
+  pattern: "\\S",
+});
+const networkNode = Type.Object(
+  {
+    id: networkId,
+    label: Type.String({
+      minLength: 1,
+      maxLength: MAX_NETWORK_LABEL_LENGTH,
+      pattern: "\\S",
+    }),
+    group: Type.Optional(
+      Type.String({
+        minLength: 1,
+        maxLength: MAX_NETWORK_GROUP_LENGTH,
+        pattern: "\\S",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+const networkEdge = Type.Object(
+  {
+    source: networkId,
+    target: networkId,
+    label: Type.Optional(
+      Type.String({
+        minLength: 1,
+        maxLength: MAX_NETWORK_EDGE_LABEL_LENGTH,
+        pattern: "\\S",
+      }),
+    ),
+  },
+  { additionalProperties: false },
+);
+const networkOptions = {
+  nodes: Type.Array(networkNode, {
+    minItems: 1,
+    maxItems: MAX_NETWORK_NODES,
+    description: "Declared graph nodes with stable IDs and display labels.",
+  }),
+  edges: Type.Array(networkEdge, {
+    maxItems: MAX_NETWORK_EDGES,
+    description: "Directed edges; source calls or depends on target.",
+  }),
+  title: chartTitle,
+};
+export const chartNetworkParameters = Type.Object(networkOptions, { additionalProperties: false });
+export const networkChartVariant = Type.Object(
+  { type: Type.Literal("network"), ...networkOptions },
+  { additionalProperties: false },
+);
+export type NetworkParameters = Static<typeof chartNetworkParameters>;
+export type NetworkChartInput = Static<typeof networkChartVariant>;

@@ -203,6 +203,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "network": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("network"),
+          ]);
+          const details = module.networkChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.networkChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.networkChartRenderer,
+          );
+          break;
+        }
         case "tree": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("tree")]);
           const details = module.treeChartRenderer.deserializeDetails(this.details);
