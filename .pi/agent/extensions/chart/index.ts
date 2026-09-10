@@ -11,6 +11,7 @@ export type {
   LineParameters,
   PieParameters,
   ScatterParameters,
+  WaterfallParameters,
 } from "./metadata";
 export {
   chartBarParameters,
@@ -21,6 +22,7 @@ export {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartWaterfallParameters,
 } from "./metadata";
 
 export default function (pi: ExtensionAPI): void {

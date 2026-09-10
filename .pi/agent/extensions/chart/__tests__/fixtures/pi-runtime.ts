@@ -163,6 +163,28 @@ export default function (pi: ExtensionAPI): void {
         ),
         ctx.ui.theme,
       );
+      const { waterfallChartRenderer: waterfall } = await loadChartType("waterfall");
+      assert.ok(pi.getActiveTools().includes("chart_waterfall"));
+      assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_waterfall"));
+      await check(
+        waterfall,
+        waterfall.createDetails(
+          waterfall.parseParameters({
+            type: "waterfall",
+            start: -10,
+            deltas: [
+              { label: "æ", value: 30 },
+              { label: "ø", value: -50 },
+              { label: "å", value: 0 },
+            ],
+            title: "Changes",
+            xLabel: "Value",
+            yLabel: "Step",
+          }),
+          settings,
+        ),
+        ctx.ui.theme,
+      );
       console.log(`CHART_RUNTIME_OK ${event.reason} ${process.execPath}`);
       if (event.reason === "reload") {
         runtime.shutdownRasterizer();

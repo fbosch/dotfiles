@@ -16,11 +16,13 @@ import {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartWaterfallParameters,
   type HeatmapParameters,
   type HistogramParameters,
   type LineParameters,
   type PieParameters,
   type ScatterParameters,
+  type WaterfallParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
 import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
@@ -30,6 +32,7 @@ import type { HistogramChartDetails, HistogramChartInput } from "./types/histogr
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
+import type { WaterfallChartDetails, WaterfallChartInput } from "./types/waterfall";
 
 export type {
   BarParameters,
@@ -40,6 +43,7 @@ export type {
   LineParameters,
   PieParameters,
   ScatterParameters,
+  WaterfallParameters,
 } from "./schemas";
 export {
   chartBarParameters,
@@ -50,6 +54,7 @@ export {
   chartLineParameters,
   chartPieParameters,
   chartScatterParameters,
+  chartWaterfallParameters,
 } from "./schemas";
 
 function renderChartCall() {
@@ -66,7 +71,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "histogram" ||
     details.type === "bezier" ||
     details.type === "heatmap" ||
-    details.type === "boxplot"
+    details.type === "boxplot" ||
+    details.type === "waterfall"
     ? details.type
     : fallback;
 }
@@ -503,6 +509,54 @@ export function createBoxplotChartTool(): ToolDefinition<
   };
 }
 
+export function createWaterfallChartTool(): ToolDefinition<
+  typeof chartWaterfallParameters,
+  WaterfallChartDetails
+> {
+  return {
+    name: "chart_waterfall",
+    label: "Chart waterfall",
+    description:
+      "Render a horizontal waterfall from start and 1-12 ordered deltas {label, value}. Labels are trimmed, nonblank, 1-22 characters. Start, signed deltas, and every running total must be finite within ±1,000,000,000. Final total is calculated. Blue increase and orange decrease bars with connectors and a semantic legend. Optional title (1-80), xLabel and yLabel (1-40).",
+    promptSnippet: "Render cumulative changes as waterfall charts",
+    parameters: chartWaterfallParameters,
+    async execute(_toolCallId, parameters: WaterfallParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartWaterfallParameters, parameters))
+        throw new Error("invalid waterfall chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("waterfall")]);
+      signal?.throwIfAborted();
+      const input: WaterfallChartInput = { ...parameters, type: "waterfall" };
+      if (!Value.Check(module.waterfallChartVariant, input))
+        throw new Error("invalid waterfall chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.waterfallChartRenderer.createDetails(
+        module.waterfallChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.waterfallChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.waterfallChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("waterfall", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -512,4 +566,5 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createBezierChartTool());
   pi.registerTool(createHeatmapChartTool());
   pi.registerTool(createBoxplotChartTool());
+  pi.registerTool(createWaterfallChartTool());
 }

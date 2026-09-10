@@ -277,3 +277,29 @@ export const boxplotChartVariant = Type.Object(
 );
 export type BoxplotParameters = Static<typeof chartBoxplotParameters>;
 export type BoxplotChartInput = Static<typeof boxplotChartVariant>;
+
+export const MAX_WATERFALL_VALUE = 1_000_000_000;
+const waterfallOptions = {
+  start: Type.Number({ minimum: -MAX_WATERFALL_VALUE, maximum: MAX_WATERFALL_VALUE }),
+  deltas: Type.Array(
+    Type.Object(
+      {
+        label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH, pattern: "\\S" }),
+        value: Type.Number({ minimum: -MAX_WATERFALL_VALUE, maximum: MAX_WATERFALL_VALUE }),
+      },
+      { additionalProperties: false },
+    ),
+    { minItems: 1, maxItems: 12 },
+  ),
+  title: chartTitle,
+  ...axisLabels,
+};
+export const chartWaterfallParameters = Type.Object(waterfallOptions, {
+  additionalProperties: false,
+});
+export const waterfallChartVariant = Type.Object(
+  { type: Type.Literal("waterfall"), ...waterfallOptions },
+  { additionalProperties: false },
+);
+export type WaterfallParameters = Static<typeof chartWaterfallParameters>;
+export type WaterfallChartInput = Static<typeof waterfallChartVariant>;

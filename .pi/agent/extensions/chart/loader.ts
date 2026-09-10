@@ -6,9 +6,11 @@ export type ChartTypeId =
   | "histogram"
   | "bezier"
   | "heatmap"
-  | "boxplot";
+  | "boxplot"
+  | "waterfall";
 
 export type ChartModules = {
+  waterfall: typeof import("./types/waterfall");
   boxplot: typeof import("./types/boxplot");
   heatmap: typeof import("./types/heatmap");
   bezier: typeof import("./types/bezier");
@@ -19,6 +21,7 @@ export type ChartModules = {
   scatter: typeof import("./types/scatter");
 };
 
+let cachedWaterfallModule: Promise<ChartModules["waterfall"]> | undefined;
 let cachedBoxplotModule: Promise<ChartModules["boxplot"]> | undefined;
 let cachedHeatmapModule: Promise<ChartModules["heatmap"]> | undefined;
 let cachedBezierModule: Promise<ChartModules["bezier"]> | undefined;
@@ -33,6 +36,7 @@ let sharedRuntimePromise: Promise<typeof import("./types")> | undefined;
  * Dynamic imports are cached as promises, including rejected promises. A failed native/runtime
  * load stays visible as a stable chart error instead of retrying on every TUI render.
  */
+export function loadChartType(type: "waterfall"): Promise<ChartModules["waterfall"]>;
 export function loadChartType(type: "boxplot"): Promise<ChartModules["boxplot"]>;
 export function loadChartType(type: "heatmap"): Promise<ChartModules["heatmap"]>;
 export function loadChartType(type: "bezier"): Promise<ChartModules["bezier"]>;
@@ -43,6 +47,9 @@ export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>
 export function loadChartType(type: "histogram"): Promise<ChartModules["histogram"]>;
 export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartTypeId]> {
   switch (type) {
+    case "waterfall":
+      cachedWaterfallModule ??= import("./types/waterfall");
+      return cachedWaterfallModule;
     case "boxplot":
       cachedBoxplotModule ??= import("./types/boxplot");
       return cachedBoxplotModule;
@@ -85,6 +92,7 @@ export async function shutdownChartRuntime(): Promise<void> {
     cachedHistogramModule === undefined &&
     cachedHeatmapModule === undefined &&
     cachedBoxplotModule === undefined &&
+    cachedWaterfallModule === undefined &&
     cachedBezierModule === undefined
   )
     return;

@@ -49,13 +49,18 @@ with tempfile.TemporaryDirectory(prefix="chart-pi-resume-") as temporary:
     boxplot_parameters = {"groups": [{"label": "æ", "values": [-2, 0, 0, 0, 1, 30]}, {"label": "ø", "values": [3]}], "showOutliers": True}
     boxplot_details = {"type": "boxplot", **boxplot_parameters,
                        "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
+    waterfall_parameters = {"start": -10, "deltas": [{"label": "æ", "value": 30}, {"label": "ø", "value": -50}, {"label": "å", "value": 0}]}
+    waterfall_details = {"type": "waterfall", **waterfall_parameters,
+                         "imageWidthCells": 80, "fontFamily": "JetBrainsMono NF", "fontSize": 14}
     for index in range(32):
         tool_name = "chart_heatmap" if index % 2 else "chart_histogram"
         arguments = heatmap_parameters if index % 2 else {"data": [42, 146]}
         saved_details = heatmap_details if index % 2 else details
         if index % 3 == 2:
             tool_name, arguments, saved_details = "chart_boxplot", boxplot_parameters, boxplot_details
-        append({"role": "user", "content": "Show a histogram"})
+        if index % 4 == 3:
+            tool_name, arguments, saved_details = "chart_waterfall", waterfall_parameters, waterfall_details
+        append({"role": "user", "content": "Show a chart"})
         append({"role": "assistant", "api": "openai-responses", "provider": "openai",
                 "model": "gpt-4o", "usage": usage, "stopReason": "toolUse",
                 "content": [{"type": "toolCall", "id": f"chart-{index}",

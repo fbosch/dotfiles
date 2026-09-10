@@ -56,6 +56,8 @@ test.skipIf(!executable)(
       expect(stdout).toContain("CHART_REDRAW reload Rendering heatmap");
       expect(stdout).toContain("CHART_REDRAW startup Rendering box plot");
       expect(stdout).toContain("CHART_REDRAW reload Rendering box plot");
+      expect(stdout).toContain("CHART_REDRAW startup Rendering waterfall");
+      expect(stdout).toContain("CHART_REDRAW reload Rendering waterfall");
     } finally {
       await rm(agentDir, { recursive: true, force: true });
     }

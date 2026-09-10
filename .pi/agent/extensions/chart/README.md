@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers eight focused tools:
+The enabled chart extension registers nine focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -10,8 +10,9 @@ The enabled chart extension registers eight focused tools:
 - `chart_bezier` renders one exact cubic Bézier segment from four x/y points.
 - `chart_heatmap` renders a labeled numeric matrix with explicit missing cells.
 - `chart_boxplot` compares labeled sample distributions with horizontal boxes and whiskers.
+- `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All eight `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. All nine `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -103,6 +104,25 @@ Quartiles use linear interpolation, quantile type 7. Sort each group's samples a
 TanStack rectangle and dot marks, scene rules, and its SVG renderer own the plot geometry. Redundant per-dot metadata and fill attributes are removed from the resulting SVG to keep the maximum outlier payload within the shared worker's 64 KiB input limit. Dot coordinates are unchanged. Saved details contain normalized labels, original samples, resolved `showOutliers`, and shared chart settings; statistics are recomputed on replay. Text summaries retain full labels, exact quartiles, whiskers, extrema, sample counts, and outlier counts. Visible labels are shortened to fit, and numeric ticks are abbreviated. Height grows with group count and configured font size.
 
 Box plots use the existing lazy loader, full-resolution raster worker, cached image identities, and per-render queue deadlines. No raster scheduling or cache behavior changes are required.
+
+## Waterfalls
+
+`chart_waterfall` requires `start` and `deltas`, an ordered array of 1–12 `{ label, value }` objects. Start, each signed delta, and every running total must be finite numbers within ±1,000,000,000. Labels are 1–22 characters, trimmed and nonblank; repeated labels are allowed because each step has its own position. Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. All text is trimmed and cannot be blank. X represents cumulative value and Y represents steps.
+
+```json
+{
+  "start": 100,
+  "deltas": [{ "label": "Sales", "value": 40 }, { "label": "Costs", "value": -25 }],
+  "title": "Balance changes",
+  "xLabel": "Amount"
+}
+```
+
+This produces Start `100`, Sales `100 → 140`, Costs `140 → 115`, and Total `115`. The final total is calculated; callers cannot override it. Arithmetic uses JavaScript numbers in input order without intermediate rounding. Text summaries retain the exact numbers, signed deltas, and every before/after total. Saved details contain the normalized input and chart settings; replay validates them and recomputes totals.
+
+Horizontal bars run top to bottom with connectors at the preceding running total. Start and Total bars extend from zero, including negative totals. Blue means increase, orange means decrease, and the foreground color identifies Start, Total, and zero changes. The legend describes direction, not whether a change is good or bad. Zero-width bars receive a visible rule at their exact position.
+
+The domain includes zero and every intermediate total, with padding `max(span * 0.05, 1e-12)` on both sides. This also handles zero-only and subnormal data. Visible ticks are abbreviated to three significant digits and labels are shortened to fit. Height grows with the number of steps and configured font size. TanStack rectangle marks, scene rules, and its SVG renderer own plot geometry. Waterfalls use the shared lazy loader, full-resolution raster worker, cached image identities, and resume queue deadlines unchanged.
 
 ## Font configuration
 
