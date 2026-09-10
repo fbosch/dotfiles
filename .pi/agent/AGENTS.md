@@ -17,6 +17,7 @@
 
 ## Preferences
 
+- When a concept, relationship, timeline, hierarchy, or quantitative comparison would be easier to grasp visually, use `chart_*` tools for data, results, and quantitative visualizations; use Mermaid diagrams mainly for flows and process relationships. Include a concise textual explanation too.
 - Preserve Danish letters exactly (`æ`, `ø`, `å`).
 - Treat follow-up requests as cumulative unless the user resets scope.
 - Target the current contract. Add compatibility paths only for explicitly scoped
