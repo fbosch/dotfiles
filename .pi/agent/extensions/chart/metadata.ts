@@ -19,6 +19,7 @@ import {
   chartScatterParameters,
   chartStackedBarParameters,
   chartTreemapParameters,
+  chartTreeParameters,
   chartWaterfallParameters,
   type DumbbellParameters,
   type HeatmapParameters,
@@ -29,6 +30,7 @@ import {
   type ScatterParameters,
   type StackedBarParameters,
   type TreemapParameters,
+  type TreeParameters,
   type WaterfallParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
@@ -41,6 +43,7 @@ import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 import type { StackedBarChartDetails, StackedBarChartInput } from "./types/stacked-bar";
+import type { TreeChartDetails, TreeChartInput } from "./types/tree";
 import type { TreemapChartDetails, TreemapChartInput } from "./types/treemap";
 import type { WaterfallChartDetails, WaterfallChartInput } from "./types/waterfall";
 
@@ -56,6 +59,7 @@ export type {
   ScatterParameters,
   StackedBarParameters,
   TreemapParameters,
+  TreeParameters,
   WaterfallParameters,
 } from "./schemas";
 export {
@@ -70,6 +74,7 @@ export {
   chartScatterParameters,
   chartStackedBarParameters,
   chartTreemapParameters,
+  chartTreeParameters,
   chartWaterfallParameters,
 } from "./schemas";
 
@@ -91,7 +96,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "waterfall" ||
     details.type === "dumbbell" ||
     details.type === "stacked_bar" ||
-    details.type === "treemap"
+    details.type === "treemap" ||
+    details.type === "tree"
     ? details.type
     : fallback;
 }
@@ -726,6 +732,54 @@ export function createTreemapChartTool(): ToolDefinition<
   };
 }
 
+export function createTreeChartTool(): ToolDefinition<
+  typeof chartTreeParameters,
+  TreeChartDetails
+> {
+  return {
+    name: "chart_tree",
+    label: "Chart tree",
+    description:
+      "Render a left-to-right tidy hierarchy tree from 1-64 flat parent-reference nodes. Each node has a unique trimmed id, optional parentId, and trimmed label. The data must form one connected acyclic hierarchy with exactly one root. Optional title (1-80 characters).",
+    promptSnippet: "Render tidy hierarchy trees from parent-reference nodes",
+    parameters: chartTreeParameters,
+    async execute(_toolCallId, parameters: TreeParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartTreeParameters, parameters))
+        throw new Error("invalid tree chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("tree")]);
+      signal?.throwIfAborted();
+      const input: TreeChartInput = { ...parameters, type: "tree" };
+      if (!Value.Check(module.treeChartVariant, input))
+        throw new Error("invalid tree chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.treeChartRenderer.createDetails(
+        module.treeChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.treeChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.treeChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("tree", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
@@ -738,5 +792,6 @@ export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createWaterfallChartTool());
   pi.registerTool(createDumbbellChartTool());
   pi.registerTool(createStackedBarChartTool());
+  pi.registerTool(createTreeChartTool());
   pi.registerTool(createTreemapChartTool());
 }

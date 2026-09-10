@@ -14,6 +14,7 @@ export type {
   ScatterParameters,
   StackedBarParameters,
   TreemapParameters,
+  TreeParameters,
   WaterfallParameters,
 } from "./metadata";
 export {
@@ -28,6 +29,7 @@ export {
   chartScatterParameters,
   chartStackedBarParameters,
   chartTreemapParameters,
+  chartTreeParameters,
   chartWaterfallParameters,
 } from "./metadata";
 

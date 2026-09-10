@@ -203,6 +203,21 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "tree": {
+          const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("tree")]);
+          const details = module.treeChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.treeChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.treeChartRenderer,
+          );
+          break;
+        }
         case "treemap": {
           const [runtime, module] = await Promise.all([
             loadChartRuntime(),

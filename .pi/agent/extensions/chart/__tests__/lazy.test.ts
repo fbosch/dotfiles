@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers twelve tools in a fresh process without loading the native renderer", async () => {
+  test("registers thirteen tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -48,6 +48,7 @@ describe("lazy chart architecture", () => {
         "chart_waterfall",
         "chart_dumbbell",
         "chart_stacked_bar",
+        "chart_tree",
         "chart_treemap",
       ],
       native: [],
@@ -94,6 +95,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/waterfall.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/dumbbell.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/stacked-bar.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/tree.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/treemap.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");

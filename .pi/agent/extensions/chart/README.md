@@ -1,6 +1,6 @@
 # Chart extension
 
-The enabled chart extension registers twelve focused tools:
+The enabled chart extension registers thirteen focused tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
@@ -13,9 +13,10 @@ The enabled chart extension registers twelve focused tools:
 - `chart_waterfall` shows a starting value, signed changes, and a calculated final total.
 - `chart_dumbbell` compares two values per labeled row with connected dots.
 - `chart_stacked_bar` compares nonnegative compositions across labeled categories.
+- `chart_tree` renders tidy parent-child hierarchy trees for repository, AST, dependency, and task structures.
 - `chart_treemap` compares hierarchical bundle, directory, or module sizes by area.
 
-The extension registers tool metadata and public TypeBox schemas eagerly. All twelve `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
+The extension registers tool metadata and public TypeBox schemas eagerly. All thirteen `chart_*` tools remain active through Pi's tool discovery. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
@@ -177,6 +178,24 @@ Values must be finite numbers from 0 through 1,000,000,000 inclusive. These are 
 Optional `title` is 1–80 characters; `xLabel` and `yLabel` are 1–40 characters. Text bounds apply before trimming; supplied text cannot be blank. Unknown fields and a caller-supplied `type` are rejected. Visible labels are shortened or omitted when space is insufficient, tick count decreases at narrow widths, and each legend entry gets its own line. Colors identify series consistently across rows, including all-zero series. The SVG description and tool summary always retain full labels, exact raw values, and exact raw category totals, even in normalized mode.
 
 TanStack scenes, rectangle marks with zero inset, linear scales, and its SVG renderer own bar geometry. Unit coordinates protect subnormal raw domains from scale overflow. Saved details contain trimmed labels, original values, resolved `normalize`, and shared chart settings; replay revalidates them and recomputes stacks and totals. The lazy loader, full-resolution worker, cached image identities, and resume queue deadlines are unchanged.
+
+## Tidy hierarchy trees
+
+`chart_tree` accepts `data`, an array of 1–64 flat `{ id, parentId?, label }` nodes. IDs are trimmed, nonblank, unique, and at most 120 characters; labels are trimmed, nonblank, and at most 40 characters. The rows must form one connected acyclic hierarchy with exactly one root. An explicit `null` `parentId` is also accepted for the root. Optional `title` is 1–80 characters and is trimmed and nonblank.
+
+```json
+{
+  "data": [
+    { "id": "repo", "label": "Repository" },
+    { "id": "src", "parentId": "repo", "label": "src" },
+    { "id": "tests", "parentId": "repo", "label": "tests" },
+    { "id": "parser", "parentId": "src", "label": "parser.ts" }
+  ],
+  "title": "Repository"
+}
+```
+
+The installed TanStack `hierarchy/tree` transform computes a deterministic tidy layout. The adapter renders parent-child links first, then nodes and labels, with the root at the left and descendants growing to the right. Labels are fitted to their available parent-to-child gap, and outgoing links are offset beyond the source label when space permits, so connectors do not paint through text or dots. Input order controls sibling order. The text summary and bounded SVG description retain every exact ID, parent relationship, and label.
 
 ## Treemaps
 

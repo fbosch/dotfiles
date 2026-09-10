@@ -473,3 +473,40 @@ export function hasBoundedTreemapHierarchy(input: unknown): boolean {
   }
   return true;
 }
+
+export const MAX_TREE_NODES = 64;
+export const MAX_TREE_ID_LENGTH = 120;
+export const MAX_TREE_LABEL_LENGTH = 40;
+const treeId = Type.String({
+  minLength: 1,
+  maxLength: MAX_TREE_ID_LENGTH,
+  pattern: "\\S",
+});
+const treeRow = Type.Object(
+  {
+    id: treeId,
+    parentId: Type.Optional(Type.Union([treeId, Type.Null()])),
+    label: Type.String({
+      minLength: 1,
+      maxLength: MAX_TREE_LABEL_LENGTH,
+      pattern: "\\S",
+    }),
+  },
+  { additionalProperties: false },
+);
+const treeOptions = {
+  data: Type.Array(treeRow, {
+    minItems: 1,
+    maxItems: MAX_TREE_NODES,
+    description:
+      "Flat parent-reference rows. IDs must form one acyclic hierarchy with exactly one root.",
+  }),
+  title: chartTitle,
+};
+export const chartTreeParameters = Type.Object(treeOptions, { additionalProperties: false });
+export const treeChartVariant = Type.Object(
+  { type: Type.Literal("tree"), ...treeOptions },
+  { additionalProperties: false },
+);
+export type TreeParameters = Static<typeof chartTreeParameters>;
+export type TreeChartInput = Static<typeof treeChartVariant>;
