@@ -6,6 +6,8 @@ import { LazyChartComponent } from "./lazy";
 import { type ChartTypeId, loadChartRuntime, loadChartType } from "./loader";
 import {
   type BarParameters,
+  type BezierParameters,
+  chartBezierParameters,
   chartBarParameters,
   chartHistogramParameters,
   chartLineParameters,
@@ -17,12 +19,14 @@ import {
   type ScatterParameters,
 } from "./schemas";
 import type { BarChartDetails, BarChartInput } from "./types/bar";
+import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
 import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
 import type { LineChartDetails, LineChartInput } from "./types/line";
 import type { PieChartDetails, PieChartInput } from "./types/pie";
 import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
 
 export type {
+  BezierParameters,
   BarParameters,
   HistogramParameters,
   LineParameters,
@@ -30,6 +34,7 @@ export type {
   ScatterParameters,
 } from "./schemas";
 export {
+  chartBezierParameters,
   chartBarParameters,
   chartHistogramParameters,
   chartLineParameters,
@@ -48,7 +53,8 @@ function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
     details.type === "bar" ||
     details.type === "line" ||
     details.type === "scatter" ||
-    details.type === "histogram"
+    details.type === "histogram" ||
+    details.type === "bezier"
     ? details.type
     : fallback;
 }
@@ -341,10 +347,59 @@ export function createHistogramChartTool(): ToolDefinition<
   };
 }
 
+export function createBezierChartTool(): ToolDefinition<
+  typeof chartBezierParameters,
+  BezierChartDetails
+> {
+  return {
+    name: "chart_bezier",
+    label: "Chart bezier",
+    description:
+      "Render one exact cubic Bezier segment from start, control1, control2, and end x/y points (finite, ±1,000,000,000). Equal X/Y pixels per unit. Optional showControls (default false), title, xLabel, and yLabel. No sample interpolation.",
+    promptSnippet: "Render exact cubic Bezier curves",
+    parameters: chartBezierParameters,
+    async execute(_toolCallId, parameters: BezierParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (!Value.Check(chartBezierParameters, parameters))
+        throw new Error("invalid bezier chart parameters");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("bezier")]);
+      signal?.throwIfAborted();
+      const input: BezierChartInput = { ...parameters, type: "bezier" };
+      if (!Value.Check(module.bezierChartVariant, input))
+        throw new Error("invalid bezier chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.bezierChartRenderer.createDetails(
+        module.bezierChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.bezierChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.bezierChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("bezier", result, theme, context);
+    },
+  };
+}
+
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
   pi.registerTool(createBarChartTool());
   pi.registerTool(createScatterChartTool());
   pi.registerTool(createLineChartTool());
   pi.registerTool(createHistogramChartTool());
+  pi.registerTool(createBezierChartTool());
 }

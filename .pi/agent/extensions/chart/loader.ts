@@ -1,6 +1,7 @@
-export type ChartTypeId = "pie" | "bar" | "line" | "scatter" | "histogram";
+export type ChartTypeId = "pie" | "bar" | "line" | "scatter" | "histogram" | "bezier";
 
 export type ChartModules = {
+  bezier: typeof import("./types/bezier");
   pie: typeof import("./types/pie");
   bar: typeof import("./types/bar");
   line: typeof import("./types/line");
@@ -8,6 +9,7 @@ export type ChartModules = {
   scatter: typeof import("./types/scatter");
 };
 
+let cachedBezierModule: Promise<ChartModules["bezier"]> | undefined;
 let cachedPieModule: Promise<ChartModules["pie"]> | undefined;
 let cachedBarModule: Promise<ChartModules["bar"]> | undefined;
 let cachedLineModule: Promise<ChartModules["line"]> | undefined;
@@ -19,6 +21,7 @@ let sharedRuntimePromise: Promise<typeof import("./types")> | undefined;
  * Dynamic imports are cached as promises, including rejected promises. A failed native/runtime
  * load stays visible as a stable chart error instead of retrying on every TUI render.
  */
+export function loadChartType(type: "bezier"): Promise<ChartModules["bezier"]>;
 export function loadChartType(type: "pie"): Promise<ChartModules["pie"]>;
 export function loadChartType(type: "bar"): Promise<ChartModules["bar"]>;
 export function loadChartType(type: "line"): Promise<ChartModules["line"]>;
@@ -26,6 +29,9 @@ export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>
 export function loadChartType(type: "histogram"): Promise<ChartModules["histogram"]>;
 export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartTypeId]> {
   switch (type) {
+    case "bezier":
+      cachedBezierModule ??= import("./types/bezier");
+      return cachedBezierModule;
     case "pie":
       cachedPieModule ??= import("./types/pie");
       return cachedPieModule;
@@ -56,7 +62,8 @@ export async function shutdownChartRuntime(): Promise<void> {
     cachedBarModule === undefined &&
     cachedLineModule === undefined &&
     cachedScatterModule === undefined &&
-    cachedHistogramModule === undefined
+    cachedHistogramModule === undefined &&
+    cachedBezierModule === undefined
   )
     return;
   (await loadChartRuntime()).shutdownRasterizer();

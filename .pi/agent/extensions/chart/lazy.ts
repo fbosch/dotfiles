@@ -113,6 +113,24 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "bezier": {
+          const [runtime, module] = await Promise.all([
+            loadChartRuntime(),
+            loadChartType("bezier"),
+          ]);
+          const details = module.bezierChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? module.bezierChartRenderer.unavailableText;
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.bezierChartRenderer,
+          );
+          break;
+        }
         case "line": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
           const details = module.lineChartRenderer.deserializeDetails(this.details);
