@@ -33,6 +33,9 @@ const NARROW_LAYOUT_CELLS = 36;
 const MAX_SLICES = 12;
 const MAX_LABEL_LENGTH = 22;
 const MAX_TITLE_LENGTH = 80;
+const ESTIMATED_CHARACTER_WIDTH = 0.58;
+const LEGEND_TEXT_GAP_PX = 6;
+const LEGEND_COLUMN_GAP_PX = 8;
 
 export type PieChartRow = { label: string; value: number };
 export type PieChartData = {
@@ -118,7 +121,6 @@ export function getPieChartLayout(
     };
   }
 
-  const legendWidthPx = Math.round(widthPx * 0.54) - paddingPx;
   const pieDiameterPx = Math.max(
     Math.round(dimensions.heightPx * 7),
     Math.min(
@@ -127,6 +129,9 @@ export function getPieChartLayout(
       maxHeightPx - paddingPx * 2,
     ),
   );
+  // Use the gap between the pie and the legend so the text columns have room to breathe.
+  const legendX = paddingPx + pieDiameterPx + paddingPx;
+  const legendWidthPx = Math.max(1, widthPx - legendX - paddingPx);
   const heightPx = Math.min(
     maxHeightPx,
     Math.max(pieDiameterPx + paddingPx * 2, legendRows * legendRowHeightPx + paddingPx * 2),
@@ -138,7 +143,7 @@ export function getPieChartLayout(
     pieDiameterPx,
     pieX: paddingPx,
     pieY: Math.round((heightPx - pieDiameterPx) / 2),
-    legendX: widthPx - legendWidthPx,
+    legendX,
     legendY: Math.round((heightPx - legendRows * legendRowHeightPx) / 2 + labelFontSizePx),
     legendColumns,
     legendColumnWidthPx: Math.floor(legendWidthPx / legendColumns),
@@ -273,13 +278,19 @@ export function renderPieChartSvg(
   const accessibleName = title === undefined ? "Pie chart" : `Pie chart: ${title}`;
   const chart = renderTanStackChartSvg(scene, { ariaLabel: accessibleName, idPrefix: "pi-pie" });
   const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
-  const maxLabelWidth = Math.max(1, layout.legendColumnWidthPx - layout.markerSizePx - 8);
-  const truncateLabel = (label: string) => {
-    const maximumCharacters = Math.max(
-      3,
-      Math.floor(maxLabelWidth / (layout.labelFontSizePx * 0.58)),
-    );
-    return label.length > maximumCharacters ? `${label.slice(0, maximumCharacters - 1)}…` : label;
+  // Budget the complete entry; otherwise the percentage can cross into the next column.
+  const maxLegendTextWidth = Math.max(
+    1,
+    layout.legendColumnWidthPx - layout.markerSizePx - LEGEND_TEXT_GAP_PX - LEGEND_COLUMN_GAP_PX,
+  );
+  const truncateLabel = (label: string, suffix: string) => {
+    const characterWidth = layout.labelFontSizePx * ESTIMATED_CHARACTER_WIDTH;
+    const availableLabelWidth = Math.max(0, maxLegendTextWidth - suffix.length * characterWidth);
+    const maximumCharacters = Math.floor(availableLabelWidth / characterWidth);
+    if (label.length <= maximumCharacters) return `${label}${suffix}`;
+    if (maximumCharacters < 2) return suffix.trim();
+    const visibleLabel = label.slice(0, maximumCharacters - 1).trimEnd();
+    return `${visibleLabel}…${suffix}`;
   };
   const legend = rows
     .map((row, index) => {
@@ -289,7 +300,8 @@ export function renderPieChartSvg(
       const y = layout.legendY + legendRow * layout.legendRowHeightPx;
       const percentage = ((row.value / total) * 100).toFixed(1);
       const color = sliceColors[index % sliceColors.length] ?? "currentColor";
-      return `<rect x="${x}" y="${y - layout.markerSizePx + 2}" width="${layout.markerSizePx}" height="${layout.markerSizePx}" rx="2" fill="${color}"/><text x="${x + layout.markerSizePx + 6}" y="${y}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(`${truncateLabel(row.label)} ${percentage}%`)}</text>`;
+      const legendLabel = truncateLabel(row.label, ` ${percentage}%`);
+      return `<rect x="${x}" y="${y - layout.markerSizePx + 2}" width="${layout.markerSizePx}" height="${layout.markerSizePx}" rx="2" fill="${color}"/><text x="${x + layout.markerSizePx + LEGEND_TEXT_GAP_PX}" y="${y}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(legendLabel)}</text>`;
     })
     .join("");
   const chartBody = chart.replace(/^<svg\b[^>]*>/, "").replace(/<\/svg>$/, "");

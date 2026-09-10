@@ -266,7 +266,34 @@ describe("pie chart", () => {
       }),
     ).toThrow("duplicates");
   });
+  test("keeps crowded two-column legend entries within their columns", () => {
+    const crowdedRows = validatePieChartInput({
+      type: "pie",
+      data: [
+        { label: "TypeScript (.ts)", value: 1 },
+        { label: "Markdown (.md)", value: 1 },
+        { label: "Lua (.lua)", value: 1 },
+        { label: "JSON (.json)", value: 1 },
+        { label: "Shell (.sh)", value: 1 },
+        { label: "TSX (.tsx)", value: 1 },
+        { label: "No extension", value: 1 },
+        { label: "Fish (.fish)", value: 1 },
+        { label: "YAML (.yml)", value: 1 },
+        { label: "YAML (.yaml)", value: 1 },
+        { label: "PNG (.png)", value: 1 },
+        { label: "Other types", value: 1 },
+      ],
+    });
+    const layout = getPieChartLayout(undefined, 60, crowdedRows.length);
+    const svg = renderPieChartSvg(crowdedRows, theme, layout);
 
+    expect(svg).toContain(">TypeScript… 8.3%<");
+    expect(svg).toContain(">Markdown (.… 8.3%<");
+    expect(svg).not.toContain(">TypeScript (.ts) 8.3%<");
+    expect(svg).not.toContain(">Markdown (.md) 8.3%<");
+    expect(layout.legendX - (layout.pieX + layout.pieDiameterPx)).toBe(11);
+    expect(layout.legendColumnWidthPx).toBeGreaterThan(140);
+  });
   test("registers focused chart tools with public schemas that omit type", () => {
     const pie = registerTool();
     const bar = registerTool("chart_bar");
