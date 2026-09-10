@@ -35,6 +35,8 @@ const MAX_BARS = 12;
 const MAX_LABEL_LENGTH = 22;
 const MAX_TITLE_LENGTH = 80;
 
+// Keep layout sizing and truncation on the same approximate font-width model.
+const ESTIMATED_CHARACTER_WIDTH = 0.58;
 export type BarChartRow = { label: string; value: number };
 export type BarChartData = { rows: BarChartRow[]; title?: string };
 export type BarChartLayout = ChartLayout & {
@@ -137,7 +139,7 @@ export function deserializeBarChartDetails(value: unknown): BarChartDetails | un
 export function getBarChartLayout(
   cellDimensions?: CellDimensions,
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
-  rowCount = 2,
+  rows: readonly BarChartRow[] = [],
   hasTitle = false,
   fontSize?: number,
 ): BarChartLayout {
@@ -161,12 +163,14 @@ export function getBarChartLayout(
       : labelFontSizePx + Math.max(7, Math.round(labelFontSizePx * 0.35));
   const maxPlotHeightPx =
     Math.round(MAX_CHART_HEIGHT_CELLS * dimensions.heightPx) - paddingPx * 2 - titleHeightPx;
-  const plotHeightPx = Math.min(maxPlotHeightPx, rowCount * rowHeightPx);
-  const labelWidthPx = clamp(
-    Math.round(widthPx * 0.42),
-    fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7),
-    Math.round(widthPx * 0.48),
+  const plotHeightPx = Math.min(maxPlotHeightPx, rows.length * rowHeightPx);
+  const minimumLabelWidthPx =
+    fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7);
+  const contentLabelWidthPx = Math.max(
+    minimumLabelWidthPx,
+    ...rows.map((row) => Math.ceil(estimateTextWidthPx(formatBarLabel(row), labelFontSizePx)) + 6),
   );
+  const labelWidthPx = clamp(contentLabelWidthPx, minimumLabelWidthPx, Math.round(widthPx * 0.48));
   const plotWidthPx = Math.max(
     Math.round(dimensions.widthPx * 8),
     widthPx - paddingPx * 2 - labelWidthPx,
@@ -190,15 +194,26 @@ function formatValue(value: number): string {
   return String(value);
 }
 
+function formatBarLabel(row: BarChartRow): string {
+  return `${row.label}: ${formatValue(row.value)}`;
+}
+
+function estimateTextWidthPx(value: string, fontSizePx: number): number {
+  return value.length * fontSizePx * ESTIMATED_CHARACTER_WIDTH;
+}
+
 function truncateLabel(value: string, widthPx: number, fontSizePx: number): string {
-  const maximumCharacters = Math.max(3, Math.floor(widthPx / (fontSizePx * 0.58)));
+  const maximumCharacters = Math.max(
+    3,
+    Math.floor(widthPx / (fontSizePx * ESTIMATED_CHARACTER_WIDTH)),
+  );
   return value.length > maximumCharacters ? `${value.slice(0, maximumCharacters - 1)}…` : value;
 }
 
 export function renderBarChartSvg(
   rows: BarChartRow[],
   theme: ChartTheme,
-  layout = getBarChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows.length),
+  layout = getBarChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows),
   title?: string,
   fontFamily = DEFAULT_FONT_FAMILY,
 ): string {
@@ -238,7 +253,7 @@ export function renderBarChartSvg(
   const labels = rows
     .map((row, index) => {
       const y = layout.plotY + layout.rowHeightPx * (index + 0.5) + layout.labelFontSizePx * 0.35;
-      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(`${row.label}: ${formatValue(row.value)}`, layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
+      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(formatBarLabel(row), layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
     })
     .join("");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
@@ -287,7 +302,7 @@ export const barChartRenderer: ChartType<
     return getBarChartLayout(
       cellDimensions,
       widthCells,
-      details.rows.length,
+      details.rows,
       details.title !== undefined,
       details.fontSize,
     );

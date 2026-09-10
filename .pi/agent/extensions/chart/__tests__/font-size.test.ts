@@ -41,7 +41,18 @@ describe("chart font size", () => {
     expect(scaleChartFontSize(16, highDensity)).toBe(34);
 
     expect(getPieChartLayout(highDensity, 28, 2, 16).labelFontSizePx).toBe(34);
-    expect(getBarChartLayout(highDensity, 28, 2, true, 16).labelFontSizePx).toBe(34);
+    expect(
+      getBarChartLayout(
+        highDensity,
+        28,
+        [
+          { label: "A", value: 1 },
+          { label: "B", value: 2 },
+        ],
+        true,
+        16,
+      ),
+    ).toMatchObject({ labelFontSizePx: 34 });
     expect(getLineChartLayout(highDensity, 28, true, true, true, 16).axisLabelFontSizePx).toBe(34);
     expect(getScatterChartLayout(highDensity, 28, true, true, true, 16).axisLabelFontSizePx).toBe(
       34,
@@ -145,7 +156,15 @@ describe("chart font size", () => {
     }
     expect(pieLayout.heightCells).toBeLessThanOrEqual(18);
     expect(barLayout.rowHeightPx).toBeGreaterThan(
-      getBarChartLayout(dimensions, 28, 2, true).rowHeightPx,
+      getBarChartLayout(
+        dimensions,
+        28,
+        [
+          { label: "A", value: 1 },
+          { label: "B", value: 2 },
+        ],
+        true,
+      ).rowHeightPx,
     );
     expect(lineLayout.heightPx).toBeGreaterThan(
       getLineChartLayout(dimensions, 28, true, true, true).heightPx,

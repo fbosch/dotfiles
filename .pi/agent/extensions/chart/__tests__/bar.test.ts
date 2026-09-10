@@ -131,13 +131,28 @@ describe("bar chart", () => {
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
   });
 
+  test("sizes the label gutter from the visible label and value text", () => {
+    const longRows = [
+      { label: "long label content", value: -1234 },
+      { label: "another long label", value: 5678 },
+    ];
+    const shortLayout = getBarChartLayout({ widthPx: 9, heightPx: 18 }, 60, rows);
+    const longLayout = getBarChartLayout({ widthPx: 9, heightPx: 18 }, 60, longRows);
+    const widthPx = 60 * 9;
+
+    expect(shortLayout.labelWidthPx).toBeLessThan(Math.round(widthPx * 0.42));
+    expect(longLayout.labelWidthPx).toBeGreaterThan(shortLayout.labelWidthPx);
+    expect(longLayout.labelWidthPx).toBeLessThanOrEqual(Math.round(widthPx * 0.48));
+    expect(shortLayout.plotWidthPx).toBeGreaterThan(longLayout.plotWidthPx);
+  });
+
   test("escapes custom fonts and adapts raster dimensions to the available width", () => {
     const font = `A < B & C "quoted" '`;
     const svg = renderBarChartSvg(rows, theme, undefined, undefined, font);
     expect(svg).toContain('font-family="A &lt; B &amp; C &quot;quoted&quot; &apos;"');
 
-    const wide = getBarChartLayout(undefined, 60, rows.length, true);
-    const narrow = getBarChartLayout({ widthPx: 9, heightPx: 18 }, 28, rows.length, true);
+    const wide = getBarChartLayout(undefined, 60, rows, true);
+    const narrow = getBarChartLayout({ widthPx: 9, heightPx: 18 }, 28, rows, true);
     expect(wide).toMatchObject({ widthPx: 540, heightCells: 7 });
     expect(narrow).toMatchObject({ widthPx: 252, heightCells: 7 });
     expect(wide.plotWidthPx).toBeGreaterThan(narrow.plotWidthPx);
