@@ -1,3 +1,14 @@
 .shared-todo-error {
   margin-bottom: 1rem;
 }
+
+.todo-item-aging,
+.todo-item-aging .todo-item-text,
+.todo-item-aging .auto-scaling-textarea-mimic {
+  color: hsl(35 90% 62%);
+}
+
+.todo-item.color-negative .todo-item-text,
+.todo-item.color-negative .auto-scaling-textarea-mimic {
+  color: var(--color-negative);
+}

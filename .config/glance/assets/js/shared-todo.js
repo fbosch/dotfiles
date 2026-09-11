@@ -41,6 +41,12 @@
     return pageScript.src.replace(/page\.js(?:\?.*)?$/, "todo.js");
   }
 
+  function ageClass(ageDays) {
+    if (ageDays > 14) return "color-negative";
+    if (ageDays > 5) return "todo-item-aging";
+    return "";
+  }
+
   function createClient(root, todoModule) {
     const { autoScalingTextarea, verticallyReorderable } = todoModule;
     let state = {
@@ -50,6 +56,7 @@
           id: item.dataset.taskId,
           text: item.querySelector(".todo-item-text")?.value || "",
           checked: item.dataset.taskChecked === "true",
+          ageDays: Number(item.dataset.taskAgeDays || 0),
         };
       }),
     };
@@ -248,6 +255,8 @@
 
       item = document.createElement("div");
       item.className = "todo-item flex gap-10 items-center";
+      const colorClass = ageClass(Number(data.ageDays || 0));
+      if (colorClass) item.classList.add(colorClass);
       item.append(checkbox, input, remove);
       input.component.setValue(serializable.text);
       item.component = {

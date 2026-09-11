@@ -15,7 +15,7 @@
       <div class="drag-and-drop-container">
         <div class="todo-items">
           {{ range .JSON.Array "tasks" }}
-            <div class="todo-item flex gap-10 items-center" data-task-id="{{ .String "id" }}" data-task-checked="{{ .Bool "checked" }}">
+            <div class="todo-item flex gap-10 items-center{{ if gt (.Int "ageDays") 14 }} color-negative{{ else if gt (.Int "ageDays") 5 }} todo-item-aging{{ end }}" data-task-id="{{ .String "id" }}" data-task-checked="{{ .Bool "checked" }}" data-task-age-days="{{ .Int "ageDays" }}">
               <input class="todo-item-checkbox shrink-0" style="margin-top: -0.1rem" type="checkbox"{{ if .Bool "checked" }} checked{{ end }}>
               <div class="auto-scaling-textarea-container min-width-0 grow">
                 <textarea class="auto-scaling-textarea todo-item-text" placeholder="empty task" spellcheck="false">{{ .String "text" }}</textarea>
