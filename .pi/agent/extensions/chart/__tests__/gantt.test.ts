@@ -10,10 +10,16 @@ import {
   ganttChartVariant,
   validateGanttChartInput,
 } from "../types/gantt";
+import { getChartSurfaceColor, getContrastingTextColor } from "../types/shared";
 
 const theme = {
   getFgAnsi: (color: string) =>
     color === "text" ? "\u001b[38;2;187;187;187m" : "\u001b[38;2;102;165;173m",
+};
+
+const lightTheme = {
+  getFgAnsi: (color: string) =>
+    color === "text" ? "\u001b[38;2;31;35;40m" : "\u001b[38;2;84;125;167m",
 };
 
 const context = (mode: "tui" | "print") =>
@@ -140,6 +146,28 @@ describe("gantt chart", () => {
       }),
     ).toThrow("does not reference a task");
     expect(() => validateGanttChartInput({ ...input, title: "   " })).toThrow("title");
+  });
+
+  test("chooses black or white in-cell labels for dark and light chart surfaces", () => {
+    expect(getChartSurfaceColor("rgb(187, 187, 187)")).toBe("#181819");
+    expect(getChartSurfaceColor("rgb(31, 35, 40)")).toBe("#f8f8f8");
+    expect(getContrastingTextColor("#66a5ad", 0.2, "#181819")).toBe("#ffffff");
+    expect(getContrastingTextColor("#66a5ad", 0.2, "#f8f8f8")).toBe("#000000");
+    const contrastInput: GanttChartInput = {
+      type: "gantt",
+      tasks: [{ id: "zero", label: "Zero progress", start: 0, end: 4, group: "follow-up" }],
+    };
+    const details = ganttChartRenderer.createDetails(
+      ganttChartRenderer.parseParameters(contrastInput),
+      { imageWidthCells: 60, fontFamily: "sans-serif" },
+    );
+    const renderLabel = (chartTheme: { getFgAnsi: (color: string) => string }) => {
+      const layout = ganttChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, 60);
+      const svg = ganttChartRenderer.renderSvg(details, chartTheme, layout);
+      return svg.match(/<text\b[^>]*>0%<\/text>/)?.[0];
+    };
+    expect(renderLabel(theme)).toContain('fill="#ffffff"');
+    expect(renderLabel(lightTheme)).toContain('fill="#000000"');
   });
 
   test("renders TanStack interval marks, progress text, dependencies, milestones, and summary", () => {

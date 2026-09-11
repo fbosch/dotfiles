@@ -41,6 +41,8 @@ import {
   formatNumber,
   getAccessibleDescription,
   getChartHeightLimitPx,
+  getChartSurfaceColor,
+  getContrastingTextColor,
   isValidChartHeight,
   normalizeBoundedText,
   renderSvgDocument,
@@ -433,7 +435,11 @@ function createGanttRows(details: GanttChartDetails, theme: ChartTheme): Positio
   });
 }
 
-function createGanttScene(rows: readonly PositionedGanttTask[], layout: GanttChartLayout) {
+function createGanttScene(
+  rows: readonly PositionedGanttTask[],
+  layout: GanttChartLayout,
+  surfaceColor: string,
+) {
   const groups = [...new Set(rows.map((row) => row.group))];
   const progressFillRows = rows.filter((row) => row.progress > 0);
   const progressLabelRows = rows.filter(
@@ -477,7 +483,8 @@ function createGanttScene(rows: readonly PositionedGanttTask[], layout: GanttCha
           y: "y",
           text: "progressLabel",
           key: (row) => `progress-label-${row.id}`,
-          fill: "#071018",
+          fill: (row) =>
+            getContrastingTextColor(row.color, row.progress > 0 ? 0.82 : 0.2, surfaceColor),
           fontSize: layout.fontSizePx,
           anchor: "start",
         }),
@@ -683,10 +690,11 @@ export function renderGanttChartSvg(
   layout = getGanttChartLayout(details),
 ): string {
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
+  const surfaceColor = getChartSurfaceColor(foreground);
   const fontFamily = details.fontFamily ?? DEFAULT_FONT_FAMILY;
   const rows = createGanttRows(details, theme);
   const plot = stripTanStackSvg(
-    renderTanStackChartSvg(createGanttScene(rows, layout), {
+    renderTanStackChartSvg(createGanttScene(rows, layout, surfaceColor), {
       ariaLabel: details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`,
       idPrefix: "pi-gantt",
     }),

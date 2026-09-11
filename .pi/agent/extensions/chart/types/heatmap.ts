@@ -29,6 +29,7 @@ import {
   deserializeChartDetails,
   finalizeChartLayout,
   formatNumeric,
+  getContrastingTextColor,
   normalizeUniqueLabels,
   renderSvgDocument,
   stripTanStackSvg,
@@ -282,20 +283,14 @@ export function renderHeatmapChartSvg(
           .flatMap((cell) => {
             if (cell.value === null) return [];
             const fill = color(cell.value, domain, diverging);
-            const channels = [1, 3, 5]
-              .map((offset) => Number.parseInt(fill.slice(offset, offset + 2), 16) / 255)
-              .map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
-            const luminance =
-              (channels[0] ?? 0) * 0.2126 +
-              (channels[1] ?? 0) * 0.7152 +
-              (channels[2] ?? 0) * 0.0722;
+            const textFill = getContrastingTextColor(fill);
             return text(
               formatNumeric(cell.value, details.valueFormat, compact),
               layout.plotX + (cell.column + 0.5) * cellWidth,
               layout.plotY + (cell.row + 0.5) * cellHeight + font * 0.35,
               "middle",
               'data-cell-value="true"',
-              luminance > 0.179 ? "#000000" : "#ffffff",
+              textFill,
             );
           })
           .join("")

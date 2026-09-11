@@ -19,6 +19,69 @@ export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
+type RgbColor = readonly [number, number, number];
+
+function parseRgbColor(value: string): RgbColor | undefined {
+  const hex = /^#([\da-f]{3}|[\da-f]{6})$/iu.exec(value);
+  if (hex !== null) {
+    const digits = hex[1] ?? "";
+    return digits.length === 3
+      ? [
+          Number.parseInt(`${digits[0]}${digits[0]}`, 16),
+          Number.parseInt(`${digits[1]}${digits[1]}`, 16),
+          Number.parseInt(`${digits[2]}${digits[2]}`, 16),
+        ]
+      : [
+          Number.parseInt(digits.slice(0, 2), 16),
+          Number.parseInt(digits.slice(2, 4), 16),
+          Number.parseInt(digits.slice(4, 6), 16),
+        ];
+  }
+  const rgb = /^rgb\(\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*,\s*(\d+(?:\.\d+)?)\s*\)$/iu.exec(
+    value,
+  );
+  return rgb === null
+    ? undefined
+    : [
+        Math.max(0, Math.min(255, Number(rgb[1]))),
+        Math.max(0, Math.min(255, Number(rgb[2]))),
+        Math.max(0, Math.min(255, Number(rgb[3]))),
+      ];
+}
+
+function relativeLuminance([red, green, blue]: RgbColor): number {
+  const linear = (channel: number) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue);
+}
+
+export function getChartSurfaceColor(foreground: string): string {
+  const color = parseRgbColor(foreground);
+  // Chart SVGs remain transparent, so infer the terminal surface from its normal text color.
+  return color === undefined || relativeLuminance(color) > 0.35 ? "#181819" : "#f8f8f8";
+}
+
+export function getContrastingTextColor(
+  background: string,
+  opacity = 1,
+  underlay = "#ffffff",
+): "#000000" | "#ffffff" {
+  const color = parseRgbColor(background);
+  const base = parseRgbColor(underlay);
+  if (base === undefined)
+    return color === undefined || relativeLuminance(color) > 0.179 ? "#000000" : "#ffffff";
+  if (color === undefined) return relativeLuminance(base) > 0.179 ? "#000000" : "#ffffff";
+  const alpha = clamp(opacity, 0, 1);
+  const composited: RgbColor = [
+    color[0] * alpha + base[0] * (1 - alpha),
+    color[1] * alpha + base[1] * (1 - alpha),
+    color[2] * alpha + base[2] * (1 - alpha),
+  ];
+  return relativeLuminance(composited) > 0.179 ? "#000000" : "#ffffff";
+}
+
 export function isValidChartHeight(value: unknown): value is number {
   return (
     typeof value === "number" &&

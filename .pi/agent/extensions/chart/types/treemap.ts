@@ -35,6 +35,7 @@ import {
   deserializeChartDetails,
   FIXED_CHART_PALETTE,
   finalizeChartLayout,
+  getContrastingTextColor,
   isValidChartHeight,
   renderSvgDocument,
   stripTanStackSvg,
@@ -240,7 +241,8 @@ export function createTreemapScene(
             node.data
               ? `${node.data.path.join(" / ")}: ${readable(node.data.total)}${details.unit ? ` ${details.unit}` : ""}`
               : "",
-          labelFill: "#101010",
+          labelFill: (node) =>
+            getContrastingTextColor(FIXED_CHART_PALETTE[node.data?.group ?? 0] ?? "#579aca"),
           labelFontSize: layout.fontSizePx,
           labelPadding: 5,
         }),
