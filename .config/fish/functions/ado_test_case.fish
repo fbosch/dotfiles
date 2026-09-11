@@ -54,26 +54,10 @@ function ado_test_case --description 'Get Azure DevOps test case contents by ID,
 
     printf "%s\n" "$markdown_output" | glow -s "$HOME/.config/glow/zenwritten-dark.json" -
 
-    set -l clipboard_cmd ""
-    if test (uname) = Darwin
-        set clipboard_cmd pbcopy
-    else if test (uname) = Linux
-        if command -v wl-copy >/dev/null 2>&1
-            set clipboard_cmd wl-copy
-        else if command -v xclip >/dev/null 2>&1
-            set clipboard_cmd "xclip -selection clipboard"
-        end
-    end
-
-    if test -n "$clipboard_cmd"
-        echo -n "$markdown_output" | eval $clipboard_cmd
-        if test $status -eq 0
-            echo ""
-            gum style --foreground 2 "󰸞 Test case copied to clipboard"
-        else
-            gum style --foreground 3 "󰦨 Failed to copy to clipboard"
-        end
+    if printf '%s' "$markdown_output" | pbcopy
+        echo ""
+        gum style --foreground 2 "󰸞 Test case copied to clipboard"
     else
-        gum style --foreground 3 "󰦨 Clipboard command not found"
+        gum style --foreground 3 "󰦨 Failed to copy to clipboard"
     end
 end

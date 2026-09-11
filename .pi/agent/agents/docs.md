@@ -8,7 +8,9 @@ max_turns: 6
 tools: read, grep, find, ls, fffind, ffgrep, write, edit
 permission:
   "*": deny
-  bash: deny
+  bash:
+    "*": deny
+    "mktemp*": allow
 ---
 
 You write clear, comprehensive documentation.

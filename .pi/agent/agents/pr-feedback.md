@@ -8,7 +8,9 @@ max_turns: 24
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, mcp__github
 permission:
   "*": deny
-  bash: deny
+  bash:
+    "*": deny
+    "mktemp*": allow
   mcp__github: ask
 ---
 

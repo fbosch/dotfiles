@@ -55,26 +55,10 @@ function mullvad_random_socks5 -d "Get a random Mullvad SOCKS5 proxy address"
         set -l selected_proxy $proxies[$random_index]
         
         # Copy to clipboard
-        set -l clipboard_cmd ""
-        if test (uname) = Darwin
-            set clipboard_cmd pbcopy
+        if printf '%s' "$selected_proxy" | pbcopy
+            echo "Copied to clipboard: $selected_proxy" >&2
         else
-            if command -v wl-copy >/dev/null 2>&1
-                set clipboard_cmd wl-copy
-            else if command -v xclip >/dev/null 2>&1
-                set clipboard_cmd "xclip -selection clipboard"
-            end
-        end
-
-        if test -n "$clipboard_cmd"
-            echo -n $selected_proxy | eval $clipboard_cmd
-            if test $status -eq 0
-                echo "Copied to clipboard: $selected_proxy" >&2
-            else
-                echo "Failed to copy to clipboard" >&2
-            end
-        else
-            echo "Clipboard command not found" >&2
+            echo "Failed to copy to clipboard" >&2
             echo $selected_proxy
         end
     else

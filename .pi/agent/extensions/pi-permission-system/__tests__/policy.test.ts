@@ -428,14 +428,30 @@ describe("pi-permission-system policy", () => {
     );
   });
 
-  test("allows standalone mktemp calls for primary and debug agents without allowing chained mutations", async () => {
+  test("allows standalone mktemp calls for every build agent without allowing chained mutations", async () => {
     const engine = createEngine();
-    for (const agentName of [undefined, "debug"]) {
+    const buildAgents = [
+      undefined,
+      "adversarial",
+      "benchmark",
+      "debug",
+      "docs",
+      "general",
+      "pr-feedback",
+      "quick",
+      "refactor",
+      "test",
+      "validate",
+    ];
+    for (const agentName of buildAgents) {
       for (const command of ["mktemp", "mktemp -d", "mktemp -d /tmp/pi-permission-check.XXXXXX"]) {
-        expect((await checkBash(engine, command, agentName)).state, command).toBe("allow");
+        expect(
+          (await checkBash(engine, command, agentName)).state,
+          `${agentName ?? "primary"}: ${command}`,
+        ).toBe("allow");
       }
       expect((await checkBash(engine, "mktemp -d; sudo id", agentName)).state).toBe("deny");
-      expect((await checkBash(engine, "mktemp -d; rm -rf .", agentName)).state).toBe("ask");
+      expect((await checkBash(engine, "mktemp -d; rm -rf .", agentName)).state).not.toBe("allow");
     }
   });
 
