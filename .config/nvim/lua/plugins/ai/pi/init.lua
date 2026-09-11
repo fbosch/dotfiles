@@ -1,6 +1,5 @@
 local pi_bridge = require("plugins.ai.pi.bridge")
 local pi_session = require("plugins.ai.pi.session")
-local path_loader = require("config.direnv")
 local session = require("utils.session")
 
 local M = {}
@@ -212,16 +211,7 @@ local function prepare_launch(cwd, owner)
 	if expected_cwd == nil or canonical_path(vim.fn.getcwd()) ~= expected_cwd then
 		return nil, "worktree"
 	end
-
-	local ok, result = pcall(path_loader.synchronize, expected_cwd)
-	if not ok or (result ~= true and (type(result) ~= "table" or result.ok ~= true)) then
-		return nil, "environment", ok and result or nil
-	end
-	if
-		canonical_path(vim.fn.getcwd()) ~= expected_cwd
-		or vim.v.servername ~= socket
-		or session.get_current(vim.fn.getcwd()) ~= owner
-	then
+	if vim.v.servername ~= socket or session.get_current(vim.fn.getcwd()) ~= owner then
 		return nil, "changed"
 	end
 	return socket
@@ -360,19 +350,8 @@ local function notify_restore_failure(reason)
 	vim.notify("Pi session was not restored: " .. messages[reason] .. ".", vim.log.levels.WARN)
 end
 
-local function notify_launch_environment_failure(result)
-	local status = type(result) == "table" and result.status or "unavailable"
-	local message = "Project environment is unavailable; check direnv and `.envrc` before starting Pi."
-	if type(path_loader.failure_message) == "function" then
-		message = path_loader.failure_message(status)
-	end
-	vim.notify("Pi launch blocked: " .. message, vim.log.levels.ERROR)
-end
-
-local function notify_launch_preparation_failure(reason, result)
-	if reason == "environment" then
-		notify_launch_environment_failure(result)
-	elseif reason == "worktree" then
+local function notify_launch_preparation_failure(reason)
+	if reason == "worktree" then
 		vim.notify("Pi launch cancelled: the current worktree changed.", vim.log.levels.WARN)
 	else
 		vim.notify("Pi launch cancelled: the Neovim session or RPC socket changed.", vim.log.levels.WARN)
@@ -397,13 +376,13 @@ local function resume_saved_session(nvim_session, launch_options, prepared_socke
 
 	local socket = prepared_socket
 	if socket == nil then
-		local reason, result
-		socket, reason, result = prepare_launch(nvim_session.cwd, nvim_session)
+		local reason
+		socket, reason = prepare_launch(nvim_session.cwd, nvim_session)
 		if socket == nil then
 			if reason == "worktree" then
 				notify_restore_failure("wrong_worktree")
 			else
-				notify_launch_preparation_failure(reason, result)
+				notify_launch_preparation_failure(reason)
 			end
 			return nil
 		end
@@ -610,9 +589,9 @@ local function ensure_started(options)
 		return terminal
 	end
 
-	local socket, reason, result = prepare_launch(cwd, owner)
+	local socket, reason = prepare_launch(cwd, owner)
 	if socket == nil then
-		notify_launch_preparation_failure(reason, result)
+		notify_launch_preparation_failure(reason)
 		return nil
 	end
 	if vim.fn.executable("pi") ~= 1 then
