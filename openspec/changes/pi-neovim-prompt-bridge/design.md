@@ -30,8 +30,8 @@ promise provider completion in its acknowledgement.
 - No second socket, Pi process, session owner, or Herdr reporter.
 - No terminal keystroke injection, arbitrary editor command, private Pi API, or
   Pi TUI patch.
-- No implicit streaming queue, steer behavior, prompt-triggered session
-  selection, or automatic retry after uncertain delivery.
+- No follow-up delivery, prompt-triggered session selection, or automatic retry
+  after uncertain delivery.
 - No Pi implementation of editable diff review or clickable patch navigation.
 
 ## Decisions
@@ -64,12 +64,16 @@ accidental stale-process routing inside the same trusted Neovim process.
 `submit` calls:
 
 ```ts
-pi.sendUserMessage(text, { expandPromptTemplates: false });
+pi.sendUserMessage(text, {
+  expandPromptTemplates: false,
+  ...(context.isIdle() ? {} : { deliverAs: "steer" }),
+});
 ```
 
-It is accepted only when the current context is TUI, has UI, reports idle, and
-has no blocking UI prompt. No `deliverAs` value is used while idle. Streaming
-and blocked requests fail instead of choosing follow-up or steer behavior.
+It is accepted only when the current context is TUI, has UI, and has no blocking
+UI prompt. Idle requests start immediately. Streaming requests use `steer`, so
+Pi queues them after the current assistant turn finishes its tool calls. Blocking
+requests fail instead of competing with the active UI prompt.
 
 `append` reads and synchronously writes the Pi TUI editor text. The request
 contains the exact separator, so whitespace has no protocol meaning. It never

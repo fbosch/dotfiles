@@ -35,9 +35,10 @@ test("refreshes the custom editor after compaction completes", () => {
   setThemeInstance(
     loadThemeFromPath(new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname),
   );
+  const extensionStatuses = new Map<string, string>();
   const footerData = {
     getGitBranch: () => null,
-    getExtensionStatuses: () => new Map<string, string>(),
+    getExtensionStatuses: () => extensionStatuses,
     getAvailableProviderCount: () => 0,
     onBranchChange: () => () => {},
   };
@@ -84,6 +85,8 @@ test("refreshes the custom editor after compaction completes", () => {
   promptUi(pi as unknown as ExtensionAPI);
   handlers.get("session_start")?.({}, ctx);
   expect(editor).toBeDefined();
+  extensionStatuses.set("startup-time", "Startup: 1.18s (startup)");
+  expect(editor?.render(100).join("\n")).not.toContain("Startup:");
 
   const before = editor?.render(100).join("\n") ?? "";
   expect(before).toContain("80K (40%)");

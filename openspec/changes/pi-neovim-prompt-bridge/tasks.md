@@ -12,7 +12,8 @@
 
 - [x] 2.1 Add a focused extension proof that idle
       `sendUserMessage(..., { expandPromptTemplates: false })` emits one extension
-      input and starts one turn, while busy state sends nothing
+      input and starts one turn, while streaming uses `deliverAs: "steer"` and
+      blocking UI prompts reject
 - [x] 2.2 Prove TUI editor append with `getEditorText` and `setEditorText`, including
       exact existing-text preservation and zero user-message dispatches
 - [x] 2.3 Verify the proof imports no private Pi module and record the Pi 0.84.4
@@ -35,8 +36,9 @@
 - [x] 4.1 Install the explicit `pi:nvim-prompt/v1` notification listener in the
       existing Effect-owned channel and verify passive notifications still produce
       zero submissions
-- [x] 4.2 Dispatch idle literal submit through Pi's public API and reject non-TUI,
-      busy, blocked, stale, and replacing-session states in focused tests
+- [x] 4.2 Dispatch literal submit through Pi's public API, use `deliverAs: "steer"`
+      while streaming, and reject non-TUI, blocked, stale, and replacing-session
+      states in focused tests
 - [x] 4.3 Reserve in-flight request IDs, retain 64 outcomes, and verify pending,
       completed duplicate, changed-content reuse, stale sequence, and sequence-gap
       behavior

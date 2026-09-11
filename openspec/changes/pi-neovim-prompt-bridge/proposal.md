@@ -9,12 +9,12 @@ behavior and overstated the completed migration.
 
 - Add a versioned, bounded prompt-request protocol to the existing bound
   Neovim Msgpack-RPC channel.
-- Add a literal idle-only `:PiAsk` canary that uses `vim.ui.input` and Pi's
-  public `sendUserMessage` API without terminal input injection.
+- Add a literal `:PiAsk` canary that uses `vim.ui.input` and Pi's public
+  `sendUserMessage` API without terminal input injection.
 - Bind each request to the exact terminal launch, Pi session, Neovim session,
   RPC channel, and canonical worktree.
-- Add acknowledgements, duplicate protection, busy rejection, preserve-focus
-  startup, and lifecycle cleanup.
+- Add acknowledgements, duplicate protection, blocking-prompt rejection,
+  streaming steering, preserve-focus startup, and lifecycle cleanup.
 - Restore OpenCode Ask and append mappings while Pi prompt workflows remain
   canaries.
 - Stage bounded context placeholders, Pi editor append, action selection, and

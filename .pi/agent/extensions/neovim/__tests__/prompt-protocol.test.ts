@@ -68,6 +68,7 @@ function dispatcherFixture(
     readonly editorText?: string;
     readonly hasContext?: boolean;
     readonly idle?: boolean;
+    readonly streaming?: boolean;
     readonly onSubmit?: () => void;
     readonly replayState?: PromptReplayState;
   } = {},
@@ -80,6 +81,7 @@ function dispatcherFixture(
     cwd: "/project",
     hasUI: true,
     isIdle: () => options.idle ?? true,
+    signal: options.streaming === true ? new AbortController().signal : undefined,
     mode: "tui",
     sessionManager: { getSessionId: () => sessionId },
     ui: {
@@ -386,7 +388,6 @@ describe("Pi prompt request dispatch", () => {
 
   test.each([
     { blockingPromptActive: true, code: "PI_BUSY", state: "blocked" },
-    { idle: false, code: "PI_BUSY", state: "streaming" },
     { hasContext: false, code: "PI_SESSION_NOT_READY", state: "starting" },
   ])("rejects unavailable Pi state", (options) => {
     const target = dispatcherFixture(options);
@@ -397,6 +398,17 @@ describe("Pi prompt request dispatch", () => {
       state: options.state,
     });
     expect(target.sent).toEqual([]);
+  });
+
+  test("queues a streaming literal submission as steering", () => {
+    const target = dispatcherFixture({ idle: false, streaming: true });
+
+    expect(target.dispatcher.dispatch(request())).toMatchObject({
+      outcome: "accepted",
+      state: "streaming",
+    });
+    expect(target.sent).toEqual(["literal prompt"]);
+    expect(target.sentOptions).toEqual([{ deliverAs: "steer", expandPromptTemplates: false }]);
   });
 
   test.each([

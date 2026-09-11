@@ -34,8 +34,9 @@ separate protocol for explicit Neovim user actions.
 
 Provide a public-API-only Neovim-to-Pi prompt path with these final workflows:
 
-- `<leader>ac` captures source context, opens `vim.ui.input`, submits once to
-  the owned idle Pi session, then focuses Pi.
+- `<leader>ac` captures source context, opens `vim.ui.input`, and submits once to
+  the owned Pi session. Idle requests start immediately; streaming requests use
+  Pi's steering queue before focusing Pi.
 - `ga` appends the captured `@this` context to Pi's editor without starting a
   turn.
 - Visual `<A-x>` appends the exact bounded selection without starting a turn.
@@ -48,9 +49,10 @@ Provide a public-API-only Neovim-to-Pi prompt path with these final workflows:
 `vim.ui.input` is the required input interface. The existing Snacks input
 provider may enhance it, but the bridge must still work with Neovim's fallback.
 
-The first shipped slice is literal idle-only `:PiAsk`. Context placeholders,
-append operations, the action picker, and default-key cutover follow as separate
-vertical slices. The bridge adds no dependency; Snacks is already present and
+The first shipped slice is literal `:PiAsk`. Idle submissions start immediately;
+streaming submissions use Pi's steering queue. Context placeholders, append operations,
+the action picker, and default-key cutover follow as separate vertical slices.
+The bridge adds no dependency; Snacks is already present and
 remains an optional enhancement over `vim.ui`.
 
 ## Decisions
@@ -60,8 +62,9 @@ remains an optional enhancement over `vim.ui`.
 The Pi extension receives validated requests and uses only public Pi 0.84.4
 interfaces:
 
-- `pi.sendUserMessage(text, { expandPromptTemplates = false })` for an explicit
-  submit. This starts one model turn.
+- `pi.sendUserMessage(text, { expandPromptTemplates: false })` for an idle
+  submit, or with `deliverAs: "steer"` when Pi is streaming. Both are explicit
+  user messages; streaming messages enter Pi's normal steering queue.
 - `ctx.ui.getEditorText()` and `ctx.ui.setEditorText(text)` for append or
   prefill. These do not start a model turn.
 
@@ -116,16 +119,16 @@ reloads.
 This favors at-most-once behavior over convenience. Retrying an ambiguous
 submission can start two model turns.
 
-### Reject implicit streaming behavior
+### Queue streaming submits as steering
 
-The first slice accepts submit only while Pi is idle. Streaming, blocked,
-starting, replacing a session, or unknown state returns `PI_BUSY` or
-`PI_SESSION_NOT_READY` without calling `sendUserMessage`.
+The first slice accepts submit while Pi is idle or streaming. Idle requests start
+immediately. Streaming requests pass `deliverAs: "steer"` so Pi queues them after
+the current assistant turn finishes executing its tool calls. A blocking UI prompt
+still returns `PI_BUSY`; starting, replacing a session, or unknown state returns
+`PI_BUSY` or `PI_SESSION_NOT_READY` without calling `sendUserMessage`.
 
 A later explicit follow-up operation may use `deliverAs: "followUp"`. The bridge
-does not infer follow-up or steer behavior from Pi state, trailing whitespace,
-or timing. `steer` is outside this plan until it has its own interaction and
-cancellation contract.
+does not infer follow-up behavior from trailing whitespace or timing.
 
 ### Capture context before opening input
 
@@ -513,16 +516,15 @@ Acceptance:
   text cannot dispatch an extension command or prompt template.
 - Append requires `ctx.mode === "tui"` and `ctx.hasUI`, changes editor text,
   and produces no input event or turn.
-- Busy requests fail without hidden queueing.
+- Streaming requests use Pi's normal steering queue; blocking requests fail with `PI_BUSY`.
 - No private Pi module is imported.
 
 If this proof fails, retain OpenCode Ask and stop. Do not patch Pi.
 
 Proof record (2026-09-05):
 
-- `prompt-dispatch.test.ts` passes seven focused cases for one idle literal
-  dispatch, busy and blocked rejection, missing-TUI rejection, exact append,
-  and zero append submissions.
+- `prompt-dispatch.test.ts` covers idle literal dispatch, streaming steering,
+  blocking rejection, missing-TUI rejection, exact append, and zero append submissions.
 - The implementation imports `ExtensionAPI` and `ExtensionContext` only from
   Pi's public package root. It calls `sendUserMessage` once with
   `expandPromptTemplates: false` and gives append no access to that API.
@@ -676,8 +678,8 @@ Cover:
 - closed request and acknowledgement schemas
 - launch/session/worktree/channel binding
 - passive notification prohibition
-- idle submit calls `sendUserMessage` exactly once
-- busy submit calls it zero times
+- idle submit calls `sendUserMessage` exactly once without a delivery mode
+- streaming submit calls it exactly once with `deliverAs: "steer"`; blocking submit is rejected before calling it
 - append calls only `getEditorText` and `setEditorText`
 - in-flight and completed duplicates, ID reuse, stale request, disconnect, and
   timeout behavior
@@ -758,8 +760,8 @@ OpenCode prompt wiring can be removed only in a separate approved cleanup after:
 - `<leader>ac` opens a Snacks-enhanced input and starts exactly one turn in the
   exact owned Pi session after explicit submission.
 - `ga` and `<A-x>` append editor context without starting a turn.
-- Cancel, busy, stale, disconnected, wrong-session, and wrong-worktree paths
-  fail without prompt delivery.
+- Cancel, blocking-prompt, stale, disconnected, wrong-session, and wrong-worktree paths
+  fail without prompt delivery. Streaming submits use Pi's steering queue.
 - Passive editor notifications still cannot trigger work.
 - The bridge uses one inherited Neovim socket, one Pi terminal, one Pi session,
   and one Herdr reporter.

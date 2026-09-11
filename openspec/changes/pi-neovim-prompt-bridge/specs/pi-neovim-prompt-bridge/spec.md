@@ -71,22 +71,34 @@ requests over 64 KiB rather than truncating them.
 - **WHEN** a request contains an unknown field, version, or operation
 - **THEN** the system rejects the request as invalid
 
-### Requirement: Submit is explicit and idle-only
-
+### Requirement: Submit is explicit with state-aware delivery
 The system SHALL call Pi's public user-message API exactly once for an accepted
 `submit` request and SHALL disable prompt-template and extension-command
-expansion. The initial protocol MUST accept submit only when the exact Pi TUI
-session is idle and has no blocking prompt.
+expansion. An idle exact Pi TUI session receives the message immediately. A
+streaming exact Pi TUI session receives it with `deliverAs: "steer"`, so Pi queues
+it after the current assistant turn's tool calls. A blocking prompt MUST reject the
+request.
 
 #### Scenario: Idle submit is accepted
 
 - **WHEN** an explicit valid submit reaches an idle bound Pi TUI session
 - **THEN** Pi receives the literal user text once and starts one turn
 
-#### Scenario: Busy submit is rejected
+#### Scenario: Streaming submit is queued
 
-- **WHEN** Pi is starting, streaming, blocked, replacing a session, closed, or
-  in an unknown state
+- **WHEN** an explicit valid submit reaches a streaming bound Pi TUI session
+- **THEN** Pi receives the literal user text once with `deliverAs: "steer"` and
+  queues it without starting a competing turn
+
+#### Scenario: Blocking submit is rejected
+
+- **WHEN** an explicit valid submit reaches a bound Pi TUI session with an active
+  blocking prompt
+- **THEN** the system returns `PI_BUSY` without calling the user-message API
+
+#### Scenario: Unavailable submit is rejected
+
+- **WHEN** Pi is starting, replacing a session, closed, or in an unknown state
 - **THEN** the system returns a stable failure without calling the user-message
   API
 

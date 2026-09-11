@@ -16,6 +16,7 @@ import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
 const PROFILE_STATUS_KEY = "auth-profile";
+const STARTUP_TIME_STATUS_KEY = "startup-time";
 // The MCP adapter publishes this versioned snapshot on Pi's shared event bus.
 const MCP_STATUS_EVENT = "pi-mcp-adapter/status/v1";
 
@@ -150,7 +151,8 @@ export default function promptUi(pi: ExtensionAPI): void {
             ([key]) =>
               key !== PROFILE_STATUS_KEY &&
               key !== FILE_CHANGES_STATUS_KEY &&
-              key !== MCP_STATUS_KEY,
+              key !== MCP_STATUS_KEY &&
+              key !== STARTUP_TIME_STATUS_KEY,
           )
           .map(([key, status]) => renderFooterStatus(theme, key, status));
       getMcpStatus = () => {

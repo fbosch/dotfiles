@@ -15,12 +15,20 @@ export function submitPrompt(
   if (context.mode !== "tui" || context.hasUI === false) {
     return { code: "PI_NO_UI", ok: false };
   }
-  if (blockingPromptActive || context.isIdle() === false) {
+  if (blockingPromptActive) {
     return { code: "PI_BUSY", ok: false };
   }
+  const idle = context.isIdle();
+  if (!idle && context.signal === undefined) {
+    return { code: "PI_BUSY", ok: false };
+  }
+  const sendOptions = {
+    expandPromptTemplates: false,
+    ...(idle ? {} : { deliverAs: "steer" as const }),
+  };
 
   try {
-    pi.sendUserMessage(text, { expandPromptTemplates: false });
+    pi.sendUserMessage(text, sendOptions);
     return { ok: true };
   } catch {
     return { code: "PI_DELIVERY_UNKNOWN", ok: false };

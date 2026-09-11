@@ -8,6 +8,7 @@ function fixture(
     readonly editorText?: string;
     readonly hasUI?: boolean;
     readonly idle?: boolean;
+    readonly streaming?: boolean;
     readonly mode?: ExtensionContext["mode"];
     readonly sendThrows?: boolean;
     readonly writeThrows?: boolean;
@@ -15,14 +16,24 @@ function fixture(
 ) {
   let editorText = options.editorText ?? "";
   const sent: Array<{
-    readonly options: { readonly expandPromptTemplates?: boolean } | undefined;
+    readonly options:
+      | {
+          readonly deliverAs?: "steer";
+          readonly expandPromptTemplates?: boolean;
+        }
+      | undefined;
     readonly text: string;
   }> = [];
   const editorWrites: string[] = [];
   const pi = {
     sendUserMessage: (
       text: string,
-      sendOptions: { readonly expandPromptTemplates?: boolean } | undefined,
+      sendOptions:
+        | {
+            readonly deliverAs?: "steer";
+            readonly expandPromptTemplates?: boolean;
+          }
+        | undefined,
     ) => {
       sent.push({ options: sendOptions, text });
       if (options.sendThrows === true) throw new Error("send failed");
@@ -31,6 +42,7 @@ function fixture(
   const context = {
     hasUI: options.hasUI ?? true,
     isIdle: () => options.idle ?? true,
+    signal: options.streaming === true ? new AbortController().signal : undefined,
     mode: options.mode ?? "tui",
     ui: {
       getEditorText: () => editorText,
@@ -65,11 +77,27 @@ describe("Pi prompt public API dispatch", () => {
     ]);
   });
 
-  test.each([
-    { blockingPromptActive: true, idle: true },
-    { blockingPromptActive: false, idle: false },
-  ])("rejects busy state without submission", (options) => {
-    const target = fixture(options);
+  test("rejects a blocking UI prompt without submission", () => {
+    const target = fixture({ blockingPromptActive: true });
+
+    expect(target.submit("do not send")).toEqual({ code: "PI_BUSY", ok: false });
+    expect(target.sent).toEqual([]);
+  });
+
+  test("queues a streaming literal message as steering", () => {
+    const target = fixture({ idle: false, streaming: true });
+
+    expect(target.submit("queue this")).toEqual({ ok: true });
+    expect(target.sent).toEqual([
+      {
+        options: { deliverAs: "steer", expandPromptTemplates: false },
+        text: "queue this",
+      },
+    ]);
+  });
+
+  test("rejects a non-streaming busy state without submission", () => {
+    const target = fixture({ idle: false });
 
     expect(target.submit("do not send")).toEqual({ code: "PI_BUSY", ok: false });
     expect(target.sent).toEqual([]);
