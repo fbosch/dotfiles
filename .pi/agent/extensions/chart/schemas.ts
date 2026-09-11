@@ -8,10 +8,10 @@ export const MAX_POINT_LABEL_LENGTH = 40;
 export const MAX_TITLE_LENGTH = 80;
 export const MAX_AXIS_LABEL_LENGTH = 40;
 
-export const numericFormat = Type.Union(
-  [Type.Literal("number"), Type.Literal("percent")],
-  { description: '"number" preserves the current numeric labels; "percent" formats fractional values as percentages.' },
-);
+export const numericFormat = Type.Union([Type.Literal("number"), Type.Literal("percent")], {
+  description:
+    '"number" preserves the current numeric labels; "percent" formats fractional values as percentages.',
+});
 export type NumericFormat = Static<typeof numericFormat>;
 
 const chartTitle = Type.Optional(Type.String({ minLength: 1, maxLength: MAX_TITLE_LENGTH }));
@@ -33,7 +33,7 @@ const chartHeightOptions = {
   ),
 } as const;
 
-const pieData = Type.Array(
+const sliceData = Type.Array(
   Type.Object(
     {
       label: Type.String({ minLength: 1, maxLength: MAX_LABEL_LENGTH }),
@@ -101,7 +101,12 @@ const temporalLineFormatOptions = {
 
 /** Public provider schemas intentionally omit the internal chart discriminator. */
 export const chartPieParameters = Type.Object(
-  { data: pieData, title: chartTitle, ...chartHeightOptions },
+  { data: sliceData, title: chartTitle, ...chartHeightOptions },
+  { additionalProperties: false },
+);
+
+export const chartDonutParameters = Type.Object(
+  { data: sliceData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
 
@@ -173,9 +178,16 @@ export const temporalLineChartVariant = Type.Object(
 export const lineChartVariant = Type.Union([numericLineChartVariant, temporalLineChartVariant]);
 
 export const pieChartVariant = Type.Object(
-  { type: Type.Literal("pie"), data: pieData, title: chartTitle, ...chartHeightOptions },
+  { type: Type.Literal("pie"), data: sliceData, title: chartTitle, ...chartHeightOptions },
   { additionalProperties: false },
 );
+
+export const donutChartVariant = Type.Object(
+  { type: Type.Literal("donut"), data: sliceData, title: chartTitle, ...chartHeightOptions },
+  { additionalProperties: false },
+);
+export type DonutParameters = Static<typeof chartDonutParameters>;
+export type DonutChartInput = Static<typeof donutChartVariant>;
 
 export const barChartVariant = Type.Object(
   {
@@ -394,7 +406,8 @@ const dumbbellOptions = {
   ),
   showDifferences: Type.Optional(
     Type.Boolean({
-      description: "Show signed after - before differences; valueFormat percent displays percentage-point changes; default false.",
+      description:
+        "Show signed after - before differences; valueFormat percent displays percentage-point changes; default false.",
     }),
   ),
   title: chartTitle,

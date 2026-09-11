@@ -1,5 +1,6 @@
 export type ChartTypeId =
   | "pie"
+  | "donut"
   | "bar"
   | "line"
   | "scatter"
@@ -27,6 +28,7 @@ export type ChartModules = {
   heatmap: typeof import("./types/heatmap");
   bezier: typeof import("./types/bezier");
   pie: typeof import("./types/pie");
+  donut: typeof import("./types/donut");
   bar: typeof import("./types/bar");
   line: typeof import("./types/line");
   histogram: typeof import("./types/histogram");
@@ -44,6 +46,7 @@ let cachedBoxplotModule: Promise<ChartModules["boxplot"]> | undefined;
 let cachedHeatmapModule: Promise<ChartModules["heatmap"]> | undefined;
 let cachedBezierModule: Promise<ChartModules["bezier"]> | undefined;
 let cachedPieModule: Promise<ChartModules["pie"]> | undefined;
+let cachedDonutModule: Promise<ChartModules["donut"]> | undefined;
 let cachedBarModule: Promise<ChartModules["bar"]> | undefined;
 let cachedLineModule: Promise<ChartModules["line"]> | undefined;
 let cachedHistogramModule: Promise<ChartModules["histogram"]> | undefined;
@@ -65,6 +68,7 @@ export function loadChartType(type: "boxplot"): Promise<ChartModules["boxplot"]>
 export function loadChartType(type: "heatmap"): Promise<ChartModules["heatmap"]>;
 export function loadChartType(type: "bezier"): Promise<ChartModules["bezier"]>;
 export function loadChartType(type: "pie"): Promise<ChartModules["pie"]>;
+export function loadChartType(type: "donut"): Promise<ChartModules["donut"]>;
 export function loadChartType(type: "bar"): Promise<ChartModules["bar"]>;
 export function loadChartType(type: "line"): Promise<ChartModules["line"]>;
 export function loadChartType(type: "scatter"): Promise<ChartModules["scatter"]>;
@@ -104,6 +108,9 @@ export function loadChartType(type: ChartTypeId): Promise<ChartModules[ChartType
     case "pie":
       cachedPieModule ??= import("./types/pie");
       return cachedPieModule;
+    case "donut":
+      cachedDonutModule ??= import("./types/donut");
+      return cachedDonutModule;
     case "bar":
       cachedBarModule ??= import("./types/bar");
       return cachedBarModule;
@@ -128,6 +135,7 @@ export async function shutdownChartRuntime(): Promise<void> {
   if (
     sharedRuntimePromise === undefined &&
     cachedPieModule === undefined &&
+    cachedDonutModule === undefined &&
     cachedBarModule === undefined &&
     cachedLineModule === undefined &&
     cachedScatterModule === undefined &&

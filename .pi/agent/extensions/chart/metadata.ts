@@ -11,6 +11,7 @@ import {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
+  chartDonutParameters,
   chartDumbbellParameters,
   chartGanttParameters,
   chartHeatmapParameters,
@@ -23,6 +24,7 @@ import {
   chartTreemapParameters,
   chartTreeParameters,
   chartWaterfallParameters,
+  type DonutParameters,
   type DumbbellParameters,
   type GanttParameters,
   type HeatmapParameters,
@@ -40,6 +42,7 @@ import {
 import type { BarChartDetails, BarChartInput } from "./types/bar";
 import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
 import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
+import type { DonutChartDetails, DonutChartInput } from "./types/donut";
 import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell";
 import type { GanttChartDetails, GanttChartInput } from "./types/gantt";
 import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
@@ -57,6 +60,7 @@ export type {
   BarParameters,
   BezierParameters,
   BoxplotParameters,
+  DonutParameters,
   DumbbellParameters,
   GanttParameters,
   HeatmapParameters,
@@ -74,6 +78,7 @@ export {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
+  chartDonutParameters,
   chartDumbbellParameters,
   chartGanttParameters,
   chartHeatmapParameters,
@@ -96,6 +101,7 @@ function renderChartCall() {
 function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
   if (!isRecord(details) || typeof details.type !== "string") return fallback;
   return details.type === "pie" ||
+    details.type === "donut" ||
     details.type === "bar" ||
     details.type === "line" ||
     details.type === "scatter" ||
@@ -195,6 +201,51 @@ export function createPieChartTool(): ToolDefinition<typeof chartPieParameters, 
     renderCall: renderChartCall,
     renderResult(result, _options, theme, context) {
       return renderChartResult("pie", result, theme, context);
+    },
+  };
+}
+export function createDonutChartTool(): ToolDefinition<
+  typeof chartDonutParameters,
+  DonutChartDetails
+> {
+  return {
+    name: "chart_donut",
+    label: "Chart donut",
+    description: "Render a compact donut chart from labeled nonnegative values.",
+    promptSnippet: "Render compact donut charts",
+    parameters: chartDonutParameters,
+    async execute(_toolCallId, parameters: DonutParameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      assertParameters(chartDonutParameters, parameters, "donut");
+      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("donut")]);
+      signal?.throwIfAborted();
+      const input: DonutChartInput = { ...parameters, type: "donut" };
+      if (!Value.Check(module.donutChartVariant, input))
+        throw new Error("invalid donut chart parameters");
+      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
+      const details = module.donutChartRenderer.createDetails(
+        module.donutChartRenderer.parseParameters(input),
+        settings,
+      );
+      const text = module.donutChartRenderer.getSummary(details);
+      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
+      const png = await runtime.rasterizeSvg(
+        runtime.renderChartSvg(module.donutChartRenderer, details, ctx.ui.theme),
+        signal,
+        { fontFamily: settings.fontFamily },
+      );
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult("donut", result, theme, context);
     },
   };
 }
@@ -890,6 +941,7 @@ export function createTreeChartTool(): ToolDefinition<
 
 export function registerChartTools(pi: ExtensionAPI): void {
   pi.registerTool(createPieChartTool());
+  pi.registerTool(createDonutChartTool());
   pi.registerTool(createBarChartTool());
   pi.registerTool(createScatterChartTool());
   pi.registerTool(createLineChartTool());

@@ -11,7 +11,7 @@ const theme = {
 } as unknown as Theme;
 
 describe("lazy chart architecture", () => {
-  test("registers fifteen tools in a fresh process without loading the native renderer", async () => {
+  test("registers sixteen tools in a fresh process without loading the native renderer", async () => {
     const probe = [
       "const extension = await import(process.argv[1]);",
       "const names = [];",
@@ -38,6 +38,7 @@ describe("lazy chart architecture", () => {
     expect(JSON.parse(stdout)).toEqual({
       names: [
         "chart_pie",
+        "chart_donut",
         "chart_bar",
         "chart_scatter",
         "chart_line",
@@ -101,6 +102,7 @@ describe("lazy chart architecture", () => {
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/network.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/treemap.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/histogram.ts");
+      expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/donut.ts");
       expect(staticGraph.join("\n")).not.toContain("// extensions/chart/types/bezier.ts");
       const outputFiles = (await readdir(outputDirectory)).filter((fileName) =>
         fileName.endsWith(".js"),
@@ -113,6 +115,9 @@ describe("lazy chart architecture", () => {
       );
       expect(
         outputSources.some((source) => source.includes("// extensions/chart/types/pie.ts")),
+      ).toBe(true);
+      expect(
+        outputSources.some((source) => source.includes("// extensions/chart/types/donut.ts")),
       ).toBe(true);
       expect(
         outputSources.some((source) => source.includes("// extensions/chart/types/bar.ts")),
@@ -159,6 +164,9 @@ describe("lazy chart architecture", () => {
     const heatmap = loadChartType("heatmap");
     expect(loadChartType("heatmap")).toBe(heatmap);
     expect(await loadChartType("heatmap")).toBe(await heatmap);
+    const donut = loadChartType("donut");
+    expect(loadChartType("donut")).toBe(donut);
+    expect(await loadChartType("donut")).toBe(await donut);
     const bezier = loadChartType("bezier");
     expect(loadChartType("bezier")).toBe(bezier);
     expect(await loadChartType("bezier")).toBe(await bezier);

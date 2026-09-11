@@ -80,6 +80,21 @@ export class LazyChartComponent implements Component {
           );
           break;
         }
+        case "donut": {
+          const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("donut")]);
+          const details = module.donutChartRenderer.deserializeDetails(this.details);
+          if (details === undefined) {
+            this.fallback = this.fallbackText ?? "Donut chart unavailable";
+            break;
+          }
+          this.delegate = new runtime.ChartComponent(
+            details,
+            this.theme,
+            this.requestRender,
+            module.donutChartRenderer,
+          );
+          break;
+        }
         case "bar": {
           const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("bar")]);
           const details = module.barChartRenderer.deserializeDetails(this.details);

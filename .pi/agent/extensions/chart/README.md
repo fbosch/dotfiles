@@ -1,8 +1,9 @@
 # Chart extension
 
-The enabled chart extension registers fifteen focused specialist tools:
+The enabled chart extension registers sixteen focused specialist tools:
 
 - `chart_pie` renders labeled nonnegative values as a pie chart.
+- `chart_donut` renders the same labeled nonnegative values as a donut chart with a transparent center.
 - `chart_bar` renders labeled signed values as a horizontal bar chart.
 - `chart_line` renders numeric or temporal points as a single-series line chart. It accepts `null` y values as gaps and optional `markers`.
 - `chart_scatter` renders one numeric x/y series as uniform, fixed-size dots. Points retain their input order; unordered and duplicate coordinates are valid. Optional point `label` values are shown beside their dots.
@@ -17,15 +18,27 @@ The enabled chart extension registers fifteen focused specialist tools:
 - `chart_network` renders deterministic layered directed networks and call graphs, including multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels.
 - `chart_tree` renders tidy parent-child hierarchy trees for repository, AST, dependency, and task structures.
 - `chart_treemap` compares hierarchical bundle, directory, or module sizes by area.
-
-All fifteen tools accept an optional `maxHeightCells` value from 8 through 64. It sets an upper bound on the rendered height in terminal cells. Omit it to keep the chart's existing default sizing. Charts that need compaction keep every row, node, task, or category and reduce available spacing instead of dropping data.
+All sixteen tools accept an optional `maxHeightCells` value from 8 through 64. It sets an upper bound on the rendered height in terminal cells. Omit it to keep the chart's existing default sizing. Charts that need compaction keep every row, node, task, or category and reduce available spacing instead of dropping data.
 
 The extension registers tool metadata and public TypeBox schemas eagerly, but `chart_*` tools are specialist tools deferred from the initial active set. Use `search_tools` to discover and activate them. The shared renderer (`types.ts`) and the requested chart adapter are loaded only when that chart is executed or replayed. Concurrent requests share the same cached import promise. A failed import is cached and reported as a stable chart-unavailable error rather than retried on every render.
 
 Result rendering remains synchronous for Pi. The result slot starts loading on its first render, keeps the self-shell empty while the module loads, and invalidates the row when the chart component is ready. The wrapper keeps the latest width and theme, so a resize or theme change during loading does not render stale output. Replay selects the adapter from saved details, falling back to the tool name. Pie details saved before chart type metadata existed remain supported by `chart_pie`.
 
 `toolDiscovery.deferredToolPrefixes` in `.pi/agent/settings.json` controls which tool-name prefixes are treated as specialist tools. The default configuration includes `chart_`, `figma_`, `serena_`, `context7_`, `ast-grep_`, and `mcp__`.
+## Donut charts
+`chart_donut` accepts the same labeled nonnegative values as `chart_pie`, but renders each slice as an annular arc with a transparent center. Values must have a finite positive total. The legend includes each label and its percentage; the SVG summary and accessibility description retain exact values. Optional `title` and `maxHeightCells` behave as they do for pie charts.
 
+```json
+{
+  "data": [
+    { "label": "Open", "value": 3 },
+    { "label": "Closed", "value": 1 }
+  ],
+  "title": "Status"
+}
+```
+
+The center is intentionally empty, leaving room for a future center metric without changing the current data contract.
 ## Line charts
 
 `chart_line` requires `xType`. `numeric` uses finite numeric `x` values; `temporal` uses UTC ISO dates (`YYYY-MM-DD`) or UTC datetimes ending in `Z`. Points must be strictly increasing. `y` values are finite numbers or `null`; a `null` creates a gap.

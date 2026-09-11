@@ -5,6 +5,7 @@ import {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
+  chartDonutParameters,
   chartDumbbellParameters,
   chartGanttParameters,
   chartHeatmapParameters,
@@ -22,6 +23,7 @@ import type { ChartDetails, ChartLayout } from "../types";
 import { barChartRenderer } from "../types/bar";
 import { bezierChartRenderer } from "../types/bezier";
 import { boxplotChartRenderer } from "../types/boxplot";
+import { donutChartRenderer } from "../types/donut";
 import { dumbbellChartRenderer } from "../types/dumbbell";
 import { ganttChartRenderer } from "../types/gantt";
 import { heatmapChartRenderer } from "../types/heatmap";
@@ -49,6 +51,13 @@ type HeightCase = {
 
 const pieInput = {
   type: "pie" as const,
+  data: [
+    { label: "A", value: 1 },
+    { label: "B", value: 2 },
+  ],
+};
+const donutInput = {
+  type: "donut" as const,
   data: [
     { label: "A", value: 1 },
     { label: "B", value: 2 },
@@ -125,6 +134,23 @@ const heightCases: HeightCase[] = [
       };
     },
     deserialize: pieChartRenderer.deserializeDetails,
+  },
+  {
+    name: "donut",
+    schema: chartDonutParameters,
+    input: donutInput,
+    build: () => {
+      const data = donutChartRenderer.parseParameters({
+        ...donutInput,
+        maxHeightCells: requestedHeight,
+      });
+      const details = donutChartRenderer.createDetails(data, settings);
+      return {
+        details,
+        layout: donutChartRenderer.getLayout(details, cells, settings.imageWidthCells),
+      };
+    },
+    deserialize: donutChartRenderer.deserializeDetails,
   },
   {
     name: "bar",

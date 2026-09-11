@@ -69,11 +69,15 @@ export function getContrastingTextColor(
   underlay = "#ffffff",
 ): "#000000" | "#ffffff" {
   const color = parseRgbColor(background);
+  const alpha = clamp(opacity, 0, 1);
+  // Opaque colors do not depend on the underlay; avoid parsing and compositing on the common path.
+  if (color !== undefined && alpha === 1) {
+    return relativeLuminance(color) > 0.179 ? "#000000" : "#ffffff";
+  }
   const base = parseRgbColor(underlay);
   if (base === undefined)
     return color === undefined || relativeLuminance(color) > 0.179 ? "#000000" : "#ffffff";
   if (color === undefined) return relativeLuminance(base) > 0.179 ? "#000000" : "#ffffff";
-  const alpha = clamp(opacity, 0, 1);
   const composited: RgbColor = [
     color[0] * alpha + base[0] * (1 - alpha),
     color[1] * alpha + base[1] * (1 - alpha),

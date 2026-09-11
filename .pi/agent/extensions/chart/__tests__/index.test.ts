@@ -23,6 +23,7 @@ import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi
 import chartExtension, {
   chartBarParameters,
   chartBezierParameters,
+  chartDonutParameters,
   chartGanttParameters,
   chartLineParameters,
   chartNetworkParameters,
@@ -296,6 +297,7 @@ describe("pie chart", () => {
   });
   test("registers focused chart tools with public schemas that omit type", () => {
     const pie = registerTool();
+    const donut = registerTool("chart_donut");
     const bar = registerTool("chart_bar");
     const scatter = registerTool("chart_scatter");
     const line = registerTool("chart_line");
@@ -313,6 +315,7 @@ describe("pie chart", () => {
 
     expect(registerTools().map((tool) => tool.name)).toEqual([
       "chart_pie",
+      "chart_donut",
       "chart_bar",
       "chart_scatter",
       "chart_line",
@@ -330,6 +333,7 @@ describe("pie chart", () => {
     ]);
     expect([
       pie.name,
+      donut.name,
       bar.name,
       scatter.name,
       line.name,
@@ -346,6 +350,7 @@ describe("pie chart", () => {
       treemap.name,
     ]).toEqual([
       "chart_pie",
+      "chart_donut",
       "chart_bar",
       "chart_scatter",
       "chart_line",
@@ -363,6 +368,7 @@ describe("pie chart", () => {
     ]);
     for (const tool of [
       pie,
+      donut,
       bar,
       scatter,
       line,
@@ -385,6 +391,7 @@ describe("pie chart", () => {
     }
     expect(registerTools().some((tool) => tool.name === "chart")).toBe(false);
     expect(pie.parameters).toBe(chartPieParameters);
+    expect(donut.parameters).toBe(chartDonutParameters);
     expect(bar.parameters).toBe(chartBarParameters);
     expect(scatter.parameters).toBe(chartScatterParameters);
     expect(line.parameters).toBe(chartLineParameters);
