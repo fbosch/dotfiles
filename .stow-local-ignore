@@ -43,6 +43,7 @@ __pycache__
 ^/\.config/fish/(completions|conf\.d)$
 ^/\.config/fish/fish_variables.*$
 ^/\.config/herdr/(plugins|release-notes|session|session-history)\.json$
+^/\.config/herdr/[^/]+\.sock$
 ^/\.config/hypr/(monitors|hyprpaper|window-state-rules)\.conf$
 ^/\.config/hypr/benchmarks/results$
 ^/\.config/hypr/lua/rules/window-state\.lua$
