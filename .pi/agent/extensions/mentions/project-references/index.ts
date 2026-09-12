@@ -220,7 +220,7 @@ export default function projectReferences(pi: ExtensionAPI, agentDirectory = get
     return {
       cwd: activeContext.cwd,
       references,
-      foregroundAnsi: activeContext.ui.theme.getFgAnsi("warning"),
+      foregroundAnsi: activeContext.ui.theme.getFgAnsi("mdLink"),
       imageForegroundAnsi: activeContext.ui.theme.getFgAnsi("accent"),
       restoreAnsi: activeContext.ui.theme.getFgAnsi("userMessageText"),
     };

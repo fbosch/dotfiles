@@ -18,7 +18,7 @@ import { fitColumns, paintDockRow } from "./dock-rendering";
 type Color = (text: string) => string;
 type AgentMentionFormatter = (mention: AgentMention, text: string) => string;
 type MatchFormatter = (text: string) => string;
-
+type ReferenceMentionFormatter = (reference: ProjectReference, text: string) => string;
 type AutocompleteItemWithMetadata = AutocompleteItem & { gitStatus?: unknown };
 
 function getGitStatus(item: AutocompleteItem): string | undefined {
@@ -353,6 +353,7 @@ export function createPromptAutocompleteProvider(
   projectReferences: readonly ProjectReference[],
   formatAgentMention: AgentMentionFormatter,
   formatPathMatch: MatchFormatter = (text) => text,
+  formatReferenceMention: ReferenceMentionFormatter = (_reference, text) => text,
 ): AutocompleteProvider {
   const pathProvider = createPathDisplayAutocompleteProvider(provider, formatPathMatch);
   const aliasProvider = createAliasAutocompleteProvider(
@@ -360,7 +361,11 @@ export function createPromptAutocompleteProvider(
     agentMentions,
     formatAgentMention,
   );
-  const composedProvider = createReferenceAutocompleteProvider(aliasProvider, projectReferences);
+  const composedProvider = createReferenceAutocompleteProvider(
+    aliasProvider,
+    projectReferences,
+    formatReferenceMention,
+  );
   return {
     ...composedProvider,
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {

@@ -1,9 +1,11 @@
 import type { AutocompleteItem, AutocompleteProvider } from "@earendil-works/pi-tui";
 import type { ProjectReference } from "./types";
 
+type ReferenceMentionFormatter = (reference: ProjectReference, text: string) => string;
 export function createReferenceAutocompleteProvider(
   provider: AutocompleteProvider,
   references: readonly ProjectReference[],
+  formatReferenceMention: ReferenceMentionFormatter = (_reference, text) => text,
 ): AutocompleteProvider {
   const referenceProvider: AutocompleteProvider = {
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {
@@ -21,7 +23,7 @@ export function createReferenceAutocompleteProvider(
           const value = /\s/u.test(reference.name) ? `@"${reference.name}"` : `@${reference.name}`;
           return {
             value,
-            label: value,
+            label: formatReferenceMention(reference, value),
             description: `Reference · ${reference.description}`,
           };
         });

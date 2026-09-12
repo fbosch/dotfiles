@@ -251,6 +251,8 @@ describe("prompt autocomplete", () => {
       [],
       [{ name: "nixos", path: "/home/fbb/nixos", description: "Personal configuration" }],
       (_mention, text) => text,
+      (text) => text,
+      (_reference, text) => `mdLink:${text}`,
     );
 
     const suggestions = await autocomplete.getSuggestions(["inspect @nixos"], 0, 14, {
@@ -258,5 +260,6 @@ describe("prompt autocomplete", () => {
     });
 
     expect(suggestions?.items.map((item) => item.value)).toEqual(["@nixos", "@nix-run.md"]);
+    expect(suggestions?.items[0]?.label).toBe("mdLink:@nixos");
   });
 });

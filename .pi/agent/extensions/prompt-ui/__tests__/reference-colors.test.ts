@@ -30,7 +30,7 @@ const state: PromptEditorState = {
 };
 
 describe("prompt reference colors", () => {
-  test("renders existing file references with warning orange", () => {
+  test("renders existing file references with markdown-link color", () => {
     setThemeInstance(
       loadThemeFromPath(new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname),
     );
@@ -51,7 +51,7 @@ describe("prompt reference colors", () => {
     editor.setText("check this @.pi/agent/extensions/mentions/project-references/index.ts");
 
     expect(editor.render(100).join("\n")).toContain(
-      `${theme.getFgAnsi("warning")}@.pi/agent/extensions/mentions/project-references/index.ts`,
+      `${theme.getFgAnsi("mdLink")}@.pi/agent/extensions/mentions/project-references/index.ts`,
     );
     editor.dispose();
   });

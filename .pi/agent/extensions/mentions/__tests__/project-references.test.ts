@@ -476,7 +476,7 @@ describe("project references", () => {
     const rendered = new UserMessageComponent("Inspect @reference-material and screenshot.png")
       .render(80)
       .join("\n");
-    expect(rendered).toContain(`${theme.getFgAnsi("warning")}@reference-material`);
+    expect(rendered).toContain(`${theme.getFgAnsi("mdLink")}@reference-material`);
     expect(rendered).toContain(`${theme.getFgAnsi("accent")}screenshot.png`);
     sessionShutdown?.();
   });

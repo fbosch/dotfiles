@@ -312,6 +312,7 @@ export class PromptEditor extends CustomEditor {
           ? this.ctx.ui.theme.fg("accent", text)
           : colorizeHex(this.ctx.ui.theme, mention.color)(text),
       (text) => this.ctx.ui.theme.bold(text),
+      (_reference, text) => this.ctx.ui.theme.fg("mdLink", text),
     );
     super.setAutocompleteProvider({
       ...promptProvider,
@@ -436,7 +437,7 @@ export class PromptEditor extends CustomEditor {
         coloredAgents,
         this.projectReferences,
         this.ctx.cwd,
-        theme.getFgAnsi("warning"),
+        theme.getFgAnsi("mdLink"),
         "\u001b[39m",
         theme.getFgAnsi("accent"),
       );
