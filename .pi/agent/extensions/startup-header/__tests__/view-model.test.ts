@@ -52,7 +52,7 @@ function integration(
 }
 
 describe("startup header baseline", () => {
-  test("renders optional startup timing and linked-worktree identity", () => {
+  test("renders optional startup timing without workspace identity", () => {
     expect(
       renderStartupHeader(theme, 160, runtime(), 42.5, {
         branch: "topic",
@@ -61,7 +61,6 @@ describe("startup header baseline", () => {
         linkedWorktree: true,
       }),
     ).toEqual([
-      "Branch: topic · Worktree: /worktrees/topic",
       "pi",
       "Extensions: 18 enabled (3 project)",
       "Skills: 25 available (2 project)",
@@ -79,7 +78,6 @@ describe("startup header baseline", () => {
     );
 
     expect(lines).toEqual([
-      "Branch: detached HEAD",
       "pi",
       "Extensions: 4 enabled, 1 failed",
       "Skills: 7 available",

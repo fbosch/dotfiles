@@ -292,10 +292,11 @@ test("cancels a running /just recipe from terminal input", async () => {
       stderrTruncated: false,
     });
     if (signal === undefined) throw new Error("command signal missing");
+    const finalOutput = Array.from({ length: 40 }, (_, index) => `output-${index}`).join("\n");
     return new Promise<RecipeExecutionResult>((resolve) => {
       signal.addEventListener("abort", () =>
         resolve({
-          stdout: "",
+          stdout: finalOutput,
           stderr: "",
           code: 143,
           killed: true,
@@ -330,6 +331,7 @@ test("cancels a running /just recipe from terminal input", async () => {
           theme: {
             fg: (_role: string, text: string) => string;
             bold: (text: string) => string;
+            bg: (_role: string, text: string) => string;
           },
           keybindings: object,
           done: () => void,
@@ -338,7 +340,11 @@ test("cancels a running /just recipe from terminal input", async () => {
         return new Promise<void>((resolve) => {
           const modal = factory(
             { requestRender() {} },
-            { fg: (_role: string, text: string) => text, bold: (text: string) => text },
+            {
+              fg: (_role: string, text: string) => text,
+              bold: (text: string) => text,
+              bg: (role: string, text: string) => `[${role}]${text}`,
+            },
             {},
             () => resolve(),
           );
@@ -356,14 +362,24 @@ test("cancels a running /just recipe from terminal input", async () => {
   await started;
   if (terminalInput === undefined) throw new Error("terminal input handler was not registered");
   if (modalComponent?.render === undefined) throw new Error("output modal was not rendered");
-  expect(modalComponent.render(80).join("\n")).toContain("live output");
+  const renderedModal = modalComponent.render(80).join("\n");
+  expect(renderedModal).toContain("live output");
+  expect(renderedModal).toContain("[toolPendingBg]");
   expect(terminalInput("\u001b")).toEqual({ consume: true });
   await new Promise((resolve) => setTimeout(resolve, 10));
+  const completedModal = modalComponent.render(80).join("\n");
+  expect(completedModal).toContain("output-39");
+  expect(completedModal.split("\n").length).toBe(renderedModal.split("\n").length);
+  modalComponent.handleInput?.("\u001b[H");
+  expect(modalComponent.render(80).join("\n")).toContain("output-0");
+  modalComponent.handleInput?.("\u001b[F");
+  expect(modalComponent.render(80).join("\n")).toContain("output-39");
   if (closeModal === undefined) throw new Error("output modal was not opened");
   closeModal();
   await execution;
   expect(notifications).toEqual([]);
 });
+
 test("retries recipe completion discovery after a failed Justfile read", async () => {
   let command: TestJustCommand | undefined;
   let sessionStart: TestSessionStart | undefined;

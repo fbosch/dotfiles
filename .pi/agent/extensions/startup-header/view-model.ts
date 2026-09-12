@@ -11,7 +11,6 @@ import {
 } from "./owner-payloads";
 import { readContextEstimate, readStartupRuntimeSnapshot } from "./runtime-capability";
 import type { StartupRuntimeSnapshot } from "./runtime-types";
-import { sanitizeHeaderField } from "./sanitize";
 import type { WorkspaceIdentity } from "./workspace";
 
 export interface StartupIntegrationSnapshots {
@@ -52,7 +51,7 @@ export function renderStartupHeader(
   width: number,
   runtime: StartupRuntimeSnapshot | undefined,
   startupElapsedMs?: number,
-  workspace?: WorkspaceIdentity,
+  _workspace?: WorkspaceIdentity,
   updates?: StartupOwnerSnapshot,
   integrations?: StartupIntegrationSnapshots,
   candidates?: CandidateInspection,
@@ -63,17 +62,7 @@ export function renderStartupHeader(
 ): string[] {
   if (width <= 0) return [];
 
-  const lines: string[] = [];
-  if (workspace !== undefined) {
-    const branch = workspace.detached
-      ? "detached HEAD"
-      : sanitizeHeaderField(workspace.branch ?? "");
-    const linkedPath = workspace.linkedWorktree
-      ? ` · Worktree: ${sanitizeHeaderField(workspace.root)}`
-      : "";
-    lines.push(theme.fg("muted", `Branch: ${branch}${linkedPath}`));
-  }
-  lines.push(...renderStartupHeaderArt(theme, width, art));
+  const lines = renderStartupHeaderArt(theme, width, art);
 
   const integrationStatus = renderIntegrationStatus(theme, integrations);
   if (integrationStatus !== "") lines.push("", integrationStatus);

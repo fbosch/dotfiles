@@ -1,5 +1,13 @@
 import { DynamicBorder, type Theme } from "@earendil-works/pi-coding-agent";
-import { Container, matchesKey, ScrollView, Text, type TUI } from "@earendil-works/pi-tui";
+import {
+  Box,
+  type Component,
+  Container,
+  matchesKey,
+  ScrollView,
+  Text,
+  type TUI,
+} from "@earendil-works/pi-tui";
 
 export interface RecipeOutput {
   text: string;
@@ -16,8 +24,62 @@ export interface RecipeOutputStatus {
 export type RecipeOutputHandler = (output: RecipeOutput) => void;
 
 type StatusTone = "accent" | "error" | "success" | "warning";
+// Overlay components skip the normal layout pass, so clipping and scroll state are handled here.
+const OUTPUT_VIEWPORT_LINES = 20;
+
+class OutputViewport implements Component {
+  constructor(
+    private readonly outputText: Text,
+    private readonly scrollView: ScrollView,
+    private readonly requestRender: () => void,
+  ) {}
+
+  render(width: number): string[] {
+    const safeWidth = Math.max(1, Math.floor(width));
+    const hasScrollbar = safeWidth > 1 && this.scrollView.scrollbar === "always";
+    const contentWidth = this.scrollView.getContentWidth(safeWidth);
+    const contentLines = this.outputText.render(contentWidth);
+    this.scrollView.updateLayout(contentLines.length, OUTPUT_VIEWPORT_LINES, this.requestRender);
+
+    const visibleLines = contentLines.slice(
+      this.scrollView.scrollTop,
+      this.scrollView.scrollTop + OUTPUT_VIEWPORT_LINES,
+    );
+    while (visibleLines.length < OUTPUT_VIEWPORT_LINES) {
+      visibleLines.push(" ".repeat(contentWidth));
+    }
+    if (!hasScrollbar) return visibleLines;
+
+    const maxScrollTop = Math.max(0, contentLines.length - OUTPUT_VIEWPORT_LINES);
+    const thumbHeight = Math.max(
+      Math.min(2, OUTPUT_VIEWPORT_LINES),
+      Math.min(
+        OUTPUT_VIEWPORT_LINES,
+        Math.round(
+          (OUTPUT_VIEWPORT_LINES * OUTPUT_VIEWPORT_LINES) / Math.max(1, contentLines.length),
+        ),
+      ),
+    );
+    const maxThumbTop = OUTPUT_VIEWPORT_LINES - thumbHeight;
+    const thumbTop =
+      maxScrollTop === 0 ? 0 : Math.round((this.scrollView.scrollTop / maxScrollTop) * maxThumbTop);
+
+    return visibleLines.map((line, index) => {
+      const scrollbar =
+        index >= thumbTop && index < thumbTop + thumbHeight
+          ? this.scrollView.scrollbarThumbStyle("┃")
+          : this.scrollView.scrollbarTrackStyle("│");
+      return `${line}${scrollbar}`;
+    });
+  }
+
+  invalidate(): void {
+    this.scrollView.invalidate();
+  }
+}
 
 export class JustOutputModal extends Container {
+  private readonly contentBox: Box;
   private readonly tui: TUI;
   private readonly theme: Theme;
   private readonly done: () => void;
@@ -27,6 +89,7 @@ export class JustOutputModal extends Container {
   private readonly helpText: Text;
   private readonly scrollView: ScrollView;
   private readonly title: string;
+  private readonly outputViewport: OutputViewport;
   private running = true;
   private statusMessage = "Running…";
   private statusTone: StatusTone = "accent";
@@ -54,13 +117,18 @@ export class JustOutputModal extends Container {
       primary: true,
       scrollbar: "always",
     });
+    this.outputViewport = new OutputViewport(this.outputText, this.scrollView, () =>
+      tui.requestRender(),
+    );
 
-    this.addChild(new DynamicBorder((line) => theme.fg("accent", line)));
-    this.addChild(this.titleText);
-    this.addChild(this.statusText);
-    this.addChild(this.scrollView);
-    this.addChild(this.helpText);
-    this.addChild(new DynamicBorder((line) => theme.fg("accent", line)));
+    this.contentBox = new Box(1, 1, (line) => theme.bg("toolPendingBg", line));
+    this.contentBox.addChild(new DynamicBorder((line) => theme.fg("accent", line)));
+    this.contentBox.addChild(this.titleText);
+    this.contentBox.addChild(this.statusText);
+    this.contentBox.addChild(this.outputViewport);
+    this.contentBox.addChild(this.helpText);
+    this.contentBox.addChild(new DynamicBorder((line) => theme.fg("accent", line)));
+    this.addChild(this.contentBox);
     this.refreshChrome();
 
     signal.addEventListener(
