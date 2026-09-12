@@ -46,6 +46,7 @@ import {
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
+import { colorizeFooterIcon, type FooterCustomization } from "./footer-config";
 import { installClickableSubagentSessions } from "./subagent-session-links";
 import { colorizeHex } from "./terminal-color";
 
@@ -173,13 +174,14 @@ export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status
 }
 
 export function renderPromptHints(
-  theme: Pick<Theme, "fg">,
+  theme: Pick<Theme, "fg"> & Partial<Pick<Theme, "getColorMode">>,
   keybindings: PromptKeybindings,
   promptState: PromptEditorState,
   cwd: string,
   width: number,
   primaryRightStatus = "",
   secondaryRightStatus = "",
+  footerCustomization?: FooterCustomization,
 ): string {
   const statuses = promptState
     .getStatuses()
@@ -203,7 +205,13 @@ export function renderPromptHints(
         .join("  ")
     : "";
   const branch = promptState.getBranch();
-  const location = theme.fg("muted", `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`);
+  const repoIcon =
+    footerCustomization === undefined ? "" : colorizeFooterIcon(theme, footerCustomization);
+  const locationText = `${formatCwd(cwd)}${branch ? ` (${branch})` : ""}`;
+  const location =
+    repoIcon.length === 0
+      ? theme.fg("muted", locationText)
+      : `${repoIcon} ${theme.fg("muted", locationText)}`;
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
   const renderedLeft = theme.fg("muted", ` ${hintLeft}`);
   const primaryRight = sanitizeStatus(primaryRightStatus);

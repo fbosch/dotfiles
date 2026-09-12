@@ -2,6 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
+import { type FooterCustomization, loadFooterCustomization } from "./footer-config";
 import {
   FILE_CHANGES_STATUS_KEY,
   MCP_STATUS_KEY,
@@ -127,6 +128,15 @@ export default function promptUi(pi: ExtensionAPI): void {
     resetMcpFooterSnapshot();
     if (!ctx.hasUI) return;
 
+    let footerCustomization: FooterCustomization | undefined;
+    try {
+      footerCustomization = loadFooterCustomization(ctx);
+    } catch (error) {
+      ctx.ui.notify?.(
+        `Could not load footer customization: ${error instanceof Error ? error.message : String(error)}`,
+        "warning",
+      );
+    }
     unsubscribeMcpStatus = pi.events.on(MCP_STATUS_EVENT, (value) => {
       const snapshot = readMcpFooterSnapshot(value);
       if (snapshot === undefined) return;
@@ -181,6 +191,7 @@ export default function promptUi(pi: ExtensionAPI): void {
             width,
             getMcpStatus(),
             getFileChangesStatus(),
+            footerCustomization,
           ),
         ],
         invalidate: () => tui.requestRender(),
