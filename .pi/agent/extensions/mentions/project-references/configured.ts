@@ -10,7 +10,20 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
-function resolveReferencePath(pathBase: string, configuredPath: string, home: string): string {
+function isMissingPath(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error.code === "ENOENT" || error.code === "ENOTDIR")
+  );
+}
+
+function resolveReferencePath(
+  pathBase: string,
+  configuredPath: string,
+  home: string,
+): string | undefined {
   const expandedPath =
     configuredPath === "~"
       ? home
@@ -18,12 +31,17 @@ function resolveReferencePath(pathBase: string, configuredPath: string, home: st
         ? join(home, configuredPath.slice(2))
         : configuredPath;
   const absolutePath = isAbsolute(expandedPath) ? expandedPath : resolve(pathBase, expandedPath);
-  const canonicalPath = realpathSync(absolutePath);
 
-  if (statSync(canonicalPath).isDirectory() === false) {
-    throw new Error(`Reference path is not a directory: ${configuredPath}`);
+  try {
+    const canonicalPath = realpathSync(absolutePath);
+    if (statSync(canonicalPath).isDirectory() === false) {
+      throw new Error(`Reference path is not a directory: ${configuredPath}`);
+    }
+    return canonicalPath;
+  } catch (error) {
+    if (isMissingPath(error)) return undefined;
+    throw error;
   }
-  return canonicalPath;
 }
 
 export function loadConfiguredReferences(
@@ -50,7 +68,7 @@ export function loadConfiguredReferences(
     throw new Error(`Project references must contain an object: ${settingsPath}`);
   }
 
-  return Object.entries(configuredReferences).map(([name, value]): ProjectReference => {
+  return Object.entries(configuredReferences).flatMap(([name, value]): ProjectReference[] => {
     if (REFERENCE_NAME_PATTERN.test(name) === false) {
       throw new Error(`Invalid project reference name: ${name}`);
     }
@@ -68,7 +86,8 @@ export function loadConfiguredReferences(
     }
 
     try {
-      return { name, path: resolveReferencePath(pathBase, path, home), description };
+      const resolvedPath = resolveReferencePath(pathBase, path, home);
+      return resolvedPath === undefined ? [] : [{ name, path: resolvedPath, description }];
     } catch (error) {
       throw new Error(
         `Cannot resolve project reference "${name}" (${path}): ${error instanceof Error ? error.message : String(error)}`,

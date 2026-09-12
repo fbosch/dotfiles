@@ -87,6 +87,31 @@ describe("project references", () => {
     ]);
   });
 
+  test("omits missing references and references equal to the current working directory", () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    const home = join(root, "home");
+    mkdirSync(cwd);
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        missingGlobal: {
+          path: join(root, "missing-global"),
+          description: "Missing global documentation",
+        },
+        cwdGlobal: { path: cwd, description: "Current working directory" },
+      },
+    });
+    writeProjectSettings(cwd, {
+      references: {
+        missingProject: { path: "missing-project", description: "Missing project documentation" },
+        cwdProject: { path: ".", description: "Current project" },
+      },
+    });
+
+    expect(loadProjectReferences(cwd, true, home, agentDirectory)).toEqual([]);
+  });
+
   test("merges global and trusted project references with project precedence", () => {
     const root = temporaryDirectory();
     const cwd = join(root, "project");

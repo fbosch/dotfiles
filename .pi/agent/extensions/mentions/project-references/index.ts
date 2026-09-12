@@ -162,8 +162,14 @@ export function loadProjectReferences(
 ): ProjectReference[] {
   const globalReferences = loadConfiguredGlobalReferences(agentDirectory, home);
   const projectReferences = projectTrusted ? loadConfiguredProjectReferences(cwd, home) : [];
-  const configuredReferences = mergeConfiguredReferences(globalReferences, projectReferences);
-  const docsCacheReferences = projectTrusted ? loadDocsCacheReferences(cwd) : [];
+  const canonicalCwd = realpathSync(cwd);
+  const configuredReferences = mergeConfiguredReferences(
+    globalReferences,
+    projectReferences,
+  ).filter((reference) => reference.path !== canonicalCwd);
+  const docsCacheReferences = (projectTrusted ? loadDocsCacheReferences(cwd) : []).filter(
+    (reference) => reference.path !== canonicalCwd,
+  );
   assertNoReferenceCollisions(configuredReferences, docsCacheReferences);
   return [...configuredReferences, ...docsCacheReferences].sort((left, right) =>
     left.name.localeCompare(right.name),

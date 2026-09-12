@@ -2,6 +2,12 @@
   "lastChangelogVersion": "0.85.1",
   "theme": "zenwritten-dark",
   "quietStartup": true,
+  "references": {
+    "obsidian": {
+      "path": "/mnt/nas/FrederikDocs/Obsidian/Vault",
+      "description": "Personal Obsidian vault"
+    }
+  },
   "extensions": [
     "!extensions/**",
     "+extensions/ask-user-question.ts",
