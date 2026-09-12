@@ -106,6 +106,14 @@ test("Confirm Dialog validates requests before changing lifecycle", () => {
 		assert(configured === 1 && shown === 0, "show delay was not preserved");
 		clock.increment(180);
 		assert(shown === 1, "dialog was not shown after its delay");
+		handlers?.onCancel();
+		assert(executed === null, "cancel executed an unapproved operation");
+		assert(!visible, "cancel did not hide the dialog");
+		assert(
+			request(handle, [JSON.stringify({ action: "show", config })]) === "shown",
+			"dialog could not be shown again after cancellation",
+		);
+		clock.increment(180);
 		assert(
 			request(handle, [JSON.stringify({
 				action: "show",
@@ -113,7 +121,7 @@ test("Confirm Dialog validates requests before changing lifecycle", () => {
 			})]) === "shown",
 			"duplicate show response changed",
 		);
-		assert(configured === 1, "active dialog was replaced by a duplicate show");
+		assert(configured === 2, "active dialog was replaced by a duplicate show");
 		handlers?.onConfirm();
 		assert(executed?.type === "shutdown", "confirm did not execute the operation");
 		assert(hidden > 0, "confirm did not hide the dialog");
@@ -134,7 +142,11 @@ test("Confirm Dialog maps operations only to fixed argv or dispatch", () => {
 	const dispatched: string[] = [];
 	const dependencies = {
 		homeDirectory: "/home/test",
-		findProgram: (name: string) => (name === "systemctl" ? "/bin/systemctl" : null),
+		findProgram: (name: string) => {
+			if (name === "busctl") return "/bin/busctl";
+			if (name === "systemctl") return "/bin/systemctl";
+			return null;
+		},
 		spawn: (argv: string[]) => spawned.push(argv),
 		dispatch: (expression: string) => {
 			dispatched.push(expression);
@@ -145,12 +157,15 @@ test("Confirm Dialog maps operations only to fixed argv or dispatch", () => {
 		[
 			{ type: "shutdown" },
 			[
-				"/home/test/.config/hypr/runtime/session/hyprshutdown-session.sh",
-				"--no-exit",
-				"-t",
-				"Shutting down...",
-				"--post-cmd",
-				"systemctl poweroff",
+				"/bin/busctl",
+				"call",
+				"--system",
+				"org.freedesktop.login1",
+				"/org/freedesktop/login1",
+				"org.freedesktop.login1.Manager",
+				"PowerOff",
+				"b",
+				"false",
 			],
 		],
 		[
@@ -196,6 +211,13 @@ test("Confirm Dialog maps operations only to fixed argv or dispatch", () => {
 	assert(
 		dispatched[0] === 'hl.dsp.window.close({ window = "address:0xabc" })',
 		"window dispatch changed",
+	);
+	assert(
+		executeConfirmOperation(
+			{ type: "shutdown" },
+			{ ...dependencies, findProgram: () => null },
+		) === false,
+		"missing busctl was accepted for shutdown",
 	);
 	assert(
 		executeConfirmOperation(

@@ -21,15 +21,21 @@ export function executeConfirmOperation(
 
 	const hyprRuntime = `${dependencies.homeDirectory}/.config/hypr/runtime`;
 	let argv: string[] | null = null;
-	if (operation.type === "shutdown")
+	if (operation.type === "shutdown") {
+		const busctl = dependencies.findProgram("busctl");
+		if (!busctl) return false;
 		argv = [
-			`${hyprRuntime}/session/hyprshutdown-session.sh`,
-			"--no-exit",
-			"-t",
-			"Shutting down...",
-			"--post-cmd",
-			"systemctl poweroff",
+			busctl,
+			"call",
+			"--system",
+			"org.freedesktop.login1",
+			"/org/freedesktop/login1",
+			"org.freedesktop.login1.Manager",
+			"PowerOff",
+			"b",
+			"false",
 		];
+	}
 	if (operation.type === "restart")
 		argv = [
 			`${hyprRuntime}/session/hyprshutdown-session.sh`,
