@@ -62,6 +62,26 @@ describe("agent mentions", () => {
     expect(mentions.some((mention) => mention.name === "general")).toBeTrue();
   });
 
+  test("excludes project agents when the project is untrusted", () => {
+    const root = temporaryDirectory();
+    const agentDirectory = join(root, "agent");
+    const cwd = join(root, "project");
+    mkdirSync(join(agentDirectory, "agents"), { recursive: true });
+    mkdirSync(join(cwd, ".pi", "agents"), { recursive: true });
+    writeFileSync(
+      join(agentDirectory, "agents", "review.md"),
+      "---\\ndescription: Global reviewer\\n---\\nReview globally.",
+    );
+    writeFileSync(
+      join(cwd, ".pi", "agents", "nixos.md"),
+      "---\\ndescription: Project NixOS\\n---\\nReview NixOS.",
+    );
+
+    const mentions = loadAgentMentions(cwd, agentDirectory, false);
+
+    expect(mentions.some((mention) => mention.name === "review")).toBeTrue();
+    expect(mentions.some((mention) => mention.name === "nixos")).toBeFalse();
+  });
   test("matches known agents case-insensitively and only once", () => {
     const cwd = temporaryDirectory();
     const mentions: AgentMention[] = [

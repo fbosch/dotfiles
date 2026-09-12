@@ -148,6 +148,7 @@ export default function promptUi(pi: ExtensionAPI): void {
     disposeSubagentWidgetFrame();
     disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui, {
       cwd: ctx.cwd,
+      includeProjectAgents: ctx.isProjectTrusted(),
       sessionId: ctx.sessionManager.getSessionId(),
     });
     ctx.ui.setWorkingVisible(false);

@@ -4,11 +4,12 @@ import { isAbsolute, relative, sep } from "node:path";
 import {
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
 import { type AgentMention, loadAgentMentions } from "../agent-mentions";
 import { createReferenceAutocompleteProvider } from "./autocomplete";
-import { loadConfiguredProjectReferences } from "./configured";
+import { loadConfiguredGlobalReferences, loadConfiguredProjectReferences } from "./configured";
 import { loadDocsCacheReferences } from "./docs-cache";
 import { appendProjectReferences, formatProjectReferences } from "./formatting";
 import { formatAnsiReferenceMentions } from "./reference-mentions";
@@ -136,21 +137,33 @@ function assertNoReferenceCollisions(
     const configuredName = configuredNames.get(reference.name.toLowerCase());
     if (configuredName !== undefined) {
       throw new Error(
-        `Docs-cache reference "${reference.name}" conflicts with project reference "${configuredName}".`,
+        `Docs-cache reference "${reference.name}" conflicts with configured reference "${configuredName}".`,
       );
     }
   }
+}
+
+function mergeConfiguredReferences(
+  globalReferences: readonly ProjectReference[],
+  projectReferences: readonly ProjectReference[],
+): ProjectReference[] {
+  const referencesByName = new Map<string, ProjectReference>();
+  for (const reference of [...globalReferences, ...projectReferences]) {
+    referencesByName.set(reference.name.toLowerCase(), reference);
+  }
+  return [...referencesByName.values()];
 }
 
 export function loadProjectReferences(
   cwd: string,
   projectTrusted: boolean,
   home = homedir(),
+  agentDirectory = getAgentDir(),
 ): ProjectReference[] {
-  if (projectTrusted === false) return [];
-
-  const configuredReferences = loadConfiguredProjectReferences(cwd, home);
-  const docsCacheReferences = loadDocsCacheReferences(cwd);
+  const globalReferences = loadConfiguredGlobalReferences(agentDirectory, home);
+  const projectReferences = projectTrusted ? loadConfiguredProjectReferences(cwd, home) : [];
+  const configuredReferences = mergeConfiguredReferences(globalReferences, projectReferences);
+  const docsCacheReferences = projectTrusted ? loadDocsCacheReferences(cwd) : [];
   assertNoReferenceCollisions(configuredReferences, docsCacheReferences);
   return [...configuredReferences, ...docsCacheReferences].sort((left, right) =>
     left.name.localeCompare(right.name),
@@ -186,7 +199,7 @@ export {
   PROJECT_REFERENCES_START,
 };
 
-export default function projectReferences(pi: ExtensionAPI): void {
+export default function projectReferences(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
   let references: ProjectReference[] = [];
   let activeContext: ExtensionContext | undefined;
   let referenceReadDirectoryDisposers: Array<() => void> = [];
@@ -213,8 +226,16 @@ export default function projectReferences(pi: ExtensionAPI): void {
     referenceReadDirectoryRegistrationFailed = false;
     activeContext = ctx;
     try {
-      references = loadProjectReferences(ctx.cwd, ctx.isProjectTrusted());
-      assertNoAgentMentionCollisions(references, loadAgentMentions(ctx.cwd));
+      references = loadProjectReferences(
+        ctx.cwd,
+        ctx.isProjectTrusted(),
+        undefined,
+        agentDirectory,
+      );
+      assertNoAgentMentionCollisions(
+        references,
+        loadAgentMentions(ctx.cwd, agentDirectory, ctx.isProjectTrusted()),
+      );
     } catch (error) {
       references = [];
       ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");

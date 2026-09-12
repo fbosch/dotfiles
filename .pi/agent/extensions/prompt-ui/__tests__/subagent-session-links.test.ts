@@ -586,9 +586,11 @@ describe("subagent session links", () => {
       getColorMode: () => "truecolor",
       bold: (text: string) => text,
     } as unknown as Theme;
-    const ctx = { ui: { theme, notify() {} }, cwd: directory } as unknown as Parameters<
-      typeof openSubagentSession
-    >[2];
+    const ctx = {
+      ui: { theme, notify() {} },
+      cwd: directory,
+      isProjectTrusted: () => true,
+    } as unknown as Parameters<typeof openSubagentSession>[2];
 
     // Pi's message components share a process-wide theme, including the legacy SDK alias.
     const globals = globalThis as Record<symbol, unknown>;

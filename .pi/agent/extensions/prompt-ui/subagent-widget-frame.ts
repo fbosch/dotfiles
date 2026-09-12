@@ -57,6 +57,7 @@ interface WidgetSubagentsService {
 export interface SubagentWidgetFrameOptions {
   cwd?: string;
   agentDirectory?: string;
+  includeProjectAgents?: boolean;
   agentColors?: AgentWidgetColors;
   agentDisplayNames?: AgentWidgetDisplayNames;
   loadAgentMetadata?: () => AgentWidgetMetadata;
@@ -171,15 +172,22 @@ function widgetMetadataFromMentions(
   return { colors, displayNames };
 }
 
-export function loadAgentWidgetColors(cwd: string, agentDirectory: string): AgentWidgetColors {
-  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)).colors;
+export function loadAgentWidgetColors(
+  cwd: string,
+  agentDirectory: string,
+  includeProjectAgents = true,
+): AgentWidgetColors {
+  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory, includeProjectAgents))
+    .colors;
 }
 
 export function loadAgentWidgetDisplayNames(
   cwd: string,
   agentDirectory: string,
+  includeProjectAgents = true,
 ): AgentWidgetDisplayNames {
-  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)).displayNames;
+  return widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory, includeProjectAgents))
+    .displayNames;
 }
 
 function publishedWidgetSubagentsService(): WidgetSubagentsService | undefined {
@@ -379,12 +387,14 @@ export function installSubagentWidgetFrame(
   const ui = uiContext as PatchableUI;
   const cwd = options.cwd ?? process.cwd();
   const agentDirectory = options.agentDirectory ?? getAgentDir();
+  const includeProjectAgents = options.includeProjectAgents ?? true;
   let loadedMetadata: AgentWidgetMetadata | undefined;
   const getAgentMetadata = (): AgentWidgetMetadata => {
     if (loadedMetadata === undefined) {
       loadedMetadata = (
         options.loadAgentMetadata ??
-        (() => widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory)))
+        (() =>
+          widgetMetadataFromMentions(loadAgentMentions(cwd, agentDirectory, includeProjectAgents)))
       )();
     }
     return {

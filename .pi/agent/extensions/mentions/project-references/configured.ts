@@ -10,14 +10,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
-function resolveReferencePath(cwd: string, configuredPath: string, home: string): string {
+function resolveReferencePath(pathBase: string, configuredPath: string, home: string): string {
   const expandedPath =
     configuredPath === "~"
       ? home
       : configuredPath.startsWith("~/")
         ? join(home, configuredPath.slice(2))
         : configuredPath;
-  const absolutePath = isAbsolute(expandedPath) ? expandedPath : resolve(cwd, expandedPath);
+  const absolutePath = isAbsolute(expandedPath) ? expandedPath : resolve(pathBase, expandedPath);
   const canonicalPath = realpathSync(absolutePath);
 
   if (statSync(canonicalPath).isDirectory() === false) {
@@ -26,9 +26,11 @@ function resolveReferencePath(cwd: string, configuredPath: string, home: string)
   return canonicalPath;
 }
 
-export function loadConfiguredProjectReferences(cwd: string, home: string): ProjectReference[] {
-  const settingsPath = join(cwd, CONFIG_DIR_NAME, "settings.json");
-
+export function loadConfiguredReferences(
+  settingsPath: string,
+  pathBase: string,
+  home: string,
+): ProjectReference[] {
   let settings: unknown;
   try {
     settings = readLockedJsonFile(settingsPath);
@@ -66,11 +68,22 @@ export function loadConfiguredProjectReferences(cwd: string, home: string): Proj
     }
 
     try {
-      return { name, path: resolveReferencePath(cwd, path, home), description };
+      return { name, path: resolveReferencePath(pathBase, path, home), description };
     } catch (error) {
       throw new Error(
         `Cannot resolve project reference "${name}" (${path}): ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   });
+}
+
+export function loadConfiguredProjectReferences(cwd: string, home: string): ProjectReference[] {
+  return loadConfiguredReferences(join(cwd, CONFIG_DIR_NAME, "settings.json"), cwd, home);
+}
+
+export function loadConfiguredGlobalReferences(
+  agentDirectory: string,
+  home: string,
+): ProjectReference[] {
+  return loadConfiguredReferences(join(agentDirectory, "settings.json"), agentDirectory, home);
 }

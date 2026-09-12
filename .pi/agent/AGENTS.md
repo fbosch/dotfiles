@@ -32,9 +32,6 @@
   conventions.
 - Capture the smallest useful screenshot region unless a full-screen image is
   requested.
-- After initially creating a generated artifact, open it once with the platform's
-  file opener. Do not reopen it after subsequent updates. Use browser tools only
-  when inspection or interaction is required.
 ## Conditional guidance
 
 - Before selecting or adding a dependency, library, or development tool, read

@@ -84,12 +84,18 @@ function loadAgentDirectory(directory: string, mentions: Map<string, AgentMentio
   }
 }
 
-export function loadAgentMentions(cwd: string, agentDirectory = getAgentDir()): AgentMention[] {
+export function loadAgentMentions(
+  cwd: string,
+  agentDirectory = getAgentDir(),
+  includeProjectAgents = true,
+): AgentMention[] {
   const mentions = new Map(
     BUILTIN_AGENT_MENTIONS.map((mention) => [mention.name.toLowerCase(), mention]),
   );
   loadAgentDirectory(join(agentDirectory, "agents"), mentions);
-  loadAgentDirectory(join(cwd, CONFIG_DIR_NAME, "agents"), mentions);
+  if (includeProjectAgents) {
+    loadAgentDirectory(join(cwd, CONFIG_DIR_NAME, "agents"), mentions);
+  }
   return [...mentions.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 
@@ -232,7 +238,11 @@ export default function agentMentions(pi: ExtensionAPI): void {
     if (renderContext.messageType !== "user" || activeContext === undefined) return markdown;
 
     const theme = activeContext.ui.theme;
-    const mentions = loadAgentMentions(activeContext.cwd);
+    const mentions = loadAgentMentions(
+      activeContext.cwd,
+      getAgentDir(),
+      activeContext.isProjectTrusted?.() ?? false,
+    );
     return formatAgentMentions(
       markdown,
       mentions,
@@ -245,7 +255,11 @@ export default function agentMentions(pi: ExtensionAPI): void {
   pi.on("before_agent_start", (event, ctx) => {
     if (pi.getActiveTools().includes("subagent") === false) return;
 
-    const mentions = findAgentMentions(event.prompt, loadAgentMentions(ctx.cwd), ctx.cwd);
+    const mentions = findAgentMentions(
+      event.prompt,
+      loadAgentMentions(ctx.cwd, getAgentDir(), ctx.isProjectTrusted?.() ?? false),
+      ctx.cwd,
+    );
     if (mentions.length === 0) return;
 
     return {

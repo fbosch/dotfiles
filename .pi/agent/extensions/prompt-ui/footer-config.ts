@@ -3,7 +3,8 @@ import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readJsonConfig } from "../../lib/extension-config";
 
-export const FOOTER_CONFIG_FILE = "footer.json";
+export const FOOTER_SETTINGS_KEY = "footer";
+const SETTINGS_FILE = "settings.json";
 
 const FOOTER_NAMED_COLORS: Readonly<Record<string, number>> = {
   black: 30,
@@ -12,6 +13,7 @@ const FOOTER_NAMED_COLORS: Readonly<Record<string, number>> = {
   yellow: 33,
   blue: 34,
   magenta: 35,
+  purple: 35,
   cyan: 36,
   white: 37,
 };
@@ -26,16 +28,26 @@ export function loadFooterCustomization(
   agentDirectory = getAgentDir(),
 ): FooterCustomization | undefined {
   const project = context.isProjectTrusted()
-    ? readJsonConfig(join(context.cwd, CONFIG_DIR_NAME, FOOTER_CONFIG_FILE))
+    ? readFooterSettings(join(context.cwd, CONFIG_DIR_NAME, SETTINGS_FILE))
     : undefined;
   const configured =
-    project === undefined ? readJsonConfig(join(agentDirectory, FOOTER_CONFIG_FILE)) : project;
+    project === undefined ? readFooterSettings(join(agentDirectory, SETTINGS_FILE)) : project;
   return configured === undefined ? undefined : parseFooterCustomization(configured);
+}
+function readFooterSettings(path: string): unknown {
+  const settings = readJsonConfig(path);
+  if (settings === undefined) return undefined;
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+    throw new Error(`${SETTINGS_FILE} must contain an object`);
+  }
+
+  const record = settings as Record<string, unknown>;
+  return Object.hasOwn(record, FOOTER_SETTINGS_KEY) ? record[FOOTER_SETTINGS_KEY] : undefined;
 }
 
 function parseFooterCustomization(value: unknown): FooterCustomization {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new Error(`${FOOTER_CONFIG_FILE} must contain an object`);
+    throw new Error(`${SETTINGS_FILE}.${FOOTER_SETTINGS_KEY} must contain an object`);
   }
 
   const config = value as Record<string, unknown>;
@@ -44,7 +56,9 @@ function parseFooterCustomization(value: unknown): FooterCustomization {
     icon !== undefined &&
     (typeof icon !== "string" || icon.length === 0 || hasControlCharacter(icon))
   ) {
-    throw new Error(`${FOOTER_CONFIG_FILE}.icon must be a non-empty single-line string`);
+    throw new Error(
+      `${SETTINGS_FILE}.${FOOTER_SETTINGS_KEY}.icon must be a non-empty single-line string`,
+    );
   }
 
   const color = config.color;
@@ -52,7 +66,7 @@ function parseFooterCustomization(value: unknown): FooterCustomization {
     color !== undefined &&
     (typeof color !== "string" || isSupportedFooterColor(color) === false)
   ) {
-    throw new Error(`${FOOTER_CONFIG_FILE}.color must be a supported color`);
+    throw new Error(`${SETTINGS_FILE}.${FOOTER_SETTINGS_KEY}.color must be a supported color`);
   }
 
   return {

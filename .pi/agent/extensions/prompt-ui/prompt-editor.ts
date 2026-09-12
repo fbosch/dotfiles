@@ -2,6 +2,7 @@ import {
   CustomEditor,
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
   type KeybindingsManager,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -260,19 +261,24 @@ export class PromptEditor extends CustomEditor {
     this.ctx = ctx;
     this.promptState = state;
     this.typoRules = typoRules;
-    const knownAgentMentions = loadAgentMentions(this.ctx.cwd);
+    const knownAgentMentions = loadAgentMentions(
+      this.ctx.cwd,
+      getAgentDir(),
+      this.ctx.isProjectTrusted?.() ?? false,
+    );
     this.agentMentions = knownAgentMentions.filter(
       (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
     );
     this.projectReferences = [];
-    if (typeof this.ctx.isProjectTrusted === "function" && this.ctx.isProjectTrusted()) {
-      try {
-        const projectReferences = loadProjectReferences(this.ctx.cwd, true);
-        assertNoAgentMentionCollisions(projectReferences, knownAgentMentions);
-        this.projectReferences = projectReferences;
-      } catch {
-        // The project-references extension reports the same configuration error during startup.
-      }
+    try {
+      const projectReferences = loadProjectReferences(
+        this.ctx.cwd,
+        this.ctx.isProjectTrusted?.() ?? false,
+      );
+      assertNoAgentMentionCollisions(projectReferences, knownAgentMentions);
+      this.projectReferences = projectReferences;
+    } catch {
+      // The project-references extension reports the same configuration error during startup.
     }
     this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);

@@ -695,9 +695,9 @@ export async function openSubagentSession(
     }
     source = compactSubagentTranscriptSource(source);
     const markdownTheme = getMarkdownTheme();
-    const agentColor = [...loadAgentWidgetColors(ctx.cwd, getAgentDir())].find(
-      ([name]) => name.toLowerCase() === target.displayName.toLowerCase(),
-    )?.[1];
+    const agentColor = [
+      ...loadAgentWidgetColors(ctx.cwd, getAgentDir(), ctx.isProjectTrusted?.() ?? false),
+    ].find(([name]) => name.toLowerCase() === target.displayName.toLowerCase())?.[1];
     const agentModel =
       outputFile === undefined ? undefined : readSubagentModel(outputFile, sessionId);
     // Transcript inspection is user navigation, not a blocking agent prompt. Mount it
@@ -790,7 +790,7 @@ export function installClickableSubagentSessions(tui: TUI, ctx: ExtensionContext
   const service = getSubagentsService();
   const uninstallToolLinks = installSubagentToolLinks(tui, service, {
     theme: ctx.ui.theme,
-    agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir()),
+    agentColors: loadAgentWidgetColors(ctx.cwd, getAgentDir(), ctx.isProjectTrusted?.() ?? false),
     sessionId: contextSessionId(ctx),
   });
   const uninstallUrlHandler = installSubagentSessionUrlHandler(tui, (target) => {

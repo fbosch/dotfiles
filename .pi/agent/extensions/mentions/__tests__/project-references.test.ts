@@ -16,6 +16,7 @@ import {
   setThemeInstance,
   theme,
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { loadAgentMentions } from "../agent-mentions";
 import projectReferences, {
   appendProjectReferences,
   assertNoAgentMentionCollisions,
@@ -37,6 +38,11 @@ function temporaryDirectory(): string {
 function writeProjectSettings(cwd: string, settings: unknown): void {
   mkdirSync(join(cwd, ".pi"));
   writeFileSync(join(cwd, ".pi", "settings.json"), `${JSON.stringify(settings)}\n`);
+}
+
+function writeGlobalSettings(agentDirectory: string, settings: unknown): void {
+  mkdirSync(agentDirectory, { recursive: true });
+  writeFileSync(join(agentDirectory, "settings.json"), `${JSON.stringify(settings)}\n`);
 }
 
 function writeDocsLock(cwd: string, sources: Record<string, { repo: string }>): void {
@@ -67,7 +73,7 @@ describe("project references", () => {
       },
     });
 
-    expect(loadProjectReferences(cwd, true, home)).toEqual([
+    expect(loadProjectReferences(cwd, true, home, join(cwd, "global-agent"))).toEqual([
       {
         name: "docs",
         path: realpathSync(join(cwd, "docs")),
@@ -81,6 +87,91 @@ describe("project references", () => {
     ]);
   });
 
+  test("merges global and trusted project references with project precedence", () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    const home = join(root, "home");
+    mkdirSync(cwd);
+    mkdirSync(join(agentDirectory, "dotfiles"), { recursive: true });
+    mkdirSync(join(cwd, "nixos"));
+    mkdirSync(join(home, "nixos"), { recursive: true });
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        dotfiles: { path: "dotfiles", description: "Personal dotfiles" },
+        nixos: { path: "~/nixos", description: "Global NixOS configuration" },
+      },
+    });
+    writeProjectSettings(cwd, {
+      references: {
+        NixOS: { path: "nixos", description: "Project NixOS configuration" },
+      },
+    });
+
+    expect(loadProjectReferences(cwd, true, home, agentDirectory)).toEqual([
+      {
+        name: "dotfiles",
+        path: realpathSync(join(agentDirectory, "dotfiles")),
+        description: "Personal dotfiles",
+      },
+      {
+        name: "NixOS",
+        path: realpathSync(join(cwd, "nixos")),
+        description: "Project NixOS configuration",
+      },
+    ]);
+  });
+
+  test("loads global references while excluding untrusted project references", () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    const home = join(root, "home");
+    mkdirSync(cwd);
+    mkdirSync(join(home, "dotfiles"), { recursive: true });
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        dotfiles: { path: "~/dotfiles", description: "Personal dotfiles" },
+      },
+    });
+    writeProjectSettings(cwd, { references: "invalid" });
+    writeFileSync(join(cwd, "docs-lock.json"), "invalid\\n");
+
+    expect(loadProjectReferences(cwd, false, home, agentDirectory)).toEqual([
+      {
+        name: "dotfiles",
+        path: realpathSync(join(home, "dotfiles")),
+        description: "Personal dotfiles",
+      },
+    ]);
+  });
+
+  test("autocompletes global aliases in an untrusted project", async () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    const home = join(root, "home");
+    mkdirSync(cwd);
+    mkdirSync(join(home, "dotfiles"), { recursive: true });
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        dotfiles: { path: "~/dotfiles", description: "Personal dotfiles" },
+      },
+    });
+
+    const references = loadProjectReferences(cwd, false, home, agentDirectory);
+    const provider = {
+      getSuggestions: async () => null,
+      applyCompletion: () => ({ lines: [""], cursorLine: 0, cursorCol: 0 }),
+    } as AutocompleteProvider;
+    const wrapped = createReferenceAutocompleteProvider(provider, references);
+    const prompt = "inspect @do";
+    const suggestions = await wrapped.getSuggestions([prompt], 0, prompt.length, {
+      signal: AbortSignal.timeout(1_000),
+    });
+
+    expect(suggestions?.items.map((item) => item.value)).toEqual(["@dotfiles"]);
+  });
   test("loads docs-cache aliases from the lock without project settings", () => {
     const cwd = temporaryDirectory();
     mkdirSync(join(cwd, ".docs", "framework"), { recursive: true });
@@ -90,7 +181,7 @@ describe("project references", () => {
       framework: { repo: "https://github.com/framework/core.git" },
     });
 
-    expect(loadProjectReferences(cwd, true)).toEqual([
+    expect(loadProjectReferences(cwd, true, undefined, join(cwd, "global-agent"))).toEqual([
       {
         name: "framework",
         path: join(cwd, ".docs", "framework"),
@@ -110,7 +201,7 @@ describe("project references", () => {
       "Låneportalen-Wiki": { repo: "https://github.com/owner/loan-portal.git" },
     });
 
-    const references = loadProjectReferences(cwd, true);
+    const references = loadProjectReferences(cwd, true, undefined, join(cwd, "global-agent"));
     expect(references[0]?.name).toBe("Låneportalen-Wiki");
 
     const provider = {
@@ -131,7 +222,7 @@ describe("project references", () => {
     writeProjectSettings(cwd, { references: "invalid" });
     writeFileSync(join(cwd, "docs-lock.json"), "invalid\n");
 
-    expect(loadProjectReferences(cwd, false)).toEqual([]);
+    expect(loadProjectReferences(cwd, false, undefined, join(cwd, "global-agent"))).toEqual([]);
   });
 
   test("rejects aliases shared by project settings and docs-cache", () => {
@@ -142,8 +233,26 @@ describe("project references", () => {
     });
     writeDocsLock(cwd, { docs: { repo: "https://github.com/owner/docs.git" } });
 
-    expect(() => loadProjectReferences(cwd, true)).toThrow(
-      'Docs-cache reference "docs" conflicts with project reference "docs".',
+    expect(() => loadProjectReferences(cwd, true, undefined, join(cwd, "global-agent"))).toThrow(
+      'Docs-cache reference "docs" conflicts with configured reference "docs".',
+    );
+  });
+
+  test("rejects aliases shared by global references and docs-cache", () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    mkdirSync(cwd);
+    mkdirSync(join(agentDirectory, "docs"), { recursive: true });
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        docs: { path: "docs", description: "Global documentation" },
+      },
+    });
+    writeDocsLock(cwd, { docs: { repo: "https://github.com/owner/docs.git" } });
+
+    expect(() => loadProjectReferences(cwd, true, undefined, agentDirectory)).toThrow(
+      'Docs-cache reference "docs" conflicts with configured reference "docs".',
     );
   });
 
@@ -154,7 +263,7 @@ describe("project references", () => {
       references: { docs: { path: "file.txt", description: "Documentation" } },
     });
 
-    expect(() => loadProjectReferences(cwd, true)).toThrow(
+    expect(() => loadProjectReferences(cwd, true, undefined, join(cwd, "global-agent"))).toThrow(
       'Cannot resolve project reference "docs"',
     );
   });
@@ -168,6 +277,32 @@ describe("project references", () => {
         [{ name: "Plan", description: "Creates implementation plans" }],
       ),
     ).toThrow('Project reference "plan" conflicts with agent mention @Plan.');
+  });
+
+  test("rejects global reference aliases that collide with global agents", () => {
+    const root = temporaryDirectory();
+    const cwd = join(root, "project");
+    const agentDirectory = join(root, "agent");
+    const home = join(root, "home");
+    mkdirSync(cwd);
+    mkdirSync(join(agentDirectory, "agents"), { recursive: true });
+    mkdirSync(join(agentDirectory, "nixos"), { recursive: true });
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        nixos: { path: "nixos", description: "NixOS configuration" },
+      },
+    });
+    writeFileSync(
+      join(agentDirectory, "agents", "nixos.md"),
+      "---\\ndescription: NixOS agent\\n---\\nReview NixOS.",
+    );
+
+    const references = loadProjectReferences(cwd, true, home, agentDirectory);
+    const mentions = loadAgentMentions(cwd, agentDirectory);
+
+    expect(() => assertNoAgentMentionCollisions(references, mentions)).toThrow(
+      'Project reference "nixos" conflicts with agent mention @nixos.',
+    );
   });
 
   test("formats keyed JSON metadata and appends it once", () => {
@@ -325,9 +460,17 @@ describe("project references", () => {
     const root = temporaryDirectory();
     const cwd = join(root, "project");
     const external = join(root, "external docs");
+    const agentDirectory = join(root, "agent");
+    const globalExternal = join(root, "global docs");
     const docsCacheExternal = join(root, "docs-cache *");
     mkdirSync(join(cwd, "local-docs"), { recursive: true });
     mkdirSync(external);
+    mkdirSync(globalExternal);
+    writeGlobalSettings(agentDirectory, {
+      references: {
+        global: { path: "../global docs", description: "Global documentation" },
+      },
+    });
     mkdirSync(docsCacheExternal);
     mkdirSync(join(cwd, ".docs"));
     symlinkSync(docsCacheExternal, join(cwd, ".docs", "symlinked-docs"), "dir");
@@ -361,7 +504,7 @@ describe("project references", () => {
         if (event === "session_shutdown") sessionShutdown = handler as () => void;
       },
     } as unknown as ExtensionAPI;
-    projectReferences(pi);
+    projectReferences(pi, agentDirectory);
 
     const sessionId = "project-reference-read-test";
     const registrations: string[] = [];
@@ -402,12 +545,20 @@ describe("project references", () => {
       await beforeAgentStart?.(event, context);
       await beforeAgentStart?.(event, context);
 
-      expect(registrations).toEqual([realpathSync(external), realpathSync(docsCacheExternal)]);
+      expect(registrations).toEqual([
+        realpathSync(external),
+        realpathSync(globalExternal),
+        realpathSync(docsCacheExternal),
+      ]);
       expect(notifications).toEqual([]);
       expect(disposals).toEqual([]);
 
       sessionShutdown?.();
-      expect(disposals).toEqual([realpathSync(docsCacheExternal), realpathSync(external)]);
+      expect(disposals).toEqual([
+        realpathSync(docsCacheExternal),
+        realpathSync(globalExternal),
+        realpathSync(external),
+      ]);
     } finally {
       serviceModule.unpublishPermissionsService(sessionId, permissions);
     }
