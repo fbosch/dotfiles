@@ -5,13 +5,19 @@ import { join } from "node:path";
 import type {
   ExecOptions,
   ExtensionAPI,
+  ExtensionCommandContext,
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import { parseJustCatalog } from "../catalog";
 import {
   executeJustRecipe,
+  justRecipeCompletions,
+  parseJustCommandArguments,
   type RecipeExecutionResult,
   type RecipeExecutor,
+  registerJustCommand,
   registerJustTools,
 } from "../index";
 
@@ -146,6 +152,7 @@ function context(
         onConfirm?.();
         return confirmed ? "1. Run recipe" : "2. Cancel";
       },
+      notify() {},
     },
   } as unknown as ExtensionContext;
 }
@@ -158,6 +165,235 @@ async function loadShellcheck(harness: Harness, ctx: ExtensionContext): Promise<
   if (recipeTool === undefined) throw new Error("recipe tool missing");
   return recipeTool;
 }
+
+interface TestJustCommand {
+  getArgumentCompletions?: (prefix: string) => Promise<AutocompleteItem[] | null>;
+  handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+}
+type TestSessionStart = (event: object, ctx: ExtensionContext) => void;
+type TestTerminalInput = (data: string) => { consume?: boolean } | undefined;
+type TestModal = {
+  handleInput?: (data: string) => void;
+  render?: (width: number) => string[];
+};
+
+test("provides recipe names and descriptions for /just completion", () => {
+  const recipes = parseJustCatalog(dump([parameter("target")]));
+  expect(justRecipeCompletions(recipes, "shell")).toEqual([
+    {
+      value: "shellcheck",
+      label: "shellcheck",
+      description: "Run shell checks. Group: validation. Arguments: target.",
+    },
+  ]);
+  expect(justRecipeCompletions(recipes, "shellcheck ")).toBeNull();
+});
+
+test("parses quoted and escaped /just arguments", () => {
+  expect(parseJustCommandArguments(`shellcheck "src file" 'other file' plain\\ value`)).toEqual([
+    "shellcheck",
+    "src file",
+    "other file",
+    "plain value",
+  ]);
+  expect(parseJustCommandArguments(String.raw`shellcheck "\d+\\value"`)).toEqual([
+    "shellcheck",
+    String.raw`\d+\value`,
+  ]);
+  expect(() => parseJustCommandArguments("shellcheck 'missing")).toThrow("unterminated quote");
+});
+
+test("registers /just completion and executes the selected public recipe", async () => {
+  let command: TestJustCommand | undefined;
+  let sessionStart: TestSessionStart | undefined;
+  const executions: Array<{ cwd: string; args: string[] }> = [];
+  const notifications: string[] = [];
+  const pi = {
+    on(event: string, handler: TestSessionStart) {
+      if (event === "session_start") sessionStart = handler;
+    },
+    registerCommand(_name: string, definition: TestJustCommand) {
+      command = definition;
+    },
+    async exec() {
+      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+    },
+  } as unknown as ExtensionAPI;
+  const recipeExecutor: RecipeExecutor = async (cwd, args) => {
+    executions.push({ cwd, args });
+    return {
+      stdout: "checked\n",
+      stderr: "",
+      code: 0,
+      killed: false,
+      timedOut: false,
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    };
+  };
+  registerJustCommand(pi, recipeExecutor);
+  if (sessionStart === undefined) throw new Error("session_start handler was not registered");
+  sessionStart({}, context([]));
+  if (command === undefined) throw new Error("/just command was not registered");
+  if (command.getArgumentCompletions === undefined) {
+    throw new Error("/just completion was not registered");
+  }
+
+  await expect(command.getArgumentCompletions("shell")).resolves.toEqual([
+    {
+      value: "shellcheck",
+      label: "shellcheck",
+      description: "Run shell checks. Group: validation.",
+    },
+  ]);
+  const commandContext = {
+    ...context([]),
+    ui: {
+      ...context([]).ui,
+      notify(message: string) {
+        notifications.push(message);
+      },
+    },
+  } as unknown as ExtensionCommandContext;
+  await command.handler("shellcheck 'src file'", commandContext);
+  expect(executions).toEqual([
+    { cwd: "/repo", args: ["--yes", "--one", "--", "shellcheck", "src file"] },
+  ]);
+  expect(notifications[0]).toContain("Just recipe `shellcheck` completed");
+});
+
+test("cancels a running /just recipe from terminal input", async () => {
+  let command: TestJustCommand | undefined;
+  let sessionStart: TestSessionStart | undefined;
+  let terminalInput: TestTerminalInput | undefined;
+  let closeModal: (() => void) | undefined;
+  let modalComponent: TestModal | undefined;
+  let executionStarted: () => void = () => {};
+  const started = new Promise<void>((resolve) => {
+    executionStarted = resolve;
+  });
+  const notifications: string[] = [];
+  const pi = {
+    on(event: string, handler: TestSessionStart) {
+      if (event === "session_start") sessionStart = handler;
+    },
+    registerCommand(_name: string, definition: TestJustCommand) {
+      command = definition;
+    },
+    async exec() {
+      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+    },
+  } as unknown as ExtensionAPI;
+  const recipeExecutor: RecipeExecutor = async (_cwd, _args, signal, onOutput) => {
+    executionStarted();
+    onOutput?.({
+      text: "stdout:\nlive output\nstderr:\nwarning",
+      stdoutTruncated: false,
+      stderrTruncated: false,
+    });
+    if (signal === undefined) throw new Error("command signal missing");
+    return new Promise<RecipeExecutionResult>((resolve) => {
+      signal.addEventListener("abort", () =>
+        resolve({
+          stdout: "",
+          stderr: "",
+          code: 143,
+          killed: true,
+          timedOut: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+        }),
+      );
+    });
+  };
+
+  registerJustCommand(pi, recipeExecutor);
+  if (sessionStart === undefined || command === undefined) {
+    throw new Error("/just command was not registered");
+  }
+  sessionStart({}, context([]));
+  const baseContext = context([]);
+  const commandContext = {
+    ...baseContext,
+    mode: "tui",
+    ui: {
+      ...baseContext.ui,
+      onTerminalInput(handler: TestTerminalInput) {
+        terminalInput = handler;
+        return () => {
+          terminalInput = undefined;
+        };
+      },
+      custom(
+        factory: (
+          tui: { requestRender: () => void },
+          theme: {
+            fg: (_role: string, text: string) => string;
+            bold: (text: string) => string;
+          },
+          keybindings: object,
+          done: () => void,
+        ) => TestModal,
+      ) {
+        return new Promise<void>((resolve) => {
+          const modal = factory(
+            { requestRender() {} },
+            { fg: (_role: string, text: string) => text, bold: (text: string) => text },
+            {},
+            () => resolve(),
+          );
+          modalComponent = modal;
+          closeModal = () => modal.handleInput?.("\u001b");
+        });
+      },
+      notify(message: string) {
+        notifications.push(message);
+      },
+    },
+  } as unknown as ExtensionCommandContext;
+
+  const execution = command.handler("shellcheck", commandContext);
+  await started;
+  if (terminalInput === undefined) throw new Error("terminal input handler was not registered");
+  if (modalComponent?.render === undefined) throw new Error("output modal was not rendered");
+  expect(modalComponent.render(80).join("\n")).toContain("live output");
+  expect(terminalInput("\u001b")).toEqual({ consume: true });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  if (closeModal === undefined) throw new Error("output modal was not opened");
+  closeModal();
+  await execution;
+  expect(notifications).toEqual([]);
+});
+test("retries recipe completion discovery after a failed Justfile read", async () => {
+  let command: TestJustCommand | undefined;
+  let sessionStart: TestSessionStart | undefined;
+  let discoveryAttempts = 0;
+  const pi = {
+    on(event: string, handler: TestSessionStart) {
+      if (event === "session_start") sessionStart = handler;
+    },
+    registerCommand(_name: string, definition: TestJustCommand) {
+      command = definition;
+    },
+    async exec() {
+      discoveryAttempts += 1;
+      if (discoveryAttempts === 1) {
+        return { stdout: "not json", stderr: "invalid Justfile", code: 1, killed: false };
+      }
+      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+    },
+  } as unknown as ExtensionAPI;
+
+  registerJustCommand(pi);
+  if (sessionStart === undefined || command?.getArgumentCompletions === undefined) {
+    throw new Error("/just lifecycle was not registered");
+  }
+  sessionStart({}, context([]));
+  await expect(command.getArgumentCompletions("shell")).resolves.toBeNull();
+  const completions = await command.getArgumentCompletions("shell");
+  expect(completions?.map(({ value }) => value)).toEqual(["shellcheck"]);
+  expect(discoveryAttempts).toBe(2);
+});
 
 describe("Just tools extension", () => {
   test("discovers, activates, confirms, and executes a public recipe", async () => {
@@ -277,8 +513,34 @@ describe("Just tools extension", () => {
     );
   });
 
+  test("publishes bounded recipe output while running", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "pi-just-"));
+    try {
+      await writeFile(
+        join(directory, "justfile"),
+        "output:\n    @printf 'hello\\n'; printf 'warning\\n' >&2\n",
+      );
+      const updates: string[] = [];
+      const result = await executeJustRecipe(
+        directory,
+        ["--one", "--", "output"],
+        undefined,
+        (output) => updates.push(output.text),
+      );
+
+      expect(result.stdout).toContain("hello");
+      expect(result.stderr).toContain("warning");
+      const finalOutput = updates.at(-1);
+      if (finalOutput === undefined) throw new Error("recipe output was not published");
+      expect(finalOutput).toContain("stdout:\nhello");
+      expect(finalOutput).toContain("stderr:\nwarning");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   test("executes native confirmation recipes with bounded output", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-just-tools-"));
+    const directory = await mkdtemp(join(tmpdir(), "pi-just-"));
     try {
       await writeFile(
         join(directory, "justfile"),
@@ -299,7 +561,7 @@ describe("Just tools extension", () => {
   });
 
   test("settles when a completed recipe leaves inherited output pipes open", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-just-tools-"));
+    const directory = await mkdtemp(join(tmpdir(), "pi-just-"));
     try {
       await writeFile(join(directory, "justfile"), "background:\n    @sleep 2 & printf done\n");
       const startedAt = Date.now();
@@ -315,7 +577,7 @@ describe("Just tools extension", () => {
   });
 
   test("cancels a recipe process group", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "pi-just-tools-"));
+    const directory = await mkdtemp(join(tmpdir(), "pi-just-"));
     try {
       await writeFile(
         join(directory, "justfile"),

@@ -3,8 +3,10 @@ import {
   defineTool,
   type ExecResult,
   type ExtensionAPI,
+  type ExtensionCommandContext,
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { type AutocompleteItem, matchesKey } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { runAskUserQuestion } from "../ask-user-question";
 import {
@@ -17,6 +19,7 @@ import {
   recipeToolDescription,
   searchRecipes,
 } from "./catalog";
+import { JustOutputModal, type RecipeOutputHandler } from "./output-modal";
 
 const DISCOVERY_TIMEOUT_MS = 10_000;
 const RECIPE_TIMEOUT_MS = 10 * 60_000;
@@ -75,6 +78,7 @@ export type RecipeExecutor = (
   cwd: string,
   arguments_: string[],
   signal?: AbortSignal,
+  onOutput?: RecipeOutputHandler,
 ) => Promise<RecipeExecutionResult>;
 
 class OutputTail {
@@ -167,19 +171,24 @@ export function truncateCommandOutput(value: string): TruncatedOutput {
   };
 }
 
-function formatResult(result: RecipeExecutionResult): {
+function formatOutput(
+  stdoutValue: string,
+  stderrValue: string,
+  stdoutWasTruncated: boolean,
+  stderrWasTruncated: boolean,
+): {
   text: string;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
 } {
-  const stdout = truncateCommandOutput(result.stdout);
-  const stderr = truncateCommandOutput(result.stderr);
+  const stdout = truncateCommandOutput(stdoutValue);
+  const stderr = truncateCommandOutput(stderrValue);
   const stdoutText =
-    result.stdoutTruncated && stdout.truncated === false
+    stdoutWasTruncated && stdout.truncated === false
       ? `[Earlier output truncated]\n${stdout.text}`
       : stdout.text;
   const stderrText =
-    result.stderrTruncated && stderr.truncated === false
+    stderrWasTruncated && stderr.truncated === false
       ? `[Earlier output truncated]\n${stderr.text}`
       : stderr.text;
   const sections: string[] = [];
@@ -187,15 +196,19 @@ function formatResult(result: RecipeExecutionResult): {
   if (stderrText.length > 0) sections.push(`stderr:\n${stderrText}`);
   return {
     text: sections.join("\n\n") || "Recipe completed with no output.",
-    stdoutTruncated: result.stdoutTruncated || stdout.truncated,
-    stderrTruncated: result.stderrTruncated || stderr.truncated,
+    stdoutTruncated: stdoutWasTruncated || stdout.truncated,
+    stderrTruncated: stderrWasTruncated || stderr.truncated,
   };
+}
+function formatResult(result: RecipeExecutionResult): ReturnType<typeof formatOutput> {
+  return formatOutput(result.stdout, result.stderr, result.stdoutTruncated, result.stderrTruncated);
 }
 
 export async function executeJustRecipe(
   cwd: string,
   arguments_: string[],
   signal?: AbortSignal,
+  onOutput?: RecipeOutputHandler,
 ): Promise<RecipeExecutionResult> {
   if (signal?.aborted === true) throw new Error("Just recipe execution was cancelled");
 
@@ -217,6 +230,10 @@ export async function executeJustRecipe(
     let forceSettleTimer: NodeJS.Timeout | undefined;
     let outputGraceTimer: NodeJS.Timeout | undefined;
 
+    const publishOutput = (): void => {
+      if (onOutput === undefined) return;
+      onOutput(formatOutput(stdout.text(), stderr.text(), stdout.truncated, stderr.truncated));
+    };
     const timeout = setTimeout(() => terminate("timeout"), RECIPE_TIMEOUT_MS);
     timeout.unref();
 
@@ -280,9 +297,11 @@ export async function executeJustRecipe(
     signal?.addEventListener("abort", abort, { once: true });
     child.stdout.on("data", (chunk: Buffer | string) => {
       stdout.append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      publishOutput();
     });
     child.stderr.on("data", (chunk: Buffer | string) => {
       stderr.append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      publishOutput();
     });
     child.once("error", (error) => {
       if (settled) return;
@@ -322,6 +341,123 @@ function trustedProject(ctx: ExtensionContext): void {
   if (ctx.isProjectTrusted() === false) {
     throw new Error("Just recipe tools are unavailable until the project is trusted");
   }
+}
+const MAX_COMMAND_MATCHES = 20;
+
+export function recipeCompletionDescription(recipe: JustRecipe): string {
+  const group = recipe.groups.length > 0 ? `Group: ${recipe.groups.join(", ")}.` : undefined;
+  const parameters =
+    recipe.parameters.length > 0
+      ? `Arguments: ${recipe.parameters.map((parameter) => parameter.name).join(" ")}.`
+      : undefined;
+  return [recipe.doc, group, parameters]
+    .filter((part): part is string => part !== undefined)
+    .join(" ");
+}
+
+export function justRecipeCompletions(
+  recipes: JustRecipe[],
+  prefix: string,
+  limit = MAX_COMMAND_MATCHES,
+): AutocompleteItem[] | null {
+  if (/\s/u.test(prefix)) return null;
+  const query = prefix.trim();
+  const matches =
+    query.length === 0 ? recipes.slice(0, limit) : searchRecipes(recipes, query, limit);
+  if (matches.length === 0) return null;
+
+  return matches.map((recipe) => ({
+    value: recipe.namepath,
+    label: recipe.namepath,
+    description: recipeCompletionDescription(recipe),
+  }));
+}
+
+export function parseJustCommandArguments(input: string): string[] {
+  const arguments_: string[] = [];
+  const characters = [...input];
+  let current = "";
+  let quote: "'" | '"' | undefined;
+  let escaping = false;
+  let tokenStarted = false;
+
+  for (let index = 0; index < characters.length; index += 1) {
+    const character = characters[index];
+    if (character === undefined) continue;
+
+    if (escaping) {
+      current += character;
+      escaping = false;
+      tokenStarted = true;
+      continue;
+    }
+
+    if (quote === "'") {
+      if (character === "'") quote = undefined;
+      else current += character;
+      continue;
+    }
+
+    if (quote === '"') {
+      if (character === '"') {
+        quote = undefined;
+      } else if (character === "\\") {
+        const nextCharacter = characters[index + 1];
+        if (
+          nextCharacter === '"' ||
+          nextCharacter === "\\" ||
+          nextCharacter === "$" ||
+          nextCharacter === "`"
+        ) {
+          escaping = true;
+        } else {
+          current += character;
+        }
+      } else {
+        current += character;
+      }
+      continue;
+    }
+
+    if (/\s/u.test(character)) {
+      if (tokenStarted) {
+        arguments_.push(current);
+        current = "";
+        tokenStarted = false;
+      }
+      continue;
+    }
+    if (character === "'") {
+      quote = "'";
+      tokenStarted = true;
+      continue;
+    }
+    if (character === '"') {
+      quote = '"';
+      tokenStarted = true;
+      continue;
+    }
+    if (character === "\\") {
+      escaping = true;
+      tokenStarted = true;
+      continue;
+    }
+
+    current += character;
+    tokenStarted = true;
+  }
+
+  if (escaping) throw new Error("Invalid /just arguments: trailing escape");
+  if (quote !== undefined) throw new Error("Invalid /just arguments: unterminated quote");
+  if (tokenStarted) arguments_.push(current);
+  return arguments_;
+}
+
+function makeRecipeCache(cwd: string): {
+  cwd: string;
+  promise: Promise<JustRecipe[]> | undefined;
+} {
+  return { cwd, promise: undefined };
 }
 
 export function registerJustTools(
@@ -492,6 +628,196 @@ export function registerJustTools(
   );
 }
 
-export default function justToolsExtension(pi: ExtensionAPI): void {
+function recipeForCommand(recipes: JustRecipe[], name: string): JustRecipe | undefined {
+  return recipes.find((recipe) => recipe.namepath === name || recipe.aliases.includes(name));
+}
+
+function commandFailureMessage(
+  recipe: JustRecipe,
+  result: RecipeExecutionResult,
+  formatted: ReturnType<typeof formatResult>,
+  signal: AbortSignal | undefined,
+): string {
+  const reason =
+    signal?.aborted === true
+      ? "cancelled"
+      : result.timedOut
+        ? `timed out after ${RECIPE_TIMEOUT_MS / 1_000} seconds`
+        : `failed with exit code ${result.code}`;
+  return `Just recipe \`${recipe.namepath}\` ${reason}\n\n${formatted.text}`;
+}
+
+export function registerJustCommand(
+  pi: ExtensionAPI,
+  recipeExecutor: RecipeExecutor = executeJustRecipe,
+): void {
+  let cache = makeRecipeCache(process.cwd());
+
+  let projectTrustResolved = false;
+  let projectTrusted = false;
+  const activeCommandControllers = new Set<AbortController>();
+  function createCommandSignal(ctx: ExtensionCommandContext): {
+    signal: AbortSignal;
+    dispose: () => void;
+    disableCancellation: () => void;
+  } {
+    const controller = new AbortController();
+    activeCommandControllers.add(controller);
+    let terminalCancellationEnabled = true;
+    const abortFromParent = () => controller.abort();
+    if (ctx.signal?.aborted === true) {
+      controller.abort();
+    } else {
+      ctx.signal?.addEventListener("abort", abortFromParent, { once: true });
+    }
+    const removeTerminalInputHandler =
+      ctx.mode === "tui"
+        ? ctx.ui.onTerminalInput((data) => {
+            if (terminalCancellationEnabled === false) return undefined;
+            if (matchesKey(data, "escape") === false && matchesKey(data, "ctrl+c") === false) {
+              return undefined;
+            }
+            controller.abort();
+            return { consume: true };
+          })
+        : () => {};
+
+    return {
+      signal: controller.signal,
+      dispose: () => {
+        removeTerminalInputHandler();
+        ctx.signal?.removeEventListener("abort", abortFromParent);
+        activeCommandControllers.delete(controller);
+      },
+      disableCancellation: () => {
+        terminalCancellationEnabled = false;
+      },
+    };
+  }
+  function resetCache(cwd: string): void {
+    cache = makeRecipeCache(cwd);
+  }
+
+  function loadCachedRecipes(cwd: string): Promise<JustRecipe[]> {
+    if (cache.cwd !== cwd) resetCache(cwd);
+    if (cache.promise === undefined) {
+      const discovery = discoverJustRecipes(pi, cwd);
+      let cachedPromise: Promise<JustRecipe[]>;
+      cachedPromise = discovery.catch((error: unknown) => {
+        if (cache.promise === cachedPromise) cache.promise = undefined;
+        throw error;
+      });
+      cache.promise = cachedPromise;
+    }
+    return cache.promise;
+  }
+
+  pi.on("session_start", (_event, ctx) => {
+    resetCache(ctx.cwd);
+    projectTrustResolved = true;
+    projectTrusted = ctx.isProjectTrusted();
+    if (!projectTrusted) return;
+
+    void loadCachedRecipes(ctx.cwd).catch((error: unknown) => {
+      ctx.ui.notify(
+        error instanceof Error ? error.message : `Could not load Just recipes: ${String(error)}`,
+        "error",
+      );
+    });
+  });
+
+  pi.on("session_shutdown", () => {
+    for (const controller of activeCommandControllers) controller.abort();
+  });
+
+  pi.registerCommand("just", {
+    description: "Run a public Just recipe from the current project",
+    getArgumentCompletions: async (prefix: string) => {
+      if (projectTrustResolved === false || projectTrusted === false) return null;
+      try {
+        const recipes = await loadCachedRecipes(cache.cwd);
+        return justRecipeCompletions(recipes, prefix);
+      } catch {
+        return null;
+      }
+    },
+    handler: async (args: string, ctx: ExtensionCommandContext) => {
+      const commandExecution = createCommandSignal(ctx);
+      const { signal } = commandExecution;
+      try {
+        trustedProject(ctx);
+        const tokens = parseJustCommandArguments(args);
+        const recipeName = tokens[0];
+        if (recipeName === undefined) {
+          ctx.ui.notify("Usage: /just <recipe> [arguments]", "warning");
+          return;
+        }
+
+        const recipes = await discoverJustRecipes(pi, ctx.cwd, signal);
+        const recipe = recipeForCommand(recipes, recipeName);
+        if (recipe === undefined) {
+          ctx.ui.notify(`No public Just recipe named \`${recipeName}\``, "error");
+          return;
+        }
+
+        const recipeArguments = ["--yes", "--one", "--", recipe.namepath, ...tokens.slice(1)];
+        if (ctx.mode !== "tui") {
+          const result = await recipeExecutor(ctx.cwd, recipeArguments, signal);
+          const formatted = formatResult(result);
+          if (result.code !== 0 || result.killed) {
+            ctx.ui.notify(commandFailureMessage(recipe, result, formatted, signal), "error");
+            return;
+          }
+          ctx.ui.notify(
+            `Just recipe \`${recipe.namepath}\` completed\n\n${formatted.text}`,
+            "info",
+          );
+          return;
+        }
+
+        await ctx.ui.custom<void>(
+          (tui, theme, _keybindings, done) => {
+            const modal = new JustOutputModal(
+              tui,
+              theme,
+              recipe.namepath,
+              tokens.slice(1),
+              signal,
+              done,
+            );
+            void Promise.resolve()
+              .then(() =>
+                recipeExecutor(ctx.cwd, recipeArguments, signal, (output) =>
+                  modal.updateOutput(output),
+                ),
+              )
+              .then(
+                (result) => {
+                  commandExecution.disableCancellation();
+                  modal.finish(result, formatResult(result), signal.aborted);
+                },
+                (error: unknown) => {
+                  commandExecution.disableCancellation();
+                  modal.fail(error);
+                },
+              );
+            return modal;
+          },
+          {
+            overlay: true,
+            overlayOptions: { anchor: "center", width: "85%", maxHeight: "80%", margin: 2 },
+          },
+        );
+      } catch (error: unknown) {
+        ctx.ui.notify(error instanceof Error ? error.message : String(error), "error");
+      } finally {
+        commandExecution.dispose();
+      }
+    },
+  });
+}
+
+export default function justExtension(pi: ExtensionAPI): void {
   registerJustTools(pi);
+  registerJustCommand(pi);
 }

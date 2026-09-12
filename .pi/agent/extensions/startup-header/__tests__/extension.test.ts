@@ -12,6 +12,7 @@ type Handler = (event: unknown, context: unknown) => void;
 const dependencies = {
   inspectWorkspace: async () => undefined,
   inspectRepositoryFiles: async () => ({ files: [], truncated: false }),
+  loadArt: () => undefined,
   inspectCandidates: async () => ({
     formatter: { state: "unavailable" as const, candidates: [], overflow: [] },
     lsp: { state: "unavailable" as const, candidates: [], overflow: [] },

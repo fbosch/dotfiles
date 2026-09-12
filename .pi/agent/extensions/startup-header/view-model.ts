@@ -1,5 +1,6 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, candidateView, formatCandidateView } from "./candidates";
 import { type ContextStripConfig, renderInitialContextStrip } from "./context-strip";
 import type { StartupOwnerSnapshot } from "./contracts";
@@ -58,10 +59,11 @@ export function renderStartupHeader(
   auth?: StartupOwnerSnapshot,
   contextConfig?: ContextStripConfig,
   context?: StartupOwnerSnapshot,
+  art?: StartupHeaderArt,
 ): string[] {
   if (width <= 0) return [];
 
-  const lines = [theme.fg("accent", "pi")];
+  const lines: string[] = [];
   if (workspace !== undefined) {
     const branch = workspace.detached
       ? "detached HEAD"
@@ -71,6 +73,7 @@ export function renderStartupHeader(
       : "";
     lines.push(theme.fg("muted", `Branch: ${branch}${linkedPath}`));
   }
+  lines.push(...renderStartupHeaderArt(theme, width, art));
 
   const integrationStatus = renderIntegrationStatus(theme, integrations);
   if (integrationStatus !== "") lines.push("", integrationStatus);

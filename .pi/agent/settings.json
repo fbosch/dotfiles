@@ -21,7 +21,7 @@
     "+extensions/herdr-agent-state.ts",
     "+extensions/hyprland/index.ts",
     "+extensions/instruction-fragments.ts",
-    "+extensions/just-tools/index.ts",
+    "+extensions/just/index.ts",
     "+extensions/lsp/index.ts",
     "+extensions/mcp-approval.ts",
     "+extensions/mentions/index.ts",
@@ -47,7 +47,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,

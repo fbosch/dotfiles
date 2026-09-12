@@ -61,8 +61,8 @@ describe("startup header baseline", () => {
         linkedWorktree: true,
       }),
     ).toEqual([
-      "pi",
       "Branch: topic · Worktree: /worktrees/topic",
+      "pi",
       "Extensions: 18 enabled (3 project)",
       "Skills: 25 available (2 project)",
       "Startup: 42.5ms",
@@ -79,8 +79,8 @@ describe("startup header baseline", () => {
     );
 
     expect(lines).toEqual([
-      "pi",
       "Branch: detached HEAD",
+      "pi",
       "Extensions: 4 enabled, 1 failed",
       "Skills: 7 available",
     ]);

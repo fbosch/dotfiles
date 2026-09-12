@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
   inspectConfiguredCandidates,
@@ -24,12 +25,14 @@ export interface StartupHeaderDependencies {
   readonly inspectWorkspace: typeof inspectWorkspace;
   readonly inspectCandidates: typeof inspectConfiguredCandidates;
   readonly inspectRepositoryFiles?: (cwd: string) => Promise<RepositoryFiles>;
+  readonly loadArt?: typeof loadStartupHeaderArt;
 }
 
 const DEFAULT_DEPENDENCIES: StartupHeaderDependencies = {
   inspectWorkspace,
   inspectCandidates: inspectConfiguredCandidates,
   inspectRepositoryFiles: (cwd) => discoverRepositoryFiles(cwd, undefined),
+  loadArt: loadStartupHeaderArt,
 };
 
 export default function startupHeader(
@@ -60,6 +63,7 @@ export default function startupHeader(
     let workspace: WorkspaceIdentity | undefined;
     let candidates: CandidateInspection | undefined;
     let contextViewConfig: ContextStripConfig | undefined;
+    let art: StartupHeaderArt | undefined;
     let requestRender = () => {};
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
@@ -93,6 +97,15 @@ export default function startupHeader(
       }
     }
 
+    const artLoader = dependencies.loadArt ?? loadStartupHeaderArt;
+    try {
+      art = artLoader(ctx);
+    } catch (error) {
+      ctx.ui.notify?.(
+        `Could not load startup header art: ${error instanceof Error ? error.message : String(error)}`,
+        "warning",
+      );
+    }
     // Wait until every extension module has loaded so pi-context-view's config module is already cached.
     contextViewConfigPromise ??= loadContextViewConfig();
     void contextViewConfigPromise.then((config) => {
@@ -133,6 +146,7 @@ export default function startupHeader(
             owners.get("auth"),
             contextViewConfig,
             owners.get("context"),
+            art,
           ),
         invalidate() {},
       };
