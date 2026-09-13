@@ -117,7 +117,8 @@
     "npm:pi-worktrunk@0.8.0",
     "npm:pi-mono-figma@0.2.2",
     "npm:pi-hashline-edit-pro@3.0.4",
-    "npm:@liborw/pi-startup-time"
+    "npm:@liborw/pi-startup-time",
+    "npm:pi-goal-x"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
