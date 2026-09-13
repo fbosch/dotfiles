@@ -10,11 +10,11 @@ import { cn } from '../../utils/cn';
  * - Compact pill shape with rounded-full
  * - Minimal padding for tight appearance
  * - Dark text on light backgrounds for WCAG AA compliance (4.5:1 minimum)
- * - Bold font weight for readability at small sizes
+ * - Medium font weight for readability at small sizes
  */
 
 const tagVariants = cva(
-  'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-bold min-w-[18px] leading-none shadow-sm',
+  'inline-flex items-center justify-center px-1.5 py-0.5 rounded-full text-[9px] font-medium min-w-[18px] leading-none shadow-sm',
   {
     variants: {
       variant: {

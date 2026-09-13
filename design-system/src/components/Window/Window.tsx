@@ -55,7 +55,7 @@ const buttonVariants = cva(
   {
     variants: {
       type: {
-        close: "font-nerd font-bold",
+        close: "font-nerd font-medium",
         maximize: "font-nerd",
         minimize: "font-nerd",
       },

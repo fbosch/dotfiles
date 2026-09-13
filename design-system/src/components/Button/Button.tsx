@@ -24,7 +24,7 @@ import { cn } from '../../utils/cn';
 
 const buttonVariants = cva(
   // Base styles (always applied)
-  'inline-flex items-center justify-center gap-2 font-button font-bold rounded-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] text-shadow-subtle',
+  'inline-flex items-center justify-center gap-2 font-button font-medium rounded-md transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] text-shadow-subtle',
   {
     variants: {
       variant: {

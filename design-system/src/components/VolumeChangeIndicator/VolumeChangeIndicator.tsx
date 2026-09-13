@@ -84,7 +84,7 @@ const progressSquareVariants = cva("rounded-sm transition-all duration-150", {
 });
 
 const labelVariants = cva(
-  "font-button font-bold text-foreground-primary flex-shrink-0 text-right",
+  "font-button font-medium text-foreground-primary flex-shrink-0 text-right",
   {
     variants: {
       size: {

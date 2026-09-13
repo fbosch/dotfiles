@@ -36,7 +36,7 @@ const switcherVariants = cva(
 );
 
 const layoutBadgeVariants = cva(
-  'rounded-full font-button font-bold transition-all duration-200 flex items-center justify-center',
+  'rounded-full font-button font-medium transition-all duration-200 flex items-center justify-center',
   {
     variants: {
       state: {

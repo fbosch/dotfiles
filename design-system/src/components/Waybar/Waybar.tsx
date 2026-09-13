@@ -50,7 +50,7 @@ const buttonVariants = cva(
         tray: "",
       },
       active: {
-        true: "bg-white/5 border-white/10 font-bold",
+        true: "bg-white/5 border-white/10 font-medium",
         false: "",
       },
     },
@@ -58,7 +58,7 @@ const buttonVariants = cva(
       {
         variant: "task",
         active: true,
-        className: "bg-white/5 border-white/10 font-bold",
+        className: "bg-white/5 border-white/10 font-medium",
       },
     ],
     defaultVariants: {
@@ -145,12 +145,12 @@ export const Waybar: React.FC<WaybarProps> = ({
       <div className="flex items-center pr-1 h-full">
         <div className="flex items-center gap-3">
           <div className={moduleVariants({ type: "memory" })}>
-            <span className="font-fluent font-bold"></span>
+            <span className="font-fluent font-medium"></span>
             <span className="font-medium">45%</span>
           </div>
 
           <div className={moduleVariants({ type: "cpu", state: "idle" })}>
-            <span className="font-fluent font-bold"></span>
+            <span className="font-fluent font-medium"></span>
             <span className="font-medium">12%</span>
           </div>
         </div>

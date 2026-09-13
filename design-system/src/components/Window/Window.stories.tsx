@@ -63,9 +63,9 @@ export const Default: Story = {
           {/* System Info */}
           <div className="text-foreground-secondary text-xs space-y-1 flex-1">
             <div>
-              <span className="text-state-success font-bold">user</span>
+              <span className="text-state-success font-medium">user</span>
               <span className="text-foreground-primary">@</span>
-              <span className="text-state-success font-bold">nixos</span>
+              <span className="text-state-success font-medium">nixos</span>
             </div>
             <div className="text-foreground-tertiary">-----------------</div>
             <div>
@@ -134,7 +134,7 @@ export const WithoutTitlebar: Story = {
       <div className="p-6 bg-background-primary h-full flex items-center justify-center">
         <div className="text-center">
           <div className="text-4xl mb-4">🎵</div>
-          <h2 className="text-lg font-bold text-foreground-primary mb-2">
+          <h2 className="text-lg font-medium text-foreground-primary mb-2">
             Now Playing
           </h2>
           <p className="text-sm text-foreground-secondary mb-1">
