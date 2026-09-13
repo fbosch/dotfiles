@@ -19,6 +19,7 @@ mini_sessions_path="$live_data_root/site/pack/core/opt/mini.sessions"
 fake_bin="$test_dir/bin"
 command_capture="$test_dir/herdr-pane-run.txt"
 process_state="$test_dir/neovim-restored"
+launch_count="$test_dir/neovim-launch-count"
 order_log="$test_dir/restore-order.txt"
 pi_environment_capture="$test_dir/pi-environment.txt"
 mkdir -p "$fake_bin" "$test_dir/config" "$test_dir/data" "$test_dir/state" "$test_dir/cache"
@@ -43,10 +44,12 @@ case "${1:-} ${2:-}" in
 			'{result:{panes:[{pane_id:$pane_id,workspace_id:"w1",tab_id:"w1:t1",label:"nvim",cwd:$cwd,foreground_cwd:$cwd,tokens:{nvim_session:$session}}]}}'
 		;;
 	"pane process-info")
-		if [[ -e "$HERDR_PROCESS_STATE" ]]; then
+		state="$(cat "$HERDR_PROCESS_STATE" 2>/dev/null || true)"
+		if [[ "$state" == "nvim" ]]; then
 			printf '{"result":{"process_info":{"foreground_processes":[{"name":"nvim"}]}}}\n'
 		else
 			printf '{"result":{"process_info":{"foreground_processes":[{"name":"fish"}]}}}\n'
+			[[ "$state" == "launching" ]] && printf 'nvim\n' >"$HERDR_PROCESS_STATE"
 		fi
 		;;
 	"pane report-metadata")
@@ -65,9 +68,16 @@ case "${1:-} ${2:-}" in
 			printf '\n' >&2
 			exit 1
 		fi
+		count="$(cat "$HERDR_LAUNCH_COUNT" 2>/dev/null || printf '0')"
+		count=$((count + 1))
+		printf '%s\n' "$count" >"$HERDR_LAUNCH_COUNT"
+		if ((count > 1)); then
+			printf 'Restore command was injected into Neovim after a stale shell observation.\n' >&2
+			exit 1
+		fi
 		printf 'herdr-pane-run\n' >>"$PI_RESTORE_ORDER_LOG"
 		printf '%s\n' "$4" >"$HERDR_COMMAND_CAPTURE"
-		touch "$HERDR_PROCESS_STATE"
+		printf 'launching\n' >"$HERDR_PROCESS_STATE"
 		cd "$HERDR_PANE_CWD"
 		exec bash -c "$4"
 		;;
@@ -113,6 +123,7 @@ export PATH="$fake_bin:$PATH"
 export HERDR_BIN_PATH="$fake_bin/herdr"
 export HERDR_COMMAND_CAPTURE="$command_capture"
 export HERDR_PROCESS_STATE="$process_state"
+export HERDR_LAUNCH_COUNT="$launch_count"
 export HERDR_PANE_CWD="$repo_root"
 export HERDR_SOCKET_PATH="$test_dir/herdr.sock"
 export PI_EXPECTED_HERDR_PANE_ID="w1:p1"

@@ -149,6 +149,7 @@ workspace_label_from_restored_panes() {
 
 main() {
 	local pending workspace_list workspace_ids workspace_id panes pane_ids pane_id cwd nvim_session processes
+	local -A launched_panes=()
 
 	for _ in {1..20}; do
 		pending=0
@@ -171,6 +172,9 @@ main() {
 					nvim_session="herdr-${pane_id/:/-}"
 				fi
 
+				# A successful pane run owns this restore attempt; stale process snapshots must not inject it again.
+				[[ -n "${launched_panes[$pane_id]:-}" ]] && continue
+
 				processes=""
 				for _ in {1..20}; do
 					if processes="$("$herdr_bin" pane process-info --pane "$pane_id" 2>/dev/null)"; then
@@ -189,6 +193,7 @@ main() {
 				if jq -e '[.result.process_info.foreground_processes[]?.name] | any(. == "fish" or . == "bash" or . == "zsh" or . == "sh")' >/dev/null <<<"$processes"; then
 					report_neovim_session "$pane_id" "$nvim_session"
 					run_neovim_session "$pane_id" "$nvim_session"
+					launched_panes[$pane_id]=1
 				fi
 				pending=1
 			done < <(jq -r '.[]' <<<"$pane_ids")

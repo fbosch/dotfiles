@@ -5,15 +5,20 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local listener
 local dispatched
 local parent
+local window_rules
 
 before_each(function()
 	listener = nil
 	dispatched = {}
 	parent = nil
+	window_rules = {}
 	_G.hl = {
 		on = function(event, callback)
 			assert.are.equal("window.open", event)
 			listener = callback
+		end,
+		window_rule = function(rule)
+			table.insert(window_rules, rule)
 		end,
 		get_last_window = function()
 			return parent
@@ -98,6 +103,61 @@ it("ignores a normal Zen window", function()
 	listener({
 		address = "0xwindow",
 		class = "app.zen_browser.zen",
+		at = { x = 0, y = 0 },
+		size = { x = 400, y = 300 },
+	})
+
+	assert.are.same({}, dispatched)
+end)
+
+it("registers floating rules for Obsidian settings and community plugins", function()
+	assert.are.same({
+		{
+			match = {
+				class = "^md\\.obsidian\\.Obsidian$",
+				initial_title = "^(Settings|Community plugins) - .*$",
+			},
+			float = true,
+			size = "970 1050",
+			no_anim = true,
+		},
+	}, window_rules)
+end)
+
+it("centers Obsidian dialogs within their parent window", function()
+	parent = {
+		class = "md.obsidian.Obsidian",
+		at = { x = 100, y = 200 },
+		size = { x = 1200, y = 1400 },
+	}
+
+	listener({
+		address = "0xsettings",
+		class = "md.obsidian.Obsidian",
+		title = "Settings - Vault - Obsidian 1.13.7",
+		at = { x = 0, y = 0 },
+		size = { x = 400, y = 300 },
+	})
+
+	assert.are.same({
+		{
+			operation = "move",
+			options = { x = 215, y = 375, window = "address:0xsettings" },
+		},
+	}, dispatched)
+end)
+
+it("ignores normal Obsidian windows", function()
+	parent = {
+		class = "md.obsidian.Obsidian",
+		at = { x = 100, y = 200 },
+		size = { x = 1200, y = 800 },
+	}
+
+	listener({
+		address = "0xnote",
+		class = "md.obsidian.Obsidian",
+		title = "Heap, Stack & Static - Vault - Obsidian 1.13.7",
 		at = { x = 0, y = 0 },
 		size = { x = 400, y = 300 },
 	})

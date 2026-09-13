@@ -1,5 +1,7 @@
 local M = {}
 
+local obsidian_dialog_size = { x = 970, y = 1050 }
+
 -- Add children under the class of the window that opens them.
 local child_classes_by_parent_class = {
 	["app.zen_browser.zen"] = {
@@ -27,8 +29,37 @@ local function centered_position(parent, dialog)
 end
 
 function M.register()
+	hl.window_rule({
+		match = {
+			class = "^md\\.obsidian\\.Obsidian$",
+			initial_title = "^(Settings|Community plugins) - .*$",
+		},
+		float = true,
+		size = "970 1050",
+		no_anim = true,
+	})
+
 	hl.on("window.open", function(dialog)
 		local parent = hl.get_last_window()
+		local title = dialog.title or dialog.initial_title or ""
+		local is_obsidian_dialog = parent
+			and parent.class == "md.obsidian.Obsidian"
+			and dialog.class == "md.obsidian.Obsidian"
+			and (title:sub(1, 11) == "Settings - " or title:sub(1, 20) == "Community plugins - ")
+		if is_obsidian_dialog then
+			local position = centered_position(parent, { at = dialog.at, size = obsidian_dialog_size })
+			if not position then
+				return
+			end
+
+			hl.dispatch(hl.dsp.window.move({
+				x = position.x,
+				y = position.y,
+				window = "address:" .. dialog.address,
+			}))
+			return
+		end
+
 		local child_classes = parent and child_classes_by_parent_class[parent.class]
 		if not child_classes then
 			return
