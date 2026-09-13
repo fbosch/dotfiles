@@ -96,7 +96,9 @@ export async function areDangerousCommandTargetsSafeInLocations(
   safeLocations: readonly string[],
   workingDirectory?: string,
 ): Promise<boolean> {
-  const parsed = await parseShellLcLiteralCommands(["bash", "-lc", command]);
+  const commandWithTrustedTempTargets = await resolveTrustedMktempTargets(command, safeLocations);
+  if (commandWithTrustedTempTargets === undefined) return false;
+  const parsed = await parseShellLcLiteralCommands(["bash", "-lc", commandWithTrustedTempTargets]);
   if (
     parsed.kind !== "parsed" ||
     parsed.hasUnresolvedCommands ||
@@ -123,8 +125,108 @@ export async function areDangerousCommandTargetsSafeInLocations(
   }
 
   return (
-    foundDangerousCommand && (parsed.commands.length === 1 || allDangerousTargetsInWorkingDirectory)
+    foundDangerousCommand &&
+    (parsed.commands.length === 1 ||
+      allDangerousTargetsInWorkingDirectory ||
+      commandWithTrustedTempTargets !== command)
   );
+}
+
+async function resolveTrustedMktempTargets(
+  command: string,
+  safeLocations: readonly string[],
+): Promise<string | undefined> {
+  const parsed = await parseSyntaxTree(command);
+  if (parsed === undefined) return undefined;
+
+  try {
+    const assignments = collectNodes(parsed.rootNode, "variable_assignment");
+    let resolved = command;
+    for (const assignment of assignments) {
+      const match = /^([A-Za-z_][A-Za-z0-9_]*)=\$\((mktemp(?:\s+-d)?)\)$/.exec(assignment.text);
+      if (match === null) continue;
+
+      const variableName = match[1];
+      if (variableName === undefined) continue;
+      if (assignments.filter((node) => firstNamedChild(node)?.text === variableName).length !== 1) {
+        continue;
+      }
+      if (mayMutateVariable(command, variableName)) continue;
+
+      const assignmentEnd = command.indexOf(assignment.text) + assignment.text.length;
+      const reference = new RegExp(`(["'])\\$(?:${variableName}|\\{${variableName}\\})\\1`, "g");
+      const references = [...command.matchAll(reference)];
+      if (references.length === 0 || references.some((item) => (item.index ?? -1) < assignmentEnd)) {
+        continue;
+      }
+
+      const tempRoot = process.env.TMPDIR ?? "/tmp";
+      const placeholder = posixPath.join(tempRoot, "pi-permission-mktemp-output");
+      if (!safeLocations.some((location) => isPathDescendant(placeholder, location))) continue;
+      resolved = resolved.replaceAll(reference, `'${placeholder}'`);
+    }
+    if (resolved !== command && (await containsDynamicRmTarget(resolved))) return undefined;
+    return resolved;
+  } finally {
+    parsed.delete();
+  }
+}
+
+async function containsDynamicRmTarget(command: string): Promise<boolean> {
+  const parsed = await parseSyntaxTree(command);
+  if (parsed === undefined) return true;
+  try {
+    return collectNodes(parsed.rootNode, "command").some((node) => {
+      const words = literalCommandWords(node);
+      return (
+        executableName(words?.[0]) === "rm" && collectNodes(node, "simple_expansion").length > 0
+      );
+    });
+  } finally {
+    parsed.delete();
+  }
+}
+
+function mayMutateVariable(command: string, variableName: string): boolean {
+  const escaped = escapeRegExp(variableName);
+  return new RegExp(
+    `(?:^|[;&|()\\n]\\s*)(?:unset\\s+|read(?:\\s+-[^\\s]+)*\\s+|printf\\s+-v\\s+|(?:declare|typeset|local)(?:\\s+-[^\\s]+)*\\s+)${escaped}(?:\\s|[;&|()\\n]|$)`,
+  ).test(command);
+}
+
+function collectNodes(root: SyntaxNode, type: string): SyntaxNode[] {
+  const matches: SyntaxNode[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (node === undefined) continue;
+    if (node.type === type) matches.push(node);
+    for (let index = 0; index < node.childCount; index++) {
+      const child = node.child(index);
+      if (child?.isNamed) stack.push(child);
+    }
+  }
+  return matches;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function parseSyntaxTree(
+  source: string,
+): Promise<{ rootNode: SyntaxNode; delete(): void } | undefined> {
+  try {
+    const { getParser } = (await import(BASH_PARSER_MODULE_URL)) as BashParserModule;
+    const tree = (await getParser()).parse(source);
+    if (tree === null || tree.rootNode.hasError) {
+      tree?.delete();
+      return undefined;
+    }
+    return tree;
+  } catch {
+    return undefined;
+  }
 }
 
 function dangerousPathValuesAreSafe(

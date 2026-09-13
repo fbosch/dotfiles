@@ -105,6 +105,47 @@ describe("dangerousCommandMatch", () => {
     }
   });
 
+  test("allows exact cleanup targets produced by mktemp", async () => {
+    const safeLocations = ["/tmp"];
+    for (const command of [
+      'log=$(mktemp); printf x >"$log"; rm -f "$log"',
+      'dir=$(mktemp -d); test -d "$dir"; rm -rf "${dir}"',
+      'log=$(mktemp); rm -f "$log" /tmp/other',
+    ]) {
+      expect(
+        await areDangerousCommandTargetsSafeInLocations(
+          command,
+          safeLocations,
+          "/workspace/project",
+        ),
+        command,
+      ).toBe(true);
+    }
+  });
+
+  test("rejects ambiguous or mutated mktemp cleanup targets", async () => {
+    const safeLocations = ["/tmp"];
+    for (const command of [
+      'log=$(mktemp); log=/home/example; rm -f "$log"',
+      'log=$(mktemp); unset log; rm -f "$log"',
+      'log=$(mktemp); rm -rf "$log/.."',
+      'log=$(mktemp); rm -f "${log}suffix"',
+      'rm -f "$log"; log=$(mktemp)',
+      'echo \'log=$(mktemp)\'; rm -f "$log"',
+      'log=$(some-command); rm -f "$log"',
+      'log=$(mktemp); echo "$log"; rm -f "$OTHER" /tmp/other',
+    ]) {
+      expect(
+        await areDangerousCommandTargetsSafeInLocations(
+          command,
+          safeLocations,
+          "/workspace/project",
+        ),
+        command,
+      ).toBe(false);
+    }
+  });
+
   test("uses supplied path evidence instead of an executable-specific rule", async () => {
     expect(
       await isDangerousCommandSafeInLocations(

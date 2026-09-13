@@ -191,12 +191,12 @@ assert(saved_metadata.opencode_session_id == "ses_exact", "OpenCode session ID c
 assert(saved_metadata.opencode_terminal_open == true, "OpenCode terminal state changed after Pi binding")
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
 saved_metadata = session.get_metadata(nvim_session)
-assert(saved_metadata.pi_terminal_open == true, "hidden Pi terminal was not kept restorable")
+assert(saved_metadata.pi_terminal_open == false, "hidden Pi terminal was not persisted as closed")
 
 local restored_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 local restored_metadata = restored_session.get_metadata(nvim_session)
 assert(restored_metadata.pi_session_id == first_session_id, "Pi session ID did not survive metadata load")
-assert(restored_metadata.pi_terminal_open == true, "Pi terminal state did not survive metadata load")
+assert(restored_metadata.pi_terminal_open == false, "closed Pi terminal state did not survive metadata load")
 assert(restored_metadata.opencode_session_id == "ses_exact", "OpenCode session ID did not survive metadata load")
 assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal state did not survive metadata load")
 

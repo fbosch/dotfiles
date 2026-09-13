@@ -243,6 +243,22 @@ describe("permissions mode", () => {
     }
   });
 
+  test("normal mode auto-approves exact mktemp cleanup for build agents", async () => {
+    const command =
+      'log=$(mktemp); EVENT_LOG="$log" timeout 5s nvim --headless; code=$?; cat "$log"; rm -f "$log" /tmp/pi-snacks-exit-order.lua; exit $code';
+
+    expect(
+      await canAutoApprovePermission({ surface: "bash", command, agentName: "debug" }),
+    ).toBe(true);
+    expect(
+      await canAutoApprovePermission({
+        surface: "bash",
+        command: 'log=$(mktemp); log=/home/fbb/keep; rm -f "$log"',
+        agentName: "debug",
+      }),
+    ).toBe(false);
+  });
+
   test("normal mode auto-approves literal destructive targets inside the CWD", async () => {
     const workingDirectory = "/workspace/project";
 

@@ -53,19 +53,32 @@ rawset(vim, "notify", function(message, level)
 end)
 
 local terminal_callbacks = {}
+local terminal_visible = true
 local terminal = {
 	buf = vim.api.nvim_create_buf(false, true),
 	buf_valid = function()
 		return true
 	end,
 	close = function(self)
+		terminal_visible = false
+		return self
+	end,
+	focus = function(self)
+		return self
+	end,
+	show = function(self)
+		terminal_visible = true
+		return self
+	end,
+	toggle = function(self)
+		terminal_visible = not terminal_visible
 		return self
 	end,
 	on = function(_, event, callback)
 		terminal_callbacks[event] = callback
 	end,
 	valid = function()
-		return true
+		return terminal_visible
 	end,
 }
 local opened = {}
@@ -75,6 +88,7 @@ package.loaded["snacks.terminal"] = {
 		if fail_open then
 			error("terminal fixture failure")
 		end
+		terminal_visible = true
 		table.insert(opened, { command = command, options = options })
 		options.win.on_buf(terminal)
 		return terminal
@@ -260,6 +274,14 @@ assert_exact_command(
 assert(opened[5].options.cwd == repo_root, "PiStart did not use the saved worktree")
 assert_metadata_unchanged(manual_metadata, "manual Pi resume changed Neovim metadata")
 assert(vim.deep_equal(vim.fn.readfile(exact_path, "b"), exact_file_before), "manual Pi resume changed the session file")
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+assert(session.get_metadata(nvim_session).pi_terminal_open == true, "visible Pi terminal was not persisted as open")
+terminal:toggle()
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
+assert(session.get_metadata(nvim_session).pi_terminal_open == false, "hidden Pi terminal was not persisted as closed")
+local opened_before_hidden_restore = #opened
+vim.api.nvim_exec_autocmds("User", { pattern = "SessionLoadPost" })
+assert(#opened == opened_before_hidden_restore, "saved closed Pi terminal reopened during session load")
 terminal_callbacks.TermClose()
 
 notifications = {}

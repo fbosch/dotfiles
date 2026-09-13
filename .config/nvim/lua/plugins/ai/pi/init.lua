@@ -323,7 +323,7 @@ local function save_terminal_state()
 	end
 
 	local terminal = current_terminal()
-	local is_open = terminal ~= nil and terminal_owner == nvim_session and terminal:buf_valid()
+	local is_open = terminal ~= nil and terminal_owner == nvim_session and terminal:valid()
 	if is_open and terminal_session_id == nil then
 		session.set_pi_terminal_state(nil, false, nvim_session)
 		return
