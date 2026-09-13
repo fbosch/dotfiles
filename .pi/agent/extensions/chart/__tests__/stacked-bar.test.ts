@@ -123,6 +123,68 @@ describe("stacked bar", () => {
     }
   });
 
+  test("keeps both normalized endpoints visible at the narrow natural width", () => {
+    const d = details({ normalize: true });
+    const layout = getStackedBarChartLayout(d, { widthPx: 9, heightPx: 18 }, 28);
+    const svg = renderStackedBarChartSvg(d, theme, layout);
+    expect(svg).toContain(">0%</text>");
+    expect(svg).toContain(">100%</text>");
+  });
+
+  test("reserves enough wide label gutter for complete modest labels but ellipsizes narrowly", () => {
+    const d = details({
+      categories: ["North", "Long category"],
+      series: [{ name: "Online", values: [1, 2] }],
+    });
+    const wide = renderStackedBarChartSvg(d, theme, getStackedBarChartLayout(d, undefined, 60));
+    const narrow = renderStackedBarChartSvg(d, theme, getStackedBarChartLayout(d, undefined, 28));
+    expect(wide).toContain(">Long category</text>");
+    expect(narrow).toContain(">Long cate…</text>");
+  });
+
+  test("compacts capped categories and wraps every series in exact raster space", async () => {
+    const d = details({
+      categories: [
+        "North",
+        "South",
+        "East",
+        "West",
+        "No sales",
+        "Other",
+        "Long category",
+        "Remote",
+      ],
+      series: [
+        { name: "Online", values: [3, 6, 1, 0, 0, 2, 4, 1] },
+        { name: "Store", values: [1, 2, 3, 4, 0, 0, 5, 2] },
+        { name: "Partner", values: [0, 0, 1, 2, 0, 1, 0, 1] },
+        { name: "Wholesale", values: [2, 0, 0, 1, 0, 3, 2, 0] },
+        { name: "Other", values: [0, 1, 0, 0, 0, 0, 1, 1] },
+        { name: "Unused", values: [0, 0, 0, 0, 0, 0, 0, 0] },
+      ],
+      normalize: true,
+      title: "Normalized sales mix",
+      xLabel: "Share",
+      maxHeightCells: 8,
+    });
+    const layout = getStackedBarChartLayout(d, { widthPx: 9, heightPx: 18 }, 28);
+    const svg = renderStackedBarChartSvg(d, theme, layout);
+    expect(layout.compact).toBe(true);
+    expect(layout.fontSizePx).toBeLessThan(14);
+    expect(layout.heightCells).toBeLessThanOrEqual(8);
+    expect(layout.legendRows).toBeGreaterThanOrEqual(1);
+    expect(rectangles(svg).filter((mark) => mark["data-ts-key"])).toHaveLength(48);
+    expect(rectangles(svg).filter((mark) => !mark["data-ts-key"])).toHaveLength(6);
+    expect(svg).toContain(">North</text>");
+    expect(svg).toContain(">Remote</text>");
+    expect(svg).toContain("Online");
+    expect(svg).toContain("Unused");
+    expect(getPngDimensions(await rasterizeSvg(svg))).toEqual({
+      widthPx: layout.widthPx,
+      heightPx: layout.heightPx,
+    });
+  }, 15_000);
+
   test("rejects malformed public inputs and saved details at both boundaries", async () => {
     const { type: _type, ...parameters } = input;
     expect(Value.Check(chartStackedBarParameters, parameters)).toBe(true);

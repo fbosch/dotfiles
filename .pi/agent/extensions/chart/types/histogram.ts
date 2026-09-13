@@ -39,6 +39,7 @@ import {
 import {
   clampChartPlotHeightPx,
   finalizeChartLayout,
+  getChartSurfaceColor,
   isValidChartHeight,
   renderSvgDocument,
   stripTanStackSvg,
@@ -290,6 +291,17 @@ export function renderHistogramChartSvg(
       if (!row) throw new Error("histogram rectangle has no bin");
       return `<rect data-bin="${index}"${attributes}><title>${escapeXml(interval(row, index === details.rows.length - 1))}: ${row.count}</title></rect>`;
     });
+  const separatorColor = getChartSurfaceColor(foreground);
+  const separators = details.rows
+    .slice(1)
+    .map((row, index) => {
+      const previous = details.rows[index];
+      if (!previous || row.count <= 0 || row.count !== previous.count) return "";
+      const boundary = x(row.lower);
+      const height = (row.count / peak) * layout.plotHeightPx;
+      return `<line data-bin-separator="${index + 1}" x1="${boundary}" x2="${boundary}" y1="${baseline}" y2="${baseline - height}" stroke="${separatorColor}" stroke-width="1"/>`;
+    })
+    .join("");
   const tickCount = layout.plotWidthPx < 300 ? 2 : 4;
   const xTicks = Array.from({ length: tickCount + 1 }, (_, index) => {
     const value = index === tickCount ? last.upper : first.lower + span * (index / tickCount);
@@ -343,7 +355,7 @@ export function renderHistogramChartSvg(
     viewBoxHeightPx: layout.heightPx,
     fontFamily: fontFamily,
     ariaLabel: name,
-    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${bars}</g><path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}`,
+    content: `<title>${escapeXml(name)}</title><desc>${escapeXml(getHistogramChartSummary(details))}</desc><g transform="translate(${layout.plotX} ${layout.plotY})">${bars}</g>${separators === "" ? "" : `<g data-histogram-separators="true">${separators}</g>`}<path d="M ${layout.plotX} ${layout.plotY} V ${baseline} H ${layout.plotX + layout.plotWidthPx}" fill="none" stroke="${foreground}"/>${xTicks}${yTicks}${labels}`,
   });
 }
 
@@ -354,7 +366,7 @@ export const histogramChartRenderer: ChartType<
   HistogramChartLayout
 > = {
   renderingText: "Rendering histogram…",
-  unavailableText: "Histogram unavailable",
+  unavailableText: "Histogram chart unavailable",
   parameters: histogramChartVariant,
   parseParameters: validateHistogramChartInput,
   createDetails(data, settings) {

@@ -561,7 +561,7 @@ describe("pie chart", () => {
       "base64",
     );
 
-    expect(getPngDimensions(png.toString("base64"))).toEqual({ widthPx: 540, heightPx: 220 });
+    expect(getPngDimensions(png.toString("base64"))).toEqual({ widthPx: 540, heightPx: 245 });
     expect(topLeftPngAlpha(png)).toBe(0);
   });
 
@@ -637,7 +637,7 @@ describe("pie chart", () => {
     );
     const image = printResult.content.find((content) => content.type === "image");
     expect(image).toMatchObject({ type: "image", mimeType: "image/png" });
-    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 720, heightPx: 220 });
+    expect(getPngDimensions(image?.data ?? "")).toEqual({ widthPx: 720, heightPx: 245 });
   });
 
   test("rasterizes at native logical dimensions and displays compact wide and narrow cell heights", async () => {

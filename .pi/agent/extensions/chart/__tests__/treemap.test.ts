@@ -64,6 +64,12 @@ function rectangles(nodes: readonly SceneNode[]): SceneRect[] {
   );
 }
 
+function labels(nodes: readonly SceneNode[]): string[] {
+  return nodes.flatMap((node) =>
+    node.kind === "group" ? labels(node.children) : node.kind === "label" ? [node.text] : [],
+  );
+}
+
 describe("treemap", () => {
   test("aggregates nested children without double counting, retaining exact paths and independent data", () => {
     const d = details();
@@ -125,6 +131,106 @@ describe("treemap", () => {
       ).toBeLessThanOrEqual(layout.widthPx + layout.plotHeightPx);
       expect(renderTreemapChartSvg(d, theme, layout)).toBe(renderTreemapChartSvg(d, theme, layout));
     }
+  });
+
+  test("renders hierarchy paths for substantial nested representative tiles", () => {
+    const d = details({
+      title: "Bundle sizes",
+      unit: "kB",
+      data: [
+        {
+          label: "src",
+          children: [
+            {
+              label: "core",
+              children: [
+                { label: "parse.ts", value: 24 },
+                { label: "render.ts", value: 16 },
+              ],
+            },
+            { label: "empty.ts", value: 0 },
+          ],
+        },
+        { label: "vendor", value: 60 },
+      ],
+    });
+    const layout = getTreemapChartLayout(d, { widthPx: 9, heightPx: 18 }, 60);
+    const visible = labels(createTreemapScene(d, layout).nodes);
+
+    expect(visible).toEqual(
+      expect.arrayContaining([
+        "src: 40 kB",
+        "src / core: 40 kB",
+        "src / core / parse.ts: 24 kB",
+        "src / core / render.ts: 16 kB",
+      ]),
+    );
+  });
+
+  test("keeps nested names visible at narrow width without reviving skewed tiny tiles", () => {
+    const representative = details({
+      title: "Bundle sizes",
+      unit: "kB",
+      data: [
+        {
+          label: "src",
+          children: [
+            {
+              label: "core",
+              children: [
+                { label: "parse.ts", value: 24 },
+                { label: "render.ts", value: 16 },
+              ],
+            },
+            { label: "empty.ts", value: 0 },
+          ],
+        },
+        { label: "vendor", value: 60 },
+      ],
+    });
+    const narrowLayout = getTreemapChartLayout(representative, { widthPx: 9, heightPx: 18 }, 28);
+    const narrowLabels = labels(createTreemapScene(representative, narrowLayout).nodes);
+    expect(narrowLabels.some((text) => text.includes("core"))).toBe(true);
+    expect(narrowLabels.some((text) => text.includes("parse.ts"))).toBe(true);
+    expect(narrowLabels.some((text) => text.includes("render.ts"))).toBe(true);
+
+    const skewed = details({
+      title: "Skewed bundle",
+      unit: "kB",
+      data: [
+        {
+          label: "application",
+          children: [
+            {
+              label: "src",
+              children: [
+                {
+                  label: "core",
+                  children: [
+                    { label: "parse.ts", value: 900 },
+                    { label: "render.ts", value: 1 },
+                  ],
+                },
+                { label: "empty.ts", value: 0 },
+              ],
+            },
+          ],
+        },
+        {
+          label: "docs",
+          children: [
+            { label: "guide.md", value: 2 },
+            { label: "api.md", value: 0 },
+          ],
+        },
+        { label: "vendor", value: 10000 },
+        { label: "empty-group", value: 0 },
+      ],
+    });
+    const skewedLayout = getTreemapChartLayout(skewed, { widthPx: 9, heightPx: 18 }, 60);
+    const skewedLabels = labels(createTreemapScene(skewed, skewedLayout).nodes);
+    expect(skewedLabels.some((text) => text.includes("render.ts"))).toBe(false);
+    expect(skewedLabels.some((text) => text.includes("guide.md"))).toBe(false);
   });
 
   test("keeps rounded coordinates inside a fractional height cap", () => {

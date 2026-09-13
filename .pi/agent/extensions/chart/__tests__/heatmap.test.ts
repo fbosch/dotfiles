@@ -15,6 +15,7 @@ import {
   renderHeatmapChartSvg,
   validateHeatmapChartInput,
 } from "../types/heatmap";
+import manifest from "./fixtures/visual-validation/manifest.json";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -54,6 +55,59 @@ function rectangles(svg: string) {
     };
   });
 }
+
+type HeatmapVisualProfile = keyof typeof manifest.profiles;
+
+type RenderedHeatmapView = {
+  fixtureId: string;
+  profileName: HeatmapVisualProfile;
+  details: ReturnType<typeof details>;
+  layout: ReturnType<typeof getHeatmapChartLayout>;
+  svg: string;
+};
+
+function required<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("Expected a heatmap visual fixture");
+  return value;
+}
+
+const frozenHeatmap = required(manifest.charts.find((chart) => chart.chart === "heatmap"));
+const renderedHeatmapViews: RenderedHeatmapView[] = frozenHeatmap.cases.flatMap((fixture) => {
+  const profiles = [
+    ...fixture.profiles.map((profileName) => ({
+      profileName: profileName as HeatmapVisualProfile,
+      maxHeightCells: undefined,
+    })),
+    ...(fixture.heightCaps ?? []).map((cap) => ({
+      profileName: cap.profile as HeatmapVisualProfile,
+      maxHeightCells: cap.maxHeightCells,
+    })),
+  ];
+  return profiles.map(({ profileName, maxHeightCells }) => {
+    const profile = manifest.profiles[profileName];
+    const parameters = {
+      ...fixture.args,
+      type: "heatmap" as const,
+      ...(maxHeightCells === undefined ? {} : { maxHeightCells }),
+    } as HeatmapChartInput;
+    const renderedDetails = heatmapChartRenderer.createDetails(
+      heatmapChartRenderer.parseParameters(parameters),
+      { imageWidthCells: profile.widthCells, fontFamily: "sans-serif" },
+    );
+    const layout = getHeatmapChartLayout(
+      renderedDetails,
+      { widthPx: profile.cellWidthPx, heightPx: profile.cellHeightPx },
+      profile.widthCells,
+    );
+    return {
+      fixtureId: fixture.id,
+      profileName,
+      details: renderedDetails,
+      layout,
+      svg: renderHeatmapChartSvg(renderedDetails, theme, layout),
+    };
+  });
+});
 
 describe("heatmap", () => {
   test("has a bounded discriminator-free contract and validates matrix semantics", async () => {
@@ -290,6 +344,54 @@ describe("heatmap", () => {
       );
     }
   }, 15_000);
+
+  test("keeps capped manifest heatmaps raster-visible without changing matrix identity", async () => {
+    expect(renderedHeatmapViews).toHaveLength(7);
+    for (const view of renderedHeatmapViews) {
+      const cells = rectangles(view.svg);
+      expect(cells, `${view.fixtureId} ${view.profileName}`).toHaveLength(
+        view.details.rows.length * view.details.columns.length,
+      );
+      expect(new Set(cells.map((cell) => cell.key)).size).toBe(cells.length);
+      expect(cells.every((cell) => cell.width > 0 && cell.height > 0)).toBe(true);
+      expect(view.svg).not.toMatch(/NaN|Infinity|undefined/);
+      expect(getPngDimensions(await rasterizeSvg(view.svg))).toEqual({
+        widthPx: view.layout.widthPx,
+        heightPx: view.layout.heightPx,
+      });
+
+      const showValues =
+        view.details.showValues &&
+        view.layout.plotWidthPx / view.details.columns.length >= view.layout.fontSizePx * 5 &&
+        view.layout.plotHeightPx / view.details.rows.length >= view.layout.fontSizePx * 1.2;
+      expect(view.svg.match(/data-cell-value="true"/g)?.length ?? 0).toBe(
+        showValues ? view.details.data.flat().filter((value) => value !== null).length : 0,
+      );
+    }
+
+    const dense = required(
+      renderedHeatmapViews.find(
+        (view) =>
+          view.fixtureId === "heatmap-adversarial-dense-missing" && view.profileName === "N8",
+      ),
+    );
+    const rowLabels = [
+      ...dense.svg.matchAll(
+        /<text x="[^"]+" y="([^"]+)" font-size="([^"]+)" text-anchor="end"[^>]*>([^<]+)<\/text>/g,
+      ),
+    ].slice(0, dense.details.rows.length);
+    expect(rowLabels).toHaveLength(dense.details.rows.length);
+    const rowLabelY = rowLabels.map((match) => Number(match[1]));
+    expect(
+      rowLabelY.every(
+        (value, index) =>
+          index === 0 || value - (rowLabelY[index - 1] ?? value) >= dense.layout.fontSizePx,
+      ),
+    ).toBe(true);
+    expect(rowLabels.map((match) => match[3])).toEqual(dense.details.rows);
+    expect(new Set(rectangles(dense.svg).map((cell) => cell.y))).toHaveLength(6);
+    expect(new Set(rectangles(dense.svg).map((cell) => cell.x))).toHaveLength(6);
+  }, 30_000);
 
   test("round-trips saved details and rejects corrupt replay matrices", () => {
     const d = details({ showValues: true, colorScale: "diverging" });

@@ -7,17 +7,20 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { getPngDimensions } from "@earendil-works/pi-tui";
+import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
 import chartExtension from "../index";
 import { resolveChartSettings } from "../types";
 import {
   type BarChartInput,
+  type BarChartRow,
   barChartRenderer,
   barChartVariant,
   getBarChartLayout,
   renderBarChartSvg,
   validateBarChartInput,
 } from "../types/bar";
+import manifest from "./fixtures/visual-validation/manifest.json";
 
 const theme = {
   fg: (_color: string, text: string) => text,
@@ -79,6 +82,63 @@ function currentChartFontFamily(): string {
     .fontFamily;
 }
 
+type BarProfileName = "D" | "N" | "D18" | "N8";
+type BarManifestProfile = {
+  widthCells: number;
+  cellWidthPx: number;
+  cellHeightPx: number;
+};
+type BarManifestCase = {
+  id: string;
+  args: {
+    data: BarChartRow[];
+    title?: string;
+    valueFormat?: "number" | "percent";
+  };
+  profiles: BarProfileName[];
+  heightCaps?: { profile: BarProfileName; maxHeightCells: number }[];
+};
+type BarManifest = { cases: BarManifestCase[] };
+
+const barManifest = manifest.charts.find(
+  (chart) => chart.chart === "bar",
+) as unknown as BarManifest;
+const barProfiles = manifest.profiles as unknown as Record<BarProfileName, BarManifestProfile>;
+
+function rasterize(svg: string) {
+  return new Resvg(svg, {
+    font: { loadSystemFonts: true, defaultFontFamily: "sans-serif" },
+  }).render();
+}
+
+function hasAlphaInBand(
+  pixels: Uint8Array,
+  width: number,
+  height: number,
+  xStart: number,
+  xEnd: number,
+  yStart: number,
+  yEnd: number,
+): boolean {
+  const left = Math.max(0, Math.floor(xStart));
+  const right = Math.min(width, Math.ceil(xEnd));
+  const top = Math.max(0, Math.floor(yStart));
+  const bottom = Math.min(height, Math.ceil(yEnd));
+  for (let y = top; y < bottom; y += 1) {
+    for (let x = left; x < right; x += 1) {
+      if ((pixels[(y * width + x) * 4 + 3] ?? 0) >= 16) return true;
+    }
+  }
+  return false;
+}
+
+function removeRasterTextAndRules(svg: string): string {
+  return svg
+    .replace(/<title>[\s\S]*?<\/title>/g, "")
+    .replace(/<text\b[^>]*>[\s\S]*?<\/text>/g, "")
+    .replace(/<line\b[^>]*\/>/g, "");
+}
+
 describe("bar chart", () => {
   const rows = [
     { label: "Loss", value: -4 },
@@ -126,6 +186,7 @@ describe("bar chart", () => {
     expect(zeroBar?.[1]).toBeDefined();
     expect(baseline?.[1]).toBeDefined();
     expect(Number(zeroBar?.[1])).toBeCloseTo(Number(baseline?.[1]), 1);
+    expect(svg).toContain('data-bar-zero="Neutral"');
     expect(svg).toContain("rgb(102, 165, 173)");
     expect(svg).toContain("rgb(129, 155, 105)");
     expect(svg).not.toMatch(/<rect\b[^>]*width="100%"[^>]*height="100%"/);
@@ -163,6 +224,23 @@ describe("bar chart", () => {
     expect(narrowSvg).toContain('width="252" height="114" viewBox="0 0 252 114"');
   });
 
+  test("keeps a capped dense chart aligned to one compact row pitch", () => {
+    const denseRows = Array.from({ length: 12 }, (_, index) => ({
+      label: `Row ${index}`,
+      value: index === 2 || index === 9 ? 0 : index % 2 === 0 ? index + 1 : -(index + 1),
+    }));
+    const layout = getBarChartLayout({ widthPx: 9, heightPx: 18 }, 28, denseRows, true, 32, 8);
+    const svg = renderBarChartSvg(denseRows, theme, layout, "Dense rows");
+
+    expect(layout.heightCells).toBeLessThanOrEqual(8);
+    expect(layout.labelFontSizePx).toBe(8);
+    expect(layout.plotHeightPx / denseRows.length).toBe(layout.rowHeightPx);
+    expect(layout.plotY + layout.plotHeightPx).toBeLessThanOrEqual(layout.heightPx);
+    expect(svg.match(/data-bar-row="\d+"/g)).toHaveLength(denseRows.length);
+    expect(svg.match(/data-bar-zero="[^"]+"/g)).toHaveLength(2);
+    for (const row of denseRows) expect(svg).toContain(`${row.label}:`);
+  });
+
   test("routes bar results through TUI replay details and non-TUI PNG output", async () => {
     const execute = registerTool().execute as ChartExecute;
     const params: BarChartInput = { type: "bar", data: rows, title: "Balance" };
@@ -192,6 +270,88 @@ describe("bar chart", () => {
       heightPx: layout.heightPx,
     });
   });
+
+  test("replays every bar manifest view as a complete raster", () => {
+    for (const fixture of barManifest.cases) {
+      const views = [
+        ...fixture.profiles.map((profile) => ({ profile, maxHeightCells: undefined })),
+        ...(fixture.heightCaps ?? []).map(({ profile, maxHeightCells }) => ({
+          profile,
+          maxHeightCells,
+        })),
+      ];
+      for (const view of views) {
+        const profile = barProfiles[view.profile];
+        const input: BarChartInput = {
+          type: "bar",
+          ...fixture.args,
+          ...(view.maxHeightCells === undefined ? {} : { maxHeightCells: view.maxHeightCells }),
+        };
+        const data = barChartRenderer.parseParameters(input);
+        const details = barChartRenderer.createDetails(data, {
+          imageWidthCells: profile.widthCells,
+          fontFamily: "sans-serif",
+        });
+        const layout = barChartRenderer.getLayout(
+          details,
+          { widthPx: profile.cellWidthPx, heightPx: profile.cellHeightPx },
+          profile.widthCells,
+        );
+        const svg = barChartRenderer.renderSvg(details, theme, layout);
+        const raster = rasterize(svg);
+        const marksOnly = rasterize(removeRasterTextAndRules(svg));
+
+        expect(
+          { widthPx: raster.width, heightPx: raster.height },
+          `${fixture.id} ${view.profile}`,
+        ).toEqual({ widthPx: layout.widthPx, heightPx: layout.heightPx });
+        if (view.maxHeightCells !== undefined) {
+          expect(layout.heightCells, `${fixture.id} ${view.profile}`).toBeLessThanOrEqual(
+            view.maxHeightCells,
+          );
+        }
+        expect(svg.match(/data-bar-row="\d+"/g), `${fixture.id} ${view.profile}`).toHaveLength(
+          fixture.args.data.length,
+        );
+        expect([...svg.matchAll(/data-bar-zero="([^"]+)"/g)].map((match) => match[1])).toEqual(
+          fixture.args.data.filter((row) => row.value === 0).map((row) => row.label),
+        );
+
+        for (let index = 0; index < fixture.args.data.length; index += 1) {
+          const rowTop = layout.plotY + layout.rowHeightPx * index;
+          const rowBottom = rowTop + layout.rowHeightPx;
+          expect(
+            hasAlphaInBand(
+              marksOnly.pixels,
+              marksOnly.width,
+              marksOnly.height,
+              layout.plotX - 1,
+              layout.plotX + layout.plotWidthPx + 1,
+              rowTop,
+              rowBottom,
+            ),
+            `${fixture.id} ${view.profile}: row ${index} has no raster mark`,
+          ).toBe(true);
+        }
+
+        const rowLabels = [
+          ...svg.matchAll(
+            /<text data-bar-row="(\d+)"[^>]* y="([0-9.e+-]+)"[^>]*font-size="([0-9.e+-]+)"/g,
+          ),
+        ];
+        expect(rowLabels, `${fixture.id} ${view.profile}`).toHaveLength(fixture.args.data.length);
+        for (const match of rowLabels) {
+          const y = Number(match[2]);
+          const font = Number(match[3]);
+          expect(y - font, `${fixture.id} ${view.profile}: row ${match[1]} top`).toBeGreaterThan(0);
+          expect(
+            y + font * 0.3,
+            `${fixture.id} ${view.profile}: row ${match[1]} bottom`,
+          ).toBeLessThan(layout.heightPx);
+        }
+      }
+    }
+  }, 30_000);
 
   test("deserializes only persisted bar details", () => {
     expect(barChartRenderer.deserializeDetails({ type: "bar", rows, imageWidthCells: 60 })).toEqual(

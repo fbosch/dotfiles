@@ -5,7 +5,15 @@ return {
 		},
 		decoration = {
 			blur = {
-				enabled = false,
+				enabled = true,
+				size = 6,
+				passes = 1,
+				special = false,
+				popups = false,
+				input_methods = false,
+				new_optimizations = true,
+				noise = 0,
+				vibrancy = 0,
 			},
 			shadow = {
 				enabled = false,

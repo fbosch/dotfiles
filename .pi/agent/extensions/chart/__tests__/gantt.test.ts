@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { getPngDimensions } from "@earendil-works/pi-tui";
+import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
 import { createGanttChartTool } from "../metadata";
 import { chartGanttParameters } from "../schemas";
@@ -11,10 +14,23 @@ import {
   validateGanttChartInput,
 } from "../types/gantt";
 import { getChartSurfaceColor, getContrastingTextColor } from "../types/shared";
+import manifest from "./fixtures/visual-validation/manifest.json";
 
+const darkColors: Record<string, string> = {
+  text: "187;187;187",
+  accent: "102;165;173",
+  success: "129;155;105",
+  warning: "183;126;100",
+  error: "222;110;124",
+  thinkingLow: "96;153;192",
+  thinkingMedium: "102;165;173",
+  thinkingHigh: "178;121;167",
+  thinkingXhigh: "183;126;100",
+  thinkingMax: "222;110;124",
+  bashMode: "129;155;105",
+};
 const theme = {
-  getFgAnsi: (color: string) =>
-    color === "text" ? "\u001b[38;2;187;187;187m" : "\u001b[38;2;102;165;173m",
+  getFgAnsi: (color: string) => `\u001b[38;2;${darkColors[color] ?? "167;139;250"}m`,
 };
 
 const lightTheme = {
@@ -291,3 +307,146 @@ describe("gantt chart", () => {
     expect(printResult.content.map((part) => part.type)).toEqual(["text", "image"]);
   });
 });
+
+function svgAttributes(tag: string): Record<string, string> {
+  return Object.fromEntries([...tag.matchAll(/([\w-]+)="([^"]*)"/g)].map((m) => [m[1], m[2]]));
+}
+
+const fontFile = execFileSync("fc-match", ["-f", "%{file}", "sans-serif"], { encoding: "utf8" });
+const rasterOptions = {
+  font: { loadSystemFonts: false, fontFiles: [fontFile], defaultFontFamily: "sans-serif" },
+};
+
+const manifestGantt = manifest.charts.find((chart) => chart.chart === "gantt");
+if (!manifestGantt) throw new Error("missing frozen gantt fixtures");
+for (const fixture of manifestGantt.cases) {
+  const views = [
+    ...fixture.profiles.map((profile) => ({ profile, maxHeightCells: undefined })),
+    ...(fixture.heightCaps ?? []),
+  ];
+  for (const view of views) {
+    test(`exact manifest ${fixture.id}/${view.profile}: distinct intervals and collision-free text`, async () => {
+      const width = view.profile.startsWith("N") ? 28 : 60;
+      const parameters = {
+        type: "gantt",
+        ...fixture.args,
+        ...(view.maxHeightCells === undefined ? {} : { maxHeightCells: view.maxHeightCells }),
+      };
+      if (!Value.Check(ganttChartVariant, parameters)) throw new Error("invalid frozen fixture");
+      const details = ganttChartRenderer.createDetails(
+        ganttChartRenderer.parseParameters(parameters),
+        { imageWidthCells: width, fontFamily: "sans-serif" },
+      );
+      const layout = ganttChartRenderer.getLayout(details, { widthPx: 9, heightPx: 18 }, width);
+      const svg = ganttChartRenderer.renderSvg(details, theme, layout);
+      expect(layout.widthPx).toBe(width * 9);
+      if (view.maxHeightCells === undefined) expect(layout.rowHeightPx).toBeGreaterThanOrEqual(25);
+      expect(layout.rowHeightPx).toBeGreaterThanOrEqual(5);
+      expect(getPngDimensions(await rasterizeSvg(svg))).toEqual({
+        widthPx: width * 9,
+        heightPx: layout.heightPx,
+      });
+      if (view.maxHeightCells !== undefined)
+        expect(layout.heightPx).toBeLessThanOrEqual(view.maxHeightCells * 18);
+      const bars = [...svg.matchAll(/<rect\b[^>]*\/>/g)]
+        .map((m) => m[0])
+        .filter((tag) => svgAttributes(tag)["data-ts-key"]?.includes(":background-"));
+      expect(bars).toHaveLength(details.tasks.length);
+      const sorted = bars.map(svgAttributes).sort((a, b) => Number(a.y) - Number(b.y));
+      const domain = Math.max(
+        ...details.tasks.map((task) => task.end),
+        ...details.milestones.map((milestone) => milestone.at),
+      );
+      for (const [index, bar] of sorted.entries()) {
+        const task = details.tasks[index];
+        if (!task) throw new Error("missing task interval");
+        expect(Number(bar.x)).toBeCloseTo((task.start / domain) * layout.plotWidthPx, 2);
+        expect(Number(bar.width)).toBeCloseTo(
+          ((task.end - task.start) / domain) * layout.plotWidthPx,
+          2,
+        );
+        expect(Number(bar.height)).toBeGreaterThanOrEqual(2);
+        if (index > 0)
+          expect(
+            Number(bar.y) - Number(sorted[index - 1]?.y) - Number(sorted[index - 1]?.height),
+          ).toBeGreaterThanOrEqual(1.5);
+      }
+      const dependencies = [...svg.matchAll(/<path\b[^>]*class="pi-gantt-dependency"[^>]*\/>/g)];
+      expect(dependencies).toHaveLength(
+        details.tasks.reduce((count, task) => count + task.dependencies.length, 0),
+      );
+      let dependencyIndex = 0;
+      for (const [targetIndex, task] of details.tasks.entries()) {
+        for (const id of task.dependencies) {
+          const sourceIndex = details.tasks.findIndex((source) => source.id === id);
+          const source = details.tasks[sourceIndex];
+          const path = svgAttributes(dependencies[dependencyIndex++]?.[0] ?? "").d;
+          if (!source || !path) throw new Error("missing dependency geometry");
+          const sourceX = layout.plotX + (source.end / domain) * layout.plotWidthPx;
+          const sourceY = layout.plotY + (sourceIndex + 0.5) * layout.rowHeightPx;
+          const targetX = layout.plotX + (task.start / domain) * layout.plotWidthPx;
+          const targetY = layout.plotY + (targetIndex + 0.5) * layout.rowHeightPx;
+          expect(path.startsWith(`M ${sourceX} ${sourceY} H `)).toBe(true);
+          expect(path.endsWith(` V ${targetY} H ${targetX}`)).toBe(true);
+          if (sourceX > targetX) {
+            const approachX = Number(path.match(/H ([0-9.e+-]+) V [0-9.e+-]+ H [0-9.e+-]+$/)?.[1]);
+            expect(approachX).toBeLessThan(targetX);
+          }
+        }
+      }
+      expect(svg.match(/class="pi-gantt-milestone-leader"/g)).toHaveLength(
+        details.milestones.length,
+      );
+      const summary = ganttChartRenderer.getSummary(details);
+      for (const milestone of details.milestones)
+        expect(summary).toContain(`${milestone.label} @ ${milestone.at}`);
+      for (const task of details.tasks)
+        expect(summary).toContain(
+          `${task.label} [${task.id}] ${task.start}-${task.end} progress=${task.progress}`,
+        );
+
+      const opening = svg.slice(0, svg.indexOf(">") + 1);
+      const intervalRaster = new Resvg(
+        `${opening}<g transform="translate(${layout.plotX} ${layout.plotY})">${bars.join("")}</g></svg>`,
+        rasterOptions,
+      ).render();
+      const intervalPixels = intervalRaster.pixels;
+      const rowInk = (y: number) => {
+        let count = 0;
+        for (let x = 0; x < intervalRaster.width; x++)
+          if ((intervalPixels[(y * intervalRaster.width + x) * 4 + 3] ?? 0) > 32) count++;
+        return count;
+      };
+      for (let index = 0; index < details.tasks.length; index++) {
+        expect(
+          rowInk(Math.floor(layout.plotY + (index + 0.5) * layout.rowHeightPx)),
+        ).toBeGreaterThan(0);
+        if (index > 0)
+          expect(rowInk(Math.floor(layout.plotY + index * layout.rowHeightPx))).toBe(0);
+      }
+      // Independent alpha masks catch glyph collisions rather than trusting estimated text widths.
+      const occupied = new Uint8Array(layout.widthPx * layout.heightPx);
+      for (const match of svg.matchAll(/<text\b[^>]*>[\s\S]*?<\/text>/g)) {
+        const tag = match[0];
+        expect(Number(svgAttributes(tag)["font-size"])).toBeGreaterThanOrEqual(8);
+        const positioned = tag.includes("progress-label-")
+          ? `<g transform="translate(${layout.plotX} ${layout.plotY})">${tag}</g>`
+          : tag;
+        const rendered = new Resvg(`${opening}${positioned}</svg>`, rasterOptions);
+        const bounds = rendered.getBBox();
+        if (!bounds) throw new Error(`text did not render: ${tag}`);
+        expect(bounds.x).toBeGreaterThanOrEqual(0);
+        expect(bounds.y).toBeGreaterThanOrEqual(0);
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(layout.widthPx);
+        expect(bounds.y + bounds.height).toBeLessThanOrEqual(layout.heightPx);
+        const image = rendered.render();
+        const pixels = image.pixels;
+        for (let pixel = 0; pixel < occupied.length; pixel++) {
+          if ((pixels[pixel * 4 + 3] ?? 0) < 32) continue;
+          expect(occupied[pixel]).toBe(0);
+          occupied[pixel] = 1;
+        }
+      }
+    }, 15_000);
+  }
+}

@@ -32,6 +32,7 @@ import {
   clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
+  fitTextToWidth,
   renderSvgDocument,
   stripTanStackSvg,
 } from "./shared";
@@ -302,10 +303,20 @@ export function renderBezierChartSvg(
     },
   );
   const chartBody = stripTanStackSvg(chart);
-  const title =
+  const visibleTitle =
     details.title === undefined
       ? ""
-      : text(layout.plotX, layout.plotY - 8, details.title, layout.titleFontSizePx);
+      : text(
+          layout.plotX,
+          layout.plotY - 8,
+          fitTextToWidth(
+            details.title,
+            Math.max(1, layout.widthPx - layout.plotX),
+            layout.titleFontSizePx,
+          ),
+          layout.titleFontSizePx,
+          'data-chart-title="true"',
+        );
   const xLabel =
     details.xLabel === undefined
       ? ""
@@ -334,7 +345,7 @@ export function renderBezierChartSvg(
     viewBoxHeightPx: layout.heightPx,
     fontFamily: font,
     ariaLabel: details.title === undefined ? "Bezier chart" : `Bezier chart: ${details.title}`,
-    content: `<desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${chartBody}${title}${xLabel}${yLabel}`,
+    content: `<desc>${escapeXml(getBezierChartSummary(details))}</desc>${details.title === undefined ? "" : `<title>${escapeXml(details.title)}</title>`}${chartBody}${visibleTitle}${xLabel}${yLabel}`,
   });
 }
 

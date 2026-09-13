@@ -92,6 +92,56 @@ describe("dumbbell", () => {
     }
   });
 
+  test("rounds percent ticks and differences through the shared numeric formatter", () => {
+    const d = details({
+      valueFormat: "percent",
+      showDifferences: true,
+      data: [{ label: "Remote", before: 0.9, after: -0.2 }],
+    });
+    const svg = renderDumbbellChartSvg(d, theme);
+    expect(svg).toContain(">Δ -110%</text>");
+    expect(svg).toContain(">-25.5%</text>");
+    expect(svg).toContain(">35%</text>");
+    expect(svg).toContain(">95.5%</text>");
+    expect(svg).not.toContain("110.00000000000001");
+  });
+
+  test("compacts capped rows and keeps inline differences disjoint in exact raster space", async () => {
+    const d = details({
+      data: [
+        { label: "North", before: -0.25, after: 0.5 },
+        { label: "South", before: 0, after: 0 },
+        { label: "East", before: 0.75, after: 0.25 },
+        { label: "West", before: -0.5, after: -0.1 },
+        { label: "Central", before: 0.1, after: 0.1 },
+        { label: "Remote", before: 0.9, after: -0.2 },
+        { label: "Support", before: -0.05, after: 0.05 },
+        { label: "Other", before: 0.3, after: 0 },
+      ],
+      beforeLabel: "Prior",
+      afterLabel: "Current",
+      showDifferences: true,
+      valueFormat: "percent",
+      title: "Fractional change",
+      xLabel: "Rate",
+      maxHeightCells: 8,
+    });
+    const layout = getDumbbellChartLayout(d, { widthPx: 9, heightPx: 18 }, 28);
+    const svg = renderDumbbellChartSvg(d, theme, layout);
+    expect(layout.compact).toBe(true);
+    expect(layout.fontSizePx).toBeLessThan(14);
+    expect(layout.heightCells).toBeLessThanOrEqual(8);
+    expect(marks(svg, "circle").filter((mark) => mark["data-ts-key"])).toHaveLength(16);
+    expect(marks(svg, "line")).toHaveLength(8);
+    expect(svg.match(/Δ /g)).toHaveLength(8);
+    expect(svg).toContain(">North</text>");
+    expect(svg).toContain(">Other</text>");
+    expect(getPngDimensions(await rasterizeSvg(svg))).toEqual({
+      widthPx: layout.widthPx,
+      heightPx: layout.heightPx,
+    });
+  }, 15_000);
+
   test("rejects invalid execution and persisted values and unknown fields", async () => {
     const { type: _type, ...parameters } = input;
     expect(Value.Check(chartDumbbellParameters, parameters)).toBe(true);

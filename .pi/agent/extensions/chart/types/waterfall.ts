@@ -44,6 +44,7 @@ export type WaterfallChartLayout = ChartLayout & {
   plotWidthPx: number;
   plotHeightPx: number;
   fontSizePx: number;
+  compact: boolean;
 };
 
 function normalizeWaterfallChartInput(input: WaterfallChartInput): WaterfallChartData {
@@ -127,6 +128,24 @@ export function getWaterfallDomain(data: WaterfallChartData): [number, number] {
   return [min - padding, max + padding];
 }
 
+function getCompactedFontSize(
+  baseFontSizePx: number,
+  capHeightPx: number,
+  rowCount: number,
+  topBandFactor: number,
+  bottomBandFactor: number,
+): number {
+  for (
+    let fontSizePx = Math.floor(baseFontSizePx);
+    fontSizePx >= MIN_FONT_SIZE_PX;
+    fontSizePx -= 1
+  ) {
+    const availablePlotHeightPx = capHeightPx - fontSizePx * (topBandFactor + bottomBandFactor);
+    if (availablePlotHeightPx / rowCount >= fontSizePx * 1.05) return fontSizePx;
+  }
+  return MIN_FONT_SIZE_PX;
+}
+
 export function getWaterfallChartLayout(
   details: WaterfallChartDetails,
   cellDimensions?: CellDimensions,
@@ -134,17 +153,39 @@ export function getWaterfallChartLayout(
 ): WaterfallChartLayout {
   const cells = validCellDimensions(cellDimensions ?? { widthPx: NaN, heightPx: NaN });
   const widthPx = Math.round(width * cells.widthPx);
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const baseFontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const plotX = Math.min(
     widthPx * 0.4,
-    Math.max(5, ...details.deltas.map((delta) => delta.label.length)) * fontSizePx * 0.65 +
-      fontSizePx * (details.yLabel ? 2.5 : 1),
+    Math.max(5, ...details.deltas.map((delta) => delta.label.length)) * baseFontSizePx * 0.65 +
+      baseFontSizePx * (details.yLabel ? 2.5 : 1),
   );
-  const plotY = fontSizePx * (details.title ? 2.5 : 1);
-  const plotWidthPx = Math.max(1, widthPx - plotX - fontSizePx);
-  const naturalPlotHeightPx =
-    (details.deltas.length + 2) * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
-  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 7.5 : 6);
+  const basePlotY = baseFontSizePx * (details.title ? 2.5 : 1);
+  const rowCount = details.deltas.length + 2;
+  const baseNaturalPlotHeightPx = rowCount * Math.max(cells.heightPx * 1.5, baseFontSizePx * 1.6);
+  const baseBottomBandPx = baseFontSizePx * (details.xLabel ? 7.5 : 6);
+  const baseFixedHeightPx = basePlotY + baseBottomBandPx;
+  const baseDisplayPlotHeightPx = clampChartPlotHeightPx(
+    baseNaturalPlotHeightPx,
+    undefined,
+    cells.heightPx,
+    baseFixedHeightPx,
+    undefined,
+  );
+  const baseNaturalHeightPx = baseFixedHeightPx + baseDisplayPlotHeightPx;
+  const capHeightPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(details.maxHeightCells * cells.heightPx);
+  const compact = capHeightPx < baseNaturalHeightPx;
+  const topBandFactor = details.title ? 1.6 : 1;
+  // Compact views use one horizontal legend row and tight tick/axis-label bands.
+  const bottomBandFactor = 1.1 + (details.xLabel ? 1.5 : 0) + 1.6;
+  const fontSizePx = compact
+    ? getCompactedFontSize(baseFontSizePx, capHeightPx, rowCount, topBandFactor, bottomBandFactor)
+    : baseFontSizePx;
+  const plotY = compact ? fontSizePx * topBandFactor : basePlotY;
+  const naturalPlotHeightPx = rowCount * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
+  const fixedHeightPx = compact ? plotY + fontSizePx * bottomBandFactor : plotY + baseBottomBandPx;
   const plotHeightPx = clampChartPlotHeightPx(
     naturalPlotHeightPx,
     details.maxHeightCells,
@@ -152,16 +193,17 @@ export function getWaterfallChartLayout(
     fixedHeightPx,
     undefined,
   );
-  const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 7.5 : 6));
+  const heightPx = Math.ceil(plotY + plotHeightPx + (fixedHeightPx - plotY));
   return finalizeChartLayout(
     {
       widthPx,
       heightPx,
       plotX,
       plotY,
-      plotWidthPx,
+      plotWidthPx: Math.max(1, widthPx - plotX - fontSizePx),
       plotHeightPx,
       fontSizePx,
+      compact,
     },
     cells.heightPx,
     details.maxHeightCells,
@@ -220,6 +262,7 @@ export function renderWaterfallChartSvg(
     y1: number,
     y2: number,
     stroke = foreground,
+    strokeDasharray?: string,
   ): SceneNode => ({
     kind: "rule",
     key,
@@ -227,7 +270,12 @@ export function renderWaterfallChartSvg(
     x2: x(value) * layout.plotWidthPx,
     y1,
     y2,
-    style: { stroke, strokeWidth: 1 },
+    style: {
+      stroke,
+      // A thicker dashed overlay keeps a zero-width change identifiable even when it sits on zero.
+      strokeWidth: strokeDasharray === undefined ? 1 : 2,
+      ...(strokeDasharray === undefined ? {} : { strokeDasharray }),
+    },
   });
   const rules: SceneNode[] = [rule("zero", 0, 0, layout.plotHeightPx)];
   for (const row of rows) {
@@ -249,6 +297,7 @@ export function renderWaterfallChartSvg(
           (row.index + 0.25) * rowHeight,
           (row.index + 0.75) * rowHeight,
           color(row),
+          "2 2",
         ),
       );
   }
@@ -265,7 +314,24 @@ export function renderWaterfallChartSvg(
     const length = Math.max(1, Math.floor(space / (font * 0.65)));
     return value.length <= length ? value : `${value.slice(0, length - 1)}…`;
   };
-  const labels = rows
+  const labelRows: typeof rows = [];
+  let lastLabelY = Number.NEGATIVE_INFINITY;
+  const minimumLabelGap = font * 1.05;
+  for (const row of rows) {
+    const y = layout.plotY + (row.index + 0.5) * rowHeight + font * 0.35;
+    if (row.index === rows.length - 1) {
+      const previous = labelRows.at(-1);
+      if (previous !== undefined) {
+        const previousY = layout.plotY + (previous.index + 0.5) * rowHeight + font * 0.35;
+        if (y - previousY < minimumLabelGap) labelRows.pop();
+      }
+    }
+    if (y - lastLabelY >= minimumLabelGap) {
+      labelRows.push(row);
+      lastLabelY = y;
+    }
+  }
+  const labels = labelRows
     .map((row) =>
       text(
         shorten(row.label, layout.plotX - font * (details.yLabel ? 2 : 0.5)),
@@ -275,6 +341,9 @@ export function renderWaterfallChartSvg(
       ),
     )
     .join("");
+  const tickBaseline = layout.compact
+    ? layout.plotY + layout.plotHeightPx + font * 1.1
+    : layout.plotY + layout.plotHeightPx + font * 1.3;
   const ticks = Array.from({ length: 3 }, (_, i) =>
     text(
       formatNumeric(
@@ -283,42 +352,76 @@ export function renderWaterfallChartSvg(
         String,
       ),
       layout.plotX + (layout.plotWidthPx * i) / 2,
-      layout.plotY + layout.plotHeightPx + font * 1.3,
+      tickBaseline,
       i === 0 ? "start" : i === 2 ? "end" : "middle",
     ),
   ).join("");
   const middleY = layout.plotY + layout.plotHeightPx / 2;
-  const annotations =
-    (details.title ? text(shorten(details.title, layout.widthPx - 16), 8, font, "start") : "") +
-    (details.xLabel
-      ? text(
-          shorten(details.xLabel, layout.plotWidthPx),
-          layout.plotX + layout.plotWidthPx / 2,
-          layout.plotY + layout.plotHeightPx + font * 2.8,
-        )
-      : "") +
-    (details.yLabel
-      ? text(
-          shorten(details.yLabel, layout.plotHeightPx),
-          font,
-          middleY,
-          "middle",
-          `transform="rotate(-90 ${font} ${middleY})"`,
-        )
-      : "");
-  const legend = [
-    ["Increase (+)", increase],
-    ["Decrease (−)", decrease],
-    ["Start / Total / Zero", foreground],
-  ]
-    .map(([label, fill], index) => {
-      const py = layout.heightPx - font * (3 - index);
-      return (
-        `<rect x="8" y="${py - font * 0.7}" width="${font * 0.7}" height="${font * 0.7}" fill="${fill}"/>` +
-        text(shorten(label ?? "", layout.widthPx - font * 2), font * 1.8, py, "start")
-      );
-    })
-    .join("");
+  const title = details.title
+    ? text(shorten(details.title, layout.widthPx - 16), 8, font, "start")
+    : "";
+  const xLabel = details.xLabel
+    ? text(
+        shorten(details.xLabel, layout.plotWidthPx),
+        layout.plotX + layout.plotWidthPx / 2,
+        layout.compact
+          ? layout.heightPx - font * 1.9
+          : layout.plotY + layout.plotHeightPx + font * 2.8,
+      )
+    : "";
+  const yLabel = details.yLabel
+    ? text(
+        shorten(details.yLabel, layout.plotHeightPx),
+        font,
+        middleY,
+        "middle",
+        `transform="rotate(-90 ${font} ${middleY})"`,
+      )
+    : "";
+  const annotations = title + xLabel + yLabel;
+  const legend = layout.compact
+    ? (() => {
+        const entries = [
+          ["Increase (+)", increase],
+          ["Decrease (−)", decrease],
+          ["Start / Total / Zero", foreground],
+        ] as const;
+        let px = 8;
+        const py = layout.heightPx - font * 0.35;
+        return entries
+          .map(([label, fill], index) => {
+            const markerWidth = font * 0.7;
+            const textX = px + font * 1.1;
+            const available = Math.max(1, layout.widthPx - textX);
+            const maximumCharacters = Math.max(1, Math.floor(available / (font * 0.58)));
+            const fitted =
+              label.length <= maximumCharacters
+                ? label
+                : maximumCharacters === 1
+                  ? "…"
+                  : `${label.slice(0, maximumCharacters - 1)}…`;
+            const textWidth = fitted.length * font * 0.58;
+            const entry =
+              `<rect x="${px}" y="${py - font * 0.7}" width="${markerWidth}" height="${font * 0.7}" fill="${fill}"/>` +
+              text(fitted, textX, py, "start");
+            px = textX + textWidth + (index === entries.length - 1 ? 0 : font * 0.3);
+            return entry;
+          })
+          .join("");
+      })()
+    : [
+        ["Increase (+)", increase],
+        ["Decrease (−)", decrease],
+        ["Start / Total / Zero", foreground],
+      ]
+        .map(([label, fill], index) => {
+          const py = layout.heightPx - font * (3 - index);
+          return (
+            `<rect x="8" y="${py - font * 0.7}" width="${font * 0.7}" height="${font * 0.7}" fill="${fill}"/>` +
+            text(shorten(label ?? "", layout.widthPx - font * 2), font * 1.8, py, "start")
+          );
+        })
+        .join("");
   const name = details.title ?? "Waterfall";
   return renderSvgDocument({
     widthPx: layout.widthPx * RASTER_DENSITY,

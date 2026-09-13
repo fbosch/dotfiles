@@ -29,11 +29,11 @@ import {
   scaleChartFontSize,
   validCellDimensions,
 } from "../types";
-
 import {
   clamp,
   ESTIMATED_CHARACTER_WIDTH,
   finalizeChartLayout,
+  fitTextToWidth,
   getChartHeightLimitPx,
   isRecord,
   isValidChartHeight,
@@ -63,8 +63,13 @@ export type PieChartLayout = ChartLayout & {
   legendY: number;
   legendColumns: number;
   legendColumnWidthPx: number;
+  /** Horizontal breathing room reserved when fitting legend text in a column. */
+  legendColumnGapPx: number;
   legendRowHeightPx: number;
   labelFontSizePx: number;
+  titleFontSizePx: number;
+  titleX: number;
+  titleY: number;
   markerSizePx: number;
   stacked: boolean;
 };
@@ -75,99 +80,235 @@ export type PieChartDetails = ChartDetails & {
   title?: string;
 };
 
+type PieLayoutGeometry = Omit<PieChartLayout, "heightCells">;
+type PieLayoutCandidate = PieLayoutGeometry & { fitsCap: boolean };
+
+type PieLayoutTypography = {
+  labelFontSizePx: number;
+  titleFontSizePx: number;
+  markerSizePx: number;
+  legendRowHeightPx: number;
+  legendColumnGapPx: number;
+};
+
+const MIN_CAP_PIE_DIAMETER_PX = 48;
+
+function getPieLayoutTypography(
+  dimensions: CellDimensions,
+  fontSize: number | undefined,
+  compact: boolean,
+): PieLayoutTypography {
+  const labelFontSizePx = compact
+    ? MIN_FONT_SIZE_PX
+    : fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.72), 11, scaleChartFontSize(16, dimensions))
+      : scaleChartFontSize(fontSize, dimensions);
+  const titleFontSizePx = compact
+    ? MIN_FONT_SIZE_PX
+    : fontSize === undefined
+      ? clamp(Math.round(dimensions.heightPx * 0.75), 11, scaleChartFontSize(16, dimensions))
+      : scaleChartFontSize(fontSize, dimensions);
+  const markerSizePx = compact
+    ? MIN_FONT_SIZE_PX
+    : fontSize === undefined
+      ? Math.max(8, Math.round(dimensions.heightPx * 0.5))
+      : Math.max(8, Math.round(labelFontSizePx * 0.7));
+  const legendRowHeightPx = Math.round(
+    Math.max(labelFontSizePx, markerSizePx) + dimensions.heightPx * 0.32,
+  );
+  return {
+    labelFontSizePx,
+    titleFontSizePx,
+    markerSizePx,
+    legendRowHeightPx,
+    // Tight capped legends can still retain their suffix when this gap is removed.
+    legendColumnGapPx: compact ? 0 : LEGEND_COLUMN_GAP_PX,
+  };
+}
+
+function buildPieLayoutCandidate(
+  dimensions: CellDimensions,
+  widthPx: number,
+  sliceCount: number,
+  hasTitle: boolean,
+  maxHeightPx: number,
+  paddingPx: number,
+  typography: PieLayoutTypography,
+  stacked: boolean,
+): PieLayoutCandidate {
+  const titleHeightPx = hasTitle ? typography.titleFontSizePx + paddingPx : 0;
+  const titleX = paddingPx;
+  const titleY = titleHeightPx === 0 ? 0 : paddingPx + typography.titleFontSizePx;
+  const legendColumns = stacked ? (sliceCount > 4 ? 2 : 1) : sliceCount > 6 ? 2 : 1;
+  const legendRows = Math.ceil(sliceCount / legendColumns);
+  const legendHeightPx = legendRows * typography.legendRowHeightPx;
+  const maxPieWidthPx = Math.max(1, widthPx - paddingPx * 2);
+  let pieDiameterPx: number;
+  let heightPx: number;
+  let pieX: number;
+  let pieY: number;
+  let legendX: number;
+  let legendY: number;
+  let legendColumnWidthPx: number;
+
+  if (stacked) {
+    const naturalPieDiameterPx = Math.min(maxPieWidthPx, Math.round(dimensions.heightPx * 10));
+    const availablePieHeightPx = maxHeightPx - paddingPx * 3 - legendHeightPx - titleHeightPx;
+    pieDiameterPx = Math.max(1, Math.min(naturalPieDiameterPx, availablePieHeightPx));
+    heightPx = Math.round(
+      paddingPx + titleHeightPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx,
+    );
+    pieX = Math.round((widthPx - pieDiameterPx) / 2);
+    pieY = titleHeightPx + paddingPx;
+    legendX = paddingPx;
+    legendY = Math.round(
+      titleHeightPx + paddingPx + pieDiameterPx + paddingPx + typography.labelFontSizePx,
+    );
+    legendColumnWidthPx = Math.floor(maxPieWidthPx / legendColumns);
+  } else {
+    const naturalPieDiameterPx = Math.max(
+      Math.round(dimensions.heightPx * 7),
+      Math.min(Math.round(widthPx * 0.42), Math.round(dimensions.heightPx * 11)),
+    );
+    const availablePieHeightPx = maxHeightPx - titleHeightPx - paddingPx * 2;
+    pieDiameterPx = Math.max(
+      1,
+      Math.min(naturalPieDiameterPx, maxPieWidthPx, availablePieHeightPx),
+    );
+    legendX = paddingPx + pieDiameterPx + paddingPx;
+    const legendWidthPx = Math.max(1, widthPx - legendX - paddingPx);
+    heightPx = Math.round(
+      titleHeightPx + Math.max(pieDiameterPx + paddingPx * 2, legendHeightPx + paddingPx * 2),
+    );
+    pieX = paddingPx;
+    pieY = Math.round(titleHeightPx + (heightPx - titleHeightPx - pieDiameterPx) / 2);
+    legendY = Math.round(
+      titleHeightPx + (heightPx - titleHeightPx - legendHeightPx) / 2 + typography.labelFontSizePx,
+    );
+    legendColumnWidthPx = Math.floor(legendWidthPx / legendColumns);
+  }
+
+  const availableLegendTextWidthPx =
+    legendColumnWidthPx -
+    typography.markerSizePx -
+    LEGEND_TEXT_GAP_PX -
+    typography.legendColumnGapPx;
+  // Reserve the widest percentage suffix so a cap never hides its only exact cue.
+  const suffixFits =
+    availableLegendTextWidthPx >= 7 * typography.labelFontSizePx * ESTIMATED_CHARACTER_WIDTH;
+  return {
+    widthPx,
+    heightPx,
+    pieDiameterPx,
+    pieX,
+    pieY,
+    legendX,
+    legendY,
+    legendColumns,
+    legendColumnWidthPx,
+    legendColumnGapPx: typography.legendColumnGapPx,
+    legendRowHeightPx: typography.legendRowHeightPx,
+    labelFontSizePx: typography.labelFontSizePx,
+    titleFontSizePx: typography.titleFontSizePx,
+    titleX,
+    titleY,
+    markerSizePx: typography.markerSizePx,
+    stacked,
+    fitsCap: heightPx <= maxHeightPx && suffixFits,
+  };
+}
+
+function finalizePieLayout(
+  candidate: PieLayoutCandidate,
+  cellHeightPx: number,
+  maxHeightCells: number | undefined,
+): PieChartLayout {
+  const { fitsCap: _fitsCap, ...geometry } = candidate;
+  return finalizeChartLayout(geometry, cellHeightPx, maxHeightCells);
+}
+
 export function getPieChartLayout(
   cellDimensions?: CellDimensions,
   imageWidthCells = DEFAULT_IMAGE_WIDTH_CELLS,
   sliceCount = 2,
   fontSize?: number,
   maxHeightCells?: number,
+  hasTitle = false,
 ): PieChartLayout {
   const dimensions = validCellDimensions(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
-  const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const labelFontSizePx =
-    fontSize === undefined
-      ? clamp(Math.round(dimensions.heightPx * 0.72), 11, scaleChartFontSize(16, dimensions))
-      : scaleChartFontSize(fontSize, dimensions);
-  const markerSizePx =
-    fontSize === undefined
-      ? Math.max(8, Math.round(dimensions.heightPx * 0.5))
-      : Math.max(8, Math.round(labelFontSizePx * 0.7));
-  const legendRowHeightPx = Math.round(
-    Math.max(labelFontSizePx, markerSizePx) + dimensions.heightPx * 0.32,
-  );
-  const stacked = imageWidthCells <= NARROW_LAYOUT_CELLS;
-  const legendColumns = stacked ? (sliceCount > 4 ? 2 : 1) : sliceCount > 6 ? 2 : 1;
-  const legendRows = Math.ceil(sliceCount / legendColumns);
   const maxHeightPx = getChartHeightLimitPx(maxHeightCells, dimensions.heightPx);
+  const defaultPaddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
+  const preferredStacked = imageWidthCells <= NARROW_LAYOUT_CELLS;
+  const baseTypography = getPieLayoutTypography(dimensions, fontSize, false);
+  const compactTypography = getPieLayoutTypography(dimensions, fontSize, true);
+  const baseCandidate = buildPieLayoutCandidate(
+    dimensions,
+    widthPx,
+    sliceCount,
+    hasTitle,
+    maxHeightPx,
+    defaultPaddingPx,
+    baseTypography,
+    preferredStacked,
+  );
 
-  if (stacked) {
-    const legendHeightPx = legendRows * legendRowHeightPx;
-    // Reserve legend space before choosing the pie diameter so configured text is never clipped.
-    const availablePieHeightPx = Math.max(1, maxHeightPx - paddingPx * 3 - legendHeightPx);
-    const pieDiameterPx = Math.min(
-      widthPx - paddingPx * 2,
-      Math.round(dimensions.heightPx * 10),
-      availablePieHeightPx,
-    );
-    const heightPx = Math.round(paddingPx + pieDiameterPx + paddingPx + legendHeightPx + paddingPx);
-    return finalizeChartLayout(
-      {
-        widthPx,
-        heightPx,
-        pieDiameterPx,
-        pieX: Math.round((widthPx - pieDiameterPx) / 2),
-        pieY: paddingPx,
-        legendX: paddingPx,
-        legendY: Math.round(paddingPx + pieDiameterPx + paddingPx + labelFontSizePx),
-        legendColumns,
-        legendColumnWidthPx: Math.floor((widthPx - paddingPx * 2) / legendColumns),
-        legendRowHeightPx,
-        labelFontSizePx,
-        markerSizePx,
-        stacked,
-      },
-      dimensions.heightPx,
-      maxHeightCells,
-    );
+  // Natural layouts retain their established stacked/side preference. Explicit caps may switch
+  // orientation and compact typography instead of clipping the pie or the last legend rows.
+  if (maxHeightCells === undefined) {
+    return finalizePieLayout(baseCandidate, dimensions.heightPx, maxHeightCells);
   }
 
-  const pieDiameterPx = Math.max(
-    Math.round(dimensions.heightPx * 7),
-    Math.min(
-      Math.round(widthPx * 0.42),
-      Math.round(dimensions.heightPx * 11),
-      maxHeightPx - paddingPx * 2,
-    ),
-  );
-  // Use the gap between the pie and the legend so the text columns have room to breathe.
-  const legendX = paddingPx + pieDiameterPx + paddingPx;
-  const legendWidthPx = Math.max(1, widthPx - legendX - paddingPx);
-  const heightPx = Math.min(
+  if (baseCandidate.fitsCap && baseCandidate.pieDiameterPx >= MIN_CAP_PIE_DIAMETER_PX) {
+    return finalizePieLayout(baseCandidate, dimensions.heightPx, maxHeightCells);
+  }
+
+  const alternateCandidate = buildPieLayoutCandidate(
+    dimensions,
+    widthPx,
+    sliceCount,
+    hasTitle,
     maxHeightPx,
-    Math.max(pieDiameterPx + paddingPx * 2, legendRows * legendRowHeightPx + paddingPx * 2),
+    defaultPaddingPx,
+    baseTypography,
+    !preferredStacked,
   );
-  return finalizeChartLayout(
-    {
-      widthPx,
-      heightPx,
-      pieDiameterPx,
-      pieX: paddingPx,
-      pieY: Math.round((heightPx - pieDiameterPx) / 2),
-      legendX,
-      legendY: Math.round((heightPx - legendRows * legendRowHeightPx) / 2 + labelFontSizePx),
-      legendColumns,
-      legendColumnWidthPx: Math.floor(legendWidthPx / legendColumns),
-      legendRowHeightPx,
-      labelFontSizePx,
-      markerSizePx,
-      stacked,
-    },
-    dimensions.heightPx,
-    maxHeightCells,
+  if (alternateCandidate.fitsCap) {
+    return finalizePieLayout(alternateCandidate, dimensions.heightPx, maxHeightCells);
+  }
+
+  const compactPaddingPx = Math.min(defaultPaddingPx, 8);
+  const compactPreferred = buildPieLayoutCandidate(
+    dimensions,
+    widthPx,
+    sliceCount,
+    hasTitle,
+    maxHeightPx,
+    compactPaddingPx,
+    compactTypography,
+    preferredStacked,
   );
+  const compactAlternate = buildPieLayoutCandidate(
+    dimensions,
+    widthPx,
+    sliceCount,
+    hasTitle,
+    maxHeightPx,
+    compactPaddingPx,
+    compactTypography,
+    !preferredStacked,
+  );
+  const compactCandidate =
+    compactPreferred.fitsCap && compactAlternate.fitsCap
+      ? compactPreferred.pieDiameterPx >= compactAlternate.pieDiameterPx
+        ? compactPreferred
+        : compactAlternate
+      : compactPreferred.fitsCap
+        ? compactPreferred
+        : compactAlternate;
+  return finalizePieLayout(compactCandidate, dimensions.heightPx, maxHeightCells);
 }
 
 export function validatePieChartInput(input: PieChartInput): PieChartRow[] {
@@ -254,10 +395,18 @@ export function deserializePieChartDetails(value: unknown): PieChartDetails | un
 export function renderPieChartSvg(
   rows: PieChartRow[],
   theme: ChartTheme,
-  layout = getPieChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows.length),
+  layout?: PieChartLayout,
   title?: string,
   fontFamily = DEFAULT_FONT_FAMILY,
 ): string {
+  layout ??= getPieChartLayout(
+    undefined,
+    DEFAULT_IMAGE_WIDTH_CELLS,
+    rows.length,
+    undefined,
+    undefined,
+    title !== undefined,
+  );
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
   const sliceColors = getChartColors(theme);
@@ -288,7 +437,10 @@ export function renderPieChartSvg(
   // Budget the complete entry; otherwise the percentage can cross into the next column.
   const maxLegendTextWidth = Math.max(
     1,
-    layout.legendColumnWidthPx - layout.markerSizePx - LEGEND_TEXT_GAP_PX - LEGEND_COLUMN_GAP_PX,
+    layout.legendColumnWidthPx -
+      layout.markerSizePx -
+      LEGEND_TEXT_GAP_PX -
+      layout.legendColumnGapPx,
   );
   const truncateLabel = (label: string, suffix: string) => {
     const characterWidth = layout.labelFontSizePx * ESTIMATED_CHARACTER_WIDTH;
@@ -312,6 +464,10 @@ export function renderPieChartSvg(
     })
     .join("");
   const chartBody = stripTanStackSvg(chart);
+  const visibleTitle =
+    title === undefined
+      ? ""
+      : `<text data-chart-title="true" x="${layout.titleX}" y="${layout.titleY}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.titleFontSizePx}">${escapeXml(fitTextToWidth(title, Math.max(1, layout.widthPx - layout.titleX), layout.titleFontSizePx))}</text>`;
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
   return renderSvgDocument({
@@ -322,7 +478,7 @@ export function renderPieChartSvg(
     fontFamily: fontFamily,
     ariaLabel: accessibleName,
     ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
-    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g>`,
+    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}${visibleTitle}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g>`,
   });
 }
 
@@ -375,6 +531,7 @@ export const pieChartRenderer: ChartType<
       details.rows.length,
       details.fontSize,
       details.maxHeightCells,
+      details.title !== undefined,
     );
   },
   renderSvg(details, theme, layout): string {

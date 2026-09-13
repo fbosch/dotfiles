@@ -24,13 +24,18 @@ import {
   type PieChartRow,
   validatePieChartInput,
 } from "./pie";
-import { ESTIMATED_CHARACTER_WIDTH, isRecord, renderSvgDocument, stripTanStackSvg } from "./shared";
+import {
+  ESTIMATED_CHARACTER_WIDTH,
+  fitTextToWidth,
+  isRecord,
+  renderSvgDocument,
+  stripTanStackSvg,
+} from "./shared";
 
 export type { DonutChartInput };
 export { donutChartVariant };
 
 const LEGEND_TEXT_GAP_PX = 6;
-const LEGEND_COLUMN_GAP_PX = 8;
 
 export type DonutChartData = {
   rows: PieChartRow[];
@@ -80,10 +85,18 @@ function deserializeDonutChartDetails(value: unknown): DonutChartDetails | undef
 export function renderDonutChartSvg(
   rows: PieChartRow[],
   theme: ChartTheme,
-  layout = getDonutChartLayout(undefined, DEFAULT_IMAGE_WIDTH_CELLS, rows.length),
+  layout?: PieChartLayout,
   title?: string,
   fontFamily = DEFAULT_FONT_FAMILY,
 ): string {
+  layout ??= getDonutChartLayout(
+    undefined,
+    DEFAULT_IMAGE_WIDTH_CELLS,
+    rows.length,
+    undefined,
+    undefined,
+    title !== undefined,
+  );
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   const slices = pie(rows, { value: "value", gapAngle: 0.025 });
   const sliceColors = getChartColors(theme);
@@ -114,7 +127,10 @@ export function renderDonutChartSvg(
   const foreground = ansiColor(theme.getFgAnsi("text"), "currentColor");
   const maxLegendTextWidth = Math.max(
     1,
-    layout.legendColumnWidthPx - layout.markerSizePx - LEGEND_TEXT_GAP_PX - LEGEND_COLUMN_GAP_PX,
+    layout.legendColumnWidthPx -
+      layout.markerSizePx -
+      LEGEND_TEXT_GAP_PX -
+      layout.legendColumnGapPx,
   );
   const truncateLabel = (label: string, suffix: string) => {
     const characterWidth = layout.labelFontSizePx * ESTIMATED_CHARACTER_WIDTH;
@@ -138,6 +154,10 @@ export function renderDonutChartSvg(
     })
     .join("");
   const chartBody = stripTanStackSvg(chart);
+  const visibleTitle =
+    title === undefined
+      ? ""
+      : `<text data-chart-title="true" x="${layout.titleX}" y="${layout.titleY}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.titleFontSizePx}">${escapeXml(fitTextToWidth(title, Math.max(1, layout.widthPx - layout.titleX), layout.titleFontSizePx))}</text>`;
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
   const rasterHeightPx = layout.heightPx * RASTER_DENSITY;
   return renderSvgDocument({
@@ -148,7 +168,7 @@ export function renderDonutChartSvg(
     fontFamily,
     ariaLabel: accessibleName,
     ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
-    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g>`,
+    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}${visibleTitle}<g transform="translate(${layout.pieX} ${layout.pieY})">${chartBody}</g><g>${legend}</g>`,
   });
 }
 
@@ -192,6 +212,7 @@ export const donutChartRenderer: ChartType<
       details.rows.length,
       details.fontSize,
       details.maxHeightCells,
+      details.title !== undefined,
     );
   },
   renderSvg(details, theme, layout): string {

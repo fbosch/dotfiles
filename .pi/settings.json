@@ -6,12 +6,6 @@
     "convertUserMessages": true,
     "convertToolResults": true
   },
-  "references": {
-    "nixos": {
-      "path": "~/nixos",
-      "description": "Personal nixos configuration"
-    }
-  },
   "packages": [
     "npm:pi-mono-figma@0.2.2"
   ]

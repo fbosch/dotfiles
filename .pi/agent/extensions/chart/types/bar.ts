@@ -31,7 +31,6 @@ import {
   scaleChartFontSize,
   validCellDimensions,
 } from "../types";
-
 import {
   clamp,
   clampChartPlotHeightPx,
@@ -150,29 +149,58 @@ export function getBarChartLayout(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(imageWidthCells * dimensions.widthPx);
-  const paddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
-  const labelFontSizePx =
+  const naturalPaddingPx = Math.max(8, Math.round(dimensions.widthPx * 1.25));
+  const naturalLabelFontSizePx =
     fontSize === undefined
       ? clamp(Math.round(dimensions.heightPx * 0.66), 10, scaleChartFontSize(15, dimensions))
       : scaleChartFontSize(fontSize, dimensions);
-  const titleHeightPx = hasTitle
+  const naturalTitleHeightPx = hasTitle
     ? fontSize === undefined
       ? Math.round(dimensions.heightPx * 1.25)
-      : labelFontSizePx + paddingPx
+      : naturalLabelFontSizePx + naturalPaddingPx
     : 0;
-  const rowHeightPx =
+  const naturalRowHeightPx =
     fontSize === undefined
-      ? Math.max(Math.round(dimensions.heightPx * 1.25), labelFontSizePx + 7)
-      : labelFontSizePx + Math.max(7, Math.round(labelFontSizePx * 0.35));
+      ? Math.max(Math.round(dimensions.heightPx * 1.25), naturalLabelFontSizePx + 7)
+      : naturalLabelFontSizePx + Math.max(7, Math.round(naturalLabelFontSizePx * 0.35));
+  const naturalHeightPx =
+    naturalPaddingPx * 2 + naturalTitleHeightPx + rows.length * naturalRowHeightPx;
+  const maxHeightPx =
+    maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(1, Math.floor(maxHeightCells * dimensions.heightPx));
+  const compact = naturalHeightPx > maxHeightPx;
+
+  // A height cap applies to the entire composition, not just the plotting scene. Keep every row
+  // in the same coordinate system as its mark, then spend the remaining budget on the title.
+  const paddingPx = compact
+    ? Math.max(2, Math.min(naturalPaddingPx, Math.floor(dimensions.heightPx * 0.25)))
+    : naturalPaddingPx;
+  const labelFontSizePx = compact
+    ? scaleChartFontSize(MIN_FONT_SIZE_PX, dimensions)
+    : naturalLabelFontSizePx;
+  const titleHeightPx = hasTitle
+    ? compact
+      ? labelFontSizePx + Math.max(2, Math.round(labelFontSizePx * 0.25))
+      : naturalTitleHeightPx
+    : 0;
   const fixedHeightPx = paddingPx * 2 + titleHeightPx;
-  const plotHeightPx = clampChartPlotHeightPx(
-    rows.length * rowHeightPx,
+  const naturalPlotHeightPx = rows.length * naturalRowHeightPx;
+  const boundedPlotHeightPx = clampChartPlotHeightPx(
+    naturalPlotHeightPx,
     maxHeightCells,
     dimensions.heightPx,
     fixedHeightPx,
   );
-  const minimumLabelWidthPx =
-    fontSize === undefined ? Math.round(dimensions.widthPx * 8) : Math.round(labelFontSizePx * 7);
+  const plotHeightPx = compact
+    ? Math.max(1, Math.floor(maxHeightPx - fixedHeightPx))
+    : boundedPlotHeightPx;
+  const rowHeightPx = rows.length > 0 ? plotHeightPx / rows.length : naturalRowHeightPx;
+  const minimumLabelWidthPx = compact
+    ? Math.round(labelFontSizePx * 7)
+    : fontSize === undefined
+      ? Math.round(dimensions.widthPx * 8)
+      : Math.round(labelFontSizePx * 7);
   const contentLabelWidthPx = Math.max(
     minimumLabelWidthPx,
     ...rows.map(
@@ -219,6 +247,32 @@ function truncateLabel(value: string, widthPx: number, fontSizePx: number): stri
   return value.length > maximumCharacters ? `${value.slice(0, maximumCharacters - 1)}…` : value;
 }
 
+function truncateBarLabel(
+  row: BarChartRow,
+  widthPx: number,
+  fontSizePx: number,
+  valueFormat?: "number" | "percent",
+): string {
+  const value = formatValue(row.value, valueFormat);
+  const full = `${row.label}: ${value}`;
+  const maximumCharacters = Math.max(
+    3,
+    Math.floor(widthPx / (fontSizePx * ESTIMATED_CHARACTER_WIDTH)),
+  );
+  if (full.length <= maximumCharacters) return full;
+
+  // Keep the signed value suffix visible when the row label has to ellipsize. Exact data also
+  // remains in aria-description, but a clipped prefix must not hide negative-vs-positive meaning.
+  const suffix = `: ${value}`;
+  if (suffix.length >= maximumCharacters) return `…${value}`;
+  const labelCharacters = maximumCharacters - suffix.length;
+  const label =
+    row.label.length > labelCharacters
+      ? `${row.label.slice(0, Math.max(1, labelCharacters - 1))}…`
+      : row.label;
+  return `${label}${suffix}`;
+}
+
 export function renderBarChartSvg(
   rows: BarChartRow[],
   theme: ChartTheme,
@@ -251,6 +305,8 @@ export function renderBarChartSvg(
       x: { scale: scaleLinear().domain(domain), axis: false },
       y: { scale: () => scaleBand<string>().paddingInner(0.16).paddingOuter(0.08), axis: false },
     },
+    margin: 0,
+    focus: false,
   });
   const scene = createChartScene(definition, {
     width: layout.plotWidthPx,
@@ -260,10 +316,23 @@ export function renderBarChartSvg(
   const chart = renderTanStackChartSvg(scene, { ariaLabel: accessibleName, idPrefix: "pi-bar" });
   const chartBody = stripTanStackSvg(chart);
   const baselineX = ((0 - domain[0]) / (domain[1] - domain[0])) * layout.plotWidthPx;
+  const zeroMarkerRadius = Math.max(1.2, Math.min(3, layout.rowHeightPx * 0.22));
+  const zeroMarkers = rows
+    .map((row, index) => {
+      if (row.value !== 0) return "";
+      const y = layout.rowHeightPx * (index + 0.5);
+      const color = fillByLabel.get(row.label) ?? "currentColor";
+      return `<circle data-bar-zero="${escapeXml(row.label)}" cx="${baselineX}" cy="${y}" r="${zeroMarkerRadius}" fill="${color}" stroke="${foreground}" stroke-width="1"/>`;
+    })
+    .join("");
+  const titleText =
+    title === undefined
+      ? ""
+      : `<title>${escapeXml(title)}</title><text x="${layout.plotX}" y="${Math.max(layout.labelFontSizePx, layout.plotY - Math.round(layout.labelFontSizePx * 0.55))}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(title, layout.widthPx - layout.plotX - 2, layout.labelFontSizePx))}</text>`;
   const labels = rows
     .map((row, index) => {
       const y = layout.plotY + layout.rowHeightPx * (index + 0.5) + layout.labelFontSizePx * 0.35;
-      return `<text x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateLabel(formatBarLabel(row, valueFormat), layout.labelWidthPx - 6, layout.labelFontSizePx))}</text>`;
+      return `<text data-bar-row="${index}" x="${layout.plotX - 6}" y="${y}" text-anchor="end" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(truncateBarLabel(row, layout.labelWidthPx - 6, layout.labelFontSizePx, valueFormat))}</text>`;
     })
     .join("");
   const rasterWidthPx = layout.widthPx * RASTER_DENSITY;
@@ -276,7 +345,7 @@ export function renderBarChartSvg(
     fontFamily: fontFamily,
     ariaLabel: accessibleName,
     ariaDescription: rows.map((row) => `${row.label}: ${row.value}`).join(", "),
-    content: `${title === undefined ? "" : `<title>${escapeXml(title)}</title>`}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}<line x1="${baselineX}" x2="${baselineX}" y1="0" y2="${layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.72"/></g>${title === undefined ? "" : `<text x="${layout.plotX}" y="${layout.plotY - Math.round(layout.labelFontSizePx * 0.55)}" fill="${foreground}" font-family="${escapeXml(fontFamily)}" font-size="${layout.labelFontSizePx}">${escapeXml(title)}</text>`}${labels}`,
+    content: `${titleText}<g transform="translate(${layout.plotX} ${layout.plotY})">${chartBody}${zeroMarkers}<line x1="${baselineX}" x2="${baselineX}" y1="0" y2="${layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.72"/></g>${labels}`,
   });
 }
 

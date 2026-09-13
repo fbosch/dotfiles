@@ -27,6 +27,7 @@ import {
 import {
   clampChartPlotHeightPx,
   deserializeChartDetails,
+  estimateTextWidthPx,
   FIXED_CHART_PALETTE,
   finalizeChartLayout,
   isValidChartHeight,
@@ -47,6 +48,9 @@ export type StackedBarChartLayout = ChartLayout & {
   plotWidthPx: number;
   plotHeightPx: number;
   fontSizePx: number;
+  rowHeightPx: number;
+  compact: boolean;
+  legendRows: number;
 };
 
 // Fixed series-index colors keep identity stable across rows, including all-zero series.
@@ -125,6 +129,52 @@ export function getStackedBarDomain(details: StackedBarChartData): [number, numb
   return [0, details.normalize ? 100 : Math.max(...getStackedBarTotals(details)) || 1];
 }
 
+function getStackedLegendRows(
+  details: StackedBarChartDetails,
+  widthPx: number,
+  fontSizePx: number,
+  compact: boolean,
+): number {
+  if (!compact) return details.series.length;
+  let rows = 1;
+  let used = 0;
+  for (const series of details.series) {
+    const itemWidth = estimateTextWidthPx(series.name, fontSizePx) + fontSizePx * 2.1;
+    if (used > 0 && used + itemWidth > Math.max(1, widthPx)) {
+      rows += 1;
+      used = 0;
+    }
+    used += itemWidth + fontSizePx * 0.7;
+  }
+  return rows;
+}
+
+function getStackedCompactMetrics(
+  details: StackedBarChartDetails,
+  widthPx: number,
+  fontSizePx: number,
+): {
+  plotY: number;
+  rowHeightPx: number;
+  fixedHeightPx: number;
+  legendRows: number;
+  totalHeightPx: number;
+} {
+  const plotY = fontSizePx * (details.title ? 1.6 : 0.8);
+  const rowHeightPx = fontSizePx * 1.15;
+  const axisHeightPx = fontSizePx * (details.xLabel ? 2.8 : 1.5);
+  const legendRows = getStackedLegendRows(details, widthPx, fontSizePx, true);
+  const legendHeightPx = legendRows * fontSizePx * 1.5;
+  const fixedHeightPx = plotY + axisHeightPx + legendHeightPx;
+  return {
+    plotY,
+    rowHeightPx,
+    fixedHeightPx,
+    legendRows,
+    totalHeightPx: fixedHeightPx + details.categories.length * rowHeightPx,
+  };
+}
+
 export function getStackedBarChartLayout(
   details: StackedBarChartDetails,
   cellDimensions?: CellDimensions,
@@ -132,41 +182,90 @@ export function getStackedBarChartLayout(
 ): StackedBarChartLayout {
   const cells = validCellDimensions(cellDimensions ?? { widthPx: NaN, heightPx: NaN });
   const widthPx = Math.max(1, Math.round(width * cells.widthPx));
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const requestedFontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const naturalPlotY = requestedFontSizePx * (details.title ? 2.5 : 1);
+  const naturalPlotHeightPx =
+    details.categories.length * Math.max(cells.heightPx * 1.5, requestedFontSizePx * 1.8);
+  const naturalFixedHeightPx =
+    naturalPlotY + requestedFontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4);
+  const naturalHeightPx = naturalFixedHeightPx + naturalPlotHeightPx;
+  const heightLimitPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : details.maxHeightCells * cells.heightPx;
+  const compact = heightLimitPx < naturalHeightPx;
+  let fontSizePx = requestedFontSizePx;
+  if (compact) {
+    for (let candidate = requestedFontSizePx; candidate >= MIN_FONT_SIZE_PX; candidate -= 1) {
+      if (getStackedCompactMetrics(details, widthPx, candidate).totalHeightPx <= heightLimitPx) {
+        fontSizePx = candidate;
+        break;
+      }
+      fontSizePx = MIN_FONT_SIZE_PX;
+    }
+  }
   const plotX = Math.min(
     widthPx * 0.4,
     Math.max(...details.categories.map((label) => label.length)) * fontSizePx * 0.65 +
       fontSizePx * (details.yLabel ? 2.5 : 1),
   );
-  const plotY = fontSizePx * (details.title ? 2.5 : 1);
   const plotWidthPx = Math.max(1, widthPx - plotX - Math.min(fontSizePx, widthPx * 0.1));
-  const naturalPlotHeightPx =
-    details.categories.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.8);
-  const fixedHeightPx =
-    plotY + fontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4);
-  const plotHeightPx =
-    details.maxHeightCells === undefined
-      ? naturalPlotHeightPx
-      : clampChartPlotHeightPx(
-          naturalPlotHeightPx,
-          details.maxHeightCells,
-          cells.heightPx,
-          fixedHeightPx,
-          undefined,
-        );
-  // One legend entry per line avoids collisions without hiding zero-valued series.
-  const heightPx = Math.ceil(
-    plotY + plotHeightPx + fontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4),
+  if (!compact) {
+    const plotY = naturalPlotY;
+    const plotHeightPx =
+      details.maxHeightCells === undefined
+        ? naturalPlotHeightPx
+        : clampChartPlotHeightPx(
+            naturalPlotHeightPx,
+            details.maxHeightCells,
+            cells.heightPx,
+            naturalFixedHeightPx,
+            undefined,
+          );
+    // One legend entry per line avoids collisions without hiding zero-valued series.
+    const heightPx = Math.ceil(
+      plotY +
+        plotHeightPx +
+        requestedFontSizePx * ((details.xLabel ? 4 : 2.5) + details.series.length * 1.4),
+    );
+    return finalizeChartLayout(
+      {
+        widthPx,
+        heightPx,
+        plotX,
+        plotY,
+        plotWidthPx,
+        plotHeightPx,
+        fontSizePx,
+        rowHeightPx: plotHeightPx / details.categories.length,
+        compact,
+        legendRows: details.series.length,
+      },
+      cells.heightPx,
+      details.maxHeightCells,
+    );
+  }
+  const compactMetrics = getStackedCompactMetrics(details, widthPx, fontSizePx);
+  const plotHeightPx = Math.max(
+    1,
+    Math.min(
+      details.categories.length * compactMetrics.rowHeightPx,
+      heightLimitPx - compactMetrics.fixedHeightPx,
+    ),
   );
+  const heightPx = Math.ceil(compactMetrics.fixedHeightPx + plotHeightPx);
   return finalizeChartLayout(
     {
       widthPx,
       heightPx,
       plotX,
-      plotY,
+      plotY: compactMetrics.plotY,
       plotWidthPx,
       plotHeightPx,
       fontSizePx,
+      rowHeightPx: plotHeightPx / details.categories.length,
+      compact,
+      legendRows: compactMetrics.legendRows,
     },
     cells.heightPx,
     details.maxHeightCells,
@@ -234,7 +333,7 @@ export function renderStackedBarChartSvg(
   const text = (value: string, x: number, y: number, anchor = "middle", extra = "") =>
     `<text x="${x}" y="${y}" font-size="${font}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
   const shorten = (value: string, space: number) => {
-    const length = Math.max(0, Math.floor(space / font));
+    const length = Math.max(0, Math.floor(space / (font * 0.65)));
     return length === 0 ? "" : value.length <= length ? value : `${value.slice(0, length - 1)}…`;
   };
   const labels = details.categories
@@ -242,19 +341,27 @@ export function renderStackedBarChartSvg(
       text(
         shorten(label, layout.plotX - font * (details.yLabel ? 2 : 0.5)),
         layout.plotX - font * 0.35,
-        layout.plotY + ((i + 0.5) * layout.plotHeightPx) / details.categories.length + font * 0.35,
+        layout.plotY + (i + 0.5) * layout.rowHeightPx + font * 0.35,
         "end",
       ),
     )
     .join("");
-  const tickCount = layout.plotWidthPx >= font * 26 ? 3 : layout.plotWidthPx >= font * 12 ? 2 : 1;
+  const tickCount = details.normalize
+    ? layout.plotWidthPx >= font * 26
+      ? 3
+      : 2
+    : layout.plotWidthPx >= font * 26
+      ? 3
+      : layout.plotWidthPx >= font * 12
+        ? 2
+        : 1;
   const ticks = Array.from({ length: tickCount }, (_, i) => {
     const ratio = tickCount === 1 ? 0.5 : i / (tickCount - 1);
     const value = `${Number((max * ratio).toPrecision(3))}${details.normalize ? "%" : ""}`;
     return text(
       shorten(value, layout.plotWidthPx / tickCount),
       layout.plotX + ratio * layout.plotWidthPx,
-      layout.plotY + layout.plotHeightPx + font * 1.3,
+      layout.plotY + layout.plotHeightPx + font * (layout.compact ? 1.05 : 1.3),
       tickCount === 1 ? "middle" : i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle",
     );
   }).join("");
@@ -265,7 +372,7 @@ export function renderStackedBarChartSvg(
       ? text(
           shorten(details.xLabel, layout.plotWidthPx),
           layout.plotX + layout.plotWidthPx / 2,
-          layout.plotY + layout.plotHeightPx + font * 2.8,
+          layout.plotY + layout.plotHeightPx + font * (layout.compact ? 2.15 : 2.8),
         )
       : "") +
     (details.yLabel
@@ -277,21 +384,48 @@ export function renderStackedBarChartSvg(
           `transform="rotate(-90 ${font} ${middleY})"`,
         )
       : "");
-  const legend = details.series
-    .map((series, index) => {
-      const y = layout.heightPx - font * (0.5 + (details.series.length - 1 - index) * 1.4);
-      const size = Math.min(font * 0.7, layout.widthPx * 0.1);
-      return (
-        `<rect x="0" y="${y - size}" width="${size}" height="${size}" fill="${FIXED_CHART_PALETTE[index]}"/>` +
-        text(
-          shorten(series.name, layout.widthPx - size - font * 0.5),
-          size + font * 0.3,
-          y,
-          "start",
-        )
-      );
-    })
-    .join("");
+  const legend = layout.compact
+    ? (() => {
+        const rowHeightPx = font * 1.5;
+        let row = 0;
+        let x = 0;
+        return details.series
+          .map((series, index) => {
+            const itemWidth = estimateTextWidthPx(series.name, font) + font * 2.1;
+            if (x > 0 && x + itemWidth > layout.widthPx) {
+              row += 1;
+              x = 0;
+            }
+            const y = layout.heightPx - (layout.legendRows - row - 1) * rowHeightPx - font * 0.2;
+            const size = Math.min(font * 0.7, layout.widthPx * 0.1);
+            const item =
+              `<rect x="${x}" y="${y - size}" width="${size}" height="${size}" fill="${FIXED_CHART_PALETTE[index]}"/>` +
+              text(
+                shorten(series.name, layout.widthPx - x - size - font * 0.5),
+                x + size + font * 0.3,
+                y,
+                "start",
+              );
+            x += itemWidth + font * 0.7;
+            return item;
+          })
+          .join("");
+      })()
+    : details.series
+        .map((series, index) => {
+          const y = layout.heightPx - font * (0.5 + (details.series.length - 1 - index) * 1.4);
+          const size = Math.min(font * 0.7, layout.widthPx * 0.1);
+          return (
+            `<rect x="0" y="${y - size}" width="${size}" height="${size}" fill="${FIXED_CHART_PALETTE[index]}"/>` +
+            text(
+              shorten(series.name, layout.widthPx - size - font * 0.5),
+              size + font * 0.3,
+              y,
+              "start",
+            )
+          );
+        })
+        .join("");
   const name = details.title ?? "Stacked bar";
   return renderSvgDocument({
     widthPx: layout.widthPx * RASTER_DENSITY,

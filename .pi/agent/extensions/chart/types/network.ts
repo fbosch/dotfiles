@@ -98,6 +98,18 @@ type NetworkTopology = {
   layers: number[][];
 };
 
+type NetworkPoint = {
+  x: number;
+  y: number;
+};
+
+type NetworkRect = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
 type PositionedNetworkNode = NetworkChartNode & {
   ordinal: number;
   component: number;
@@ -105,7 +117,10 @@ type PositionedNetworkNode = NetworkChartNode & {
   x: number;
   y: number;
   displayLabel: string;
-  labelAnchor: "start" | "end";
+  labelAnchor: "start" | "end" | "middle";
+  labelX: number;
+  labelY: number;
+  labelBounds: NetworkRect | undefined;
   color: string;
 };
 
@@ -118,7 +133,10 @@ type PositionedNetworkEdge = NetworkChartEdge & {
   x2: number;
   y2: number;
   kind: "forward" | "backward" | "same-layer" | "self";
+  route: "straight" | "orthogonal";
+  routePoints: readonly NetworkPoint[] | undefined;
   bendPx: number;
+  labelSlot?: NetworkLabelSlot | undefined;
 };
 
 type NetworkRows = {
@@ -132,8 +150,16 @@ const LABEL_OFFSET_PX = 7;
 const LABEL_EDGE_GAP_PX = 5;
 const TARGET_EDGE_GAP_PX = 4;
 const MANUAL_EDGE_BEND_PX = 18;
+const EDGE_STROKE_WIDTH_PX = 1.5;
+const SCC_LANE_SPACING_PX = NODE_RADIUS_PX * 2 + LABEL_EDGE_GAP_PX;
 
 const SELF_LOOP_LABEL_MARGIN_PX = 4;
+
+function requiredNetworkValue<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
 function fitNetworkLabel(value: string, maximumWidthPx: number, fontSizePx: number): string {
   if (maximumWidthPx < fontSizePx * 3.2) return "";
   return fitTextToWidth(value, maximumWidthPx, fontSizePx);
@@ -348,13 +374,404 @@ function computeNetworkTopology(data: NetworkChartData): NetworkTopology {
     });
   for (const component of orderedComponents) {
     const layer = layerByComponent[component] ?? 0;
-    layers[layer] = [...(layers[layer] ?? []), ...(components[component]?.members ?? [])];
     layers[layer] = [...(layers[layer] ?? []), ...(components[component]?.members ?? [])].sort(
       (left, right) => left - right,
     );
   }
 
   return { components, componentByNode, layers };
+}
+
+function getNetworkLabelBounds(
+  node: Pick<PositionedNetworkNode, "displayLabel" | "labelAnchor" | "labelX" | "labelY">,
+  fontSizePx: number,
+  plotHeightPx: number,
+): NetworkRect | undefined {
+  if (node.displayLabel.length === 0) return undefined;
+  const width = estimateTextWidthPx(node.displayLabel, fontSizePx);
+  const left = node.labelAnchor === "start" ? node.labelX : node.labelX - width;
+  const y = plotHeightPx - node.labelY;
+  return { left, right: left + width, top: y - fontSizePx * 0.6, bottom: y + fontSizePx * 0.6 };
+}
+
+function segmentIntersectsNetworkRect(
+  start: NetworkPoint,
+  end: NetworkPoint,
+  rect: NetworkRect,
+): boolean {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  let minimum = 0;
+  let maximum = 1;
+  for (const [origin, delta, lower, upper] of [
+    [start.x, dx, rect.left, rect.right],
+    [start.y, dy, rect.top, rect.bottom],
+  ] as const) {
+    if (delta === 0) {
+      if (origin <= lower || origin >= upper) return false;
+      continue;
+    }
+    const first = (lower - origin) / delta;
+    const second = (upper - origin) / delta;
+    minimum = Math.max(minimum, Math.min(first, second));
+    maximum = Math.min(maximum, Math.max(first, second));
+    if (minimum >= maximum) return false;
+  }
+  return minimum < maximum && maximum > 0 && minimum < 1;
+}
+
+type NetworkLabelSlot = { text: string; x: number; y: number; bounds: NetworkRect };
+type NetworkNaturalPlan = {
+  nodes: Map<number, NetworkLabelSlot & { nodeX: number; nodeY: number }>;
+  edges: Map<number, NetworkLabelSlot>;
+  channels: Map<number, number>;
+  height: number;
+};
+
+function expandNetworkRect(rect: NetworkRect, gap: number): NetworkRect {
+  return {
+    left: rect.left - gap,
+    right: rect.right + gap,
+    top: rect.top - gap,
+    bottom: rect.bottom + gap,
+  };
+}
+
+function networkRectsOverlap(a: NetworkRect, b: NetworkRect): boolean {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function planNetworkLabels(
+  details: NetworkChartDetails,
+  width: number,
+  size: number,
+): NetworkNaturalPlan {
+  const topology = computeNetworkTopology(details);
+  const nodes: NetworkNaturalPlan["nodes"] = new Map();
+  const edges: NetworkNaturalPlan["edges"] = new Map();
+  const occupied: NetworkRect[] = [];
+  const nodeOrdinals = new Map(details.nodes.map((node, ordinal) => [node.id, ordinal]));
+  const layerOf = (id: string) => {
+    const ordinal = requiredNetworkValue(nodeOrdinals.get(id), `missing node ordinal: ${id}`);
+    const componentIndex = requiredNetworkValue(
+      topology.componentByNode[ordinal],
+      `missing network component: ${id}`,
+    );
+    return requiredNetworkValue(
+      topology.components[componentIndex],
+      `missing network component entry: ${id}`,
+    ).layer;
+  };
+  const labeledBranches = details.edges
+    .map((edge, ordinal) => ({ ...edge, ordinal }))
+    .filter((edge) => edge.label !== undefined && layerOf(edge.source) < layerOf(edge.target));
+  const channels = new Map<number, number>();
+  if (width < size * 20 && labeledBranches.length > 1) {
+    const branchTargets = new Set(labeledBranches.map((edge) => edge.target));
+    const routed = [
+      ...labeledBranches.sort(
+        (a, b) =>
+          requiredNetworkValue(nodeOrdinals.get(b.target), `missing node ordinal: ${b.target}`) -
+            requiredNetworkValue(nodeOrdinals.get(a.target), `missing node ordinal: ${a.target}`) ||
+          a.ordinal - b.ordinal,
+      ),
+      ...details.edges
+        .map((edge, ordinal) => ({ ...edge, ordinal }))
+        .filter(
+          (edge) =>
+            branchTargets.has(edge.source) &&
+            layerOf(edge.source) < layerOf(edge.target) &&
+            !labeledBranches.some((branch) => branch.ordinal === edge.ordinal),
+        ),
+    ];
+    const innerChannel = width - 4 - (routed.length - 1) * SCC_LANE_SPACING_PX;
+    const edgeSize = Math.max(8, Math.round(size * 0.85));
+    const widestLabel = Math.max(
+      ...details.nodes.map(
+        (node) =>
+          estimateTextWidthPx(fitNetworkLabel(node.label, (width - 20) / 1.15, size), size) * 1.15,
+      ),
+      ...details.edges
+        .filter((edge) => edge.label !== undefined)
+        .map((edge) => {
+          const label = requiredNetworkValue(edge.label, "network edge label is missing");
+          return (
+            estimateTextWidthPx(fitNetworkLabel(label, (width - 20) / 1.15, edgeSize), edgeSize) *
+            1.15
+          );
+        }),
+    );
+    // Keep the original visible text when a crowded graph cannot afford a separate gutter.
+    if (innerChannel >= widestLabel + 16) {
+      for (const [index, edge] of routed.entries()) {
+        channels.set(edge.ordinal, innerChannel + index * SCC_LANE_SPACING_PX);
+      }
+    }
+  }
+  // Narrow labeled branches reserve actual gutter width; independent obstacle routing otherwise merges their channels.
+  const labelRight = Math.min(width - 10, ...[...channels.values()].map((x) => x - 6));
+  const pitch = size * 2.4 + 22;
+  const inset = Math.min(22, width / 4);
+  let height = pitch * 2;
+  const slot = (value: string, fontSize: number, x: number, y: number): NetworkLabelSlot => {
+    // Reserve conservative ink bounds, including fallback-font bearings and baseline differences.
+    const text = fitNetworkLabel(value, (width - 20) / 1.15, fontSize);
+    const labelWidth = estimateTextWidthPx(text, fontSize) * 1.15;
+    const center = Math.max(10 + labelWidth / 2, Math.min(labelRight - labelWidth / 2, x));
+    return {
+      text,
+      x: center,
+      y,
+      bounds: {
+        left: center - labelWidth / 2,
+        right: center + labelWidth / 2,
+        top: y - fontSize * 0.7,
+        bottom: y + fontSize * 0.7,
+      },
+    };
+  };
+  for (let layer = 0; layer < topology.layers.length; layer += 1) {
+    let previousY = -pitch;
+    for (const ordinal of topology.layers[layer] ?? []) {
+      const node = details.nodes[ordinal];
+      if (node === undefined) continue;
+      const x =
+        topology.layers.length === 1
+          ? width / 2
+          : inset + (layer * (width - inset * 2)) / (topology.layers.length - 1);
+      let y = Math.max(12 + size, previousY + pitch);
+      let label = slot(node.label, size, x, y);
+      let footprint = { ...label.bounds, bottom: y + size * 0.7 + 28 };
+      while (occupied.some((rect) => networkRectsOverlap(expandNetworkRect(footprint, 6), rect))) {
+        y += pitch;
+        label = slot(node.label, size, x, y);
+        footprint = { ...label.bounds, bottom: y + size * 0.7 + 28 };
+      }
+      const nodeY = y + size * 0.7 + 18;
+      nodes.set(ordinal, { ...label, nodeX: x, nodeY });
+      occupied.push(footprint);
+      previousY = y;
+      height = Math.max(height, footprint.bottom + 16);
+      // Outgoing label bands participate in packing before later nodes, and own a routing lane below their ink.
+      const outgoing = details.edges
+        .map((edge, ordinal) => ({ ...edge, ordinal }))
+        .filter((edge) => edge.source === node.id && edge.label !== undefined)
+        .sort(
+          (a, b) =>
+            details.nodes.findIndex((node) => node.id === a.target) -
+            details.nodes.findIndex((node) => node.id === b.target),
+        );
+      const edgeSize = Math.max(8, Math.round(size * 0.85));
+      let edgeY = footprint.bottom + 18 + edgeSize * 0.7;
+      for (const edge of outgoing) {
+        const targetOrdinal = details.nodes.findIndex((node) => node.id === edge.target);
+        if (targetOrdinal < 0) throw new Error(`missing network target: ${edge.target}`);
+        const targetComponent = requiredNetworkValue(
+          topology.componentByNode[targetOrdinal],
+          `missing network component: ${edge.target}`,
+        );
+        const targetLayer = requiredNetworkValue(
+          topology.components[targetComponent],
+          `missing network component entry: ${edge.target}`,
+        ).layer;
+        const edgeLabel = requiredNetworkValue(edge.label, "network edge label is missing");
+        const targetX =
+          topology.layers.length === 1
+            ? width / 2
+            : inset + (targetLayer * (width - inset * 2)) / (topology.layers.length - 1);
+        let edgeSlot = slot(edgeLabel, edgeSize, (x + targetX) / 2, edgeY);
+        while (
+          occupied.some((rect) => networkRectsOverlap(expandNetworkRect(edgeSlot.bounds, 12), rect))
+        ) {
+          edgeY += edgeSize * 1.4 + 24;
+          edgeSlot = slot(edgeLabel, edgeSize, (x + targetX) / 2, edgeY);
+        }
+        edges.set(edge.ordinal, edgeSlot);
+        occupied.push(expandNetworkRect(edgeSlot.bounds, 4));
+        height = Math.max(height, edgeSlot.bounds.bottom + 24);
+        edgeY += edgeSize * 1.4 + 24;
+      }
+    }
+  }
+  return { nodes, edges, channels, height };
+}
+
+function routeNetworkObstacles(
+  start: NetworkPoint,
+  end: NetworkPoint,
+  obstacles: readonly NetworkRect[],
+  width: number,
+  height: number,
+): NetworkPoint[] {
+  const xs = [
+    ...new Set([start.x, end.x, 2, width - 2, ...obstacles.flatMap((r) => [r.left, r.right])]),
+  ]
+    .filter((x) => x >= 0 && x <= width)
+    .sort((a, b) => a - b);
+  const ys = [
+    ...new Set([start.y, end.y, 2, height - 2, ...obstacles.flatMap((r) => [r.top, r.bottom])]),
+  ]
+    .filter((y) => y >= 0 && y <= height)
+    .sort((a, b) => a - b);
+  const columns = xs.length;
+  const first = ys.indexOf(start.y) * columns + xs.indexOf(start.x);
+  const last = ys.indexOf(end.y) * columns + xs.indexOf(end.x);
+  const previous = new Int32Array(columns * ys.length).fill(-1);
+  const queue = [first];
+  previous[first] = first;
+  const point = (index: number): NetworkPoint => ({
+    x: requiredNetworkValue(xs[index % columns], "network route column is missing"),
+    y: requiredNetworkValue(ys[Math.floor(index / columns)], "network route row is missing"),
+  });
+  // A rectilinear visibility grid is bounded by the modest-graph limit, not by pixel dimensions.
+  for (let cursor = 0; cursor < queue.length && previous[last] === -1; cursor += 1) {
+    const current = requiredNetworkValue(queue[cursor], "network route queue entry is missing");
+    const column = current % columns;
+    const row = Math.floor(current / columns);
+    const next = [
+      column + 1 < columns ? current + 1 : -1,
+      column > 0 ? current - 1 : -1,
+      row + 1 < ys.length ? current + columns : -1,
+      row > 0 ? current - columns : -1,
+    ];
+    for (const neighbor of next) {
+      if (neighbor < 0 || previous[neighbor] !== -1) continue;
+      if (
+        obstacles.some((rect) =>
+          segmentIntersectsNetworkRect(point(current), point(neighbor), rect),
+        )
+      )
+        continue;
+      previous[neighbor] = current;
+      queue.push(neighbor);
+    }
+  }
+  if (previous[last] === -1) throw new Error("network reserved-label route is unavailable");
+  const result: NetworkPoint[] = [];
+  for (let current = last; ; ) {
+    result.push(point(current));
+    if (current === first) break;
+    const previousPoint = previous[current];
+    if (previousPoint === undefined || previousPoint === -1)
+      throw new Error("network reserved-label route is unavailable");
+    current = previousPoint;
+  }
+  result.reverse();
+  return result.filter((p, i) => {
+    const before = result[i - 1];
+    const after = result[i + 1];
+    return (
+      before === undefined ||
+      after === undefined ||
+      !((before.x === p.x && p.x === after.x) || (before.y === p.y && p.y === after.y))
+    );
+  });
+}
+
+function applyNetworkNaturalPlan(
+  rows: NetworkRows,
+  plan: NetworkNaturalPlan,
+  layout: NetworkChartLayout,
+): NetworkRows {
+  const nodes = rows.nodes.map((node) => {
+    const slot = requiredNetworkValue(plan.nodes.get(node.ordinal), "network node slot is missing");
+    return {
+      ...node,
+      x: slot.nodeX,
+      y: layout.plotHeightPx - slot.nodeY,
+      displayLabel: slot.text,
+      labelAnchor: "middle" as const,
+      labelX: slot.x,
+      labelY: layout.plotHeightPx - slot.y,
+      labelBounds: slot.bounds,
+    };
+  });
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const labels = [...plan.nodes.values(), ...plan.edges.values()].map((slot) =>
+    expandNetworkRect(slot.bounds, 6),
+  );
+  const lanes = new Map<number, number>();
+  const edges = [...rows.forwardEdges, ...rows.manualEdges]
+    .sort(
+      (a, b) =>
+        a.sourceNode.ordinal - b.sourceNode.ordinal || a.targetNode.ordinal - b.targetNode.ordinal,
+    )
+    .map((edge) => {
+      const sourceNode = requiredNetworkValue(
+        byId.get(edge.source),
+        `missing network source: ${edge.source}`,
+      );
+      const targetNode = requiredNetworkValue(
+        byId.get(edge.target),
+        `missing network target: ${edge.target}`,
+      );
+      const start = { x: sourceNode.x, y: layout.plotHeightPx - sourceNode.y };
+      const end = { x: targetNode.x, y: layout.plotHeightPx - targetNode.y };
+      const obstacles = [
+        ...labels,
+        ...nodes
+          .filter((node) => node.id !== edge.source && node.id !== edge.target)
+          .map((node) => {
+            const y = layout.plotHeightPx - node.y;
+            return { left: node.x - 9, right: node.x + 9, top: y - 9, bottom: y + 9 };
+          }),
+      ];
+      const via: NetworkPoint[] = [start];
+      const label = plan.edges.get(edge.ordinal);
+      if (label !== undefined) {
+        const y = label.bounds.bottom + 10;
+        via.push({ x: label.bounds.left, y }, { x: label.bounds.right, y });
+      }
+      if (label === undefined && (edge.kind === "same-layer" || edge.kind === "self")) {
+        const lane = lanes.get(sourceNode.component) ?? 0;
+        lanes.set(sourceNode.component, lane + 1);
+        const side = sourceNode.x > layout.plotWidthPx / 2 ? -1 : 1;
+        const laneX = Math.max(
+          2,
+          Math.min(layout.plotWidthPx - 2, sourceNode.x + side * (18 + lane * 13)),
+        );
+        via.push({ x: laneX, y: start.y });
+        if (edge.kind === "self")
+          via.push({ x: laneX, y: start.y + 12 }, { x: start.x, y: start.y + 12 });
+        else via.push({ x: laneX, y: end.y });
+      }
+      const channel = plan.channels.get(edge.ordinal);
+      if (channel !== undefined) {
+        const departureY = label === undefined ? start.y : label.bounds.bottom + 10;
+        // Vertical arrival stays distinct from an outgoing route leaving the same node to the right.
+        const approachY = end.y + (end.y < departureY ? 12 : -12);
+        via.push(
+          { x: channel, y: departureY },
+          { x: channel, y: approachY },
+          { x: end.x, y: approachY },
+        );
+      }
+      via.push(end);
+      const points = via
+        .slice(1)
+        .flatMap((to, index) =>
+          routeNetworkObstacles(
+            requiredNetworkValue(via[index], "network route start is missing"),
+            to,
+            obstacles,
+            layout.plotWidthPx,
+            layout.plotHeightPx,
+          ).slice(index === 0 ? 0 : 1),
+        );
+      return {
+        ...edge,
+        sourceNode,
+        targetNode,
+        x1: start.x,
+        y1: sourceNode.y,
+        x2: end.x,
+        y2: targetNode.y,
+        route: "orthogonal" as const,
+        routePoints: points.slice(1, -1),
+        labelSlot: plan.edges.get(edge.ordinal),
+      };
+    });
+  return { nodes, forwardEdges: [], manualEdges: edges };
 }
 
 function createNetworkRows(
@@ -404,7 +821,7 @@ function createNetworkRows(
     }
   }
   const colors = getChartColors(theme);
-  const nodes = details.nodes.map((node, ordinal) => {
+  const initialNodes = details.nodes.map((node, ordinal) => {
     const position = basePositions.get(node.id);
     if (position === undefined) throw new Error("network node position is missing");
     const component = topology.componentByNode[ordinal] ?? 0;
@@ -438,9 +855,16 @@ function createNetworkRows(
               layout.fontSizePx,
             ),
       labelAnchor,
+      labelX: position.x + (labelAnchor === "start" ? LABEL_OFFSET_PX : -LABEL_OFFSET_PX),
+      labelY: position.y,
+      labelBounds: undefined,
       color: colors[colorIndex % Math.max(1, colors.length)] ?? "#579aca",
-    };
+    } satisfies PositionedNetworkNode;
   });
+  const nodes = initialNodes.map((node) => ({
+    ...node,
+    labelBounds: getNetworkLabelBounds(node, layout.fontSizePx, layout.plotHeightPx),
+  }));
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
   const positionedEdges = details.edges
@@ -459,6 +883,13 @@ function createNetworkRows(
               ? "backward"
               : "same-layer";
       const nextTargetX = firstForwardTargetX.get(sourceNode.id);
+      const sourceLabelExit =
+        sourceNode.labelAnchor === "start" && sourceNode.displayLabel.length > 0
+          ? sourceNode.x +
+            LABEL_OFFSET_PX +
+            estimateTextWidthPx(sourceNode.displayLabel, layout.fontSizePx) +
+            LABEL_EDGE_GAP_PX
+          : sourceNode.x;
       return {
         ...edge,
         ordinal,
@@ -466,18 +897,14 @@ function createNetworkRows(
         targetNode,
         x1:
           kind === "forward" && nextTargetX !== undefined
-            ? Math.min(
-                sourceNode.x +
-                  LABEL_OFFSET_PX +
-                  estimateTextWidthPx(sourceNode.displayLabel, layout.fontSizePx) +
-                  LABEL_EDGE_GAP_PX,
-                targetNode.x - TARGET_EDGE_GAP_PX,
-              )
+            ? Math.min(sourceLabelExit, targetNode.x - TARGET_EDGE_GAP_PX)
             : sourceNode.x,
         y1: sourceNode.y,
         x2: targetNode.x,
         y2: targetNode.y,
         kind,
+        route: "straight",
+        routePoints: undefined,
         bendPx: 0,
       } satisfies PositionedNetworkEdge;
     })
@@ -487,24 +914,29 @@ function createNetworkRows(
         left.targetNode.ordinal - right.targetNode.ordinal ||
         left.ordinal - right.ordinal,
     );
-  const pairBends = new Map<string, number>();
-  const edges = positionedEdges.map((edge) => {
-    const pair = [edge.sourceNode.ordinal, edge.targetNode.ordinal]
-      .sort((left, right) => left - right)
-      .join(":");
-    const pairIndex = pairBends.get(pair) ?? 0;
-    pairBends.set(pair, pairIndex + 1);
-    const bendPx = MANUAL_EDGE_BEND_PX + pairIndex * 8;
+  const componentLanes = new Map<number, number>();
+  const laneEdges = positionedEdges.map((edge) => {
+    if (edge.kind !== "same-layer") return edge;
+    // Allocate lanes from the stable edge order so an SCC never relies on input traversal timing.
+    const lane = componentLanes.get(edge.sourceNode.component) ?? 0;
+    componentLanes.set(edge.sourceNode.component, lane + 1);
+    const bendPx = MANUAL_EDGE_BEND_PX + lane * SCC_LANE_SPACING_PX;
     return {
       ...edge,
-      bendPx: edge.kind === "same-layer" && edge.x1 < bendPx ? -bendPx : bendPx,
+      bendPx: edge.x1 < bendPx ? -bendPx : bendPx,
     };
   });
-  return {
+  const rows = {
     nodes,
-    forwardEdges: edges.filter((edge) => edge.kind === "forward"),
-    manualEdges: edges.filter((edge) => edge.kind !== "forward"),
+    forwardEdges: laneEdges.filter((edge) => edge.kind === "forward"),
+    manualEdges: laneEdges.filter((edge) => edge.kind !== "forward"),
   };
+  // Capped and dense graphs retain compact placement and label omission rather than unbounded routing.
+  if (details.nodes.length <= 12 && details.edges.length <= 25) {
+    const plan = planNetworkLabels(details, layout.plotWidthPx, layout.fontSizePx);
+    if (plan.height <= layout.plotHeightPx) return applyNetworkNaturalPlan(rows, plan, layout);
+  }
+  return rows;
 }
 
 function createNetworkScales(layout: NetworkChartLayout) {
@@ -531,7 +963,7 @@ function createNetworkLabelMarks(
   foreground: string,
   fontSizePx: number,
 ) {
-  return (["start", "end"] as const).flatMap((anchor) => {
+  return (["start", "end", "middle"] as const).flatMap((anchor) => {
     const visibleNodes = nodes.filter(
       (node) => node.displayLabel.length > 0 && node.labelAnchor === anchor,
     );
@@ -539,14 +971,14 @@ function createNetworkLabelMarks(
       ? []
       : [
           text(visibleNodes, {
-            x: "x",
-            y: "y",
+            x: "labelX",
+            y: "labelY",
             text: "displayLabel",
             key: "id",
             fill: foreground,
             fontSize: fontSizePx,
             anchor,
-            dx: anchor === "start" ? LABEL_OFFSET_PX : -LABEL_OFFSET_PX,
+            dx: 0,
           }),
         ];
   });
@@ -639,6 +1071,13 @@ function renderManualEdges(
       const y2 = plotHeightPx - edge.y2;
       const dash =
         edge.kind === "same-layer" || edge.kind === "self" ? ` stroke-dasharray="4 3"` : "";
+      if (edge.route === "orthogonal") {
+        const points = [{ x: edge.x1, y: y1 }, ...(edge.routePoints ?? []), { x: edge.x2, y: y2 }];
+        const path = points
+          .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+          .join(" ");
+        return `<path d="${path}" fill="none" stroke="${foreground}" stroke-opacity="0.8" stroke-width="${EDGE_STROKE_WIDTH_PX}" stroke-linecap="round"${dash} marker-end="url(#pi-network-arrow)"/>`;
+      }
       if (edge.kind === "self") {
         const side = edge.x1 <= plotWidthPx / 2 ? 1 : -1;
         const above = y1 > 32;
@@ -667,6 +1106,13 @@ function renderNetworkEdgeLabels(
   return edges
     .flatMap((edge) => {
       if (edge.label === undefined || labelsRendered >= edgeLabelLimit) return [];
+      if (edge.labelSlot !== undefined) {
+        labelsRendered += 1;
+        const slot = edge.labelSlot;
+        return [
+          `<text x="${slot.x}" y="${slot.y}" data-network-edge-label="true" fill="${foreground}" font-size="${size}" text-anchor="middle" dominant-baseline="middle">${escapeXml(slot.text)}</text>`,
+        ];
+      }
       labelsRendered += 1;
       const y1 = plotHeightPx - edge.y1;
       const y2 = plotHeightPx - edge.y2;
@@ -699,16 +1145,38 @@ function renderNetworkEdgeLabels(
                 ),
               )
             : Math.min(120, Math.max(0, Math.abs(edge.x2 - edge.x1) - 12));
-      if (availableWidth < size * ESTIMATED_CHARACTER_WIDTH) return [];
+      if (availableWidth < size * ESTIMATED_CHARACTER_WIDTH * 3.2) return [];
       const label = fitTextToWidth(edge.label, availableWidth, size);
       const labelWidth = estimateTextWidthPx(label, size);
       const labelX =
         edge.kind === "self"
           ? edge.x1 +
             (edge.x1 <= plotWidthPx / 2 ? 1 : -1) * (SELF_LOOP_LABEL_MARGIN_PX + labelWidth / 2)
-          : x;
+          : edge.kind === "same-layer"
+            ? x - labelWidth / 2 - SELF_LOOP_LABEL_MARGIN_PX
+            : x;
+      const labelY =
+        edge.kind === "self" || edge.kind === "same-layer"
+          ? y
+          : (() => {
+              const dx = edge.x2 - edge.x1;
+              const dy = y2 - y1;
+              const length = Math.hypot(dx, dy) || 1;
+              const normalX = -dy / length;
+              const normalY = dx / length;
+              const halfHeight = size * 0.6;
+              const normalDistance =
+                Math.abs(normalX) * (labelWidth / 2) +
+                Math.abs(normalY) * halfHeight +
+                LABEL_EDGE_GAP_PX +
+                1.5;
+              const candidateY = y + normalY * normalDistance;
+              return candidateY - halfHeight >= 0 && candidateY + halfHeight <= plotHeightPx
+                ? candidateY
+                : y - normalY * normalDistance;
+            })();
       return [
-        `<text x="${labelX}" y="${y}" fill="${foreground}" font-size="${size}" text-anchor="middle">${escapeXml(label)}</text>`,
+        `<text x="${labelX}" y="${labelY}" fill="${foreground}" font-size="${size}" text-anchor="middle">${escapeXml(label)}</text>`,
       ];
     })
     .join("");
@@ -729,7 +1197,22 @@ export function getNetworkChartLayout(
   const topology = computeNetworkTopology(details);
   const maxBreadth = Math.max(1, ...topology.layers.map((layer) => layer.length));
   // Expand broad layers instead of compressing nodes into overlapping labels. The node bound keeps this finite.
-  const naturalPlotHeightPx = Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
+  const modest = details.nodes.length <= 12 && details.edges.length <= 25;
+  const minimumLabelWidthPx = Math.round(cells.widthPx * 8);
+  const labelWidthPx = Math.min(
+    Math.round(widthPx * 0.4),
+    Math.max(
+      minimumLabelWidthPx,
+      ...details.nodes.map((node) => Math.ceil(estimateTextWidthPx(node.label, fontSizePx)) + 8),
+    ),
+  );
+  const plotWidthPx = Math.max(
+    Math.round(cells.widthPx * 8),
+    widthPx - paddingPx * 2 - (modest ? 0 : labelWidthPx),
+  );
+  const naturalPlotHeightPx = modest
+    ? planNetworkLabels(details, plotWidthPx, fontSizePx).height
+    : Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
   const maxHeightPx = getChartHeightLimitPx(
     details.maxHeightCells,
     cells.heightPx,
@@ -747,18 +1230,6 @@ export function getNetworkChartLayout(
       : compacted
         ? Math.max(1, Math.floor(plotHeightPx / (edgeLabelSizePx * 1.5)))
         : details.edges.length;
-  const minimumLabelWidthPx = Math.round(cells.widthPx * 8);
-  const labelWidthPx = Math.min(
-    Math.round(widthPx * 0.4),
-    Math.max(
-      minimumLabelWidthPx,
-      ...details.nodes.map((node) => Math.ceil(estimateTextWidthPx(node.label, fontSizePx)) + 8),
-    ),
-  );
-  const plotWidthPx = Math.max(
-    Math.round(cells.widthPx * 8),
-    widthPx - paddingPx * 2 - labelWidthPx,
-  );
   const heightPx = paddingPx + titleHeightPx + plotHeightPx + paddingPx;
   return finalizeChartLayout(
     {

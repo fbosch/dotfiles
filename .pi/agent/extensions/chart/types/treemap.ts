@@ -218,6 +218,249 @@ function readable(value: number): string {
   return String(Number.isFinite(rounded) ? rounded : value);
 }
 
+type TreemapTile = Pick<SceneRect, "x" | "y" | "width" | "height">;
+type TreemapSceneLabel = Extract<SceneNode, { kind: "label" }>;
+type TreemapLabelBox = TreemapTile;
+type TreemapLabelPlan = {
+  row: HierarchyRow;
+  tile: TreemapTile;
+  structural: boolean;
+  x: number;
+  y: number;
+  candidates: string[];
+  index: number;
+};
+
+function getTreemapRowId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || !("data" in value)) return undefined;
+  const data = value.data;
+  if (typeof data !== "object" || data === null || !("id" in data)) return undefined;
+  return typeof data.id === "string" ? data.id : undefined;
+}
+
+function collectTreemapSceneParts(nodes: readonly SceneNode[]): {
+  tiles: Map<string, TreemapTile>;
+  nativeLabels: Map<string, TreemapSceneLabel>;
+} {
+  const tiles = new Map<string, TreemapTile>();
+  const nativeLabels = new Map<string, TreemapSceneLabel>();
+  const visit = (children: readonly SceneNode[]): void => {
+    for (const node of children) {
+      if (node.kind === "group") {
+        visit(node.children);
+      } else if (node.kind === "rect") {
+        const id = getTreemapRowId(node.interaction?.point?.datum);
+        if (
+          id !== undefined &&
+          node.width > 0 &&
+          node.height > 0 &&
+          [node.x, node.y, node.width, node.height].every(Number.isFinite)
+        ) {
+          tiles.set(id, { x: node.x, y: node.y, width: node.width, height: node.height });
+        }
+      } else if (node.kind === "label") {
+        const id = getTreemapRowId(node.pointOwner?.datum);
+        if (id !== undefined) nativeLabels.set(id, node);
+      }
+    }
+  };
+  visit(nodes);
+  return { tiles, nativeLabels };
+}
+
+function unionTreemapTiles(left: TreemapTile, right: TreemapTile): TreemapTile {
+  const x = Math.min(left.x, right.x);
+  const y = Math.min(left.y, right.y);
+  const rightEdge = Math.max(left.x + left.width, right.x + right.width);
+  const bottomEdge = Math.max(left.y + left.height, right.y + right.height);
+  return { x, y, width: rightEdge - x, height: bottomEdge - y };
+}
+
+function treemapLabelCandidates(row: HierarchyRow, unit: string | undefined): string[] {
+  const suffix = `${readable(row.total)}${unit ? ` ${unit}` : ""}`;
+  const paths = row.path.map((_, index) => row.path.slice(index).join(" / "));
+  return [...paths.map((path) => `${path}: ${suffix}`), ...paths];
+}
+
+function chooseTreemapLabel(
+  candidates: readonly string[],
+  tile: TreemapTile,
+  fontSizePx: number,
+): string | undefined {
+  const horizontalPadding = 5;
+  const verticalPadding = 5;
+  const availableWidth = tile.width - horizontalPadding * 2;
+  const availableHeight = tile.height - verticalPadding * 2;
+  const lineHeight = fontSizePx * 1.2;
+  if (availableWidth <= 0 || availableHeight < lineHeight) return undefined;
+  return candidates.find((candidate) => candidate.length * fontSizePx * 0.58 <= availableWidth);
+}
+
+function isSufficientlyLargeTreemapTile(tile: TreemapTile, fontSizePx: number): boolean {
+  // Fallback labels should not turn subpixel or barely painted tiles into noisy text.
+  return tile.width >= fontSizePx * 4 && tile.height >= fontSizePx * 2.5;
+}
+
+function getTreemapLabelBox(
+  label: Pick<TreemapSceneLabel, "x" | "y" | "text" | "anchor" | "baseline" | "fontSize">,
+): TreemapLabelBox {
+  const fontSize = label.fontSize ?? 16;
+  const width = label.text.length * fontSize * 0.58;
+  const height = fontSize * 1.2;
+  const x =
+    label.anchor === "middle"
+      ? label.x - width / 2
+      : label.anchor === "end"
+        ? label.x - width
+        : label.x;
+  const y =
+    label.baseline === "middle"
+      ? label.y - height / 2
+      : label.baseline === "hanging"
+        ? label.y
+        : label.y - fontSize * 0.8;
+  return { x, y, width, height };
+}
+
+function clipTreemapLabelBox(box: TreemapLabelBox, tile: TreemapTile): TreemapLabelBox | undefined {
+  const x = Math.max(box.x, tile.x);
+  const y = Math.max(box.y, tile.y);
+  const right = Math.min(box.x + box.width, tile.x + tile.width);
+  const bottom = Math.min(box.y + box.height, tile.y + tile.height);
+  return right > x && bottom > y ? { x, y, width: right - x, height: bottom - y } : undefined;
+}
+
+function treemapLabelBoxesOverlap(left: TreemapLabelBox, right: TreemapLabelBox): boolean {
+  return (
+    Math.min(left.x + left.width, right.x + right.width) > Math.max(left.x, right.x) &&
+    Math.min(left.y + left.height, right.y + right.height) > Math.max(left.y, right.y)
+  );
+}
+
+function createNestedTreemapLabels(
+  rows: readonly HierarchyRow[],
+  details: TreemapChartDetails,
+  layout: TreemapChartLayout,
+  scene: { nodes: readonly SceneNode[] },
+): SceneNode[] {
+  const { tiles, nativeLabels } = collectTreemapSceneParts(scene.nodes);
+  const childrenByParent = new Map<string, HierarchyRow[]>();
+  for (const row of rows) {
+    if (row.parentId === null) continue;
+    const children = childrenByParent.get(row.parentId) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parentId, children);
+  }
+  const boundsById = new Map<string, TreemapTile | undefined>();
+  const boundsFor = (id: string): TreemapTile | undefined => {
+    if (boundsById.has(id)) return boundsById.get(id);
+    const ownTile = tiles.get(id);
+    if (ownTile !== undefined) {
+      boundsById.set(id, ownTile);
+      return ownTile;
+    }
+    let bounds: TreemapTile | undefined;
+    for (const child of childrenByParent.get(id) ?? []) {
+      const childBounds = boundsFor(child.id);
+      if (childBounds !== undefined)
+        bounds = bounds === undefined ? childBounds : unionTreemapTiles(bounds, childBounds);
+    }
+    boundsById.set(id, bounds);
+    return bounds;
+  };
+
+  const lineHeight = layout.fontSizePx * 1.2;
+  const lineGap = 2;
+  const plans: TreemapLabelPlan[] = [];
+  for (const [index, row] of rows.slice(1).entries()) {
+    const tile = boundsFor(row.id);
+    if (
+      tile === undefined ||
+      row.total <= 0 ||
+      !isSufficientlyLargeTreemapTile(tile, layout.fontSizePx)
+    )
+      continue;
+    const structural = row.contribution === 0;
+    if (!structural && nativeLabels.has(row.id)) continue;
+
+    const candidates = treemapLabelCandidates(row, details.unit).filter(
+      (candidate) => chooseTreemapLabel([candidate], tile, layout.fontSizePx) !== undefined,
+    );
+    if (candidates.length === 0) continue;
+
+    const x = structural ? tile.x + 5 : tile.x + tile.width / 2;
+    const centeredY = tile.y + tile.height / 2;
+    const headerY = tile.y + 5 + (row.path.length - 1) * (lineHeight + lineGap) + lineHeight / 2;
+    const y = structural
+      ? tile.y + 5 + (row.path.length - 1) * (lineHeight + lineGap)
+      : headerY + lineHeight / 2 <= tile.y + tile.height - 2
+        ? headerY
+        : centeredY;
+    plans.push({ row, tile, structural, x, y, candidates, index });
+  }
+
+  const occupied = [...nativeLabels.entries()].flatMap(([id, label]) => {
+    const box = getTreemapLabelBox(label);
+    const tile = tiles.get(id);
+    const clipped = tile === undefined ? box : clipTreemapLabelBox(box, tile);
+    return clipped === undefined ? [] : [clipped];
+  });
+  const accepted = new Map<string, SceneNode>();
+  // Leaf labels carry the most specific information, so retain them before broad parent headers.
+  const prioritized = [...plans].sort(
+    (left, right) =>
+      Number(right.row.contribution > 0) - Number(left.row.contribution > 0) ||
+      left.index - right.index,
+  );
+  for (const plan of prioritized) {
+    for (const text of plan.candidates) {
+      const label: TreemapSceneLabel = {
+        kind: "label",
+        key: `treemap-0:nested-label:${plan.row.id}`,
+        x: plan.x,
+        y: plan.y,
+        text,
+        anchor: plan.structural ? "start" : "middle",
+        baseline: plan.structural ? "hanging" : "middle",
+        fontSize: layout.fontSizePx,
+        style: {
+          fill: getContrastingTextColor(
+            FIXED_CHART_PALETTE[plan.row.group] ?? FIXED_CHART_PALETTE[0] ?? "#579aca",
+          ),
+        },
+      };
+      const box = clipTreemapLabelBox(getTreemapLabelBox(label), plan.tile);
+      if (box === undefined || occupied.some((other) => treemapLabelBoxesOverlap(box, other)))
+        continue;
+      occupied.push(box);
+      accepted.set(plan.row.id, {
+        kind: "group",
+        key: `${label.key}:clip`,
+        clip: { x: plan.tile.x, y: plan.tile.y, width: plan.tile.width, height: plan.tile.height },
+        children: [label],
+      });
+      break;
+    }
+  }
+  return plans.flatMap((plan) => {
+    const label = accepted.get(plan.row.id);
+    return label === undefined ? [] : [label];
+  });
+}
+
+function appendNestedTreemapLabels(
+  nodes: readonly SceneNode[],
+  labels: readonly SceneNode[],
+): SceneNode[] {
+  return nodes.map((node) => {
+    if (node.kind !== "group") return node;
+    const children = appendNestedTreemapLabels(node.children, labels);
+    return node.className?.includes("ts-chart__treemap")
+      ? { ...node, children: [...children, ...labels] }
+      : { ...node, children };
+  });
+}
+
 export function createTreemapScene(
   details: TreemapChartDetails,
   layout = getTreemapChartLayout(details),
@@ -253,6 +496,7 @@ export function createTreemapScene(
     }),
     { width: layout.widthPx, height: layout.plotHeightPx },
   );
+  const nestedLabels = createNestedTreemapLabels(rows, details, layout, scene);
   // Native fit checks omit tiny labels. Clip retained labels to their own tiles as a final guard
   // against font substitution differing from the deterministic scene text estimator.
   const clipLabels = (nodes: readonly SceneNode[]): SceneNode[] => {
@@ -276,7 +520,7 @@ export function createTreemapScene(
         .otherwise((node) => node),
     );
   };
-  return { ...scene, nodes: clipLabels(scene.nodes) };
+  return { ...scene, nodes: clipLabels(appendNestedTreemapLabels(scene.nodes, nestedLabels)) };
 }
 
 export function renderTreemapChartSvg(

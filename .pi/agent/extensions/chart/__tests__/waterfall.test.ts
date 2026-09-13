@@ -119,6 +119,20 @@ describe("waterfall", () => {
     expect(lines.find((line) => line["data-ts-key"] === "zero-bar-4")).toBeDefined();
   });
 
+  test("keeps a zero delta at the zero baseline visibly distinct without widening its bar", () => {
+    const d = details({ start: 0, deltas: [{ label: "No change", value: 0 }] });
+    const layout = getWaterfallChartLayout(d);
+    const svg = renderWaterfallChartSvg(d, theme, layout);
+    const zero = marks(svg, "line").find((line) => line["data-ts-key"] === "zero");
+    const zeroDelta = marks(svg, "line").find((line) => line["data-ts-key"] === "zero-bar-1");
+    const bar = marks(svg, "rect").find((mark) => mark["data-ts-key"]?.endsWith(":bar-1"));
+    assert(zero && zeroDelta && bar);
+    expect(zeroDelta["stroke-dasharray"]).toBe("2 2");
+    expect(Number(zeroDelta["stroke-width"])).toBeGreaterThan(Number(zero["stroke-width"]));
+    expect(Number(zeroDelta.x1)).toBeCloseTo(Number(zero.x1), 2);
+    expect(Number(bar.width)).toBe(0);
+  });
+
   test("zero-only, constant, subnormal and bounded extreme data produce finite full-size PNGs", async () => {
     for (const start of [0, 7, -7, 1e9, -1e9, Number.MIN_VALUE]) {
       const d = details({ start, deltas: [{ label: "No change", value: 0 }] });

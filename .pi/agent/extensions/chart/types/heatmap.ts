@@ -25,7 +25,6 @@ import {
 } from "../types";
 
 import {
-  clampChartPlotHeightPx,
   deserializeChartDetails,
   finalizeChartLayout,
   formatNumeric,
@@ -147,39 +146,75 @@ export function getHeatmapChartLayout(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const widthPx = Math.round(width * cells.widthPx);
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const requestedFontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const padding = cells.widthPx;
-  const plotX = Math.min(
-    widthPx * 0.3,
-    Math.max(...details.rows.map((label) => label.length)) * fontSizePx * 0.65 + padding * 2,
-  );
+  const longestRowLabel = Math.max(...details.rows.map((label) => label.length));
+  const longestColumnLabel = Math.max(...details.columns.map((label) => label.length));
+  const plotX = Math.min(widthPx * 0.3, longestRowLabel * requestedFontSizePx * 0.65 + padding * 2);
   const plotY =
-    Math.min(
-      cells.heightPx * 5,
-      Math.max(...details.columns.map((label) => label.length)) * fontSizePx * 0.65 + padding * 2,
-    ) + (details.title ? fontSizePx * 1.5 : 0);
+    Math.min(cells.heightPx * 5, longestColumnLabel * requestedFontSizePx * 0.65 + padding * 2) +
+    (details.title ? requestedFontSizePx * 1.5 : 0);
   const plotWidthPx = Math.max(1, widthPx - plotX - padding);
-  // Reserve a readable row for every label rather than squeezing dense matrices below the configured font.
+  // The uncapped layout keeps the configured font and a generous row pitch for natural views.
   const naturalPlotHeightPx =
-    details.rows.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.25);
-  const fixedHeightPx = plotY + fontSizePx * 5;
-  const plotHeightPx = clampChartPlotHeightPx(
-    naturalPlotHeightPx,
-    details.maxHeightCells,
-    cells.heightPx,
-    fixedHeightPx,
-    undefined,
+    details.rows.length * Math.max(cells.heightPx * 1.5, requestedFontSizePx * 1.25);
+  const naturalFixedHeightPx = plotY + requestedFontSizePx * 5;
+  const naturalHeightPx = Math.ceil(naturalFixedHeightPx + naturalPlotHeightPx);
+  const heightLimitPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(details.maxHeightCells * cells.heightPx);
+
+  if (naturalHeightPx <= heightLimitPx) {
+    return finalizeChartLayout(
+      {
+        widthPx,
+        heightPx: naturalHeightPx,
+        plotX,
+        plotY,
+        plotWidthPx,
+        plotHeightPx: naturalPlotHeightPx,
+        fontSizePx: requestedFontSizePx,
+      },
+      cells.heightPx,
+      details.maxHeightCells,
+    );
+  }
+
+  // A height cap is a separate typography regime: fit header, rows, and legend as bands instead
+  // of allowing the plot to collapse to subpixel rows while retaining the configured data matrix.
+  const capFontSizePx = Math.max(
+    1,
+    Math.min(
+      requestedFontSizePx,
+      Math.floor(
+        (heightLimitPx - padding) /
+          ((details.title ? 1.5 : 0) + longestColumnLabel * 0.65 + details.rows.length * 1.25 + 5),
+      ),
+    ),
   );
-  const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * 5);
+  const compactPlotX = Math.min(
+    widthPx * 0.3,
+    longestRowLabel * capFontSizePx * 0.65 + padding * 2,
+  );
+  // One padding band is enough above compact headers; the saved space is assigned to row bands.
+  const compactPlotY =
+    longestColumnLabel * capFontSizePx * 0.65 + (details.title ? capFontSizePx * 1.5 : 0) + padding;
+  const rowBandPx = Math.max(3, capFontSizePx * 1.25);
+  const compactPlotHeightPx = Math.max(
+    1,
+    Math.min(details.rows.length * rowBandPx, heightLimitPx - compactPlotY - capFontSizePx * 5),
+  );
+  const compactHeightPx = Math.ceil(compactPlotY + compactPlotHeightPx + capFontSizePx * 5);
   return finalizeChartLayout(
     {
       widthPx,
-      heightPx,
-      plotX,
-      plotY,
-      plotWidthPx,
-      plotHeightPx,
-      fontSizePx,
+      heightPx: compactHeightPx,
+      plotX: compactPlotX,
+      plotY: compactPlotY,
+      plotWidthPx: Math.max(1, widthPx - compactPlotX - padding),
+      plotHeightPx: compactPlotHeightPx,
+      fontSizePx: capFontSizePx,
     },
     cells.heightPx,
     details.maxHeightCells,

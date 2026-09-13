@@ -118,7 +118,6 @@ const LEGEND_GAP_PX = 18;
 const LEGEND_SWATCH_PX = 8;
 const DEPENDENCY_ROUTE_GAP_PX = 12;
 const MILESTONE_SIZE_PX = 7;
-const MILESTONE_GAP_PX = 8;
 
 function normalizeId(value: string, name: string): string {
   const normalized = value.trim();
@@ -315,42 +314,61 @@ export function getGanttChartLayout(
     cellDimensions ?? { widthPx: Number.NaN, heightPx: Number.NaN },
   );
   const requestedWidthPx = Math.max(1, Math.round(width * cells.widthPx));
-  const paddingPx = Math.max(8, Math.round(cells.widthPx * 1.25));
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
-  const titleHeightPx = details.title === undefined ? 0 : fontSizePx + paddingPx;
-  const tickHeightPx = Math.ceil(fontSizePx * 1.5);
+  const heightLimitPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : getChartHeightLimitPx(details.maxHeightCells, cells.heightPx);
+  const requestedFont = Math.max(
+    MIN_FONT_SIZE_PX,
+    scaleChartFontSize(details.fontSize ?? 14, cells),
+  );
+  const bands = (font: number, compact: boolean) => {
+    const padding = compact ? 4 : Math.max(8, Math.round(cells.widthPx * 1.25));
+    const title = details.title === undefined ? 0 : font + padding;
+    const ticks = Math.ceil(font * 1.2) + 3;
+    const milestone = details.milestones.length === 0 ? 0 : 2 * Math.min(7, font * 0.4) + font + 4;
+    const annotation = milestone + (details.xLabel === undefined ? 0 : font + 4) + padding;
+    return { padding, title, ticks, annotation, fixed: padding + title + ticks + annotation };
+  };
+  const naturalBands = bands(requestedFont, false);
+  const compact = naturalBands.fixed + details.tasks.length * requestedFont * 1.8 > heightLimitPx;
+  let fontSizePx = requestedFont;
+  // Reserve distinct interval lanes before spending the cap on annotation or legend text.
+  while (
+    fontSizePx > MIN_FONT_SIZE_PX &&
+    bands(fontSizePx, compact).fixed + details.tasks.length * fontSizePx * 0.625 > heightLimitPx
+  )
+    fontSizePx--;
+  const allocated = bands(fontSizePx, compact);
+  const paddingPx = allocated.padding;
+  const titleHeightPx = allocated.title;
+  const tickHeightPx = allocated.ticks;
+  const annotationHeightPx = allocated.annotation;
   const baseRowHeightPx = Math.max(Math.round(cells.heightPx * 1.4), Math.ceil(fontSizePx * 1.8));
   const labelWidthPx = Math.min(
     Math.round(requestedWidthPx * 0.42),
     Math.max(
-      Math.round(cells.widthPx * 12),
-      ...details.tasks.map((task) => Math.ceil(estimateTextWidthPx(task.label, fontSizePx)) + 12),
+      24,
+      ...details.tasks.map((task) => Math.ceil(estimateTextWidthPx(task.label, fontSizePx)) + 20),
     ),
   );
   const plotX = paddingPx + labelWidthPx;
-  const minimumPlotWidthPx = Math.round(cells.widthPx * 16);
-  const plotWidthPx = Math.max(minimumPlotWidthPx, requestedWidthPx - plotX - paddingPx);
-  const widthPx = Math.max(requestedWidthPx, plotX + plotWidthPx + paddingPx);
+  const widthPx = requestedWidthPx;
+  const plotWidthPx = Math.max(1, widthPx - plotX - paddingPx);
   const naturalPlotHeightPx = Math.max(baseRowHeightPx * 2, details.tasks.length * baseRowHeightPx);
-  const annotationHeightPx = Math.max(
-    fontSizePx * 2.4,
-    details.xLabel === undefined ? 0 : fontSizePx * 3.2,
-    details.milestones.length === 0 ? 0 : fontSizePx * 2.8,
-  );
   const legendEntries = getLegendEntries(details);
   const legendRowHeightPx = Math.ceil(fontSizePx * 1.7);
   const legendWidthPx = widthPx - plotX;
   const fullLegendRows = getLegendRowCount(legendEntries, legendWidthPx, fontSizePx);
-  const fixedWithoutLegendPx = paddingPx + titleHeightPx + tickHeightPx + annotationHeightPx;
-  const heightLimitPx =
-    details.maxHeightCells === undefined
-      ? Number.POSITIVE_INFINITY
-      : getChartHeightLimitPx(details.maxHeightCells, cells.heightPx, undefined);
+  const reservedPlotHeightPx = Math.min(
+    naturalPlotHeightPx,
+    details.tasks.length * Math.max(5, fontSizePx * 1.35),
+  );
   const maximumLegendRows = Number.isFinite(heightLimitPx)
     ? Math.max(
         0,
         Math.floor(
-          Math.max(0, heightLimitPx - fixedWithoutLegendPx - 1 - paddingPx) / legendRowHeightPx,
+          (heightLimitPx - allocated.fixed - reservedPlotHeightPx - paddingPx) / legendRowHeightPx,
         ),
       )
     : fullLegendRows;
@@ -366,14 +384,9 @@ export function getGanttChartLayout(
       ? 0
       : getLegendRowCount(visibleLegendEntries, legendWidthPx, fontSizePx) * legendRowHeightPx +
         paddingPx;
-  const fixedHeightPx = fixedWithoutLegendPx + legendHeightPx;
-  const plotHeightPx = Math.max(
-    1,
-    details.maxHeightCells === undefined
-      ? naturalPlotHeightPx
-      : Math.min(naturalPlotHeightPx, Math.max(1, heightLimitPx - fixedHeightPx)),
-  );
-  // Use the actual pitch after height compaction so overlays share TanStack's row coordinates.
+  const fixedHeightPx = allocated.fixed + legendHeightPx;
+  const plotHeightPx = Math.max(1, Math.min(naturalPlotHeightPx, heightLimitPx - fixedHeightPx));
+  // Use the actual pitch after compaction so overlays share TanStack's row coordinates.
   const rowHeightPx = plotHeightPx / details.tasks.length;
   const heightPx = Math.ceil(fixedHeightPx + plotHeightPx);
   return finalizeChartLayout(
@@ -412,11 +425,16 @@ function getGanttColors(
   return groups;
 }
 
-function createGanttRows(details: GanttChartDetails, theme: ChartTheme): PositionedGanttTask[] {
+function createGanttRows(
+  details: GanttChartDetails,
+  theme: ChartTheme,
+  layout: GanttChartLayout,
+): PositionedGanttTask[] {
   const [minimum, maximum] = getGanttDomain(details);
   const span = Math.max(maximum - minimum, MIN_TIME_SPAN);
   const position = (value: number) => (value - minimum) / span;
   const colors = getGanttColors(details, theme);
+  // Tight lanes keep a raster-visible separator; text yields before intervals or dependencies.
   return details.tasks.map((task, index) => {
     const x1 = position(task.start);
     const x2 = position(task.end);
@@ -426,8 +444,8 @@ function createGanttRows(details: GanttChartDetails, theme: ChartTheme): Positio
       x1,
       x2,
       progressEnd: x1 + (x2 - x1) * task.progress,
-      y1: details.tasks.length - index - 0.82,
-      y2: details.tasks.length - index - 0.18,
+      y1: details.tasks.length - index - (layout.rowHeightPx < 10 ? 0.72 : 0.82),
+      y2: details.tasks.length - index - (layout.rowHeightPx < 10 ? 0.28 : 0.18),
       y: details.tasks.length - index - 0.5,
       progressLabel: `${Math.round(task.progress * 100)}%`,
       color: colors.get(task.group) ?? "#579aca",
@@ -445,7 +463,8 @@ function createGanttScene(
   const progressLabelRows = rows.filter(
     (row) =>
       layout.rowHeightPx >= layout.fontSizePx * 1.35 &&
-      (row.x2 - row.x1) * layout.plotWidthPx >= layout.fontSizePx * 2.5,
+      (row.x2 - row.x1) * layout.plotWidthPx >=
+        estimateTextWidthPx(row.progressLabel, layout.fontSizePx) + 8,
   );
   return createChartScene(
     defineChart({
@@ -461,7 +480,7 @@ function createGanttScene(
             fill: groupRows[0]?.color ?? "#579aca",
             fillOpacity: 0.2,
             stroke: groupRows[0]?.color ?? "#579aca",
-            strokeWidth: 1.5,
+            strokeWidth: layout.rowHeightPx < 10 ? 0.75 : 1.5,
             inset: 0,
           });
         }),
@@ -542,7 +561,8 @@ function renderGrid(
     const ratio = tickCount === 1 ? 0.5 : index / (tickCount - 1);
     const x = layout.plotX + ratio * layout.plotWidthPx;
     const value = minimum + ratio * span;
-    return `<line x1="${x}" y1="${layout.plotY}" x2="${x}" y2="${layout.plotY + layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.16"/><text x="${x}" y="${layout.plotY - 8}" text-anchor="middle" fill="${foreground}" font-size="${layout.fontSizePx * 0.82}">${escapeXml(formatNumber(value))}</text>`;
+    const anchor = index === 0 ? "start" : index === tickCount - 1 ? "end" : "middle";
+    return `<line x1="${x}" y1="${layout.plotY}" x2="${x}" y2="${layout.plotY + layout.plotHeightPx}" stroke="${foreground}" stroke-opacity="0.16"/><text x="${x}" y="${layout.plotY - 8}" text-anchor="${anchor}" fill="${foreground}" font-size="${Math.max(8, layout.fontSizePx * 0.82)}">${escapeXml(formatNumber(value))}</text>`;
   }).join("");
   const rows = details.tasks
     .map((_, index) => {
@@ -570,7 +590,7 @@ function renderTaskLabels(
       const centerY = layout.plotY + (index + 0.5) * layout.rowHeightPx;
       const label = fitLabel(task.label, layout.labelWidthPx - 8, labelFontSize);
       const group = task.group ?? "ungrouped";
-      return `${renderText(label, layout.plotX - 8, centerY + labelFontSize * 0.35, labelFontSize, details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end")}${showGroups ? renderText(group, layout.plotX - 8, centerY + layout.fontSizePx * 0.95, Math.max(8, layout.fontSizePx * 0.72), details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end") : ""}`;
+      return `${renderText(label, layout.plotX - 8, centerY + labelFontSize * (showGroups ? -0.05 : 0.35), labelFontSize, details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end")}${showGroups ? renderText(group, layout.plotX - 8, centerY + layout.fontSizePx * 0.85, Math.max(8, layout.fontSizePx * 0.72), details.fontFamily ?? DEFAULT_FONT_FAMILY, foreground, "end") : ""}`;
     })
     .join("");
 }
@@ -589,12 +609,14 @@ function renderDependencies(
         const x2 = layout.plotX + target.x1 * layout.plotWidthPx;
         const y1 = layout.plotY + (source.index + 0.5) * layout.rowHeightPx;
         const y2 = layout.plotY + (target.index + 0.5) * layout.rowHeightPx;
-        const mid =
+        const gap = Math.min(DEPENDENCY_ROUTE_GAP_PX, Math.max(3, layout.rowHeightPx * 0.4));
+        const route =
           x2 >= x1
-            ? (x1 + x2) / 2
-            : Math.min(layout.plotX + layout.plotWidthPx, x1 + DEPENDENCY_ROUTE_GAP_PX);
+            ? `M ${x1} ${y1} H ${(x1 + x2) / 2} V ${y2} H ${x2}`
+            : // Overlapping intervals approach the target from outside its bar, never underneath it.
+              `M ${x1} ${y1} H ${Math.min(layout.widthPx - 1, x1 + gap)} V ${(y1 + y2) / 2} H ${x2 - gap} V ${y2} H ${x2}`;
         return [
-          `<path d="M ${x1} ${y1} H ${mid} V ${y2} H ${x2}" class="pi-gantt-dependency" marker-end="url(#pi-gantt-arrow)"/>`,
+          `<path d="${route}" class="pi-gantt-dependency" marker-end="url(#pi-gantt-arrow)"/>`,
         ];
       }),
     )
@@ -608,18 +630,49 @@ function renderMilestones(
 ): string {
   const [minimum, maximum] = getGanttDomain(details);
   const span = Math.max(maximum - minimum, MIN_TIME_SPAN);
-  const diamondY = layout.plotY + layout.plotHeightPx + MILESTONE_GAP_PX;
-  return details.milestones
-    .map((milestone) => {
-      const x = layout.plotX + ((milestone.at - minimum) / span) * layout.plotWidthPx;
-      const label = fitLabel(
-        milestone.label,
-        Math.min(120, layout.plotWidthPx * 0.25),
-        layout.fontSizePx * 0.82,
-      );
-      const anchor = x > layout.widthPx - 100 ? "end" : "start";
-      const labelX = anchor === "end" ? x - MILESTONE_SIZE_PX - 6 : x + MILESTONE_SIZE_PX + 6;
-      return `<line x1="${x}" y1="${layout.plotY}" x2="${x}" y2="${diamondY + MILESTONE_SIZE_PX}" stroke="#f0b85b" stroke-width="1.5" stroke-dasharray="5 4"/><path d="M ${x} ${diamondY - MILESTONE_SIZE_PX} l ${MILESTONE_SIZE_PX} ${MILESTONE_SIZE_PX} l -${MILESTONE_SIZE_PX} ${MILESTONE_SIZE_PX} l -${MILESTONE_SIZE_PX} -${MILESTONE_SIZE_PX} z" fill="#f0b85b"/>${renderText(label, labelX, diamondY + 4, Math.max(8, layout.fontSizePx * 0.82), fontFamily, "#f0b85b", anchor)}`;
+  const font = Math.max(8, layout.fontSizePx * 0.82);
+  const positions = details.milestones.map((milestone) => milestone.at).sort((a, b) => a - b);
+  const separation = positions
+    .slice(1)
+    .reduce(
+      (gap, at, index) =>
+        Math.min(gap, ((at - (positions[index] ?? at)) / span) * layout.plotWidthPx),
+      Number.POSITIVE_INFINITY,
+    );
+  const size = Math.min(
+    MILESTONE_SIZE_PX,
+    layout.fontSizePx * 0.4,
+    Math.max(1, separation / 2 - 0.5),
+  );
+  const diamondY = layout.plotY + layout.plotHeightPx + size + 2;
+  const labelY = diamondY + size + font + 2;
+  const gap = 6;
+  const labels = details.milestones
+    .map((milestone) => ({
+      milestone,
+      x: layout.plotX + ((milestone.at - minimum) / span) * layout.plotWidthPx,
+      width: Math.min(120, estimateTextWidthPx(milestone.label, font) + 8),
+      left: 0,
+    }))
+    .sort((a, b) => a.x - b.x);
+  const available = Math.max(0, layout.plotWidthPx - gap * Math.max(0, labels.length - 1));
+  const total = labels.reduce((sum, label) => sum + label.width, 0);
+  const scale = Math.min(1, available / Math.max(1, total));
+  let right = layout.plotX + layout.plotWidthPx;
+  // Pack from the timeline end, then sweep forward; leaders preserve exact milestone positions.
+  for (const label of [...labels].reverse()) {
+    label.width *= scale;
+    label.left = Math.min(label.x - label.width / 2, right - label.width);
+    right = label.left - gap;
+  }
+  let left = layout.plotX;
+  return labels
+    .map((label) => {
+      label.left = Math.max(left, label.left);
+      left = label.left + label.width + gap;
+      const x = label.x;
+      const textX = label.left + label.width / 2;
+      return `<line x1="${x}" y1="${layout.plotY}" x2="${x}" y2="${diamondY}" stroke="#f0b85b" stroke-width="1" stroke-dasharray="5 4"/><path d="M ${x} ${diamondY - size} l ${size} ${size} l -${size} ${size} l -${size} -${size} z" fill="#f0b85b"/><path class="pi-gantt-milestone-leader" d="M ${x} ${diamondY + size} L ${textX} ${labelY - font}" fill="none" stroke="#f0b85b" stroke-width="0.75"/>${renderText(fitLabel(label.milestone.label, label.width, font), textX, labelY, font, fontFamily, "#f0b85b", "middle", 'class="pi-gantt-milestone-label"')}`;
     })
     .join("");
 }
@@ -692,7 +745,7 @@ export function renderGanttChartSvg(
   const foreground = ansiColor(theme.getFgAnsi("text"), "#b0b0b0");
   const surfaceColor = getChartSurfaceColor(foreground);
   const fontFamily = details.fontFamily ?? DEFAULT_FONT_FAMILY;
-  const rows = createGanttRows(details, theme);
+  const rows = createGanttRows(details, theme, layout);
   const plot = stripTanStackSvg(
     renderTanStackChartSvg(createGanttScene(rows, layout, surfaceColor), {
       ariaLabel: details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`,
@@ -708,8 +761,8 @@ export function renderGanttChartSvg(
     details.title === undefined
       ? ""
       : renderText(
-          details.title,
-          layout.plotX,
+          fitLabel(details.title, layout.widthPx - 16, layout.fontSizePx),
+          8,
           layout.plotY - layout.tickHeightPx - layout.titleHeightPx + layout.fontSizePx,
           layout.fontSizePx,
           fontFamily,
@@ -722,13 +775,14 @@ export function renderGanttChartSvg(
       : renderText(
           fitLabel(details.xLabel, layout.plotWidthPx, layout.fontSizePx),
           layout.plotX + layout.plotWidthPx / 2,
-          layout.plotY + layout.plotHeightPx + layout.fontSizePx * 2.4,
+          layout.plotY + layout.plotHeightPx + layout.annotationHeightPx - 5,
           Math.max(8, layout.fontSizePx * 0.82),
           fontFamily,
           foreground,
         );
-  const style = `<style>.pi-gantt-dependency{fill:none;stroke:${foreground};stroke-opacity:.7;stroke-width:1.5;stroke-dasharray:4 3}</style>`;
-  const marker = `<defs><marker id="pi-gantt-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M 0 0 L 7 3.5 L 0 7 z" fill="${foreground}"/></marker></defs>`;
+  const style = `<style>.pi-gantt-dependency{fill:none;stroke:${foreground};stroke-opacity:.7;stroke-width:${layout.rowHeightPx < 10 ? 0.8 : 1.5};stroke-dasharray:${layout.rowHeightPx < 10 ? "none" : "4 3"}}</style>`;
+  const arrowSize = Math.min(7, Math.max(3, layout.rowHeightPx * 0.45));
+  const marker = `<defs><marker id="pi-gantt-arrow" markerUnits="userSpaceOnUse" markerWidth="${arrowSize}" markerHeight="${arrowSize}" viewBox="0 0 7 7" refX="7" refY="3.5" orient="auto"><path d="M 0 0 L 7 3.5 L 0 7 z" fill="${foreground}"/></marker></defs>`;
   const name = details.title === undefined ? "Gantt chart" : `Gantt chart: ${details.title}`;
   return renderSvgDocument({
     widthPx: layout.widthPx * RASTER_DENSITY,

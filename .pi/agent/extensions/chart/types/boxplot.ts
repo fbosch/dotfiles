@@ -48,6 +48,7 @@ export type BoxplotChartLayout = ChartLayout & {
   plotWidthPx: number;
   plotHeightPx: number;
   fontSizePx: number;
+  compact: boolean;
 };
 
 function normalizeBoxplotChartInput(input: BoxplotChartInput): BoxplotChartData {
@@ -144,6 +145,24 @@ export function getBoxplotDomain(details: BoxplotChartData): [number, number] {
   return [min - padding, max + padding];
 }
 
+function getCompactedFontSize(
+  baseFontSizePx: number,
+  capHeightPx: number,
+  rowCount: number,
+  topBandFactor: number,
+  bottomBandFactor: number,
+): number {
+  for (
+    let fontSizePx = Math.floor(baseFontSizePx);
+    fontSizePx >= MIN_FONT_SIZE_PX;
+    fontSizePx -= 1
+  ) {
+    const availablePlotHeightPx = capHeightPx - fontSizePx * (topBandFactor + bottomBandFactor);
+    if (availablePlotHeightPx / rowCount >= fontSizePx * 1.05) return fontSizePx;
+  }
+  return MIN_FONT_SIZE_PX;
+}
+
 export function getBoxplotChartLayout(
   details: BoxplotChartDetails,
   cellDimensions?: CellDimensions,
@@ -151,17 +170,45 @@ export function getBoxplotChartLayout(
 ): BoxplotChartLayout {
   const cells = validCellDimensions(cellDimensions ?? { widthPx: NaN, heightPx: NaN });
   const widthPx = Math.round(width * cells.widthPx);
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const baseFontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
   const plotX = Math.min(
     widthPx * 0.4,
-    Math.max(...details.groups.map((group) => group.label.length)) * fontSizePx * 0.65 +
-      fontSizePx * (details.yLabel ? 2.5 : 1),
+    Math.max(...details.groups.map((group) => group.label.length)) * baseFontSizePx * 0.65 +
+      baseFontSizePx * (details.yLabel ? 2.5 : 1),
   );
-  const plotY = fontSizePx * (details.title ? 2.5 : 1);
-  const plotWidthPx = Math.max(1, widthPx - plotX - fontSizePx);
+  const basePlotY = baseFontSizePx * (details.title ? 2.5 : 1);
+  const baseNaturalPlotHeightPx =
+    details.groups.length * Math.max(cells.heightPx * 1.5, baseFontSizePx * 1.6);
+  const baseBottomBandPx = baseFontSizePx * (details.xLabel ? 3.5 : 2);
+  const baseFixedHeightPx = basePlotY + baseBottomBandPx;
+  const baseDisplayPlotHeightPx = clampChartPlotHeightPx(
+    baseNaturalPlotHeightPx,
+    undefined,
+    cells.heightPx,
+    baseFixedHeightPx,
+    undefined,
+  );
+  const baseNaturalHeightPx = baseFixedHeightPx + baseDisplayPlotHeightPx;
+  const capHeightPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.floor(details.maxHeightCells * cells.heightPx);
+  const compact = capHeightPx < baseNaturalHeightPx;
+  const topBandFactor = details.title ? 1.6 : 1;
+  const bottomBandFactor = details.xLabel ? 3 : 1.45;
+  const fontSizePx = compact
+    ? getCompactedFontSize(
+        baseFontSizePx,
+        capHeightPx,
+        details.groups.length,
+        topBandFactor,
+        bottomBandFactor,
+      )
+    : baseFontSizePx;
+  const plotY = compact ? fontSizePx * topBandFactor : basePlotY;
   const naturalPlotHeightPx =
     details.groups.length * Math.max(cells.heightPx * 1.5, fontSizePx * 1.6);
-  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 3.5 : 2);
+  const fixedHeightPx = compact ? plotY + fontSizePx * bottomBandFactor : plotY + baseBottomBandPx;
   const plotHeightPx = clampChartPlotHeightPx(
     naturalPlotHeightPx,
     details.maxHeightCells,
@@ -169,16 +216,17 @@ export function getBoxplotChartLayout(
     fixedHeightPx,
     undefined,
   );
-  const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 3.5 : 2));
+  const heightPx = Math.ceil(plotY + plotHeightPx + (fixedHeightPx - plotY));
   return finalizeChartLayout(
     {
       widthPx,
       heightPx,
       plotX,
       plotY,
-      plotWidthPx,
+      plotWidthPx: Math.max(1, widthPx - plotX - fontSizePx),
       plotHeightPx,
       fontSizePx,
+      compact,
     },
     cells.heightPx,
     details.maxHeightCells,
@@ -281,7 +329,24 @@ export function renderBoxplotChartSvg(
     const length = Math.max(1, Math.floor(space / (font * 0.65)));
     return value.length <= length ? value : `${value.slice(0, length - 1)}…`;
   };
-  const labels = rows
+  const labelRows: typeof rows = [];
+  let lastLabelY = Number.NEGATIVE_INFINITY;
+  const minimumLabelGap = font * 1.05;
+  for (const row of rows) {
+    const y = layout.plotY + (row.index + 0.5) * rowHeight + font * 0.35;
+    if (row.index === rows.length - 1) {
+      const previous = labelRows.at(-1);
+      if (previous !== undefined) {
+        const previousY = layout.plotY + (previous.index + 0.5) * rowHeight + font * 0.35;
+        if (y - previousY < minimumLabelGap) labelRows.pop();
+      }
+    }
+    if (y - lastLabelY >= minimumLabelGap) {
+      labelRows.push(row);
+      lastLabelY = y;
+    }
+  }
+  const labels = labelRows
     .map((row) =>
       text(
         shorten(row.label, layout.plotX - font * (details.yLabel ? 2 : 0.5)),
@@ -291,6 +356,9 @@ export function renderBoxplotChartSvg(
       ),
     )
     .join("");
+  const tickBaseline = layout.compact
+    ? layout.plotY + layout.plotHeightPx + font * 1.1
+    : layout.plotY + layout.plotHeightPx + font * 1.3;
   const ticks = Array.from({ length: 3 }, (_, i) =>
     text(
       formatNumeric(
@@ -299,7 +367,7 @@ export function renderBoxplotChartSvg(
         String,
       ),
       layout.plotX + (layout.plotWidthPx * i) / 2,
-      layout.plotY + layout.plotHeightPx + font * 1.3,
+      tickBaseline,
       i === 0 ? "start" : i === 2 ? "end" : "middle",
     ),
   ).join("");
@@ -310,7 +378,7 @@ export function renderBoxplotChartSvg(
       ? text(
           shorten(details.xLabel, layout.plotWidthPx),
           layout.plotX + layout.plotWidthPx / 2,
-          layout.heightPx - font * 0.5,
+          layout.compact ? layout.heightPx - font * 0.35 : layout.heightPx - font * 0.5,
         )
       : "") +
     (details.yLabel

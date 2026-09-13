@@ -51,6 +51,9 @@ export type DumbbellChartLayout = ChartLayout & {
   plotWidthPx: number;
   plotHeightPx: number;
   fontSizePx: number;
+  rowHeightPx: number;
+  compact: boolean;
+  annotationWidthPx: number;
 };
 
 function normalizeDumbbellChartInput(input: DumbbellChartInput): DumbbellChartData {
@@ -121,6 +124,34 @@ export function getDumbbellDomain(details: DumbbellChartData): [number, number] 
   return [min - padding, max + padding];
 }
 
+function signed(value: number): string {
+  return `${value > 0 ? "+" : ""}${value}`;
+}
+
+function signedFormatted(value: number, format: DumbbellChartData["valueFormat"]): string {
+  const formatted = formatNumeric(value, format);
+  return value > 0 ? `+${formatted}` : formatted;
+}
+
+function getDumbbellCompactMetrics(
+  fontSizePx: number,
+  rowCount: number,
+  hasTitle: boolean,
+  hasXLabel: boolean,
+): { plotY: number; rowHeightPx: number; fixedHeightPx: number; totalHeightPx: number } {
+  const plotY = fontSizePx * (hasTitle ? 1.35 : 0.85);
+  const rowHeightPx = fontSizePx * 0.95;
+  const axisHeightPx = fontSizePx * (hasXLabel ? 2.5 : 1.3);
+  const legendHeightPx = fontSizePx * 1.35;
+  const fixedHeightPx = plotY + axisHeightPx + legendHeightPx;
+  return {
+    plotY,
+    rowHeightPx,
+    fixedHeightPx,
+    totalHeightPx: fixedHeightPx + rowCount * rowHeightPx,
+  };
+}
+
 export function getDumbbellChartLayout(
   details: DumbbellChartDetails,
   cellDimensions?: CellDimensions,
@@ -128,29 +159,104 @@ export function getDumbbellChartLayout(
 ): DumbbellChartLayout {
   const cells = validCellDimensions(cellDimensions ?? { widthPx: NaN, heightPx: NaN });
   const widthPx = Math.max(1, Math.round(width * cells.widthPx));
-  const fontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const requestedFontSizePx = scaleChartFontSize(details.fontSize ?? 14, cells);
+  const naturalPlotY = requestedFontSizePx * (details.title ? 2.5 : 1);
+  const naturalRowHeightPx = Math.max(
+    cells.heightPx * 1.5,
+    requestedFontSizePx * (details.showDifferences ? 3.4 : 1.8),
+  );
+  const naturalPlotHeightPx = details.data.length * naturalRowHeightPx;
+  const naturalFixedHeightPx = naturalPlotY + requestedFontSizePx * (details.xLabel ? 6.5 : 5);
+  const naturalHeightPx = naturalFixedHeightPx + naturalPlotHeightPx;
+  const heightLimitPx =
+    details.maxHeightCells === undefined
+      ? Number.POSITIVE_INFINITY
+      : details.maxHeightCells * cells.heightPx;
+  const compact = heightLimitPx < naturalHeightPx;
+  let fontSizePx = requestedFontSizePx;
+  if (compact) {
+    for (let candidate = requestedFontSizePx; candidate >= MIN_FONT_SIZE_PX; candidate -= 1) {
+      if (
+        getDumbbellCompactMetrics(
+          candidate,
+          details.data.length,
+          details.title !== undefined,
+          details.xLabel !== undefined,
+        ).totalHeightPx <= heightLimitPx
+      ) {
+        fontSizePx = candidate;
+        break;
+      }
+      fontSizePx = MIN_FONT_SIZE_PX;
+    }
+  }
   const plotX = Math.min(
     widthPx * 0.4,
     Math.max(...details.data.map((row) => row.label.length)) * fontSizePx * 0.65 +
       fontSizePx * (details.yLabel ? 2.5 : 1),
   );
-  const plotY = fontSizePx * (details.title ? 2.5 : 1);
+  const plotY = compact
+    ? getDumbbellCompactMetrics(
+        fontSizePx,
+        details.data.length,
+        details.title !== undefined,
+        details.xLabel !== undefined,
+      ).plotY
+    : naturalPlotY;
   const plotWidthPx = Math.max(1, widthPx - plotX - Math.min(fontSizePx, widthPx * 0.1));
-  // Differences get a separate line in each row, never competing with endpoints or adjacent rows.
-  const rowHeight = Math.max(
-    cells.heightPx * 1.5,
-    fontSizePx * (details.showDifferences ? 3.4 : 1.8),
+  const annotationWidthPx =
+    compact && details.showDifferences
+      ? Math.max(
+          fontSizePx * 3,
+          ...details.data.map(
+            (row) =>
+              `Δ ${signedFormatted(row.after - row.before, details.valueFormat)}`.length *
+                fontSizePx *
+                0.65 +
+              fontSizePx,
+          ),
+        )
+      : 0;
+  if (!compact) {
+    const plotHeightPx = clampChartPlotHeightPx(
+      naturalPlotHeightPx,
+      details.maxHeightCells,
+      cells.heightPx,
+      naturalFixedHeightPx,
+      undefined,
+    );
+    const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 6.5 : 5));
+    return finalizeChartLayout(
+      {
+        widthPx,
+        heightPx,
+        plotX,
+        plotY,
+        plotWidthPx,
+        plotHeightPx,
+        fontSizePx,
+        rowHeightPx: plotHeightPx / details.data.length,
+        compact,
+        annotationWidthPx,
+      },
+      cells.heightPx,
+      details.maxHeightCells,
+    );
+  }
+  const compactMetrics = getDumbbellCompactMetrics(
+    fontSizePx,
+    details.data.length,
+    details.title !== undefined,
+    details.xLabel !== undefined,
   );
-  const naturalPlotHeightPx = details.data.length * rowHeight;
-  const fixedHeightPx = plotY + fontSizePx * (details.xLabel ? 6.5 : 5);
-  const plotHeightPx = clampChartPlotHeightPx(
-    naturalPlotHeightPx,
-    details.maxHeightCells,
-    cells.heightPx,
-    fixedHeightPx,
-    undefined,
+  const plotHeightPx = Math.max(
+    1,
+    Math.min(
+      details.data.length * compactMetrics.rowHeightPx,
+      heightLimitPx - compactMetrics.fixedHeightPx,
+    ),
   );
-  const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 6.5 : 5));
+  const heightPx = Math.ceil(compactMetrics.fixedHeightPx + plotHeightPx);
   return finalizeChartLayout(
     {
       widthPx,
@@ -160,14 +266,13 @@ export function getDumbbellChartLayout(
       plotWidthPx,
       plotHeightPx,
       fontSizePx,
+      rowHeightPx: plotHeightPx / details.data.length,
+      compact,
+      annotationWidthPx,
     },
     cells.heightPx,
     details.maxHeightCells,
   );
-}
-
-function signed(value: number): string {
-  return `${value > 0 ? "+" : ""}${value}`;
 }
 
 export function getDumbbellChartSummary(details: DumbbellChartDetails): string {
@@ -188,9 +293,11 @@ export function renderDumbbellChartSvg(
   const radius = Math.min(font * 0.32, layout.plotWidthPx / 8);
   const gutter = radius + Math.min(2, layout.plotWidthPx / 20);
   const innerWidth = Math.max(0.1, layout.plotWidthPx - gutter * 2);
+  const annotationWidthPx = layout.annotationWidthPx;
+  const dataWidth = Math.max(0.1, innerWidth - annotationWidthPx);
   const x = (value: number) => (value - min) / (max - min);
-  const rowHeight = layout.plotHeightPx / details.data.length;
-  const rowPosition = details.showDifferences ? 0.3 : 0.5;
+  const rowHeight = layout.rowHeightPx;
+  const rowPosition = layout.compact ? 0.5 : details.showDifferences ? 0.3 : 0.5;
   const rows = details.data.map((row, index) => ({
     ...row,
     index,
@@ -223,13 +330,13 @@ export function renderDumbbellChartSvg(
       margin: 0,
       focus: false,
     }),
-    { width: innerWidth, height: layout.plotHeightPx },
+    { width: dataWidth, height: layout.plotHeightPx },
   );
   const rules: SceneNode[] = rows.map((row) => ({
     kind: "rule",
     key: `connector-${row.index}`,
-    x1: x(row.before) * innerWidth,
-    x2: x(row.after) * innerWidth,
+    x1: x(row.before) * dataWidth,
+    x2: x(row.after) * dataWidth,
     y1: (row.index + rowPosition) * rowHeight,
     y2: (row.index + rowPosition) * rowHeight,
     style: { stroke: foreground, strokeWidth: 1, strokeOpacity: 0.5 },
@@ -243,7 +350,7 @@ export function renderDumbbellChartSvg(
   const text = (value: string, px: number, py: number, anchor = "middle", extra = "") =>
     `<text x="${px}" y="${py}" font-size="${font}" text-anchor="${anchor}" fill="${foreground}" ${extra}>${escapeXml(value)}</text>`;
   const shorten = (value: string, space: number) => {
-    const length = Math.max(0, Math.floor(space / font));
+    const length = Math.max(0, Math.floor(space / (font * 0.65)));
     return length === 0 ? "" : value.length <= length ? value : `${value.slice(0, length - 1)}…`;
   };
   const labels = rows
@@ -258,16 +365,20 @@ export function renderDumbbellChartSvg(
     .join("");
   const differences = details.showDifferences
     ? rows
-        .map((row) =>
-          text(
-            shorten(
-              `Δ ${formatNumeric(row.after - row.before, details.valueFormat, signed)}`,
-              layout.plotWidthPx,
-            ),
-            layout.plotX + layout.plotWidthPx / 2,
-            layout.plotY + (row.index + 0.8) * rowHeight,
-          ),
-        )
+        .map((row) => {
+          const value = `Δ ${signedFormatted(row.after - row.before, details.valueFormat)}`;
+          const x = layout.compact
+            ? layout.plotX + gutter + dataWidth + annotationWidthPx / 2
+            : layout.plotX + layout.plotWidthPx / 2;
+          const y = layout.compact
+            ? layout.plotY + (row.index + rowPosition) * rowHeight + font * 0.35
+            : layout.plotY + (row.index + 0.8) * rowHeight;
+          return text(
+            shorten(value, layout.compact ? annotationWidthPx : layout.plotWidthPx),
+            x,
+            y,
+          );
+        })
         .join("")
     : "";
   // Reduce tick count at narrow widths rather than allowing neighboring numeric labels to overlap.
@@ -276,15 +387,11 @@ export function renderDumbbellChartSvg(
     const ratio = tickCount === 1 ? 0.5 : i / (tickCount - 1);
     return text(
       shorten(
-        formatNumeric(
-          Number((min + (max - min) * ratio).toPrecision(3)),
-          details.valueFormat,
-          String,
-        ),
-        innerWidth / tickCount,
+        formatNumeric(Number((min + (max - min) * ratio).toPrecision(3)), details.valueFormat),
+        dataWidth / tickCount,
       ),
-      layout.plotX + gutter + innerWidth * ratio,
-      layout.plotY + layout.plotHeightPx + font * 1.3,
+      layout.plotX + gutter + dataWidth * ratio,
+      layout.plotY + layout.plotHeightPx + font * (layout.compact ? 1.05 : 1.3),
       tickCount === 1 ? "middle" : i === 0 ? "start" : i === tickCount - 1 ? "end" : "middle",
     );
   }).join("");
@@ -293,9 +400,9 @@ export function renderDumbbellChartSvg(
     (details.title ? text(shorten(details.title, layout.widthPx - 16), 8, font, "start") : "") +
     (details.xLabel
       ? text(
-          shorten(details.xLabel, layout.plotWidthPx),
-          layout.plotX + layout.plotWidthPx / 2,
-          layout.plotY + layout.plotHeightPx + font * 2.8,
+          shorten(details.xLabel, layout.compact ? dataWidth : layout.plotWidthPx),
+          layout.plotX + gutter + dataWidth / 2,
+          layout.plotY + layout.plotHeightPx + font * (layout.compact ? 2.15 : 2.8),
         )
       : "") +
     (details.yLabel
@@ -307,18 +414,37 @@ export function renderDumbbellChartSvg(
           `transform="rotate(-90 ${font} ${middleY})"`,
         )
       : "");
-  const legend = [
-    [details.beforeLabel, beforeColor],
-    [details.afterLabel, afterColor],
-  ]
-    .map(([label, color], index) => {
-      const py = layout.heightPx - font * (2 - index);
-      return (
-        `<circle cx="${font * 0.8}" cy="${py - font * 0.3}" r="${font * (index === 0 ? 0.32 : 0.16)}" fill="${index === 0 ? "none" : color}" stroke="${color}" stroke-width="${index === 0 ? 2 : 0}"/>` +
-        text(shorten(label ?? "", layout.widthPx - font * 2), font * 1.8, py, "start")
-      );
-    })
-    .join("");
+  const legend = layout.compact
+    ? (() => {
+        const entries = [
+          [details.beforeLabel, beforeColor],
+          [details.afterLabel, afterColor],
+        ] as const;
+        const py = layout.heightPx - font * 0.2;
+        let x = font * 0.35;
+        return entries
+          .map(([label, color], index) => {
+            const fitted = shorten(label, layout.widthPx - x - font);
+            const item =
+              `<circle cx="${x + font * 0.3}" cy="${py - font * 0.3}" r="${font * (index === 0 ? 0.32 : 0.16)}" fill="${index === 0 ? "none" : color}" stroke="${color}" stroke-width="${index === 0 ? 2 : 0}"/>` +
+              text(fitted, x + font * 0.9, py, "start");
+            x += Math.max(font * 3, fitted.length * font * 0.65 + font * 2.1);
+            return item;
+          })
+          .join("");
+      })()
+    : [
+        [details.beforeLabel, beforeColor],
+        [details.afterLabel, afterColor],
+      ]
+        .map(([label, color], index) => {
+          const py = layout.heightPx - font * (2 - index);
+          return (
+            `<circle cx="${font * 0.8}" cy="${py - font * 0.3}" r="${font * (index === 0 ? 0.32 : 0.16)}" fill="${index === 0 ? "none" : color}" stroke="${color}" stroke-width="${index === 0 ? 2 : 0}"/>` +
+            text(shorten(label ?? "", layout.widthPx - font * 2), font * 1.8, py, "start")
+          );
+        })
+        .join("");
   const name = details.title ?? "Dumbbell";
   return renderSvgDocument({
     widthPx: layout.widthPx * RASTER_DENSITY,

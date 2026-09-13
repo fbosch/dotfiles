@@ -3,6 +3,14 @@
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
+    "dotfiles": {
+      "path": "~/dotfiles",
+      "description": "Personal dotfiles"
+    },
+    "nixos": {
+      "path": "~/nixos",
+      "description": "Personal NixOS configuration"
+    },
     "obsidian": {
       "path": "/mnt/nas/FrederikDocs/Obsidian/Vault",
       "description": "Personal Obsidian vault"
@@ -118,7 +126,7 @@
     "npm:pi-mono-figma@0.2.2",
     "npm:pi-hashline-edit-pro@3.0.4",
     "npm:@liborw/pi-startup-time",
-    "npm:pi-goal-x"
+    "npm:pi-codex-goal"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,

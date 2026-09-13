@@ -1,0 +1,3243 @@
+{
+  "schemaVersion": 1,
+  "fixtureSet": "chart-visual-validation-v1",
+  "publicArgsExclude": [
+    "type"
+  ],
+  "profiles": {
+    "D": {
+      "widthCells": 60,
+      "cellWidthPx": 9,
+      "cellHeightPx": 18,
+      "heightMode": "natural"
+    },
+    "N": {
+      "widthCells": 28,
+      "cellWidthPx": 9,
+      "cellHeightPx": 18,
+      "heightMode": "natural"
+    },
+    "D18": {
+      "widthCells": 60,
+      "cellWidthPx": 9,
+      "cellHeightPx": 18,
+      "maxHeightCells": 18
+    },
+    "N8": {
+      "widthCells": 28,
+      "cellWidthPx": 9,
+      "cellHeightPx": 18,
+      "maxHeightCells": 8
+    }
+  },
+  "themes": {
+    "dark": {
+      "description": "Current Pi dark theme",
+      "required": true
+    }
+  },
+  "ledger": {
+    "initialStatus": "pending",
+    "requiredViewRecord": {
+      "profile": "D|N|D18|N8",
+      "theme": "dark",
+      "status": "pending|validated|blocked",
+      "attempts": 0,
+      "artifact": "relative PNG path or null",
+      "defectsCorrected": []
+    },
+    "artifactPolicy": "Do not commit PNGs or bulky result dumps; keep only compact ledger records and replayable inputs."
+  },
+  "objectiveChecks": {
+    "PI-EXACT": {
+      "seam": "parse/summary/accessibility",
+      "assertion": "Every slice and exact value survives in authored order; the total is finite and positive."
+    },
+    "PI-ORDER": {
+      "seam": "SVG legend",
+      "assertion": "Legend entries retain input order and percentages are calculated from the exact total."
+    },
+    "PI-LEGEND-FIT": {
+      "seam": "SVG geometry",
+      "assertion": "Markers and percentage suffixes stay inside their legend columns; labels may ellipsize only when documented."
+    },
+    "DONUT-EXACT": {
+      "seam": "parse/summary/accessibility",
+      "assertion": "Every slice and exact value survives in authored order with percentages from the exact positive total."
+    },
+    "DONUT-HOLE": {
+      "seam": "SVG geometry",
+      "assertion": "Each slice is an annular arc with a transparent center, not a pie wedge to the origin."
+    },
+    "DONUT-LEGEND-FIT": {
+      "seam": "SVG geometry",
+      "assertion": "Legend markers, percentages, and columns do not overlap or clip."
+    },
+    "BAR-SIGN": {
+      "seam": "SVG geometry",
+      "assertion": "Negative bars extend left of zero and positive bars right of zero; row order is preserved."
+    },
+    "BAR-ZERO": {
+      "seam": "SVG geometry",
+      "assertion": "Zero has a visible baseline and a zero-width row remains identifiable."
+    },
+    "BAR-LABEL": {
+      "seam": "SVG/accessibility",
+      "assertion": "Signed value meaning remains readable; truncation never changes the exact summary."
+    },
+    "LINE-ORDER": {
+      "seam": "parse/geometry",
+      "assertion": "Strictly increasing x values retain proportional numeric or temporal spacing and input order."
+    },
+    "LINE-GAP": {
+      "seam": "SVG paths",
+      "assertion": "A null y creates a disconnected gap and never creates a plotted point or marker."
+    },
+    "LINE-MARKERS": {
+      "seam": "SVG marks",
+      "assertion": "Markers appear only when requested and only for finite y values."
+    },
+    "LINE-FORMAT": {
+      "seam": "axis labels",
+      "assertion": "Percent formatting changes labels only; source values and geometry remain fractional exact values."
+    },
+    "SCATTER-POINTS": {
+      "seam": "SVG marks",
+      "assertion": "Every input row is a fixed-size dot, including duplicate coordinates."
+    },
+    "SCATTER-ORDER": {
+      "seam": "summary/accessibility",
+      "assertion": "Point order and exact coordinates are retained; input is not sorted or aggregated."
+    },
+    "SCATTER-LABELS": {
+      "seam": "SVG labels",
+      "assertion": "Every supplied point label is present and does not paint through another label or dot."
+    },
+    "HIST-BINS": {
+      "seam": "parse",
+      "assertion": "Equal-width boundaries use lower-inclusive/upper-exclusive bins except the final upper-inclusive bin; exact boundaries go right."
+    },
+    "HIST-EMPTY": {
+      "seam": "parse/SVG",
+      "assertion": "Empty bins remain as zero-count bars and all sample counts sum to the input length."
+    },
+    "HIST-FINITE": {
+      "seam": "SVG/raster",
+      "assertion": "All boundaries and bar geometry are finite, contiguous, and renderable."
+    },
+    "BEZ-CUBIC": {
+      "seam": "SVG path",
+      "assertion": "One exact M/C cubic path uses the supplied start, control1, control2, and end coordinates without sampled interpolation."
+    },
+    "BEZ-CONTROLS": {
+      "seam": "SVG marks",
+      "assertion": "When requested, both control guides and control markers are visible without changing the cubic path."
+    },
+    "BEZ-SQUARE": {
+      "seam": "layout/geometry",
+      "assertion": "The plot is square with equal pixels-per-unit and contains all four points."
+    },
+    "BEZ-FINITE": {
+      "seam": "SVG/raster",
+      "assertion": "Coincident, straight, and extreme valid coordinates produce no NaN, Infinity, clipping, or missing endpoints."
+    },
+    "HEAT-MATRIX": {
+      "seam": "parse/SVG",
+      "assertion": "Rows and columns remain row-major, rectangular, and one positive-area cell per input cell."
+    },
+    "HEAT-MISSING": {
+      "seam": "SVG/summary",
+      "assertion": "null cells use the missing hatch and remain distinct from numeric zero in the summary."
+    },
+    "HEAT-DOMAIN": {
+      "seam": "domain/color",
+      "assertion": "Sequential uses observed min/max; diverging uses a symmetric zero-centered domain; nulls do not affect it."
+    },
+    "HEAT-VALUES": {
+      "seam": "SVG labels",
+      "assertion": "Numeric values show only when requested and cells fit; exact values remain in summary/accessibility."
+    },
+    "BOX-STATS": {
+      "seam": "statistics/geometry",
+      "assertion": "Type-7 quartiles, median, inclusive 1.5×IQR fences, and actual-sample whiskers are exact."
+    },
+    "BOX-OUTLIERS": {
+      "seam": "SVG marks/summary",
+      "assertion": "Outlier count and exact samples remain correct; duplicate outliers retain multiplicity in semantics."
+    },
+    "BOX-HIDDEN-DOMAIN": {
+      "seam": "domain/SVG",
+      "assertion": "showOutliers false hides dots only; all samples still determine the padded axis domain."
+    },
+    "BOX-ORDER": {
+      "seam": "SVG geometry",
+      "assertion": "Groups retain authored top-to-bottom order and labels do not overlap rows."
+    },
+    "WATER-TOTALS": {
+      "seam": "running totals/summary",
+      "assertion": "Start, every signed delta, every before/after total, and calculated final Total use unrounded input-order arithmetic."
+    },
+    "WATER-DIRECTION": {
+      "seam": "SVG geometry",
+      "assertion": "Increase/decrease bars and connectors show signed direction; the domain includes zero and every intermediate total."
+    },
+    "WATER-ZERO": {
+      "seam": "SVG marks",
+      "assertion": "A zero change has a visible rule at its exact cumulative position."
+    },
+    "DUMB-PAIRS": {
+      "seam": "SVG geometry",
+      "assertion": "Each row has one independent before/after pair and one connector; rows are never cross-connected."
+    },
+    "DUMB-DIFFERENCE": {
+      "seam": "summary/labels",
+      "assertion": "showDifferences displays signed after−before values, with percent mode as percentage points."
+    },
+    "DUMB-EQUAL": {
+      "seam": "SVG marks",
+      "assertion": "Equal values share one position while the after dot remains visible inside the before ring."
+    },
+    "DUMB-ORDER": {
+      "seam": "SVG geometry",
+      "assertion": "Rows retain authored top-to-bottom order and the axis covers both series without forcing zero."
+    },
+    "STACK-TOTALS": {
+      "seam": "summary/geometry",
+      "assertion": "Each category total is the exact series-order sum and segment order matches the series order."
+    },
+    "STACK-NORMALIZE": {
+      "seam": "geometry/axes",
+      "assertion": "normalize true maps each nonzero category to 100%; zero totals stay zero and raw values remain unchanged."
+    },
+    "STACK-ZERO": {
+      "seam": "SVG/legend",
+      "assertion": "Zero segments have zero width but zero-valued series remain in the legend."
+    },
+    "STACK-LEGEND": {
+      "seam": "SVG geometry",
+      "assertion": "Each series has a separate, stable legend entry with no overlap."
+    },
+    "GANTT-INTERVALS": {
+      "seam": "SVG geometry",
+      "assertion": "Every task interval retains start/end and authored row order; no task is dropped."
+    },
+    "GANTT-PROGRESS": {
+      "seam": "SVG marks/summary",
+      "assertion": "Progress fills represent the exact 0..1 values; progress text may be omitted only when it cannot fit."
+    },
+    "GANTT-DEPS": {
+      "seam": "SVG overlays",
+      "assertion": "Every declared dependency points from prerequisite task to dependent task with an unambiguous arrow path."
+    },
+    "GANTT-MILESTONES": {
+      "seam": "SVG overlays",
+      "assertion": "Every milestone remains at its exact timeline coordinate with a visible diamond or exact summary."
+    },
+    "GANTT-CAP": {
+      "seam": "layout/cap",
+      "assertion": "Height caps compact rows but retain every task, dependency, milestone, and exact summary."
+    },
+    "NET-DIRECTION": {
+      "seam": "SVG overlays",
+      "assertion": "Every directed edge has the declared source, target, and arrow direction; self-loops remain self-loops."
+    },
+    "NET-SCC": {
+      "seam": "layout",
+      "assertion": "Cycles, reciprocal edges, multiple parents, and disconnected nodes remain represented without force-layout nondeterminism."
+    },
+    "NET-LABELS": {
+      "seam": "SVG/summary",
+      "assertion": "Node identity and duplicate display labels remain distinguishable; exact labels and edge data remain accessible."
+    },
+    "NET-CYCLE-LANES": {
+      "seam": "SVG geometry",
+      "assertion": "Backward, same-layer, and self-loop paths use distinct readable lanes and do not cross node labels."
+    },
+    "NET-CAP": {
+      "seam": "layout/cap",
+      "assertion": "A height cap retains every node and edge; only labels documented as too dense may be omitted visibly."
+    },
+    "TREE-ROOT": {
+      "seam": "parse/layout",
+      "assertion": "Exactly one root and one connected acyclic hierarchy are retained."
+    },
+    "TREE-PARENTS": {
+      "seam": "SVG overlays",
+      "assertion": "Every non-root node has one link to its declared parent and no link paints through a label or node."
+    },
+    "TREE-ORDER": {
+      "seam": "layout",
+      "assertion": "Input order controls sibling order from top to bottom; broad levels remain distinguishable under compaction."
+    },
+    "TREE-LABELS": {
+      "seam": "SVG/summary",
+      "assertion": "Labels fit their available gaps or are explicitly omitted only when too crowded; exact IDs and labels stay accessible."
+    },
+    "TREEMAP-SUMS": {
+      "seam": "parse/summary",
+      "assertion": "Parents and overall total equal exact child sums; leaf values and units are not silently converted."
+    },
+    "TREEMAP-CONTAINMENT": {
+      "seam": "SVG geometry",
+      "assertion": "Every child tile stays inside its parent and positive leaves receive area proportional to contribution."
+    },
+    "TREEMAP-ZERO": {
+      "seam": "SVG/summary",
+      "assertion": "Zero leaves and zero-valued top-level groups remain in exact summary/legend without consuming area."
+    },
+    "TREEMAP-LABELS": {
+      "seam": "SVG/summary",
+      "assertion": "Fitted labels stay inside their own tiles; small or skewed tiles may omit visible labels while full paths remain accessible."
+    }
+  },
+  "visualizerPromptTemplate": "Validate fixture {chart}/{caseId} using {tool}. Use the exact public JSON in {argsJson}; it excludes the internal type discriminator. For each natural profile in {profiles}, and each height-cap variant in {heightCaps}, render with cell dimensions 9x18, the named width, and theme {theme}. Do not shorten, aggregate, reorder, normalize, remove, or replace supplied data. First check the semantic invariants: {semanticInvariants}. Then inspect the actual rendered image at the target profile for clipping, overlap, legibility, contrast, misleading scales, ordering, connectors/arrows, legend correspondence, and the required visible information: {requiredVisible}. These omissions alone are allowed: {allowedOmissions}. Run objective checks {objectiveCheckIds} separately from the visual verdict. If incorrect, state the exact defect and corrected renderer revision, rerender the unchanged arguments, and inspect again; allow at most three attempts per view. Return one record per view with status validated or blocked, profile, theme, attempts, inspected artifact, defects corrected, and remaining limitations. A successful tool call or SVG/syntax inspection without an image is not validated.",
+  "charts": [
+    {
+      "chart": "pie",
+      "tool": "chart_pie",
+      "cases": [
+        {
+          "id": "pie-representative",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "label": "Open",
+                "value": 3
+              },
+              {
+                "label": "Closed",
+                "value": 1
+              }
+            ],
+            "title": "Status"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Total is 4; Open is 75.0% and Closed is 25.0%.",
+            "Input order is Open then Closed."
+          ],
+          "objectiveCheckIds": [
+            "PI-EXACT",
+            "PI-ORDER",
+            "PI-LEGEND-FIT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Two distinct slices",
+              "Status title",
+              "Open/Closed legend entries and percentages"
+            ],
+            "allowedOmissions": [
+              "Legend labels may ellipsize at N or under N8, but markers and percentage suffixes remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "pie-adversarial-crowded-zero",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "label": "TypeScript (.ts)",
+                "value": 1
+              },
+              {
+                "label": "Markdown (.md)",
+                "value": 1
+              },
+              {
+                "label": "Lua (.lua)",
+                "value": 1
+              },
+              {
+                "label": "JSON (.json)",
+                "value": 1
+              },
+              {
+                "label": "Shell (.sh)",
+                "value": 1
+              },
+              {
+                "label": "TSX (.tsx)",
+                "value": 1
+              },
+              {
+                "label": "No extension",
+                "value": 1
+              },
+              {
+                "label": "Fish (.fish)",
+                "value": 1
+              },
+              {
+                "label": "YAML (.yml)",
+                "value": 1
+              },
+              {
+                "label": "YAML (.yaml)",
+                "value": 1
+              },
+              {
+                "label": "PNG (.png)",
+                "value": 0
+              },
+              {
+                "label": "Other types",
+                "value": 2
+              }
+            ],
+            "title": "File types"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 12 labels remain distinct; the zero PNG slice is retained; total is 12.",
+            "Each displayed percentage is derived from the exact value, including 0.0% for PNG."
+          ],
+          "objectiveCheckIds": [
+            "PI-EXACT",
+            "PI-ORDER",
+            "PI-LEGEND-FIT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "A visibly complete 12-entry legend with a marker per row",
+              "Zero PNG entry and its 0.0% meaning",
+              "Slice/legend correspondence"
+            ],
+            "allowedOmissions": [
+              "Long legend labels may ellipsize, never the marker or percentage; exact labels remain in text/accessibility output."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "donut",
+      "tool": "chart_donut",
+      "cases": [
+        {
+          "id": "donut-representative",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "label": "Open",
+                "value": 3
+              },
+              {
+                "label": "Closed",
+                "value": 1
+              }
+            ],
+            "title": "Status"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Total is 4; percentages are 75.0% and 25.0% in input order.",
+            "The center is intentionally transparent and contains no invented metric."
+          ],
+          "objectiveCheckIds": [
+            "DONUT-EXACT",
+            "DONUT-HOLE",
+            "DONUT-LEGEND-FIT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Annular Open and Closed slices",
+              "Transparent center",
+              "Legend percentages"
+            ],
+            "allowedOmissions": [
+              "Legend labels may ellipsize at narrow/capped sizes, but percentages and markers remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "donut-adversarial-crowded-zero",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "label": "TypeScript (.ts)",
+                "value": 1
+              },
+              {
+                "label": "Markdown (.md)",
+                "value": 1
+              },
+              {
+                "label": "Lua (.lua)",
+                "value": 1
+              },
+              {
+                "label": "JSON (.json)",
+                "value": 1
+              },
+              {
+                "label": "Shell (.sh)",
+                "value": 1
+              },
+              {
+                "label": "TSX (.tsx)",
+                "value": 1
+              },
+              {
+                "label": "No extension",
+                "value": 1
+              },
+              {
+                "label": "Fish (.fish)",
+                "value": 1
+              },
+              {
+                "label": "YAML (.yml)",
+                "value": 1
+              },
+              {
+                "label": "YAML (.yaml)",
+                "value": 1
+              },
+              {
+                "label": "PNG (.png)",
+                "value": 0
+              },
+              {
+                "label": "Other types",
+                "value": 2
+              }
+            ],
+            "title": "File types"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 12 entries and the zero PNG value remain in the summary; total is 12.",
+            "Every slice has an annular path and percentages sum to 100.0% subject to displayed rounding."
+          ],
+          "objectiveCheckIds": [
+            "DONUT-EXACT",
+            "DONUT-HOLE",
+            "DONUT-LEGEND-FIT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Hole remains visible",
+              "All 12 legend markers and percentage suffixes",
+              "No slice/legend color mismatch"
+            ],
+            "allowedOmissions": [
+              "Long names may ellipsize only; exact labels and values remain accessible."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "bar",
+      "tool": "chart_bar",
+      "cases": [
+        {
+          "id": "bar-representative-signed",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "label": "Loss",
+                "value": -4
+              },
+              {
+                "label": "Neutral",
+                "value": 0
+              },
+              {
+                "label": "Gain",
+                "value": 6
+              }
+            ],
+            "title": "Balance"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Rows remain Loss, Neutral, Gain; values remain -4, 0, 6.",
+            "Zero is neither positive nor negative."
+          ],
+          "objectiveCheckIds": [
+            "BAR-SIGN",
+            "BAR-ZERO",
+            "BAR-LABEL"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Zero baseline",
+              "Left/right signed direction",
+              "Three ordered rows"
+            ],
+            "allowedOmissions": [
+              "Long value labels may abbreviate at narrow widths, but sign and row identity remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "bar-adversarial-long-mixed",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "label": "North America",
+                "value": -100
+              },
+              {
+                "label": "Europe",
+                "value": 80
+              },
+              {
+                "label": "Asia Pacific",
+                "value": 0
+              },
+              {
+                "label": "Latin America",
+                "value": 45
+              },
+              {
+                "label": "Middle East",
+                "value": -30
+              },
+              {
+                "label": "Africa",
+                "value": 12
+              },
+              {
+                "label": "Oceania",
+                "value": -8
+              },
+              {
+                "label": "Internal tools",
+                "value": 0
+              },
+              {
+                "label": "Support",
+                "value": 6
+              },
+              {
+                "label": "Refunds",
+                "value": -2
+              },
+              {
+                "label": "Other",
+                "value": 15
+              },
+              {
+                "label": "Unallocated",
+                "value": -1
+              }
+            ],
+            "title": "Regional balance"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 12 rows remain in order, including two zero rows and both signs.",
+            "The baseline includes zero and no row is sorted or aggregated."
+          ],
+          "objectiveCheckIds": [
+            "BAR-SIGN",
+            "BAR-ZERO",
+            "BAR-LABEL"
+          ],
+          "visibleInfo": {
+            "required": [
+              "All 12 bar positions and signed direction",
+              "Zero baseline and zero rows",
+              "A readable distinction between neighboring rows"
+            ],
+            "allowedOmissions": [
+              "Row labels may ellipsize under N8; exact labels and values remain in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "line",
+      "tool": "chart_line",
+      "cases": [
+        {
+          "id": "line-representative-numeric",
+          "kind": "representative",
+          "args": {
+            "xType": "numeric",
+            "data": [
+              {
+                "x": 0,
+                "y": 0.1
+              },
+              {
+                "x": 10,
+                "y": 0.4
+              },
+              {
+                "x": 20,
+                "y": 0.9
+              }
+            ],
+            "title": "Conversion",
+            "xLabel": "Sample",
+            "yLabel": "Rate",
+            "yFormat": "percent",
+            "markers": true
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Numeric x spacing is proportional 0, 10, 20; y values remain fractions 0.1, 0.4, 0.9.",
+            "Percent formatting displays 10.0%, 40.0%, 90.0% without changing geometry."
+          ],
+          "objectiveCheckIds": [
+            "LINE-ORDER",
+            "LINE-MARKERS",
+            "LINE-FORMAT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "One ordered rising series",
+              "Three markers",
+              "Rate percent meaning and axis labels"
+            ],
+            "allowedOmissions": [
+              "Tick count may reduce at N; exact points remain in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "line-adversarial-temporal-gap",
+          "kind": "adversarial",
+          "args": {
+            "xType": "temporal",
+            "data": [
+              {
+                "x": "2024-01-01",
+                "y": 0.1
+              },
+              {
+                "x": "2024-01-02",
+                "y": null
+              },
+              {
+                "x": "2024-01-11",
+                "y": 0.8
+              },
+              {
+                "x": "2024-01-12",
+                "y": 1
+              },
+              {
+                "x": "2024-02-01",
+                "y": 0.6
+              },
+              {
+                "x": "2024-02-02",
+                "y": null
+              },
+              {
+                "x": "2024-02-20",
+                "y": 0.9
+              },
+              {
+                "x": "2024-02-21",
+                "y": 0.95
+              }
+            ],
+            "title": "Daily rate",
+            "xLabel": "UTC date",
+            "yLabel": "Rate",
+            "yFormat": "percent",
+            "markers": true
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "UTC dates are strictly increasing and irregular gaps use temporal spacing.",
+            "The two null y values create two gaps and no markers; six finite points remain."
+          ],
+          "objectiveCheckIds": [
+            "LINE-ORDER",
+            "LINE-GAP",
+            "LINE-MARKERS",
+            "LINE-FORMAT"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Irregular date spacing",
+              "Two visible breaks rather than zero-valued points",
+              "Finite markers only"
+            ],
+            "allowedOmissions": [
+              "Dense date ticks may be reduced or abbreviated; null entries remain in exact summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "scatter",
+      "tool": "chart_scatter",
+      "cases": [
+        {
+          "id": "scatter-representative-labeled",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "x": 3,
+                "y": 4,
+                "label": "C"
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "label": "Origin"
+              },
+              {
+                "x": 2,
+                "y": 1,
+                "label": "B"
+              },
+              {
+                "x": 1,
+                "y": 3,
+                "label": "A"
+              }
+            ],
+            "title": "Observed points",
+            "xLabel": "Input",
+            "yLabel": "Output"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Input order C, Origin, B, A is retained; no sorting or grouping occurs.",
+            "Each point has a fixed-size dot and its exact coordinate."
+          ],
+          "objectiveCheckIds": [
+            "SCATTER-POINTS",
+            "SCATTER-ORDER",
+            "SCATTER-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Four distinct dots",
+              "All four supplied labels beside their dots",
+              "Numeric axes"
+            ],
+            "allowedOmissions": [
+              "Axis tick count may reduce at N; supplied point labels are not optional omissions."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "scatter-adversarial-overlap",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "x": 0,
+                "y": 0,
+                "label": "Origin one"
+              },
+              {
+                "x": 0,
+                "y": 0,
+                "label": "Origin two"
+              },
+              {
+                "x": 1,
+                "y": 1,
+                "label": "Diagonal one"
+              },
+              {
+                "x": 1,
+                "y": 1,
+                "label": "Diagonal two"
+              },
+              {
+                "x": 2,
+                "y": 0,
+                "label": "Low"
+              },
+              {
+                "x": 2,
+                "y": 2,
+                "label": "High"
+              },
+              {
+                "x": 1,
+                "y": 0,
+                "label": "Middle"
+              },
+              {
+                "x": 0,
+                "y": 2,
+                "label": "Upper"
+              }
+            ],
+            "title": "Duplicate coordinates",
+            "xLabel": "X",
+            "yLabel": "Y"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 8 rows and both duplicate coordinate pairs remain separate fixed-size dots.",
+            "Point labels retain their row association and exact coordinates."
+          ],
+          "objectiveCheckIds": [
+            "SCATTER-POINTS",
+            "SCATTER-ORDER",
+            "SCATTER-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Eight dots, including visibly acknowledged duplicates",
+              "All supplied labels remain distinguishable",
+              "No dot or label is painted through another label"
+            ],
+            "allowedOmissions": [
+              "Only non-data axis ticks may be reduced; no point or supplied label may be silently omitted."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "histogram",
+      "tool": "chart_histogram",
+      "cases": [
+        {
+          "id": "histogram-representative-boundaries",
+          "kind": "representative",
+          "args": {
+            "data": [
+              -2,
+              -1,
+              0,
+              0,
+              2
+            ],
+            "bins": 4,
+            "title": "Samples",
+            "xLabel": "Value",
+            "yLabel": "Count"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Rows are [-2,-1):1, [-1,0):1, [0,1):2, [1,2]:1.",
+            "Samples on an internal boundary go to the bin on its right; total count is 5."
+          ],
+          "objectiveCheckIds": [
+            "HIST-BINS",
+            "HIST-EMPTY",
+            "HIST-FINITE"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Four contiguous bars",
+              "Count axis and interval order",
+              "Peak count of 2 at [0,1)"
+            ],
+            "allowedOmissions": [
+              "Tick labels may abbreviate at N; empty/short bars remain represented."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "histogram-adversarial-empty-bins",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              0,
+              0,
+              0,
+              5,
+              10,
+              10
+            ],
+            "bins": 5,
+            "title": "Sparse distribution",
+            "xLabel": "Value",
+            "yLabel": "Count"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Five equal-width bins are retained, including zero-count bins; counts sum to 6.",
+            "The maximum 10 is included in the final bin and duplicate samples are retained."
+          ],
+          "objectiveCheckIds": [
+            "HIST-BINS",
+            "HIST-EMPTY",
+            "HIST-FINITE"
+          ],
+          "visibleInfo": {
+            "required": [
+              "All five contiguous bin positions",
+              "Empty bins distinguishable from missing data",
+              "Counts and maximum endpoint"
+            ],
+            "allowedOmissions": [
+              "Numeric tick labels may abbreviate; no bin may be dropped or made non-contiguous."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "bezier",
+      "tool": "chart_bezier",
+      "cases": [
+        {
+          "id": "bezier-representative-cubic",
+          "kind": "representative",
+          "args": {
+            "start": {
+              "x": -2,
+              "y": 0
+            },
+            "control1": {
+              "x": 4,
+              "y": 8
+            },
+            "control2": {
+              "x": -4,
+              "y": 8
+            },
+            "end": {
+              "x": 2,
+              "y": 0
+            },
+            "title": "U curve",
+            "xLabel": "X",
+            "yLabel": "Y"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "semanticInvariants": [
+            "One exact cubic uses all four supplied points; controls are not interpolated samples.",
+            "Equal x/y pixel scale keeps the curve proportions intact."
+          ],
+          "objectiveCheckIds": [
+            "BEZ-CUBIC",
+            "BEZ-SQUARE",
+            "BEZ-FINITE"
+          ],
+          "visibleInfo": {
+            "required": [
+              "One complete curve",
+              "Both endpoints",
+              "Square plot with supplied title/axis labels"
+            ],
+            "allowedOmissions": [
+              "No control guides are requested and no additional axes/ticks are required by this case."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "bezier-adversarial-guided-closed",
+          "kind": "adversarial",
+          "args": {
+            "start": {
+              "x": 0,
+              "y": 0
+            },
+            "control1": {
+              "x": 4,
+              "y": 8
+            },
+            "control2": {
+              "x": -4,
+              "y": 8
+            },
+            "end": {
+              "x": 0,
+              "y": 0
+            },
+            "showControls": true,
+            "title": "Closed guided curve",
+            "xLabel": "X coordinate",
+            "yLabel": "Y coordinate"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Start and end coincide but remain endpoint markers; the exact cubic path is unchanged by showControls.",
+            "Both control guides and both control markers use the supplied controls."
+          ],
+          "objectiveCheckIds": [
+            "BEZ-CUBIC",
+            "BEZ-CONTROLS",
+            "BEZ-SQUARE",
+            "BEZ-FINITE"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Closed curve and coincident endpoint location",
+              "Two control markers and two guides",
+              "No clipping under N8"
+            ],
+            "allowedOmissions": [
+              "Axis labels may shorten to fit; control guides must not be omitted when requested."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "heatmap",
+      "tool": "chart_heatmap",
+      "cases": [
+        {
+          "id": "heatmap-representative-diverging-missing",
+          "kind": "representative",
+          "args": {
+            "rows": [
+              "North",
+              "South"
+            ],
+            "columns": [
+              "Mon",
+              "Tue",
+              "Wed"
+            ],
+            "data": [
+              [
+                -2,
+                0,
+                null
+              ],
+              [
+                1,
+                2,
+                4
+              ]
+            ],
+            "colorScale": "diverging",
+            "showValues": true,
+            "title": "Daily change"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "The 2×3 row-major matrix is unchanged; null is missing and zero is numeric.",
+            "Diverging domain is [-4,4] and values remain exact."
+          ],
+          "objectiveCheckIds": [
+            "HEAT-MATRIX",
+            "HEAT-MISSING",
+            "HEAT-DOMAIN",
+            "HEAT-VALUES"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Six cells in two rows and three columns",
+              "Distinct null hatch and numeric zero color",
+              "Diverging negative/zero/positive meaning"
+            ],
+            "allowedOmissions": [
+              "Cell values may be omitted when N cells cannot fit them; exact matrix remains in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "heatmap-adversarial-dense-missing",
+          "kind": "adversarial",
+          "args": {
+            "rows": [
+              "North",
+              "South",
+              "East",
+              "West",
+              "Central",
+              "Remote"
+            ],
+            "columns": [
+              "Mon",
+              "Tue",
+              "Wed",
+              "Thu",
+              "Fri",
+              "Sat"
+            ],
+            "data": [
+              [
+                -4,
+                -2,
+                0,
+                null,
+                2,
+                4
+              ],
+              [
+                1,
+                null,
+                3,
+                5,
+                -1,
+                -3
+              ],
+              [
+                0,
+                0,
+                null,
+                0,
+                0,
+                0
+              ],
+              [
+                7,
+                6,
+                5,
+                4,
+                3,
+                2
+              ],
+              [
+                null,
+                -7,
+                -6,
+                -5,
+                -4,
+                -3
+              ],
+              [
+                8,
+                null,
+                6,
+                null,
+                4,
+                2
+              ]
+            ],
+            "colorScale": "diverging",
+            "showValues": true,
+            "title": "Six-day regional change"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 36 cells remain one-for-one, including six null cells and numeric zeros.",
+            "Diverging domain is [-8,8]; row/column order is unchanged."
+          ],
+          "objectiveCheckIds": [
+            "HEAT-MATRIX",
+            "HEAT-MISSING",
+            "HEAT-DOMAIN",
+            "HEAT-VALUES"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Complete 6×6 cell grid",
+              "Missing hatch distinct from zero",
+              "Legend communicates symmetric diverging scale"
+            ],
+            "allowedOmissions": [
+              "Per-cell numeric labels may be omitted at N/N8 when cells cannot fit; full values and labels remain accessible."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "boxplot",
+      "tool": "chart_boxplot",
+      "cases": [
+        {
+          "id": "boxplot-representative-outlier",
+          "kind": "representative",
+          "args": {
+            "groups": [
+              {
+                "label": "Before",
+                "values": [
+                  0,
+                  1,
+                  2,
+                  3,
+                  4,
+                  100
+                ]
+              },
+              {
+                "label": "After",
+                "values": [
+                  1,
+                  2,
+                  2,
+                  3
+                ]
+              }
+            ],
+            "title": "Latency distribution",
+            "xLabel": "Milliseconds",
+            "showOutliers": true
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Before uses type-7 Q1=1.25, median=2.5, Q3=3.75 with 100 as one outlier.",
+            "After retains its four samples and groups remain top-to-bottom."
+          ],
+          "objectiveCheckIds": [
+            "BOX-STATS",
+            "BOX-OUTLIERS",
+            "BOX-ORDER"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Two horizontal boxes with medians and whiskers",
+              "Visible 100 outlier dot",
+              "Group labels and value axis"
+            ],
+            "allowedOmissions": [
+              "Labels/ticks may shorten at N; no outlier may be hidden when showOutliers is true."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "boxplot-adversarial-degenerate-hidden",
+          "kind": "adversarial",
+          "args": {
+            "groups": [
+              {
+                "label": "Extreme outlier group",
+                "values": [
+                  100,
+                  3,
+                  2,
+                  1,
+                  0,
+                  4
+                ]
+              },
+              {
+                "label": "After",
+                "values": [
+                  1,
+                  2,
+                  2,
+                  3
+                ]
+              },
+              {
+                "label": "Constant",
+                "values": [
+                  7,
+                  7,
+                  7
+                ]
+              },
+              {
+                "label": "Singleton",
+                "values": [
+                  -3
+                ]
+              },
+              {
+                "label": "Negative range",
+                "values": [
+                  -4,
+                  -3,
+                  -2,
+                  -1
+                ]
+              },
+              {
+                "label": "Subnormal",
+                "values": [
+                  -5e-324,
+                  0,
+                  5e-324
+                ]
+              }
+            ],
+            "title": "Degenerate distributions",
+            "xLabel": "Value",
+            "yLabel": "Group",
+            "showOutliers": false
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Singleton, constant, negative, subnormal, and outlier samples remain finite exact inputs.",
+            "Outlier dots are intentionally hidden, but the 100 sample still determines the axis domain."
+          ],
+          "objectiveCheckIds": [
+            "BOX-STATS",
+            "BOX-OUTLIERS",
+            "BOX-HIDDEN-DOMAIN",
+            "BOX-ORDER"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Six distinct ordered rows and finite boxes/whisker rules",
+              "Axis still spans the hidden extreme outlier",
+              "No fabricated spread for singleton/constant groups"
+            ],
+            "allowedOmissions": [
+              "Outlier dots are allowed to be absent because showOutliers is false; labels/ticks may shorten at N8."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "waterfall",
+      "tool": "chart_waterfall",
+      "cases": [
+        {
+          "id": "waterfall-representative-total",
+          "kind": "representative",
+          "args": {
+            "start": 100,
+            "deltas": [
+              {
+                "label": "Sales",
+                "value": 40
+              },
+              {
+                "label": "Costs",
+                "value": -25
+              }
+            ],
+            "title": "Balance changes",
+            "xLabel": "Amount"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Start=100; Sales runs 100→140; Costs runs 140→115; calculated Total=115.",
+            "Connectors attach to preceding running totals and bars include zero."
+          ],
+          "objectiveCheckIds": [
+            "WATER-TOTALS",
+            "WATER-DIRECTION"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Start, two signed changes, and Total bars",
+              "Increase/decrease distinction",
+              "Running-total connectors"
+            ],
+            "allowedOmissions": [
+              "Tick labels may abbreviate and row labels may ellipsize at N; exact arithmetic remains in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "waterfall-adversarial-zero-crossing",
+          "kind": "adversarial",
+          "args": {
+            "start": -5,
+            "deltas": [
+              {
+                "label": "Recover",
+                "value": 5
+              },
+              {
+                "label": "No change",
+                "value": 0
+              },
+              {
+                "label": "Drop",
+                "value": -10
+              },
+              {
+                "label": "Rebound",
+                "value": 20
+              },
+              {
+                "label": "Fee",
+                "value": -3
+              },
+              {
+                "label": "Bonus",
+                "value": 0
+              },
+              {
+                "label": "Close",
+                "value": -7
+              },
+              {
+                "label": "Correction",
+                "value": 2
+              }
+            ],
+            "title": "Signed cash flow",
+            "xLabel": "Amount",
+            "yLabel": "Step"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Every running total is calculated in input order; final Total is 2.",
+            "Both zero changes remain distinct and receive exact-position zero rules."
+          ],
+          "objectiveCheckIds": [
+            "WATER-TOTALS",
+            "WATER-DIRECTION",
+            "WATER-ZERO"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Eight ordered change rows plus Start/Total",
+              "Crossing of zero and signed direction",
+              "Visible rules for No change and Bonus"
+            ],
+            "allowedOmissions": [
+              "Long row labels and numeric ticks may abbreviate at N8; zero rules and bars may not disappear."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "dumbbell",
+      "tool": "chart_dumbbell",
+      "cases": [
+        {
+          "id": "dumbbell-representative-differences",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "label": "North",
+                "before": -10,
+                "after": 20
+              },
+              {
+                "label": "South",
+                "before": 5,
+                "after": 5
+              }
+            ],
+            "beforeLabel": "Baseline",
+            "afterLabel": "Current",
+            "showDifferences": true,
+            "title": "Regional values",
+            "xLabel": "Value"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "North difference is +30; South difference is 0; before/after values remain exact.",
+            "Equal South markers share a position but remain two series."
+          ],
+          "objectiveCheckIds": [
+            "DUMB-PAIRS",
+            "DUMB-DIFFERENCE",
+            "DUMB-EQUAL",
+            "DUMB-ORDER"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Two independent connectors",
+              "Before ring and after dot legend",
+              "Signed +30 and 0 differences"
+            ],
+            "allowedOmissions": [
+              "Difference annotations may shorten only when the narrow renderer has no room; exact differences remain in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "dumbbell-adversarial-percent-mixed",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "label": "North",
+                "before": -0.25,
+                "after": 0.5
+              },
+              {
+                "label": "South",
+                "before": 0,
+                "after": 0
+              },
+              {
+                "label": "East",
+                "before": 0.75,
+                "after": 0.25
+              },
+              {
+                "label": "West",
+                "before": -0.5,
+                "after": -0.1
+              },
+              {
+                "label": "Central",
+                "before": 0.1,
+                "after": 0.1
+              },
+              {
+                "label": "Remote",
+                "before": 0.9,
+                "after": -0.2
+              },
+              {
+                "label": "Support",
+                "before": -0.05,
+                "after": 0.05
+              },
+              {
+                "label": "Other",
+                "before": 0.3,
+                "after": 0
+              }
+            ],
+            "beforeLabel": "Prior",
+            "afterLabel": "Current",
+            "showDifferences": true,
+            "valueFormat": "percent",
+            "title": "Fractional change",
+            "xLabel": "Rate"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 8 rows retain paired values, including two equal pairs, zero values, and negative values.",
+            "Differences are percentage-point after−before values: North +75, East -50, Remote -110, etc."
+          ],
+          "objectiveCheckIds": [
+            "DUMB-PAIRS",
+            "DUMB-DIFFERENCE",
+            "DUMB-EQUAL",
+            "DUMB-ORDER"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Before/after identity and independent row connectors",
+              "Negative/positive direction",
+              "Equal values remain overlaid but identifiable"
+            ],
+            "allowedOmissions": [
+              "Difference annotations may ellipsize or be omitted where no narrow space exists; dots, connectors, and exact summaries remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "stacked_bar",
+      "tool": "chart_stacked_bar",
+      "cases": [
+        {
+          "id": "stacked-bar-representative-raw",
+          "kind": "representative",
+          "args": {
+            "categories": [
+              "North",
+              "South",
+              "No sales"
+            ],
+            "series": [
+              {
+                "name": "Online",
+                "values": [
+                  1,
+                  6,
+                  0
+                ]
+              },
+              {
+                "name": "Store",
+                "values": [
+                  3,
+                  2,
+                  0
+                ]
+              },
+              {
+                "name": "Other",
+                "values": [
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ],
+            "xLabel": "Sales"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Raw totals are North=4, South=8, No sales=0; stack order is Online, Store, Other.",
+            "Zero total and zero series stay present without division by zero."
+          ],
+          "objectiveCheckIds": [
+            "STACK-TOTALS",
+            "STACK-ZERO",
+            "STACK-LEGEND"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Three ordered category bars",
+              "Online/Store/Other legend",
+              "Zero No sales category remains identifiable"
+            ],
+            "allowedOmissions": [
+              "Category labels/ticks may shorten at N; zero-width segments need not be visibly wide."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "stacked-bar-adversarial-normalized-dense",
+          "kind": "adversarial",
+          "args": {
+            "categories": [
+              "North",
+              "South",
+              "East",
+              "West",
+              "No sales",
+              "Other",
+              "Long category",
+              "Remote"
+            ],
+            "series": [
+              {
+                "name": "Online",
+                "values": [
+                  3,
+                  6,
+                  1,
+                  0,
+                  0,
+                  2,
+                  4,
+                  1
+                ]
+              },
+              {
+                "name": "Store",
+                "values": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  0,
+                  0,
+                  5,
+                  2
+                ]
+              },
+              {
+                "name": "Partner",
+                "values": [
+                  0,
+                  0,
+                  1,
+                  2,
+                  0,
+                  1,
+                  0,
+                  1
+                ]
+              },
+              {
+                "name": "Wholesale",
+                "values": [
+                  2,
+                  0,
+                  0,
+                  1,
+                  0,
+                  3,
+                  2,
+                  0
+                ]
+              },
+              {
+                "name": "Other",
+                "values": [
+                  0,
+                  1,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  1
+                ]
+              },
+              {
+                "name": "Unused",
+                "values": [
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0
+                ]
+              }
+            ],
+            "normalize": true,
+            "title": "Normalized sales mix",
+            "xLabel": "Share"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 8 category rows and all 6 series remain; No sales stays zero.",
+            "Each nonzero category reaches 100%; raw values and totals remain exact in summary and legend."
+          ],
+          "objectiveCheckIds": [
+            "STACK-TOTALS",
+            "STACK-NORMALIZE",
+            "STACK-ZERO",
+            "STACK-LEGEND"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Normalized 100% axis",
+              "Segment order and stable colors",
+              "Separate legend entries including Unused"
+            ],
+            "allowedOmissions": [
+              "Category labels and ticks may shorten at N8; zero-width segments have no visible area but remain in legend/summary."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "gantt",
+      "tool": "chart_gantt",
+      "cases": [
+        {
+          "id": "gantt-representative-dependencies",
+          "kind": "representative",
+          "args": {
+            "tasks": [
+              {
+                "id": "scan",
+                "label": "Scan repository",
+                "start": 0,
+                "end": 3,
+                "group": "frontend",
+                "progress": 1
+              },
+              {
+                "id": "ast",
+                "label": "Build AST index",
+                "start": 2,
+                "end": 6,
+                "group": "analysis",
+                "progress": 0.8,
+                "dependencies": [
+                  "scan"
+                ]
+              },
+              {
+                "id": "imports",
+                "label": "Resolve imports",
+                "start": 5,
+                "end": 9,
+                "group": "analysis",
+                "progress": 0.45,
+                "dependencies": [
+                  "ast"
+                ]
+              },
+              {
+                "id": "network",
+                "label": "Render call graph",
+                "start": 10,
+                "end": 14,
+                "group": "frontend",
+                "dependencies": [
+                  "imports"
+                ]
+              }
+            ],
+            "milestones": [
+              {
+                "label": "Release",
+                "at": 15
+              }
+            ],
+            "title": "Repository analysis plan",
+            "xLabel": "Day"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "Four task intervals remain authored order with exact starts/ends and progress 1, .8, .45, 0.",
+            "Dependencies scan→ast→imports→network and milestone Release@15 remain directed and exact."
+          ],
+          "objectiveCheckIds": [
+            "GANTT-INTERVALS",
+            "GANTT-PROGRESS",
+            "GANTT-DEPS",
+            "GANTT-MILESTONES"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Four interval bars and completion fills",
+              "Dependency arrows in the declared direction",
+              "Release milestone"
+            ],
+            "allowedOmissions": [
+              "Progress text, group labels, or task labels may be omitted only when they would overlap under N8; bars, paths, and milestone remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "gantt-adversarial-dense-capped",
+          "kind": "adversarial",
+          "args": {
+            "tasks": [
+              {
+                "id": "task-0",
+                "label": "Task 0",
+                "start": 0,
+                "end": 2,
+                "group": "build",
+                "progress": 1
+              },
+              {
+                "id": "task-1",
+                "label": "Task 1",
+                "start": 1,
+                "end": 3,
+                "group": "test",
+                "progress": 0.5,
+                "dependencies": [
+                  "task-0"
+                ]
+              },
+              {
+                "id": "task-2",
+                "label": "Task 2",
+                "start": 2,
+                "end": 4,
+                "group": "build",
+                "progress": 0.25,
+                "dependencies": [
+                  "task-1"
+                ]
+              },
+              {
+                "id": "task-3",
+                "label": "Task 3",
+                "start": 3,
+                "end": 5,
+                "group": "test",
+                "progress": 0,
+                "dependencies": [
+                  "task-2"
+                ]
+              },
+              {
+                "id": "task-4",
+                "label": "Task 4",
+                "start": 4,
+                "end": 6,
+                "group": "build",
+                "progress": 1,
+                "dependencies": [
+                  "task-3"
+                ]
+              },
+              {
+                "id": "task-5",
+                "label": "Task 5",
+                "start": 5,
+                "end": 7,
+                "group": "test",
+                "progress": 0.5,
+                "dependencies": [
+                  "task-4"
+                ]
+              },
+              {
+                "id": "task-6",
+                "label": "Task 6",
+                "start": 6,
+                "end": 8,
+                "group": "build",
+                "progress": 0.25,
+                "dependencies": [
+                  "task-5"
+                ]
+              },
+              {
+                "id": "task-7",
+                "label": "Task 7",
+                "start": 7,
+                "end": 9,
+                "group": "test",
+                "progress": 0,
+                "dependencies": [
+                  "task-6"
+                ]
+              },
+              {
+                "id": "task-8",
+                "label": "Task 8",
+                "start": 8,
+                "end": 10,
+                "group": "build",
+                "progress": 1,
+                "dependencies": [
+                  "task-7"
+                ]
+              },
+              {
+                "id": "task-9",
+                "label": "Task 9",
+                "start": 9,
+                "end": 11,
+                "group": "test",
+                "progress": 0.5,
+                "dependencies": [
+                  "task-8"
+                ]
+              },
+              {
+                "id": "task-10",
+                "label": "Task 10",
+                "start": 10,
+                "end": 12,
+                "group": "build",
+                "progress": 0.25,
+                "dependencies": [
+                  "task-9"
+                ]
+              },
+              {
+                "id": "task-11",
+                "label": "Task 11",
+                "start": 11,
+                "end": 13,
+                "group": "test",
+                "progress": 0,
+                "dependencies": [
+                  "task-10"
+                ]
+              },
+              {
+                "id": "task-12",
+                "label": "Task 12",
+                "start": 12,
+                "end": 14,
+                "group": "build",
+                "progress": 1,
+                "dependencies": [
+                  "task-11"
+                ]
+              },
+              {
+                "id": "task-13",
+                "label": "Task 13",
+                "start": 13,
+                "end": 15,
+                "group": "test",
+                "progress": 0.5,
+                "dependencies": [
+                  "task-12"
+                ]
+              },
+              {
+                "id": "task-14",
+                "label": "Task 14",
+                "start": 14,
+                "end": 16,
+                "group": "build",
+                "progress": 0.25,
+                "dependencies": [
+                  "task-13"
+                ]
+              },
+              {
+                "id": "task-15",
+                "label": "Task 15",
+                "start": 15,
+                "end": 17,
+                "group": "test",
+                "progress": 0,
+                "dependencies": [
+                  "task-14"
+                ]
+              }
+            ],
+            "milestones": [
+              {
+                "label": "Release candidate",
+                "at": 17
+              },
+              {
+                "label": "Ship",
+                "at": 18
+              }
+            ],
+            "title": "Dense delivery plan",
+            "xLabel": "Day"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 16 authored intervals, 15 dependencies, progress values, groups, and 2 milestones remain.",
+            "The height cap compacts rows only; it never drops a task or changes timeline coordinates."
+          ],
+          "objectiveCheckIds": [
+            "GANTT-INTERVALS",
+            "GANTT-PROGRESS",
+            "GANTT-DEPS",
+            "GANTT-MILESTONES",
+            "GANTT-CAP"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Every task bar and dependency chain direction",
+              "Timeline endpoints and milestone positions",
+              "A coherent compact row rhythm"
+            ],
+            "allowedOmissions": [
+              "Task/group/progress text may be omitted when it cannot fit; exact task data, paths, and milestones remain in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "network",
+      "tool": "chart_network",
+      "cases": [
+        {
+          "id": "network-representative-workflow",
+          "kind": "representative",
+          "args": {
+            "nodes": [
+              {
+                "id": "brief",
+                "label": "Brief"
+              },
+              {
+                "id": "select",
+                "label": "Select"
+              },
+              {
+                "id": "build",
+                "label": "Build"
+              },
+              {
+                "id": "render",
+                "label": "Render"
+              },
+              {
+                "id": "inspect",
+                "label": "Inspect"
+              },
+              {
+                "id": "fix",
+                "label": "Fix"
+              },
+              {
+                "id": "stop",
+                "label": "Stop"
+              },
+              {
+                "id": "pass",
+                "label": "Pass"
+              },
+              {
+                "id": "show",
+                "label": "Show"
+              }
+            ],
+            "edges": [
+              {
+                "source": "brief",
+                "target": "select"
+              },
+              {
+                "source": "select",
+                "target": "build"
+              },
+              {
+                "source": "build",
+                "target": "render"
+              },
+              {
+                "source": "render",
+                "target": "inspect"
+              },
+              {
+                "source": "inspect",
+                "target": "stop"
+              },
+              {
+                "source": "inspect",
+                "target": "pass"
+              },
+              {
+                "source": "inspect",
+                "target": "fix"
+              },
+              {
+                "source": "fix",
+                "target": "render"
+              },
+              {
+                "source": "pass",
+                "target": "show"
+              }
+            ],
+            "title": "Validation workflow"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 9 nodes and 9 directed edges remain, including the fix→render cycle.",
+            "Pass→Show and Inspect→Stop are distinct outcomes; authored node order is retained within layers."
+          ],
+          "objectiveCheckIds": [
+            "NET-DIRECTION",
+            "NET-SCC",
+            "NET-LABELS",
+            "NET-CYCLE-LANES"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Directed workflow arrows",
+              "Distinct Inspect branches to Stop/Pass/Fix",
+              "Fix loop returns to Render without crossing labels"
+            ],
+            "allowedOmissions": [
+              "Edge labels are absent in this case; under caps only labels documented as dense may be omitted, never nodes or arrows."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "network-adversarial-cycles-duplicate-labels",
+          "kind": "adversarial",
+          "args": {
+            "nodes": [
+              {
+                "id": "a",
+                "label": "Service",
+                "group": "frontend"
+              },
+              {
+                "id": "b",
+                "label": "Service",
+                "group": "backend"
+              },
+              {
+                "id": "c",
+                "label": "Store"
+              },
+              {
+                "id": "d",
+                "label": "Worker"
+              },
+              {
+                "id": "e",
+                "label": "Queue"
+              },
+              {
+                "id": "f",
+                "label": "Audit"
+              },
+              {
+                "id": "g",
+                "label": "Orphan"
+              },
+              {
+                "id": "h",
+                "label": "Loop"
+              },
+              {
+                "id": "i",
+                "label": "Cache"
+              },
+              {
+                "id": "j",
+                "label": "API"
+              },
+              {
+                "id": "k",
+                "label": "Retry"
+              },
+              {
+                "id": "l",
+                "label": "Done"
+              }
+            ],
+            "edges": [
+              {
+                "source": "a",
+                "target": "b",
+                "label": "calls"
+              },
+              {
+                "source": "c",
+                "target": "b",
+                "label": "feeds"
+              },
+              {
+                "source": "b",
+                "target": "a",
+                "label": "returns"
+              },
+              {
+                "source": "a",
+                "target": "c"
+              },
+              {
+                "source": "b",
+                "target": "d"
+              },
+              {
+                "source": "d",
+                "target": "e"
+              },
+              {
+                "source": "e",
+                "target": "b",
+                "label": "requeues"
+              },
+              {
+                "source": "f",
+                "target": "f",
+                "label": "self"
+              },
+              {
+                "source": "h",
+                "target": "i"
+              },
+              {
+                "source": "i",
+                "target": "h",
+                "label": "back"
+              },
+              {
+                "source": "j",
+                "target": "k"
+              },
+              {
+                "source": "k",
+                "target": "j",
+                "label": "retry"
+              },
+              {
+                "source": "k",
+                "target": "l"
+              }
+            ],
+            "title": "Layered service graph"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "All 12 nodes and 13 directed edges remain, including multiple parents, three cycles, a self-loop, and disconnected Orphan.",
+            "The duplicate display labels Service remain distinguishable by node identity/group and exact summary."
+          ],
+          "objectiveCheckIds": [
+            "NET-DIRECTION",
+            "NET-SCC",
+            "NET-LABELS",
+            "NET-CYCLE-LANES",
+            "NET-CAP"
+          ],
+          "visibleInfo": {
+            "required": [
+              "All nodes and arrow directions",
+              "Separate routing lanes for reciprocal/cyclic/self-loop edges",
+              "Duplicate Service nodes visibly distinguishable",
+              "No connector through a node label"
+            ],
+            "allowedOmissions": [
+              "Edge labels may be omitted in dense N/N8 views; node labels may ellipsize or be omitted only when documented as unavailable, never exact node identity in summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "tree",
+      "tool": "chart_tree",
+      "cases": [
+        {
+          "id": "tree-representative-repository",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "id": "repo",
+                "label": "Repository"
+              },
+              {
+                "id": "src",
+                "parentId": "repo",
+                "label": "src"
+              },
+              {
+                "id": "tests",
+                "parentId": "repo",
+                "label": "tests"
+              },
+              {
+                "id": "parser",
+                "parentId": "src",
+                "label": "parser.ts"
+              }
+            ],
+            "title": "Repository"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "One root repo; src and tests are its children; parser.ts is a child of src.",
+            "Input order controls sibling order and all four nodes remain connected and acyclic."
+          ],
+          "objectiveCheckIds": [
+            "TREE-ROOT",
+            "TREE-PARENTS",
+            "TREE-ORDER",
+            "TREE-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Repository root and three descendants",
+              "Three parent-child links",
+              "Nested parser.ts relationship"
+            ],
+            "allowedOmissions": [
+              "Labels may shorten only if a gap is too small; nodes and links remain."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "tree-adversarial-broad-capped",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "id": "root",
+                "label": "Repository root"
+              },
+              {
+                "id": "child-0",
+                "parentId": "root",
+                "label": "Child 0 with long label"
+              },
+              {
+                "id": "child-1",
+                "parentId": "root",
+                "label": "Child 1 with long label"
+              },
+              {
+                "id": "child-2",
+                "parentId": "root",
+                "label": "Child 2 with long label"
+              },
+              {
+                "id": "child-3",
+                "parentId": "root",
+                "label": "Child 3 with long label"
+              },
+              {
+                "id": "child-4",
+                "parentId": "root",
+                "label": "Child 4 with long label"
+              },
+              {
+                "id": "child-5",
+                "parentId": "root",
+                "label": "Child 5 with long label"
+              },
+              {
+                "id": "child-6",
+                "parentId": "root",
+                "label": "Child 6 with long label"
+              },
+              {
+                "id": "child-7",
+                "parentId": "root",
+                "label": "Child 7 with long label"
+              },
+              {
+                "id": "child-8",
+                "parentId": "root",
+                "label": "Child 8 with long label"
+              },
+              {
+                "id": "child-9",
+                "parentId": "root",
+                "label": "Child 9 with long label"
+              },
+              {
+                "id": "child-10",
+                "parentId": "root",
+                "label": "Child 10 with long label"
+              },
+              {
+                "id": "child-11",
+                "parentId": "root",
+                "label": "Child 11 with long label"
+              },
+              {
+                "id": "leaf-0",
+                "parentId": "child-0",
+                "label": "Leaf 0"
+              },
+              {
+                "id": "leaf-1",
+                "parentId": "child-1",
+                "label": "Leaf 1"
+              },
+              {
+                "id": "leaf-2",
+                "parentId": "child-2",
+                "label": "Leaf 2"
+              },
+              {
+                "id": "leaf-3",
+                "parentId": "child-3",
+                "label": "Leaf 3"
+              },
+              {
+                "id": "leaf-4",
+                "parentId": "child-4",
+                "label": "Leaf 4"
+              },
+              {
+                "id": "leaf-5",
+                "parentId": "child-5",
+                "label": "Leaf 5"
+              }
+            ],
+            "title": "Broad repository tree"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "One root, 18 non-root nodes, one parent per non-root, and no cycle; all 19 nodes remain.",
+            "The 12 broad root children retain authored order, with six nested leaves."
+          ],
+          "objectiveCheckIds": [
+            "TREE-ROOT",
+            "TREE-PARENTS",
+            "TREE-ORDER",
+            "TREE-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Root-to-child hierarchy and all links",
+              "Sibling ordering remains top-to-bottom",
+              "No connector through a label or node"
+            ],
+            "allowedOmissions": [
+              "Long child/leaf labels may shorten or be omitted when gaps are too small; exact IDs and labels remain accessible."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    },
+    {
+      "chart": "treemap",
+      "tool": "chart_treemap",
+      "cases": [
+        {
+          "id": "treemap-representative-bundle",
+          "kind": "representative",
+          "args": {
+            "data": [
+              {
+                "label": "src",
+                "children": [
+                  {
+                    "label": "core",
+                    "children": [
+                      {
+                        "label": "parse.ts",
+                        "value": 24
+                      },
+                      {
+                        "label": "render.ts",
+                        "value": 16
+                      }
+                    ]
+                  },
+                  {
+                    "label": "empty.ts",
+                    "value": 0
+                  }
+                ]
+              },
+              {
+                "label": "vendor",
+                "value": 60
+              }
+            ],
+            "title": "Bundle sizes",
+            "unit": "kB"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "parse.ts=24, render.ts=16, empty.ts=0, vendor=60; src total is 40 and overall total is 100 kB.",
+            "Every child is contained by its parent and the zero leaf consumes no area."
+          ],
+          "objectiveCheckIds": [
+            "TREEMAP-SUMS",
+            "TREEMAP-CONTAINMENT",
+            "TREEMAP-ZERO",
+            "TREEMAP-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "src and vendor top-level areas",
+              "Nested core and leaf relationship",
+              "Unit kB and value correspondence"
+            ],
+            "allowedOmissions": [
+              "Tiny empty/leaf labels may be omitted when tiles cannot fit; complete paths and exact values remain summary/accessibility."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        },
+        {
+          "id": "treemap-adversarial-skew-zero",
+          "kind": "adversarial",
+          "args": {
+            "data": [
+              {
+                "label": "application",
+                "children": [
+                  {
+                    "label": "src",
+                    "children": [
+                      {
+                        "label": "core",
+                        "children": [
+                          {
+                            "label": "parse.ts",
+                            "value": 900
+                          },
+                          {
+                            "label": "render.ts",
+                            "value": 1
+                          }
+                        ]
+                      },
+                      {
+                        "label": "empty.ts",
+                        "value": 0
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "label": "docs",
+                "children": [
+                  {
+                    "label": "guide.md",
+                    "value": 2
+                  },
+                  {
+                    "label": "api.md",
+                    "value": 0
+                  }
+                ]
+              },
+              {
+                "label": "vendor",
+                "value": 10000
+              },
+              {
+                "label": "empty-group",
+                "value": 0
+              }
+            ],
+            "title": "Skewed bundle",
+            "unit": "kB"
+          },
+          "profiles": [
+            "D",
+            "N"
+          ],
+          "heightCaps": [
+            {
+              "profile": "D18",
+              "maxHeightCells": 18
+            },
+            {
+              "profile": "N8",
+              "maxHeightCells": 8
+            }
+          ],
+          "semanticInvariants": [
+            "application total is 901, docs total is 2, vendor is 10000, empty-group is 0; overall total is 10903 kB.",
+            "The four-level application path and all zero leaves remain in the hierarchy and summary despite extreme skew."
+          ],
+          "objectiveCheckIds": [
+            "TREEMAP-SUMS",
+            "TREEMAP-CONTAINMENT",
+            "TREEMAP-ZERO",
+            "TREEMAP-LABELS"
+          ],
+          "visibleInfo": {
+            "required": [
+              "Top-level vendor/application/docs/empty-group distinction",
+              "Positive-area containment without tile overflow",
+              "Legend retains zero-valued group"
+            ],
+            "allowedOmissions": [
+              "Labels for tiny skewed tiles may be omitted or shortened; full hierarchical paths and exact values remain accessible."
+            ]
+          },
+          "ledger": {
+            "status": "pending",
+            "attempts": 0,
+            "views": [],
+            "artifact": null,
+            "defectsCorrected": []
+          }
+        }
+      ]
+    }
+  ]
+}
