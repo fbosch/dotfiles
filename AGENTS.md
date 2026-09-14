@@ -36,7 +36,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - Local plugins live in `.config/opencode/plugins/` and are auto-loaded by OpenCode; npm plugins are configured in `opencode.json`.
 - Each plugin entry file **must have a unique filename** (not `index.ts`). OpenCode deduplicates plugins by filename only, so multiple `index.ts` files collapse to one.
-- `@opencode-ai/plugin` must be a `peerDependency`, not `devDependency` — the published package ships empty `dist/`; opencode provides it at runtime.
+- Packages under `.config/opencode/plugins/` must declare `@opencode-ai/plugin` as a `peerDependency`, not a bundled runtime dependency. The `.config/opencode` workspace may depend on the exact package version to provide types and local tooling; OpenCode provides the runtime package to loaded plugins.
 
 ## References
 

@@ -5,10 +5,12 @@
 Before committing config changes:
 
 1. [ ] Run `just stow-check` to preview symlink changes
-2. [ ] Test Neovim: `nvim --headless +checkhealth +qa`
-3. [ ] Test Fish: `fish -c "source ~/.config/fish/config.fish"`
+2. [ ] If files under `.config/nvim/` changed, test Neovim: `nvim --headless +checkhealth +qa`
+3. [ ] If files under `.config/fish/` changed, test Fish: `fish -c "source ~/.config/fish/config.fish"`
 4. [ ] Verify no auto-generated files are staged: `git status`
 5. [ ] Check `.gitignore` patterns match
+
+Run the Neovim and Fish checks only for their affected scopes. Unrelated documentation, Hyprland, or other config changes do not require those checks.
 
 ## PR Iteration Gates
 

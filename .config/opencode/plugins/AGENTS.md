@@ -5,7 +5,7 @@ Local OpenCode server and TUI plugins.
 ## Essentials
 
 - Keep each non-trivial plugin in its own directory with its own `.fallowrc.json`.
-- Run Fallow against the specific plugin config before finishing plugin changes.
+- For plugin code or configuration changes, run Fallow against the specific plugin config before finishing. Docs-only changes do not require Fallow.
 - Do not put loadable plugin files at this directory's root; keep every plugin in its own directory to prevent auto-discovery.
 - Register every enabled local OpenCode plugin explicitly in `.config/opencode/opencode.jsonc` under `plugin`.
 - Register every enabled local TUI plugin explicitly in `.config/opencode/tui.json` under `plugin`.
@@ -16,5 +16,5 @@ Local OpenCode server and TUI plugins.
 
 ## Validation
 
-- Use the plugin-specific Fallow script or direct `fallow --config <plugin>/.fallowrc.json` command.
+- Use the plugin-specific Fallow script or `fallow --config <plugin>/.fallowrc.json`.
 - For `prompt-enhancements`, run `bun run test:typos`, `bun run bench:typos` after performance changes, and a Bun build check for `prompt-enhancements/prompt-enhancements.tsx`.

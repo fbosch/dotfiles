@@ -26,17 +26,16 @@
 - Before drafting or editing substantial human-facing prose, use the `writing-clearly` skill.
 - Format user-executed multi-step instructions as a numbered list of bounded actions. Put the immediate next action first.
 - For work spanning multiple replies, state the current step, completed outcome, and immediate next action. When task tracking is available, use it instead of repeating the full plan.
-- Before creating a plan, look for existing planning documents in `docs/agents/plans/`, `docs/plans/`, `plans/`, and repository guidance. Use the established location and naming convention when present.
-- When asked to output a plan, write it to `docs/agents/plans/` by default, named `YYYY-MM-DD-brief-kebab-case-title.md`.
+- Before creating a persisted plan, look for existing planning documents in `docs/agents/plans/`, `docs/plans/`, `plans/`, and repository guidance. Use the established location and naming convention when present.
+- Persist a requested plan to `docs/agents/plans/` by default, named `YYYY-MM-DD-brief-kebab-case-title.md`. Response-only planning commands, including `/plan-tasks`, must keep their documented output contract and must not write a file unless the user asks for a persisted artifact.
 - Keep responses and implementation focused on the active problem; raise unrelated findings only when they affect correctness, safety, or the requested outcome.
 
 ## Coding style
 
 - Prefer early returns and guard clauses. Avoid deep nesting. Avoid `else` when control flow remains clear without it.
 - Avoid deeply nested ternary operators; prefer clearer control flow.
-- Favor small, focused functions/modules and clear names over cleverness.
 - Name meaningful magic numbers and strings. Extract complex conditions into well-named helpers.
-- Keep each unit focused on one job. Separate decision logic from I/O when this separation improves clarity.
+- Separate decision logic from I/O when this separation improves clarity.
 - Prefer adding new code paths over modifying stable or shared code. Add extension points only for a concrete second use case.
 - When using inheritance or interfaces, preserve existing contracts. Do not introduce surprising behavior, stricter inputs, or weaker outputs.
 - Prefer small, purpose-built interfaces/types/props; avoid god interfaces.
@@ -68,7 +67,6 @@
 - Trust the type system; do not add runtime checks it already prevents.
 - Add `try/catch` only where errors are expected and can be handled.
 - Do not add speculative compatibility layers, options, or adapters without a current caller.
-- Do not install an avoidable dependency when stdlib, platform, or existing dependency coverage is sufficient.
 
 ## Communication style
 
@@ -97,6 +95,6 @@
 
 ## Done criteria
 
-- Before declaring completion, confirm that the requested problem is solved.
+- Before claiming completion, map each requested outcome to evidence and list any unmet outcomes.
 - Run relevant validation, or list explicit validation gaps.
 - Confirm that the change introduced no known unintended side effects and added or exposed no secrets.

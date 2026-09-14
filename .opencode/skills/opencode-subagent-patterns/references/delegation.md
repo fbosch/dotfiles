@@ -7,11 +7,13 @@ Best practices for delegating tasks to subagents, including batch processing, pa
 **Best use case**: Tasks that are **repetitive but require judgment**.
 
 ✅ **Good fit:**
+
 - Audit 70 skills (repetitive) checking versions against docs (judgment)
 - Update 50 files (repetitive) deciding what needs changing (judgment)
 - Research 10 frameworks (repetitive) evaluating trade-offs (judgment)
 
 ❌ **Poor fit:**
+
 - Simple find-replace (no judgment needed, use bash/grep)
 - Single complex task (not repetitive, do it directly)
 - Tasks with cross-item dependencies (agents work independently)
@@ -22,6 +24,7 @@ This 5-step structure works consistently:
 
 ```markdown
 For each [item]:
+
 1. Read [source file/data]
 2. Verify with [external check - npm view, API, docs]
 3. Check [authoritative source]
@@ -33,6 +36,7 @@ Add an explicit output contract after the steps:
 
 ```markdown
 Output:
+
 - One section per item
 - Include status, files touched, and unresolved blockers
 - No raw tool logs unless requested
@@ -47,11 +51,11 @@ Output:
 
 ## Batch Sizing
 
-| Batch Size | Use When |
-|------------|----------|
-| 3-5 items | Complex tasks (deep research, multi-step fixes) |
-| 5-8 items | Standard tasks (audits, updates, validations) |
-| 8-12 items | Simple tasks (version checks, format fixes) |
+| Batch Size | Use When                                        |
+| ---------- | ----------------------------------------------- |
+| 3-5 items  | Complex tasks (deep research, multi-step fixes) |
+| 5-8 items  | Standard tasks (audits, updates, validations)   |
+| 8-12 items | Simple tasks (version checks, format fixes)     |
 
 **Why not more?**
 
@@ -74,7 +78,7 @@ Output:
 │  3. WAIT: Agents work in parallel                           │
 │     └─ Read → Verify → Check → Edit → Report                │
 ├─────────────────────────────────────────────────────────────┤
-│  4. REVIEW: Check agent reports and file changes            │
+│  4. REVIEW: Check agent reports and file changes             │
 │     └─ git status, spot-check diffs                         │
 ├─────────────────────────────────────────────────────────────┤
 │  5. COMMIT: Batch changes with meaningful changelog         │
@@ -90,7 +94,7 @@ Primary agents proactively delegate based on:
 - `description` field in subagent config
 - Current context and available tools
 
-**Tip**: Include "use PROACTIVELY" or "MUST BE USED" in description for more automatic invocation.
+**Tip**: Use a clear `Use when...` description for normal automatic routing. Reserve stronger wording such as `use proactively` for cases where underuse is materially worse than overuse, such as a security review gate or mandatory validation workflow.
 
 ## Explicit Invocation
 
@@ -106,12 +110,12 @@ Use the `@` mention to explicitly invoke a specific subagent.
 
 **Agents don't commit** - they only edit files. This is by design:
 
-| Agent Does | Human Does |
-|------------|------------|
-| Research & verify | Review changes |
-| Edit files | Spot-check diffs |
-| Score & report | git add/commit |
-| Create summaries | Write changelog |
+| Agent Does        | Human Does       |
+| ----------------- | ---------------- |
+| Research & verify | Review changes   |
+| Edit files        | Spot-check diffs |
+| Score & report    | git add/commit   |
+| Create summaries  | Write changelog  |
 
 **Why?**
 
@@ -166,12 +170,12 @@ Prefer sequential delegation when batches touch shared files or cross-dependent 
 
 Agent context usage depends heavily on the task:
 
-| Scenario | Context | Tool Calls | Works? |
-|----------|---------|------------|--------|
-| Deep research agent | 130k | 90+ | ✅ Yes |
-| Multi-file audit | 80k+ | 50+ | ✅ Yes |
-| Simple format check | 3k | 5-10 | ✅ Yes |
-| Chained orchestration | Varies | Varies | ✅ Depends |
+| Scenario              | Context | Tool Calls | Works?     |
+| --------------------- | ------- | ---------- | ---------- |
+| Deep research agent   | 130k    | 90+        | ✅ Yes     |
+| Multi-file audit      | 80k+    | 50+        | ✅ Yes     |
+| Simple format check   | 3k      | 5-10       | ✅ Yes     |
+| Chained orchestration | Varies  | Varies     | ✅ Depends |
 
 **Reality**: Agents with 90+ tool calls and 130k context work fine when doing meaningful work. The limiting factor is task complexity, not arbitrary token limits.
 
@@ -206,11 +210,13 @@ tools:
 You are a frontend specialist.
 
 BOUNDARIES:
+
 - NEVER write backend logic, API routes, or database queries
 - ALWAYS use React patterns consistent with the codebase
 - If task requires backend work, STOP and report "Requires backend specialist"
 
 FOCUS:
+
 - React components, hooks, state management
 - CSS/Tailwind styling
 - Client-side routing

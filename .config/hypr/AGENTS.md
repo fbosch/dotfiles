@@ -19,7 +19,7 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - Preserve window-rule declaration order: generated rules, static rules, then window-state rules.
 - For performance-sensitive read-only Hyprland queries in scripts, prefer the IPC query socket over spawning `hyprctl`, e.g. `printf 'j/clients' | nc -U "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"`; keep a `hyprctl` fallback when practical.
 - Derive long-lived custom daemon control sockets and their PID/lock files from the shared Hypr IPC instance-path helpers; never create global `$XDG_RUNTIME_DIR/hypr-*` control paths.
-- For state-changing dispatches on Hyprland 0.55, send Lua dispatcher expressions (e.g. `hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })"`); do not use legacy `dispatch closewindow ...` syntax.
+- For state-changing dispatches on Hyprland 0.56.0, send Lua dispatcher expressions (e.g. `hypr_dispatch_lua "hl.dsp.window.close({ window = \"address:$address\" })"`); do not use legacy `dispatch closewindow ...` syntax.
 - For Lua runtime helpers, reuse existing `lib/` modules such as `lib.json`, `lib.command`, `lib.paths`, and `lib.monitor_role` before adding local parsing, quoting, or path helpers.
 - Prefer configuring `package.path` and using `require(...)` for Lua modules; reserve `dofile(...)` for dynamic data/config files that must be re-read or are not modules.
 - For reducers and event routers with mutually exclusive tagged cases, prefer dispatch tables keyed by `event.type` and nested `event.action`/`event.name` over long `elseif` chains; handle unknown tags explicitly, while keeping independent conditions as ordinary `if` statements.
@@ -31,6 +31,8 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 Nix (`~/nixos`)
 
 ## Commands
+
+Run repository-scoped checks from the repository root; `just` recipes anchor there, and direct relative script paths assume that root.
 
 - `hyprctl configerrors`
 - `hyprctl reload` (optional)

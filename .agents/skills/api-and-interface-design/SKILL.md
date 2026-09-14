@@ -14,21 +14,35 @@ Define contracts that are explicit, testable, and hard to misuse.
 - Introducing config schemas, CLI arguments, or protocol payloads
 - Reviewing compatibility impact of contract changes
 
+## Compatibility scope gate
+
+Before choosing a compatibility layer, identify the concrete compatibility obligation:
+
+- an explicitly requested compatibility requirement
+- an explicitly scoped external consumer
+- persisted old data that must still be read or migrated
+- an existing compatibility commitment, such as a published contract or rollout promise
+
+Do not infer an obligation from a contract change alone. If all consumers are internal and coordinated, update them and replace the contract atomically instead of adding a shim, dual path, or staged migration. If the scope is unclear and the choice would materially change the implementation, ask for clarification.
+
+Follow the compatibility reference: do not preserve prior behavior by default, and add migration, fallback, or dual-read/dual-write logic only for an obligation that is explicitly in scope.
+
 ## Design prompts
 
 Before selecting a contract shape, ask:
 
 - Which behaviors are consumers likely to accidentally depend on?
 - Which fields are likely to expand in cardinality, size, or enum values?
-- What can be additive vs what forces a compatibility boundary?
+- What can be additive versus what forces a compatibility boundary?
 - Which errors must be machine-actionable for clients?
 
 ## Change decision matrix
 
 - `Add optional field` -> when semantics are unchanged and old clients can ignore safely.
 - `Add endpoint/operation` -> when behavior is new but existing contracts remain valid.
-- `New version or compatibility mode` -> when semantics, required fields, ordering, or error meaning changes.
-- `Deprecation path required` -> when removing/renaming fields or changing defaults with consumer-visible impact.
+- `New version or compatibility mode` -> when semantics, required fields, ordering, or error meaning changes and explicitly scoped external consumers, persisted old data, or a compatibility commitment require coexistence.
+- `Deprecation path required` -> when removing or renaming fields, or changing defaults with consumer-visible impact, for that same explicitly scoped compatibility obligation.
+- `Coordinated internal replacement` -> when all consumers can be updated and validated atomically; do not add staged compatibility solely for internal coordination.
 
 ## Contract checklist
 
@@ -41,16 +55,21 @@ Before selecting a contract shape, ask:
 
 ## Compatibility rules
 
-- Prefer additive changes over type/behavior mutations.
-- Preserve existing fields/behaviors during migration windows.
-- Mark deprecated fields with replacement guidance and timeline.
+For an explicitly scoped compatibility obligation:
+
+- Prefer additive changes over type or behavior mutations.
+- Preserve existing fields and behaviors during the migration window.
+- Mark deprecated fields with replacement guidance and a timeline.
+
+For coordinated internal consumers, prefer one atomic replacement and update all call sites in the same change.
+
 - Avoid leaking implementation details into public contracts.
 
 ## Concrete contract patterns
 
 - Error model: stable machine code + human message + optional details object (`code`, `message`, `details`).
 - Pagination: explicit cursor/token contract or page/pageSize with documented stability and ordering guarantees.
-- Deprecation marker: include replacement field/operation and sunset timeline in docs and warnings.
+- Deprecation marker: include replacement field/operation and sunset timeline in docs and warnings when a compatibility window is in scope.
 
 ## Validation boundaries
 
@@ -62,10 +81,10 @@ Before selecting a contract shape, ask:
 
 - Never change error semantics silently (same status/code, different meaning).
 - Never overload one field with multiple semantic modes based on hidden context.
-- Never make enum narrowing changes without compatibility strategy.
+- Never make enum narrowing changes without a compatibility strategy when an external consumer, persisted data, or commitment is in scope.
 - Never rely on undocumented ordering as part of client-visible behavior.
 - Never ship pagination without deterministic ordering guarantees.
-- Never rename/remove fields without a deprecation window and migration path.
+- For explicitly scoped external consumers, persisted old data, or compatibility commitments, never rename or remove fields without a deprecation window and migration path.
 
 ## Output contract
 
@@ -75,10 +94,10 @@ Return:
 2. `Alternatives considered`
 3. `Compatibility impact`
 4. `Validation strategy`
-5. `Test implications` (contract and back-compat coverage)
+5. `Test implications` (contract and back-compat coverage when compatibility scope is explicit)
 
 ## Done when
 
 - Contract behavior is deterministic.
-- Compatibility implications are explicit.
+- Compatibility implications are explicit for the selected scope.
 - Consumers can implement against the interface without reading internals.

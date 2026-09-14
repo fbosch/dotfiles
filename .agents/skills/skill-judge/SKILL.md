@@ -98,7 +98,7 @@ The most important dimension. Does the Skill add genuine expert knowledge?
 - Decision trees for non-obvious choices ("when X fails, try Y because Z")
 - Trade-offs only an expert would know ("A is faster but B handles edge case C")
 - Edge cases from real-world experience
-- "NEVER do X because [non-obvious reason]"
+- Concrete constraints or anti-patterns paired with a non-obvious reason
 - Domain-specific thinking frameworks
 
 **Evaluation questions**:
@@ -131,7 +131,7 @@ The difference between experts and novices isn't "knowing how to operate" — it
 **What counts as valuable procedures**:
 - Workflows Claude hasn't been trained on (new tools, proprietary systems)
 - Correct ordering that's non-obvious (e.g., "validate BEFORE packing, not after")
-- Critical steps that are easy to miss (e.g., "MUST recalculate formulas after editing")
+- Critical steps that are easy to miss (e.g., recalculating formulas after editing)
 - Domain-specific sequences (e.g., MCP server's 4-phase development process)
 
 **What counts as redundant procedures**:
@@ -172,38 +172,37 @@ A good Skill provides both when needed.
 
 ---
 
-### D3: Anti-Pattern Quality (15 points)
+### D3: Anti-Pattern and Constraint Quality (15 points)
 
-Does the Skill have effective NEVER lists?
+Does the Skill prevent concrete failure modes with justified constraints?
 
-**Why this matters**: Half of expert knowledge is knowing what NOT to do. A senior designer sees purple gradient on white background and instinctively cringes — "too AI-generated." This intuition for "what absolutely not to do" comes from stepping on countless landmines.
-
-Claude hasn't stepped on these landmines. It doesn't know Inter font is overused, doesn't know purple gradients are the signature of AI-generated content. Good Skills must explicitly state these "absolute don'ts."
+A constraint may be phrased as a prohibition, requirement, default, or decision rule. Do not award points for literal MUST/NEVER language, a prohibition count, or formatting alone. Score specificity, reasoning, scope, and whether the guidance changes decisions.
 
 | Score | Criteria |
 |-------|----------|
-| 0-3 | No anti-patterns mentioned |
-| 4-7 | Generic warnings ("avoid errors", "be careful", "consider edge cases") |
-| 8-11 | Specific NEVER list with some reasoning |
-| 12-15 | Expert-grade anti-patterns with WHY — things only experience teaches |
+| 0-3 | No concrete failure modes or useful constraints |
+| 4-7 | Generic warnings or constraints with little scope or reasoning |
+| 8-11 | Specific failure modes with some reasoning and safer alternatives |
+| 12-15 | Expert-grade constraints with why, scope, and a practical alternative |
 
-**Expert anti-patterns** (specific + reason):
+**Expert constraint** (specific + reason):
 ```markdown
-NEVER use generic AI-generated aesthetics like:
+Avoid generic AI-generated aesthetics when the task needs a distinctive visual
+language, because familiar defaults make the result look interchangeable:
 - Overused font families (Inter, Roboto, Arial)
 - Cliched color schemes (particularly purple gradients on white backgrounds)
 - Predictable layouts and component patterns
 - Default border-radius on everything
 ```
 
-**Weak anti-patterns** (vague, no reasoning):
+**Weak constraint** (vague, no reasoning):
 ```markdown
 Avoid making mistakes.
 Be careful with edge cases.
 Don't write bad code.
 ```
 
-**The test**: Would an expert read the anti-pattern list and say "yes, I learned this the hard way"? Or would they say "this is obvious to everyone"?
+**The test**: Would an expert say the guidance captures a failure mode they learned through experience, and does it explain when the constraint applies? Literal MUST/NEVER wording without that information earns no extra credit.
 
 ---
 
@@ -287,7 +286,7 @@ This is useless — Agent has no idea when to activate it.
 - [ ] Includes explicit trigger scenarios ("Use when...", "When user asks for...")
 - [ ] Contains searchable keywords (file extensions, domain terms, action verbs)
 - [ ] Specific enough that Agent knows EXACTLY when to use it
-- [ ] Includes scenarios where this skill MUST be used (not just "can be used")
+- [ ] States required-use conditions when underuse is materially risky
 
 ---
 
@@ -314,17 +313,17 @@ Layer 3: Resources (loaded on demand)
 |-------|----------|
 | 0-5 | Everything dumped in SKILL.md (>500 lines, no structure) |
 | 6-10 | Has references but unclear when to load them |
-| 11-13 | Good layering with MANDATORY triggers present |
-| 14-15 | Perfect: decision trees + explicit triggers + "Do NOT Load" guidance |
+| 11-13 | Good layering with scenario-based, conditional reference routing |
+| 14-15 | Excellent: selective disclosure routes only relevant references and explains exclusions |
 
-**For Skills WITH references directory**, check Loading Trigger Quality:
+**For Skills WITH references directory**, check Loading Trigger Quality. Do not award points for literal MANDATORY/NEVER wording, full-file loading, or an exclusion list by themselves; score whether the routing is selective, justified, and usable:
 
 | Trigger Quality | Characteristics |
 |-----------------|-----------------|
 | Poor | References listed at end, no loading guidance |
 | Mediocre | Some triggers but not embedded in workflow |
-| Good | MANDATORY triggers in workflow steps |
-| Excellent | Scenario detection + conditional triggers + "Do NOT Load" |
+| Good | Scenario detection and conditional reference loading in workflow steps |
+| Excellent | Selective disclosure with justified prerequisites and exclusions that prevent irrelevant loading |
 
 **The loading problem**:
 ```
@@ -334,16 +333,19 @@ Loading too little ◄───────────────────�
 - Knowledge is there but never accessed    - Unnecessary token overhead
 ```
 
-**Good loading trigger** (embedded in workflow):
+**Targeted loading trigger** (embedded in workflow):
 ```markdown
-### Creating New Document
+### Editing Store-backed state
 
-**MANDATORY - READ ENTIRE FILE**: Before proceeding, you MUST read
-[`docx-js.md`](docx-js.md) (~500 lines) completely from start to finish.
-**NEVER set any range limits when reading this file.**
-
-**Do NOT load** `ooxml.md` or `redlining.md` for this task.
+If the task edits `@xstate/store`, read [`xstate-store.md`](xstate-store.md)
+for that package only.
+Do not load framework-adapter or core-machine references unless the task
+uses those APIs too.
 ```
+
+The trigger earns credit when it routes the agent to the needed material and
+keeps unrelated context out. A full-file read can be justified by dependency
+structure, but completeness or imperative wording is not a quality criterion.
 
 **Bad loading trigger** (just listed):
 ```markdown
@@ -395,9 +397,9 @@ Review priority:
 
 **Low freedom** (specific scripts, exact steps):
 ```markdown
-**MANDATORY**: Use exact script in `scripts/create-doc.py`
+Use the exact script in `scripts/create-doc.py`
 Parameters: --title "X" --author "Y"
-Do NOT modify the script.
+Do not modify the script.
 ```
 
 **The test**: Ask "if Agent makes a mistake, what's the consequence?"
@@ -414,7 +416,7 @@ Through analyzing 17 official Skills, we identified 5 main design patterns:
 
 | Pattern | ~Lines | Key Characteristics | Example | When to Use |
 |---------|--------|---------------------|---------|-------------|
-| **Mindset** | ~50 | Thinking > technique, strong NEVER list, high freedom | frontend-design | Creative tasks requiring taste |
+| **Mindset** | ~50 | Thinking over technique, specific constraints, high freedom | frontend-design | Creative tasks requiring taste |
 | **Navigation** | ~30 | Minimal SKILL.md, routes to sub-files | internal-comms | Multiple distinct scenarios |
 | **Philosophy** | ~150 | Two-step: Philosophy → Express, emphasizes craft | canvas-design | Art/creation requiring originality |
 | **Process** | ~200 | Phased workflow, checkpoints, medium freedom | mcp-builder | Complex multi-step projects |
@@ -485,7 +487,7 @@ Consider edge cases.
 - **NEVER** let length impress you — a 43-line Skill can outperform a 500-line Skill
 - **NEVER** skip mentally testing the decision trees — do they actually lead to correct choices?
 - **NEVER** forgive explaining basics with "but it provides helpful context"
-- **NEVER** overlook missing anti-patterns — if there's no NEVER list, that's a significant gap
+- **NEVER** overlook missing concrete anti-patterns or constraints; their absence is a significant gap when the task has known failure modes
 - **NEVER** assume all procedures are valuable — distinguish domain-specific from generic
 - **NEVER** undervalue the description field — poor description = skill never gets used
 - **NEVER** put "when to use" info only in the body — Agent only sees description before loading
@@ -560,7 +562,7 @@ Max = 120 points
 |-----------|-------|-----|-------|
 | D1: Knowledge Delta | X | 20 | |
 | D2: Mindset vs Mechanics | X | 15 | |
-| D3: Anti-Pattern Quality | X | 15 | |
+| D3: Anti-Pattern and Constraint Quality | X | 15 | |
 | D4: Specification Compliance | X | 15 | |
 | D5: Progressive Disclosure | X | 15 | |
 | D6: Freedom Calibration | X | 15 | |
@@ -606,8 +608,8 @@ Fix: Core routing and decision trees in SKILL.md (<300 lines ideal)
 ```
 Symptom: References directory exists but files are never loaded
 Root cause: No explicit loading triggers
-Fix: Add "MANDATORY - READ ENTIRE FILE" at workflow decision points
-     Add "Do NOT Load" to prevent over-loading
+Fix: Add conditional reference routing at workflow decision points
+     Add exclusions only when they prevent irrelevant loading
 ```
 
 ### Pattern 4: The Checkbox Procedure
@@ -622,8 +624,8 @@ Fix: Transform into "Before doing X, ask yourself..."
 ```
 Symptom: "Be careful", "avoid errors", "consider edge cases"
 Root cause: Author knows things can go wrong but hasn't articulated specifics
-Fix: Specific NEVER list with concrete examples and non-obvious reasons
-     "NEVER use X because [specific problem that takes experience to learn]"
+Fix: Specific constraints with concrete examples, scope, and non-obvious reasons
+     "Avoid X because [specific problem that takes experience to learn]"
 ```
 
 ### Pattern 6: The Invisible Skill
@@ -686,7 +688,7 @@ Fix: High freedom for creative (principles, not steps)
 │    [ ] Distinguishes valuable procedures from generic ones              │
 │                                                                         │
 │  ANTI-PATTERNS:                                                         │
-│    [ ] Has explicit NEVER list                                          │
+│    [ ] Has explicit, justified anti-patterns or constraints             │
 │    [ ] Anti-patterns are specific, not vague                            │
 │    [ ] Includes WHY (non-obvious reasons)                               │
 │                                                                         │
@@ -702,7 +704,7 @@ Fix: High freedom for creative (principles, not steps)
 │    [ ] SKILL.md < 500 lines (ideal < 300)                               │
 │    [ ] Heavy content in references/                                     │
 │    [ ] Loading triggers embedded in workflow                            │
-│    [ ] Has "Do NOT Load" for preventing over-loading                    │
+│    [ ] Has selective loading or exclusions tied to task scope            │
 │                                                                         │
 │  FREEDOM:                                                               │
 │    [ ] Creative tasks → High freedom (principles)                       │
@@ -741,7 +743,7 @@ This Skill (skill-judge) should itself pass evaluation:
 
 - **Knowledge Delta**: Provides specific evaluation criteria Claude wouldn't generate on its own
 - **Mindset**: Shapes how to think about Skill quality, not just checklist items
-- **Anti-Patterns**: "NEVER Do When Evaluating" section with specific don'ts
+- **Anti-Patterns**: The evaluation guardrails name concrete scoring errors and explain why they mislead
 - **Specification**: Valid frontmatter with comprehensive description
 - **Progressive Disclosure**: Self-contained, no external references needed
 - **Freedom**: Medium freedom appropriate for evaluation task

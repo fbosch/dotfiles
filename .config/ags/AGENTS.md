@@ -36,10 +36,11 @@ AGS (Aylur's GTK Shell) configuration for Hyprland UI.
 ## Commands
 
 - `ags types`
-- `bun run test` - run pure AGS feature and service logic tests.
-- `bun run test:coverage` - write Bun LCOV to `/tmp/ags-coverage` and print the
-  temporary native GJS LCOV path.
-- `bun run test:coverage:gjs` - run only native GJS integration coverage.
+- `bun test --parallel` - run pure AGS feature and service logic tests.
+- `bun run test:gjs` - run native GJS/GTK integration tests through an AGS host.
+- `bun run test` - run both the pure Bun tests and native GJS integration tests.
+- `bun run test:coverage` - collect pure Bun coverage and native GJS coverage.
+- `bun run test:coverage:gjs` - collect only native GJS integration coverage.
 - `bun run test:coverage:istanbul` - convert LCOV to Istanbul JSON for Fallow.
 - `bun run health:coverage` - report Fallow health with pure-logic coverage.
 - `bash scripts/benchmark/run-benchmarks.sh calendar-widget` - benchmark only the Calendar Widget slice.
@@ -56,7 +57,7 @@ Feature-specific benchmark drivers belong in `components/<feature>/__benchmarks_
 
 ## References
 
-- [AGS guide (upstream docs)](docs/guide/TOC.md)
+- [AGS guide (upstream docs)](docs/agents/guide/TOC.md)
 - [Architecture and components](docs/agents/architecture.md)
 - [Feature organization](docs/agents/feature-organization.md)
 - [State machines](docs/agents/state-machines.md)

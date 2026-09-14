@@ -23,6 +23,7 @@ Archive a completed change in the experimental workflow.
    Include the schema used for each change if available.
 
    **IMPORTANT**: Do NOT guess or auto-select a change. Always let the user choose.
+   If the selection is cancelled, stop immediately without writing anything.
 
 2. **Check artifact completion status**
 
@@ -35,24 +36,23 @@ Archive a completed change in the experimental workflow.
    **If any artifacts are not `done`:**
    - Display warning listing incomplete artifacts
    - Use **AskUserQuestion tool** to confirm user wants to proceed
-   - Proceed if user confirms
+   - Stop without writes if the user does not affirm proceeding
 
 3. **Check task completion status**
 
    Read the tasks file (typically `tasks.md`) to check for incomplete tasks.
-
    Count tasks marked with `- [ ]` (incomplete) vs `- [x]` (complete).
 
    **If incomplete tasks found:**
    - Display warning showing count of incomplete tasks
    - Use **AskUserQuestion tool** to confirm user wants to proceed
-   - Proceed if user confirms
+   - Stop without writes if the user does not affirm proceeding
 
    **If no tasks file exists:** Proceed without task-related warning.
 
-4. **Assess delta spec sync state**
+4. **Assess delta spec sync state and obtain archive consent**
 
-   Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, proceed without sync prompt.
+   Check for delta specs at `openspec/changes/<name>/specs/`. If none exist, proceed to an archive confirmation.
 
    **If delta specs exist:**
    - Compare each delta spec with its corresponding main spec at `openspec/specs/<capability>/spec.md`
@@ -60,14 +60,21 @@ Archive a completed change in the experimental workflow.
    - Show a combined summary before prompting
 
    **Prompt options:**
-   - If changes needed: "Sync now (recommended)", "Archive without syncing"
-   - If already synced: "Archive now", "Sync anyway", "Cancel"
+   - If changes are needed: **"Sync now, then archive (recommended)"**, **"Archive without syncing"**, **"Cancel"**
+   - If already synced: **"Archive now"**, **"Sync again, then archive"**, **"Cancel"**
 
-   If user chooses sync, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Proceed to archive regardless of choice.
+   The options that include archive are the required affirmative archive consent. If the user chooses **Cancel**, stop immediately without writes. Do not create the archive directory, move the change, or invoke sync.
+
+   If the user chooses a sync option, use Task tool (subagent_type: "general-purpose", prompt: "Use Skill tool to invoke openspec-sync-specs for change '<name>'. Delta spec analysis: <include the analyzed delta spec summary>"). Require an explicit successful result from that task before continuing. If the task fails, is cancelled, or does not report success, display the failure and stop; do not create the archive directory or move the change.
+
+   If there are no delta specs, use **AskUserQuestion tool** with **"Archive now"** and **"Cancel"**. Continue only after the user chooses **"Archive now"**; cancellation stops without writes.
 
 5. **Perform the archive**
 
+   Only after affirmative archive consent and, when requested, a successful sync:
+
    Create the archive directory if it doesn't exist:
+
    ```bash
    mkdir -p openspec/changes/archive
    ```
@@ -105,10 +112,13 @@ All artifacts complete. All tasks complete.
 ```
 
 **Guardrails**
+
 - Always prompt for change selection if not provided
-- Use artifact graph (openspec status --json) for completion checking
-- Don't block archive on warnings - just inform and confirm
-- Preserve .openspec.yaml when moving to archive (it moves with the directory)
+- Use artifact graph (`openspec status --json`) for completion checking
+- Don't block archive on warnings; just inform and obtain confirmation
+- Stop without writes when the user cancels any pre-write confirmation
+- Archive only after an explicit affirmative archive choice
+- If sync is requested, require a successful `openspec-sync-specs` result before archiving
+- Preserve `.openspec.yaml` when moving to archive (it moves with the directory)
 - Show clear summary of what happened
-- If sync is requested, use openspec-sync-specs approach (agent-driven)
 - If delta specs exist, always run the sync assessment and show the combined summary before prompting

@@ -1,6 +1,6 @@
 ---
 name: xstate
-description: Build, review, debug, test, or migrate XState machines, actors, and `@xstate/store` state. Use when a project imports XState packages or work involves statecharts, actors, machine context, guards, actions, persistence, selectors, or model-based testing. Default to stable XState v5 unless the project explicitly installs v6.
+description: Build, review, debug, test, or migrate XState machines, actors, or `@xstate/store` state. Use when the task changes XState logic, actor lifecycles, transitions, persistence, selectors, or model-based tests; do not use for generic state-management work unrelated to XState.
 ---
 
 # XState

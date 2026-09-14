@@ -57,13 +57,12 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 - Never call `showToast` during render; it causes repeated toasts and jitter.
 - Never leave debug logging in production commands.
 - Never mix manual Cache persistence with React Query persistence in the same command.
-- Never hardcode a shortcut when an equivalent `Keyboard.Shortcut.Common.*` value exists.
-- Never bind shortcuts for actions that are unavailable.
 - Never open external URLs without a success toast + `closeMainWindow()`.
 
 ## References
 
 **Official Vicinae Documentation**:
+
 - **Introduction & architecture**: `https://docs.vicinae.com/extensions/introduction`
 - **Creating extensions**: `https://docs.vicinae.com/extensions/create`
 - **File structure**: `https://docs.vicinae.com/extensions/file-structure`
@@ -74,6 +73,7 @@ Follow the repo’s established Vicinae extension patterns for structure, cachin
 - **API reference (TypeDoc)**: `https://api-reference.vicinae.com/modules.html`
 
 **Repo-specific patterns**:
+
 - If creating a new extension or adding modules, read `references/extension-template.md`.
 - If implementing persistence or caching, read `references/cache-patterns.md` before coding.
 - If adding or reordering actions/shortcuts, read `references/action-ux-standards.md`.

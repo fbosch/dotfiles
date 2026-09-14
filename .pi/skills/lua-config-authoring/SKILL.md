@@ -74,12 +74,8 @@ Write Lua config as small declarative modules with guarded imperative edges. Kee
 - Does the edit match the host's existing module shape?
 - Does startup work stay minimal and lazy where possible?
 - Are optional integrations guarded with useful fallback behavior?
-- Are event hooks used instead of polling?
-- Are globals avoided unless required by the host?
 - Are reload/change loops impossible around host override APIs?
 - Did host-specific setup/API rules come from the scoped `AGENTS.md` or local docs?
-- Are keymaps/actions/user commands using existing helpers where available?
-- Did validation target the smallest relevant scope?
 
 ## Validation
 

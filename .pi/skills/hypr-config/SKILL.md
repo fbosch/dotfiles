@@ -1,20 +1,21 @@
 ---
 name: hypr-config
-description: Configure and troubleshoot Hyprland safely in this dotfiles repo. Use when adding or changing monitor, bind, input, workspace, window rule, layer rule, layout, animation, env, startup, or runtime behavior in `.config/hypr/*.conf`, and when diagnosing config errors, layer-shell stacking/input issues, or post-reload regressions against the locally recorded Hyprland version and current runtime.
+description: Configure and troubleshoot the active Hyprland Lua configuration in this dotfiles repo. Use when changing monitors, binds, input, workspaces, window or layer rules, layouts, animations, environment, startup, or runtime behavior under `.config/hypr/`, or when diagnosing regressions against the locally recorded Hyprland 0.56.0 runtime. The active graph starts at `hyprland.lua`; Hyprlang `.conf` files are legacy rollback material.
 ---
 
 # Hypr Config
 
 ## Scope
 
-Treat `.config/hypr/docs/agents/` as the canonical local reference for this repo.
-Use `.config/hypr/docs/agents/version.md` as the documentation baseline and confirm the locally installed runtime with `hyprctl version` before relying on version-specific behavior.
+The active compositor configuration is the Lua graph rooted at `.config/hypr/hyprland.lua`. `.conf` files are legacy Hyprlang rollback material unless the task explicitly targets a rollback. Treat `.config/hypr/docs/agents/` as the canonical local reference.
 
-Edit only the smallest relevant config file. Keep the repo's split-config layout.
+Use `.config/hypr/docs/agents/version.md` as the documentation baseline and confirm the locally installed runtime with `hyprctl version` before relying on version-specific behavior. The current local baseline is Hyprland 0.56.0.
+
+Edit only the smallest relevant Lua module or sourced data file. Keep the repo's split-config layout.
 
 ## Activation Boundaries
 
-Use this skill for Hyprland config/runtime behavior.
+Use this skill for Hyprland configuration or runtime behavior under `.config/hypr/`.
 
 Do not use this skill for generic Nix/Home Manager refactors unless the task includes Hyprland behavior or diagnostics.
 
@@ -22,18 +23,35 @@ Do not use this skill for generic Nix/Home Manager refactors unless the task inc
 
 1. Read the active config structure first:
    - `.config/hypr/docs/agents/structure.md`
-2. Classify the issue before editing:
-   - parse/syntax errors
+   - `.config/hypr/docs/agents/lua-configuration.md`
+2. Confirm the runtime and documentation baseline:
+   - `hyprctl version`
+   - `.config/hypr/docs/agents/version.md`
+3. When troubleshooting, classify the issue before editing:
+   - Lua parse/config error
    - layer/input/stacking behavior
    - runtime regression after reload
-3. Confirm exact syntax and options in local docs before changing behavior.
-4. Apply minimal edits in the appropriate sourced file.
-5. Validate every `.conf` change with:
+   - legacy Hyprlang rollback work
+4. Confirm exact Lua API, options, and event semantics in the local docs before changing behavior.
+5. Apply minimal edits in the appropriate Lua module or generated-data source.
+6. Validate active Lua changes with:
    - `hyprctl configerrors`
-6. Reload only when needed:
-   - `hyprctl reload`
+   - `just lua-quality changed` when Lua files changed
+   - `just hypr-validate` for the compositor error check
+7. Reload only when needed with `hyprctl reload`. Use `hyprctl reload full-reset` only when explicitly testing a switch between Lua and legacy Hyprlang.
 
-If `hyprctl configerrors` reports issues, fix them before any further tuning.
+If `hyprctl configerrors` reports issues, fix them before further tuning. Do not treat a legacy `.conf` check as validation of the active Lua graph.
+
+## Lua Runtime Commands
+
+For temporary active-config experiments, prefer:
+
+- `hyprctl eval 'hl.config(...)'` for Lua configuration values
+- `hyprctl eval 'hl.dispatch(...)'` for Lua dispatchers
+- `hyprctl repl` to inspect the live Lua API
+- `hyprctl getoption <section.option>` for effective option values
+
+`hyprctl keyword` is the legacy Hyprlang path. Do not use it as the persistence mechanism for the active Lua configuration. Runtime experiments are temporary; persist successful behavior in the sourced Lua module.
 
 ## Pi Runtime Tools
 
@@ -49,77 +67,60 @@ All three tools respect Hyprland privacy boundaries. Windows and layer-shell ent
 
 ## Failure Decision Tree
 
-1. If `hyprctl configerrors` is non-empty, fix syntax/rules first.
-2. If symptom is layer/input/overlay behavior, inspect:
+1. If `hyprctl configerrors` is non-empty, fix Lua syntax or rules first.
+2. If the symptom is layer, input, or overlay behavior, inspect:
    - `hyprctl layers`
    - `hypr_layer_inspect`
    - `hypr_desktop_diagnose`
    - `.config/hypr/docs/agents/layer-rules.md`
-3. If symptom appears only after reload/startup, inspect live logs:
+   - `.config/hypr/docs/agents/references/core/rules/layer-rules.md`
+3. If the symptom appears only after reload or startup, inspect live logs:
    - `hyprctl rollinglog -f`
-4. If unresolved, return the smallest next diagnostic step and required evidence.
-
-## NEVER
-
-- Never skip `hyprctl configerrors` after editing `.conf` files.
-- Never bundle unrelated config changes before a validation cycle.
-- Never claim a fix without command evidence tied to the symptom.
-- Never use broad regex selectors when a stable explicit selector is available.
-- Never rely on high-frequency `hyprctl` polling loops; `hyprctl` is synchronous.
+   - `.config/hypr/docs/agents/references/core/advanced-configuration/events.md`
+4. If the issue is a legacy rollback, verify that the task explicitly selected the Hyprlang graph and do not mix it with the active Lua validation path.
+5. If unresolved, return the smallest next diagnostic step and required evidence.
 
 ## Authoring Rules
 
-- Respect comma-separated argument counts. Empty arguments still require separators.
-- Use block nesting for subcategories (`general { snap { ... } }`), not `general:snap {`.
+- Use the Lua APIs documented in `lua-configuration.md`; do not translate new changes into Hyprlang syntax just because a rollback `.conf` file contains a similar rule.
+- Prefer `require` for stable hand-written modules and `dofile` for generated data that must be re-read.
+- Keep generated rule data under the existing generated sources and preserve declaration order: generated rules, static rules, then window-state rules.
+- Respect comma-separated argument counts in Lua tables and calls. Empty arguments still require separators where the API expects them.
 - Keep rule order intentional. Rules are evaluated top to bottom.
-- Remember precedence: named rules evaluate before anonymous rules.
-- Distinguish static and dynamic window effects:
-  - static effects apply on window creation
-  - dynamic effects can be adjusted at runtime (including with `setprop`)
-- Prefer explicit `match:` props and stable selectors over broad regex rules.
+- Distinguish static and dynamic window effects: static effects apply on window creation; dynamic effects can be adjusted at runtime.
+- Prefer explicit match properties and stable selectors over broad regex rules.
+- Keep Lua runtime helpers non-blocking; use asynchronous `hl.dsp.exec_cmd(...)` for external commands.
 
 ## Reference Loading Strategy
 
-Load local docs first. Use these paths directly:
+Load only the local reference relevant to the task:
 
-- `.config/hypr/docs/agents/pitfalls.md` for syntax traps and script-path pitfalls.
-- `.config/hypr/docs/agents/debugging.md` for first-line diagnostics.
-- `.config/hypr/docs/agents/references/Variables.md` for option types/defaults.
-- `.config/hypr/docs/agents/references/Keywords.md` for config keywords and sourcing.
-- `.config/hypr/docs/agents/references/Binds.md` and `.config/hypr/docs/agents/references/Dispatchers.md` for key handling.
-- `.config/hypr/docs/agents/references/Window-Rules.md` for window/layer rule behavior.
-- `.config/hypr/docs/agents/references/Workspace-Rules.md` for workspace policies.
-- `.config/hypr/docs/agents/references/Monitors.md` for monitor setup/scaling.
-- `.config/hypr/docs/agents/references/Using-hyprctl.md` for runtime control semantics.
+- Lua config and module loading: `.config/hypr/docs/agents/lua-configuration.md`
+- Base options: `.config/hypr/docs/agents/references/core/config-options.md`
+- Keywords and runtime Lua control: `.config/hypr/docs/agents/references/core/advanced-configuration/using-hyprctl.md`
+- Binds and submaps: `.config/hypr/docs/agents/references/core/binds/_index.md`, `flags.md`, and `.config/hypr/docs/agents/references/core/dispatchers.md`
+- Window and layer behavior: `.config/hypr/docs/agents/references/core/rules/window-rules.md` and `layer-rules.md`
+- Workspace policy: `.config/hypr/docs/agents/references/core/rules/workspace-rules.md`
+- Monitor setup and scaling: `.config/hypr/docs/agents/references/core/monitors/_index.md`
+- Layout-specific tuning: `.config/hypr/docs/agents/references/layouts/dwindle-layout.md`, `master-layout.md`, `monocle-layout.md`, or `scrolling-layout.md`
 
 Escalate to upstream docs only when local docs do not cover the behavior.
-
-## Config Decision Guide
-
-- **Monitors and scaling:** `.config/hypr/docs/agents/references/Monitors.md`.
-- **Base options and types:** `.config/hypr/docs/agents/references/Variables.md`.
-- **Keywords and sourcing:** `.config/hypr/docs/agents/references/Keywords.md`.
-- **Binds and submaps:** `.config/hypr/docs/agents/references/Binds.md` + `.config/hypr/docs/agents/references/Dispatchers.md`.
-- **Window behavior:** `.config/hypr/docs/agents/references/Window-Rules.md`.
-- **Layer behavior (bars/notifications/overlays):** `.config/hypr/docs/agents/references/Window-Rules.md` (Layer Rules section).
-- **Workspace policy/default monitor/layout:** `.config/hypr/docs/agents/references/Workspace-Rules.md`.
-- **Layout-specific tuning:** `.config/hypr/docs/agents/references/Dwindle-Layout.md`, `.config/hypr/docs/agents/references/Master-Layout.md`, `.config/hypr/docs/agents/references/Monocle-Layout.md`, `.config/hypr/docs/agents/references/Scrolling-Layout.md`.
-- **Runtime control via CLI:** `.config/hypr/docs/agents/references/Using-hyprctl.md`.
 
 ## Runtime-Safe Iteration
 
 When testing behavior, prefer temporary runtime changes first, then persist in config:
 
-- `hyprctl keyword ...` for option experiments
-- `hyprctl dispatch ...` for behavior checks
-- `hyprctl getoption ...` for effective values
+- `hyprctl eval 'hl.config(...)'` for option experiments
+- `hyprctl dispatch 'hl.dsp.focus({ workspace = "3" })'` for behavior checks
+- `hyprctl getoption <section:option>` for effective values
 
-Batch multiple runtime operations when possible with `hyprctl --batch`.
-Avoid high-frequency `hyprctl` loops; it is synchronous.
+Batch multiple runtime operations when possible with `hyprctl --batch`. Avoid high-frequency `hyprctl` loops; it is synchronous.
 
 ## Output Contract
 
-Return these five items:
+For ordinary configuration changes, report the files inspected or edited, the changes made, and validation commands with key results.
+
+When troubleshooting, return these five items:
 
 1. symptom bucket
 2. files inspected or edited
