@@ -1,6 +1,6 @@
 import type { Dirent } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
-import { join, relative, resolve } from "node:path";
+import { readdir, readFile, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
   defineTool,
   type ExtensionAPI,
@@ -14,8 +14,9 @@ import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 const MCP_PROTOCOL_VERSION = "2025-06-18";
 const MCP_REQUEST_TIMEOUT_MS = 10_000;
 const MAX_MCP_RESPONSE_BYTES = 1_000_000;
-const DEFAULT_LIMIT = 10;
+const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 50;
+const MAX_OFFSET = 10_000;
 
 interface JsonObject {
   [key: string]: unknown;
@@ -53,11 +54,16 @@ export interface TemporalCandidatesDetails {
   checkedTasksFiltered: number;
   formalizedTasksFiltered: FormalizedTask[];
   candidates: SharedTodoTask[];
+  totalCandidates: number;
+  offset: number;
+  limit: number;
+  nextOffset?: number;
 }
 
 export interface TemporalCandidatesOptions {
   cwd: string;
   limit?: number;
+  offset?: number;
   signal?: AbortSignal;
   mcpUrl?: string;
   fetchFn?: FetchFunction;
@@ -81,6 +87,13 @@ const TemporalCandidatesParameters = Type.Object(
         minimum: 1,
         maximum: MAX_LIMIT,
         description: `Maximum number of unchecked unmatched tasks to return (default: ${DEFAULT_LIMIT}).`,
+      }),
+    ),
+    offset: Type.Optional(
+      Type.Integer({
+        minimum: 0,
+        maximum: MAX_OFFSET,
+        description: "Number of filtered candidates to skip (default: 0).",
       }),
     ),
   },
@@ -138,12 +151,23 @@ async function discoverMarkdownFiles(directory: string): Promise<string[]> {
 export async function readInboxReferences(cwd: string): Promise<InboxReferenceIndex> {
   const root = resolve(cwd);
   const inboxPath = join(root, "Inbox");
-  const notePaths = await discoverMarkdownFiles(inboxPath);
+  let canonicalRoot: string;
+  let canonicalInbox: string;
+  try {
+    [canonicalRoot, canonicalInbox] = await Promise.all([realpath(root), realpath(inboxPath)]);
+  } catch (error) {
+    throw new Error(`Could not read Inbox directory ${inboxPath}: ${errorText(error)}`);
+  }
+  const relativeInbox = relative(canonicalRoot, canonicalInbox);
+  if (relativeInbox === ".." || relativeInbox.startsWith(`..${sep}`) || isAbsolute(relativeInbox)) {
+    throw new Error(`Inbox must remain inside the current project: ${inboxPath}`);
+  }
+  const notePaths = await discoverMarkdownFiles(canonicalInbox);
   const bySharedTodoId = new Map<string, Set<string>>();
   const byOriginalCapture = new Map<string, Set<string>>();
 
   for (const notePath of notePaths) {
-    const relativeNotePath = relative(root, notePath);
+    const relativeNotePath = relative(canonicalRoot, notePath);
     let parsed: ReturnType<typeof parseFrontmatter<InboxFrontmatter>>;
     try {
       parsed = parseFrontmatter<InboxFrontmatter>(await readFile(notePath, "utf8"));
@@ -235,12 +259,26 @@ async function readBoundedResponse(response: Response): Promise<string> {
     await response.body?.cancel();
     throw new Error("Shared todo MCP response is too large");
   }
+  if (response.body === null) return "";
 
-  const body = await response.text();
-  if (new TextEncoder().encode(body).byteLength > MAX_MCP_RESPONSE_BYTES) {
-    throw new Error("Shared todo MCP response is too large");
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let bytesRead = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      bytesRead += value.byteLength;
+      if (bytesRead > MAX_MCP_RESPONSE_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("Shared todo MCP response is too large");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
   }
-  return body;
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf8");
 }
 
 function requestSignal(signal?: AbortSignal): AbortSignal {
@@ -330,6 +368,14 @@ function limitValue(value: number | undefined): number {
   return limit;
 }
 
+function offsetValue(value: number | undefined): number {
+  const offset = value ?? 0;
+  if (!Number.isSafeInteger(offset) || offset < 0 || offset > MAX_OFFSET) {
+    throw new Error(`offset must be an integer between 0 and ${MAX_OFFSET}`);
+  }
+  return offset;
+}
+
 function formalizedTask(
   task: SharedTodoTask,
   references: InboxReferenceIndex,
@@ -359,19 +405,24 @@ export async function collectTemporalCandidates(
   options: TemporalCandidatesOptions,
 ): Promise<TemporalCandidatesDetails> {
   const root = resolve(options.cwd);
+  const limit = limitValue(options.limit);
+  const offset = offsetValue(options.offset);
   const references = await readInboxReferences(root);
   const url = options.mcpUrl ?? (await readSharedTodoMcpUrl());
   const state = await listSharedTodoTasks(url, {
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.fetchFn === undefined ? {} : { fetchFn: options.fetchFn }),
   });
-  const limit = limitValue(options.limit);
-  const formalizedTasksFiltered = state.tasks
-    .map((task) => formalizedTask(task, references))
-    .filter((task): task is FormalizedTask => task !== undefined);
-  const candidates = state.tasks
-    .filter((task) => task.checked === false && formalizedTask(task, references) === undefined)
-    .slice(0, limit);
+  const formalizedByTask = state.tasks.map((task) => formalizedTask(task, references));
+  const formalizedTasksFiltered = formalizedByTask.filter(
+    (task): task is FormalizedTask => task !== undefined,
+  );
+  const unmatchedTasks = state.tasks.filter(
+    (task, index) => task.checked === false && formalizedByTask[index] === undefined,
+  );
+  const candidates = unmatchedTasks.slice(offset, offset + limit);
+  const nextOffset =
+    offset + candidates.length < unmatchedTasks.length ? offset + candidates.length : undefined;
 
   return {
     revision: state.revision,
@@ -379,6 +430,10 @@ export async function collectTemporalCandidates(
     inboxNotesScanned: references.noteCount,
     checkedTasksFiltered: state.tasks.filter((task) => task.checked).length,
     formalizedTasksFiltered,
+    totalCandidates: unmatchedTasks.length,
+    offset,
+    limit,
+    ...(nextOffset === undefined ? {} : { nextOffset }),
     candidates,
   };
 }
@@ -394,12 +449,18 @@ export function formatTemporalCandidates(details: TemporalCandidatesDetails): st
     `Inbox notes scanned: ${details.inboxNotesScanned}`,
     `Filtered ${details.checkedTasksFiltered} checked task(s) and ${formalizedCount} task(s) already represented in Inbox frontmatter.`,
     "",
-    `Candidates (${details.candidates.length}):`,
+    `Candidates (${details.candidates.length} returned, ${details.totalCandidates} total; offset ${details.offset}):`,
   ];
   if (details.candidates.length === 0) {
     lines.push("- None");
   } else {
     lines.push(...details.candidates.map((task) => `- ${task.id}: ${displayTaskText(task.text)}`));
+  }
+  if (details.nextOffset !== undefined) {
+    lines.push(
+      "",
+      `More candidates remain. Call temporal_candidates with offset=${details.nextOffset}.`,
+    );
   }
   return lines.join("\n");
 }
@@ -417,6 +478,7 @@ export function createTemporalCandidatesTool(
     promptGuidelines: [
       "Use temporal_candidates before suggesting a shared-todo idea in the temporal-contract workflow.",
       "The tool filters checked tasks and exact Inbox frontmatter matches; still skip obvious execution tasks manually.",
+      "If nextOffset is returned, request the next page before concluding there are no eligible ideas.",
     ],
     parameters: TemporalCandidatesParameters,
     executionMode: "sequential",
@@ -424,6 +486,7 @@ export function createTemporalCandidatesTool(
       const details = await collectTemporalCandidates({
         cwd: ctx.cwd,
         ...(params.limit === undefined ? {} : { limit: params.limit }),
+        ...(params.offset === undefined ? {} : { offset: params.offset }),
         ...(signal === undefined ? {} : { signal }),
         ...(defaults.mcpUrl === undefined ? {} : { mcpUrl: defaults.mcpUrl }),
         ...(defaults.fetchFn === undefined ? {} : { fetchFn: defaults.fetchFn }),

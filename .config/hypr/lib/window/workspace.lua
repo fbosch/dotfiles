@@ -55,8 +55,16 @@ function M.move_to_workspace(workspace)
 end
 
 function M.move_to_gaming_workspace()
+	local window = hl.get_active_window()
+	local game, is_launcher
+	if window then
+		game, is_launcher = gaming.match(window)
+	end
+
 	M.move_to_workspace(gaming.workspace)
-	dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen" }))
+	if game ~= nil and is_launcher == false and game.fullscreen_state ~= nil then
+		dispatch(hl.dsp.window.fullscreen({ mode = "fullscreen" }))
+	end
 end
 
 function M.hide_from_current_workspace()

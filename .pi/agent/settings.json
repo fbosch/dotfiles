@@ -63,7 +63,7 @@
     "enabled": true
   },
   "hideThinkingBlock": false,
-  "showFileChanges": true,
+  "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
   "selectorOverlayWidths": {

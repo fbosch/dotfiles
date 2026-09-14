@@ -29,6 +29,9 @@ _G.hl = {
 			float = function(args)
 				return { op = "window.float", args = args }
 			end,
+			fullscreen = function(args)
+				return { op = "window.fullscreen", args = args }
+			end,
 			move = function(args)
 				return { op = "window.move", args = args }
 			end,
@@ -76,6 +79,7 @@ local monitor_role = require("lib.monitor_role")
 local directional
 local intents
 local state
+local workspace
 
 local function reset(monitor, x, monitor_x, workspace_windows, name)
 	dispatched = {}
@@ -141,6 +145,7 @@ local function load_modules()
 	custom_layout = require("lib.window.custom_layout")
 	directional = require("lib.window.directional")
 	state = require("lib.window.state")
+	workspace = require("lib.window.workspace")
 	intents = require("layouts.shared.intents")
 end
 
@@ -149,6 +154,40 @@ before_each(load_modules)
 local function run(name, test)
 	it(name, test)
 end
+
+run("gaming move fullscreens policies with fullscreen state", function()
+	reset("DP-2")
+	active_window.initial_title = "Warcraft III"
+
+	workspace.move_to_gaming_workspace()
+
+	assert_equal(dispatched[1].op, "window.move", "move dispatcher")
+	assert_equal(dispatched[1].args.workspace, "10", "gaming workspace")
+	assert_equal(dispatched[2].op, "window.fullscreen", "fullscreen dispatcher")
+end)
+
+run("gaming move does not fullscreen move-only policies", function()
+	reset("DP-2")
+	active_window.class = "steam_app_elderscrollsonline"
+	active_window.initial_title = "Elder Scrolls Online"
+
+	workspace.move_to_gaming_workspace()
+
+	assert_equal(#dispatched, 1, "dispatch count")
+	assert_equal(dispatched[1].op, "window.move", "move dispatcher")
+	assert_equal(dispatched[1].args.workspace, "10", "gaming workspace")
+end)
+
+run("gaming move does not fullscreen unmatched windows", function()
+	reset("DP-2")
+	active_window.class = "kitty"
+	active_window.initial_title = "Terminal"
+
+	workspace.move_to_gaming_workspace()
+
+	assert_equal(#dispatched, 1, "dispatch count")
+	assert_equal(dispatched[1].op, "window.move", "move dispatcher")
+end)
 
 run("dp down moves window to portrait monitor", function()
 	reset("DP-2")
