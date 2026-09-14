@@ -22,6 +22,7 @@ end
 local startup_environment = copy_environment(vim.fn.environ())
 local startup_path = startup_environment.PATH
 
+local startup_environment_consumed = false
 local function inherited_direnv()
 	for _, name in ipairs(inherited_metadata) do
 		if type(startup_environment[name]) == "string" and startup_environment[name] ~= "" then
@@ -99,6 +100,21 @@ local function envrc_directory(cwd)
 	end
 end
 
+local function use_startup_environment(cwd)
+	if startup_environment_consumed then
+		return false
+	end
+
+	local active_directory = canonical_path(startup_environment.DIRENV_ACTIVE)
+	local directory = envrc_directory(cwd)
+	if active_directory == nil or directory == nil or active_directory ~= canonical_path(directory) then
+		return false
+	end
+
+	startup_environment_consumed = true
+	set_path(startup_path)
+	return true
+end
 local function stop_process(process)
 	if process == nil then
 		return
@@ -313,6 +329,10 @@ function M.refresh(cwd)
 	if pending ~= nil and pending.cwd == cwd then
 		return { ok = false, status = "pending" }
 	end
+	if current_cwd() == cwd and use_startup_environment(cwd) then
+		cancel_pending()
+		return { ok = true, status = "loaded", cwd = cwd }
+	end
 
 	cancel_pending()
 	set_path(clean_path)
@@ -356,6 +376,10 @@ function M.synchronize(cwd)
 	if synchronizing then
 		set_path(clean_path)
 		return { ok = false, status = "pending", cwd = cwd }
+	end
+	if use_startup_environment(cwd) then
+		cancel_pending()
+		return { ok = true, status = "loaded", cwd = cwd }
 	end
 
 	synchronizing = true

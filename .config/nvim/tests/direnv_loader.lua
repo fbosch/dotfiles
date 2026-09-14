@@ -227,6 +227,16 @@ assert(vim.uv.fs_stat(baseline_directory) == nil, "baseline exit did not clean u
 assert(vim.env.PATH == "/clean/path", "asynchronous baseline exit did not apply the clean PATH")
 
 vim.api.nvim_del_augroup_by_name("DirenvPathLoader")
+vim.env.PATH = "/inherited/project/bin"
+vim.env.DIRENV_ACTIVE = project_a
+vim.cmd("cd " .. vim.fn.fnameescape(project_a))
+local inherited_loader = dofile(repo_root .. "/.config/nvim/lua/config/direnv.lua")
+local inherited_request_count = #requests
+local inherited_result = assert(inherited_loader.synchronize(project_a))
+assert(inherited_result.ok == true and inherited_result.status == "loaded", "inherited environment was not reused")
+assert(#requests == inherited_request_count, "same-project inherited environment invoked direnv")
+assert(vim.env.PATH == "/inherited/project/bin", "inherited project PATH was replaced")
+
 vim.cmd("cd " .. vim.fn.fnameescape(original_cwd))
 rawset(vim, "system", original_system)
 rawset(vim, "defer_fn", original_defer_fn)

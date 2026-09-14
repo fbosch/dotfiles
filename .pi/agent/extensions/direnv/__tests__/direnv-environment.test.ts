@@ -44,6 +44,44 @@ test("skips repositories without an envrc without invoking direnv", async () => 
   expect(invoked).toBe(false);
 });
 
+test("reuses an inherited environment for the same envrc directory", async () => {
+  const project = await temporaryProject();
+  await writeFile(join(project, ".envrc"), "");
+  let invoked = false;
+
+  const result = await loadDirenvEnvironment(
+    project,
+    project,
+    async () => {
+      invoked = true;
+      throw new Error("direnv should not run");
+    },
+    { DIRENV_ACTIVE: project },
+  );
+
+  expect(result).toEqual({ status: "loaded", environment: {} });
+  expect(invoked).toBe(false);
+});
+
+test("does not reuse an inherited environment from another project", async () => {
+  const project = await temporaryProject();
+  await writeFile(join(project, ".envrc"), "");
+  let invoked = false;
+
+  const result = await loadDirenvEnvironment(
+    project,
+    project,
+    async () => {
+      invoked = true;
+      return "{}";
+    },
+    { DIRENV_ACTIVE: join(project, "other") },
+  );
+
+  expect(result).toEqual({ status: "loaded", environment: {} });
+  expect(invoked).toBe(true);
+});
+
 test("loads the nearest envrc inside the repository", async () => {
   const project = await temporaryProject();
   const child = join(project, "packages", "app");

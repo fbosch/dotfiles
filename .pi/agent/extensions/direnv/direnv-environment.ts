@@ -15,6 +15,18 @@ function isWithin(directory: string, boundary: string): boolean {
   return path === "" || (path.startsWith("..") === false && isAbsolute(path) === false);
 }
 
+function inheritedEnvironmentMatches(
+  environment: NodeJS.ProcessEnv,
+  envrcDirectory: string,
+): boolean {
+  const activeDirectory = environment.DIRENV_ACTIVE;
+  return (
+    typeof activeDirectory === "string" &&
+    activeDirectory !== "" &&
+    resolve(activeDirectory) === resolve(envrcDirectory)
+  );
+}
+
 export function findProjectDirectory(directory: string): string {
   const start = resolve(directory);
   let current = start;
@@ -67,9 +79,13 @@ export async function loadDirenvEnvironment(
   directory: string,
   projectDirectory: string,
   exportDirenv: ExportDirenv,
+  inheritedEnvironment: NodeJS.ProcessEnv = process.env,
 ): Promise<DirenvLoadResult> {
   const envrcDirectory = findEnvrcDirectory(directory, projectDirectory);
   if (envrcDirectory === undefined) return { status: "missing" };
+  if (inheritedEnvironmentMatches(inheritedEnvironment, envrcDirectory)) {
+    return { status: "loaded", environment: Object.create(null) };
+  }
 
   try {
     const environment = parseEnvironment(await exportDirenv(envrcDirectory));

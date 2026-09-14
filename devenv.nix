@@ -91,7 +91,11 @@ in
         fi
         lefthook install
       '';
-      before = [ "devenv:enterShell" ];
+      status = ''
+        hook_path="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null)"
+        test -x "$hook_path"
+        grep -Fq 'call_lefthook run "pre-commit"' "$hook_path"
+      '';
     };
 
     "test:shellcheck".exec = ''

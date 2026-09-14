@@ -40,7 +40,12 @@ _install-ags-dependencies:
 
 # Install all managed dependencies and build first-use artifacts.
 [group('dependencies')]
-install-all: install-ags install-fbb install-fish-libexec install-opencode install-opencode-plugins install-pi install-vicinae
+install-all: install-ags install-fbb install-fish-libexec install-hooks install-opencode install-opencode-plugins install-pi install-vicinae
+
+# Install repository Git hooks.
+[group('dependencies')]
+install-hooks:
+    devenv tasks run hooks:install
 
 # Install OpenCode dependencies.
 [group('dependencies')]
