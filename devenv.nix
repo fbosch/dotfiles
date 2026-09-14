@@ -485,7 +485,10 @@ in
         "test:lua"
         "test:window-state-runtime"
       ];
-      before = [ "devenv:enterTest" ];
     };
   };
+
+  enterTest = ''
+    devenv tasks run test:all
+  '';
 }
