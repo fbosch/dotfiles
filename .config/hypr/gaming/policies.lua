@@ -31,7 +31,6 @@ local M = {
 	},
 }
 
-
 ---@type GamingLauncherRule[]
 local battlenet_launcher_rules = {
 	{
@@ -92,30 +91,21 @@ M.games = {
 			{ initial_title = "^World of Warcraft$" },
 			{ title = "^World of Warcraft$" },
 		},
-		launcher_rules = {
-			{
-				match = { initial_title = "^Battle\\.net" },
-				workspace = "unset",
-				float = true,
-				persistent_size = true,
-				no_shadow = false,
-			},
-			{
-				match = { title = "^Battle\\.net" },
-				workspace = "unset",
-				float = true,
-				persistent_size = true,
-				no_shadow = false,
-			},
-			{
-				match = { initial_title = "^Battle\\.net Settings$" },
-				workspace = "unset",
-				float = true,
-				persistent_size = true,
-				no_shadow = false,
-				pin = true,
-			},
+		launcher_rules = battlenet_launcher_rules,
+		close_launcher_on_start = true,
+		fullscreen_state = "2 0",
+		enable_profile = true,
+		freeze = false,
+		confirm_close = true,
+	},
+	{
+		name = "warcraft-iii",
+		selectors = {
+			{ class = "^(gamescope)$", title = "^Warcraft III$" },
+			{ initial_title = "^Warcraft III$" },
+			{ title = "^Warcraft III$" },
 		},
+		launcher_rules = battlenet_launcher_rules,
 		close_launcher_on_start = true,
 		fullscreen_state = "2 0",
 		enable_profile = true,

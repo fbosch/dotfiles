@@ -53,9 +53,14 @@ describe("gaming rules", function()
 		local world_of_warcraft = find_rule(registered_rules, function(match)
 			return match.initial_title == "^World of Warcraft$"
 		end)
+		local warcraft_iii = find_rule(registered_rules, function(match)
+			return match.initial_title == "^Warcraft III$"
+		end)
 
 		assert.are.equal("2 0", bg3.fullscreen_state)
 		assert.are.equal("2 0", world_of_warcraft.fullscreen_state)
+		assert.are.equal("2 0", warcraft_iii.fullscreen_state)
+		assert.are.equal("10 silent", warcraft_iii.workspace)
 	end)
 
 	it("keeps the Battle.net launcher on its launch workspace and remembers its size", function()
