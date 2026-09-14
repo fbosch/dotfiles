@@ -1,5 +1,5 @@
 ---@alias GamingSelector table<string, string>
----@alias GamingLauncherRule table<string, boolean|GamingSelector>
+---@alias GamingLauncherRule table<string, boolean|string|GamingSelector>
 
 ---@class GamingPresentation
 ---@field vrr? integer Hyprland `misc:vrr` override.
@@ -31,6 +31,32 @@ local M = {
 	},
 }
 
+
+---@type GamingLauncherRule[]
+local battlenet_launcher_rules = {
+	{
+		match = { initial_title = "^Battle\\.net" },
+		workspace = "unset",
+		float = true,
+		persistent_size = true,
+		no_shadow = false,
+	},
+	{
+		match = { title = "^Battle\\.net" },
+		workspace = "unset",
+		float = true,
+		persistent_size = true,
+		no_shadow = false,
+	},
+	{
+		match = { initial_title = "^Battle\\.net Settings$" },
+		workspace = "unset",
+		float = true,
+		persistent_size = true,
+		no_shadow = false,
+		pin = true,
+	},
+}
 ---@type GamingPolicy[]
 M.games = {
 	{
@@ -67,9 +93,28 @@ M.games = {
 			{ title = "^World of Warcraft$" },
 		},
 		launcher_rules = {
-			{ match = { initial_title = "^Battle\\.net" } },
-			{ match = { title = "^Battle\\.net" } },
-			{ match = { initial_title = "^Battle\\.net Settings$" }, pin = true },
+			{
+				match = { initial_title = "^Battle\\.net" },
+				workspace = "unset",
+				float = true,
+				persistent_size = true,
+				no_shadow = false,
+			},
+			{
+				match = { title = "^Battle\\.net" },
+				workspace = "unset",
+				float = true,
+				persistent_size = true,
+				no_shadow = false,
+			},
+			{
+				match = { initial_title = "^Battle\\.net Settings$" },
+				workspace = "unset",
+				float = true,
+				persistent_size = true,
+				no_shadow = false,
+				pin = true,
+			},
 		},
 		close_launcher_on_start = true,
 		fullscreen_state = "2 0",

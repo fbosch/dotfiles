@@ -24,7 +24,7 @@ return {
 		},
 		plugin = {
 			adaptive_soft_shadow = {
-				enabled = false,
+				enabled = true,
 			},
 		},
 		general = {

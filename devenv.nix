@@ -384,6 +384,11 @@ in
         -l .config/nvim/tests/pack_inventory.lua
     '';
 
+    "test:nvim-statusline-git-cache".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
+        -l .config/nvim/tests/statusline_git_cache.lua
+    '';
+
     "test:nvim-pack-loader".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/pack_loader.lua
@@ -471,6 +476,7 @@ in
         "test:nvim-pi-production-restore"
         "test:nvim-pack-disabled-sync"
         "test:nvim-pack-lazy-startup"
+        "test:nvim-statusline-git-cache"
         "test:nvim-pack-loader"
         "test:nvim-pack-inventory"
         "test:vicinae"

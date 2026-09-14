@@ -48,6 +48,7 @@
     "+extensions/routed-prompts.ts",
     "+extensions/startup-header/index.ts",
     "+extensions/skill-tweaks/index.ts",
+    "+extensions/temporal-candidates/index.ts",
     "+extensions/tool-discovery/index.ts",
     "+extensions/toon/index.ts",
     "+extensions/tree-sitter/index.ts",
@@ -62,7 +63,7 @@
     "enabled": true
   },
   "hideThinkingBlock": false,
-  "showFileChanges": false,
+  "showFileChanges": true,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
   "selectorOverlayWidths": {

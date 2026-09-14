@@ -212,4 +212,38 @@ describe("file changes extension", () => {
     expect(harness.widgets.at(-1)).toBeTypeOf("function");
     expect(harness.notifications.at(-1)).toBe("Changes shown");
   });
+  test("accepts a file reference after the show action", async () => {
+    const harness = createHarness({ "example.ts": "before\n" });
+    await harness.emit("session_start", { reason: "startup" });
+    await harness.emit("tool_call", writeCall("write-1", "example.ts"));
+    harness.files.set("/repo/example.ts", "after\n");
+    await harness.emit("tool_result", writeResult("write-1", "example.ts"));
+    await harness.runCommand("hide");
+    await harness.runCommand("show @.pi/agent/extensions/file-changes/");
+    expect(harness.getShowFileChanges()).toBe(true);
+    expect(harness.widgets.at(-1)).toBeTypeOf("function");
+    expect(harness.notifications.at(-1)).toBe("Changes shown");
+  });
+  test("tracks hashline replace edits when the built-in edit tool is disabled", async () => {
+    const harness = createHarness({ "example.ts": "before\n" });
+    await harness.emit("session_start", { reason: "startup" });
+    await harness.emit("tool_call", {
+      type: "tool_call",
+      toolCallId: "replace-1",
+      toolName: "replace",
+      input: { path: "example.ts" },
+    });
+    harness.files.set("/repo/example.ts", "after\n");
+    await harness.emit("tool_result", {
+      type: "tool_result",
+      toolCallId: "replace-1",
+      toolName: "replace",
+      input: { path: "example.ts" },
+      content: [{ type: "text", text: "replaced file" }],
+      details: {},
+      isError: false,
+    });
+    expect(harness.statuses.at(-1)).toBe("1 file +1 -1");
+    expect(harness.widgets.at(-1)).toBeTypeOf("function");
+  });
 });

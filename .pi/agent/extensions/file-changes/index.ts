@@ -1,11 +1,8 @@
 import { readFile } from "node:fs/promises";
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  type ExtensionFactory,
-  isEditToolResult,
-  isToolCallEventType,
-  isWriteToolResult,
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ExtensionFactory,
 } from "@earendil-works/pi-coding-agent";
 import {
   type FileBaseline,
@@ -25,6 +22,15 @@ const BASELINE_ENTRY = "file-changes:baseline";
 const CLEAR_ENTRY = "file-changes:clear";
 const UNTRACK_ENTRY = "file-changes:untrack";
 const UI_KEY = "file-changes";
+
+// Hashline replaces built-in edit with these file-mutating tool names.
+const FILE_MUTATION_TOOL_NAMES = new Set([
+  "edit",
+  "write",
+  "replace",
+  "insert",
+  "undo_last_change",
+]);
 
 type FileContent = string | null | undefined;
 type ReadTextFile = (absolutePath: string) => Promise<FileContent>;
@@ -200,7 +206,12 @@ export function createFileChangesExtension(
         return matches.length === 0 ? null : matches.map((value) => ({ value, label: value }));
       },
       handler: async (args, ctx) => {
-        const action = args.trim();
+        // Slash commands receive raw @-references; they must not invalidate the action.
+        const [action = "", ...references] = args.trim().split(/\s+/);
+        if (references.some((reference) => !reference.startsWith("@"))) {
+          report(ctx, "Usage: /changes [show|hide|clear]");
+          return;
+        }
 
         if (action === "clear") {
           const count = trackedFiles.size;
@@ -229,9 +240,11 @@ export function createFileChangesExtension(
     pi.on("session_shutdown", (_event, ctx) => clearUi(ctx));
 
     pi.on("tool_call", async (event, ctx) => {
-      if (!isToolCallEventType("edit", event) && !isToolCallEventType("write", event)) return;
+      if (!FILE_MUTATION_TOOL_NAMES.has(event.toolName)) return;
 
-      const path = normalizeToolPath(ctx.cwd, event.input.path);
+      const rawPath = entryRecord(event.input)?.path;
+      if (typeof rawPath !== "string") return;
+      const path = normalizeToolPath(ctx.cwd, rawPath);
       const originalContent = await readText(path.absolutePath);
       if (originalContent === undefined) return;
 
@@ -239,7 +252,7 @@ export function createFileChangesExtension(
     });
 
     pi.on("tool_result", async (event, ctx) => {
-      if (!isEditToolResult(event) && !isWriteToolResult(event)) return;
+      if (!FILE_MUTATION_TOOL_NAMES.has(event.toolName)) return;
 
       const pending = pendingSnapshots.get(event.toolCallId);
       pendingSnapshots.delete(event.toolCallId);

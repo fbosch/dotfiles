@@ -4,6 +4,38 @@ return {
 	dependencies = { "nvim-web-devicons" },
 	setup = function()
 		local git = require("utils.git")
+		local repo_cache = {}
+		local repo_group = vim.api.nvim_create_augroup("LualineGitRepo", { clear = true })
+
+		-- Keep discovery off redraws without caching retryable Git plugin conditions.
+		local function is_git_repo()
+			local bufnr = vim.api.nvim_get_current_buf()
+			if repo_cache[bufnr] == nil then
+				repo_cache[bufnr] = git.is_git_repo(bufnr)
+			end
+			return repo_cache[bufnr]
+		end
+
+		vim.api.nvim_create_autocmd({ "BufEnter", "WinEnter", "BufFilePost", "BufWritePost", "BufWipeout" }, {
+			group = repo_group,
+			callback = function(event)
+				repo_cache[event.buf] = nil
+			end,
+		})
+		local function invalidate_repos()
+			repo_cache = {}
+		end
+		-- Recheck external repo/symlink changes at interaction boundaries, not on edits.
+		vim.api.nvim_create_autocmd({ "DirChanged", "FocusGained", "ShellCmdPost", "TermClose" }, {
+			group = repo_group,
+			callback = invalidate_repos,
+		})
+		-- Async integrations can explicitly report repo creation/removal without polling.
+		vim.api.nvim_create_autocmd("User", {
+			group = repo_group,
+			pattern = { "FugitiveChanged", "StatuslineGitChanged" },
+			callback = invalidate_repos,
+		})
 
 		local function is_valid_status(result)
 			return type(result) == "string"
@@ -39,7 +71,7 @@ return {
 			{
 				"branch",
 				cond = function()
-					return git.is_git_repo()
+					return is_git_repo()
 				end,
 			},
 		}
@@ -50,7 +82,7 @@ return {
 					return vim.b.gitsigns_blame_line or vim.b.last_gitsigns_blame_line or ""
 				end,
 				cond = function()
-					return git.is_git_repo()
+					return is_git_repo()
 						and (
 							is_valid_status(vim.b.gitsigns_blame_line)
 							or is_valid_status(vim.b.last_gitsigns_blame_line)

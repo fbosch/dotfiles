@@ -57,4 +57,15 @@ describe("gaming rules", function()
 		assert.are.equal("2 0", bg3.fullscreen_state)
 		assert.are.equal("2 0", world_of_warcraft.fullscreen_state)
 	end)
+
+	it("keeps the Battle.net launcher on its launch workspace and remembers its size", function()
+		local battle_net = find_rule(registered_rules, function(match)
+			return match.initial_title == "^Battle\\.net"
+		end)
+
+		assert.are.equal("unset", battle_net.workspace)
+		assert.is_true(battle_net.float)
+		assert.is_true(battle_net.persistent_size)
+		assert.is_false(battle_net.no_shadow)
+	end)
 end)
