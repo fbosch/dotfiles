@@ -22,7 +22,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
@@ -74,7 +74,7 @@
     "npm:pi-hashline-edit-pro@4.2.11",
     "npm:@gotgenes/pi-permission-system@31.1.1",
     "npm:pi-codex-goal",
-    "npm:pi-context-view",
+    "npm:pi-context-view@0.5.2",
     "npm:pi-mcp-adapter@2.32.1",
     "npm:pi-subagents",
     "npm:@ff-labs/pi-fff@0.10.6"
