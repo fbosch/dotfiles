@@ -1,10 +1,18 @@
 skills:
   - ./SKILL.md
 
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
 tasks:
   - name: Summarizes a staged behavior change
+    setup: rm -f /tmp/commit-message-session.txt
+    cleanup: rm -f /tmp/commit-message-session.txt
     prompt: |
-      Write a commit message for this staged diff. Return only the message.
+      Write a commit message for this staged diff to
+      `/tmp/commit-message-session.txt`. Write only the complete message to the
+      file, then return that same message and nothing else.
 
       diff --git a/src/session.ts b/src/session.ts
       index 1409abc..7d12def 100644
@@ -22,12 +30,26 @@ tasks:
       rejecting an expired token or session. It uses imperative lowercase
       wording, ends without a period, makes no unsupported claims, and is at
       most 50 characters.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-session.txt").read_text(encoding="utf-8").strip()
+      assert text
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"fix\([^)]+\): [a-z0-9].*", text)
+      assert not text.endswith(".")
     activates: [commit-message]
 
   - name: Preserves a branch work item within the limit
+    setup: rm -f /tmp/commit-message-work-item.txt
+    cleanup: rm -f /tmp/commit-message-work-item.txt
     prompt: |
-      The branch is feature/12345-session-expiration. Write only a commit
-      message for the following staged change:
+      The branch is feature/12345-session-expiration. Write one commit message
+      for the following staged change to `/tmp/commit-message-work-item.txt`.
+      Write only the complete message to the file, then return that same message
+      and nothing else.
 
       diff --git a/src/auth/session.ts b/src/auth/session.ts
       --- a/src/auth/session.ts
@@ -41,6 +63,173 @@ tasks:
       exact scope `AB#12345`. Its subject accurately describes reducing the
       session lifetime, is imperative and lowercase, is not truncated or
       incomplete, and the complete line is at most 50 characters.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-work-item.txt").read_text(encoding="utf-8").strip()
+      assert text
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"fix\(AB#12345\): [a-z0-9].*", text)
+      assert not text.endswith(".")
+    activates: [commit-message]
+
+  - name: Shortens a long inferred scope to stay within the limit
+    setup: rm -f /tmp/commit-message-api-eval.txt
+    cleanup: rm -f /tmp/commit-message-api-eval.txt
+    prompt: |
+      Write one commit message for this staged diff to
+      `/tmp/commit-message-api-eval.txt`. Write only the complete message to the
+      file, then return that same message and nothing else.
+
+      diff --git a/.agents/skills/api-and-interface-design/api-and-interface-design.eval.yaml b/.agents/skills/api-and-interface-design/api-and-interface-design.eval.yaml
+      new file mode 100644
+      --- /dev/null
+      +++ b/.agents/skills/api-and-interface-design/api-and-interface-design.eval.yaml
+      @@ -0,0 +1,3 @@
+      +skills:
+      +  - ./SKILL.md
+      +tasks: []
+    expect: >
+      The response is one accurate Conventional Commit subject with type `test`.
+      It describes adding evaluation configuration for the named skill, uses a
+      concise stable scope rather than blindly copying the full directory name,
+      and remains complete rather than truncating words.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-api-eval.txt").read_text(encoding="utf-8").strip()
+      assert text
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"test\([^)]+\): [a-z0-9].*", text)
+      assert not text.endswith(".")
+    activates: [commit-message]
+
+  - name: Keeps commit-message documentation changes within the limit
+    setup: rm -f /tmp/commit-message-docs.txt
+    cleanup: rm -f /tmp/commit-message-docs.txt
+    prompt: |
+      Write one commit message for this staged diff to
+      `/tmp/commit-message-docs.txt`. Write only the complete message to the
+      file, then return that same message and nothing else.
+
+      diff --git a/.agents/skills/commit-message/SKILL.md b/.agents/skills/commit-message/SKILL.md
+      --- a/.agents/skills/commit-message/SKILL.md
+      +++ b/.agents/skills/commit-message/SKILL.md
+      @@ -24,2 +24,4 @@
+      - Use the narrowest stable area as the scope.
+      + Use the shortest stable, unambiguous area as the scope.
+      + Treat the scope as a semantic label, not a copied directory name.
+      + Budget the subject after accounting for the complete prefix.
+    expect: >
+      The response is one accurate Conventional Commit subject with type `docs`.
+      It describes tightening commit-message scope or line-length guidance and
+      remains complete rather than truncating words or omitting the outcome.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-docs.txt").read_text(encoding="utf-8").strip()
+      assert text
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"docs\([^)]+\): [a-z0-9].*", text)
+      assert not text.endswith(".")
+    activates: [commit-message]
+
+  - name: Rewrites an overlong supplied subject
+    setup: rm -f /tmp/commit-message-rewrite.txt
+    cleanup: rm -f /tmp/commit-message-rewrite.txt
+    prompt: |
+      Review this proposed commit subject against the supplied change, correct
+      it, and write only the replacement to `/tmp/commit-message-rewrite.txt`.
+      Return that same replacement and nothing else.
+
+      Proposed subject:
+      `docs(commit-message): clarify scope and line length guidance`
+
+      Change: the commit-message guidance now requires semantic scopes and exact
+      counting of the complete subject line before returning it.
+    expect: >
+      The response replaces the supplied 60-character subject with one accurate,
+      complete Conventional Commit subject using type `docs`. It preserves the
+      scope or line-length outcome without merely truncating the supplied text.
+    assert: |
+      import re
+      from pathlib import Path
+
+      original = "docs(commit-message): clarify scope and line length guidance"
+      text = Path("/tmp/commit-message-rewrite.txt").read_text(encoding="utf-8").strip()
+      assert text != original
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"docs\([^)]+\): [a-z0-9].*", text)
+      assert not text.endswith(".")
+    activates: [commit-message]
+
+  - name: Fits a dense fix around a mandatory work item scope
+    setup: rm -f /tmp/commit-message-dense-work-item.txt
+    cleanup: rm -f /tmp/commit-message-dense-work-item.txt
+    prompt: |
+      The branch is feature/12345-session-refresh. Write one commit message for
+      this staged diff to `/tmp/commit-message-dense-work-item.txt`. Write only
+      the complete message to the file, then return it and nothing else.
+
+      diff --git a/src/auth/refresh.ts b/src/auth/refresh.ts
+      --- a/src/auth/refresh.ts
+      +++ b/src/auth/refresh.ts
+      @@ -42,2 +42,3 @@ export async function refreshSession(session) {
+      +  if (session.refreshing) return session.pendingRefresh;
+         return startRefresh(session);
+       }
+    expect: >
+      The response uses type `fix` and exact scope `AB#12345`. It accurately
+      describes preventing or reusing an in-progress refresh without unsupported
+      claims, truncation, or an incomplete phrase.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-dense-work-item.txt").read_text(encoding="utf-8").strip()
+      assert text
+      assert "\n" not in text
+      assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
+      assert re.fullmatch(r"fix\(AB#12345\): [a-z0-9].*", text)
+      assert not text.endswith(".")
+    activates: [commit-message]
+
+  - name: Limits the subject when a body is requested
+    setup: rm -f /tmp/commit-message-with-body.txt
+    cleanup: rm -f /tmp/commit-message-with-body.txt
+    prompt: |
+      Write a Conventional Commit message with a subject and body for this
+      verified worker fix. Save only the complete message to
+      `/tmp/commit-message-with-body.txt`, then return that same message.
+
+      The worker acknowledged a queue message before persisting its delivery id.
+      A restart in that gap caused duplicate delivery. The fix persists the id
+      before acknowledgement. The restart integration test passed.
+    expect: >
+      The subject is an accurate `fix` message about delivery ordering or
+      duplicates and is at most 50 characters. A body follows after one blank
+      line and explains the restart or persistence-ordering reason without
+      repeating the subject or inventing evidence. It may mention the supplied
+      passing restart integration test.
+    assert: |
+      import re
+      from pathlib import Path
+
+      text = Path("/tmp/commit-message-with-body.txt").read_text(encoding="utf-8").strip()
+      lines = text.splitlines()
+      assert len(lines) >= 3
+      assert len(lines[0]) <= 50, f"subject is {len(lines[0])} characters: {lines[0]!r}"
+      assert re.fullmatch(r"fix\([^)]+\): [a-z0-9].*", lines[0])
+      assert not lines[0].endswith(".")
+      assert lines[1] == ""
+      assert any(line.strip() for line in lines[2:])
     activates: [commit-message]
 
   - name: Stays silent for release notes

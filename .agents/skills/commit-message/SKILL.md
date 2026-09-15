@@ -25,9 +25,10 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 - When the branch or prompt contains an Azure Boards work item, use exactly `AB#<number>` as the scope. For example, `feature/12345-session-expiration` requires `fix(AB#12345): ...`, never `fix(auth): ...`.
 - Recognize `AB#12345`, `#12345`, and standalone work-item numbers of four or more digits in branch forms such as `feature/12345-description`.
 - Never invent a ticket scope from numbers found only in source code or the diff.
-- When no work item is present, use the narrowest stable area as the scope.
+- When no work item is present, use the shortest stable, unambiguous area as the scope. Treat the scope as a semantic label, not a directory name to copy verbatim. Follow an established repository scope when one exists; otherwise shorten a compound path to an accurate domain noun, such as `api-and-interface-design` to `api`.
 - Write the subject in imperative mood, lowercase, without a trailing period.
-- Keep the complete subject line at most 50 characters, including type, scope, punctuation, and spaces. Compose the full line, count its characters, and rewrite and recount until `len(line) <= 50`; do not estimate or truncate. Preserve the outcome with shorter terms, such as `fix(AB#12345): limit session expiry to one hour`.
+- Budget the complete line before drafting the subject: `subject_budget = 50 - len(f"{type}({scope}): ")`. Write a complete subject within that budget.
+- Compose the full line and count its characters. If `len(line) > 50`, shorten an inferred scope first, then shorten the subject while preserving the outcome and every material distinction. Use a shorter phrase only when it has the same meaning; for example, do not change `line length` to `line count`. Never abbreviate a required work-item scope, estimate the count, truncate a word, or return the line until recounting confirms `len(line) <= 50`.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
 - If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.
 
