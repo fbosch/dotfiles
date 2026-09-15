@@ -57,7 +57,7 @@ trap cleanup EXIT
 
 cat >"$wrapper" <<EOF
 #!/bin/sh
-exec "$pi_bin" --no-extensions "\$@"
+PI_OFFLINE=1 exec "$pi_bin" --no-extensions "\$@"
 EOF
 chmod +x "$wrapper"
 

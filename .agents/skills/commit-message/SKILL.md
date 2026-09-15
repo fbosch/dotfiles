@@ -27,7 +27,7 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 - Never invent a ticket scope from numbers found only in source code or the diff.
 - When no work item is present, use the narrowest stable area as the scope.
 - Write the subject in imperative mood, lowercase, without a trailing period.
-- Keep the complete subject line at most 50 characters. Rewrite it as a shorter complete phrase; never truncate words or leave a dangling connector.
+- Keep the complete subject line at most 50 characters, including type, scope, punctuation, and spaces. Compose the full line, count its characters, and rewrite and recount until `len(line) <= 50`; do not estimate or truncate. Preserve the outcome with shorter terms, such as `fix(AB#12345): limit session expiry to one hour`.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
 - If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.
 
@@ -37,4 +37,4 @@ Add a body only when the user asks for one or the non-obvious reason cannot fit 
 
 Return only the commit message unless the user requests analysis, alternatives, or another output envelope. A command or tool requiring JSON or another schema takes precedence over this default.
 
-Before returning, verify that the message is supported by the provided evidence, follows any narrower repository convention, and satisfies the length limit.
+Before returning, verify that the message is supported by the provided evidence and follows any narrower repository convention. Count the final complete subject line—not only the text after the colon—and return it only after confirming it is at most 50 characters.
