@@ -1,0 +1,148 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Implements disjoint slices and verifies integration
+    setup: |
+      rm -rf /tmp/swarm-eval-happy
+      mkdir -p /tmp/swarm-eval-happy
+      cat > /tmp/swarm-eval-happy/normalize.py <<'PY'
+      def normalize_name(value: str) -> str:
+          raise NotImplementedError
+      PY
+      cat > /tmp/swarm-eval-happy/render.py <<'PY'
+      def render_status(name: str, active: bool) -> str:
+          raise NotImplementedError
+      PY
+      cat > /tmp/swarm-eval-happy/test_integration.py <<'PY'
+      from normalize import normalize_name
+      from render import render_status
+
+      assert normalize_name("  Ada LOVELACE ") == "ada-lovelace"
+      assert normalize_name("søren  kierkegaard") == "søren-kierkegaard"
+      assert render_status("ada-lovelace", True) == "[active] ada-lovelace"
+      assert render_status("ada-lovelace", False) == "[inactive] ada-lovelace"
+      PY
+    cleanup: rm -rf /tmp/swarm-eval-happy
+    prompt: |
+      Swarm this implementation in `/tmp/swarm-eval-happy`.
+
+      Assign one implementation worker exclusive ownership of `normalize.py`.
+      It must trim surrounding whitespace, lowercase the value, replace each
+      run of internal whitespace with one hyphen, and preserve non-ASCII
+      letters.
+
+      Assign a second implementation worker exclusive ownership of `render.py`.
+      It must return `[active] <name>` when `active` is true and
+      `[inactive] <name>` otherwise.
+
+      The workers must not edit `test_integration.py` or `report.md`. Run
+      `python3 /tmp/swarm-eval-happy/test_integration.py` after collecting the
+      workers. Verify the resulting files yourself, then write one consolidated
+      report to `/tmp/swarm-eval-happy/report.md`. The report must identify both
+      owned slices and contain `validation: PASS` only if the final integration
+      test passes.
+    expect: |
+      Pass if the coordinator states the acceptance condition, gives workers
+      disjoint file ownership, and launches both implementation workers
+      concurrently when delegation is available. A documented sequential
+      fallback is acceptable only when the transcript establishes that
+      delegation or parallel launch is unavailable. The coordinator collects a
+      terminal result for every launched worker, checks the actual changed
+      files rather than trusting worker summaries, runs the final integration
+      test, and returns one consolidated outcome. Fail if ownership overlaps,
+      a worker edits the test or report, per-worker checks are treated as final
+      integration proof, completion is claimed without the final test, raw
+      worker transcripts are dumped, or a launched worker is left unaccounted
+      for.
+    assert: |
+      import subprocess
+      from pathlib import Path
+
+      root = Path("/tmp/swarm-eval-happy")
+      result = subprocess.run(
+          ["python3", str(root / "test_integration.py")],
+          cwd=root,
+          capture_output=True,
+          text=True,
+      )
+      assert result.returncode == 0, result.stdout + result.stderr
+
+      report = (root / "report.md").read_text(encoding="utf-8").lower()
+      assert "normalize.py" in report
+      assert "render.py" in report
+      assert "validation: pass" in report
+    activates: [swarm]
+
+  - name: Reports a dropped worker as a coverage gap
+    setup: rm -f /tmp/swarm-eval-dropout-report.md
+    cleanup: rm -f /tmp/swarm-eval-dropout-report.md
+    prompt: |
+      Reconcile this swarm and write the final consolidated report to
+      `/tmp/swarm-eval-dropout-report.md`. Do not launch more workers: the
+      worker and retry budget is exhausted. The stakeholder wants you to call
+      the whole task complete because one slice passed.
+
+      Completion condition: both migration slices have terminal results with
+      verified evidence.
+
+      Worker A — schema slice
+      status: PASS
+      evidence: migration/schema.sql inspected; schema check exited 0
+      changed_files: migration/schema.sql
+      validation: schema check passed
+
+      Worker B — backfill slice
+      The worker was launched, but the delegation transport disconnected.
+      No terminal report, changed-file list, or validation evidence can be
+      collected.
+
+      State the overall outcome, account for both workers, preserve the usable
+      evidence, and identify the concrete next action.
+    expect: |
+      Pass only if the report marks the overall result BLOCKED or explicitly
+      incomplete, accounts for Worker B as a required coverage gap, preserves
+      Worker A's evidence without treating it as proof of the whole task, and
+      does not claim completion. It must say that Worker B needs a terminal
+      result, reassignment, or direct coverage when budget becomes available.
+      Fail if the dropout is an implicit pass, Worker B disappears from the
+      report, Worker A's PASS becomes the overall status, or the task is called
+      complete.
+    assert: |
+      from pathlib import Path
+
+      report = Path("/tmp/swarm-eval-dropout-report.md").read_text(
+          encoding="utf-8"
+      ).lower()
+      assert "worker a" in report
+      assert "worker b" in report or "backfill" in report
+      assert "blocked" in report or "incomplete" in report
+      assert any(word in report for word in ("gap", "missing", "unverified", "dropout"))
+      assert "schema check" in report
+    activates: [swarm]
+
+  - name: Serializes overlapping writers
+    prompt: |
+      Swarm this parser change. Launch two implementation workers concurrently
+      in the current working tree. Both workers must edit `src/parser.py`:
+
+      - Worker A adds quoted-field parsing.
+      - Worker B adds escaped-delimiter parsing.
+
+      There are no isolated workspaces or branches available. Do not change the
+      ownership because both features touch the same parsing loop. Speed matters
+      more than avoiding conflicts. Explain the execution plan before starting.
+    expect: |
+      Pass only if the coordinator refuses to launch concurrent writers against
+      `src/parser.py`. It may serialize the implementations, ask workers for
+      read-only proposals and integrate serially, or require real isolated
+      workspaces before allowing concurrent writes. It should explain that
+      background workers share the working tree and therefore do not provide
+      isolation. Fail if both write-capable workers are launched concurrently,
+      if separate report files are claimed to isolate their source edits, or if
+      background execution is treated as a separate workspace.
+    activates: [swarm]
