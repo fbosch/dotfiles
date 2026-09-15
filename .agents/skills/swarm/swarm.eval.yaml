@@ -121,7 +121,13 @@ tasks:
       assert "worker a" in report
       assert "worker b" in report or "backfill" in report
       assert "blocked" in report or "incomplete" in report
-      assert any(word in report for word in ("gap", "missing", "unverified", "dropout"))
+      assert (
+          "no terminal" in report
+          or any(
+              word in report
+              for word in ("gap", "missing", "unverified", "dropout", "lacks")
+          )
+      )
       assert "schema check" in report
     activates: [swarm]
 

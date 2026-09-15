@@ -1,6 +1,6 @@
 ---
 name: swarm
-description: Coordinate bounded parallel workers and return one verified result. Use whenever the user explicitly asks to swarm, fan out, parallelize across workers, run independent reviews, compare competing solutions, race models, or cover several angles. Also use to make a swarm request safe when workers would overlap, share writable files, or lack isolation. Prefer direct work when delegation adds no useful independence or coverage.
+description: Use for every explicit request to swarm, fan out, parallelize, or coordinate multiple workers, even when the request is unsafe, workers overlap, delegation is unavailable, or a prior worker failed or dropped out. Coordinate bounded workers and return one verified result. Also use for independent reviews, competing solutions, model races, and multi-angle exploration. Prefer direct work when delegation adds no useful independence or coverage.
 ---
 
 # Swarm
