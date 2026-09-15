@@ -27,6 +27,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - `just stow-apply`
 - `just stow-check`
 - Add and run tests through `devenv test`.
+- Run Caliper skill evaluations through `scripts/caliper-skill-eval.sh`; do not invoke `caliper run` directly.
 
 ## Pi Extensions
 
