@@ -87,7 +87,7 @@ Improve the wording without changing or misrepresenting the behavior.
 
 - **Applies to:** All platforms; errors; all locales.
 - **Instruction:** State what failed in terms people can recognize. Add a verified next step when one exists.
-- **Boundary:** Do not invent a cause, recovery path, guarantee, retry outcome, or claim about data safety. If only the failure is known, say only that.
+- **Boundary:** Do not invent a cause, recovery path, guarantee, retry outcome, claim about data safety, or caveat that an unknown fact was not verified. Unknown facts must be omitted from user-facing error copy, not described as unknown. If only the failure is known, state that failure once in one sentence; do not restate or explain it.
 - **Example:** Use `Unable to upload “Map.png”.` when neither the cause nor a reliable remedy is known.
 - **Basis:** **Our policy**, informed by [Apple HIG: Writing](https://developer.apple.com/design/human-interface-guidelines/writing) and [Apple HIG: Alerts](https://developer.apple.com/design/human-interface-guidelines/alerts), checked 2026-09-07.
 

@@ -282,9 +282,13 @@ describe("tool discovery", () => {
     expect(text).not.toContain("large reference");
   });
 
-  test("does not alter a pi-subagent tool selection", async () => {
+  test("preserves a pi-subagent tool selection as its discovery boundary", async () => {
     const harness = createHarness({
-      tools: [dummyTool("read", "Read files"), dummyTool("figma_parse_url", "Parse a Figma URL")],
+      tools: [
+        dummyTool("read", "Read files"),
+        dummyTool("figma_parse_url", "Parse a Figma URL"),
+        dummyTool("webfetch", "Fetch a web page"),
+      ],
       activeTools: ["read", "figma_parse_url"],
       parentSession: "parent-session-id",
       systemPrompt:
@@ -294,6 +298,11 @@ describe("tool discovery", () => {
     await harness.discoverResources();
 
     expect(harness.activeTools).toEqual(["read", "figma_parse_url", "search_tools"]);
+    expect((await harness.search("fetch web page")).details).toEqual({ matches: [], added: [] });
+    expect((await harness.search("figma URL")).details).toEqual({
+      matches: ["figma_parse_url"],
+      added: [],
+    });
     expect(harness.activeToolSets).toEqual([]);
   });
 

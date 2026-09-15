@@ -18,7 +18,7 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 - Put the review-relevant point first; do not make reviewers dig through setup prose.
 - Keep prose compact; prefer concrete consequences, examples, and limits over filler or broad claims.
 - Scale detail by risk and uncertainty, not only by file count.
-- Use the `writing-clearly` skill for final PR prose; task-specific output contracts and hard limits still win.
+- Load and apply the `writing-clearly` skill before drafting or editing final PR prose; task-specific output contracts and hard limits still win.
 
 ## Priority
 
@@ -112,7 +112,7 @@ Add a section only when it changes reviewer behavior, preserves non-obvious cont
 
 ## Procedure
 
-1. Confirm there is evidence of what changed and why. If no change evidence exists, ask a direct question for the minimum missing change or purpose context instead of drafting, inferring, or only stating that a body cannot be written.
+1. Load `writing-clearly`. Then confirm there is evidence of what changed and why. If no change evidence exists, ask one direct question ending in `?` for the minimum missing change or purpose context. Return that question instead of drafting, inferring, or explaining why a body cannot be written.
 2. Classify the PR (`Tiny`, `Normal`, `Risky`, `OSS-facing`, `WIP/Spike`).
 3. Start from `Summary` only, then add sections only when the change justifies them.
 4. Draft `Summary` before `Changes`; add `Motivation` only when explicitly relevant.

@@ -45,7 +45,7 @@ The default is an image-capable model already used by this agent collection, wit
 
 ## Select the representation
 
-Read `~/.pi/agent/extensions/chart/README.md` for current capabilities and constraints. Discover the selected `chart_*` tool with `search_tools` and inspect its schema rather than guessing arguments. Prefer native charts for supported data, hierarchies, and relationships:
+Read `~/.pi/agent/extensions/chart/README.md` for current capabilities and constraints. Inspect the selected `chart_*` tool schema already provided in context rather than guessing arguments. Prefer native charts for supported data, hierarchies, and relationships:
 
 | Tool                       | Use                                                                                              |
 | -------------------------- | ------------------------------------------------------------------------------------------------ |

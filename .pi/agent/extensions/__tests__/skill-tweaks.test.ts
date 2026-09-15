@@ -23,6 +23,47 @@ describe("skill tweaks", () => {
     ).toEqual(new Set(["grilling", "skill-creator", "xstate"]));
   });
 
+  test("disables conditional skills outside their allowed agent", () => {
+    const settings = {
+      skillTweaks: {
+        modelInvocationAgents: {
+          "ascii-visualizer": ["visualizer"],
+          "mermaid-diagrams": ["visualizer"],
+        },
+      },
+    };
+
+    expect(disabledSkillNames(settings, {})).toEqual(
+      new Set(["ascii-visualizer", "mermaid-diagrams"]),
+    );
+    expect(
+      disabledSkillNames(
+        settings,
+        {},
+        '<active_agent name="review"/>\n\n# Environment',
+      ),
+    ).toEqual(new Set(["ascii-visualizer", "mermaid-diagrams"]));
+  });
+
+  test("keeps conditional skills visible to an allowed agent", () => {
+    const settings = {
+      skillTweaks: {
+        modelInvocationAgents: {
+          "ascii-visualizer": ["visualizer"],
+          "mermaid-diagrams": ["visualizer"],
+        },
+      },
+    };
+
+    expect(
+      disabledSkillNames(
+        settings,
+        {},
+        '<active_agent name="visualizer"/>\n\n# Environment',
+      ),
+    ).toEqual(new Set());
+  });
+
   test("hides configured skills without mutating discovered metadata", () => {
     const skills = [skill("grilling"), skill("writing-clearly")];
     const prompt = `base${formatSkillsForPrompt(skills, "read")}\n\nend`;

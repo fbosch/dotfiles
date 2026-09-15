@@ -1,9 +1,9 @@
 import {
   defineTool,
-  getAgentDir,
-  SettingsManager,
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
@@ -168,6 +168,16 @@ function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly stri
   return resolveDeferredToolPrefixes(settings.getGlobalSettings(), settings.getProjectSettings());
 }
 export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
+  let subagentAdmittedTools: ReadonlySet<string> | undefined;
+
+  const searchableTools = (ctx: ExtensionContext): readonly ToolInfo[] => {
+    const tools = pi.getAllTools();
+    if (!isSubagentSession(ctx)) return tools;
+
+    const admitted = subagentAdmittedTools ?? new Set(pi.getActiveTools());
+    return tools.filter((tool) => admitted.has(tool.name));
+  };
+
   pi.registerTool(
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
       name: "search_tools",
@@ -182,7 +192,7 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
 
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const matches = searchDeferredTools(
-          pi.getAllTools(),
+          searchableTools(ctx),
           params.query,
           params.limit ?? DEFAULT_MATCHES,
           getConfiguredDeferredToolPrefixes(ctx),
@@ -227,7 +237,12 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   );
 
   pi.on("resources_discover", (_event, ctx) => {
-    if (isSubagentSession(ctx)) return;
+    if (isSubagentSession(ctx)) {
+      // The subagent package has already reduced this set from its `tools:` frontmatter.
+      // Preserve that admission boundary when search_tools inspects the global registry.
+      subagentAdmittedTools = new Set(pi.getActiveTools());
+      return;
+    }
 
     const deferredPrefixes = getConfiguredDeferredToolPrefixes(ctx);
     const deferredNames = new Set(
