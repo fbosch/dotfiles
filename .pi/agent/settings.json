@@ -70,7 +70,10 @@
       "mcp__"
     ]
   },
-  "packages": ["npm:pi-hashline-edit-pro@4.2.11"],
+  "packages": [
+    "npm:pi-hashline-edit-pro@4.2.11",
+    "npm:@gotgenes/pi-permission-system@31.1.1"
+  ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
   "skillTweaks": {

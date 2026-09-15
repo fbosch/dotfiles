@@ -1,0 +1,204 @@
+skills:
+  - ./SKILL.md
+  - ../writing-clearly/SKILL.md
+  - ../commit-message/SKILL.md
+  - ../crafting-effective-readmes/SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Writes a focused internal feature PR
+    setup: rm -f /tmp/pr-feature.md
+    cleanup: rm -f /tmp/pr-feature.md
+    prompt: |
+      Write the PR body to `/tmp/pr-feature.md` for this internal feature:
+
+      The account settings API now accepts an optional `timezone` field. The
+      service validates it against the IANA database and returns the existing
+      validation-error shape for unknown zones. This lets scheduled reports use
+      each account's local time instead of UTC. Reviewers should focus on whether
+      validation belongs at the API boundary. `devenv test` passed.
+
+      Do not include a PR title or invent links, measurements, or validation.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-feature.md").read_text(encoding="utf-8")
+      lower = text.lower()
+      assert "## summary" in lower
+      assert "## changes" in lower
+      assert "## testing" in lower
+      assert "timezone" in lower and "iana" in lower
+      assert "scheduled reports" in lower and "utc" in lower
+      assert "api boundary" in lower
+      assert "devenv test" in lower and "passed" in lower
+      assert "http://" not in lower and "https://" not in lower
+      assert "this pr" not in lower
+    expect: >
+      The body leads with the user-visible outcome and rationale, describes the
+      validation behavior without narrating files, and gives reviewers a focused
+      question about boundary placement. It is compact, and its Changes section
+      adds concrete implementation detail.
+    activates: [pr-description, writing-clearly]
+
+  - name: Explains a bug fix root cause rather than only symptoms
+    setup: rm -f /tmp/pr-bugfix.md
+    cleanup: rm -f /tmp/pr-bugfix.md
+    prompt: |
+      Write the PR body to `/tmp/pr-bugfix.md` from these verified facts:
+
+      Users saw duplicate invoice emails after a worker restart. The worker
+      acknowledged the queue message before persisting the delivery id. A restart
+      in that gap caused redelivery without an idempotency record. The change now
+      persists the delivery id before acknowledgement and treats an existing id as
+      complete. The focused restart integration test passed. No production data
+      migration is required.
+
+      Do not add facts or a PR title.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-bugfix.md").read_text(encoding="utf-8")
+      lower = text.lower()
+      assert "## summary" in lower and "## changes" in lower
+      assert "acknowledg" in lower and "persist" in lower
+      assert "restart" in lower
+      assert "integration test" in lower and "passed" in lower
+      assert "migration" in lower
+      assert "this pr" not in lower
+    expect: >
+      The body connects the duplicate emails to the acknowledgement/persistence
+      ordering gap, then explains how the new ordering and idempotency handling
+      prevent recurrence. It does not merely restate the symptom.
+    activates: [pr-description, writing-clearly]
+
+  - name: Covers migration risk and rollback
+    setup: rm -f /tmp/pr-migration.md
+    cleanup: rm -f /tmp/pr-migration.md
+    prompt: |
+      Write the PR body to `/tmp/pr-migration.md` for this risky migration:
+
+      Session expiry moves from an integer `ttl_seconds` column to nullable
+      `expires_at`. Deployment first adds and backfills `expires_at`, then deploys
+      readers that prefer it and fall back to `ttl_seconds`. A later change will
+      remove the old column. The backfill can increase replica lag; pause it if lag
+      exceeds 30 seconds. Roll back by stopping the backfill and reverting readers
+      to `ttl_seconds`. The migration was tested on a production-sized snapshot;
+      peak replica lag was 12 seconds. Do not invent links or additional checks.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-migration.md").read_text(encoding="utf-8")
+      lower = text.lower()
+      for heading in ("## summary", "## changes", "## risk", "## rollback"):
+          assert heading in lower
+      assert "expires_at" in text and "ttl_seconds" in text
+      assert "30 seconds" in lower and "pause" in lower
+      assert "12 seconds" in lower and "snapshot" in lower
+      assert "fallback" in lower or "fall back" in lower
+      assert "http://" not in lower and "https://" not in lower
+    expect: >
+      The body makes the staged compatibility path, measurable pause condition,
+      observed validation result, and fast rollback procedure easy for migration
+      reviewers to find. It distinguishes the observed 12-second lag from the
+      30-second operational threshold.
+    activates: [pr-description, writing-clearly]
+
+  - name: Frames a WIP request without claiming completion
+    setup: rm -f /tmp/pr-wip.md
+    cleanup: rm -f /tmp/pr-wip.md
+    prompt: |
+      Write an early-review PR body to `/tmp/pr-wip.md`.
+
+      This spike parses webhook payloads into a discriminated union before domain
+      handling. Signature verification is still stubbed, malformed nested payloads
+      are not covered, and no tests have been run. The author wants feedback on
+      whether parsing should remain at the HTTP adapter or move into the domain
+      package. This is not ready to merge.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-wip.md").read_text(encoding="utf-8")
+      lower = text.lower()
+      assert "## summary" in lower and "## changes" in lower
+      assert "## feedback wanted" in lower
+      assert "## readiness" in lower
+      assert "signature" in lower and "stub" in lower
+      assert "malformed" in lower and "not" in lower
+      assert "no tests" in lower or "not been run" in lower or "not run" in lower
+      assert "not ready" in lower
+      assert "http adapter" in lower and "domain" in lower
+      assert "ready to merge" not in lower.replace("not ready to merge", "")
+    expect: >
+      The body clearly labels the work as incomplete, exposes the verification and
+      malformed-input gaps, and asks a focused architecture-boundary question. It
+      does not disguise the spike as completed work.
+    activates: [pr-description, writing-clearly]
+
+  - name: Refuses to fabricate validation or references
+    setup: rm -f /tmp/pr-restraint.md
+    cleanup: rm -f /tmp/pr-restraint.md
+    prompt: |
+      Write the PR body to `/tmp/pr-restraint.md` using only these facts:
+
+      The CLI's default output changes from a table to JSON so shell consumers can
+      parse it. `--format table` preserves the old presentation. Validation status,
+      performance impact, issue links, and rollout details were not provided.
+
+      Do not ask follow-up questions; draft the smallest accurate body now.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-restraint.md").read_text(encoding="utf-8")
+      lower = text.lower()
+      assert "## summary" in lower
+      assert "json" in lower and "--format table" in lower
+      assert "shell" in lower
+      assert "http://" not in lower and "https://" not in lower
+      for unsupported in ("tests passed", "tested successfully", "no performance impact", "zero downtime", "verified"):
+          assert unsupported not in lower
+      assert "## testing" not in lower
+      assert "## rollout" not in lower and "## deployment" not in lower
+    expect: >
+      The body explains the default-format change and explicit compatibility path
+      without inventing validation, performance, links, or rollout claims. It does
+      not pad missing evidence with empty sections.
+    activates: [pr-description, writing-clearly]
+
+  - name: Requests evidence for an empty PR description
+    setup: rm -f /tmp/pr-empty.txt
+    cleanup: rm -f /tmp/pr-empty.txt
+    prompt: |
+      Write a PR description for an empty diff with no issue, rationale, test
+      results, or author notes. Save your complete response to `/tmp/pr-empty.txt`.
+      Do not infer what might have changed.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/pr-empty.txt").read_text(encoding="utf-8").strip()
+      lower = text.lower()
+      assert text
+      assert "?" in text
+      assert any(term in lower for term in ("change", "diff", "context", "purpose"))
+      assert "## summary" not in lower and "## changes" not in lower
+      for fabricated in ("implements", "fixes", "adds support", "tests passed"):
+          assert fabricated not in lower
+    expect: >
+      The response asks for the missing change or purpose evidence instead of
+      fabricating a plausible PR body.
+    activates: [pr-description, writing-clearly]
+
+  - name: Defers a commit message to the neighboring skill
+    prompt: |
+      Write one Conventional Commit message for staged changes that add retry
+      validation. Use scope AB#3812 and keep the complete line under 50 characters.
+    activates: [commit-message]
+
+  - name: Defers README architecture work to neighboring skills
+    prompt: |
+      Restructure the README for a small open-source CLI so new users see
+      installation and a minimal example before contributor internals. Explain the
+      revised information architecture and draft the new README.
+    activates: [crafting-effective-readmes, writing-clearly]

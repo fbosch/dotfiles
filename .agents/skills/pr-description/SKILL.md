@@ -7,7 +7,7 @@ description: Write effective pull request description bodies that explain what c
 
 This skill covers PR body writing only.
 
-Do not define or rewrite PR title conventions here. Title format and type rules stay in command-specific prompts such as `~/.config/opencode/commands/pr-desc.md`.
+Do not define or rewrite PR title conventions here. Title format and type rules stay in downstream command prompts.
 
 ## Core Principles
 
@@ -20,17 +20,14 @@ Do not define or rewrite PR title conventions here. Title format and type rules 
 - Scale detail by risk and uncertainty, not only by file count.
 - Use the `writing-clearly` skill for final PR prose; task-specific output contracts and hard limits still win.
 
-## Voice And Priority
-
-Before writing or editing final PR prose, read `~/.config/fbb/TONE.md` when it exists. If a repo-local tone file also exists, use it only when the task explicitly asks for repo-local voice.
+## Priority
 
 Use this priority order when instructions conflict:
 
 1. Factual correctness and verified evidence.
 2. Explicit user constraints for this PR.
 3. Required output contract from a command, tool, template, or maintainer.
-4. `~/.config/fbb/TONE.md`.
-5. This skill's general PR-writing guidance.
+4. This skill's general PR-writing guidance.
 
 ## PR Classification
 
@@ -115,14 +112,16 @@ Add a section only when it changes reviewer behavior, preserves non-obvious cont
 
 ## Procedure
 
-1. Classify the PR (`Tiny`, `Normal`, `Risky`, `OSS-facing`, `WIP/Spike`).
-2. Start from `Summary` only, then add sections only when the change justifies them.
-3. Draft `Summary` before `Changes`; add `Motivation` only when explicitly relevant.
-4. Replace broad claims with concrete consequences, examples, or limits.
-5. Add risk and validation details only where they materially affect review; omit `Testing` when it would be redundant or obvious.
-6. Add `Feedback Wanted` or `Readiness` for early-review or partial work.
-7. Trim filler, duplicate statements, and repeated caveats.
-8. Final-check that the first sentence states the purpose, each section has one job, and every claim is concrete enough to verify.
+1. Confirm there is evidence of what changed and why. If no change evidence exists, ask a direct question for the minimum missing change or purpose context instead of drafting, inferring, or only stating that a body cannot be written.
+2. Classify the PR (`Tiny`, `Normal`, `Risky`, `OSS-facing`, `WIP/Spike`).
+3. Start from `Summary` only, then add sections only when the change justifies them.
+4. Draft `Summary` before `Changes`; add `Motivation` only when explicitly relevant.
+5. Replace broad claims with concrete consequences, examples, or limits.
+6. Add risk and validation details only where they materially affect review; omit `Testing` when it would be redundant or obvious.
+7. Preserve supplied validation status precisely. A command name alone does not communicate whether it passed, failed, or was not run.
+8. Add `Feedback Wanted` or `Readiness` for early-review or partial work.
+9. Trim filler, duplicate statements, and repeated caveats.
+10. Final-check that the first sentence states the purpose, each section has one job, and every claim is concrete enough to verify.
 
 ## Output Contract for Downstream Commands
 
