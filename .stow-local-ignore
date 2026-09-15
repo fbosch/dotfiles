@@ -75,6 +75,7 @@ __pycache__
 ^/\.pi/agent/subagent-sessions$
 ^/\.pi/agent/fff$
 ^/\.pi/agent/mcp-cache\.json$
+^/\.pi/agent/mcp-npx-cache\.json$
 ^/\.pi/agent/mcp-onboarding\.json$
 ^/\.pi/agent/npm$
 ^/\.pi/agent/git$
