@@ -5,6 +5,12 @@ argument-hint: "[target branch or guidance]"
 
 Open a pull request for the current branch.
 
+PROJECT-LOCAL OPEN-PR SKILL (authoritative for opening workflow when present):
+
+Before applying this prompt's workflow, check whether `.agents/skills/open-pr/SKILL.md` exists in the repository root. If it exists, read it fully and follow it as the authoritative workflow for opening the pull request. Do not apply this prompt's generic provider detection, target-branch selection, pushing, or PR-creation instructions unless the local skill explicitly delegates to them.
+
+If no project-local `open-pr` skill exists, continue with this prompt's workflow.
+
 Use the available GitHub or Azure DevOps CLI workflow (`gh`/`az`) for provider detection, target branch selection, pushing, and PR creation.
 
 PR BODY POLICY (authoritative for body content only):
@@ -17,10 +23,11 @@ Read and apply `~/.config/fbb/TONE.md`.
 
 Follow this precedence order:
 
-1. Tool invocation and provider routing rules from this command
-2. PR body structure and content rules from `pr-description` skill
-3. Voice and phrasing from `TONE.md`
-4. If there is a conflict, command hard limits win
+1. Project-local `.agents/skills/open-pr/SKILL.md` for the pull-request opening workflow, when present
+2. This command's provider routing and PR-creation workflow, when no project-local `open-pr` skill is present
+3. PR body structure and content rules from `pr-description` skill
+4. Voice and phrasing from `TONE.md`
+5. If instructions conflict, the applicable opening workflow's explicit hard limits win
 
 User-provided PR guidance:
 $ARGUMENTS
