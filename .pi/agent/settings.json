@@ -70,7 +70,7 @@
       "mcp__"
     ]
   },
-  "packages": [],
+  "packages": ["npm:pi-hashline-edit-pro@4.2.11"],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
   "skillTweaks": {
