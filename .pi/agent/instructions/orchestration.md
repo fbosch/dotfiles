@@ -12,4 +12,4 @@ when:
 - Give each worker a bounded goal, owned scope, exclusions, and acceptance criteria.
 - Parallel writes require disjoint ownership and no dependencies. Keep shared work serial.
 - Verify delegated results before integrating or declaring completion.
-- Before coordinating a multi-worker batch, read `~/.pi/agent/references/parallel-work.md`.
+- Before coordinating a multi-worker batch, load the `swarm` skill from its advertised path, or `~/.agents/skills/swarm/SKILL.md` when no path is advertised.
