@@ -1,0 +1,328 @@
+{
+  "run": {
+    "spec": "commit-message",
+    "timestamp": "2026-09-15T08:15:49.579040Z",
+    "k": 1,
+    "backend": "pi",
+    "model": null,
+    "era": "install-and-discover",
+    "ablated": [],
+    "judge_backend": "pi",
+    "judge_model": null,
+    "interrupted": false
+  },
+  "skill_snapshots": [
+    {
+      "name": "commit-message",
+      "path": "/Users/fbb/dotfiles/.agents/skills/commit-message/SKILL.md",
+      "source_kind": "path",
+      "git_repo": "/Users/fbb/dotfiles",
+      "git_sha": "49fd4656eb0a96d3260f3c124144fb12bb3df3d5",
+      "files": {
+        "SKILL.md": {
+          "content": "---\nname: commit-message\ndescription: Write or review concise Conventional Commit messages grounded in staged or supplied diffs. Use when asked for a Git commit message, commit subject, commit body, Conventional Commit, or Commitizen-style message. Do not use for release notes, changelogs, pull request descriptions, or general documentation.\n---\n\n# Commit messages\n\nWrite the smallest accurate message that identifies the change and its purpose.\n\n## Gather evidence\n\n- Use the supplied diff when the prompt contains one. Otherwise inspect the staged diff and relevant repository commit conventions.\n- Ignore unstaged changes unless the user explicitly includes them.\n- Treat branch names as scope evidence only. Do not claim intent that the diff, tests, issue reference, or user context does not support.\n- Do not commit, stage, amend, or push unless the user explicitly requests that operation.\n\n## Construct the message\n\nUse `type(scope): subject` for the subject line.\n\nValid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.\n\n- Choose the type from the observable effect, not the files changed.\n- Use the narrowest stable area as the scope.\n- When the branch or prompt contains an Azure Boards work item, use exactly `AB#<number>` as the scope. Recognize `AB#12345`, `#12345`, and standalone work-item numbers of four or more digits in branch forms such as `feature/12345-description`.\n- Never invent a ticket scope from numbers found only in source code or the diff.\n- Write the subject in imperative mood, lowercase, without a trailing period.\n- Keep the complete subject line at most 50 characters. Rewrite it as a shorter complete phrase; never truncate words or leave a dangling connector.\n- Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.\n- If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.\n\nAdd a body only when the user asks for one or the non-obvious reason cannot fit accurately in the subject. Separate it with a blank line and explain why or a material consequence rather than repeating the diff.\n\n## Output\n\nReturn only the commit message unless the user requests analysis, alternatives, or another output envelope. A command or tool requiring JSON or another schema takes precedence over this default.\n\nBefore returning, verify that the message is supported by the provided evidence, follows any narrower repository convention, and satisfies the length limit.\n",
+          "hash": "sha256:8987959e899cec634313e290d9e9388cf8737cae626454d209087ab397fb17d1"
+        }
+      }
+    }
+  ],
+  "task_results": [
+    {
+      "task_id": "task-001",
+      "task_name": "Summarizes a staged behavior change",
+      "attempts": [
+        {
+          "attempt": 1,
+          "output": "fix(session): reject expired tokens before restoring session",
+          "duration_seconds": 3.518731542000751,
+          "outcome": "task_fail",
+          "usage": {
+            "input_tokens": 2128,
+            "output_tokens": 13,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "total_tokens": 2141
+          },
+          "transcript": [
+            {
+              "role": "assistant",
+              "content": "fix(session): reject expired tokens before restoring session",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": null
+            }
+          ],
+          "cheat_evidence": [],
+          "activated": [],
+          "activation_passed": false,
+          "assert_passed": null,
+          "assert_evidence": null,
+          "autorater_passed": false,
+          "autorater_reasoning": "The subject meets the semantic and formatting requirements, but it is 60 characters long, exceeding the 50-character limit.",
+          "judge_seconds": 6.662524625000515,
+          "retries": 0,
+          "passed": false,
+          "cheated": false
+        }
+      ],
+      "successes": 0,
+      "unusable": 0,
+      "activation_expected": [
+        "commit-message"
+      ],
+      "pass_at_k": 0.0,
+      "usable": 1,
+      "score": 0.0,
+      "pass_hat_k": 0.0,
+      "activation_usable": 1,
+      "activation_successes": 0,
+      "activation_score": 0.0
+    },
+    {
+      "task_id": "task-002",
+      "task_name": "Preserves a branch work item within the limit",
+      "attempts": [
+        {
+          "attempt": 1,
+          "output": "fix(auth): reduce session expiration to one hour",
+          "duration_seconds": 2.796976124998764,
+          "outcome": "task_fail",
+          "usage": {
+            "input_tokens": 2112,
+            "output_tokens": 13,
+            "cache_read_tokens": 0,
+            "cache_creation_tokens": 0,
+            "total_tokens": 2125
+          },
+          "transcript": [
+            {
+              "role": "assistant",
+              "content": "fix(auth): reduce session expiration to one hour",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": null
+            }
+          ],
+          "cheat_evidence": [],
+          "activated": [],
+          "activation_passed": false,
+          "assert_passed": null,
+          "assert_evidence": null,
+          "autorater_passed": false,
+          "autorater_reasoning": "The subject accurately describes the change, but its scope is `auth` rather than the required exact scope `AB#12345`.",
+          "judge_seconds": 3.8515952080015268,
+          "retries": 0,
+          "passed": false,
+          "cheated": false
+        }
+      ],
+      "successes": 0,
+      "unusable": 0,
+      "activation_expected": [
+        "commit-message"
+      ],
+      "pass_at_k": 0.0,
+      "usable": 1,
+      "score": 0.0,
+      "pass_hat_k": 0.0,
+      "activation_usable": 1,
+      "activation_successes": 0,
+      "activation_score": 0.0
+    },
+    {
+      "task_id": "task-003",
+      "task_name": "Stays silent for release notes",
+      "attempts": [
+        {
+          "attempt": 1,
+          "output": "I can’t generate the release notes because the current directory contains no repository, changelog, or source files. Provide the project path or its Git history since tag/version `2.4`.",
+          "duration_seconds": 18.649809750000713,
+          "outcome": "not_checked",
+          "usage": {
+            "input_tokens": 4920,
+            "output_tokens": 480,
+            "cache_read_tokens": 2176,
+            "cache_creation_tokens": 0,
+            "total_tokens": 7576
+          },
+          "transcript": [
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "git status --short && printf '\\nTAGS\\n' && git tag --sort=-version:refname | head -30 && printf '\\nFILES\\n' && ls -la",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "git log --oneline --decorate --all -40",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "find . -maxdepth 2 -type f | sort | head -200",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_result",
+              "content": "(no output)",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "(no output)"
+            },
+            {
+              "role": "tool_result",
+              "content": "fatal: not a git repository (or any of the parent directories): .git\n\n\nCommand exited with code 128",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "fatal: not a git repository (or any of the parent directories): .git\n\n\nCommand exited with code 128"
+            },
+            {
+              "role": "tool_result",
+              "content": "fatal: not a git repository (or any of the parent directories): .git\n\n\nCommand exited with code 128",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "fatal: not a git repository (or any of the parent directories): .git\n\n\nCommand exited with code 128"
+            },
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "pwd; ls -la; find . -maxdepth 3 -print | head -200",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "find .. -maxdepth 3 -name .git -type d -print 2>/dev/null | head -50",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_use",
+              "content": "[tool: bash]",
+              "tool_name": "bash",
+              "tool_input": {
+                "command": "env | grep '^PI_' | sort",
+                "timeout": 10
+              },
+              "tool_output": null
+            },
+            {
+              "role": "tool_result",
+              "content": "PI_CODING_AGENT_DIR=/Users/fbb/dotfiles/.pi/agent\nPI_CODING_AGENT=true\nPI_MODEL=gpt-5.6-sol\nPI_PACKAGE_DIR=/nix/store/xvx202j10rcr70l88izn6zfyvvgw7109-pi-0.85.1/libexec/pi\nPI_PROVIDER=openai-codex\nPI_REASONING_LEVEL=medium\nPI_SESSION_ID=01a0a422-ada1-715a-9fef-dba48cde3c86\nPI_SKIP_VERSION_CHECK=1\nPI_TELEMETRY=0",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "PI_CODING_AGENT_DIR=/Users/fbb/dotfiles/.pi/agent\nPI_CODING_AGENT=true\nPI_MODEL=gpt-5.6-sol\nPI_PACKAGE_DIR=/nix/store/xvx202j10rcr70l88izn6zfyvvgw7109-pi-0.85.1/libexec/pi\nPI_PROVIDER=openai-codex\nPI_REASONING_LEVEL=medium\nPI_SESSION_ID=01a0a422-ada1-715a-9fef-dba48cde3c86\nPI_SKIP_VERSION_CHECK=1\nPI_TELEMETRY=0"
+            },
+            {
+              "role": "tool_result",
+              "content": "/private/var/folders/2p/9hk4b2yx0wdckt43n_4g2wbc0000gn/T/caliper-eskrgwtg\ntotal 0\ndrwx------   3 fbb staff    96 Sep 15 10:15 .\ndrwx------ 450 fbb staff 14400 Sep 15 10:15 ..\ndrwxr-xr-x   3 fbb staff    96 Sep 15 10:15 .pi\n.\n./.pi\n./.pi/agent\n./.pi/agent/settings.json\n./.pi/agent/auth.json\n./.pi/agent/skills",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "/private/var/folders/2p/9hk4b2yx0wdckt43n_4g2wbc0000gn/T/caliper-eskrgwtg\ntotal 0\ndrwx------   3 fbb staff    96 Sep 15 10:15 .\ndrwx------ 450 fbb staff 14400 Sep 15 10:15 ..\ndrwxr-xr-x   3 fbb staff    96 Sep 15 10:15 .pi\n.\n./.pi\n./.pi/agent\n./.pi/agent/settings.json\n./.pi/agent/auth.json\n./.pi/agent/skills"
+            },
+            {
+              "role": "tool_result",
+              "content": "(no output)",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": "(no output)"
+            },
+            {
+              "role": "assistant",
+              "content": "I can’t generate the release notes because the current directory contains no repository, changelog, or source files. Provide the project path or its Git history since tag/version `2.4`.",
+              "tool_name": null,
+              "tool_input": null,
+              "tool_output": null
+            }
+          ],
+          "cheat_evidence": [],
+          "activated": [],
+          "activation_passed": true,
+          "assert_passed": null,
+          "assert_evidence": null,
+          "autorater_passed": null,
+          "autorater_reasoning": null,
+          "judge_seconds": null,
+          "retries": 0,
+          "passed": false,
+          "cheated": false
+        }
+      ],
+      "successes": 0,
+      "unusable": 0,
+      "activation_expected": [],
+      "pass_at_k": null,
+      "usable": 0,
+      "score": null,
+      "pass_hat_k": null,
+      "activation_usable": 1,
+      "activation_successes": 1,
+      "activation_score": 1.0
+    }
+  ],
+  "aggregate": {
+    "avg_score": 0.0,
+    "scored_tasks": 2,
+    "per_task": [
+      {
+        "task_id": "task-001",
+        "task_name": "Summarizes a staged behavior change",
+        "k": 1,
+        "successes": 0,
+        "score": 0.0
+      },
+      {
+        "task_id": "task-002",
+        "task_name": "Preserves a branch work item within the limit",
+        "k": 1,
+        "successes": 0,
+        "score": 0.0
+      },
+      {
+        "task_id": "task-003",
+        "task_name": "Stays silent for release notes",
+        "k": 1,
+        "successes": 0,
+        "score": null
+      }
+    ],
+    "avg_activation_score": 0.3333333333333333,
+    "activation_tasks": 3,
+    "activation_asserted": 3,
+    "activation_per_skill": [
+      {
+        "skill": "commit-message",
+        "total": 3,
+        "expected": 2,
+        "fired": 0,
+        "hits": 0,
+        "recall": 0.0,
+        "precision": null,
+        "opportunities": 1,
+        "unwanted": 0,
+        "unwanted_rate": 0.0
+      }
+    ]
+  }
+}

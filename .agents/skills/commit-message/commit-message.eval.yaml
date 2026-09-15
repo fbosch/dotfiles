@@ -1,0 +1,49 @@
+skills:
+  - ./SKILL.md
+
+tasks:
+  - name: Summarizes a staged behavior change
+    prompt: |
+      Write a commit message for this staged diff. Return only the message.
+
+      diff --git a/src/session.ts b/src/session.ts
+      index 1409abc..7d12def 100644
+      --- a/src/session.ts
+      +++ b/src/session.ts
+      @@ -18,6 +18,9 @@ export function restoreSession(token: Token) {
+      +  if (token.expiresAt <= Date.now()) {
+      +    throw new ExpiredSessionError();
+      +  }
+         return decodeSession(token);
+       }
+    expect: >
+      The response contains only one Conventional Commit subject line. It uses
+      type `fix`, has a narrow session or auth scope, describes rejecting or
+      preventing expired sessions in imperative lowercase wording, ends without
+      a period, makes no unsupported claims, and is at most 50 characters.
+    activates: [commit-message]
+
+  - name: Preserves a branch work item within the limit
+    prompt: |
+      The branch is feature/12345-session-expiration. Write only a commit
+      message for the following staged change:
+
+      diff --git a/src/auth/session.ts b/src/auth/session.ts
+      --- a/src/auth/session.ts
+      +++ b/src/auth/session.ts
+      @@ -31,7 +31,7 @@ export const sessionOptions = {
+      -  maxAge: 86400,
+      +  maxAge: 3600,
+       };
+    expect: >
+      The response contains only one Conventional Commit subject line with the
+      exact scope `AB#12345`. Its subject accurately describes reducing the
+      session lifetime, is imperative and lowercase, is not truncated or
+      incomplete, and the complete line is at most 50 characters.
+    activates: [commit-message]
+
+  - name: Stays silent for release notes
+    prompt: |
+      Summarize the user-visible changes since version 2.4 as release notes.
+      Group them under Added, Changed, and Fixed.
+    activates: []

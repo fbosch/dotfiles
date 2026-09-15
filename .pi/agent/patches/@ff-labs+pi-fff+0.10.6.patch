@@ -1,3 +1,13 @@
+diff --git a/node_modules/@ff-labs/pi-fff/src/file-picker.ts b/node_modules/@ff-labs/pi-fff/src/file-picker.ts
+--- a/node_modules/@ff-labs/pi-fff/src/file-picker.ts
++++ b/node_modules/@ff-labs/pi-fff/src/file-picker.ts
+@@ -55 +55,5 @@
+-    const init: InitOptions = { ...options, aiMode: true };
++    const init: InitOptions = {
++      ...options,
++      aiMode: true,
++      disableWatch: process.platform === "darwin",
++    };
 diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/pi-fff/src/index.ts
 --- a/node_modules/@ff-labs/pi-fff/src/index.ts
 +++ b/node_modules/@ff-labs/pi-fff/src/index.ts
