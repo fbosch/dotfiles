@@ -1,0 +1,149 @@
+skills:
+  - ./SKILL.md
+
+# The engine (backend + model) is a runtime axis, not a spec field — run this
+# eval with `--model codex --judge-model codex` (or any other engine).
+
+# No explicit sandbox.forbidden_files: caliper auto-forbids this spec and any
+# .caliper/results/ directory. Listing "./.caliper/.*" by hand risks a false
+# cheat flag, because these tasks legitimately WRITE caliper specs whose text
+# contains that very pattern — see the same note in grill-skill.eval.yaml.
+
+tasks:
+  - name: Validates a well-formed spec and reports it as valid
+    activates: [evaluate-skill]
+    setup: |
+      cat > /tmp/caliper-test-valid.eval.yaml << 'EOF'
+      skills:
+        - ./SKILL.md
+      tasks:
+        - name: Test arithmetic
+          prompt: What is 2 + 2?
+          expect: The assistant answers 4.
+      EOF
+    cleanup: rm -f /tmp/caliper-test-valid.eval.yaml
+    prompt: >
+      Use caliper to validate the spec file at /tmp/caliper-test-valid.eval.yaml
+      and tell me whether it is valid.
+    expect: >
+      The agent runs caliper validate on /tmp/caliper-test-valid.eval.yaml and
+      reports that the spec is valid with no errors.
+    assert: |
+      import subprocess
+
+      result = subprocess.run(
+          ["caliper", "validate", "/tmp/caliper-test-valid.eval.yaml"],
+          capture_output=True, text=True
+      )
+      assert result.returncode == 0, f"caliper validate exited {result.returncode}: {result.stderr}"
+
+  - name: Identifies errors in an invalid spec without fixing it
+    activates: [evaluate-skill]
+    setup: |
+      cat > /tmp/caliper-test-invalid.eval.yaml << 'EOF'
+      skills:
+        - ./SKILL.md
+      tasks:
+        - name: Broken task
+          prompt: do something
+      EOF
+    cleanup: rm -f /tmp/caliper-test-invalid.eval.yaml
+    prompt: >
+      Use caliper to validate the spec file at /tmp/caliper-test-invalid.eval.yaml
+      and tell me what errors it contains.
+    expect: >
+      The agent runs caliper validate and reports that the spec is invalid,
+      describing that the task is missing both expect and assert fields. The
+      agent does not edit the invalid spec file.
+
+  - name: Creates an engineless eval spec and defers the engine to run time
+    activates: [evaluate-skill]
+    cleanup: rm -f /tmp/caliper-created.eval.yaml
+    prompt: >
+      Create an evaluation spec file at /tmp/caliper-created.eval.yaml for a
+      skill at ./SKILL.md that I intend to run on the Codex CLI. Include one task
+      named "Answers arithmetic", with prompt "What is 2 + 2?" and expectation
+      "The assistant answers 4." Then tell me how to run it against Codex.
+    expect: >
+      A valid .eval.yaml file is written at /tmp/caliper-created.eval.yaml with
+      a top-level skills: list containing ./SKILL.md and the requested task. The
+      spec does NOT pin a backend or model (no skill.backend/model, no judge
+      block) because the engine is a runtime axis, and the agent tells the user
+      to select Codex at run time with `caliper run ... --model codex`
+      (optionally `--judge-model codex`).
+    assert: |
+      import os
+      import yaml
+
+      path = "/tmp/caliper-created.eval.yaml"
+      assert os.path.exists(path), "Spec file was not created"
+      with open(path) as f:
+          spec = yaml.safe_load(f)
+      assert "skill" not in spec, "`skill:` was replaced by the `skills:` list"
+      skills = spec.get("skills")
+      assert isinstance(skills, list) and skills, \
+          f"spec needs a top-level skills: list, got {skills!r}"
+      def pa(e): return e if isinstance(e, str) else (e or {}).get("path")
+      assert pa(skills[0]) == "./SKILL.md", "skills[0] should be ./SKILL.md"
+      assert "judge" not in spec, "engine is a runtime axis: no judge block belongs in the spec"
+      assert len(spec.get("tasks", [])) == 1, "Expected exactly one task"
+      task = spec["tasks"][0]
+      assert task["name"] == "Answers arithmetic", "Unexpected task name"
+      assert task["prompt"] == "What is 2 + 2?", "Unexpected prompt"
+      assert task["expect"] == "The assistant answers 4.", "Unexpected expectation"
+
+  - name: Explains independent skill and judge engines are selected at run time
+    activates: [evaluate-skill]
+    cleanup: rm -f /tmp/caliper-mixed-backend.eval.yaml
+    prompt: >
+      Create an evaluation spec file at /tmp/caliper-mixed-backend.eval.yaml
+      that evaluates a Claude Code skill at ~/.claude/skills/review/SKILL.md but
+      is judged by Codex. Include one task named "Reviews staged changes", prompt
+      "Review the staged changes", and expectation "The review reports at least
+      one actionable issue." Then tell me the exact command to run it that way.
+    expect: >
+      The agent writes a valid engineless spec (a skills: list containing
+      ~/.claude/skills/review/SKILL.md, no backend/model, no judge block) and
+      explains that the skill and judge engines are chosen independently at run
+      time — e.g. `caliper run ... --model claude-code --judge-model codex` —
+      because Caliper treats the engine as a runtime axis, not a spec field.
+    assert: |
+      import os
+      import yaml
+
+      path = "/tmp/caliper-mixed-backend.eval.yaml"
+      assert os.path.exists(path), "Spec file was not created"
+      with open(path) as f:
+          spec = yaml.safe_load(f)
+      assert "skill" not in spec, "`skill:` was replaced by the `skills:` list"
+      skills = spec.get("skills")
+      assert isinstance(skills, list) and skills, \
+          f"spec needs a top-level skills: list, got {skills!r}"
+      def pa(e): return e if isinstance(e, str) else (e or {}).get("path")
+      assert pa(skills[0]) == "~/.claude/skills/review/SKILL.md", "Unexpected skill path"
+      assert "judge" not in spec, "engine is a runtime axis: no judge block belongs in the spec"
+      assert spec["tasks"][0]["name"] == "Reviews staged changes", "Unexpected task name"
+
+  - name: Lists available evaluations gracefully
+    activates: [evaluate-skill]
+    prompt: >
+      Use caliper to list all available evaluations and tell me what you find.
+    expect: >
+      The agent runs caliper list and either shows a table of available evaluations
+      with scores and timestamps, or clearly states that no results have been recorded yet
+
+  - name: Surfaces Claude Code configuration errors clearly
+    activates: [evaluate-skill]
+    prompt: >
+      Run the Claude Code smoke eval at
+      skills/evaluate-skill/references/evals/claude-code-smoke/claude-code-smoke.eval.yaml
+      with k=1, one worker, a 60 second timeout, and the script judge. If Claude
+      Code is not logged in or the account lacks access, report the Caliper
+      configuration error clearly instead of describing it as a task failure.
+    expect: >
+      The agent runs caliper run
+      skills/evaluate-skill/references/evals/claude-code-smoke/claude-code-smoke.eval.yaml
+      with --k 1 --workers 1 --timeout 60 --judge script. If the run exits with a
+      Claude Code configuration error, the agent reports that configuration problem
+      and the relevant login or access guidance. If Claude Code is configured, the
+      agent reports the eval result normally.

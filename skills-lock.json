@@ -53,6 +53,12 @@
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
       "computedHash": "a11713c0ff7870efa3c331b2e273f09116158485246edc89ae5088eefd1b0b48"
     },
+    "evaluate-skill": {
+      "source": "edonadei/caliper",
+      "sourceType": "github",
+      "skillPath": "skills/evaluate-skill/SKILL.md",
+      "computedHash": "1ad2968aab7a40e67c8b5dc42a526eb7082551de5e885414eea5c999cb65b5cf"
+    },
     "github-actions-docs": {
       "source": "xixu-me/skills",
       "sourceType": "github",
@@ -64,6 +70,12 @@
       "sourceType": "github",
       "skillPath": "skills/productivity/grill-me/SKILL.md",
       "computedHash": "9cdbb4b8f7a3aeaef82e6230c9e823500d4a8a1214c726cf342cf9829d34fc7d"
+    },
+    "grill-skill": {
+      "source": "edonadei/caliper",
+      "sourceType": "github",
+      "skillPath": "skills/grill-skill/SKILL.md",
+      "computedHash": "bee78d0038258d39dcdb9794e5bfe03d8a8c73f45313bbe4156e7868e2f71f9d"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",

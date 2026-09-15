@@ -18,9 +18,10 @@ tasks:
        }
     expect: >
       The response contains only one Conventional Commit subject line. It uses
-      type `fix`, has a narrow session or auth scope, describes rejecting or
-      preventing expired sessions in imperative lowercase wording, ends without
-      a period, makes no unsupported claims, and is at most 50 characters.
+      type `fix`, has a narrow session or auth scope, and accurately describes
+      rejecting an expired token or session. It uses imperative lowercase
+      wording, ends without a period, makes no unsupported claims, and is at
+      most 50 characters.
     activates: [commit-message]
 
   - name: Preserves a branch work item within the limit

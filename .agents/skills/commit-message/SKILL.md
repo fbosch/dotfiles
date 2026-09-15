@@ -21,9 +21,11 @@ Use `type(scope): subject` for the subject line.
 Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
 
 - Choose the type from the observable effect, not the files changed.
-- Use the narrowest stable area as the scope.
-- When the branch or prompt contains an Azure Boards work item, use exactly `AB#<number>` as the scope. Recognize `AB#12345`, `#12345`, and standalone work-item numbers of four or more digits in branch forms such as `feature/12345-description`.
+- Determine scope before writing the subject. A recognized work item overrides every module or semantic scope.
+- When the branch or prompt contains an Azure Boards work item, use exactly `AB#<number>` as the scope. For example, `feature/12345-session-expiration` requires `fix(AB#12345): ...`, never `fix(auth): ...`.
+- Recognize `AB#12345`, `#12345`, and standalone work-item numbers of four or more digits in branch forms such as `feature/12345-description`.
 - Never invent a ticket scope from numbers found only in source code or the diff.
+- When no work item is present, use the narrowest stable area as the scope.
 - Write the subject in imperative mood, lowercase, without a trailing period.
 - Keep the complete subject line at most 50 characters. Rewrite it as a shorter complete phrase; never truncate words or leave a dangling connector.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
