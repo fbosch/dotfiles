@@ -10,10 +10,11 @@ description: Write, implement, or review visible and assistive interface text, i
 1. Identify the target platform, locale, component, project terminology, and requested scope.
 2. Inspect the implementation or specification before choosing wording that implies behavior. If the behavior is uncertain, name the missing evidence instead of inventing a replacement.
 3. Read the applicable rules in [references/guidelines.md](references/guidelines.md). Read [references/terminology.md](references/terminology.md) when a consequential term distinction is involved.
-4. Make focused copy changes. Do not modify behavior or rename APIs, configuration keys, localization identifiers, or other internal identifiers.
-5. Preserve compliant wording. Do not perform an unrelated consistency sweep.
-6. Validate affected localization structures and run relevant existing checks when available.
-7. Report material wording changes with their rule identifiers.
+4. Before proposing a change, identify the behavioral, accessibility, locale, component, or material clarity defect supported by project evidence or an applicable rule. A valid alternative is not evidence that the current wording is defective.
+5. Make focused copy changes. Do not modify behavior or rename APIs, configuration keys, localization identifiers, or other internal identifiers.
+6. Preserve compliant wording. Treat explicit statements that copy matches the implementation as evidence unless stronger project evidence contradicts them. Do not perform an unrelated consistency sweep.
+7. Validate affected localization structures and run relevant existing checks when available.
+8. Report material wording changes with their rule identifiers.
 
 ## Resolve conflicts
 
@@ -37,6 +38,7 @@ List actual defects separately from optional editorial preferences. Use this tab
 
 ## Completion checks
 
+- For every proposed change, name the concrete defect and supporting evidence or rule. Remove proposals justified only by another valid preference, such as wording that merely sounds more natural or clearer.
 - Confirm each changed label still describes the implemented action, state, or consequence.
 - Confirm accessible names and visible labels remain aligned.
 - Confirm placeholders, plural and select branches, markup, identifiers, product names, and language-specific characters remain intact.

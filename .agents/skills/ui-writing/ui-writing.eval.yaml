@@ -25,9 +25,13 @@ tasks:
     activates: [ui-writing]
 
   - name: Distinguishes an action button from a pressed toggle
+    setup: rm -f /tmp/ui-writing-accessibility.json
+    cleanup: rm -f /tmp/ui-writing-accessibility.json
     prompt: |
-      Review these two icon-only controls and provide the corrected accessible
-      labels with a brief explanation.
+      Review these two icon-only controls. Write a JSON object to
+      `/tmp/ui-writing-accessibility.json` with exactly these string fields:
+      `ordinaryButton`, `pressedToggle`, and `explanation`. Do not make other
+      changes.
 
       A. An ordinary button is not a toggle and exposes no pressed or checked
       state. The microphone is muted; activating it unmutes. Its accessible
@@ -36,12 +40,22 @@ tasks:
       B. A web toggle button is `<button aria-label="Mute"
       aria-pressed="true">`. The pressed state means muting is enabled;
       activating it disables muting.
-    expect: >
-      The response changes control A's label to the available action, such as
-      “Unmute”, while keeping control B's stable setting name “Mute”. It
-      explicitly grounds the difference in ordinary action-button semantics
-      versus aria-pressed toggle-state semantics and does not propose changing
-      either control's behavior.
+    assert: |
+      import json
+      from pathlib import Path
+
+      path = Path("/tmp/ui-writing-accessibility.json")
+      assert path.is_file(), "/tmp/ui-writing-accessibility.json was not created"
+      data = json.loads(path.read_text(encoding="utf-8"))
+      assert set(data) == {"ordinaryButton", "pressedToggle", "explanation"}
+      assert data["ordinaryButton"] == "Unmute"
+      assert data["pressedToggle"] == "Mute"
+      explanation = data["explanation"].lower()
+      assert explanation.strip()
+      assert "action" in explanation
+      assert "aria-pressed" in explanation
+      assert "toggle" in explanation
+      assert "stable" in explanation or "state" in explanation
     activates: [ui-writing]
 
   - name: Preserves ICU localization structure while correcting the operation

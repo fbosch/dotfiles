@@ -48,6 +48,7 @@ Use these distinctions only after inspecting the behavior. Project terminology w
 
 - **Use `Clear` when:** The operation removes current content, filters, history, or a value from the defined scope.
 - **Use `Reset` when:** The operation restores a value or set of values to a known default or initial state.
+- **Boundary:** `Reset Defaults` is accurate when the action restores settings to defined defaults. Do not replace `Reset` with `Restore` merely because both are plausible.
 - **Verify:** Which values change, whether user data is deleted, what the defaults are, and whether the operation is reversible.
 - **Exception:** Preserve a familiar domain command when its behavior is established, such as clearing a search field without changing saved filters.
 - **Related rules:** UI-01, UI-04, UI-07.
