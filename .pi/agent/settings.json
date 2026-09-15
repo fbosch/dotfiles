@@ -76,8 +76,8 @@
     "npm:pi-codex-goal",
     "npm:pi-context-view@0.5.2",
     "npm:pi-mcp-adapter@2.32.1",
-    "npm:pi-subagents",
-    "npm:@ff-labs/pi-fff@0.10.6"
+    "npm:@ff-labs/pi-fff@0.10.6",
+    "npm:@gotgenes/pi-subagents"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
