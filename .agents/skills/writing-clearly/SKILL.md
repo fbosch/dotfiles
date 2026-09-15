@@ -1,25 +1,11 @@
 ---
 name: writing-clearly
-description: Write, edit, copyedit, or unslop human-facing prose while preserving the user's canonical voice from `~/.config/fbb/TONE.md`. Use for documentation, READMEs, PR descriptions, commit-message bodies, changelogs, issue summaries, long-form explanations, UI/help text, error messages, or requests to remove AI-generated tells, generic wording, filler, and formulaic structure.
+description: Write, edit, copyedit, or unslop human-facing prose while preserving the intended voice. Use for documentation, READMEs, PR descriptions, commit-message bodies, changelogs, issue summaries, long-form explanations, UI/help text, error messages, or requests to remove AI-generated tells, generic wording, filler, and formulaic structure.
 ---
 
 # Writing Clearly
 
 Use this skill to make prose easier to read without making it generic.
-
-## Source of Voice
-
-Before writing or editing final prose, read `~/.config/fbb/TONE.md` when it exists. If a repo-local tone file also exists, use it only when the task explicitly asks for repo-local voice.
-
-Treat `TONE.md` as canonical for voice. This skill supplies process and clarity checks; it must not duplicate or override the tone file. Task-specific output contracts still win.
-
-When instructions conflict, use this priority order:
-
-1. Factual correctness and verified evidence.
-2. Explicit user constraints for this task.
-3. Required output contract from a command, tool, template, or maintainer.
-4. `~/.config/fbb/TONE.md`.
-5. This skill's general writing guidance.
 
 ## Process
 
@@ -27,9 +13,8 @@ When instructions conflict, use this priority order:
 2. Draft the smallest complete version that gives necessary context. Put the point first unless suspense or narrative order is explicitly useful.
 3. **Scan.** Find the AI patterns below, including puffery, vague attribution, formulaic structure, empty consequence clauses, chatbot artifacts, and generic conclusions. Treat words as diagnostic signals rather than automatic replacements. Em dashes are prohibited.
 4. **Rewrite.** Fix substance before style. Cut filler and replace broad claims with verified mechanisms, consequences, examples, measurements, or limits. Preserve meaning, evidence, uncertainty, constraints, and technical distinctions. If the source does not support a concrete rewrite, qualify or remove the claim instead of inventing detail.
-5. **Restore voice.** Match the intended tone and recover useful stance, rhythm, emphasis, and first person already supported by the source, genre, or `TONE.md`. Do not invent personality, opinions, or deliberate messiness.
+5. **Restore voice.** Match the intended tone and recover useful stance, rhythm, emphasis, and first person already supported by the source, genre, or supplied voice guidance. Do not invent personality, opinions, or deliberate messiness.
 6. **Self-audit.** Ask, "What still makes this read like generic AI-generated prose?" Fix the remaining tells without weakening accuracy or violating the output contract.
-7. Run a final pass against `TONE.md`.
 
 ## Substance
 
@@ -128,7 +113,7 @@ Before returning prose, verify:
 - Each paragraph or section advances the prose instead of restating it.
 - Claims have a defensible scope, and externally checkable details have been verified.
 - Each citation supports the exact claim attached to it.
-- The prose sounds practical, direct, and low-ceremony per `TONE.md`.
+- The prose preserves the intended voice and suits the reader and genre.
 - No marketing tone, consultant polish, or generic enthusiasm remains.
 - Stock phrases and business jargon remain only where they do more than announce, intensify, narrate, or disguise the point.
 - No unsupported agreement, optimism, reassurance, or false balance remains.

@@ -24,6 +24,12 @@
       "skillPath": "ast-grep/skills/outline/SKILL.md",
       "computedHash": "5fca6734ddf196a61f9f58701668428420680d2052e762355dd9a18136699465"
     },
+    "bro": {
+      "source": "cursor/plugins",
+      "sourceType": "github",
+      "skillPath": "pstack/skills/bro/SKILL.md",
+      "computedHash": "b651827a1c11465d79500780e53414fdccffd12ce3b640138dee2d04133a9a33"
+    },
     "bun": {
       "source": "bun.sh",
       "sourceType": "well-known",
@@ -77,6 +83,12 @@
       "skillPath": "skills/herdr/SKILL.md",
       "computedHash": "d2ee5846631446f22067c52980d100c9355df48106a679a04aab1c7a383b5f41"
     },
+    "how": {
+      "source": "cursor/plugins",
+      "sourceType": "github",
+      "skillPath": "pstack/skills/how/SKILL.md",
+      "computedHash": "532e080fb8d0f9119488628910d2ff2e2976882b009d3df4e8a29c86016e3207"
+    },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
       "sourceType": "github",
@@ -123,6 +135,12 @@
       "sourceType": "github",
       "skillPath": "skills/engineering/triage/SKILL.md",
       "computedHash": "b954d74c219c805bf353d6642251a713c9b2e9cfdb11babfe588bcfe7dfd16d5"
+    },
+    "why": {
+      "source": "cursor/plugins",
+      "sourceType": "github",
+      "skillPath": "pstack/skills/why/SKILL.md",
+      "computedHash": "552d937a5bad70c5e0c2b92fa21cc914cd4b59d3c1747554a68f26bce9fc9a0f"
     },
     "worktrunk": {
       "source": "max-sixty/worktrunk",
