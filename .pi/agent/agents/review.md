@@ -4,7 +4,7 @@ description: Reviews code for quality, security vulnerabilities, and best practi
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep
+tools: read, grep, find, ls, fffind, ffgrep, git_diff, lsp
 permission:
   "*": deny
   bash: deny

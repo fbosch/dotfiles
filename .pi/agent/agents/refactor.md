@@ -4,7 +4,7 @@ description: Refactors code to improve quality without changing behavior. Use wh
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: xhigh
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, lsp, find_definition, find_callers
 permission:
   "*": deny
 ---

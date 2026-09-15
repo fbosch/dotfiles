@@ -4,7 +4,7 @@ description: Traces how specific code works - data flow, call chains, state tran
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: max
-tools: read, grep, find, ls, fffind, ffgrep
+tools: read, grep, find, ls, fffind, ffgrep, list_symbols, find_definition, find_callers, find_callees, get_symbol_body
 permission:
   "*": deny
   bash: deny

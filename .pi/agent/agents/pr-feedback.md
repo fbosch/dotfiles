@@ -5,7 +5,7 @@ prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: xhigh
 max_turns: 24
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, mcp__github
+tools: read, grep, find, ls, fffind, ffgrep, write, edit, git_diff, lsp, mcp__github
 permission:
   "*": deny
   bash:
