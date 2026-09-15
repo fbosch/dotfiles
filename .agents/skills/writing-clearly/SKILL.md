@@ -1,6 +1,6 @@
 ---
 name: writing-clearly
-description: Write, edit, copyedit, or unslop human-facing prose while preserving the intended voice. Use for documentation, READMEs, PR descriptions, commit-message bodies, changelogs, issue summaries, long-form explanations, UI/help text, error messages, or requests to remove AI-generated tells, generic wording, filler, and formulaic structure.
+description: Write, edit, copyedit, or unslop human-facing prose while preserving the intended voice. Use for documentation, READMEs, PR descriptions, commit-message bodies, changelogs, issue summaries, long-form explanations, or requests to remove AI-generated tells, generic wording, filler, and formulaic structure. Do not use for visible or assistive interface text; use ui-writing instead.
 ---
 
 # Writing Clearly
