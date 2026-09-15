@@ -63,6 +63,9 @@ async function setup() {
     "insert",
     "undo_last_change",
   ]);
+  for (const tool of loadedHashlineTools.filter(({ name }) => name !== "undo_last_change")) {
+    expect((tool.parameters as { required?: string[] }).required).toContain("path");
+  }
   const hashlineTools = loadedHashlineTools.map(({ name }) => {
     const tool = tools.get(name);
     if (tool === undefined) throw new Error(`${name} was not registered`);

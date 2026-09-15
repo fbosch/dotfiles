@@ -1,0 +1,8 @@
+{
+  "autoRead": true,
+  "anchorGrepEnabled": false,
+  "requirePath": true,
+  "strictInput": false,
+  "boundaryDedupMode": "on",
+  "diffContextLines": 1
+}

@@ -294,19 +294,44 @@ function isDeltaDetails(value: unknown): value is DeltaDetails {
   );
 }
 
+interface HashlineEditFlags {
+  readonly requirePath: boolean;
+  readonly strictInput: boolean;
+  readonly boundaryDedupMode: "on" | "off" | "strict";
+  readonly autoRead: boolean;
+}
+
 interface HashlineToolModule {
-  readonly buildToolDef?: () => ToolDefinition;
-  readonly buildInsertToolDef?: () => ToolDefinition;
+  readonly buildToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
+  readonly buildInsertToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
   readonly regUndo?: (pi: ExtensionAPI) => void;
+}
+
+interface HashlineEditCommonModule {
+  readonly currentEditFlags?: () => Promise<HashlineEditFlags>;
+}
+
+async function loadHashlineEditFlags(): Promise<HashlineEditFlags | undefined> {
+  try {
+    const module = (await import(
+      new URL("../../npm/node_modules/pi-hashline-edit-pro/src/edit-common.ts", import.meta.url)
+        .href
+    )) as unknown as HashlineEditCommonModule;
+    return await module.currentEditFlags?.();
+  } catch {
+    // Hashline 3.x has no configurable edit flags; its builders use the legacy schema.
+    return undefined;
+  }
 }
 
 export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   const tools: ToolDefinition[] = [];
+  const flags = await loadHashlineEditFlags();
   try {
     const replaceModule = (await import(
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/replace.ts", import.meta.url).href
     )) as unknown as HashlineToolModule;
-    if (replaceModule.buildToolDef !== undefined) tools.push(replaceModule.buildToolDef());
+    if (replaceModule.buildToolDef !== undefined) tools.push(replaceModule.buildToolDef(flags));
   } catch {
     return tools;
   }
@@ -316,7 +341,7 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/insert.ts", import.meta.url).href
     )) as unknown as HashlineToolModule;
     if (insertModule.buildInsertToolDef !== undefined)
-      tools.push(insertModule.buildInsertToolDef());
+      tools.push(insertModule.buildInsertToolDef(flags));
   } catch {
     // Replace remains useful when the optional insert module is unavailable.
   }
