@@ -14,7 +14,8 @@ import {
   resolveCommitMessageModelConfig,
   type ThinkingLevel,
 } from "./config";
-import { COMMIT_SYSTEM_PROMPT, type CompleteCommitPrompt } from "./generate";
+import type { CompleteCommitPrompt } from "./generate";
+import { buildCommitSystemPrompt, loadCommitSkillPolicy } from "./skill-policy";
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 const MINIMUM_TIMEOUT_MS = 5_000;
@@ -141,6 +142,7 @@ export async function createPiCommitModel(
   const requestModel =
     fastRequest === undefined ? selectedModel : { ...selectedModel, id: fastRequest.modelId };
   const timeoutMs = commandTimeoutMs();
+  const systemPrompt = buildCommitSystemPrompt(loadCommitSkillPolicy());
 
   return {
     modelRef: `${selectedModel.provider}/${selectedModel.id}`,
@@ -148,7 +150,7 @@ export async function createPiCommitModel(
     ...(thinkingLevel === undefined ? {} : { thinkingLevel }),
     complete: async (prompt) => {
       const context = {
-        systemPrompt: COMMIT_SYSTEM_PROMPT,
+        systemPrompt,
         messages: [
           {
             role: "user" as const,

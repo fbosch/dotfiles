@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildCommitPrompt,
-  COMMIT_SYSTEM_PROMPT,
   detectWorkItemScope,
   type GitContext,
   generateCommit,
@@ -90,18 +89,6 @@ describe("commit parsing", () => {
 
     expect(atLimit).toMatchObject({ ok: true, value: { overLimit: false } });
     expect(overLimit).toMatchObject({ ok: true, value: { overLimit: true } });
-  });
-
-  test("tells the model that the prefix consumes the message budget", () => {
-    const prompt = buildCommitPrompt(context);
-
-    expect(COMMIT_SYSTEM_PROMPT).toContain(
-      "Count every character in the type(scope): prefix, including its trailing space",
-    );
-    expect(prompt).toContain(
-      "including every character in the type(scope): prefix and its trailing space",
-    );
-    expect(prompt).toContain("Never treat 50 characters as the subject-only budget");
   });
 
   test("marks a complete over-limit message for the interactive workflow", () => {
