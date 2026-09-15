@@ -48,6 +48,19 @@ if [[ ! -f "$spec" ]]; then
   exit 2
 fi
 
+pi_bin="$(command -v pi)"
+wrapper="$(mktemp "${TMPDIR:-/tmp}/caliper-pi.XXXXXX")"
+cleanup() {
+  rm -f "$wrapper"
+}
+trap cleanup EXIT
+
+cat >"$wrapper" <<EOF
+#!/bin/sh
+exec "$pi_bin" --no-extensions "\$@"
+EOF
+chmod +x "$wrapper"
+
 candidate="pi:openai-codex/$model:$thinking"
 judge="pi:openai-codex/$judge_model:$judge_thinking"
 args=(run "$spec" --k "$k" --workers 1 --model "$candidate" --judge-model "$judge")
@@ -56,4 +69,4 @@ if [[ "$ablate" == true ]]; then
 fi
 
 caliper validate "$spec"
-caliper "${args[@]}"
+PI_CLI_PATH="$wrapper" caliper "${args[@]}"
