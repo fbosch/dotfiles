@@ -81,8 +81,7 @@
     "npm:@ff-labs/pi-fff@0.10.6",
     "npm:@gotgenes/pi-subagents",
     "npm:pi-web-access",
-    "npm:pi-lens@4.1.6",
-    "npm:@nerisma/pi-auto-title"
+    "npm:pi-lens@4.1.6"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
