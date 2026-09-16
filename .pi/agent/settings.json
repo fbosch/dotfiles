@@ -82,7 +82,7 @@
     "npm:@gotgenes/pi-subagents",
     "npm:pi-web-access",
     "npm:pi-lens@4.1.6",
-    "npm:pi-auto-session-name"
+    "npm:@nerisma/pi-auto-title"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,

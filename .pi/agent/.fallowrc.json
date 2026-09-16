@@ -13,7 +13,6 @@
     "@gotgenes/pi-subagents",
     "@juicesharp/rpiv-todo",
     "@narumitw/pi-btw",
-    "pi-auto-session-name",
     "pi-command-palette",
     "pi-compaction-model",
     "pi-context-view",
