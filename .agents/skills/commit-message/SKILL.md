@@ -25,7 +25,7 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 - When the branch or prompt contains an Azure Boards work item, use exactly `AB#<number>` as the scope. For example, `feature/12345-session-expiration` requires `fix(AB#12345): ...`, never `fix(auth): ...`.
 - Recognize `AB#12345`, `#12345`, and standalone work-item numbers of four or more digits in branch forms such as `feature/12345-description`.
 - Never invent a ticket scope from numbers found only in source code or the diff.
-- When no work item is present, use the shortest stable, unambiguous area as the scope. Treat the scope as a semantic label, not a directory name to copy verbatim. Follow an established repository scope when one exists; otherwise shorten a compound path to an accurate domain noun, such as `api-and-interface-design` to `api`.
+- When no work item is present, use the shortest stable, unambiguous semantic scope, never a copied path. Keep an inferred scope at 12 characters or fewer; shorten compound names even when the longer form appears in a directory. Prefer `commit` over `commit-message`, `permission` over `pi-permission-system` or `dangerous-command`, and `api` over `api-and-interface-design`.
 - Write the subject in imperative mood, lowercase, without a trailing period.
 - Name the concrete behavior, rule, or outcome supported by the evidence. Do not replace it with generic verbs such as `update`, `improve`, `refine`, or `adjust` when the specific change fits.
 

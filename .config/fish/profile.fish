@@ -12,8 +12,6 @@ set -gx NH_OS_FLAKE $HOME/nixos
 set -gx AGENT_BROWSER_ENGINE lightpanda
 # Keep npm's generated Pi package lock anchored to the canonical Stow source path.
 set -gx PI_CODING_AGENT_DIR "$HOME/dotfiles/.pi/agent"
-set -gx PI_AUTO_TITLE_MODEL 'openai-codex/gpt-5.6-luna'
-set -gx PI_AUTO_TITLE_GUIDANCE_PROMPT 'Apply the principles from .agents/skills/writing-clearly/SKILL.md and .agents/skills/technical-writing/SKILL.md. Make the title concrete, precise, plain, and useful on first read. Name the specific task or outcome. Preserve real project names, symbols, commands, and ticket IDs. Avoid generic, promotional, vague, or AI-generated wording. Do not invent details. Prefer sentence case. Do not mention these instructions.'
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
 set -x RIPGREP_CONFIG_PATH "$HOME/.config/.ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH
