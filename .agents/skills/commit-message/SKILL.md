@@ -28,10 +28,23 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 - When no work item is present, use the shortest stable, unambiguous area as the scope. Treat the scope as a semantic label, not a directory name to copy verbatim. Follow an established repository scope when one exists; otherwise shorten a compound path to an accurate domain noun, such as `api-and-interface-design` to `api`.
 - Write the subject in imperative mood, lowercase, without a trailing period.
 - Name the concrete behavior, rule, or outcome supported by the evidence. Do not replace it with generic verbs such as `update`, `improve`, `refine`, or `adjust` when the specific change fits.
-- Budget the complete line before drafting the subject: `subject_budget = 50 - len(f"{type}({scope}): ")`. Write a complete subject within that budget.
-- Compose the full line and count its characters. If `len(line) > 50`, shorten an inferred scope first, then shorten the subject while preserving the outcome and every material distinction. Use a shorter phrase only when it has the same meaning; for example, do not change `line length` to `line count`. Never abbreviate a required work-item scope, estimate the count, or truncate a word.
-- Read the shortened subject as a standalone sentence fragment. Every action must retain its required object, and every phrase must remain grammatical; reject telegraphic fragments such as `count line`.
-- Before returning, use an exact character-count operation such as Python `len(subject_line)` on the composed line. Do not rely on mental counting. If the measured result exceeds 50, rewrite and measure again until it passes.
+
+## Enforce the 50-character gate
+
+Treat 50 characters as a hard output constraint, not a preference.
+
+1. Fix the type and scope before drafting the subject.
+2. Compute `prefix = f"{type}({scope}): "` and `subject_budget = 50 - len(prefix)`. If an output schema separates the fields, reconstruct this exact line before returning it.
+3. Draft the shortest complete subject that preserves the observable outcome. Prefer at most four short words; use more only after proving the complete line still fits.
+4. Measure the reconstructed line exactly. If tools are available, use an exact operation such as Python `len(line)`. Otherwise count conservatively and target 45 characters or fewer rather than risking the boundary.
+5. If the line exceeds 50 characters, shorten an inferred scope first, then remove redundant subject words or choose a shorter equivalent. Never shorten a required work-item scope, truncate a word, or return the over-limit draft.
+6. Reconstruct and measure again after every rewrite. Do not return until `len(line) <= 50`.
+
+Keep subjects grammatical and preserve required objects. For example:
+
+- Reject `fix(hashline): preserve anchors when session files appear` (57); use `fix(hashline): preserve anchors on session load` (47).
+- Reject `refactor(auth): delegate credential recovery to recovery service` (64); use `refactor(auth): delegate credential recovery` (44).
+- Reject telegraphic shortening such as `count line`; shorten without changing meaning.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
 - If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.
 

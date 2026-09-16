@@ -249,7 +249,7 @@ export function sanitizeTerminalOutput(value: string): string {
   return output;
 }
 
-export function normalizeHashlineDiffDetails(details: unknown): unknown {
+export function normalizeHashlineDiffDetails<T>(details: T): T {
   if (details === null || typeof details !== "object" || Array.isArray(details)) return details;
   const record = details as Record<string, unknown>;
   if (
@@ -262,7 +262,8 @@ export function normalizeHashlineDiffDetails(details: unknown): unknown {
 
   const normalized = { ...record };
   normalized.diff = record.diff.replace(HASHLINE_DIFF_ROW_REPLACEMENT, "$1");
-  return normalized;
+  // SAFETY: Normalization preserves every property and only replaces the validated string diff.
+  return normalized as T;
 }
 
 type HashlineToolExecute = NonNullable<ToolDefinition["execute"]>;
@@ -313,6 +314,7 @@ interface HashlineEditCommonModule {
 
 async function loadHashlineEditFlags(): Promise<HashlineEditFlags | undefined> {
   try {
+    // SAFETY: The pinned hashline module exposes this optional function; absence is handled below.
     const module = (await import(
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/edit-common.ts", import.meta.url)
         .href
@@ -328,6 +330,7 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   const tools: ToolDefinition[] = [];
   const flags = await loadHashlineEditFlags();
   try {
+    // SAFETY: The pinned hashline replace module exposes the optional builder checked below.
     const replaceModule = (await import(
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/replace.ts", import.meta.url).href
     )) as unknown as HashlineToolModule;
@@ -337,6 +340,7 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   }
 
   try {
+    // SAFETY: The pinned hashline insert module exposes the optional builder checked below.
     const insertModule = (await import(
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/insert.ts", import.meta.url).href
     )) as unknown as HashlineToolModule;
@@ -346,12 +350,14 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
     // Replace remains useful when the optional insert module is unavailable.
   }
   try {
+    // SAFETY: The pinned hashline undo module exposes the optional registration hook checked below.
     const undoModule = (await import(
       new URL("../../npm/node_modules/pi-hashline-edit-pro/src/replace-undo.ts", import.meta.url)
         .href
     )) as unknown as HashlineToolModule;
     const registeredTools: ToolDefinition[] = [];
     // Hashline exposes undo through registration rather than a definition builder.
+    // SAFETY: regUndo only calls registerTool on this deliberately minimal API adapter.
     undoModule.regUndo?.({
       registerTool(tool: ToolDefinition) {
         registeredTools.push(tool);
@@ -1487,6 +1493,7 @@ interface DeltaExtensionDependencies {
   readonly run?: GitDiffRunner;
   readonly runEdit?: EditDiffRunner;
   readonly hashlineTools?: readonly ToolDefinition[];
+  readonly loadHashlineTools?: () => Promise<readonly ToolDefinition[]>;
 }
 
 export interface DeltaConfig {
@@ -1548,24 +1555,24 @@ export function registerDeltaExtension(
   const previewControllers = new Set<AbortController>();
   const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
-  let hashlineRegistration: Promise<void> | undefined;
-  const registerHashlineDeltaTools = (force = false): Promise<void> => {
-    const preloadedTools = dependencies.hashlineTools;
-    if (hashlineRegistration === undefined || (force && preloadedTools !== undefined)) {
-      if (preloadedTools !== undefined) {
-        for (const tool of preloadedTools) {
+  const loadHashlineTools = dependencies.loadHashlineTools ?? loadHashlineDeltaTools;
+  interface SessionState {
+    readonly cwd: string;
+    readonly editPreviews: boolean;
+    hashlineRegistration?: Promise<void>;
+  }
+  let activeSession: SessionState | undefined;
+  const registerHashlineDeltaTools = (session: SessionState): Promise<void> => {
+    if (session.hashlineRegistration === undefined) {
+      session.hashlineRegistration = (async () => {
+        const tools = dependencies.hashlineTools ?? (await loadHashlineTools());
+        if (activeSession !== session) return;
+        for (const tool of tools) {
           pi.registerTool(wrapHashlineTool(tool, runEdit));
         }
-        hashlineRegistration = Promise.resolve();
-      } else {
-        hashlineRegistration = (async () => {
-          for (const tool of await loadHashlineDeltaTools()) {
-            pi.registerTool(wrapHashlineTool(tool, runEdit));
-          }
-        })();
-      }
+      })();
     }
-    return hashlineRegistration;
+    return session.hashlineRegistration;
   };
   pi.on("tool_result", (event) => {
     if (!HASHLINE_DIFF_TOOLS.has(event.toolName)) return;
@@ -1577,17 +1584,25 @@ export function registerDeltaExtension(
   });
 
   pi.on("session_shutdown", () => {
+    activeSession = undefined;
     for (const controller of previewControllers) controller.abort();
     for (const controller of expansionControllers) controller.abort();
     previewControllers.clear();
     expansionControllers.clear();
   });
 
-  pi.on("session_start", async (_event, ctx) => {
-    if (shouldUseEditPreviews(ctx)) {
+  pi.on("session_start", (_event, ctx) => {
+    const editPreviews = shouldUseEditPreviews(ctx);
+    activeSession = { cwd: ctx.cwd, editPreviews };
+    if (editPreviews) {
       pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
-      await registerHashlineDeltaTools(true);
     }
+  });
+
+  pi.on("before_agent_start", async (_event, ctx) => {
+    const session = activeSession;
+    if (session === undefined || !session.editPreviews || session.cwd !== ctx.cwd) return;
+    await registerHashlineDeltaTools(session);
   });
 
   pi.registerEntryRenderer<DeltaDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
@@ -1707,7 +1722,6 @@ export function registerDeltaExtension(
   });
 }
 
-export default async function deltaExtension(pi: ExtensionAPI): Promise<void> {
-  const hashlineTools = await loadHashlineDeltaTools();
-  registerDeltaExtension(pi, { hashlineTools });
+export default function deltaExtension(pi: ExtensionAPI): void {
+  registerDeltaExtension(pi);
 }

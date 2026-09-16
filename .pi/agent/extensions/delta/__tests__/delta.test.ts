@@ -11,7 +11,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import {
+import deltaExtension, {
   applyDiffTheme,
   boundDiffOutput,
   buildDeltaInvocation,
@@ -411,6 +411,95 @@ describe("Delta execution", () => {
 });
 
 describe("Delta extension", () => {
+  test("default factory returns synchronously without registering hashline tools", () => {
+    const registeredTools: string[] = [];
+    const pi = {
+      registerEntryRenderer: () => {},
+      on: () => {},
+      registerTool(tool: ToolDefinition) {
+        registeredTools.push(tool.name);
+      },
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+
+    expect(deltaExtension(pi)).toBeUndefined();
+    expect(registeredTools).toEqual(["git_diff"]);
+  });
+
+  test("defers hashline loading until the first agent turn and registers once per session", async () => {
+    type Handler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
+    const handlers = new Map<string, Handler>();
+    const registeredTools: string[] = [];
+    let loads = 0;
+    const hashlineTool = { name: "replace" } as ToolDefinition;
+    const pi = {
+      registerEntryRenderer: () => {},
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+      registerTool(tool: ToolDefinition) {
+        registeredTools.push(tool.name);
+      },
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+
+    registerDeltaExtension(pi, {
+      config: { editPreviews: true },
+      loadHashlineTools: async () => {
+        loads += 1;
+        return [hashlineTool];
+      },
+      run: async () => diffResult,
+    });
+    const sessionStart = handlers.get("session_start");
+    const beforeAgentStart = handlers.get("before_agent_start");
+    if (sessionStart === undefined || beforeAgentStart === undefined) {
+      throw new Error("Delta lifecycle handlers were not registered");
+    }
+
+    await sessionStart({}, { cwd: "/repo-a" } as ExtensionContext);
+    expect(loads).toBe(0);
+    expect(registeredTools.filter((name) => name === "replace")).toHaveLength(0);
+
+    await beforeAgentStart({}, { cwd: "/repo-a" } as ExtensionContext);
+    await beforeAgentStart({}, { cwd: "/repo-a" } as ExtensionContext);
+    expect(loads).toBe(1);
+    expect(registeredTools.filter((name) => name === "replace")).toHaveLength(1);
+
+    await sessionStart({}, { cwd: "/repo-b" } as ExtensionContext);
+    expect(loads).toBe(1);
+    await beforeAgentStart({}, { cwd: "/repo-b" } as ExtensionContext);
+    await beforeAgentStart({}, { cwd: "/repo-b" } as ExtensionContext);
+    expect(loads).toBe(2);
+    expect(registeredTools.filter((name) => name === "replace")).toHaveLength(2);
+  });
+
+  test("never loads hashline tools when edit previews are disabled", async () => {
+    type Handler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
+    const handlers = new Map<string, Handler>();
+    let loads = 0;
+    const pi = {
+      registerEntryRenderer: () => {},
+      on(event: string, handler: Handler) {
+        handlers.set(event, handler);
+      },
+      registerTool: () => {},
+      registerCommand: () => {},
+    } as unknown as ExtensionAPI;
+
+    registerDeltaExtension(pi, {
+      config: { editPreviews: false },
+      loadHashlineTools: async () => {
+        loads += 1;
+        return [];
+      },
+      run: async () => diffResult,
+    });
+    await handlers.get("session_start")?.({}, { cwd: "/repo" } as ExtensionContext);
+    await handlers.get("before_agent_start")?.({}, { cwd: "/repo" } as ExtensionContext);
+    expect(loads).toBe(0);
+  });
+
   test("registers the model tool and interactive command", async () => {
     let tool: ToolDefinition | undefined;
     let commandHandler:
@@ -591,9 +680,9 @@ describe("Delta extension", () => {
     await writeFile(filePath, "const value = 1;\n", "utf8");
 
     const tools = new Map<string, ToolDefinition>();
-    let sessionStart:
-      | ((event: unknown, context: ExtensionContext) => Promise<void> | void)
-      | undefined;
+    type LifecycleHandler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
+    let sessionStart: LifecycleHandler | undefined;
+    let beforeAgentStart: LifecycleHandler | undefined;
     const editDetails: DeltaDetails = {
       ...details,
       output: "\u001b[91m1 const value = 1;\u001b[0m\n\u001b[92m1 const value = 2;\u001b[0m",
@@ -603,11 +692,9 @@ describe("Delta extension", () => {
     let failEditDiff = false;
     const pi = {
       registerEntryRenderer: () => {},
-      on(
-        _event: string,
-        handler: (event: unknown, context: ExtensionContext) => Promise<void> | void,
-      ) {
-        sessionStart = handler;
+      on(event: string, handler: LifecycleHandler) {
+        if (event === "session_start") sessionStart = handler;
+        if (event === "before_agent_start") beforeAgentStart = handler;
       },
       registerTool(definition: ToolDefinition) {
         tools.set(definition.name, definition);
@@ -629,6 +716,8 @@ describe("Delta extension", () => {
 
       const editTool = tools.get("edit");
       if (editTool === undefined) throw new Error("edit override was not registered");
+      expect(tools.has("replace")).toBeFalse();
+      await beforeAgentStart?.({ type: "before_agent_start" }, { cwd: root } as ExtensionContext);
       const replaceTool = tools.get("replace");
       if (replaceTool === undefined)
         throw new Error("hashline replace override was not registered");

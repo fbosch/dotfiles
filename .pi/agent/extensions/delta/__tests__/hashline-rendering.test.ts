@@ -38,6 +38,7 @@ const theme = {
 
 async function setup() {
   const tools = new Map<string, ToolDefinition>();
+  const registrationCounts = new Map<string, number>();
   const resultHooks: ResultHook[] = [];
   let runtime = false;
   const pi = {
@@ -45,6 +46,7 @@ async function setup() {
       if (!runtime && tools.has(tool.name))
         throw new Error(`Tool ${tool.name} conflicts at startup`);
       tools.set(tool.name, tool);
+      registrationCounts.set(tool.name, (registrationCounts.get(tool.name) ?? 0) + 1);
     },
     registerCommand: () => {},
     registerEntryRenderer: () => {},
@@ -71,23 +73,39 @@ async function setup() {
     if (tool === undefined) throw new Error(`${name} was not registered`);
     return tool;
   });
-  type SessionStart = (event: unknown, context: ExtensionContext) => Promise<void> | void;
-  let sessionStart: SessionStart | undefined;
+  type LifecycleHandler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
+  let sessionStart: LifecycleHandler | undefined;
+  let beforeAgentStart: LifecycleHandler | undefined;
   registerDeltaExtension(
     {
       ...pi,
-      on: (event: string, handler: ResultHook | SessionStart) => {
-        if (event === "session_start") sessionStart = handler as SessionStart;
+      on: (event: string, handler: ResultHook | LifecycleHandler) => {
+        if (event === "session_start") sessionStart = handler as LifecycleHandler;
+        if (event === "before_agent_start") beforeAgentStart = handler as LifecycleHandler;
         if (event === "tool_result") resultHooks.push(handler as ResultHook);
       },
     } as unknown as ExtensionAPI,
     { config: { editPreviews: true }, hashlineTools },
   );
-  for (const tool of hashlineTools) expect(tools.get(tool.name)).toBe(tool);
-  if (sessionStart === undefined) throw new Error("Delta session_start handler missing");
+  for (const tool of hashlineTools) {
+    expect(tools.get(tool.name)).toBe(tool);
+    expect(registrationCounts.get(tool.name)).toBe(1);
+  }
+  if (sessionStart === undefined || beforeAgentStart === undefined) {
+    throw new Error("Delta lifecycle handlers missing");
+  }
   runtime = true;
   await sessionStart({ type: "session_start" }, { cwd: "/repo" } as ExtensionContext);
-  for (const tool of hashlineTools) expect(tools.get(tool.name)).not.toBe(tool);
+  for (const tool of hashlineTools) {
+    expect(tools.get(tool.name)).toBe(tool);
+    expect(registrationCounts.get(tool.name)).toBe(1);
+  }
+  await beforeAgentStart({ type: "before_agent_start" }, { cwd: "/repo" } as ExtensionContext);
+  await beforeAgentStart({ type: "before_agent_start" }, { cwd: "/repo" } as ExtensionContext);
+  for (const tool of hashlineTools) {
+    expect(tools.get(tool.name)).not.toBe(tool);
+    expect(registrationCounts.get(tool.name)).toBe(2);
+  }
   return { tools, resultHooks, hashlineTools };
 }
 
