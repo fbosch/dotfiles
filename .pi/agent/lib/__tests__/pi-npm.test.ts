@@ -252,7 +252,7 @@ describe("tracked Pi package patches", () => {
     expect(run(["--apply-patches", install]).exitCode).toBe(1);
   });
 
-  test("does not partly apply a conflicting patch", () => {
+  test("keeps explicit --apply-patches strict and transactional on conflict", () => {
     writeFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "unexpected\n");
     writeFileSync(
       join(agent, "patches/pi-worktrunk+0.8.0.patch"),
@@ -260,6 +260,7 @@ describe("tracked Pi package patches", () => {
     );
     const result = run(["--apply-patches", install]);
     expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).not.toContain("Pi will launch with unpatched packages");
     expect(readFileSync(example, "utf8")).toBe("original\n");
   });
 
@@ -307,35 +308,42 @@ describe("Pi npmCommand wrapper", () => {
     expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
   });
 
-  test("rejects requested upgrades before invoking npm", () => {
-    const result = run(["install", "pi-worktrunk@0.9.0", "--prefix", install]);
-    expect(result.exitCode).toBe(1);
-    expect(result.stdout.toString()).toBe("");
-    expect(readFileSync(example, "utf8")).toBe("original\n");
-
-    const fffResult = run(["install", "@ff-labs/pi-fff@0.11.0", "--prefix", install]);
-    expect(fffResult.exitCode).toBe(1);
-    expect(fffResult.stdout.toString()).toBe("");
-    expect(readFileSync(fffExample, "utf8")).toBe("original\n");
-
-    const permissionResult = run([
+  test("lets npm handle requested patched-package upgrades and falls back on version mismatch", () => {
+    const result = run(["install", "pi-worktrunk@0.9.0", "--prefix", install], {
+      TEST_INSTALLED_VERSION: "0.9.0",
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("npm stdout");
+    expect(result.stderr.toString()).toContain("Pi will launch with unpatched packages");
+    expect(result.stderr.toString()).toContain(
+      "patches must be reviewed and updated for installed versions",
+    );
+    expect(JSON.parse(readFileSync(join(directory, "npm-args.json"), "utf8"))).toEqual([
+      "--save-exact",
       "install",
-      "@gotgenes/pi-permission-system@32.0.0",
+      "pi-worktrunk@0.9.0",
       "--prefix",
       install,
     ]);
-    expect(permissionResult.exitCode).toBe(1);
-    expect(permissionResult.stdout.toString()).toBe("");
-    expect(readFileSync(permissionExample, "utf8")).toBe("original\n");
+    expect(readFileSync(example, "utf8")).toBe("original\n");
   });
 
-  test("checks the installed version again after npm finishes", () => {
-    const result = run(["install", "other-package", `--prefix=${install}`], {
-      TEST_INSTALLED_VERSION: "0.9.0",
-    });
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toContain("requires exactly 0.8.0");
+  test("falls back when a post-install patch conflicts", () => {
+    writeFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "unexpected\n");
+    writeFileSync(
+      join(agent, "patches/pi-worktrunk+0.8.0.patch"),
+      `${patch}${patch.replaceAll("example.txt", "second.txt")}`,
+    );
+    const result = run(["install", "other-package", "--prefix", install]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toContain("Pi will launch with unpatched packages");
+    expect(result.stderr.toString()).toContain(
+      "patches must be reviewed and updated for installed versions",
+    );
     expect(readFileSync(example, "utf8")).toBe("original\n");
+    expect(readFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "utf8")).toBe(
+      "unexpected\n",
+    );
   });
 
   test("preserves npm failure status without applying patches", () => {
@@ -363,7 +371,9 @@ describe("Pi npmCommand wrapper", () => {
       join(install, "package.json"),
       JSON.stringify({ dependencies: { "pi-worktrunk": "0.8.0" } }),
     );
-    expect(run(["install", "other", "--prefix", install]).exitCode).toBe(1);
+    const result = run(["install", "other", "--prefix", install]);
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr.toString()).toContain("Pi will launch with unpatched packages");
   });
 
   test("settings launcher forwards arguments without shell interpretation", () => {

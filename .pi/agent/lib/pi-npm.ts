@@ -177,17 +177,6 @@ export function runPiNpm(args: string[], cwd = process.cwd()): number {
   const mutates = ["install", "ci", "update", "uninstall"].includes(args[0] ?? "");
   const global = args.includes("--global") || args.includes("-g");
   const dryRun = args.includes("--dry-run") || args.includes("--dry-run=true");
-  if (mutates && !global && args[0] !== "uninstall") {
-    for (const { name, version } of patchedPackages) {
-      for (const arg of args) {
-        if ((arg === name || arg.startsWith(`${name}@`)) && arg !== `${name}@${version}`) {
-          throw new Error(
-            `Install exactly ${name}@${version}, or review and regenerate its patch first.`,
-          );
-        }
-      }
-    }
-  }
   const prefixIndex = args.indexOf("--prefix");
   if (prefixIndex !== -1 && !args[prefixIndex + 1]) throw new Error("--prefix requires a path");
   const prefix = args.find((arg) => arg.startsWith("--prefix="))?.slice("--prefix=".length);
@@ -199,7 +188,20 @@ export function runPiNpm(args: string[], cwd = process.cwd()): number {
     stderr: "inherit",
   });
   if (result.exitCode !== 0 || !mutates || global || dryRun) return result.exitCode;
-  return applyPiPatches(root, false);
+
+  try {
+    const patchExitCode = applyPiPatches(root, false);
+    if (patchExitCode !== 0) {
+      console.error(
+        `Warning: Pi will launch with unpatched packages. Patch application exited with status ${patchExitCode}; patches must be reviewed and updated for installed versions.`,
+      );
+    }
+  } catch (error) {
+    console.error(
+      `Warning: Pi will launch with unpatched packages. ${error instanceof Error ? error.message : String(error)}; patches must be reviewed and updated for installed versions.`,
+    );
+  }
+  return 0;
 }
 
 if (import.meta.main) {
