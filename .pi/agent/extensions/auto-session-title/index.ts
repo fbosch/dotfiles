@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { UserMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { type AutoSessionTitleSettings, loadAutoSessionTitleSettings } from "./settings";
 
 const MAX_TITLE_LENGTH = 72;
 const TITLE_TIMEOUT_MS = 15_000;
@@ -83,12 +84,14 @@ Writing skills:
 ${writingGuidance}`;
 }
 
-async function generateTitle(
+export async function generateTitle(
   ctx: ExtensionContext,
   prompt: string,
   systemPrompt: string,
+  settings: AutoSessionTitleSettings,
 ): Promise<string | undefined> {
-  if (!ctx.model) return undefined;
+  const model = ctx.modelRegistry.find(settings.model.provider, settings.model.id);
+  if (!model) return undefined;
 
   const message: UserMessage = {
     role: "user",
@@ -96,11 +99,12 @@ async function generateTitle(
     timestamp: Date.now(),
   };
   const response = await ctx.modelRegistry.complete(
-    ctx.model,
+    model,
     { systemPrompt, messages: [message] },
     {
       cacheRetention: "short",
       maxRetries: 0,
+      reasoningEffort: settings.thinkingLevel === "off" ? "none" : settings.thinkingLevel,
       maxTokens: 40,
       sessionId: "auto-session-title",
       timeoutMs: TITLE_TIMEOUT_MS,
@@ -119,18 +123,36 @@ export default async function autoSessionTitle(pi: ExtensionAPI): Promise<void> 
   const systemPrompt = buildSystemPrompt(await loadWritingGuidance());
   let eligible = false;
   let attempted = false;
+  let settings: AutoSessionTitleSettings | undefined;
 
   pi.on("session_start", (_event, ctx) => {
     eligible = shouldNameSession(pi, ctx);
     attempted = false;
+    try {
+      settings = loadAutoSessionTitleSettings();
+    } catch (error) {
+      settings = undefined;
+      const message = `Could not load auto-session-title settings: ${
+        error instanceof Error ? error.message : String(error)
+      }`;
+      if (ctx.hasUI) ctx.ui.notify(message, "warning");
+      else console.warn(message);
+    }
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
-    if (!eligible || attempted || pi.getSessionName() || !event.prompt.trim()) return;
+    if (
+      !eligible ||
+      attempted ||
+      settings === undefined ||
+      pi.getSessionName() ||
+      !event.prompt.trim()
+    )
+      return;
     attempted = true;
 
     try {
-      const title = await generateTitle(ctx, event.prompt, systemPrompt);
+      const title = await generateTitle(ctx, event.prompt, systemPrompt, settings);
       if (title && !pi.getSessionName()) pi.setSessionName(title);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

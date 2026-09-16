@@ -58,6 +58,10 @@
     "model": "openai-codex/gpt-5.6-luna-fast",
     "thinkingLevel": "off"
   },
+  "autoSessionTitle": {
+    "model": "openai-codex/gpt-5.6-luna-fast",
+    "thinkingLevel": "low"
+  },
   "charts": {
     "fontFamily": "JetBrainsMono NF",
     "fontSize": 14
