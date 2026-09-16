@@ -16,6 +16,5 @@
 /tools/
 /pi-debug.log
 /*.log
-/extensions/pi-permission-system/logs/
 /tmp
 /web-search-cache

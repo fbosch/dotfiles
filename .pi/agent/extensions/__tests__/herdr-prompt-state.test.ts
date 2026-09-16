@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import herdrPromptState from "../herdr/permission-state";
+import herdrPromptState from "../herdr/prompt-state";
 
 type ExtensionHandler = (event: { title?: string }) => void;
 type EventHandler = (data: unknown) => void;
@@ -59,7 +59,7 @@ test("reports ask_user_question UI prompts to Herdr", () => {
   ]);
 });
 
-test("reports custom permission prompts without a title", () => {
+test("reports untitled custom UI prompts", () => {
   const { pi, extensionHandlers, blockedEvents } = createPiHarness();
   herdrPromptState(pi);
 

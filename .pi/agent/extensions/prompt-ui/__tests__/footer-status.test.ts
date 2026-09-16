@@ -38,16 +38,6 @@ describe("prompt footer statuses", () => {
     expect(line).toContain("warning:esc again to interrupt");
   });
 
-  test("renders strict permission status with its icon and warning color", () => {
-    expect(renderFooterStatus(theme, "permissions-strict", "strict")).toBe("warning: strict");
-  });
-
-  test("preserves the permission-system status in normal mode", () => {
-    expect(renderFooterStatus(theme, "pi-permission-system", "permission status")).toBe(
-      "permission status",
-    );
-  });
-
   test("renders MCP status like OpenCode", () => {
     expect(renderMcpFooterStatus(theme, 2)).toBe("success: text:2 MCP");
     expect(renderMcpFooterStatus(theme, 2, true)).toBe("error: text:2 MCP");
@@ -66,20 +56,10 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
-  test("omits strict permission status from the lower footer", () => {
-    const state = {
-      ...promptState,
-      getStatuses: () => [renderFooterStatus(ansiTheme, "permissions-strict", "strict")],
-    };
-    const line = renderPromptHints(ansiTheme, keybindings, state, "~/dotfiles", 50);
-
-    expect(stripTerminalSequences(line)).not.toContain("strict");
-  });
-
   test("keeps file changes and MCP together on the right", () => {
     const state = {
       ...promptState,
-      getStatuses: () => ["permission status"],
+      getStatuses: () => ["background task"],
     };
     const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
     const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
@@ -94,7 +74,7 @@ describe("prompt footer statuses", () => {
     );
     const plainLine = stripTerminalSequences(line);
 
-    expect(plainLine).toContain("permission status");
+    expect(plainLine).toContain("background task");
     expect(plainLine.endsWith("2 files +40 -25 ·  2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });

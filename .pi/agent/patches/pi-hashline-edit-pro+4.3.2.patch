@@ -1,0 +1,53 @@
+diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+index ad348e5..d77723d 100644
+--- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
++++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+@@ -167,6 +167,7 @@ const sessionFileByKey = new Map<string, string>();
+ const pendingInits = new Map<string, Promise<void>>();
+ const loadTokens = new Map<string, object>();
+ const registries = new Map<string, SessionState>();
++const sessionKeyById = new Map<string, string>();
+ const sessionScope = new AsyncLocalStorage<string>();
+ 
+ function newSessionState(seed?: string): SessionState {
+@@ -393,11 +394,18 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+ }
+ 
+ export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
+-  const sessionFile = sessionFileFor(ctx);
+-  if (sessionFile !== undefined) return sidecarKeyFor(sessionFile);
+   const sessionId = ctx?.sessionManager?.getSessionId?.();
+-  if (typeof sessionId === "string" && sessionId.length > 0) return `ephemeral:${sessionId}`;
+-  return undefined;
++  if (typeof sessionId === "string" && sessionId.length > 0) {
++    const existing = sessionKeyById.get(sessionId);
++    if (existing !== undefined) return existing;
++    const sessionFile = sessionFileFor(ctx);
++    const key = sessionFile !== undefined ? sidecarKeyFor(sessionFile) : `ephemeral:${sessionId}`;
++    // A session file can appear after early tool calls; keep those calls on one registry.
++    sessionKeyById.set(sessionId, key);
++    return key;
++  }
++  const sessionFile = sessionFileFor(ctx);
++  return sessionFile !== undefined ? sidecarKeyFor(sessionFile) : undefined;
+ }
+ 
+ function sessionFileFor(ctx: AnchorSessionContext | undefined): string | undefined {
+@@ -890,6 +898,7 @@ export function resetRegistryForTests(): void {
+   sessionFileByKey.clear();
+   pendingInits.clear();
+   loadTokens.clear();
++  sessionKeyById.clear();
+   registries.clear();
+ }
+ 
+@@ -929,6 +938,9 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+ 
+ export function releaseRegistrySession(key: string): void {
+   loadTokens.delete(key);
++  for (const [sessionId, sessionKey] of sessionKeyById) {
++    if (sessionKey === key) sessionKeyById.delete(sessionId);
++  }
+   if (currentKey === key) currentKey = undefined;
+   pendingInits.delete(key);
+   sidecarByKey.delete(key);

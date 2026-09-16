@@ -16,7 +16,9 @@
       "description": "Personal Obsidian vault"
     }
   },
-  "extensions": [],
+  "extensions": [
+    "+extensions/catastrophic-command-guard.ts"
+  ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.6-sol",
   "quickReplies": {
@@ -72,7 +74,6 @@
   },
   "packages": [
     "npm:pi-hashline-edit-pro@4.3.2",
-    "npm:@gotgenes/pi-permission-system@31.1.1",
     "npm:pi-codex-goal",
     "npm:pi-context-view@0.5.2",
     "npm:pi-mcp-adapter@2.32.1",

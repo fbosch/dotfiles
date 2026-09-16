@@ -27,7 +27,6 @@ import {
   loadProjectReferences,
   type ProjectReference,
 } from "../mentions/project-references";
-import { PERMISSIONS_STRICT_STATUS_KEY, PERMISSIONS_STRICT_STATUS_TEXT } from "../permissions-mode";
 import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
@@ -135,10 +134,6 @@ function sanitizeStatus(status: string): string {
     .trim();
 }
 
-function isStrictPermissionsStatus(status: string): boolean {
-  return stripTerminalSequences(status) === PERMISSIONS_STRICT_STATUS_TEXT;
-}
-
 export function renderMcpFooterStatus(
   theme: Pick<Theme, "fg">,
   connectedCount: number,
@@ -151,9 +146,6 @@ export function renderMcpFooterStatus(
 }
 
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
-  if (key === PERMISSIONS_STRICT_STATUS_KEY) {
-    return theme.fg("warning", PERMISSIONS_STRICT_STATUS_TEXT);
-  }
   if (key === FILE_CHANGES_STATUS_KEY) {
     const match = /^(\d+ files?)(?: (\+\d+))?(?: (-\d+))?$/.exec(stripTerminalSequences(status));
     if (match === null) return status;
@@ -197,9 +189,7 @@ export function renderPromptHints(
   const interruptHint = interruptPending
     ? theme.fg("warning", interruptHintText)
     : interruptHintText;
-  const statusText = statuses
-    .filter((status) => status !== PLAN_MODE_STATUS && !isStrictPermissionsStatus(status))
-    .join(" · ");
+  const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
   const workingText = promptState.isWorking()
     ? [theme.fg("accent", `${promptState.getWorkingMarker()} working`), interruptHint]
         .filter(Boolean)
@@ -420,7 +410,6 @@ export class PromptEditor extends CustomEditor {
       .map((status) => sanitizeStatus(status))
       .filter((status) => status.length > 0);
     const isPlanMode = statuses.includes(PLAN_MODE_STATUS);
-    const isStrictPermissions = statuses.some(isStrictPermissionsStatus);
     const modeColor = colorizeHex(theme, getModeColor(isPlanMode ? "plan" : "build"));
     const editorBorder = (text: string) => this.borderColor(text);
     const editorWidth = width - DOCK_CHROME_WIDTH;
@@ -457,9 +446,6 @@ export class PromptEditor extends CustomEditor {
             theme.fg("muted", formatProvider(model.provider)),
             separator,
             theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
-            isStrictPermissions
-              ? `${separator}${theme.fg("warning", PERMISSIONS_STRICT_STATUS_TEXT)}`
-              : "",
           ].join("");
     const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
     const modelRight = [

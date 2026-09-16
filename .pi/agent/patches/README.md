@@ -3,8 +3,7 @@
 Tracked patches preserve local changes to pinned Pi extensions:
 
 - `@ff-labs+pi-fff+0.10.6.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
-- `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration, direct TypeScript import resolution, and normal-mode prompt authorization.
-- `pi-mcp-adapter+2.32.1.patch` lets the session approval broker override cached MCP grants, so strict mode can require confirmation for every call.
+- `pi-mcp-adapter+2.32.1.patch` lets session approval brokers override cached MCP grants.
 - `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
@@ -18,7 +17,6 @@ Keep these patches here rather than editing Pi's installed packages without a re
 
    ```sh
    pi install npm:@ff-labs/pi-fff@0.10.6
-   pi install npm:@gotgenes/pi-permission-system@31.1.1
    pi install npm:pi-worktrunk@0.8.0
    pi install npm:pi-lens@4.1.6
    pi install npm:pi-mcp-adapter@2.32.1
@@ -36,44 +34,15 @@ npm operations pass through. The runner preserves npm's status and `--save-exact
 behavior. Direct npm commands outside Pi bypass it; run `patch:packages`
 afterwards.
 
-The runner checks every installed package name and exact version **before**
-invoking patch-package. It rejects requests for another pinned-package version.
-A disposable copy verifies all selected patches before the installed packages
-are modified. Patch application uses `--error-on-fail --error-on-warn` and never
-`--partial`. Empty patches and patches without textual changes are rejected.
-A failed patch stops the command; it does not roll back the npm installation that
-preceded it. Conflict preflight is not a filesystem transaction: disk or permission
-errors during writing can leave partially patched package files. Fix the filesystem
-problem, remove and reinstall the pinned package through Pi, then restart Pi.
+The runner checks every installed package name and exact version before invoking
+patch-package. A disposable copy verifies all selected patches before the installed
+packages are modified. Patch application uses `--error-on-fail --error-on-warn` and
+never `--partial`. Empty patches and patches without textual changes are rejected.
 
-## Project-reference reads
-
-The permission-system patch exposes an identity-scoped registration for absolute,
-literal read directories. The project-references extension registers trusted
-references outside the current working directory before an agent turn. This
-bypasses only the `external_directory` gate for the built-in `read` tool.
-Cross-cutting `path` denies still apply, and every other tool still uses the
-normal policy.
-
-Registrations are removed on session shutdown. Duplicate registrations remain
-independent, so disposing one consumer cannot remove another consumer's access.
-
-## Automatic permission mode
-
-The `session-permissions-mode` authorizer is exempt from the package's path-family delegation cap. Permission gates resolve policy first, so it receives only `ask` decisions. In normal mode it allows ordinary requests and literal destructive commands whose targets remain below the active working directory; configured build agents also retain the `/tmp` safe root. It defers destructive commands with external or ambiguous targets and unclassifiable Bash. Strict mode defers every request to the prompt. Explicit `deny` rules still block before authorization, and other authorizers retain the delegation cap.
-
-## Permission-system imports
-
-The permission-system patch maps `#src/*` to `./src/*.ts` instead of `./src/*`.
-All runtime aliases in the pinned package resolve to the same files, without
-Jiti's failed extensionless lookups. No permission code, command registration,
-configuration loading, or authorization work is deferred.
-
-Regression tests apply the import-map patch to a disposable package, check every
-runtime alias with Node's resolver, and compare eager gate registration and
-public service exports through Pi's SDK loader. Keep the exact-version guard:
-a future package could use directory imports or explicit extensions that need a
-different map.
+Automatic install and update commands treat patch failures as recoverable. They
+print a warning and continue with the unpatched package so Pi can start. Run
+`patch:packages` explicitly when maintaining patches; that command remains strict
+and returns a failure for version mismatches or conflicts.
 
 ## Cache behavior
 

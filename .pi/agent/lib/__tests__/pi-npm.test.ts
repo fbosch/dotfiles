@@ -28,18 +28,18 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
-const permissionPatch = `diff --git a/node_modules/@gotgenes/pi-permission-system/example.txt b/node_modules/@gotgenes/pi-permission-system/example.txt
-index 3367afd..5ea2ed4 100644
---- a/node_modules/@gotgenes/pi-permission-system/example.txt
-+++ b/node_modules/@gotgenes/pi-permission-system/example.txt
-@@ -1 +1 @@
--original
-+patched
-`;
 const mcpPatch = `diff --git a/node_modules/pi-mcp-adapter/example.txt b/node_modules/pi-mcp-adapter/example.txt
 index 3367afd..5ea2ed4 100644
 --- a/node_modules/pi-mcp-adapter/example.txt
 +++ b/node_modules/pi-mcp-adapter/example.txt
+@@ -1 +1 @@
+-original
++patched
+`;
+const hashlinePatch = `diff --git a/node_modules/pi-hashline-edit-pro/example.txt b/node_modules/pi-hashline-edit-pro/example.txt
+index 3367afd..5ea2ed4 100644
+--- a/node_modules/pi-hashline-edit-pro/example.txt
++++ b/node_modules/pi-hashline-edit-pro/example.txt
 @@ -1 +1 @@
 -original
 +patched
@@ -59,12 +59,12 @@ let example: string;
 let manifest: string;
 let fffExample: string;
 let fffManifest: string;
-let permissionExample: string;
-let permissionManifest: string;
 let mcpExample: string;
 let mcpManifest: string;
 let lensExample: string;
 let lensManifest: string;
+let hashlineExample: string;
+let hashlineManifest: string;
 
 function run(args: string[], env: Record<string, string> = {}) {
   return Bun.spawnSync([process.execPath, join(agent, "lib/pi-npm.ts"), ...args], {
@@ -79,12 +79,12 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "pi-npm-test-"));
   agent = join(directory, "agent config");
   install = join(directory, "managed npm");
+  hashlineManifest = join(install, "node_modules/pi-hashline-edit-pro/package.json");
+  hashlineExample = join(install, "node_modules/pi-hashline-edit-pro/example.txt");
   manifest = join(install, "node_modules/pi-worktrunk/package.json");
   example = join(install, "node_modules/pi-worktrunk/example.txt");
   fffManifest = join(install, "node_modules/@ff-labs/pi-fff/package.json");
   fffExample = join(install, "node_modules/@ff-labs/pi-fff/example.txt");
-  permissionManifest = join(install, "node_modules/@gotgenes/pi-permission-system/package.json");
-  permissionExample = join(install, "node_modules/@gotgenes/pi-permission-system/example.txt");
   mcpManifest = join(install, "node_modules/pi-mcp-adapter/package.json");
   mcpExample = join(install, "node_modules/pi-mcp-adapter/example.txt");
   lensManifest = join(install, "node_modules/pi-lens/package.json");
@@ -94,8 +94,8 @@ beforeEach(() => {
   mkdirSync(join(agent, "node_modules"));
   mkdirSync(join(install, "node_modules/pi-worktrunk"), { recursive: true });
   mkdirSync(join(install, "node_modules/@ff-labs/pi-fff"), { recursive: true });
-  mkdirSync(join(install, "node_modules/@gotgenes/pi-permission-system"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-mcp-adapter"), { recursive: true });
+  mkdirSync(join(install, "node_modules/pi-hashline-edit-pro"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-lens"), { recursive: true });
   mkdirSync(join(directory, "bin"));
   cpSync(join(sourceRoot, "lib/pi-npm.ts"), join(agent, "lib/pi-npm.ts"));
@@ -105,22 +105,19 @@ beforeEach(() => {
   );
   writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), patch);
   writeFileSync(join(agent, "patches/@ff-labs+pi-fff+0.10.6.patch"), fffPatch);
-  writeFileSync(
-    join(agent, "patches/@gotgenes+pi-permission-system+31.1.1.patch"),
-    permissionPatch,
-  );
   writeFileSync(join(agent, "patches/pi-mcp-adapter+2.32.1.patch"), mcpPatch);
   writeFileSync(join(agent, "patches/pi-lens+4.1.6.patch"), lensPatch);
+  writeFileSync(join(agent, "patches/pi-hashline-edit-pro+4.3.2.patch"), hashlinePatch);
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
   writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.8.0" }));
+  writeFileSync(
+    hashlineManifest,
+    JSON.stringify({ name: "pi-hashline-edit-pro", version: "4.3.2" }),
+  );
+  writeFileSync(hashlineExample, "original\n");
   writeFileSync(example, "original\n");
   writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.10.6" }));
   writeFileSync(fffExample, "original\n");
-  writeFileSync(
-    permissionManifest,
-    JSON.stringify({ name: "@gotgenes/pi-permission-system", version: "31.1.1" }),
-  );
-  writeFileSync(permissionExample, "original\n");
   writeFileSync(mcpManifest, JSON.stringify({ name: "pi-mcp-adapter", version: "2.32.1" }));
   writeFileSync(mcpExample, "original\n");
   writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.1.6" }));
@@ -149,7 +146,6 @@ describe("tracked Pi package patches", () => {
       expect(result.exitCode).toBe(0);
       expect(readFileSync(example, "utf8")).toBe("patched\n");
       expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
-      expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
       expect(readFileSync(mcpExample, "utf8")).toBe("patched\n");
       expect(readFileSync(lensExample, "utf8")).toBe("patched\n");
     }
@@ -162,7 +158,6 @@ describe("tracked Pi package patches", () => {
     expect(run(["--apply-patches", link]).exitCode).toBe(0);
     expect(readFileSync(example, "utf8")).toBe("patched\n");
     expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
-    expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
     expect(readFileSync(mcpExample, "utf8")).toBe("patched\n");
   });
 
@@ -185,22 +180,6 @@ describe("tracked Pi package patches", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr.toString()).toContain("requires exactly 0.10.6");
       expect(readFileSync(fffExample, "utf8")).toBe("original\n");
-      expect(readFileSync(permissionExample, "utf8")).toBe("original\n");
-      expect(readFileSync(example, "utf8")).toBe("original\n");
-    },
-  );
-
-  test.each(["31.1.0", "31.1.2", "31.1.1-beta", "^31.1.1"])(
-    "rejects permission-system %s before writing every package",
-    (version) => {
-      writeFileSync(
-        permissionManifest,
-        JSON.stringify({ name: "@gotgenes/pi-permission-system", version }),
-      );
-      const result = run(["--apply-patches", install]);
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 31.1.1");
-      expect(readFileSync(permissionExample, "utf8")).toBe("original\n");
       expect(readFileSync(example, "utf8")).toBe("original\n");
     },
   );
@@ -305,7 +284,6 @@ describe("Pi npmCommand wrapper", () => {
     ]);
     expect(readFileSync(example, "utf8")).toBe("patched\n");
     expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
-    expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
   });
 
   test("lets npm handle requested patched-package upgrades and falls back on version mismatch", () => {

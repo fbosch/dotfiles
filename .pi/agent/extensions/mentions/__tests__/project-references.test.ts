@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -209,7 +209,7 @@ describe("project references", () => {
     expect(loadProjectReferences(cwd, true, undefined, join(cwd, "global-agent"))).toEqual([
       {
         name: "framework",
-        path: join(cwd, ".docs", "framework"),
+        path: realpathSync(join(cwd, ".docs", "framework")),
         description: "Use for documentation from framework/core. Start with TOC.md.",
       },
       {
@@ -479,113 +479,5 @@ describe("project references", () => {
     expect(rendered).toContain(`${theme.getFgAnsi("mdLink")}@reference-material`);
     expect(rendered).toContain(`${theme.getFgAnsi("accent")}screenshot.png`);
     sessionShutdown?.();
-  });
-
-  test("registers only external references for read access and disposes them", async () => {
-    const root = temporaryDirectory();
-    const cwd = join(root, "project");
-    const external = join(root, "external docs");
-    const agentDirectory = join(root, "agent");
-    const globalExternal = join(root, "global docs");
-    const docsCacheExternal = join(root, "docs-cache *");
-    mkdirSync(join(cwd, "local-docs"), { recursive: true });
-    mkdirSync(external);
-    mkdirSync(globalExternal);
-    writeGlobalSettings(agentDirectory, {
-      references: {
-        global: { path: "../global docs", description: "Global documentation" },
-      },
-    });
-    mkdirSync(docsCacheExternal);
-    mkdirSync(join(cwd, ".docs"));
-    symlinkSync(docsCacheExternal, join(cwd, ".docs", "symlinked-docs"), "dir");
-    writeProjectSettings(cwd, {
-      references: {
-        external: { path: external, description: "External documentation" },
-        local: { path: "local-docs", description: "Local documentation" },
-      },
-    });
-    writeDocsLock(cwd, {
-      "symlinked-docs": { repo: "https://github.com/owner/symlinked-docs.git" },
-    });
-
-    let sessionStart:
-      | ((event: SessionStartEvent, ctx: ExtensionContext) => void | Promise<void>)
-      | undefined;
-    let beforeAgentStart:
-      | ((
-          event: BeforeAgentStartEvent,
-          ctx: ExtensionContext,
-        ) =>
-          | BeforeAgentStartEventResult
-          | undefined
-          | Promise<BeforeAgentStartEventResult | undefined>)
-      | undefined;
-    let sessionShutdown: (() => void) | undefined;
-    const pi = {
-      on(event: string, handler: typeof sessionStart | typeof beforeAgentStart) {
-        if (event === "session_start") sessionStart = handler as typeof sessionStart;
-        if (event === "before_agent_start") beforeAgentStart = handler as typeof beforeAgentStart;
-        if (event === "session_shutdown") sessionShutdown = handler as () => void;
-      },
-    } as unknown as ExtensionAPI;
-    projectReferences(pi, agentDirectory);
-
-    const sessionId = "project-reference-read-test";
-    const registrations: string[] = [];
-    const disposals: string[] = [];
-    const permissions = {
-      registerInfrastructureReadDirectory(directory: string) {
-        registrations.push(directory);
-        return () => disposals.push(directory);
-      },
-    };
-    const serviceModule = (await import(
-      new URL(
-        "../../../npm/node_modules/@gotgenes/pi-permission-system/src/service.ts",
-        import.meta.url,
-      ).href
-    )) as {
-      publishPermissionsService(sessionId: string, service: typeof permissions): void;
-      unpublishPermissionsService(sessionId: string, service: typeof permissions): void;
-    };
-    serviceModule.publishPermissionsService(sessionId, permissions);
-
-    const notifications: string[] = [];
-    const context = {
-      cwd,
-      isProjectTrusted: () => true,
-      sessionManager: { getHeader: () => ({ id: sessionId }) },
-      ui: { notify: (message: string) => notifications.push(message) },
-    } as unknown as ExtensionContext;
-
-    try {
-      await sessionStart?.({} as SessionStartEvent, context);
-      const event = {
-        type: "before_agent_start",
-        prompt: "Inspect references",
-        systemPrompt: "base prompt",
-        systemPromptOptions: {},
-      } as BeforeAgentStartEvent;
-      await beforeAgentStart?.(event, context);
-      await beforeAgentStart?.(event, context);
-
-      expect(registrations).toEqual([
-        realpathSync(external),
-        realpathSync(globalExternal),
-        realpathSync(docsCacheExternal),
-      ]);
-      expect(notifications).toEqual([]);
-      expect(disposals).toEqual([]);
-
-      sessionShutdown?.();
-      expect(disposals).toEqual([
-        realpathSync(docsCacheExternal),
-        realpathSync(globalExternal),
-        realpathSync(external),
-      ]);
-    } finally {
-      serviceModule.unpublishPermissionsService(sessionId, permissions);
-    }
   });
 });

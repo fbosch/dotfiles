@@ -83,7 +83,6 @@ __pycache__
 ^/\.pi/agent/tools$
 ^/\.pi/agent/pi-debug\.log$
 ^/\.pi/agent/[^/]*\.log$
-^/\.pi/agent/extensions/pi-permission-system/logs$
 ^/\.pi/agent/tmp$
 
 # Example files should not be stowed, only used as templates
