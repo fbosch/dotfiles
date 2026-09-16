@@ -1,115 +1,78 @@
-import { describe, expect, spyOn, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import type { FormatterCommand, ResolvedFormatterSettings } from "../../formatter/settings";
-import { markerExistsWithinDirectory, resolveMarkerTarget } from "../candidate-adapter";
+import { describe, expect, test } from "bun:test";
 import {
   CANDIDATE_LIMITS,
   type CandidateInspectionInput,
   type CandidateResult,
-  candidateView,
   formatCandidateView,
   inspectToolCandidates,
 } from "../candidates";
+import { matchesPiLensServer, type PiLensServerCandidate } from "../pi-lens-config";
 
-const formatter = (commands: readonly FormatterCommand[]): ResolvedFormatterSettings => ({
-  rules: [{ id: "source", extensions: [".ts"], fileNames: [], mode: "first_available", commands }],
-  timeoutMs: 30_000,
-  warnings: [],
+const server = (id: string, extensions: readonly string[] = [".ts"]): PiLensServerCandidate => ({
+  id,
+  extensions,
 });
-const command = (
-  name: string,
-  requireRootMarker = false,
-  rootMarkers: readonly string[] = [],
-): FormatterCommand => ({ command: name, args: ["$FILE"], requireRootMarker, rootMarkers });
 const input = (overrides: Partial<CandidateInspectionInput> = {}): CandidateInspectionInput => ({
   projectTrusted: true,
-  ancestors: [
-    { path: "/repo/src", markers: [] },
-    { path: "/repo", markers: [".git"] },
-  ],
   ...overrides,
 });
 
-describe("startup header formatter candidates", () => {
-  test("uses matching file mappings and root markers", () => {
+describe("startup header LSP candidates", () => {
+  test("uses matching file mappings", () => {
     const result = inspectToolCandidates(
       input({
-        formatter: formatter([command("biome", true, ["biome.json"])]),
         files: ["src/index.ts"],
-        ancestors: [{ path: "/repo", markers: ["biome.json"] }],
+        lspServers: [server("tsc")],
       }),
     );
-    expect(result.formatter).toMatchObject({ state: "ready", candidates: ["biome"] });
+
+    expect(result.lsp).toMatchObject({ state: "ready", candidates: ["tsc"] });
   });
 
-  test("excludes marker-matched tools without compatible repository files", () => {
+  test("excludes servers without compatible repository files", () => {
     const result = inspectToolCandidates(
       input({
         files: ["README.md"],
-        formatter: formatter([command("biome", true, ["package.json"])]),
-        ancestors: [{ path: "/repo", markers: ["package.json"] }],
+        lspServers: [server("tsc")],
       }),
     );
-    expect(result.formatter).toMatchObject({ state: "none", candidates: [] });
+
+    expect(result.lsp).toMatchObject({ state: "none", candidates: [] });
   });
 
-  test("keeps first-available fallback order without duplicates", () => {
+  test("keeps configured order without duplicates", () => {
     const result = inspectToolCandidates(
-      input({
-        formatter: formatter([command("primary"), command("fallback"), command("primary")]),
-      }),
+      input({ lspServers: [server("primary"), server("fallback"), server("primary")] }),
     );
-    expect(result.formatter).toMatchObject({ state: "ready", candidates: ["primary", "fallback"] });
+
+    expect(result.lsp).toMatchObject({ state: "ready", candidates: ["primary", "fallback"] });
   });
 
   test("reports collection caps with retained candidate data", () => {
-    const entries = Array.from({ length: CANDIDATE_LIMITS.configuredEntries + 1 }, (_, index) =>
-      command(`formatter-${index}`),
+    const servers = Array.from({ length: CANDIDATE_LIMITS.configuredEntries + 1 }, (_, index) =>
+      server(`lsp-${index}`),
     );
-    const result = inspectToolCandidates(input({ formatter: formatter(entries) }));
-    expect(result.formatter.state).toBe("incomplete");
-    expect(result.formatter.overflow).toContain("configured-entries");
-    expect(result.formatter.overflow).toContain("candidates");
-    expect(result.formatter.candidates).toHaveLength(CANDIDATE_LIMITS.displayedCandidates);
+    const result = inspectToolCandidates(input({ lspServers: servers }));
+
+    expect(result.lsp.state).toBe("incomplete");
+    expect(result.lsp.overflow).toContain("configured-entries");
+    expect(result.lsp.overflow).toContain("candidates");
+    expect(result.lsp.candidates).toHaveLength(CANDIDATE_LIMITS.displayedCandidates);
   });
 
   test("distinguishes candidate states", () => {
     const states: readonly [CandidateResult, string][] = [
-      [{ state: "trust-disabled", candidates: [], overflow: [] }, "formatters: trust disabled"],
-      [{ state: "invalid-settings", candidates: [], overflow: [] }, "formatters: invalid settings"],
-      [{ state: "none", candidates: [], overflow: [] }, "formatters: none"],
-      [{ state: "unavailable", candidates: [], overflow: [] }, "formatters: unavailable"],
-      [{ state: "ready", candidates: ["biome"], overflow: [] }, "formatters: biome"],
+      [{ state: "trust-disabled", candidates: [], overflow: [] }, "lsp: trust disabled"],
+      [{ state: "none", candidates: [], overflow: [] }, "lsp: none"],
+      [{ state: "unavailable", candidates: [], overflow: [] }, "lsp: unavailable"],
+      [{ state: "ready", candidates: ["tsc"], overflow: [] }, "lsp: tsc"],
     ];
-    for (const [result, expected] of states)
-      expect(formatCandidateView(candidateView("formatter", result))).toBe(expected);
+
+    for (const [result, expected] of states) expect(formatCandidateView(result)).toBe(expected);
   });
 
-  test("never executes candidate commands", () => {
-    const spawn = spyOn(Bun, "spawn");
-    inspectToolCandidates(input({ formatter: formatter([command("biome")]) }));
-    expect(spawn).not.toHaveBeenCalled();
-    spawn.mockRestore();
-  });
-
-  test("rejects marker paths outside the inspected ancestor", () => {
-    expect(resolveMarkerTarget("/repo/project", ".toolrc")).toBe("/repo/project/.toolrc");
-    expect(resolveMarkerTarget("/repo/project", "../.toolrc")).toBeUndefined();
-    expect(resolveMarkerTarget("/repo/project", "/tmp/.toolrc")).toBeUndefined();
-
-    const base = mkdtempSync(join(tmpdir(), "startup-candidates-"));
-    try {
-      const root = join(base, "root");
-      const outside = join(base, "outside");
-      mkdirSync(root);
-      mkdirSync(outside);
-      writeFileSync(join(outside, ".toolrc"), "");
-      symlinkSync(outside, join(root, "config"));
-      expect(markerExistsWithinDirectory(root, "config/.toolrc")).toBe(false);
-    } finally {
-      rmSync(base, { recursive: true, force: true });
-    }
+  test("matches configured file extensions", () => {
+    expect(matchesPiLensServer(server("tsc", [".mts"]), "src/index.mts")).toBe(true);
+    expect(matchesPiLensServer(server("tsc", [".mts"]), "src/index.ts")).toBe(false);
   });
 });

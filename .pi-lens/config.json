@@ -1,6 +1,7 @@
 {
   "format": {
-    "enabled": false
+    "enabled": true,
+    "mode": "immediate"
   },
   "autofix": {
     "enabled": false

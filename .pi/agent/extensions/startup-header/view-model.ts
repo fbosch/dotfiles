@@ -1,7 +1,7 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
-import { type CandidateInspection, candidateView, formatCandidateView } from "./candidates";
+import { type CandidateInspection, formatCandidateView } from "./candidates";
 import { type ContextStripConfig, renderInitialContextStrip } from "./context-strip";
 import type { StartupOwnerSnapshot } from "./contracts";
 import {
@@ -68,20 +68,7 @@ export function renderStartupHeader(
   if (integrationStatus !== "") lines.push("", integrationStatus);
 
   if (candidates !== undefined) {
-    lines.push(
-      "",
-      theme.fg(
-        "muted",
-        formatCandidateView(candidateView("formatter", candidates.formatter)).replace(
-          /^formatters:/,
-          "Formatters:",
-        ),
-      ),
-      theme.fg(
-        "muted",
-        formatCandidateView(candidateView("lsp", candidates.lsp)).replace(/^lsp:/, "LSP:"),
-      ),
-    );
+    lines.push("", theme.fg("muted", formatCandidateView(candidates.lsp).replace(/^lsp:/, "LSP:")));
   }
 
   const authLines = renderAuthStatus(theme, width, auth, Date.now());

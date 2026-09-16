@@ -14,7 +14,6 @@ const dependencies = {
   inspectRepositoryFiles: async () => ({ files: [], truncated: false }),
   loadArt: () => undefined,
   inspectCandidates: async () => ({
-    formatter: { state: "unavailable" as const, candidates: [], overflow: [] },
     lsp: { state: "unavailable" as const, candidates: [], overflow: [] },
   }),
 };

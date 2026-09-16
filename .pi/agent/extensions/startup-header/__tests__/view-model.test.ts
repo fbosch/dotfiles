@@ -131,11 +131,10 @@ describe("startup header baseline", () => {
       undefined,
       undefined,
       {
-        formatter: { state: "ready", candidates: ["biome", "prettier"], overflow: [] },
         lsp: { state: "ready", candidates: ["tsc", "eslint"], overflow: [] },
       },
     );
-    expect(lines).toEqual(["pi", "", "Formatters: biome, prettier", "LSP: tsc, eslint"]);
+    expect(lines).toEqual(["pi", "", "LSP: tsc, eslint"]);
     expect(lines.join("\n")).not.toMatch(/installed|executable|available on path/i);
   });
 
@@ -337,7 +336,6 @@ describe("startup header baseline", () => {
       undefined,
       { neovim: undefined, direnv: undefined, lsp: integration("lsp", "collecting") },
       {
-        formatter: { state: "incomplete", candidates: ["biome"], overflow: ["markers"] },
         lsp: { state: "none", candidates: [], overflow: [] },
       },
       { ...auth, staleAt: now - 1 },
@@ -346,7 +344,6 @@ describe("startup header baseline", () => {
     expect(lines.every((line) => visibleWidth(line) <= 28)).toBe(true);
     expect(lines).toContain("lsp ?");
     expect(lines.some((line) => line.startsWith("auth stale"))).toBe(true);
-    expect(lines.some((line) => line.startsWith("Formatters: incomplete"))).toBe(true);
     expect(lines.some((line) => line.startsWith("Extensions: 4 enabled"))).toBe(true);
     expect(lines.some((line) => line.includes("failed"))).toBe(true);
   });

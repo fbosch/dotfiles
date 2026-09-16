@@ -85,6 +85,8 @@ test("refreshes the custom editor after compaction completes", () => {
   promptUi(pi as unknown as ExtensionAPI);
   handlers.get("session_start")?.({}, ctx);
   expect(editor).toBeDefined();
+  extensionStatuses.set("pi-lens-lsp", "LSP Inactive");
+  expect(editor?.render(100).join("\n")).not.toContain("LSP Inactive");
   extensionStatuses.set("startup-time", "Startup: 1.18s (startup)");
   expect(editor?.render(100).join("\n")).not.toContain("Startup:");
 

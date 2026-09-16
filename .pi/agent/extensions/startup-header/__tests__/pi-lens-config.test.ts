@@ -30,8 +30,10 @@ describe("pi-lens startup candidates", () => {
     try {
       const servers = loadPiLensServerCandidates(project, root);
       expect(servers).toEqual([{ id: "tsc", extensions: [".mts"] }]);
-      expect(matchesPiLensServer(servers[0]!, "src/index.mts")).toBe(true);
-      expect(matchesPiLensServer(servers[0]!, "src/index.ts")).toBe(false);
+      const server = servers[0];
+      if (server === undefined) throw new Error("expected tsc server");
+      expect(matchesPiLensServer(server, "src/index.mts")).toBe(true);
+      expect(matchesPiLensServer(server, "src/index.ts")).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -41,6 +41,11 @@ const patchedPackages = [
     patchFilename: "pi-mcp-adapter+2.32.1.patch",
   },
   {
+    name: "pi-lens",
+    version: "4.1.6",
+    patchFilename: "pi-lens+4.1.6.patch",
+  },
+  {
     name: "pi-worktrunk",
     version: "0.8.0",
     patchFilename: "pi-worktrunk+0.8.0.patch",
@@ -48,7 +53,14 @@ const patchedPackages = [
 ] as const satisfies readonly PatchedPackage[];
 
 function readObject(path: string): Record<string, unknown> {
-  const value: unknown = JSON.parse(readFileSync(path, "utf8"));
+  let value: unknown;
+  try {
+    value = JSON.parse(readFileSync(path, "utf8"));
+  } catch (error) {
+    throw new Error(
+      `Cannot parse JSON object from ${path}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new Error(`Expected a JSON object in ${path}`);
   }

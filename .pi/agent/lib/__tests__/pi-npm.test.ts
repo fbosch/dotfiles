@@ -44,6 +44,14 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
+const lensPatch = `diff --git a/node_modules/pi-lens/example.txt b/node_modules/pi-lens/example.txt
+index 3367afd..5ea2ed4 100644
+--- a/node_modules/pi-lens/example.txt
++++ b/node_modules/pi-lens/example.txt
+@@ -1 +1 @@
+-original
++patched
+`;
 let directory: string;
 let agent: string;
 let install: string;
@@ -55,6 +63,8 @@ let permissionExample: string;
 let permissionManifest: string;
 let mcpExample: string;
 let mcpManifest: string;
+let lensExample: string;
+let lensManifest: string;
 
 function run(args: string[], env: Record<string, string> = {}) {
   return Bun.spawnSync([process.execPath, join(agent, "lib/pi-npm.ts"), ...args], {
@@ -77,6 +87,8 @@ beforeEach(() => {
   permissionExample = join(install, "node_modules/@gotgenes/pi-permission-system/example.txt");
   mcpManifest = join(install, "node_modules/pi-mcp-adapter/package.json");
   mcpExample = join(install, "node_modules/pi-mcp-adapter/example.txt");
+  lensManifest = join(install, "node_modules/pi-lens/package.json");
+  lensExample = join(install, "node_modules/pi-lens/example.txt");
   mkdirSync(join(agent, "lib"), { recursive: true });
   mkdirSync(join(agent, "patches"));
   mkdirSync(join(agent, "node_modules"));
@@ -84,6 +96,7 @@ beforeEach(() => {
   mkdirSync(join(install, "node_modules/@ff-labs/pi-fff"), { recursive: true });
   mkdirSync(join(install, "node_modules/@gotgenes/pi-permission-system"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-mcp-adapter"), { recursive: true });
+  mkdirSync(join(install, "node_modules/pi-lens"), { recursive: true });
   mkdirSync(join(directory, "bin"));
   cpSync(join(sourceRoot, "lib/pi-npm.ts"), join(agent, "lib/pi-npm.ts"));
   symlinkSync(
@@ -97,6 +110,7 @@ beforeEach(() => {
     permissionPatch,
   );
   writeFileSync(join(agent, "patches/pi-mcp-adapter+2.32.1.patch"), mcpPatch);
+  writeFileSync(join(agent, "patches/pi-lens+4.1.6.patch"), lensPatch);
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
   writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.8.0" }));
   writeFileSync(example, "original\n");
@@ -109,6 +123,8 @@ beforeEach(() => {
   writeFileSync(permissionExample, "original\n");
   writeFileSync(mcpManifest, JSON.stringify({ name: "pi-mcp-adapter", version: "2.32.1" }));
   writeFileSync(mcpExample, "original\n");
+  writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.1.6" }));
+  writeFileSync(lensExample, "original\n");
   writeFileSync(
     join(directory, "bin/npm"),
     `#!/usr/bin/env bun
@@ -135,6 +151,7 @@ describe("tracked Pi package patches", () => {
       expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
       expect(readFileSync(permissionExample, "utf8")).toBe("patched\n");
       expect(readFileSync(mcpExample, "utf8")).toBe("patched\n");
+      expect(readFileSync(lensExample, "utf8")).toBe("patched\n");
     }
   });
 
@@ -196,6 +213,18 @@ describe("tracked Pi package patches", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr.toString()).toContain("requires exactly 2.32.1");
       expect(readFileSync(mcpExample, "utf8")).toBe("original\n");
+      expect(readFileSync(example, "utf8")).toBe("original\n");
+    },
+  );
+
+  test.each(["4.1.5", "4.1.7", "4.1.6-beta", "^4.1.6"])(
+    "rejects pi-lens %s before writing every package",
+    (version) => {
+      writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version }));
+      const result = run(["--apply-patches", install]);
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toContain("requires exactly 4.1.6");
+      expect(readFileSync(lensExample, "utf8")).toBe("original\n");
       expect(readFileSync(example, "utf8")).toBe("original\n");
     },
   );

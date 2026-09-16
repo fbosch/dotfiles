@@ -1,16 +1,8 @@
 import { execFile } from "node:child_process";
-import { existsSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { ResolvedFormatterSettings } from "../formatter/settings";
-import {
-  CANDIDATE_LIMITS,
-  type CandidateAncestor,
-  type CandidateInspection,
-  inspectToolCandidates,
-} from "./candidates";
-import { loadPiLensServerCandidates } from "./pi-lens-config";
+import { CANDIDATE_LIMITS, type CandidateInspection, inspectToolCandidates } from "./candidates";
+import { loadPiLensServerCandidates, type PiLensServerCandidate } from "./pi-lens-config";
 import type { WorkspaceIdentity } from "./workspace";
 
 const execFileAsync = promisify(execFile);
@@ -27,103 +19,42 @@ export async function inspectConfiguredCandidates(
   discoveredFiles?: RepositoryFiles,
 ): Promise<CandidateInspection> {
   if (context.isProjectTrusted() === false) {
-    return inspectToolCandidates({ ancestors: [], projectTrusted: false });
+    return inspectToolCandidates({ projectTrusted: false });
   }
   if (workspace === undefined) {
-    return inspectToolCandidates({ ancestors: [], projectTrusted: true });
+    return inspectToolCandidates({ projectTrusted: true });
   }
 
   try {
-    const { loadFormatterSettings } = await import("../formatter/index");
-    const formatter = loadFormatterSettings(context);
     const lspServers = loadPiLensServerCandidates(workspace.root);
-    const ancestors = buildAncestorChain(context.cwd, workspace.root);
     const repositoryFiles =
       discoveredFiles ??
-      (await discoverRepositoryFiles(
-        workspace.root,
-        candidatePathspecs(formatter, lspServers, ancestors),
-      ));
+      (await discoverRepositoryFiles(workspace.root, candidatePathspecs(lspServers)));
     return inspectToolCandidates({
-      ancestors,
       files: repositoryFiles.files,
       filesTruncated: repositoryFiles.truncated,
-      formatter,
       lspServers,
-      markerReader: markerExistsWithinDirectory,
       projectTrusted: true,
     });
   } catch {
-    return inspectToolCandidates({ ancestors: [], projectTrusted: true });
+    return inspectToolCandidates({ projectTrusted: true });
   }
-}
-
-export function resolveMarkerTarget(directory: string, marker: string): string | undefined {
-  if (marker === "" || isAbsolute(marker)) return undefined;
-  const target = resolve(directory, marker);
-  const withinDirectory = relative(directory, target);
-  if (withinDirectory.startsWith("..") || isAbsolute(withinDirectory)) return undefined;
-  return target;
-}
-
-export function markerExistsWithinDirectory(directory: string, marker: string): boolean {
-  try {
-    const target = resolveMarkerTarget(directory, marker);
-    if (target === undefined || !existsSync(target)) return false;
-    const canonicalDirectory = realpathSync(directory);
-    const canonicalTarget = realpathSync(target);
-    const withinDirectory = relative(canonicalDirectory, canonicalTarget);
-    return !withinDirectory.startsWith("..") && !isAbsolute(withinDirectory);
-  } catch {
-    return false;
-  }
-}
-function markersExist(
-  markers: readonly string[],
-  ancestors: readonly CandidateAncestor[],
-): boolean {
-  return ancestors.some((ancestor) =>
-    markers
-      .slice(0, CANDIDATE_LIMITS.markersPerEntry)
-      .some((marker) => markerExistsWithinDirectory(ancestor.path, marker)),
-  );
 }
 
 export function candidatePathspecs(
-  formatter: ResolvedFormatterSettings,
-  lspServers: readonly import("./pi-lens-config").PiLensServerCandidate[],
-  ancestors: readonly CandidateAncestor[],
+  lspServers: readonly PiLensServerCandidate[],
 ): readonly string[] | undefined {
   const extensions = new Set<string>();
-  const fileNames = new Set<string>();
-  for (const rule of formatter.rules) {
-    if (
-      !rule.commands.some(
-        (command) =>
-          command.requireRootMarker === false || markersExist(command.rootMarkers, ancestors),
-      )
-    ) {
-      continue;
-    }
-    for (const extension of rule.extensions) extensions.add(extension);
-    for (const fileName of rule.fileNames) fileNames.add(fileName);
-  }
   for (const server of lspServers) {
     for (const extension of server.extensions) extensions.add(extension);
   }
   const safeLiteral = /^[A-Za-z0-9._+-]+$/u;
   if (
-    [...extensions].some(
-      (extension) => !extension.startsWith(".") || !safeLiteral.test(extension),
-    ) ||
-    [...fileNames].some((fileName) => !safeLiteral.test(fileName))
+    [...extensions].some((extension) => !extension.startsWith(".") || !safeLiteral.test(extension))
   ) {
     return undefined;
   }
-  return Object.freeze([
-    ...[...extensions].sort().map((extension) => `:(glob)**/*${extension}`),
-    ...[...fileNames].sort().map((fileName) => `:(glob)**/${fileName}`),
-  ]);
+  return Object.freeze([...extensions].sort().map((extension) => `:(glob)**/*${extension}`));
 }
 
 export async function discoverRepositoryFiles(
@@ -152,22 +83,4 @@ export async function discoverRepositoryFiles(
     files: Object.freeze(allFiles.slice(0, CANDIDATE_LIMITS.repositoryFiles)),
     truncated: allFiles.length > CANDIDATE_LIMITS.repositoryFiles,
   };
-}
-
-export function buildAncestorChain(cwd: string, root: string): CandidateAncestor[] {
-  const canonicalCwd = resolve(cwd);
-  const canonicalRoot = resolve(root);
-  const outsideRoot = relative(canonicalRoot, canonicalCwd);
-  if (outsideRoot.startsWith("..") || isAbsolute(outsideRoot)) return [];
-
-  const ancestors: CandidateAncestor[] = [];
-  let directory = canonicalCwd;
-  while (ancestors.length <= CANDIDATE_LIMITS.ancestors) {
-    ancestors.push({ path: directory });
-    if (directory === canonicalRoot) break;
-    const parent = dirname(directory);
-    if (parent === directory) break;
-    directory = parent;
-  }
-  return ancestors;
 }

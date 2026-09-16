@@ -4,6 +4,7 @@ import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readJsonConfig } from "../../lib/extension-config";
 
 export const FOOTER_SETTINGS_KEY = "footer";
+export const HIDDEN_FOOTER_STATUS_KEYS: ReadonlySet<string> = new Set(["pi-lens-lsp"]);
 const SETTINGS_FILE = "settings.json";
 
 const FOOTER_NAMED_COLORS: Readonly<Record<string, number>> = {
@@ -32,9 +33,9 @@ export function loadFooterCustomization(
     : undefined;
   const configured =
     project === undefined ? readFooterSettings(join(agentDirectory, SETTINGS_FILE)) : project;
-  return configured === undefined ? undefined : parseFooterCustomization(configured);
+  return configured;
 }
-function readFooterSettings(path: string): unknown {
+function readFooterSettings(path: string): FooterCustomization | undefined {
   const settings = readJsonConfig(path);
   if (settings === undefined) return undefined;
   if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
@@ -42,7 +43,9 @@ function readFooterSettings(path: string): unknown {
   }
 
   const record = settings as Record<string, unknown>;
-  return Object.hasOwn(record, FOOTER_SETTINGS_KEY) ? record[FOOTER_SETTINGS_KEY] : undefined;
+  return Object.hasOwn(record, FOOTER_SETTINGS_KEY)
+    ? parseFooterCustomization(record[FOOTER_SETTINGS_KEY])
+    : undefined;
 }
 
 function parseFooterCustomization(value: unknown): FooterCustomization {

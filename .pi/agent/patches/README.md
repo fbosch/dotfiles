@@ -5,6 +5,7 @@ Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.10.6.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
 - `@gotgenes+pi-permission-system+31.1.1.patch` adds session-scoped infrastructure read-directory registration, direct TypeScript import resolution, and normal-mode prompt authorization.
 - `pi-mcp-adapter+2.32.1.patch` lets the session approval broker override cached MCP grants, so strict mode can require confirmation for every call.
+- `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
@@ -19,6 +20,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
    pi install npm:@ff-labs/pi-fff@0.10.6
    pi install npm:@gotgenes/pi-permission-system@31.1.1
    pi install npm:pi-worktrunk@0.8.0
+   pi install npm:pi-lens@4.1.6
    pi install npm:pi-mcp-adapter@2.32.1
    ```
 

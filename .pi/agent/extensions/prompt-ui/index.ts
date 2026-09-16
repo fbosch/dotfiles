@@ -2,7 +2,11 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
-import { type FooterCustomization, loadFooterCustomization } from "./footer-config";
+import {
+  type FooterCustomization,
+  HIDDEN_FOOTER_STATUS_KEYS,
+  loadFooterCustomization,
+} from "./footer-config";
 import {
   FILE_CHANGES_STATUS_KEY,
   MCP_STATUS_KEY,
@@ -160,6 +164,7 @@ export default function promptUi(pi: ExtensionAPI): void {
         [...footerData.getExtensionStatuses().entries()]
           .filter(
             ([key]) =>
+              HIDDEN_FOOTER_STATUS_KEYS.has(key) === false &&
               key !== PROFILE_STATUS_KEY &&
               key !== FILE_CHANGES_STATUS_KEY &&
               key !== MCP_STATUS_KEY &&
