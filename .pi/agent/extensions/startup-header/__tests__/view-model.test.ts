@@ -77,11 +77,7 @@ describe("startup header baseline", () => {
       { detached: true, root: "/repo", linkedWorktree: false },
     );
 
-    expect(lines).toEqual([
-      "pi",
-      "Extensions: 4 enabled, 1 failed",
-      "Skills: 7 available",
-    ]);
+    expect(lines).toEqual(["pi", "Extensions: 4 enabled, 1 failed", "Skills: 7 available"]);
     expect(lines.join("\n")).not.toContain("(0 project)");
   });
 
@@ -136,19 +132,10 @@ describe("startup header baseline", () => {
       undefined,
       {
         formatter: { state: "ready", candidates: ["biome", "prettier"], overflow: [] },
-        lsp: {
-          state: "incomplete",
-          candidates: ["typescript"],
-          overflow: ["ancestors"],
-        },
+        lsp: { state: "ready", candidates: ["tsc", "eslint"], overflow: [] },
       },
     );
-    expect(lines).toEqual([
-      "pi",
-      "",
-      "Formatters: biome, prettier",
-      "LSP: incomplete (ancestors): typescript",
-    ]);
+    expect(lines).toEqual(["pi", "", "Formatters: biome, prettier", "LSP: tsc, eslint"]);
     expect(lines.join("\n")).not.toMatch(/installed|executable|available on path/i);
   });
 

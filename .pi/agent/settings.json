@@ -79,7 +79,8 @@
     "npm:pi-compaction-model@0.1.0",
     "npm:@ff-labs/pi-fff@0.10.6",
     "npm:@gotgenes/pi-subagents",
-    "npm:pi-web-access"
+    "npm:pi-web-access",
+    "npm:pi-lens@4.1.6"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,

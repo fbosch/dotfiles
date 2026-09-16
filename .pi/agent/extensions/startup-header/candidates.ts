@@ -1,10 +1,9 @@
-import { basename, extname } from "node:path";
 import {
   type FormatterCommand,
   matchesFormatterRule,
   type ResolvedFormatterSettings,
 } from "../formatter/settings";
-import type { LspLanguage, LspServerSettings, ResolvedLspSettings } from "../lsp/settings";
+import { matchesPiLensServer, type PiLensServerCandidate } from "./pi-lens-config";
 import { sanitizeHeaderField } from "./sanitize";
 
 export const CANDIDATE_LIMITS = {
@@ -40,7 +39,7 @@ export interface CandidateInspectionInput {
   readonly files?: readonly string[];
   readonly filesTruncated?: boolean;
   readonly formatter?: ResolvedFormatterSettings;
-  readonly lsp?: ResolvedLspSettings;
+  readonly lspServers?: readonly PiLensServerCandidate[];
   readonly markerReader?: (directory: string, marker: string) => boolean;
   readonly projectTrusted: boolean;
 }
@@ -84,19 +83,12 @@ export function inspectToolCandidates(input: CandidateInspectionInput): Candidat
       ancestorOverflow,
       input.filesTruncated === true,
     ),
-    lsp: inspectLsp(
-      input.lsp,
-      input.files,
-      ancestors,
-      input.markerReader,
-      ancestorOverflow,
-      input.filesTruncated === true,
-    ),
+    lsp: inspectLspServers(input.lspServers, input.files, input.filesTruncated === true),
   };
 }
 
 export function candidateView(kind: CandidateKind, result: CandidateResult): CandidateViewModel {
-  const label = kind === "formatter" ? "formatters" : "lsp candidates";
+  const label = kind === "formatter" ? "formatters" : "lsp";
   switch (result.state) {
     case "trust-disabled":
       return { label, state: result.state, detail: "trust disabled" };
@@ -153,41 +145,24 @@ function inspectFormatters(
   return collector.result();
 }
 
-function inspectLsp(
-  settings: ResolvedLspSettings | undefined,
+function inspectLspServers(
+  servers: readonly PiLensServerCandidate[] | undefined,
   files: readonly string[] | undefined,
-  ancestors: readonly CandidateAncestor[],
-  markerReader: CandidateInspectionInput["markerReader"],
-  ancestorOverflow: boolean,
   filesTruncated: boolean,
 ): CandidateResult {
-  if (settings === undefined) return fixedResult("unavailable");
-  if (settings.warnings.length > 0) return fixedResult("invalid-settings");
-
-  const collector = createCollector(ancestorOverflow);
+  if (servers === undefined) return fixedResult("unavailable");
+  const collector = createCollector(false);
   if (filesTruncated) collector.overflow("files");
-  for (const [index, server] of settings.servers.entries()) {
+  for (const [index, server] of servers.entries()) {
     if (index >= CANDIDATE_LIMITS.configuredEntries) {
       collector.overflow("configured-entries");
-      return collector.result();
+      break;
     }
-    if (!serverApplies(server, ancestors, markerReader, collector)) continue;
-    if (
-      files !== undefined &&
-      !server.languages.some((language) => files.some((file) => languageApplies(language, file)))
-    ) {
-      continue;
+    if (files === undefined || files.some((file) => matchesPiLensServer(server, file))) {
+      collector.add(server.id);
     }
-    collector.add(server.id);
   }
   return collector.result();
-}
-
-function languageApplies(language: LspLanguage, filePath: string): boolean {
-  return (
-    language.extensions.includes(extname(filePath)) ||
-    language.fileNames.includes(basename(filePath))
-  );
 }
 
 function formatterCommandApplies(
@@ -198,15 +173,6 @@ function formatterCommandApplies(
 ): boolean {
   if (command.requireRootMarker === false) return true;
   return markersMatch(command.rootMarkers, ancestors, markerReader, collector);
-}
-
-function serverApplies(
-  server: LspServerSettings,
-  ancestors: readonly CandidateAncestor[],
-  markerReader: CandidateInspectionInput["markerReader"],
-  collector: Collector,
-): boolean {
-  return markersMatch(server.rootMarkers, ancestors, markerReader, collector);
 }
 
 function markersMatch(

@@ -1,0 +1,274 @@
+{
+  "format": {
+    "enabled": false
+  },
+  "autofix": {
+    "enabled": false
+  },
+  "lsp": {
+    "disabledServers": [
+      "ast-grep",
+      "bash",
+      "cpp",
+      "css",
+      "deno",
+      "html",
+      "lua",
+      "marksman",
+      "nix",
+      "opengrep",
+      "typescript",
+      "typos",
+      "zizmor"
+    ],
+    "servers": {
+      "bashls": {
+        "name": "Bash Language Server",
+        "command": "bash-language-server",
+        "args": [
+          "start"
+        ],
+        "extensions": [
+          ".sh",
+          ".bash",
+          ".bashrc",
+          ".bash_profile",
+          ".bash_login",
+          ".bash_logout",
+          ".profile"
+        ],
+        "rootMarkers": [
+          ".git"
+        ]
+      },
+      "tsc": {
+        "name": "TypeScript Native Preview",
+        "command": "tsc",
+        "args": [
+          "--lsp",
+          "--stdio"
+        ],
+        "extensions": [
+          ".js",
+          ".jsx",
+          ".ts",
+          ".tsx"
+        ],
+        "rootMarkers": [
+          "tsconfig.json",
+          "jsconfig.json",
+          "package.json",
+          "pnpm-lock.yaml",
+          "yarn.lock",
+          "package-lock.json",
+          "bun.lock",
+          ".git"
+        ]
+      },
+      "biome": {
+        "name": "Biome",
+        "command": "biome",
+        "args": [
+          "lsp-proxy"
+        ],
+        "extensions": [
+          ".js",
+          ".jsx",
+          ".ts",
+          ".tsx",
+          ".json",
+          ".jsonc",
+          ".css",
+          ".html"
+        ],
+        "rootMarkers": [
+          "biome.json",
+          "biome.jsonc"
+        ]
+      },
+      "clangd": {
+        "name": "clangd",
+        "command": "clangd",
+        "args": [],
+        "extensions": [
+          ".cc",
+          ".cpp",
+          ".cxx",
+          ".c++",
+          ".h",
+          ".hh",
+          ".hpp",
+          ".hxx",
+          ".h++",
+          ".ipp"
+        ],
+        "rootMarkers": [
+          "compile_commands.json",
+          "compile_flags.txt",
+          ".clangd",
+          "CMakeLists.txt",
+          ".git"
+        ]
+      },
+      "cssls": {
+        "name": "CSS Language Server",
+        "command": "vscode-css-language-server",
+        "args": [
+          "--stdio"
+        ],
+        "extensions": [
+          ".css",
+          ".scss",
+          ".less"
+        ],
+        "rootMarkers": [
+          "package.json",
+          ".git"
+        ]
+      },
+      "eslint": {
+        "name": "ESLint Language Server",
+        "command": "vscode-eslint-language-server",
+        "args": [
+          "--stdio"
+        ],
+        "extensions": [
+          ".js",
+          ".jsx",
+          ".ts",
+          ".tsx"
+        ],
+        "rootMarkers": [
+          "eslint.config.js",
+          "eslint.config.mjs",
+          "eslint.config.cjs",
+          "eslint.config.ts",
+          "eslint.config.mts",
+          "eslint.config.cts",
+          ".eslintrc",
+          ".eslintrc.js",
+          ".eslintrc.cjs",
+          ".eslintrc.yaml",
+          ".eslintrc.yml",
+          ".eslintrc.json"
+        ]
+      },
+      "fallow": {
+        "name": "Fallow",
+        "command": "fallow-lsp",
+        "args": [],
+        "extensions": [
+          ".js",
+          ".jsx",
+          ".ts",
+          ".tsx"
+        ],
+        "rootMarkers": [
+          ".fallowrc.json",
+          ".fallowrc.jsonc",
+          "fallow.toml",
+          ".fallow.toml"
+        ]
+      },
+      "html-custom": {
+        "name": "HTML Language Server",
+        "command": "vscode-html-language-server",
+        "args": [
+          "--stdio"
+        ],
+        "extensions": [
+          ".html"
+        ],
+        "rootMarkers": [
+          "package.json",
+          ".git"
+        ]
+      },
+      "lua_ls": {
+        "name": "Lua Language Server",
+        "command": "lua-language-server",
+        "args": [],
+        "extensions": [
+          ".lua"
+        ],
+        "rootMarkers": [
+          ".luarc.json",
+          ".luarc.jsonc",
+          ".git"
+        ]
+      },
+      "marksman-custom": {
+        "name": "Marksman",
+        "command": "marksman",
+        "args": [
+          "server"
+        ],
+        "extensions": [
+          ".md",
+          ".mdx"
+        ],
+        "rootMarkers": [
+          ".marksman.toml",
+          ".git"
+        ]
+      },
+      "nil": {
+        "name": "nil",
+        "command": "nil",
+        "args": [],
+        "extensions": [
+          ".nix"
+        ],
+        "rootMarkers": [
+          "flake.nix",
+          "flake.lock",
+          "devenv.nix",
+          "shell.nix"
+        ]
+      },
+      "stylelint": {
+        "name": "Stylelint Language Server",
+        "command": "stylelint-lsp",
+        "args": [
+          "--stdio"
+        ],
+        "extensions": [
+          ".css",
+          ".scss",
+          ".less"
+        ],
+        "rootMarkers": [
+          ".stylelintrc",
+          ".stylelintrc.json",
+          ".stylelintrc.yaml",
+          ".stylelintrc.yml",
+          ".stylelintrc.js",
+          ".stylelintrc.cjs",
+          ".stylelintrc.mjs",
+          "stylelint.config.js",
+          "stylelint.config.cjs",
+          "stylelint.config.mjs"
+        ]
+      }
+    },
+    "serverOverrides": {
+      "cssls": {
+        "initializationOptions": {
+          "provideFormatter": false
+        }
+      },
+      "html-custom": {
+        "initializationOptions": {
+          "provideFormatter": false,
+          "embeddedLanguages": {
+            "css": true,
+            "javascript": true
+          }
+        }
+      }
+    }
+  },
+  "widget": {
+    "visible": false
+  }
+}

@@ -19,6 +19,8 @@ storybook-static
 
 # Pi installs project-local packages here; .pi/settings.json pins them for other machines.
 .pi/npm/
+.pi-lens/*
+!.pi-lens/config.json
 !.codex/skills/**/*
 .agents/skills/.system
 # Herdr publishes its skill from the repository root; keep only its skill entry point.

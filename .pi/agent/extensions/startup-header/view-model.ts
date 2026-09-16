@@ -79,10 +79,7 @@ export function renderStartupHeader(
       ),
       theme.fg(
         "muted",
-        formatCandidateView(candidateView("lsp", candidates.lsp)).replace(
-          /^lsp candidates:/,
-          "LSP:",
-        ),
+        formatCandidateView(candidateView("lsp", candidates.lsp)).replace(/^lsp:/, "LSP:"),
       ),
     );
   }

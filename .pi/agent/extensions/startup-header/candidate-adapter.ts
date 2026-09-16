@@ -4,13 +4,13 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type { ResolvedFormatterSettings } from "../formatter/settings";
-import type { ResolvedLspSettings } from "../lsp/settings";
 import {
   CANDIDATE_LIMITS,
   type CandidateAncestor,
   type CandidateInspection,
   inspectToolCandidates,
 } from "./candidates";
+import { loadPiLensServerCandidates } from "./pi-lens-config";
 import type { WorkspaceIdentity } from "./workspace";
 
 const execFileAsync = promisify(execFile);
@@ -34,25 +34,22 @@ export async function inspectConfiguredCandidates(
   }
 
   try {
-    const [{ loadFormatterSettings }, { loadLspSettings }] = await Promise.all([
-      import("../formatter/index"),
-      import("../lsp/index"),
-    ]);
+    const { loadFormatterSettings } = await import("../formatter/index");
     const formatter = loadFormatterSettings(context);
-    const lsp = loadLspSettings(context);
+    const lspServers = loadPiLensServerCandidates(workspace.root);
     const ancestors = buildAncestorChain(context.cwd, workspace.root);
     const repositoryFiles =
       discoveredFiles ??
       (await discoverRepositoryFiles(
         workspace.root,
-        candidatePathspecs(formatter, lsp, ancestors),
+        candidatePathspecs(formatter, lspServers, ancestors),
       ));
     return inspectToolCandidates({
       ancestors,
       files: repositoryFiles.files,
       filesTruncated: repositoryFiles.truncated,
       formatter,
-      lsp,
+      lspServers,
       markerReader: markerExistsWithinDirectory,
       projectTrusted: true,
     });
@@ -94,7 +91,7 @@ function markersExist(
 
 export function candidatePathspecs(
   formatter: ResolvedFormatterSettings,
-  lsp: ResolvedLspSettings,
+  lspServers: readonly import("./pi-lens-config").PiLensServerCandidate[],
   ancestors: readonly CandidateAncestor[],
 ): readonly string[] | undefined {
   const extensions = new Set<string>();
@@ -111,12 +108,8 @@ export function candidatePathspecs(
     for (const extension of rule.extensions) extensions.add(extension);
     for (const fileName of rule.fileNames) fileNames.add(fileName);
   }
-  for (const server of lsp.servers) {
-    if (!markersExist(server.rootMarkers, ancestors)) continue;
-    for (const language of server.languages) {
-      for (const extension of language.extensions) extensions.add(extension);
-      for (const fileName of language.fileNames) fileNames.add(fileName);
-    }
+  for (const server of lspServers) {
+    for (const extension of server.extensions) extensions.add(extension);
   }
   const safeLiteral = /^[A-Za-z0-9._+-]+$/u;
   if (
