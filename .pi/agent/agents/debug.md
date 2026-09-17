@@ -1,6 +1,6 @@
 ---
 color: "#de7681"
-description: Investigates and diagnoses bugs, errors, and unexpected behavior using bash and file inspection. Use when a bug needs root cause analysis, when logs need examination, or when system state needs to be inspected.
+description: Diagnoses concrete bugs, errors, unexpected behavior, and performance regressions using reproductions, logs, and runtime state. Use analyze for symptom-free code explanation, test for test-focused failures, and benchmark for performance measurement rather than root-cause diagnosis.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low

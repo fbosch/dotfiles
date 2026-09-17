@@ -1,6 +1,6 @@
 ---
 color: "#8ed8c1"
-description: Decomposes rough ideas, specs, and issue text into a structured backlog plan. Use before creating Linear issues or starting implementation.
+description: Converts ideas, specs, or issue text into a dependency-aware task backlog without creating tickets or implementing code. Use when the deliverable is work decomposition; use ideate for alternatives and spec for unresolved behavior contracts.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low

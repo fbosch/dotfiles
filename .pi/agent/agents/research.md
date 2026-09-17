@@ -1,6 +1,6 @@
 ---
 color: "#ae87ed"
-description: Gathers information from docs, web, and codebases without making changes
+description: Synthesizes source-backed answers, comparisons, and tradeoffs without making changes. Use when a question needs synthesis beyond a narrow reference lookup, repository map, code trace, or pattern search.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: high

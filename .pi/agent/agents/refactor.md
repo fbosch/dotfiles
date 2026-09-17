@@ -1,6 +1,6 @@
 ---
 color: "#aae373"
-description: Refactors code to improve quality without changing behavior. Use when code has duplication, poor naming, complex logic, or readability issues.
+description: Makes requested behavior-preserving improvements to duplication, naming, logic, and readability. Use when code cleanup is the deliverable; use review for assessment without edits and debug for incorrect behavior.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: xhigh

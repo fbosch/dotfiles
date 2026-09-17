@@ -1,6 +1,6 @@
 ---
 color: "#e5d784"
-description: Fast, cost-efficient execution for well-scoped tasks and command workflows.
+description: Executes small, well-scoped edits, context transformations, and repeatable command workflows with explicit acceptance criteria. Prefer specialists for their named deliverables; do not use for deep design or broad cross-cutting changes.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna-fast
 thinking: low
