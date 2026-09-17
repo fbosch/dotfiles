@@ -18,8 +18,6 @@ const ansiTheme = {
 };
 const promptState: PromptEditorState = {
   isWorking: () => false,
-  isInterruptPending: () => false,
-  setInterruptPending() {},
   getWorkingMarker: () => "●",
   getBranch: () => null,
   getProfileName: () => undefined,
@@ -27,15 +25,14 @@ const promptState: PromptEditorState = {
 };
 
 describe("prompt footer statuses", () => {
-  test("prompts for a second interrupt press while armed", () => {
+  test("shows a direct interrupt hint while working", () => {
     const state = {
       ...promptState,
       isWorking: () => true,
-      isInterruptPending: () => true,
     };
     const line = renderPromptHints(theme, { getKeys: () => ["escape"] }, state, "~/dotfiles", 60);
 
-    expect(line).toContain("warning:esc again to interrupt");
+    expect(line).toContain("esc interrupt");
   });
 
   test("renders MCP status like OpenCode", () => {

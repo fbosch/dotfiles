@@ -21,8 +21,6 @@ const tui = {
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 const state: PromptEditorState = {
   isWorking: () => false,
-  isInterruptPending: () => false,
-  setInterruptPending() {},
   getWorkingMarker: () => "●",
   getBranch: () => null,
   getProfileName: () => undefined,

@@ -49,8 +49,6 @@ function createEditor() {
   } as unknown as TUI;
   const state: PromptEditorState = {
     isWorking: () => false,
-    isInterruptPending: () => false,
-    setInterruptPending: () => {},
     getWorkingMarker: () => "●",
     getBranch: () => null,
     getProfileName: () => undefined,

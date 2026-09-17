@@ -20,24 +20,14 @@ const keybindings = {
   matches: (data: string, action: string) => data === "\u001b" && action === "app.interrupt",
 } as unknown as KeybindingsManager;
 
-function createEditor(working: boolean, confirmationWindowMs = 1_500) {
-  let interruptPending = false;
+function createEditor(working: boolean) {
   let interruptCount = 0;
-  let renderCount = 0;
   const tui = {
     terminal: { rows: 40, columns: 120 },
-    requestRender() {
-      renderCount += 1;
-    },
+    requestRender() {},
   } as unknown as TUI;
   const state: PromptEditorState = {
     isWorking: () => working,
-    isInterruptPending: () => interruptPending,
-    setInterruptPending: (pending) => {
-      if (interruptPending === pending) return;
-      interruptPending = pending;
-      renderCount += 1;
-    },
     getWorkingMarker: () => "●",
     getBranch: () => null,
     getProfileName: () => undefined,
@@ -59,7 +49,6 @@ function createEditor(working: boolean, confirmationWindowMs = 1_500) {
     } as unknown as ExtensionContext,
     state,
     { rules: new Map(), lengths: new Set() },
-    confirmationWindowMs,
   );
   editor.onEscape = () => {
     interruptCount += 1;
@@ -67,47 +56,15 @@ function createEditor(working: boolean, confirmationWindowMs = 1_500) {
 
   return {
     editor,
-    isInterruptPending: () => interruptPending,
     getInterruptCount: () => interruptCount,
-    getRenderCount: () => renderCount,
   };
 }
 
-test("requires a second interrupt press while the agent is working", () => {
+test("interrupts on the first press while the agent is working", () => {
   const fixture = createEditor(true);
-
-  fixture.editor.handleInput("\u001b");
-  expect(fixture.getInterruptCount()).toBe(0);
-  expect(fixture.isInterruptPending()).toBe(true);
-  expect(fixture.getRenderCount()).toBeGreaterThan(0);
 
   fixture.editor.handleInput("\u001b");
   expect(fixture.getInterruptCount()).toBe(1);
-  expect(fixture.isInterruptPending()).toBe(false);
-  fixture.editor.dispose();
-});
-
-test("expires the interrupt confirmation window", async () => {
-  const fixture = createEditor(true, 10);
-
-  fixture.editor.handleInput("\u001b");
-  await Bun.sleep(20);
-  expect(fixture.isInterruptPending()).toBe(false);
-
-  fixture.editor.handleInput("\u001b");
-  expect(fixture.getInterruptCount()).toBe(0);
-  expect(fixture.isInterruptPending()).toBe(true);
-  fixture.editor.dispose();
-});
-
-test("disarms interrupt confirmation when other input arrives", () => {
-  const fixture = createEditor(true);
-
-  fixture.editor.handleInput("\u001b");
-  fixture.editor.handleInput("a");
-
-  expect(fixture.isInterruptPending()).toBe(false);
-  expect(fixture.getInterruptCount()).toBe(0);
   fixture.editor.dispose();
 });
 
@@ -116,6 +73,5 @@ test("keeps a single interrupt press when the agent is idle", () => {
 
   fixture.editor.handleInput("\u001b");
   expect(fixture.getInterruptCount()).toBe(1);
-  expect(fixture.isInterruptPending()).toBe(false);
   fixture.editor.dispose();
 });

@@ -12,8 +12,6 @@ const theme = {
 const keybindings = { getKeys: () => [] };
 const promptState: PromptEditorState = {
   isWorking: () => false,
-  isInterruptPending: () => false,
-  setInterruptPending() {},
   getWorkingMarker: () => "●",
   getBranch: () => null,
   getProfileName: () => undefined,

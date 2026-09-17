@@ -52,7 +52,6 @@ import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
-const INTERRUPT_CONFIRMATION_WINDOW_MS = 1_500;
 export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
 const MCP_ICON = "";
@@ -80,8 +79,6 @@ export function formatFffGitStatus(theme: Pick<Theme, "fg">, status: string): st
 }
 export interface PromptEditorState {
   isWorking(): boolean;
-  isInterruptPending(): boolean;
-  setInterruptPending(pending: boolean): void;
   getWorkingMarker(): string;
   getBranch(): string | null;
   getProfileName(): string | undefined;
@@ -180,15 +177,7 @@ export function renderPromptHints(
     .getStatuses()
     .map((status) => sanitizeStatus(status))
     .filter((status) => status.length > 0);
-  const interruptPending = promptState.isInterruptPending();
-  const interruptHintText = keyHint(
-    keybindings,
-    "app.interrupt",
-    interruptPending ? "again to interrupt" : "interrupt",
-  );
-  const interruptHint = interruptPending
-    ? theme.fg("warning", interruptHintText)
-    : interruptHintText;
+  const interruptHint = keyHint(keybindings, "app.interrupt", "interrupt");
   const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
   const workingText = promptState.isWorking()
     ? [theme.fg("accent", `${promptState.getWorkingMarker()} working`), interruptHint]
@@ -230,7 +219,6 @@ export class PromptEditor extends CustomEditor {
   private readonly projectReferences: readonly ProjectReference[];
   private autocompleteItems: readonly AutocompleteItem[] = [];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
-  private interruptConfirmationTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(
     tui: TUI,
@@ -240,7 +228,6 @@ export class PromptEditor extends CustomEditor {
     ctx: ExtensionContext,
     state: PromptEditorState,
     typoRules: TypoCorrectionRules,
-    private readonly interruptConfirmationWindowMs = INTERRUPT_CONFIRMATION_WINDOW_MS,
   ) {
     super(tui, theme, keybindings, {
       paddingX: EDITOR_PADDING_X,
@@ -275,7 +262,6 @@ export class PromptEditor extends CustomEditor {
   }
 
   dispose(): void {
-    this.resetInterruptConfirmation();
     this.disposeSubagentSessionLinks();
     this.autocompleteOverlay.dispose();
   }
@@ -319,27 +305,6 @@ export class PromptEditor extends CustomEditor {
     });
   }
 
-  private armInterruptConfirmation(): void {
-    this.resetInterruptConfirmation();
-    this.promptState.setInterruptPending(true);
-    this.interruptConfirmationTimer = setTimeout(() => {
-      this.interruptConfirmationTimer = undefined;
-      if (this.promptState.isInterruptPending()) {
-        this.promptState.setInterruptPending(false);
-      }
-    }, this.interruptConfirmationWindowMs);
-  }
-
-  private resetInterruptConfirmation(): void {
-    if (this.interruptConfirmationTimer !== undefined) {
-      clearTimeout(this.interruptConfirmationTimer);
-      this.interruptConfirmationTimer = undefined;
-    }
-    if (this.promptState.isInterruptPending()) {
-      this.promptState.setInterruptPending(false);
-    }
-  }
-
   private hasAutocompleteTokenAtCursor(line: string, cursorCol: number): boolean {
     let tokenStart = cursorCol;
     while (tokenStart > 0) {
@@ -353,18 +318,6 @@ export class PromptEditor extends CustomEditor {
   }
 
   handleInput(data: string): void {
-    const isInterrupt = this.appKeybindings.matches(data, "app.interrupt");
-    if (isInterrupt && this.promptState.isWorking() && !this.isShowingAutocomplete()) {
-      if (this.promptState.isInterruptPending()) {
-        this.resetInterruptConfirmation();
-        super.handleInput(data);
-      } else {
-        this.armInterruptConfirmation();
-      }
-      return;
-    }
-    this.resetInterruptConfirmation();
-
     if (
       this.isShowingAutocomplete() &&
       (this.appKeybindings.matches(data, "tui.select.cancel") ||
