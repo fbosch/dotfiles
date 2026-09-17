@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "d84c0a10cd5ea23285cb5575fa90179f51710f99",
+      "rev": "4083ea04d30537aaa653a2189616ab6b4ff19810",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -66,7 +66,7 @@
       "src": "https://github.com/lionyxml/gitlineage.nvim.git"
     },
     "gitsigns.nvim": {
-      "rev": "5be654f2232c10ddcad19c1607a67b6b4b78fc29",
+      "rev": "8d79f2410c76e62b92e51c28c82e28c1c5a3daeb",
       "src": "https://github.com/lewis6991/gitsigns.nvim.git"
     },
     "helpview.nvim": {
@@ -151,7 +151,7 @@
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "456f8cc94438de35ff2294454019e7b780b73514",
+      "rev": "ac9d2f7c4757db6320cab6697fe73e5e8adb2457",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -184,11 +184,11 @@
       "src": "https://github.com/nguyenvukhang/nvim-toggler.git"
     },
     "nvim-tree.lua": {
-      "rev": "b2aadda94b107480c48e548d6db51c6840b7b33c",
+      "rev": "8d814495983e8db87d02d2f1da293f25b2fd1bdc",
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "5cb0114e6242625db56dd6440e945ed1ece10bc7",
+      "rev": "9a168f6357ed21c3a636e1727bc7d382abc451b8",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -200,7 +200,7 @@
       "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
     "opencode.nvim": {
-      "rev": "2ddeebd3212596b51bf078e6ff52862655b80419",
+      "rev": "84eabfbe65a44f452ee302fe360cea9fd9939f31",
       "src": "https://github.com/NickvanDyke/opencode.nvim.git"
     },
     "plenary.nvim": {

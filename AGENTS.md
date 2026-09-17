@@ -31,7 +31,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## Pi Extensions
 
-- Local Pi extensions are deny-by-default in `.pi/agent/settings.json`. When adding an extension, add its `+extensions/<path>` entry to the allowlist; `/reload` alone will not enable it.
+- Extensions in `.pi/agent/extensions/` are auto-discovered from the Stow-linked `~/.pi/agent/extensions/`; use `/reload` after changes.
 
 ## OpenCode Plugins
 
