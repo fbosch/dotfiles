@@ -293,6 +293,8 @@ tasks:
                           del output[fd]
                   if proc.poll() is not None and not ready:
                       break
+              while proc.poll() is None and time.monotonic() < deadline:
+                  time.sleep(0.01)
               if proc.poll() is None:
                   raise AssertionError(f"pipeline updater exceeded deadline: {argv}")
               for stream in streams.values():
@@ -552,6 +554,8 @@ tasks:
                           del fds[fd]
                   if proc.poll() is not None and not ready:
                       break
+              while proc.poll() is None and time.monotonic() < deadline:
+                  time.sleep(0.01)
               if proc.poll() is None:
                   raise AssertionError(f"piped command exceeded deadline: {args}")
               for stream in streams.values():
@@ -830,6 +834,8 @@ tasks:
                           del fds[fd]
                   if proc.poll() is not None and not ready:
                       break
+              while proc.poll() is None and time.monotonic() < deadline:
+                  time.sleep(0.01)
               if proc.poll() is None:
                   raise AssertionError(f"wrapper {mode} exceeded deadline")
               if send_signal is not None and not signalled:
@@ -856,11 +862,11 @@ tasks:
 
       code, stdout, stderr = run_capture("wait", signal.SIGINT)
       assert code == -signal.SIGINT, f"SIGINT status was not preserved: {code}"
-      assert stdout.startswith(b"ready\\n"), stdout
+      assert stdout.startswith(b"ready\n"), stdout
 
       code, stdout, stderr = run_capture("wait", signal.SIGTERM)
       assert code == -signal.SIGTERM, f"SIGTERM status was not preserved: {code}"
-      assert stdout.startswith(b"ready\\n"), stdout
+      assert stdout.startswith(b"ready\n"), stdout
 
       assert wrapper_path.read_bytes() == expected_wrapper, "wrapper changed during probes"
       assert child_path.read_bytes() == expected_child, "child changed during probes"

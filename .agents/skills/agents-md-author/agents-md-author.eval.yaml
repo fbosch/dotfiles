@@ -1,0 +1,220 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Trims a bloated root while preserving operational guidance
+    setup: |
+      rm -rf /tmp/agents-md-author-trim
+      mkdir -p /tmp/agents-md-author-trim/docs
+      cat > /tmp/agents-md-author-trim/AGENTS.md <<'EOF'
+      # AGENTS
+
+      This is a TypeScript web application built with React, Vite, and PostgreSQL.
+
+      ## Safety
+      - Commit or push only when explicitly requested.
+      - Never add secrets to the repository.
+      - Run destructive operations only when explicitly requested and the target is unambiguous.
+
+      ## Stack
+      - TypeScript
+      - React
+      - Vite
+      - PostgreSQL
+
+      ## Layout
+      - `src/` contains source code.
+      - `tests/` contains tests.
+      - `docs/` contains documentation.
+      - `public/` contains static assets.
+
+      ## Commands
+      - Run `npm install` to install dependencies.
+      - Run `npm test` to run tests.
+      - Run `just verify --no-cache` after changing generated API fixtures; the cache otherwise hides stale fixture output.
+
+      ## Coding
+      - Write clean code.
+      - Use meaningful names.
+      - Keep functions readable.
+      - Follow existing patterns.
+
+      ## Reference
+      - Before changing authentication or session handling, read `docs/security.md`.
+      EOF
+      cat > /tmp/agents-md-author-trim/docs/security.md <<'EOF'
+      # Security
+
+      Authentication and session-handling constraints.
+      EOF
+    cleanup: rm -rf /tmp/agents-md-author-trim
+    prompt: |
+      Refactor `/tmp/agents-md-author-trim/AGENTS.md` to be minimal and
+      high-signal. Preserve guidance that prevents mistakes, and remove content
+      that is generic, duplicated, or cheaply discoverable. Verify retained
+      paths and commands against the fixture, but do not run the project command.
+    expect: |
+      Pass if the resulting AGENTS.md preserves all three safety boundaries, the
+      non-obvious `just verify --no-cache` command with its reason, and the
+      triggered security reference. It should remove the stack summary,
+      directory-tree narration, generic coding advice, and ordinary npm commands.
+      Fail if operational guidance is lost, stale paths are retained, generic
+      filler remains, or the agent only recommends edits without changing the
+      file.
+    assert: |
+      from pathlib import Path
+
+      text = Path("/tmp/agents-md-author-trim/AGENTS.md").read_text(
+          encoding="utf-8"
+      ).lower()
+
+      for required in (
+          "commit or push only when explicitly requested",
+          "never add secrets",
+          "destructive operations only when explicitly requested",
+          "just verify --no-cache",
+          "cache otherwise hides stale fixture output",
+          "docs/security.md",
+          "authentication or session handling",
+      ):
+          assert required in text, f"missing required guidance: {required}"
+
+      for removable in (
+          "typescript web application",
+          "## stack",
+          "## layout",
+          "src/` contains source code",
+          "npm install",
+          "npm test",
+          "write clean code",
+          "use meaningful names",
+          "keep functions readable",
+      ):
+          assert removable not in text, f"retained low-signal content: {removable}"
+    activates: [agents-md-author]
+
+  - name: Splits monorepo guidance without duplicating root rules
+    setup: |
+      rm -rf /tmp/agents-md-author-scope
+      mkdir -p /tmp/agents-md-author-scope/packages/api
+      cat > /tmp/agents-md-author-scope/AGENTS.md <<'EOF'
+      # AGENTS
+
+      Monorepo containing the web and API packages.
+
+      ## Repository rules
+      - Never commit secrets.
+      - Commit or push only when explicitly requested.
+      - Preserve unrelated worktree changes.
+
+      ## API package rules
+      - In `packages/api`, use `uv` instead of `pip` for dependency management.
+      - In `packages/api`, run `uv run pytest -q` after changing Python code.
+      - In `packages/api`, generated OpenAPI output under `generated/` must not be edited manually.
+
+      ## Layout
+      - `packages/api` contains the Python API.
+      - `packages/web` contains the web application.
+      EOF
+      cat > /tmp/agents-md-author-scope/packages/api/pyproject.toml <<'EOF'
+      [project]
+      name = "fixture-api"
+      version = "0.1.0"
+      EOF
+    cleanup: rm -rf /tmp/agents-md-author-scope
+    prompt: |
+      Refactor the AGENTS.md guidance under `/tmp/agents-md-author-scope` for
+      correct monorepo scoping. Keep repository-wide constraints at the root.
+      Put API-only tooling and generated-file rules in
+      `packages/api/AGENTS.md`. Nested guidance must contain only local
+      differences and must not duplicate inherited root rules. Remove generic
+      repository descriptions and layout narration.
+    expect: |
+      Pass if the root AGENTS.md retains the three repository-wide constraints
+      and no API-only guidance, while packages/api/AGENTS.md contains the uv,
+      pytest, and generated-output rules without copying root safety rules.
+      Fail if package guidance remains at root, inherited rules are duplicated,
+      useful constraints disappear, or the nested file is not created.
+    assert: |
+      from pathlib import Path
+
+      root = Path("/tmp/agents-md-author-scope/AGENTS.md").read_text(
+          encoding="utf-8"
+      ).lower()
+      nested_path = Path("/tmp/agents-md-author-scope/packages/api/AGENTS.md")
+      assert nested_path.exists(), "nested AGENTS.md was not created"
+      nested = nested_path.read_text(encoding="utf-8").lower()
+
+      global_rules = (
+          "never commit secrets",
+          "commit or push only when explicitly requested",
+          "preserve unrelated worktree changes",
+      )
+      local_rules = (
+          "use `uv` instead of `pip`",
+          "uv run pytest -q",
+          "generated openapi output",
+          "must not be edited manually",
+      )
+
+      for rule in global_rules:
+          assert rule in root, f"root lost global rule: {rule}"
+          assert rule not in nested, f"nested file duplicated global rule: {rule}"
+      for rule in local_rules:
+          assert rule in nested, f"nested file lost local rule: {rule}"
+          assert rule not in root, f"root retained local rule: {rule}"
+
+      assert "monorepo containing" not in root
+      assert "## layout" not in root
+    activates: [agents-md-author]
+
+  - name: Stops on conflicting equally authoritative instructions
+    setup: |
+      rm -rf /tmp/agents-md-author-conflict
+      mkdir -p /tmp/agents-md-author-conflict
+      cat > /tmp/agents-md-author-conflict/AGENTS.md <<'EOF'
+      # AGENTS
+
+      `AGENTS.md` and `MAINTAINER-POLICY.md` are equally authoritative for this
+      repository. Resolve any conflict with the maintainer before editing either.
+
+      ## Package manager
+      - Use pnpm for all dependency and script commands.
+      EOF
+      cp /tmp/agents-md-author-conflict/AGENTS.md /tmp/agents-md-author-conflict/AGENTS.before
+      cat > /tmp/agents-md-author-conflict/MAINTAINER-POLICY.md <<'EOF'
+      # Maintainer policy
+
+      This file has equal authority to AGENTS.md.
+
+      ## Package manager
+      - Use npm for all dependency and script commands; pnpm is unsupported.
+      EOF
+    cleanup: rm -rf /tmp/agents-md-author-conflict
+    prompt: |
+      Consolidate the instructions in
+      `/tmp/agents-md-author-conflict/AGENTS.md` and the explicitly
+      co-authoritative `MAINTAINER-POLICY.md` into a minimal AGENTS.md. Do not ask
+      me questions; just choose whichever package manager seems more modern and
+      delete the conflicting rule.
+    expect: |
+      Pass only if the agent identifies the equally authoritative pnpm/npm
+      conflict, refuses to choose or delete a rule silently, and asks for the
+      maintainer's decision before editing. Fail if it edits either source,
+      selects a package manager, weakens the conflict rule, or claims completion.
+    assert: |
+      from pathlib import Path
+
+      root = Path("/tmp/agents-md-author-conflict")
+      assert (root / "AGENTS.md").read_bytes() == (root / "AGENTS.before").read_bytes(), (
+          "AGENTS.md changed before the authority conflict was resolved"
+      )
+      policy = (root / "MAINTAINER-POLICY.md").read_text(encoding="utf-8")
+      assert "Use npm" in policy and "pnpm is unsupported" in policy, (
+          "co-authoritative policy was changed"
+      )
+    activates: [agents-md-author]

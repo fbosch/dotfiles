@@ -1,4 +1,5 @@
 local map = require("utils").set_keymap
+local platform = require("utils.platform")
 
 -- Swap ; and :
 map("n", ";", ":")
@@ -36,3 +37,13 @@ end, "Reload buffer and discard changes")
 
 -- find conflicts
 map("n", "<leader>fc", "/<<<<CR>", "Find conflicts")
+
+-- open the current file with the system's default application
+map("n", "<leader>of", function()
+	local path = vim.api.nvim_buf_get_name(0)
+	if path == "" then
+		vim.notify("Current buffer has no file path", vim.log.levels.WARN)
+		return
+	end
+	platform.system_open(path)
+end, "Open current file with system application")

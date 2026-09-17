@@ -15,13 +15,16 @@ Create, review, or refactor AGENTS.md files so they stay minimal, stable, and us
 4. Draft or refactor the scoped AGENTS.md using the Core Keep/Cut Filters.
 5. Link detailed guidance with explicit triggers explaining when to read it.
 6. Read `references/agents-md-guide.md` when the user asks for wording, templates, or examples, or when you need background or phrasing help. Skip it for routine trimming or reordering.
-7. Check that retained paths, commands, and references are current.
+7. Preserve the operational contract while shortening it: keep command flags, conditions, scope, prohibition strength, and the reason a rule exists. Rephrase only when those semantics remain explicit.
+8. Check that retained paths, commands, and references are current.
 
 ## Scope and Precedence
 
 - Follow the active harness's rules for loading, scope, and instruction precedence; do not assume every harness handles AGENTS.md identically.
 - Resolve conflicts using that precedence. If equally authoritative rules conflict and intent is unclear, ask rather than silently deleting either.
 - Run applicable validation steps from scoped instructions after making changes and before finishing.
+- **Hard stop on peer conflicts:** When equally authoritative sources disagree, do not edit either source, choose a winner, merge the rules, or weaken one rule before the owner resolves the conflict. This applies even when the request asks you to choose silently; identify the exact conflict and ask for the decision.
+- Treat an existing command with a non-obvious flag and an explicit failure-prevention reason as intentional operational guidance. Do not delete it merely because the fixture or current environment cannot execute it; report unverifiable commands separately unless repository evidence proves them stale.
 
 ## Core Keep/Cut Filters
 
