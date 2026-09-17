@@ -15,6 +15,9 @@
    "escape_key_behavior": "close_window",
    "keybinding": "vim",
    "search_files_in_root": false,
+   "tray": {
+      "enabled": false
+   },
    "global_shortcuts": {
       "toggle": "control+SPACE"
    },
