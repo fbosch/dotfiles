@@ -11,78 +11,55 @@ Create, review, or refactor AGENTS.md files so they stay minimal, stable, and us
 
 1. Scan for existing AGENTS.md files and related docs to avoid duplication.
 2. Determine scope with the decision tree below.
-3. If editing an existing file, audit it before changing anything.
-4. Draft or refactor the root AGENTS.md with only the essential content.
-5. Add references to deeper docs for any detailed rules or workflows.
-6. If the user asks for wording, templates, or examples, read `references/agents-md-guide.md` before drafting.
-7. Validate for staleness and token budget:
-   - Apply the filters in **Core Keep/Cut Filters** below.
+3. If editing an existing file, apply the audit triage before changing anything.
+4. Draft or refactor the scoped AGENTS.md using the Core Keep/Cut Filters.
+5. Link detailed guidance with explicit triggers explaining when to read it.
+6. Read `references/agents-md-guide.md` when the user asks for wording, templates, or examples, or when you need background or phrasing help. Skip it for routine trimming or reordering.
+7. Check that retained paths, commands, and references are current.
 
 ## Scope and Precedence
 
-- An `AGENTS.md` file applies to the directory tree rooted at the folder that contains it.
-- For any file you touch, follow every `AGENTS.md` whose scope includes that file.
-- More deeply nested `AGENTS.md` files override broader ones when they conflict.
-- Direct system, developer, and user instructions override `AGENTS.md`.
-- If a scoped `AGENTS.md` or referenced workflow doc specifies validation steps, run them after making changes and before finishing.
-
-## Mindset Checks (Before Editing)
-
-- Will this change improve activation or execution safety, or just add noise?
-- Is the guidance stable for 6+ months, or will it drift?
-- Is this better as a reference doc instead of in the root file?
-- Can the agent discover this directly from code or standard tooling? If yes, leave it out.
-- Does mentioning this anchor the agent toward a deprecated or wrong pattern? Every line competes for attention and biases behavior — even passive mentions.
-- Will this line become redundant as the underlying friction gets fixed or as models improve?
+- Follow the active harness's rules for loading, scope, and instruction precedence; do not assume every harness handles AGENTS.md identically.
+- Resolve conflicts using that precedence. If equally authoritative rules conflict and intent is unclear, ask rather than silently deleting either.
+- Run applicable validation steps from scoped instructions after making changes and before finishing.
 
 ## Core Keep/Cut Filters
 
-Apply these filters once per section and avoid re-litigating the same rule elsewhere:
+Apply these filters once per section:
 
-- **Discoverability (primary gate):** Remove anything the agent can find by reading code, config, READMEs, or running standard commands. Tech stack descriptions, architecture overviews, directory structures, and framework conventions are all discoverable — cut them.
-- **Anchoring:** Remove passive mentions of tools, patterns, or modules that could bias the agent toward deprecated or wrong approaches. If you mention it, the agent treats it as current and relevant.
-- **Surface fit:** Keep always-on safety and stable repo preferences in AGENTS.md. Put mode-specific behavior in agent prompts, and domain/tool/workflow expertise in skills. Do not create generic style/preference skills.
-- Remove brittle paths, long lists, or duplicated guidance.
-- Keep instructions high-level and stable.
-- Keep build/validation notes only when they are non-standard or easy to miss.
-- Remove guidance once the underlying friction is fixed.
+- **Operational value:** Keep guidance that changes an agent's decisions or prevents a demonstrated mistake. Cut discoverable facts unless discovering them is costly or agents repeatedly miss them.
+- **Anchoring:** Remove passive mentions of deprecated tools or patterns unless an explicit warning is needed to prevent their use.
+- **Surface fit:** Keep always-on safety and stable repo preferences in AGENTS.md. Put mode-specific behavior in agent prompts, and domain/tool/workflow expertise in skills.
+- **Maintenance:** Remove stale paths and commands. Replace brittle layout descriptions with capability-level guidance when exact paths are unnecessary.
+- **Duplication:** Cut repeated rules and summaries of existing documentation; link the source when the agent needs it.
+- **Generated content:** Do not use generated repository summaries as instructions without reviewing each line for operational value.
 
 ## What Earns a Line
 
-A line belongs in AGENTS.md only if it passes the discoverability gate: the agent cannot infer it from the codebase, and it is operationally significant. Concrete examples:
+Examples that can meet the operational-value filter:
 
 - Always-on safety boundaries: git publishing, destructive commands, secrets, fabricated evidence
 - Stable user/repo preferences that apply across task modes
-- Non-standard package manager: `uv` instead of `pip`, `pnpm` instead of `npm`
+- A required package manager that agents otherwise choose incorrectly: `uv` instead of `pip`, `pnpm` instead of `npm`
 - Commands with non-obvious required flags: `--no-cache` to avoid false positives from fixture setup
 - Landmines: code that looks safe to refactor but isn't (custom middleware that must not be replaced, deprecated modules still imported by production code)
 - Non-standard file placement or naming that contradicts framework defaults
 
-Does NOT earn a line:
+Usually omit unless there is a concrete discovery cost or repeated mistake:
 
-- Tech stack, language, or framework (discoverable from package.json, imports, config)
-- Directory structure or module layout (discoverable from ls)
-- Architecture overviews or design patterns (discoverable from code)
+- Tech stack, language, or framework summaries
+- Directory trees and architecture overviews
 - Standard commands the agent already knows (`npm test`, `git commit`)
-- Generic coding style, communication style, or validation checklists better owned by a specific agent prompt
 
 ## Audit Mode (Existing AGENTS.md)
 
-Use this checklist to review and edit existing files:
+Apply the Core Keep/Cut Filters, then assign each section:
 
-- Token bloat: remove long lists, verbose explanations, or duplicated guidance.
-- Discoverable content: cut facts the agent can infer from codebase/tooling.
-- Stack overviews: remove language/framework summaries unless they are actionable constraints.
-- Stale details: remove paths, file trees, or commands that drift.
-- Missing triggers: ensure the file explains WHEN to use referenced docs.
-- Clarity: keep instructions short, stable, and action-oriented.
-- Gaps: add missing package manager or non-standard commands.
+- Keep: guidance that changes decisions or prevents mistakes.
+- Cut: content that fails the filters.
+- Relocate: useful detail that belongs in a referenced doc, agent prompt, or skill.
 
-Apply a triage pass to each section:
-
-- Keep: stable, high-value guidance.
-- Cut: redundant or brittle content.
-- Relocate: move detail into a referenced doc.
+Check for missing guidance about observed mistakes or non-obvious required commands; do not fill sections merely to match a template.
 
 ## Scope Decision Tree
 
@@ -95,7 +72,7 @@ Apply a triage pass to each section:
 
 ## Root AGENTS.md Template (default)
 
-Use this minimal format unless the repo already uses another convention:
+Use this minimal format unless the repo already uses another convention. Omit empty sections; add safety boundaries or preferences when they pass the filters.
 
 ```markdown
 # AGENTS
@@ -103,58 +80,26 @@ Use this minimal format unless the repo already uses another convention:
 <One-sentence project description.>
 
 ## Package manager
-<Only when non-standard or not reliably discoverable from repo tooling.>
+<Only when agents choose incorrectly or discovery is costly.>
 
 ## Commands
-- <Non-standard build or typecheck commands>
+- <Non-obvious required build or typecheck command and flags>
 
 ## References
-- <Link to deeper docs when needed, e.g., docs/TYPESCRIPT.md>
+- <When to read the linked document>: <path>
 ```
 
 ## Progressive Disclosure
 
-Use references for details rather than expanding the root file:
-
 - Keep root under a page when possible.
-- Place domain-specific guidance in separate docs.
-- Reference those docs from root with short, stable pointers.
-
-If a reference file is long, add a short table of contents to that file.
-
-Do NOT load reference docs for routine edits that only trim or reorder content.
+- Place detailed guidance in separate docs rather than expanding the root file.
+- If a reference file is long, add a short table of contents to that file.
 
 ## Monorepo Guidance
 
-- Root AGENTS.md: repo-wide description and shared commands only.
-- Package AGENTS.md: local package context and package-specific commands.
-- Avoid duplicating root guidance in package files.
+- Root AGENTS.md contains repository-wide constraints, including shared safety boundaries, preferences, and commands.
+- Nested AGENTS.md files contain only local differences; do not duplicate root guidance.
 
-## Anti-Patterns (Never Do)
+## Hazard Register Lifecycle
 
-- Never copy README content into AGENTS.md; it bloats context and dilutes activation.
-- Never include deep file trees or path lists; they rot quickly and poison context.
-- Never include codebase structure or tech stack overviews that code already reveals.
-- Never add broad, absolute rules unless they are critical and stable.
-- Never auto-generate AGENTS.md. Auto-generated output duplicates what agents already discover from the repo, adds ~20% cost overhead, and can reduce task success — because the agent reads the file, then re-discovers the same facts from code, and must reconcile two sources of truth.
-- Never include setup steps that already live in standard tooling docs.
-
-## Expert Heuristics
-
-- If AGENTS.md exceeds one page, cut to essentials and move detail into references.
-- If two rules conflict, keep the more stable and delete the more brittle one.
-- If a rule depends on file layout, replace it with a capability-level description.
-- **Hazard register lifecycle:** When an agent trips on something, add a line. Then investigate the root cause — is the code confusing, the structure unclear, the linter missing a rule? Fix the underlying problem. Once fixed, delete the line. The file should shrink as the codebase improves.
-- **Temporal decay:** AGENTS.md should shrink over time, not grow. Instructions that were essential months ago may be redundant now as models improve at codebase navigation. Audit for lines that no longer earn their place.
-
-## Output Expectations
-
-- Use ASCII unless the repo already uses other characters.
-- Do not auto-generate AGENTS.md with init scripts.
-- Prefer stability over detail; cut anything that will drift.
-
-## Resources
-
-Read this guide when you need more background or phrasing help:
-
-- `references/agents-md-guide.md`
+When an agent trips on something, add guidance that prevents recurrence. Investigate the root cause: confusing code, unclear structure, or a missing linter rule. Once the underlying problem is fixed and the guidance is no longer needed, delete it.
