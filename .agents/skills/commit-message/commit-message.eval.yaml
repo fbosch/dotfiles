@@ -93,9 +93,10 @@ tasks:
       +tasks: []
     expect: >
       The response is one accurate Conventional Commit subject with type `test`.
-      It describes adding evaluation configuration for the named skill, uses a
-      concise stable scope rather than blindly copying the full directory name,
-      and remains complete rather than truncating words.
+      It describes adding evaluation configuration for
+      `api-and-interface-design`, uses the concise semantic scope `api` rather
+      than copying the full directory name, and remains complete rather than
+      truncating words.
     assert: |
       import re
       from pathlib import Path
@@ -104,7 +105,7 @@ tasks:
       assert text
       assert "\n" not in text
       assert len(text) <= 50, f"subject is {len(text)} characters: {text!r}"
-      assert re.fullmatch(r"test\([^)]+\): [a-z0-9].*", text)
+      assert re.fullmatch(r"test\(api\): [a-z0-9].*", text)
       assert not text.endswith(".")
     activates: [commit-message]
 
