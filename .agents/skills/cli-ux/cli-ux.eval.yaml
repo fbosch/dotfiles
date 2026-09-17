@@ -1,6 +1,7 @@
 skills:
   - ./SKILL.md
 
+# cli-ux disables auto invocation; prompts explicitly locate the installed file so activation measures manual loading/body use, not trigger discovery.
 sandbox:
   forbidden_files:
     - ".*\\.eval\\.yaml$"
@@ -93,7 +94,13 @@ tasks:
           shutil.rmtree(root)
       PY
     prompt: |
-      Use cli-ux if available; continue without it if unavailable.
+      Use cli-ux if available; continue without it if unavailable. Because the
+      skill disables automatic invocation, explicitly resolve its installed file:
+      when `$PI_CODING_AGENT_DIR` is set and
+      `$PI_CODING_AGENT_DIR/skills/cli-ux/SKILL.md` exists, read that file and the
+      references it routes to before acting. If the variable is unset, check
+      `~/.pi/agent/skills/cli-ux/SKILL.md` instead. If the resolved file is absent,
+      continue without the skill for this ablation path.
 
       Work in the local fixture at `/tmp/cli-ux-eval-task1`. Improve the existing
       Python-stdlib-only `updater.py` in place; do not use git, network access, or
@@ -437,7 +444,13 @@ tasks:
           shutil.rmtree(root)
       PY
     prompt: |
-      Use cli-ux if available; continue without it if unavailable.
+      Use cli-ux if available; continue without it if unavailable. Because the
+      skill disables automatic invocation, explicitly resolve its installed file:
+      when `$PI_CODING_AGENT_DIR` is set and
+      `$PI_CODING_AGENT_DIR/skills/cli-ux/SKILL.md` exists, read that file and the
+      references it routes to before acting. If the variable is unset, check
+      `~/.pi/agent/skills/cli-ux/SKILL.md` instead. If the resolved file is absent,
+      continue without the skill for this ablation path.
 
       Work in `/tmp/cli-ux-eval-task2` and improve the existing stdlib-only
       `bulk_update.py`. It accepts newline-delimited repository names on stdin and
@@ -685,7 +698,13 @@ tasks:
           shutil.rmtree(root)
       PY
     prompt: |
-      Use cli-ux if available; continue without it if unavailable.
+      Use cli-ux if available; continue without it if unavailable. Because the
+      skill disables automatic invocation, explicitly resolve its installed file:
+      when `$PI_CODING_AGENT_DIR` is set and
+      `$PI_CODING_AGENT_DIR/skills/cli-ux/SKILL.md` exists, read that file and the
+      references it routes to before acting. If the variable is unset, check
+      `~/.pi/pi/agent/skills/cli-ux/SKILL.md` instead. If the resolved file is absent,
+      continue without the skill for this ablation path.
 
       Review `/tmp/cli-ux-eval-task3/wrapper.py`, `/tmp/cli-ux-eval-task3/child.py`,
       and the established contract in `/tmp/cli-ux-eval-task3/CONTRACT.md`. Do not
