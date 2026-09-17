@@ -98,6 +98,8 @@ in
       '';
     };
 
+    "test:caliper-skill-eval".exec = "python3 tests/caliper_skill_eval_test.py";
+
     "test:shellcheck".exec = ''
       set -euo pipefail
       shopt -s globstar nullglob
@@ -449,6 +451,7 @@ in
       exec = "true";
       after = [
         "test:shellcheck"
+        "test:caliper-skill-eval"
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"

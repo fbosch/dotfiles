@@ -54,7 +54,7 @@ Examples:
 
 - A stable public human workflow keeps its established flags, streams, and exit codes, then adopts the house style only where presentation is not parseable.
 - A JSON command may prompt only before it begins JSON output; after output begins, stdout belongs exclusively to JSON.
-- A wrapper preserves child output unchanged. If it sanitizes, prefixes, buffers, merges, or reorders child output, it is a transforming wrapper and must document a new stream contract.
+- A wrapper preserves child output unchanged. If it sanitizes, prefixes, buffers, merges, or reorders child output, it is a transforming wrapper and must document a new stream contract. When reviewing or rejecting such a change, state the effect on child bytes, stdout/stderr ownership, exit status, and signal behavior; unchanged output alone does not establish transparency.
 - A CI adapter emits its required control records even when they differ from the house style.
 - A live stream owns its output channel while active; final human summary belongs on the other channel or after the stream closes.
 

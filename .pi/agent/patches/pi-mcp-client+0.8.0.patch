@@ -1,0 +1,77 @@
+diff --git a/node_modules/pi-mcp-client/dist/index.js b/node_modules/pi-mcp-client/dist/index.js
+index 60ef01e..459d4d3 100644
+--- a/node_modules/pi-mcp-client/dist/index.js
++++ b/node_modules/pi-mcp-client/dist/index.js
+@@ -5986,6 +5986,18 @@ function mcpClient(pi, options = {}) {
+   let loginController;
+   let promptController;
+   let importController;
++  const MCP_FOOTER_STATUS_KEY = "mcp";
++  const updateFooterStatus = (ctx) => {
++    if (!ctx.hasUI) return;
++    if (!runtime) {
++      ctx.ui.setStatus(MCP_FOOTER_STATUS_KEY, void 0);
++      return;
++    }
++    const statuses = runtime.serverStatuses();
++    const connected = statuses.filter(({ state }) => state === "connected").length;
++    const total = statuses.filter(({ state }) => state !== "disabled").length;
++    ctx.ui.setStatus(MCP_FOOTER_STATUS_KEY, connected > 0 ? `MCP ${connected}/${total}` : void 0);
++  };
+   pi.registerEntryRenderer(
+     STATUS_ENTRY,
+     (entry, _options, theme) => statusPanel(entry.data ?? { servers: [], loaded: [] }, theme)
+@@ -6049,6 +6061,8 @@ Text output is limited to 2000 lines or 50 KiB; larger results are saved to a pr
+             oauth: usesOAuth(config[tool.server]),
+             signal: ctx.signal?.aborted ? ctx.signal : signal
+           });
++        } finally {
++          updateFooterStatus(ctx);
+         }
+       }
+     });
+@@ -6137,15 +6151,17 @@ Text output is limited to 2000 lines or 50 KiB; larger results are saved to a pr
+       configError = new DiagnosticError(diagnose(error, { operation: "configuration" }));
+       if (ctx.hasUI) ctx.ui.notify(configError.message, "error");
+     }
++    updateFooterStatus(ctx);
+     restore(ctx);
+   });
+   pi.on("session_tree", async (_event, ctx) => {
+     promptController?.abort();
+     importController?.abort();
+     await runtime?.clearResourceSubscriptions();
++    updateFooterStatus(ctx);
+     restore(ctx);
+   });
+-  pi.on("session_shutdown", async () => {
++  pi.on("session_shutdown", async (_event, ctx) => {
+     sessionGeneration++;
+     loginController?.abort();
+     promptController?.abort();
+@@ -6153,6 +6169,7 @@ Text output is limited to 2000 lines or 50 KiB; larger results are saved to a pr
+     const old = runtime;
+     runtime = void 0;
+     await old?.close();
++    updateFooterStatus(ctx);
+   });
+   pi.on("before_agent_start", (event) => {
+     if (!pi.getActiveTools().includes(TOOLS_TOOL)) return;
+@@ -6376,6 +6393,8 @@ Variables: ${(candidate.variables ?? []).join(", ") || "none"}. Supply known val
+           row.inlineDescription = result.details.diagnostics?.[0].message;
+         }
+         return result;
++      } finally {
++        updateFooterStatus(ctx);
+       }
+     }
+   });
+@@ -6689,6 +6708,8 @@ Opening browser. Esc to cancel.`
+         );
+         if (ctx.hasUI) ctx.ui.notify(message, "error");
+         else throw new Error(message);
++      } finally {
++        updateFooterStatus(ctx);
+       }
+     }
+   });

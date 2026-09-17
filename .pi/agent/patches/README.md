@@ -3,6 +3,7 @@
 Tracked patches preserve local changes to pinned Pi extensions:
 
 - `@ff-labs+pi-fff+0.10.6.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
+- `pi-mcp-client+0.8.0.patch` publishes live MCP connection counts through Pi's `mcp` footer status key.
 - `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
