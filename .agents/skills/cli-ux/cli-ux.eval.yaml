@@ -122,7 +122,7 @@ tasks:
       run focused checks for both the decline and accepted paths if practical.
     expect: |
       Pass if the agent updates `/tmp/cli-ux-eval-task1/updater.py` to implement a
-      safe local human workflow: it previews only selected pending repositories,
+      safe local human workflow: it previews only selected repositories,
       asks for confirmation with a default decline before mutation, leaves state
       untouched when declined, reports bounded work while updating, and emits a
       final successful result only after the selected mutation completes. `--yes`
@@ -317,6 +317,7 @@ tasks:
       def reset():
           state.write_bytes(original)
 
+      reset()
       code, declined = run_pty(b"n")
       assert code == 0, f"declining confirmation should exit 0, got {code}: {declined!r}"
       assert state.read_bytes() == original, "declining confirmation mutated state"
@@ -582,6 +583,7 @@ tasks:
                       pass
 
       payload = b"\ngamma\n\nalpha\n"
+      state.write_bytes(original)
       code, stdout, stderr = run_pipe([sys.executable, str(script), "--json"], payload)
       assert code == 2, f"missing --yes should exit 2, got {code}: {stdout!r} {stderr!r}"
       assert stdout == stdout.rstrip(b"\n") + (b"\n" if stdout.endswith(b"\n") else b""), "error output is not one line"
@@ -596,6 +598,7 @@ tasks:
       assert stderr == b"", f"error polluted stderr: {stderr!r}"
       assert state.read_bytes() == original, "missing confirmation mutated state"
 
+      state.write_bytes(original)
       code, stdout, stderr = run_pipe([sys.executable, str(script), "--json", "--yes"], payload)
       assert code == 0, f"JSON success failed: {code}: {stdout!r} {stderr!r}"
       success = json.loads(stdout)
@@ -703,7 +706,7 @@ tasks:
       when `$PI_CODING_AGENT_DIR` is set and
       `$PI_CODING_AGENT_DIR/skills/cli-ux/SKILL.md` exists, read that file and the
       references it routes to before acting. If the variable is unset, check
-      `~/.pi/pi/agent/skills/cli-ux/SKILL.md` instead. If the resolved file is absent,
+      `~/.pi/agent/skills/cli-ux/SKILL.md` instead. If the resolved file is absent,
       continue without the skill for this ablation path.
 
       Review `/tmp/cli-ux-eval-task3/wrapper.py`, `/tmp/cli-ux-eval-task3/child.py`,
