@@ -78,15 +78,15 @@
   },
   "packages": [
     "npm:pi-hashline-edit-pro@4.3.2",
-    "npm:pi-codex-goal",
+    "npm:pi-codex-goal@0.3.0",
     "npm:pi-context-view@0.5.2",
     "npm:pi-mcp-client@0.8.0",
     "npm:pi-compaction-model@0.1.0",
     "npm:@ff-labs/pi-fff@0.10.6",
-    "npm:@gotgenes/pi-subagents",
-    "npm:pi-web-access",
+    "npm:@gotgenes/pi-subagents@21.7.1",
+    "npm:pi-web-access@0.29.0",
     "npm:pi-lens@4.1.6",
-    "npm:@juicesharp/rpiv-todo"
+    "npm:@juicesharp/rpiv-todo@2.10.1"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
