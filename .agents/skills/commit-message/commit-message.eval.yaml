@@ -252,10 +252,11 @@ tasks:
        }
     expect: >
       The response is a single `fix` Conventional Commit subject. It uses a
-      concise hashline or session scope and accurately states that anchors are
-      preserved during session loading or when session files exist. It must not
-      use the known 57-character wording `fix(hashline): preserve anchors when
-      session files appear` or end with an incomplete phrase.
+      concise hashline or session scope and accurately describes preserving
+      session anchors, preserving anchors during session loading, or preserving
+      anchors when session files exist. It must not use the known 57-character
+      wording `fix(hashline): preserve anchors when session files appear` or end
+      with an incomplete phrase.
     assert: |
       import re
       from pathlib import Path
@@ -296,8 +297,8 @@ tasks:
     expect: >
       The JSON contains exactly the requested commit fields. It uses type `fix`,
       a concise hashline or session scope, and a complete subject describing
-      preservation of anchors when session files exist. The reconstructed
-      Conventional Commit line is at most 50 characters.
+      preservation of session anchors or preservation during session loading.
+      The reconstructed Conventional Commit line is at most 50 characters.
     assert: |
       import json
       import re

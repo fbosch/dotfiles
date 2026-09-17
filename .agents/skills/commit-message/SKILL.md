@@ -35,16 +35,18 @@ Treat 50 characters as a hard output constraint, not a preference.
 
 1. Fix the type and scope before drafting the subject. Unless it is a required work-item scope, reject and shorten any scope longer than 12 characters.
 2. Compute `prefix = f"{type}({scope}): "` and `subject_budget = 50 - len(prefix)`. If an output schema separates the fields, reconstruct this exact line before returning it.
-3. Draft the shortest complete subject that preserves the observable outcome. Start with at most four words. Treat five or more words, or a conjunction such as `and`, as over-budget until an exact measurement proves otherwise.
+3. Draft one short clause preserving the observable outcome. With an inferred scope, the subject must contain at most four words. Preserve the verb's required direct object before optional conditions or rationale; never produce fragments such as `persist before ack`. Do not join clauses with `and`, a semicolon, or similar punctuation.
 4. Measure the reconstructed line exactly. If tools are available, use an exact operation such as Python `len(line)`. Otherwise count conservatively and target 45 characters or fewer rather than risking the boundary.
 5. If the line exceeds 50 characters, shorten an inferred scope first, then remove redundant subject words or choose a shorter equivalent. Never shorten a required work-item scope, truncate a word, or return the over-limit draft.
 6. Reconstruct and measure again after every rewrite. Do not return until `len(line) <= 50`.
 
 Keep subjects grammatical and preserve required objects. For example:
 
-- Reject `fix(hashline): preserve anchors when session files appear` (57); use `fix(hashline): preserve anchors on session load` (47).
+- Reject `fix(hashline): preserve anchors when session files appear` (57); use `fix(hashline): preserve session anchors` (39).
+- With a required ticket scope, use `fix(AB#9876543210): persist delivery before ack` (47), never `fix(AB#9876543210): persist before ack` (38).
 - Reject `refactor(auth): delegate credential recovery to recovery service` (64); use `refactor(auth): delegate credential recovery` (44).
-- Reject `docs(commit): enforce semantic scopes and line counting` (55); use `docs(commit): clarify scope and line limits` (43).
+- Reject `docs(commit): enforce semantic scopes and line counting` (55); use `docs(commit): enforce scoped line counts` (40).
+- Reject `docs(commit): count full lines; use semantic scopes` (51); use `docs(commit): enforce scoped line counts` (40).
 - Reject telegraphic shortening such as `count line`; shorten without changing meaning.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
 - If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.
