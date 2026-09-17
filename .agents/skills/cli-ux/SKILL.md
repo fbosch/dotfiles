@@ -6,7 +6,6 @@ disable-model-invocation: true
 
 # CLI UX
 
-Create clear, scriptable line-oriented CLIs with one exact human-output style.
 Treat Fish, shell, Gum, Clack, Rich, Charmbracelet, Cobra, Click, and plain ANSI as renderers. Choose the smallest renderer that fits the interaction; do not let a renderer define the visible design.
 
 ## Classify First
@@ -37,9 +36,9 @@ Answer before implementation:
 ## Workflow
 
 1. Identify the user job, target, side effects, failure states, and recovery path.
-2. Map every observable surface: context, resolved state, prompt, preview, progress, result, warning, error, empty state, list, detail, stream, and machine record.
+2. Map the changed output surfaces and any contracts they affect.
 3. Draft the intended plain-text transcript before choosing a renderer.
-4. Load only the reference required for the changed surface.
+4. Load only the references required for the changed surface.
 5. Implement semantic output before color, animation, or library-specific controls.
 6. Test the relevant matrix in [verification.md](references/verification.md).
 7. Review the complete before/after transcript, not only edited strings.
@@ -56,20 +55,6 @@ Choose the lowest numbered matching row. Do not combine lower-priority rows afte
 | 4 | Advisory copy or layout draft with no source change | `visual-language.md` |
 
 Every implementation or review loads `verification.md` and runs the minimum checks for every applicable profile.
-
-## Non-Negotiables
-
-- Design the command journey, not isolated strings.
-- Make human output useful without breaking composition and automation.
-- Treat interaction, format, decoration, and verbosity as separate axes.
-- Ask only for unresolved input; never require a prompt.
-- Show meaningful state transitions, but omit phases that add no information.
-- Scale confirmation strength to the consequence of the action.
-- Print enough for slow work and state changes, but not developer-only detail by default.
-- Make errors explain the failure and the safest next action.
-- Treat command grammar, streams, exit codes, and machine output as APIs.
-- Treat secrets and remote or user-provided text as untrusted data.
-- Preserve compatibility over visual consistency for an established public contract.
 
 ## Completion Check
 
