@@ -425,14 +425,6 @@ in
       done
     '';
 
-    "test:nvim-pack-disabled-sync".exec = ''
-      test_root="$(mktemp -d)"
-      trap 'rm -rf "$test_root"' EXIT
-      XDG_CONFIG_HOME="$test_root/config" XDG_DATA_HOME="$test_root/data" REPO_ROOT="$PWD" \
-        timeout --foreground 15s nvim --headless -u NONE \
-        -l .config/nvim/tests/pack_disabled_sync.lua
-    '';
-
     "test:waybar-css".exec = "bash scripts/validate-waybar-css.sh";
 
     "test:lua".exec = ''
@@ -472,7 +464,6 @@ in
         "test:nvim-pi-session-restore"
         "test:nvim-session-selection"
         "test:nvim-pi-production-restore"
-        "test:nvim-pack-disabled-sync"
         "test:nvim-pack-lazy-startup"
         "test:nvim-statusline-git-cache"
         "test:nvim-pack-loader"

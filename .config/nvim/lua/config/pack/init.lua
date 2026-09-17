@@ -11,8 +11,8 @@ local inventory_module = require("config.pack.inventory")
 inventory_module.register(require("config.pack.discovery").load())
 require("config.pack.build").register()
 local inventory = inventory_module.current()
-require("config.pack.disabled_sync").synchronize({
-	specs = inventory.pack_specs,
-	disabled_names = inventory.disabled_names,
+vim.pack.add(inventory.pack_specs, {
+	confirm = true,
+	load = function() end,
 })
 require("config.pack.loader").setup(inventory)

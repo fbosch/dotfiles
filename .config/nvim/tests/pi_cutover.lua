@@ -87,7 +87,7 @@ package.loaded["utils"] = {
 }
 package.loaded["config.pack.inventory"] = {
 	current = function()
-		return { enabled_by_name = {}, enabled_names = {} }
+		return { by_name = {}, names = {} }
 	end,
 }
 

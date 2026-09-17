@@ -16,14 +16,13 @@ do
 		require_dir_modules = function(dir)
 			table.insert(categories, vim.fs.basename(dir))
 			if #categories == 1 then
-				local modules = {
+				return {
 					plugin({ name = "single.nvim" }),
 					{
 						plugin({ name = "list-a.nvim" }),
 						plugin({ name = "list-b.nvim" }),
 					},
-				}
-				return modules, { "plugins.core.single", "plugins.core.list" }
+				}, { "plugins.core.single", "plugins.core.list" }
 			end
 			return {}, {}
 		end,
@@ -59,118 +58,52 @@ end
 
 do
 	local inventory = dofile(inventory_path)
-	local calls = 0
-	inventory.register(plugin({
-		enabled = function()
-			calls = calls + 1
-			return false
-		end,
-	}))
-
-	local first = inventory.current()
-	local second = inventory.current()
-	assert(calls == 1, "disabled predicate was not evaluated exactly once")
-	assert(next(first.enabled_by_name) == nil, "disabled plugin was included in enabled declarations")
-	assert(#first.enabled_names == 0, "disabled plugin was included in enabled names")
-	assert(#first.pack_specs == 0, "disabled plugin was included in package specs")
-	assert(vim.deep_equal(first.disabled_names, { "example.nvim" }), "disabled plugin name was omitted")
-	assert(vim.deep_equal(second.disabled_names, first.disabled_names), "equivalent snapshots changed classification")
-
-	first.disabled_names[1] = "changed.nvim"
-	assert(
-		vim.deep_equal(inventory.current().disabled_names, { "example.nvim" }),
-		"disabled names exposed inventory state"
-	)
-end
-
-do
-	local inventory = dofile(inventory_path)
-	local calls = 0
-	local declaration = plugin({
-		enabled = function()
-			calls = calls + 1
-			return true
-		end,
-	})
+	local declaration = plugin()
 	inventory.register(declaration)
 
 	local first = inventory.current()
 	local second = inventory.current()
-	assert(calls == 1, "enabled predicate was not evaluated exactly once")
-	assert(first.enabled_by_name["example.nvim"] ~= nil, "enabled plugin was omitted")
-	assert(vim.deep_equal(first.enabled_names, { "example.nvim" }), "enabled plugin name was omitted")
-	assert(#first.pack_specs == 1 and first.pack_specs[1].name == "example.nvim", "enabled package spec was omitted")
-	assert(#first.disabled_names == 0, "enabled plugin was classified as disabled")
+	assert(first.by_name["example.nvim"] ~= nil, "registered plugin was omitted")
+	assert(vim.deep_equal(first.names, { "example.nvim" }), "registered plugin name was omitted")
+	assert(#first.pack_specs == 1 and first.pack_specs[1].name == "example.nvim", "package spec was omitted")
 	assert(declaration.events == nil, "registration mutated the source declaration")
 	assert(
-		vim.deep_equal(first.enabled_by_name["example.nvim"].events, { { "User", pattern = "PackReady" } }),
-		"enabled declaration was not normalized"
+		vim.deep_equal(first.by_name["example.nvim"].events, { { "User", pattern = "PackReady" } }),
+		"declaration was not normalized"
 	)
-	assert(vim.deep_equal(second, first), "equivalent snapshots changed enabled state")
+	assert(vim.deep_equal(second, first), "equivalent snapshots changed state")
 
-	first.enabled_names[1] = "changed.nvim"
+	first.names[1] = "changed.nvim"
 	first.pack_specs[1].src = "https://changed.example/plugin.git"
-	first.enabled_by_name["example.nvim"].events[1].pattern = "Changed"
+	first.by_name["example.nvim"].events[1].pattern = "Changed"
 	local detached = inventory.current()
-	assert(detached.enabled_names[1] == "example.nvim", "enabled names exposed inventory state")
+	assert(detached.names[1] == "example.nvim", "names exposed inventory state")
 	assert(
 		detached.pack_specs[1].src == "https://example.com/example.nvim.git",
 		"package specs exposed inventory state"
 	)
-	assert(
-		detached.enabled_by_name["example.nvim"].events[1].pattern == "PackReady",
-		"enabled declarations exposed inventory state"
-	)
+	assert(detached.by_name["example.nvim"].events[1].pattern == "PackReady", "declarations exposed inventory state")
 end
 
 do
 	local inventory = dofile(inventory_path)
-	local evaluation_order = {}
 	inventory.register({
-		plugin({
-			name = "z.nvim",
-			enabled = function()
-				table.insert(evaluation_order, "z.nvim")
-				return false
-			end,
-		}),
-		plugin({
-			name = "b.nvim",
-			enabled = function()
-				table.insert(evaluation_order, "b.nvim")
-				return true
-			end,
-		}),
+		plugin({ name = "z.nvim" }),
+		plugin({ name = "b.nvim" }),
 		plugin({ name = "a.nvim" }),
 	})
-
 	local current = inventory.current()
-	assert(vim.deep_equal(evaluation_order, { "z.nvim", "b.nvim" }), "predicates ignored declaration order")
-	assert(vim.deep_equal(current.enabled_names, { "a.nvim", "b.nvim" }), "enabled names were not sorted")
-	assert(vim.deep_equal(current.disabled_names, { "z.nvim" }), "disabled names were not sorted")
+	assert(vim.deep_equal(current.names, { "a.nvim", "b.nvim", "z.nvim" }), "plugin names were not sorted")
 	assert(current.pack_specs[1].name == "a.nvim", "package specs were not sorted")
 	assert(current.pack_specs[2].name == "b.nvim", "package specs were not sorted")
+	assert(current.pack_specs[3].name == "z.nvim", "package specs were not sorted")
 end
 
 do
 	local inventory = dofile(inventory_path)
-	inventory.register(plugin({
-		enabled = function()
-			return false
-		end,
-	}))
-	local duplicate_calls = 0
-	local ok, err = pcall(
-		inventory.register,
-		plugin({
-			enabled = function()
-				duplicate_calls = duplicate_calls + 1
-				return true
-			end,
-		})
-	)
-	assert(ok == false, "duplicate disabled and enabled plugin registration was accepted")
-	assert(duplicate_calls == 0, "duplicate plugin predicate was evaluated")
+	inventory.register(plugin())
+	local ok, err = pcall(inventory.register, plugin())
+	assert(ok == false, "duplicate plugin registration was accepted")
 	assert(
 		tostring(err):find("duplicate native plugin registration: example.nvim", 1, true) ~= nil,
 		"unexpected duplicate plugin error: " .. tostring(err)
@@ -196,30 +129,21 @@ for _, name in ipairs({
 	)
 end
 
-local invalid_cases = {
-	{
-		enabled = true,
-		error = "native enabled must be a function: example.nvim",
-	},
-	{
-		enabled = function()
-			error("predicate exploded")
-		end,
-		error = "native enabled predicate failed: example.nvim",
-	},
-	{
-		enabled = function()
-			return "yes"
-		end,
-		error = "native enabled predicate must return a boolean: example.nvim",
-	},
-}
-
-for _, case in ipairs(invalid_cases) do
+do
 	local inventory = dofile(inventory_path)
-	local ok, err = pcall(inventory.register, plugin({ enabled = case.enabled }))
-	assert(ok == false, "invalid enabled predicate was accepted")
-	assert(tostring(err):find(case.error, 1, true) ~= nil, "unexpected enabled predicate error: " .. tostring(err))
+	local ok, err = pcall(
+		inventory.register,
+		plugin({
+			enabled = function()
+				return false
+			end,
+		})
+	)
+	assert(ok == false, "enabled predicate was accepted")
+	assert(
+		tostring(err):find("native enabled predicates are unsupported: example.nvim", 1, true) ~= nil,
+		"unexpected enabled predicate error: " .. tostring(err)
+	)
 end
 
 do
@@ -246,31 +170,31 @@ do
 	assert(vim.deep_equal(vim.api.nvim_get_autocmds({}), autocmds_before), "discovery created autocmds")
 	assert(vim.deep_equal(keymaps(), keymaps_before), "discovery created keymaps")
 	assert(vim.g.barbar_auto_setup == barbar_auto_setup, "discovery mutated plugin globals")
+	for _, declaration in ipairs(declarations) do
+		assert(declaration.enabled == nil, "plugin declaration retained an enabled predicate: " .. declaration.name)
+	end
 
 	local inventory = dofile(inventory_path)
 	inventory.register(declarations)
 	local current = inventory.current()
-	assert(
-		#current.enabled_names + #current.disabled_names == #declarations,
-		"collective registration lost a real declaration"
-	)
+	assert(#current.names == #declarations, "collective registration lost a real declaration")
 
-	local treesitter = assert(current.enabled_by_name["nvim-treesitter"])
+	local treesitter = assert(current.by_name["nvim-treesitter"])
 	assert(treesitter.startup == true, "Tree-sitter is not startup-loaded")
 	assert(treesitter.events == nil, "Tree-sitter still has lazy-load events")
-	local leap = assert(current.enabled_by_name["leap.nvim"])
+	local leap = assert(current.by_name["leap.nvim"])
 	assert(leap.startup ~= true and #leap.keys == 3, "Leap is not key triggered")
 	for _, key in ipairs(leap.keys) do
 		assert(key.expr == true, "Leap key trigger does not preserve input state: " .. key[1])
 	end
-	local unimpaired = assert(current.enabled_by_name["vim-unimpaired"])
+	local unimpaired = assert(current.by_name["vim-unimpaired"])
 	assert(
 		vim.deep_equal(unimpaired.events, { { "User", pattern = "PackReady" } }),
 		"vim-unimpaired is not post-start triggered"
 	)
 
 	local startup_names = {}
-	for name, declaration in pairs(current.enabled_by_name) do
+	for name, declaration in pairs(current.by_name) do
 		if declaration.startup == true then
 			table.insert(startup_names, name)
 		end
@@ -284,7 +208,12 @@ end
 
 do
 	local inventory = dofile(inventory_path)
-	for _, obsolete in ipairs({ "get", "all", "pack_specs", "disabled_package_names" }) do
+	for _, obsolete in ipairs({
+		"get",
+		"all",
+		"pack_specs",
+		"disabled_package_names",
+	}) do
 		assert(inventory[obsolete] == nil, "obsolete inventory projection remains: " .. obsolete)
 	end
 	assert(type(inventory.register) == "function", "inventory registration interface is missing")

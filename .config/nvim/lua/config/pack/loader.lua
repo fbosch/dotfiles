@@ -3,8 +3,8 @@ local states = {}
 local failures = {}
 local trigger_autocmds = {}
 local initialized = {}
-local enabled_by_name = {}
-local enabled_names = {}
+local plugins_by_name = {}
+local plugin_names = {}
 
 local function clear_trigger_autocmds(name)
 	for _, id in ipairs(trigger_autocmds[name] or {}) do
@@ -38,7 +38,7 @@ local function activate(name, context, root, chain, dependency)
 		error(failures[name], 0)
 	end
 
-	local plugin = assert(enabled_by_name[name], "unknown native plugin: " .. name)
+	local plugin = assert(plugins_by_name[name], "unknown native plugin: " .. name)
 	local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
 	if states[name] == "loading" then
 		error(activation_error(root, next_chain, name, "dependency", "re-entrant activation"), 0)
@@ -101,7 +101,7 @@ local function initialize(name, root, chain)
 		return
 	end
 
-	local plugin = assert(enabled_by_name[name], "unknown native plugin: " .. name)
+	local plugin = assert(plugins_by_name[name], "unknown native plugin: " .. name)
 	local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
 	for _, dependency_name in ipairs(plugin.dependencies or {}) do
 		initialize(dependency_name, root, next_chain)
@@ -121,10 +121,10 @@ local function initialize(name, root, chain)
 end
 
 local function validate_dependencies()
-	for _, name in ipairs(enabled_names) do
-		local plugin = enabled_by_name[name]
+	for _, name in ipairs(plugin_names) do
+		local plugin = plugins_by_name[name]
 		for _, dependency in ipairs(plugin.dependencies or {}) do
-			assert(enabled_by_name[dependency] ~= nil, "unknown native dependency: " .. name .. " -> " .. dependency)
+			assert(plugins_by_name[dependency] ~= nil, "unknown native dependency: " .. name .. " -> " .. dependency)
 		end
 	end
 
@@ -140,22 +140,22 @@ local function validate_dependencies()
 
 		visiting[name] = true
 		local next_chain = vim.list_extend(vim.deepcopy(chain), { name })
-		for _, dependency in ipairs(enabled_by_name[name].dependencies or {}) do
+		for _, dependency in ipairs(plugins_by_name[name].dependencies or {}) do
 			visit(dependency, next_chain)
 		end
 		visiting[name] = nil
 		visited[name] = true
 	end
 
-	for _, name in ipairs(enabled_names) do
+	for _, name in ipairs(plugin_names) do
 		visit(name, {})
 	end
 end
 
 local function validate_key_triggers()
 	local owners = {}
-	for _, name in ipairs(enabled_names) do
-		local plugin = enabled_by_name[name]
+	for _, name in ipairs(plugin_names) do
+		local plugin = plugins_by_name[name]
 		for _, key in ipairs(plugin.keys or {}) do
 			local modes = type(key.mode) == "table" and key.mode or { key.mode or "n" }
 			for _, mode in ipairs(modes) do
@@ -254,27 +254,27 @@ end
 
 function M.setup(inventory)
 	assert(type(inventory) == "table", "native lifecycle inventory is required")
-	assert(type(inventory.enabled_by_name) == "table", "native lifecycle inventory declarations are required")
-	assert(vim.islist(inventory.enabled_names), "native lifecycle inventory names are required")
-	enabled_by_name = inventory.enabled_by_name
-	enabled_names = inventory.enabled_names
+	assert(type(inventory.by_name) == "table", "native lifecycle inventory declarations are required")
+	assert(vim.islist(inventory.names), "native lifecycle inventory names are required")
+	plugins_by_name = inventory.by_name
+	plugin_names = inventory.names
 
 	validate_dependencies()
 	validate_key_triggers()
 
-	for _, name in ipairs(enabled_names) do
+	for _, name in ipairs(plugin_names) do
 		initialize(name, name, {})
 	end
 
-	for _, name in ipairs(enabled_names) do
-		local plugin = enabled_by_name[name]
+	for _, name in ipairs(plugin_names) do
+		local plugin = plugins_by_name[name]
 		register_autocmd_triggers(name, plugin)
 		register_key_triggers(name, plugin)
 	end
 
 	local startup_plugins = {}
-	for _, name in ipairs(enabled_names) do
-		local plugin = enabled_by_name[name]
+	for _, name in ipairs(plugin_names) do
+		local plugin = plugins_by_name[name]
 		if plugin.startup == true then
 			table.insert(startup_plugins, name)
 		end

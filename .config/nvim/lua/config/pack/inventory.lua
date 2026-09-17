@@ -1,7 +1,6 @@
 local M = {}
 
-local enabled_by_name = {}
-local disabled_by_name = {}
+local declarations_by_name = {}
 local registered_names = {}
 
 local function sorted_keys(values)
@@ -133,10 +132,7 @@ local function validate_plugin(plugin)
 		"native startup must be boolean: " .. plugin.name
 	)
 	assert(plugin.root == nil or type(plugin.root) == "boolean", "native root must be boolean: " .. plugin.name)
-	assert(
-		plugin.enabled == nil or type(plugin.enabled) == "function",
-		"native enabled must be a function: " .. plugin.name
-	)
+	assert(plugin.enabled == nil, "native enabled predicates are unsupported: " .. plugin.name)
 	assert(
 		plugin.condition == nil or type(plugin.condition) == "function",
 		"native condition must be a function: " .. plugin.name
@@ -160,21 +156,11 @@ local function register_one(plugin)
 	validate_plugin(plugin)
 	registered_names[plugin.name] = true
 
-	if plugin.enabled ~= nil then
-		local ok, enabled = xpcall(plugin.enabled, debug.traceback)
-		assert(ok, ("native enabled predicate failed: %s\n%s"):format(plugin.name, enabled))
-		assert(type(enabled) == "boolean", "native enabled predicate must return a boolean: " .. plugin.name)
-		if enabled == false then
-			disabled_by_name[plugin.name] = true
-			return
-		end
-	end
-
 	local normalized = vim.deepcopy(plugin)
 	if normalized.root ~= false and normalized.startup ~= true and has_triggers(normalized) == false then
 		normalized.events = { { "User", pattern = "PackReady" } }
 	end
-	enabled_by_name[normalized.name] = normalized
+	declarations_by_name[normalized.name] = normalized
 end
 
 function M.register(declaration)
@@ -193,12 +179,12 @@ function M.register(declaration)
 end
 
 function M.current()
-	local enabled = vim.deepcopy(enabled_by_name)
-	local enabled_names = sorted_keys(enabled)
+	local by_name = vim.deepcopy(declarations_by_name)
+	local names = sorted_keys(by_name)
 
 	local specs = {}
-	for _, name in ipairs(enabled_names) do
-		local plugin = enabled[name]
+	for _, name in ipairs(names) do
+		local plugin = by_name[name]
 		table.insert(specs, {
 			name = name,
 			src = plugin.src,
@@ -207,10 +193,9 @@ function M.current()
 	end
 
 	return {
-		enabled_by_name = enabled,
-		enabled_names = enabled_names,
+		by_name = by_name,
+		names = names,
 		pack_specs = specs,
-		disabled_names = sorted_keys(disabled_by_name),
 	}
 end
 

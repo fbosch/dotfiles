@@ -1,0 +1,867 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+    - ".*/\\.caliper/results/.*"
+
+tasks:
+  - name: Builds a safe interactive local updater
+    setup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import json
+      import shutil
+      import textwrap
+
+      root = Path("/tmp/cli-ux-eval-task1")
+      owner_name = ".caliper-owner"
+      owner_value = "cli-ux-task1\n"
+
+      if root.is_symlink() or (root.exists() and not root.is_dir()):
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      if root.exists():
+          owner = root / owner_name
+          if owner.is_symlink() or not owner.is_file() or owner.read_text() != owner_value:
+              raise SystemExit(f"refusing to remove unowned fixture: {root}")
+          raise SystemExit(f"fixture already exists; refusing concurrent run: {root}")
+      root.mkdir(mode=0o700)
+      (root / owner_name).write_text(owner_value)
+      (root / "repos.json").write_text(json.dumps({
+          "repositories": [
+              {"name": "alpha", "current": "1.0", "latest": "2.0", "selected": True},
+              {"name": "beta", "current": "10.0", "latest": "11.0", "selected": False},
+              {"name": "gamma", "current": "3.0", "latest": "4.0", "selected": True},
+          ]
+      }, indent=2) + "\n")
+      updater = textwrap.dedent('''\
+          #!/usr/bin/env python3
+          import argparse
+          import json
+          import sys
+          from pathlib import Path
+
+          STATE = Path(__file__).with_name("repos.json")
+
+          def main():
+              parser = argparse.ArgumentParser()
+              parser.add_argument("--yes", action="store_true")
+              args = parser.parse_args()
+              data = json.loads(STATE.read_text())
+              selected = [repo for repo in data["repositories"] if repo["selected"]]
+              print("Repositories selected for update:")
+              for repo in selected:
+                  print(f"  {repo['name']}: {repo['current']} -> {repo['latest']}")
+              if not selected:
+                  print("Nothing to update.")
+                  return 0
+              if not args.yes:
+                  answer = input("Proceed with update? [y/N] ")
+                  if answer.strip().lower() not in {"y", "yes"}:
+                      print("Cancelled.")
+                      return 0
+              for repo in data["repositories"]:
+                  repo["current"] = repo["latest"]
+                  print(f"Updating {repo['name']}...", file=sys.stderr)
+              STATE.write_text(json.dumps(data, indent=2) + "\\n")
+              print(f"Updated {len(data['repositories'])} repositories.")
+              return 0
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+      ''')
+      script = root / "updater.py"
+      script.write_text(updater)
+      script.chmod(0o755)
+      PY
+    cleanup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import shutil
+
+      root = Path("/tmp/cli-ux-eval-task1")
+      owner = root / ".caliper-owner"
+      if not root.exists():
+          if root.is_symlink():
+              raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif root.is_symlink() or not root.is_dir():
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif owner.is_symlink() or not owner.is_file() or owner.read_text() != "cli-ux-task1\n":
+          raise SystemExit(f"refusing to remove unowned fixture: {root}")
+      else:
+          shutil.rmtree(root)
+      PY
+    prompt: |
+      Use cli-ux if available; continue without it if unavailable.
+
+      Work in the local fixture at `/tmp/cli-ux-eval-task1`. Improve the existing
+      Python-stdlib-only `updater.py` in place; do not use git, network access, or
+      third-party packages. The fixture is a fake repository updater, not a real
+      repository. Read its state file and existing implementation before editing.
+
+      Make the command `python3 updater.py` a safe human workflow. It must preview
+      the selected repositories and their current-to-latest versions before asking
+      for confirmation, use the documented default-no confirmation, and leave the
+      state unchanged when the user declines. On acceptance, show progress for the
+      actual selected work and one final result. The preview and progress must name
+      only repositories whose state marks them selected; an unselected repository
+      must never be updated or appear as selected work. Human context, preview,
+      prompt, progress, and result must use the cli-ux stream and copy rules.
+
+      Add `--yes` as the explicit non-interactive alternative. With `--yes`, do not
+      prompt or read stdin as confirmation, so `printf 'n\\n' | python3 updater.py
+      --yes` still performs the selected update. Keep the command stdlib-only and
+      run focused checks for both the decline and accepted paths if practical.
+    expect: |
+      Pass if the agent updates `/tmp/cli-ux-eval-task1/updater.py` to implement a
+      safe local human workflow: it previews only selected pending repositories,
+      asks for confirmation with a default decline before mutation, leaves state
+      untouched when declined, reports bounded work while updating, and emits a
+      final successful result only after the selected mutation completes. `--yes`
+      must be a genuinely non-interactive path that neither prompts nor consumes
+      stdin as a confirmation and must update selected entries only. The response
+      should describe or demonstrate the relevant checks without claiming work it
+      did not perform. Fail if it updates unselected state, mutates on decline,
+      prompts in `--yes` mode, mixes human phases into an accidental machine
+      protocol, or invents dependencies, git, or network work.
+    assert: |
+      import errno
+      import json
+      import os
+      import pty
+      import re
+      import select
+      import signal
+      import subprocess
+      import sys
+      import time
+      from pathlib import Path
+
+      root = Path("/tmp/cli-ux-eval-task1")
+      script = root / "updater.py"
+      state = root / "repos.json"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "task fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink() and owner.read_text() == "cli-ux-task1\n", "task fixture ownership marker is invalid"
+      original = (
+          b'{\n'
+          b'  "repositories": [\n'
+          b'    {\n'
+          b'      "name": "alpha",\n'
+          b'      "current": "1.0",\n'
+          b'      "latest": "2.0",\n'
+          b'      "selected": true\n'
+          b'    },\n'
+          b'    {\n'
+          b'      "name": "beta",\n'
+          b'      "current": "10.0",\n'
+          b'      "latest": "11.0",\n'
+          b'      "selected": false\n'
+          b'    },\n'
+          b'    {\n'
+          b'      "name": "gamma",\n'
+          b'      "current": "3.0",\n'
+          b'      "latest": "4.0",\n'
+          b'      "selected": true\n'
+          b'    }\n'
+          b'  ]\n'
+          b'}\n'
+      )
+      ansi = re.compile(rb"\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\a]*(?:\a|\x1b\\))")
+
+      def text(data):
+          return ansi.sub(b"", data).decode("utf-8", "replace").replace("\r", "")
+
+      def kill_and_wait(proc):
+          if proc.poll() is None:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+          try:
+              proc.wait(timeout=1.0)
+          except subprocess.TimeoutExpired:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+              proc.wait(timeout=1.0)
+
+      def run_pty(answer):
+          pid, master = pty.fork()
+          if pid == 0:
+              os.chdir(root)
+              os.execv(sys.executable, [sys.executable, str(script)])
+              os._exit(127)
+          chunks = []
+          sent = False
+          status = None
+          pty_closed = False
+          deadline = time.monotonic() + 5.0
+          try:
+              while time.monotonic() < deadline:
+                  remaining = deadline - time.monotonic()
+                  ready = [] if pty_closed else select.select(
+                      [master], [], [], min(0.1, max(0.0, remaining))
+                  )[0]
+                  if ready:
+                      try:
+                          block = os.read(master, 4096)
+                      except OSError as exc:
+                          if exc.errno == errno.EIO:
+                              pty_closed = True
+                              block = b""
+                          else:
+                              raise
+                      if block:
+                          chunks.append(block)
+                          if not sent and re.search(r"\[y/N\]", text(b"".join(chunks))):
+                              os.write(master, answer + b"\n")
+                              sent = True
+                  waited, status_value = os.waitpid(pid, os.WNOHANG)
+                  if waited == pid:
+                      status = status_value
+                      break
+                  if pty_closed:
+                      time.sleep(0.01)
+              if status is None:
+                  raise AssertionError("PTY updater did not finish before deadline")
+              drain_deadline = time.monotonic() + 0.5
+              while time.monotonic() < drain_deadline:
+                  ready, _, _ = select.select([master], [], [], 0.05)
+                  if not ready:
+                      break
+                  try:
+                      block = os.read(master, 4096)
+                  except OSError as exc:
+                      if exc.errno == errno.EIO:
+                          break
+                      raise
+                  if not block:
+                      break
+                  chunks.append(block)
+              if not sent:
+                  raise AssertionError("interactive updater did not expose a default-no confirmation")
+              return os.waitstatus_to_exitcode(status), text(b"".join(chunks))
+          finally:
+              if status is None:
+                  try:
+                      os.killpg(pid, signal.SIGKILL)
+                  except ProcessLookupError:
+                      pass
+                  wait_deadline = time.monotonic() + 1.0
+                  while time.monotonic() < wait_deadline:
+                      try:
+                          waited, status_value = os.waitpid(pid, os.WNOHANG)
+                      except ChildProcessError:
+                          break
+                      if waited == pid:
+                          status = status_value
+                          break
+                      time.sleep(0.01)
+              os.close(master)
+
+      def run_pipes(argv, payload):
+          proc = subprocess.Popen(
+              argv,
+              cwd=root,
+              stdin=subprocess.PIPE,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              start_new_session=True,
+              close_fds=True,
+          )
+          stdout_fd = proc.stdout.fileno()
+          stderr_fd = proc.stderr.fileno()
+          output = {stdout_fd: bytearray(), stderr_fd: bytearray()}
+          streams = {stdout_fd: proc.stdout, stderr_fd: proc.stderr}
+          try:
+              proc.stdin.write(payload)
+              proc.stdin.close()
+              deadline = time.monotonic() + 5.0
+              while output and time.monotonic() < deadline:
+                  remaining = deadline - time.monotonic()
+                  ready, _, _ = select.select(list(output), [], [], min(0.1, max(0.0, remaining)))
+                  for fd in ready:
+                      block = os.read(fd, 4096)
+                      if block:
+                          output[fd].extend(block)
+                      else:
+                          streams[fd].close()
+                          del streams[fd]
+                          del output[fd]
+                  if proc.poll() is not None and not ready:
+                      break
+              if proc.poll() is None:
+                  raise AssertionError(f"pipeline updater exceeded deadline: {argv}")
+              for stream in streams.values():
+                  stream.close()
+              return proc.returncode, bytes(output.get(stdout_fd, b"")), bytes(output.get(stderr_fd, b""))
+          finally:
+              kill_and_wait(proc)
+              for stream in (proc.stdin, proc.stdout, proc.stderr):
+                  try:
+                      stream.close()
+                  except OSError:
+                      pass
+
+      def reset():
+          state.write_bytes(original)
+
+      code, declined = run_pty(b"n")
+      assert code == 0, f"declining confirmation should exit 0, got {code}: {declined!r}"
+      assert state.read_bytes() == original, "declining confirmation mutated state"
+      prompt_at = declined.find("[y/N]")
+      assert prompt_at >= 0, "confirmation prompt is missing"
+      after_prompt = declined[prompt_at:]
+      assert not re.search(r"(?m)^Working  ", after_prompt), "decline reported working state"
+      assert not re.search(r"(?m)^Success  ", after_prompt), "decline reported success"
+      assert "alpha" in declined and "gamma" in declined, "preview omitted selected entries"
+      assert "1.0" in declined and "2.0" in declined and "3.0" in declined and "4.0" in declined, "preview omitted versions"
+      assert "beta" not in declined, "preview exposed unselected work"
+
+      reset()
+      code, accepted = run_pty(b"y")
+      assert code == 0, f"accepted update failed: {accepted!r}"
+      prompt_at = accepted.find("[y/N]")
+      assert prompt_at >= 0, "accepted path did not confirm"
+      assert re.search(r"(?m)^Working  ", accepted[prompt_at:]), "accepted path omitted progress"
+      assert re.search(r"(?m)^Success  ", accepted[prompt_at:]), "accepted path omitted final result"
+      assert accepted.find("[y/N]") < accepted.find("Working  "), "progress preceded confirmation"
+      assert accepted.find("Working  ") < accepted.find("Success  "), "result preceded progress"
+      accepted_data = json.loads(state.read_text())
+      by_name = {repo["name"]: repo for repo in accepted_data["repositories"]}
+      assert by_name["alpha"]["current"] == "2.0"
+      assert by_name["gamma"]["current"] == "4.0"
+      assert by_name["beta"]["current"] == "10.0", "unselected repository was updated"
+      assert "beta" not in accepted, "accepted output exposed unselected work"
+
+      reset()
+      code, stdout, stderr = run_pipes([sys.executable, str(script), "--yes"], b"n\n")
+      assert code == 0, f"--yes update failed: {code}, {stdout!r}, {stderr!r}"
+      assert b"\x1b" not in stdout + stderr, "redirected output contains ANSI control bytes"
+      out_text, err_text = text(stdout), text(stderr)
+      assert "[y/N]" not in out_text + err_text, "--yes path prompted for confirmation"
+      assert re.search(r"(?m)^Success  ", out_text), "final result did not stay on stdout"
+      assert not re.search(r"Updating beta", out_text + err_text), "--yes updated unselected work"
+      assert re.search(r"(?m)^Working  ", err_text), "progress did not stay on stderr"
+      final_data = json.loads(state.read_text())
+      final_by_name = {repo["name"]: repo for repo in final_data["repositories"]}
+      assert final_by_name["alpha"]["current"] == "2.0"
+      assert final_by_name["gamma"]["current"] == "4.0"
+      assert final_by_name["beta"]["current"] == "10.0"
+
+  - name: Keeps piped JSON input separate from confirmation
+    setup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import json
+      import shutil
+      import textwrap
+
+      root = Path("/tmp/cli-ux-eval-task2")
+      owner_name = ".caliper-owner"
+      owner_value = "cli-ux-task2\n"
+
+      if root.is_symlink() or (root.exists() and not root.is_dir()):
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      if root.exists():
+          owner = root / owner_name
+          if owner.is_symlink() or not owner.is_file() or owner.read_text() != owner_value:
+              raise SystemExit(f"refusing to remove unowned fixture: {root}")
+          raise SystemExit(f"fixture already exists; refusing concurrent run: {root}")
+      root.mkdir(mode=0o700)
+      (root / owner_name).write_text(owner_value)
+      (root / "state.json").write_text(json.dumps({
+          "repositories": [
+              {"name": "alpha", "current": "1.0", "latest": "2.0"},
+              {"name": "beta", "current": "10.0", "latest": "11.0"},
+              {"name": "gamma", "current": "3.0", "latest": "4.0"},
+          ]
+      }, indent=2) + "\n")
+      updater = textwrap.dedent('''\
+          #!/usr/bin/env python3
+          import argparse
+          import json
+          import sys
+          from pathlib import Path
+
+          STATE = Path(__file__).with_name("state.json")
+
+          def main():
+              parser = argparse.ArgumentParser()
+              parser.add_argument("--json", action="store_true")
+              parser.add_argument("--yes", action="store_true")
+              args = parser.parse_args()
+              names = [line.strip() for line in sys.stdin if line.strip()]
+              if not args.yes:
+                  answer = input("Confirm update? [y/N] ")
+                  if answer.strip().lower() not in {"y", "yes"}:
+                      return 0
+              data = json.loads(STATE.read_text())
+              by_name = {repo["name"]: repo for repo in data["repositories"]}
+              for name in names:
+                  by_name[name]["current"] = by_name[name]["latest"]
+              STATE.write_text(json.dumps(data, indent=2) + "\\n")
+              if args.json:
+                  print(json.dumps({"ok": True, "updated": names, "count": len(names)}))
+              else:
+                  print(f"Updated {len(names)} repositories.")
+              return 0
+
+          if __name__ == "__main__":
+              raise SystemExit(main())
+      ''')
+      script = root / "bulk_update.py"
+      script.write_text(updater)
+      script.chmod(0o755)
+      PY
+    cleanup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import shutil
+
+      root = Path("/tmp/cli-ux-eval-task2")
+      owner = root / ".caliper-owner"
+      if not root.exists():
+          if root.is_symlink():
+              raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif root.is_symlink() or not root.is_dir():
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif owner.is_symlink() or not owner.is_file() or owner.read_text() != "cli-ux-task2\n":
+          raise SystemExit(f"refusing to remove unowned fixture: {root}")
+      else:
+          shutil.rmtree(root)
+      PY
+    prompt: |
+      Use cli-ux if available; continue without it if unavailable.
+
+      Work in `/tmp/cli-ux-eval-task2` and improve the existing stdlib-only
+      `bulk_update.py`. It accepts newline-delimited repository names on stdin and
+      has `--json` and `--yes` flags. Do not use git, network access, or third-party
+      packages.
+
+      This command's machine contract is explicit. With `--json --yes`,
+      `bulk_update.py` must read newline-delimited names from stdin, ignore blank
+      lines, preserve the order of the nonblank names, update exactly those names,
+      and write exactly one JSON object to stdout (a trailing newline is fine):
+      `{"ok":true,"updated":["gamma","alpha"],"count":2}`. The object must
+      have exactly those keys and types for the input `\\ngamma\\n\\nalpha\\n`,
+      and stderr must remain empty.
+
+      When stdin is not a terminal and `--yes` is absent, stdin is payload, never a
+      confirmation prompt. Fail before mutation (and before consuming the payload
+      as a prompt) with exit status 2 and exactly this JSON object on stdout:
+      `{"ok":false,"error":{"code":"confirmation_required","message":"pass --yes when stdin is not a terminal"}}`
+      (a trailing newline is fine), with no stderr output. Do not add human status
+      prose or ANSI bytes to JSON stdout. Keep state for unmentioned repositories
+      unchanged. Run focused checks for both the missing-confirmation error and the
+      reversed-name, blank-line success path if practical.
+    expect: |
+      Pass if the agent treats piped stdin as newline-delimited payload rather than
+      confirmation input. Without `--yes`, it must fail non-interactively with the
+      requested exit status and exact machine-readable error object before changing
+      state. With `--json --yes`, it must ignore blank lines, preserve the reversed
+      nonblank input order, update only those names, and emit exactly the requested
+      success schema on stdout with no stderr prose. The response should ground its
+      claims in the fixture or checks it actually performed. Fail if it consumes a
+      piped name as a yes/no answer, mutates before the required confirmation flag,
+      changes JSON keys/types/order, or contaminates machine output with human UI.
+    assert: |
+      import json
+      import os
+      import select
+      import signal
+      import subprocess
+      import sys
+      import time
+      from pathlib import Path
+
+      root = Path("/tmp/cli-ux-eval-task2")
+      script = root / "bulk_update.py"
+      state = root / "state.json"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "task fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink() and owner.read_text() == "cli-ux-task2\n", "task fixture ownership marker is invalid"
+      original = (
+          b'{\n'
+          b'  "repositories": [\n'
+          b'    {\n'
+          b'      "name": "alpha",\n'
+          b'      "current": "1.0",\n'
+          b'      "latest": "2.0"\n'
+          b'    },\n'
+          b'    {\n'
+          b'      "name": "beta",\n'
+          b'      "current": "10.0",\n'
+          b'      "latest": "11.0"\n'
+          b'    },\n'
+          b'    {\n'
+          b'      "name": "gamma",\n'
+          b'      "current": "3.0",\n'
+          b'      "latest": "4.0"\n'
+          b'    }\n'
+          b'  ]\n'
+          b'}\n'
+      )
+
+      def kill_and_wait(proc):
+          if proc.poll() is None:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+          try:
+              proc.wait(timeout=1.0)
+          except subprocess.TimeoutExpired:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+              proc.wait(timeout=1.0)
+
+      def run_pipe(args, payload):
+          proc = subprocess.Popen(
+              args,
+              cwd=root,
+              stdin=subprocess.PIPE,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              start_new_session=True,
+              close_fds=True,
+          )
+          stdout_fd = proc.stdout.fileno()
+          stderr_fd = proc.stderr.fileno()
+          fds = {stdout_fd: bytearray(), stderr_fd: bytearray()}
+          streams = {stdout_fd: proc.stdout, stderr_fd: proc.stderr}
+          try:
+              proc.stdin.write(payload)
+              proc.stdin.close()
+              deadline = time.monotonic() + 5.0
+              while fds and time.monotonic() < deadline:
+                  remaining = deadline - time.monotonic()
+                  ready, _, _ = select.select(list(fds), [], [], min(0.1, max(0.0, remaining)))
+                  for fd in ready:
+                      block = os.read(fd, 4096)
+                      if block:
+                          fds[fd].extend(block)
+                      else:
+                          streams[fd].close()
+                          del streams[fd]
+                          del fds[fd]
+                  if proc.poll() is not None and not ready:
+                      break
+              if proc.poll() is None:
+                  raise AssertionError(f"piped command exceeded deadline: {args}")
+              for stream in streams.values():
+                  stream.close()
+              return proc.returncode, bytes(fds.get(stdout_fd, b"")), bytes(fds.get(stderr_fd, b""))
+          finally:
+              kill_and_wait(proc)
+              for stream in (proc.stdin, proc.stdout, proc.stderr):
+                  try:
+                      stream.close()
+                  except OSError:
+                      pass
+
+      payload = b"\ngamma\n\nalpha\n"
+      code, stdout, stderr = run_pipe([sys.executable, str(script), "--json"], payload)
+      assert code == 2, f"missing --yes should exit 2, got {code}: {stdout!r} {stderr!r}"
+      assert stdout == stdout.rstrip(b"\n") + (b"\n" if stdout.endswith(b"\n") else b""), "error output is not one line"
+      error = json.loads(stdout)
+      assert error == {
+          "ok": False,
+          "error": {
+              "code": "confirmation_required",
+              "message": "pass --yes when stdin is not a terminal",
+          },
+      }, f"unexpected error object: {error!r}"
+      assert stderr == b"", f"error polluted stderr: {stderr!r}"
+      assert state.read_bytes() == original, "missing confirmation mutated state"
+
+      code, stdout, stderr = run_pipe([sys.executable, str(script), "--json", "--yes"], payload)
+      assert code == 0, f"JSON success failed: {code}: {stdout!r} {stderr!r}"
+      success = json.loads(stdout)
+      assert success == {"ok": True, "updated": ["gamma", "alpha"], "count": 2}, success
+      assert set(success) == {"ok", "updated", "count"}, "success schema has extra or missing keys"
+      assert stderr == b"", f"success polluted stderr: {stderr!r}"
+      assert b"\x1b" not in stdout + stderr, "machine protocol contains ANSI bytes"
+      data = json.loads(state.read_text())
+      by_name = {repo["name"]: repo for repo in data["repositories"]}
+      assert by_name["gamma"]["current"] == "4.0"
+      assert by_name["alpha"]["current"] == "2.0"
+      assert by_name["beta"]["current"] == "10.0", "unmentioned repository changed"
+
+  - name: Rejects a transforming change to a transparent wrapper
+    setup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import json
+      import shutil
+      import textwrap
+
+      root = Path("/tmp/cli-ux-eval-task3")
+      owner_name = ".caliper-owner"
+      owner_value = "cli-ux-task3\n"
+
+      if root.is_symlink() or (root.exists() and not root.is_dir()):
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      if root.exists():
+          owner = root / owner_name
+          if owner.is_symlink() or not owner.is_file() or owner.read_text() != owner_value:
+              raise SystemExit(f"refusing to remove unowned fixture: {root}")
+          raise SystemExit(f"fixture already exists; refusing concurrent run: {root}")
+      root.mkdir(mode=0o700)
+      (root / owner_name).write_text(owner_value)
+      wrapper = textwrap.dedent('''\
+      #!/usr/bin/env python3
+      import os
+      import sys
+      from pathlib import Path
+
+      child = Path(__file__).with_name("child.py")
+      os.execv(sys.executable, [sys.executable, str(child), *sys.argv[1:]])
+      ''').encode()
+      child = textwrap.dedent('''\
+      #!/usr/bin/env python3
+      import os
+      import sys
+      import time
+
+      mode = sys.argv[1] if len(sys.argv) > 1 else ""
+      if mode == "bytes":
+          os.write(1, b"child-out:\\x00\\xff\\nline-two\\n")
+          os.write(2, b"child-err:\\x1b[31mraw\\x00\\xff\\n")
+          raise SystemExit(0)
+      if mode == "status":
+          raise SystemExit(37)
+      if mode == "wait":
+          sys.stdout.buffer.write(b"ready\\n")
+          sys.stdout.buffer.flush()
+          time.sleep(60)
+          raise SystemExit(0)
+      raise SystemExit(64)
+      ''').encode()
+      contract = textwrap.dedent('''\
+      Transparent wrapper contract (v1)
+
+      This launcher is already correct and is a stable public interface.
+      - Forward child stdout and stderr byte-for-byte, including control and non-UTF-8 bytes.
+      - Do not add launcher-owned text to either child stream.
+      - Preserve the child exit status.
+      - Preserve the child's default SIGINT and SIGTERM behavior.
+
+      Prefixing, sanitizing, buffering, merging, or adding a success receipt would
+      be a breaking transforming-wrapper change. Do not migrate this contract in
+      this task.
+      ''').encode()
+      (root / "wrapper.py").write_bytes(wrapper)
+      (root / "child.py").write_bytes(child)
+      (root / "CONTRACT.md").write_bytes(contract)
+      (root / "state.json").write_text(json.dumps({"version": 1, "mode": "transparent"}, indent=2) + "\n")
+      (root / "wrapper.py").chmod(0o755)
+      (root / "child.py").chmod(0o755)
+      PY
+    cleanup: |
+      python3 - <<'PY'
+      from pathlib import Path
+      import shutil
+
+      root = Path("/tmp/cli-ux-eval-task3")
+      owner = root / ".caliper-owner"
+      if not root.exists():
+          if root.is_symlink():
+              raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif root.is_symlink() or not root.is_dir():
+          raise SystemExit(f"refusing unexpected fixture path: {root}")
+      elif owner.is_symlink() or not owner.is_file() or owner.read_text() != "cli-ux-task3\n":
+          raise SystemExit(f"refusing to remove unowned fixture: {root}")
+      else:
+          shutil.rmtree(root)
+      PY
+    prompt: |
+      Use cli-ux if available; continue without it if unavailable.
+
+      Review `/tmp/cli-ux-eval-task3/wrapper.py`, `/tmp/cli-ux-eval-task3/child.py`,
+      and the established contract in `/tmp/cli-ux-eval-task3/CONTRACT.md`. Do not
+      edit the child or add dependencies, git, or network access.
+
+      Here is the requested change: add a human-readable prefix to every child
+      output line, sanitize control and non-UTF-8 bytes before forwarding output,
+      and print a wrapper-owned success receipt after the child exits successfully.
+      The request is intentionally in conflict with the existing transparent
+      wrapper contract, which explicitly requires byte-for-byte stdout/stderr,
+      unchanged stream ownership, unchanged child status, and default SIGINT and
+      SIGTERM behavior. Treat the established contract as authoritative. Reject
+      the conflicting implementation request, explain the concrete incompatibility,
+      and leave the wrapper, child, contract, and state untouched. Do not invent a
+      migration, compatibility shim, transforming wrapper, or new protocol; none is
+      authorized by this task.
+    expect: |
+      Pass only if the agent recognizes and explicitly explains the conflict between
+      the requested prefixes, sanitization, and success receipt and the established
+      transparent-wrapper contract. It must refuse to implement the transformation,
+      preserve child bytes, stream ownership, exit status, and default signal
+      behavior, and avoid editing the wrapper or child. It must not invent a
+      migration, compatibility shim, receipt protocol, or other new interface. A
+      separately scoped transforming wrapper may be mentioned only as a clearly
+      conditional explanation, not created or silently substituted. Fail if it
+      implements, partially implements, or claims to have implemented the request,
+      or if its explanation does not identify the byte/stream/status/signal conflict.
+    assert: |
+      import errno
+      import hashlib
+      import os
+      import select
+      import textwrap
+      import signal
+      import subprocess
+      import sys
+      import time
+      from pathlib import Path
+
+      root = Path("/tmp/cli-ux-eval-task3")
+      wrapper_path = root / "wrapper.py"
+      child_path = root / "child.py"
+      contract_path = root / "CONTRACT.md"
+      state_path = root / "state.json"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "task fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink() and owner.read_text() == "cli-ux-task3\n", "task fixture ownership marker is invalid"
+      expected_wrapper = textwrap.dedent('''\
+      #!/usr/bin/env python3
+      import os
+      import sys
+      from pathlib import Path
+
+      child = Path(__file__).with_name("child.py")
+      os.execv(sys.executable, [sys.executable, str(child), *sys.argv[1:]])
+      ''').encode()
+      expected_child = textwrap.dedent('''\
+      #!/usr/bin/env python3
+      import os
+      import sys
+      import time
+
+      mode = sys.argv[1] if len(sys.argv) > 1 else ""
+      if mode == "bytes":
+          os.write(1, b"child-out:\\x00\\xff\\nline-two\\n")
+          os.write(2, b"child-err:\\x1b[31mraw\\x00\\xff\\n")
+          raise SystemExit(0)
+      if mode == "status":
+          raise SystemExit(37)
+      if mode == "wait":
+          sys.stdout.buffer.write(b"ready\\n")
+          sys.stdout.buffer.flush()
+          time.sleep(60)
+          raise SystemExit(0)
+      raise SystemExit(64)
+      ''').encode()
+      expected_contract = textwrap.dedent('''\
+      Transparent wrapper contract (v1)
+
+      This launcher is already correct and is a stable public interface.
+      - Forward child stdout and stderr byte-for-byte, including control and non-UTF-8 bytes.
+      - Do not add launcher-owned text to either child stream.
+      - Preserve the child exit status.
+      - Preserve the child's default SIGINT and SIGTERM behavior.
+
+      Prefixing, sanitizing, buffering, merging, or adding a success receipt would
+      be a breaking transforming-wrapper change. Do not migrate this contract in
+      this task.
+      ''').encode()
+      expected_state = b'{\n  "version": 1,\n  "mode": "transparent"\n}\n'
+
+      assert wrapper_path.read_bytes() == expected_wrapper, "wrapper source changed"
+      assert child_path.read_bytes() == expected_child, "child source changed"
+      assert contract_path.read_bytes() == expected_contract, "established contract changed"
+      assert state_path.read_bytes() == expected_state, "fixture state changed"
+      assert {path.name for path in root.iterdir()} == {
+          ".caliper-owner", "CONTRACT.md", "child.py", "state.json", "wrapper.py"
+      }, "agent added a migration or receipt artifact"
+      assert hashlib.sha256(wrapper_path.read_bytes()).hexdigest() == hashlib.sha256(expected_wrapper).hexdigest()
+
+      def kill_and_wait(proc):
+          if proc.poll() is None:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+          try:
+              proc.wait(timeout=1.0)
+          except subprocess.TimeoutExpired:
+              try:
+                  os.killpg(proc.pid, signal.SIGKILL)
+              except ProcessLookupError:
+                  pass
+              proc.wait(timeout=1.0)
+
+      def run_capture(mode, send_signal=None):
+          proc = subprocess.Popen(
+              [str(wrapper_path), mode],
+              cwd=root,
+              stdin=subprocess.DEVNULL,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+              start_new_session=True,
+              close_fds=True,
+          )
+          stdout_fd = proc.stdout.fileno()
+          stderr_fd = proc.stderr.fileno()
+          fds = {stdout_fd: bytearray(), stderr_fd: bytearray()}
+          streams = {stdout_fd: proc.stdout, stderr_fd: proc.stderr}
+          signalled = False
+          deadline = time.monotonic() + 5.0
+          try:
+              while fds and time.monotonic() < deadline:
+                  remaining = deadline - time.monotonic()
+                  ready, _, _ = select.select(list(fds), [], [], min(0.1, max(0.0, remaining)))
+                  for fd in ready:
+                      block = os.read(fd, 4096)
+                      if block:
+                          fds[fd].extend(block)
+                          if send_signal is not None and not signalled and b"ready\n" in fds[fd]:
+                              os.killpg(proc.pid, send_signal)
+                              signalled = True
+                      else:
+                          streams[fd].close()
+                          del streams[fd]
+                          del fds[fd]
+                  if proc.poll() is not None and not ready:
+                      break
+              if proc.poll() is None:
+                  raise AssertionError(f"wrapper {mode} exceeded deadline")
+              if send_signal is not None and not signalled:
+                  raise AssertionError(f"wrapper {mode} never reached deterministic readiness")
+              for stream in streams.values():
+                  stream.close()
+              return proc.returncode, bytes(fds.get(stdout_fd, b"")), bytes(fds.get(stderr_fd, b""))
+          finally:
+              kill_and_wait(proc)
+              for stream in (proc.stdin, proc.stdout, proc.stderr):
+                  try:
+                      stream.close()
+                  except OSError:
+                      pass
+
+      code, stdout, stderr = run_capture("bytes")
+      assert code == 0, f"child success status changed: {code}"
+      assert stdout == b"child-out:\x00\xff\nline-two\n", stdout
+      assert stderr == b"child-err:\x1b[31mraw\x00\xff\n", stderr
+
+      code, stdout, stderr = run_capture("status")
+      assert code == 37, f"child exit status changed: {code}"
+      assert stdout == b"" and stderr == b"", "status probe gained wrapper output"
+
+      code, stdout, stderr = run_capture("wait", signal.SIGINT)
+      assert code == -signal.SIGINT, f"SIGINT status was not preserved: {code}"
+      assert stdout.startswith(b"ready\\n"), stdout
+
+      code, stdout, stderr = run_capture("wait", signal.SIGTERM)
+      assert code == -signal.SIGTERM, f"SIGTERM status was not preserved: {code}"
+      assert stdout.startswith(b"ready\\n"), stdout
+
+      assert wrapper_path.read_bytes() == expected_wrapper, "wrapper changed during probes"
+      assert child_path.read_bytes() == expected_child, "child changed during probes"
+      assert state_path.read_bytes() == expected_state, "state changed during probes"

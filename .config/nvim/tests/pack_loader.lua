@@ -69,10 +69,7 @@ end
 local function load_loader(plugins)
 	local names = vim.tbl_keys(plugins)
 	table.sort(names)
-	local inventory = {
-		enabled_by_name = plugins,
-		enabled_names = names,
-	}
+	local inventory = { by_name = plugins, names = names }
 	return dofile(loader_path), inventory
 end
 

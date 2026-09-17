@@ -57,21 +57,21 @@ usrcmd("ReloadConfig", function()
 	vim.notify("Reloaded Neovim keymaps", vim.log.levels.INFO)
 end, "Reload Neovim keymaps")
 
-local function enabled_plugin_names()
-	return pack_inventory.current().enabled_names
+local function plugin_names()
+	return pack_inventory.current().names
 end
 
 usrcmd("PackUpdate", function(args)
 	local inventory = pack_inventory.current()
 	for _, name in ipairs(args.fargs) do
-		assert(inventory.enabled_by_name[name] ~= nil, "native plugin is disabled or unknown: " .. name)
+		assert(inventory.by_name[name] ~= nil, "unknown native plugin: " .. name)
 	end
-	vim.pack.update(#args.fargs > 0 and args.fargs or inventory.enabled_names)
+	vim.pack.update(#args.fargs > 0 and args.fargs or inventory.names)
 end, {
 	nargs = "*",
 	desc = "Review native plugin updates",
 	complete = function(arg_lead)
-		return vim.iter(enabled_plugin_names())
+		return vim.iter(plugin_names())
 			:filter(function(name)
 				return vim.startswith(name, arg_lead)
 			end)
