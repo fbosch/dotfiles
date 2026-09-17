@@ -45,41 +45,27 @@ end
 
 mapping("n", "Focus Pi").callback()
 assert(starts == 1, "Pi focus mapping did not start Pi")
-for _, description in ipairs({
-	"Focus Pi with source context",
-	"Add source context to Pi",
-	"Focus Pi with visible buffers",
-}) do
-	assert(
-		vim.iter(vim.api.nvim_get_keymap("n")):all(function(candidate)
-			return candidate.desc ~= description
-		end),
-		"Pi still claims an OpenCode prompt mapping: " .. description
-	)
-end
 mapping("n", "Toggle Pi").callback()
 mapping("t", "Toggle Pi").callback()
 assert(toggles == 2, "Pi toggle mappings did not toggle Pi")
-
--- Loading OpenCode later must not reclaim Pi's Ask mapping.
-dofile(repo_root .. "/.config/nvim/lua/plugins/ai/opencode.lua")[1].setup()
 for _, mode in ipairs({ "n", "x" }) do
-	local ask = vim.fn.maparg("<leader>ac", mode, false, true)
-	assert(ask.desc == "Ask Pi" and type(ask.callback) == "function", "Ask mapping is not Pi-owned in " .. mode)
+	local ask = mapping(mode, "Ask Pi")
 	ask.callback()
 end
 assert(vim.deep_equal(pi_asks, { "", "" }), "Pi Ask mapping callbacks did not call pi.ask with literal input")
-pi_asks = {}
-local rollback = mapping("n", "Toggle OpenCode rollback")
-assert(rollback.rhs:find("OpenCodeToggle", 1, true) ~= nil, "OpenCode rollback key changed")
+for _, mode in ipairs({ "n", "x", "t" }) do
+	assert(
+		vim.iter(vim.api.nvim_get_keymap(mode)):all(function(candidate)
+			return candidate.desc == nil or candidate.desc:find("OpenCode", 1, true) == nil
+		end),
+		"OpenCode mapping survived the Pi-only cutover"
+	)
+end
 
 for _, command in ipairs({
 	"PiStart",
 	"PiToggle",
 	"PiAsk",
-	"OpenCodeStart",
-	"OpenCodeToggle",
-	"OpenCodeAsk",
 	"ReloadConfig",
 	"Z",
 	"DiffClip",
@@ -101,35 +87,7 @@ package.loaded["utils"] = {
 }
 package.loaded["config.pack.inventory"] = {
 	current = function()
-		return { enabled_by_name = { ["opencode.nvim"] = {} }, enabled_names = { "opencode.nvim" } }
-	end,
-}
-local activations = 0
-package.loaded["config.pack.loader"] = {
-	activate = function(name)
-		assert(name == "opencode.nvim", "rollback command activated the wrong plugin")
-		activations = activations + 1
-		return true
-	end,
-}
-local opencode_starts = 0
-local opencode_toggles = 0
-local opencode_asks = {}
-package.loaded["opencode.config"] = {
-	opts = {
-		server = {
-			start = function()
-				opencode_starts = opencode_starts + 1
-			end,
-			toggle = function()
-				opencode_toggles = opencode_toggles + 1
-			end,
-		},
-	},
-}
-package.loaded["opencode"] = {
-	ask = function(prefill)
-		table.insert(opencode_asks, prefill)
+		return { enabled_by_name = {}, enabled_names = {} }
 	end,
 }
 
@@ -138,13 +96,8 @@ vim.cmd("PiStart")
 vim.cmd("PiToggle")
 vim.cmd("PiAsk")
 vim.cmd("PiAsk literal prompt")
-vim.cmd("OpenCodeStart")
-vim.cmd("OpenCodeToggle")
-vim.cmd("OpenCodeAsk")
-vim.cmd("OpenCodeAsk explain this")
 assert(starts == 2 and toggles == 3, "Pi commands did not use the cutover integration")
-assert(vim.deep_equal(pi_asks, { "", "literal prompt" }), "Pi Ask did not preserve literal prefill")
-assert(activations == 4, "OpenCode rollback commands did not activate the plugin")
-assert(opencode_starts == 1, "OpenCode rollback start command did not start OpenCode")
-assert(opencode_toggles == 1, "OpenCode rollback toggle command did not toggle OpenCode")
-assert(vim.deep_equal(opencode_asks, { "@this: ", "explain this" }), "OpenCode Ask did not preserve prefill")
+assert(vim.deep_equal(pi_asks, { "", "", "", "literal prompt" }), "Pi Ask did not preserve literal prefill")
+for _, command in ipairs({ "OpenCodeStart", "OpenCodeToggle", "OpenCodeAsk" }) do
+	assert(vim.fn.exists(":" .. command) == 0, command .. " survived the Pi-only cutover")
+end

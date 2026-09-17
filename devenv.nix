@@ -326,11 +326,6 @@ in
 
     "test:herdr-neovim-sessions".exec = "bash .config/herdr/plugins/neovim-sessions/tests/restore.sh";
 
-    "test:nvim-opencode-session-restore".exec = ''
-      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE --listen "$DEVENV_STATE/opencode-session-restore.sock" \
-        -l .config/nvim/tests/opencode_session_restore.lua
-    '';
-
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent
@@ -468,7 +463,6 @@ in
         "test:fish-starship-cache"
         "test:herdr-neovim-sessions"
         "test:lua-quality"
-        "test:nvim-opencode-session-restore"
         "test:pi-extensions"
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"

@@ -44,27 +44,7 @@ return {
 				and result:match("%f[%a]unknown%f[%A]") == nil
 		end
 
-		local lualine_x = {
-			{
-				function()
-					local opencode = package.loaded.opencode
-					local ok, result = pcall(opencode and opencode.statusline or function()
-						return ""
-					end)
-					if not ok or not is_valid_status(result) then
-						return ""
-					end
-					return result
-				end,
-				cond = function()
-					local opencode = package.loaded.opencode
-					local ok, result = pcall(opencode and opencode.statusline or function()
-						return ""
-					end)
-					return ok and is_valid_status(result)
-				end,
-			},
-		}
+		local lualine_x = {}
 
 		-- Make git components conditional on current buffer being in a git repo
 		local lualine_b = {

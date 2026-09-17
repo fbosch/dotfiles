@@ -61,8 +61,6 @@ vim.fn.writefile({
 	'{"type":"session_info","name":"production restore fixture"}',
 }, pi_session_path)
 session.set_metadata({
-	opencode_session_id = "ses_production",
-	opencode_terminal_open = true,
 	pi_session_id = pi_session_id,
 	pi_terminal_open = true,
 }, target)
@@ -220,11 +218,6 @@ assert(restored_metadata.herdr_pane_id == expected_pane_id, "restored metadata r
 assert(restored_metadata.specifier == expected_specifier, "restored metadata recorded the wrong Neovim session")
 assert(restored_metadata.pi_session_id == pi_session_id, "Pi session identity changed during restoration")
 assert(restored_metadata.pi_terminal_open == true, "Pi terminal state changed during restoration")
-assert(
-	restored_metadata.opencode_session_id == "ses_production",
-	"OpenCode session identity changed during restoration"
-)
-assert(restored_metadata.opencode_terminal_open == true, "OpenCode terminal state changed during restoration")
 assert(
 	vim.deep_equal(vim.fn.readfile(pi_session_path, "b"), pi_session_before),
 	"production validation changed the Pi session file"

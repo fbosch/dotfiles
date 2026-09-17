@@ -113,8 +113,6 @@ end
 
 local function set_metadata(session_id, is_open)
 	session.set_metadata({
-		opencode_session_id = "ses_exact",
-		opencode_terminal_open = true,
 		pi_session_id = session_id,
 		pi_terminal_open = is_open,
 	}, nvim_session)
@@ -338,8 +336,6 @@ assert(type(replacement_binding) == "table", "Pi fallback did not bind Pi's actu
 local replacement_metadata = session.get_metadata(nvim_session)
 assert(replacement_metadata.pi_session_id == replacement_id, "Pi fallback binding did not persist the replacement ID")
 assert(replacement_metadata.pi_terminal_open == true, "Pi fallback binding did not persist the open state")
-assert(replacement_metadata.opencode_session_id == "ses_exact", "Pi fallback binding changed OpenCode session metadata")
-assert(replacement_metadata.opencode_terminal_open == true, "Pi fallback binding changed OpenCode terminal metadata")
 local reloaded_session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 local reloaded_metadata = reloaded_session.get_metadata(nvim_session)
 assert(reloaded_metadata.pi_session_id == replacement_id, "bound Pi ID did not survive metadata reload")

@@ -155,26 +155,6 @@ function M.touch(session)
 	M.set_metadata(metadata, session)
 end
 
-function M.set_opencode_session_id(session_id, session)
-	if type(session_id) ~= "string" or session_id:match("^ses_[A-Za-z0-9]+$") == nil then
-		return false
-	end
-
-	session = session or M.get_current()
-	if session == nil then
-		return false
-	end
-
-	local metadata = M.get_metadata(session)
-	if metadata.opencode_session_id == session_id then
-		return true
-	end
-
-	metadata.opencode_session_id = session_id
-	M.set_metadata(metadata, session)
-	return true
-end
-
 function M.is_valid_pi_session_id(session_id)
 	return type(session_id) == "string"
 		and session_id:match("^[A-Za-z0-9._-]+$") ~= nil

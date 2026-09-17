@@ -6,12 +6,9 @@
     "@opencode-ai/plugin": "1.18.26"
   },
   "scripts": {
-    "deps:list": "pnpm -r list --depth 0",
-    "quality:fallow:mcp": "pnpm --dir mcp/neovim run quality:fallow",
-    "quality:fallow:mcp:audit": "pnpm --dir mcp/neovim run quality:fallow:audit"
+    "deps:list": "pnpm -r list --depth 0"
   },
   "workspaces": [
-    "mcp/*",
     "plugins",
     "plugins/*"
   ]

@@ -1,6 +1,5 @@
 local utils = require("utils")
 local pack_inventory = require("config.pack.inventory")
-local pack_loader = require("config.pack.loader")
 local usrcmd = utils.set_usrcmd
 local keymap_modules = {
 	"config.keymaps.core",
@@ -48,34 +47,6 @@ end, "Toggle Pi bound to this Neovim instance")
 usrcmd("PiAsk", function(args)
 	require("plugins.ai.pi").ask(args.args)
 end, { nargs = "*", desc = "Ask the bound idle Pi session" })
-
-local function with_opencode(action)
-	local activated, reason = pack_loader.activate("opencode.nvim", { source = "command" })
-	if activated == false then
-		vim.notify("OpenCode is unavailable: " .. reason, vim.log.levels.WARN)
-		return
-	end
-	action(require("opencode.config").opts.server)
-end
-
-usrcmd("OpenCodeStart", function()
-	with_opencode(function(server)
-		server.start()
-	end)
-end, "Start the OpenCode rollback integration")
-
-usrcmd("OpenCodeToggle", function()
-	with_opencode(function(server)
-		server.toggle()
-	end)
-end, "Toggle the OpenCode rollback integration")
-
-usrcmd("OpenCodeAsk", function(args)
-	with_opencode(function()
-		local prefill = args.args ~= "" and args.args or "@this: "
-		require("opencode").ask(prefill)
-	end)
-end, { nargs = "*", desc = "Open the retained OpenCode Ask input" })
 
 usrcmd("ReloadConfig", function()
 	-- Only reload keymaps: other config modules register commands and autocmds that are not reload-safe.

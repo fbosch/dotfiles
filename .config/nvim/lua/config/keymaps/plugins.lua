@@ -12,7 +12,6 @@ end, "Toggle Pi")
 map({ "n", "x" }, "<leader>ac", function()
 	require("plugins.ai.pi").ask("")
 end, "Ask Pi")
-map({ "n", "t" }, "<leader>aO", "<Cmd>OpenCodeToggle<CR>", "Toggle OpenCode rollback")
 
 -- web
 map("n", "<leader>ou", web.open_uris_in_buffer, "Open all URIs in current buffer")

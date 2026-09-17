@@ -31,6 +31,13 @@ test("pi-lens refreshes hashline anchors after immediate formatting", () => {
   expect(patch).toContain("Re-read the file before editing");
 });
 
+test("pi-lens locates its packaged grammars from the bundled runtime", () => {
+  const patch = readFileSync(patchPath, "utf8");
+
+  expect(patch).toContain('deps.resolvePackage("pi-lens/package.json")');
+  expect(patch).toContain('path71.join(packageGrammars, "tree-sitter-typescript.wasm")');
+});
+
 test("the tracked patch round-trips against the installed pi-lens bundle", () => {
   const fixture = mkdtempSync(resolve(tmpdir(), "pi-lens-patch-"));
   temporaryDirectories.push(fixture);

@@ -183,8 +183,6 @@ local function is_source_buffer(buffer, require_loaded)
 		and has_uri_scheme(name) == false
 		and options.buftype == ""
 		and options.modifiable
-		and options.filetype ~= "opencode"
-		and options.filetype ~= "opencode_terminal"
 		and vim.b[buffer].is_pi_terminal ~= true
 end
 
@@ -301,8 +299,6 @@ local function source_snapshot(max_lines, max_bytes)
 		or has_uri_scheme(name)
 		or options.buftype ~= ""
 		or options.modifiable == false
-		or options.filetype == "opencode"
-		or options.filetype == "opencode_terminal"
 		or vim.b[buffer].is_pi_terminal == true
 	then
 		return nil
@@ -905,8 +901,6 @@ local function problem_source_buffer(buffer)
 	return name ~= ""
 		and has_uri_scheme(name) == false
 		and options.buftype == ""
-		and options.filetype ~= "opencode"
-		and options.filetype ~= "opencode_terminal"
 		and vim.b[buffer].is_pi_terminal ~= true
 end
 

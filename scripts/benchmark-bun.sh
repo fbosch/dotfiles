@@ -31,15 +31,15 @@ EOF
 [[ $# -le 1 ]] || fail "expected at most one target"
 target="${1:-runtime}"
 case "$target" in
-  runtime|install|profiles|all) ;;
-  -h|--help)
-    usage
-    exit 0
-    ;;
-  *)
-    usage >&2
-    fail "unknown target: $target"
-    ;;
+runtime | install | profiles | all) ;;
+-h | --help)
+  usage
+  exit 0
+  ;;
+*)
+  usage >&2
+  fail "unknown target: $target"
+  ;;
 esac
 
 require_command bun
@@ -72,7 +72,6 @@ output_dir="$(cd "$output_dir" && pwd -P)"
 untracked_workloads="$(git ls-files --others --exclude-standard -- \
   .config/fbb \
   .config/ags \
-  .config/opencode/mcp/neovim \
   .config/opencode/plugins/prompt-enhancements)"
 if [[ -n "$untracked_workloads" ]]; then
   printf 'bun benchmark: untracked benchmark workload files found:\n%s\n' "$untracked_workloads" >&2
@@ -160,8 +159,7 @@ run_runtime_benchmarks() {
     --export-json "$output_dir/runtime.json" \
     --export-markdown "$output_dir/runtime.md" \
     --command-name fbb-tests 'bun test --cwd .config/fbb ./lib' \
-    --command-name ags-tests 'bun test --cwd .config/ags' \
-    --command-name neovim-mcp-tests 'bun test --cwd .config/opencode/mcp/neovim'
+    --command-name ags-tests 'bun test --cwd .config/ags'
 
   for ((iteration = 1; iteration <= internal_runs; iteration += 1)); do
     bun run --cwd .config/opencode/plugins bench:typos \
@@ -169,8 +167,7 @@ run_runtime_benchmarks() {
     AI_POINTER_BENCH_SAMPLES=5 AI_POINTER_POLICY_BATCH=100 \
       bun run --cwd .config/ags components/ai-pointer/__benchmarks__/policy.ts \
       >"$output_dir/ai-pointer-policy-$iteration.json"
-    bun run --cwd .config/opencode/mcp/neovim benchmark \
-      >"$output_dir/neovim-mcp-$iteration.txt" 2>&1
+
   done
 }
 
@@ -231,19 +228,19 @@ run_profiles() {
 printf 'Bun %s benchmark results: %s\n' "$bun_version" "$output_dir"
 
 case "$target" in
-  runtime)
-    run_runtime_benchmarks
-    ;;
-  install)
-    run_install_benchmarks
-    ;;
-  profiles)
-    run_profiles
-    ;;
-  all)
-    run_runtime_benchmarks
-    run_install_benchmarks
-    ;;
+runtime)
+  run_runtime_benchmarks
+  ;;
+install)
+  run_install_benchmarks
+  ;;
+profiles)
+  run_profiles
+  ;;
+all)
+  run_runtime_benchmarks
+  run_install_benchmarks
+  ;;
 esac
 
 printf 'Benchmark complete: %s\n' "$output_dir"

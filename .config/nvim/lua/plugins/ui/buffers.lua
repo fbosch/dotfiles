@@ -190,10 +190,6 @@ local declaration = {
 			exclude_name = {
 				"startup-log.txt",
 			},
-			exclude_ft = {
-				"opencode",
-				"opencode_terminal",
-			},
 			icons = {
 				filetype = {
 					custom_colors = false,

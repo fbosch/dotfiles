@@ -127,12 +127,7 @@ local function source_context()
 	local buffer = vim.api.nvim_get_current_buf()
 	local options = vim.bo[buffer]
 	local name = vim.api.nvim_buf_get_name(buffer)
-	if
-		name == ""
-		or options.buftype ~= ""
-		or options.filetype == "opencode"
-		or options.filetype == "opencode_terminal"
-	then
+	if name == "" or options.buftype ~= "" then
 		return nil
 	end
 

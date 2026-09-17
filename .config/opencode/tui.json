@@ -1,7 +1,6 @@
 {
   "plugin": [
     "./plugins/current-port/current-port.tsx",
-    "./plugins/neovim-integration/neovim-integration.tsx",
     "./plugins/prompt-enhancements/prompt-enhancements.tsx"
   ],
   "plugin_enabled": {
