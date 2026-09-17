@@ -34,7 +34,6 @@ Do not advance to planning or implementation guidance when contract-shaping ambi
 
 ## Skill routing
 
-- Load `api-and-interface-design` when the request defines or changes a public interface (API endpoint, CLI surface, config schema, or module contract).
 - Load `deprecation-and-migration` when the request replaces, removes, or materially changes an existing contract that consumers may depend on.
 
 ## Output format

@@ -4,6 +4,8 @@ Verify observable CLI behavior, not only the styled happy path. Use the smallest
 
 ## Test Matrix
 
+Select supported cases from this matrix, including the minimum checks for each applicable profile below.
+
 | Concern | Cover |
 | --- | --- |
 | Destination | stdout TTY, stderr TTY, redirected output, pipe |
@@ -18,21 +20,6 @@ Verify observable CLI behavior, not only the styled happy path. Use the smallest
 | Compatibility | Existing invocation, parser, config, stream, and schema |
 | Renderer | Plain renderer plus each enhanced renderer in scope |
 
-## Required Transcripts
-
-Review at least the paths the command supports:
-
-1. Simple query
-2. Successful mutation
-3. Empty result
-4. Recoverable error
-5. Partial success
-6. Destructive confirmation
-7. Intentional cancellation
-8. Long-running operation
-9. Non-interactive missing input
-10. Machine-readable success and failure
-
 ## Minimum Profile Checks
 
 Run these checks in addition to the changed behavior's focused tests:
@@ -43,7 +30,7 @@ Run these checks in addition to the changed behavior's focused tests:
 | Query or report | Result, empty result, narrow layout, and exact values |
 | Filter | Exact stdout bytes, empty input, error stream, and broken pipe |
 | Machine protocol | Valid success and failure payloads, TTY-invariant schema, and stdout cleanliness |
-| Interactive command | Prompt, no-input failure, piped stdin, and plain numbered fallback |
+| Interactive command | Prompt, destructive confirmation, no-input failure, piped stdin, and plain numbered fallback |
 | Live stream | Record ordering, no spinner interleaving, interruption, and machine parseability when applicable |
 | Transparent wrapper | Exact child stdout/stderr, exit status, signals, and no wrapper sanitization |
 | CI adapter | Required CI records and absence of incompatible house-style output |
@@ -56,38 +43,23 @@ Assert the following when applicable:
 - Human output uses the canonical status labels and sentence case.
 - Detail rows use two-space indentation, local label alignment, and one blank line between phases.
 - No emoji, Nerd Font icon, decorative border, or full-width rule appears in persisted human output.
-- Success names the completed state; warnings do not masquerade as success.
-- Plain output preserves the same words, hierarchy, and order without ANSI or animation.
+- Success names the completed state and is not emitted after a failed owned operation; partial completion, recovery, retry risk, timeout, and remote continuation are explicit.
+- Plain output preserves the same words, hierarchy, and order without ANSI or animation; meaning does not depend on color, spacing, or cursor position.
 - JSON and JSONL stdout parse cleanly and contain no status prose, warning, spinner, or ANSI bytes.
-- Prompts never consume piped payload stdin.
+- Prompts ask only for unresolved input and never consume piped payload stdin.
 - Non-interactive failures name the exact required input.
 - Single-select and multi-select prompts preserve the canonical focus, selected-state, default, disabled-choice, hint, and wrapping rules.
 - Live streams do not interleave with spinner frames or static result tables.
+- Progress bars have a reliable denominator; animation stays in interactive terminals, with no duplicate completed-progress and success lines.
 - IDs, URLs, paths, hashes, and commands remain exactly obtainable at narrow widths.
 - Terminal control characters in untrusted text cannot forge terminal rows or control sequences.
-- Transparent wrappers preserve child stdout, stderr, status, and signal behavior.
-- Wrapper-owned text escapes untrusted controls; transparent child output is unchanged.
-- Cancellation, error output, and exit status agree.
-- Declined prompts exit `0`; `SIGINT` and `SIGTERM` retain signal-derived failure status.
-
-## Review Gates
-
-Reject or fix changes that:
-
-- Add a prompt for an inferred or already-supplied value
-- Apply workflow receipts to filters, machine protocols, streams, wrappers, or CI adapters
-- Mix prose or decoration into machine stdout
-- Rely on color, symbols, spacing, or cursor position for meaning
-- Use a progress bar without a reliable denominator
-- Animate outside an interactive terminal
-- Emit duplicate completed-progress and success lines
-- Claim success after a failed owned operation
-- Hide partial failure, retry risk, timeout, or remote continuation
-- Consume stdin ambiguously as both payload and prompt input
-- Change a stable output, flag, exit, config, or schema contract without migration evidence
-- Apply a lower profile rule when compatibility, wrapper, CI, machine, or stream ownership takes precedence
-- Expose secrets or interpolate untrusted text into commands
-- Add renderer dependencies for static output a plain renderer can express
+- Transparent wrappers preserve child stdout, stderr, status, and signal behavior; wrapper-owned text escapes untrusted controls while child output is unchanged.
+- Cancellation, error output, and exit status agree. Declined prompts exit `0`; `SIGINT` and `SIGTERM` retain signal-derived failure status.
+- Filters, machine protocols, streams, wrappers, and CI adapters do not acquire workflow receipts.
+- Stable output, flag, exit, config, and schema contracts remain unchanged unless migration evidence supports the change.
+- Lower profile rules do not override compatibility, wrapper, CI, machine, or stream ownership.
+- Secrets are not exposed and untrusted text is not interpolated into commands.
+- Renderer dependencies are not added for static output a plain renderer can express.
 
 ## Renderer Parity
 

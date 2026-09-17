@@ -25,6 +25,7 @@ Default stream contract:
 - Keep structured stdout strictly machine-readable.
 - Keep live streams exclusive to their documented channel.
 - Preserve a stable existing stream contract when it differs.
+- Filters normally remain silent on success apart from their transformed records.
 
 Default exit codes:
 
@@ -33,20 +34,6 @@ Default exit codes:
 - `2`: invalid invocation
 
 Do not normalize existing public exit codes without an explicit migration. The final exit code and user-visible outcome must agree.
-
-## Profiles
-
-| Profile | Required behavior |
-| --- | --- |
-| Human workflow | Apply visual house style and show relevant state changes |
-| Query or report | Use scan-first list, table, detail, or empty-state output |
-| Filter | Keep stdout exact; normally remain silent on success |
-| Machine protocol | Do not run human rendering; follow the documented schema and failure channel |
-| Interactive command | Provide a non-interactive input route for every prompt |
-| Live stream | Do not reflow as a static table or overlay with progress |
-| Transparent wrapper | Preserve child bytes, streams, exit status, and signals |
-| CI adapter | Let the CI protocol override ordinary rendering |
-| Stable public CLI | Preserve grammar, streams, and parseable output over style normalization |
 
 ## Profile Composition
 
@@ -82,9 +69,9 @@ For new commands:
 - Evaluate stdout and stderr TTY capability separately.
 - Never emit ANSI in JSON, JSONL, or other machine output.
 
-Use ANSI 8-color roles when a renderer supports them: cyan for headings, `Working`, and `Info`; green for `Success`; yellow for `Warning`; red for `Error`; magenta for active prompt focus. A renderer without ANSI renders the same text without color; it must not substitute another semantic color.
+Use the color roles in [visual-language.md](visual-language.md#type-and-color). A renderer without ANSI renders the same text without color; it must not substitute another semantic color.
 
-Measure display cells, not bytes. Strip ANSI before measuring. Clamp untrusted width values such as `COLUMNS` to `20..500`. In styled human mode, use stacked fields and record blocks below 48 columns or when width is unknown. Render a table only when every column fits without wrapping; otherwise use record blocks. In plain mode, always use stacked fields and record blocks regardless of width. Never truncate the only exact copy of an ID, URL, path, hash, or command.
+Measure display cells, not bytes. Strip ANSI before measuring. Clamp untrusted width values such as `COLUMNS` to `20..500`. For layout thresholds and plain-mode fallbacks, use [Headings and Detail](visual-language.md#headings-and-detail) and [Lists and Tables](visual-language.md#lists-and-tables). Never truncate the only exact copy of an ID, URL, path, hash, or command.
 
 Escape control characters in user-provided, file, and remote text before human rendering. Do not interpolate untrusted text into a suggested shell command or instruction. This rule applies only to text rendered by this command. A transparent wrapper preserves child bytes unchanged; treat child output as a separate trust boundary. Sanitizing child output creates a transforming wrapper and requires an explicit contract.
 

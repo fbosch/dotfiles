@@ -37,7 +37,6 @@ Run relevant test suites when validation requires interpretation, failure diagno
 
 ## Skill routing
 
-- Load `api-and-interface-design` when tests need to lock API or interface contracts (payload shape, error semantics, pagination, backward compatibility).
 - Load `security-and-hardening` when adding tests for security boundaries (validation failures, authz bypass attempts, secret leakage, injection resistance).
 - Load `test-pruner` when new or changed tests show low-value test smells, or when explicitly auditing, pruning, consolidating, deleting, quarantining, or rewriting tests.
 - Use `test-pruner` in audit-only mode by default; report cleanup opportunities instead of deleting or rewriting existing tests unless requested.
