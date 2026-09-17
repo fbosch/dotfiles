@@ -1,21 +1,10 @@
 {
-  "settings": {
-    "directTools": false,
-    "hostConfigDiscovery": "off",
-    "scriptMode": false,
-    "mcpFooterStatus": "compact",
-    "requestTimeoutMs": 30000
-  },
   "mcpServers": {
     "github": {
       "command": "gh",
       "args": [
         "mcp"
-      ],
-      "lifecycle": "lazy",
-      "directTools": false,
-      "exposeResources": false,
-      "approveTools": true
+      ]
     },
     "context7": {
       "command": "podman",
@@ -29,10 +18,7 @@
         "-e",
         "MCP_TRANSPORT=stdio",
         "docker.io/mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836"
-      ],
-      "lifecycle": "lazy",
-      "directTools": true,
-      "exposeResources": false
+      ]
     },
     "serena": {
       "command": "podman",
@@ -58,11 +44,7 @@
         "agent",
         "--open-web-dashboard",
         "False"
-      ],
-      "lifecycle": "lazy",
-      "directTools": true,
-      "exposeResources": false,
-      "approveTools": true
+      ]
     },
     "ast-grep": {
       "command": "podman",
@@ -78,11 +60,8 @@
         "/tmp:rw,noexec,nosuid,size=64m",
         "-v",
         "${PWD}:/src:ro,Z",
-        "docker.io/mcp/ast-grep@sha256:5fc3f2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72"
-      ],
-      "lifecycle": "lazy",
-      "directTools": true,
-      "exposeResources": false
+        "docker.io/mcp/ast-grep@sha256:5fcf2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72"
+      ]
     },
     "chrome-devtools": {
       "command": "podman",
@@ -112,11 +91,7 @@
         "--no-performance-crux",
         "--executable-path=/ms-playwright/chromium-1200/chrome-linux64/chrome",
         "--chrome-arg=--no-sandbox"
-      ],
-      "lifecycle": "lazy",
-      "directTools": false,
-      "exposeResources": false,
-      "approveTools": true
+      ]
     },
     "firefox-devtools": {
       "command": "npx",
@@ -132,19 +107,10 @@
         "input",
         "screenshot",
         "script"
-      ],
-      "lifecycle": "lazy",
-      "directTools": false,
-      "exposeResources": false,
-      "approveTools": true
+      ]
     },
     "shared-todo": {
-      "url": "http://192.168.1.46:8092/mcp",
-      "protocolVersion": "auto",
-      "lifecycle": "lazy",
-      "directTools": false,
-      "exposeResources": false,
-      "approveTools": true
+      "url": "http://192.168.1.46:8092/mcp"
     }
   }
 }

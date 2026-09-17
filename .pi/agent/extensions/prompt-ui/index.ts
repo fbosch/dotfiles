@@ -13,7 +13,6 @@ import {
   PromptEditor,
   type PromptEditorState,
   renderFooterStatus,
-  renderMcpFooterStatus,
   renderPromptHints,
 } from "./prompt-editor";
 import { installSubagentWidgetFrame } from "./subagent-widget-frame";
@@ -22,35 +21,6 @@ const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
 const PROFILE_STATUS_KEY = "auth-profile";
 const STARTUP_TIME_STATUS_KEY = "startup-time";
-// The MCP adapter publishes this versioned snapshot on Pi's shared event bus.
-const MCP_STATUS_EVENT = "pi-mcp-adapter/status/v1";
-
-type McpFooterSnapshot = {
-  connectedCount: number;
-  hasFailure: boolean;
-};
-
-function readMcpFooterSnapshot(value: unknown): McpFooterSnapshot | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-
-  const snapshot = value as Record<string, unknown>;
-  const connectedCount = snapshot.connectedCount;
-  if (
-    snapshot.version !== 1 ||
-    typeof connectedCount !== "number" ||
-    !Number.isInteger(connectedCount) ||
-    connectedCount < 0 ||
-    !Array.isArray(snapshot.servers)
-  ) {
-    return undefined;
-  }
-
-  const hasFailure = snapshot.servers.some((server) => {
-    if (typeof server !== "object" || server === null) return false;
-    return (server as Record<string, unknown>).status === "failed";
-  });
-  return { connectedCount, hasFailure };
-}
 
 export default function promptUi(pi: ExtensionAPI): void {
   const typoRules = loadTypoCorrectionRules();
@@ -66,13 +36,6 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getStatuses = (): readonly string[] => [];
   let getMcpStatus = (): string => "";
   let getFileChangesStatus = (): string => "";
-  let mcpFooterSnapshot: McpFooterSnapshot | undefined;
-  let unsubscribeMcpStatus = () => {};
-  const resetMcpFooterSnapshot = () => {
-    unsubscribeMcpStatus();
-    unsubscribeMcpStatus = () => {};
-    mcpFooterSnapshot = undefined;
-  };
   const state: PromptEditorState = {
     isWorking: () => isWorking,
     isInterruptPending: () => isInterruptPending,
@@ -120,7 +83,6 @@ export default function promptUi(pi: ExtensionAPI): void {
   pi.on("session_shutdown", () => {
     state.setInterruptPending(false);
     stopWorkingPulse();
-    resetMcpFooterSnapshot();
     disposePromptEditor();
     disposePromptEditor = () => {};
     disposeSubagentWidgetFrame();
@@ -129,7 +91,6 @@ export default function promptUi(pi: ExtensionAPI): void {
   });
 
   pi.on("session_start", (_event, ctx) => {
-    resetMcpFooterSnapshot();
     if (!ctx.hasUI) return;
 
     let footerCustomization: FooterCustomization | undefined;
@@ -141,12 +102,6 @@ export default function promptUi(pi: ExtensionAPI): void {
         "warning",
       );
     }
-    unsubscribeMcpStatus = pi.events.on(MCP_STATUS_EVENT, (value) => {
-      const snapshot = readMcpFooterSnapshot(value);
-      if (snapshot === undefined) return;
-      mcpFooterSnapshot = snapshot;
-      activeTui?.requestRender();
-    });
 
     installFloatingDialogs(ctx.ui);
     disposeSubagentWidgetFrame();
@@ -172,10 +127,6 @@ export default function promptUi(pi: ExtensionAPI): void {
           )
           .map(([key, status]) => renderFooterStatus(theme, key, status));
       getMcpStatus = () => {
-        const snapshot = mcpFooterSnapshot;
-        if (snapshot !== undefined) {
-          return renderMcpFooterStatus(theme, snapshot.connectedCount, snapshot.hasFailure);
-        }
         const status = footerData.getExtensionStatuses().get(MCP_STATUS_KEY);
         return status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status);
       };

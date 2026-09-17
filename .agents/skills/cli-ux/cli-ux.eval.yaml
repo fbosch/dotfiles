@@ -280,9 +280,9 @@ tasks:
               proc.stdin.write(payload)
               proc.stdin.close()
               deadline = time.monotonic() + 5.0
-              while output and time.monotonic() < deadline:
+              while streams and time.monotonic() < deadline:
                   remaining = deadline - time.monotonic()
-                  ready, _, _ = select.select(list(output), [], [], min(0.1, max(0.0, remaining)))
+                  ready, _, _ = select.select(list(streams), [], [], min(0.1, max(0.0, remaining)))
                   for fd in ready:
                       block = os.read(fd, 4096)
                       if block:
@@ -290,7 +290,6 @@ tasks:
                       else:
                           streams[fd].close()
                           del streams[fd]
-                          del output[fd]
                   if proc.poll() is not None and not ready:
                       break
               while proc.poll() is None and time.monotonic() < deadline:
@@ -353,6 +352,7 @@ tasks:
       assert final_by_name["alpha"]["current"] == "2.0"
       assert final_by_name["gamma"]["current"] == "4.0"
       assert final_by_name["beta"]["current"] == "10.0"
+    activates: [cli-ux]
 
   - name: Keeps piped JSON input separate from confirmation
     setup: |
@@ -541,9 +541,9 @@ tasks:
               proc.stdin.write(payload)
               proc.stdin.close()
               deadline = time.monotonic() + 5.0
-              while fds and time.monotonic() < deadline:
+              while streams and time.monotonic() < deadline:
                   remaining = deadline - time.monotonic()
-                  ready, _, _ = select.select(list(fds), [], [], min(0.1, max(0.0, remaining)))
+                  ready, _, _ = select.select(list(streams), [], [], min(0.1, max(0.0, remaining)))
                   for fd in ready:
                       block = os.read(fd, 4096)
                       if block:
@@ -551,7 +551,6 @@ tasks:
                       else:
                           streams[fd].close()
                           del streams[fd]
-                          del fds[fd]
                   if proc.poll() is not None and not ready:
                       break
               while proc.poll() is None and time.monotonic() < deadline:
@@ -596,6 +595,7 @@ tasks:
       assert by_name["gamma"]["current"] == "4.0"
       assert by_name["alpha"]["current"] == "2.0"
       assert by_name["beta"]["current"] == "10.0", "unmentioned repository changed"
+    activates: [cli-ux]
 
   - name: Rejects a transforming change to a transparent wrapper
     setup: |
@@ -818,9 +818,9 @@ tasks:
           signalled = False
           deadline = time.monotonic() + 5.0
           try:
-              while fds and time.monotonic() < deadline:
+              while streams and time.monotonic() < deadline:
                   remaining = deadline - time.monotonic()
-                  ready, _, _ = select.select(list(fds), [], [], min(0.1, max(0.0, remaining)))
+                  ready, _, _ = select.select(list(streams), [], [], min(0.1, max(0.0, remaining)))
                   for fd in ready:
                       block = os.read(fd, 4096)
                       if block:
@@ -831,7 +831,6 @@ tasks:
                       else:
                           streams[fd].close()
                           del streams[fd]
-                          del fds[fd]
                   if proc.poll() is not None and not ready:
                       break
               while proc.poll() is None and time.monotonic() < deadline:
@@ -846,10 +845,11 @@ tasks:
           finally:
               kill_and_wait(proc)
               for stream in (proc.stdin, proc.stdout, proc.stderr):
-                  try:
-                      stream.close()
-                  except OSError:
-                      pass
+                  if stream is not None:
+                      try:
+                          stream.close()
+                      except OSError:
+                          pass
 
       code, stdout, stderr = run_capture("bytes")
       assert code == 0, f"child success status changed: {code}"
@@ -871,3 +871,4 @@ tasks:
       assert wrapper_path.read_bytes() == expected_wrapper, "wrapper changed during probes"
       assert child_path.read_bytes() == expected_child, "child changed during probes"
       assert state_path.read_bytes() == expected_state, "state changed during probes"
+    activates: [cli-ux]

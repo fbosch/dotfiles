@@ -80,7 +80,7 @@
     "npm:pi-hashline-edit-pro@4.3.2",
     "npm:pi-codex-goal",
     "npm:pi-context-view@0.5.2",
-    "npm:pi-mcp-adapter@2.32.1",
+    "npm:pi-mcp-client@0.8.0",
     "npm:pi-compaction-model@0.1.0",
     "npm:@ff-labs/pi-fff@0.10.6",
     "npm:@gotgenes/pi-subagents",

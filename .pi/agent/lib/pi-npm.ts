@@ -31,11 +31,6 @@ const patchedPackages = [
     patchFilename: "@ff-labs+pi-fff+0.10.6.patch",
   },
   {
-    name: "pi-mcp-adapter",
-    version: "2.32.1",
-    patchFilename: "pi-mcp-adapter+2.32.1.patch",
-  },
-  {
     name: "pi-lens",
     version: "4.1.6",
     patchFilename: "pi-lens+4.1.6.patch",

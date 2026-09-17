@@ -28,14 +28,6 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
-const mcpPatch = `diff --git a/node_modules/pi-mcp-adapter/example.txt b/node_modules/pi-mcp-adapter/example.txt
-index 3367afd..5ea2ed4 100644
---- a/node_modules/pi-mcp-adapter/example.txt
-+++ b/node_modules/pi-mcp-adapter/example.txt
-@@ -1 +1 @@
--original
-+patched
-`;
 const hashlinePatch = `diff --git a/node_modules/pi-hashline-edit-pro/example.txt b/node_modules/pi-hashline-edit-pro/example.txt
 index 3367afd..5ea2ed4 100644
 --- a/node_modules/pi-hashline-edit-pro/example.txt
@@ -59,8 +51,6 @@ let example: string;
 let manifest: string;
 let fffExample: string;
 let fffManifest: string;
-let mcpExample: string;
-let mcpManifest: string;
 let lensExample: string;
 let lensManifest: string;
 let hashlineExample: string;
@@ -85,8 +75,6 @@ beforeEach(() => {
   example = join(install, "node_modules/pi-worktrunk/example.txt");
   fffManifest = join(install, "node_modules/@ff-labs/pi-fff/package.json");
   fffExample = join(install, "node_modules/@ff-labs/pi-fff/example.txt");
-  mcpManifest = join(install, "node_modules/pi-mcp-adapter/package.json");
-  mcpExample = join(install, "node_modules/pi-mcp-adapter/example.txt");
   lensManifest = join(install, "node_modules/pi-lens/package.json");
   lensExample = join(install, "node_modules/pi-lens/example.txt");
   mkdirSync(join(agent, "lib"), { recursive: true });
@@ -94,7 +82,6 @@ beforeEach(() => {
   mkdirSync(join(agent, "node_modules"));
   mkdirSync(join(install, "node_modules/pi-worktrunk"), { recursive: true });
   mkdirSync(join(install, "node_modules/@ff-labs/pi-fff"), { recursive: true });
-  mkdirSync(join(install, "node_modules/pi-mcp-adapter"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-hashline-edit-pro"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-lens"), { recursive: true });
   mkdirSync(join(directory, "bin"));
@@ -105,7 +92,6 @@ beforeEach(() => {
   );
   writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), patch);
   writeFileSync(join(agent, "patches/@ff-labs+pi-fff+0.10.6.patch"), fffPatch);
-  writeFileSync(join(agent, "patches/pi-mcp-adapter+2.32.1.patch"), mcpPatch);
   writeFileSync(join(agent, "patches/pi-lens+4.1.6.patch"), lensPatch);
   writeFileSync(join(agent, "patches/pi-hashline-edit-pro+4.3.2.patch"), hashlinePatch);
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
@@ -118,8 +104,6 @@ beforeEach(() => {
   writeFileSync(example, "original\n");
   writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.10.6" }));
   writeFileSync(fffExample, "original\n");
-  writeFileSync(mcpManifest, JSON.stringify({ name: "pi-mcp-adapter", version: "2.32.1" }));
-  writeFileSync(mcpExample, "original\n");
   writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.1.6" }));
   writeFileSync(lensExample, "original\n");
   writeFileSync(
@@ -146,7 +130,6 @@ describe("tracked Pi package patches", () => {
       expect(result.exitCode).toBe(0);
       expect(readFileSync(example, "utf8")).toBe("patched\n");
       expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
-      expect(readFileSync(mcpExample, "utf8")).toBe("patched\n");
       expect(readFileSync(lensExample, "utf8")).toBe("patched\n");
     }
   });
@@ -158,7 +141,6 @@ describe("tracked Pi package patches", () => {
     expect(run(["--apply-patches", link]).exitCode).toBe(0);
     expect(readFileSync(example, "utf8")).toBe("patched\n");
     expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
-    expect(readFileSync(mcpExample, "utf8")).toBe("patched\n");
   });
 
   test.each(["0.7.0", "0.8.1", "0.8.0-beta", "^0.8.0"])(
@@ -180,18 +162,6 @@ describe("tracked Pi package patches", () => {
       expect(result.exitCode).toBe(1);
       expect(result.stderr.toString()).toContain("requires exactly 0.10.6");
       expect(readFileSync(fffExample, "utf8")).toBe("original\n");
-      expect(readFileSync(example, "utf8")).toBe("original\n");
-    },
-  );
-
-  test.each(["2.32.0", "2.32.2", "2.32.1-beta", "^2.32.1"])(
-    "rejects MCP adapter %s before writing every package",
-    (version) => {
-      writeFileSync(mcpManifest, JSON.stringify({ name: "pi-mcp-adapter", version }));
-      const result = run(["--apply-patches", install]);
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 2.32.1");
-      expect(readFileSync(mcpExample, "utf8")).toBe("original\n");
       expect(readFileSync(example, "utf8")).toBe("original\n");
     },
   );

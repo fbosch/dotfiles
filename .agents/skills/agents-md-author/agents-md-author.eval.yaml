@@ -77,7 +77,9 @@ tasks:
           "never add secrets",
           "destructive operations only when explicitly requested",
           "just verify --no-cache",
-          "cache otherwise hides stale fixture output",
+          "cache",
+          "stale",
+          "fixture output",
           "docs/security.md",
           "authentication or session handling",
       ):
@@ -158,7 +160,6 @@ tasks:
           "use `uv` instead of `pip`",
           "uv run pytest -q",
           "generated openapi output",
-          "must not be edited manually",
       )
 
       for rule in global_rules:
@@ -167,6 +168,13 @@ tasks:
       for rule in local_rules:
           assert rule in nested, f"nested file lost local rule: {rule}"
           assert rule not in root, f"root retained local rule: {rule}"
+
+      assert "edit" in nested and "manual" in nested, (
+          "nested file lost the manual-edit restriction"
+      )
+      assert any(term in nested for term in ("do not", "must not", "never")), (
+          "nested file weakened the generated-output prohibition"
+      )
 
       assert "monorepo containing" not in root
       assert "## layout" not in root
