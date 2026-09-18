@@ -92,7 +92,7 @@ M.games = {
 			{ title = "^World of Warcraft$" },
 		},
 		launcher_rules = battlenet_launcher_rules,
-		close_launcher_on_start = true,
+		close_launcher_on_start = false,
 		fullscreen_state = "2 0",
 		enable_profile = true,
 		freeze = false,
