@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(20_000);
+
 import {
   cpSync,
   mkdirSync,
@@ -38,14 +39,6 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
-const hashlinePatch = `diff --git a/node_modules/pi-hashline-edit-pro/example.txt b/node_modules/pi-hashline-edit-pro/example.txt
-index 3367afd..5ea2ed4 100644
---- a/node_modules/pi-hashline-edit-pro/example.txt
-+++ b/node_modules/pi-hashline-edit-pro/example.txt
-@@ -1 +1 @@
--original
-+patched
-`;
 const lensPatch = `diff --git a/node_modules/pi-lens/example.txt b/node_modules/pi-lens/example.txt
 index 3367afd..5ea2ed4 100644
 --- a/node_modules/pi-lens/example.txt
@@ -65,8 +58,6 @@ let mcpClientExample: string;
 let mcpClientManifest: string;
 let lensExample: string;
 let lensManifest: string;
-let hashlineExample: string;
-let hashlineManifest: string;
 
 function run(args: string[], env: Record<string, string> = {}) {
   return Bun.spawnSync([process.execPath, join(agent, "lib/pi-npm.ts"), ...args], {
@@ -81,8 +72,6 @@ beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "pi-npm-test-"));
   agent = join(directory, "agent config");
   install = join(directory, "managed npm");
-  hashlineManifest = join(install, "node_modules/pi-hashline-edit-pro/package.json");
-  hashlineExample = join(install, "node_modules/pi-hashline-edit-pro/example.txt");
   manifest = join(install, "node_modules/pi-worktrunk/package.json");
   example = join(install, "node_modules/pi-worktrunk/example.txt");
   fffManifest = join(install, "node_modules/@ff-labs/pi-fff/package.json");
@@ -97,10 +86,10 @@ beforeEach(() => {
   mkdirSync(join(install, "node_modules/pi-worktrunk"), { recursive: true });
   mkdirSync(join(install, "node_modules/@ff-labs/pi-fff"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-mcp-client"), { recursive: true });
-  mkdirSync(join(install, "node_modules/pi-hashline-edit-pro"), { recursive: true });
   mkdirSync(join(install, "node_modules/pi-lens"), { recursive: true });
   mkdirSync(join(directory, "bin"));
   cpSync(join(sourceRoot, "lib/pi-npm.ts"), join(agent, "lib/pi-npm.ts"));
+  cpSync(join(sourceRoot, "lib/patch-catalog.ts"), join(agent, "lib/patch-catalog.ts"));
   symlinkSync(
     join(sourceRoot, "node_modules/patch-package"),
     join(agent, "node_modules/patch-package"),
@@ -109,14 +98,8 @@ beforeEach(() => {
   writeFileSync(join(agent, "patches/@ff-labs+pi-fff+0.10.6.patch"), fffPatch);
   writeFileSync(join(agent, "patches/pi-mcp-client+0.8.0.patch"), mcpClientPatch);
   writeFileSync(join(agent, "patches/pi-lens+4.1.6.patch"), lensPatch);
-  writeFileSync(join(agent, "patches/pi-hashline-edit-pro+4.3.2.patch"), hashlinePatch);
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
   writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.8.0" }));
-  writeFileSync(
-    hashlineManifest,
-    JSON.stringify({ name: "pi-hashline-edit-pro", version: "4.3.2" }),
-  );
-  writeFileSync(hashlineExample, "original\n");
   writeFileSync(example, "original\n");
   writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.10.6" }));
   writeFileSync(fffExample, "original\n");
@@ -245,12 +228,30 @@ describe("tracked Pi package patches", () => {
     expect(readFileSync(example, "utf8")).toBe("original\n");
   });
 
-  test("refuses missing or unreviewed patch files", () => {
+  test("uses the patch directory as the package inventory", () => {
     rmSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"));
-    expect(run(["--apply-patches", install]).exitCode).toBe(1);
-    writeFileSync(join(agent, "patches/pi-worktrunk+0.8.1.patch"), patch);
-    expect(run(["--apply-patches", install]).exitCode).toBe(1);
+
+    expect(run(["--apply-patches", install]).exitCode).toBe(0);
     expect(readFileSync(example, "utf8")).toBe("original\n");
+    expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
+  });
+
+  test("applies a valid patch added without changing the runner", () => {
+    const packageDir = join(install, "node_modules/extra-package");
+    const packageExample = join(packageDir, "example.txt");
+    mkdirSync(packageDir, { recursive: true });
+    writeFileSync(
+      join(packageDir, "package.json"),
+      JSON.stringify({ name: "extra-package", version: "1.2.3" }),
+    );
+    writeFileSync(packageExample, "original\n");
+    writeFileSync(
+      join(agent, "patches/extra-package+1.2.3.patch"),
+      patch.replaceAll("pi-worktrunk", "extra-package"),
+    );
+
+    expect(run(["--apply-patches", install]).exitCode).toBe(0);
+    expect(readFileSync(packageExample, "utf8")).toBe("patched\n");
   });
 
   test("passes strict flags only and propagates patch-package failures", () => {

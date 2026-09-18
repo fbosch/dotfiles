@@ -5,45 +5,23 @@ description: Simplify and refine code for clarity, consistency, and maintainabil
 
 # Code Simplifier
 
-Use this skill to make code clearer and easier to maintain without changing its behavior.
+## Scope and Constraints
 
-## Core Rules
+- Default to code changed in the current session; use the diff and session history to identify it without sweeping in unrelated worktree changes. Expand the scope only when requested.
+- Preserve outputs, errors, side effects, and their ordering. Do not remove security checks, authorization, validation, or observability. Note behavior-changing opportunities separately instead of implementing them.
+- Favor clarity over fewer lines. If a rewrite offers no clear benefit, leave the code unchanged.
+- Do not introduce dependencies or architecture merely to remove minor duplication.
 
-1. **Preserve behavior.** Never change what the code does, only how it does it. All features, outputs, and side effects must remain intact. Do not "simplify" away security checks, authorization, validation, or observability.
+## Cleanup Candidates
 
-2. **Follow project standards.** Read the relevant `AGENTS.md` (root and any deeper files in the target subtree) and apply its coding-style rules. Default to existing repo conventions over personal preference.
+- For control-flow or async rewrites, compare branch outcomes and observable event order, including work initiation, awaits, errors, cancellation, and cleanup. Equal final values alone do not establish equivalent behavior.
+- Replace deeply nested ternaries with control flow that makes the alternatives easier to follow.
+- Remove redundant code. Remove indirection only when it hides no meaningful policy, invariant, or lifecycle responsibility; size and usage count alone do not establish redundancy.
+- Extract duplicated logic only when the call sites share a responsibility and should change together. Similar code serving independent policies should remain separate.
+- Delete comments that merely restate the code; retain explanations of constraints and intent.
 
-3. **Favor clarity over brevity.** Explicit, direct code beats compact code. Do not chase fewer lines at the cost of readability.
+## Verification and Reporting
 
-4. **Stay in scope.** Refine code that was recently modified or written in the current session, unless asked to review a broader range.
+Trace the affected outputs, error paths, and side-effect ordering, then run the relevant existing tests and the smallest additional check needed for the changed paths. Passing tests alone do not prove equivalence; report unverified paths or assumptions.
 
-## What to Do
-
-- Reduce unnecessary nesting; prefer early returns and guard clauses.
-- Replace deeply nested ternaries with clearer control flow (if/else chains or switch).
-- Remove redundant code, dead abstractions, single-use wrappers, and trivial helpers.
-- Consolidate related logic and extract well-named helpers where they reduce duplication.
-- Rename variables and functions for clarity; name meaningful magic numbers and strings.
-- Delete comments that merely restate obvious code.
-- Split functions/modules that mix unrelated concerns; keep each unit focused on one job.
-- Prefer small, purpose-built interfaces over god interfaces.
-
-## What to Avoid
-
-- Over-simplification that hides intent or makes code harder to debug or extend.
-- Clever, dense one-liners that trade readability for line count.
-- Merging unrelated concerns into a single function or component.
-- Removing abstractions that genuinely improve organization.
-- Introducing new dependencies or architecture to avoid a small amount of duplication.
-- Any change that weakens correctness, contracts, or safety checks.
-
-## Process
-
-1. Identify the recently modified code (git diff, current session edits).
-2. Read the governing `AGENTS.md` style rules for that subtree.
-3. Analyze for clarity, consistency, and maintainability improvements.
-4. Apply refinements while keeping behavior identical.
-5. Verify behavior is unchanged; run the smallest reasonable validation.
-6. Report only changes that affect understanding.
-
-Keep edits minimal and local. If a change would alter behavior, do not make it; note it instead.
+Summarize changes that affect understanding and the validation performed. If no change is warranted, say so rather than manufacturing a cleanup.

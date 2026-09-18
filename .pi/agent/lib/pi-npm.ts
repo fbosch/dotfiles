@@ -4,7 +4,6 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -13,44 +12,11 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { discoverPackagePatches, type PackagePatch } from "./patch-catalog";
 
 const agentRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const patchDirectory = resolve(agentRoot, "patches");
 const patchPackage = resolve(agentRoot, "node_modules/patch-package/index.js");
-
-interface PatchedPackage {
-  name: string;
-  version: string;
-  patchFilename: string;
-}
-
-const patchedPackages = [
-  {
-    name: "@ff-labs/pi-fff",
-    version: "0.10.6",
-    patchFilename: "@ff-labs+pi-fff+0.10.6.patch",
-  },
-  {
-    name: "pi-mcp-client",
-    version: "0.8.0",
-    patchFilename: "pi-mcp-client+0.8.0.patch",
-  },
-  {
-    name: "pi-lens",
-    version: "4.1.6",
-    patchFilename: "pi-lens+4.1.6.patch",
-  },
-  {
-    name: "pi-hashline-edit-pro",
-    version: "4.3.2",
-    patchFilename: "pi-hashline-edit-pro+4.3.2.patch",
-  },
-  {
-    name: "pi-worktrunk",
-    version: "0.8.0",
-    patchFilename: "pi-worktrunk+0.8.0.patch",
-  },
-] as const satisfies readonly PatchedPackage[];
 
 function readObject(path: string): Record<string, unknown> {
   let value: unknown;
@@ -74,38 +40,12 @@ function hasDependency(root: string, packageName: string): boolean {
   return !!dependencies && typeof dependencies === "object" && packageName in dependencies;
 }
 
-function validatePatchFiles(): void {
-  const actual = readdirSync(patchDirectory)
-    .filter((name) => name.endsWith(".patch"))
-    .sort();
-  const expected = patchedPackages.map(({ patchFilename }) => patchFilename).sort();
-  if (actual.length !== expected.length || actual.some((name, index) => name !== expected[index])) {
-    throw new Error(
-      `Expected only ${expected.join(", ")} in ${patchDirectory}. Review the patch runner before changing patches.`,
-    );
-  }
-
-  for (const { patchFilename } of patchedPackages) {
-    const contents = readFileSync(resolve(patchDirectory, patchFilename), "utf8");
-    // patch-package accepts an empty effects list as a successful application.
-    if (
-      !/^diff --git /m.test(contents) ||
-      !/^@@ /m.test(contents) ||
-      !/^[+-](?![+-])/m.test(contents)
-    ) {
-      throw new Error(
-        `${patchFilename} contains no textual changes. Regenerate the patch before applying it.`,
-      );
-    }
-  }
-}
-
 export function applyPiPatches(root: string, required = true): number {
   root = realpathSync(root);
-  validatePatchFiles();
+  const packagePatches = discoverPackagePatches(patchDirectory);
 
-  const installedPackages: PatchedPackage[] = [];
-  for (const patchedPackage of patchedPackages) {
+  const installedPackages: PackagePatch[] = [];
+  for (const patchedPackage of packagePatches) {
     const manifest = resolve(root, "node_modules", patchedPackage.name, "package.json");
     if (!existsSync(manifest)) {
       if (!required && !hasDependency(root, patchedPackage.name)) continue;
@@ -137,10 +77,12 @@ export function applyPiPatches(root: string, required = true): number {
     mkdirSync(join(preflightRoot, "node_modules"), { recursive: true });
     writeFileSync(join(preflightRoot, "package.json"), '{"private":true}\n');
     for (const patchedPackage of installedPackages) {
-      copyFileSync(
-        resolve(patchDirectory, patchedPackage.patchFilename),
-        resolve(selectedPatchDirectory, patchedPackage.patchFilename),
-      );
+      for (const patchFilename of patchedPackage.patchFilenames) {
+        copyFileSync(
+          resolve(patchDirectory, patchFilename),
+          resolve(selectedPatchDirectory, patchFilename),
+        );
+      }
       const packageCopy = resolve(preflightRoot, "node_modules", patchedPackage.name);
       mkdirSync(dirname(packageCopy), { recursive: true });
       cpSync(resolve(root, "node_modules", patchedPackage.name), packageCopy, {

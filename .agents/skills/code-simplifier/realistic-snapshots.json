@@ -1,0 +1,34 @@
+{
+  "snapshot_git_revision": "1d7635effedcc3dae809658ff1b95f301721846f",
+  "files": {
+    "handoff": {
+      ".pi/agent/extensions/handoff/__tests__/handoff.test.ts.snapshot": "7f6b2ac108895eebe2b84f8935cc7a3ed3e78b7588106505f69a7f16e7a72f4d",
+      ".pi/agent/extensions/handoff/context.ts.snapshot": "6e22d8995271d94f53c9d5fd138cf8ac078a70d36ea9892230794fa2b4834c04",
+      ".pi/agent/extensions/handoff/index.ts.snapshot": "852b736cc344956f615106bb6a82bedefc29deb43f4b32a14a23520acd3da987",
+      ".pi/agent/extensions/openai-capabilities.ts.snapshot": "eb3b183479bd7afef348676ffa20e9bb590d836134af9f54a1e7e4f86930239a",
+      ".pi/agent/lib/tool-exposure.ts.snapshot": "aac10c2b10afc13137924c4b93affde7d41ba1fe0d0c7cac4d7dab7149c31127",
+      ".pi/agent/models.json": "92ae0eb25b5af48d8a5aea016c9ccee3bf03fadf08bcdabc09c4eb3942eaabf2"
+    },
+    "just": {
+      ".pi/agent/extensions/just/__tests__/catalog.test.ts.snapshot": "6608ca59833064d610fd023a03633b3b7866e0485b76ea6dd04033e3d0d61a36",
+      ".pi/agent/extensions/just/catalog.ts.snapshot": "76e123f4a316e703dac2e58f2a90834e5bf0211be11bd920b5c38080d1cdf862"
+    },
+    "typo-engine": {
+      ".config/opencode/plugins/prompt-enhancements/__tests__/typo-engine.test.ts.snapshot": "9a190127e26a2c9fe6b10716796ab6bfcab74d61536f758fca527d09418fabaa",
+      ".config/opencode/plugins/prompt-enhancements/typo-engine.ts.snapshot": "cc89bfb782cb659ab0a2a0eecb502caebfe2f5ca9c5ae1a9db38c0ffb49c2e9d",
+      ".test-runner.sh.snapshot": "9045aa36e960f5d111011ab9db9b4aba86d4f8e1405c18ab537cfcfbcab3d717",
+      ".test-deps/xdg-data/nvim/site/pack/eval/start/vim-abolish/plugin/abolish.vim.snapshot": "ba6f5b206d2a3d3611ff9cb00d0923e32bd73ffec19d5a22394278b18ad0e41c"
+    }
+  },
+  "dependencies": {
+    "typo-engine": {
+      "name": "vim-abolish",
+      "source": "~/.local/share/nvim/nvim/lazy/vim-abolish/plugin/abolish.vim",
+      "revision": "dcbfe065297d31823561ba787f51056c147aa682",
+      "files": {
+        ".test-deps/xdg-data/nvim/site/pack/eval/start/vim-abolish/plugin/abolish.vim.snapshot": "ba6f5b206d2a3d3611ff9cb00d0923e32bd73ffec19d5a22394278b18ad0e41c",
+        ".test-runner.sh.snapshot": "9045aa36e960f5d111011ab9db9b4aba86d4f8e1405c18ab537cfcfbcab3d717"
+      }
+    }
+  }
+}

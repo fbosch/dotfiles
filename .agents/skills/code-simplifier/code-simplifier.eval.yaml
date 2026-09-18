@@ -1,0 +1,473 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+    - ".*/\\.caliper/results/.*"
+
+tasks:
+  - name: Reviews a small settings module
+    setup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" create already-clear
+    cleanup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" clean already-clear
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. To avoid
+      using a repository path directly, resolve the installed skill only as follows:
+      if `$PI_CODING_AGENT_DIR` is set and
+      `$PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md` exists, read that file
+      before acting. If `$PI_CODING_AGENT_DIR` is unset, check
+      `~/.pi/agent/skills/code-simplifier/SKILL.md`. If the variable is set but that
+      file is absent, do not fall back; continue without the skill. Do not hardcode or
+      search for this repository's real skill path.
+
+      Review and refine `/tmp/code-simplifier-eval-already-clear/already_clear.py`
+      alongside its ordinary `test_already_clear.py` if a worthwhile improvement is
+      apparent. Preserve the module's documented behavior and keep the fixture
+      Python-stdlib-only. Do not edit the ordinary test, add dependencies, use network
+      access, or use git. Run the smallest relevant ordinary check and report exactly
+      what you verified.
+    expect: |
+      Pass if the response grounds its decision in the module's concrete behavior and
+      reports only validation the agent actually performed. Fail if it offers generic
+      style advice, invents a refactor without a benefit, or claims unperformed
+      validation.
+    assert: |
+      import hashlib
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier", f"assertion cwd is {Path.cwd()}"
+      root = Path("/tmp/code-simplifier-eval-already-clear")
+      source = root / "already_clear.py"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink()
+      assert owner.read_text() == "code-simplifier-already-clear\n"
+      assert source.is_file() and not source.is_symlink()
+      assert hashlib.sha256(source.read_bytes()).hexdigest() == "8d705c247b6d4916c294176dd928cabe1e70a2c5faf67dc9fd6e0f211abd1365", "already-clear source was changed"
+      assert hashlib.sha256((root / "test_already_clear.py").read_bytes()).hexdigest() == "e824fd6b0c36bf682918f471c47c03b2e1830b408576d420beec124bed7c6daa", "ordinary test was changed"
+
+      probe = """
+      import json
+      from pathlib import Path
+      from already_clear import read_setting
+      path = Path('probe-setting.txt')
+      path.write_text('  ready  \\n', encoding='utf-8')
+      print(json.dumps([read_setting(Path('missing.txt'), 'fallback'), read_setting(path, 'fallback')]))
+      path.unlink()
+      """
+      try:
+          result = subprocess.run(
+              [sys.executable, "-c", probe],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+      except subprocess.TimeoutExpired as error:
+          raise AssertionError("already-clear behavior probe exceeded 5 seconds") from error
+      assert result.returncode == 0, result.stderr or result.stdout
+      assert json.loads(result.stdout) == ["fallback", "ready"]
+      assert not (root / "probe-setting.txt").exists(), "behavior probe left state behind"
+    activates: [code-simplifier]
+
+  - name: Simplifies a resource lifecycle module
+    setup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" create lifecycle
+    cleanup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" clean lifecycle
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. Resolve the
+      installed skill only by checking `$PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md`
+      when that variable is set and the file exists; when it is unset, check
+      `~/.pi/agent/skills/code-simplifier/SKILL.md`. If the variable is set but its
+      installed file is absent, continue without the skill and do not fall back. Do not
+      hardcode or search for this repository's real skill path.
+
+      Review `/tmp/code-simplifier-eval-lifecycle/lifecycle.py` and its ordinary
+      `test_lifecycle.py`. Simplify the module for clarity without introducing
+      dependencies. Preserve the public `run_once` outcomes and errors, including the
+      observable Session lifecycle and cleanup behavior. Run the ordinary stdlib tests
+      or the smallest equivalent check and report what you actually verified. Do not
+      edit the test, use network access, or use git.
+    expect: |
+      Pass if the response accurately describes the concrete clarity changes it made
+      (or why no further change was warranted) and reports validation it actually ran.
+      It need not restate unchanged lifecycle mechanics. Fail if it claims changes or
+      checks that did not occur, or explicitly justifies removing a lifecycle boundary
+      solely because it has one caller.
+    assert: |
+      import ast
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier", f"assertion cwd is {Path.cwd()}"
+      root = Path("/tmp/code-simplifier-eval-lifecycle")
+      source_path = root / "lifecycle.py"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink()
+      assert owner.read_text() == "code-simplifier-lifecycle\n"
+      source = source_path.read_text()
+      tree = ast.parse(source)
+      definitions = {node.name: node for node in tree.body if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))}
+      assert "run_once" in definitions, "public fixture entry point was removed"
+      run_once = definitions["run_once"]
+      called_names = {
+          node.func.id
+          for node in ast.walk(run_once)
+          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+      }
+
+      def owns_lifecycle(function):
+          creates_session = any(
+              isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Name)
+              and node.func.id == "Session"
+              for node in ast.walk(function)
+          )
+          has_context = any(isinstance(node, (ast.With, ast.AsyncWith)) for node in ast.walk(function))
+          closes_in_finally = any(
+              isinstance(node, ast.Try)
+              and node.finalbody
+              and any(
+                  isinstance(call, ast.Call)
+                  and isinstance(call.func, ast.Attribute)
+                  and call.func.attr == "close"
+                  for statement in node.finalbody
+                  for call in ast.walk(statement)
+              )
+              for node in ast.walk(function)
+          )
+          return creates_session and (has_context or closes_in_finally)
+
+      helper_boundaries = {
+          name for name in called_names
+          if name in definitions and name != "run_once" and owns_lifecycle(definitions[name])
+      }
+      assert helper_boundaries or owns_lifecycle(run_once), "no meaningful Session lifecycle boundary remains"
+
+      probe = """
+      import json
+      from lifecycle import run_once
+      print(json.dumps([run_once('success'), run_once('error')], sort_keys=True))
+      """
+      try:
+          result = subprocess.run(
+              [sys.executable, "-c", probe],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+      except subprocess.TimeoutExpired as error:
+          raise AssertionError("lifecycle behavior probe exceeded 5 seconds") from error
+      assert result.returncode == 0, result.stderr or result.stdout
+      assert json.loads(result.stdout) == [
+          {"status": "ok", "value": "done", "events": ["open", "work", "close"]},
+          {"status": "error", "value": "boom", "events": ["open", "work", "error", "close"]},
+      ]
+    activates: [code-simplifier]
+
+  - name: Simplifies async control flow without changing traces
+    setup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" create async
+    cleanup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" clean async
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. Resolve the
+      installed skill only by checking `$PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md`
+      when that variable is set and the file exists; when it is unset, check
+      `~/.pi/agent/skills/code-simplifier/SKILL.md`. If the variable is set but its
+      installed file is absent, continue without the skill and do not fall back. Do not
+      hardcode or search for this repository's real skill path.
+
+      Refactor `/tmp/code-simplifier-eval-async/async_pipeline.py` for a genuine
+      readability improvement. Preserve the public `execute` behavior and its
+      observable ordering, error, cancellation, and cleanup semantics. The ordinary
+      `test_async_pipeline.py` is available for local checks. Do not edit the test,
+      add dependencies, use network access, or use git. Make a meaningful control-flow
+      simplification rather than a pure reformat or rename, and report the checks and
+      assumptions you actually performed.
+    expect: |
+      Pass if the response explains a genuine async control-flow simplification and
+      how the agent established behavioral equivalence. Fail if it gives only line-count
+      advice or a rename/reformat, ignores observable lifecycle behavior, or claims
+      validation that did not occur. No single refactoring shape is required.
+    assert: |
+      import ast
+      import hashlib
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier", f"assertion cwd is {Path.cwd()}"
+      root = Path("/tmp/code-simplifier-eval-async")
+      source_path = root / "async_pipeline.py"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink()
+      assert owner.read_text() == "code-simplifier-async\n"
+      source = source_path.read_text()
+
+      def normalized_ast(text):
+          tree = ast.parse(text)
+          for node in ast.walk(tree):
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                  node.name = "_"
+              elif isinstance(node, ast.arg):
+                  node.arg = "_"
+              elif isinstance(node, ast.Name):
+                  node.id = "_"
+              elif isinstance(node, ast.Attribute):
+                  node.attr = "_"
+              elif isinstance(node, ast.Constant):
+                  node.value = None
+              elif isinstance(node, ast.alias):
+                  node.name = "_"
+                  node.asname = None
+          return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+      assert hashlib.sha256(normalized_ast(source).encode()).hexdigest() != "1e764b582f43ca53c2519cdae23955aed1c2d906dcb2be99de6d9d9bbf4efd37", "async control flow was not structurally simplified"
+
+      probe = """
+      import json
+      from async_pipeline import execute
+      print(json.dumps({mode: execute(mode) for mode in ('success', 'error', 'cancel')}, sort_keys=True))
+      """
+      try:
+          result = subprocess.run(
+              [sys.executable, "-c", probe],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+      except subprocess.TimeoutExpired as error:
+          raise AssertionError("async behavior probe exceeded 5 seconds") from error
+      assert result.returncode == 0, result.stderr or result.stdout
+      assert json.loads(result.stdout) == {
+          "success": {
+              "status": "ok",
+              "value": "value",
+              "events": ["open", "step:start", "step:done", "success", "close:start", "close:done", "cleanup"],
+          },
+          "error": {
+              "status": "ok",
+              "value": "error:boom",
+              "events": ["open", "step:start", "step:error", "error", "close:start", "close:done", "cleanup"],
+          },
+          "cancel": {
+              "status": "cancelled",
+              "value": None,
+              "events": ["open", "step:start", "step:cancel", "cancel", "close:start", "close:done", "cleanup"],
+          },
+      }
+    activates: [code-simplifier]
+
+  - name: Refines a policy routing module
+    setup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" create policies
+    cleanup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" clean policies
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. Resolve the
+      installed skill only by checking `$PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md`
+      when that variable is set and the file exists; when it is unset, check
+      `~/.pi/agent/skills/code-simplifier/SKILL.md`. If the variable is set but its
+      installed file is absent, continue without the skill and do not fall back. Do not
+      hardcode or search for this repository's real skill path.
+
+      Review `/tmp/code-simplifier-eval-policies/policies.py` and its ordinary
+      `test_policies.py`. The module makes two independently owned routing decisions
+      over the same item shape, with intentionally different outcomes. Reduce
+      repetition where appropriate without assuming similar text makes responsibilities
+      interchangeable. Preserve the module's behavior, run the ordinary stdlib checks,
+      and report what you actually verified. Do not add dependencies, use network
+      access, or use git.
+    expect: |
+      Pass if the response grounds its cleanup in the module's ownership context,
+      explains which repetition is safe to reduce, and reports the checks actually run.
+      Fail if it argues from textual similarity alone, obscures policy responsibility,
+      or claims unperformed validation.
+    assert: |
+      import ast
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier", f"assertion cwd is {Path.cwd()}"
+      root = Path("/tmp/code-simplifier-eval-policies")
+      source_path = root / "policies.py"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink()
+      assert owner.read_text() == "code-simplifier-policies\n"
+      tree = ast.parse(source_path.read_text())
+      definitions = {node.name: node for node in tree.body if isinstance(node, ast.FunctionDef)}
+      assert {"primary_policy", "secondary_policy", "decide"} <= definitions.keys(), "policy boundaries were removed"
+      calls = {
+          name: {
+              node.func.id
+              for node in ast.walk(definitions[name])
+              if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+          }
+          for name in ("primary_policy", "secondary_policy")
+      }
+      assert "secondary_policy" not in calls["primary_policy"]
+      assert "primary_policy" not in calls["secondary_policy"]
+      decide_calls = {
+          node.func.id
+          for node in ast.walk(definitions["decide"])
+          if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+      }
+      assert {"primary_policy", "secondary_policy"} <= decide_calls
+
+      probe = """
+      import json
+      from policies import decide
+      cases = [
+          {'kind': 'urgent', 'retryable': True},
+          {'kind': 'normal', 'retryable': True},
+          {'kind': 'normal', 'retryable': False},
+      ]
+      print(json.dumps([decide(case) for case in cases], sort_keys=True))
+      """
+      try:
+          result = subprocess.run(
+              [sys.executable, "-c", probe],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+      except subprocess.TimeoutExpired as error:
+          raise AssertionError("policy behavior probe exceeded 5 seconds") from error
+      assert result.returncode == 0, result.stderr or result.stdout
+      assert json.loads(result.stdout) == [
+          {"primary": "expedite", "secondary": "review", "events": ["primary:expedite", "secondary:review"]},
+          {"primary": "retry", "secondary": "hold", "events": ["primary:retry", "secondary:hold"]},
+          {"primary": "queue", "secondary": "archive", "events": ["primary:queue", "secondary:archive"]},
+      ]
+    activates: [code-simplifier]
+
+  - name: Refines a scoped worktree change
+    setup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" create scope
+    cleanup: >
+      helper="$(git -C "$PWD" rev-parse --show-toplevel)/.agents/skills/code-simplifier/code-simplifier-fixtures.py" &&
+      python3 "$helper" clean scope
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. Resolve the
+      installed skill only by checking `$PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md`
+      when that variable is set and the file exists; when it is unset, check
+      `~/.pi/agent/skills/code-simplifier/SKILL.md`. If the variable is set but its
+      installed file is absent, continue without the skill and do not fall back. Do not
+      hardcode or search for this repository's real skill path.
+
+      Work in the local git fixture `/tmp/code-simplifier-eval-scope`. The
+      current-session file for this request is `src/current.py`; the changed
+      `notes/unrelated.py` is a pre-existing worktree change from another workstream.
+      Inspect the diff and `VALIDATION.md`, refine the requested file while preserving
+      behavior, and report the checks and limitations you found. Keep the edit
+      dependency-free and local; do not use network access or add unrelated files.
+    expect: |
+      Pass if the response grounds scope in the inspected diff and documentation,
+      acknowledges the pre-existing unrelated change, and accurately reports checks
+      performed and limitations. Fail if it gives unsupported validation claims or
+      glosses over the scope boundary.
+    assert: |
+      import ast
+      import hashlib
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier", f"assertion cwd is {Path.cwd()}"
+      root = Path("/tmp/code-simplifier-eval-scope")
+      current = root / "src/current.py"
+      unrelated = root / "notes/unrelated.py"
+      validation = root / "VALIDATION.md"
+      owner = root / ".caliper-owner"
+      assert root.is_dir() and not root.is_symlink(), "fixture is missing or not a directory"
+      assert owner.is_file() and not owner.is_symlink()
+      assert owner.read_text() == "code-simplifier-scope\n"
+      def normalized_ast(text):
+          tree = ast.parse(text)
+          for node in ast.walk(tree):
+              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                  node.name = "_"
+              elif isinstance(node, ast.arg):
+                  node.arg = "_"
+              elif isinstance(node, ast.Name):
+                  node.id = "_"
+              elif isinstance(node, ast.Attribute):
+                  node.attr = "_"
+              elif isinstance(node, ast.Constant):
+                  node.value = None
+              elif isinstance(node, ast.alias):
+                  node.name = "_"
+                  node.asname = None
+          return ast.dump(tree, annotate_fields=True, include_attributes=False)
+
+      assert hashlib.sha256(normalized_ast(current.read_text()).encode()).hexdigest() != "06737609c45c1a0361d4288ded6119978eb1f858ccb7a00d71304bff8d5bf7e9", "current-session code was not structurally simplified"
+      assert hashlib.sha256(unrelated.read_bytes()).hexdigest() == "8582220a8ef8d5d44a23833feca1c7afe78b281b98ff157b078fb769946e3b26", "pre-existing unrelated file changed"
+      assert hashlib.sha256(validation.read_bytes()).hexdigest() == "32959243fc7497355388527c73312db22526a20b900c289f1a84f3cbc6afd8bd", "validation documentation changed"
+      assert hashlib.sha256((root / "test_current.py").read_bytes()).hexdigest() == "2867c698c692445e11d0dcec52d3a9a6e5603f2a6beeaba4a148c9f49bbffc80", "ordinary test was changed"
+      assert not (root / "tests" / "test_current.py").exists(), "unavailable focused test was added to disguise validation"
+
+      diff = subprocess.run(
+          ["git", "diff", "--name-only"],
+          cwd=root,
+          capture_output=True,
+          text=True,
+          timeout=5,
+      )
+      assert diff.returncode == 0, diff.stderr
+      changed = {line for line in diff.stdout.splitlines() if line}
+      assert changed <= {"src/current.py", "notes/unrelated.py"}, f"unexpected tracked scope: {changed}"
+
+      probe = """
+      import importlib.util
+      import json
+      from pathlib import Path
+      spec = importlib.util.spec_from_file_location('current', Path('src/current.py'))
+      module = importlib.util.module_from_spec(spec)
+      spec.loader.exec_module(module)
+      print(json.dumps([
+          module.format_message('', True),
+          module.format_message('  Ada  ', True),
+          module.format_message('  Ada  ', False),
+      ]))
+      """
+      try:
+          result = subprocess.run(
+              [sys.executable, "-c", probe],
+              cwd=root,
+              capture_output=True,
+              text=True,
+              timeout=5,
+          )
+      except subprocess.TimeoutExpired as error:
+          raise AssertionError("scoped behavior probe exceeded 5 seconds") from error
+      assert result.returncode == 0, result.stderr or result.stdout
+      assert json.loads(result.stdout) == ["Hello, guest!", "Hello, Ada!", "Hello, Ada."]
+    activates: [code-simplifier]
