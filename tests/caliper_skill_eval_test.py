@@ -67,7 +67,7 @@ raise SystemExit(2)
 '''
 
 class CaliperSkillEvalTests(unittest.TestCase):
-    def run_eval(self, profile=None, ablate=False, exit_code=0, conflict=False, extra=None):
+    def run_eval(self, profile=None, ablate=False, exit_code=0, conflict=False, extra=None, spec=None):
         root = Path(tempfile.mkdtemp(prefix="caliper fixture "))
         agent = root / "pi agent with spaces"
         (agent / "auth-profiles").mkdir(parents=True)
@@ -96,6 +96,7 @@ class CaliperSkillEvalTests(unittest.TestCase):
         args = []
         if ablate: args.append("--ablate")
         if profile: args += ["--auth-profile", profile]
+        if spec: args += ["--spec", spec]
         args += list(extra or ["cli-ux"])
         result = subprocess.run([str(SCRIPT), *args], cwd=ROOT, env=env, text=True,
                                 capture_output=True)
@@ -143,6 +144,20 @@ class CaliperSkillEvalTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(json.loads(named.read_text())["token"], "external-change")
         self.assertIn("changed during evaluation", result.stderr)
+
+    def test_custom_spec_is_forwarded_and_ablation_names_the_requested_skill(self):
+        spec = ".agents/skills/code-simplifier/code-simplifier-realistic.eval.yaml"
+        root, _, _, _, result, events = self.run_eval(
+            ablate=True,
+            spec=spec,
+            extra=["code-simplifier", "m", "medium", "1", "j", "high"],
+        )
+        self.track(root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        caliper = [event for event in events if event["kind"] == "caliper"]
+        self.assertEqual(caliper[0]["argv"], ["validate", spec])
+        self.assertEqual(caliper[1]["argv"][0:2], ["run", spec])
+        self.assertEqual(caliper[1]["argv"][caliper[1]["argv"].index("--ablate") + 1], "code-simplifier")
 
     def test_invalid_missing_profiles_and_missing_option_value_fail_closed(self):
         for profile in ("missing", "../escape", "foo/bar", "."):

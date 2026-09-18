@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+root=$(CDPATH= cd "$(dirname "$0")" && pwd -P)
+export XDG_DATA_HOME="$root/.test-deps/xdg-data"
+export XDG_CONFIG_HOME="$root/.test-deps/xdg-config"
+export XDG_STATE_HOME="$root/.test-deps/xdg-state"
+export XDG_CACHE_HOME="$root/.test-deps/xdg-cache"
+exec bun test ./.config/opencode/plugins/prompt-enhancements/__tests__/typo-engine.test.ts

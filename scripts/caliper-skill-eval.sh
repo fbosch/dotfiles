@@ -3,12 +3,13 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
 ablate=false
 auth_profile=default
+spec_override=""
 while (($# > 0)); do
   case "$1" in
   --ablate)
@@ -21,6 +22,14 @@ while (($# > 0)); do
       exit 2
     fi
     auth_profile="$2"
+    shift 2
+    ;;
+  --spec)
+    if (($# < 2)) || [[ "$2" == -* ]]; then
+      printf '%s\n' '--spec requires a path' >&2
+      exit 2
+    fi
+    spec_override="$2"
     shift 2
     ;;
   --)
@@ -71,7 +80,7 @@ if [[ ! "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 2
 fi
 
-spec=".agents/skills/$skill/$skill.eval.yaml"
+spec="${spec_override:-.agents/skills/$skill/$skill.eval.yaml}"
 if [[ ! -f "$spec" ]]; then
   printf 'Eval spec not found: %s\n' "$spec" >&2
   exit 2

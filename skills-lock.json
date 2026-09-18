@@ -16,7 +16,7 @@
       "source": "ast-grep/agent-skill",
       "sourceType": "github",
       "skillPath": "ast-grep/skills/ast-grep/SKILL.md",
-      "computedHash": "3bca45167617f547e97454ae16d271ba3aeb2550d89e6ef1942057bd122c0061"
+      "computedHash": "472c7cd092f9fad72e0ad0c58b5f6af627844730ecc420c009e25a835a5d6e81"
     },
     "ast-grep-outline": {
       "source": "ast-grep/agent-skill",
@@ -57,7 +57,7 @@
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/evaluate-skill/SKILL.md",
-      "computedHash": "1ad2968aab7a40e67c8b5dc42a526eb7082551de5e885414eea5c999cb65b5cf"
+      "computedHash": "52f1fa514ac4ebcd7c6eeea3e9ee9f19a0065e9f7e50a1ca860cc130a19f8846"
     },
     "github-actions-docs": {
       "source": "xixu-me/skills",
@@ -75,7 +75,7 @@
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/grill-skill/SKILL.md",
-      "computedHash": "bee78d0038258d39dcdb9794e5bfe03d8a8c73f45313bbe4156e7868e2f71f9d"
+      "computedHash": "9ec571be497ee3c1eb43f40deb7b54c79bcc63823e746e76b3456bd9180a90df"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",
@@ -93,7 +93,7 @@
       "source": "herdrdev/herdr",
       "sourceType": "github",
       "skillPath": "skills/herdr/SKILL.md",
-      "computedHash": "d2ee5846631446f22067c52980d100c9355df48106a679a04aab1c7a383b5f41"
+      "computedHash": "c741134cc22372c08da2f469d49aac9f9bbddd4f5e1da0558cf1132836fa3287"
     },
     "how": {
       "source": "cursor/plugins",

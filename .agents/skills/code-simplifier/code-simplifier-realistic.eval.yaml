@@ -1,0 +1,167 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+    - ".*/\\.caliper/results/.*"
+    - ".*/code-simplifier-realistic-fixtures\\.py$"
+    - ".*/realistic-snapshots(?:\\.json|/).*"
+    - ".*/code-simplifier-realistic-artifacts/.*"
+    - ".*/\\.env(?:\\..*)?$"
+    - ".*/settings\\.json$"
+
+tasks:
+  - name: Refines the Just catalog module
+    setup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" create just
+    cleanup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" clean just
+    prompt: |
+      Use code-simplifier if available; continue without it if unavailable. Resolve the
+      installed skill only by checking $PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md
+      when that variable is set and the file exists, or ~/.pi/agent/skills/code-simplifier/SKILL.md
+      when it is unset. Do not search for the repository's skill path.
+
+      Review and refine /tmp/code-simplifier-realistic-just/.pi/agent/extensions/just/catalog.ts
+      if a worthwhile clarity or maintainability improvement is apparent. Preserve its public
+      behavior and contract, do not edit the existing test or dependency artifacts, and keep
+      the change within the module's source directory. Run the focused existing test and report
+      the validation you actually performed. A justified no-op is acceptable.
+    expect: |
+      Pass if the agent makes a concrete, behavior-preserving readability improvement when one
+      is justified, or accurately leaves the source unchanged when no worthwhile improvement is
+      apparent. Inspect the concrete before/after source by comparing
+      `/tmp/code-simplifier-realistic-just/.caliper-baseline/.pi/agent/extensions/just/catalog.ts`
+      with the after source at the corresponding path, and check the focused test result. The
+      response must ground the decision in this catalog's behavior, avoid needless abstractions,
+      and report only checks actually run. Fail if tests/configuration are edited,
+      scope is exceeded, behavior is changed, or validation is claimed without evidence. Do not
+      require a narration of mechanics that were not changed.
+    assert: |
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier"
+      helper = Path.cwd() / "code-simplifier-realistic-fixtures.py"
+      result = subprocess.run(
+          [sys.executable, str(helper), "verify", "just"],
+          capture_output=True,
+          text=True,
+          timeout=75,
+      )
+      assert result.returncode == 0, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      assert report["test_returncode"] == 0
+      assert report["test_command"][-1].endswith("catalog.test.ts")
+    activates: [code-simplifier]
+
+  - name: Refines the handoff context and extension
+    setup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" create handoff
+    cleanup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" clean handoff
+    prompt: |
+      Use code-simplifier if available; resolve it only from the installed profile path
+      $PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md when present, or
+      ~/.pi/agent/skills/code-simplifier/SKILL.md when PI_CODING_AGENT_DIR is unset. Do not
+      search for the repository source of the skill.
+
+      Review and refine the handoff implementation in
+      /tmp/code-simplifier-realistic-handoff/.pi/agent/extensions/handoff/context.ts and
+      /tmp/code-simplifier-realistic-handoff/.pi/agent/extensions/handoff/index.ts if worthwhile.
+      Preserve the public behavior, validation/security boundaries, lifecycle and ordering
+      semantics. Do not edit the existing test or protected support files, add dependencies or
+      use the network, and keep any source change within the handoff module directory. Run the
+      focused existing test and report exactly what you verified. A justified no-op is acceptable.
+    expect: |
+      Pass if the agent's source diff demonstrates a substantive clarity improvement without
+      obscuring the handoff module's validation, file-boundary checks, session lifecycle, or
+      observable ordering, or if it gives a concrete reason no change is warranted. Inspect the
+      concrete before/after sources at `/tmp/code-simplifier-realistic-handoff/.caliper-baseline/.pi/agent/extensions/handoff/context.ts`,
+      `/tmp/code-simplifier-realistic-handoff/.caliper-baseline/.pi/agent/extensions/handoff/index.ts`,
+      and their after paths, together with the focused test result. It must validate with the
+      available test and be honest about unverified paths. Fail for generic
+      advice, needless abstraction, altered tests/configuration/support files, out-of-scope edits,
+      behavior changes, or invented validation. Do not require repeated explanation of unchanged
+      contract details.
+    assert: |
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier"
+      helper = Path.cwd() / "code-simplifier-realistic-fixtures.py"
+      result = subprocess.run(
+          [sys.executable, str(helper), "verify", "handoff"],
+          capture_output=True,
+          text=True,
+          timeout=90,
+      )
+      assert result.returncode == 0, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      assert report["test_returncode"] == 0
+      assert report["test_command"][-1].endswith("handoff.test.ts")
+    activates: [code-simplifier]
+
+  - name: Refines the typo engine
+    setup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" create typo-engine
+    cleanup: |
+      set -eu
+      repo="$(git -C "$PWD" rev-parse --show-toplevel)"
+      python3 "$repo/.agents/skills/code-simplifier/code-simplifier-realistic-fixtures.py" clean typo-engine
+    prompt: |
+      Use code-simplifier if available; resolve it only from the installed profile path
+      $PI_CODING_AGENT_DIR/skills/code-simplifier/SKILL.md when present, or
+      ~/.pi/agent/skills/code-simplifier/SKILL.md when PI_CODING_AGENT_DIR is unset. Do not
+      search for the repository source of the skill.
+
+      Review and refine
+      /tmp/code-simplifier-realistic-typo-engine/.config/opencode/plugins/prompt-enhancements/typo-engine.ts
+      if worthwhile. Preserve the parser, brace expansion, case variants, completed-word
+      correction, and delimiter behavior. Do not edit the existing test or add dependencies or
+      network access; keep source edits within the prompt-enhancements module directory. Run the
+      focused existing test through `/tmp/code-simplifier-realistic-typo-engine/.test-runner.sh`
+      so the bundled vim-abolish parity dependency is used, and report what you actually verified.
+      A justified no-op is acceptable.
+    expect: |
+      Pass if the agent makes a useful behavior-preserving clarity improvement or accurately
+      leaves this already-tested engine unchanged. Inspect the concrete before/after source at
+      `/tmp/code-simplifier-realistic-typo-engine/.caliper-baseline/.config/opencode/plugins/prompt-enhancements/typo-engine.ts`
+      and the after source at the corresponding path, together with the focused test result; do
+      not rely only on the final explanation. Fail for generic advice,
+      unnecessary redesign, changed tests/configuration, out-of-scope edits, behavior changes, or
+      claims of checks that were not run. Unchanged mechanics need not be narrated.
+    assert: |
+      import json
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      assert Path.cwd().name == "code-simplifier"
+      helper = Path.cwd() / "code-simplifier-realistic-fixtures.py"
+      result = subprocess.run(
+          [sys.executable, str(helper), "verify", "typo-engine"],
+          capture_output=True,
+          text=True,
+          timeout=75,
+      )
+      assert result.returncode == 0, result.stderr or result.stdout
+      report = json.loads(result.stdout)
+      assert report["test_returncode"] == 0
+      assert report["test_command"][-1].endswith("typo-engine.test.ts")
+    activates: [code-simplifier]
