@@ -1,0 +1,115 @@
+diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+index d1626527..253ff8a7 100644
+--- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
++++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+@@ -167,6 +167,7 @@ const sessionFileByKey = new Map<string, string>();
+ const pendingInits = new Map<string, Promise<void>>();
+ const loadTokens = new Map<string, object>();
+ const registries = new Map<string, SessionState>();
++const sessionKeyById = new Map<string, string>();
+ const sessionScope = new AsyncLocalStorage<string>();
+ 
+ function newSessionState(seed?: string): SessionState {
+@@ -323,7 +324,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
+ }
+ 
+ async function loadRegistryState(key: string, sessionFile: string, token: object): Promise<void> {
+-  const sidecar = sidecarPath(key);
++  const sidecar = sidecarPath(sidecarKeyFor(sessionFile));
+   let events: RegistryEvent[] = [];
+   let rawLog = "";
+   try {
+@@ -354,9 +355,53 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
+   }
+ }
+ 
++function mergeSessionState(target: SessionState, source: SessionState): void {
++  for (const [anchor, entry] of source.owned) target.owned.set(anchor, entry);
++  for (const [path, entries] of source.served) {
++    const served = target.served.get(path) ?? new Map<string, string>();
++    for (const [anchor, checksum] of entries) served.set(anchor, checksum);
++    target.served.set(path, served);
++  }
++  for (const anchor of source.everMinted) target.everMinted.add(anchor);
++  for (const [path, checksum] of source.allocatedChecksum) {
++    target.allocatedChecksum.set(path, checksum);
++  }
++  target.probe = source.probe;
++}
++
++async function attachRegistryToSessionFile(key: string, sessionFile: string): Promise<void> {
++  const live = registries.get(key);
++  if (live === undefined || sidecarByKey.has(key)) return;
++  const token: object = {};
++  loadTokens.set(key, token);
++  await loadRegistryState(key, sessionFile, token);
++  if (loadTokens.get(key) !== token) return;
++  const persisted = registries.get(key);
++  const sidecar = sidecarByKey.get(key);
++  if (persisted === undefined || sidecar === undefined) return;
++  mergeSessionState(persisted, live);
++  seedServedFromOwned(persisted);
++  await compactSidecarIfNeeded(sidecar, "", sessionFile, persisted, true);
++}
++
+ async function ensureRegistryForKey(key: string, sessionFile: string | undefined): Promise<void> {
+   currentKey = key;
+-  if (registries.has(key)) return;
++  if (registries.has(key)) {
++    const pendingAttach = pendingInits.get(key);
++    if (pendingAttach !== undefined) {
++      await pendingAttach;
++      return;
++    }
++    if (sessionFile === undefined || sidecarByKey.has(key)) return;
++    const attach = attachRegistryToSessionFile(key, sessionFile);
++    pendingInits.set(key, attach);
++    try {
++      await attach;
++    } finally {
++      pendingInits.delete(key);
++    }
++    return;
++  }
+   const pending = pendingInits.get(key);
+   if (pending) {
+     await pending;
+@@ -393,11 +438,16 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+ }
+ 
+ export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
+-  const sessionFile = sessionFileFor(ctx);
+-  if (sessionFile !== undefined) return sidecarKeyFor(sessionFile);
+   const sessionId = ctx?.sessionManager?.getSessionId?.();
+-  if (typeof sessionId === "string" && sessionId.length > 0) return `ephemeral:${sessionId}`;
+-  return undefined;
++  if (typeof sessionId === "string" && sessionId.length > 0) {
++    const existing = sessionKeyById.get(sessionId);
++    if (existing !== undefined) return existing;
++    const key = `session:${sessionId}`;
++    sessionKeyById.set(sessionId, key);
++    return key;
++  }
++  const sessionFile = sessionFileFor(ctx);
++  return sessionFile !== undefined ? sidecarKeyFor(sessionFile) : undefined;
+ }
+ 
+ function sessionFileFor(ctx: AnchorSessionContext | undefined): string | undefined {
+@@ -887,6 +937,7 @@ export function resetRegistryForTests(): void {
+   sessionFileByKey.clear();
+   pendingInits.clear();
+   loadTokens.clear();
++  sessionKeyById.clear();
+   registries.clear();
+ }
+ 
+@@ -926,6 +977,9 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+ 
+ export function releaseRegistrySession(key: string): void {
+   loadTokens.delete(key);
++  for (const [sessionId, sessionKey] of sessionKeyById) {
++    if (sessionKey === key) sessionKeyById.delete(sessionId);
++  }
+   if (currentKey === key) currentKey = undefined;
+   pendingInits.delete(key);
+   sidecarByKey.delete(key);

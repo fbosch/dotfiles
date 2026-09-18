@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "4083ea04d30537aaa653a2189616ab6b4ff19810",
+      "rev": "914c91e34a8a9ad7faa6d4777eb116a924fbdeba",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -151,7 +151,7 @@
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "b410cbfb9934e3d37733d36e396feeb51d43881c",
+      "rev": "98e5981d14057a54cd49a35fb280dfd275ff65f8",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -196,7 +196,7 @@
       "src": "https://github.com/windwp/nvim-ts-autotag.git"
     },
     "nvim-web-devicons": {
-      "rev": "5f032a85be210cd1c6ac98861eb3b187ff3bd5eb",
+      "rev": "914decffe650296c87312c53b7933ecb86718499",
       "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
     "opencode.nvim": {

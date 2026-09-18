@@ -5,6 +5,7 @@ Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.10.6.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
 - `pi-mcp-client+0.8.0.patch` publishes live MCP connection counts through Pi's `mcp` footer status key.
 - `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
+- `pi-hashline-edit-pro+4.3.5.patch` keeps one registry identity when Pi exposes a session file after early tool calls, so previously served anchors remain owned.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
@@ -20,6 +21,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
    pi install npm:pi-worktrunk@0.8.0
    pi install npm:pi-lens@4.1.6
    pi install npm:pi-mcp-client@0.8.0
+   pi install npm:pi-hashline-edit-pro@4.3.5
    ```
 
    If they are already installed, run
@@ -34,10 +36,16 @@ npm operations pass through. The runner preserves npm's status and `--save-exact
 behavior. Direct npm commands outside Pi bypass it; run `patch:packages`
 afterwards.
 
-The runner checks every installed package name and exact version before invoking
-patch-package. A disposable copy verifies all selected patches before the installed
+The patch directory is the runner's package inventory. It derives each package name
+and exact version from patch-package filenames such as `package+1.2.3.patch` and
+`@scope+package+1.2.3.patch`. Adding or removing a patch does not require a matching
+code change. Malformed filenames, multiple versions of one package, nested-package
+patches, empty patches, and patches without textual changes are rejected.
+
+Before invoking patch-package, the runner checks every discovered package against its
+installed manifest. A disposable copy verifies all selected patches before the installed
 packages are modified. Patch application uses `--error-on-fail --error-on-warn` and
-never `--partial`. Empty patches and patches without textual changes are rejected.
+never `--partial`.
 
 Automatic install and update commands treat patch failures as recoverable. They
 print a warning and continue with the unpatched package so Pi can start. Run
@@ -68,13 +76,15 @@ reference generation, parsing, formatting, or the persisted schema.
 1. Review the new upstream package before changing its pin. Retire this patch if
    upstream supplies the cache.
 2. Develop changes in a disposable package copy, then regenerate the affected
-   patch with patch-package. Keep each package version in `lib/pi-npm.ts`, the
-   patch filename, and `settings.json` aligned. Do not weaken version checks to
-   accept an upgrade.
+   patch with patch-package. Keep the patch filename and `settings.json` pin aligned.
+   The runner reads the package name and exact version from the filename. Do not
+   weaken version checks to accept an upgrade.
 3. Run the patch and extension regression tests, then `devenv test`. Tests apply
    the selected patches to disposable package copies before touching an installed
    package.
 
-To remove this customization, remove the patch and its guard, restore the
-previous npm command (`["npm", "--save-exact"]`), and reinstall the upstream
-package. Restart Pi after replacing package code.
+To retire one customization, remove its patch and reinstall the upstream package.
+No runner change is needed. Restart Pi after replacing package code.
+
+To remove patching entirely, delete all patch files, restore the previous npm command
+(`["npm", "--save-exact"]`), and remove the patch runner integration.
