@@ -16,7 +16,7 @@
     "typo-engine": {
       ".config/opencode/plugins/prompt-enhancements/__tests__/typo-engine.test.ts.snapshot": "9a190127e26a2c9fe6b10716796ab6bfcab74d61536f758fca527d09418fabaa",
       ".config/opencode/plugins/prompt-enhancements/typo-engine.ts.snapshot": "cc89bfb782cb659ab0a2a0eecb502caebfe2f5ca9c5ae1a9db38c0ffb49c2e9d",
-      ".test-runner.sh.snapshot": "0544b8eab56dd718b5fe4143c027fb45f8ead039a804ee62daad82d4c34f1bff",
+      ".test-runner.sh.snapshot": "9045aa36e960f5d111011ab9db9b4aba86d4f8e1405c18ab537cfcfbcab3d717",
       ".test-deps/xdg-data/nvim/site/pack/eval/start/vim-abolish/plugin/abolish.vim.snapshot": "ba6f5b206d2a3d3611ff9cb00d0923e32bd73ffec19d5a22394278b18ad0e41c"
     }
   },
@@ -26,7 +26,8 @@
       "source": "~/.local/share/nvim/nvim/lazy/vim-abolish/plugin/abolish.vim",
       "revision": "dcbfe065297d31823561ba787f51056c147aa682",
       "files": {
-        ".test-deps/xdg-data/nvim/site/pack/eval/start/vim-abolish/plugin/abolish.vim.snapshot": "ba6f5b206d2a3d3611ff9cb00d0923e32bd73ffec19d5a22394278b18ad0e41c"
+        ".test-deps/xdg-data/nvim/site/pack/eval/start/vim-abolish/plugin/abolish.vim.snapshot": "ba6f5b206d2a3d3611ff9cb00d0923e32bd73ffec19d5a22394278b18ad0e41c",
+        ".test-runner.sh.snapshot": "9045aa36e960f5d111011ab9db9b4aba86d4f8e1405c18ab537cfcfbcab3d717"
       }
     }
   }

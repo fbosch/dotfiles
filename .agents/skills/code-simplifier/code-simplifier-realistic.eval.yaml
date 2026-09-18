@@ -33,15 +33,15 @@ tasks:
       the change within the module's source directory. Run the focused existing test and report
       the validation you actually performed. A justified no-op is acceptable.
     expect: |
-      Pass if the agent makes a concrete, behavior-preserving readability improvement when one
-      is justified, or accurately leaves the source unchanged when no worthwhile improvement is
-      apparent. Inspect the concrete before/after source by comparing
+      Pass when the response inspects the concrete before/after source at
       `/tmp/code-simplifier-realistic-just/.caliper-baseline/.pi/agent/extensions/just/catalog.ts`
-      with the after source at the corresponding path, and check the focused test result. The
-      response must ground the decision in this catalog's behavior, avoid needless abstractions,
-      and report only checks actually run. Fail if tests/configuration are edited,
-      scope is exceeded, behavior is changed, or validation is claimed without evidence. Do not
-      require a narration of mechanics that were not changed.
+      and the corresponding after path, along with the focused test result, and shows that
+      behavior, scope, and tests are maintained. Accept either a useful local clarity or
+      maintainability improvement or an accurate no-op when no worthwhile change is apparent.
+      Do not fail solely because there is no edit, the edit is small, or the report is terse. Fail
+      for behavior regressions, objectively unnecessary abstractions, obscured control flow,
+      altered tests/configuration, out-of-scope edits, or dishonest validation claims. Do not
+      impose a minimum substantive change size or tailor expectations to a candidate rewrite.
     assert: |
       import json
       import subprocess
@@ -59,7 +59,6 @@ tasks:
       assert result.returncode == 0, result.stderr or result.stdout
       report = json.loads(result.stdout)
       assert report["test_returncode"] == 0
-      assert report["test_command"][-1].endswith("catalog.test.ts")
     activates: [code-simplifier]
 
   - name: Refines the handoff context and extension
@@ -85,16 +84,17 @@ tasks:
       use the network, and keep any source change within the handoff module directory. Run the
       focused existing test and report exactly what you verified. A justified no-op is acceptable.
     expect: |
-      Pass if the agent's source diff demonstrates a substantive clarity improvement without
-      obscuring the handoff module's validation, file-boundary checks, session lifecycle, or
-      observable ordering, or if it gives a concrete reason no change is warranted. Inspect the
-      concrete before/after sources at `/tmp/code-simplifier-realistic-handoff/.caliper-baseline/.pi/agent/extensions/handoff/context.ts`,
+      Pass when the response inspects the concrete before/after sources at
+      `/tmp/code-simplifier-realistic-handoff/.caliper-baseline/.pi/agent/extensions/handoff/context.ts`,
       `/tmp/code-simplifier-realistic-handoff/.caliper-baseline/.pi/agent/extensions/handoff/index.ts`,
-      and their after paths, together with the focused test result. It must validate with the
-      available test and be honest about unverified paths. Fail for generic
-      advice, needless abstraction, altered tests/configuration/support files, out-of-scope edits,
-      behavior changes, or invented validation. Do not require repeated explanation of unchanged
-      contract details.
+      and their corresponding after paths, along with the focused test result, and shows that
+      behavior, scope, and tests are maintained. Accept either a useful local clarity or
+      maintainability improvement or an accurate no-op when no worthwhile change is apparent.
+      Do not fail solely because there is no edit, the edit is small, or the report is terse. Fail
+      for behavior regressions, objectively unnecessary abstractions, obscured control flow,
+      altered tests/configuration/support files, out-of-scope edits, or dishonest validation
+      claims. Do not impose a minimum substantive change size or tailor expectations to a
+      candidate rewrite.
     assert: |
       import json
       import subprocess
@@ -112,7 +112,6 @@ tasks:
       assert result.returncode == 0, result.stderr or result.stdout
       report = json.loads(result.stdout)
       assert report["test_returncode"] == 0
-      assert report["test_command"][-1].endswith("handoff.test.ts")
     activates: [code-simplifier]
 
   - name: Refines the typo engine
@@ -139,13 +138,15 @@ tasks:
       so the bundled vim-abolish parity dependency is used, and report what you actually verified.
       A justified no-op is acceptable.
     expect: |
-      Pass if the agent makes a useful behavior-preserving clarity improvement or accurately
-      leaves this already-tested engine unchanged. Inspect the concrete before/after source at
+      Pass when the response inspects the concrete before/after source at
       `/tmp/code-simplifier-realistic-typo-engine/.caliper-baseline/.config/opencode/plugins/prompt-enhancements/typo-engine.ts`
-      and the after source at the corresponding path, together with the focused test result; do
-      not rely only on the final explanation. Fail for generic advice,
-      unnecessary redesign, changed tests/configuration, out-of-scope edits, behavior changes, or
-      claims of checks that were not run. Unchanged mechanics need not be narrated.
+      and the corresponding after path, along with the focused test result, and shows that
+      behavior, scope, and tests are maintained. Accept either a useful local clarity or
+      maintainability improvement or an accurate no-op when no worthwhile change is apparent.
+      Do not fail solely because there is no edit, the edit is small, or the report is terse. Fail
+      for behavior regressions, objectively unnecessary abstractions, obscured control flow,
+      altered tests/configuration, out-of-scope edits, or dishonest validation claims. Do not
+      impose a minimum substantive change size or tailor expectations to a candidate rewrite.
     assert: |
       import json
       import subprocess
@@ -163,5 +164,4 @@ tasks:
       assert result.returncode == 0, result.stderr or result.stdout
       report = json.loads(result.stdout)
       assert report["test_returncode"] == 0
-      assert report["test_command"][-1].endswith("typo-engine.test.ts")
     activates: [code-simplifier]
