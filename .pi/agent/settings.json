@@ -73,8 +73,22 @@
       "serena_",
       "context7_",
       "ast-grep_",
-      "mcp__"
+      "mcp__",
+      "web_search",
+      "source_check",
+      "fetch_content",
+      "get_search_content",
+      "temporal_candidates",
+      "create_goal",
+      "get_goal",
+      "update_goal"
     ]
+  },
+  "skillSelection": {
+    "enabled": true,
+    "threshold": 0.72,
+    "timeoutMs": 600,
+    "maxRecommendations": 3
   },
   "packages": [
     "npm:pi-hashline-edit-pro@4.3.5",

@@ -1,20 +1,11 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
-import { loadTypoCorrectionRules } from "../typo-abolish";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
   type FooterCustomization,
   HIDDEN_FOOTER_STATUS_KEYS,
   loadFooterCustomization,
 } from "./footer-config";
-import {
-  FILE_CHANGES_STATUS_KEY,
-  MCP_STATUS_KEY,
-  PromptEditor,
-  type PromptEditorState,
-  renderFooterStatus,
-  renderPromptHints,
-} from "./prompt-editor";
 import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
@@ -23,7 +14,6 @@ const PROFILE_STATUS_KEY = "auth-profile";
 const STARTUP_TIME_STATUS_KEY = "startup-time";
 
 export default function promptUi(pi: ExtensionAPI): void {
-  const typoRules = loadTypoCorrectionRules();
   let isWorking = false;
   let workingPulseIndex = 0;
   let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
@@ -35,7 +25,7 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getStatuses = (): readonly string[] => [];
   let getMcpStatus = (): string => "";
   let getFileChangesStatus = (): string => "";
-  const state: PromptEditorState = {
+  const state = {
     isWorking: () => isWorking,
     getWorkingMarker: () => WORKING_PULSE_FRAMES[workingPulseIndex] ?? WORKING_PULSE_FRAMES[0],
     getBranch: () => getBranch(),
@@ -80,8 +70,18 @@ export default function promptUi(pi: ExtensionAPI): void {
     activeTui = undefined;
   });
 
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", async (_event, ctx) => {
     if (!ctx.hasUI) return;
+
+    const { loadTypoCorrectionRules } = await import("../typo-abolish");
+    const typoRules = loadTypoCorrectionRules();
+    const {
+      FILE_CHANGES_STATUS_KEY,
+      MCP_STATUS_KEY,
+      PromptEditor,
+      renderFooterStatus,
+      renderPromptHints,
+    } = await import("./prompt-editor");
 
     let footerCustomization: FooterCustomization | undefined;
     try {

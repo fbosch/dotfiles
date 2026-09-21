@@ -13,6 +13,7 @@
     "benchmark:startup": "bash benchmarks/startup.sh",
     "patch:packages": "bun lib/pi-npm.ts --apply-patches",
     "benchmark:toon": "bun benchmarks/toon-heuristic.ts",
+    "benchmark:skill-selection": "bun benchmarks/skill-selection-offline.ts",
     "check": "bun run lint && bun run test && bun run typecheck && bun run audit"
   },
   "devDependencies": {

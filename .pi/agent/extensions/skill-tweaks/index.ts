@@ -6,26 +6,12 @@ import {
   SettingsManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
+import { activeAgentName } from "../shared/active-agent";
+import { isRecord } from "../shared/is-record";
 
 const SKILL_PROMPT_START =
   "\n\nThe following skills provide specialized instructions for specific tasks.";
 const SKILL_PROMPT_END = "\n</available_skills>";
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
-
-const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"([^"\r\n]+)"|'([^'\r\n]+)')[^>]*\/>\s*$/u;
-
-function activeAgentName(systemPrompt: string | undefined): string | undefined {
-  if (systemPrompt === undefined) return undefined;
-
-  for (const line of systemPrompt.split("\n")) {
-    const match = ACTIVE_AGENT_MARKER.exec(line);
-    if (match !== null) return match[1] ?? match[2];
-  }
-  return undefined;
-}
 
 function configuredSkillNames(
   value: unknown,

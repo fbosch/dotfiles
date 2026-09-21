@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 const paths: string[] = [];
 const entry = join(import.meta.dir, "..", "index.ts");
+const extension = join(import.meta.dir, "..", "extension.ts");
 const integration = join(import.meta.dir, "..", "integration.ts");
 
 async function fixture() {
@@ -72,6 +73,7 @@ test("missing optional direnv sibling and unsupported platforms are silent", asy
   const root = await fixture();
   const copiedEntry = join(root, "index.ts");
   await writeFile(copiedEntry, await readFile(entry, "utf8"));
+  await writeFile(join(root, "extension.ts"), await readFile(extension, "utf8"));
   await writeFile(join(root, "integration.ts"), await readFile(integration, "utf8"));
   expect(await load(copiedEntry, root)).toBe('{"registrations":0}');
   await writeFile(join(root, "comma"), "#!/bin/sh\nprintf should-not-run >&2\nexit 0\n");

@@ -4,6 +4,7 @@ import { hostname as systemHostname } from "node:os";
 import { basename, resolve as resolvePath } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/is-record";
 import { DEFAULT_PROFILE, globalConfigPath, normalizeName } from "./profile-store";
 
 const GIT_TIMEOUT_MS = 2_000;
@@ -50,10 +51,6 @@ export type ResolveProfileOptions = {
   platform?: NodeJS.Platform;
   runGit?: GitRunner;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function orderedProfiles(...groups: readonly string[][]): string[] {
   return [...new Set(groups.flat())];

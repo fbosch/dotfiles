@@ -10,7 +10,7 @@ import {
   type HyprlandCommandRunner,
   registerHyprlandExtension,
   supportsHyprlandSession,
-} from "../index";
+} from "../extension";
 
 const environment = {
   HYPRLAND_INSTANCE_SIGNATURE: "fixture",

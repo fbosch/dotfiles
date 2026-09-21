@@ -43,6 +43,9 @@ export function correctedPromptForInput(
   return corrected === `${input}${delimiter}` ? undefined : corrected;
 }
 
-export default function typoAbolish(_pi: ExtensionAPI): void {
-  loadTypoCorrectionRules();
+export default function typoAbolish(pi: ExtensionAPI): void {
+  pi.on("session_start", (_event, ctx) => {
+    if (!ctx.hasUI) return;
+    loadTypoCorrectionRules();
+  });
 }

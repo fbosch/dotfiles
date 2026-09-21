@@ -6,12 +6,17 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { requestVercelGateway, type VercelGatewayFetch } from "../../lib/vercel-gateway";
+import { activeAgentName } from "../shared/active-agent";
+import { isRecord } from "../shared/is-record";
 
 const DEFAULT_MATCHES = 3;
 const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
+const MAX_JEV_CANDIDATES = 24;
+const JEV_NO_MATCH = "no_match";
 
 const DEFERRED_TOOL_NAMES = new Set([
   "exec",
@@ -40,8 +45,6 @@ const DEFAULT_DEFERRED_TOOL_PREFIXES = [
   "mcp__",
 ] as const;
 
-const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"[^"\r\n]+"|'[^'\r\n]+')[^>]*\/>\s*$/u;
-
 const ToolSearchParameters = Type.Object(
   {
     query: Type.String({
@@ -57,15 +60,10 @@ const ToolSearchParameters = Type.Object(
 interface ToolSearchDetails {
   matches: string[];
   added: string[];
+  rankingSource: "jev" | "lexical";
 }
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
-
-type SettingsRecord = Record<string, unknown>;
-
-function isRecord(value: unknown): value is SettingsRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
 
 function getConfiguredPrefixes(settings: unknown): string[] | undefined {
   if (!isRecord(settings) || !isRecord(settings.toolDiscovery)) return undefined;
@@ -109,10 +107,7 @@ function isSubagentSession(ctx: ExtensionContext): boolean {
   const parentSession = ctx.sessionManager.getHeader()?.parentSession;
   if (typeof parentSession !== "string" || parentSession.length === 0) return false;
 
-  return ctx
-    .getSystemPrompt()
-    .split("\n")
-    .some((line) => ACTIVE_AGENT_MARKER.test(line));
+  return activeAgentName(ctx.getSystemPrompt()) !== undefined;
 }
 
 function compactDescription(description: string, maxChars = MAX_SUMMARY_CHARS): string {
@@ -161,6 +156,165 @@ export function searchDeferredTools(
     .map(({ tool }) => tool);
 }
 
+interface JevCandidate {
+  id: string;
+  tool: ToolInfo;
+}
+
+export interface JevRankingOptions {
+  modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
+  fetch?: VercelGatewayFetch;
+  timeoutMs?: number;
+}
+
+function buildJevCandidatePool(
+  tools: readonly ToolInfo[],
+  query: string,
+  prefixes: readonly string[],
+): JevCandidate[] {
+  const lexicalMatches = searchDeferredTools(tools, query, MAX_JEV_CANDIDATES, prefixes);
+  const selectedNames = new Set(lexicalMatches.map((tool) => tool.name));
+  const candidates = [...lexicalMatches];
+
+  // Keep the semantic pass bounded while adding deterministic non-lexical candidates.
+  for (const tool of tools
+    .filter((candidate) => isDeferredToolName(candidate.name, prefixes))
+    .filter((candidate) => !selectedNames.has(candidate.name))
+    .sort((left, right) => left.name.localeCompare(right.name))) {
+    if (candidates.length >= MAX_JEV_CANDIDATES) break;
+    selectedNames.add(tool.name);
+    candidates.push(tool);
+  }
+
+  return candidates.map((tool, index) => ({ id: `candidate_${index}`, tool }));
+}
+
+function createJevRequest(
+  candidates: readonly JevCandidate[],
+  query: string,
+): Record<string, unknown> {
+  const criteria = Object.fromEntries(
+    candidates.map(({ id, tool }) => [id, `${tool.name}: ${compactDescription(tool.description)}`]),
+  );
+  criteria[JEV_NO_MATCH] = "No candidate provides the capability requested by the query.";
+
+  return {
+    state: {
+      query,
+      candidates: candidates.map(({ id, tool }) => ({
+        id,
+        name: tool.name,
+        description: compactDescription(tool.description),
+      })),
+    },
+    questions: {
+      best_tool: {
+        type: "choice",
+        instructions:
+          "Which candidate tool best matches the requested capability? Choose no_match when none is a useful match.",
+        criteria,
+      },
+    },
+  };
+}
+
+function parseJevRanking(
+  value: unknown,
+  candidates: readonly JevCandidate[],
+  limit: number,
+): ToolInfo[] | undefined {
+  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
+  const answer = value.answers.best_tool;
+  if (!isRecord(answer) || answer.type !== "choice" || typeof answer.choice !== "string")
+    return undefined;
+  if (!isRecord(answer.probabilities)) return undefined;
+
+  const expectedIds = [...candidates.map(({ id }) => id), JEV_NO_MATCH];
+  if (!expectedIds.includes(answer.choice)) return undefined;
+  const expectedIdSet = new Set(expectedIds);
+  const probabilityKeys = Object.keys(answer.probabilities);
+  if (
+    probabilityKeys.length !== expectedIds.length ||
+    probabilityKeys.some((id) => !expectedIdSet.has(id))
+  ) {
+    return undefined;
+  }
+
+  const probabilities = new Map<string, number>();
+  let probabilityTotal = 0;
+  for (const id of expectedIds) {
+    const probability = answer.probabilities[id];
+    if (
+      typeof probability !== "number" ||
+      !Number.isFinite(probability) ||
+      probability < 0 ||
+      probability > 1
+    ) {
+      return undefined;
+    }
+    probabilityTotal += probability;
+    probabilities.set(id, probability);
+  }
+  if (Math.abs(probabilityTotal - 1) > 0.02) return undefined;
+
+  const selectedProbability = probabilities.get(answer.choice);
+  if (selectedProbability === undefined) return undefined;
+  const highestProbability = Math.max(...probabilities.values());
+  if (selectedProbability < highestProbability) return undefined;
+  if (answer.choice === JEV_NO_MATCH) return [];
+
+  const selectedCandidate = candidates.find(({ id }) => id === answer.choice);
+  return selectedCandidate === undefined || limit < 1 ? [] : [selectedCandidate.tool];
+}
+
+export interface RankedToolResult {
+  matches: ToolInfo[];
+  rankingSource: "jev" | "lexical";
+}
+
+export async function rankDeferredToolsWithJev(
+  tools: readonly ToolInfo[],
+  query: string,
+  limit: number,
+  prefixes: readonly string[],
+  options: JevRankingOptions,
+  signal?: AbortSignal,
+): Promise<RankedToolResult | undefined> {
+  const candidates = buildJevCandidatePool(tools, query, prefixes);
+  if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
+
+  const gateway = await requestVercelGateway(
+    options.modelRegistry,
+    createJevRequest(candidates, query),
+    {
+      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      ...(signal === undefined ? {} : { signal }),
+      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+    },
+  );
+  if (!gateway.ok) return undefined;
+
+  const matches = parseJevRanking(gateway.value, candidates, limit);
+  return matches === undefined ? undefined : { matches, rankingSource: "jev" };
+}
+
+export async function searchDeferredToolsWithJevFallback(
+  tools: readonly ToolInfo[],
+  query: string,
+  limit: number,
+  prefixes: readonly string[],
+  options: JevRankingOptions,
+  signal?: AbortSignal,
+): Promise<RankedToolResult> {
+  const lexicalMatches = searchDeferredTools(tools, query, limit, prefixes);
+  return (
+    (await rankDeferredToolsWithJev(tools, query, limit, prefixes, options, signal)) ?? {
+      matches: lexicalMatches,
+      rankingSource: "lexical",
+    }
+  );
+}
+
 function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly string[] {
   const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
     projectTrusted: ctx.isProjectTrusted(),
@@ -190,23 +344,31 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
       parameters: ToolSearchParameters,
       executionMode: "sequential",
 
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-        const matches = searchDeferredTools(
-          searchableTools(ctx),
+      async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+        const tools = searchableTools(ctx);
+        const prefixes = getConfiguredDeferredToolPrefixes(ctx);
+        const ranked = await searchDeferredToolsWithJevFallback(
+          tools,
           params.query,
           params.limit ?? DEFAULT_MATCHES,
-          getConfiguredDeferredToolPrefixes(ctx),
+          prefixes,
+          {
+            modelRegistry: ctx.modelRegistry,
+          },
+          signal,
         );
+        signal?.throwIfAborted();
+        const { matches, rankingSource } = ranked;
 
         if (matches.length === 0) {
           return {
             content: [
               {
                 type: "text",
-                text: `No specialized tools found for: ${params.query}`,
+                text: `No specialized tools found for: ${params.query} (ranking: ${rankingSource})`,
               },
             ],
-            details: { matches: [], added: [] },
+            details: { matches: [], added: [], rankingSource },
           };
         }
 
@@ -226,10 +388,13 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
         });
 
         return {
-          content: [{ type: "text", text: lines.join("\n") }],
+          content: [
+            { type: "text", text: `${lines.join("\n")}\nRanking source: ${rankingSource}` },
+          ],
           details: {
             matches: matches.map((tool) => tool.name),
             added,
+            rankingSource,
           },
         };
       },

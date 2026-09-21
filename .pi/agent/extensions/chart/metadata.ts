@@ -3,7 +3,8 @@ import { type Component, Text } from "@earendil-works/pi-tui";
 import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { LazyChartComponent } from "./lazy";
-import { type ChartTypeId, loadChartRuntime, loadChartType } from "./loader";
+import { loadChartRuntime, loadChartType } from "./loader";
+import { type ChartTypeId, chartTypeIds, isChartTypeId } from "./registry";
 import {
   type BarParameters,
   type BezierParameters,
@@ -99,25 +100,8 @@ function renderChartCall() {
 }
 
 function replayChartType(fallback: ChartTypeId, details: unknown): ChartTypeId {
-  if (!isRecord(details) || typeof details.type !== "string") return fallback;
-  return details.type === "pie" ||
-    details.type === "donut" ||
-    details.type === "bar" ||
-    details.type === "line" ||
-    details.type === "scatter" ||
-    details.type === "histogram" ||
-    details.type === "bezier" ||
-    details.type === "heatmap" ||
-    details.type === "boxplot" ||
-    details.type === "waterfall" ||
-    details.type === "dumbbell" ||
-    details.type === "stacked_bar" ||
-    details.type === "network" ||
-    details.type === "treemap" ||
-    details.type === "gantt" ||
-    details.type === "tree"
-    ? details.type
-    : fallback;
+  if (!isRecord(details) || !isChartTypeId(details.type)) return fallback;
+  return details.type;
 }
 
 function renderChartResult(
@@ -150,14 +134,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
 }
 
-function withoutDiscriminator(value: unknown): unknown {
-  if (!isRecord(value) || !("type" in value)) return value;
-  const { type: _type, ...parameters } = value;
-  return parameters;
-}
-
 function assertParameters(schema: TSchema, parameters: unknown, name: string): void {
-  if (!Value.Check(schema, withoutDiscriminator(parameters))) {
+  if (isRecord(parameters) && "type" in parameters) {
+    const { type: _type, ...withoutType } = parameters;
+    if (!Value.Check(schema, withoutType)) {
+      throw new Error(`invalid ${name} chart parameters`);
+    }
+    return;
+  }
+  if (!Value.Check(schema, parameters)) {
     throw new Error(`invalid ${name} chart parameters`);
   }
 }
@@ -939,21 +924,25 @@ export function createTreeChartTool(): ToolDefinition<
   };
 }
 
+const chartToolRegistrars: Record<ChartTypeId, (pi: ExtensionAPI) => void> = {
+  pie: (pi) => pi.registerTool(createPieChartTool()),
+  donut: (pi) => pi.registerTool(createDonutChartTool()),
+  bar: (pi) => pi.registerTool(createBarChartTool()),
+  scatter: (pi) => pi.registerTool(createScatterChartTool()),
+  line: (pi) => pi.registerTool(createLineChartTool()),
+  histogram: (pi) => pi.registerTool(createHistogramChartTool()),
+  bezier: (pi) => pi.registerTool(createBezierChartTool()),
+  heatmap: (pi) => pi.registerTool(createHeatmapChartTool()),
+  boxplot: (pi) => pi.registerTool(createBoxplotChartTool()),
+  waterfall: (pi) => pi.registerTool(createWaterfallChartTool()),
+  dumbbell: (pi) => pi.registerTool(createDumbbellChartTool()),
+  stacked_bar: (pi) => pi.registerTool(createStackedBarChartTool()),
+  gantt: (pi) => pi.registerTool(createGanttChartTool()),
+  network: (pi) => pi.registerTool(createNetworkChartTool()),
+  tree: (pi) => pi.registerTool(createTreeChartTool()),
+  treemap: (pi) => pi.registerTool(createTreemapChartTool()),
+};
+
 export function registerChartTools(pi: ExtensionAPI): void {
-  pi.registerTool(createPieChartTool());
-  pi.registerTool(createDonutChartTool());
-  pi.registerTool(createBarChartTool());
-  pi.registerTool(createScatterChartTool());
-  pi.registerTool(createLineChartTool());
-  pi.registerTool(createHistogramChartTool());
-  pi.registerTool(createBezierChartTool());
-  pi.registerTool(createHeatmapChartTool());
-  pi.registerTool(createBoxplotChartTool());
-  pi.registerTool(createWaterfallChartTool());
-  pi.registerTool(createDumbbellChartTool());
-  pi.registerTool(createStackedBarChartTool());
-  pi.registerTool(createGanttChartTool());
-  pi.registerTool(createNetworkChartTool());
-  pi.registerTool(createTreeChartTool());
-  pi.registerTool(createTreemapChartTool());
+  for (const type of chartTypeIds) chartToolRegistrars[type](pi);
 }

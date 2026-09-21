@@ -4,6 +4,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { runAskUserQuestion } from "../ask-user-question";
+import { isRecord } from "../shared/is-record";
+import { readBoundedJson } from "../shared/read-bounded-json";
 import {
   accountIdFor,
   DEFAULT_PROFILE,
@@ -15,7 +17,6 @@ import { cachedResetCreditStatusForAccount } from "./usage-status-service";
 
 const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
 const REQUEST_TIMEOUT_MS = 10_000;
-const MAX_RESPONSE_BYTES = 1024 * 1024;
 const USAGE_CACHE_PATH = "pi-auth-profiles-usage.json";
 const USAGE_CACHE_DIR = "fbb";
 
@@ -101,10 +102,6 @@ function parseCommandOptions(args: string): CommandOptions {
   return { dryRun };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 function boundedText(value: unknown, maxLength: number): string | null {
   if (typeof value !== "string") return null;
   const text = [...value]
@@ -152,31 +149,6 @@ function parseResetCredits(payload: unknown): ResetCredits {
       })
     : [];
   return { availableCount, credits };
-}
-
-async function readBoundedJson(response: Response): Promise<unknown> {
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
-    throw new Error("response is too large");
-  }
-  if (!response.body) return undefined;
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const chunks: string[] = [];
-  let bytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes += value.byteLength;
-    if (bytes > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error("response is too large");
-    }
-    chunks.push(decoder.decode(value, { stream: true }));
-  }
-  chunks.push(decoder.decode());
-  return JSON.parse(chunks.join(""));
 }
 
 async function requestResetCredits(

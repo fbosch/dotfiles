@@ -6,6 +6,8 @@ import type {
   CredentialStore,
 } from "@earendil-works/pi-ai";
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../../shared/is-record";
+import { readBoundedJson } from "../../shared/read-bounded-json";
 import { authPathFor, normalizeName } from "../profile-store";
 import type {
   ProfileCredentialReadResult,
@@ -22,7 +24,6 @@ const USAGE_URL = "https://chatgpt.com/backend-api/wham/usage";
 const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits";
 const REQUEST_TIMEOUT_MS = 10_000;
 const REFRESH_TIMEOUT_MS = 20_000;
-const MAX_RESPONSE_BYTES = 1024 * 1024;
 const UNKNOWN_USAGE_COOLDOWN_MS = 60_000;
 // shortcut: AuthStorage is not publicly exported, so use Pi's pinned implementation
 // until coding-agent exposes a supported file-backed CredentialStore constructor.
@@ -47,10 +48,6 @@ export type OpenAiCodexAdapterDependencies = {
 type AuthStorageModule = {
   AuthStorage: { create(path?: string): CredentialStore };
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
 
 function finiteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
@@ -193,31 +190,6 @@ async function createCredentialStore(path: string): Promise<CredentialStore> {
 
 async function createRuntime(credentials: CredentialStore): Promise<AuthRuntime> {
   return ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false });
-}
-
-async function readBoundedJson(response: Response): Promise<unknown> {
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength > MAX_RESPONSE_BYTES) {
-    throw new Error("response is too large");
-  }
-  if (!response.body) return undefined;
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const parts: string[] = [];
-  let bytes = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    bytes += value.byteLength;
-    if (bytes > MAX_RESPONSE_BYTES) {
-      await reader.cancel();
-      throw new Error("response is too large");
-    }
-    parts.push(decoder.decode(value, { stream: true }));
-  }
-  parts.push(decoder.decode());
-  return JSON.parse(parts.join(""));
 }
 
 async function fetchPayload(

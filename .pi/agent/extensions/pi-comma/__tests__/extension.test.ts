@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import piCommaExtension, { createSetupFragment, isCommaAvailable } from "../index";
+import piCommaExtension, { createSetupFragment, isCommaAvailable } from "../extension";
 
 const temporaryPaths: string[] = [];
 
