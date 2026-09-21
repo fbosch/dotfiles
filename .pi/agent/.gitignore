@@ -6,7 +6,6 @@
 /sessions/
 /subagent-sessions/
 /fff/
-/cache/pi-worktrunk/
 /mcp-cache.json
 /mcp-onboarding.json
 /node_modules/
@@ -18,3 +17,4 @@
 /*.log
 /tmp
 /web-search-cache
+/cache

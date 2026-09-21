@@ -43,7 +43,8 @@
     "build": "vici build",
     "dev": "vici develop",
     "format": "biome format --write src",
-    "lint": "vici lint"
+    "lint": "vici lint",
+    "test": "node --experimental-strip-types --test src/**/*.test.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",

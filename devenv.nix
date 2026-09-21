@@ -301,6 +301,7 @@ in
       exec = ''
         set -euo pipefail
         pnpm --dir .config/vicinae/extensions run lint
+        pnpm --dir .config/vicinae/extensions/home-assistant run test
         pnpm --dir .config/vicinae/extensions run build
       '';
     };
