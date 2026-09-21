@@ -69,6 +69,7 @@ __pycache__
 
 # Pi machine-local state and generated dependencies
 ^/\.pi/agent/auth-profiles$
+^/\.pi/agent/auth\.json$
 ^/\.pi/agent/trust\.json$
 ^/\.pi/agent/models-store\.json$
 ^/\.pi/agent/sessions$

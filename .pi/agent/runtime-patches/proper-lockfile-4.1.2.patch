@@ -1,0 +1,26 @@
+diff --git a/node_modules/proper-lockfile/lib/mtime-precision.js b/node_modules/proper-lockfile/lib/mtime-precision.js
+--- a/node_modules/proper-lockfile/lib/mtime-precision.js
++++ b/node_modules/proper-lockfile/lib/mtime-precision.js
+@@ -1,9 +1,9 @@
+ 'use strict';
+ 
+-const cacheSymbol = Symbol();
++const precisionCache = new WeakMap();
+ 
+ function probe(file, fs, callback) {
+-    const cachedPrecision = fs[cacheSymbol];
++    const cachedPrecision = precisionCache.get(fs);
+ 
+     if (cachedPrecision) {
+         return fs.stat(file, (err, stat) => {
+@@ -33,8 +33,8 @@
+ 
+             const precision = stat.mtime.getTime() % 1000 === 0 ? 's' : 'ms';
+ 
+-            // Cache the precision in a non-enumerable way
+-            Object.defineProperty(fs, cacheSymbol, { value: precision });
++            // Bun exposes fs through a Proxy whose invariants reject this mutation.
++            precisionCache.set(fs, precision);
+ 
+             callback(null, stat.mtime, precision);
+         });

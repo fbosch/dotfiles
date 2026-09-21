@@ -8,6 +8,8 @@ Tracked patches preserve local changes to pinned Pi extensions:
 - `pi-hashline-edit-pro+4.3.5.patch` keeps one registry identity when Pi exposes a session file after early tool calls, so previously served anchors remain owned.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
+The runtime compatibility patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies it after dependency installation.
+
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
 
 ## Installation
