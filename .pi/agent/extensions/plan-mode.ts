@@ -1,11 +1,12 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  getAgentDir,
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { readJsonConfig } from "../lib/extension-config";
+import { activeAgentName } from "./shared/active-agent";
 
 export const PLAN_MODE_STATUS = "Plan";
 
@@ -79,8 +80,6 @@ const THINKING_LEVELS: ReadonlySet<string> = new Set([
   "max",
 ]);
 
-const ACTIVE_AGENT_MARKER = /^<active_agent\s+name=(?:"[^"\r\n]+"|'[^'\r\n]+')[^>]*\/>\s*$/u;
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -92,7 +91,7 @@ function isSubagentSession(ctx: ExtensionContext, systemPrompt = ctx.getSystemPr
   const parentSession = ctx.sessionManager.getHeader()?.parentSession;
   if (typeof parentSession !== "string" || parentSession.length === 0) return false;
 
-  return systemPrompt.split("\n").some((line) => ACTIVE_AGENT_MARKER.test(line));
+  return activeAgentName(systemPrompt) !== undefined;
 }
 
 function getSessionId(ctx: ExtensionContext): string | undefined {

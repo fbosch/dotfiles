@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/is-record";
 import { normalizeName } from "./profile-store";
 
 const SESSION_PROFILE_ENTRY_TYPE = "auth-profile-override";
@@ -7,10 +8,6 @@ type PersistedSessionProfile = {
   sessionId: string;
   profile: string | null;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && Array.isArray(value) === false;
-}
 
 function sessionId(ctx: Pick<ExtensionContext, "sessionManager">): string | undefined {
   return ctx.sessionManager.getHeader()?.id;

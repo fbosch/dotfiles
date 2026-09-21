@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { isRecord } from "../shared/is-record";
 
 export const DEFAULT_PROFILE = "default";
 
@@ -35,9 +36,7 @@ export function authPathFor(profile: string, agentDir = getAgentDir()): string {
 export function readJsonFile(path: string): Record<string, unknown> | undefined {
   try {
     const value: unknown = JSON.parse(readFileSync(path, "utf8"));
-    return typeof value === "object" && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
-      : undefined;
+    return isRecord(value) ? value : undefined;
   } catch {
     return undefined;
   }
@@ -61,10 +60,8 @@ export function providersIn(profile: string, agentDir = getAgentDir()): string[]
 
 export function accountIdFor(profile: string, agentDir = getAgentDir()): string | undefined {
   const provider = readJsonFile(authPathFor(profile, agentDir))?.["openai-codex"];
-  if (typeof provider !== "object" || provider === null || Array.isArray(provider)) {
-    return undefined;
-  }
-  const accountId = (provider as Record<string, unknown>).accountId;
+  if (!isRecord(provider)) return undefined;
+  const accountId = provider.accountId;
   return typeof accountId === "string" && /^[A-Za-z0-9._-]{1,200}$/.test(accountId)
     ? accountId
     : undefined;
