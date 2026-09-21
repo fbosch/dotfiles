@@ -126,6 +126,30 @@ describe("skill-selection benchmark metrics", () => {
     expect(metrics.failures).toEqual([]);
   });
 
+  test("reports coverage, usable versus all-attempted quality, and p50/p95 latency", () => {
+    const cases = [
+      { name: "fast", request: "run Bun tests", relevant: ["bun"] },
+      { name: "slow", request: "answer a fact", relevant: [] },
+      { name: "unavailable", request: "use XState", relevant: ["xstate"] },
+    ] as const;
+    const metrics = calculateBenchmarkMetrics(cases, [
+      { names: ["bun"], latencyMs: 10 },
+      { names: [], latencyMs: 40 },
+      {
+        names: [],
+        latencyMs: 600,
+        unavailable: true,
+        failure: { stage: "request", reason: "timeout" },
+      },
+    ]);
+
+    expect(metrics.semanticCoverage).toBe(2 / 3);
+    expect(metrics.semantic.caseAccuracy).toBe(1);
+    expect(metrics.semanticAllAttempted.caseAccuracy).toBe(2 / 3);
+    expect(metrics.endToEnd.allAttempted.caseAccuracy).toBe(2 / 3);
+    expect(metrics.latency).toEqual({ samples: 3, p50: 40, p95: 600 });
+  });
+
   test("keeps an explicit bypass control check out of semantic metrics", () => {
     const cases = [
       { name: "bypass", request: "/skill:bun", relevant: [], explicitSkillInvocation: true },

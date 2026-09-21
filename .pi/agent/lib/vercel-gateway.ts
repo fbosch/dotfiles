@@ -133,7 +133,12 @@ export async function requestVercelGateway<TRequest extends object>(
 
     const auth = authResult.value;
     if (auth === undefined) return failure("missing-credentials", "auth");
-    const apiKey = auth.auth.apiKey;
+    let apiKey: unknown;
+    try {
+      apiKey = auth.auth.apiKey;
+    } catch {
+      return failure("auth-failure", "auth");
+    }
     if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
       return failure("missing-credentials", "auth");
     }
@@ -149,22 +154,31 @@ export async function requestVercelGateway<TRequest extends object>(
       return failure("request-failure", "request");
     }
 
-    let response: Response;
+    let responseResult: AwaitStageResult<Response>;
     try {
-      response = await (options.fetch ?? globalThis.fetch)(VERCEL_GATEWAY_ENDPOINT, {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        // Keep Gateway routing private; callers supply only evaluator-specific state.
-        body,
-        signal: deadlineController.signal,
-      });
+      responseResult = await awaitWithinDeadline(
+        Promise.resolve().then(() =>
+          (options.fetch ?? globalThis.fetch)(VERCEL_GATEWAY_ENDPOINT, {
+            method: "POST",
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${apiKey}`,
+              "Content-Type": "application/json",
+            },
+            // Keep Gateway routing private; callers supply only evaluator-specific state.
+            body,
+            signal: deadlineController.signal,
+          }),
+        ),
+        deadlineController.signal,
+      );
     } catch {
       return stageFailure("request") ?? failure("request-failure", "request");
     }
+    if (!responseResult.completed) {
+      return stageFailure("request") ?? failure("request-failure", "request");
+    }
+    const response = responseResult.value;
 
     const responseFailure = stageFailure("request");
     if (responseFailure !== undefined) return responseFailure;
@@ -179,6 +193,8 @@ export async function requestVercelGateway<TRequest extends object>(
     if (!textResult.completed) return stageFailure("body") ?? failure("body-failure", "body");
 
     const text = textResult.value;
+    const bodyDeadlineFailure = stageFailure("body");
+    if (bodyDeadlineFailure !== undefined) return bodyDeadlineFailure;
     if (text.length > MAX_VERCEL_GATEWAY_RESPONSE_CHARS) {
       return failure("oversized-body", "body");
     }

@@ -283,7 +283,7 @@ export async function rankDeferredToolsWithJev(
   const candidates = buildJevCandidatePool(tools, query, prefixes);
   if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
 
-  const payload = await requestVercelGateway(
+  const gateway = await requestVercelGateway(
     options.modelRegistry,
     createJevRequest(candidates, query),
     {
@@ -292,9 +292,9 @@ export async function rankDeferredToolsWithJev(
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     },
   );
-  if (payload === undefined) return undefined;
+  if (!gateway.ok) return undefined;
 
-  const matches = parseJevRanking(payload, candidates, limit);
+  const matches = parseJevRanking(gateway.value, candidates, limit);
   return matches === undefined ? undefined : { matches, rankingSource: "jev" };
 }
 

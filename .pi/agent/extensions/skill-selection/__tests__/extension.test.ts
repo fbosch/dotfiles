@@ -12,9 +12,11 @@ import {
   eligibleSkillCandidates,
   formatSkillRecommendations,
   parseSkillSelectionResponse,
+  parseSkillSelectionResponseDetailed,
   resolveSkillSelectionConfig,
   type SkillSelectionResult,
   selectSkillsWithJev,
+  selectSkillsWithJevDetailed,
 } from "../index";
 
 function skill(
@@ -166,6 +168,14 @@ describe("skill selection", () => {
   test("rejects malformed or incomplete responses instead of making a partial recommendation", () => {
     const candidates = [{ name: "writing-clearly", description: "writing" }];
     expect(parseSkillSelectionResponse({ answers: {} }, candidates)).toBeUndefined();
+    expect(parseSkillSelectionResponseDetailed({ answers: {} }, candidates)).toEqual({
+      ok: false,
+      failure: {
+        kind: "invalid-evaluation-response",
+        stage: "evaluation",
+        reason: "invalid-evaluation-response",
+      },
+    });
     expect(
       parseSkillSelectionResponse(
         { answers: { skill_0: { type: "noul", noul: Number.NaN } } },
@@ -178,6 +188,36 @@ describe("skill selection", () => {
         candidates,
       ),
     ).toBeUndefined();
+  });
+
+  test("keeps Gateway failures distinct from invalid evaluation responses", async () => {
+    const candidates = [{ name: "writing-clearly", description: "writing" }];
+    await expect(
+      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
+        modelRegistry: { getProviderAuth: async () => undefined },
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      failure: {
+        kind: "gateway-failure",
+        stage: "auth",
+        reason: "missing-credentials",
+      },
+    });
+
+    await expect(
+      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
+        modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
+        fetch: async () => new Response(JSON.stringify({ answers: {} })),
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      failure: {
+        kind: "invalid-evaluation-response",
+        stage: "evaluation",
+        reason: "invalid-evaluation-response",
+      },
+    });
   });
 
   test("sends only bounded candidate metadata and parses an independent Jev response", async () => {
