@@ -2349,14 +2349,16 @@ async function resolveHyprlandSessionEnvironment(
   });
 }
 
-function registerHyprPropCommand(
+export const hyprPropCommandDescription =
+  "Select a Hyprland window or inspect one by address and send its properties to the agent";
+
+export function createHyprPropCommand(
   pi: ExtensionAPI,
-  environment: NodeJS.ProcessEnv,
-  runCommand: HyprlandCommandRunner,
-): void {
-  pi.registerCommand("hypr-prop", {
-    description:
-      "Select a Hyprland window or inspect one by address and send its properties to the agent",
+  environment: NodeJS.ProcessEnv = process.env,
+  runCommand: HyprlandCommandRunner = createCommandRunner(pi),
+): { description: string; handler: (args: string, ctx: ExtensionCommandContext) => Promise<void> } {
+  return {
+    description: hyprPropCommandDescription,
     handler: async (args, ctx: ExtensionCommandContext) => {
       const request = parseHyprPropRequest(args);
       if (request === null) {
@@ -2459,7 +2461,15 @@ function registerHyprPropCommand(
         );
       }
     },
-  });
+  };
+}
+
+export function registerHyprPropCommand(
+  pi: ExtensionAPI,
+  environment: NodeJS.ProcessEnv,
+  runCommand: HyprlandCommandRunner,
+): void {
+  pi.registerCommand("hypr-prop", createHyprPropCommand(pi, environment, runCommand));
 }
 
 export function supportsHyprlandSession(environment: NodeJS.ProcessEnv = process.env): boolean {
@@ -2469,6 +2479,7 @@ export function supportsHyprlandSession(environment: NodeJS.ProcessEnv = process
 export interface HyprlandExtensionOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly commandRunner?: HyprlandCommandRunner;
+  readonly registerCommand?: boolean;
 }
 
 export function registerHyprlandExtension(
@@ -2477,7 +2488,9 @@ export function registerHyprlandExtension(
 ): void {
   const environment = options.environment ?? process.env;
   const commandRunner = options.commandRunner ?? createCommandRunner(pi);
-  registerHyprPropCommand(pi, environment, commandRunner);
+  if (options.registerCommand !== false) {
+    registerHyprPropCommand(pi, environment, commandRunner);
+  }
   if (supportsHyprlandSession(environment) === false) return;
   const runCommand = options.commandRunner ?? createCommandRunner(pi, COMMAND_TIMEOUT_MS);
   pi.registerTool(createHyprDesktopDiagnoseTool(runCommand, environment));
@@ -2486,5 +2499,5 @@ export function registerHyprlandExtension(
 }
 
 export default function hyprlandExtension(pi: ExtensionAPI): void {
-  registerHyprlandExtension(pi);
+  registerHyprlandExtension(pi, { registerCommand: false });
 }

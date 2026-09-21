@@ -228,14 +228,14 @@ export function appendInstructionFragments(systemPrompt: string, fragments: stri
   return [before, block, after].filter((part) => part.length > 0).join("\n\n");
 }
 
-// Load one coherent snapshot per extension generation; /reload imports a fresh generation.
-const GLOBAL_INSTRUCTION_FRAGMENTS = loadGlobalInstructionFragments();
-
 export default function instructionFragments(pi: ExtensionAPI): void {
+  // Keep one coherent snapshot per extension generation; /reload invokes this again.
+  const globalInstructionFragments = loadGlobalInstructionFragments();
+
   pi.on("before_agent_start", (event) => {
     // Deferred tools remain available in Pi's registry; excluded tools are removed before this hook runs.
     const fragments = instructionFragmentsForTools(
-      GLOBAL_INSTRUCTION_FRAGMENTS,
+      globalInstructionFragments,
       pi.getAllTools().map((tool) => tool.name),
     );
     const systemPrompt = appendInstructionFragments(event.systemPrompt, fragments);

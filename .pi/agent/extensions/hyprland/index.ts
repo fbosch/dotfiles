@@ -1,7 +1,11 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 
 type HyprlandExtensionModule = {
   default: (pi: ExtensionAPI) => void | Promise<void>;
+  createHyprPropCommand: (pi: ExtensionAPI) => {
+    description: string;
+    handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
+  };
 };
 
 type HyprlandExtensionImporter = () => Promise<HyprlandExtensionModule>;
@@ -32,5 +36,17 @@ export async function loadHyprlandExtension(
 }
 
 export default async function hyprlandExtension(pi: ExtensionAPI): Promise<void> {
-  await loadHyprlandExtension(pi);
+  pi.registerCommand("hypr-prop", {
+    description:
+      "Select a Hyprland window or inspect one by address and send its properties to the agent",
+    handler: async (args, ctx) => {
+      const extension = await import("./extension");
+      const command = extension.createHyprPropCommand(pi);
+      await command.handler(args, ctx);
+    },
+  });
+
+  if (supportsHyprlandEnvironment()) {
+    await loadHyprlandExtension(pi, process.env, async () => import("./extension"));
+  }
 }

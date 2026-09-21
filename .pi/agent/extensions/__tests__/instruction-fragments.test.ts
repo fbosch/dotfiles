@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import type {
   BeforeAgentStartEvent,
   BeforeAgentStartEventResult,
@@ -43,6 +43,62 @@ afterEach(() => {
 });
 
 describe("instruction fragments", () => {
+  test("does not read global fragments while importing the extension", () => {
+    const missingAgentDirectory = join(temporaryDirectory(), "missing-agent");
+    const modulePath = resolve(import.meta.dir, "../instruction-fragments.ts");
+    const result = Bun.spawnSync(
+      [process.execPath, "-e", `await import(${JSON.stringify(modulePath)})`],
+      {
+        env: { ...process.env, PI_CODING_AGENT_DIR: missingAgentDirectory },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+  });
+
+  test("snapshots global fragments when the extension initializes", () => {
+    const agentDirectory = temporaryDirectory();
+    const instructionsDirectory = join(agentDirectory, "instructions");
+    mkdirSync(instructionsDirectory);
+    writeFragment(instructionsDirectory, "first.md", "First instruction.");
+    const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDirectory;
+
+    try {
+      let handler:
+        | ((
+            event: BeforeAgentStartEvent,
+            ctx: ExtensionContext,
+          ) => BeforeAgentStartEventResult | undefined)
+        | undefined;
+      const pi = {
+        getAllTools: () => [{ name: "read" }],
+        on(event: string, registeredHandler: typeof handler) {
+          if (event === "before_agent_start") handler = registeredHandler;
+        },
+      } as unknown as ExtensionAPI;
+
+      instructionFragments(pi);
+      writeFragment(instructionsDirectory, "first.md", "Updated instruction.");
+
+      const event = {
+        type: "before_agent_start",
+        prompt: "Use the snapshot",
+        systemPrompt: "base prompt",
+        systemPromptOptions: {},
+      } as BeforeAgentStartEvent;
+      const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+
+      expect(systemPrompt).toContain("First instruction.");
+      expect(systemPrompt).not.toContain("Updated instruction.");
+    } finally {
+      if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    }
+  });
+
   test("discovers Markdown fragments recursively in lexical order", () => {
     const root = temporaryDirectory();
     const agentDirectory = join(root, "agent");
@@ -197,38 +253,61 @@ describe("instruction fragments", () => {
   });
 
   test("injects fragments for available tools, including inactive deferred tools", () => {
-    let handler:
-      | ((
-          event: BeforeAgentStartEvent,
-          ctx: ExtensionContext,
-        ) => BeforeAgentStartEventResult | undefined)
-      | undefined;
-    let availableTools = ["subagent", "todo", "ffgrep"];
-    const pi = {
-      getAllTools: () => availableTools.map((name) => ({ name })),
-      on(event: string, registeredHandler: typeof handler) {
-        if (event === "before_agent_start") handler = registeredHandler;
-      },
-    } as unknown as ExtensionAPI;
-    instructionFragments(pi);
-    const event = {
-      type: "before_agent_start",
-      prompt: "Delegate this",
-      systemPrompt: "base prompt",
-      systemPromptOptions: {},
-    } as BeforeAgentStartEvent;
+    const agentDirectory = temporaryDirectory();
+    const instructionsDirectory = join(agentDirectory, "instructions");
+    mkdirSync(instructionsDirectory);
+    writeFragment(
+      instructionsDirectory,
+      "orchestration.md",
+      "# Subagent orchestration",
+      "when:\n  tools:\n    any:\n      - subagent",
+    );
+    writeFragment(
+      instructionsDirectory,
+      "task-tracking.md",
+      "# Task tracking",
+      "when:\n  tools:\n    any:\n      - todo",
+    );
+    const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDirectory;
 
-    const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-    expect(systemPrompt).toContain("# Subagent orchestration");
-    expect(systemPrompt).toContain("# Task tracking");
+    try {
+      let handler:
+        | ((
+            event: BeforeAgentStartEvent,
+            ctx: ExtensionContext,
+          ) => BeforeAgentStartEventResult | undefined)
+        | undefined;
+      let availableTools = ["subagent", "todo", "ffgrep"];
+      const pi = {
+        getAllTools: () => availableTools.map((name) => ({ name })),
+        on(event: string, registeredHandler: typeof handler) {
+          if (event === "before_agent_start") handler = registeredHandler;
+        },
+      } as unknown as ExtensionAPI;
+      instructionFragments(pi);
+      const event = {
+        type: "before_agent_start",
+        prompt: "Delegate this",
+        systemPrompt: "base prompt",
+        systemPromptOptions: {},
+      } as BeforeAgentStartEvent;
 
-    availableTools = ["todo"];
-    const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-    expect(taskSystemPrompt).toContain("# Task tracking");
-    expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
+      const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+      expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
+      expect(systemPrompt).toContain("# Subagent orchestration");
+      expect(systemPrompt).toContain("# Task tracking");
 
-    availableTools = ["read"];
-    expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
+      availableTools = ["todo"];
+      const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
+      expect(taskSystemPrompt).toContain("# Task tracking");
+      expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
+
+      availableTools = ["read"];
+      expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
+    } finally {
+      if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    }
   });
 });

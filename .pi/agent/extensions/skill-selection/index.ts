@@ -70,6 +70,7 @@ export type SkillSelectionFailure =
       readonly stage: VercelGatewayStage;
       readonly reason: VercelGatewayFailure["reason"];
       readonly httpStatus?: number;
+      readonly retryAfterMs?: number;
     }
   | {
       readonly kind: "invalid-evaluation-response";
@@ -374,6 +375,7 @@ export async function selectSkillsWithJevDetailed(
         stage: gateway.stage,
         reason: gateway.reason,
         ...(gateway.httpStatus === undefined ? {} : { httpStatus: gateway.httpStatus }),
+        ...(gateway.retryAfterMs === undefined ? {} : { retryAfterMs: gateway.retryAfterMs }),
       },
     };
   }

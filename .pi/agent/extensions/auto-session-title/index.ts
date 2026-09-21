@@ -70,6 +70,8 @@ async function loadWritingGuidance(): Promise<string> {
   return skills.join("\n\n---\n\n");
 }
 
+type WritingGuidanceLoader = () => Promise<string>;
+
 function buildSystemPrompt(writingGuidance: string): string {
   return `Write a short session title for a developer's request.
 
@@ -119,11 +121,19 @@ export async function generateTitle(
   return composeSessionTitle(candidate, prompt);
 }
 
-export default async function autoSessionTitle(pi: ExtensionAPI): Promise<void> {
-  const systemPrompt = buildSystemPrompt(await loadWritingGuidance());
+export default async function autoSessionTitle(
+  pi: ExtensionAPI,
+  loadGuidance: WritingGuidanceLoader = loadWritingGuidance,
+): Promise<void> {
+  let writingSystemPrompt: Promise<string> | undefined;
   let eligible = false;
   let attempted = false;
   let settings: AutoSessionTitleSettings | undefined;
+
+  const getSystemPrompt = (): Promise<string> => {
+    writingSystemPrompt ??= Promise.resolve().then(loadGuidance).then(buildSystemPrompt);
+    return writingSystemPrompt;
+  };
 
   pi.on("session_start", (_event, ctx) => {
     eligible = shouldNameSession(pi, ctx);
@@ -152,7 +162,7 @@ export default async function autoSessionTitle(pi: ExtensionAPI): Promise<void> 
     attempted = true;
 
     try {
-      const title = await generateTitle(ctx, event.prompt, systemPrompt, settings);
+      const title = await generateTitle(ctx, event.prompt, await getSystemPrompt(), settings);
       if (title && !pi.getSessionName()) pi.setSessionName(title);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

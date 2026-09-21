@@ -6,6 +6,7 @@ export interface BenchmarkPredictionFailure {
   readonly stage: BenchmarkFailureStage;
   readonly reason: string;
   readonly httpStatus?: number;
+  readonly retryAfterMs?: number;
 }
 
 export interface BenchmarkPrediction {
@@ -46,7 +47,7 @@ export interface BenchmarkAttemptMetrics {
 export interface BenchmarkEndToEndMetrics {
   /** Semantic cases with a returned prediction; unavailable cases are excluded. */
   readonly availableOnly: BenchmarkAttemptMetrics;
-  /** Every semantic case; unavailable cases count as unsuccessful attempts. */
+  /** Every attempted semantic case; unavailable cases count as unsuccessful attempts. */
   readonly allAttempted: BenchmarkAttemptMetrics;
   /** Explicit skill invocations are deterministic control-flow checks, reported separately. */
   readonly explicitBypass: BenchmarkAttemptMetrics;
@@ -65,6 +66,9 @@ export interface BenchmarkMetrics {
   readonly unavailableCases: number;
   readonly unavailableSemanticCases: number;
   readonly unavailableBypassCases: number;
+  readonly notAttemptedCases: number;
+  readonly notAttemptedSemanticCases: number;
+  readonly notAttemptedBypassCases: number;
   readonly evaluatedSemanticCases: number;
   readonly semanticCoverage: number | null;
   /** Quality over responses that passed availability and semantic validation. */
@@ -95,7 +99,7 @@ function percentile(values: readonly number[], percentileValue: number): number 
 
 function qualityMetrics(
   cases: readonly SkillSelectionBenchmarkCase[],
-  predictions: readonly BenchmarkPrediction[],
+  predictions: readonly (BenchmarkPrediction | undefined)[],
   includeUnavailable: boolean,
 ): BenchmarkQualityMetrics {
   let exactMatches = 0;
@@ -111,12 +115,13 @@ function qualityMetrics(
   cases.forEach((testCase, index) => {
     if (testCase.explicitSkillInvocation === true) return;
     const prediction = predictions[index];
-    const unavailable = prediction === undefined || prediction.unavailable === true;
+    if (prediction === undefined) return;
+    const unavailable = prediction.unavailable === true;
     if (unavailable && !includeUnavailable) return;
 
     const expected = new Set(testCase.relevant);
     const predicted = new Set(unavailable ? [] : prediction.names);
-    const accepted = exactMatch(expected, predicted);
+    const accepted = !unavailable && exactMatch(expected, predicted);
     evaluatedCases += 1;
     if (accepted) exactMatches += 1;
     expectedLabelCount += expected.size;
@@ -151,12 +156,15 @@ function qualityMetrics(
  */
 export function calculateBenchmarkMetrics(
   cases: readonly SkillSelectionBenchmarkCase[],
-  predictions: readonly BenchmarkPrediction[],
+  predictions: readonly (BenchmarkPrediction | undefined)[],
 ): BenchmarkMetrics {
   let explicitBypassCases = 0;
   let unavailableCases = 0;
   let unavailableSemanticCases = 0;
   let unavailableBypassCases = 0;
+  let notAttemptedCases = 0;
+  let notAttemptedSemanticCases = 0;
+  let notAttemptedBypassCases = 0;
   let evaluatedSemanticCases = 0;
   let semanticExactMatches = 0;
   let explicitBypassCorrectCases = 0;
@@ -166,14 +174,20 @@ export function calculateBenchmarkMetrics(
 
   cases.forEach((testCase, index) => {
     const prediction = predictions[index];
-    const unavailable = prediction === undefined || prediction.unavailable === true;
+    const notAttempted = prediction === undefined;
+    const unavailable = prediction?.unavailable === true;
     const expected = new Set(testCase.relevant);
-    const predicted = new Set(unavailable ? [] : prediction.names);
+    const predicted = new Set(notAttempted || unavailable ? [] : (prediction?.names ?? []));
     const predictedNames = [...predicted];
 
     if (testCase.explicitSkillInvocation === true) {
       explicitBypassCases += 1;
       explicitBypassFixtureNames.push(testCase.name);
+      if (notAttempted) {
+        notAttemptedCases += 1;
+        notAttemptedBypassCases += 1;
+        return;
+      }
       if (unavailable) {
         unavailableCases += 1;
         unavailableBypassCases += 1;
@@ -194,6 +208,11 @@ export function calculateBenchmarkMetrics(
       return;
     }
 
+    if (notAttempted) {
+      notAttemptedCases += 1;
+      notAttemptedSemanticCases += 1;
+      return;
+    }
     if (unavailable) {
       unavailableCases += 1;
       unavailableSemanticCases += 1;
@@ -231,6 +250,9 @@ export function calculateBenchmarkMetrics(
     unavailableCases,
     unavailableSemanticCases,
     unavailableBypassCases,
+    notAttemptedCases,
+    notAttemptedSemanticCases,
+    notAttemptedBypassCases,
     evaluatedSemanticCases,
     semanticCoverage: fraction(evaluatedSemanticCases, semanticDenominator),
     semantic,
@@ -243,13 +265,19 @@ export function calculateBenchmarkMetrics(
       },
       allAttempted: {
         correctCases: semanticExactMatches,
-        denominator: semanticDenominator,
-        caseAccuracy: fraction(semanticExactMatches, semanticDenominator),
+        denominator: semanticDenominator - notAttemptedSemanticCases,
+        caseAccuracy: fraction(
+          semanticExactMatches,
+          semanticDenominator - notAttemptedSemanticCases,
+        ),
       },
       explicitBypass: {
         correctCases: explicitBypassCorrectCases,
-        denominator: explicitBypassCases,
-        caseAccuracy: fraction(explicitBypassCorrectCases, explicitBypassCases),
+        denominator: explicitBypassCases - notAttemptedBypassCases,
+        caseAccuracy: fraction(
+          explicitBypassCorrectCases,
+          explicitBypassCases - notAttemptedBypassCases,
+        ),
       },
     },
     latency: {

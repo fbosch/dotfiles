@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { requestVercelGateway } from "../vercel-gateway";
+import { parseRetryAfter, requestVercelGateway } from "../vercel-gateway";
 
 const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) };
 
@@ -165,6 +165,27 @@ describe("requestVercelGateway", () => {
       },
     );
     expectFailure(bodyCancelled, { reason: "caller-cancellation", stage: "body" });
+  });
+
+  test("parses safe Retry-After seconds and HTTP dates without exposing headers", async () => {
+    const numeric = await requestVercelGateway(
+      auth,
+      {},
+      { fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "7" } }) },
+    );
+    expect(numeric).toMatchObject({
+      ok: false,
+      reason: "http-status",
+      httpStatus: 429,
+      retryAfterMs: 7_000,
+    });
+
+    const now = Date.parse("Wed, 21 Oct 2015 07:28:00 GMT");
+    expect(parseRetryAfter("Wed, 21 Oct 2015 07:28:10 GMT", now)).toBe(10_000);
+    expect(parseRetryAfter("Infinity", now)).toBeUndefined();
+    expect(parseRetryAfter("-1", now)).toBeUndefined();
+    expect(parseRetryAfter("7.5", now)).toBeUndefined();
+    expect(JSON.stringify(numeric)).not.toContain("Retry-After");
   });
 
   test("categorizes HTTP status, invalid JSON, oversized body, and body failures safely", async () => {

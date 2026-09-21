@@ -50,6 +50,10 @@ describe("skill-selection benchmark metrics", () => {
       predictedLabelCount: 2,
       truePositiveLabelCount: 1,
     });
+    expect(metrics.semanticAllAttempted).toMatchObject({
+      caseAccuracy: 0.5,
+      noMatchAccuracy: 0.5,
+    });
     expect(metrics.endToEnd).toEqual({
       availableOnly: {
         correctCases: 2,
@@ -108,19 +112,21 @@ describe("skill-selection benchmark metrics", () => {
     ]);
   });
 
-  test("treats a missing prediction as unavailable instead of an empty no-match answer", () => {
+  test("keeps a missing prediction separate from an unavailable response", () => {
     const metrics = calculateBenchmarkMetrics(
       [{ name: "missing", request: "no listed skill", relevant: [] }],
       [],
     );
 
-    expect(metrics.unavailableCases).toBe(1);
+    expect(metrics.unavailableCases).toBe(0);
+    expect(metrics.notAttemptedCases).toBe(1);
+    expect(metrics.notAttemptedSemanticCases).toBe(1);
     expect(metrics.evaluatedSemanticCases).toBe(0);
     expect(metrics.semantic.noMatchAccuracy).toBeNull();
     expect(metrics.semantic.caseAccuracy).toBeNull();
     expect(metrics.endToEnd).toEqual({
       availableOnly: { correctCases: 0, denominator: 0, caseAccuracy: null },
-      allAttempted: { correctCases: 0, denominator: 1, caseAccuracy: 0 },
+      allAttempted: { correctCases: 0, denominator: 0, caseAccuracy: null },
       explicitBypass: { correctCases: 0, denominator: 0, caseAccuracy: null },
     });
     expect(metrics.failures).toEqual([]);

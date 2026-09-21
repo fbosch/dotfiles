@@ -218,6 +218,22 @@ describe("skill selection", () => {
         reason: "invalid-evaluation-response",
       },
     });
+
+    await expect(
+      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
+        modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
+        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
+      }),
+    ).resolves.toEqual({
+      ok: false,
+      failure: {
+        kind: "gateway-failure",
+        stage: "request",
+        reason: "http-status",
+        httpStatus: 429,
+        retryAfterMs: 3_000,
+      },
+    });
   });
 
   test("sends only bounded candidate metadata and parses an independent Jev response", async () => {

@@ -42,6 +42,28 @@ describe("Hyprland extension entrypoint", () => {
     expect(registrations).toBe(1);
   });
 
+  test("registers hypr-prop without a Hyprland environment", async () => {
+    let registered: { handler: (args: string, ctx: never) => Promise<void> } | undefined;
+    const entrypointPi = {
+      registerCommand: (_name: string, definition: typeof registered) => {
+        registered = definition;
+      },
+    } as unknown as ExtensionAPI;
+
+    const previousEnvironment = { ...process.env };
+    for (const name of ["HYPRLAND_INSTANCE_SIGNATURE", "XDG_RUNTIME_DIR", "WAYLAND_DISPLAY"]) {
+      delete process.env[name];
+    }
+    try {
+      const module = await import("../index");
+      await module.default(entrypointPi);
+    } finally {
+      process.env = previousEnvironment;
+    }
+
+    expect(registered).toBeDefined();
+  });
+
   test("requires the complete Hyprland environment before importing", () => {
     expect(supportsHyprlandEnvironment({})).toBeFalse();
     expect(

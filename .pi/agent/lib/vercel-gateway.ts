@@ -29,6 +29,8 @@ export type VercelGatewayFailure = {
   readonly stage: VercelGatewayStage;
   readonly reason: VercelGatewayFailureReason;
   readonly httpStatus?: number;
+  /** Validated delay from Retry-After, in milliseconds. Never includes raw headers. */
+  readonly retryAfterMs?: number;
 };
 
 export type VercelGatewayResult =
@@ -74,13 +76,38 @@ function failure(
   reason: VercelGatewayFailureReason,
   stage: VercelGatewayStage,
   httpStatus?: number,
+  retryAfterMs?: number,
 ): VercelGatewayFailure {
   return {
     ok: false,
     stage,
     reason,
     ...(httpStatus === undefined ? {} : { httpStatus }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
   };
+}
+
+const MAX_SAFE_DELAY_MS = Number.MAX_SAFE_INTEGER;
+
+function safeDelayMs(value: number): number | undefined {
+  if (!Number.isFinite(value) || value < 0) return undefined;
+  return Math.min(Math.floor(value), MAX_SAFE_DELAY_MS);
+}
+
+/** Parse Retry-After without retaining untrusted header text. */
+export function parseRetryAfter(value: string | null, nowMs = Date.now()): number | undefined {
+  if (value === null) return undefined;
+  const normalized = value.trim();
+  if (/^\d+$/u.test(normalized)) {
+    const seconds = Number(normalized);
+    if (!Number.isFinite(seconds)) return MAX_SAFE_DELAY_MS;
+    return safeDelayMs(seconds * 1_000);
+  }
+  if (/^[+-]?\d/u.test(normalized)) return undefined;
+
+  const timestampMs = Date.parse(normalized);
+  if (!Number.isFinite(timestampMs)) return undefined;
+  return safeDelayMs(Math.max(0, timestampMs - nowMs));
 }
 
 function normalizedTimeout(timeoutMs: number | undefined): number {
@@ -182,7 +209,14 @@ export async function requestVercelGateway<TRequest extends object>(
 
     const responseFailure = stageFailure("request");
     if (responseFailure !== undefined) return responseFailure;
-    if (!response.ok) return failure("http-status", "request", response.status);
+    if (!response.ok) {
+      return failure(
+        "http-status",
+        "request",
+        response.status,
+        parseRetryAfter(response.headers.get("retry-after")),
+      );
+    }
 
     let textResult: AwaitStageResult<string>;
     try {

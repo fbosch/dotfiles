@@ -62,7 +62,7 @@ async function settleReports(): Promise<void> {
 }
 
 herdrAgentState(pi);
-herdr(pi);
+await herdr(pi);
 
 await emit("session_start", { reason: "startup" });
 await settleReports();

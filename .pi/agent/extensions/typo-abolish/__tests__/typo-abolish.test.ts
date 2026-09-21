@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -14,6 +17,27 @@ import { PromptEditor, type PromptEditorState } from "../../prompt-ui/prompt-edi
 import { correctedPromptForInput } from "..";
 import { parseTypoRules, typoRuleLengths } from "../typo-engine";
 
+const TYPO_EXTENSION_PATH = new URL("../index.ts", import.meta.url).pathname;
+
+type ProbeResult = {
+  exitCode: number;
+  stderr: string;
+  stdout: string;
+};
+
+async function runProbe(script: string, configHome: string): Promise<ProbeResult> {
+  const child = Bun.spawn([process.execPath, "--no-install", "-e", script, TYPO_EXTENSION_PATH], {
+    env: { ...process.env, XDG_CONFIG_HOME: configHome },
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
+  return { exitCode, stderr, stdout };
+}
 const rules = parseTypoRules(
   "teh the\nrepositry repository\nsucces{,ful,fully} success{,ful,fully}",
 );
@@ -52,6 +76,46 @@ function createEditor(): PromptEditor {
     typoRules,
   );
 }
+
+test("defers typo rule loading until a UI session starts", async () => {
+  const configHome = await mkdtemp(join(tmpdir(), "pi-typo-abolish-headless-"));
+  try {
+    const result = await runProbe(
+      `
+const { default: extension } = await import(process.argv[1]);
+let sessionStart;
+extension({ on(event, handler) { if (event === "session_start") sessionStart = handler; } });
+await sessionStart({ type: "session_start", reason: "startup" }, { hasUI: false });
+console.log("headless");
+`,
+      configHome,
+    );
+    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "headless\n" });
+  } finally {
+    await rm(configHome, { force: true, recursive: true });
+  }
+});
+
+test("loads typo rules for UI sessions", async () => {
+  const configHome = await mkdtemp(join(tmpdir(), "pi-typo-abolish-ui-"));
+  try {
+    await mkdir(join(configHome, "fbb/data"), { recursive: true });
+    await writeFile(join(configHome, "fbb/data/typos.abolish"), "teh the\n");
+    const result = await runProbe(
+      `
+const { default: extension, correctedPromptForInput, loadTypoCorrectionRules } = await import(process.argv[1]);
+let sessionStart;
+extension({ on(event, handler) { if (event === "session_start") sessionStart = handler; } });
+await sessionStart({ type: "session_start", reason: "startup" }, { hasUI: true });
+console.log(correctedPromptForInput("teh", " ", loadTypoCorrectionRules()));
+`,
+      configHome,
+    );
+    expect(result).toEqual({ exitCode: 0, stderr: "", stdout: "the \n" });
+  } finally {
+    await rm(configHome, { force: true, recursive: true });
+  }
+});
 
 describe("prompt typo correction", () => {
   test("allows ten visible autocomplete suggestions", () => {
