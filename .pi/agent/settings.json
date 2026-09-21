@@ -85,7 +85,7 @@
     ]
   },
   "skillSelection": {
-    "enabled": false,
+    "enabled": true,
     "threshold": 0.72,
     "timeoutMs": 600,
     "maxRecommendations": 3
