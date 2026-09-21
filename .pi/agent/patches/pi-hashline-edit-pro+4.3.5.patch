@@ -1,16 +1,17 @@
 diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
-index d1626527..253ff8a7 100644
+index d162652..1ea0a90 100644
 --- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
-@@ -167,6 +167,7 @@ const sessionFileByKey = new Map<string, string>();
+@@ -167,6 +167,8 @@ const sessionFileByKey = new Map<string, string>();
  const pendingInits = new Map<string, Promise<void>>();
  const loadTokens = new Map<string, object>();
  const registries = new Map<string, SessionState>();
 +const sessionKeyById = new Map<string, string>();
++const sessionKeyByFile = new Map<string, string>();
  const sessionScope = new AsyncLocalStorage<string>();
  
  function newSessionState(seed?: string): SessionState {
-@@ -323,7 +324,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
+@@ -323,7 +325,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
  }
  
  async function loadRegistryState(key: string, sessionFile: string, token: object): Promise<void> {
@@ -19,7 +20,7 @@ index d1626527..253ff8a7 100644
    let events: RegistryEvent[] = [];
    let rawLog = "";
    try {
-@@ -354,9 +355,53 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
+@@ -354,9 +356,53 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
    }
  }
  
@@ -74,7 +75,7 @@ index d1626527..253ff8a7 100644
    const pending = pendingInits.get(key);
    if (pending) {
      await pending;
-@@ -393,11 +438,16 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+@@ -393,10 +439,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
  }
  
  export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
@@ -82,7 +83,17 @@ index d1626527..253ff8a7 100644
 -  if (sessionFile !== undefined) return sidecarKeyFor(sessionFile);
    const sessionId = ctx?.sessionManager?.getSessionId?.();
 -  if (typeof sessionId === "string" && sessionId.length > 0) return `ephemeral:${sessionId}`;
--  return undefined;
++  const sessionFile = sessionFileFor(ctx);
++  if (sessionFile !== undefined) {
++    const existingByFile = sessionKeyByFile.get(sessionFile);
++    const existingById = typeof sessionId === "string" && sessionId.length > 0
++      ? sessionKeyById.get(sessionId)
++      : undefined;
++    const key = existingByFile ?? existingById ?? sidecarKeyFor(sessionFile);
++    sessionKeyByFile.set(sessionFile, key);
++    if (typeof sessionId === "string" && sessionId.length > 0) sessionKeyById.set(sessionId, key);
++    return key;
++  }
 +  if (typeof sessionId === "string" && sessionId.length > 0) {
 +    const existing = sessionKeyById.get(sessionId);
 +    if (existing !== undefined) return existing;
@@ -90,25 +101,27 @@ index d1626527..253ff8a7 100644
 +    sessionKeyById.set(sessionId, key);
 +    return key;
 +  }
-+  const sessionFile = sessionFileFor(ctx);
-+  return sessionFile !== undefined ? sidecarKeyFor(sessionFile) : undefined;
+   return undefined;
  }
  
- function sessionFileFor(ctx: AnchorSessionContext | undefined): string | undefined {
-@@ -887,6 +937,7 @@ export function resetRegistryForTests(): void {
+@@ -887,6 +948,8 @@ export function resetRegistryForTests(): void {
    sessionFileByKey.clear();
    pendingInits.clear();
    loadTokens.clear();
 +  sessionKeyById.clear();
++  sessionKeyByFile.clear();
    registries.clear();
  }
  
-@@ -926,6 +977,9 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+@@ -926,6 +989,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
  
  export function releaseRegistrySession(key: string): void {
    loadTokens.delete(key);
 +  for (const [sessionId, sessionKey] of sessionKeyById) {
 +    if (sessionKey === key) sessionKeyById.delete(sessionId);
++  }
++  for (const [sessionFile, sessionKey] of sessionKeyByFile) {
++    if (sessionKey === key) sessionKeyByFile.delete(sessionFile);
 +  }
    if (currentKey === key) currentKey = undefined;
    pendingInits.delete(key);
