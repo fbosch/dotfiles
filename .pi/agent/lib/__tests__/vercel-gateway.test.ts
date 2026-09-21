@@ -112,5 +112,30 @@ describe("requestVercelGateway", () => {
         },
       ),
     ).resolves.toBeUndefined();
+
+    await expect(
+      requestVercelGateway(
+        {
+          getProviderAuth: () => new Promise(() => undefined),
+        },
+        {},
+        { timeoutMs: 5, fetch: async () => new Response("unexpected") },
+      ),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      requestVercelGateway(
+        { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) },
+        {},
+        {
+          timeoutMs: 5,
+          fetch: async () =>
+            ({
+              ok: true,
+              text: () => new Promise<string>(() => undefined),
+            }) as Response,
+        },
+      ),
+    ).resolves.toBeUndefined();
   });
 });
