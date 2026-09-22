@@ -120,6 +120,7 @@ export interface RunCandidate {
   readonly id: string;
   readonly description: string;
   readonly command: readonly string[];
+  readonly authorization: "choice" | "independent";
   readonly trace: {
     readonly action: "click" | "fill" | "check" | "uncheck" | "select";
     readonly ref: string;
@@ -133,7 +134,9 @@ export interface RunTraceEntry {
   readonly snapshot: string;
   readonly action: RunCandidate["trace"];
   readonly probability: number;
-  readonly authorizationProbability: number;
+  readonly selectionMode: "deterministic" | "jev";
+  readonly authorizationMode: "choice" | "independent";
+  readonly authorizationProbability?: number;
 }
 
 export interface StepDecision {
@@ -344,6 +347,7 @@ export function parseRunCandidates(
         id: `click:${rawRef}`,
         description: `Click ${JSON.stringify(displayLabel)} at ${ref}.`,
         command: ["click", ref],
+        authorization: "independent",
         trace: { action: "click", ref, label: displayLabel },
       });
     } else if (role === "checkbox" || role === "radio") {
@@ -354,6 +358,7 @@ export function parseRunCandidates(
         id: `${action}:${rawRef}`,
         description: `${action === "click" ? "Click" : action === "check" ? "Check" : "Uncheck"} ${JSON.stringify(displayLabel)} at ${ref}.`,
         command: [action, ref],
+        authorization: "choice",
         trace: { action, ref, label: displayLabel },
       });
     } else {
@@ -366,6 +371,7 @@ export function parseRunCandidates(
           id: `${action}:${rawRef}:${inputIndex}`,
           description: `${action === "select" ? "Select" : "Fill"} ${summarizedInput(input)} in ${JSON.stringify(displayLabel)} at ${ref}.`,
           command: [action, ref, input.value],
+          authorization: "choice",
           trace: { action, ref, label: displayLabel, input: input.name },
         });
       }
@@ -373,6 +379,22 @@ export function parseRunCandidates(
     if (candidates.length >= MAX_ACTIONS) break;
   }
   return candidates;
+}
+
+export function findDeterministicInputCandidate(
+  candidates: readonly RunCandidate[],
+): RunCandidate | undefined {
+  const inputs = candidates.filter(
+    ({ trace }) => trace.action === "fill" || trace.action === "select",
+  );
+  return inputs.find((candidate) => {
+    const input = candidate.trace.input;
+    if (input === undefined) return false;
+    return (
+      inputs.filter(({ trace }) => trace.input === input).length === 1 &&
+      inputs.filter(({ trace }) => trace.ref === candidate.trace.ref).length === 1
+    );
+  });
 }
 
 export function redactSensitiveInputs(snapshot: string, inputs: readonly RunValue[] = []): string {
@@ -638,7 +660,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     name: "browser_run",
     label: "Run browser workflow",
     description:
-      "Run a bounded multi-step browser workflow. Jev selects one explicit click, fill, check, uncheck, or select action per fresh snapshot and separately verifies that each action is authorized by the objective.",
+      "Run a bounded multi-step browser workflow. Explicit inputs with a unique control match run directly; Jev selects ambiguous or control actions and independently authorizes button and link clicks.",
     parameters: RunParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: RunInput, signal, _onUpdate, ctx) {
@@ -675,35 +697,54 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           break;
         }
 
-        const choiceGateway = await requestVercelGateway(
-          ctx.modelRegistry,
-          createDecisionRequest({
-            objective: params.objective,
-            pageState: decisionPageState,
-            actions: candidates.map(({ id, description }) => ({ id, description })),
-          }),
-          { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
-        );
-        if (!choiceGateway.ok) throw new Error(`Jev browser run failed: ${choiceGateway.reason}`);
-        const choice = parseDecision(
-          choiceGateway.value,
-          candidates.map(({ id }) => id),
-        );
-        if (choice === undefined) throw new Error("Jev returned an invalid browser run decision");
-        const probability = choice.probabilities[choice.choice];
-        if (probability === undefined) throw new Error("Jev omitted selected probability");
-        if (choice.choice === NO_ACTION) {
-          stopReason = "no_action";
-          break;
-        }
-        if (probability < confidenceThreshold) {
-          stopReason = "low_confidence";
-          break;
+        const deterministicCandidate = findDeterministicInputCandidate(candidates);
+        let candidate: RunCandidate;
+        let probability: number;
+        let selectionMode: RunTraceEntry["selectionMode"];
+
+        if (deterministicCandidate !== undefined) {
+          candidate = deterministicCandidate;
+          probability = 1;
+          selectionMode = "deterministic";
+        } else {
+          const choiceGateway = await requestVercelGateway(
+            ctx.modelRegistry,
+            createDecisionRequest({
+              objective: params.objective,
+              pageState: decisionPageState,
+              actions: candidates.map(({ id, description }) => ({ id, description })),
+            }),
+            { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
+          );
+          if (!choiceGateway.ok) {
+            throw new Error(`Jev browser run failed: ${choiceGateway.reason}`);
+          }
+          const choice = parseDecision(
+            choiceGateway.value,
+            candidates.map(({ id }) => id),
+          );
+          if (choice === undefined) throw new Error("Jev returned an invalid browser run decision");
+          const selectedProbability = choice.probabilities[choice.choice];
+          if (selectedProbability === undefined)
+            throw new Error("Jev omitted selected probability");
+          if (choice.choice === NO_ACTION) {
+            stopReason = "no_action";
+            break;
+          }
+          if (selectedProbability < confidenceThreshold) {
+            stopReason = "low_confidence";
+            break;
+          }
+
+          const selectedCandidate = candidates.find(({ id }) => id === choice.choice);
+          if (selectedCandidate === undefined) {
+            throw new Error("Jev selected an unknown browser run candidate");
+          }
+          candidate = selectedCandidate;
+          probability = selectedProbability;
+          selectionMode = "jev";
         }
 
-        const candidate = candidates.find(({ id }) => id === choice.choice);
-        if (candidate === undefined)
-          throw new Error("Jev selected an unknown browser run candidate");
         const cycleKey = `${snapshot}\u0000${candidate.id}`;
         if (seen.has(cycleKey)) {
           stopReason = "cycle";
@@ -711,21 +752,24 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         }
         seen.add(cycleKey);
 
-        const authorizationGateway = await requestVercelGateway(
-          ctx.modelRegistry,
-          createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
-          { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
-        );
-        if (!authorizationGateway.ok) {
-          throw new Error(`Jev browser authorization failed: ${authorizationGateway.reason}`);
-        }
-        const authorizationProbability = parseRunAuthorization(authorizationGateway.value);
-        if (authorizationProbability === undefined) {
-          throw new Error("Jev returned an invalid browser authorization decision");
-        }
-        if (authorizationProbability < authorizationThreshold) {
-          stopReason = "unauthorized_or_uncertain";
-          break;
+        let authorizationProbability: number | undefined;
+        if (candidate.authorization === "independent") {
+          const authorizationGateway = await requestVercelGateway(
+            ctx.modelRegistry,
+            createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
+            { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
+          );
+          if (!authorizationGateway.ok) {
+            throw new Error(`Jev browser authorization failed: ${authorizationGateway.reason}`);
+          }
+          authorizationProbability = parseRunAuthorization(authorizationGateway.value);
+          if (authorizationProbability === undefined) {
+            throw new Error("Jev returned an invalid browser authorization decision");
+          }
+          if (authorizationProbability < authorizationThreshold) {
+            stopReason = "unauthorized_or_uncertain";
+            break;
+          }
         }
 
         await runBrowser(pi, sessionId, candidate.command, signal);
@@ -738,7 +782,9 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           snapshot,
           action: candidate.trace,
           probability,
-          authorizationProbability,
+          selectionMode,
+          authorizationMode: candidate.authorization,
+          ...(authorizationProbability === undefined ? {} : { authorizationProbability }),
         });
       }
 
@@ -760,8 +806,22 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       }
       const summary = trace
         .map(
-          ({ step, action, probability, authorizationProbability }) =>
-            `${step}. ${action.action} ${action.ref} (${action.label}) — selection ${probability.toFixed(3)}, authorization ${authorizationProbability.toFixed(3)}`,
+          ({
+            step,
+            action,
+            probability,
+            selectionMode,
+            authorizationMode,
+            authorizationProbability,
+          }) => {
+            const selection =
+              selectionMode === "deterministic" ? "deterministic" : probability.toFixed(3);
+            const authorization =
+              authorizationMode === "choice"
+                ? "choice"
+                : (authorizationProbability?.toFixed(3) ?? "missing");
+            return `${step}. ${action.action} ${action.ref} (${action.label}) — selection ${selection}, authorization ${authorization}`;
+          },
         )
         .join("\n");
       return {

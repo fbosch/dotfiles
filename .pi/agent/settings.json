@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "0.85.1",
+  "lastChangelogVersion": "0.87.0",
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
@@ -88,12 +88,12 @@
   "jev": {
     "toolDiscovery": {
       "enabled": true,
-      "timeoutMs": 2000
+      "timeoutMs": 2400
     },
     "skillSelection": {
       "enabled": true,
       "threshold": 0.72,
-      "timeoutMs": 600,
+      "timeoutMs": 2400,
       "maxRecommendations": 3
     },
     "recommendAgent": {

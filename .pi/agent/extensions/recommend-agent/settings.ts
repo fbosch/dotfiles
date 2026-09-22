@@ -1,4 +1,5 @@
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { DEFAULT_JEV_TIMEOUT_MS } from "../../lib/vercel-gateway";
 
 export const RECOMMEND_AGENT_SETTING = "recommendAgent" as const;
 export const DEFAULT_RECOMMEND_AGENT_CONFIG = {
@@ -6,7 +7,7 @@ export const DEFAULT_RECOMMEND_AGENT_CONFIG = {
   // These are conservative operating thresholds, not calibrated probabilities.
   minProbability: 0.72,
   minMargin: 0.1,
-  timeoutMs: 1200,
+  timeoutMs: DEFAULT_JEV_TIMEOUT_MS,
   maxCandidates: 32,
 } as const;
 

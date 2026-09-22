@@ -6,7 +6,11 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { requestVercelGateway, type VercelGatewayFetch } from "../../lib/vercel-gateway";
+import {
+  DEFAULT_JEV_TIMEOUT_MS,
+  requestVercelGateway,
+  type VercelGatewayFetch,
+} from "../../lib/vercel-gateway";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
 
@@ -16,8 +20,11 @@ const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
 const MAX_JEV_CANDIDATES = 24;
-const MAX_JEV_TIMEOUT_MS = 2_000;
-const DEFAULT_JEV_TOOL_DISCOVERY_CONFIG = { enabled: true, timeoutMs: 2_000 } as const;
+const MAX_JEV_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
+const DEFAULT_JEV_TOOL_DISCOVERY_CONFIG = {
+  enabled: true,
+  timeoutMs: DEFAULT_JEV_TIMEOUT_MS,
+} as const;
 const JEV_NO_MATCH = "no_match";
 
 const DEFERRED_TOOL_NAMES = new Set([

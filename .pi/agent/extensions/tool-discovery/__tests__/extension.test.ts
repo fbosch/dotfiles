@@ -158,7 +158,7 @@ describe("tool discovery", () => {
   test("resolves Jev settings with safe defaults, bounds, and trusted project overrides", () => {
     expect(resolveJevToolDiscoveryConfig({}, undefined)).toEqual({
       enabled: true,
-      timeoutMs: 2000,
+      timeoutMs: 2400,
     });
     expect(
       resolveJevToolDiscoveryConfig({
@@ -167,22 +167,22 @@ describe("tool discovery", () => {
     ).toEqual({ enabled: false, timeoutMs: 1500 });
     expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { timeoutMs: 0 } } })).toEqual({
       enabled: false,
-      timeoutMs: 2000,
+      timeoutMs: 2400,
     });
     expect(resolveJevToolDiscoveryConfig({ jev: null })).toEqual({
       enabled: false,
-      timeoutMs: 2000,
+      timeoutMs: 2400,
     });
     expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { enabled: null } } })).toEqual({
       enabled: false,
-      timeoutMs: 2000,
+      timeoutMs: 2400,
     });
     expect(
       resolveJevToolDiscoveryConfig(
         { jev: { toolDiscovery: { enabled: true } } },
         { jev: { toolDiscovery: { enabled: false } } },
       ),
-    ).toEqual({ enabled: false, timeoutMs: 2000 });
+    ).toEqual({ enabled: false, timeoutMs: 2400 });
     expect(
       resolveJevToolDiscoveryConfig(
         {
@@ -191,7 +191,7 @@ describe("tool discovery", () => {
         },
         { toolDiscovery: { deferredToolPrefixes: ["project_"] } },
       ),
-    ).toEqual({ enabled: false, timeoutMs: 2000 });
+    ).toEqual({ enabled: false, timeoutMs: 2400 });
   });
 
   test("reads deferred prefixes from tool discovery settings", () => {

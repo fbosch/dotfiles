@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   createRunAuthorizationRequest,
+  findDeterministicInputCandidate,
   parseRunAuthorization,
   parseRunCandidates,
   redactSensitiveInputs,
@@ -25,12 +26,14 @@ describe("browser run", () => {
         id: "fill:e1:0",
         description: 'Fill "email" ("person@example.com") in "Email" at @e1.',
         command: ["fill", "@e1", "person@example.com"],
+        authorization: "choice",
         trace: { action: "fill", ref: "@e1", label: "Email", input: "email" },
       },
       {
         id: "check:e2",
         description: 'Check "Updates" at @e2.',
         command: ["check", "@e2"],
+        authorization: "choice",
         trace: { action: "check", ref: "@e2", label: "Updates" },
       },
       {
@@ -38,17 +41,20 @@ describe("browser run", () => {
         description: 'Uncheck "Terms" at @e3.',
         command: ["uncheck", "@e3"],
         trace: { action: "uncheck", ref: "@e3", label: "Terms" },
+        authorization: "choice",
       },
       {
         id: "click:e6",
         description: 'Click "Medium" at @e6.',
         command: ["click", "@e6"],
+        authorization: "choice",
         trace: { action: "click", ref: "@e6", label: "Medium" },
       },
       {
         id: "click:e5",
         description: 'Click "Submit" at @e5.',
         command: ["click", "@e5"],
+        authorization: "independent",
         trace: { action: "click", ref: "@e5", label: "Submit" },
       },
     ]);
@@ -74,6 +80,23 @@ describe("browser run", () => {
       label: "Password",
       input: "password",
     });
+  });
+
+  test("selects only one-to-one named input mappings deterministically", () => {
+    const unique = parseRunCandidates(
+      ['- textbox "Email" [ref=e1]', '- textbox "Name" [ref=e2]'].join("\n"),
+      [
+        { name: "email", value: "person@example.com" },
+        { name: "name", value: "Ada" },
+      ],
+    );
+    expect(findDeterministicInputCandidate(unique)?.id).toBe("fill:e1:0");
+
+    const ambiguous = parseRunCandidates(
+      ['- textbox "Email" [ref=e1]', '- textbox "Email address" [ref=e2]'].join("\n"),
+      [{ name: "email", value: "person@example.com" }],
+    );
+    expect(findDeterministicInputCandidate(ambiguous)).toBeUndefined();
   });
 
   test("builds and validates an objective-authorization judgment", () => {

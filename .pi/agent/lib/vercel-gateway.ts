@@ -11,7 +11,9 @@ export const JEV_GATEWAY_PROVIDER_IDS = [
   VERCEL_GATEWAY_PROVIDER_ID,
   OPENROUTER_PROVIDER_ID,
 ] as const;
-export const DEFAULT_VERCEL_GATEWAY_TIMEOUT_MS = 2_000;
+/** Provisional total Jev budget shared by every integration and both gateways. */
+export const DEFAULT_JEV_TIMEOUT_MS = 2_400;
+export const DEFAULT_VERCEL_GATEWAY_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
 export const MAX_VERCEL_GATEWAY_RESPONSE_CHARS = 256_000;
 
 export type VercelGatewayProviderId = (typeof JEV_GATEWAY_PROVIDER_IDS)[number];

@@ -14,7 +14,7 @@ const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key
 
 function expectFailure(
   result: Awaited<ReturnType<typeof requestVercelGateway>>,
-  expected: { reason: string; stage: string; httpStatus?: number },
+  expected: { reason: string; stage: string; httpStatus?: number; provider?: string },
 ): void {
   expect(result).toMatchObject({ ok: false, ...expected });
   expect(result).not.toHaveProperty("message");
@@ -91,7 +91,11 @@ describe("requestVercelGateway", () => {
       {},
       { timeoutMs: 5, fetch: async () => new Response("unexpected") },
     );
-    expectFailure(authTimeout, { reason: "timeout", stage: "auth" });
+    expectFailure(authTimeout, {
+      reason: "timeout",
+      stage: "auth",
+      provider: OPENROUTER_PROVIDER_ID,
+    });
 
     const requestTimeout = await requestVercelGateway(
       auth,
@@ -106,7 +110,11 @@ describe("requestVercelGateway", () => {
           }),
       },
     );
-    expectFailure(requestTimeout, { reason: "timeout", stage: "request" });
+    expectFailure(requestTimeout, {
+      reason: "timeout",
+      stage: "request",
+      provider: OPENROUTER_PROVIDER_ID,
+    });
 
     const bodyTimeout = await requestVercelGateway(
       auth,
@@ -120,7 +128,11 @@ describe("requestVercelGateway", () => {
           }) as Response,
       },
     );
-    expectFailure(bodyTimeout, { reason: "timeout", stage: "body" });
+    expectFailure(bodyTimeout, {
+      reason: "timeout",
+      stage: "body",
+      provider: OPENROUTER_PROVIDER_ID,
+    });
   });
 
   test("categorizes caller cancellation at auth, request, and body stages", async () => {
@@ -371,7 +383,75 @@ describe("requestVercelGateway", () => {
     expect(JSON.stringify(result)).not.toContain("provider detail");
   });
 
-  test("does not start fallback after caller abort or an exhausted Vercel deadline", async () => {
+  test("falls back after Vercel auth, request, and body attempt timeouts", async () => {
+    for (const stage of ["auth", "request", "body"] as const) {
+      let primaryFetchCalls = 0;
+      let fallbackFetchCalls = 0;
+      let primaryAborted = false;
+      let releasePrimaryAuth: (() => void) | undefined;
+
+      const result = await requestVercelGateway(
+        {
+          getProviderAuth: async (provider: string) => {
+            if (provider === VERCEL_GATEWAY_PROVIDER_ID && stage === "auth") {
+              return new Promise((resolve) => {
+                releasePrimaryAuth = () => resolve({ auth: { apiKey: "late-primary-key" } });
+              });
+            }
+            return { auth: { apiKey: `${provider}-key` } };
+          },
+        },
+        { state: { stage } },
+        {
+          timeoutMs: 80,
+          fetch: async (input, init) => {
+            if (String(input) === VERCEL_GATEWAY_ENDPOINT) {
+              primaryFetchCalls += 1;
+              if (stage === "request") {
+                return new Promise<Response>((_resolve, reject) => {
+                  const abort = () => {
+                    primaryAborted = true;
+                    reject(new Error("primary request aborted"));
+                  };
+                  if (init?.signal?.aborted) abort();
+                  else init?.signal?.addEventListener("abort", abort, { once: true });
+                });
+              }
+              return {
+                ok: true,
+                text: () => {
+                  init?.signal?.addEventListener(
+                    "abort",
+                    () => {
+                      primaryAborted = true;
+                    },
+                    { once: true },
+                  );
+                  return new Promise<string>(() => undefined);
+                },
+              } as Response;
+            }
+
+            fallbackFetchCalls += 1;
+            return new Response(JSON.stringify({ answers: { route: { type: "choice" } } }));
+          },
+        },
+      );
+
+      expect(result).toEqual({ ok: true, value: { answers: { route: { type: "choice" } } } });
+      expect(primaryFetchCalls).toBe(stage === "auth" ? 0 : 1);
+      expect(fallbackFetchCalls).toBe(1);
+      if (stage === "auth") {
+        releasePrimaryAuth?.();
+        await Promise.resolve();
+        expect(primaryFetchCalls).toBe(0);
+      } else {
+        expect(primaryAborted).toBe(true);
+      }
+    }
+  });
+
+  test("does not start fallback after caller abort or an exhausted shared deadline", async () => {
     const callerController = new AbortController();
     let callerFetchCalls = 0;
     const callerCancelled = await requestVercelGateway(
@@ -394,17 +474,23 @@ describe("requestVercelGateway", () => {
     expect(callerFetchCalls).toBe(1);
 
     let deadlineFetchCalls = 0;
+    let fallbackAborted = false;
     const deadlineExpired = await requestVercelGateway(
       auth,
       {},
       {
-        timeoutMs: 5,
-        fetch: async (_input, init) => {
+        timeoutMs: 40,
+        fetch: async (input, init) => {
           deadlineFetchCalls += 1;
           return new Promise<Response>((_resolve, reject) => {
-            init?.signal?.addEventListener("abort", () => reject(new Error("timed out")), {
-              once: true,
-            });
+            init?.signal?.addEventListener(
+              "abort",
+              () => {
+                if (String(input) === OPENROUTER_GATEWAY_ENDPOINT) fallbackAborted = true;
+                reject(new Error("timed out"));
+              },
+              { once: true },
+            );
           });
         },
       },
@@ -412,8 +498,9 @@ describe("requestVercelGateway", () => {
     expect(deadlineExpired).toMatchObject({
       ok: false,
       reason: "timeout",
-      provider: VERCEL_GATEWAY_PROVIDER_ID,
+      provider: OPENROUTER_PROVIDER_ID,
     });
-    expect(deadlineFetchCalls).toBe(1);
+    expect(deadlineFetchCalls).toBe(2);
+    expect(fallbackAborted).toBe(true);
   });
 });

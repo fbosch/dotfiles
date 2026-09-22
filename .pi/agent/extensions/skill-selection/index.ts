@@ -13,14 +13,15 @@ import {
   type VercelGatewayFetch,
   type VercelGatewayProviderId,
   type VercelGatewayStage,
+  DEFAULT_JEV_TIMEOUT_MS,
 } from "../../lib/vercel-gateway";
 import { isRecord } from "../shared/is-record";
 import { disabledSkillNames } from "../skill-tweaks";
 
 const DEFAULT_THRESHOLD = 0.72;
-const DEFAULT_TIMEOUT_MS = 600;
+const DEFAULT_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
 const DEFAULT_MAX_RECOMMENDATIONS = 3;
-const MAX_TIMEOUT_MS = 2_000;
+const MAX_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
 const MAX_RECOMMENDATIONS = 5;
 const MAX_CATALOG_SKILLS = 96;
 const MAX_REQUEST_CHARS = 12_000;

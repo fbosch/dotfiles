@@ -2,7 +2,7 @@
 
 This extension asks Jev for independent relevance scores over the skills Pi has already discovered. It appends recommendations only; it never removes the native catalog, loads a skill, or changes explicit `/skill:name` behavior.
 
-Skills with `disable-model-invocation` metadata or names denied by `skillTweaks` are excluded before the request. Jev uses the configured Vercel AI Gateway credential first and makes one bounded OpenRouter System One fallback when the provider fails; both providers use the registry's public auth lookup. A missing credential, timeout, abort, malformed response, image prompt, or other Jev failure leaves the original system prompt unchanged. A Vercel timeout exhausts the shared deadline, so it does not start an OpenRouter request.
+Skills with `disable-model-invocation` metadata or names denied by `skillTweaks` are excluded before the request. Jev uses the configured Vercel AI Gateway credential first and makes one bounded OpenRouter System One fallback when the provider fails; both providers use the registry's public auth lookup. A missing credential, timeout, abort, malformed response, image prompt, or other Jev failure leaves the original system prompt unchanged. The primary Vercel attempt receives roughly half the configured budget; OpenRouter uses the remaining original deadline without extending the total.
 
 The feature is disabled by default. Opt in through `settings.json` or a trusted project settings file:
 
@@ -12,7 +12,7 @@ The feature is disabled by default. Opt in through `settings.json` or a trusted 
     "skillSelection": {
       "enabled": true,
       "threshold": 0.72,
-      "timeoutMs": 600,
+      "timeoutMs": 2400,
       "maxRecommendations": 3
     }
   }
