@@ -7,6 +7,15 @@ when:
 
 # Subagent orchestration
 - When a specialized agent fits the task, prefer it over a generic `general-purpose` or `general` agent. Use a generic agent only when no specialized agent applies or the task genuinely spans several specialties.
+- Delegate visualization to `visualizer` when requested directly or indirectly, or when a visual would help explain the response. Route before visualization-specific tool discovery, data collection, aggregation, or rendering; simplicity is not a reason to do that work in the parent. Pass the question, known evidence or bounded source locations, and constraints. The worker owns collection through visual validation; the parent resolves material ambiguity and publishes the validated result.
+- After any required recommendation and availability/permission check, launch the selected specialist instead of doing its preparation first. Already-collected evidence should be passed through, not collected again. If delegation is unavailable or prohibited, report that limitation before using a permitted direct fallback.
+
+## Agent recommendations
+
+- Before starting a new delegation without an explicit user-selected agent, call `recommend_agent` once for the scoped task if the tool is available. Supply the task, expected deliverable, and minimal sanitized context, not transcripts, file contents, or credentials.
+- Treat the result as advisory. Verify the suggested agent fits the task and is available and permitted before calling `subagent`; a recommendation never authorizes execution or overrides these orchestration rules.
+- Consider a `stay` result before delegating. On abstention, failure, or an unavailable recommendation tool, use ordinary primary-agent routing without retrying the recommendation.
+- Skip recommendations for explicit user routing, work retained by the primary, and continuations of an existing worker. Do not call merely to justify delegation or repeat the call for the same unchanged task.
 
 ## Model and thinking presets
 These presets apply only when invoking `subagent_type: "general"`. Select the lowest-cost fit and pass both `model` and `thinking` to that call. Never override a specialized agent's configured model or thinking level.
@@ -23,7 +32,7 @@ Escalate one preset when uncertainty, coupling, or impact is higher than the tas
 
 ## Scope and budgets
 
-- Work directly when the relevant context is already loaded and delegation adds no specialist benefit.
+- Work directly when the relevant context is already loaded and delegation adds no specialist benefit, unless a delegation rule above applies.
 - Give each worker one verifiable deliverable, owned files, exclusions, one targeted validation command, and a stopping point. Keep prompts focused; pass relevant findings instead of asking workers to rediscover them.
 - Keep implementation and its focused regression tests together. Split broad discovery, cross-feature implementation, full-suite validation, and hosted benchmarking into separately reviewed assignments.
 - Always pass `max_turns`: use at most 12 for discovery or routine work and 24 for implementation or deep analysis. Preserve a specialist's lower configured cap. These are per-assignment review boundaries, not guarantees of elapsed time or tool-call count.

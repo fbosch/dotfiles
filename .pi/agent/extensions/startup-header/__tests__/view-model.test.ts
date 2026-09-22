@@ -86,8 +86,9 @@ describe("startup header baseline", () => {
       neovim: integration("neovim", "ready"),
       direnv: integration("direnv", "degraded", { problem: "blocked" }),
       lsp: integration("lsp", "collecting"),
+      jev: { state: "ready" },
     });
-    expect(lines).toEqual(["pi", "", "nvim ✓  direnv !  lsp ?"]);
+    expect(lines).toEqual(["pi", "", "nvim ✓  direnv !  lsp ?  jev ✓"]);
 
     const observed = renderStartupHeader(theme, 160, undefined, undefined, undefined, undefined, {
       neovim: undefined,
@@ -113,11 +114,13 @@ describe("startup header baseline", () => {
         neovim: integration("neovim", "ready"),
         direnv: integration("direnv", "degraded"),
         lsp: integration("lsp", "collecting"),
+        jev: { state: "degraded" },
       },
     ).join("\n");
 
     expect(rendered).toContain("\u001b[32mnvim ✓");
     expect(rendered).toContain("\u001b[33mdirenv !");
+    expect(rendered).toContain("\u001b[33mjev !");
     expect(rendered).toContain("\u001b[36mpi");
   });
 

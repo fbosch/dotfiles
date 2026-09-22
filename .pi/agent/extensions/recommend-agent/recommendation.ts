@@ -276,10 +276,10 @@ export async function recommendAgent(
 
 export function renderRecommendation(evaluation: RecommendationEvaluation): string {
   if (evaluation.decision.decision === "recommend") {
-    return `Advisory recommendation: use existing agent "${evaluation.decision.agentId}" for this one scoped task. Verify current availability and permission before native routing; no agent was invoked. Catalog provenance: discovered-definitions.`;
+    return `Recommended: ${evaluation.decision.agentId}`;
   }
   if (evaluation.decision.decision === "stay") {
-    return "Advisory result: stay with the primary agent for this one scoped task. No agent was invoked.";
+    return "Stay with primary";
   }
-  return "No agent recommendation. Continue with ordinary primary-agent routing; no agent was invoked.";
+  return "No recommendation";
 }

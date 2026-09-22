@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
@@ -16,6 +16,7 @@ import {
   StartupOwnerStore,
 } from "./contracts";
 import { readHeaderOwnerSnapshot } from "./header-snapshot";
+import { type JevStartupStatus, resolveJevStartupStatus } from "./jev-status";
 import { readStartupSnapshotAPI } from "./runtime-capability";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
 import { renderStartupHeader, StartupRuntimeStore } from "./view-model";
@@ -64,6 +65,25 @@ export default function startupHeader(
     let candidates: CandidateInspection | undefined;
     let contextViewConfig: ContextStripConfig | undefined;
     let art: StartupHeaderArt | undefined;
+    let jev: JevStartupStatus | undefined;
+    if (
+      typeof ctx.cwd === "string" &&
+      typeof ctx.isProjectTrusted === "function" &&
+      ctx.modelRegistry !== undefined
+    ) {
+      try {
+        const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+          projectTrusted: ctx.isProjectTrusted(),
+        });
+        jev = resolveJevStartupStatus(
+          settings.getGlobalSettings(),
+          settings.getProjectSettings(),
+          ctx.modelRegistry,
+        );
+      } catch {
+        jev = { state: "unavailable" };
+      }
+    }
     let requestRender = () => {};
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
@@ -141,6 +161,7 @@ export default function startupHeader(
               neovim: owners.get("neovim"),
               direnv: owners.get("direnv"),
               lsp: owners.get("lsp"),
+              jev,
             },
             candidates,
             owners.get("auth"),

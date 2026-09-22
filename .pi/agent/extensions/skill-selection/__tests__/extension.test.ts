@@ -39,6 +39,7 @@ function extensionHarness(dependencies: Parameters<typeof createSkillSelectionEx
     | undefined;
   const extension = createSkillSelectionExtension(dependencies);
   const api = {
+    registerCommand: () => {},
     on: (_event: string, callback: typeof handler) => {
       handler = callback;
     },
@@ -46,6 +47,24 @@ function extensionHarness(dependencies: Parameters<typeof createSkillSelectionEx
   extension(api);
   if (handler === undefined) throw new Error("extension did not register a handler");
   return handler;
+}
+
+function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionExtension>[0] = {}) {
+  let handler:
+    | ((event: BeforeAgentStartEvent, context: ExtensionContext) => Promise<unknown> | unknown)
+    | undefined;
+  let statusCommand: ((args: string, context: ExtensionContext) => Promise<void>) | undefined;
+  const extension = createSkillSelectionExtension(dependencies);
+  extension({
+    registerCommand: (name: string, definition: { handler: typeof statusCommand }) => {
+      if (name === "jev-status") statusCommand = definition.handler;
+    },
+    on: (_event: string, callback: typeof handler) => {
+      handler = callback;
+    },
+  } as unknown as ExtensionAPI);
+  if (handler === undefined || statusCommand === undefined) throw new Error("extension incomplete");
+  return { handler, statusCommand };
 }
 
 function context(): ExtensionContext {
@@ -273,9 +292,9 @@ describe("skill selection", () => {
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
       getDisabledNames: () => new Set(["security-and-hardening"]),
-      selectSkills: async (_prompt, candidates) => {
+      selectSkillsDetailed: async (_prompt, candidates) => {
         expect(candidates.map(({ name }) => name)).toEqual(["writing-clearly"]);
-        return scores({ "writing-clearly": 0.91 });
+        return { ok: true, value: scores({ "writing-clearly": 0.91 }) };
       },
     });
     const original = event();
@@ -299,9 +318,16 @@ describe("skill selection", () => {
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
       getDisabledNames: () => new Set<string>(),
-      selectSkills: async (prompt) => {
+      selectSkillsDetailed: async (prompt) => {
         calls.push(prompt);
-        return undefined;
+        return {
+          ok: false,
+          failure: {
+            kind: "gateway-failure",
+            stage: "auth",
+            reason: "missing-credentials",
+          },
+        };
       },
     });
     const normal = event();
@@ -318,6 +344,118 @@ describe("skill selection", () => {
     (withImage as { images: unknown[] }).images = [{ type: "image" }];
     expect(await handler(withImage, context())).toBeUndefined();
     expect(calls).toEqual(["Help me choose an approach"]);
+  });
+
+  test("records actual callback skip reasons without consulting auth", async () => {
+    let authCalls = 0;
+    const { handler, statusCommand } = lifecycleHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set<string>(),
+    });
+    const ctx = {
+      ...context(),
+      modelRegistry: {
+        getProviderAuth: async () => {
+          authCalls += 1;
+          return undefined;
+        },
+      },
+    } as unknown as ExtensionContext;
+    const notifications: string[] = [];
+    const commandContext = {
+      ...ctx,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionContext;
+
+    await handler(event("/skill:writing-clearly"), ctx);
+    await statusCommand("", commandContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toEqual(
+      expect.objectContaining({
+        enabled: false,
+        eventCount: 1,
+        state: "skipped",
+        reason: "explicit-skill",
+        fetchAttempted: false,
+      }),
+    );
+    expect(authCalls).toBe(0);
+
+    const noCandidates = event();
+    noCandidates.systemPromptOptions.skills = [
+      skill("hidden", { disableModelInvocation: true }),
+      { ...skill("missing-flag"), disableModelInvocation: undefined },
+    ] as unknown as Skill[];
+    await handler(noCandidates, ctx);
+    await statusCommand("", commandContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toEqual(
+      expect.objectContaining({
+        enabled: true,
+        eventCount: 2,
+        state: "skipped",
+        reason: "no-candidates",
+        fetchAttempted: false,
+      }),
+    );
+    expect(authCalls).toBe(0);
+  });
+
+  test("distinguishes transport failure from semantic no-match in actual callback status", async () => {
+    let clock = 10;
+    const unavailable = lifecycleHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set<string>(),
+      fetch: async () => {
+        throw new Error("offline");
+      },
+      now: () => clock++,
+    });
+    const ctx = {
+      ...context(),
+      modelRegistry: {
+        getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
+      },
+    } as unknown as ExtensionContext;
+    const notifications: string[] = [];
+    const commandContext = {
+      ...ctx,
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionContext;
+
+    await unavailable.handler(event(), ctx);
+    await unavailable.statusCommand("", commandContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toEqual(
+      expect.objectContaining({
+        state: "failed",
+        reason: "request-failure",
+        failureStage: "request",
+        fetchAttempted: true,
+      }),
+    );
+
+    const noMatch = lifecycleHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set<string>(),
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            answers: {
+              skill_0: { type: "noul", noul: 0.1 },
+              skill_1: { type: "noul", noul: 0.2 },
+              none_relevant: { type: "noul", noul: 0.9 },
+            },
+          }),
+        ),
+    });
+    await noMatch.handler(event(), ctx);
+    await noMatch.statusCommand("", commandContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toEqual(
+      expect.objectContaining({
+        state: "completed",
+        reason: "no-match",
+        candidateCount: 2,
+        fetchAttempted: true,
+      }),
+    );
   });
 
   test("honors global and project config overrides and disables malformed config", () => {

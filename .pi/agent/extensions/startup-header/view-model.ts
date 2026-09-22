@@ -4,6 +4,7 @@ import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
 import { type ContextStripConfig, renderInitialContextStrip } from "./context-strip";
 import type { StartupOwnerSnapshot } from "./contracts";
+import type { JevStartupStatus } from "./jev-status";
 import {
   type AuthStartupProfile,
   readAuthStartupPayload,
@@ -17,6 +18,7 @@ export interface StartupIntegrationSnapshots {
   readonly neovim: StartupOwnerSnapshot | undefined;
   readonly direnv: StartupOwnerSnapshot | undefined;
   readonly lsp: StartupOwnerSnapshot | undefined;
+  readonly jev?: JevStartupStatus | undefined;
 }
 
 export class StartupRuntimeStore {
@@ -111,6 +113,7 @@ function renderIntegrationStatus(
     renderIntegration(theme, "nvim", snapshots.neovim),
     renderIntegration(theme, "direnv", snapshots.direnv),
     renderIntegration(theme, "lsp", snapshots.lsp),
+    renderIntegration(theme, "jev", snapshots.jev),
   ]
     .filter((status) => status !== "")
     .join("  ");
@@ -118,8 +121,8 @@ function renderIntegrationStatus(
 
 function renderIntegration(
   theme: Theme,
-  label: "nvim" | "direnv" | "lsp",
-  snapshot: StartupOwnerSnapshot | undefined,
+  label: "nvim" | "direnv" | "lsp" | "jev",
+  snapshot: Pick<StartupOwnerSnapshot, "state" | "payload"> | undefined,
 ): string {
   if (snapshot === undefined) return "";
   if (label === "lsp" && snapshot.state === "ready") {
