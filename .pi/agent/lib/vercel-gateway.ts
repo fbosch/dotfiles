@@ -1,11 +1,20 @@
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 
-export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway";
+export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway" as const;
 export const VERCEL_GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
 export const VERCEL_GATEWAY_MODEL = "typesafe-ai/jev";
+export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
+export const OPENROUTER_GATEWAY_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
+/** OpenRouter's official TypeSafe integration accepts the bare Jev model ID. */
+export const OPENROUTER_GATEWAY_MODEL = "jev-1.13";
+export const JEV_GATEWAY_PROVIDER_IDS = [
+  VERCEL_GATEWAY_PROVIDER_ID,
+  OPENROUTER_PROVIDER_ID,
+] as const;
 export const DEFAULT_VERCEL_GATEWAY_TIMEOUT_MS = 2_000;
 export const MAX_VERCEL_GATEWAY_RESPONSE_CHARS = 256_000;
 
+export type VercelGatewayProviderId = (typeof JEV_GATEWAY_PROVIDER_IDS)[number];
 type VercelGatewayRegistry = Pick<ModelRegistry, "getProviderAuth">;
 export type VercelGatewayFetch = (
   input: RequestInfo | URL,
@@ -26,6 +35,8 @@ export type VercelGatewayFailureReason =
 
 export type VercelGatewayFailure = {
   readonly ok: false;
+  /** Identifies the provider whose bounded attempt produced this failure. */
+  readonly provider: VercelGatewayProviderId;
   readonly stage: VercelGatewayStage;
   readonly reason: VercelGatewayFailureReason;
   readonly httpStatus?: number;
@@ -48,6 +59,29 @@ export interface VercelGatewayRequestOptions {
 type AwaitStageResult<T> =
   | { readonly completed: true; readonly value: T }
   | { readonly completed: false };
+
+type ProviderConfig = {
+  readonly id: VercelGatewayProviderId;
+  readonly endpoint: string;
+  readonly model: string;
+};
+
+const PRIMARY_PROVIDER: ProviderConfig = {
+  id: VERCEL_GATEWAY_PROVIDER_ID,
+  endpoint: VERCEL_GATEWAY_ENDPOINT,
+  model: VERCEL_GATEWAY_MODEL,
+};
+const FALLBACK_PROVIDER: ProviderConfig = {
+  id: OPENROUTER_PROVIDER_ID,
+  endpoint: OPENROUTER_GATEWAY_ENDPOINT,
+  model: OPENROUTER_GATEWAY_MODEL,
+};
+
+interface DeadlineState {
+  readonly signal: AbortSignal;
+  readonly callerCancelled: () => boolean;
+  readonly timedOut: () => boolean;
+}
 
 async function awaitWithinDeadline<T>(
   promise: Promise<T>,
@@ -75,6 +109,7 @@ async function awaitWithinDeadline<T>(
 }
 
 function failure(
+  provider: VercelGatewayProviderId,
   reason: VercelGatewayFailureReason,
   stage: VercelGatewayStage,
   httpStatus?: number,
@@ -82,6 +117,7 @@ function failure(
 ): VercelGatewayFailure {
   return {
     ok: false,
+    provider,
     stage,
     reason,
     ...(httpStatus === undefined ? {} : { httpStatus }),
@@ -118,6 +154,138 @@ function normalizedTimeout(timeoutMs: number | undefined): number {
   return Math.floor(timeoutMs);
 }
 
+function stageFailure(
+  provider: VercelGatewayProviderId,
+  stage: VercelGatewayStage,
+  deadline: DeadlineState,
+): VercelGatewayFailure | undefined {
+  if (deadline.callerCancelled()) return failure(provider, "caller-cancellation", stage);
+  if (deadline.timedOut() || deadline.signal.aborted) return failure(provider, "timeout", stage);
+  return undefined;
+}
+
+async function requestProvider<TRequest extends object>(
+  registry: VercelGatewayRegistry,
+  request: TRequest,
+  provider: ProviderConfig,
+  options: VercelGatewayRequestOptions,
+  deadline: DeadlineState,
+): Promise<VercelGatewayResult> {
+  const initialFailure = stageFailure(provider.id, "auth", deadline);
+  if (initialFailure !== undefined) return initialFailure;
+
+  let authResult: AwaitStageResult<Awaited<ReturnType<VercelGatewayRegistry["getProviderAuth"]>>>;
+  try {
+    authResult = await awaitWithinDeadline(
+      Promise.resolve().then(() => registry.getProviderAuth(provider.id)),
+      deadline.signal,
+    );
+  } catch {
+    return failure(provider.id, "auth-failure", "auth");
+  }
+  if (!authResult.completed) {
+    return (
+      stageFailure(provider.id, "auth", deadline) ?? failure(provider.id, "auth-failure", "auth")
+    );
+  }
+
+  const auth = authResult.value;
+  if (auth === undefined) return failure(provider.id, "missing-credentials", "auth");
+  let apiKey: unknown;
+  try {
+    apiKey = auth.auth.apiKey;
+  } catch {
+    return failure(provider.id, "auth-failure", "auth");
+  }
+  if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
+    return failure(provider.id, "missing-credentials", "auth");
+  }
+
+  const requestFailure = stageFailure(provider.id, "request", deadline);
+  if (requestFailure !== undefined) return requestFailure;
+
+  let body: string;
+  try {
+    // The evaluator request is assembled from bounded synthetic/catalog fields by its caller.
+    body = JSON.stringify({ ...request, model: provider.model });
+  } catch {
+    return failure(provider.id, "request-failure", "request");
+  }
+
+  let responseResult: AwaitStageResult<Response>;
+  try {
+    responseResult = await awaitWithinDeadline(
+      Promise.resolve().then(() => {
+        options.onFetchAttempt?.();
+        return (options.fetch ?? globalThis.fetch)(provider.endpoint, {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          // Keep provider routing private; callers supply only evaluator-specific state.
+          body,
+          signal: deadline.signal,
+        });
+      }),
+      deadline.signal,
+    );
+  } catch {
+    return (
+      stageFailure(provider.id, "request", deadline) ??
+      failure(provider.id, "request-failure", "request")
+    );
+  }
+  if (!responseResult.completed) {
+    return (
+      stageFailure(provider.id, "request", deadline) ??
+      failure(provider.id, "request-failure", "request")
+    );
+  }
+  const response = responseResult.value;
+
+  const responseFailure = stageFailure(provider.id, "request", deadline);
+  if (responseFailure !== undefined) return responseFailure;
+  if (!response.ok) {
+    return failure(
+      provider.id,
+      "http-status",
+      "request",
+      response.status,
+      parseRetryAfter(response.headers.get("retry-after")),
+    );
+  }
+
+  let textResult: AwaitStageResult<string>;
+  try {
+    textResult = await awaitWithinDeadline(response.text(), deadline.signal);
+  } catch {
+    return (
+      stageFailure(provider.id, "body", deadline) ?? failure(provider.id, "body-failure", "body")
+    );
+  }
+  if (!textResult.completed) {
+    return (
+      stageFailure(provider.id, "body", deadline) ?? failure(provider.id, "body-failure", "body")
+    );
+  }
+
+  const text = textResult.value;
+  const bodyDeadlineFailure = stageFailure(provider.id, "body", deadline);
+  if (bodyDeadlineFailure !== undefined) return bodyDeadlineFailure;
+  if (text.length > MAX_VERCEL_GATEWAY_RESPONSE_CHARS) {
+    return failure(provider.id, "oversized-body", "body");
+  }
+
+  try {
+    // OpenRouter's official System One endpoint returns the same typed answers shape as TypeSafe.
+    return { ok: true, value: JSON.parse(text) as unknown };
+  } catch {
+    return failure(provider.id, "invalid-json", "body");
+  }
+}
+
 export async function requestVercelGateway<TRequest extends object>(
   registry: VercelGatewayRegistry,
   request: TRequest,
@@ -136,114 +304,37 @@ export async function requestVercelGateway<TRequest extends object>(
     deadlineController.abort();
   };
   options.signal?.addEventListener("abort", onCallerAbort, { once: true });
-
-  const stageFailure = (stage: VercelGatewayStage): VercelGatewayFailure | undefined => {
-    if (callerCancelled) return failure("caller-cancellation", stage);
-    if (timedOut || deadlineController.signal.aborted) return failure("timeout", stage);
-    return undefined;
+  const deadline: DeadlineState = {
+    signal: deadlineController.signal,
+    callerCancelled: () => callerCancelled,
+    timedOut: () => timedOut,
   };
 
   try {
-    const initialFailure = stageFailure("auth");
-    if (initialFailure !== undefined) return initialFailure;
+    const primary = await requestProvider(registry, request, PRIMARY_PROVIDER, options, deadline);
+    if (primary.ok || callerCancelled || timedOut || deadlineController.signal.aborted)
+      return primary;
 
-    let authResult: AwaitStageResult<Awaited<ReturnType<VercelGatewayRegistry["getProviderAuth"]>>>;
-    try {
-      authResult = await awaitWithinDeadline(
-        Promise.resolve().then(() => registry.getProviderAuth(VERCEL_GATEWAY_PROVIDER_ID)),
-        deadlineController.signal,
-      );
-    } catch {
-      return failure("auth-failure", "auth");
+    // One bounded fallback shares the primary attempt's deadline and caller abort signal.
+    const fallback = await requestProvider(registry, request, FALLBACK_PROVIDER, options, deadline);
+    if (
+      !fallback.ok &&
+      fallback.stage === "auth" &&
+      (fallback.reason === "missing-credentials" || fallback.reason === "auth-failure") &&
+      !(
+        primary.stage === "auth" &&
+        (primary.reason === "missing-credentials" || primary.reason === "auth-failure")
+      )
+    ) {
+      // Keep useful primary diagnostics such as Vercel's Retry-After when the fallback is unavailable.
+      return primary;
     }
-    if (!authResult.completed) {
-      return stageFailure("auth") ?? failure("auth-failure", "auth");
-    }
-
-    const auth = authResult.value;
-    if (auth === undefined) return failure("missing-credentials", "auth");
-    let apiKey: unknown;
-    try {
-      apiKey = auth.auth.apiKey;
-    } catch {
-      return failure("auth-failure", "auth");
-    }
-    if (typeof apiKey !== "string" || apiKey.trim().length === 0) {
-      return failure("missing-credentials", "auth");
-    }
-
-    const requestFailure = stageFailure("request");
-    if (requestFailure !== undefined) return requestFailure;
-
-    let body: string;
-    try {
-      // The evaluator request is assembled from bounded synthetic/catalog fields by its caller.
-      body = JSON.stringify({ ...request, model: VERCEL_GATEWAY_MODEL });
-    } catch {
-      return failure("request-failure", "request");
-    }
-
-    let responseResult: AwaitStageResult<Response>;
-    try {
-      responseResult = await awaitWithinDeadline(
-        Promise.resolve().then(() => {
-          options.onFetchAttempt?.();
-          return (options.fetch ?? globalThis.fetch)(VERCEL_GATEWAY_ENDPOINT, {
-            method: "POST",
-            headers: {
-              Accept: "application/json",
-              Authorization: `Bearer ${apiKey}`,
-              "Content-Type": "application/json",
-            },
-            // Keep Gateway routing private; callers supply only evaluator-specific state.
-            body,
-            signal: deadlineController.signal,
-          });
-        }),
-        deadlineController.signal,
-      );
-    } catch {
-      return stageFailure("request") ?? failure("request-failure", "request");
-    }
-    if (!responseResult.completed) {
-      return stageFailure("request") ?? failure("request-failure", "request");
-    }
-    const response = responseResult.value;
-
-    const responseFailure = stageFailure("request");
-    if (responseFailure !== undefined) return responseFailure;
-    if (!response.ok) {
-      return failure(
-        "http-status",
-        "request",
-        response.status,
-        parseRetryAfter(response.headers.get("retry-after")),
-      );
-    }
-
-    let textResult: AwaitStageResult<string>;
-    try {
-      textResult = await awaitWithinDeadline(response.text(), deadlineController.signal);
-    } catch {
-      return stageFailure("body") ?? failure("body-failure", "body");
-    }
-    if (!textResult.completed) return stageFailure("body") ?? failure("body-failure", "body");
-
-    const text = textResult.value;
-    const bodyDeadlineFailure = stageFailure("body");
-    if (bodyDeadlineFailure !== undefined) return bodyDeadlineFailure;
-    if (text.length > MAX_VERCEL_GATEWAY_RESPONSE_CHARS) {
-      return failure("oversized-body", "body");
-    }
-
-    try {
-      return { ok: true, value: JSON.parse(text) as unknown };
-    } catch {
-      return failure("invalid-json", "body");
-    }
+    return fallback;
   } catch {
-    const unexpectedFailure = stageFailure("request");
-    return unexpectedFailure ?? failure("request-failure", "request");
+    const provider = callerCancelled || timedOut ? PRIMARY_PROVIDER.id : FALLBACK_PROVIDER.id;
+    return (
+      stageFailure(provider, "request", deadline) ?? failure(provider, "request-failure", "request")
+    );
   } finally {
     clearTimeout(timeout);
     options.signal?.removeEventListener("abort", onCallerAbort);

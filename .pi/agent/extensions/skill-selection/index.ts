@@ -11,6 +11,7 @@ import {
   requestVercelGateway,
   type VercelGatewayFailure,
   type VercelGatewayFetch,
+  type VercelGatewayProviderId,
   type VercelGatewayStage,
 } from "../../lib/vercel-gateway";
 import { isRecord } from "../shared/is-record";
@@ -67,6 +68,7 @@ export interface SkillSelectionResult {
 export type SkillSelectionFailure =
   | {
       readonly kind: "gateway-failure";
+      readonly provider?: VercelGatewayProviderId;
       readonly stage: VercelGatewayStage;
       readonly reason: VercelGatewayFailure["reason"];
       readonly httpStatus?: number;
@@ -378,6 +380,7 @@ export async function selectSkillsWithJevDetailed(
       ok: false,
       failure: {
         kind: "gateway-failure",
+        provider: gateway.provider,
         stage: gateway.stage,
         reason: gateway.reason,
         ...(gateway.httpStatus === undefined ? {} : { httpStatus: gateway.httpStatus }),
@@ -455,6 +458,7 @@ export interface SkillSelectionStatus {
   readonly candidateCount?: number;
   readonly elapsedMs?: number;
   readonly fetchAttempted: boolean;
+  readonly failureProvider?: VercelGatewayProviderId;
   readonly failureStage?: VercelGatewayStage | "evaluation";
   readonly httpStatus?: number;
 }
@@ -562,6 +566,9 @@ export function createSkillSelectionExtension(
             candidateCount: candidates.length,
             elapsedMs,
             fetchAttempted,
+            ...(attempt.failure.kind === "gateway-failure" && attempt.failure.provider !== undefined
+              ? { failureProvider: attempt.failure.provider }
+              : {}),
             failureStage: attempt.failure.stage,
             ...(attempt.failure.kind === "gateway-failure" &&
             attempt.failure.httpStatus !== undefined

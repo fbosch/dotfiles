@@ -12,10 +12,11 @@ when:
 
 ## Agent recommendations
 
-- Before starting a new delegation without an explicit user-selected agent, call `recommend_agent` once for the scoped task if the tool is available. Supply the task, expected deliverable, and minimal sanitized context, not transcripts, file contents, or credentials.
-- Treat the result as advisory. Verify the suggested agent fits the task and is available and permitted before calling `subagent`; a recommendation never authorizes execution or overrides these orchestration rules.
-- Consider a `stay` result before delegating. On abstention, failure, or an unavailable recommendation tool, use ordinary primary-agent routing without retrying the recommendation.
-- Skip recommendations for explicit user routing, work retained by the primary, and continuations of an existing worker. Do not call merely to justify delegation or repeat the call for the same unchanged task.
+- The recommend-agent extension automatically evaluates at most the first eligible native `subagent` delegation per user turn with shared Jev routing immediately before execution. Do not call a separate recommendation tool; the old `recommend_agent` tool is intentionally not registered.
+- Jev agreement lets the proposed `subagent_type` execute. A disagreement or `stay` result blocks once with a concise advisory so the primary can reconsider; it never substitutes or spawns another agent. The one-evaluation budget resets for each user turn and session start, so subsequent delegations in that turn are intentionally uninspected.
+- Inference failure, abstention, disabled settings, or malformed delegation input fail open. The hook uses a bounded, credential/path-redacted prefix of the proposed delegation prompt; keep sensitive content out of delegation instructions because the existing redaction is not exhaustive.
+- A user-selected `@agent` mention in the latest user request bypasses routing for that turn. Resume calls bypass routing because they continue an existing worker. These are authorization boundaries: do not treat an agent-generated prompt or tool argument as user selection.
+- Independently apply the role-boundary guidance below and verify availability/permission before delegating. The hook is advisory and never overrides explicit user routing or native tool permissions.
 
 ## Role boundaries
 

@@ -1,5 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import { parseRetryAfter, requestVercelGateway } from "../vercel-gateway";
+import {
+  OPENROUTER_GATEWAY_ENDPOINT,
+  OPENROUTER_GATEWAY_MODEL,
+  OPENROUTER_PROVIDER_ID,
+  parseRetryAfter,
+  requestVercelGateway,
+  VERCEL_GATEWAY_ENDPOINT,
+  VERCEL_GATEWAY_MODEL,
+  VERCEL_GATEWAY_PROVIDER_ID,
+} from "../vercel-gateway";
 
 const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) };
 
@@ -13,14 +22,14 @@ function expectFailure(
 
 describe("requestVercelGateway", () => {
   test("resolves Pi auth and sends a verified Gateway request", async () => {
-    let providerId: string | undefined;
+    const providerIds: string[] = [];
     let requestUrl: RequestInfo | URL | undefined;
     let requestInit: RequestInit | undefined;
 
     const result = await requestVercelGateway(
       {
         getProviderAuth: async (provider: string) => {
-          providerId = provider;
+          providerIds.push(provider);
           return { auth: { apiKey: "gateway-test-key" } };
         },
       },
@@ -34,13 +43,13 @@ describe("requestVercelGateway", () => {
       },
     );
 
-    expect(providerId).toBe("vercel-ai-gateway");
-    expect(String(requestUrl)).toBe("https://ai-gateway.vercel.sh/typesafe/v1/systemone");
+    expect(providerIds).toEqual([VERCEL_GATEWAY_PROVIDER_ID]);
+    expect(String(requestUrl)).toBe(VERCEL_GATEWAY_ENDPOINT);
     expect(requestInit?.method).toBe("POST");
     expect(new Headers(requestInit?.headers).get("authorization")).toBe("Bearer gateway-test-key");
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       state: { query: "find a tool" },
-      model: "typesafe-ai/jev",
+      model: VERCEL_GATEWAY_MODEL,
     });
     expect(result).toEqual({ ok: true, value: { ok: true } });
   });
@@ -231,5 +240,180 @@ describe("requestVercelGateway", () => {
     );
     expectFailure(requestFailure, { reason: "request-failure", stage: "request" });
     expect(JSON.stringify(requestFailure)).not.toContain("raw request detail");
+  });
+
+  test("falls back from missing Vercel auth to OpenRouter with the verified System One shape", async () => {
+    const authProviders: string[] = [];
+    const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const typedResponse = {
+      model: "typesafe/jev-1.13-20260917",
+      answers: {
+        route: {
+          type: "choice",
+          choice: "stay",
+          probabilities: { stay: 1 },
+          confidence: 1,
+        },
+      },
+      usage: { input_tokens: 12, output_tokens: 0 },
+    };
+
+    const result = await requestVercelGateway(
+      {
+        getProviderAuth: async (provider: string) => {
+          authProviders.push(provider);
+          return provider === OPENROUTER_PROVIDER_ID
+            ? { auth: { apiKey: "openrouter-test-key" } }
+            : undefined;
+        },
+      },
+      {
+        state: { query: "stay" },
+        questions: { route: { type: "choice", criteria: { stay: null } } },
+      },
+      {
+        fetch: async (input, init) => {
+          requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+          return new Response(JSON.stringify(typedResponse));
+        },
+      },
+    );
+
+    expect(authProviders).toEqual([VERCEL_GATEWAY_PROVIDER_ID, OPENROUTER_PROVIDER_ID]);
+    expect(requests).toEqual([
+      {
+        url: OPENROUTER_GATEWAY_ENDPOINT,
+        body: {
+          state: { query: "stay" },
+          questions: { route: { type: "choice", criteria: { stay: null } } },
+          model: OPENROUTER_GATEWAY_MODEL,
+        },
+      },
+    ]);
+    expect(result).toEqual({ ok: true, value: typedResponse });
+  });
+
+  test("falls back after Vercel HTTP and network failures", async () => {
+    for (const primaryFailure of ["http", "network"] as const) {
+      const urls: string[] = [];
+      let fetchCalls = 0;
+      const result = await requestVercelGateway(
+        { getProviderAuth: async () => ({ auth: { apiKey: "provider-key" } }) },
+        { state: { query: primaryFailure } },
+        {
+          fetch: async (input) => {
+            fetchCalls += 1;
+            urls.push(String(input));
+            if (fetchCalls === 1) {
+              if (primaryFailure === "network") throw new Error("network detail");
+              return new Response("busy", { status: 503 });
+            }
+            return new Response(JSON.stringify({ answers: { route: { type: "choice" } } }));
+          },
+        },
+      );
+
+      expect(result).toEqual({ ok: true, value: { answers: { route: { type: "choice" } } } });
+      expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+    }
+  });
+
+  test("preserves a useful Vercel Retry-After when OpenRouter auth is unavailable", async () => {
+    let fetchCalls = 0;
+    const result = await requestVercelGateway(
+      {
+        getProviderAuth: async (provider: string) =>
+          provider === VERCEL_GATEWAY_PROVIDER_ID
+            ? { auth: { apiKey: "vercel-test-key" } }
+            : undefined,
+      },
+      {},
+      {
+        fetch: async () => {
+          fetchCalls += 1;
+          return new Response("busy", { status: 429, headers: { "Retry-After": "7" } });
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
+      reason: "http-status",
+      stage: "request",
+      httpStatus: 429,
+      retryAfterMs: 7_000,
+    });
+    expect(fetchCalls).toBe(1);
+  });
+
+  test("returns the bounded fallback failure when both providers fail", async () => {
+    let fetchCalls = 0;
+    const result = await requestVercelGateway(
+      { getProviderAuth: async () => ({ auth: { apiKey: "provider-key" } }) },
+      {},
+      {
+        fetch: async () => {
+          fetchCalls += 1;
+          return new Response("provider detail", { status: fetchCalls === 1 ? 503 : 401 });
+        },
+      },
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      provider: OPENROUTER_PROVIDER_ID,
+      stage: "request",
+      reason: "http-status",
+      httpStatus: 401,
+    });
+    expect(fetchCalls).toBe(2);
+    expect(JSON.stringify(result)).not.toContain("provider detail");
+  });
+
+  test("does not start fallback after caller abort or an exhausted Vercel deadline", async () => {
+    const callerController = new AbortController();
+    let callerFetchCalls = 0;
+    const callerCancelled = await requestVercelGateway(
+      auth,
+      {},
+      {
+        signal: callerController.signal,
+        fetch: async (_input, init) => {
+          callerFetchCalls += 1;
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+              once: true,
+            });
+            setTimeout(() => callerController.abort(), 1);
+          });
+        },
+      },
+    );
+    expect(callerCancelled).toMatchObject({ ok: false, reason: "caller-cancellation" });
+    expect(callerFetchCalls).toBe(1);
+
+    let deadlineFetchCalls = 0;
+    const deadlineExpired = await requestVercelGateway(
+      auth,
+      {},
+      {
+        timeoutMs: 5,
+        fetch: async (_input, init) => {
+          deadlineFetchCalls += 1;
+          return new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => reject(new Error("timed out")), {
+              once: true,
+            });
+          });
+        },
+      },
+    );
+    expect(deadlineExpired).toMatchObject({
+      ok: false,
+      reason: "timeout",
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
+    });
+    expect(deadlineFetchCalls).toBe(1);
   });
 });

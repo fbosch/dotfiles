@@ -1,9 +1,10 @@
+import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/vercel-gateway";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 
-export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway";
+export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/vercel-gateway";
 
 export interface JevStartupStatus {
   readonly state: Exclude<StartupOwnerState, "disposed">;
@@ -30,12 +31,24 @@ export function resolveJevStartupStatus(
   const reader = modelRegistry as ProviderAuthStatusReader;
   if (typeof reader.getProviderAuthStatus !== "function") return { state: "unavailable" };
 
-  let auth: ProviderAuthStatus | undefined;
-  try {
-    auth = reader.getProviderAuthStatus(VERCEL_GATEWAY_PROVIDER_ID);
-  } catch {
-    return { state: "unavailable" };
+  let hasKnownStatus = false;
+  let hasUnknownStatus = false;
+  let hasConfiguredProvider = false;
+  for (const providerId of JEV_GATEWAY_PROVIDER_IDS) {
+    let auth: ProviderAuthStatus | undefined;
+    try {
+      auth = reader.getProviderAuthStatus(providerId);
+    } catch {
+      hasUnknownStatus = true;
+      continue;
+    }
+    if (auth === undefined || typeof auth.configured !== "boolean") {
+      hasUnknownStatus = true;
+      continue;
+    }
+    hasKnownStatus = true;
+    hasConfiguredProvider ||= auth.configured;
   }
-  if (auth === undefined || typeof auth.configured !== "boolean") return { state: "unavailable" };
-  return { state: auth.configured ? "ready" : "degraded" };
+  if (hasConfiguredProvider) return { state: "ready" };
+  return { state: hasKnownStatus && !hasUnknownStatus ? "degraded" : "unavailable" };
 }

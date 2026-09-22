@@ -219,6 +219,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "gateway-failure",
+        provider: "openrouter",
         stage: "auth",
         reason: "missing-credentials",
       },
@@ -247,6 +248,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "gateway-failure",
+        provider: "openrouter",
         stage: "request",
         reason: "http-status",
         httpStatus: 429,

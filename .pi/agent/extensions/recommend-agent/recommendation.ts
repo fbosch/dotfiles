@@ -1,9 +1,9 @@
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
 import {
   requestVercelGateway,
   type VercelGatewayFailureReason,
   type VercelGatewayFetch,
+  type VercelGatewayProviderId,
 } from "../../lib/vercel-gateway";
 import {
   type AgentCatalog,
@@ -13,26 +13,7 @@ import {
 import { readGlobalRoutingPolicy } from "./policy";
 import type { RecommendAgentConfig } from "./settings";
 
-export const RECOMMEND_AGENT_TOOL_NAME = "recommend_agent" as const;
 export const RECOMMEND_AGENT_STATE_LIMIT = 4096;
-
-export const RecommendAgentParameters = Type.Object({
-  task: Type.String({ minLength: 1, maxLength: 2400, description: "One scoped task to route." }),
-  intent: Type.String({
-    minLength: 1,
-    maxLength: 1200,
-    description: "The desired specialist outcome.",
-  }),
-  context: Type.Optional(
-    Type.String({
-      maxLength: 1600,
-      description:
-        "A brief sanitized summary; never include transcripts, file contents, paths, or credentials.",
-    }),
-  ),
-});
-
-export type RecommendAgentParameters = Static<typeof RecommendAgentParameters>;
 
 export type RecommendationDecision =
   | { readonly decision: "recommend"; readonly agentId: string }
@@ -57,6 +38,7 @@ export interface RecommendationEvaluation {
   readonly catalogKind?: "discovered-definitions";
   readonly catalogRevision?: string;
   readonly gatewayFailure?: VercelGatewayFailureReason;
+  readonly gatewayProvider?: VercelGatewayProviderId;
 }
 
 export interface RecommendationRequest {
@@ -267,6 +249,7 @@ export async function recommendAgent(
       catalogKind: catalog.kind,
       catalogRevision: catalog.revision,
       gatewayFailure: gateway.reason,
+      gatewayProvider: gateway.provider,
     };
   }
 

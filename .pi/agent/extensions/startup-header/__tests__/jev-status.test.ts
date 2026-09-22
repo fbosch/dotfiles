@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { resolveJevStartupStatus, VERCEL_GATEWAY_PROVIDER_ID } from "../jev-status";
+import { JEV_GATEWAY_PROVIDER_IDS } from "../../../lib/vercel-gateway";
+import { resolveJevStartupStatus } from "../jev-status";
 
 const disabledSettings = {
   jev: {
@@ -40,7 +41,7 @@ describe("startup header Jev status", () => {
     );
 
     expect(status).toEqual({ state: "ready" });
-    expect(calls).toEqual([VERCEL_GATEWAY_PROVIDER_ID]);
+    expect(calls).toEqual([...JEV_GATEWAY_PROVIDER_IDS]);
   });
 
   test("degrades an enabled feature when Gateway credentials are missing", () => {
