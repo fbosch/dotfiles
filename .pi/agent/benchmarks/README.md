@@ -140,3 +140,20 @@ The tokenizer reference is enabled by setting `PI_TOON_TOKEN_COUNTER_MODULE` to 
 Run `bun run --cwd .pi/agent benchmark:skill-selection --jev` for hosted Jev requests. Hosted calls use a 1-second delay by default; override it with `--delay-ms N` (a nonnegative safe integer, including `0` to disable pacing). Transient failures retry the same case before the benchmark advances, using up to 5 total attempts with 2-second exponential backoff capped at 30 seconds. Valid `Retry-After` seconds or HTTP dates are honored when they are longer, within the 120-second per-case and 10-minute per-run retry-wait budgets. Configure these values with `--max-attempts` (or the retry-count alias `--retries`), `--retry-base-ms`, `--retry-cap-ms`, `--max-case-wait-ms`, and `--max-run-wait-ms`.
 
 A persistent or non-retryable failure stops the current run. Compare mode does not start its next timeout budget after an incomplete run. The output is saved as `complete: false`, with not-attempted cases and per-attempt timing and failure metadata. Retry waits are excluded from model latency. The default lexical benchmark remains offline and makes no hosted calls.
+
+## Agent recommendation benchmark
+
+Run the deterministic, mock-first benchmark without paid calls:
+
+```bash
+bun run --cwd .pi/agent benchmark:recommend-agent --mock
+```
+
+The fixture catalog uses actual agent IDs with frozen synthetic descriptions and covers specialist boundaries, stay, abstention, explicit routing bypass, and a denied catalog entry. The report keeps lexical, mocked Jev-shaped, hosted Jev, and optional primary-model baseline results separate. Fixture names and expected labels are never sent to an evaluator.
+
+Hosted Jev and primary-model runs are opt-in. They attempt one case by default; pass `--limit N` or the explicit `--all` to request more:
+
+```bash
+bun run --cwd .pi/agent benchmark:recommend-agent --jev --limit 1
+bun run --cwd .pi/agent benchmark:recommend-agent --primary provider/model --limit 1
+```

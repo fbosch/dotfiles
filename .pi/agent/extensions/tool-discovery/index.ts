@@ -16,6 +16,8 @@ const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
 const MAX_JEV_CANDIDATES = 24;
+const MAX_JEV_TIMEOUT_MS = 2_000;
+const DEFAULT_JEV_TOOL_DISCOVERY_CONFIG = { enabled: true, timeoutMs: 2_000 } as const;
 const JEV_NO_MATCH = "no_match";
 
 const DEFERRED_TOOL_NAMES = new Set([
@@ -64,6 +66,56 @@ interface ToolSearchDetails {
 }
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
+
+export interface JevToolDiscoveryConfig {
+  readonly enabled: boolean;
+  readonly timeoutMs: number;
+}
+
+function readJevToolDiscoverySection(
+  settings: unknown,
+): Record<string, unknown> | null | undefined {
+  if (!isRecord(settings) || settings.jev === undefined) return undefined;
+  if (!isRecord(settings.jev)) return null;
+  const section = settings.jev.toolDiscovery;
+  return section === undefined || isRecord(section) ? section : null;
+}
+
+function readJevToolDiscoveryConfig(
+  section: Record<string, unknown> | null | undefined,
+  current: JevToolDiscoveryConfig,
+): JevToolDiscoveryConfig {
+  if (section === undefined) return current;
+  if (
+    section === null ||
+    Object.keys(section).some((key) => !["enabled", "timeoutMs"].includes(key))
+  ) {
+    return { enabled: false, timeoutMs: current.timeoutMs };
+  }
+  const enabled = Object.hasOwn(section, "enabled") ? section.enabled : current.enabled;
+  const timeoutMs = Object.hasOwn(section, "timeoutMs") ? section.timeoutMs : current.timeoutMs;
+  if (
+    typeof enabled !== "boolean" ||
+    typeof timeoutMs !== "number" ||
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > MAX_JEV_TIMEOUT_MS
+  ) {
+    return { enabled: false, timeoutMs: current.timeoutMs };
+  }
+  return { enabled, timeoutMs };
+}
+
+export function resolveJevToolDiscoveryConfig(
+  globalSettings: unknown,
+  projectSettings?: unknown,
+): JevToolDiscoveryConfig {
+  const global = readJevToolDiscoveryConfig(
+    readJevToolDiscoverySection(globalSettings),
+    DEFAULT_JEV_TOOL_DISCOVERY_CONFIG,
+  );
+  return readJevToolDiscoveryConfig(readJevToolDiscoverySection(projectSettings), global);
+}
 
 function getConfiguredPrefixes(settings: unknown): string[] | undefined {
   if (!isRecord(settings) || !isRecord(settings.toolDiscovery)) return undefined;
@@ -315,11 +367,18 @@ export async function searchDeferredToolsWithJevFallback(
   );
 }
 
+function getConfiguredSettings(ctx: ExtensionContext) {
+  return SettingsManager.create(ctx.cwd, getAgentDir(), { projectTrusted: ctx.isProjectTrusted() });
+}
+
 function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly string[] {
-  const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-    projectTrusted: ctx.isProjectTrusted(),
-  });
+  const settings = getConfiguredSettings(ctx);
   return resolveDeferredToolPrefixes(settings.getGlobalSettings(), settings.getProjectSettings());
+}
+
+function getConfiguredJevToolDiscovery(ctx: ExtensionContext): JevToolDiscoveryConfig {
+  const settings = getConfiguredSettings(ctx);
+  return resolveJevToolDiscoveryConfig(settings.getGlobalSettings(), settings.getProjectSettings());
 }
 export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   let subagentAdmittedTools: ReadonlySet<string> | undefined;
@@ -347,16 +406,28 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const tools = searchableTools(ctx);
         const prefixes = getConfiguredDeferredToolPrefixes(ctx);
-        const ranked = await searchDeferredToolsWithJevFallback(
-          tools,
-          params.query,
-          params.limit ?? DEFAULT_MATCHES,
-          prefixes,
-          {
-            modelRegistry: ctx.modelRegistry,
-          },
-          signal,
-        );
+        const jevConfig = getConfiguredJevToolDiscovery(ctx);
+        const ranked = jevConfig.enabled
+          ? await searchDeferredToolsWithJevFallback(
+              tools,
+              params.query,
+              params.limit ?? DEFAULT_MATCHES,
+              prefixes,
+              {
+                modelRegistry: ctx.modelRegistry,
+                timeoutMs: jevConfig.timeoutMs,
+              },
+              signal,
+            )
+          : {
+              matches: searchDeferredTools(
+                tools,
+                params.query,
+                params.limit ?? DEFAULT_MATCHES,
+                prefixes,
+              ),
+              rankingSource: "lexical" as const,
+            };
         signal?.throwIfAborted();
         const { matches, rankingSource } = ranked;
 

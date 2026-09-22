@@ -84,11 +84,20 @@
       "update_goal"
     ]
   },
-  "skillSelection": {
-    "enabled": true,
-    "threshold": 0.72,
-    "timeoutMs": 600,
-    "maxRecommendations": 3
+  "jev": {
+    "toolDiscovery": {
+      "enabled": true,
+      "timeoutMs": 2000
+    },
+    "skillSelection": {
+      "enabled": true,
+      "threshold": 0.72,
+      "timeoutMs": 600,
+      "maxRecommendations": 3
+    },
+    "recommendAgent": {
+      "enabled": true
+    }
   },
   "packages": [
     "npm:pi-hashline-edit-pro@4.3.5",

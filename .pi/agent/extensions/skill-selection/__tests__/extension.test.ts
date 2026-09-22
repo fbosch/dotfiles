@@ -323,18 +323,23 @@ describe("skill selection", () => {
   test("honors global and project config overrides and disables malformed config", () => {
     expect(
       resolveSkillSelectionConfig(
-        { skillSelection: { threshold: 0.8, timeoutMs: 500 } },
-        { skillSelection: { maxRecommendations: 2 } },
+        { jev: { skillSelection: { threshold: 0.8, timeoutMs: 500 } } },
+        { jev: { skillSelection: { maxRecommendations: 2 } } },
       ),
     ).toEqual({ enabled: false, threshold: 0.8, timeoutMs: 500, maxRecommendations: 2 });
-    expect(resolveSkillSelectionConfig({ skillSelection: { threshold: "high" } }, {})).toEqual({
+    expect(
+      resolveSkillSelectionConfig({ jev: { skillSelection: { threshold: "high" } } }, {}),
+    ).toEqual({
       ...DEFAULT_SKILL_SELECTION_CONFIG,
       enabled: false,
     });
-    expect(resolveSkillSelectionConfig({ skillSelection: { typo: true } }, {})).toEqual({
+    expect(resolveSkillSelectionConfig({ jev: { skillSelection: { typo: true } } }, {})).toEqual({
       ...DEFAULT_SKILL_SELECTION_CONFIG,
       enabled: false,
     });
+    expect(resolveSkillSelectionConfig({ skillSelection: { enabled: true } }, {})).toEqual(
+      DEFAULT_SKILL_SELECTION_CONFIG,
+    );
   });
 
   test("formats no block for zero recommendations and escapes names", () => {

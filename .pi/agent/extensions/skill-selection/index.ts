@@ -86,13 +86,18 @@ export interface SkillSelectionRequestOptions {
   readonly modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
   readonly fetch?: VercelGatewayFetch;
   readonly signal?: AbortSignal;
+  readonly onFetchAttempt?: () => void;
 }
 
 type SkillSelectionSection = Record<string, unknown> | null | undefined;
 
 function settingSection(settings: unknown): SkillSelectionSection {
   if (isRecord(settings) === false) return undefined;
-  const section = settings.skillSelection;
+  const jev = settings.jev;
+  if (jev === undefined) return undefined;
+  if (isRecord(jev) === false) return null;
+
+  const section = jev.skillSelection;
   if (section === undefined || isRecord(section)) return section;
   return null;
 }
@@ -365,6 +370,7 @@ export async function selectSkillsWithJevDetailed(
   const gateway = await requestVercelGateway(options.modelRegistry, request, {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onFetchAttempt === undefined ? {} : { onFetchAttempt: options.onFetchAttempt }),
     timeoutMs: config.timeoutMs,
   });
   if (!gateway.ok) {
@@ -441,51 +447,154 @@ function disabledNamesForContext(
   );
 }
 
+export interface SkillSelectionStatus {
+  readonly enabled: boolean;
+  readonly eventCount: number;
+  readonly state: "idle" | "skipped" | "evaluating" | "completed" | "failed" | "cancelled";
+  readonly reason?: string;
+  readonly candidateCount?: number;
+  readonly elapsedMs?: number;
+  readonly fetchAttempted: boolean;
+  readonly failureStage?: VercelGatewayStage | "evaluation";
+  readonly httpStatus?: number;
+}
+
 interface SkillSelectionExtensionDependencies {
-  selectSkills?: typeof selectSkillsWithJev;
+  selectSkillsDetailed?: typeof selectSkillsWithJevDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
   getDisabledNames?: (context: ExtensionContext, systemPrompt: string) => ReadonlySet<string>;
+  fetch?: VercelGatewayFetch;
+  now?: () => number;
 }
 
 export function createSkillSelectionExtension(
   dependencies: SkillSelectionExtensionDependencies = {},
 ): (pi: ExtensionAPI) => void {
-  const selectSkills = dependencies.selectSkills ?? selectSkillsWithJev;
+  const selectSkillsDetailed = dependencies.selectSkillsDetailed ?? selectSkillsWithJevDetailed;
   const getConfig = dependencies.getConfig ?? configuredSkillSelection;
   const getDisabledNames = dependencies.getDisabledNames ?? disabledNamesForContext;
+  const now = dependencies.now ?? Date.now;
+  let status: SkillSelectionStatus = {
+    enabled: false,
+    eventCount: 0,
+    state: "idle",
+    fetchAttempted: false,
+  };
 
   return (pi) => {
+    pi.registerCommand("jev-status", {
+      description: "Show the latest advisory skill-selection lifecycle status",
+      handler: async (_args, context) => {
+        context.ui.notify(JSON.stringify(status), "info");
+      },
+    });
+
     pi.on("before_agent_start", async (event: BeforeAgentStartEvent, context) => {
-      if (event.images !== undefined && event.images.length > 0) return;
-      if (isExplicitSkillInvocation(event.prompt)) return;
-      if (event.systemPrompt.includes(SKILL_RECOMMENDATIONS_START)) return;
+      const eventCount = status.eventCount + 1;
+      const skip = (reason: string, enabled = status.enabled) => {
+        status = { enabled, eventCount, state: "skipped", reason, fetchAttempted: false };
+      };
+
+      if (event.images !== undefined && event.images.length > 0) return skip("images");
+      if (isExplicitSkillInvocation(event.prompt)) return skip("explicit-skill");
+      if (event.systemPrompt.includes(SKILL_RECOMMENDATIONS_START)) {
+        return skip("recommendation-marker");
+      }
 
       let config: SkillSelectionConfig;
       let disabledNames: ReadonlySet<string>;
       try {
         config = getConfig(context);
-        if (!config.enabled) return;
+        if (!config.enabled) return skip("disabled", false);
         disabledNames = getDisabledNames(context, event.systemPrompt);
       } catch {
-        return;
+        return skip("config-error", false);
       }
 
       const candidates = eligibleSkillCandidates(event.systemPromptOptions.skills, disabledNames);
-      if (candidates.length === 0 || candidates.length > MAX_CATALOG_SKILLS) return;
+      if (candidates.length === 0) return skip("no-candidates", true);
+      if (candidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
 
+      const startedAt = now();
+      let fetchAttempted = false;
+      status = {
+        enabled: true,
+        eventCount,
+        state: "evaluating",
+        candidateCount: candidates.length,
+        fetchAttempted,
+      };
       try {
-        const selectionOptions: SkillSelectionRequestOptions =
-          context.signal === undefined
-            ? { modelRegistry: context.modelRegistry }
-            : { modelRegistry: context.modelRegistry, signal: context.signal };
-        const result = await selectSkills(event.prompt, candidates, config, selectionOptions);
-        if (context.signal?.aborted || result === undefined || result.recommendations.length === 0)
+        const selectionOptions: SkillSelectionRequestOptions = {
+          modelRegistry: context.modelRegistry,
+          ...(dependencies.fetch === undefined ? {} : { fetch: dependencies.fetch }),
+          ...(context.signal === undefined ? {} : { signal: context.signal }),
+          onFetchAttempt: () => {
+            fetchAttempted = true;
+            status = { ...status, fetchAttempted: true };
+          },
+        };
+        const attempt = await selectSkillsDetailed(
+          event.prompt,
+          candidates,
+          config,
+          selectionOptions,
+        );
+        const elapsedMs = Math.max(0, now() - startedAt);
+        if (context.signal?.aborted) {
+          status = {
+            enabled: true,
+            eventCount,
+            state: "cancelled",
+            reason: "caller-cancellation",
+            candidateCount: candidates.length,
+            elapsedMs,
+            fetchAttempted,
+          };
           return;
+        }
+        if (!attempt.ok) {
+          status = {
+            enabled: true,
+            eventCount,
+            state: attempt.failure.reason === "caller-cancellation" ? "cancelled" : "failed",
+            reason: attempt.failure.reason,
+            candidateCount: candidates.length,
+            elapsedMs,
+            fetchAttempted,
+            failureStage: attempt.failure.stage,
+            ...(attempt.failure.kind === "gateway-failure" &&
+            attempt.failure.httpStatus !== undefined
+              ? { httpStatus: attempt.failure.httpStatus }
+              : {}),
+          };
+          return;
+        }
 
+        const result = attempt.value;
+        status = {
+          enabled: true,
+          eventCount,
+          state: "completed",
+          reason: result.recommendations.length === 0 ? "no-match" : "recommendations",
+          candidateCount: candidates.length,
+          elapsedMs,
+          fetchAttempted,
+        };
+        if (result.recommendations.length === 0) return;
         return {
           systemPrompt: appendSkillRecommendations(event.systemPrompt, result.recommendations),
         };
       } catch {
+        status = {
+          enabled: true,
+          eventCount,
+          state: "failed",
+          reason: "unexpected-error",
+          candidateCount: candidates.length,
+          elapsedMs: Math.max(0, now() - startedAt),
+          fetchAttempted,
+        };
         // Advisory selection must never change the default skill behavior when Jev is unavailable.
         return;
       }

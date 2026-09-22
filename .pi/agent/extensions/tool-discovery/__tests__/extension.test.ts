@@ -9,6 +9,7 @@ import toolDiscoveryExtension, {
   isDeferredToolName,
   rankDeferredToolsWithJev,
   resolveDeferredToolPrefixes,
+  resolveJevToolDiscoveryConfig,
   searchDeferredTools,
   searchDeferredToolsWithJevFallback,
 } from "../index";
@@ -154,6 +155,45 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("mcp")).toBe(false);
     expect(isDeferredToolName("neovim")).toBe(false);
   });
+  test("resolves Jev settings with safe defaults, bounds, and trusted project overrides", () => {
+    expect(resolveJevToolDiscoveryConfig({}, undefined)).toEqual({
+      enabled: true,
+      timeoutMs: 2000,
+    });
+    expect(
+      resolveJevToolDiscoveryConfig({
+        jev: { toolDiscovery: { enabled: false, timeoutMs: 1500 } },
+      }),
+    ).toEqual({ enabled: false, timeoutMs: 1500 });
+    expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { timeoutMs: 0 } } })).toEqual({
+      enabled: false,
+      timeoutMs: 2000,
+    });
+    expect(resolveJevToolDiscoveryConfig({ jev: null })).toEqual({
+      enabled: false,
+      timeoutMs: 2000,
+    });
+    expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { enabled: null } } })).toEqual({
+      enabled: false,
+      timeoutMs: 2000,
+    });
+    expect(
+      resolveJevToolDiscoveryConfig(
+        { jev: { toolDiscovery: { enabled: true } } },
+        { jev: { toolDiscovery: { enabled: false } } },
+      ),
+    ).toEqual({ enabled: false, timeoutMs: 2000 });
+    expect(
+      resolveJevToolDiscoveryConfig(
+        {
+          jev: { toolDiscovery: { enabled: false } },
+          toolDiscovery: { deferredToolPrefixes: ["global_"] },
+        },
+        { toolDiscovery: { deferredToolPrefixes: ["project_"] } },
+      ),
+    ).toEqual({ enabled: false, timeoutMs: 2000 });
+  });
+
   test("reads deferred prefixes from tool discovery settings", () => {
     expect(
       resolveDeferredToolPrefixes({

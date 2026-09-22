@@ -8,11 +8,13 @@ The feature is disabled by default. Opt in through `settings.json` or a trusted 
 
 ```json
 {
-  "skillSelection": {
-    "enabled": true,
-    "threshold": 0.72,
-    "timeoutMs": 600,
-    "maxRecommendations": 3
+  "jev": {
+    "skillSelection": {
+      "enabled": true,
+      "threshold": 0.72,
+      "timeoutMs": 600,
+      "maxRecommendations": 3
+    }
   }
 }
 ```

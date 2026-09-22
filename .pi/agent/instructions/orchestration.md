@@ -21,8 +21,26 @@ These presets apply only when invoking `subagent_type: "general"`. Select the lo
 
 Escalate one preset when uncertainty, coupling, or impact is higher than the task's apparent size. Do not use a stronger preset merely because the task is long; use it when the task requires deeper judgment or carries greater risk.
 
-- Delegate only when specialist expertise, isolated context, or independent work justifies the overhead. Otherwise work directly.
-- Give each worker a bounded goal, owned scope, exclusions, and acceptance criteria.
+## Scope and budgets
+
+- Work directly when the relevant context is already loaded and delegation adds no specialist benefit.
+- Give each worker one verifiable deliverable, owned files, exclusions, one targeted validation command, and a stopping point. Keep prompts focused; pass relevant findings instead of asking workers to rediscover them.
+- Keep implementation and its focused regression tests together. Split broad discovery, cross-feature implementation, full-suite validation, and hosted benchmarking into separately reviewed assignments.
+- Always pass `max_turns`: use at most 12 for discovery or routine work and 24 for implementation or deep analysis. Preserve a specialist's lower configured cap. These are per-assignment review boundaries, not guarantees of elapsed time or tool-call count.
+- If the assignment cannot reasonably fit that budget, reduce its scope before launching. Do not raise the budget merely to finish an oversized prompt.
+
+## Supervision and handoff
+
+- Use `run_in_background: true` for substantial multi-step work. Reserve foreground delegation for short, bounded work where waiting is appropriate.
+- Retain the agent ID and acceptance criteria. Use completion notifications and worker updates instead of rapid status polling. Before blocking on completion, inspect progress once; if there is no independently useful work, use a bounded status check when supervision is needed.
+- Require a progress update at the first material finding, before expanding scope, and when blocked. If the worker repeats discovery, broadens ownership, or cycles through unrelated failures, steer it to return a checkpoint instead of continuing.
+- Every worker must return a completion or partial handoff: findings, changed files, checks actually run and their results, unresolved blockers, and the smallest next step. Ask workers to reserve their final turn for this handoff.
+- At a turn limit, blocker, or interruption, inspect the result and partial diff before resuming or assigning another writer. Never blindly resume with the original broad prompt or launch a replacement into the same files.
+- Resume the same worker only with a newly bounded next step and an explicit turn budget. After two unsuccessful bounded attempts at the same deliverable, stop delegation and diagnose the blocker directly or ask the user for the missing decision.
+- Report material blockers and unverified partial work to the user. Background execution alone is not supervision; the primary still owns scope, verification, and integration.
+
+## Coordination
+
 - Parallel writes require disjoint ownership and no dependencies. Keep shared work serial.
-- Verify delegated results before integrating or declaring completion.
+- Verify each worker's result before starting dependent work or declaring completion. Do not rerun broad investigations without conflicting evidence.
 - Before coordinating a multi-worker batch, load the `swarm` skill from its advertised path, or `~/.agents/skills/swarm/SKILL.md` when no path is advertised.

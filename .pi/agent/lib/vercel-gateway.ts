@@ -41,6 +41,8 @@ export interface VercelGatewayRequestOptions {
   fetch?: VercelGatewayFetch;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** Called immediately before fetch is invoked; receives no request or credential data. */
+  onFetchAttempt?: () => void;
 }
 
 type AwaitStageResult<T> =
@@ -184,8 +186,9 @@ export async function requestVercelGateway<TRequest extends object>(
     let responseResult: AwaitStageResult<Response>;
     try {
       responseResult = await awaitWithinDeadline(
-        Promise.resolve().then(() =>
-          (options.fetch ?? globalThis.fetch)(VERCEL_GATEWAY_ENDPOINT, {
+        Promise.resolve().then(() => {
+          options.onFetchAttempt?.();
+          return (options.fetch ?? globalThis.fetch)(VERCEL_GATEWAY_ENDPOINT, {
             method: "POST",
             headers: {
               Accept: "application/json",
@@ -195,8 +198,8 @@ export async function requestVercelGateway<TRequest extends object>(
             // Keep Gateway routing private; callers supply only evaluator-specific state.
             body,
             signal: deadlineController.signal,
-          }),
-        ),
+          });
+        }),
         deadlineController.signal,
       );
     } catch {
