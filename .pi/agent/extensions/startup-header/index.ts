@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  getAgentDir,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
@@ -7,7 +12,7 @@ import {
   type RepositoryFiles,
 } from "./candidate-adapter";
 import type { CandidateInspection } from "./candidates";
-import { type ContextStripConfig, loadContextViewConfig } from "./context-strip";
+import { readContextUsageFromContext, type StartupContextUsage } from "./context-usage";
 import {
   createStartupOwnerRequest,
   STARTUP_OWNER_IDS,
@@ -17,9 +22,8 @@ import {
 } from "./contracts";
 import { readHeaderOwnerSnapshot } from "./header-snapshot";
 import { type JevStartupStatus, resolveJevStartupStatus } from "./jev-status";
-import { readStartupSnapshotAPI } from "./runtime-capability";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
-import { renderStartupHeader, StartupRuntimeStore } from "./view-model";
+import { renderStartupHeader } from "./view-model";
 import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
 
 export interface StartupHeaderDependencies {
@@ -42,28 +46,26 @@ export default function startupHeader(
 ): void {
   let disposeSession = () => {};
   const startupBaselines = new Map<string, string | undefined>();
-  let contextViewConfigPromise: Promise<ContextStripConfig | undefined> | undefined;
+  let refreshContextUsage: ((context: ExtensionContext) => void) | undefined;
 
-  pi.on("before_model_availability", (_event, ctx) => {
-    startupBaselines.set(
-      ctx.sessionManager.getSessionId(),
-      captureStartupBaseline(ctx.sessionManager.getEntries()),
-    );
-  });
+  pi.on("agent_start", (_event, ctx) => refreshContextUsage?.(ctx));
+  pi.on("agent_end", (_event, ctx) => refreshContextUsage?.(ctx));
+  pi.on("model_select", (_event, ctx) => refreshContextUsage?.(ctx));
+  pi.on("session_compact", (_event, ctx) => refreshContextUsage?.(ctx));
+  pi.on("session_compact_failed", (_event, ctx) => refreshContextUsage?.(ctx));
 
   pi.on("session_start", (event, ctx) => {
     disposeSession();
     disposeSession = () => {};
     if (ctx.mode !== "tui") return;
 
-    const runtime = new StartupRuntimeStore();
+    let contextUsage: StartupContextUsage | undefined = readContextUsageFromContext(ctx);
     const sessionId = ctx.sessionManager.getSessionId();
     const generationId = randomUUID();
     const owners = new StartupOwnerStore(sessionId, generationId, readHeaderOwnerSnapshot);
     let active = true;
     let workspace: WorkspaceIdentity | undefined;
     let candidates: CandidateInspection | undefined;
-    let contextViewConfig: ContextStripConfig | undefined;
     let art: StartupHeaderArt | undefined;
     let jev: JevStartupStatus | undefined;
     if (
@@ -85,6 +87,11 @@ export default function startupHeader(
       }
     }
     let requestRender = () => {};
+    const updateContextUsage = (nextContext: ExtensionContext) => {
+      contextUsage = readContextUsageFromContext(nextContext);
+      requestRender();
+    };
+    refreshContextUsage = updateContextUsage;
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
       ? startupBaselines.get(sessionId)
@@ -99,23 +106,9 @@ export default function startupHeader(
         requestRender();
       },
     );
-    let unsubscribeRuntime = () => {};
     const unsubscribeOwners = pi.events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) => {
       if (owners.accept(value)) requestRender();
     });
-    const capability = readStartupSnapshotAPI(pi.startupSnapshot);
-    if (capability !== undefined) {
-      try {
-        unsubscribeRuntime = capability.subscribe((value) => {
-          if (runtime.accept(value)) requestRender();
-        });
-        runtime.accept(capability.get());
-      } catch {
-        unsubscribeRuntime();
-        unsubscribeRuntime = () => {};
-        runtime.clear();
-      }
-    }
 
     const artLoader = dependencies.loadArt ?? loadStartupHeaderArt;
     try {
@@ -126,13 +119,6 @@ export default function startupHeader(
         "warning",
       );
     }
-    // Wait until every extension module has loaded so pi-context-view's config module is already cached.
-    contextViewConfigPromise ??= loadContextViewConfig();
-    void contextViewConfigPromise.then((config) => {
-      if (!active || config === undefined) return;
-      contextViewConfig = config;
-      requestRender();
-    });
     const workspacePromise = dependencies.inspectWorkspace(ctx.cwd);
     const repositoryFilesPromise = (
       dependencies.inspectRepositoryFiles ?? ((cwd) => discoverRepositoryFiles(cwd, undefined))
@@ -153,7 +139,7 @@ export default function startupHeader(
           renderStartupHeader(
             theme,
             width,
-            runtime.get(),
+            contextUsage,
             startupElapsedMs,
             workspace,
             owners.get("updates"),
@@ -165,7 +151,7 @@ export default function startupHeader(
             },
             candidates,
             owners.get("auth"),
-            contextViewConfig,
+            undefined,
             owners.get("context"),
             art,
           ),
@@ -184,8 +170,7 @@ export default function startupHeader(
       cancelStartupMeasurement();
       unsubscribeOwners();
       owners.dispose();
-      unsubscribeRuntime();
-      runtime.clear();
+      if (refreshContextUsage === updateContextUsage) refreshContextUsage = undefined;
       requestRender = () => {};
     };
   });

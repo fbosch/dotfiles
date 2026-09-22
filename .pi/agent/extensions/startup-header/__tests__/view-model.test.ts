@@ -1,24 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import type { StartupContextUsage } from "../context-usage";
 import type { StartupOwnerSnapshot } from "../contracts";
-import type { StartupRuntimeSnapshot } from "../runtime-types";
 import { renderStartupHeader } from "../view-model";
 
 const theme = { fg: (_color: string, text: string) => text } as Theme;
 
-function runtime(
-  extensions = { enabled: 18, project: 3, loadFailed: 0 },
-  skills = { available: 25, project: 2 },
-): StartupRuntimeSnapshot {
-  return {
-    sessionId: "session",
-    generationId: "generation",
-    ownerId: "pi-runtime",
-    ownerRevision: 1,
-    resources: { status: "ready", value: { extensions, skills } },
-    context: { status: "unavailable" },
-  };
+function runtime(tokens = 18_000, contextWindow = 200_000): StartupContextUsage {
+  return { tokens, contextWindow, percent: (tokens / contextWindow) * 100 };
 }
 
 function updates(coverage: string, available: number): StartupOwnerSnapshot {
@@ -60,25 +50,35 @@ describe("startup header baseline", () => {
         root: "/worktrees/topic",
         linkedWorktree: true,
       }),
-    ).toEqual([
-      "pi",
-      "Extensions: 18 enabled (3 project)",
-      "Skills: 25 available (2 project)",
-      "Startup: 42.5ms",
-    ]);
+    ).toEqual(["pi", "Context: ■■■■■■■■■■■■■■ 18k / 200k (9%)", "Startup: 42.5ms"]);
   });
 
-  test("renders detached, failed, and zero-project states truthfully", () => {
+  test("uses one 14×14-map cell per box and rounds boundary occupancy", () => {
+    expect(renderStartupHeader(theme, 160, runtime(4_000))).toContain(
+      "Context: ■■■■□□□□□□□□□□ 4.0k / 200k (2%)",
+    );
+    expect(renderStartupHeader(theme, 160, runtime(14_286))).toContain(
+      "Context: ■■■■■■■■■■■■■■ 14k / 200k (7.1%)",
+    );
+  });
+
+  test("keeps the first-row slice scale instead of filling the full window", () => {
+    const rendered = renderStartupHeader(theme, 160, runtime(200_000)).join("\\n");
+    expect(rendered).toContain("Context: ■■■■■■■■■■■■■■ 200k / 200k (100%)");
+    expect((rendered.match(/■/g) ?? []).length).toBe(14);
+  });
+
+  test("renders unknown usage without inventing a total", () => {
     const lines = renderStartupHeader(
       theme,
       160,
-      runtime({ enabled: 4, project: 0, loadFailed: 1 }, { available: 7, project: 0 }),
+      { tokens: null, contextWindow: 200_000, percent: null },
       undefined,
       { detached: true, root: "/repo", linkedWorktree: false },
     );
 
-    expect(lines).toEqual(["pi", "Extensions: 4 enabled, 1 failed", "Skills: 7 available"]);
-    expect(lines.join("\n")).not.toContain("(0 project)");
+    expect(lines).toEqual(["pi", "Context: ? / 200k"]);
+    expect(lines.join("\n")).not.toMatch(/Extensions|Skills|reserve|project/);
   });
 
   test("renders only published integration evidence with visible status semantics", () => {
@@ -289,28 +289,24 @@ describe("startup header baseline", () => {
     expect(rendered).toContain("ct [next]");
   });
 
-  test("keeps update coverage adjacent to extensions and omits absent updates", () => {
+  test("renders update coverage without resource totals", () => {
     expect(
       renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("partial", 2)).find(
-        (line) => line.startsWith("Extensions:"),
+        (line) => line.startsWith("Updates:"),
       ),
-    ).toBe("Extensions: 18 enabled (3 project), 2 updates available (incomplete)");
+    ).toBe("Updates: 2 updates available (incomplete)");
     expect(
       renderStartupHeader(theme, 160, runtime(), undefined, undefined, updates("complete", 0)).find(
-        (line) => line.startsWith("Extensions:"),
+        (line) => line.startsWith("Updates:"),
       ),
-    ).toBe("Extensions: 18 enabled (3 project), 0 updates available");
+    ).toBe("Updates: 0 updates available");
     expect(
-      renderStartupHeader(theme, 160, runtime()).find((line) => line.startsWith("Extensions:")),
-    ).toBe("Extensions: 18 enabled (3 project)");
+      renderStartupHeader(theme, 160, runtime()).some((line) => line.startsWith("Updates:")),
+    ).toBe(false);
   });
 
-  test("omits unavailable resource and startup fields without placeholders", () => {
-    const unavailable: StartupRuntimeSnapshot = {
-      ...runtime(),
-      resources: { status: "unavailable" },
-    };
-    const rendered = renderStartupHeader(theme, 160, unavailable).join("\n");
+  test("omits unavailable context and startup fields without placeholders", () => {
+    const rendered = renderStartupHeader(theme, 160, undefined).join("\n");
 
     expect(rendered).toBe("pi");
     expect(rendered).not.toMatch(/unavailable|unknown|warning/i);
@@ -333,7 +329,7 @@ describe("startup header baseline", () => {
     const lines = renderStartupHeader(
       theme,
       28,
-      runtime({ enabled: 4, project: 0, loadFailed: 1 }, { available: 7, project: 0 }),
+      runtime(),
       undefined,
       undefined,
       undefined,
@@ -347,7 +343,6 @@ describe("startup header baseline", () => {
     expect(lines.every((line) => visibleWidth(line) <= 28)).toBe(true);
     expect(lines).toContain("lsp ?");
     expect(lines.some((line) => line.startsWith("auth stale"))).toBe(true);
-    expect(lines.some((line) => line.startsWith("Extensions: 4 enabled"))).toBe(true);
-    expect(lines.some((line) => line.includes("failed"))).toBe(true);
+    expect(lines.some((line) => line.startsWith("Context:") && line.includes("18k"))).toBe(true);
   });
 });

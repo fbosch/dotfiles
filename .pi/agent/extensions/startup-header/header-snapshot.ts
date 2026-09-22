@@ -1,12 +1,16 @@
+import { readContextUsage, type StartupContextUsage } from "./context-usage";
 import { readStartupOwnerSnapshot, type StartupOwnerSnapshot } from "./contracts";
 import {
+  type AuthStartupPayload,
+  type DirenvStartupPayload,
+  type LspStartupPayload,
+  type NeovimStartupPayload,
   readAuthStartupPayload,
   readDirenvStartupPayload,
   readLspStartupPayload,
   readNeovimStartupPayload,
 } from "./owner-payloads";
-import { readContextEstimate } from "./runtime-capability";
-import { readUpdateCoverage } from "./updates";
+import { readUpdateCoverage, type UpdateCoverage } from "./updates";
 
 export function readHeaderOwnerSnapshot(value: unknown): StartupOwnerSnapshot | undefined {
   const snapshot = readStartupOwnerSnapshot(value);
@@ -27,10 +31,19 @@ export function readHeaderOwnerSnapshot(value: unknown): StartupOwnerSnapshot | 
   });
 }
 
-function sanitizePayload(snapshot: StartupOwnerSnapshot): unknown {
+type StartupHeaderPayload =
+  | AuthStartupPayload
+  | DirenvStartupPayload
+  | LspStartupPayload
+  | NeovimStartupPayload
+  | StartupContextUsage
+  | UpdateCoverage
+  | undefined;
+
+function sanitizePayload(snapshot: StartupOwnerSnapshot): StartupHeaderPayload {
   switch (snapshot.ownerId) {
     case "context":
-      return readContextEstimate(snapshot.payload);
+      return readContextUsage(snapshot.payload);
     case "auth":
       return readAuthStartupPayload(snapshot.payload);
     case "direnv":

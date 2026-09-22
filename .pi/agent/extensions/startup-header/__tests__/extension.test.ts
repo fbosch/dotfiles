@@ -1,14 +1,14 @@
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import {
   STARTUP_OWNER_IDS,
   STARTUP_OWNER_REQUEST_EVENT,
   STARTUP_OWNER_SNAPSHOT_EVENT,
 } from "../contracts";
 import startupHeader from "../index";
-import type { StartupRuntimeSnapshot, StartupSnapshotAPI } from "../runtime-types";
 
-type Handler = (event: unknown, context: unknown) => void;
+type Handler = (event: unknown, context: ExtensionContext) => void;
+
 const dependencies = {
   inspectWorkspace: async () => undefined,
   inspectRepositoryFiles: async () => ({ files: [], truncated: false }),
@@ -18,25 +18,7 @@ const dependencies = {
   }),
 };
 
-function readySnapshot(overrides: Partial<StartupRuntimeSnapshot> = {}): StartupRuntimeSnapshot {
-  return {
-    sessionId: "session-a",
-    generationId: "generation-a",
-    ownerId: "pi-runtime",
-    ownerRevision: 1,
-    resources: {
-      status: "ready",
-      value: {
-        extensions: { enabled: 18, project: 3, loadFailed: 1 },
-        skills: { available: 25, project: 2 },
-      },
-    },
-    context: { status: "unavailable" },
-    ...overrides,
-  };
-}
-
-function createHarness(startupSnapshot?: unknown) {
+function createHarness() {
   const handlers = new Map<string, Handler[]>();
   const busHandlers = new Map<string, Set<(value: unknown) => void>>();
   const emitted: { event: string; value: unknown }[] = [];
@@ -46,8 +28,34 @@ function createHarness(startupSnapshot?: unknown) {
     | ((tui: { requestRender(): void }, theme: Theme) => { render(width: number): string[] })
     | undefined;
   let renderRequests = 0;
+  let usage: unknown;
+  const model = { contextWindow: 200_000 };
+  const context = {
+    mode: "tui" as const,
+    cwd: "/tmp/project",
+    model,
+    getContextUsage: () => usage,
+    sessionManager: {
+      getSessionId: () => "session-a",
+      getEntries: () => [],
+    },
+    ui: {
+      setHeader(factory: typeof headerFactory) {
+        uiMutations.header += 1;
+        headerFactory = factory;
+      },
+      setFooter() {
+        uiMutations.footer += 1;
+      },
+      setEditorComponent() {
+        uiMutations.editor += 1;
+      },
+      setStatus() {
+        uiMutations.status += 1;
+      },
+    },
+  } as unknown as ExtensionContext;
   const pi = {
-    startupSnapshot,
     events: {
       on(event: string, listener: (value: unknown) => void) {
         operations.push(`on:${event}`);
@@ -68,28 +76,6 @@ function createHarness(startupSnapshot?: unknown) {
       handlers.set(event, registered);
     },
   } as unknown as ExtensionAPI;
-  const context = {
-    mode: "tui",
-    sessionManager: {
-      getSessionId: () => "session-a",
-      getEntries: () => [],
-    },
-    ui: {
-      setHeader(factory: typeof headerFactory) {
-        uiMutations.header += 1;
-        headerFactory = factory;
-      },
-      setFooter() {
-        uiMutations.footer += 1;
-      },
-      setEditorComponent() {
-        uiMutations.editor += 1;
-      },
-      setStatus() {
-        uiMutations.status += 1;
-      },
-    },
-  };
   const emit = (event: string) => {
     for (const handler of handlers.get(event) ?? []) handler({ type: event }, context);
   };
@@ -105,6 +91,12 @@ function createHarness(startupSnapshot?: unknown) {
     uiMutations,
     emit,
     render,
+    setUsage(value: unknown) {
+      usage = value;
+    },
+    setContextWindow(value: number) {
+      model.contextWindow = value;
+    },
     get renderRequests() {
       return renderRequests;
     },
@@ -112,17 +104,35 @@ function createHarness(startupSnapshot?: unknown) {
 }
 
 describe("startup header registration", () => {
-  test("registers in TUI mode without the runtime capability", () => {
+  test("uses the model context window when public usage is initially unavailable", () => {
     const harness = createHarness();
     startupHeader(harness.pi, dependencies);
     harness.emit("session_start");
 
-    expect(harness.render()).toEqual(["pi"]);
+    expect(harness.render()).toEqual(["pi", "Context: ? / 200k"]);
     expect(harness.uiMutations).toEqual({ header: 1, footer: 0, editor: 0, status: 0 });
-    const light = { fg: (color: string, text: string) => `<light:${color}>${text}` } as Theme;
-    const dark = { fg: (color: string, text: string) => `<dark:${color}>${text}` } as Theme;
-    expect(harness.render(120, light)[0]).toContain("<light:accent>");
-    expect(harness.render(120, dark)[0]).toContain("<dark:accent>");
+  });
+
+  test("refreshes from public lifecycle events and never keeps compacted totals", () => {
+    const harness = createHarness();
+    startupHeader(harness.pi, dependencies);
+    harness.emit("session_start");
+    harness.setUsage({ tokens: 12_000, contextWindow: 200_000, percent: 6 });
+    harness.emit("agent_end");
+    expect(harness.render()).toContain("Context: ■■■■■■■■■■■■□□ 12k / 200k (6%)");
+
+    harness.setUsage({ tokens: null, contextWindow: 200_000, percent: null });
+    harness.emit("session_compact");
+    expect(harness.render()).toContain("Context: ? / 200k");
+    expect(harness.render().join("\n")).not.toContain("12k");
+
+    harness.setUsage(undefined);
+    harness.setContextWindow(128_000);
+    harness.emit("model_select");
+    expect(harness.render()).toContain("Context: ? / 128k");
+    harness.setContextWindow(64_000);
+    harness.emit("session_start");
+    expect(harness.render()).toContain("Context: ? / 64k");
   });
 
   test("subscribes before requesting owners and rejects replies from replaced generations", () => {
@@ -133,7 +143,6 @@ describe("startup header registration", () => {
     expect(harness.operations.indexOf(`on:${STARTUP_OWNER_SNAPSHOT_EVENT}`)).toBeLessThan(
       harness.operations.indexOf(`emit:${STARTUP_OWNER_REQUEST_EVENT}`),
     );
-
     const firstRequests = harness.emitted.filter(
       ({ event }) => event === STARTUP_OWNER_REQUEST_EVENT,
     );
@@ -142,11 +151,9 @@ describe("startup header registration", () => {
     expect(first.sessionId).toBe("session-a");
 
     harness.emit("session_start");
-    harness.render();
-    const allRequests = harness.emitted.filter(
-      ({ event }) => event === STARTUP_OWNER_REQUEST_EVENT,
-    );
-    const current = allRequests.at(-1)?.value as { generationId: string };
+    const current = harness.emitted
+      .filter(({ event }) => event === STARTUP_OWNER_REQUEST_EVENT)
+      .at(-1)?.value as { generationId: string };
     expect(current.generationId).not.toBe(first.generationId);
 
     const before = harness.renderRequests;
@@ -160,52 +167,16 @@ describe("startup header registration", () => {
       state: "ready",
     });
     expect(harness.renderRequests).toBe(before);
-
-    harness.pi.events.emit(STARTUP_OWNER_SNAPSHOT_EVENT, {
-      type: "reply",
-      schemaVersion: 1,
-      sessionId: "session-a",
-      generationId: current.generationId,
-      ownerId: "lsp",
-      ownerRevision: 1,
-      state: "ready",
-    });
-    expect(harness.renderRequests).toBe(before + 1);
-  });
-  test("omits unavailable data without notices for absent or incompatible capabilities", () => {
-    for (const capability of [undefined, { capability: "pi.startupSnapshot", schemaVersion: 2 }]) {
-      const harness = createHarness(capability);
-      startupHeader(harness.pi, dependencies);
-      harness.emit("session_start");
-
-      const rendered = harness.render().join("\n");
-      expect(rendered).toBe("pi");
-      expect(rendered).not.toMatch(/unavailable|warning|capability/i);
-    }
   });
 
-  test("renders compatible resource data and redraws for newer revisions", () => {
-    let listener: ((value: StartupRuntimeSnapshot) => void) | undefined;
-    let unsubscribed = false;
-    const capability: StartupSnapshotAPI = {
-      capability: "pi.startupSnapshot",
-      schemaVersion: 1,
-      get: () => readySnapshot(),
-      subscribe: (next) => {
-        listener = next;
-        return () => {
-          unsubscribed = true;
-        };
-      },
-    };
-    const harness = createHarness(capability);
+  test("stops context refreshes after session disposal", () => {
+    const harness = createHarness();
     startupHeader(harness.pi, dependencies);
     harness.emit("session_start");
-
-    expect(harness.render().join("\n")).toContain("Extensions: 18 enabled, 1 failed (3 project)");
-    listener?.(readySnapshot({ ownerRevision: 2 }));
-    expect(harness.renderRequests).toBe(1);
     harness.emit("session_shutdown");
-    expect(unsubscribed).toBe(true);
+    const before = harness.renderRequests;
+    harness.setUsage({ tokens: 2_000, contextWindow: 200_000, percent: 1 });
+    harness.emit("agent_end");
+    expect(harness.renderRequests).toBe(before);
   });
 });

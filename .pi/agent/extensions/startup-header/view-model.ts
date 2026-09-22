@@ -2,7 +2,7 @@ import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
-import { type ContextStripConfig, renderInitialContextStrip } from "./context-strip";
+import { readContextUsage, type StartupContextUsage } from "./context-usage";
 import type { StartupOwnerSnapshot } from "./contracts";
 import type { JevStartupStatus } from "./jev-status";
 import {
@@ -10,8 +10,6 @@ import {
   readAuthStartupPayload,
   readLspStartupPayload,
 } from "./owner-payloads";
-import { readContextEstimate, readStartupRuntimeSnapshot } from "./runtime-capability";
-import type { StartupRuntimeSnapshot } from "./runtime-types";
 import type { WorkspaceIdentity } from "./workspace";
 
 export interface StartupIntegrationSnapshots {
@@ -21,44 +19,17 @@ export interface StartupIntegrationSnapshots {
   readonly jev?: JevStartupStatus | undefined;
 }
 
-export class StartupRuntimeStore {
-  private snapshot: StartupRuntimeSnapshot | undefined;
-
-  public accept(value: unknown): boolean {
-    const candidate = readStartupRuntimeSnapshot(value);
-    if (candidate === undefined) return false;
-    if (
-      this.snapshot !== undefined &&
-      (candidate.sessionId !== this.snapshot.sessionId ||
-        candidate.generationId !== this.snapshot.generationId ||
-        candidate.ownerRevision <= this.snapshot.ownerRevision)
-    ) {
-      return false;
-    }
-    this.snapshot = candidate;
-    return true;
-  }
-
-  public get(): StartupRuntimeSnapshot | undefined {
-    return this.snapshot;
-  }
-
-  public clear(): void {
-    this.snapshot = undefined;
-  }
-}
-
 export function renderStartupHeader(
   theme: Theme,
   width: number,
-  runtime: StartupRuntimeSnapshot | undefined,
+  contextUsage: StartupContextUsage | undefined,
   startupElapsedMs?: number,
   _workspace?: WorkspaceIdentity,
   updates?: StartupOwnerSnapshot,
   integrations?: StartupIntegrationSnapshots,
   candidates?: CandidateInspection,
   auth?: StartupOwnerSnapshot,
-  contextConfig?: ContextStripConfig,
+  _legacyContextConfig?: undefined,
   context?: StartupOwnerSnapshot,
   art?: StartupHeaderArt,
 ): string[] {
@@ -76,33 +47,53 @@ export function renderStartupHeader(
   const authLines = renderAuthStatus(theme, width, auth, Date.now());
   if (authLines.length > 0) lines.push("", ...authLines, "");
 
-  const contextEstimate =
-    context?.state === "ready" ? readContextEstimate(context.payload) : undefined;
-  if (contextEstimate !== undefined && contextConfig !== undefined) {
-    const strip = renderInitialContextStrip(theme, contextEstimate, contextConfig);
-    if (strip !== "") lines.push(strip);
-  }
+  const ownerContextUsage =
+    context?.state === "ready" ? readContextUsage(context.payload) : undefined;
+  const usage = contextUsage ?? ownerContextUsage;
+  if (usage !== undefined) lines.push(formatContextUsage(theme, usage));
 
-  if (runtime?.resources.status === "ready") {
-    const { extensions, skills } = runtime.resources.value;
-    const extensionProject = extensions.project === 0 ? "" : ` (${extensions.project} project)`;
-    const failure = extensions.loadFailed === 0 ? "" : `, ${extensions.loadFailed} failed`;
-    const updateStatus = renderUpdateStatus(updates);
-    const skillProject = skills.project === 0 ? "" : ` (${skills.project} project)`;
-    lines.push(
-      theme.fg(
-        "muted",
-        `Extensions: ${extensions.enabled} enabled${failure}${extensionProject}${updateStatus}`,
-      ),
-      theme.fg("muted", `Skills: ${skills.available} available${skillProject}`),
-    );
-  }
+  const updateStatus = renderUpdateStatus(updates);
+  if (updateStatus !== "") lines.push(theme.fg("muted", `Updates: ${updateStatus.slice(2)}`));
 
   if (startupElapsedMs !== undefined) {
     lines.push(theme.fg("muted", `Startup: ${formatStartupDuration(startupElapsedMs)}`));
   }
 
   return lines.flatMap((line) => (line === "" ? [line] : wrapTextWithAnsi(line, width)));
+}
+
+const CONTEXT_SLICE_COLUMNS = 14;
+const CONTEXT_SLICE_ROWS = 14;
+const CONTEXT_SLICE_BOXES = CONTEXT_SLICE_COLUMNS;
+
+function formatContextUsage(theme: Theme, usage: StartupContextUsage): string {
+  const window = formatTokens(usage.contextWindow);
+  if (usage.tokens === null || usage.percent === null) {
+    return `${theme.fg("muted", "Context: ? / ")}${theme.fg("accent", window)}`;
+  }
+
+  // Match pi-context-view's first-row slice: each box is one cell of the full 14×14 map.
+  const tokensPerBox = usage.contextWindow / (CONTEXT_SLICE_COLUMNS * CONTEXT_SLICE_ROWS);
+  const usedBoxes = Math.round(
+    Math.min(CONTEXT_SLICE_BOXES, Math.max(0, usage.tokens / tokensPerBox)),
+  );
+  const boxes = `${theme.fg("accent", "■".repeat(usedBoxes))}${theme.fg(
+    "muted",
+    "□".repeat(CONTEXT_SLICE_BOXES - usedBoxes),
+  )}`;
+  return `${theme.fg("muted", "Context: ")}${boxes} ${formatTokens(usage.tokens)} / ${window} (${formatPercent(
+    usage.percent,
+  )}%)`;
+}
+
+function formatPercent(percent: number): string {
+  return Number.isInteger(percent) ? String(percent) : percent.toFixed(1);
+}
+
+function formatTokens(tokens: number): string {
+  if (tokens < 1_000) return String(tokens);
+  if (tokens < 10_000) return `${(tokens / 1_000).toFixed(1)}k`;
+  return `${Math.round(tokens / 1_000)}k`;
 }
 function renderIntegrationStatus(
   theme: Theme,

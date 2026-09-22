@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { createEventBus, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import {
+  createEventBus,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import contextViewStartupPublisher from "../context-view-startup";
 import {
   createStartupOwnerRequest,
@@ -7,39 +11,20 @@ import {
   STARTUP_OWNER_SNAPSHOT_EVENT,
   type StartupOwnerSnapshot,
 } from "../startup-header/contracts";
-import type { StartupRuntimeSnapshot, StartupSnapshotAPI } from "../startup-header/runtime-types";
 
-function runtime(context: StartupRuntimeSnapshot["context"]): StartupRuntimeSnapshot {
-  return {
-    sessionId: "runtime-session",
-    generationId: "runtime-generation",
-    ownerId: "pi-runtime",
-    ownerRevision: 1,
-    resources: { status: "unavailable" },
-    context,
-  };
-}
-
-test("publishes only structured pi-context-view startup aggregates", () => {
+test("publishes public context usage through the existing owner protocol", () => {
   const events = createEventBus();
-  const handlers = new Map<string, () => void>();
+  const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => void>();
   const snapshots: StartupOwnerSnapshot[] = [];
-  let listener: ((snapshot: StartupRuntimeSnapshot) => void) | undefined;
-  let unsubscribed = false;
-  const capability = {
-    capability: "pi.startupSnapshot",
-    schemaVersion: 1,
-    get: () => runtime({ status: "collecting" }),
-    subscribe: (next: (snapshot: StartupRuntimeSnapshot) => void) => {
-      listener = next;
-      return () => {
-        unsubscribed = true;
-      };
-    },
-  } satisfies StartupSnapshotAPI;
+  let usage: unknown;
+  const context = {
+    mode: "tui" as const,
+    model: { contextWindow: 200_000 },
+    getContextUsage: () => usage,
+  } as unknown as ExtensionContext;
   const pi = {
     events,
-    on(event: string, handler: () => void) {
+    on(event: string, handler: (event: unknown, ctx: ExtensionContext) => void) {
       handlers.set(event, handler);
     },
   } as unknown as ExtensionAPI;
@@ -51,32 +36,22 @@ test("publishes only structured pi-context-view startup aggregates", () => {
     createStartupOwnerRequest("session", "generation", "context"),
   );
   expect(snapshots.at(-1)).toMatchObject({ state: "unavailable" });
-  (pi as ExtensionAPI & { startupSnapshot?: unknown }).startupSnapshot = capability;
-  handlers.get("session_start")?.();
-  events.emit(
-    STARTUP_OWNER_REQUEST_EVENT,
-    createStartupOwnerRequest("session", "generation", "context"),
-  );
-  expect(snapshots.at(-1)).toMatchObject({ state: "collecting" });
 
-  listener?.(
-    runtime({
-      status: "ready",
-      value: {
-        contextWindowTokens: 200_000,
-        autoCompactReserveTokens: 12_000,
-        estimatedTokens: 100,
-        categories: [{ id: "system-prompt", tokens: 100 }],
-      },
-    }),
-  );
+  handlers.get("session_start")?.({ type: "session_start" }, context);
   expect(snapshots.at(-1)).toMatchObject({
     state: "ready",
-    payload: { estimatedTokens: 100 },
+    payload: { tokens: null, contextWindow: 200_000, percent: null },
   });
+
+  usage = { tokens: 100, contextWindow: 200_000, percent: 0.05 };
+  handlers.get("agent_end")?.({ type: "agent_end" }, context);
+  expect(snapshots.at(-1)).toMatchObject({ state: "ready", payload: { tokens: 100 } });
   expect(JSON.stringify(snapshots)).not.toMatch(/prompt text|tool schema|file content/i);
 
-  handlers.get("session_shutdown")?.();
-  expect(unsubscribed).toBe(true);
+  usage = { tokens: null, contextWindow: 200_000, percent: null };
+  handlers.get("session_compact")?.({ type: "session_compact" }, context);
+  expect(snapshots.at(-1)).toMatchObject({ state: "ready", payload: { tokens: null } });
+
+  handlers.get("session_shutdown")?.({ type: "session_shutdown" }, context);
   expect(snapshots.at(-1)).toMatchObject({ state: "disposed" });
 });

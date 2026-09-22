@@ -24,6 +24,22 @@ describe("startup header Jev status", () => {
     expect(authChecks).toBe(0);
   });
 
+  test("includes only global Jev compaction enablement", () => {
+    expect(
+      resolveJevStartupStatus(
+        disabledSettings,
+        { jev: { compaction: { enabled: true } } },
+        { getProviderAuthStatus: () => ({ configured: true }) },
+      ),
+    ).toBeUndefined();
+
+    expect(
+      resolveJevStartupStatus({ jev: { compaction: { enabled: true } } }, undefined, {
+        getProviderAuthStatus: () => ({ configured: true }),
+      }),
+    ).toEqual({ state: "ready" });
+  });
+
   test("reports configured and enabled without resolving auth or making a request", () => {
     const calls: string[] = [];
     const status = resolveJevStartupStatus(

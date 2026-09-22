@@ -1,4 +1,5 @@
 import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/vercel-gateway";
+import { resolveFastJevCompactionConfig } from "../fast-jev-compaction";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
@@ -24,7 +25,13 @@ export function resolveJevStartupStatus(
   const toolDiscovery = resolveJevToolDiscoveryConfig(globalSettings, projectSettings);
   const skillSelection = resolveSkillSelectionConfig(globalSettings, projectSettings);
   const recommendAgent = resolveRecommendAgentConfig(globalSettings);
-  if (!toolDiscovery.enabled && !skillSelection.enabled && !recommendAgent.enabled)
+  const compaction = resolveFastJevCompactionConfig(globalSettings);
+  if (
+    !toolDiscovery.enabled &&
+    !skillSelection.enabled &&
+    !recommendAgent.enabled &&
+    !compaction.enabled
+  )
     return undefined;
 
   if (typeof modelRegistry !== "object" || modelRegistry === null) return { state: "unavailable" };
