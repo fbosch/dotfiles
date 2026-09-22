@@ -1,6 +1,6 @@
 ---
 color: "#61afef"
-description: Own visualization from bounded read-only source collection through rendering and visual validation. Delegate before chart discovery or data preparation whenever visualization is requested directly or indirectly, or would help explain the response. Pass the question, data or source locations, and constraints; returns replayable charts or diagrams with validation evidence, or a blocker.
+description: Collects bounded, read-only sources, renders charts or diagrams, and validates the result visually. Delivers replayable visuals with source bounds, constraints, and validation evidence.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: medium

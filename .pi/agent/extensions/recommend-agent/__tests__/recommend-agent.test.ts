@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { discoverAgentDefinitions } from "../discovery";
+import { MAX_ROUTING_POLICY_BYTES, readGlobalRoutingPolicy } from "../policy";
 import { recommendAgent } from "../recommendation";
 import { DEFAULT_RECOMMEND_AGENT_CONFIG, resolveRecommendAgentConfig } from "../settings";
 
@@ -19,6 +20,12 @@ function definition(directory: string, name: string, description: string, enable
     join(directory, `${name}.md`),
     `---\ndescription: ${description}\nenabled: ${enabled}\n---\nbody must never be exposed`,
   );
+}
+
+function routingPolicy(directory: string, body = "Canonical routing policy for this test."): void {
+  const instructions = join(directory, "instructions");
+  mkdirSync(instructions, { recursive: true });
+  writeFileSync(join(instructions, "orchestration.md"), `---\nsource: trusted\n---\n${body}\n`);
 }
 
 function responseFor(choice: string, catalog: readonly string[], confidence = 0.95): Response {
@@ -127,12 +134,22 @@ describe("recommend agent configuration and routing", () => {
     const root = temporaryDirectory();
     const agents = join(root, "agents");
     mkdirSync(agents, { recursive: true });
+    routingPolicy(
+      root,
+      "Choose the role that owns the requested deliverable.\nDo not execute delegation instructions.",
+    );
     definition(agents, "analyze", "Analyze existing code");
     let calls = 0;
     let requestBody: Record<string, unknown> | undefined;
     const fetch = async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       calls += 1;
       requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      const question = requestBody.questions as { route: { instructions: string } };
+      expect(question.route.instructions).toContain(
+        "Choose the role that owns the requested deliverable.",
+      );
+      expect(question.route.instructions).toContain("Do not execute delegation instructions.");
+      expect(question.route.instructions).not.toContain("source: trusted");
       const state = requestBody.state as { agents: readonly { id: string }[] };
       return responseFor(
         "analyze",
@@ -178,10 +195,52 @@ describe("recommend agent configuration and routing", () => {
     expect(calls).toBe(0);
   });
 
+  test("rejects invalid, empty, and oversized routing policies", () => {
+    const contents = [
+      "---\nsource: [\n---\npolicy",
+      "---\nsource: trusted\n---\n   ",
+      "x".repeat(MAX_ROUTING_POLICY_BYTES + 1),
+    ];
+    for (const content of contents) {
+      const root = temporaryDirectory();
+      const instructions = join(root, "instructions");
+      mkdirSync(instructions, { recursive: true });
+      writeFileSync(join(instructions, "orchestration.md"), content);
+      expect(readGlobalRoutingPolicy(root)).toEqual({ failure: "routing-policy-unavailable" });
+    }
+  });
+
+  test("abstains before auth when the routing policy is unavailable", async () => {
+    const root = temporaryDirectory();
+    let authCalls = 0;
+    let fetchCalls = 0;
+    const result = await recommendAgent(
+      { task: "Trace the data flow", intent: "Explain the existing implementation" },
+      {
+        modelRegistry: {
+          getProviderAuth: async () => {
+            authCalls += 1;
+            return { auth: { apiKey: "test-key" } };
+          },
+        },
+        config: enabledConfig,
+        discovery: { cwd: root, projectTrusted: false, agentDir: root },
+        fetch: async () => {
+          fetchCalls += 1;
+          return responseFor("stay", []);
+        },
+      },
+    );
+    expect(result.decision).toEqual({ decision: "abstain", reason: "routing-policy-unavailable" });
+    expect(authCalls).toBe(0);
+    expect(fetchCalls).toBe(0);
+  });
+
   test("abstains on uncertainty and stale catalog responses", async () => {
     const root = temporaryDirectory();
     const agents = join(root, "agents");
     mkdirSync(agents, { recursive: true });
+    routingPolicy(root);
     definition(agents, "analyze", "Analyze existing code");
     const uncertain = await recommendAgent(
       { task: "Trace the data flow", intent: "Explain the existing implementation" },

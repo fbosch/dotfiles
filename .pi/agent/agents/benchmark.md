@@ -1,6 +1,6 @@
 ---
 color: "#f2d066"
-description: Runs performance benchmarks, profiles code, and compares before/after results. Use when measuring performance, identifying bottlenecks, or validating optimizations.
+description: Runs performance benchmarks and profiles code to measure latency, CPU, memory, allocations, and bottlenecks. Delivers reproducible before-and-after comparisons and flags meaningful regressions or gains.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: max

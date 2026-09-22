@@ -1,6 +1,6 @@
 ---
 color: "#e5d784"
-description: Executes small, well-scoped edits, context transformations, and repeatable command workflows with explicit acceptance criteria. Prefer specialists for their named deliverables; do not use for deep design or broad cross-cutting changes.
+description: Executes small, well-scoped edits, context transformations, and repeatable command workflows with explicit acceptance criteria. Delivers bounded changes or command results without deep design work.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna-fast
 thinking: low

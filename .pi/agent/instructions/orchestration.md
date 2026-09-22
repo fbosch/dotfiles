@@ -17,6 +17,16 @@ when:
 - Consider a `stay` result before delegating. On abstention, failure, or an unavailable recommendation tool, use ordinary primary-agent routing without retrying the recommendation.
 - Skip recommendations for explicit user routing, work retained by the primary, and continuations of an existing worker. Do not call merely to justify delegation or repeat the call for the same unchanged task.
 
+## Role boundaries
+
+- Route by the requested deliverable, not shared topic words. Use `explore` to locate unfamiliar code, `analyze` to explain known code paths, and `patterns` to find reusable examples. Use `debug` when observed behavior needs a root cause.
+- Use `review` for an independent correctness or maintainability assessment, `adversarial` for deliberate attack and failure-mode probing, and `pr-feedback` for existing reviewer threads.
+- Use `validate` to execute established checks and report evidence. Use `test` when the deliverable includes test design, test changes, or interpreting test failures. Broader unexplained application failures belong with `debug`.
+- Use `lookup` for one narrow external-reference question and `research` for synthesis across sources.
+- Use `ideate` to expand alternatives, `spec` to settle behavior and interfaces, and `backlog-planning` to decompose a sufficiently defined change into verifiable tasks.
+- Use `docs` when documentation is the main deliverable and `refactor` for behavior-preserving code improvements. Use `benchmark` for performance measurement rather than general diagnosis.
+- Use `quick` for tightly scoped execution with explicit acceptance criteria. Prefer a matching specialist when the deliverable needs its expertise; reserve `general` for complex implementation or mixed work without a narrower fit.
+
 ## Model and thinking presets
 These presets apply only when invoking `subagent_type: "general"`. Select the lowest-cost fit and pass both `model` and `thinking` to that call. Never override a specialized agent's configured model or thinking level.
 

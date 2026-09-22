@@ -1,6 +1,6 @@
 ---
 color: "#5B9BD5"
-description: Quickly retrieves narrow, source-backed online references without making changes
+description: Retrieves narrow, source-backed online references without making changes. Delivers one factual or documentation answer with verified authoritative sources and explicit evidence limits.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna-fast
 thinking: low

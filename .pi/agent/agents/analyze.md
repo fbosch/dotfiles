@@ -1,6 +1,6 @@
 ---
 color: "#80a9c8"
-description: Traces how specific code works - data flow, call chains, state transitions, and component interactions. Use when you need precise file:line documentation of an existing implementation before making changes.
+description: Traces existing code through data flow, call chains, state transitions, and component interactions. Delivers precise file-and-line evidence describing current behavior before changes.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: max

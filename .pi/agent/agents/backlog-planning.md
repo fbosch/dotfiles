@@ -1,6 +1,6 @@
 ---
 color: "#8ed8c1"
-description: Converts ideas, specs, or issue text into a dependency-aware task backlog without creating tickets or implementing code. Use when the deliverable is work decomposition; use ideate for alternatives and spec for unresolved behavior contracts.
+description: Turns settled ideas, specs, or issue text into dependency-aware task backlogs without creating tickets or implementing code. Delivers ordered tasks with dependencies, scope, and observable outcomes.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low

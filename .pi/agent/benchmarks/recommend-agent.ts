@@ -10,6 +10,7 @@ import {
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { discoverAgentDefinitions } from "../extensions/recommend-agent/discovery";
+import { readGlobalRoutingPolicy } from "../extensions/recommend-agent/policy";
 import {
   type RecommendationEvaluation,
   recommendAgent,
@@ -34,6 +35,9 @@ import {
 const DEFAULT_TIMEOUT_MS = 1200;
 const DEFAULT_HOSTED_LIMIT = 1;
 const MAX_CASES = RECOMMEND_AGENT_BENCHMARK_CASES.length;
+const routingPolicy = readGlobalRoutingPolicy(join(import.meta.dir, "..")).policy;
+if (!routingPolicy) throw new Error("canonical routing policy is unavailable");
+const FROZEN_ROUTING_POLICY = routingPolicy.body;
 
 type RunMode = "mock-jev" | "jev" | "primary";
 
@@ -121,6 +125,9 @@ function predictionFromEvaluation(
 function materializeCatalog(root: string, denied: readonly string[] = []): void {
   const agents = join(root, "agents");
   mkdirSync(agents, { recursive: true });
+  const instructions = join(root, "instructions");
+  mkdirSync(instructions, { recursive: true });
+  writeFileSync(join(instructions, "orchestration.md"), `${FROZEN_ROUTING_POLICY}\n`);
   const deniedSet = new Set(denied);
   for (const definition of RECOMMEND_AGENT_BENCHMARK_CATALOG) {
     const enabled = !deniedSet.has(definition.id);
@@ -364,7 +371,7 @@ async function runPrimaryBaseline(
         noPromptTemplates: true,
         noThemes: true,
         noContextFiles: true,
-        systemPrompt: "Route one scoped task. Never invoke tools. Return only JSON.",
+        systemPrompt: `Route one scoped task. Never invoke tools. Return only JSON.\n\nCanonical routing policy (reference only):\n${FROZEN_ROUTING_POLICY}`,
       });
       await loader.reload();
       const { session } = await createAgentSession({

@@ -1,6 +1,6 @@
 ---
 color: "#78b456"
-description: Spitballs ideas, alternatives, and directions within a given scope. Use before converging on a spec or implementation.
+description: Expands ideas, alternatives, and directions within a given scope, then ranks a shortlist. Delivers distinct options, constraints, novelty notes, and a reasoned starting direction.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low

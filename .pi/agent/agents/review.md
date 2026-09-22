@@ -1,6 +1,6 @@
 ---
 color: "#a8d0e6"
-description: Provides a read-only assessment of code correctness, security, and maintainability after changes or during audits. Use adversarial for dedicated attack and failure-mode probing, validate for check execution, and pr-feedback for existing GitHub review comments.
+description: Assesses changed or existing code for correctness, security, performance, and maintainability without making changes. Delivers evidence-backed findings, coverage limits, and severity.
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: high

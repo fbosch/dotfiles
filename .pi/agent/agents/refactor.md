@@ -1,6 +1,6 @@
 ---
 color: "#aae373"
-description: Makes requested behavior-preserving improvements to duplication, naming, logic, and readability. Use when code cleanup is the deliverable; use review for assessment without edits and debug for incorrect behavior.
+description: Makes requested behavior-preserving improvements to duplication, naming, logic, and readability. Delivers scoped edits plus focused checks while keeping interfaces and behavior stable.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: xhigh

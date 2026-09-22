@@ -208,6 +208,30 @@ export function searchDeferredTools(
     .map(({ tool }) => tool);
 }
 
+export function expandDeferredToolFamilyMatches(
+  tools: readonly ToolInfo[],
+  matches: readonly ToolInfo[],
+  prefixes: readonly string[],
+): ToolInfo[] {
+  const matchedPrefixes = prefixes.filter((prefix) =>
+    matches.some((tool) => tool.name.startsWith(prefix)),
+  );
+  if (matchedPrefixes.length === 0) return [...matches];
+
+  const expanded = [...matches];
+  const selectedNames = new Set(matches.map((tool) => tool.name));
+  for (const tool of tools) {
+    if (
+      !selectedNames.has(tool.name) &&
+      matchedPrefixes.some((prefix) => tool.name.startsWith(prefix))
+    ) {
+      selectedNames.add(tool.name);
+      expanded.push(tool);
+    }
+  }
+  return expanded;
+}
+
 interface JevCandidate {
   id: string;
   tool: ToolInfo;
@@ -429,8 +453,8 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
               rankingSource: "lexical" as const,
             };
         signal?.throwIfAborted();
-        const { matches, rankingSource } = ranked;
-
+        const { matches: rankedMatches, rankingSource } = ranked;
+        const matches = expandDeferredToolFamilyMatches(tools, rankedMatches, prefixes);
         if (matches.length === 0) {
           return {
             content: [

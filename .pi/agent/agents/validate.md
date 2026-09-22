@@ -1,6 +1,6 @@
 ---
 color: "#70b5a1"
-description: Runs bounded, read-only post-change validation and reports evidence. Use after edits when targeted checks need execution without test design, debugging, or code review.
+description: Runs bounded, read-only post-change checks including formatting, linting, typechecking, builds, configuration validation, and targeted tests. Delivers evidence and reports validation gaps without editing files.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna-fast
 thinking: medium

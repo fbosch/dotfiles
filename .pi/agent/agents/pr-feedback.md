@@ -1,6 +1,6 @@
 ---
 color: "#b7d6f5"
-description: Triage GitHub PR review feedback, validate claims against the code, apply confirmed fixes, and resolve explicitly approved threads.
+description: Triages GitHub pull-request review feedback, validates claims against code and tests, applies confirmed fixes after approval, and resolves explicitly approved threads.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: xhigh

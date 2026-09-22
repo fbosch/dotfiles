@@ -40,22 +40,43 @@ async function buildDeltaBundle(outdir: string) {
   return build;
 }
 
-test("keeps command, execution, and edit-preview dependencies out of the startup chunk", async () => {
+test("keeps command, execution, and edit-preview dependencies out of the static graph", async () => {
   const outdir = await mkdtemp(join(tmpdir(), "pi-delta-bundle-"));
   try {
-    await buildDeltaBundle(outdir);
-    const entry = await readFile(join(outdir, "index.js"), "utf8");
+    const build = await buildDeltaBundle(outdir);
     const files = await readdir(outdir);
     const chunks = await Promise.all(
       files
         .filter((file) => file.endsWith(".js"))
         .map(async (file) => [file, await readFile(join(outdir, file), "utf8")] as const),
     );
+    const inputs = build.metafile?.inputs;
+    if (inputs === undefined) throw new Error("Bun build did not produce a metafile");
 
-    expect(entry).not.toContain("child_process");
-    expect(entry).not.toContain("createEditToolDefinition");
-    expect(entry).not.toContain("BorderedLoader");
-    expect(entry).toContain('import("./chunk-');
+    const indexInput = join(import.meta.dir, "..", "index.ts");
+    const staticInputs = new Set<string>();
+    const pending = [indexInput];
+    while (pending.length > 0) {
+      const input = pending.pop();
+      if (input === undefined || staticInputs.has(input)) continue;
+      staticInputs.add(input);
+      for (const imported of inputs[input]?.imports ?? []) {
+        if (imported.kind === "dynamic-import" || imported.external) continue;
+        const resolved =
+          inputs[imported.path] === undefined
+            ? join(
+                imported.path.startsWith(".") ? input.replace(/\/[^/]+$/, "") : "",
+                imported.path,
+              )
+            : imported.path;
+        pending.push(resolved);
+      }
+    }
+
+    for (const module of ["command.ts", "execution.ts", "edit-preview.ts"]) {
+      expect([...staticInputs].some((input) => input.endsWith(`/${module}`))).toBe(false);
+      expect(Object.keys(inputs).some((input) => input.endsWith(`/${module}`))).toBe(true);
+    }
 
     expect(chunks.find(([, source]) => source.includes("child_process"))).toBeDefined();
     expect(chunks.find(([, source]) => source.includes("createEditToolDefinition"))).toBeDefined();

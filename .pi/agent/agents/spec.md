@@ -1,6 +1,6 @@
 ---
 color: "#81a5bb"
-description: Defines scope, interfaces, invariants, and failure behavior when requirements for new or changed behavior are ambiguous. Use before implementation when the contract needs decisions; use backlog-planning when the contract is settled and needs task decomposition.
+description: Defines scope, interfaces, invariants, and failure behavior when requirements are ambiguous. Delivers a precise contract, explicit assumptions, material questions, and readiness status without implementation.
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: medium

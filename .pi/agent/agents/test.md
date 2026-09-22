@@ -1,6 +1,6 @@
 ---
 color: "#96bd78"
-description: Designs, writes, and improves tests and investigates failures requiring test-focused interpretation or changes. Use validate for execution-only post-change checks and debug for broader application or environment diagnosis.
+description: Designs, writes, improves, and diagnoses tests for behavior, edge cases, and failure conditions. Delivers focused regression coverage, clear case names, and interpreted results.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-luna
 thinking: max

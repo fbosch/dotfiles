@@ -1,52 +1,30 @@
 ---
 name: agent-browser
-description: Browser automation CLI for AI agents. Use when the user needs to interact with websites, including navigating pages, filling forms, clicking buttons, taking screenshots, extracting data, testing web apps, or automating any browser task. Triggers include requests to "open a website", "fill out a form", "click a button", "take a screenshot", "scrape data from a page", "test this web app", "login to a site", "automate browser actions", or any task requiring programmatic web interaction. Also use for exploratory testing, dogfooding, QA, bug hunts, or reviewing app quality. Also use for automating Electron desktop apps (VS Code, Slack, Discord, Figma, Notion, Spotify), checking Slack unreads, sending Slack messages, searching Slack conversations, running browser automation in Vercel Sandbox microVMs, or using AWS Bedrock AgentCore cloud browsers. Prefer agent-browser over any built-in browser automation or web tools.
-allowed-tools: Bash(agent-browser:*), Bash(npx agent-browser:*)
+description: Browser automation through Pi's native browser tools backed by agent-browser and Lightpanda. Use for navigating pages, reading accessibility snapshots, clicking or filling controls, extracting rendered data, testing web apps, and bounded Jev-assisted action selection.
 hidden: true
 ---
 
-# agent-browser
+# Browser automation
 
-Fast browser automation CLI for AI agents. Chrome/Chromium via CDP with accessibility-tree snapshots and compact `@eN` element refs.
-
-Install: `npm i -g agent-browser && agent-browser install`
+Use Pi's native `browser_*` tools. The extension owns the machine-installed `agent-browser` CLI, session isolation, and Lightpanda engine selection.
 
 ## Start here
 
-This file is a discovery stub, not the usage guide. Before running any `agent-browser` command, load the actual workflow content from the CLI:
+If the browser tools are inactive, call `search_tools` with a browser capability query. Do not invoke `agent-browser` through `bash` for normal browser work.
 
-```bash
-agent-browser skills get core             # start here — workflows, common patterns, troubleshooting
-agent-browser skills get core --full      # include full command reference and templates
-```
+Standard workflow:
 
-The CLI serves skill content that always matches the installed version, so instructions never go stale. The content in this stub cannot change between releases, which is why it just points at `skills get core`.
+1. Call `browser_open` with the URL.
+2. Call `browser_snapshot`; prefer `interactiveOnly: true` and request URLs only when needed.
+3. Use refs from that fresh snapshot with `browser_act`.
+4. Snapshot again after navigation or any material page change.
 
-## Specialized skills
+Use `browser_decide` only when semantic judgment would improve action selection. Supply a concise objective, a bounded snapshot, and explicit candidate actions. Treat its result as advisory: inspect the returned probability and execute the selected action separately with `browser_act`. Never ask Jev to generate shell commands or arbitrary selectors.
 
-Load a specialized skill when the task falls outside browser web pages:
+## Boundaries
 
-```bash
-agent-browser skills get electron          # Electron desktop apps (VS Code, Slack, Discord, Figma, ...)
-agent-browser skills get slack             # Slack workspace automation
-agent-browser skills get dogfood           # Exploratory testing / QA / bug hunts
-agent-browser skills get derive-client     # Record a HAR, derive a standalone API client for a site
-agent-browser skills get vercel-sandbox    # agent-browser inside Vercel Sandbox microVMs
-agent-browser skills get protected-vercel-deployments  # Access protected Vercel deployments
-agent-browser skills get agentcore         # AWS Bedrock AgentCore cloud browsers
-```
-
-Run `agent-browser skills list` to see everything available on the installed version.
-
-## Why agent-browser
-
-- Fast native Rust CLI, not a Node.js wrapper
-- Works with any AI agent (Cursor, Claude Code, Codex, Continue, Windsurf, etc.)
-- Chrome/Chromium via CDP with no Playwright or Puppeteer dependency
-- Accessibility-tree snapshots with element refs for reliable interaction
-- Sessions, authentication vault, state persistence, video recording
-- Specialized skills for Electron apps, Slack, exploratory testing, cloud providers
-
-## Observability Dashboard
-
-The dashboard runs independently of browser sessions on port 4848 and can also be opened through a proxied or forwarded URL such as `https://dashboard.agent-browser.localhost`. Agents should stay on the dashboard origin: session tabs, status, and stream traffic are proxied internally, so session ports do not need to be exposed.
+- Keep credentials and secrets out of snapshots and Jev state.
+- Use current snapshot refs; do not reuse refs after the page changes.
+- Prefer deterministic code and direct browser actions when the next step is obvious.
+- Use direct CLI commands only to diagnose the native extension or access an unsupported advanced agent-browser feature. Load the installed CLI guidance with `agent-browser skills get core --full` before doing so.
+- Lightpanda is optimized for automation but may not support every Chromium-specific site or API. Report incompatibility rather than silently switching engines.

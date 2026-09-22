@@ -1,6 +1,6 @@
 ---
 color: "#e36435"
-description: Challenges a proposed design or implementation with concrete attack scenarios, malicious inputs, stress cases, and failure reproducers. Use for dedicated adversarial assessment, especially of risky input boundaries or infrastructure; use review for a general code audit.
+description: Tests proposed designs and implementations against concrete attack scenarios, malicious inputs, stress cases, and failure reproducers. Delivers ranked risks, expected-versus-actual behavior, mitigations, and focused test cases.
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: xhigh

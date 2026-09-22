@@ -1,6 +1,6 @@
 ---
 color: "#a4c0c9"
-description: Writes and maintains documentation including READMEs, API docs, and inline comments. Use when creating new docs, updating existing documentation, or improving the clarity of existing content.
+description: Writes and maintains documentation, API references, READMEs, and inline comments. Delivers source-grounded prose with an explicit audience, current behavior, and project tone.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low

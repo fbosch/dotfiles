@@ -1,6 +1,6 @@
 ---
 color: "#de7681"
-description: Diagnoses concrete bugs, errors, unexpected behavior, and performance regressions using reproductions, logs, and runtime state. Use analyze for symptom-free code explanation, test for test-focused failures, and benchmark for performance measurement rather than root-cause diagnosis.
+description: Diagnoses concrete bugs, errors, unexpected behavior, and performance regressions using reproductions, logs, and runtime state. Delivers confirmed facts, root-cause hypotheses, verification steps, and focused fixes when authorized.
 prompt_mode: replace
 model: openai-codex/gpt-5.6-sol
 thinking: low
