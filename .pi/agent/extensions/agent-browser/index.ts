@@ -619,6 +619,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       const trace: RunTraceEntry[] = [];
       const seen = new Set<string>();
       const completed = new Set<string>();
+      const completedDescriptions = new Map<string, string[]>();
       const maxSteps = params.maxSteps ?? DEFAULT_RUN_STEPS;
       const confidenceThreshold = params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE;
       const authorizationThreshold =
@@ -635,6 +636,11 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         const pageUrl = commandOutput(
           await runBrowser(pi, sessionId, ["get", "url"], signal),
         ).trim();
+        const completedOnPage = completedDescriptions.get(pageUrl) ?? [];
+        const decisionPageState =
+          completedOnPage.length > 0
+            ? `${snapshot}\n\nActions already completed on this page:\n${completedOnPage.map((description) => `- ${description}`).join("\n")}`
+            : snapshot;
         const candidates = parseRunCandidates(snapshot, params.inputs).filter(
           ({ id }) => !completed.has(`${pageUrl}\u0000${id}`),
         );
@@ -647,7 +653,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           ctx.modelRegistry,
           createDecisionRequest({
             objective: params.objective,
-            pageState: snapshot,
+            pageState: decisionPageState,
             actions: candidates.map(({ id, description }) => ({ id, description })),
           }),
           { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
@@ -681,7 +687,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         const authorizationGateway = await requestVercelGateway(
           ctx.modelRegistry,
-          createRunAuthorizationRequest(params.objective, snapshot, candidate),
+          createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
           { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
         );
         if (!authorizationGateway.ok) {
@@ -698,6 +704,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         await runBrowser(pi, sessionId, candidate.command, signal);
         completed.add(`${pageUrl}\u0000${candidate.id}`);
+        completedDescriptions.set(pageUrl, [...completedOnPage, candidate.description]);
         await settleAfterAction(pi, sessionId, candidate.trace.action, signal);
         trace.push({
           step: stepNumber,
