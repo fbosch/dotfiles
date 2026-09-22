@@ -230,7 +230,7 @@ describe("tool discovery", () => {
     expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "search_tools"]);
   });
 
-  test("defers chart tools and discovers them on demand", async () => {
+  test("loads a matched underscore-namespaced tool family", async () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
@@ -245,11 +245,46 @@ describe("tool discovery", () => {
     await harness.discoverResources();
     expect(harness.activeTools).toEqual(["read", "search_tools"]);
     expect((await harness.search("chart timeline", 1)).details).toEqual({
-      matches: ["chart_gantt"],
-      added: ["chart_gantt"],
+      matches: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
+      added: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
       rankingSource: "lexical",
     });
-    expect(harness.activeTools).toEqual(["read", "search_tools", "chart_gantt"]);
+    expect(harness.activeTools).toEqual([
+      "read",
+      "search_tools",
+      "chart_gantt",
+      "chart_pie",
+      "chart_line",
+      "chart_network",
+    ]);
+  });
+
+  test("loads the full browser family from one matching search", async () => {
+    const harness = createHarness({
+      tools: [
+        dummyTool("browser_open", "Open a URL in Lightpanda"),
+        dummyTool("browser_snapshot", "Read the current page accessibility snapshot"),
+        dummyTool("browser_act", "Interact with a browser element"),
+        dummyTool("browser_decide", "Choose among explicit browser actions"),
+      ],
+      activeTools: [],
+    });
+
+    await harness.discoverResources();
+    const result = await harness.search("open a URL in the browser", 1);
+
+    expect(result.details).toEqual({
+      matches: ["browser_open", "browser_snapshot", "browser_act", "browser_decide"],
+      added: ["browser_open", "browser_snapshot", "browser_act", "browser_decide"],
+      rankingSource: "lexical",
+    });
+    expect(harness.activeTools).toEqual([
+      "search_tools",
+      "browser_open",
+      "browser_snapshot",
+      "browser_act",
+      "browser_decide",
+    ]);
   });
 
   test("loads the highest-scoring matches additively", async () => {
@@ -270,14 +305,15 @@ describe("tool discovery", () => {
     const result = await harness.search("figma implementation context", 1);
 
     expect(result.details).toEqual({
-      matches: ["figma_get_implementation_context"],
-      added: ["figma_get_implementation_context"],
+      matches: ["figma_get_implementation_context", "figma_parse_url"],
+      added: ["figma_get_implementation_context", "figma_parse_url"],
       rankingSource: "lexical",
     });
     expect(harness.activeTools).toEqual([
       "read",
       "search_tools",
       "figma_get_implementation_context",
+      "figma_parse_url",
     ]);
   });
 

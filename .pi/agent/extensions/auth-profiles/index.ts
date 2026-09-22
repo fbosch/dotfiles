@@ -113,6 +113,41 @@ function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
   }
   return { credentials, store };
 }
+export function createProfileCredentialStore(
+  selected: CredentialStore,
+  shared: CredentialStore,
+  profileProviderId: string,
+): CredentialStore & { readonly path?: string } {
+  const target = (providerId: string) => (providerId === profileProviderId ? selected : shared);
+  const selectedPath =
+    "path" in selected && typeof selected.path === "string" ? selected.path : undefined;
+
+  return {
+    // Preserve file-backed store diagnostics used by profile status and tests.
+    ...(selectedPath === undefined ? {} : { path: selectedPath }),
+    async read(providerId, options) {
+      return (
+        (await selected.read(providerId, options)) ??
+        (providerId === profileProviderId ? undefined : await shared.read(providerId, options))
+      );
+    },
+    async list(options) {
+      const [selectedEntries, sharedEntries] = await Promise.all([
+        selected.list(options),
+        shared.list(options),
+      ]);
+      const merged = new Map(sharedEntries.map((entry) => [entry.providerId, entry]));
+      for (const entry of selectedEntries) merged.set(entry.providerId, entry);
+      return [...merged.values()];
+    },
+    modify(providerId, fn, options) {
+      return target(providerId).modify(providerId, fn, options);
+    },
+    delete(providerId, options) {
+      return target(providerId).delete(providerId, options);
+    },
+  };
+}
 
 /** Point the session's live credential store at the profile's file. */
 async function bindProfile(
@@ -123,7 +158,15 @@ async function bindProfile(
 ): Promise<string> {
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
-  credentials.store = await adapter.createCredentialStore(profile);
+  const selectedStore = await adapter.createCredentialStore(profile);
+  credentials.store =
+    profile === DEFAULT_PROFILE
+      ? selectedStore
+      : createProfileCredentialStore(
+          selectedStore,
+          await adapter.createCredentialStore(DEFAULT_PROFILE),
+          adapter.providerId,
+        );
   if (options.refresh === false) return path;
 
   const refresh = async (): Promise<void> => {

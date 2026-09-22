@@ -208,23 +208,24 @@ export function searchDeferredTools(
     .map(({ tool }) => tool);
 }
 
+function inferredToolFamily(name: string): string | undefined {
+  return /^([^_]+_)/u.exec(name)?.[1];
+}
+
 export function expandDeferredToolFamilyMatches(
   tools: readonly ToolInfo[],
   matches: readonly ToolInfo[],
-  prefixes: readonly string[],
 ): ToolInfo[] {
-  const matchedPrefixes = prefixes.filter((prefix) =>
-    matches.some((tool) => tool.name.startsWith(prefix)),
+  const matchedFamilies = new Set(
+    matches.map((tool) => inferredToolFamily(tool.name)).filter((family) => family !== undefined),
   );
-  if (matchedPrefixes.length === 0) return [...matches];
+  if (matchedFamilies.size === 0) return [...matches];
 
   const expanded = [...matches];
   const selectedNames = new Set(matches.map((tool) => tool.name));
   for (const tool of tools) {
-    if (
-      !selectedNames.has(tool.name) &&
-      matchedPrefixes.some((prefix) => tool.name.startsWith(prefix))
-    ) {
+    const family = inferredToolFamily(tool.name);
+    if (!selectedNames.has(tool.name) && family !== undefined && matchedFamilies.has(family)) {
       selectedNames.add(tool.name);
       expanded.push(tool);
     }
@@ -454,7 +455,7 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
             };
         signal?.throwIfAborted();
         const { matches: rankedMatches, rankingSource } = ranked;
-        const matches = expandDeferredToolFamilyMatches(tools, rankedMatches, prefixes);
+        const matches = expandDeferredToolFamilyMatches(tools, rankedMatches);
         if (matches.length === 0) {
           return {
             content: [
