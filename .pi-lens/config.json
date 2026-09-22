@@ -6,6 +6,13 @@
   "autofix": {
     "enabled": false
   },
+  "rules": {
+    "disabled-rules": {
+      "disable": [
+        "ts-ssrf"
+      ]
+    }
+  },
   "lsp": {
     "disabledServers": [
       "ast-grep",

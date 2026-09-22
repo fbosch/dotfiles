@@ -288,12 +288,36 @@ function summarizedInput(input: RunValue): string {
   const value = input.value.length > 100 ? `${input.value.slice(0, 100)}…` : input.value;
   return `${JSON.stringify(input.name)} (${JSON.stringify(value)})`;
 }
+function normalizedControlName(value: string): string {
+  return value.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function inputMatchesControl(input: RunValue, label: string): boolean {
+  const inputName = normalizedControlName(input.name);
+  const controlName = normalizedControlName(label);
+  return (
+    inputName.length >= 3 &&
+    controlName.length >= 3 &&
+    (inputName.includes(controlName) || controlName.includes(inputName))
+  );
+}
 
 export function parseRunCandidates(
   snapshot: string,
   inputs: readonly RunValue[] = [],
 ): RunCandidate[] {
   const candidates: RunCandidate[] = [];
+  const indexedInputs = inputs.map((input, inputIndex) => ({ input, inputIndex }));
+  const hasNamedMatches = snapshot.split(/\r?\n/u).some((line) => {
+    const match = INTERACTIVE_SNAPSHOT_LINE.exec(line.trim());
+    const role = match?.[1];
+    const label = match?.[2];
+    return (
+      (role === "textbox" || role === "searchbox" || role === "combobox") &&
+      label !== undefined &&
+      inputs.some((input) => inputMatchesControl(input, label))
+    );
+  });
   const add = (candidate: RunCandidate): void => {
     if (candidates.length < MAX_ACTIONS) candidates.push(candidate);
   };
@@ -333,7 +357,10 @@ export function parseRunCandidates(
         trace: { action, ref, label: displayLabel },
       });
     } else {
-      for (const [inputIndex, input] of inputs.entries()) {
+      const candidateInputs = hasNamedMatches
+        ? indexedInputs.filter(({ input }) => inputMatchesControl(input, displayLabel))
+        : indexedInputs;
+      for (const { input, inputIndex } of candidateInputs) {
         const action = role === "combobox" ? "select" : "fill";
         add({
           id: `${action}:${rawRef}:${inputIndex}`,
@@ -624,6 +651,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       const confidenceThreshold = params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE;
       const authorizationThreshold =
         params.authorizationThreshold ?? DEFAULT_STEP_SAFETY_CONFIDENCE;
+      let pageUrl: string | undefined;
       let stopReason = "max_steps";
 
       for (let stepNumber = 1; stepNumber <= maxSteps; stepNumber += 1) {
@@ -633,9 +661,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           params.inputs,
         );
         const snapshot = redactedSnapshot;
-        const pageUrl = commandOutput(
-          await runBrowser(pi, sessionId, ["get", "url"], signal),
-        ).trim();
+        pageUrl ??= commandOutput(await runBrowser(pi, sessionId, ["get", "url"], signal)).trim();
         const completedOnPage = completedDescriptions.get(pageUrl) ?? [];
         const decisionPageState =
           completedOnPage.length > 0
@@ -706,6 +732,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         completed.add(`${pageUrl}\u0000${candidate.id}`);
         completedDescriptions.set(pageUrl, [...completedOnPage, candidate.description]);
         await settleAfterAction(pi, sessionId, candidate.trace.action, signal);
+        if (candidate.trace.action === "click") pageUrl = undefined;
         trace.push({
           step: stepNumber,
           snapshot,
@@ -715,11 +742,22 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         });
       }
 
-      const finalResult = await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal);
-      const finalSnapshot = redactSensitiveInputs(
-        boundedOutput(commandOutput(finalResult)),
+      let finalSnapshot = redactSensitiveInputs(
+        boundedOutput(
+          commandOutput(await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal)),
+        ),
         params.inputs,
       );
+      const lastTrace = trace.at(-1);
+      if (lastTrace?.action.action === "click" && finalSnapshot === lastTrace.snapshot) {
+        await runBrowser(pi, sessionId, ["wait", "1000"], signal);
+        finalSnapshot = redactSensitiveInputs(
+          boundedOutput(
+            commandOutput(await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal)),
+          ),
+          params.inputs,
+        );
+      }
       const summary = trace
         .map(
           ({ step, action, probability, authorizationProbability }) =>

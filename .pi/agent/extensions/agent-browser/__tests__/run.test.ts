@@ -46,12 +46,6 @@ describe("browser run", () => {
         trace: { action: "click", ref: "@e6", label: "Medium" },
       },
       {
-        id: "select:e4:0",
-        description: 'Select "email" ("person@example.com") in "Country" at @e4.',
-        command: ["select", "@e4", "person@example.com"],
-        trace: { action: "select", ref: "@e4", label: "Country", input: "email" },
-      },
-      {
         id: "click:e5",
         description: 'Click "Submit" at @e5.',
         command: ["click", "@e5"],

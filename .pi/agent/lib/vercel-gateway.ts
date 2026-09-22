@@ -81,14 +81,15 @@ interface DeadlineState {
   readonly signal: AbortSignal;
   readonly callerCancelled: () => boolean;
   readonly timedOut: () => boolean;
+  readonly attemptTimedOut: () => boolean;
 }
+
+type AttemptDeadline = DeadlineState & { readonly dispose: () => void };
 
 async function awaitWithinDeadline<T>(
   promise: Promise<T>,
   signal: AbortSignal,
 ): Promise<AwaitStageResult<T>> {
-  if (signal.aborted) return { completed: false };
-
   return new Promise<AwaitStageResult<T>>((resolve) => {
     let settled = false;
     const cleanup = () => signal.removeEventListener("abort", onAbort);
@@ -105,7 +106,40 @@ async function awaitWithinDeadline<T>(
       (value) => finish({ completed: true, value }),
       () => finish({ completed: false }),
     );
+    if (signal.aborted) finish({ completed: false });
   });
+}
+
+function createAttemptDeadline(overall: DeadlineState, timeoutMs?: number): AttemptDeadline {
+  const controller = new AbortController();
+  let attemptTimedOut = false;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  const onOverallAbort = () => controller.abort();
+  if (overall.signal.aborted) controller.abort();
+  else overall.signal.addEventListener("abort", onOverallAbort, { once: true });
+
+  if (timeoutMs !== undefined && !overall.signal.aborted) {
+    timeout = setTimeout(
+      () => {
+        if (overall.signal.aborted) return;
+        attemptTimedOut = true;
+        controller.abort();
+      },
+      Math.max(1, timeoutMs),
+    );
+  }
+
+  return {
+    signal: controller.signal,
+    callerCancelled: overall.callerCancelled,
+    timedOut: overall.timedOut,
+    attemptTimedOut: () => attemptTimedOut,
+    dispose: () => {
+      if (timeout !== undefined) clearTimeout(timeout);
+      overall.signal.removeEventListener("abort", onOverallAbort);
+    },
+  };
 }
 
 function failure(
@@ -150,8 +184,8 @@ export function parseRetryAfter(value: string | null, nowMs = Date.now()): numbe
 
 function normalizedTimeout(timeoutMs: number | undefined): number {
   if (timeoutMs === undefined) return DEFAULT_VERCEL_GATEWAY_TIMEOUT_MS;
-  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return 0;
-  return Math.floor(timeoutMs);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return 1;
+  return Math.max(1, Math.floor(timeoutMs));
 }
 
 function stageFailure(
@@ -160,7 +194,8 @@ function stageFailure(
   deadline: DeadlineState,
 ): VercelGatewayFailure | undefined {
   if (deadline.callerCancelled()) return failure(provider, "caller-cancellation", stage);
-  if (deadline.timedOut() || deadline.signal.aborted) return failure(provider, "timeout", stage);
+  if (deadline.timedOut() || deadline.attemptTimedOut() || deadline.signal.aborted)
+    return failure(provider, "timeout", stage);
   return undefined;
 }
 
@@ -189,6 +224,9 @@ async function requestProvider<TRequest extends object>(
     );
   }
 
+  const authDeadlineFailure = stageFailure(provider.id, "auth", deadline);
+  if (authDeadlineFailure !== undefined) return authDeadlineFailure;
+
   const auth = authResult.value;
   if (auth === undefined) return failure(provider.id, "missing-credentials", "auth");
   let apiKey: unknown;
@@ -216,6 +254,7 @@ async function requestProvider<TRequest extends object>(
   try {
     responseResult = await awaitWithinDeadline(
       Promise.resolve().then(() => {
+        if (deadline.signal.aborted) throw new Error("provider attempt aborted");
         options.onFetchAttempt?.();
         return (options.fetch ?? globalThis.fetch)(provider.endpoint, {
           method: "POST",
@@ -292,9 +331,12 @@ export async function requestVercelGateway<TRequest extends object>(
   options: VercelGatewayRequestOptions = {},
 ): Promise<VercelGatewayResult> {
   const timeoutMs = normalizedTimeout(options.timeoutMs);
+  const primaryTimeoutMs = Math.max(1, Math.floor(timeoutMs / 2));
   const deadlineController = new AbortController();
   let timedOut = false;
   let callerCancelled = options.signal?.aborted === true;
+  if (callerCancelled) deadlineController.abort();
+
   const timeout = setTimeout(() => {
     timedOut = true;
     deadlineController.abort();
@@ -308,15 +350,26 @@ export async function requestVercelGateway<TRequest extends object>(
     signal: deadlineController.signal,
     callerCancelled: () => callerCancelled,
     timedOut: () => timedOut,
+    attemptTimedOut: () => false,
+  };
+  const runAttempt = async (
+    provider: ProviderConfig,
+    attemptTimeoutMs?: number,
+  ): Promise<VercelGatewayResult> => {
+    const attemptDeadline = createAttemptDeadline(deadline, attemptTimeoutMs);
+    try {
+      return await requestProvider(registry, request, provider, options, attemptDeadline);
+    } finally {
+      attemptDeadline.dispose();
+    }
   };
 
   try {
-    const primary = await requestProvider(registry, request, PRIMARY_PROVIDER, options, deadline);
+    const primary = await runAttempt(PRIMARY_PROVIDER, primaryTimeoutMs);
     if (primary.ok || callerCancelled || timedOut || deadlineController.signal.aborted)
       return primary;
 
-    // One bounded fallback shares the primary attempt's deadline and caller abort signal.
-    const fallback = await requestProvider(registry, request, FALLBACK_PROVIDER, options, deadline);
+    const fallback = await runAttempt(FALLBACK_PROVIDER);
     if (
       !fallback.ok &&
       fallback.stage === "auth" &&

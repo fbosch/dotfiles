@@ -17,11 +17,32 @@ import {
 // Keep the harness at the public event seam: registration and emitted events.
 type EventHandler = (event: unknown, ctx: ExtensionContext) => unknown;
 
-function createHarness(dependencies: SubagentRoutingHookDependencies = {}) {
+interface HarnessOptions {
+  readonly hasUI?: boolean;
+  readonly throwOnAppend?: boolean;
+  readonly throwOnNotify?: boolean;
+}
+
+function createHarness(
+  dependencies: SubagentRoutingHookDependencies = {},
+  options: HarnessOptions = {},
+) {
   const handlers = new Map<string, EventHandler>();
+  const entries: Array<{ customType: string; data: unknown }> = [];
+  const notifications: Array<{ message: string; type: string | undefined }> = [];
   const pi = {
     on(name: string, handler: EventHandler) {
       handlers.set(name, handler);
+    },
+    appendEntry(customType: string, data: unknown) {
+      if (options.throwOnAppend) throw new Error("session write failed");
+      entries.push({ customType, data });
+    },
+    sendMessage() {
+      throw new Error("unexpected sendMessage");
+    },
+    sendUserMessage() {
+      throw new Error("unexpected sendUserMessage");
     },
   } as unknown as ExtensionAPI;
   registerSubagentRoutingHook(pi, dependencies);
@@ -30,15 +51,23 @@ function createHarness(dependencies: SubagentRoutingHookDependencies = {}) {
   temporaryDirectories.push(root);
   const context = {
     cwd: root,
-    hasUI: false,
+    hasUI: options.hasUI ?? false,
     isProjectTrusted: () => false,
     modelRegistry: {},
     signal: undefined,
     sessionManager: { getBranch: () => [] },
+    ui: {
+      notify(message: string, type?: "info" | "warning" | "error") {
+        if (options.throwOnNotify) throw new Error("ui failed");
+        notifications.push({ message, type });
+      },
+    },
   } as unknown as ExtensionContext;
 
   return {
     context,
+    entries,
+    notifications,
     root,
     async emit(name: string, event: unknown): Promise<unknown> {
       const handler = handlers.get(name);
@@ -81,32 +110,53 @@ afterEach(() => {
 describe("subagent routing hook", () => {
   test("allows agreement and evaluates only the first delegation in a turn", async () => {
     const requests: Array<{ task: string; intent: string }> = [];
-    const harness = createHarness({
-      readConfig: () => enabled,
-      evaluate: async (request) => {
-        requests.push(request);
-        return evaluation({ decision: "recommend", agentId: "review" });
+    const harness = createHarness(
+      {
+        readConfig: () => enabled,
+        evaluate: async (request) => {
+          requests.push(request);
+          return evaluation({ decision: "recommend", agentId: "review" });
+        },
       },
-    });
+      { hasUI: true },
+    );
 
     await harness.emit("before_agent_start", {
       type: "before_agent_start",
       prompt: "Please handle this task.",
       systemPrompt: "",
     });
-    expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
+    const call = subagentCall();
+    const originalInput = { ...call.input };
+    expect(await harness.emit("tool_call", call)).toBeUndefined();
     expect(
       await harness.emit("tool_call", subagentCall("review", "Another task.")),
     ).toBeUndefined();
     expect(requests).toHaveLength(1);
     expect(requests[0]?.task).toBe("Review this change for regressions.");
+    expect(call.input).toEqual(originalInput);
+    expect(harness.notifications.map(({ message }) => message)).toEqual(["Jev → review ✓"]);
+    expect(harness.entries).toHaveLength(1);
+    expect(harness.entries[0]).toMatchObject({
+      customType: "recommend-agent-routing",
+      data: {
+        version: 1,
+        proposedAgentId: "review",
+        selectedAgentId: "review",
+        decision: "agreement",
+      },
+    });
+    expect(JSON.stringify(harness.entries)).not.toContain("Review this change");
   });
 
   test("blocks disagreement exactly once, then permits the primary's reconsidered call", async () => {
-    const harness = createHarness({
-      readConfig: () => enabled,
-      evaluate: async () => evaluation({ decision: "recommend", agentId: "debug" }),
-    });
+    const harness = createHarness(
+      {
+        readConfig: () => enabled,
+        evaluate: async () => evaluation({ decision: "recommend", agentId: "debug" }),
+      },
+      { hasUI: true },
+    );
 
     await harness.emit("before_agent_start", {
       type: "before_agent_start",
@@ -118,18 +168,29 @@ describe("subagent routing hook", () => {
       reason: "Jev routing recommends debug instead; reconsider this delegation.",
     });
     expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
+    expect(harness.notifications.map(({ message }) => message)).toEqual([
+      "Jev → debug (proposed review)",
+    ]);
+    expect(harness.entries[0]?.data).toMatchObject({
+      proposedAgentId: "review",
+      selectedAgentId: "debug",
+      decision: "disagreement",
+    });
   });
 
   test("blocks stay, but fails open for abstention and inference errors", async () => {
     let result: RecommendationEvaluation = evaluation({ decision: "stay" });
     let shouldThrow = false;
-    const harness = createHarness({
-      readConfig: () => enabled,
-      evaluate: async () => {
-        if (shouldThrow) throw new Error("gateway unavailable");
-        return result;
+    const harness = createHarness(
+      {
+        readConfig: () => enabled,
+        evaluate: async () => {
+          if (shouldThrow) throw new Error("gateway unavailable");
+          return result;
+        },
       },
-    });
+      { hasUI: true },
+    );
 
     await harness.emit("before_agent_start", {
       type: "before_agent_start",
@@ -153,6 +214,89 @@ describe("subagent routing hook", () => {
     });
     shouldThrow = true;
     expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
+    expect(harness.notifications.map(({ message }) => message)).toEqual([
+      "Jev → primary (proposed review)",
+      "Jev → abstain; proceeding",
+      "Jev unavailable: evaluation failed; proceeding",
+    ]);
+    expect(harness.entries).toHaveLength(3);
+    expect(harness.entries.map(({ data }) => (data as { decision: string }).decision)).toEqual([
+      "stay",
+      "abstain",
+      "unavailable",
+    ]);
+  });
+
+  test("shows safe gateway failure diagnostics without leaking the delegation prompt", async () => {
+    const harness = createHarness(
+      {
+        readConfig: () => enabled,
+        evaluate: async () => ({
+          decision: { decision: "abstain", reason: "gateway-failure" },
+          gatewayFailure: "missing-credentials",
+          gatewayProvider: "vercel-ai-gateway",
+        }),
+      },
+      { hasUI: true },
+    );
+    const call = subagentCall("review", "Bearer supersecret /Users/fbb/private task");
+
+    await harness.emit("before_agent_start", {
+      type: "before_agent_start",
+      prompt: "Please handle this task.",
+      systemPrompt: "",
+    });
+    expect(await harness.emit("tool_call", call)).toBeUndefined();
+    expect(harness.notifications.map(({ message }) => message)).toEqual([
+      "Jev unavailable: missing credentials; proceeding",
+    ]);
+    expect(harness.entries[0]?.data).toMatchObject({
+      proposedAgentId: "review",
+      decision: "unavailable",
+      reason: "gateway-failure",
+      gatewayFailure: "missing-credentials",
+      gatewayProvider: "vercel-ai-gateway",
+    });
+    expect(JSON.stringify(harness.entries)).not.toContain("supersecret");
+    expect(JSON.stringify(harness.entries)).not.toContain("/Users/fbb/private");
+  });
+
+  test("persists diagnostics in headless mode without notifying", async () => {
+    const harness = createHarness({
+      readConfig: () => enabled,
+      evaluate: async () => evaluation({ decision: "recommend", agentId: "review" }),
+    });
+
+    await harness.emit("before_agent_start", {
+      type: "before_agent_start",
+      prompt: "Please handle this task.",
+      systemPrompt: "",
+    });
+    expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
+    expect(harness.notifications).toHaveLength(0);
+    expect(harness.entries).toHaveLength(1);
+  });
+
+  test("diagnostic surface failures do not change blocking or call message APIs", async () => {
+    const harness = createHarness(
+      {
+        readConfig: () => enabled,
+        evaluate: async () => evaluation({ decision: "recommend", agentId: "debug" }),
+      },
+      { hasUI: true, throwOnAppend: true, throwOnNotify: true },
+    );
+
+    await harness.emit("before_agent_start", {
+      type: "before_agent_start",
+      prompt: "Please handle this task.",
+      systemPrompt: "",
+    });
+    expect(await harness.emit("tool_call", subagentCall())).toEqual({
+      block: true,
+      reason: "Jev routing recommends debug instead; reconsider this delegation.",
+    });
+    expect(harness.entries).toHaveLength(0);
+    expect(harness.notifications).toHaveLength(0);
   });
 
   test("bypasses explicit user-selected agents and resume calls", async () => {
