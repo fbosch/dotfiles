@@ -26,6 +26,11 @@ function preparation(
   messages: readonly unknown[],
   reserveTokens = 4_000,
   turnPrefixMessages: readonly unknown[] = [],
+  fileOps: Prepared["fileOps"] = {
+    read: new Set<string>(),
+    written: new Set<string>(),
+    edited: new Set<string>(),
+  },
 ): Prepared {
   return {
     messagesToSummarize: messages,
@@ -34,7 +39,7 @@ function preparation(
     firstKeptEntryId: "kept-1",
     tokensBefore: 1_000,
     previousSummary: undefined,
-    fileOps: { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() },
+    fileOps,
     settings: { enabled: true, reserveTokens, keepRecentTokens: 20_000 },
   } as unknown as Prepared;
 }
@@ -83,6 +88,53 @@ function toolHeavyTranscript(count: number): unknown[] {
   return messages;
 }
 
+function multiBatchTranscript(
+  count: number,
+  options: {
+    readonly largeResultAt?: number;
+    readonly largeResult?: string;
+    readonly initialContext?: string;
+  } = {},
+): unknown[] {
+  const initialText = ["Prune stale read results.", options.initialContext]
+    .filter(Boolean)
+    .join("\n");
+  const messages: unknown[] = [{ role: "user", content: [{ type: "text", text: initialText }] }];
+  for (let index = 0; index < count; index += 1) {
+    if (index > 0 && index % 10 === 0) {
+      messages.push({
+        role: "user",
+        content: [{ type: "text", text: `Local context for calls ${index + 1}-${index + 10}.` }],
+      });
+    }
+    const id = `tool-${index + 1}`;
+    messages.push(
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: `Inspect report ${index + 1}.` },
+          { type: "toolCall", id, name: "read", arguments: { path: `report-${index + 1}.txt` } },
+        ],
+      },
+      {
+        role: "toolResult",
+        toolCallId: id,
+        content: [
+          {
+            type: "text",
+            text:
+              index === options.largeResultAt
+                ? (options.largeResult ?? "LARGE_RESULT_BODY_".repeat(1_000))
+                : `short result ${index + 1}`,
+          },
+        ],
+        isError: false,
+      },
+    );
+  }
+  return messages;
+}
+
 function gatewayFetch(
   answer: (name: string) => { type: "noul"; noul: number },
   onBody?: (body: Record<string, unknown>) => void,
@@ -100,6 +152,18 @@ function gatewayFetch(
 }
 
 const checkpoint = async () => ({ text: "Checkpoint preserves the prepared context." });
+
+function continuityHeader(summary: string): string {
+  const start = summary.indexOf("<fast-jev-continuity>");
+  const closing = "</fast-jev-continuity>";
+  const end = summary.indexOf(closing, start);
+  return start < 0 || end < 0 ? "" : summary.slice(start, end + closing.length);
+}
+
+function piWrappedSummaryChars(summary: string): number {
+  return `The conversation history before this point was compacted into the following summary:\n\n<summary>\n${summary}\n</summary>`
+    .length;
+}
 
 describe("fast-jev-compaction", () => {
   test("reads only the explicit global setting and resolves configured model references", () => {
@@ -349,13 +413,23 @@ describe("fast-jev-compaction", () => {
     expect(JSON.stringify(statuses)).not.toContain("provider secret prompt");
   });
 
-  test("registers compaction after startup and exposes a status command", () => {
+  test("registers compaction after startup and exposes a status command", async () => {
     const handlers = new Map<string, unknown>();
+    const commands = new Map<
+      string,
+      { handler: (_args: string, ctx: ExtensionContext) => Promise<void> }
+    >();
+    const notices: string[] = [];
     const pi = {
       on(name: string, callback: unknown) {
         handlers.set(name, callback);
       },
-      registerCommand() {},
+      registerCommand(
+        name: string,
+        command: { handler: (_args: string, ctx: ExtensionContext) => Promise<void> },
+      ) {
+        commands.set(name, command);
+      },
       events: { emit() {} },
     } as unknown as ExtensionAPI;
     fastJevCompaction(pi);
@@ -363,6 +437,30 @@ describe("fast-jev-compaction", () => {
     const start = handlers.get("session_start") as (() => void) | undefined;
     start?.();
     expect(handlers.has("session_before_compact")).toBe(true);
+
+    const compactHandler = handlers.get("session_before_compact") as
+      | ((event: SessionBeforeCompactEvent, ctx: ExtensionContext) => Promise<unknown>)
+      | undefined;
+    const controller = new AbortController();
+    controller.abort();
+    await compactHandler?.(
+      {
+        reason: "auto",
+        preparation: preparation(transcript()),
+        branchEntries: [],
+        signal: controller.signal,
+      } as unknown as SessionBeforeCompactEvent,
+      { modelRegistry } as unknown as ExtensionContext,
+    );
+    await commands.get("fast-jev-status")?.handler("", {
+      ui: { notify: (message: string) => notices.push(message) },
+    } as unknown as ExtensionContext);
+
+    expect(notices[0]).toContain("native fallback (Fast Jev compaction not finished) (cancelled)");
+    expect(notices[0]).toContain("Jev 0 ms, summary 0 ms");
+    expect(notices[0]).toContain("calls; path native");
+    expect(notices[0]).not.toContain("Continue the migration.");
+    expect(notices[0]).not.toContain("config.ts");
   });
 
   test("redacts Jev inference state and omits tool-result bodies", () => {
@@ -427,6 +525,7 @@ describe("fast-jev-compaction", () => {
     expect(result?.summary).toContain("fast-jev-compaction truncated");
     expect(result?.summary).toContain("Keep this follow-up verbatim.");
     expect(result?.details.fastJev.attempt.outcome).toBe("pruned");
+    expect(result?.details.fastJev.attempt.checkpointReason).toBeUndefined();
     expect(statuses).toHaveLength(1);
     expect(JSON.stringify(statuses[0])).not.toContain("routine listing");
     expect(result?.details.fastJev.attempt).toMatchObject({
@@ -434,6 +533,176 @@ describe("fast-jev-compaction", () => {
       beforeChars: expect.any(Number),
       afterChars: expect.any(Number),
     });
+  });
+
+  test("adds a bounded redacted continuity header without duplicating the prior summary", async () => {
+    const longRequest =
+      "Please inspect token=header-secret and preserve only useful context. " +
+      "Additional request detail. ".repeat(40);
+    const messages = transcript("routine listing\n".repeat(700));
+    messages[3] = { role: "user", content: [{ type: "text", text: longRequest }] };
+    const previousSummary = "PRIOR_SUMMARY_MARKER";
+    const prepared = preparation(messages, 20_000, [], {
+      read: new Set([
+        ...Array.from(
+          { length: 14 },
+          (_, index) => `src/read-${String(index).padStart(2, "0")}.ts`,
+        ),
+        "/Users/fbb/private/hidden.ts",
+      ]),
+      written: new Set(["src/read-00.ts"]),
+      edited: new Set(["src/changed.ts"]),
+    });
+    prepared.previousSummary = previousSummary;
+
+    const result = await runFastJevCompaction(prepared, [], {
+      modelRegistry,
+      summarizeCheckpoint: checkpoint,
+      fetch: gatewayFetch(() => ({ type: "noul", noul: 0.01 })),
+    });
+    const header = continuityHeader(result?.summary ?? "");
+    const summary = result?.summary ?? "";
+
+    expect(result?.details.fastJev.attempt.path).toBe("prune");
+    expect(header).toContain(
+      "Latest user request in compacted span (may be superseded by Pi's kept tail",
+    );
+    expect(header).toContain("Please inspect token=[redacted]");
+    expect(header).toContain("[excerpt truncated]");
+    expect(header).toContain("Pi fileOps read paths (limit 12; 2 omitted;");
+    expect(header).toContain("Pi fileOps modified paths (limit 12; 0 omitted;");
+    expect(header).toContain("src/changed.ts");
+    expect(header).toContain("src/read-00.ts");
+    expect(header).toContain("[redacted-path]");
+    expect(header).not.toContain("header-secret");
+    expect(header).not.toContain("/Users/fbb");
+    expect(header).not.toContain(previousSummary);
+    expect(header.length).toBeLessThanOrEqual(6_000);
+    expect(summary.split(previousSummary)).toHaveLength(2);
+  });
+
+  test("includes continuity header in the wrapped reserve budget", async () => {
+    const messages = transcript("routine listing\n".repeat(700));
+    const render = (reserveTokens: number, onCheckpoint?: () => void) =>
+      runFastJevCompaction(preparation(messages, reserveTokens), [], {
+        modelRegistry,
+        summarizeCheckpoint: async () => {
+          onCheckpoint?.();
+          return { text: "small checkpoint" };
+        },
+        fetch: gatewayFetch(() => ({ type: "noul", noul: 0.01 })),
+      });
+    const roomy = await render(20_000);
+    const header = continuityHeader(roomy?.summary ?? "");
+    const withoutHeader = (roomy?.summary ?? "").slice(`${header}\n\n`.length);
+    const reserveTokens = Math.ceil(piWrappedSummaryChars(withoutHeader) / 4);
+    let checkpointCalls = 0;
+
+    expect(header.length).toBeGreaterThan(0);
+    expect(Math.ceil(piWrappedSummaryChars(withoutHeader) / 4)).toBe(reserveTokens);
+    expect(Math.ceil(piWrappedSummaryChars(roomy?.summary ?? "") / 4)).toBeGreaterThan(
+      reserveTokens,
+    );
+
+    const bounded = await render(reserveTokens, () => {
+      checkpointCalls += 1;
+    });
+    expect(bounded?.summary).toBe("small checkpoint");
+    expect(bounded?.details.fastJev.attempt.checkpointReason).toBe("final-size-limit");
+    expect(checkpointCalls).toBe(1);
+  });
+
+  test("offline synthetic continuation keeps visible anchors but loses dropped middle and end facts", async () => {
+    const resultText = [
+      "SYNTHETIC_BEGINNING_FACT",
+      "ordinary row; ".repeat(40),
+      "SYNTHETIC_MIDDLE_FACT",
+      "ordinary trailing row; ".repeat(40),
+      "SYNTHETIC_END_FACT",
+    ].join("\n");
+    const messages = transcript(resultText);
+    messages[3] = {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: "Synthetic request: report the inspected source and its useful evidence.",
+        },
+      ],
+    };
+    const result = await runFastJevCompaction(
+      preparation(messages, 10_000, [], {
+        read: new Set(["src/input.ts"]),
+        written: new Set(["src/output.ts"]),
+        edited: new Set(),
+      }),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: checkpoint,
+        fetch: gatewayFetch(() => ({ type: "noul", noul: 0.01 })),
+      },
+    );
+    const syntheticContinuationContext = result?.summary ?? "";
+
+    expect(result?.details.fastJev.attempt.path).toBe("prune");
+    expect(syntheticContinuationContext).toContain(
+      "Synthetic request: report the inspected source",
+    );
+    expect(syntheticContinuationContext).toContain("src/input.ts");
+    expect(syntheticContinuationContext).toContain("src/output.ts");
+    expect(syntheticContinuationContext).toContain("SYNTHETIC_BEGINNING_FACT");
+    expect(syntheticContinuationContext).not.toContain("SYNTHETIC_MIDDLE_FACT");
+    expect(syntheticContinuationContext).not.toContain("SYNTHETIC_END_FACT");
+  });
+
+  test("keeps Jev pruning with small positive wrapped-output savings", async () => {
+    let summaryCalls = 0;
+    const context = "Keep this retained context. ".repeat(400);
+    const resultText = "routine result line\n".repeat(100);
+    const result = await runFastJevCompaction(
+      preparation([
+        { role: "user", content: [{ type: "text", text: context }] },
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "toolCall",
+              id: "low-savings",
+              name: "read",
+              arguments: { path: "report.txt" },
+            },
+          ],
+        },
+        {
+          role: "toolResult",
+          toolCallId: "low-savings",
+          content: [{ type: "text", text: resultText }],
+          isError: false,
+        },
+      ]),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: async () => {
+          summaryCalls += 1;
+          return checkpoint();
+        },
+        fetch: gatewayFetch((name) => ({
+          type: "noul",
+          noul: name.startsWith("call_") ? 0.99 : 0.01,
+        })),
+      },
+    );
+
+    expect(result?.details.fastJev.attempt.outcome).toBe("pruned");
+    expect(result?.details.fastJev.attempt.path).toBe("prune");
+    expect(result?.details.fastJev.attempt.afterChars).toBeLessThan(
+      result?.details.fastJev.attempt.beforeChars ?? 0,
+    );
+    expect(result?.details.fastJev.reductionRatio).toBeGreaterThan(0);
+    expect(result?.details.fastJev.reductionRatio).toBeLessThan(0.25);
+    expect(summaryCalls).toBe(0);
   });
 
   test("avoids duplicating result excerpts for drop_result and represents drop_call material once", async () => {
@@ -555,15 +824,42 @@ describe("fast-jev-compaction", () => {
       [{ role: "user", content: [{ type: "text", text: "recent boundary" }] }],
     );
     let summarized: readonly unknown[] = [];
-    await runFastJevCompaction(next, [], {
+    let summaryCalls = 0;
+    const result = await runFastJevCompaction(next, [], {
       modelRegistry,
       summarizeCheckpoint: async (messages) => {
+        summaryCalls += 1;
         summarized = messages;
         return { text: "checkpoint" };
       },
     });
     expect(JSON.stringify(summarized)).toContain("old context");
     expect(JSON.stringify(summarized)).toContain("recent boundary");
+    expect(summaryCalls).toBe(1);
+    expect(result?.details.fastJev.attempt.reason).toBe("no-eligible-candidates");
+  });
+
+  test("reports no-eligible trigger separately from a checkpoint summary failure", async () => {
+    let attempt: unknown;
+    const result = await runFastJevCompaction(
+      preparation([{ role: "user", content: [{ type: "text", text: "Keep this fact." }] }]),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: async () => ({ failureReason: "summary-auth-provider-failed" }),
+        onStatus: (status) => {
+          attempt = status;
+        },
+      },
+    );
+
+    expect(result).toBeUndefined();
+    expect(attempt).toMatchObject({
+      outcome: "fallback",
+      reason: "summary-auth-provider-failed",
+      checkpointReason: "no-eligible-candidates",
+    });
+    expect(JSON.stringify(attempt)).not.toContain("Keep this fact.");
   });
 
   test("insufficient savings triggers one coherent checkpoint with previous summary", async () => {
@@ -581,10 +877,14 @@ describe("fast-jev-compaction", () => {
         receivedPrevious = previous ?? "";
         return { text: "One coherent checkpoint." };
       },
-      fetch: gatewayFetch(() => ({ type: "noul", noul: 0.99 })),
+      fetch: gatewayFetch((name) => ({
+        type: "noul",
+        noul: name.startsWith("call_") ? 0.99 : 0.01,
+      })),
     });
     expect(result?.summary).toBe("One coherent checkpoint.");
     expect(calls).toBe(1);
+    expect(result?.details.fastJev.attempt.reason).toBe("insufficient-savings");
     expect(receivedPrevious).toBe(previousSummary);
     expect(JSON.stringify(receivedMessages)).toContain("Continue the migration.");
     expect(result?.summary).not.toContain("<fast-jev-compaction>");
@@ -722,6 +1022,216 @@ describe("fast-jev-compaction", () => {
     expect(result?.summary).toBe("checkpoint after atomic Jev failure");
   });
 
+  test("visits more than 125 candidates with focused states and no tool-result bodies", async () => {
+    const privateResult = "PRIVATE_BATCH_RESULT_BODY";
+    const payloads: Record<string, unknown>[] = [];
+    const questionIds: string[] = [];
+    let summaryCalls = 0;
+    const result = await runFastJevCompaction(
+      preparation(
+        multiBatchTranscript(130, {
+          largeResultAt: 129,
+          largeResult: `${privateResult} `.repeat(1_000),
+        }),
+        20_000,
+      ),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: async () => {
+          summaryCalls += 1;
+          return checkpoint();
+        },
+        fetch: gatewayFetch(
+          (name) => ({
+            type: "noul",
+            noul: name === "result_t130" ? 0.01 : 0.99,
+          }),
+          (body) => {
+            payloads.push(body);
+            questionIds.push(...Object.keys(body.questions as Record<string, unknown>));
+          },
+        ),
+      },
+    );
+    const serialized = JSON.stringify(payloads);
+
+    expect(result?.details.fastJev.attempt.path).toBe("prune");
+    expect(summaryCalls).toBe(0);
+    expect(payloads).toHaveLength(10);
+    expect(new Set(questionIds).size).toBe(260);
+    expect(questionIds).toContain("call_t130");
+    expect(serialized).toContain("t130");
+    expect(serialized).toContain("Local context for calls 121-130.");
+    expect(serialized).not.toContain(privateResult);
+  });
+
+  test("stops requesting batches as soon as a round renders savings within reserve", async () => {
+    const payloads: Record<string, unknown>[] = [];
+    let summaryCalls = 0;
+    const result = await runFastJevCompaction(
+      preparation(
+        multiBatchTranscript(50, {
+          largeResultAt: 0,
+          largeResult: "FIRST_RESULT_TO_PRUNE_".repeat(1_000),
+        }),
+        10_000,
+      ),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: async () => {
+          summaryCalls += 1;
+          return checkpoint();
+        },
+        fetch: gatewayFetch(
+          (name) => ({
+            type: "noul",
+            noul: name === "result_t1" ? 0.01 : 0.99,
+          }),
+          (body) => payloads.push(body),
+        ),
+      },
+    );
+    const questionIds = payloads.flatMap((body) =>
+      Object.keys(body.questions as Record<string, unknown>),
+    );
+
+    expect(result?.details.fastJev.attempt.path).toBe("prune");
+    expect(summaryCalls).toBe(0);
+    expect(payloads).toHaveLength(2);
+    expect(questionIds).toContain("result_t1");
+    expect(questionIds).not.toContain("call_t29");
+  });
+
+  test("checkpoints once after exhausting all calls without savings", async () => {
+    const questionIds: string[] = [];
+    let summaryCalls = 0;
+    const result = await runFastJevCompaction(preparation(toolHeavyTranscript(30), 1_000), [], {
+      modelRegistry,
+      summarizeCheckpoint: async () => {
+        summaryCalls += 1;
+        return { text: "One checkpoint after every candidate was considered." };
+      },
+      fetch: gatewayFetch(
+        () => ({ type: "noul", noul: 0.99 }),
+        (body) => questionIds.push(...Object.keys(body.questions as Record<string, unknown>)),
+      ),
+    });
+
+    expect(result?.summary).toBe("One checkpoint after every candidate was considered.");
+    expect(summaryCalls).toBe(1);
+    expect(new Set(questionIds).size).toBe(60);
+    expect(result?.details.fastJev.attempt.checkpointReason).toBe("insufficient-savings");
+  });
+
+  test("a malformed later round checkpoints the original prepared context", async () => {
+    const privateResult = "ORIGINAL_PREPARED_RESULT_BODY";
+    const payloads: Record<string, unknown>[] = [];
+    let fetchCalls = 0;
+    let summarized = "";
+    const result = await runFastJevCompaction(
+      preparation(
+        multiBatchTranscript(30, {
+          largeResultAt: 0,
+          largeResult: `${privateResult} `.repeat(1_000),
+          initialContext: "Retain this full user context. ".repeat(1_500),
+        }),
+        1_000,
+      ),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: async (messages) => {
+          summarized = JSON.stringify(messages);
+          return { text: "Safe original checkpoint." };
+        },
+        fetch: async (_input, init) => {
+          fetchCalls += 1;
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          payloads.push(body);
+          const questions = body.questions as Record<string, unknown>;
+          if (Object.hasOwn(questions, "call_t29")) {
+            return new Response(JSON.stringify({ answers: {} }));
+          }
+          return new Response(
+            JSON.stringify({
+              answers: Object.fromEntries(
+                Object.keys(questions).map((name) => [
+                  name,
+                  { type: "noul", noul: name === "result_t1" ? 0.01 : 0.99 },
+                ]),
+              ),
+            }),
+          );
+        },
+      },
+    );
+
+    expect(result?.summary).toBe("Safe original checkpoint.");
+    expect(fetchCalls).toBe(3);
+    expect(summarized).toContain(privateResult);
+    expect(JSON.stringify(payloads)).not.toContain(privateResult);
+    expect(result?.details.fastJev.attempt.checkpointReason).toBe("malformed-jev");
+  });
+
+  test("cancellation in a later round never starts checkpoint fallback", async () => {
+    const controller = new AbortController();
+    let fetchCalls = 0;
+    let summaryCalls = 0;
+    const result = await runFastJevCompaction(preparation(multiBatchTranscript(30), 1), [], {
+      modelRegistry,
+      signal: controller.signal,
+      summarizeCheckpoint: async () => {
+        summaryCalls += 1;
+        return checkpoint();
+      },
+      fetch: async (_input, init) => {
+        fetchCalls += 1;
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        const questions = body.questions as Record<string, unknown>;
+        if (Object.hasOwn(questions, "call_t29")) controller.abort();
+        return new Response(
+          JSON.stringify({
+            answers: Object.fromEntries(
+              Object.keys(questions).map((name) => [name, { type: "noul", noul: 0.99 }]),
+            ),
+          }),
+        );
+      },
+    });
+
+    expect(result).toBeUndefined();
+    expect(fetchCalls).toBe(3);
+    expect(summaryCalls).toBe(0);
+  });
+
+  test("reports the finite eligible-call limit without labeling unvisited calls protected", async () => {
+    const questionIds = new Set<string>();
+    let attempt: unknown;
+    const result = await runFastJevCompaction(preparation(multiBatchTranscript(257), 1), [], {
+      modelRegistry,
+      summarizeCheckpoint: async () => ({ text: "Checkpoint." }),
+      fetch: gatewayFetch(
+        () => ({ type: "noul", noul: 0.99 }),
+        (body) => {
+          for (const name of Object.keys(body.questions as Record<string, unknown>)) {
+            questionIds.add(name);
+          }
+        },
+      ),
+      onStatus: (status) => {
+        attempt = status;
+      },
+    });
+
+    expect(result).toBeUndefined();
+    expect(questionIds.size).toBe(512);
+    expect(questionIds).toContain("call_t256");
+    expect(questionIds).not.toContain("call_t257");
+    expect(attempt).toMatchObject({ checkpointReason: "eligible-call-limit" });
+  });
+
   test("recovers a v1 persisted summary when preparation omits previousSummary", async () => {
     let previous = "";
     const result = await runFastJevCompaction(
@@ -761,6 +1271,7 @@ describe("fast-jev-compaction", () => {
       outcome: "fallback",
       path: "native",
       reason: "summary-auth-provider-failed",
+      checkpointReason: "insufficient-savings",
     });
     expect((attempt as { beforeChars: number; afterChars: number }).afterChars).toBe(
       (attempt as { beforeChars: number; afterChars: number }).beforeChars,

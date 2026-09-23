@@ -11,22 +11,25 @@ import {
 import { type JevGatewayFetch, requestJevGateway } from "../../lib/jev-gateway";
 
 const SETTINGS_KEY = "compaction";
-const DEFAULT_TIMEOUT_MS = 2_400;
+const REQUEST_TIMEOUT_MS = 2_400;
+const MAX_JEV_DURATION_MS = 12_000;
 const DEFAULT_SUMMARY_MODEL = "openai-codex/gpt-6-luna-fast";
 const KEEP_THRESHOLD = 0.7;
-const MIN_REDUCTION_RATIO = 0.25;
 const MAX_STATE_MESSAGES = 96;
 const MAX_STATE_CHARS = 24_000;
 const MAX_STATE_TEXT_CHARS = 320;
 const MAX_STATE_INPUT_CHARS = 240;
-const MAX_CANDIDATES = 24;
-const MAX_BATCHES = 2;
+const MAX_ELIGIBLE_CALLS = 256;
+const MAX_PARALLEL_BATCHES = 2;
 // Match jev-use's ~29 judgments per request: each tool call contributes two judgments.
 const CALLS_PER_BATCH = 14;
 const MAX_DETAILS_MESSAGES = 96;
 const MAX_DETAILS_TEXT_CHARS = 1_200;
 const MAX_DETAILS_RESULT_CHARS = 800;
 const MAX_FILE_PATHS = 64;
+const MAX_CONTINUITY_REQUEST_CHARS = 600;
+const MAX_CONTINUITY_FILE_PATHS = 12;
+const MAX_CONTINUITY_PATH_CHARS = 180;
 const TRUNCATED_RESULT_HEAD_CHARS = 240;
 // Pi wraps every persisted compaction summary before sending it back to the model.
 const COMPACTION_SUMMARY_PREFIX =
@@ -87,6 +90,8 @@ export type FastJevFailureReason =
   | "no-eligible-candidates"
   | "jev-failed"
   | "malformed-jev"
+  | "jev-timeout"
+  | "eligible-call-limit"
   | "insufficient-savings"
   | "summary-model-missing"
   | "summary-runtime-unsupported"
@@ -126,6 +131,7 @@ export interface FastJevAttemptStatus {
   readonly outcome: "pruned" | "checkpointed" | "fallback";
   readonly path: "prune" | "checkpoint" | "native";
   readonly reason?: FastJevFailureReason;
+  readonly checkpointReason?: FastJevFailureReason;
   readonly diagnostics?: FastJevDiagnostics;
   readonly jevMs: number;
   readonly summaryMs: number;
@@ -611,6 +617,7 @@ function collectCalls(messages: readonly FastJevMessage[]): ToolCall[] {
 function stateHistory(
   messages: readonly FastJevMessage[],
   calls: readonly ToolCall[],
+  focusedMessageIndexes?: ReadonlySet<number>,
 ): Record<string, unknown>[] {
   const callsByMessage = new Map<number, ToolCall[]>();
   for (const call of calls) {
@@ -619,10 +626,15 @@ function stateHistory(
     callsByMessage.set(call.messageIndex, list);
   }
 
+  const indexes =
+    focusedMessageIndexes === undefined
+      ? messages.map((_, index) => index).slice(0, MAX_STATE_MESSAGES)
+      : [...focusedMessageIndexes].sort((left, right) => left - right).slice(0, MAX_STATE_MESSAGES);
   const history: Record<string, unknown>[] = [];
   let chars = 0;
-  for (const [index, message] of messages.entries()) {
-    if (index >= MAX_STATE_MESSAGES) break;
+  for (const index of indexes) {
+    const message = messages[index];
+    if (message === undefined) continue;
     const callsForMessage = callsByMessage.get(index) ?? [];
     const entry: Record<string, unknown> = {
       role: message.role,
@@ -637,7 +649,11 @@ function stateHistory(
         result: { chars: call.resultChars, error: call.isError },
       }));
     }
-    if (message.toolResults.length > 0 && callsForMessage.length === 0) {
+    if (
+      focusedMessageIndexes === undefined &&
+      message.toolResults.length > 0 &&
+      callsForMessage.length === 0
+    ) {
       entry.tool_results = message.toolResults.map((result) => ({
         id: result.toolUseId,
         chars: result.text.length,
@@ -653,11 +669,12 @@ function stateHistory(
   return history;
 }
 
-export function buildInferenceState(
+function createInferenceState(
   messages: readonly FastJevMessage[],
-  customInstructions?: string,
+  calls: readonly ToolCall[],
+  customInstructions: string | undefined,
+  focusedMessageIndexes?: ReadonlySet<number>,
 ): InferenceState {
-  const calls = collectCalls(messages);
   const users = messages
     .filter((message) => message.role === "user" && message.text.trim().length > 0)
     .slice(-3)
@@ -668,10 +685,38 @@ export function buildInferenceState(
   ].join("\n");
   return {
     context:
-      "A coding-assistant transcript is being compacted. Decide whether each tool call and its full result still need to remain. Tool-result bodies are intentionally omitted from this state.",
+      focusedMessageIndexes === undefined
+        ? "A coding-assistant transcript is being compacted. Decide whether each tool call and its full result still need to remain. Tool-result bodies are intentionally omitted from this state."
+        : "A focused coding-assistant transcript is being compacted. The history contains this batch's calls and their nearest preceding user messages. Tool-result bodies are intentionally omitted from this state.",
     goal,
-    history: stateHistory(messages, calls),
+    history: stateHistory(messages, calls, focusedMessageIndexes),
   };
+}
+
+export function buildInferenceState(
+  messages: readonly FastJevMessage[],
+  customInstructions?: string,
+): InferenceState {
+  return createInferenceState(messages, collectCalls(messages), customInstructions);
+}
+
+function buildBatchInferenceState(
+  messages: readonly FastJevMessage[],
+  calls: readonly ToolCall[],
+  customInstructions: string | undefined,
+): InferenceState {
+  const focusedMessageIndexes = new Set<number>();
+  for (const call of calls) {
+    focusedMessageIndexes.add(call.messageIndex);
+    for (let index = call.messageIndex - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message?.role === "user" && message.text.trim().length > 0) {
+        focusedMessageIndexes.add(index);
+        break;
+      }
+    }
+  }
+  return createInferenceState(messages, calls, customInstructions, focusedMessageIndexes);
 }
 
 function questionFor(call: ToolCall, kind: "call" | "result"): Record<string, unknown> {
@@ -805,15 +850,6 @@ function messageChars(message: FastJevMessage): number {
   return chars;
 }
 
-function reductionRatio(
-  before: readonly FastJevMessage[],
-  after: readonly FastJevMessage[],
-): number {
-  const beforeChars = before.reduce((sum, message) => sum + messageChars(message), 0);
-  const afterChars = after.reduce((sum, message) => sum + messageChars(message), 0);
-  return beforeChars === 0 ? 0 : (beforeChars - afterChars) / beforeChars;
-}
-
 function transcriptJson(value: unknown): string {
   try {
     return JSON.stringify(value) ?? "[unserializable]";
@@ -845,6 +881,44 @@ function renderTranscript(messages: readonly FastJevMessage[], droppedSummary: s
   }
   lines.push("\n</fast-jev-compaction>");
   return lines.join("");
+}
+
+interface RenderedPruning {
+  readonly decisions: Decision[];
+  readonly messages: FastJevMessage[];
+  readonly summary: string;
+  readonly afterChars: number;
+  readonly reductionRatio: number;
+}
+
+function renderPrunedOutput(
+  messages: readonly FastJevMessage[],
+  calls: readonly ToolCall[],
+  decisions: ReadonlyMap<string, Decision>,
+  beforeChars: number,
+  continuityHeader: string,
+): RenderedPruning {
+  const allDecisions = calls.map(
+    (call) =>
+      decisions.get(call.id) ?? {
+        id: call.id,
+        tool: call.name,
+        keepCall: 1,
+        keepResult: 1,
+        action: "keep" as const,
+      },
+  );
+  const compacted = applyDecisions(messages, calls, allDecisions);
+  const droppedMaterial = renderDroppedMaterial(messages, calls, allDecisions);
+  const summary = `${continuityHeader}\n\n${renderTranscript(compacted, droppedMaterial)}`;
+  const afterChars = compactionSummaryChars(summary);
+  return {
+    decisions: allDecisions,
+    messages: compacted,
+    summary,
+    afterChars,
+    reductionRatio: beforeChars === 0 ? 0 : (beforeChars - afterChars) / beforeChars,
+  };
 }
 
 function detailsMessages(messages: readonly FastJevMessage[]): FastJevMessage[] {
@@ -883,6 +957,95 @@ function fileDetails(preparation: SessionBeforeCompactEvent["preparation"]): {
   const modified = new Set([...fileList(fileOps.written), ...fileList(fileOps.edited)]);
   for (const path of modified) read.delete(path);
   return { readFiles: [...read].sort(), modifiedFiles: [...modified].sort() };
+}
+
+interface ContinuityFileList {
+  readonly paths: readonly string[];
+  readonly omitted: number;
+}
+
+function rawFilePaths(value: unknown): string[] {
+  const values: unknown[] = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
+  return [...new Set(values.filter((path): path is string => typeof path === "string"))];
+}
+
+function boundedRedactedText(
+  value: string,
+  limit: number,
+): {
+  readonly text: string;
+  readonly truncated: boolean;
+} {
+  const redacted = redact(value, limit + 1);
+  return {
+    text: redacted.slice(0, limit),
+    truncated: redacted.length > limit,
+  };
+}
+
+function continuityFileList(paths: readonly string[]): ContinuityFileList {
+  const sorted = [...paths].sort();
+  return {
+    paths: sorted.slice(0, MAX_CONTINUITY_FILE_PATHS).map((path) => {
+      const bounded = boundedRedactedText(path, MAX_CONTINUITY_PATH_CHARS);
+      return bounded.truncated ? `${bounded.text}…` : bounded.text;
+    }),
+    omitted: Math.max(0, sorted.length - MAX_CONTINUITY_FILE_PATHS),
+  };
+}
+
+function continuityFileDetails(
+  preparation: SessionBeforeCompactEvent["preparation"],
+): { readonly read: ContinuityFileList; readonly modified: ContinuityFileList } | undefined {
+  const fileOps = preparation.fileOps as unknown;
+  if (!isRecord(fileOps)) return undefined;
+  const read = new Set(rawFilePaths(fileOps.read));
+  const modified = new Set([...rawFilePaths(fileOps.written), ...rawFilePaths(fileOps.edited)]);
+  for (const path of modified) read.delete(path);
+  return {
+    read: continuityFileList([...read]),
+    modified: continuityFileList([...modified]),
+  };
+}
+
+function latestUserRequest(messages: readonly unknown[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!isRecord(message) || message.role !== "user" || message.excludeFromContext === true)
+      continue;
+    const text = contentText(message.content).trim();
+    if (text.length > 0) return text;
+  }
+  return undefined;
+}
+
+function renderContinuityHeader(
+  preparation: SessionBeforeCompactEvent["preparation"],
+  preparedMessages: readonly unknown[],
+): string {
+  const request = latestUserRequest(preparedMessages);
+  const requestExcerpt =
+    request === undefined
+      ? "unavailable (no user text found in the compacted span)"
+      : (() => {
+          const bounded = boundedRedactedText(request, MAX_CONTINUITY_REQUEST_CHARS);
+          return `${bounded.text}${bounded.truncated ? " [excerpt truncated]" : ""}`;
+        })();
+  const files = continuityFileDetails(preparation);
+  const renderFiles = (label: string, list: ContinuityFileList | undefined) => {
+    if (list === undefined) return `Pi fileOps ${label} paths: unavailable.`;
+    const entries = list.paths.length === 0 ? "none recorded" : list.paths.join(", ");
+    return `Pi fileOps ${label} paths (limit ${MAX_CONTINUITY_FILE_PATHS}; ${list.omitted} omitted; each path capped at ${MAX_CONTINUITY_PATH_CHARS} chars): ${entries}`;
+  };
+
+  return [
+    "<fast-jev-continuity>",
+    "Deterministic continuity notes. These bounded excerpts are not exhaustive and do not infer progress, decisions, or next steps.",
+    `Latest user request in compacted span (may be superseded by Pi's kept tail; excerpt limit ${MAX_CONTINUITY_REQUEST_CHARS} chars): ${requestExcerpt}`,
+    renderFiles("read", files?.read),
+    renderFiles("modified", files?.modified),
+    "</fast-jev-continuity>",
+  ].join("\n");
 }
 
 type SummaryOutput = {
@@ -978,12 +1141,14 @@ function status(
   afterChars: number,
   calls: number,
   diagnostics?: FastJevDiagnostics,
+  checkpointReason?: FastJevFailureReason,
 ): FastJevAttemptStatus {
   return {
     version: 1,
     outcome,
     path,
     ...(reason === undefined ? {} : { reason }),
+    ...(checkpointReason === undefined ? {} : { checkpointReason }),
     ...(diagnostics === undefined ? {} : { diagnostics }),
     jevMs,
     summaryMs,
@@ -1023,6 +1188,8 @@ async function checkpointPrepared(
         beforeChars,
         beforeChars,
         calls,
+        undefined,
+        reason,
       ),
     );
     return undefined;
@@ -1060,6 +1227,8 @@ async function checkpointPrepared(
         beforeChars,
         beforeChars,
         calls,
+        undefined,
+        reason,
       ),
     );
     return undefined;
@@ -1077,6 +1246,7 @@ async function checkpointPrepared(
         beforeChars,
         calls,
         output.diagnostics,
+        reason,
       ),
     );
     return undefined;
@@ -1094,6 +1264,8 @@ async function checkpointPrepared(
         beforeChars,
         beforeChars,
         calls,
+        undefined,
+        reason,
       ),
     );
     return undefined;
@@ -1110,6 +1282,8 @@ async function checkpointPrepared(
         beforeChars,
         compactionSummaryChars(text),
         calls,
+        undefined,
+        reason,
       ),
     );
     return undefined;
@@ -1125,6 +1299,8 @@ async function checkpointPrepared(
     beforeChars,
     compactionSummaryChars(text),
     calls,
+    undefined,
+    reason,
   );
   options.onStatus?.(attempt);
   const details: CompactionDetails = {
@@ -1168,26 +1344,15 @@ export async function runFastJevCompaction(
     ? [{ role: "user" as const, text: previous.summary, toolCalls: [], toolResults: [] }]
     : (previous.messages ?? []);
   const spanMessages = toFastJevMessages(preparedMessages);
+  const continuityHeader = renderContinuityHeader(preparation, preparedMessages);
   const messages = [...baseMessages.map(copyMessage), ...spanMessages.map(copyMessage)];
   const calls = collectCalls(messages);
   const baseLength = baseMessages.length;
-  const state = buildInferenceState(messages, customInstructions);
-  const stateCallIds = new Set(
-    state.history.flatMap((entry) => {
-      const toolCalls = entry.tool_calls;
-      return Array.isArray(toolCalls)
-        ? toolCalls.flatMap((call) =>
-            isRecord(call) && typeof call.id === "string" ? [call.id] : [],
-          )
-        : [];
-    }),
+  const eligibleCalls = calls.filter(
+    (call) => call.messageIndex >= baseLength && !isProtectedCall(call),
   );
-  const candidates = calls
-    .filter(
-      (call) =>
-        call.messageIndex >= baseLength && stateCallIds.has(call.id) && !isProtectedCall(call),
-    )
-    .slice(0, MAX_CANDIDATES);
+  const candidates = eligibleCalls.slice(0, MAX_ELIGIBLE_CALLS);
+  const hitCandidateLimit = eligibleCalls.length > MAX_ELIGIBLE_CALLS;
   const beforeChars = messages.reduce((sum, message) => sum + messageChars(message), 0);
   if (candidates.length === 0) {
     return checkpointPrepared(
@@ -1205,52 +1370,141 @@ export async function runFastJevCompaction(
   }
 
   const jevStartedAt = performance.now();
-  const batches = Array.from(
-    { length: Math.ceil(candidates.length / CALLS_PER_BATCH) },
-    (_, index) => candidates.slice(index * CALLS_PER_BATCH, (index + 1) * CALLS_PER_BATCH),
-  ).slice(0, MAX_BATCHES);
   const deadline = new AbortController();
   const onCallerAbort = () => deadline.abort();
   if (options.signal?.aborted) deadline.abort();
   else options.signal?.addEventListener("abort", onCallerAbort, { once: true });
-  const timer = setTimeout(() => deadline.abort(), DEFAULT_TIMEOUT_MS);
-  let batchResults: Array<{
-    readonly answers?: Record<string, number>;
-    readonly malformed?: boolean;
-    readonly failed?: boolean;
-  }>;
+  const timer = setTimeout(() => deadline.abort(), MAX_JEV_DURATION_MS);
+  const decisions = new Map<string, Decision>();
+  let stoppingReason: FastJevFailureReason | undefined;
+  let successfulRender: RenderedPruning | undefined;
+  let latestRender: RenderedPruning | undefined;
+  const callsPerRound = CALLS_PER_BATCH * MAX_PARALLEL_BATCHES;
+
   try {
-    batchResults = await Promise.all(
-      batches.map(async (batch) => {
-        const questions = Object.assign(
-          {},
-          ...batch.flatMap((call) => [questionFor(call, "call"), questionFor(call, "result")]),
-        );
-        const names = batch.flatMap((call) => [`call_${call.id}`, `result_${call.id}`]);
-        try {
-          const gateway = await requestJevGateway(
-            options.modelRegistry,
-            { state, questions },
-            {
-              timeoutMs: DEFAULT_TIMEOUT_MS,
-              signal: deadline.signal,
-              ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-            },
+    for (let offset = 0; offset < candidates.length; offset += callsPerRound) {
+      if (options.signal?.aborted) {
+        stoppingReason = "cancelled";
+        break;
+      }
+      if (deadline.signal.aborted) {
+        stoppingReason = "jev-timeout";
+        break;
+      }
+      const remainingMs = MAX_JEV_DURATION_MS - monotonicMs(jevStartedAt);
+      if (remainingMs <= 0) {
+        stoppingReason = "jev-timeout";
+        break;
+      }
+
+      const round = candidates.slice(offset, offset + callsPerRound);
+      const batches = Array.from(
+        { length: Math.ceil(round.length / CALLS_PER_BATCH) },
+        (_, index) => round.slice(index * CALLS_PER_BATCH, (index + 1) * CALLS_PER_BATCH),
+      );
+      const batchResults: Array<{
+        readonly answers?: Record<string, number>;
+        readonly malformed?: boolean;
+        readonly failureReason?: "jev-failed" | "jev-timeout";
+      }> = await Promise.all(
+        batches.map(async (batch) => {
+          const state = buildBatchInferenceState(messages, batch, customInstructions);
+          const questions = Object.assign(
+            {},
+            ...batch.flatMap((call) => [questionFor(call, "call"), questionFor(call, "result")]),
           );
-          if (!gateway.ok) return { failed: true };
-          const answers = parseNoulAnswers(gateway.value, names);
-          return answers === undefined ? { malformed: true } : { answers };
-        } catch {
-          return { failed: true };
+          const names = batch.flatMap((call) => [`call_${call.id}`, `result_${call.id}`]);
+          try {
+            const gateway = await requestJevGateway(
+              options.modelRegistry,
+              { state, questions },
+              {
+                timeoutMs: Math.min(REQUEST_TIMEOUT_MS, remainingMs),
+                signal: deadline.signal,
+                ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+              },
+            );
+            if (!gateway.ok) {
+              return {
+                failureReason: gateway.reason === "timeout" ? "jev-timeout" : "jev-failed",
+              };
+            }
+            const answers = parseNoulAnswers(gateway.value, names);
+            return answers === undefined ? { malformed: true } : { answers };
+          } catch {
+            return {
+              failureReason: deadline.signal.aborted ? "jev-timeout" : "jev-failed",
+            };
+          }
+        }),
+      );
+
+      if (options.signal?.aborted) {
+        stoppingReason = "cancelled";
+        break;
+      }
+      if (deadline.signal.aborted) {
+        stoppingReason = "jev-timeout";
+        break;
+      }
+      if (batchResults.some((result) => result.malformed)) {
+        stoppingReason = "malformed-jev";
+        break;
+      }
+      const batchFailure = batchResults.find((result) => result.failureReason !== undefined);
+      if (batchFailure?.failureReason !== undefined) {
+        stoppingReason = batchFailure.failureReason;
+        break;
+      }
+
+      // Commit a round only after every parallel batch has a complete, validated answer set.
+      const roundDecisions: Decision[] = [];
+      for (const [batchIndex, batch] of batches.entries()) {
+        const answers = batchResults[batchIndex]?.answers;
+        if (answers === undefined) {
+          stoppingReason = "malformed-jev";
+          break;
         }
-      }),
-    );
+        for (const call of batch) {
+          const keepCall = answers[`call_${call.id}`];
+          const keepResult = answers[`result_${call.id}`];
+          if (keepCall === undefined || keepResult === undefined) {
+            stoppingReason = "malformed-jev";
+            break;
+          }
+          roundDecisions.push({
+            id: call.id,
+            tool: call.name,
+            keepCall,
+            keepResult,
+            action: actionFor(keepCall, keepResult),
+          });
+        }
+        if (stoppingReason !== undefined) break;
+      }
+      if (stoppingReason !== undefined) break;
+      for (const decision of roundDecisions) decisions.set(decision.id, decision);
+
+      latestRender = renderPrunedOutput(messages, calls, decisions, beforeChars, continuityHeader);
+      if (options.signal?.aborted) {
+        stoppingReason = "cancelled";
+        break;
+      }
+      if (
+        latestRender.afterChars < beforeChars &&
+        renderFitsBudget(latestRender.summary, preparation)
+      ) {
+        successfulRender = latestRender;
+        break;
+      }
+    }
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", onCallerAbort);
   }
+
   const jevMs = monotonicMs(jevStartedAt);
-  if (options.signal?.aborted) {
+  if (options.signal?.aborted || stoppingReason === "cancelled") {
     options.onStatus?.(
       status(
         "fallback",
@@ -1266,7 +1520,7 @@ export async function runFastJevCompaction(
     );
     return undefined;
   }
-  if (batchResults.some((result) => result.failed || result.malformed)) {
+  if (stoppingReason !== undefined) {
     return checkpointPrepared(
       preparation,
       previous.summary,
@@ -1277,69 +1531,15 @@ export async function runFastJevCompaction(
       customInstructions,
       startedAt,
       jevMs,
-      batchResults.some((result) => result.malformed) ? "malformed-jev" : "jev-failed",
+      stoppingReason,
     );
   }
-
-  // Do not expose or apply any batch until every batch has strict, complete answers.
-  const decisions = new Map<string, Decision>();
-  for (const [batchIndex, batch] of batches.entries()) {
-    const answers = batchResults[batchIndex]?.answers;
-    if (answers === undefined) {
-      return checkpointPrepared(
-        preparation,
-        previous.summary,
-        preparedMessages,
-        messages,
-        calls.length,
-        options,
-        customInstructions,
-        startedAt,
-        jevMs,
-        "malformed-jev",
-      );
-    }
-    for (const call of batch) {
-      const keepCall = answers[`call_${call.id}`];
-      const keepResult = answers[`result_${call.id}`];
-      if (keepCall === undefined || keepResult === undefined) {
-        return checkpointPrepared(
-          preparation,
-          previous.summary,
-          preparedMessages,
-          messages,
-          calls.length,
-          options,
-          customInstructions,
-          startedAt,
-          jevMs,
-          "malformed-jev",
-        );
-      }
-      decisions.set(call.id, {
-        id: call.id,
-        tool: call.name,
-        keepCall,
-        keepResult,
-        action: actionFor(keepCall, keepResult),
-      });
-    }
-  }
-
-  const allDecisions = calls.map(
-    (call) =>
-      decisions.get(call.id) ?? {
-        id: call.id,
-        tool: call.name,
-        keepCall: 1,
-        keepResult: 1,
-        action: "keep" as const,
-      },
-  );
-  const compacted = applyDecisions(messages, calls, allDecisions);
-  const compactedSpan = applyDecisions(spanMessages, candidates, [...decisions.values()]);
-  const ratio = reductionRatio(spanMessages, compactedSpan);
-  if (!Number.isFinite(ratio) || ratio < MIN_REDUCTION_RATIO) {
+  if (successfulRender === undefined) {
+    const reason = hitCandidateLimit
+      ? "eligible-call-limit"
+      : latestRender === undefined || latestRender.afterChars >= beforeChars
+        ? "insufficient-savings"
+        : "final-size-limit";
     return checkpointPrepared(
       preparation,
       previous.summary,
@@ -1350,48 +1550,11 @@ export async function runFastJevCompaction(
       customInstructions,
       startedAt,
       jevMs,
-      "insufficient-savings",
+      reason,
     );
   }
 
-  const droppedMaterial = renderDroppedMaterial(messages, calls, allDecisions);
-  if (options.signal?.aborted) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "cancelled",
-        jevMs,
-        0,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls.length,
-      ),
-    );
-    return undefined;
-  }
-
-  const renderStartedAt = performance.now();
-  const rendered = renderTranscript(compacted, droppedMaterial);
-  const renderMs = monotonicMs(renderStartedAt);
-  const afterChars = compactionSummaryChars(rendered);
-  const renderedRatio = beforeChars === 0 ? 0 : (beforeChars - afterChars) / beforeChars;
-  if (renderedRatio < MIN_REDUCTION_RATIO || !renderFitsBudget(rendered, preparation)) {
-    return checkpointPrepared(
-      preparation,
-      previous.summary,
-      preparedMessages,
-      messages,
-      calls.length,
-      options,
-      customInstructions,
-      startedAt,
-      jevMs + renderMs,
-      "final-size-limit",
-    );
-  }
-
+  const allDecisions = successfulRender.decisions;
   const attempt = status(
     "pruned",
     "prune",
@@ -1400,14 +1563,14 @@ export async function runFastJevCompaction(
     0,
     monotonicMs(startedAt),
     beforeChars,
-    afterChars,
+    successfulRender.afterChars,
     calls.length,
   );
   options.onStatus?.(attempt);
   const details: CompactionDetails = {
     version: DETAILS_VERSION,
-    messages: detailsMessages(compacted),
-    reductionRatio: renderedRatio,
+    messages: detailsMessages(successfulRender.messages),
+    reductionRatio: successfulRender.reductionRatio,
     calls: calls.length,
     droppedResults: allDecisions.filter((decision) => decision.action === "drop_result").length,
     droppedCalls: allDecisions.filter((decision) => decision.action === "drop_call").length,
@@ -1415,7 +1578,7 @@ export async function runFastJevCompaction(
   };
   const files = fileDetails(preparation);
   return {
-    summary: rendered,
+    summary: successfulRender.summary,
     firstKeptEntryId: preparation.firstKeptEntryId,
     tokensBefore: preparation.tokensBefore,
     details: { ...files, [DETAILS_KEY]: details },
@@ -1530,6 +1693,10 @@ export default function fastJevCompaction(pi: ExtensionAPI): void {
           return;
         }
         const reason = lastStatus.reason === undefined ? "" : ` (${lastStatus.reason})`;
+        const checkpoint =
+          lastStatus.checkpointReason === undefined
+            ? ""
+            : `; checkpoint triggered by ${lastStatus.checkpointReason}${lastStatus.outcome === "fallback" && lastStatus.reason !== undefined ? `; summary failed: ${lastStatus.reason}` : ""}`;
         const diagnostics = lastStatus.diagnostics;
         const diagnosticParts = [
           diagnostics?.exceptionType,
@@ -1539,8 +1706,12 @@ export default function fastJevCompaction(pi: ExtensionAPI): void {
         const diagnosticText =
           diagnosticParts.length === 0 ? "" : `; diagnostics: ${diagnosticParts.join(", ")}`;
         const type = lastStatus.outcome === "fallback" ? "warning" : "info";
+        const outcome =
+          lastStatus.outcome === "fallback"
+            ? "native fallback (Fast Jev compaction not finished)"
+            : lastStatus.outcome;
         ctx.ui.notify(
-          `Fast Jev compaction ${lastStatus.outcome}${reason}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars in ${lastStatus.totalMs} ms${diagnosticText}.`,
+          `Fast Jev ${outcome}${reason}${checkpoint}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars; ${lastStatus.totalMs} ms total (Jev ${lastStatus.jevMs} ms, summary ${lastStatus.summaryMs} ms); ${lastStatus.calls} calls; path ${lastStatus.path}${diagnosticText}.`,
           type,
         );
       },
