@@ -8,13 +8,13 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import {
-  requestVercelGateway,
-  type VercelGatewayFailure,
-  type VercelGatewayFetch,
-  type VercelGatewayProviderId,
-  type VercelGatewayStage,
   DEFAULT_JEV_TIMEOUT_MS,
-} from "../../lib/vercel-gateway";
+  type JevGatewayFailure,
+  type JevGatewayFetch,
+  type JevGatewayProviderId,
+  type JevGatewayStage,
+  requestJevGateway,
+} from "../../lib/jev-gateway";
 import { isRecord } from "../shared/is-record";
 import { disabledSkillNames } from "../skill-tweaks";
 
@@ -69,9 +69,9 @@ export interface SkillSelectionResult {
 export type SkillSelectionFailure =
   | {
       readonly kind: "gateway-failure";
-      readonly provider?: VercelGatewayProviderId;
-      readonly stage: VercelGatewayStage;
-      readonly reason: VercelGatewayFailure["reason"];
+      readonly provider?: JevGatewayProviderId;
+      readonly stage: JevGatewayStage;
+      readonly reason: JevGatewayFailure["reason"];
       readonly httpStatus?: number;
       readonly retryAfterMs?: number;
     }
@@ -87,7 +87,7 @@ export type SkillSelectionAttempt =
 
 export interface SkillSelectionRequestOptions {
   readonly modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
-  readonly fetch?: VercelGatewayFetch;
+  readonly fetch?: JevGatewayFetch;
   readonly signal?: AbortSignal;
   readonly onFetchAttempt?: () => void;
 }
@@ -370,7 +370,7 @@ export async function selectSkillsWithJevDetailed(
     };
   }
 
-  const gateway = await requestVercelGateway(options.modelRegistry, request, {
+  const gateway = await requestJevGateway(options.modelRegistry, request, {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.onFetchAttempt === undefined ? {} : { onFetchAttempt: options.onFetchAttempt }),
@@ -459,8 +459,8 @@ export interface SkillSelectionStatus {
   readonly candidateCount?: number;
   readonly elapsedMs?: number;
   readonly fetchAttempted: boolean;
-  readonly failureProvider?: VercelGatewayProviderId;
-  readonly failureStage?: VercelGatewayStage | "evaluation";
+  readonly failureProvider?: JevGatewayProviderId;
+  readonly failureStage?: JevGatewayStage | "evaluation";
   readonly httpStatus?: number;
 }
 
@@ -468,7 +468,7 @@ interface SkillSelectionExtensionDependencies {
   selectSkillsDetailed?: typeof selectSkillsWithJevDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
   getDisabledNames?: (context: ExtensionContext, systemPrompt: string) => ReadonlySet<string>;
-  fetch?: VercelGatewayFetch;
+  fetch?: JevGatewayFetch;
   now?: () => number;
 }
 

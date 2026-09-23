@@ -1,10 +1,10 @@
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import {
-  requestVercelGateway,
-  type VercelGatewayFailureReason,
-  type VercelGatewayFetch,
-  type VercelGatewayProviderId,
-} from "../../lib/vercel-gateway";
+  type JevGatewayFailureReason,
+  type JevGatewayFetch,
+  type JevGatewayProviderId,
+  requestJevGateway,
+} from "../../lib/jev-gateway";
 import {
   type AgentCatalog,
   type AgentDiscoveryOptions,
@@ -37,8 +37,8 @@ export interface RecommendationEvaluation {
   readonly decision: RecommendationDecision;
   readonly catalogKind?: "discovered-definitions";
   readonly catalogRevision?: string;
-  readonly gatewayFailure?: VercelGatewayFailureReason;
-  readonly gatewayProvider?: VercelGatewayProviderId;
+  readonly gatewayFailure?: JevGatewayFailureReason;
+  readonly gatewayProvider?: JevGatewayProviderId;
 }
 
 export interface RecommendationRequest {
@@ -51,7 +51,7 @@ export interface RecommendationRuntimeOptions {
   readonly modelRegistry: Pick<ModelRegistry, "getProviderAuth">;
   readonly config: RecommendAgentConfig;
   readonly discovery: AgentDiscoveryOptions;
-  readonly fetch?: VercelGatewayFetch;
+  readonly fetch?: JevGatewayFetch;
   readonly signal?: AbortSignal;
 }
 
@@ -238,7 +238,7 @@ export async function recommendAgent(
   }
   const catalog = discovered.catalog;
   const gatewayRequest = buildGatewayRequest(request, catalog, routingPolicy.policy.body);
-  const gateway = await requestVercelGateway(options.modelRegistry, gatewayRequest, {
+  const gateway = await requestJevGateway(options.modelRegistry, gatewayRequest, {
     timeoutMs: options.config.timeoutMs,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),

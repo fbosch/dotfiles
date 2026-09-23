@@ -5,6 +5,7 @@ import type {
   ExtensionContext,
   Skill,
 } from "@earendil-works/pi-coding-agent";
+import { VERCEL_GATEWAY_ENDPOINT } from "../../../lib/jev-gateway";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
@@ -242,7 +243,11 @@ describe("skill selection", () => {
     await expect(
       selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
         modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
-        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
+        // Keep this OpenRouter Retry-After assertion from activating Vercel's shared cooldown.
+        fetch: async (input) =>
+          String(input) === VERCEL_GATEWAY_ENDPOINT
+            ? new Response("unavailable", { status: 503 })
+            : new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
       }),
     ).resolves.toEqual({
       ok: false,

@@ -16,7 +16,7 @@ import {
   recommendAgent,
 } from "../extensions/recommend-agent/recommendation";
 import { DEFAULT_RECOMMEND_AGENT_CONFIG } from "../extensions/recommend-agent/settings";
-import type { VercelGatewayFetch } from "../lib/vercel-gateway";
+import type { JevGatewayFetch } from "../lib/jev-gateway";
 import {
   RECOMMEND_AGENT_BENCHMARK_CASES,
   RECOMMEND_AGENT_BENCHMARK_CATALOG,
@@ -165,7 +165,7 @@ function mockChoice(task: string, intent: string, available: readonly string[]):
   return available.includes(preferred) ? preferred : "abstain";
 }
 
-function mockFetch(): VercelGatewayFetch {
+function mockFetch(): JevGatewayFetch {
   return async (_input, init) => {
     let body: { state: { task: string; intent: string; agents: readonly { id: string }[] } };
     try {

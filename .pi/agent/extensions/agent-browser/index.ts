@@ -6,7 +6,7 @@ import {
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import { requestVercelGateway } from "../../lib/vercel-gateway";
+import { requestJevGateway } from "../../lib/jev-gateway";
 import { isRecord } from "../shared/is-record";
 
 const ENGINE = "lightpanda";
@@ -586,7 +586,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         };
       }
 
-      const choiceGateway = await requestVercelGateway(
+      const choiceGateway = await requestJevGateway(
         ctx.modelRegistry,
         createDecisionRequest({
           objective: params.objective,
@@ -611,7 +611,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE,
       );
       if (step.executed && step.candidate !== undefined) {
-        const safetyGateway = await requestVercelGateway(
+        const safetyGateway = await requestJevGateway(
           ctx.modelRegistry,
           createStepSafetyRequest(params.objective, before, step.candidate),
           {
@@ -707,7 +707,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           probability = 1;
           selectionMode = "deterministic";
         } else {
-          const choiceGateway = await requestVercelGateway(
+          const choiceGateway = await requestJevGateway(
             ctx.modelRegistry,
             createDecisionRequest({
               objective: params.objective,
@@ -754,7 +754,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         let authorizationProbability: number | undefined;
         if (candidate.authorization === "independent") {
-          const authorizationGateway = await requestVercelGateway(
+          const authorizationGateway = await requestJevGateway(
             ctx.modelRegistry,
             createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
@@ -848,7 +848,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         throw new Error(`Action ids must be unique and must not use reserved id ${NO_ACTION}`);
       }
 
-      const gateway = await requestVercelGateway(ctx.modelRegistry, createDecisionRequest(params), {
+      const gateway = await requestJevGateway(ctx.modelRegistry, createDecisionRequest(params), {
         ...(signal === undefined ? {} : { signal }),
         timeoutMs: DECISION_TIMEOUT_MS,
       });

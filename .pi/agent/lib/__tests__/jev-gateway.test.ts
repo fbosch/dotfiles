@@ -1,32 +1,36 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import {
+  createJevGatewayRequester,
   OPENROUTER_GATEWAY_ENDPOINT,
   OPENROUTER_GATEWAY_MODEL,
   OPENROUTER_PROVIDER_ID,
   parseRetryAfter,
-  requestVercelGateway,
   VERCEL_GATEWAY_ENDPOINT,
   VERCEL_GATEWAY_MODEL,
   VERCEL_GATEWAY_PROVIDER_ID,
-} from "../vercel-gateway";
+} from "../jev-gateway";
 
 const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) };
+let requestJevGateway = createJevGatewayRequester();
+beforeEach(() => {
+  requestJevGateway = createJevGatewayRequester();
+});
 
 function expectFailure(
-  result: Awaited<ReturnType<typeof requestVercelGateway>>,
+  result: Awaited<ReturnType<typeof requestJevGateway>>,
   expected: { reason: string; stage: string; httpStatus?: number; provider?: string },
 ): void {
   expect(result).toMatchObject({ ok: false, ...expected });
   expect(result).not.toHaveProperty("message");
 }
 
-describe("requestVercelGateway", () => {
+describe("requestJevGateway", () => {
   test("resolves Pi auth and sends a verified Gateway request", async () => {
     const providerIds: string[] = [];
     let requestUrl: RequestInfo | URL | undefined;
     let requestInit: RequestInit | undefined;
 
-    const result = await requestVercelGateway(
+    const result = await requestJevGateway(
       {
         getProviderAuth: async (provider: string) => {
           providerIds.push(provider);
@@ -57,7 +61,7 @@ describe("requestVercelGateway", () => {
   test("categorizes missing credentials without requesting the Gateway", async () => {
     for (const apiKey of [undefined, "", "   "] as const) {
       let fetchCalls = 0;
-      const result = await requestVercelGateway(
+      const result = await requestJevGateway(
         {
           getProviderAuth: async () => (apiKey === undefined ? undefined : { auth: { apiKey } }),
         },
@@ -76,7 +80,7 @@ describe("requestVercelGateway", () => {
   });
 
   test("categorizes auth resolver failures without exposing exception text", async () => {
-    const result = await requestVercelGateway(
+    const result = await requestJevGateway(
       { getProviderAuth: async () => Promise.reject(new Error("secret auth detail")) },
       {},
     );
@@ -86,7 +90,7 @@ describe("requestVercelGateway", () => {
   });
 
   test("categorizes timeout at auth, request, and body stages", async () => {
-    const authTimeout = await requestVercelGateway(
+    const authTimeout = await requestJevGateway(
       { getProviderAuth: () => new Promise(() => undefined) },
       {},
       { timeoutMs: 5, fetch: async () => new Response("unexpected") },
@@ -97,7 +101,7 @@ describe("requestVercelGateway", () => {
       provider: OPENROUTER_PROVIDER_ID,
     });
 
-    const requestTimeout = await requestVercelGateway(
+    const requestTimeout = await requestJevGateway(
       auth,
       {},
       {
@@ -116,7 +120,7 @@ describe("requestVercelGateway", () => {
       provider: OPENROUTER_PROVIDER_ID,
     });
 
-    const bodyTimeout = await requestVercelGateway(
+    const bodyTimeout = await requestJevGateway(
       auth,
       {},
       {
@@ -139,7 +143,7 @@ describe("requestVercelGateway", () => {
     const authController = new AbortController();
     authController.abort();
     let authCalls = 0;
-    const authCancelled = await requestVercelGateway(
+    const authCancelled = await requestJevGateway(
       {
         getProviderAuth: async () => {
           authCalls += 1;
@@ -153,7 +157,7 @@ describe("requestVercelGateway", () => {
     expect(authCalls).toBe(0);
 
     const requestController = new AbortController();
-    const requestCancelled = await requestVercelGateway(
+    const requestCancelled = await requestJevGateway(
       auth,
       {},
       {
@@ -170,7 +174,7 @@ describe("requestVercelGateway", () => {
     expectFailure(requestCancelled, { reason: "caller-cancellation", stage: "request" });
 
     const bodyController = new AbortController();
-    const bodyCancelled = await requestVercelGateway(
+    const bodyCancelled = await requestJevGateway(
       auth,
       {},
       {
@@ -189,7 +193,7 @@ describe("requestVercelGateway", () => {
   });
 
   test("parses safe Retry-After seconds and HTTP dates without exposing headers", async () => {
-    const numeric = await requestVercelGateway(
+    const numeric = await createJevGatewayRequester()(
       auth,
       {},
       { fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "7" } }) },
@@ -210,28 +214,28 @@ describe("requestVercelGateway", () => {
   });
 
   test("categorizes HTTP status, invalid JSON, oversized body, and body failures safely", async () => {
-    const status = await requestVercelGateway(
+    const status = await requestJevGateway(
       auth,
       {},
       { fetch: async () => new Response("no", { status: 503 }) },
     );
     expectFailure(status, { reason: "http-status", stage: "request", httpStatus: 503 });
 
-    const invalidJson = await requestVercelGateway(
+    const invalidJson = await requestJevGateway(
       auth,
       {},
       { fetch: async () => new Response("not-json") },
     );
     expectFailure(invalidJson, { reason: "invalid-json", stage: "body" });
 
-    const oversized = await requestVercelGateway(
+    const oversized = await requestJevGateway(
       auth,
       {},
       { fetch: async () => new Response("x".repeat(256_001)) },
     );
     expectFailure(oversized, { reason: "oversized-body", stage: "body" });
 
-    const bodyFailure = await requestVercelGateway(
+    const bodyFailure = await requestJevGateway(
       auth,
       {},
       {
@@ -245,7 +249,7 @@ describe("requestVercelGateway", () => {
     expectFailure(bodyFailure, { reason: "body-failure", stage: "body" });
     expect(JSON.stringify(bodyFailure)).not.toContain("raw body detail");
 
-    const requestFailure = await requestVercelGateway(
+    const requestFailure = await requestJevGateway(
       auth,
       {},
       { fetch: async () => Promise.reject(new Error("raw request detail")) },
@@ -270,7 +274,7 @@ describe("requestVercelGateway", () => {
       usage: { input_tokens: 12, output_tokens: 0 },
     };
 
-    const result = await requestVercelGateway(
+    const result = await requestJevGateway(
       {
         getProviderAuth: async (provider: string) => {
           authProviders.push(provider);
@@ -308,7 +312,7 @@ describe("requestVercelGateway", () => {
   test("falls back after provider rejection using the configured OpenRouter credential", async () => {
     const providerIds: string[] = [];
     const urls: string[] = [];
-    const result = await requestVercelGateway(
+    const result = await requestJevGateway(
       {
         getProviderAuth: async (provider: string) => {
           providerIds.push(provider);
@@ -338,7 +342,7 @@ describe("requestVercelGateway", () => {
     for (const primaryFailure of ["http", "network"] as const) {
       const urls: string[] = [];
       let fetchCalls = 0;
-      const result = await requestVercelGateway(
+      const result = await requestJevGateway(
         { getProviderAuth: async () => ({ auth: { apiKey: "provider-key" } }) },
         { state: { query: primaryFailure } },
         {
@@ -359,9 +363,121 @@ describe("requestVercelGateway", () => {
     }
   });
 
+  test("shares the full Retry-After cooldown across callers and retries Vercel at expiry", async () => {
+    let now = 1_000_000;
+    const request = createJevGatewayRequester(() => now);
+    const urls: string[] = [];
+    const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      urls.push(String(input));
+      if (String(input) === VERCEL_GATEWAY_ENDPOINT && urls.length === 1) {
+        return new Response("busy", { status: 429, headers: { "Retry-After": "120" } });
+      }
+      return new Response(JSON.stringify({ routed: String(input) }));
+    };
+
+    await request(auth, {}, { fetch });
+    now += 61_000;
+    const duringCooldown = await request(
+      { getProviderAuth: async () => ({ auth: { apiKey: "another-caller-key" } }) },
+      {},
+      { fetch },
+    );
+    expect(duringCooldown).toEqual({ ok: true, value: { routed: OPENROUTER_GATEWAY_ENDPOINT } });
+    expect(urls).toEqual([
+      VERCEL_GATEWAY_ENDPOINT,
+      OPENROUTER_GATEWAY_ENDPOINT,
+      OPENROUTER_GATEWAY_ENDPOINT,
+    ]);
+
+    now += 59_000;
+    const expired = await request(auth, {}, { fetch });
+    expect(expired).toEqual({ ok: true, value: { routed: VERCEL_GATEWAY_ENDPOINT } });
+    expect(urls.at(-1)).toBe(VERCEL_GATEWAY_ENDPOINT);
+  });
+
+  test("does not cool down for missing or invalid Retry-After, zero delay, or other failures", async () => {
+    for (const response of [
+      new Response("busy", { status: 429 }),
+      new Response("busy", { status: 429, headers: { "Retry-After": "oops" } }),
+      new Response("busy", { status: 429, headers: { "Retry-After": "0" } }),
+      new Response("unavailable", { status: 503, headers: { "Retry-After": "30" } }),
+    ]) {
+      const request = createJevGatewayRequester(() => 1_000_000);
+      const urls: string[] = [];
+      const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+        urls.push(String(input));
+        return String(input) === VERCEL_GATEWAY_ENDPOINT
+          ? response.clone()
+          : new Response(JSON.stringify({ ok: true }));
+      };
+      await request(auth, {}, { fetch });
+      await request(auth, {}, { fetch });
+      expect(urls).toEqual([
+        VERCEL_GATEWAY_ENDPOINT,
+        OPENROUTER_GATEWAY_ENDPOINT,
+        VERCEL_GATEWAY_ENDPOINT,
+        OPENROUTER_GATEWAY_ENDPOINT,
+      ]);
+    }
+  });
+
+  test("keeps the primary 429 error and cancellation semantics during cooldown", async () => {
+    let now = 1_000_000;
+    const request = createJevGatewayRequester(() => now);
+    const urls: string[] = [];
+    const registry = {
+      getProviderAuth: async (provider: string) =>
+        provider === VERCEL_GATEWAY_PROVIDER_ID ? { auth: { apiKey: "vercel-key" } } : undefined,
+    };
+    const fetch = async (input: RequestInfo | URL): Promise<Response> => {
+      urls.push(String(input));
+      return new Response("busy", { status: 429, headers: { "Retry-After": "7" } });
+    };
+    const initial = await request(registry, {}, { fetch });
+    now += 1_000;
+    const unavailable = await request(registry, {}, { fetch });
+    expect(initial).toMatchObject({ retryAfterMs: 7_000 });
+    expect(unavailable).toMatchObject({
+      ok: false,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
+      reason: "http-status",
+      httpStatus: 429,
+      retryAfterMs: 6_000,
+    });
+    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT]);
+
+    const controller = new AbortController();
+    controller.abort();
+    const cancelled = await request(registry, {}, { signal: controller.signal, fetch });
+    expectFailure(cancelled, {
+      provider: OPENROUTER_PROVIDER_ID,
+      stage: "auth",
+      reason: "caller-cancellation",
+    });
+    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT]);
+
+    const timedOut = await request(
+      auth,
+      {},
+      {
+        timeoutMs: 5,
+        fetch: async (input) => {
+          urls.push(String(input));
+          return new Promise<Response>(() => undefined);
+        },
+      },
+    );
+    expectFailure(timedOut, {
+      provider: OPENROUTER_PROVIDER_ID,
+      stage: "request",
+      reason: "timeout",
+    });
+    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+  });
+
   test("preserves a useful Vercel Retry-After when OpenRouter auth is unavailable", async () => {
     let fetchCalls = 0;
-    const result = await requestVercelGateway(
+    const result = await createJevGatewayRequester()(
       {
         getProviderAuth: async (provider: string) =>
           provider === VERCEL_GATEWAY_PROVIDER_ID
@@ -390,7 +506,7 @@ describe("requestVercelGateway", () => {
 
   test("returns the bounded fallback failure when both providers fail", async () => {
     let fetchCalls = 0;
-    const result = await requestVercelGateway(
+    const result = await requestJevGateway(
       { getProviderAuth: async () => ({ auth: { apiKey: "provider-key" } }) },
       {},
       {
@@ -419,7 +535,7 @@ describe("requestVercelGateway", () => {
       let primaryAborted = false;
       let releasePrimaryAuth: (() => void) | undefined;
 
-      const result = await requestVercelGateway(
+      const result = await requestJevGateway(
         {
           getProviderAuth: async (provider: string) => {
             if (provider === VERCEL_GATEWAY_PROVIDER_ID && stage === "auth") {
@@ -483,7 +599,7 @@ describe("requestVercelGateway", () => {
   test("does not start fallback after caller abort or an exhausted shared deadline", async () => {
     const callerController = new AbortController();
     let callerFetchCalls = 0;
-    const callerCancelled = await requestVercelGateway(
+    const callerCancelled = await requestJevGateway(
       auth,
       {},
       {
@@ -504,7 +620,7 @@ describe("requestVercelGateway", () => {
 
     let deadlineFetchCalls = 0;
     let fallbackAborted = false;
-    const deadlineExpired = await requestVercelGateway(
+    const deadlineExpired = await requestJevGateway(
       auth,
       {},
       {

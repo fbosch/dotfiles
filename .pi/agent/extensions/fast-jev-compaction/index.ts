@@ -8,7 +8,7 @@ import {
   SettingsManager,
   serializeConversation,
 } from "@earendil-works/pi-coding-agent";
-import { requestVercelGateway, type VercelGatewayFetch } from "../../lib/vercel-gateway";
+import { type JevGatewayFetch, requestJevGateway } from "../../lib/jev-gateway";
 
 const SETTINGS_KEY = "compaction";
 const DEFAULT_TIMEOUT_MS = 2_400;
@@ -918,7 +918,7 @@ export interface FastJevRunOptions {
     signal?: AbortSignal,
   ) => Promise<SummaryAttempt | undefined>;
   readonly signal?: AbortSignal;
-  readonly fetch?: VercelGatewayFetch;
+  readonly fetch?: JevGatewayFetch;
   readonly onStatus?: (status: FastJevAttemptStatus) => void;
 }
 
@@ -1227,7 +1227,7 @@ export async function runFastJevCompaction(
         );
         const names = batch.flatMap((call) => [`call_${call.id}`, `result_${call.id}`]);
         try {
-          const gateway = await requestVercelGateway(
+          const gateway = await requestJevGateway(
             options.modelRegistry,
             { state, questions },
             {

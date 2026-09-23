@@ -16,15 +16,12 @@ export const DEFAULT_JEV_TIMEOUT_MS = 2_400;
 export const DEFAULT_VERCEL_GATEWAY_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
 export const MAX_VERCEL_GATEWAY_RESPONSE_CHARS = 256_000;
 
-export type VercelGatewayProviderId = (typeof JEV_GATEWAY_PROVIDER_IDS)[number];
-type VercelGatewayRegistry = Pick<ModelRegistry, "getProviderAuth">;
-export type VercelGatewayFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
+export type JevGatewayProviderId = (typeof JEV_GATEWAY_PROVIDER_IDS)[number];
+type JevGatewayRegistry = Pick<ModelRegistry, "getProviderAuth">;
+export type JevGatewayFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export type VercelGatewayStage = "auth" | "request" | "body";
-export type VercelGatewayFailureReason =
+export type JevGatewayStage = "auth" | "request" | "body";
+export type JevGatewayFailureReason =
   | "missing-credentials"
   | "auth-failure"
   | "timeout"
@@ -35,23 +32,21 @@ export type VercelGatewayFailureReason =
   | "oversized-body"
   | "body-failure";
 
-export type VercelGatewayFailure = {
+export type JevGatewayFailure = {
   readonly ok: false;
   /** Identifies the provider whose bounded attempt produced this failure. */
-  readonly provider: VercelGatewayProviderId;
-  readonly stage: VercelGatewayStage;
-  readonly reason: VercelGatewayFailureReason;
+  readonly provider: JevGatewayProviderId;
+  readonly stage: JevGatewayStage;
+  readonly reason: JevGatewayFailureReason;
   readonly httpStatus?: number;
   /** Validated delay from Retry-After, in milliseconds. Never includes raw headers. */
   readonly retryAfterMs?: number;
 };
 
-export type VercelGatewayResult =
-  | { readonly ok: true; readonly value: unknown }
-  | VercelGatewayFailure;
+export type JevGatewayResult = { readonly ok: true; readonly value: unknown } | JevGatewayFailure;
 
-export interface VercelGatewayRequestOptions {
-  fetch?: VercelGatewayFetch;
+export interface JevGatewayRequestOptions {
+  fetch?: JevGatewayFetch;
   signal?: AbortSignal;
   timeoutMs?: number;
   /** Called immediately before fetch is invoked; receives no request or credential data. */
@@ -63,7 +58,7 @@ type AwaitStageResult<T> =
   | { readonly completed: false };
 
 type ProviderConfig = {
-  readonly id: VercelGatewayProviderId;
+  readonly id: JevGatewayProviderId;
   readonly endpoint: string;
   readonly model: string;
 };
@@ -145,12 +140,12 @@ function createAttemptDeadline(overall: DeadlineState, timeoutMs?: number): Atte
 }
 
 function failure(
-  provider: VercelGatewayProviderId,
-  reason: VercelGatewayFailureReason,
-  stage: VercelGatewayStage,
+  provider: JevGatewayProviderId,
+  reason: JevGatewayFailureReason,
+  stage: JevGatewayStage,
   httpStatus?: number,
   retryAfterMs?: number,
-): VercelGatewayFailure {
+): JevGatewayFailure {
   return {
     ok: false,
     provider,
@@ -191,10 +186,10 @@ function normalizedTimeout(timeoutMs: number | undefined): number {
 }
 
 function stageFailure(
-  provider: VercelGatewayProviderId,
-  stage: VercelGatewayStage,
+  provider: JevGatewayProviderId,
+  stage: JevGatewayStage,
   deadline: DeadlineState,
-): VercelGatewayFailure | undefined {
+): JevGatewayFailure | undefined {
   if (deadline.callerCancelled()) return failure(provider, "caller-cancellation", stage);
   if (deadline.timedOut() || deadline.attemptTimedOut() || deadline.signal.aborted)
     return failure(provider, "timeout", stage);
@@ -202,16 +197,17 @@ function stageFailure(
 }
 
 async function requestProvider<TRequest extends object>(
-  registry: VercelGatewayRegistry,
+  registry: JevGatewayRegistry,
   request: TRequest,
   provider: ProviderConfig,
-  options: VercelGatewayRequestOptions,
+  options: JevGatewayRequestOptions,
   deadline: DeadlineState,
-): Promise<VercelGatewayResult> {
+  now: () => number,
+): Promise<JevGatewayResult> {
   const initialFailure = stageFailure(provider.id, "auth", deadline);
   if (initialFailure !== undefined) return initialFailure;
 
-  let authResult: AwaitStageResult<Awaited<ReturnType<VercelGatewayRegistry["getProviderAuth"]>>>;
+  let authResult: AwaitStageResult<Awaited<ReturnType<JevGatewayRegistry["getProviderAuth"]>>>;
   try {
     authResult = await awaitWithinDeadline(
       Promise.resolve().then(() => registry.getProviderAuth(provider.id)),
@@ -294,7 +290,7 @@ async function requestProvider<TRequest extends object>(
       "http-status",
       "request",
       response.status,
-      parseRetryAfter(response.headers.get("retry-after")),
+      parseRetryAfter(response.headers.get("retry-after"), now()),
     );
   }
 
@@ -327,71 +323,101 @@ async function requestProvider<TRequest extends object>(
   }
 }
 
-export async function requestVercelGateway<TRequest extends object>(
-  registry: VercelGatewayRegistry,
-  request: TRequest,
-  options: VercelGatewayRequestOptions = {},
-): Promise<VercelGatewayResult> {
-  const timeoutMs = normalizedTimeout(options.timeoutMs);
-  const primaryTimeoutMs = Math.max(1, Math.floor(timeoutMs / 2));
-  const deadlineController = new AbortController();
-  let timedOut = false;
-  let callerCancelled = options.signal?.aborted === true;
-  if (callerCancelled) deadlineController.abort();
+export function createJevGatewayRequester(now: () => number = Date.now) {
+  let cooldownUntilMs = 0;
+  let cooldownFailure: JevGatewayFailure | undefined;
 
-  const timeout = setTimeout(() => {
-    timedOut = true;
-    deadlineController.abort();
-  }, timeoutMs);
-  const onCallerAbort = () => {
-    callerCancelled = true;
-    deadlineController.abort();
-  };
-  options.signal?.addEventListener("abort", onCallerAbort, { once: true });
-  const deadline: DeadlineState = {
-    signal: deadlineController.signal,
-    callerCancelled: () => callerCancelled,
-    timedOut: () => timedOut,
-    attemptTimedOut: () => false,
-  };
-  const runAttempt = async (
-    provider: ProviderConfig,
-    attemptTimeoutMs?: number,
-  ): Promise<VercelGatewayResult> => {
-    const attemptDeadline = createAttemptDeadline(deadline, attemptTimeoutMs);
+  return async function requestJevGateway<TRequest extends object>(
+    registry: JevGatewayRegistry,
+    request: TRequest,
+    options: JevGatewayRequestOptions = {},
+  ): Promise<JevGatewayResult> {
+    const timeoutMs = normalizedTimeout(options.timeoutMs);
+    const primaryTimeoutMs = Math.max(1, Math.floor(timeoutMs / 2));
+    const deadlineController = new AbortController();
+    let timedOut = false;
+    let callerCancelled = options.signal?.aborted === true;
+    if (callerCancelled) deadlineController.abort();
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      deadlineController.abort();
+    }, timeoutMs);
+    const onCallerAbort = () => {
+      callerCancelled = true;
+      deadlineController.abort();
+    };
+    options.signal?.addEventListener("abort", onCallerAbort, { once: true });
+    const deadline: DeadlineState = {
+      signal: deadlineController.signal,
+      callerCancelled: () => callerCancelled,
+      timedOut: () => timedOut,
+      attemptTimedOut: () => false,
+    };
+    const runAttempt = async (
+      provider: ProviderConfig,
+      attemptTimeoutMs?: number,
+    ): Promise<JevGatewayResult> => {
+      const attemptDeadline = createAttemptDeadline(deadline, attemptTimeoutMs);
+      try {
+        return await requestProvider(registry, request, provider, options, attemptDeadline, now);
+      } finally {
+        attemptDeadline.dispose();
+      }
+    };
+
     try {
-      return await requestProvider(registry, request, provider, options, attemptDeadline);
+      const cachedFailure = cooldownFailure;
+      const coolingDown = cachedFailure !== undefined && now() < cooldownUntilMs;
+      const primary = coolingDown
+        ? cachedFailure
+        : await runAttempt(PRIMARY_PROVIDER, primaryTimeoutMs);
+      if (
+        !coolingDown &&
+        primary.ok === false &&
+        primary.httpStatus === 429 &&
+        primary.retryAfterMs
+      ) {
+        cooldownUntilMs = now() + primary.retryAfterMs;
+        cooldownFailure = primary;
+      }
+      if (
+        !coolingDown &&
+        (primary.ok || callerCancelled || timedOut || deadlineController.signal.aborted)
+      )
+        return primary;
+
+      const fallback = await runAttempt(FALLBACK_PROVIDER);
+      if (
+        !fallback.ok &&
+        fallback.stage === "auth" &&
+        (fallback.reason === "missing-credentials" || fallback.reason === "auth-failure") &&
+        !callerCancelled &&
+        !timedOut &&
+        !deadlineController.signal.aborted &&
+        !(
+          primary.ok === false &&
+          primary.stage === "auth" &&
+          (primary.reason === "missing-credentials" || primary.reason === "auth-failure")
+        )
+      ) {
+        // Keep useful primary diagnostics such as Vercel's Retry-After when the fallback is unavailable.
+        return coolingDown && primary.ok === false
+          ? { ...primary, retryAfterMs: Math.max(0, cooldownUntilMs - now()) }
+          : primary;
+      }
+      return fallback;
+    } catch {
+      const provider = callerCancelled || timedOut ? PRIMARY_PROVIDER.id : FALLBACK_PROVIDER.id;
+      return (
+        stageFailure(provider, "request", deadline) ??
+        failure(provider, "request-failure", "request")
+      );
     } finally {
-      attemptDeadline.dispose();
+      clearTimeout(timeout);
+      options.signal?.removeEventListener("abort", onCallerAbort);
     }
   };
-
-  try {
-    const primary = await runAttempt(PRIMARY_PROVIDER, primaryTimeoutMs);
-    if (primary.ok || callerCancelled || timedOut || deadlineController.signal.aborted)
-      return primary;
-
-    const fallback = await runAttempt(FALLBACK_PROVIDER);
-    if (
-      !fallback.ok &&
-      fallback.stage === "auth" &&
-      (fallback.reason === "missing-credentials" || fallback.reason === "auth-failure") &&
-      !(
-        primary.stage === "auth" &&
-        (primary.reason === "missing-credentials" || primary.reason === "auth-failure")
-      )
-    ) {
-      // Keep useful primary diagnostics such as Vercel's Retry-After when the fallback is unavailable.
-      return primary;
-    }
-    return fallback;
-  } catch {
-    const provider = callerCancelled || timedOut ? PRIMARY_PROVIDER.id : FALLBACK_PROVIDER.id;
-    return (
-      stageFailure(provider, "request", deadline) ?? failure(provider, "request-failure", "request")
-    );
-  } finally {
-    clearTimeout(timeout);
-    options.signal?.removeEventListener("abort", onCallerAbort);
-  }
 }
+
+export const requestJevGateway = createJevGatewayRequester();

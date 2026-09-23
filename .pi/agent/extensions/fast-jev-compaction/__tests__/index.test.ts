@@ -5,7 +5,7 @@ import {
   ModelRegistry,
   type SessionBeforeCompactEvent,
 } from "@earendil-works/pi-coding-agent";
-import type { VercelGatewayFetch } from "../../../lib/vercel-gateway";
+import type { JevGatewayFetch } from "../../../lib/jev-gateway";
 import fastJevCompaction, {
   buildInferenceState,
   type FastJevMessage,
@@ -86,7 +86,7 @@ function toolHeavyTranscript(count: number): unknown[] {
 function gatewayFetch(
   answer: (name: string) => { type: "noul"; noul: number },
   onBody?: (body: Record<string, unknown>) => void,
-): VercelGatewayFetch {
+): JevGatewayFetch {
   return async (_input, init) => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     onBody?.(body);

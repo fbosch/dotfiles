@@ -1,11 +1,11 @@
-import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/vercel-gateway";
+import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/jev-gateway";
 import { resolveFastJevCompactionConfig } from "../fast-jev-compaction";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 
-export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/vercel-gateway";
+export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/jev-gateway";
 
 export interface JevStartupStatus {
   readonly state: Exclude<StartupOwnerState, "disposed">;

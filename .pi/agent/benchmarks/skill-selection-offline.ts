@@ -9,7 +9,7 @@ import {
   type SkillSelectionFailure,
   selectSkillsWithJevDetailed,
 } from "../extensions/skill-selection";
-import { VERCEL_GATEWAY_MODEL, type VercelGatewayFailureReason } from "../lib/vercel-gateway";
+import { type JevGatewayFailureReason, VERCEL_GATEWAY_MODEL } from "../lib/jev-gateway";
 import {
   SKILL_SELECTION_BENCHMARK_CASES,
   SKILL_SELECTION_BENCHMARK_CATALOG,
@@ -63,7 +63,7 @@ const BENCHMARK_QUESTION_IDS = [
 
 type Prediction = BenchmarkPrediction;
 type SavedFailureReason =
-  | VercelGatewayFailureReason
+  | JevGatewayFailureReason
   | "invalid-evaluation-response"
   | "prediction-mismatch"
   | "retry-budget-exhausted";
@@ -243,7 +243,7 @@ function safeFailure(failure: SkillSelectionFailure): NonNullable<Prediction["fa
 }
 
 function unexpectedFailure(): NonNullable<Prediction["failure"]> {
-  return { stage: "request", reason: "request-failure" satisfies VercelGatewayFailureReason };
+  return { stage: "request", reason: "request-failure" satisfies JevGatewayFailureReason };
 }
 
 async function jevPrediction(

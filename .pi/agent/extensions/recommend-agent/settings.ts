@@ -1,5 +1,5 @@
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_JEV_TIMEOUT_MS } from "../../lib/vercel-gateway";
+import { DEFAULT_JEV_TIMEOUT_MS } from "../../lib/jev-gateway";
 
 export const RECOMMEND_AGENT_SETTING = "recommendAgent" as const;
 export const DEFAULT_RECOMMEND_AGENT_CONFIG = {

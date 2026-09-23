@@ -3,10 +3,10 @@ import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
-  requestVercelGateway,
-  type VercelGatewayFailure,
-  type VercelGatewayFetch,
-} from "../lib/vercel-gateway";
+  type JevGatewayFailure,
+  type JevGatewayFetch,
+  requestJevGateway,
+} from "../lib/jev-gateway";
 
 const DEFAULT_LIMIT = 4;
 const MAX_LIMIT = 4;
@@ -55,8 +55,8 @@ export interface CommitMessagePilotReport {
   readonly caseCount: number;
   readonly elapsedMs: number;
   readonly gatewayFailure?: {
-    readonly stage: VercelGatewayFailure["stage"];
-    readonly reason: VercelGatewayFailure["reason"];
+    readonly stage: JevGatewayFailure["stage"];
+    readonly reason: JevGatewayFailure["reason"];
     readonly httpStatus?: number;
   };
   readonly evaluationFailure?: {
@@ -72,7 +72,7 @@ export interface CommitMessagePilotReport {
 
 export interface RunCommitMessageJevPilotOptions {
   readonly modelRegistry: Pick<ModelRegistry, "getProviderAuth">;
-  readonly fetch?: VercelGatewayFetch;
+  readonly fetch?: JevGatewayFetch;
   readonly signal?: AbortSignal;
   readonly threshold?: number;
   readonly timeoutMs?: number;
@@ -365,7 +365,7 @@ export async function runCommitMessageJevPilot(
   const threshold = normalizeThreshold(options.threshold);
   const timeoutMs = normalizeTimeout(options.timeoutMs);
   const startedAt = performance.now();
-  const gateway = await requestVercelGateway(options.modelRegistry, createJevRequest(cases), {
+  const gateway = await requestJevGateway(options.modelRegistry, createJevRequest(cases), {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     timeoutMs,

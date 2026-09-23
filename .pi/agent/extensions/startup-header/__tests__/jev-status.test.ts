@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { JEV_GATEWAY_PROVIDER_IDS } from "../../../lib/vercel-gateway";
+import { JEV_GATEWAY_PROVIDER_IDS } from "../../../lib/jev-gateway";
 import { resolveJevStartupStatus } from "../jev-status";
 
 const disabledSettings = {

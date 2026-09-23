@@ -8,7 +8,7 @@
  * retried, and emit only sanitized metrics.
  */
 
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 const execFile = promisify((await import("node:child_process")).execFile);
 const REPO = resolve(dirname(import.meta.path), "../../..");
 const OURS_MODULE = resolve(REPO, ".pi/agent/extensions/fast-jev-compaction/index.ts");
-const GATEWAY_MODULE = resolve(REPO, ".pi/agent/lib/vercel-gateway.ts");
+const GATEWAY_MODULE = resolve(REPO, ".pi/agent/lib/jev-gateway.ts");
 const PINNED_COMMIT = "e3f262a7f4d42bd8dd32ced30d26176f7cb545b0";
 const PI_MODEL = "openai-codex/gpt-6-luna";
 const RESERVE_TOKENS = 4_000;
@@ -555,7 +555,7 @@ async function run() {
   } else {
     const messages = upstreamMessages([...(previousSummary ? [{ role: "user", content: [{ type: "text", text: previousSummary }] }] : []), ...oldMessages, ...tailMessages]);
     const ask = { ask: async (state, questions) => {
-      const gateway = await gatewayFns.requestVercelGateway(ctx.modelRegistry, { state, questions }, { timeoutMs: JEV_TIMEOUT_MS, fetch: (input, init) => observedFetch(counters, input, init) });
+      const gateway = await gatewayFns.requestJevGateway(ctx.modelRegistry, { state, questions }, { timeoutMs: JEV_TIMEOUT_MS, fetch: (input, init) => observedFetch(counters, input, init) });
       if (!gateway.ok) throw new Error("jev gateway failure");
       return gateway.value;
     } };

@@ -8,9 +8,9 @@ import {
 import { Type } from "typebox";
 import {
   DEFAULT_JEV_TIMEOUT_MS,
-  requestVercelGateway,
-  type VercelGatewayFetch,
-} from "../../lib/vercel-gateway";
+  type JevGatewayFetch,
+  requestJevGateway,
+} from "../../lib/jev-gateway";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
 
@@ -247,7 +247,7 @@ interface JevCandidate {
 
 export interface JevRankingOptions {
   modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
-  fetch?: VercelGatewayFetch;
+  fetch?: JevGatewayFetch;
   timeoutMs?: number;
 }
 
@@ -367,7 +367,7 @@ export async function rankDeferredToolsWithJev(
   const candidates = buildJevCandidatePool(tools, query, prefixes);
   if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
 
-  const gateway = await requestVercelGateway(
+  const gateway = await requestJevGateway(
     options.modelRegistry,
     createJevRequest(candidates, query),
     {
