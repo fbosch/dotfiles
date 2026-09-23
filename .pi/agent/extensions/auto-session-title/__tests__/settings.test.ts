@@ -37,7 +37,7 @@ describe("auto-session-title settings", () => {
       path,
       JSON.stringify({
         autoSessionTitle: {
-          model: "openai-codex/gpt-5.6-luna-fast",
+          model: "openai-codex/gpt-6-luna-fast",
           thinkingLevel: "low",
         },
       }),

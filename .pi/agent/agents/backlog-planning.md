@@ -2,7 +2,7 @@
 color: "#8ed8c1"
 description: Turns settled ideas, specs, or issue text into dependency-aware task backlogs without creating tickets or implementing code. Delivers ordered tasks with dependencies, scope, and observable outcomes.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-sol
 thinking: low
 tools: read, grep, find, ls, fffind, ffgrep
 permission:

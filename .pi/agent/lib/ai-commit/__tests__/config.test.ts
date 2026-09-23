@@ -7,14 +7,14 @@ describe("commit message model settings", () => {
       resolveCommitMessageModelConfig(
         {
           commitMessageModel: {
-            model: "openai-codex/gpt-5.6-luna-fast",
+            model: "openai-codex/gpt-6-luna-fast",
             thinkingLevel: "off",
           },
         },
         { commitMessageModel: { thinkingLevel: "minimal" } },
       ),
     ).toEqual({
-      model: "openai-codex/gpt-5.6-luna-fast",
+      model: "openai-codex/gpt-6-luna-fast",
       thinkingLevel: "minimal",
     });
   });
@@ -22,7 +22,7 @@ describe("commit message model settings", () => {
   test("supports disabling the dedicated model in project settings", () => {
     expect(
       resolveCommitMessageModelConfig(
-        { commitMessageModel: { model: "openai-codex/gpt-5.6-luna-fast" } },
+        { commitMessageModel: { model: "openai-codex/gpt-6-luna-fast" } },
         { commitMessageModel: false },
       ),
     ).toBeNull();
@@ -30,12 +30,12 @@ describe("commit message model settings", () => {
 
   test("rejects malformed model and thinking settings", () => {
     expect(() =>
-      resolveCommitMessageModelConfig({ commitMessageModel: { model: "gpt-5.6-luna-fast" } }),
+      resolveCommitMessageModelConfig({ commitMessageModel: { model: "gpt-6-luna-fast" } }),
     ).toThrow("provider/model");
     expect(() =>
       resolveCommitMessageModelConfig({
         commitMessageModel: {
-          model: "openai-codex/gpt-5.6-luna-fast",
+          model: "openai-codex/gpt-6-luna-fast",
           thinkingLevel: "none",
         },
       }),

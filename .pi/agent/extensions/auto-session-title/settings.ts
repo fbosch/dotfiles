@@ -3,7 +3,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readLockedJsonFile } from "../../lib/locked-json-file";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-const DEFAULT_MODEL_REFERENCE = "openai-codex/gpt-5.6-luna-fast";
+const DEFAULT_MODEL_REFERENCE = "openai-codex/gpt-6-luna-fast";
 const DEFAULT_THINKING_LEVEL = "low" as const;
 
 export type AutoSessionTitleThinkingLevel = (typeof THINKING_LEVELS)[number];

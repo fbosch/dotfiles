@@ -201,14 +201,14 @@ describe("generateTitle", () => {
   test("uses configured model and low reasoning without changing the active model", async () => {
     const model = {
       provider: "openai-codex",
-      id: "gpt-5.6-luna-fast",
+      id: "gpt-6-luna-fast",
       api: "openai-codex-responses",
     };
     const calls: Array<{ model: unknown; options: unknown }> = [];
     const ctx = {
       modelRegistry: {
         find: (provider: string, id: string) => {
-          expect([provider, id]).toEqual(["openai-codex", "gpt-5.6-luna-fast"]);
+          expect([provider, id]).toEqual(["openai-codex", "gpt-6-luna-fast"]);
           return model;
         },
         complete: async (requestModel: unknown, _context: unknown, options: unknown) => {
@@ -222,7 +222,7 @@ describe("generateTitle", () => {
     } as unknown as Parameters<typeof generateTitle>[0];
 
     const title = await generateTitle(ctx, "Fix title generation", "", {
-      model: { provider: "openai-codex", id: "gpt-5.6-luna-fast" },
+      model: { provider: "openai-codex", id: "gpt-6-luna-fast" },
       thinkingLevel: "low",
     });
     expect(title).toBe("Repair title generation");

@@ -2,7 +2,7 @@
 color: "#96bd78"
 description: Designs, writes, improves, and diagnoses tests for behavior, edge cases, and failure conditions. Delivers focused regression coverage, clear case names, and interpreted results.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna
+model: openai-codex/gpt-6-luna
 thinking: max
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
 permission:

@@ -155,7 +155,7 @@ describe("quick reply input", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => {
@@ -201,7 +201,7 @@ describe("quick reply input", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => {
@@ -250,8 +250,8 @@ describe("quick reply input", () => {
       reply: { label: "/compact", message: "/compact" },
     },
     {
-      assistantText: "/model openai-codex/gpt-5.6-luna",
-      reply: { label: "/model", message: "/model openai-codex/gpt-5.6-luna" },
+      assistantText: "/model openai-codex/gpt-6-luna",
+      reply: { label: "/model", message: "/model openai-codex/gpt-6-luna" },
     },
   ])("returns only an explicit final slash command: $assistantText", ({ assistantText, reply }) => {
     expect(getDeterministicQuickReplies({ userText: "Update it", assistantText })).toEqual([reply]);
@@ -398,7 +398,7 @@ describe("quick reply model generation", () => {
     const calls: Array<{ model: unknown; context: unknown; options: unknown }> = [];
     const model = {
       provider: "openai-codex",
-      id: "gpt-5.6-luna-fast",
+      id: "gpt-6-luna-fast",
       api: "openai-codex-responses",
     };
     const ctx = {
@@ -406,7 +406,7 @@ describe("quick reply model generation", () => {
       isProjectTrusted: () => false,
       modelRegistry: {
         find: (provider: string, id: string) => {
-          expect([provider, id]).toEqual(["openai-codex", "gpt-5.6-luna-fast"]);
+          expect([provider, id]).toEqual(["openai-codex", "gpt-6-luna-fast"]);
           return model;
         },
         complete: async (requestModel: unknown, context: unknown, options: unknown) => {
@@ -434,7 +434,7 @@ describe("quick reply model generation", () => {
     expect(replies).toEqual([reply(1), reply(2)]);
     expect(nextReplies).toEqual(replies);
     expect(calls).toHaveLength(2);
-    expect(calls[0]?.model).toMatchObject({ id: "gpt-5.6-luna" });
+    expect(calls[0]?.model).toMatchObject({ id: "gpt-6-luna" });
     expect(calls[0]?.context).toMatchObject({
       systemPrompt: expect.stringMatching(
         /untrusted data[\s\S]*styleSample[\s\S]*asks for a decision or missing information[\s\S]*blocked or reports a failure[\s\S]*completed work[\s\S]*Never ask it to repeat work[\s\S]*informational answer[\s\S]*generic preference for more work[\s\S]*UI-01[\s\S]*UI-02[\s\S]*UI-03[\s\S]*UI-04[\s\S]*UI-05[\s\S]*CMP-01[\s\S]*sent verbatim[\s\S]*faithfully preserve[\s\S]*Call return_quick_replies exactly once/u,
@@ -535,7 +535,7 @@ describe("quick reply model generation", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => ({ role: "assistant", content, stopReason: "toolUse" }),
@@ -559,7 +559,7 @@ describe("quick reply model generation", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => ({
@@ -678,7 +678,7 @@ describe("quick reply model generation", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => {
@@ -715,7 +715,7 @@ describe("quick reply model generation", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => {
@@ -774,7 +774,7 @@ describe("quick reply model generation", () => {
       modelRegistry: {
         find: () => ({
           provider: "openai-codex",
-          id: "gpt-5.6-luna-fast",
+          id: "gpt-6-luna-fast",
           api: "openai-codex-responses",
         }),
         complete: async () => ({ role: "assistant", content: [], stopReason: "error" }),

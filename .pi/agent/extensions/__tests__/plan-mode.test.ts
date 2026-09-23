@@ -5,10 +5,10 @@ import planMode, { PLAN_MODE_STATUS } from "../plan-mode";
 type ToggleHandler = (args: string, ctx: ExtensionContext) => Promise<void>;
 type ShortcutHandler = (ctx: ExtensionContext) => Promise<void>;
 
-const buildModel = { provider: "openai-codex", id: "gpt-5.6-luna-fast" };
-const planModel = { provider: "openai-codex", id: "gpt-5.6-sol" };
+const buildModel = { provider: "openai-codex", id: "gpt-6-luna-fast" };
+const planModel = { provider: "openai-codex", id: "gpt-6-sol" };
 const alternateBuildModel = { provider: "openai-codex", id: "gpt-5.6-terra-fast" };
-const alternatePlanModel = { provider: "openai-codex", id: "gpt-5.6-sol-fast" };
+const alternatePlanModel = { provider: "openai-codex", id: "gpt-6-sol-fast" };
 
 type ModeConfigLoader = NonNullable<Parameters<typeof planMode>[1]>;
 type EventHandler = (event: never, context: ExtensionContext) => unknown | Promise<unknown>;
@@ -505,7 +505,7 @@ describe("plan mode", () => {
     expect(harness.activeToolSets).toEqual([]);
     expect(harness.statuses).toEqual([]);
     expect(harness.notifications).toEqual([
-      ["Configured plan model is unavailable: openai-codex/gpt-5.6-sol", "error"],
+      ["Configured plan model is unavailable: openai-codex/gpt-6-sol", "error"],
     ]);
   });
 

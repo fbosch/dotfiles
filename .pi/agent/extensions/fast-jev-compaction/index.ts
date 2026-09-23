@@ -12,7 +12,7 @@ import { requestVercelGateway, type VercelGatewayFetch } from "../../lib/vercel-
 
 const SETTINGS_KEY = "compaction";
 const DEFAULT_TIMEOUT_MS = 2_400;
-const DEFAULT_SUMMARY_MODEL = "openai-codex/gpt-5.6-luna-fast";
+const DEFAULT_SUMMARY_MODEL = "openai-codex/gpt-6-luna-fast";
 const KEEP_THRESHOLD = 0.7;
 const MIN_REDUCTION_RATIO = 0.25;
 const MAX_STATE_MESSAGES = 96;

@@ -18,7 +18,7 @@ export interface QuickReplyModel {
   id: string;
 }
 
-export const DEFAULT_QUICK_REPLY_MODEL = "openai-codex/gpt-5.6-luna-fast";
+export const DEFAULT_QUICK_REPLY_MODEL = "openai-codex/gpt-6-luna-fast";
 export const DEFAULT_QUICK_REPLY_SHORTCUTS = [
   "alt+1",
   "alt+2",

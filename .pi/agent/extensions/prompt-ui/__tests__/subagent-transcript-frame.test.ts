@@ -76,15 +76,15 @@ describe("subagent transcript frame", () => {
       theme,
       "explore",
       "#5B9BD5",
-      "openai-codex/gpt-5.6-luna",
+      "openai-codex/gpt-6-luna",
     );
     const title = frame.render(64)[1] ?? "";
 
     expect(stripTerminalSequences(title)).toContain(
-      "explore subagent session · openai-codex/gpt-5.6-luna",
+      "explore subagent session · openai-codex/gpt-6-luna",
     );
     expect(title).toContain("\u001b[38;2;91;155;213mexplore\u001b[39m");
-    expect(title).toContain(`${muted} · openai-codex/gpt-5.6-luna\u001b[39m`);
+    expect(title).toContain(`${muted} · openai-codex/gpt-6-luna\u001b[39m`);
   });
 
   test("keeps agent names on one row without terminal control sequences", () => {

@@ -2,7 +2,7 @@
 color: "#61afef"
 description: Collects bounded, read-only sources, renders charts or diagrams, and validates the result visually. Delivers replayable visuals with source bounds, constraints, and validation evidence.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-sol
+model: openai-codex/gpt-6-sol
 thinking: medium
 inherit_context: false
 max_turns: 24

@@ -2,7 +2,7 @@
 color: "#f2d066"
 description: Runs performance benchmarks and profiles code to measure latency, CPU, memory, allocations, and bottlenecks. Delivers reproducible before-and-after comparisons and flags meaningful regressions or gains.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna
+model: openai-codex/gpt-6-luna
 thinking: max
 max_turns: 16
 tools: read, grep, find, ls, fffind, ffgrep, bash

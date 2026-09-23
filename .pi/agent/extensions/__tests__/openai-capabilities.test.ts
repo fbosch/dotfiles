@@ -44,36 +44,36 @@ describe("OpenAI capabilities", () => {
   });
 
   test("rewrites an alias request to the base model and priority tier", () => {
-    expect(resolveFastModelRequest("gpt-5.6-luna-fast")).toEqual({
-      modelId: "gpt-5.6-luna",
+    expect(resolveFastModelRequest("gpt-6-luna-fast")).toEqual({
+      modelId: "gpt-6-luna",
       serviceTier: "priority",
     });
     expect(
-      applyFastServiceTier({ model: "gpt-5.6-luna-fast", stream: true }, "gpt-5.6-luna-fast"),
+      applyFastServiceTier({ model: "gpt-6-luna-fast", stream: true }, "gpt-6-luna-fast"),
     ).toEqual({
-      model: "gpt-5.6-luna",
+      model: "gpt-6-luna",
       stream: true,
       service_tier: "priority",
     });
   });
 
   test("routes each configured fast model", () => {
-    expect(applyFastServiceTier({}, "gpt-5.6-sol-fast").model).toBe("gpt-5.6-sol");
+    expect(applyFastServiceTier({}, "gpt-6-sol-fast").model).toBe("gpt-6-sol");
     expect(applyFastServiceTier({}, "gpt-5.6-terra-fast").model).toBe("gpt-5.6-terra");
     expect(applyFastServiceTier({}, "gpt-6-astra-fast").model).toBe("gpt-6-astra");
   });
 
   test("routes from the request model independently of the active session model", () => {
-    expect(applyFastServiceTierForPayload({ model: "gpt-5.6-luna-fast", stream: true })).toEqual({
-      model: "gpt-5.6-luna",
+    expect(applyFastServiceTierForPayload({ model: "gpt-6-luna-fast", stream: true })).toEqual({
+      model: "gpt-6-luna",
       stream: true,
       service_tier: "priority",
     });
   });
 
   test("leaves standard and unrelated requests unchanged", () => {
-    expect(resolveFastModelRequest("gpt-5.6-luna")).toBeUndefined();
-    expect(applyFastServiceTierForPayload({ model: "gpt-5.6-luna" })).toBeUndefined();
+    expect(resolveFastModelRequest("gpt-6-luna")).toBeUndefined();
+    expect(applyFastServiceTierForPayload({ model: "gpt-6-luna" })).toBeUndefined();
     expect(applyFastServiceTierForPayload({ model: "claude-sonnet-5" })).toBeUndefined();
     expect(applyFastServiceTierForPayload("invalid")).toBeUndefined();
   });
@@ -82,7 +82,7 @@ describe("OpenAI capabilities", () => {
     expect(() => applyFastServiceTier({}, "gpt-5.4-fast")).toThrow(
       "Unsupported OpenAI Codex fast model: gpt-5.4-fast",
     );
-    expect(() => applyFastServiceTier("invalid", "gpt-5.6-luna-fast")).toThrow(
+    expect(() => applyFastServiceTier("invalid", "gpt-6-luna-fast")).toThrow(
       "OpenAI Codex fast mode requires an object request payload",
     );
   });
@@ -106,8 +106,8 @@ describe("OpenAI capabilities", () => {
     const harness = createCapabilitiesHarness(false);
     expect(harness.registrations).toEqual([]);
     expect(
-      harness.emit("before_provider_request", { payload: { model: "gpt-5.6-luna-fast" } }),
-    ).toEqual({ model: "gpt-5.6-luna", service_tier: "priority" });
+      harness.emit("before_provider_request", { payload: { model: "gpt-6-luna-fast" } }),
+    ).toEqual({ model: "gpt-6-luna", service_tier: "priority" });
   });
 
   test("rejects malformed fast-model configuration", () => {

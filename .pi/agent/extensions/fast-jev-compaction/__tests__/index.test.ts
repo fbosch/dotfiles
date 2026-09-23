@@ -105,7 +105,7 @@ describe("fast-jev-compaction", () => {
   test("reads only the explicit global setting and resolves configured model references", () => {
     expect(resolveFastJevCompactionConfig(undefined)).toEqual({
       enabled: false,
-      summaryModel: "openai-codex/gpt-5.6-luna-fast",
+      summaryModel: "openai-codex/gpt-6-luna-fast",
     });
     expect(
       resolveFastJevCompactionConfig({
@@ -657,8 +657,8 @@ describe("fast-jev-compaction", () => {
 
   test("accepts configured model lookup through the public registry API", () => {
     // SAFETY: This test only checks the pure provider/model split used before registry lookup.
-    const value = splitSummaryModelReference("openai-codex/gpt-5.6-luna-fast");
-    expect(value).toEqual({ provider: "openai-codex", modelId: "gpt-5.6-luna-fast" });
+    const value = splitSummaryModelReference("openai-codex/gpt-6-luna-fast");
+    expect(value).toEqual({ provider: "openai-codex", modelId: "gpt-6-luna-fast" });
     const _unused: ExtensionContext | undefined = undefined;
     expect(_unused).toBeUndefined();
   });

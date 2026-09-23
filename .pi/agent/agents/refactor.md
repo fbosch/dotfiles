@@ -2,7 +2,7 @@
 color: "#aae373"
 description: Makes requested behavior-preserving improvements to duplication, naming, logic, and readability. Delivers scoped edits plus focused checks while keeping interfaces and behavior stable.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna
+model: openai-codex/gpt-6-luna
 thinking: xhigh
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, lsp, find_definition, find_callers
 permission:

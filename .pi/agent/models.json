@@ -3,8 +3,8 @@
     "openai-codex": {
       "models": [
         {
-          "id": "gpt-5.6-luna-fast",
-          "name": "GPT-5.6 Luna (Fast)",
+          "id": "gpt-6-luna-fast",
+          "name": "GPT-6 Luna (Fast)",
           "api": "openai-codex-responses",
           "reasoning": true,
           "input": [
@@ -12,36 +12,41 @@
             "image"
           ],
           "cost": {
-            "input": 0.2,
-            "output": 1.2,
-            "cacheRead": 0.02,
-            "cacheWrite": 0.25,
+            "input": 0.1,
+            "output": 0.5,
+            "cacheRead": 0.01,
+            "cacheWrite": 0.125,
             "tiers": [
               {
                 "inputTokensAbove": 272000,
-                "input": 0.4,
-                "output": 1.8,
-                "cacheRead": 0.04,
-                "cacheWrite": 0.5
+                "input": 0.2,
+                "output": 0.75,
+                "cacheRead": 0.02,
+                "cacheWrite": 0.25
               }
             ]
           },
           "contextWindow": 272000,
           "maxTokens": 128000,
           "thinkingLevelMap": {
+            "off": "none",
+            "minimal": "low",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
             "xhigh": "xhigh",
-            "max": "max",
-            "minimal": "low"
+            "max": "max"
           },
           "compat": {
             "supportsOpenAIGrammarTools": true,
             "supportsAdditionalTools": true,
-            "supportsToolSearch": true
+            "supportsToolSearch": true,
+            "supportsMidConvoSystemMessages": true
           }
         },
         {
-          "id": "gpt-5.6-sol-fast",
-          "name": "GPT-5.6 Sol (Fast)",
+          "id": "gpt-6-sol-fast",
+          "name": "GPT-6 Sol (Fast)",
           "api": "openai-codex-responses",
           "reasoning": true,
           "input": [
@@ -49,31 +54,36 @@
             "image"
           ],
           "cost": {
-            "input": 5,
-            "output": 30,
-            "cacheRead": 0.5,
-            "cacheWrite": 6.25,
+            "input": 2,
+            "output": 10,
+            "cacheRead": 0.2,
+            "cacheWrite": 2.5,
             "tiers": [
               {
                 "inputTokensAbove": 272000,
-                "input": 10,
-                "output": 45,
-                "cacheRead": 1,
-                "cacheWrite": 12.5
+                "input": 4,
+                "output": 15,
+                "cacheRead": 0.4,
+                "cacheWrite": 5
               }
             ]
           },
           "contextWindow": 272000,
           "maxTokens": 128000,
           "thinkingLevelMap": {
+            "off": "none",
+            "minimal": "low",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
             "xhigh": "xhigh",
-            "max": "max",
-            "minimal": "low"
+            "max": "max"
           },
           "compat": {
             "supportsOpenAIGrammarTools": true,
             "supportsAdditionalTools": true,
-            "supportsToolSearch": true
+            "supportsToolSearch": true,
+            "supportsMidConvoSystemMessages": true
           }
         },
         {

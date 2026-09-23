@@ -118,7 +118,7 @@ function contextFor(
     modelRegistry: {
       find: () => ({
         provider: "openai-codex",
-        id: "gpt-5.6-luna-fast",
+        id: "gpt-6-luna-fast",
         api: "openai-codex-responses",
       }),
       complete: async (

@@ -517,12 +517,12 @@ describe("subagent session links", () => {
         JSON.stringify({
           type: "model_change",
           provider: "openai-codex",
-          modelId: "gpt-5.6-luna",
+          modelId: "gpt-6-luna",
         }),
         JSON.stringify({
           type: "model_change",
           provider: "openai-codex",
-          modelId: "gpt-5.6-luna-fast",
+          modelId: "gpt-6-luna-fast",
         }),
       ].join("\n"),
     );
@@ -613,7 +613,7 @@ describe("subagent session links", () => {
 
     expect(renderError).toBeUndefined();
     expect(firstRaw).toContain("\u001b[38;2;91;155;213mExplore\u001b[39m subagent session");
-    expect(first).toContain("Explore subagent session · openai-codex/gpt-5.6-luna-fast");
+    expect(first).toContain("Explore subagent session · openai-codex/gpt-6-luna-fast");
     expect(firstRaw).not.toContain("\u001b]133;");
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");

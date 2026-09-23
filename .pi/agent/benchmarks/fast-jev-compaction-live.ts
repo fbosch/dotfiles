@@ -19,7 +19,7 @@ const REPO = resolve(dirname(import.meta.path), "../../..");
 const OURS_MODULE = resolve(REPO, ".pi/agent/extensions/fast-jev-compaction/index.ts");
 const GATEWAY_MODULE = resolve(REPO, ".pi/agent/lib/vercel-gateway.ts");
 const PINNED_COMMIT = "e3f262a7f4d42bd8dd32ced30d26176f7cb545b0";
-const PI_MODEL = "openai-codex/gpt-5.6-luna";
+const PI_MODEL = "openai-codex/gpt-6-luna";
 const RESERVE_TOKENS = 4_000;
 const JEV_TIMEOUT_MS = 2_400;
 const LUNA_TIMEOUT_MS = 60_000;
@@ -445,7 +445,7 @@ async function runLuna(ctx, messages, previousSummary, counters) {
   const started = performance.now();
   counters.lunaCalls += 1;
   const registry = ctx.modelRegistry;
-  const model = registry.find("openai-codex", "gpt-5.6-luna");
+  const model = registry.find("openai-codex", "gpt-6-luna");
   if (!model) return { failureReason: "summary-model-missing" };
   const delegated = Object.create(registry);
   const originalComplete = registry.complete.bind(registry);

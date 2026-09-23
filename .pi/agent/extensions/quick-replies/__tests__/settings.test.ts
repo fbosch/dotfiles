@@ -173,7 +173,7 @@ describe("quick reply model settings", () => {
 
   test("uses the built-in default when the setting is absent or untrusted", () => {
     const cwd = project({ quickReplies: { model: "anthropic/claude-haiku-4-5" } });
-    const expected = { provider: "openai-codex", id: "gpt-5.6-luna-fast" };
+    const expected = { provider: "openai-codex", id: "gpt-6-luna-fast" };
 
     expect(resolveQuickReplyModel(context(project()))).toEqual(expected);
     expect(resolveQuickReplyModel(context(cwd, false))).toEqual(expected);

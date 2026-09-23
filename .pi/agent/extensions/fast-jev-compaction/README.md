@@ -8,7 +8,7 @@ This extension is an opt-in, global-only compaction handler. Enable it in
   "jev": {
     "compaction": {
       "enabled": true,
-      "summaryModel": "openai-codex/gpt-5.6-luna-fast"
+      "summaryModel": "openai-codex/gpt-6-luna-fast"
     }
   }
 }

@@ -18,11 +18,11 @@ describe("ai_commit message selection", () => {
 
 describe("ai_commit arguments", () => {
   test("preserves the established dry-run, verbose, debug, and model flags", () => {
-    expect(parseArgs(["-d", "-v", "-m", "openai-codex/gpt-5.6-luna-fast", "--debug"])).toEqual({
+    expect(parseArgs(["-d", "-v", "-m", "openai-codex/gpt-6-luna-fast", "--debug"])).toEqual({
       dryRun: true,
       verbose: true,
       debug: true,
-      modelRef: "openai-codex/gpt-5.6-luna-fast",
+      modelRef: "openai-codex/gpt-6-luna-fast",
     });
   });
 

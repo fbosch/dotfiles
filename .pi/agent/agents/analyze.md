@@ -2,7 +2,7 @@
 color: "#80a9c8"
 description: Traces existing code through data flow, call chains, state transitions, and component interactions. Delivers precise file-and-line evidence describing current behavior before changes.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna
+model: openai-codex/gpt-6-luna
 thinking: max
 tools: read, grep, find, ls, fffind, ffgrep, list_symbols, find_definition, find_callers, find_callees, get_symbol_body
 permission:

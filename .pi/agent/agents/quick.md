@@ -2,7 +2,7 @@
 color: "#e5d784"
 description: Executes small, well-scoped edits, context transformations, and repeatable command workflows with explicit acceptance criteria. Delivers bounded changes or command results without deep design work.
 prompt_mode: replace
-model: openai-codex/gpt-5.6-luna-fast
+model: openai-codex/gpt-6-luna-fast
 thinking: low
 max_turns: 12
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
