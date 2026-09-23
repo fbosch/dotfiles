@@ -43,6 +43,13 @@ function just
     return "$TEST_JUST_STATUS"
 end
 
+function devenv
+    printf 'devenv %s\n' (string join ' ' -- $argv) >> "$TEST_LOG"
+    just $argv[4..]
+    set -l command_status $status
+    return $command_status
+end
+
 function nvim
     printf 'nvim %s\n' (string join ' ' -- $argv) >> "$TEST_LOG"
     if env | string match -q 'CORPORATE=*'
@@ -110,6 +117,7 @@ end
 function setup_scenario
     set -e CORPORATE
     set -g SCENARIO (mktemp -d "$TEST_ROOT/scenario.XXXXXX")
+    set -e DEVENV_ROOT
     set -gx HOME "$SCENARIO/home"
     command mkdir -p "$HOME" "$SCENARIO/remotes" "$SCENARIO/seeds" "$SCENARIO/writers"
     initialize_repo nixos
@@ -136,6 +144,17 @@ function test_corporate_context_reaches_native_plugin_install
     assert_log_contains install-pi
     assert_log_absent install-opencode-plugins
     assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
+    assert_status 1 (command grep -F -c "devenv shell --from path:$HOME/dotfiles" "$TEST_LOG")
+end
+
+function test_existing_devenv_is_reused
+    setup_scenario
+    set -gx DEVENV_ROOT "$TEST_REPO_ROOT"
+
+    git_pull_system_repos --yes
+    assert_status 0 $status
+    assert_status 0 (command grep -c '^devenv ' "$TEST_LOG")
+    assert_log_contains install-fbb
 end
 
 function test_clean_repositories_fast_forward
@@ -274,6 +293,7 @@ end
 
 test_clean_repositories_fast_forward
 test_corporate_context_reaches_native_plugin_install
+test_existing_devenv_is_reused
 test_dirty_repository_aborts_before_updates
 test_non_git_directory_aborts
 test_pull_failure_skips_post_pull_setup

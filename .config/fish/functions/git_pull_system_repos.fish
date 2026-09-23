@@ -246,12 +246,20 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         return 1
     end
 
+    set -l install_recipes install-fbb install-fish-libexec
     if set -q CORPORATE
         printf '%sWorking%s  Installing shared FBB, Pi, and Fish helper dependencies...\n' "$working" "$normal" >&2
-        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-pi
     else
         printf '%sWorking%s  Installing Pi, OpenCode, and Fish helper dependencies...\n' "$working" "$normal" >&2
-        just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins install-pi
+        set -a install_recipes install-opencode-plugins
+    end
+    set -a install_recipes install-pi
+    set -l just_args --justfile "$dotfiles/justfile" --working-directory "$dotfiles" $install_recipes
+
+    if set -q DEVENV_ROOT
+        just $just_args
+    else
+        devenv shell --from "path:$dotfiles" just $just_args
     end
     set command_status $status
     if contains -- $command_status 130 143
@@ -259,11 +267,7 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
     end
     if test $command_status -ne 0
         printf '%sError%s    Failed to install dependencies.\n' "$error" "$normal" >&2
-        if set -q CORPORATE
-            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-pi` to diagnose the failure.\n' >&2
-        else
-            printf '  Run `just --justfile ~/dotfiles/justfile --working-directory ~/dotfiles install-fbb install-fish-libexec install-opencode-plugins install-pi` to diagnose the failure.\n' >&2
-        end
+        printf '  Run `devenv shell --from path:%s just --justfile %s/justfile --working-directory %s %s` to diagnose the failure.\n' "$dotfiles" "$dotfiles" "$dotfiles" (string join ' ' -- $install_recipes) >&2
         return 1
     end
 
