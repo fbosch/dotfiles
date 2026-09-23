@@ -1,10 +1,5 @@
 import { randomUUID } from "node:crypto";
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  getAgentDir,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
@@ -12,7 +7,6 @@ import {
   type RepositoryFiles,
 } from "./candidate-adapter";
 import type { CandidateInspection } from "./candidates";
-import { readContextUsageFromContext, type StartupContextUsage } from "./context-usage";
 import {
   createStartupOwnerRequest,
   STARTUP_OWNER_IDS,
@@ -46,20 +40,12 @@ export default function startupHeader(
 ): void {
   let disposeSession = () => {};
   const startupBaselines = new Map<string, string | undefined>();
-  let refreshContextUsage: ((context: ExtensionContext) => void) | undefined;
-
-  pi.on("agent_start", (_event, ctx) => refreshContextUsage?.(ctx));
-  pi.on("agent_end", (_event, ctx) => refreshContextUsage?.(ctx));
-  pi.on("model_select", (_event, ctx) => refreshContextUsage?.(ctx));
-  pi.on("session_compact", (_event, ctx) => refreshContextUsage?.(ctx));
-  pi.on("session_compact_failed", (_event, ctx) => refreshContextUsage?.(ctx));
 
   pi.on("session_start", (event, ctx) => {
     disposeSession();
     disposeSession = () => {};
     if (ctx.mode !== "tui") return;
 
-    let contextUsage: StartupContextUsage | undefined = readContextUsageFromContext(ctx);
     const sessionId = ctx.sessionManager.getSessionId();
     const generationId = randomUUID();
     const owners = new StartupOwnerStore(sessionId, generationId, readHeaderOwnerSnapshot);
@@ -87,11 +73,6 @@ export default function startupHeader(
       }
     }
     let requestRender = () => {};
-    const updateContextUsage = (nextContext: ExtensionContext) => {
-      contextUsage = readContextUsageFromContext(nextContext);
-      requestRender();
-    };
-    refreshContextUsage = updateContextUsage;
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
       ? startupBaselines.get(sessionId)
@@ -139,7 +120,6 @@ export default function startupHeader(
           renderStartupHeader(
             theme,
             width,
-            contextUsage,
             startupElapsedMs,
             workspace,
             owners.get("updates"),
@@ -151,8 +131,6 @@ export default function startupHeader(
             },
             candidates,
             owners.get("auth"),
-            undefined,
-            owners.get("context"),
             art,
           ),
         invalidate() {},
@@ -170,7 +148,6 @@ export default function startupHeader(
       cancelStartupMeasurement();
       unsubscribeOwners();
       owners.dispose();
-      if (refreshContextUsage === updateContextUsage) refreshContextUsage = undefined;
       requestRender = () => {};
     };
   });

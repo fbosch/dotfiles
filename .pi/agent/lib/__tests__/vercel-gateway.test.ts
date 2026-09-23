@@ -305,6 +305,35 @@ describe("requestVercelGateway", () => {
     expect(result).toEqual({ ok: true, value: typedResponse });
   });
 
+  test("falls back after provider rejection using the configured OpenRouter credential", async () => {
+    const providerIds: string[] = [];
+    const urls: string[] = [];
+    const result = await requestVercelGateway(
+      {
+        getProviderAuth: async (provider: string) => {
+          providerIds.push(provider);
+          return provider === OPENROUTER_PROVIDER_ID
+            ? { auth: { apiKey: "openrouter-test-key" } }
+            : { auth: { apiKey: "vercel-test-key" } };
+        },
+      },
+      { state: { query: "route" } },
+      {
+        fetch: async (input) => {
+          urls.push(String(input));
+          if (String(input) === VERCEL_GATEWAY_ENDPOINT) {
+            return new Response("rejected", { status: 403 });
+          }
+          return new Response(JSON.stringify({ answers: { route: { type: "choice" } } }));
+        },
+      },
+    );
+
+    expect(result).toEqual({ ok: true, value: { answers: { route: { type: "choice" } } } });
+    expect(providerIds).toEqual([VERCEL_GATEWAY_PROVIDER_ID, OPENROUTER_PROVIDER_ID]);
+    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+  });
+
   test("falls back after Vercel HTTP and network failures", async () => {
     for (const primaryFailure of ["http", "network"] as const) {
       const urls: string[] = [];

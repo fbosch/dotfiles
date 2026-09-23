@@ -1,4 +1,3 @@
-import { readContextUsage, type StartupContextUsage } from "./context-usage";
 import { readStartupOwnerSnapshot, type StartupOwnerSnapshot } from "./contracts";
 import {
   type AuthStartupPayload,
@@ -36,14 +35,11 @@ type StartupHeaderPayload =
   | DirenvStartupPayload
   | LspStartupPayload
   | NeovimStartupPayload
-  | StartupContextUsage
   | UpdateCoverage
   | undefined;
 
 function sanitizePayload(snapshot: StartupOwnerSnapshot): StartupHeaderPayload {
   switch (snapshot.ownerId) {
-    case "context":
-      return readContextUsage(snapshot.payload);
     case "auth":
       return readAuthStartupPayload(snapshot.payload);
     case "direnv":

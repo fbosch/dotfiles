@@ -12,6 +12,7 @@ import fastJevCompaction, {
   parseNoulAnswers,
   resolveFastJevCompactionConfig,
   runFastJevCompaction,
+  sanitizeFastJevDiagnostics,
   splitSummaryModelReference,
   summarizePreparedWithModel,
   toFastJevMessages,
@@ -231,9 +232,121 @@ describe("fast-jev-compaction", () => {
         100,
         undefined,
       );
-      expect(result).toEqual({ failureReason: entry.reason });
+      expect(result).toMatchObject({ failureReason: entry.reason });
       expect(JSON.stringify(result)).not.toContain("secret");
     }
+  });
+
+  test("sanitizes thrown provider diagnostics without traversing secret fields", () => {
+    const secret = "THROWN_SECRET_PROMPT";
+    const headers = Object.defineProperty({}, "authorization", {
+      value: secret,
+      enumerable: true,
+    });
+    const thrown = {
+      name: `Custom-${secret}`,
+      message: `${secret} message`,
+      response: {
+        status: 401,
+        headers,
+        body: secret,
+        error: { code: `provider-${secret}`, message: secret },
+      },
+    };
+    const diagnostics = sanitizeFastJevDiagnostics(thrown);
+    expect(diagnostics).toEqual({ exceptionType: "other", httpStatus: 401, providerCode: "other" });
+    expect(JSON.stringify(diagnostics)).not.toContain(secret);
+    const builtInError = sanitizeFastJevDiagnostics(new TypeError(secret));
+    expect(builtInError).toEqual({ exceptionType: "TypeError" });
+    expect(JSON.stringify(builtInError)).not.toContain(secret);
+
+    expect(
+      sanitizeFastJevDiagnostics({
+        name: "PiMessagesResponseError",
+        diagnosticDetails: { status: 502, error: { code: "api_error" } },
+      }),
+    ).toEqual({
+      exceptionType: "PiMessagesResponseError",
+      httpStatus: 502,
+      providerCode: "api_error",
+    });
+
+    const getterPayload = {
+      get response() {
+        throw new Error("getter should not run");
+      },
+    };
+    expect(sanitizeFastJevDiagnostics(getterPayload)).toBeUndefined();
+    const revocable = Proxy.revocable({}, {});
+    revocable.revoke();
+    expect(() => sanitizeFastJevDiagnostics(revocable.proxy)).not.toThrow();
+  });
+
+  test("propagates stop-reason diagnostics while excluding response and prompt content", async () => {
+    const secret = "STOP_SECRET_PROMPT";
+    const result = await summarizePreparedWithModel(
+      {
+        modelRegistry: {
+          find: () => ({}),
+          complete: async () => ({
+            content: [],
+            stopReason: "error",
+            errorMessage: secret,
+            diagnostics: [
+              {
+                error: { name: "PiMessagesResponseError", message: secret, stack: secret },
+                details: {
+                  status: 429,
+                  errorCode: "rate_limit_error",
+                  headers: { authorization: secret },
+                  body: secret,
+                },
+              },
+            ],
+          }),
+        },
+      } as unknown as ExtensionContext,
+      "configured/checkpoint-model",
+      preparation([{ role: "user", content: secret }]).messagesToSummarize,
+      undefined,
+      100,
+      undefined,
+    );
+    expect(result).toEqual({
+      failureReason: "summary-auth-provider-failed",
+      diagnostics: {
+        exceptionType: "PiMessagesResponseError",
+        httpStatus: 429,
+        providerCode: "rate_limit_error",
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain(secret);
+  });
+
+  test("propagates thrown diagnostics to fallback status without leaking the exception", async () => {
+    const statuses: unknown[] = [];
+    const result = await runFastJevCompaction(preparation(transcript()), [], {
+      modelRegistry,
+      summarizeCheckpoint: async () => {
+        const error = new Error("provider secret prompt");
+        Object.defineProperty(error, "name", { value: "TimeoutError", enumerable: true });
+        Object.defineProperty(error, "statusCode", { value: 503, enumerable: true });
+        Object.defineProperty(error, "code", { value: "service_unavailable", enumerable: true });
+        throw error;
+      },
+      fetch: gatewayFetch(() => ({ type: "noul", noul: 0.99 })),
+      onStatus: (status) => statuses.push(status),
+    });
+    expect(result).toBeUndefined();
+    expect(statuses[0]).toMatchObject({
+      reason: "summary-auth-provider-failed",
+      diagnostics: {
+        exceptionType: "TimeoutError",
+        httpStatus: 503,
+        providerCode: "service_unavailable",
+      },
+    });
+    expect(JSON.stringify(statuses)).not.toContain("provider secret prompt");
   });
 
   test("registers compaction after startup and exposes a status command", () => {

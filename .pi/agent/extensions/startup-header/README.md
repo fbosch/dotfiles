@@ -1,6 +1,6 @@
 # Startup header
 
-The header can replace its `pi` mark with project-specific ASCII art. It also shows context usage from Pi's public lifecycle context API when available; after compaction, unknown usage is shown without retaining the previous total. It checks these files in order:
+The header can replace its `pi` mark with project-specific ASCII art. It checks these files in order:
 
 1. `<project>/.pi/startup-header.txt`, when Pi trusts the project
 2. `~/.pi/agent/startup-header.txt`

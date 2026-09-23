@@ -97,11 +97,36 @@ export type FastJevFailureReason =
   | "final-size-limit"
   | "unexpected";
 
+export type FastJevExceptionType =
+  | "AbortError"
+  | "TimeoutError"
+  | "ModelsError"
+  | "PiMessagesResponseError"
+  | "CodexApiError"
+  | "CodexProtocolError"
+  | "WebSocketCloseError"
+  | "AggregateError"
+  | "TypeError"
+  | "RangeError"
+  | "ReferenceError"
+  | "SyntaxError"
+  | "URIError"
+  | "EvalError"
+  | "Error"
+  | "other";
+
+export interface FastJevDiagnostics {
+  readonly exceptionType?: FastJevExceptionType;
+  readonly httpStatus?: number;
+  readonly providerCode?: string;
+}
+
 export interface FastJevAttemptStatus {
   readonly version: 1;
   readonly outcome: "pruned" | "checkpointed" | "fallback";
   readonly path: "prune" | "checkpoint" | "native";
   readonly reason?: FastJevFailureReason;
+  readonly diagnostics?: FastJevDiagnostics;
   readonly jevMs: number;
   readonly summaryMs: number;
   readonly totalMs: number;
@@ -156,6 +181,203 @@ function readGlobalConfig(): FastJevCompactionConfig {
 }
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const KNOWN_EXCEPTION_TYPES = new Set<FastJevExceptionType>([
+  "AbortError",
+  "TimeoutError",
+  "ModelsError",
+  "PiMessagesResponseError",
+  "CodexApiError",
+  "CodexProtocolError",
+  "WebSocketCloseError",
+  "AggregateError",
+  "TypeError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "URIError",
+  "EvalError",
+  "Error",
+]);
+
+// Provider SDKs expose a small, recurring set of stable codes. Everything else
+// is intentionally collapsed so provider payloads cannot become diagnostics.
+const KNOWN_PROVIDER_CODES = new Set([
+  "invalid_request_error",
+  "authentication_error",
+  "permission_error",
+  "not_found_error",
+  "request_too_large",
+  "rate_limit_error",
+  "api_error",
+  "overloaded_error",
+  "rate_limit_exceeded",
+  "insufficient_quota",
+  "invalid_api_key",
+  "permission_denied",
+  "model_not_found",
+  "context_length_exceeded",
+  "server_error",
+  "service_unavailable",
+  "content_policy_violation",
+  "previous_response_not_found",
+  "websocket_connection_limit_reached",
+  "usage_limit_reached",
+  "usage_not_included",
+  "invalid_request",
+  "rate_limit",
+  "timeout",
+  "overloaded",
+  "internal_error",
+  "not_found",
+  "unauthorized",
+  "forbidden",
+  "bad_request",
+  "too_many_requests",
+  "internal_server_error",
+  "resource_exhausted",
+  "deadline_exceeded",
+  "INVALID_ARGUMENT",
+  "UNAUTHENTICATED",
+  "PERMISSION_DENIED",
+  "NOT_FOUND",
+  "RESOURCE_EXHAUSTED",
+  "FAILED_PRECONDITION",
+  "ABORTED",
+  "OUT_OF_RANGE",
+  "UNIMPLEMENTED",
+  "INTERNAL",
+  "UNAVAILABLE",
+  "DATA_LOSS",
+  "DEADLINE_EXCEEDED",
+]);
+const DIAGNOSTIC_CHILD_KEYS = [
+  "cause",
+  "response",
+  "payload",
+  "details",
+  "diagnosticDetails",
+  "$metadata",
+  "error",
+  "diagnostics",
+] as const;
+const MAX_DIAGNOSTIC_DEPTH = 3;
+const MAX_DIAGNOSTIC_NODES = 32;
+const MAX_DIAGNOSTIC_ARRAY_ITEMS = 16;
+type SafeDiagnosticValue = object | string | number | boolean | null | undefined;
+
+function ownData(value: unknown, key: string): SafeDiagnosticValue {
+  if ((typeof value !== "object" && typeof value !== "function") || value === null)
+    return undefined;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
+    return descriptor !== undefined && "value" in descriptor ? descriptor.value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function diagnosticNodes(value: unknown): unknown[] {
+  const nodes: unknown[] = [];
+  const queue: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+  const seen = new Set<object>();
+  while (queue.length > 0 && nodes.length < MAX_DIAGNOSTIC_NODES) {
+    const current = queue.shift();
+    if (current === undefined) break;
+    const { value: node, depth } = current;
+    if ((typeof node !== "object" && typeof node !== "function") || node === null) continue;
+    if (seen.has(node)) continue;
+    seen.add(node);
+    nodes.push(node);
+    if (depth >= MAX_DIAGNOSTIC_DEPTH) continue;
+    for (const key of DIAGNOSTIC_CHILD_KEYS) {
+      const child = ownData(node, key);
+      if (Array.isArray(child)) {
+        const length = ownData(child, "length");
+        const itemCount =
+          typeof length === "number" ? Math.min(length, MAX_DIAGNOSTIC_ARRAY_ITEMS) : 0;
+        for (let index = 0; index < itemCount; index += 1) {
+          const item = ownData(child, String(index));
+          if (item !== undefined) queue.push({ value: item, depth: depth + 1 });
+        }
+      } else if (child !== undefined) {
+        queue.push({ value: child, depth: depth + 1 });
+      }
+    }
+  }
+  return nodes;
+}
+
+function exceptionType(value: unknown): FastJevExceptionType | undefined {
+  const name = ownData(value, "name") ?? ownData(value, "exceptionType");
+  if (typeof name === "string") {
+    return KNOWN_EXCEPTION_TYPES.has(name as FastJevExceptionType)
+      ? (name as FastJevExceptionType)
+      : "other";
+  }
+  try {
+    if (value instanceof AggregateError) return "AggregateError";
+    if (value instanceof TypeError) return "TypeError";
+    if (value instanceof RangeError) return "RangeError";
+    if (value instanceof ReferenceError) return "ReferenceError";
+    if (value instanceof SyntaxError) return "SyntaxError";
+    if (value instanceof URIError) return "URIError";
+    if (value instanceof EvalError) return "EvalError";
+    if (value instanceof Error) return "Error";
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function diagnosticStatus(value: unknown): number | undefined {
+  for (const node of diagnosticNodes(value)) {
+    for (const key of ["status", "statusCode", "httpStatusCode"] as const) {
+      const candidate = ownData(node, key);
+      if (
+        typeof candidate === "number" &&
+        Number.isInteger(candidate) &&
+        candidate >= 100 &&
+        candidate <= 599
+      ) {
+        return candidate;
+      }
+    }
+  }
+  return undefined;
+}
+
+function diagnosticCode(value: unknown): string | undefined {
+  let sawUnknown = false;
+  for (const node of diagnosticNodes(value)) {
+    for (const key of ["code", "errorCode", "providerCode"] as const) {
+      const candidate = ownData(node, key);
+      if (typeof candidate !== "string" || candidate.length === 0) continue;
+      if (KNOWN_PROVIDER_CODES.has(candidate)) return candidate;
+      sawUnknown = true;
+    }
+    // Anthropic and Google put their stable provider code in error.type.
+    const providerType = ownData(node, "type");
+    if (typeof providerType === "string" && KNOWN_PROVIDER_CODES.has(providerType)) {
+      return providerType;
+    }
+  }
+  return sawUnknown ? "other" : undefined;
+}
+
+export function sanitizeFastJevDiagnostics(value: unknown): FastJevDiagnostics | undefined {
+  const nodes = diagnosticNodes(value);
+  const type = nodes.map(exceptionType).find((candidate) => candidate !== undefined);
+  const httpStatus = diagnosticStatus(value);
+  const providerCode = diagnosticCode(value);
+  if (type === undefined && httpStatus === undefined && providerCode === undefined)
+    return undefined;
+  return {
+    ...(type === undefined ? {} : { exceptionType: type }),
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+    ...(providerCode === undefined ? {} : { providerCode }),
+  };
 }
 
 function contentText(content: unknown): string {
@@ -678,6 +900,7 @@ type SummaryFailure = {
     | "summary-empty-output"
     | "summary-truncated-output"
   >;
+  readonly diagnostics?: FastJevDiagnostics;
 };
 
 type SummaryAttempt = SummaryOutput | SummaryFailure;
@@ -753,12 +976,14 @@ function status(
   beforeChars: number,
   afterChars: number,
   calls: number,
+  diagnostics?: FastJevDiagnostics,
 ): FastJevAttemptStatus {
   return {
     version: 1,
     outcome,
     path,
     ...(reason === undefined ? {} : { reason }),
+    ...(diagnostics === undefined ? {} : { diagnostics }),
     jevMs,
     summaryMs,
     totalMs,
@@ -811,8 +1036,12 @@ async function checkpointPrepared(
       customInstructions,
       options.signal,
     );
-  } catch {
-    output = { failureReason: "summary-auth-provider-failed" };
+  } catch (error) {
+    const diagnostics = sanitizeFastJevDiagnostics(error);
+    output = {
+      failureReason: "summary-auth-provider-failed",
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    };
   }
   const summaryMs = monotonicMs(summaryStartedAt);
   if (
@@ -846,6 +1075,7 @@ async function checkpointPrepared(
         beforeChars,
         beforeChars,
         calls,
+        output.diagnostics,
       ),
     );
     return undefined;
@@ -1275,14 +1505,23 @@ export async function summarizePreparedWithModel(
         ...(signal === undefined ? {} : { signal }),
       },
     );
-  } catch {
-    return signal?.aborted
-      ? { failureReason: "cancelled" }
-      : { failureReason: "summary-auth-provider-failed" };
+  } catch (error) {
+    if (signal?.aborted) return { failureReason: "cancelled" };
+    const diagnostics = sanitizeFastJevDiagnostics(error);
+    return {
+      failureReason: "summary-auth-provider-failed",
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    };
   }
   if (signal?.aborted || result.stopReason === "aborted") return { failureReason: "cancelled" };
   if (result.stopReason === "length") return { failureReason: "summary-truncated-output" };
-  if (result.stopReason === "error") return { failureReason: "summary-auth-provider-failed" };
+  if (result.stopReason === "error") {
+    const diagnostics = sanitizeFastJevDiagnostics(result);
+    return {
+      failureReason: "summary-auth-provider-failed",
+      ...(diagnostics === undefined ? {} : { diagnostics }),
+    };
+  }
   if (!Array.isArray(result.content)) return { failureReason: "summary-malformed-output" };
   if (result.content.some((part) => isRecord(part) && part.type === "toolCall")) {
     return { failureReason: "summary-malformed-output" };
@@ -1304,9 +1543,17 @@ export default function fastJevCompaction(pi: ExtensionAPI): void {
           return;
         }
         const reason = lastStatus.reason === undefined ? "" : ` (${lastStatus.reason})`;
+        const diagnostics = lastStatus.diagnostics;
+        const diagnosticParts = [
+          diagnostics?.exceptionType,
+          diagnostics?.httpStatus === undefined ? undefined : `HTTP ${diagnostics.httpStatus}`,
+          diagnostics?.providerCode === undefined ? undefined : `code ${diagnostics.providerCode}`,
+        ].filter((part): part is string => part !== undefined);
+        const diagnosticText =
+          diagnosticParts.length === 0 ? "" : `; diagnostics: ${diagnosticParts.join(", ")}`;
         const type = lastStatus.outcome === "fallback" ? "warning" : "info";
         ctx.ui.notify(
-          `Fast Jev compaction ${lastStatus.outcome}${reason}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars in ${lastStatus.totalMs} ms.`,
+          `Fast Jev compaction ${lastStatus.outcome}${reason}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars in ${lastStatus.totalMs} ms${diagnosticText}.`,
           type,
         );
       },
@@ -1360,8 +1607,9 @@ export default function fastJevCompaction(pi: ExtensionAPI): void {
             ...(result.usage === undefined ? {} : { usage: result.usage }),
           },
         };
-      } catch {
-        const attempt = status("fallback", "native", "unexpected", 0, 0, 0, 0, 0, 0);
+      } catch (error) {
+        const diagnostics = sanitizeFastJevDiagnostics(error);
+        const attempt = status("fallback", "native", "unexpected", 0, 0, 0, 0, 0, 0, diagnostics);
         lastStatus = attempt;
         pi.events.emit(FAST_JEV_STATUS_EVENT, attempt);
         return undefined;

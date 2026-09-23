@@ -28,13 +28,9 @@ function createHarness() {
     | ((tui: { requestRender(): void }, theme: Theme) => { render(width: number): string[] })
     | undefined;
   let renderRequests = 0;
-  let usage: unknown;
-  const model = { contextWindow: 200_000 };
   const context = {
     mode: "tui" as const,
     cwd: "/tmp/project",
-    model,
-    getContextUsage: () => usage,
     sessionManager: {
       getSessionId: () => "session-a",
       getEntries: () => [],
@@ -91,12 +87,6 @@ function createHarness() {
     uiMutations,
     emit,
     render,
-    setUsage(value: unknown) {
-      usage = value;
-    },
-    setContextWindow(value: number) {
-      model.contextWindow = value;
-    },
     get renderRequests() {
       return renderRequests;
     },
@@ -104,37 +94,6 @@ function createHarness() {
 }
 
 describe("startup header registration", () => {
-  test("uses the model context window when public usage is initially unavailable", () => {
-    const harness = createHarness();
-    startupHeader(harness.pi, dependencies);
-    harness.emit("session_start");
-
-    expect(harness.render()).toEqual(["pi", "Context: ? / 200k"]);
-    expect(harness.uiMutations).toEqual({ header: 1, footer: 0, editor: 0, status: 0 });
-  });
-
-  test("refreshes from public lifecycle events and never keeps compacted totals", () => {
-    const harness = createHarness();
-    startupHeader(harness.pi, dependencies);
-    harness.emit("session_start");
-    harness.setUsage({ tokens: 12_000, contextWindow: 200_000, percent: 6 });
-    harness.emit("agent_end");
-    expect(harness.render()).toContain("Context: ■■■■■■■■■■■■□□ 12k / 200k (6%)");
-
-    harness.setUsage({ tokens: null, contextWindow: 200_000, percent: null });
-    harness.emit("session_compact");
-    expect(harness.render()).toContain("Context: ? / 200k");
-    expect(harness.render().join("\n")).not.toContain("12k");
-
-    harness.setUsage(undefined);
-    harness.setContextWindow(128_000);
-    harness.emit("model_select");
-    expect(harness.render()).toContain("Context: ? / 128k");
-    harness.setContextWindow(64_000);
-    harness.emit("session_start");
-    expect(harness.render()).toContain("Context: ? / 64k");
-  });
-
   test("subscribes before requesting owners and rejects replies from replaced generations", () => {
     const harness = createHarness();
     startupHeader(harness.pi, dependencies);
@@ -166,17 +125,6 @@ describe("startup header registration", () => {
       ownerRevision: 1,
       state: "ready",
     });
-    expect(harness.renderRequests).toBe(before);
-  });
-
-  test("stops context refreshes after session disposal", () => {
-    const harness = createHarness();
-    startupHeader(harness.pi, dependencies);
-    harness.emit("session_start");
-    harness.emit("session_shutdown");
-    const before = harness.renderRequests;
-    harness.setUsage({ tokens: 2_000, contextWindow: 200_000, percent: 1 });
-    harness.emit("agent_end");
     expect(harness.renderRequests).toBe(before);
   });
 });

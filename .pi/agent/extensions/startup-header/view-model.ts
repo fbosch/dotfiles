@@ -2,7 +2,6 @@ import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
-import { readContextUsage, type StartupContextUsage } from "./context-usage";
 import type { StartupOwnerSnapshot } from "./contracts";
 import type { JevStartupStatus } from "./jev-status";
 import {
@@ -22,15 +21,12 @@ export interface StartupIntegrationSnapshots {
 export function renderStartupHeader(
   theme: Theme,
   width: number,
-  contextUsage: StartupContextUsage | undefined,
   startupElapsedMs?: number,
   _workspace?: WorkspaceIdentity,
   updates?: StartupOwnerSnapshot,
   integrations?: StartupIntegrationSnapshots,
   candidates?: CandidateInspection,
   auth?: StartupOwnerSnapshot,
-  _legacyContextConfig?: undefined,
-  context?: StartupOwnerSnapshot,
   art?: StartupHeaderArt,
 ): string[] {
   if (width <= 0) return [];
@@ -47,11 +43,6 @@ export function renderStartupHeader(
   const authLines = renderAuthStatus(theme, width, auth, Date.now());
   if (authLines.length > 0) lines.push("", ...authLines, "");
 
-  const ownerContextUsage =
-    context?.state === "ready" ? readContextUsage(context.payload) : undefined;
-  const usage = contextUsage ?? ownerContextUsage;
-  if (usage !== undefined) lines.push(formatContextUsage(theme, usage));
-
   const updateStatus = renderUpdateStatus(updates);
   if (updateStatus !== "") lines.push(theme.fg("muted", `Updates: ${updateStatus.slice(2)}`));
 
@@ -62,39 +53,6 @@ export function renderStartupHeader(
   return lines.flatMap((line) => (line === "" ? [line] : wrapTextWithAnsi(line, width)));
 }
 
-const CONTEXT_SLICE_COLUMNS = 14;
-const CONTEXT_SLICE_ROWS = 14;
-const CONTEXT_SLICE_BOXES = CONTEXT_SLICE_COLUMNS;
-
-function formatContextUsage(theme: Theme, usage: StartupContextUsage): string {
-  const window = formatTokens(usage.contextWindow);
-  if (usage.tokens === null || usage.percent === null) {
-    return `${theme.fg("muted", "Context: ? / ")}${theme.fg("accent", window)}`;
-  }
-
-  // Match pi-context-view's first-row slice: each box is one cell of the full 14×14 map.
-  const tokensPerBox = usage.contextWindow / (CONTEXT_SLICE_COLUMNS * CONTEXT_SLICE_ROWS);
-  const usedBoxes = Math.round(
-    Math.min(CONTEXT_SLICE_BOXES, Math.max(0, usage.tokens / tokensPerBox)),
-  );
-  const boxes = `${theme.fg("accent", "■".repeat(usedBoxes))}${theme.fg(
-    "muted",
-    "□".repeat(CONTEXT_SLICE_BOXES - usedBoxes),
-  )}`;
-  return `${theme.fg("muted", "Context: ")}${boxes} ${formatTokens(usage.tokens)} / ${window} (${formatPercent(
-    usage.percent,
-  )}%)`;
-}
-
-function formatPercent(percent: number): string {
-  return Number.isInteger(percent) ? String(percent) : percent.toFixed(1);
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens < 1_000) return String(tokens);
-  if (tokens < 10_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  return `${Math.round(tokens / 1_000)}k`;
-}
 function renderIntegrationStatus(
   theme: Theme,
   snapshots: StartupIntegrationSnapshots | undefined,

@@ -92,7 +92,7 @@
     },
     "compaction": {
       "enabled": true,
-      "summaryModel": "openai-codex/gpt-5.6-luna-fast"
+      "summaryModel": "openai-codex/gpt-5.6-luna"
     }
   },
   "packages": [

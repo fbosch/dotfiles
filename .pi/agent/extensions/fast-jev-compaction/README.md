@@ -54,6 +54,9 @@ millisecond timings, fallback reason where relevant, and before/after character
 sizes. Version 1 details remain readable so existing persisted summaries are
 not discarded. Failed attempts are exposed without transcript content through
 the `fast_jev_compaction_status` event and the `/fast-jev-status` command.
+Provider failures may include only a bounded exception classification, HTTP
+status, and allowlisted provider code; messages, prompts, headers, bodies,
+URLs, and stacks are never included.
 
 ## Data boundary and limitations
 

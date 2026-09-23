@@ -10,7 +10,6 @@ export const STARTUP_OWNER_IDS = [
   "formatter",
   "auth",
   "resources",
-  "context",
   "startup-time",
   "updates",
 ] as const;

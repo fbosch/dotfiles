@@ -540,12 +540,6 @@ export default function authProfiles(
         "warning",
       );
     }
-    if (resolution.profile !== DEFAULT_PROFILE) {
-      ctx.ui.notify(
-        `Auth profile: ${resolution.profile} (${describeSelection(resolution)})`,
-        "info",
-      );
-    }
   });
 
   const rotateAfterExhaustion = async (
