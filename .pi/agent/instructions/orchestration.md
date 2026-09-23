@@ -35,7 +35,8 @@ These presets apply only when invoking `subagent_type: "general"`. Select the lo
 | --- | --- | --- | --- |
 | Routine | Direct lookup, bounded edits, or deterministic work with clear acceptance criteria | `openai-codex/gpt-6-luna-fast` | `low` |
 | Moderate | Multi-step planning, diagnosis, documentation, or synthesis with limited ambiguity | `openai-codex/gpt-6-sol` | `medium` |
-| Complex implementation | Cross-file implementation or refactoring requiring sustained code reasoning | `openai-codex/gpt-6-luna` | `xhigh` |
+| Complex implementation | Cross-file implementation or refactoring with clear acceptance criteria and bounded failure cost | `openai-codex/gpt-6-luna` | `xhigh` |
+| Consequential architecture or cross-system implementation | Broad subsystem/interface changes with high coupling or costly retries/review, where contracts are clear and failures remain reviewable or reversible | `openai-codex/gpt-6-sol` | `high` |
 | Deep technical analysis | Detailed tracing, test design, benchmarking, or failure analysis with many interacting details | `openai-codex/gpt-6-luna` | `max` |
 | High-risk reasoning | Ambiguous contracts, security or correctness review, or decisions with material impact | `openai-codex/gpt-6-astra` | `xhigh` |
 Escalate one preset when uncertainty, coupling, or impact is higher than the task's apparent size. Do not use a stronger preset merely because the task is long; use it when the task requires deeper judgment or carries greater risk.

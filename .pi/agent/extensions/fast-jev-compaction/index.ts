@@ -783,9 +783,8 @@ function renderDroppedMaterial(
   for (const call of calls) {
     const action = actions.get(call.id);
     if (action === undefined || action === "keep") continue;
-    if (action === "drop_call") {
-      sections.push(`[removed tool call ${call.name}] ${transcriptJson(call.input)}`);
-    }
+    if (action !== "drop_call") continue;
+    sections.push(`[removed tool call ${call.name}] ${transcriptJson(call.input)}`);
     const result = messages[call.resultIndex]?.toolResults.find(
       (candidate) => candidate.toolUseId === call.toolUseId,
     );
@@ -827,8 +826,10 @@ function renderTranscript(messages: readonly FastJevMessage[], droppedSummary: s
   const lines = [
     "<fast-jev-compaction>",
     "Removed tool material is represented by explicit excerpts; retained transcript content follows.",
-    `\n<removed-material-summary>\n${droppedSummary}\n</removed-material-summary>`,
   ];
+  if (droppedSummary.length > 0) {
+    lines.push(`\n<removed-material-summary>\n${droppedSummary}\n</removed-material-summary>`);
+  }
   let index = 0;
   for (const message of messages) {
     index += 1;
@@ -1354,20 +1355,6 @@ export async function runFastJevCompaction(
   }
 
   const droppedMaterial = renderDroppedMaterial(messages, calls, allDecisions);
-  if (droppedMaterial.length === 0) {
-    return checkpointPrepared(
-      preparation,
-      previous.summary,
-      preparedMessages,
-      messages,
-      calls.length,
-      options,
-      customInstructions,
-      startedAt,
-      jevMs,
-      "insufficient-savings",
-    );
-  }
   if (options.signal?.aborted) {
     options.onStatus?.(
       status(

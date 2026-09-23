@@ -436,6 +436,118 @@ describe("fast-jev-compaction", () => {
     });
   });
 
+  test("avoids duplicating result excerpts for drop_result and represents drop_call material once", async () => {
+    const resultText = [
+      "IMPORTANT_BEGINNING_FACT",
+      ...Array.from({ length: 100 }, (_, index) => `routine-${index}`),
+      "UNIQUE_MIDDLE_FACT",
+      ...Array.from({ length: 100 }, (_, index) => `routine-tail-${index}`),
+      "UNIQUE_END_FACT",
+    ].join("\n");
+    const previousSummary = "previous compaction fact";
+    const next = preparation(transcript(resultText));
+    next.previousSummary = previousSummary;
+    const compact = (keepCall: number, keepResult: number) =>
+      runFastJevCompaction(next, [], {
+        modelRegistry,
+        summarizeCheckpoint: checkpoint,
+        fetch: gatewayFetch((name) => ({
+          type: "noul",
+          noul: name.startsWith("call_") ? keepCall : keepResult,
+        })),
+      });
+    const droppedResult = await compact(0.99, 0.01);
+    const droppedCall = await compact(0.01, 0.01);
+    const beginningExcerpt = resultText.slice(0, 240);
+    const resultExcerpt = `${beginningExcerpt}\n[fast-jev-compaction truncated ${resultText.length - 240} chars; re-run the tool if needed]`;
+    const count = (text: string, excerpt: string) => text.split(excerpt).length - 1;
+
+    expect(droppedResult?.summary).toContain("Continue the migration.");
+    expect(droppedResult?.summary).toContain("Keep this follow-up verbatim.");
+    expect(droppedResult?.summary).toContain(previousSummary);
+    expect(droppedResult?.summary).toContain("[tool call read]");
+    expect(count(droppedResult?.summary ?? "", beginningExcerpt)).toBe(1);
+    expect(count(droppedResult?.summary ?? "", "[tool result tool-1]")).toBe(1);
+    expect(droppedResult?.summary).not.toContain("<removed-material-summary>");
+    expect(droppedResult?.summary).not.toContain("UNIQUE_MIDDLE_FACT");
+    expect(droppedResult?.summary).not.toContain("UNIQUE_END_FACT");
+    expect(droppedResult?.details.fastJev.attempt.outcome).toBe("pruned");
+    expect(droppedResult?.details.fastJev.attempt.afterChars).toBeLessThan(
+      droppedResult?.details.fastJev.attempt.beforeChars ?? 0,
+    );
+
+    expect(droppedCall?.summary).toContain("Continue the migration.");
+    expect(droppedCall?.summary).toContain("Keep this follow-up verbatim.");
+    expect(droppedCall?.summary).toContain(previousSummary);
+    expect(count(droppedCall?.summary ?? "", '[removed tool call read] {"path":"config.ts"}')).toBe(
+      1,
+    );
+    expect(count(droppedCall?.summary ?? "", resultExcerpt)).toBe(1);
+    expect(droppedCall?.summary).not.toContain("\n[tool call read]");
+    expect(droppedCall?.summary).not.toContain("\n[tool result tool-1]");
+    expect(droppedCall?.details.fastJev.attempt.outcome).toBe("pruned");
+    expect(droppedCall?.details.fastJev.attempt.afterChars).toBeLessThan(
+      droppedCall?.details.fastJev.attempt.beforeChars ?? 0,
+    );
+  });
+
+  test("retains the full result and its middle/end facts when Jev scores it high", async () => {
+    const droppedText = [
+      "DROPPED_BEGINNING_FACT",
+      ...Array.from({ length: 100 }, (_, index) => `routine-${index}`),
+      "DROPPED_MIDDLE_UNIQUE_FACT",
+      ...Array.from({ length: 100 }, (_, index) => `routine-tail-${index}`),
+      "DROPPED_END_UNIQUE_FACT",
+    ].join("\n");
+    const retainedText = [
+      "RETAINED_BEGINNING_FACT",
+      ...Array.from({ length: 30 }, (_, index) => `important-${index}`),
+      "RETAINED_MIDDLE_UNIQUE_FACT",
+      ...Array.from({ length: 30 }, (_, index) => `important-tail-${index}`),
+      "RETAINED_END_UNIQUE_FACT",
+    ].join("\n");
+    const result = await runFastJevCompaction(
+      preparation([
+        { role: "user", content: [{ type: "text", text: "Keep unique evidence." }] },
+        {
+          role: "assistant",
+          content: [
+            { type: "toolCall", id: "drop-1", name: "read", arguments: { path: "routine.txt" } },
+            { type: "toolCall", id: "keep-1", name: "read", arguments: { path: "important.txt" } },
+          ],
+        },
+        {
+          role: "toolResult",
+          toolCallId: "drop-1",
+          content: [{ type: "text", text: droppedText }],
+          isError: false,
+        },
+        {
+          role: "toolResult",
+          toolCallId: "keep-1",
+          content: [{ type: "text", text: retainedText }],
+          isError: false,
+        },
+      ]),
+      [],
+      {
+        modelRegistry,
+        summarizeCheckpoint: checkpoint,
+        fetch: gatewayFetch((name) => ({
+          type: "noul",
+          noul: name.startsWith("call_") ? 0.99 : name.endsWith("t2") ? 0.99 : 0.01,
+        })),
+      },
+    );
+
+    expect(result?.summary).toContain("RETAINED_MIDDLE_UNIQUE_FACT");
+    expect(result?.summary).toContain("RETAINED_END_UNIQUE_FACT");
+    expect((result?.summary ?? "").split(retainedText).length - 1).toBe(1);
+    expect(result?.summary).not.toContain("DROPPED_MIDDLE_UNIQUE_FACT");
+    expect(result?.summary).not.toContain("DROPPED_END_UNIQUE_FACT");
+    expect(result?.details.fastJev.attempt.outcome).toBe("pruned");
+  });
+
   test("passes Pi's turn prefix to checkpoint summarization", async () => {
     const next = preparation(
       [{ role: "user", content: [{ type: "text", text: "old context" }] }],
