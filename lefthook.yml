@@ -13,7 +13,7 @@ pre-commit:
         - ".agents/**"
         - ".opencode/skills/**"
         - ".github/skills/**"
-      run: devenv --quiet shell ripsecrets {staged_files}
+      run: ripsecrets {staged_files}
     shellcheck:
       glob:
         - "scripts/*.sh"
@@ -26,14 +26,14 @@ pre-commit:
         - ".config/hypr/scripts/*.sh"
         - ".config/rofi/launchers/type-3/launcher.sh"
         - ".config/vicinae/extensions/*.sh"
-      run: devenv --quiet shell shellcheck -x {staged_files}
+      run: shellcheck -x {staged_files}
     fish:
       glob: ".config/fish/**/*.fish"
-      run: devenv --quiet shell fish -n {staged_files}
+      run: fish -n {staged_files}
     vicinae:
       glob: ".config/vicinae/extensions/**"
-      run: devenv --quiet shell pnpm --dir .config/vicinae/extensions run lint
+      run: pnpm --dir .config/vicinae/extensions run lint
     lua-format:
       glob: "**/*.lua"
-      run: devenv --quiet shell stylua --syntax LuaJit --respect-ignores {staged_files}
+      run: stylua --syntax LuaJit --respect-ignores {staged_files}
       stage_fixed: true

@@ -89,12 +89,11 @@ in
         if [[ "''${CI:-}" == "true" ]]; then
           exit 0
         fi
-        lefthook install
+        git config --local core.hooksPath .githooks
       '';
       status = ''
-        hook_path="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null)"
-        test -x "$hook_path"
-        grep -Fq 'call_lefthook run "pre-commit"' "$hook_path"
+        test "$(git config --local --get core.hooksPath || true)" = ".githooks"
+        test -x .githooks/pre-commit
       '';
     };
 
