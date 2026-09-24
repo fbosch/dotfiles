@@ -71,8 +71,7 @@ output_dir="$(cd "$output_dir" && pwd -P)"
 
 untracked_workloads="$(git ls-files --others --exclude-standard -- \
   .config/fbb \
-  .config/ags \
-  .config/opencode/plugins/prompt-enhancements)"
+  .config/ags)"
 if [[ -n "$untracked_workloads" ]]; then
   printf 'bun benchmark: untracked benchmark workload files found:\n%s\n' "$untracked_workloads" >&2
   exit 1
@@ -162,8 +161,6 @@ run_runtime_benchmarks() {
     --command-name ags-tests 'bun test --cwd .config/ags'
 
   for ((iteration = 1; iteration <= internal_runs; iteration += 1)); do
-    bun run --cwd .config/opencode/plugins bench:typos \
-      >"$output_dir/typo-engine-$iteration.txt"
     AI_POINTER_BENCH_SAMPLES=5 AI_POINTER_POLICY_BATCH=100 \
       bun run --cwd .config/ags components/ai-pointer/__benchmarks__/policy.ts \
       >"$output_dir/ai-pointer-policy-$iteration.json"

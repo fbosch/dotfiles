@@ -26,15 +26,6 @@ set -U FZF_ENABLE_OPEN_PREVIEW 1
 set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
 
-# opencode
-if not set -q CORPORATE
-    set -gx OPENCODE_CONFIG_DIR $HOME/.config/opencode
-    set -gx OPENCODE_DISABLE_MODELS_FETCH true
-    set -gx OPENCODE_EXPERIMENTAL_LSP_TOOL 1
-    set -gx OPENCODE_EXPERIMENTAL_LSP_TY 1
-    set -gx OPENCODE_EXPERIMENTAL_EXA 1
-    set -gx OPENCODE_TOON_PLUGIN_TOOLS "bash,rtk,python3"
-end
 
 # headroom proxy
 set -gx OPENAI_BASE_URL http://127.0.0.1:8787/v1

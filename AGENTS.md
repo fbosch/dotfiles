@@ -13,9 +13,8 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Do not edit generated state/lock files (e.g. `nvim-pack-lock.json`, AGS GIR typings, Fish auto-generated dirs).
 - Follow symlinks when reading docs.
 - Dotfiles repo root is `~/dotfiles`.
-- Shared skills live in `.agents/skills/` and are mirrored under `.config/{opencode,codex,github,claude}/skills`.
+- Shared skills live in `.agents/skills/` and are mirrored under `.config/{codex,github,claude}/skills`.
 - Dotfiles-specific Pi skills live in `.pi/skills/`.
-- OpenCode-specific skills live in `.opencode/skills/` and may be linked from `.pi/skills/` when Pi must expose them.
 
 ## OpenSpec
 
@@ -33,11 +32,9 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - Extensions in `.pi/agent/extensions/` are auto-discovered from the Stow-linked `~/.pi/agent/extensions/`; use `/reload` after changes.
 
-## OpenCode Plugins
+## OpenCode Fallback
 
-- Local plugins live in `.config/opencode/plugins/` and are auto-loaded by OpenCode; npm plugins are configured in `opencode.json`.
-- Each plugin entry file **must have a unique filename** (not `index.ts`). OpenCode deduplicates plugins by filename only, so multiple `index.ts` files collapse to one.
-- Packages under `.config/opencode/plugins/` must declare `@opencode-ai/plugin` as a `peerDependency`, not a bundled runtime dependency. The `.config/opencode` workspace may depend on the exact package version to provide types and local tooling; OpenCode provides the runtime package to loaded plugins.
+- OpenCode is retained as a near-stock fallback; keep its configuration limited to `.config/opencode/opencode.jsonc`.
 
 ## References
 

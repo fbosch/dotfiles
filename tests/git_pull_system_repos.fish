@@ -142,7 +142,6 @@ function test_corporate_context_reaches_native_plugin_install
     assert_log_contains install-fbb
     assert_log_contains install-fish-libexec
     assert_log_contains install-pi
-    assert_log_absent install-opencode-plugins
     assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
     assert_status 1 (command grep -F -c "devenv shell --from path:$HOME/dotfiles" "$TEST_LOG")
 end

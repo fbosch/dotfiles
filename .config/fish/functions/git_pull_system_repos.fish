@@ -246,14 +246,8 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         return 1
     end
 
-    set -l install_recipes install-fbb install-fish-libexec
-    if set -q CORPORATE
-        printf '%sWorking%s  Installing shared FBB, Pi, and Fish helper dependencies...\n' "$working" "$normal" >&2
-    else
-        printf '%sWorking%s  Installing Pi, OpenCode, and Fish helper dependencies...\n' "$working" "$normal" >&2
-        set -a install_recipes install-opencode-plugins
-    end
-    set -a install_recipes install-pi
+    set -l install_recipes install-fbb install-fish-libexec install-pi
+    printf '%sWorking%s  Installing Pi and Fish helper dependencies...\n' "$working" "$normal" >&2
     set -l just_args --justfile "$dotfiles/justfile" --working-directory "$dotfiles" $install_recipes
 
     if set -q DEVENV_ROOT

@@ -78,9 +78,6 @@ abbr nxgc nix-collect-garbage
 # OpenCode
 if not set -q CORPORATE
     abbr oc opencode
-    abbr ocps opencode_profile_switch
-    abbr ocas opencode_auth_switch
-    abbr liw linear_issue_workflow
 
     function wsc --wraps='wt switch --create --execute=opencode' --description 'alias wsc wt switch --create --execute=opencode'
         set -l opencode_path (__opencode_command_path)

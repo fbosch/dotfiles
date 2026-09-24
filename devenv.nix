@@ -192,8 +192,6 @@ in
         "justfile"
         "lefthook.yml"
         ".codex"
-        ".config/opencode/package-lock.json"
-        ".config/opencode/scripts/__pycache__"
         ".github"
         "tests"
       )

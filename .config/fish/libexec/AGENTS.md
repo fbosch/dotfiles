@@ -12,7 +12,6 @@ Internal Bun/TypeScript helpers for Fish functions.
 - Use one level of domain grouping when a helper area has 3+ related scripts.
 - Current subdirectories:
   - `azure/` for Azure DevOps and workitem helpers
-  - `opencode/` for OpenCode and related workflow helpers
   - `shared/` for cross-domain utilities
   - `nix/` for flake and other Nix-related helpers
 
