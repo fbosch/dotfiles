@@ -4,9 +4,10 @@ description: Assesses changed or existing code for correctness, security, perfor
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep, git_diff, lsp
+tools: read, grep, find, ls, fffind, ffgrep, git_diff, lsp, typesafe_question
 permission:
   "*": deny
+  typesafe_question: allow
   bash: deny
   external_directory: ask
   external_directory_write: deny
@@ -20,6 +21,7 @@ Review code systematically for bugs and edge cases, security vulnerabilities, pe
 - State coverage explicitly so conclusions match what was checked.
 - Prefer evidence from changed code, surrounding context, tests, and interfaces over generic advice.
 - Start narrow around changed files and related modules; widen path, file pattern, then query breadth.
+- Optionally use Jev to prioritize multiple ambiguous candidate findings for investigation, using only bounded, non-sensitive summaries. It cannot confirm defects, assign severity, or replace reading code and tests; verify each reported finding directly.
 
 ## Review workflow
 
