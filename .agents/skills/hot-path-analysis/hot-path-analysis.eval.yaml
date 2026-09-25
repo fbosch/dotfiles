@@ -186,3 +186,82 @@ tasks:
       assert "static suspect" in report, "report did not distinguish static inspection"
       assert "workload" in report, "report omitted the missing workload prerequisite"
     activates: [hot-path-analysis]
+
+  - name: Attributes poor scaling to lock contention rather than CPU saturation
+    setup: |
+      rm -rf /tmp/hot-path-analysis-contention
+      mkdir -p /tmp/hot-path-analysis-contention
+      cat > /tmp/hot-path-analysis-contention/workload.py <<'PY'
+      import json
+      import threading
+      import time
+      from pathlib import Path
+
+      lock = threading.Lock()
+
+      def process_item():
+          with lock:
+              time.sleep(0.04)
+
+      def run(workers):
+          barrier = threading.Barrier(workers + 1)
+          def worker():
+              barrier.wait()
+              process_item()
+          threads = [threading.Thread(target=worker) for _ in range(workers)]
+          for thread in threads:
+              thread.start()
+          wall_start = time.perf_counter()
+          cpu_start = time.process_time()
+          barrier.wait()
+          for thread in threads:
+              thread.join()
+          return {
+              "wall_seconds": time.perf_counter() - wall_start,
+              "cpu_seconds": time.process_time() - cpu_start,
+          }
+
+      if __name__ == "__main__":
+          Path("/tmp/hot-path-analysis-contention/metrics.json").write_text(
+              json.dumps({"one_worker": run(1), "eight_workers": run(8)}),
+              encoding="utf-8",
+          )
+      PY
+    cleanup: rm -rf /tmp/hot-path-analysis-contention
+    prompt: |
+      `/tmp/hot-path-analysis-contention/workload.py` scales poorly when worker
+      count rises. Run the existing one- and eight-worker workload, inspect
+      the synchronization path, and save a diagnosis to
+      `/tmp/hot-path-analysis-contention/report.md`. Distinguish elapsed time
+      from on-CPU work and identify the bottleneck supported by the measurements.
+      Do not modify the fixture or install tools.
+    expect: |
+      Pass if the agent compares the controlled concurrency levels, attributes
+      serialization to the shared lock held across `time.sleep` in
+      `process_item`, and explains that workers wait off-CPU rather than
+      consuming CPU in parallel. Fail if it calls the lock holder CPU-hot
+      solely from wall time, claims linear scaling, or invents mutex samples.
+    assert: |
+      import json
+      from pathlib import Path
+
+      root = Path("/tmp/hot-path-analysis-contention")
+      metrics_path = root / "metrics.json"
+      report_path = root / "report.md"
+      assert metrics_path.is_file(), "workload was not run"
+      assert report_path.is_file(), "diagnosis report was not created"
+      metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+      one = metrics["one_worker"]
+      eight = metrics["eight_workers"]
+      assert eight["wall_seconds"] > one["wall_seconds"] * 4, (
+          "fixture did not exhibit serialization under eight workers"
+      )
+      assert eight["cpu_seconds"] < eight["wall_seconds"] / 2, (
+          "fixture did not exhibit low CPU relative to wall time"
+      )
+      report = report_path.read_text(encoding="utf-8").lower()
+      assert "lock" in report and "process_item" in report
+      assert "one" in report or "1" in report
+      assert "eight" in report or "8" in report
+      assert any(word in report for word in ("wait", "serial", "contention"))
+    activates: [hot-path-analysis]

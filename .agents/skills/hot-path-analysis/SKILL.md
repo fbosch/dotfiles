@@ -29,9 +29,9 @@ If no runnable representative workload exists, stop before claiming a hot path. 
 4. Select the signal by symptom:
    - CPU saturated: sampled CPU profile and call tree.
    - High latency with low CPU: wall-time or trace evidence for I/O, queues, and off-CPU waits.
-   - High allocation or GC: allocation profile plus GC events.
-   - Poor scaling or idle workers: mutex, block, and scheduler evidence.
-5. Capture self and inclusive costs with call-tree attribution. Repeat enough to establish whether rankings are stable. Record profiler overhead, lost samples, and missing native frames.
+   - High allocation or GC: allocation profile plus GC events. For growing retained memory, compare live-heap snapshots and retention paths instead; allocation rate alone does not identify what remains reachable.
+   - Poor scaling or idle workers: compare the same workload at controlled concurrency levels, then inspect mutex, block, and scheduler evidence.
+5. Capture self and inclusive costs with call-tree attribution. Repeat enough to establish whether rankings are stable. Check that the capture covers the target workload and relevant runtime frames; record profiler overhead, lost samples, and missing native frames. If capture gaps could hide a candidate path, treat its absence as inconclusive rather than proof that it is cold.
 6. Make one narrow causal hypothesis. Validate it with comparable end-to-end runs, then re-profile: optimizing a path can move the bottleneck.
 
 ## Tool Selection
@@ -60,7 +60,7 @@ If the preferred profiler is unavailable or unsupported, do not install it or mo
 - **Provisional hotspot:** one valid profile with a named metric and attributable stack.
 - **Confirmed hot path:** representative workload and at least two comparable captures with stable attribution.
 - **Validated bottleneck:** a controlled change produces a stable end-to-end effect while preserving correctness and workload.
-- **Inconclusive:** missing workload, noisy or contradictory captures, inadequate symbols, or missing resource signals.
+- **Inconclusive:** missing workload, noisy or contradictory captures, inadequate symbols or capture coverage, or missing resource signals.
 
 Do not use a universal percentage threshold. Report exact measurements, sample counts, distributions, and uncertainty.
 
