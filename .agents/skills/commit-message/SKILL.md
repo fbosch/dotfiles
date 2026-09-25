@@ -1,6 +1,6 @@
 ---
 name: commit-message
-description: Write or review concise Conventional Commit messages grounded in staged or supplied diffs. Use when asked for a Git commit message, commit subject, commit body, Conventional Commit, or Commitizen-style message. Do not use for release notes, changelogs, pull request descriptions, or general documentation.
+description: Write, review, revise, or shorten any commit message, especially Conventional Commits, including a requested subject and body. Use whenever asked to create or correct a commit message, subject, or body based on staged or supplied changes; enforce type, scope, and subject-length limits. Do not use for release notes, changelogs, pull request descriptions, or general documentation.
 ---
 
 # Commit messages
@@ -29,32 +29,36 @@ Valid types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`
 - Write the subject in imperative mood, lowercase, without a trailing period.
 - Name the concrete behavior, rule, or outcome supported by the evidence. Do not replace it with generic verbs such as `update`, `improve`, `refine`, or `adjust` when the specific change fits.
 
+
+Treat a proposed subject as a draft, not as binding format: reconstruct its type and scope from the evidence, then apply every rule below. Do not keep an overlong or path-copied scope merely because the draft used it.
 ## Enforce the 50-character gate
 
 Treat 50 characters as a hard output constraint, not a preference.
 
 1. Fix the type and scope before drafting the subject. Unless it is a required work-item scope, reject and shorten any scope longer than 12 characters.
 2. Compute `prefix = f"{type}({scope}): "` and `subject_budget = 50 - len(prefix)`. If an output schema separates the fields, reconstruct this exact line before returning it.
-3. Draft one short clause preserving the observable outcome. With an inferred scope, the subject must contain at most four words. Preserve the verb's required direct object before optional conditions or rationale; never produce fragments such as `persist before ack`. Do not join clauses with `and`, a semicolon, or similar punctuation.
-4. Measure the reconstructed line exactly. If tools are available, use an exact operation such as Python `len(line)`. Otherwise count conservatively and target 45 characters or fewer rather than risking the boundary.
-5. If the line exceeds 50 characters, shorten an inferred scope first, then remove redundant subject words or choose a shorter equivalent. Never shorten a required work-item scope, truncate a word, or return the over-limit draft.
-6. Reconstruct and measure again after every rewrite. Do not return until `len(line) <= 50`.
+3. Draft one short, grammatical clause naming the concrete outcome. Preserve its required direct object and omit optional detail first; keep inferred-scope subjects to at most four words. For mandatory ticket scopes, compress the clause to fit its smaller budget—for example, `fix(AB#12345): reduce session lifetime`. Do not use fragments such as `persist before ack` or join clauses with `and` or a semicolon.
+4. Before returning, run an exact character-count check on the complete subject, including type and scope (for example, `len(f"{type}({scope}): {subject}")` in Python); never rely on a visual estimate. If the line exceeds 50, rewrite and measure again. Without a Python or shell tool, count conservatively and target 45 characters or fewer. A requested body does not extend the subject budget.
+5. If it exceeds 50, shorten an inferred scope first. Never alter a required work-item scope or truncate a word; rewrite the clause as a shorter grammatical equivalent and preserve its concrete outcome.
+6. Reconstruct and measure again after every rewrite. Return only when the complete subject is at most 50 characters.
 
 Keep subjects grammatical and preserve required objects. For example:
 
 - Reject `fix(hashline): preserve anchors when session files appear` (57); use `fix(hashline): preserve session anchors` (39).
 - With a required ticket scope, use `fix(AB#9876543210): persist delivery before ack` (47), never `fix(AB#9876543210): persist before ack` (38).
+- With scope `AB#12345`, reject `fix(AB#12345): shorten session expiration to one hour` (53); use `fix(AB#12345): reduce session lifetime` (38).
+- For a requested body, use `fix(worker): persist delivery id before ack` (43) as the subject; explain the restart window in the body instead of repeating the subject.
+- With `fix(permission)`, reject `fix(permission): deny recursive root deletion commands` (54); use `fix(permission): deny recursive root deletion` (45).
 - Reject `refactor(auth): delegate credential recovery to recovery service` (64); use `refactor(auth): delegate credential recovery` (44).
-- Reject `docs(commit): enforce semantic scopes and line counting` (55); use `docs(commit): enforce scoped line counts` (40).
-- Reject `docs(commit): count full lines; use semantic scopes` (51); use `docs(commit): enforce scoped line counts` (40).
+- For combined guidance about semantic scopes and measuring the complete subject, use `docs(commit): clarify scope and subject limits` (46); preserve both outcomes rather than mentioning only the length check.
 - Reject telegraphic shortening such as `count line`; shorten without changing meaning.
 - Prefer specific outcomes over file narration. Avoid filler such as “this commit”, “now”, “currently”, “as requested”, AI attribution, and emoji.
 - If only dependency lockfiles or generated lock state changed, use `chore(deps): update lock file`.
 
-Add a body only when the user asks for one or the non-obvious reason cannot fit accurately in the subject. Separate it with a blank line. Explain the cause, rationale, or material consequence that the subject does not contain. Do not begin the body by restating the subject action or narrating the diff.
+Honor a requested body, but first finalize a subject within 50 characters. Separate it with one blank line and use it only for a distinct cause, rationale, or consequence. Start with that cause or consequence, not the subject’s action and object: for `fix(worker): persist delivery id before ack`, write `A restart in that gap could redeliver the message`, not `Persist the id before acknowledging...`. Do not repeat or paraphrase the subject or narrate the diff.
 
 ## Output
 
-Return only the commit message unless the user requests analysis, alternatives, or another output envelope. A command or tool requiring JSON or another schema takes precedence over this default.
+Return only the commit message unless the user requests analysis, alternatives, or another output envelope. Honor explicit destinations: when asked to save the message or a JSON object to a file, write the exact requested artifact there before returning it; the chat response must match the saved content. A command or tool requiring JSON or another schema takes precedence over this default.
 
 Before returning, verify that the message is supported by the provided evidence and follows any narrower repository convention. Return it only after an exact measurement confirms that the complete subject line—not only the text after the colon—is at most 50 characters.
