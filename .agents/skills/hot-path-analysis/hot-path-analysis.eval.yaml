@@ -1,0 +1,188 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Identifies the executed CPU hotspot, not the static decoy
+    setup: |
+      rm -rf /tmp/hot-path-analysis-cpu
+      mkdir -p /tmp/hot-path-analysis-cpu
+      cat > /tmp/hot-path-analysis-cpu/workload.py <<'PY'
+      def lookup_hot(seed):
+          total = 0
+          for value in range(12000):
+              total += ((value * 31) + seed) % 97
+          return total
+
+      def static_decoy(seed):
+          total = seed
+          for value in range(10000000):
+              total = (total + value) % 97
+          return total
+
+      def dispatch():
+          return sum(lookup_hot(seed) for seed in range(160))
+
+      if __name__ == "__main__":
+          dispatch()
+      PY
+      rm -f /tmp/hot-path-analysis-cpu/profile.pstats /tmp/hot-path-analysis-cpu/report.md
+    cleanup: rm -rf /tmp/hot-path-analysis-cpu
+    prompt: |
+      Determine which code path dominates CPU time when
+      `/tmp/hot-path-analysis-cpu/workload.py` runs normally. Inspect its source
+      or AST for candidates, then run it under an available Python CPU profiler.
+      Save the profiler data to
+      `/tmp/hot-path-analysis-cpu/profile.pstats` and a concise report to
+      `/tmp/hot-path-analysis-cpu/report.md`. Include the command, function,
+      call count, self cost, and cumulative/inclusive cost. Explain whether the
+      statically large `static_decoy` function is actually hot. Do not edit the
+      fixture.
+    expect: |
+      Pass if the agent establishes the hot path from a profile of the normal
+      workload, identifies `lookup_hot` as the exercised CPU-heavy function,
+      distinguishes its self cost from `dispatch`'s inclusive cost, and notes
+      that `static_decoy` is not called. Fail if it ranks code from source/AST
+      alone, omits dynamic evidence, or calls the unexecuted decoy hot.
+    assert: |
+      from pathlib import Path
+      from pstats import Stats
+
+      root = Path("/tmp/hot-path-analysis-cpu")
+      profile = root / "profile.pstats"
+      report_path = root / "report.md"
+      assert profile.is_file(), "CPU profile artifact was not created"
+      assert report_path.is_file(), "analysis report was not created"
+
+      by_name = {key[2]: value for key, value in Stats(str(profile)).stats.items()}
+      assert "lookup_hot" in by_name, "profile does not contain lookup_hot"
+      assert "dispatch" in by_name, "profile does not contain dispatch"
+      assert by_name["lookup_hot"][1] == 160, "unexpected lookup_hot call count"
+      assert by_name["lookup_hot"][2] > by_name["dispatch"][2], (
+          "lookup_hot self time should exceed dispatch self time"
+      )
+      assert by_name["dispatch"][3] > by_name["dispatch"][2], (
+          "dispatch should have measurable inclusive work below it"
+      )
+      assert "static_decoy" not in by_name, "uninvoked decoy appeared in the profile"
+
+      report = report_path.read_text(encoding="utf-8").lower()
+      assert "lookup_hot" in report, "report omitted the measured hot function"
+      assert "static_decoy" in report, "report did not address the static decoy"
+      assert "self" in report, "report omitted self-cost attribution"
+      assert any(term in report for term in ("cumulative", "inclusive")), (
+          "report omitted inclusive-cost attribution"
+      )
+    activates: [hot-path-analysis]
+
+  - name: Diagnoses high latency with low CPU as waiting
+    setup: |
+      rm -rf /tmp/hot-path-analysis-wait
+      mkdir -p /tmp/hot-path-analysis-wait
+      cat > /tmp/hot-path-analysis-wait/workload.py <<'PY'
+      import json
+      import time
+      from pathlib import Path
+
+      def wait_for_response():
+          time.sleep(0.05)
+
+      def run_workload():
+          wall_start = time.perf_counter()
+          cpu_start = time.process_time()
+          for _ in range(8):
+              wait_for_response()
+          metrics = {
+              "wall_seconds": time.perf_counter() - wall_start,
+              "process_cpu_seconds": time.process_time() - cpu_start,
+          }
+          Path("/tmp/hot-path-analysis-wait/metrics.json").write_text(
+              json.dumps(metrics), encoding="utf-8"
+          )
+
+      if __name__ == "__main__":
+          run_workload()
+      PY
+      rm -f /tmp/hot-path-analysis-wait/metrics.json /tmp/hot-path-analysis-wait/report.md
+    cleanup: rm -rf /tmp/hot-path-analysis-wait
+    prompt: |
+      Requests through `/tmp/hot-path-analysis-wait/workload.py` take about
+      0.4 seconds, but CPU usage stays low. Find the cause by inspecting and
+      running the script. Use wall-time and process-CPU or equivalent wait/trace
+      evidence; save a concise report to
+      `/tmp/hot-path-analysis-wait/report.md`. Do not modify the fixture.
+    expect: |
+      Pass if the agent uses elapsed-time or wait/trace evidence, attributes the
+      delay to `wait_for_response` waiting rather than CPU work, and does not
+      infer an on-CPU hotspot from latency alone. Fail if it relies only on a
+      CPU profile or describes the sleep time as CPU consumption.
+    assert: |
+      import json
+      from pathlib import Path
+
+      root = Path("/tmp/hot-path-analysis-wait")
+      metrics_path = root / "metrics.json"
+      report_path = root / "report.md"
+      assert metrics_path.is_file(), "workload was not run to collect metrics"
+      assert report_path.is_file(), "analysis report was not created"
+      metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+      wall = metrics["wall_seconds"]
+      cpu = metrics["process_cpu_seconds"]
+      assert wall >= 0.3, f"expected substantial elapsed time, got {wall}"
+      assert cpu < wall / 2, f"expected low process CPU relative to wall time: {cpu} / {wall}"
+
+      report = report_path.read_text(encoding="utf-8").lower()
+      assert "wait_for_response" in report, "report omitted the waiting function"
+      assert "wall" in report and "cpu" in report, "report omitted measured signals"
+      assert any(term in report for term in ("wait", "sleep", "off-cpu", "blocking")), (
+          "report did not explain the off-CPU delay"
+      )
+    activates: [hot-path-analysis]
+
+  - name: Refuses to infer a hot path from source alone
+    setup: |
+      rm -rf /tmp/hot-path-analysis-static
+      mkdir -p /tmp/hot-path-analysis-static
+      cat > /tmp/hot-path-analysis-static/candidate.py <<'PY'
+      def normalize_records(records):
+          normalized = []
+          for record in records:
+              for candidate in records:
+                  if candidate.get("key") == record.get("key"):
+                      normalized.append(candidate)
+          return normalized
+      PY
+      cp /tmp/hot-path-analysis-static/candidate.py /tmp/hot-path-analysis-static/candidate.before
+      rm -f /tmp/hot-path-analysis-static/profile.pstats /tmp/hot-path-analysis-static/report.md
+    cleanup: rm -rf /tmp/hot-path-analysis-static
+    prompt: |
+      We have only `/tmp/hot-path-analysis-static/candidate.py`: there is no
+      executable entry point or representative input/workload. A lead insists
+      that its nested loops are definitely the hot path and wants a firm answer.
+      Do not ask questions or hedge; state which function to optimize and save
+      your conclusion to `/tmp/hot-path-analysis-static/report.md`.
+    expect: |
+      Pass if the agent refuses to call `normalize_records` a measured hot path,
+      labels it at most as a static suspect, marks the result inconclusive, and
+      identifies a runnable representative workload as the missing prerequisite.
+      Fail if it claims the function is hot from inspection alone, fabricates
+      profile measurements, or substitutes a microbenchmark without approval.
+    assert: |
+      from pathlib import Path
+
+      root = Path("/tmp/hot-path-analysis-static")
+      source = root / "candidate.py"
+      report_path = root / "report.md"
+      assert source.read_bytes() == (root / "candidate.before").read_bytes(), (
+          "source fixture was modified"
+      )
+      assert not (root / "profile.pstats").exists(), "profile was fabricated without a workload"
+      assert report_path.is_file(), "analysis report was not created"
+      report = report_path.read_text(encoding="utf-8").lower()
+      assert "inconclusive" in report, "report did not mark the finding inconclusive"
+      assert "static suspect" in report, "report did not distinguish static inspection"
+      assert "workload" in report, "report omitted the missing workload prerequisite"
+    activates: [hot-path-analysis]

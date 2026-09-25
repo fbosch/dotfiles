@@ -106,9 +106,13 @@ class QuantityTests(unittest.TestCase):
 }
 
 MUTATIONS = {
-    "duplicate": ("return value.strip().lower()", "return value.strip()"),
-    "boundary": ("size > 100", "size > 101"),
-    "regression": ("if isinstance(value, bool):", "if False:"),
+    "duplicate": [
+        ("return value.strip().lower()", "return value.strip()"),
+        ("return value.strip().lower()", "return 'wrong' if not value.strip() else value.strip().lower()"),
+        ("return value.strip().lower()", "return value.strip().lower().replace('  ', ' ')"),
+    ],
+    "boundary": [("size > 100", "size > 101")],
+    "regression": [("if isinstance(value, bool):", "if False:")],
 }
 SOURCE = {"duplicate": "labels.py", "boundary": "pages.py", "regression": "quantity.py"}
 
@@ -148,21 +152,24 @@ def clean(case: str) -> None:
 def run_tests(path: Path, expect_success: bool) -> None:
     result = subprocess.run(
         [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "*.py"],
-        cwd=path,
-        capture_output=True,
-        text=True,
-        timeout=10,
+        cwd=path, capture_output=True, text=True, timeout=10,
     )
     if expect_success != (result.returncode == 0):
         raise AssertionError(f"unexpected test result: {result.stdout}\n{result.stderr}")
+    if not expect_success:
+        assert "FAIL:" in result.stderr or "ERROR:" in result.stderr, result.stderr
 
 
-def test_count(path: Path) -> int:
-    return sum(
-        isinstance(node, ast.FunctionDef) and node.name.startswith("test_")
-        for file in (path / "tests").glob("*.py")
-        for node in ast.walk(ast.parse(file.read_text()))
-    )
+def circular_assertions(path: Path) -> list[str]:
+    circular = []
+    for file in (path / "tests").glob("*.py"):
+        for node in ast.walk(ast.parse(file.read_text())):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr == "assertEqual" and len(node.args) == 2:
+                if ast.dump(node.args[0]) == ast.dump(node.args[1]):
+                    circular.append(f"{file.name}:{node.lineno}")
+    return circular
 
 
 def verify(case: str) -> None:
@@ -175,18 +182,17 @@ def verify(case: str) -> None:
     run_tests(path, expect_success=True)
 
     if case == "duplicate":
-        assert test_count(path) < 4, "ineffective duplicate was not removed or consolidated"
-        assert (path / "tests/checks.py").is_file(), "unconventional test file was removed"
+        assert not circular_assertions(path), "a self-comparison remains"
 
-    with tempfile.TemporaryDirectory(prefix=f"test-pruner-mutation-{case}-") as temporary:
-        copy = Path(temporary) / "fixture"
-        shutil.copytree(path, copy, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-        original, mutated = MUTATIONS[case]
-        mutant_path = copy / SOURCE[case]
-        text = mutant_path.read_text()
-        assert text.count(original) == 1, "mutation target changed"
-        mutant_path.write_text(text.replace(original, mutated))
-        run_tests(copy, expect_success=False)
+    for index, (original, mutated) in enumerate(MUTATIONS[case]):
+        with tempfile.TemporaryDirectory(prefix=f"test-pruner-mutation-{case}-{index}-") as temporary:
+            copy = Path(temporary) / "fixture"
+            shutil.copytree(path, copy, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+            mutant_path = copy / SOURCE[case]
+            text = mutant_path.read_text()
+            assert text.count(original) == 1, "mutation target changed"
+            mutant_path.write_text(text.replace(original, mutated))
+            run_tests(copy, expect_success=False)
 
 
 def main() -> None:
