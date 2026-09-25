@@ -6,6 +6,14 @@ Signal: the test mocks the module/function/class it claims to test, then asserts
 
 Fix: delete if it has no unique behavior. Rewrite if scenario matters by mocking only unmanaged dependencies and executing the real SUT.
 
+## Circular Expectation
+Signal: expected output comes from the implementation's algorithm, the SUT itself, or a helper that shares the same defect.
+Fix: derive expected output independently from a requirement, concrete example, or established property. A hardcoded value is useful when it captures a real contract.
+
+## Incidental or Framework-Only Assertion
+Signal: the test reads source strings to check runtime behavior, checks private state or call order without a behavioral reason, or verifies a library's behavior without exercising a responsibility of our code.
+Fix: assert the externally observable outcome or meaningful side effect. Retain an interaction assertion when the interaction itself is the contract, such as exactly-once delivery.
+
 ## Assertion-Free Coverage Theater
 
 Signal: test calls code without assertions, logs values, assigns results to discard variables, or only asserts no throw when behavior has outputs.
@@ -52,7 +60,7 @@ Fix: make deterministic if valuable. Move lower if better tested as unit/integra
 
 Signal: test protects removed feature, old migration path beyond support window, deprecated behavior past removal date, or dead code only reachable from tests.
 
-Fix: delete test and dead code together when supported by product/history evidence.
+Fix: remove the test only with documented product/history evidence and the main skill's authorization and deletion gates. Recommend dead production-code removal separately unless the user explicitly requested it.
 
 ## AI-Generated Test Smells
 

@@ -1,0 +1,105 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+    - ".*/\\.caliper/results/.*"
+
+tasks:
+  - name: Removes a duplicate with no independent oracle
+    setup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py create duplicate
+    cleanup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py clean duplicate
+    prompt: |
+      Audit and improve every unit test in /tmp/test-pruner-eval-duplicate.
+      Read its AGENTS.md, production module, and both test files, including the
+      nonstandard checks.py. Preserve meaningful behavior, remove false
+      confidence, run the relevant checks, and include a file-by-file audit
+      ledger with dispositions, proposed actions, applied changes, and results.
+      Do not edit production code, add dependencies, or access the network.
+    expect: |
+      Pass if the agent recognizes that test_same_behavior_without_an_oracle
+      checks the same input on both sides and cannot detect a regression,
+      removes or consolidates it while preserving independent assertions and
+      the unique checks.py behavior, and accounts for both test files in the
+      ledger. The report must distinguish changes actually made from proposals
+      and state what validation ran. Fail if it treats passing tests or coverage
+      percentage alone as proof, skips checks.py, claims completion without a
+      per-file review, or edits production behavior.
+    assert: |
+      import subprocess
+      import sys
+      result = subprocess.run(
+          [sys.executable, "test-pruner-fixtures.py", "verify", "duplicate"],
+          capture_output=True, text=True, timeout=20,
+      )
+      assert result.returncode == 0, result.stdout + result.stderr
+    activates: [test-pruner]
+
+  - name: Retains the distinct upper boundary
+    setup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py create boundary
+    cleanup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py clean boundary
+    prompt: |
+      Audit and improve the unit tests in /tmp/test-pruner-eval-boundary.
+      Several tests call the same validator. Check the documented contract and
+      each test before deciding whether to consolidate them. Read AGENTS.md,
+      preserve production behavior, and report a ledger and actual checks.
+      Do not add dependencies or use the network.
+    expect: |
+      Pass if the agent recognizes that accepting 100 and rejecting 101
+      protect a distinct upper-boundary defect even though the tests share a
+      validator, and retains or merges that protection. The ledger must name
+      the reviewed test file and distinguish proposed versus applied changes.
+      Fail if it removes the only 101 rejection check, invents new requirements,
+      or reports an audit complete without inspecting every case.
+    assert: |
+      import subprocess
+      import sys
+      result = subprocess.run(
+          [sys.executable, "test-pruner-fixtures.py", "verify", "boundary"],
+          capture_output=True, text=True, timeout=20,
+      )
+      assert result.returncode == 0, result.stdout + result.stderr
+    activates: [test-pruner]
+
+  - name: Protects a deceptively simple bug regression
+    setup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py create regression
+    cleanup: python3 .agents/skills/test-pruner/test-pruner-fixtures.py clean regression
+    prompt: |
+      Clean up the unit tests in /tmp/test-pruner-eval-regression. Some tests
+      look trivial or overlap on the value one; remove low-value coverage
+      where justified. Read AGENTS.md and the contract first. Report a ledger
+      separating proposed actions from changes made and say what you checked.
+      Do not edit production code, add dependencies, or use the network.
+    expect: |
+      Pass if the agent keeps meaningful protection for the bool-versus-int
+      regression: True must be rejected although 1 is accepted. It may rewrite
+      tests, but must not delete or weaken the sole regression check on that
+      basis alone. The ledger must explain the distinct defect and honestly
+      report any unchanged files and validation. Fail if it deletes the check,
+      changes the expected behavior to match a bug, or alters production code.
+    assert: |
+      import shutil
+      import subprocess
+      import sys
+      import tempfile
+      from pathlib import Path
+      result = subprocess.run(
+          [sys.executable, "test-pruner-fixtures.py", "verify", "regression"],
+          capture_output=True, text=True, timeout=20,
+      )
+      assert result.returncode == 0, result.stdout + result.stderr
+      with tempfile.TemporaryDirectory(prefix="test-pruner-one-") as tmp:
+          source = Path("/tmp/test-pruner-eval-regression")
+          copy = Path(tmp) / "fixture"
+          shutil.copytree(source, copy, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+          module = copy / "quantity.py"
+          text = module.read_text()
+          assert text.count("    return value") == 1
+          module.write_text(text.replace("    return value", "    if value == 1:\n        raise ValueError('one rejected')\n    return value"))
+          probe = subprocess.run(
+              [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", "*.py"],
+              cwd=copy, capture_output=True, text=True, timeout=10,
+          )
+          assert probe.returncode != 0 and "one rejected" in probe.stderr, "tests did not protect acceptance of 1"
+    activates: [test-pruner]
