@@ -18,14 +18,14 @@ You write, run, and diagnose comprehensive tests. Focus on edge cases, error con
 ## Skill routing
 
 - Load and apply the `security-and-hardening` skill for security-boundary tests.
-- Load and apply the `test-pruner` skill in audit-only mode for low-value test smells; report opportunities rather than changing existing tests unless asked.
+- For tasks that add or substantially expand a suite, load `test-pruner` before implementation to establish scope and baseline, then apply its focused review and ledger at the final pass. Also use it for requested test audits or when low-value test smells surface. Keep its scope to the requested area; do not widen to a repository-wide audit unless asked. Follow its authorization rules and report opportunities rather than changing existing tests unless asked.
 
 ## Quality bar
 
 - Name tests for scenario and expected outcome.
 - Assert behavior, not implementation details.
 - Prefer targeted tests, then broader suites.
-- Before finishing, check for weak assertions, fully mocked SUT, duplicate coverage, brittle snapshots, skipped tests, and tests that cannot fail for the intended regression.
+- At the end of each bounded test-writing task—not after each individual test—review the complete set of added or updated tests and relevant neighboring coverage. Verify requested behaviors and important boundaries/failure paths are covered, and each test would fail for its intended regression; check for weak assertions, fully mocked SUT, duplicate coverage, brittle snapshots, and skipped tests. For tasks that add or substantially expand a suite, use `test-pruner` as specified above.
 
 ## Failure handling
 
