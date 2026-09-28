@@ -3,6 +3,9 @@
 Caliper evals for `../../instructions/orchestration.md`, loaded as an instruction
 fragment rather than a discoverable skill. Run from the dotfiles root.
 
+Turn-budget presence is scored in the delegation-contract case and recorded
+separately elsewhere, so it cannot mask a lifecycle result.
+
 ## Run
 
 Requires the existing Pi/Caliper installation, Python with PyYAML, installed

@@ -103,7 +103,6 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         return
     for spawn in all_spawns:
         assert "model" not in spawn["input"] and "thinking" not in spawn["input"], "Specialist model override"
-        assert 1 <= spawn["input"].get("max_turns", 0) <= 8, "Worker budget missing or excessive"
     # Reading the copied swarm skill is permitted; redoing fixture work is not.
     assert not any(e["tool"] in ("read", "grep", "find", "ls") and "swarm" not in str(e["input"].get("path", "")) for e in parents), "Parent repeated delegated work"
     if case == "steering":
@@ -115,6 +114,7 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         target = {"explore": "badge.ts", "debug": "ratio.ts", "review": "access.ts"}[role]
         read, _ = child_source_evidence(events, target)
         if case == "delegation":
+            assert 1 <= spawns[0]["input"].get("max_turns", 0) <= 8, "Worker budget missing or excessive"
             prompt = spawns[0]["input"]["prompt"].lower()
             assert "src" in prompt and "renderbadge" in prompt, "Delegation omitted target or known context"
             assert re.search(r"read.only|do not (?:edit|modify)|no (?:edits|writes)", prompt), "Delegation omitted read-only constraint"
@@ -168,7 +168,7 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         key = "finding" if case == "material" else "blocker"
         _, report = child_read(events, key + ".txt", expected[key])
         decision = json.loads(final)
-        assert expected[key] in decision.get("evidence", ""), "Decision not grounded in worker evidence"
+        assert expected[key] in json.dumps(decision.get("evidence")), "Decision not grounded in worker evidence"
         if case == "material":
             assert decision.get("decision") == "revise-design" and decision.get("streaming_supported") is False, "Material finding did not change the design decision"
         else:
@@ -221,7 +221,9 @@ def check(case: str | None = None) -> None:
     expected = json.loads(trace.with_suffix(".expected.json").read_text())
     case = case or expected["case"]
     assert isinstance(case, str), "Missing scenario ID"
-    summary = {"case": case, "checkpoint_calls": len(calls(events, "assess_subagent_checkpoint")), "passed": False}
+    summary = {"case": case, "checkpoint_calls": len(calls(events, "assess_subagent_checkpoint")),
+               "missing_turn_budgets": sum("max_turns" not in call["input"] for call in calls(events, "subagent")),
+               "passed": False}
     try:
         check_events(events, expected, case)
         summary["passed"] = True

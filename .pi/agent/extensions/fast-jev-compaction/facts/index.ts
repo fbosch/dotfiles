@@ -346,24 +346,39 @@ function segmentSource(text: string): SourceSegment[] {
 
   const segments: SourceSegment[] = [];
   let codeStart: number | undefined;
-  let inFence = false;
+  let fenceMarker: "`" | "~" | undefined;
+  let fenceLength = 0;
   for (const line of lines) {
     const lineText = text.slice(line.start, line.end);
-    const hasFence = lineText.includes("```");
-    if (hasFence && !inFence) {
-      codeStart = line.start;
-      inFence = true;
-    } else if (hasFence && inFence) {
-      segments.push({ start: codeStart ?? line.start, end: line.end, code: true });
-      codeStart = undefined;
-      inFence = false;
+    const openingFence = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)?.[1];
+    if (fenceMarker !== undefined) {
+      const closingFence = lineText.match(/^ {0,3}(`{3,}|~{3,})[ \t]*(?:\r?\n)?$/u)?.[1];
+      if (
+        closingFence !== undefined &&
+        closingFence[0] === fenceMarker &&
+        closingFence.length >= fenceLength
+      ) {
+        segments.push({ start: codeStart ?? line.start, end: line.end, code: true });
+        codeStart = undefined;
+        fenceMarker = undefined;
+        fenceLength = 0;
+      }
       continue;
     }
-    if (inFence) continue;
+    if (openingFence !== undefined) {
+      codeStart = line.start;
+      fenceMarker = openingFence[0] as "`" | "~";
+      fenceLength = openingFence.length;
+      continue;
+    }
+    if (/^(?: {4,}|\t)/u.test(lineText)) {
+      segments.push({ start: line.start, end: line.end, code: true });
+      continue;
+    }
     for (const [start, end] of sentenceRanges(lineText, line.start))
       segments.push({ start, end, code: false });
   }
-  if (inFence && codeStart !== undefined) {
+  if (fenceMarker !== undefined && codeStart !== undefined) {
     const last = lines.at(-1);
     segments.push({ start: codeStart, end: last?.end ?? text.length, code: true });
   }
@@ -452,20 +467,22 @@ function comparePosition(left: EvidenceUnit, right: EvidenceUnit): number {
 }
 
 function exactDeduplication(units: readonly EvidenceUnit[]): Map<string, string> {
-  const canonicalByText = new Map<string, EvidenceUnit>();
   const duplicateOf = new Map<string, string>();
+  let previous: EvidenceUnit | undefined;
   for (const unit of units) {
-    if (unit.kind !== "fact") continue;
-    const key = JSON.stringify([
-      unit.text,
-      unit.source.authority,
-      unit.source.scope,
-      unit.source.dependencies,
-      unit.source.origin,
-    ]);
-    const canonical = canonicalByText.get(key);
-    if (canonical === undefined) canonicalByText.set(key, unit);
-    else duplicateOf.set(unit.id, canonical.id);
+    if (
+      unit.kind !== "fact" ||
+      unit.source.role !== "assistant" ||
+      unit.source.dependencies.length > 0
+    ) {
+      previous = undefined;
+      continue;
+    }
+    if (previous?.source.id === unit.source.id && previous.text === unit.text) {
+      duplicateOf.set(unit.id, previous.id);
+      continue;
+    }
+    previous = unit;
   }
   return duplicateOf;
 }
@@ -511,7 +528,10 @@ function proposePairs(
     .toSorted(comparePosition);
   const termPostings = new Map<string, EvidenceUnit[]>();
   const fieldPostings = new Map<string, EvidenceUnit[]>();
-  const pairs: Pair[] = [];
+  const bestPairBySource = new Map<
+    string,
+    { readonly pair: Omit<Pair, "id">; readonly score: number }
+  >();
 
   for (const witness of candidates) {
     const possible = new Map<string, EvidenceUnit>();
@@ -522,8 +542,15 @@ function proposePairs(
     if (witness.structuredKey !== undefined) addRecent(fieldPostings.get(witness.structuredKey));
 
     for (const source of [...possible.values()].toSorted(comparePosition)) {
-      if (pairScore(source, witness) !== undefined)
-        pairs.push({ id: `p${pairs.length + 1}`, source, witness });
+      const score = pairScore(source, witness);
+      if (score === undefined) continue;
+      const previous = bestPairBySource.get(source.id);
+      if (
+        previous === undefined ||
+        score > previous.score ||
+        (score === previous.score && comparePosition(previous.pair.witness, witness) < 0)
+      )
+        bestPairBySource.set(source.id, { pair: { source, witness }, score });
     }
 
     for (const term of witness.matchTerms) {
@@ -537,7 +564,10 @@ function proposePairs(
       fieldPostings.set(witness.structuredKey, postings);
     }
   }
-  return pairs;
+  return [...bestPairBySource.values()]
+    .map(({ pair }) => pair)
+    .toSorted((left, right) => comparePosition(left.source, right.source))
+    .map((pair, index) => ({ ...pair, id: `p${index + 1}` }));
 }
 
 function quotedFact(unit: EvidenceUnit): string {
@@ -937,7 +967,7 @@ function coverageFor(
       text: unit.text,
       disposition,
       reason: duplicate
-        ? "exact source slice deduplicated within matching authority, scope, dependencies, and origin"
+        ? "consecutive duplicate assistant prose within the same dependency-free source"
         : retired
           ? "supported relation and independent safety verification"
           : unit.kind === "opaque"

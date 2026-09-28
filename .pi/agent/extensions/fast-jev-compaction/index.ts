@@ -235,6 +235,10 @@ export function safeJson(value: unknown): string {
   }
 }
 
+export function redactFactSourceText(value: string, limit = Number.MAX_SAFE_INTEGER): string {
+  return redact(value, limit);
+}
+
 function inputRecord(value: unknown): Record<string, unknown> {
   if (isRecord(value)) return { ...value };
   if (typeof value === "string") {

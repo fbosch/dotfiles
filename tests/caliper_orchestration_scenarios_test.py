@@ -142,6 +142,19 @@ class ScenarioGraderTests(unittest.TestCase):
             with self.subTest(case=case), self.assertRaises(AssertionError):
                 CHECK.check_events(bad, EXPECTED, case)
 
+    def test_parallel_lifecycle_is_not_graded_as_budget_syntax(self):
+        events = trace_for("parallel")
+        for spawn in CHECK.calls(events, "subagent"):
+            del spawn["input"]["max_turns"]
+        CHECK.check_events(events, EXPECTED, "parallel")
+
+    def test_evidence_identifier_can_be_nested_in_json(self):
+        events = trace_for("material")
+        decision = json.loads(events[-1]["text"])
+        decision["evidence"] = {"identifier": EXPECTED["finding"]}
+        events[-1]["text"] = json.dumps(decision)
+        CHECK.check_events(events, EXPECTED, "material")
+
     def test_model_verification_rejects_wrong_preset_or_lost_fast_translation(self):
         expected = {"catalog": {"parent": {"model": "openai-codex/luna-fast", "thinking": "xhigh"}, "agents": {}}}
         events = [{"kind": "session", "session": "p"}, {"kind": "execution", "session": "p", "parent": True, "model": "openai-codex/luna-fast", "thinking": "xhigh"}, {"kind": "request-model", "session": "p", "model": "luna", "serviceTier": "priority"}]
