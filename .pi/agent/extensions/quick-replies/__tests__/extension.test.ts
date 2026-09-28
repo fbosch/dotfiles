@@ -438,6 +438,39 @@ describe("quick replies lifecycle", () => {
     expect(harness.widgetActive).toBe(false);
   });
 
+  test("does not let an older completed ranking replace newer results", async () => {
+    const oldRanking = deferred<QuickReply[]>();
+    const latestReplies = [
+      { label: "Best option", message: "Choose the best option." },
+      { label: "Next option", message: "Choose the next option." },
+    ];
+    let generationCount = 0;
+    const harness = createHarness({
+      generate: () => {
+        generationCount += 1;
+        return generationCount === 1 ? oldRanking.promise : Promise.resolve(latestReplies);
+      },
+    });
+
+    await showGeneratedReplies(harness);
+    const oldSignal = harness.generationCalls[0]?.signal;
+    expect(harness.widgetActive).toBe(false);
+
+    await harness.startRun("Start a newer task");
+    await harness.finishAssistant("The newer response is complete.");
+    await harness.settle();
+    const latestPanel = stripTerminalSequences(harness.renderWidget(120).join("\n"));
+
+    oldRanking.resolve([{ label: "Stale choice", message: "Use the stale choice." }]);
+    await harness.flush();
+    const panelAfterOldRanking = stripTerminalSequences(harness.renderWidget(120).join("\n"));
+
+    expect(oldSignal?.aborted).toBe(true);
+    expect(latestPanel).toContain("Best option");
+    expect(panelAfterOldRanking).toBe(latestPanel);
+    expect(panelAfterOldRanking).not.toContain("Stale choice");
+  });
+
   test("does not request suggestions when the editor already contains text", async () => {
     const harness = createHarness({ editorText: "my answer" });
 
@@ -607,18 +640,27 @@ describe("quick replies lifecycle", () => {
     expect(harness.widgetActive).toBe(false);
   });
 
-  test("keeps wrapped replies selectable and rejects replies when the panel cannot render", async () => {
+  test("caps the panel at three selectable replies and rejects replies when it cannot render", async () => {
     const narrow = createHarness({ generate: async () => fiveReplies });
     await showGeneratedReplies(narrow);
-    narrow.renderWidget(30);
-    await narrow.press(4);
+    const rendered = stripTerminalSequences(narrow.renderWidget(30).join("\n"));
+    await narrow.press(2);
+
+    const capped = createHarness({ generate: async () => fiveReplies });
+    await showGeneratedReplies(capped);
+    capped.renderWidget(120);
+    await capped.press(3);
 
     const hidden = createHarness({ generate: async () => fiveReplies });
     await showGeneratedReplies(hidden);
     hidden.renderWidget(6);
-    await hidden.press(4);
+    await hidden.press(2);
 
-    expect(narrow.sentMessages).toEqual(["Fifth response"]);
+    expect(rendered).toContain("Three");
+    expect(rendered).not.toContain("Four");
+    expect(rendered).not.toContain("Five");
+    expect(narrow.sentMessages).toEqual(["Third response"]);
+    expect(capped.sentMessages).toEqual([]);
     expect(hidden.sentMessages).toEqual([]);
   });
 });
@@ -646,31 +688,28 @@ describe("quick reply widget", () => {
     const rendered = renderQuickReplyPanel(fiveReplies, 120, theme);
     const firstLine = stripTerminalSequences(rendered?.lines[0] ?? "").trimEnd();
 
-    expect(firstLine).toBe("   Alt+1  One   Alt+2  Two   Alt+3  Three   Alt+4  Four   Alt+5  Five");
-    expect(rendered?.visibleReplyCount).toBe(5);
+    expect(firstLine).toBe("   Alt+1  One   Alt+2  Two   Alt+3  Three");
+    expect(rendered?.visibleReplyCount).toBe(3);
     expect(rendered?.lines).toHaveLength(2);
     expect(rendered?.lines.at(-1)).toBe("");
   });
 
   test("shortens key hints before adding rows", () => {
-    const rendered = renderQuickReplyPanel(fiveReplies, 60, theme);
+    const rendered = renderQuickReplyPanel(fiveReplies, 37, theme);
 
     expect(stripTerminalSequences(rendered?.lines[0] ?? "").trimEnd()).toBe(
-      "   A1  One   A2  Two   A3  Three   A4  Four   A5  Five",
+      "   A1  One   A2  Two   A3  Three",
     );
     expect(rendered?.lines).toHaveLength(2);
   });
 
   test("wraps full keycaps on narrow terminals", () => {
-    const rendered = renderQuickReplyPanel(fiveReplies, 50, theme);
+    const rendered = renderQuickReplyPanel(fiveReplies, 30, theme);
     const plain = rendered?.lines.map((line) => stripTerminalSequences(line).trimEnd());
 
-    expect(plain?.slice(0, -1)).toEqual([
-      "   Alt+1  One   Alt+2  Two   Alt+3  Three",
-      "   Alt+4  Four   Alt+5  Five",
-    ]);
-    expect(rendered?.visibleReplyCount).toBe(5);
-    expect(rendered?.lines.slice(1, -1).every((line) => visibleWidth(line) <= 50)).toBe(true);
+    expect(plain?.slice(0, -1)).toEqual(["   Alt+1  One   Alt+2  Two", "   Alt+3  Three"]);
+    expect(rendered?.visibleReplyCount).toBe(3);
+    expect(rendered?.lines.slice(1, -1).every((line) => visibleWidth(line) <= 30)).toBe(true);
   });
 
   test("explains command confirmation without changing the command label", () => {
@@ -706,13 +745,7 @@ describe("quick reply widget", () => {
     const rendered = renderQuickReplyPanel(fiveReplies, 120, trackingTheme);
 
     expect(rendered?.lines[0]).not.toContain(PANEL_BACKGROUND);
-    expect(backgrounds).toEqual([
-      "selectedBg",
-      "selectedBg",
-      "selectedBg",
-      "selectedBg",
-      "selectedBg",
-    ]);
+    expect(backgrounds).toEqual(["selectedBg", "selectedBg", "selectedBg"]);
   });
 
   test("hides instead of truncating a reply label", () => {

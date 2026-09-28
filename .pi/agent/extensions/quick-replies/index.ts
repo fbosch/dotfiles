@@ -5,6 +5,7 @@ import {
   extractVisibleAssistantProse,
   generateQuickReplies,
   isSlashCommand,
+  MAX_DISPLAY_REPLIES,
   type QuickReply,
   type QuickReplyContextTurn,
   type QuickReplyGenerator,
@@ -60,11 +61,12 @@ export interface QuickRepliesDependencies {
 }
 
 export function renderQuickReplyPanel(
-  replies: readonly QuickReply[],
+  allReplies: readonly QuickReply[],
   width: number,
   theme: Theme,
   shortcuts: readonly string[] = QUICK_REPLY_SHORTCUTS,
 ): RenderedQuickReplies | undefined {
+  const replies = allReplies.slice(0, MAX_DISPLAY_REPLIES);
   if (replies.length === 0 || width <= 0) return undefined;
 
   const paddingX = width >= PANEL_PADDING_X * 2 + 1 ? PANEL_PADDING_X : 0;

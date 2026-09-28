@@ -3,6 +3,7 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
   buildQuickReplyPrompt,
+  createQuickReplyGenerator,
   extractRecentQuickReplyContext,
   extractVisibleAssistantProse,
   generateQuickReplies,
@@ -19,6 +20,78 @@ function reply(index: number): QuickReply {
 
 function response(replies: readonly QuickReply[]): string {
   return JSON.stringify({ suggestions: replies });
+}
+
+function candidateAt(candidates: readonly QuickReply[], index: number): QuickReply {
+  const candidate = candidates[index];
+  if (candidate === undefined) throw new Error(`Missing candidate at index ${index}`);
+  return candidate;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+function gatewayScoreResponse(scores: readonly number[]): unknown {
+  const answers = Object.fromEntries(
+    scores.map((score, index) => {
+      const candidateId = `candidate_${index}`;
+      const probabilities =
+        score <= 1
+          ? { "0": 1 - score, "1": score, "2": 0 }
+          : { "0": 0, "1": 2 - score, "2": score - 1 };
+      return [
+        candidateId,
+        {
+          type: "score",
+          score,
+          confidence: 0.5,
+          legend: {
+            "0": "Poor fit",
+            "1": "Plausible but weak",
+            "2": "Strong fit",
+          },
+          probabilities,
+        },
+      ];
+    }),
+  );
+  return { model: "jev-1.13.0", answers };
+}
+
+function generatorContext(
+  candidates: readonly QuickReply[],
+  gatewayAvailable = true,
+): Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry"> {
+  return {
+    cwd: "/project",
+    isProjectTrusted: () => false,
+    modelRegistry: {
+      find: () => ({
+        provider: "openai-codex",
+        id: "gpt-6-luna-fast",
+        api: "openai-codex-responses",
+      }),
+      getProviderAuth: async () =>
+        gatewayAvailable ? { auth: { apiKey: "gateway-test-key" } } : undefined,
+      complete: async () => ({
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "quick-reply-candidates",
+            name: "return_quick_replies",
+            arguments: { suggestions: candidates },
+          },
+        ],
+        stopReason: "toolUse",
+      }),
+    },
+  } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
 }
 
 const FAKE_RANDOM_VALUE = ["A7fK9mP2qR5t", "V8xY3bC6dE1g", "H4jL0nS2wZ8u", "Q"].join("");
@@ -288,7 +361,7 @@ describe("quick reply input", () => {
 });
 
 describe("quick reply response validation", () => {
-  test.each([2, 4, 5])("accepts %i valid suggestions", (count) => {
+  test.each([1, 2, 3, 4, 5])("accepts %i valid suggestions", (count) => {
     const replies = Array.from({ length: count }, (_, index) => reply(index + 1));
 
     expect(parseQuickReplyResponse(response(replies))).toEqual(replies);
@@ -303,7 +376,6 @@ describe("quick reply response validation", () => {
     '```json\n{"suggestions":[]}\n```',
     '{"suggestions":[],"extra":true}',
     '{"suggestions":"none"}',
-    response([reply(1)]),
     response(Array.from({ length: 6 }, (_, index) => reply(index + 1))),
   ])("rejects malformed payload %s", (raw) => {
     expect(parseQuickReplyResponse(raw)).toEqual([]);
@@ -551,6 +623,31 @@ describe("quick reply model generation", () => {
     ).toEqual([]);
   });
 
+  test("filters secret-bearing suggestions before sending candidates to Jev", async () => {
+    const secretReply = {
+      label: "Use value",
+      message: `Use ${FAKE_GITHUB_TOKEN} # pragma: allowlist secret`,
+    };
+    const safeReply = { label: "Show config path", message: "Show the relevant config path" };
+    let gatewayBody = "";
+    const generator = createQuickReplyGenerator({
+      fetch: async (_input, init) => {
+        gatewayBody = String(init?.body ?? "");
+        return new Response(JSON.stringify(gatewayScoreResponse([2])));
+      },
+    });
+
+    const replies = await generator(
+      generatorContext([secretReply, safeReply]),
+      { userText: "Inspect the config", assistantText: "The config path is available." },
+      new AbortController().signal,
+    );
+
+    expect(replies).toEqual([safeReply]);
+    expect(gatewayBody).not.toContain(FAKE_GITHUB_TOKEN);
+    expect(gatewayBody).toContain(safeReply.message);
+  });
+
   test("filters secret-bearing suggestions without discarding safe neighbors", async () => {
     const safeReply = { label: "Show config path", message: "Show the relevant config path" };
     const ctx = {
@@ -592,6 +689,182 @@ describe("quick reply model generation", () => {
         new AbortController().signal,
       ),
     ).toEqual([safeReply]);
+  });
+
+  test("batches per-candidate Score questions and ranks by Score with stable ties", async () => {
+    const candidates = [1, 2, 3, 4, 5].map((index) => ({
+      label: `Choice ${index}`,
+      message: `Use this exact candidate message ${index}`,
+    }));
+    const requestBodies: Record<string, unknown>[] = [];
+    const generator = createQuickReplyGenerator({
+      timeoutMs: 900,
+      fetch: async (_input, init) => {
+        requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+        return new Response(JSON.stringify(gatewayScoreResponse([1.9, 0.2, 2, 1.9, 0.7])));
+      },
+    });
+
+    const replies = await generator(
+      generatorContext(candidates),
+      {
+        userText: "Check the result",
+        assistantText: "The implementation is complete.",
+        recentContext: [{ role: "assistant", text: "The requirement was to preserve the output." }],
+      },
+      new AbortController().signal,
+    );
+
+    expect(replies).toEqual([
+      candidateAt(candidates, 2),
+      candidateAt(candidates, 0),
+      candidateAt(candidates, 3),
+    ]);
+    expect(requestBodies).toHaveLength(1);
+    const request = requestBodies[0];
+    expect(request?.model).toBe("typesafe-ai/jev");
+    expect(request?.questions).toMatchObject({
+      candidate_0: { type: "score" },
+      candidate_1: { type: "score" },
+      candidate_2: { type: "score" },
+      candidate_3: { type: "score" },
+      candidate_4: { type: "score" },
+    });
+    expect(Object.keys(request?.questions as Record<string, unknown>)).toHaveLength(5);
+    const state = request?.state as {
+      conversation: { userText: string; assistantText: string; recentContext: unknown[] };
+      candidates: Array<{ id: string; label: string; message: string }>;
+    };
+    expect(state.conversation).toMatchObject({
+      userText: "Check the result",
+      assistantText: "The implementation is complete.",
+      recentContext: [{ role: "assistant", text: "The requirement was to preserve the output." }],
+    });
+    expect(state.candidates.map(({ message }) => message)).toEqual(
+      candidates.map(({ message }) => message),
+    );
+  });
+
+  test("shows two suitable candidates by default and fewer when only one is suitable", async () => {
+    const candidates = [1, 2, 3].map((index) => reply(index));
+    const cases = [
+      { scores: [2, 1.8, 1.7], expected: candidates.slice(0, 2) },
+      { scores: [0.8, 2, 0.7], expected: [candidateAt(candidates, 1)] },
+    ];
+
+    for (const { scores, expected } of cases) {
+      const generator = createQuickReplyGenerator({
+        fetch: async () => new Response(JSON.stringify(gatewayScoreResponse(scores))),
+      });
+      expect(
+        await generator(
+          generatorContext(candidates),
+          { userText: "What next?", assistantText: "The change is ready." },
+          new AbortController().signal,
+        ),
+      ).toEqual(expected);
+    }
+  });
+
+  test.each(["gateway error", "invalid score response", "missing gateway credentials"])(
+    "falls back to the first two safe candidates in generator order on %s",
+    async (failure) => {
+      const candidates = [1, 2, 3, 4].map((index) => reply(index));
+      let fetchCalls = 0;
+      const generator = createQuickReplyGenerator({
+        fetch: async () => {
+          fetchCalls += 1;
+          if (failure === "gateway error") return new Response("unavailable", { status: 503 });
+          if (failure === "invalid score response")
+            return new Response(JSON.stringify({ answers: {} }));
+          return new Response(JSON.stringify(gatewayScoreResponse([0, 0, 2, 2])));
+        },
+      });
+      const ctx = generatorContext(candidates, failure !== "missing gateway credentials");
+
+      expect(
+        await generator(
+          ctx,
+          { userText: "What next?", assistantText: "The change is ready." },
+          new AbortController().signal,
+        ),
+      ).toEqual(candidates.slice(0, 2));
+      if (failure === "missing gateway credentials") expect(fetchCalls).toBe(0);
+      else expect(fetchCalls).toBeGreaterThan(0);
+    },
+  );
+
+  test("falls back when the bounded Jev deadline expires", async () => {
+    const candidates = [1, 2, 3].map((index) => reply(index));
+    let fetchCalls = 0;
+    let abortedAttempts = 0;
+    const generator = createQuickReplyGenerator({
+      timeoutMs: 30,
+      fetch: async (_input, init) => {
+        fetchCalls += 1;
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (signal === undefined || signal === null) return;
+          if (signal.aborted) {
+            abortedAttempts += 1;
+            reject(new Error("aborted"));
+            return;
+          }
+          signal.addEventListener(
+            "abort",
+            () => {
+              abortedAttempts += 1;
+              reject(new Error("aborted"));
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+
+    expect(
+      await generator(
+        generatorContext(candidates),
+        { userText: "What next?", assistantText: "The change is ready." },
+        new AbortController().signal,
+      ),
+    ).toEqual(candidates.slice(0, 2));
+    expect(fetchCalls).toBeGreaterThan(0);
+    expect(fetchCalls).toBeLessThanOrEqual(2);
+    expect(abortedAttempts).toBeGreaterThan(0);
+  });
+
+  test("returns no candidates when ranking is cancelled", async () => {
+    const candidates = [1, 2, 3].map((index) => reply(index));
+    const fetchStarted = deferred<void>();
+    let aborted = false;
+    const generator = createQuickReplyGenerator({
+      fetch: async (_input, init) => {
+        fetchStarted.resolve();
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              reject(new Error("cancelled"));
+            },
+            { once: true },
+          );
+        });
+      },
+    });
+    const controller = new AbortController();
+    const pending = generator(
+      generatorContext(candidates),
+      { userText: "What next?", assistantText: "The change is ready." },
+      controller.signal,
+    );
+
+    await fetchStarted.promise;
+    controller.abort();
+
+    expect(await pending).toEqual([]);
+    expect(aborted).toBe(true);
   });
 
   test("supports text responses and rejects extra non-text blocks", async () => {

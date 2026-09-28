@@ -1,55 +1,99 @@
-import { type AssistantMessage, type Usage, uuidv7 } from "@earendil-works/pi-ai";
 import {
-  convertToLlm,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
   type SessionBeforeCompactEvent,
   SettingsManager,
-  serializeConversation,
 } from "@earendil-works/pi-coding-agent";
-import { type JevGatewayFetch, requestJevGateway } from "../../lib/jev-gateway";
+import {
+  type JevGatewayFailure,
+  type JevGatewayFetch,
+  requestJevGateway,
+} from "../../lib/jev-gateway";
+import {
+  type PhasedCandidate,
+  type PhasedPhase,
+  type PhasedSelectionResult,
+  type PhasedSourceSpan,
+  runPhasedSelection,
+} from "./phased";
 
 const SETTINGS_KEY = "compaction";
 const REQUEST_TIMEOUT_MS = 2_400;
 const MAX_JEV_DURATION_MS = 12_000;
-const DEFAULT_SUMMARY_MODEL = "openai-codex/gpt-6-luna-fast";
 const KEEP_THRESHOLD = 0.7;
-const MAX_STATE_MESSAGES = 96;
+const MAX_SOURCE_SPANS = 1_024;
+const MAX_SOURCE_SPAN_CHARS = 700;
+const SOURCE_OFFSET_BASIS =
+  "sanitized UTF-16 code units after redaction and whitespace normalization" as const;
+const MAX_SPANS_PER_REQUEST = 14;
+const MAX_PARALLEL_REQUESTS = 2;
+const MAX_REQUESTS = Math.ceil(MAX_SOURCE_SPANS / MAX_SPANS_PER_REQUEST);
 const MAX_STATE_CHARS = 24_000;
-const MAX_STATE_TEXT_CHARS = 320;
-const MAX_STATE_INPUT_CHARS = 240;
-const MAX_ELIGIBLE_CALLS = 256;
-const MAX_PARALLEL_BATCHES = 2;
-// Match jev-use's ~29 judgments per request: each tool call contributes two judgments.
-const CALLS_PER_BATCH = 14;
-const MAX_DETAILS_MESSAGES = 96;
-const MAX_DETAILS_TEXT_CHARS = 1_200;
-const MAX_DETAILS_RESULT_CHARS = 800;
+const MAX_PHASED_REQUEST_CHARS = 240_000;
+const MAX_PHASED_ITEMS_PER_REQUEST = 192;
+const MAX_USER_CONTEXT_MESSAGES = 3;
+const MAX_USER_CONTEXT_CHARS = 400;
+const MAX_CUSTOM_INSTRUCTIONS_CHARS = 600;
 const MAX_FILE_PATHS = 64;
-const MAX_CONTINUITY_REQUEST_CHARS = 600;
-const MAX_CONTINUITY_FILE_PATHS = 12;
-const MAX_CONTINUITY_PATH_CHARS = 180;
-const TRUNCATED_RESULT_HEAD_CHARS = 240;
-// Pi wraps every persisted compaction summary before sending it back to the model.
+const MINIMUM_SAVINGS_RATIO = 0.2;
+const MAX_RESERVE_FRACTION = 0.8;
 const COMPACTION_SUMMARY_PREFIX =
   "The conversation history before this point was compacted into the following summary:\n\n<summary>\n";
 const COMPACTION_SUMMARY_SUFFIX = "\n</summary>";
 const DETAILS_KEY = "fastJev";
-const DETAILS_VERSION = 2;
-const LEGACY_DETAILS_VERSION = 1;
+const DETAILS_VERSION = 3;
+const LEGACY_DETAILS_VERSIONS = new Set([1, 2]);
 
 export const FAST_JEV_STATUS_EVENT = "fast_jev_compaction_status";
 
-interface ToolCall {
-  readonly id: string;
-  readonly toolUseId: string;
-  readonly name: string;
-  readonly input: Record<string, unknown>;
-  readonly messageIndex: number;
-  readonly resultIndex: number;
-  readonly resultChars: number;
-  readonly isError: boolean;
+export type FastJevFailureReason =
+  | "cancelled"
+  | "caller-cancellation"
+  | "no-source-spans"
+  | "source-span-limit"
+  | "local-state-too-large"
+  | "malformed-jev"
+  | "invalid-json"
+  | "oversized-body"
+  | "missing-credentials"
+  | "auth-failure"
+  | "timeout"
+  | "request-failure"
+  | "body-failure"
+  | "http-status"
+  | "insufficient-savings"
+  | "protected-too-large"
+  | "final-size-limit"
+  | "unexpected";
+
+export interface FastJevFailureDiagnostics {
+  readonly provider: JevGatewayFailure["provider"];
+  readonly stage: JevGatewayFailure["stage"];
+  readonly reason: JevGatewayFailure["reason"];
+  readonly httpStatus?: number;
+}
+
+type FastJevFailureKind = "unavailable" | "refused" | "cancelled";
+
+interface FastJevFailure {
+  readonly kind: FastJevFailureKind;
+  readonly reason: FastJevFailureReason;
+  readonly diagnostic?: FastJevFailureDiagnostics;
+}
+
+export interface FastJevAttemptStatus {
+  readonly version: 3;
+  readonly outcome: "compacted" | "native-fallback" | "refused" | "cancelled";
+  readonly path: "jev" | "native" | "none";
+  readonly reason?: FastJevFailureReason;
+  readonly diagnostic?: FastJevFailureDiagnostics;
+  readonly jevMs: number;
+  readonly totalMs: number;
+  readonly beforeChars: number;
+  readonly afterChars: number;
+  readonly spans: number;
+  readonly requests: number;
 }
 
 interface ToolResult {
@@ -69,353 +113,73 @@ export interface FastJevMessage {
   readonly toolResults: readonly ToolResult[];
 }
 
-type Action = "keep" | "drop_result" | "drop_call";
-
-interface Decision {
-  readonly id: string;
-  readonly tool: string;
-  readonly keepCall: number;
-  readonly keepResult: number;
-  readonly action: Action;
-}
-
-interface InferenceState {
-  readonly context: string;
-  readonly goal: string;
-  readonly history: readonly Record<string, unknown>[];
-}
-
-export type FastJevFailureReason =
-  | "cancelled"
-  | "no-eligible-candidates"
-  | "jev-failed"
-  | "malformed-jev"
-  | "jev-timeout"
-  | "eligible-call-limit"
-  | "insufficient-savings"
-  | "summary-model-missing"
-  | "summary-runtime-unsupported"
-  | "summary-auth-provider-failed"
-  | "summary-malformed-output"
-  | "summary-empty-output"
-  | "summary-truncated-output"
-  | "final-size-limit"
-  | "unexpected";
-
-export type FastJevExceptionType =
-  | "AbortError"
-  | "TimeoutError"
-  | "ModelsError"
-  | "PiMessagesResponseError"
-  | "CodexApiError"
-  | "CodexProtocolError"
-  | "WebSocketCloseError"
-  | "AggregateError"
-  | "TypeError"
-  | "RangeError"
-  | "ReferenceError"
-  | "SyntaxError"
-  | "URIError"
-  | "EvalError"
-  | "Error"
-  | "other";
-
-export interface FastJevDiagnostics {
-  readonly exceptionType?: FastJevExceptionType;
-  readonly httpStatus?: number;
-  readonly providerCode?: string;
-}
-
-export interface FastJevAttemptStatus {
-  readonly version: 1;
-  readonly outcome: "pruned" | "checkpointed" | "fallback";
-  readonly path: "prune" | "checkpoint" | "native";
-  readonly reason?: FastJevFailureReason;
-  readonly checkpointReason?: FastJevFailureReason;
-  readonly diagnostics?: FastJevDiagnostics;
-  readonly jevMs: number;
-  readonly summaryMs: number;
-  readonly totalMs: number;
-  readonly beforeChars: number;
-  readonly afterChars: number;
-  readonly calls: number;
-}
-
-interface CompactionDetails {
-  readonly version: number;
-  readonly messages: readonly FastJevMessage[];
-  readonly reductionRatio: number;
-  readonly calls: number;
-  readonly droppedResults: number;
-  readonly droppedCalls: number;
-  readonly attempt: FastJevAttemptStatus;
-}
-
-interface PreviousState {
-  readonly messages?: FastJevMessage[];
-  readonly summary?: string;
-}
-
 export interface FastJevCompactionConfig {
   readonly enabled: boolean;
-  readonly summaryModel: string;
+  readonly phased?: boolean;
 }
 
 export function resolveFastJevCompactionConfig(globalSettings: unknown): FastJevCompactionConfig {
-  const disabled = { enabled: false, summaryModel: DEFAULT_SUMMARY_MODEL };
-  if (!isRecord(globalSettings) || !isRecord(globalSettings.jev)) return disabled;
+  if (!isRecord(globalSettings) || !isRecord(globalSettings.jev)) return { enabled: false };
   const raw = globalSettings.jev[SETTINGS_KEY];
-  if (!isRecord(raw) || typeof raw.enabled !== "boolean") return disabled;
-  return {
-    enabled: raw.enabled,
-    summaryModel:
-      typeof raw.summaryModel === "string" && raw.summaryModel.trim().length > 0
-        ? raw.summaryModel.trim()
-        : DEFAULT_SUMMARY_MODEL,
-  };
+  if (!isRecord(raw) || raw.enabled !== true) return { enabled: false };
+  return raw.phased === true ? { enabled: true, phased: true } : { enabled: true };
 }
 
-function readGlobalConfig(): FastJevCompactionConfig {
+interface FastJevCompactionSettings {
+  readonly config: FastJevCompactionConfig;
+  readonly loadFailed: boolean;
+}
+
+function readGlobalConfig(): FastJevCompactionSettings {
   try {
     const settings = SettingsManager.create(process.cwd(), getAgentDir(), {
       projectTrusted: false,
     });
-    return resolveFastJevCompactionConfig(settings.getGlobalSettings());
+    const config = resolveFastJevCompactionConfig(settings.getGlobalSettings());
+    return { config, loadFailed: settings.drainErrors().length > 0 };
   } catch {
-    return { enabled: false, summaryModel: DEFAULT_SUMMARY_MODEL };
+    return { config: { enabled: false }, loadFailed: true };
   }
 }
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-const KNOWN_EXCEPTION_TYPES = new Set<FastJevExceptionType>([
-  "AbortError",
-  "TimeoutError",
-  "ModelsError",
-  "PiMessagesResponseError",
-  "CodexApiError",
-  "CodexProtocolError",
-  "WebSocketCloseError",
-  "AggregateError",
-  "TypeError",
-  "RangeError",
-  "ReferenceError",
-  "SyntaxError",
-  "URIError",
-  "EvalError",
-  "Error",
-]);
-
-// Provider SDKs expose a small, recurring set of stable codes. Everything else
-// is intentionally collapsed so provider payloads cannot become diagnostics.
-const KNOWN_PROVIDER_CODES = new Set([
-  "invalid_request_error",
-  "authentication_error",
-  "permission_error",
-  "not_found_error",
-  "request_too_large",
-  "rate_limit_error",
-  "api_error",
-  "overloaded_error",
-  "rate_limit_exceeded",
-  "insufficient_quota",
-  "invalid_api_key",
-  "permission_denied",
-  "model_not_found",
-  "context_length_exceeded",
-  "server_error",
-  "service_unavailable",
-  "content_policy_violation",
-  "previous_response_not_found",
-  "websocket_connection_limit_reached",
-  "usage_limit_reached",
-  "usage_not_included",
-  "invalid_request",
-  "rate_limit",
-  "timeout",
-  "overloaded",
-  "internal_error",
-  "not_found",
-  "unauthorized",
-  "forbidden",
-  "bad_request",
-  "too_many_requests",
-  "internal_server_error",
-  "resource_exhausted",
-  "deadline_exceeded",
-  "INVALID_ARGUMENT",
-  "UNAUTHENTICATED",
-  "PERMISSION_DENIED",
-  "NOT_FOUND",
-  "RESOURCE_EXHAUSTED",
-  "FAILED_PRECONDITION",
-  "ABORTED",
-  "OUT_OF_RANGE",
-  "UNIMPLEMENTED",
-  "INTERNAL",
-  "UNAVAILABLE",
-  "DATA_LOSS",
-  "DEADLINE_EXCEEDED",
-]);
-const DIAGNOSTIC_CHILD_KEYS = [
-  "cause",
-  "response",
-  "payload",
-  "details",
-  "diagnosticDetails",
-  "$metadata",
-  "error",
-  "diagnostics",
-] as const;
-const MAX_DIAGNOSTIC_DEPTH = 3;
-const MAX_DIAGNOSTIC_NODES = 32;
-const MAX_DIAGNOSTIC_ARRAY_ITEMS = 16;
-type SafeDiagnosticValue = object | string | number | boolean | null | undefined;
-
-function ownData(value: unknown, key: string): SafeDiagnosticValue {
-  if ((typeof value !== "object" && typeof value !== "function") || value === null)
-    return undefined;
-  try {
-    const descriptor = Object.getOwnPropertyDescriptor(value, key);
-    return descriptor !== undefined && "value" in descriptor ? descriptor.value : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function diagnosticNodes(value: unknown): unknown[] {
-  const nodes: unknown[] = [];
-  const queue: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
-  const seen = new Set<object>();
-  while (queue.length > 0 && nodes.length < MAX_DIAGNOSTIC_NODES) {
-    const current = queue.shift();
-    if (current === undefined) break;
-    const { value: node, depth } = current;
-    if ((typeof node !== "object" && typeof node !== "function") || node === null) continue;
-    if (seen.has(node)) continue;
-    seen.add(node);
-    nodes.push(node);
-    if (depth >= MAX_DIAGNOSTIC_DEPTH) continue;
-    for (const key of DIAGNOSTIC_CHILD_KEYS) {
-      const child = ownData(node, key);
-      if (Array.isArray(child)) {
-        const length = ownData(child, "length");
-        const itemCount =
-          typeof length === "number" ? Math.min(length, MAX_DIAGNOSTIC_ARRAY_ITEMS) : 0;
-        for (let index = 0; index < itemCount; index += 1) {
-          const item = ownData(child, String(index));
-          if (item !== undefined) queue.push({ value: item, depth: depth + 1 });
-        }
-      } else if (child !== undefined) {
-        queue.push({ value: child, depth: depth + 1 });
-      }
-    }
-  }
-  return nodes;
-}
-
-function exceptionType(value: unknown): FastJevExceptionType | undefined {
-  const name = ownData(value, "name") ?? ownData(value, "exceptionType");
-  if (typeof name === "string") {
-    return KNOWN_EXCEPTION_TYPES.has(name as FastJevExceptionType)
-      ? (name as FastJevExceptionType)
-      : "other";
-  }
-  try {
-    if (value instanceof AggregateError) return "AggregateError";
-    if (value instanceof TypeError) return "TypeError";
-    if (value instanceof RangeError) return "RangeError";
-    if (value instanceof ReferenceError) return "ReferenceError";
-    if (value instanceof SyntaxError) return "SyntaxError";
-    if (value instanceof URIError) return "URIError";
-    if (value instanceof EvalError) return "EvalError";
-    if (value instanceof Error) return "Error";
-  } catch {
-    return undefined;
-  }
-  return undefined;
-}
-
-function diagnosticStatus(value: unknown): number | undefined {
-  for (const node of diagnosticNodes(value)) {
-    for (const key of ["status", "statusCode", "httpStatusCode"] as const) {
-      const candidate = ownData(node, key);
-      if (
-        typeof candidate === "number" &&
-        Number.isInteger(candidate) &&
-        candidate >= 100 &&
-        candidate <= 599
-      ) {
-        return candidate;
-      }
-    }
-  }
-  return undefined;
-}
-
-function diagnosticCode(value: unknown): string | undefined {
-  let sawUnknown = false;
-  for (const node of diagnosticNodes(value)) {
-    for (const key of ["code", "errorCode", "providerCode"] as const) {
-      const candidate = ownData(node, key);
-      if (typeof candidate !== "string" || candidate.length === 0) continue;
-      if (KNOWN_PROVIDER_CODES.has(candidate)) return candidate;
-      sawUnknown = true;
-    }
-    // Anthropic and Google put their stable provider code in error.type.
-    const providerType = ownData(node, "type");
-    if (typeof providerType === "string" && KNOWN_PROVIDER_CODES.has(providerType)) {
-      return providerType;
-    }
-  }
-  return sawUnknown ? "other" : undefined;
-}
-
-export function sanitizeFastJevDiagnostics(value: unknown): FastJevDiagnostics | undefined {
-  const nodes = diagnosticNodes(value);
-  const type = nodes.map(exceptionType).find((candidate) => candidate !== undefined);
-  const httpStatus = diagnosticStatus(value);
-  const providerCode = diagnosticCode(value);
-  if (type === undefined && httpStatus === undefined && providerCode === undefined)
-    return undefined;
-  return {
-    ...(type === undefined ? {} : { exceptionType: type }),
-    ...(httpStatus === undefined ? {} : { httpStatus }),
-    ...(providerCode === undefined ? {} : { providerCode }),
-  };
 }
 
 function contentText(content: unknown): string {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
-
   const parts: string[] = [];
   for (const part of content) {
-    if (typeof part === "string") {
-      parts.push(part);
-      continue;
+    if (typeof part === "string") parts.push(part);
+    else if (isRecord(part) && part.type === "text" && typeof part.text === "string") {
+      parts.push(part.text);
+    } else if (isRecord(part) && part.type === "image") {
+      parts.push("[image]");
     }
-    if (!isRecord(part)) continue;
-    if (part.type === "text" && typeof part.text === "string") parts.push(part.text);
-    else if (part.type === "image") parts.push("[image]");
   }
   return parts.join("\n");
 }
 
-function redact(value: string, limit: number): string {
+function redact(value: string, limit = Number.MAX_SAFE_INTEGER): string {
   const withoutControls = [...value]
-    .filter((character) => {
+    .map((character) => {
       const code = character.codePointAt(0) ?? 0;
-      return code >= 0x20 && code !== 0x7f;
+      return code < 0x20 || code === 0x7f ? " " : character;
     })
     .join("");
-
   return withoutControls
     .replace(/\b(?:bearer|basic)\s+[A-Za-z0-9._~+/=-]+/giu, "[redacted-credential]")
     .replace(
-      /(["']?)(api[_-]?key|token|secret|password)\1\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s,;]+)/giu,
-      "$1$2$1=[redacted]",
+      /(["']?)(api[_-]?key|token|secret|password)\1(\s*[:=]\s*)("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s,;}\]]+)/giu,
+      (_match, keyQuote: string, key: string, separator: string, rawValue: string) => {
+        const replacement = rawValue.startsWith('"')
+          ? '"[redacted]"'
+          : rawValue.startsWith("'")
+            ? "'[redacted]'"
+            : "[redacted]";
+        return `${keyQuote}${key}${keyQuote}${separator}${replacement}`;
+      },
     )
     .replace(/(?:~|\/Users\/|\/home\/|\/private\/|[A-Za-z]:\\)[^\s"'`,}]*/gu, "[redacted-path]")
     .replace(/\s+/gu, " ")
@@ -423,9 +187,47 @@ function redact(value: string, limit: number): string {
     .slice(0, limit);
 }
 
-function safeJson(value: unknown, limit: number): string {
+type SanitizedJsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | SanitizedJsonValue[]
+  | { [key: string]: SanitizedJsonValue };
+
+function sanitizeStructuredValue(
+  value: unknown,
+  ancestors = new WeakSet<object>(),
+): SanitizedJsonValue {
+  if (value === null) return null;
+  if (typeof value === "string") return redact(value);
+  if (typeof value === "boolean" || typeof value === "number") return value;
+  if (typeof value !== "object") return "[unserializable]";
+  if (ancestors.has(value)) return "[circular]";
+
+  ancestors.add(value);
+  let sanitized: SanitizedJsonValue;
+  if (Array.isArray(value)) {
+    sanitized = value.map((item) => sanitizeStructuredValue(item, ancestors));
+  } else if (isRecord(value)) {
+    sanitized = Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        /^(?:api[_-]?key|token|secret|password)$/iu.test(key)
+          ? "[redacted]"
+          : sanitizeStructuredValue(item, ancestors),
+      ]),
+    );
+  } else {
+    sanitized = "[unserializable]";
+  }
+  ancestors.delete(value);
+  return sanitized;
+}
+
+export function safeJson(value: unknown): string {
   try {
-    return redact(JSON.stringify(value) ?? "", limit);
+    return JSON.stringify(sanitizeStructuredValue(value)) ?? "[unserializable]";
   } catch {
     return "[unserializable]";
   }
@@ -444,40 +246,19 @@ function inputRecord(value: unknown): Record<string, unknown> {
   return {};
 }
 
-function readToolCall(
-  part: Record<string, unknown>,
-): FastJevMessage["toolCalls"][number] | undefined {
-  if (part.type !== "toolCall" || typeof part.id !== "string" || typeof part.name !== "string") {
-    return undefined;
-  }
-  return {
-    toolUseId: part.id,
-    name: part.name,
-    input: inputRecord(part.arguments),
-  };
-}
-
 function sourceMessageText(raw: Record<string, unknown>): string {
   if (raw.role === "bashExecution") {
     const command = typeof raw.command === "string" ? raw.command : "";
     const output = typeof raw.output === "string" ? raw.output : "";
-    const exitCode = typeof raw.exitCode === "number" ? `\n[bash exit code]\n${raw.exitCode}` : "";
+    const exitCode = typeof raw.exitCode === "number" ? `\n[bash exit code] ${raw.exitCode}` : "";
     const cancelled = raw.cancelled === true ? "\n[bash cancelled]" : "";
-    const truncated =
-      raw.truncated === true && typeof raw.fullOutputPath === "string"
-        ? `\n[bash full output]\n${raw.fullOutputPath}`
-        : "";
-    return `[bash command]\n${command}\n[bash output]\n${output}${exitCode}${cancelled}${truncated}`;
+    return `[bash command] ${command}\n[bash output] ${output}${exitCode}${cancelled}`;
   }
   if (raw.role === "branchSummary" || raw.role === "compactionSummary") {
-    const summary = typeof raw.summary === "string" ? raw.summary : "";
-    const fromId = typeof raw.fromId === "string" ? `\n[branch from]\n${raw.fromId}` : "";
-    const tokensBefore =
-      typeof raw.tokensBefore === "number" ? `\n[tokens before]\n${raw.tokensBefore}` : "";
-    return `[${raw.role}]\n${summary}${fromId}${tokensBefore}`;
+    return `[${raw.role}] ${typeof raw.summary === "string" ? raw.summary : ""}`;
   }
   if (raw.role === "custom" || raw.role === "custom_message") {
-    return `[${raw.role}]\n${contentText(raw.content)}`;
+    return `[${raw.role}] ${contentText(raw.content)}`;
   }
   return raw.role === "toolResult" ? "" : contentText(raw.content);
 }
@@ -487,28 +268,30 @@ export function toFastJevMessages(messages: readonly unknown[]): FastJevMessage[
   const result: FastJevMessage[] = [];
   for (const raw of messages) {
     if (!isRecord(raw) || raw.excludeFromContext === true) continue;
-    const role = raw.role === "assistant" ? "assistant" : "user";
     const calls: Array<FastJevMessage["toolCalls"][number]> = [];
     if (Array.isArray(raw.content)) {
       for (const part of raw.content) {
-        if (isRecord(part)) {
-          const call = readToolCall(part);
-          if (call !== undefined) calls.push(call);
-        }
+        if (!isRecord(part) || part.type !== "toolCall") continue;
+        if (typeof part.id !== "string" || typeof part.name !== "string") continue;
+        calls.push({
+          toolUseId: part.id,
+          name: part.name,
+          input: inputRecord(part.arguments),
+        });
       }
     }
-
-    const toolResults: ToolResult[] = [];
-    if (raw.role === "toolResult" && typeof raw.toolCallId === "string") {
-      toolResults.push({
-        toolUseId: raw.toolCallId,
-        text: contentText(raw.content),
-        isError: raw.isError === true,
-      });
-    }
-
+    const toolResults: ToolResult[] =
+      raw.role === "toolResult" && typeof raw.toolCallId === "string"
+        ? [
+            {
+              toolUseId: raw.toolCallId,
+              text: contentText(raw.content),
+              isError: raw.isError === true,
+            },
+          ]
+        : [];
     result.push({
-      role,
+      role: raw.role === "assistant" ? "assistant" : "user",
       text: sourceMessageText(raw),
       toolCalls: calls,
       toolResults,
@@ -539,31 +322,40 @@ function validStoredMessage(value: unknown): value is FastJevMessage {
   );
 }
 
+interface PreviousState {
+  readonly summary?: string;
+  readonly messages?: FastJevMessage[];
+}
+
 function previousState(
   branchEntries: readonly unknown[],
   previousSummary: string | undefined,
 ): PreviousState {
   const summary = previousSummary?.trim();
   if (summary) return { summary };
-
   for (let index = branchEntries.length - 1; index >= 0; index -= 1) {
     const entry = branchEntries[index];
     if (!isRecord(entry) || entry.type !== "compaction") continue;
     const entrySummary = typeof entry.summary === "string" ? entry.summary.trim() : undefined;
     const details = entry.details;
-    if (!isRecord(details)) return entrySummary ? { summary: entrySummary } : {};
-    const stored = details[DETAILS_KEY];
-    if (!isRecord(stored)) return entrySummary ? { summary: entrySummary } : {};
-    const version = stored.version;
-    if (
-      (version !== DETAILS_VERSION && version !== LEGACY_DETAILS_VERSION) ||
-      !Array.isArray(stored.messages)
-    )
+    if (!isRecord(details) || !isRecord(details[DETAILS_KEY])) {
       return entrySummary ? { summary: entrySummary } : {};
+    }
+    const stored = details[DETAILS_KEY];
+    if (stored.version === DETAILS_VERSION) {
+      return entrySummary ? { summary: entrySummary } : {};
+    }
+    if (
+      typeof stored.version !== "number" ||
+      !LEGACY_DETAILS_VERSIONS.has(stored.version) ||
+      !Array.isArray(stored.messages)
+    ) {
+      return entrySummary ? { summary: entrySummary } : {};
+    }
     const messages = stored.messages.filter(validStoredMessage).map(copyMessage);
     return {
       ...(entrySummary ? { summary: entrySummary } : {}),
-      ...(messages.length > 0 ? { messages } : {}),
+      messages,
     };
   }
   return {};
@@ -582,171 +374,312 @@ function copyMessage(message: FastJevMessage): FastJevMessage {
   };
 }
 
-function resultMap(
-  messages: readonly FastJevMessage[],
-): Map<string, { index: number; result: ToolResult }> {
-  const results = new Map<string, { index: number; result: ToolResult }>();
-  messages.forEach((message, index) => {
-    for (const result of message.toolResults) results.set(result.toolUseId, { index, result });
-  });
-  return results;
+const SAFE_TO_RECREATE = new Set(["read", "grep", "find", "ls", "glob", "search", "cat", "pwd"]);
+
+type SourceSpanKind =
+  | "prior-summary"
+  | "legacy-detail"
+  | "user"
+  | "assistant"
+  | "tool-call"
+  | "tool-result";
+
+export interface SourceSpan {
+  readonly id: string;
+  readonly kind: SourceSpanKind;
+  readonly source: string;
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+  readonly mandatory: boolean;
+  readonly toolCallId?: string;
+  readonly toolCallPart?: "call" | "result";
 }
 
-function collectCalls(messages: readonly FastJevMessage[]): ToolCall[] {
-  const results = resultMap(messages);
-  const calls: ToolCall[] = [];
+interface ParsedPriorSummary {
+  readonly spans: readonly Omit<SourceSpan, "id" | "mandatory">[];
+  readonly fileOperations: string;
+}
+
+function isSourceSpanKind(value: string): value is SourceSpanKind {
+  return (
+    value === "prior-summary" ||
+    value === "legacy-detail" ||
+    value === "user" ||
+    value === "assistant" ||
+    value === "tool-call" ||
+    value === "tool-result"
+  );
+}
+
+function parsePriorV3Summary(summary: string): ParsedPriorSummary | undefined {
+  const lines = summary.split("\n");
+  if (
+    lines[0] !== "<fast-jev-compaction>" ||
+    lines[1] !==
+      "Selection-only continuation record. Source text is copied, not summarized or inferred." ||
+    lines[2] !== "<selected-source-spans>"
+  ) {
+    return undefined;
+  }
+  const sectionStart = 2;
+  const sectionEnd = lines.indexOf("</selected-source-spans>", sectionStart + 1);
+  if (
+    sectionEnd <= sectionStart ||
+    sectionEnd !== lines.length - 5 ||
+    lines[sectionEnd + 1] !== "Pi file operations (source: CompactionPreparation.fileOps):" ||
+    lines[lines.length - 1] !== "</fast-jev-compaction>"
+  ) {
+    return undefined;
+  }
+  const fileOperationListPattern = /^(?:none|"(?:\\.|[^"\\])*"(?:, "(?:\\.|[^"\\])*")*)$/u;
+  const readLine = lines[sectionEnd + 2];
+  const modifiedLine = lines[sectionEnd + 3];
+  if (
+    readLine === undefined ||
+    !readLine.startsWith("read: ") ||
+    !fileOperationListPattern.test(readLine.slice("read: ".length)) ||
+    modifiedLine === undefined ||
+    !modifiedLine.startsWith("modified: ") ||
+    !fileOperationListPattern.test(modifiedLine.slice("modified: ".length))
+  ) {
+    return undefined;
+  }
+
+  const headerPattern =
+    /^\[source (s\d+); kind ([a-z-]+); origin ("(?:\\.|[^"\\])*"); range \(([^)]*)\) (\d+):(\d+)(?:; tool (call|result) ("(?:\\.|[^"\\])*"))?\]$/u;
+  const spans: Array<Omit<SourceSpan, "id" | "mandatory">> = [];
+  for (let index = sectionStart + 1; index < sectionEnd; index += 2) {
+    const header = lines[index];
+    const match = header === undefined ? null : headerPattern.exec(header);
+    if (match === null) return undefined;
+    const [, , rawKind, rawSource, rawOffsetBasis, rawStart, rawEnd, rawToolPart, rawToolId] =
+      match;
+    if (!rawKind || !isSourceSpanKind(rawKind) || rawOffsetBasis !== SOURCE_OFFSET_BASIS)
+      return undefined;
+    const start = Number(rawStart);
+    const end = Number(rawEnd);
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start)
+      return undefined;
+
+    let source: unknown;
+    let text: unknown;
+    let toolCallId: unknown;
+    try {
+      source = JSON.parse(rawSource ?? "");
+      text = JSON.parse(lines[index + 1] ?? "");
+      if (rawToolId !== undefined) toolCallId = JSON.parse(rawToolId);
+    } catch {
+      return undefined;
+    }
+    if (typeof source !== "string" || typeof text !== "string") return undefined;
+    const sanitizedSource = redact(source, 240);
+    const sanitizedText = redact(text);
+    const sanitizedToolCallId = typeof toolCallId === "string" ? redact(toolCallId) : undefined;
+    if (
+      sanitizedSource !== source ||
+      sanitizedText !== text ||
+      sanitizedText.length !== end - start ||
+      (rawToolPart !== undefined && rawToolPart !== "call" && rawToolPart !== "result") ||
+      (rawToolPart !== undefined && typeof toolCallId !== "string") ||
+      (rawToolPart === undefined && rawToolId !== undefined) ||
+      (typeof toolCallId === "string" && sanitizedToolCallId !== toolCallId)
+    ) {
+      return undefined;
+    }
+    spans.push({
+      kind: rawKind,
+      source: sanitizedSource,
+      start,
+      end,
+      text: sanitizedText,
+      ...(rawToolPart === undefined
+        ? {}
+        : { toolCallId: sanitizedToolCallId!, toolCallPart: rawToolPart }),
+    });
+  }
+  if (spans.length === 0) return undefined;
+  return {
+    spans,
+    fileOperations: lines.slice(sectionEnd + 1, -1).join("\n"),
+  };
+}
+
+interface SourceSpanCollection {
+  readonly spans: readonly SourceSpan[];
+  readonly overflow: boolean;
+}
+
+function sourceSpans(
+  preparedMessages: readonly unknown[],
+  previous: PreviousState,
+): SourceSpanCollection {
+  const spans: SourceSpan[] = [];
+  let overflow = false;
+  const addText = (
+    kind: SourceSpanKind,
+    source: string,
+    text: string,
+    mandatory: boolean,
+    toolCallId?: string,
+    toolCallPart?: "call" | "result",
+  ): void => {
+    const sanitizedText = redact(text);
+    if (!sanitizedText) return;
+    for (let start = 0; start < sanitizedText.length; start += MAX_SOURCE_SPAN_CHARS) {
+      if (spans.length >= MAX_SOURCE_SPANS) {
+        overflow = true;
+        return;
+      }
+      let end = Math.min(start + MAX_SOURCE_SPAN_CHARS, sanitizedText.length);
+      if (end < sanitizedText.length && end > start) {
+        const last = sanitizedText.charCodeAt(end - 1);
+        if (last >= 0xd800 && last <= 0xdbff) end -= 1;
+      }
+      spans.push({
+        id: `s${spans.length + 1}`,
+        kind,
+        source,
+        start,
+        end,
+        text: sanitizedText.slice(start, end),
+        mandatory,
+        ...(toolCallId === undefined ? {} : { toolCallId }),
+        ...(toolCallPart === undefined ? {} : { toolCallPart }),
+      });
+      if (overflow) return;
+      start = end - MAX_SOURCE_SPAN_CHARS;
+    }
+  };
+
+  if (previous.summary) {
+    const parsed = parsePriorV3Summary(previous.summary);
+    if (parsed === undefined) {
+      addText("prior-summary", "prior compaction summary", previous.summary, true);
+    } else {
+      for (const priorSpan of parsed.spans) {
+        if (spans.length >= MAX_SOURCE_SPANS) {
+          overflow = true;
+          break;
+        }
+        spans.push({
+          id: `s${spans.length + 1}`,
+          ...priorSpan,
+          source: redact(priorSpan.source, 240),
+          text: redact(priorSpan.text),
+          mandatory: true,
+        });
+      }
+      if (!overflow)
+        addText("prior-summary", "prior Pi file operations", parsed.fileOperations, true);
+    }
+  } else {
+    for (const [messageIndex, message] of (previous.messages ?? []).entries()) {
+      addMessageSpans(
+        addText,
+        message,
+        `legacy persisted detail message ${messageIndex + 1}`,
+        true,
+      );
+      if (overflow) return { spans, overflow };
+    }
+  }
+  if (overflow) return { spans, overflow };
+
+  const filtered = preparedMessages.filter((raw) => {
+    if (!previous.summary || !isRecord(raw) || raw.role !== "compactionSummary") return true;
+    return typeof raw.summary !== "string" || raw.summary.trim() !== previous.summary;
+  });
+  const messages = toFastJevMessages(filtered);
+  const failedCallIds = new Set(
+    messages.flatMap((message) =>
+      message.toolResults.filter((result) => result.isError).map((result) => result.toolUseId),
+    ),
+  );
+  const calls = new Map<
+    string,
+    { readonly name: string; readonly messageIndex: number; readonly mandatory: boolean }
+  >();
   messages.forEach((message, messageIndex) => {
     for (const call of message.toolCalls) {
-      const result = results.get(call.toolUseId);
-      if (result === undefined) continue;
-      calls.push({
-        id: `t${calls.length + 1}`,
-        toolUseId: call.toolUseId,
-        name: call.name,
-        input: { ...call.input },
-        messageIndex,
-        resultIndex: result.index,
-        resultChars: result.result.text.length,
-        isError: result.result.isError,
-      });
+      const mandatory =
+        !SAFE_TO_RECREATE.has(call.name.toLowerCase()) || failedCallIds.has(call.toolUseId);
+      calls.set(call.toolUseId, { name: call.name, messageIndex, mandatory });
     }
   });
-  return calls;
-}
 
-function stateHistory(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  focusedMessageIndexes?: ReadonlySet<number>,
-): Record<string, unknown>[] {
-  const callsByMessage = new Map<number, ToolCall[]>();
-  for (const call of calls) {
-    const list = callsByMessage.get(call.messageIndex) ?? [];
-    list.push(call);
-    callsByMessage.set(call.messageIndex, list);
-  }
-
-  const indexes =
-    focusedMessageIndexes === undefined
-      ? messages.map((_, index) => index).slice(0, MAX_STATE_MESSAGES)
-      : [...focusedMessageIndexes].sort((left, right) => left - right).slice(0, MAX_STATE_MESSAGES);
-  const history: Record<string, unknown>[] = [];
-  let chars = 0;
-  for (const index of indexes) {
-    const message = messages[index];
-    if (message === undefined) continue;
-    const callsForMessage = callsByMessage.get(index) ?? [];
-    const entry: Record<string, unknown> = {
-      role: message.role,
-      text: redact(message.text, MAX_STATE_TEXT_CHARS),
-    };
-    if (callsForMessage.length > 0) {
-      entry.tool_calls = callsForMessage.map((call) => ({
-        id: call.id,
-        tool: redact(call.name, 80),
-        input: redact(safeJson(call.input, MAX_STATE_INPUT_CHARS), MAX_STATE_INPUT_CHARS),
-        // Deliberately metadata only: Jev never receives a tool-result body.
-        result: { chars: call.resultChars, error: call.isError },
-      }));
+  messages.forEach((message, messageIndex) => {
+    if (message.text.trim().length > 0) {
+      const kind = message.role === "user" ? "user" : "assistant";
+      const mandatory = message.role === "user";
+      addText(
+        kind,
+        `prepared message ${messageIndex + 1} (${message.role})`,
+        message.text,
+        mandatory,
+      );
     }
-    if (
-      focusedMessageIndexes === undefined &&
-      message.toolResults.length > 0 &&
-      callsForMessage.length === 0
-    ) {
-      entry.tool_results = message.toolResults.map((result) => ({
-        id: result.toolUseId,
-        chars: result.text.length,
-        error: result.isError,
-      }));
+    for (const call of message.toolCalls) {
+      const metadata = calls.get(call.toolUseId);
+      const mandatory = metadata?.mandatory ?? true;
+      const input = safeJson(call.input);
+      addText(
+        "tool-call",
+        `tool call ${call.name} ${call.toolUseId} from prepared message ${messageIndex + 1}`,
+        input,
+        mandatory,
+        call.toolUseId,
+        "call",
+      );
     }
-
-    const nextChars = chars + safeJson(entry, MAX_STATE_CHARS).length;
-    if (nextChars > MAX_STATE_CHARS && history.length > 0) break;
-    history.push(entry);
-    chars = nextChars;
-  }
-  return history;
-}
-
-function createInferenceState(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  customInstructions: string | undefined,
-  focusedMessageIndexes?: ReadonlySet<number>,
-): InferenceState {
-  const users = messages
-    .filter((message) => message.role === "user" && message.text.trim().length > 0)
-    .slice(-3)
-    .map((message) => redact(message.text, 500));
-  const goal = [
-    ...users,
-    ...(customInstructions?.trim() ? [redact(customInstructions, 500)] : []),
-  ].join("\n");
-  return {
-    context:
-      focusedMessageIndexes === undefined
-        ? "A coding-assistant transcript is being compacted. Decide whether each tool call and its full result still need to remain. Tool-result bodies are intentionally omitted from this state."
-        : "A focused coding-assistant transcript is being compacted. The history contains this batch's calls and their nearest preceding user messages. Tool-result bodies are intentionally omitted from this state.",
-    goal,
-    history: stateHistory(messages, calls, focusedMessageIndexes),
-  };
-}
-
-export function buildInferenceState(
-  messages: readonly FastJevMessage[],
-  customInstructions?: string,
-): InferenceState {
-  return createInferenceState(messages, collectCalls(messages), customInstructions);
-}
-
-function buildBatchInferenceState(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  customInstructions: string | undefined,
-): InferenceState {
-  const focusedMessageIndexes = new Set<number>();
-  for (const call of calls) {
-    focusedMessageIndexes.add(call.messageIndex);
-    for (let index = call.messageIndex - 1; index >= 0; index -= 1) {
-      const message = messages[index];
-      if (message?.role === "user" && message.text.trim().length > 0) {
-        focusedMessageIndexes.add(index);
-        break;
-      }
+    for (const result of message.toolResults) {
+      const call = calls.get(result.toolUseId);
+      const mandatory = result.isError || call === undefined || call.mandatory;
+      const source =
+        call === undefined
+          ? `unmatched tool result ${result.toolUseId} from prepared message ${messageIndex + 1}`
+          : `tool result ${result.toolUseId} for ${call.name}; call from prepared message ${call.messageIndex + 1}; result from prepared message ${messageIndex + 1}${result.isError ? "; error" : ""}`;
+      addText("tool-result", source, result.text, mandatory, result.toolUseId, "result");
     }
-  }
-  return createInferenceState(messages, calls, customInstructions, focusedMessageIndexes);
+    if (overflow) return;
+  });
+  return { spans, overflow };
 }
 
-function questionFor(call: ToolCall, kind: "call" | "result"): Record<string, unknown> {
-  const id = `${kind}_${call.id}`;
-  if (kind === "call") {
-    return {
-      [id]: {
-        type: "noul",
-        instructions: `The ${call.name} tool call and its exact input still matter for continuing the task; keeping the call is safer than re-running it or losing its path, command, or identifier.`,
-        criteria: {
-          true: "The call records important task-specific facts or an action that must remain visible.",
-          false: "The call is routine, stale, or safely reproducible.",
-        },
-      },
-    };
+function addMessageSpans(
+  addText: (
+    kind: SourceSpanKind,
+    source: string,
+    text: string,
+    mandatory: boolean,
+    toolCallId?: string,
+    toolCallPart?: "call" | "result",
+  ) => void,
+  message: FastJevMessage,
+  source: string,
+  mandatory: boolean,
+): void {
+  if (message.text.trim().length > 0) addText("legacy-detail", source, message.text, mandatory);
+  for (const call of message.toolCalls) {
+    addText(
+      "legacy-detail",
+      `${source}; tool call ${call.name}`,
+      safeJson(call.input),
+      mandatory,
+      call.toolUseId,
+      "call",
+    );
   }
-  return {
-    [id]: {
-      type: "noul",
-      instructions: `The full ${call.name} tool result still matters verbatim for continuing the task; keep it only when its contents cannot be cheaply recreated.`,
-      criteria: {
-        true: "The result contains unique facts or evidence that later work needs.",
-        false: "The result is stale, routine, or safely reproducible by re-running the tool.",
-      },
-    },
-  };
-}
-
-function isUnit(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
+  for (const result of message.toolResults) {
+    addText(
+      "legacy-detail",
+      `${source}; tool result ${result.toolUseId}`,
+      result.text,
+      mandatory,
+      result.toolUseId,
+      "result",
+    );
+  }
 }
 
 export function parseNoulAnswers(
@@ -758,363 +691,171 @@ export function parseNoulAnswers(
   const expected = new Set(names);
   const keys = Object.keys(answers);
   if (keys.length !== expected.size || keys.some((key) => !expected.has(key))) return undefined;
-
   const parsed: Record<string, number> = {};
   for (const name of names) {
     const answer = answers[name];
-    if (!isRecord(answer) || answer.type !== "noul" || !isUnit(answer.noul)) return undefined;
+    if (
+      !isRecord(answer) ||
+      answer.type !== "noul" ||
+      typeof answer.noul !== "number" ||
+      !Number.isFinite(answer.noul) ||
+      answer.noul < 0 ||
+      answer.noul > 1
+    ) {
+      return undefined;
+    }
     parsed[name] = answer.noul;
   }
   return parsed;
 }
 
-function actionFor(keepCall: number, keepResult: number): Action {
-  // Equality keeps content so threshold-bound decisions fail toward retention.
-  if (keepResult >= KEEP_THRESHOLD) return "keep";
-  if (keepCall >= KEEP_THRESHOLD) return "drop_result";
-  return "drop_call";
-}
-
-function truncateResult(text: string, isError: boolean): string {
-  if (text.length <= TRUNCATED_RESULT_HEAD_CHARS + 100) return text;
-  const suffix = `[fast-jev-compaction truncated ${text.length - TRUNCATED_RESULT_HEAD_CHARS} chars${isError ? " (error)" : ""}; re-run the tool if needed]`;
-  return `${text.slice(0, TRUNCATED_RESULT_HEAD_CHARS)}\n${suffix}`;
-}
-
-function applyDecisions(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  decisions: readonly Decision[],
-): FastJevMessage[] {
-  const actions = new Map<string, Action>();
-  const byId = new Map(calls.map((call) => [call.id, call]));
-  for (const decision of decisions) {
-    const call = byId.get(decision.id);
-    if (call !== undefined && decision.action !== "keep")
-      actions.set(call.toolUseId, decision.action);
+export function inferenceState(
+  spans: readonly SourceSpan[],
+  candidates: readonly SourceSpan[],
+  customInstructions: string | undefined,
+): Record<string, unknown> {
+  const userMessages = new Map<string, string[]>();
+  for (const span of spans) {
+    if (span.kind !== "user") continue;
+    const chunks = userMessages.get(span.source) ?? [];
+    chunks.push(span.text);
+    userMessages.set(span.source, chunks);
   }
-
-  return messages.flatMap((message) => {
-    const nextCalls = message.toolCalls
-      .filter((call) => actions.get(call.toolUseId) !== "drop_call")
-      .map((call) => ({ ...call, input: { ...call.input } }));
-    const nextResults = message.toolResults
-      .filter((result) => actions.get(result.toolUseId) !== "drop_call")
-      .map((result) => {
-        if (actions.get(result.toolUseId) !== "drop_result") return { ...result };
-        return { ...result, text: truncateResult(result.text, result.isError) };
-      });
-    if (message.text.trim().length === 0 && nextCalls.length === 0 && nextResults.length === 0) {
-      return [];
-    }
-    return [
-      {
-        role: message.role,
-        text: message.text,
-        toolCalls: nextCalls,
-        toolResults: nextResults,
-      },
-    ];
-  });
-}
-
-function renderDroppedMaterial(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  decisions: readonly Decision[],
-): string {
-  const actions = new Map(decisions.map((decision) => [decision.id, decision.action]));
-  const sections: string[] = [];
-  for (const call of calls) {
-    const action = actions.get(call.id);
-    if (action === undefined || action === "keep") continue;
-    if (action !== "drop_call") continue;
-    sections.push(`[removed tool call ${call.name}] ${transcriptJson(call.input)}`);
-    const result = messages[call.resultIndex]?.toolResults.find(
-      (candidate) => candidate.toolUseId === call.toolUseId,
-    );
-    if (result !== undefined) {
-      sections.push(
-        `[removed tool result ${call.toolUseId}${result.isError ? " · error" : ""}]\n${truncateResult(result.text, result.isError)}`,
-      );
-    }
-  }
-  return sections.join("\n\n");
-}
-
-function messageChars(message: FastJevMessage): number {
-  let chars = message.text.length;
-  for (const call of message.toolCalls)
-    chars += safeJson(call.input, Number.MAX_SAFE_INTEGER).length;
-  for (const result of message.toolResults) chars += result.text.length;
-  return chars;
-}
-
-function transcriptJson(value: unknown): string {
-  try {
-    return JSON.stringify(value) ?? "[unserializable]";
-  } catch {
-    return "[unserializable]";
-  }
-}
-
-function renderTranscript(messages: readonly FastJevMessage[], droppedSummary: string): string {
-  const lines = [
-    "<fast-jev-compaction>",
-    "Removed tool material is represented by explicit excerpts; retained transcript content follows.",
-  ];
-  if (droppedSummary.length > 0) {
-    lines.push(`\n<removed-material-summary>\n${droppedSummary}\n</removed-material-summary>`);
-  }
-  let index = 0;
-  for (const message of messages) {
-    index += 1;
-    if (message.text.length > 0) lines.push(`\n--- ${message.role} ${index} ---\n${message.text}`);
-    for (const call of message.toolCalls) {
-      lines.push(`\n[tool call ${call.name}] ${transcriptJson(call.input)}`);
-    }
-    for (const result of message.toolResults) {
-      lines.push(
-        `\n[tool result ${result.toolUseId}${result.isError ? " · error" : ""}]\n${result.text}`,
-      );
-    }
-  }
-  lines.push("\n</fast-jev-compaction>");
-  return lines.join("");
-}
-
-interface RenderedPruning {
-  readonly decisions: Decision[];
-  readonly messages: FastJevMessage[];
-  readonly summary: string;
-  readonly afterChars: number;
-  readonly reductionRatio: number;
-}
-
-function renderPrunedOutput(
-  messages: readonly FastJevMessage[],
-  calls: readonly ToolCall[],
-  decisions: ReadonlyMap<string, Decision>,
-  beforeChars: number,
-  continuityHeader: string,
-): RenderedPruning {
-  const allDecisions = calls.map(
-    (call) =>
-      decisions.get(call.id) ?? {
-        id: call.id,
-        tool: call.name,
-        keepCall: 1,
-        keepResult: 1,
-        action: "keep" as const,
-      },
-  );
-  const compacted = applyDecisions(messages, calls, allDecisions);
-  const droppedMaterial = renderDroppedMaterial(messages, calls, allDecisions);
-  const summary = `${continuityHeader}\n\n${renderTranscript(compacted, droppedMaterial)}`;
-  const afterChars = compactionSummaryChars(summary);
+  const userContext = [...userMessages.entries()]
+    .slice(-MAX_USER_CONTEXT_MESSAGES)
+    .map(([source, chunks]) => ({
+      source: redact(source, 160),
+      text: redact(chunks.join(""), MAX_USER_CONTEXT_CHARS),
+    }));
   return {
-    decisions: allDecisions,
-    messages: compacted,
-    summary,
-    afterChars,
-    reductionRatio: beforeChars === 0 ? 0 : (beforeChars - afterChars) / beforeChars,
+    task: "Select source spans that contain useful continuation facts; the renderer copies selected text verbatim and creates no summary prose.",
+    user_constraints: userContext,
+    focus_instructions: customInstructions?.trim()
+      ? redact(customInstructions, MAX_CUSTOM_INSTRUCTIONS_CHARS)
+      : "",
+    source_range_offset_basis: SOURCE_OFFSET_BASIS,
+    candidates: candidates.map((span) => ({
+      id: span.id,
+      kind: span.kind,
+      source: redact(span.source, 240),
+      source_range: [span.start, span.end],
+      ...(span.toolCallId === undefined
+        ? {}
+        : {
+            tool_call_id: redact(span.toolCallId),
+            tool_call_part: span.toolCallPart,
+          }),
+      text: span.text,
+    })),
   };
 }
 
-function detailsMessages(messages: readonly FastJevMessage[]): FastJevMessage[] {
-  return messages.slice(0, MAX_DETAILS_MESSAGES).map((message) => ({
-    role: message.role,
-    text: message.text.slice(0, MAX_DETAILS_TEXT_CHARS),
-    toolCalls: message.toolCalls.map((call) => ({
-      toolUseId: call.toolUseId,
-      name: call.name.slice(0, 80),
-      input: { redacted: safeJson(call.input, MAX_STATE_INPUT_CHARS) },
-    })),
-    toolResults: message.toolResults.map((result) => ({
-      toolUseId: result.toolUseId,
-      text: result.text.slice(0, MAX_DETAILS_RESULT_CHARS),
-      isError: result.isError,
-    })),
-  }));
+function questionFor(span: SourceSpan): Record<string, unknown> {
+  const id = `retain_${span.id}`;
+  return {
+    [id]: {
+      type: "noul",
+      instructions: `Should source span ${span.id} remain in the continuation record because it contains task constraints, evidence, decisions, action outcomes, or context that cannot be safely omitted?`,
+      criteria: {
+        true: "Keep this source span because it contributes a non-redundant fact useful for continuing the task.",
+        false:
+          "Omit this source span because it is routine, stale, redundant, or safely reproducible.",
+      },
+    },
+  };
+}
+
+function quote(text: string): string {
+  return JSON.stringify(text);
 }
 
 function fileList(value: unknown): string[] {
   const values: unknown[] = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
-  return values
-    .filter((path): path is string => typeof path === "string")
+  return [...new Set(values.filter((path): path is string => typeof path === "string"))]
     .map((path) => redact(path, 400))
     .filter(Boolean)
+    .sort()
     .slice(0, MAX_FILE_PATHS);
 }
 
-function fileDetails(preparation: SessionBeforeCompactEvent["preparation"]): {
-  readFiles: string[];
-  modifiedFiles: string[];
-} {
+function renderFileOperations(preparation: SessionBeforeCompactEvent["preparation"]): string {
   const fileOps = preparation.fileOps as unknown;
-  if (!isRecord(fileOps)) return { readFiles: [], modifiedFiles: [] };
-  const read = new Set(fileList(fileOps.read));
+  if (!isRecord(fileOps)) return "Pi file operations: unavailable.";
   const modified = new Set([...fileList(fileOps.written), ...fileList(fileOps.edited)]);
-  for (const path of modified) read.delete(path);
-  return { readFiles: [...read].sort(), modifiedFiles: [...modified].sort() };
-}
-
-interface ContinuityFileList {
-  readonly paths: readonly string[];
-  readonly omitted: number;
-}
-
-function rawFilePaths(value: unknown): string[] {
-  const values: unknown[] = Array.isArray(value) ? value : value instanceof Set ? [...value] : [];
-  return [...new Set(values.filter((path): path is string => typeof path === "string"))];
-}
-
-function boundedRedactedText(
-  value: string,
-  limit: number,
-): {
-  readonly text: string;
-  readonly truncated: boolean;
-} {
-  const redacted = redact(value, limit + 1);
-  return {
-    text: redacted.slice(0, limit),
-    truncated: redacted.length > limit,
-  };
-}
-
-function continuityFileList(paths: readonly string[]): ContinuityFileList {
-  const sorted = [...paths].sort();
-  return {
-    paths: sorted.slice(0, MAX_CONTINUITY_FILE_PATHS).map((path) => {
-      const bounded = boundedRedactedText(path, MAX_CONTINUITY_PATH_CHARS);
-      return bounded.truncated ? `${bounded.text}…` : bounded.text;
-    }),
-    omitted: Math.max(0, sorted.length - MAX_CONTINUITY_FILE_PATHS),
-  };
-}
-
-function continuityFileDetails(
-  preparation: SessionBeforeCompactEvent["preparation"],
-): { readonly read: ContinuityFileList; readonly modified: ContinuityFileList } | undefined {
-  const fileOps = preparation.fileOps as unknown;
-  if (!isRecord(fileOps)) return undefined;
-  const read = new Set(rawFilePaths(fileOps.read));
-  const modified = new Set([...rawFilePaths(fileOps.written), ...rawFilePaths(fileOps.edited)]);
-  for (const path of modified) read.delete(path);
-  return {
-    read: continuityFileList([...read]),
-    modified: continuityFileList([...modified]),
-  };
-}
-
-function latestUserRequest(messages: readonly unknown[]): string | undefined {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (!isRecord(message) || message.role !== "user" || message.excludeFromContext === true)
-      continue;
-    const text = contentText(message.content).trim();
-    if (text.length > 0) return text;
-  }
-  return undefined;
-}
-
-function renderContinuityHeader(
-  preparation: SessionBeforeCompactEvent["preparation"],
-  preparedMessages: readonly unknown[],
-): string {
-  const request = latestUserRequest(preparedMessages);
-  const requestExcerpt =
-    request === undefined
-      ? "unavailable (no user text found in the compacted span)"
-      : (() => {
-          const bounded = boundedRedactedText(request, MAX_CONTINUITY_REQUEST_CHARS);
-          return `${bounded.text}${bounded.truncated ? " [excerpt truncated]" : ""}`;
-        })();
-  const files = continuityFileDetails(preparation);
-  const renderFiles = (label: string, list: ContinuityFileList | undefined) => {
-    if (list === undefined) return `Pi fileOps ${label} paths: unavailable.`;
-    const entries = list.paths.length === 0 ? "none recorded" : list.paths.join(", ");
-    return `Pi fileOps ${label} paths (limit ${MAX_CONTINUITY_FILE_PATHS}; ${list.omitted} omitted; each path capped at ${MAX_CONTINUITY_PATH_CHARS} chars): ${entries}`;
-  };
-
+  const read = fileList(fileOps.read).filter((path) => !modified.has(path));
   return [
-    "<fast-jev-continuity>",
-    "Deterministic continuity notes. These bounded excerpts are not exhaustive and do not infer progress, decisions, or next steps.",
-    `Latest user request in compacted span (may be superseded by Pi's kept tail; excerpt limit ${MAX_CONTINUITY_REQUEST_CHARS} chars): ${requestExcerpt}`,
-    renderFiles("read", files?.read),
-    renderFiles("modified", files?.modified),
-    "</fast-jev-continuity>",
+    "Pi file operations (source: CompactionPreparation.fileOps):",
+    `read: ${read.length > 0 ? read.map(quote).join(", ") : "none"}`,
+    `modified: ${modified.size > 0 ? [...modified].sort().map(quote).join(", ") : "none"}`,
   ].join("\n");
 }
 
-type SummaryOutput = {
-  readonly text: string;
-  readonly usage?: Usage;
-};
-
-type SummaryFailure = {
-  readonly failureReason: Extract<
-    FastJevFailureReason,
-    | "cancelled"
-    | "summary-model-missing"
-    | "summary-runtime-unsupported"
-    | "summary-auth-provider-failed"
-    | "summary-malformed-output"
-    | "summary-empty-output"
-    | "summary-truncated-output"
-  >;
-  readonly diagnostics?: FastJevDiagnostics;
-};
-
-type SummaryAttempt = SummaryOutput | SummaryFailure;
-
-function isSummaryFailure(value: SummaryAttempt | undefined): value is SummaryFailure {
-  return value !== undefined && "failureReason" in value;
+function selectWithCallDependencies(
+  spans: readonly SourceSpan[],
+  decisions: ReadonlyMap<string, boolean>,
+): SourceSpan[] {
+  const selectedIds = new Set(
+    spans
+      .filter((span) => span.mandatory || decisions.get(span.id) === true)
+      .map((span) => span.id),
+  );
+  const callSpanIds = new Map<string, string[]>();
+  for (const span of spans) {
+    if (span.toolCallPart !== "call" || span.toolCallId === undefined) continue;
+    const ids = callSpanIds.get(span.toolCallId) ?? [];
+    ids.push(span.id);
+    callSpanIds.set(span.toolCallId, ids);
+  }
+  for (const span of spans) {
+    if (
+      !selectedIds.has(span.id) ||
+      span.toolCallPart !== "result" ||
+      span.toolCallId === undefined
+    ) {
+      continue;
+    }
+    for (const callSpanId of callSpanIds.get(span.toolCallId) ?? []) selectedIds.add(callSpanId);
+  }
+  return spans.filter((span) => selectedIds.has(span.id));
 }
 
-export interface FastJevRunOptions {
-  readonly modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
-  readonly summarizeCheckpoint: (
-    messages: SessionBeforeCompactEvent["preparation"]["messagesToSummarize"],
-    previousSummary: string | undefined,
-    customInstructions: string | undefined,
-    signal?: AbortSignal,
-  ) => Promise<SummaryAttempt | undefined>;
-  readonly signal?: AbortSignal;
-  readonly fetch?: JevGatewayFetch;
-  readonly onStatus?: (status: FastJevAttemptStatus) => void;
+function renderSelection(
+  selected: readonly PhasedSourceSpan[],
+  preparation: SessionBeforeCompactEvent["preparation"],
+): string {
+  const lines = [
+    "<fast-jev-compaction>",
+    "Selection-only continuation record. Source text is copied, not summarized or inferred.",
+    "<selected-source-spans>",
+  ];
+  for (const span of selected) {
+    lines.push(
+      `[source ${span.id}; kind ${span.kind}; origin ${quote(redact(span.source, 240))}; range (${SOURCE_OFFSET_BASIS}) ${span.start}:${span.end}${span.toolCallId === undefined ? "" : `; tool ${span.toolCallPart} ${quote(redact(span.toolCallId))}`}]`,
+      quote(span.text),
+    );
+  }
+  lines.push(
+    "</selected-source-spans>",
+    renderFileOperations(preparation),
+    "</fast-jev-compaction>",
+  );
+  return lines.join("\n");
 }
 
-type FastJevResult = {
-  readonly summary: string;
-  readonly firstKeptEntryId: string;
-  readonly tokensBefore: number;
-  readonly usage?: SummaryOutput["usage"];
-  readonly details: {
-    readonly readFiles: string[];
-    readonly modifiedFiles: string[];
-    readonly [DETAILS_KEY]: CompactionDetails;
-  };
-};
-
-const SAFE_TO_RECREATE = new Set(["read", "grep", "find", "ls", "glob", "search", "cat", "pwd"]);
-
-function isProtectedCall(call: ToolCall): boolean {
-  // Unknown tools, failed results, and actions outside this read-only set remain intact.
-  return call.isError || !SAFE_TO_RECREATE.has(call.name.toLowerCase());
+function messageChars(message: FastJevMessage): number {
+  return (
+    message.text.length +
+    message.toolCalls.reduce((sum, call) => sum + safeJson(call.input).length, 0) +
+    message.toolResults.reduce((sum, result) => sum + result.text.length, 0)
+  );
 }
 
-function monotonicMs(start: number): number {
-  return Math.max(0, Math.round(performance.now() - start));
+function wrappedSummaryChars(text: string): number {
+  return `${COMPACTION_SUMMARY_PREFIX}${text}${COMPACTION_SUMMARY_SUFFIX}`.length;
 }
 
 function renderedTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
-function compactionSummaryChars(text: string): number {
-  return `${COMPACTION_SUMMARY_PREFIX}${text}${COMPACTION_SUMMARY_SUFFIX}`.length;
+  return Math.ceil(wrappedSummaryChars(text) / 4);
 }
 
 function renderFitsBudget(
@@ -1122,251 +863,356 @@ function renderFitsBudget(
   preparation: SessionBeforeCompactEvent["preparation"],
 ): boolean {
   const reserveTokens = preparation.settings.reserveTokens;
-  const wrappedText = `${COMPACTION_SUMMARY_PREFIX}${text}${COMPACTION_SUMMARY_SUFFIX}`;
   return (
     Number.isSafeInteger(reserveTokens) &&
     reserveTokens > 0 &&
-    renderedTokens(wrappedText) <= reserveTokens
+    renderedTokens(text) <= Math.floor(reserveTokens * MAX_RESERVE_FRACTION)
   );
 }
 
-function status(
+function makeStatus(
   outcome: FastJevAttemptStatus["outcome"],
   path: FastJevAttemptStatus["path"],
   reason: FastJevFailureReason | undefined,
   jevMs: number,
-  summaryMs: number,
   totalMs: number,
   beforeChars: number,
   afterChars: number,
-  calls: number,
-  diagnostics?: FastJevDiagnostics,
-  checkpointReason?: FastJevFailureReason,
+  spans: number,
+  requests: number,
+  diagnostic?: FastJevFailureDiagnostics,
 ): FastJevAttemptStatus {
   return {
-    version: 1,
+    version: 3,
     outcome,
     path,
     ...(reason === undefined ? {} : { reason }),
-    ...(checkpointReason === undefined ? {} : { checkpointReason }),
-    ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(diagnostic === undefined ? {} : { diagnostic }),
     jevMs,
-    summaryMs,
     totalMs,
     beforeChars,
     afterChars,
-    calls,
+    spans,
+    requests,
   };
 }
 
-function safeFailureReason(reason: FastJevFailureReason): FastJevFailureReason {
-  return reason;
+function gatewayFailureDisposition(failure: JevGatewayFailure): FastJevFailure {
+  const diagnostic: FastJevFailureDiagnostics = {
+    provider: failure.provider,
+    stage: failure.stage,
+    reason: failure.reason,
+    ...(failure.httpStatus === undefined ? {} : { httpStatus: failure.httpStatus }),
+  };
+  switch (failure.reason) {
+    case "missing-credentials":
+    case "auth-failure":
+    case "timeout":
+    case "request-failure":
+    case "body-failure":
+      return { kind: "unavailable", reason: failure.reason, diagnostic };
+    case "caller-cancellation":
+      return { kind: "cancelled", reason: failure.reason, diagnostic };
+    case "http-status": {
+      const status = failure.httpStatus;
+      // 404 can mean this provider does not offer its configured Jev model; Pi's native model is separate.
+      const unavailable =
+        status === 401 ||
+        status === 403 ||
+        status === 404 ||
+        status === 408 ||
+        status === 429 ||
+        (status !== undefined && status >= 500);
+      return {
+        kind: unavailable ? "unavailable" : "refused",
+        reason: "http-status",
+        diagnostic,
+      };
+    }
+    case "invalid-json":
+      return { kind: "refused", reason: "invalid-json", diagnostic };
+    case "oversized-body":
+      return { kind: "refused", reason: "oversized-body", diagnostic };
+  }
 }
 
-async function checkpointPrepared(
+function monotonicMs(start: number): number {
+  return Math.max(0, Math.round(performance.now() - start));
+}
+
+export interface FastJevRunOptions {
+  readonly modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
+  readonly signal?: AbortSignal;
+  readonly fetch?: JevGatewayFetch;
+  readonly onStatus?: (status: FastJevAttemptStatus) => void;
+  readonly phased?: boolean;
+}
+
+interface PhasedRequest {
+  readonly state: Record<string, unknown>;
+  readonly questions: Record<string, unknown>;
+  readonly answerNames: readonly string[];
+}
+
+function phasedEvidence(spans: readonly PhasedSourceSpan[]): Record<string, unknown>[] {
+  const evidence: Array<{
+    kind: string;
+    source: string;
+    start: number;
+    end: number;
+    text: string;
+    toolCallId?: string;
+    toolCallPart?: "call" | "result";
+  }> = [];
+  for (const span of spans) {
+    const previous = evidence[evidence.length - 1];
+    if (
+      previous !== undefined &&
+      previous.kind === span.kind &&
+      previous.source === span.source &&
+      previous.end === span.start &&
+      previous.toolCallId === span.toolCallId &&
+      previous.toolCallPart === span.toolCallPart
+    ) {
+      previous.end = span.end;
+      previous.text += span.text;
+      continue;
+    }
+    evidence.push({
+      kind: span.kind,
+      source: span.source,
+      start: span.start,
+      end: span.end,
+      text: span.text,
+      ...(span.toolCallId === undefined ? {} : { toolCallId: span.toolCallId }),
+      ...(span.toolCallPart === undefined ? {} : { toolCallPart: span.toolCallPart }),
+    });
+  }
+  return evidence.map((item) => ({
+    kind: item.kind,
+    source: item.source,
+    source_range: [item.start, item.end],
+    text: item.text,
+    ...(item.toolCallId === undefined
+      ? {}
+      : { tool_call_id: item.toolCallId, tool_call_part: item.toolCallPart }),
+  }));
+}
+
+function phasedRequest(
+  baseState: Record<string, unknown>,
+  phase: PhasedPhase,
+  candidates: readonly PhasedCandidate[],
+): PhasedRequest {
+  const answerNames = candidates.map((candidate) => `retain_${candidate.id}`);
+  const questions = Object.fromEntries(
+    candidates.map((_, index) => [
+      answerNames[index]!,
+      {
+        type: "noul",
+        instructions:
+          phase === "coarse"
+            ? "Should this coherent evidence group remain in the continuation record?"
+            : "Should this source span remain in the continuation record?",
+        criteria: {
+          true: "Contains a non-redundant fact, constraint, decision, or action outcome needed to continue.",
+          false:
+            "Routine, stale, redundant, or safely reproducible; protected evidence must remain.",
+        },
+      },
+    ]),
+  );
+  return {
+    state: {
+      ...baseState,
+      task:
+        phase === "coarse"
+          ? "Select coherent evidence groups that contain useful continuation facts. The renderer copies selected source text verbatim; do not summarize or generate prose."
+          : "Refine the selected evidence by retaining only source spans needed for continuation. The renderer copies selected source text verbatim; do not summarize or generate prose.",
+      candidates: candidates.map((candidate) => ({
+        id: candidate.id,
+        evidence: phasedEvidence(candidate.spans),
+      })),
+    },
+    questions,
+    answerNames,
+  };
+}
+
+async function runPhasedJevSelection(
   preparation: SessionBeforeCompactEvent["preparation"],
-  previousSummary: string | undefined,
-  preparedMessages: SessionBeforeCompactEvent["preparation"]["messagesToSummarize"],
-  branchMessages: readonly FastJevMessage[],
-  calls: number,
+  spans: readonly SourceSpan[],
+  beforeChars: number,
   options: FastJevRunOptions,
   customInstructions: string | undefined,
-  startedAt: number,
-  jevMs: number,
-  reason: FastJevFailureReason,
-): Promise<FastJevResult | undefined> {
-  const beforeChars = branchMessages.reduce((sum, message) => sum + messageChars(message), 0);
-  if (options.signal?.aborted) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "cancelled",
-        jevMs,
-        0,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls,
-        undefined,
-        reason,
-      ),
+): Promise<PhasedSelectionResult<FastJevFailureDiagnostics>> {
+  const baseState = inferenceState(spans, [], customInstructions);
+  const buildRequest = (phase: PhasedPhase, candidates: readonly PhasedCandidate[]) =>
+    phasedRequest(baseState, phase, candidates);
+  const preflight = (phase: PhasedPhase, candidates: readonly PhasedCandidate[]) => {
+    const request = buildRequest(phase, candidates);
+    return (
+      safeJson({ state: request.state, questions: request.questions }).length <=
+      MAX_PHASED_REQUEST_CHARS
     );
-    return undefined;
-  }
-
-  const summaryStartedAt = performance.now();
-  let output: SummaryAttempt | undefined;
-  try {
-    output = await options.summarizeCheckpoint(
-      preparedMessages,
-      previousSummary,
-      customInstructions,
-      options.signal,
-    );
-  } catch (error) {
-    const diagnostics = sanitizeFastJevDiagnostics(error);
-    output = {
-      failureReason: "summary-auth-provider-failed",
-      ...(diagnostics === undefined ? {} : { diagnostics }),
-    };
-  }
-  const summaryMs = monotonicMs(summaryStartedAt);
-  if (
-    options.signal?.aborted ||
-    (isSummaryFailure(output) && output.failureReason === "cancelled")
-  ) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "cancelled",
-        jevMs,
-        summaryMs,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls,
-        undefined,
-        reason,
-      ),
-    );
-    return undefined;
-  }
-  if (isSummaryFailure(output)) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        output.failureReason,
-        jevMs,
-        summaryMs,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls,
-        output.diagnostics,
-        reason,
-      ),
-    );
-    return undefined;
-  }
-  const text = output?.text.trim();
-  if (!text) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "summary-empty-output",
-        jevMs,
-        summaryMs,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls,
-        undefined,
-        reason,
-      ),
-    );
-    return undefined;
-  }
-  if (!renderFitsBudget(text, preparation)) {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "final-size-limit",
-        jevMs,
-        summaryMs,
-        monotonicMs(startedAt),
-        beforeChars,
-        compactionSummaryChars(text),
-        calls,
-        undefined,
-        reason,
-      ),
-    );
-    return undefined;
-  }
-
-  const attempt = status(
-    "checkpointed",
-    "checkpoint",
-    reason,
-    jevMs,
-    summaryMs,
-    monotonicMs(startedAt),
-    beforeChars,
-    compactionSummaryChars(text),
-    calls,
-    undefined,
-    reason,
-  );
-  options.onStatus?.(attempt);
-  const details: CompactionDetails = {
-    version: DETAILS_VERSION,
-    messages: detailsMessages(branchMessages),
-    reductionRatio:
-      beforeChars === 0 ? 0 : (beforeChars - compactionSummaryChars(text)) / beforeChars,
-    calls,
-    droppedResults: 0,
-    droppedCalls: 0,
-    attempt,
   };
-  const files = fileDetails(preparation);
-  return {
-    summary: text,
-    firstKeptEntryId: preparation.firstKeptEntryId,
-    tokensBefore: preparation.tokensBefore,
-    usage: output?.usage,
-    details: { ...files, [DETAILS_KEY]: details },
+  return runPhasedSelection(spans, {
+    originalChars: beforeChars,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    deadlineMs: MAX_JEV_DURATION_MS,
+    maxItemsPerRequest: MAX_PHASED_ITEMS_PER_REQUEST,
+    preflight,
+    judge: async (phase, candidates, signal, remainingMs) => {
+      const request = buildRequest(phase, candidates);
+      if (!preflight(phase, candidates))
+        return { kind: "refused", reason: "local-state-too-large" };
+      const gateway = await requestJevGateway(
+        options.modelRegistry,
+        { state: request.state, questions: request.questions },
+        {
+          timeoutMs: Math.min(REQUEST_TIMEOUT_MS, remainingMs),
+          signal,
+          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+        },
+      );
+      if (!gateway.ok) {
+        const failure = gatewayFailureDisposition(gateway);
+        const diagnostic = failure.diagnostic;
+        switch (failure.kind) {
+          case "unavailable":
+            return {
+              kind: "unavailable",
+              reason: failure.reason,
+              ...(diagnostic === undefined ? {} : { diagnostic }),
+            };
+          case "refused":
+            return {
+              kind: "refused",
+              reason: failure.reason,
+              ...(diagnostic === undefined ? {} : { diagnostic }),
+            };
+          case "cancelled":
+            return {
+              kind: "cancelled",
+              reason: "caller-cancellation",
+              ...(diagnostic === undefined ? {} : { diagnostic }),
+            };
+        }
+      }
+      const answers = parseNoulAnswers(gateway.value, request.answerNames);
+      if (answers === undefined) return { kind: "refused", reason: "malformed-jev" };
+      const mappedAnswers: Record<string, number> = {};
+      for (const [index, candidate] of candidates.entries()) {
+        const answer = answers[request.answerNames[index]!];
+        if (answer === undefined) return { kind: "refused", reason: "malformed-jev" };
+        mappedAnswers[candidate.id] = answer;
+      }
+      return { kind: "answers", answers: mappedAnswers };
+    },
+    render: (selected) => renderSelection(selected, preparation),
+    wrappedChars: wrappedSummaryChars,
+    fitsPiBudget: (summary) => renderFitsBudget(summary, preparation),
+  });
+}
+
+export interface FastJevResult {
+  readonly summary: string;
+  readonly firstKeptEntryId: string;
+  readonly tokensBefore: number;
+  readonly details: {
+    readonly readFiles: string[];
+    readonly modifiedFiles: string[];
+    readonly [DETAILS_KEY]: {
+      readonly version: 3;
+      readonly reductionRatio: number;
+      readonly selectedSpans: readonly {
+        readonly id: string;
+        readonly kind: SourceSpanKind;
+        readonly source: string;
+        readonly start: number;
+        readonly end: number;
+        readonly offsetBasis: typeof SOURCE_OFFSET_BASIS;
+        readonly toolCallId?: string;
+        readonly toolCallPart?: "call" | "result";
+      }[];
+      readonly attempt: FastJevAttemptStatus;
+    };
   };
 }
+
+export type FastJevRunOutcome =
+  | { readonly kind: "success"; readonly result: FastJevResult }
+  | { readonly kind: "unavailable"; readonly status: FastJevAttemptStatus }
+  | { readonly kind: "refused"; readonly status: FastJevAttemptStatus }
+  | { readonly kind: "cancelled"; readonly status: FastJevAttemptStatus };
 
 export async function runFastJevCompaction(
   preparation: SessionBeforeCompactEvent["preparation"],
   branchEntries: readonly unknown[],
   options: FastJevRunOptions,
   customInstructions?: string,
-): Promise<FastJevResult | undefined> {
+): Promise<FastJevRunOutcome> {
   const startedAt = performance.now();
-  // A split-turn prefix precedes firstKeptEntryId and is discarded too; preserve it in compaction.
+  const finish = (
+    kind: FastJevFailureKind,
+    reason: FastJevFailureReason,
+    jevMs: number,
+    beforeChars: number,
+    spans: number,
+    requests: number,
+    diagnostic?: FastJevFailureDiagnostics,
+  ): Exclude<FastJevRunOutcome, { readonly kind: "success" }> => {
+    const status = makeStatus(
+      kind === "unavailable" ? "native-fallback" : kind,
+      kind === "unavailable" ? "native" : "none",
+      reason,
+      jevMs,
+      monotonicMs(startedAt),
+      beforeChars,
+      beforeChars,
+      spans,
+      requests,
+      diagnostic,
+    );
+    options.onStatus?.(status);
+    return { kind, status };
+  };
+  const finishRefusal = (
+    reason: FastJevFailureReason,
+    jevMs: number,
+    beforeChars: number,
+    spans: number,
+    requests: number,
+  ) => finish("refused", reason, jevMs, beforeChars, spans, requests);
   const preparedMessages = [...preparation.messagesToSummarize, ...preparation.turnPrefixMessages];
-  if (options.signal?.aborted) {
-    options.onStatus?.(status("fallback", "native", "cancelled", 0, 0, 0, 0, 0, 0));
-    return undefined;
-  }
-  if (preparedMessages.length === 0) return undefined;
+  if (options.signal?.aborted) return finish("cancelled", "caller-cancellation", 0, 0, 0, 0);
 
   const previous = previousState(branchEntries, preparation.previousSummary);
-  // A previous summary is authoritative; legacy detail messages are used only when it is absent.
-  const baseMessages = previous.summary
-    ? [{ role: "user" as const, text: previous.summary, toolCalls: [], toolResults: [] }]
-    : (previous.messages ?? []);
-  const spanMessages = toFastJevMessages(preparedMessages);
-  const continuityHeader = renderContinuityHeader(preparation, preparedMessages);
-  const messages = [...baseMessages.map(copyMessage), ...spanMessages.map(copyMessage)];
-  const calls = collectCalls(messages);
-  const baseLength = baseMessages.length;
-  const eligibleCalls = calls.filter(
-    (call) => call.messageIndex >= baseLength && !isProtectedCall(call),
+  const collection = sourceSpans(preparedMessages, previous);
+  const spans = collection.spans;
+  const legacyMessages = previous.summary ? [] : (previous.messages ?? []);
+  const transcriptMessages = toFastJevMessages(
+    preparedMessages.filter((raw) => {
+      if (!previous.summary || !isRecord(raw) || raw.role !== "compactionSummary") return true;
+      return typeof raw.summary !== "string" || raw.summary.trim() !== previous.summary;
+    }),
   );
-  const candidates = eligibleCalls.slice(0, MAX_ELIGIBLE_CALLS);
-  const hitCandidateLimit = eligibleCalls.length > MAX_ELIGIBLE_CALLS;
-  const beforeChars = messages.reduce((sum, message) => sum + messageChars(message), 0);
-  if (candidates.length === 0) {
-    return checkpointPrepared(
-      preparation,
-      previous.summary,
-      preparedMessages,
-      messages,
-      calls.length,
-      options,
-      customInstructions,
-      startedAt,
-      0,
-      safeFailureReason("no-eligible-candidates"),
-    );
+  const beforeChars =
+    (previous.summary?.length ?? 0) +
+    legacyMessages.reduce((sum, message) => sum + messageChars(message), 0) +
+    transcriptMessages.reduce((sum, message) => sum + messageChars(message), 0);
+
+  if (collection.overflow)
+    return finishRefusal("source-span-limit", 0, beforeChars, spans.length, 0);
+  if (spans.length === 0) return finishRefusal("no-source-spans", 0, beforeChars, 0, 0);
+
+  const candidates = spans.filter((span) => !span.mandatory);
+  const batches: SourceSpan[][] = [];
+  for (let index = 0; index < candidates.length; index += MAX_SPANS_PER_REQUEST) {
+    batches.push(candidates.slice(index, index + MAX_SPANS_PER_REQUEST));
+  }
+  if (batches.length > MAX_REQUESTS) {
+    return finishRefusal("source-span-limit", 0, beforeChars, spans.length, 0);
   }
 
   const jevStartedAt = performance.now();
@@ -1375,46 +1221,51 @@ export async function runFastJevCompaction(
   if (options.signal?.aborted) deadline.abort();
   else options.signal?.addEventListener("abort", onCallerAbort, { once: true });
   const timer = setTimeout(() => deadline.abort(), MAX_JEV_DURATION_MS);
-  const decisions = new Map<string, Decision>();
-  let stoppingReason: FastJevFailureReason | undefined;
-  let successfulRender: RenderedPruning | undefined;
-  let latestRender: RenderedPruning | undefined;
-  const callsPerRound = CALLS_PER_BATCH * MAX_PARALLEL_BATCHES;
+  const decisions = new Map<string, boolean>();
+  let failure: FastJevFailure | undefined;
+  let requests = 0;
 
   try {
-    for (let offset = 0; offset < candidates.length; offset += callsPerRound) {
-      if (options.signal?.aborted) {
-        stoppingReason = "cancelled";
-        break;
-      }
-      if (deadline.signal.aborted) {
-        stoppingReason = "jev-timeout";
-        break;
-      }
-      const remainingMs = MAX_JEV_DURATION_MS - monotonicMs(jevStartedAt);
-      if (remainingMs <= 0) {
-        stoppingReason = "jev-timeout";
-        break;
-      }
-
-      const round = candidates.slice(offset, offset + callsPerRound);
-      const batches = Array.from(
-        { length: Math.ceil(round.length / CALLS_PER_BATCH) },
-        (_, index) => round.slice(index * CALLS_PER_BATCH, (index + 1) * CALLS_PER_BATCH),
+    if (options.phased) {
+      const phased = await runPhasedJevSelection(
+        preparation,
+        spans,
+        beforeChars,
+        options,
+        customInstructions,
       );
-      const batchResults: Array<{
-        readonly answers?: Record<string, number>;
-        readonly malformed?: boolean;
-        readonly failureReason?: "jev-failed" | "jev-timeout";
-      }> = await Promise.all(
-        batches.map(async (batch) => {
-          const state = buildBatchInferenceState(messages, batch, customInstructions);
-          const questions = Object.assign(
-            {},
-            ...batch.flatMap((call) => [questionFor(call, "call"), questionFor(call, "result")]),
-          );
-          const names = batch.flatMap((call) => [`call_${call.id}`, `result_${call.id}`]);
-          try {
+      requests = phased.requests;
+      if (phased.kind !== "success") {
+        failure = {
+          kind: phased.kind,
+          reason: phased.reason,
+          ...(phased.diagnostic === undefined ? {} : { diagnostic: phased.diagnostic }),
+        };
+      } else {
+        const selectedIds = new Set(phased.selected.map((span) => span.id));
+        for (const candidate of candidates)
+          decisions.set(candidate.id, selectedIds.has(candidate.id));
+      }
+    } else {
+      for (let offset = 0; offset < batches.length; offset += MAX_PARALLEL_REQUESTS) {
+        if (options.signal?.aborted) {
+          failure = { kind: "cancelled", reason: "caller-cancellation" };
+          break;
+        }
+        const remainingMs = MAX_JEV_DURATION_MS - monotonicMs(jevStartedAt);
+        if (deadline.signal.aborted || remainingMs <= 0) {
+          failure = { kind: "unavailable", reason: "timeout" };
+          break;
+        }
+        const round = batches.slice(offset, offset + MAX_PARALLEL_REQUESTS);
+        const roundResults = await Promise.all(
+          round.map(async (batch) => {
+            const state = inferenceState(spans, batch, customInstructions);
+            const questions = Object.assign({}, ...batch.flatMap((span) => [questionFor(span)]));
+            const names = batch.map((span) => `retain_${span.id}`);
+            if (safeJson(state).length > MAX_STATE_CHARS)
+              return { failure: { kind: "refused", reason: "local-state-too-large" } as const };
+            requests += 1;
             const gateway = await requestJevGateway(
               options.modelRegistry,
               { state, questions },
@@ -1424,354 +1275,237 @@ export async function runFastJevCompaction(
                 ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
               },
             );
-            if (!gateway.ok) {
-              return {
-                failureReason: gateway.reason === "timeout" ? "jev-timeout" : "jev-failed",
-              };
-            }
+            if (!gateway.ok) return { failure: gatewayFailureDisposition(gateway) };
             const answers = parseNoulAnswers(gateway.value, names);
-            return answers === undefined ? { malformed: true } : { answers };
-          } catch {
-            return {
-              failureReason: deadline.signal.aborted ? "jev-timeout" : "jev-failed",
-            };
-          }
-        }),
-      );
-
-      if (options.signal?.aborted) {
-        stoppingReason = "cancelled";
-        break;
-      }
-      if (deadline.signal.aborted) {
-        stoppingReason = "jev-timeout";
-        break;
-      }
-      if (batchResults.some((result) => result.malformed)) {
-        stoppingReason = "malformed-jev";
-        break;
-      }
-      const batchFailure = batchResults.find((result) => result.failureReason !== undefined);
-      if (batchFailure?.failureReason !== undefined) {
-        stoppingReason = batchFailure.failureReason;
-        break;
-      }
-
-      // Commit a round only after every parallel batch has a complete, validated answer set.
-      const roundDecisions: Decision[] = [];
-      for (const [batchIndex, batch] of batches.entries()) {
-        const answers = batchResults[batchIndex]?.answers;
-        if (answers === undefined) {
-          stoppingReason = "malformed-jev";
+            return answers === undefined
+              ? { failure: { kind: "refused", reason: "malformed-jev" } as const }
+              : { answers };
+          }),
+        );
+        if (options.signal?.aborted) {
+          failure = { kind: "cancelled", reason: "caller-cancellation" };
           break;
         }
-        for (const call of batch) {
-          const keepCall = answers[`call_${call.id}`];
-          const keepResult = answers[`result_${call.id}`];
-          if (keepCall === undefined || keepResult === undefined) {
-            stoppingReason = "malformed-jev";
+        if (deadline.signal.aborted) {
+          failure = { kind: "unavailable", reason: "timeout" };
+          break;
+        }
+        const failed = roundResults.find((result) => "failure" in result);
+        if (failed && "failure" in failed) {
+          failure = failed.failure;
+          break;
+        }
+        // Decisions stay provisional until every bounded request has a fully valid answer set.
+        for (const [batchIndex, batch] of round.entries()) {
+          const result = roundResults[batchIndex];
+          if (!result || !("answers" in result)) {
+            failure = { kind: "refused", reason: "malformed-jev" };
             break;
           }
-          roundDecisions.push({
-            id: call.id,
-            tool: call.name,
-            keepCall,
-            keepResult,
-            action: actionFor(keepCall, keepResult),
-          });
+          for (const span of batch) {
+            const score = result.answers[`retain_${span.id}`];
+            if (score === undefined) {
+              failure = { kind: "refused", reason: "malformed-jev" };
+              break;
+            }
+            decisions.set(span.id, score >= KEEP_THRESHOLD);
+          }
+          if (failure) break;
         }
-        if (stoppingReason !== undefined) break;
-      }
-      if (stoppingReason !== undefined) break;
-      for (const decision of roundDecisions) decisions.set(decision.id, decision);
-
-      latestRender = renderPrunedOutput(messages, calls, decisions, beforeChars, continuityHeader);
-      if (options.signal?.aborted) {
-        stoppingReason = "cancelled";
-        break;
-      }
-      if (
-        latestRender.afterChars < beforeChars &&
-        renderFitsBudget(latestRender.summary, preparation)
-      ) {
-        successfulRender = latestRender;
-        break;
+        if (failure) break;
       }
     }
+  } catch {
+    failure = options.signal?.aborted
+      ? { kind: "cancelled", reason: "caller-cancellation" }
+      : deadline.signal.aborted
+        ? { kind: "unavailable", reason: "timeout" }
+        : { kind: "refused", reason: "unexpected" };
   } finally {
     clearTimeout(timer);
     options.signal?.removeEventListener("abort", onCallerAbort);
   }
 
   const jevMs = monotonicMs(jevStartedAt);
-  if (options.signal?.aborted || stoppingReason === "cancelled") {
-    options.onStatus?.(
-      status(
-        "fallback",
-        "native",
-        "cancelled",
-        jevMs,
-        0,
-        monotonicMs(startedAt),
-        beforeChars,
-        beforeChars,
-        calls.length,
-      ),
-    );
-    return undefined;
-  }
-  if (stoppingReason !== undefined) {
-    return checkpointPrepared(
-      preparation,
-      previous.summary,
-      preparedMessages,
-      messages,
-      calls.length,
-      options,
-      customInstructions,
-      startedAt,
+  if (options.signal?.aborted) failure = { kind: "cancelled", reason: "caller-cancellation" };
+  if (failure)
+    return finish(
+      failure.kind,
+      failure.reason,
       jevMs,
-      stoppingReason,
+      beforeChars,
+      spans.length,
+      requests,
+      failure.diagnostic,
     );
-  }
-  if (successfulRender === undefined) {
-    const reason = hitCandidateLimit
-      ? "eligible-call-limit"
-      : latestRender === undefined || latestRender.afterChars >= beforeChars
-        ? "insufficient-savings"
-        : "final-size-limit";
-    return checkpointPrepared(
-      preparation,
-      previous.summary,
-      preparedMessages,
-      messages,
-      calls.length,
-      options,
-      customInstructions,
-      startedAt,
-      jevMs,
-      reason,
-    );
+  if (decisions.size !== candidates.length) {
+    return finishRefusal("malformed-jev", jevMs, beforeChars, spans.length, requests);
   }
 
-  const allDecisions = successfulRender.decisions;
-  const attempt = status(
-    "pruned",
-    "prune",
+  const selected = selectWithCallDependencies(spans, decisions);
+  const summary = renderSelection(selected, preparation);
+  const afterChars = wrappedSummaryChars(summary);
+  const savingsRatio = beforeChars > 0 ? (beforeChars - afterChars) / beforeChars : 0;
+  if (savingsRatio < MINIMUM_SAVINGS_RATIO) {
+    return finishRefusal("insufficient-savings", jevMs, beforeChars, spans.length, requests);
+  }
+  if (!renderFitsBudget(summary, preparation)) {
+    return finishRefusal("final-size-limit", jevMs, beforeChars, spans.length, requests);
+  }
+
+  const attempt = makeStatus(
+    "compacted",
+    "jev",
     undefined,
     jevMs,
-    0,
     monotonicMs(startedAt),
     beforeChars,
-    successfulRender.afterChars,
-    calls.length,
+    afterChars,
+    spans.length,
+    requests,
   );
   options.onStatus?.(attempt);
-  const details: CompactionDetails = {
-    version: DETAILS_VERSION,
-    messages: detailsMessages(successfulRender.messages),
-    reductionRatio: successfulRender.reductionRatio,
-    calls: calls.length,
-    droppedResults: allDecisions.filter((decision) => decision.action === "drop_result").length,
-    droppedCalls: allDecisions.filter((decision) => decision.action === "drop_call").length,
-    attempt,
-  };
-  const files = fileDetails(preparation);
+  const fileOps = preparation.fileOps as unknown;
+  const readFiles = isRecord(fileOps) ? fileList(fileOps.read) : [];
+  const modifiedFiles = isRecord(fileOps)
+    ? [...new Set([...fileList(fileOps.written), ...fileList(fileOps.edited)])].sort()
+    : [];
+  const selectedSpans = selected.map(
+    ({ id, kind, source, start, end, toolCallId, toolCallPart }) => ({
+      id,
+      kind,
+      source: redact(source, 240),
+      start,
+      end,
+      offsetBasis: SOURCE_OFFSET_BASIS,
+      ...(toolCallId === undefined ? {} : { toolCallId, toolCallPart }),
+    }),
+  );
   return {
-    summary: successfulRender.summary,
-    firstKeptEntryId: preparation.firstKeptEntryId,
-    tokensBefore: preparation.tokensBefore,
-    details: { ...files, [DETAILS_KEY]: details },
+    kind: "success",
+    result: {
+      summary,
+      firstKeptEntryId: preparation.firstKeptEntryId,
+      tokensBefore: preparation.tokensBefore,
+      details: {
+        readFiles,
+        modifiedFiles,
+        [DETAILS_KEY]: {
+          version: DETAILS_VERSION,
+          reductionRatio: savingsRatio,
+          selectedSpans,
+          attempt,
+        },
+      },
+    },
   };
 }
 
-export function splitSummaryModelReference(
-  modelReference: string,
-): { readonly provider: string; readonly modelId: string } | undefined {
-  const separator = modelReference.indexOf("/");
-  if (separator <= 0 || separator === modelReference.length - 1) return undefined;
-  return {
-    provider: modelReference.slice(0, separator),
-    modelId: modelReference.slice(separator + 1),
-  };
+export function toPiCompactionResponse(result: FastJevRunOutcome) {
+  switch (result.kind) {
+    case "success":
+      return { compaction: result.result };
+    case "unavailable":
+      return undefined;
+    case "refused":
+    case "cancelled":
+      return { cancel: true as const };
+  }
 }
 
-export async function summarizePreparedWithModel(
-  ctx: ExtensionContext,
-  modelReference: string,
-  messages: SessionBeforeCompactEvent["preparation"]["messagesToSummarize"],
-  previousSummary: string | undefined,
-  reserveTokens: number,
-  customInstructions: string | undefined,
-  signal?: AbortSignal,
-): Promise<SummaryAttempt> {
-  if (signal?.aborted) return { failureReason: "cancelled" };
-  const reference = splitSummaryModelReference(modelReference);
-  if (reference === undefined) return { failureReason: "summary-model-missing" };
-  if (!Number.isSafeInteger(reserveTokens) || reserveTokens <= 0) {
-    return { failureReason: "summary-malformed-output" };
-  }
-
-  const registry = ctx.modelRegistry;
-  if (typeof registry.complete !== "function") {
-    return { failureReason: "summary-runtime-unsupported" };
-  }
-  const model = registry.find(reference.provider, reference.modelId);
-  if (model === undefined) return { failureReason: "summary-model-missing" };
-  const instruction = [
-    "Write one coherent checkpoint of the prepared old context. Include concrete facts needed later, exact names, paths, commands, errors, and numbers.",
-    "Merge the previous summary when provided. Do not mention compaction, do not emit a nested transcript, and do not summarize messages outside the prepared input.",
-    ...(customInstructions?.trim() ? [customInstructions.trim()] : []),
-  ].join(" ");
-  const transcript = serializeConversation(convertToLlm([...messages]));
-  const previous = previousSummary?.trim();
-  const prompt = [
-    previous ? `<previous-summary>\n${previous}\n</previous-summary>` : "",
-    "<prepared-context>",
-    transcript,
-    "</prepared-context>",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  if (signal?.aborted) return { failureReason: "cancelled" };
-
-  const modelMaxTokens =
-    typeof model.maxTokens === "number" && model.maxTokens > 0
-      ? model.maxTokens
-      : Number.POSITIVE_INFINITY;
-  let result: AssistantMessage;
-  try {
-    result = await registry.complete(
-      model,
-      {
-        systemPrompt: instruction,
-        messages: [{ role: "user", content: prompt, timestamp: Date.now() }],
-      },
-      {
-        maxTokens: Math.max(1, Math.min(Math.floor(reserveTokens * 0.8), modelMaxTokens)),
-        reasoningEffort: "low",
-        cacheRetention: "none",
-        sessionId: uuidv7(),
-        ...(signal === undefined ? {} : { signal }),
-      },
-    );
-  } catch (error) {
-    if (signal?.aborted) return { failureReason: "cancelled" };
-    const diagnostics = sanitizeFastJevDiagnostics(error);
-    return {
-      failureReason: "summary-auth-provider-failed",
-      ...(diagnostics === undefined ? {} : { diagnostics }),
-    };
-  }
-  if (signal?.aborted || result.stopReason === "aborted") return { failureReason: "cancelled" };
-  if (result.stopReason === "length") return { failureReason: "summary-truncated-output" };
-  if (result.stopReason === "error") {
-    const diagnostics = sanitizeFastJevDiagnostics(result);
-    return {
-      failureReason: "summary-auth-provider-failed",
-      ...(diagnostics === undefined ? {} : { diagnostics }),
-    };
-  }
-  if (!Array.isArray(result.content)) return { failureReason: "summary-malformed-output" };
-  if (result.content.some((part) => isRecord(part) && part.type === "toolCall")) {
-    return { failureReason: "summary-malformed-output" };
-  }
-  const text = contentText(result.content).trim();
-  if (text.length === 0) return { failureReason: "summary-empty-output" };
-  return result.usage === undefined ? { text } : { text, usage: result.usage };
+export function notifyFastJevRefusal(
+  ui: Pick<ExtensionContext["ui"], "notify">,
+  status: FastJevAttemptStatus,
+): void {
+  if (status.outcome !== "refused") return;
+  ui.notify(
+    `Fast Jev compaction refused (${status.reason ?? "unknown"}): ${status.spans} spans, ${status.requests} Jev requests. Run /fast-jev-status or disable jev.compaction to use Pi's native compactor.`,
+    "warning",
+  );
 }
 
-export default function fastJevCompaction(pi: ExtensionAPI): void {
-  let registered = false;
+export default function fastJevCompaction(
+  pi: ExtensionAPI,
+  loadConfig: () => FastJevCompactionSettings = readGlobalConfig,
+): void {
+  let config: FastJevCompactionConfig = { enabled: false };
+  let configLoadFailed = false;
+  let startupObserved = false;
+  let handlerInvocations = 0;
   let lastStatus: FastJevAttemptStatus | undefined;
   if (typeof pi.registerCommand === "function") {
     pi.registerCommand("fast-jev-status", {
       description: "Show the last Fast Jev compaction status",
       handler: async (_args, ctx) => {
+        const configuration = `configured ${config.enabled ? `enabled${config.phased ? " (phased)" : ""}` : "disabled"}${configLoadFailed ? " (settings load failed)" : ""}; startup observed ${startupObserved ? "yes" : "no"}; compaction handler invocations ${handlerInvocations}`;
         if (lastStatus === undefined) {
-          ctx.ui.notify("Fast Jev compaction has no recorded attempt.", "info");
+          ctx.ui.notify(`Fast Jev compaction has no recorded attempt; ${configuration}.`, "info");
           return;
         }
+        const label =
+          lastStatus.outcome === "native-fallback" ? "native fallback" : lastStatus.outcome;
         const reason = lastStatus.reason === undefined ? "" : ` (${lastStatus.reason})`;
-        const checkpoint =
-          lastStatus.checkpointReason === undefined
-            ? ""
-            : `; checkpoint triggered by ${lastStatus.checkpointReason}${lastStatus.outcome === "fallback" && lastStatus.reason !== undefined ? `; summary failed: ${lastStatus.reason}` : ""}`;
-        const diagnostics = lastStatus.diagnostics;
-        const diagnosticParts = [
-          diagnostics?.exceptionType,
-          diagnostics?.httpStatus === undefined ? undefined : `HTTP ${diagnostics.httpStatus}`,
-          diagnostics?.providerCode === undefined ? undefined : `code ${diagnostics.providerCode}`,
-        ].filter((part): part is string => part !== undefined);
+        const diagnostic = lastStatus.diagnostic;
         const diagnosticText =
-          diagnosticParts.length === 0 ? "" : `; diagnostics: ${diagnosticParts.join(", ")}`;
-        const type = lastStatus.outcome === "fallback" ? "warning" : "info";
-        const outcome =
-          lastStatus.outcome === "fallback"
-            ? "native fallback (Fast Jev compaction not finished)"
-            : lastStatus.outcome;
+          diagnostic === undefined
+            ? ""
+            : `; ${diagnostic.provider} ${diagnostic.stage}/${diagnostic.reason}${diagnostic.httpStatus === undefined ? "" : ` HTTP ${diagnostic.httpStatus}`}`;
+        const tone =
+          lastStatus.outcome === "refused" ||
+          lastStatus.outcome === "cancelled" ||
+          lastStatus.outcome === "native-fallback"
+            ? "warning"
+            : "info";
         ctx.ui.notify(
-          `Fast Jev ${outcome}${reason}${checkpoint}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars; ${lastStatus.totalMs} ms total (Jev ${lastStatus.jevMs} ms, summary ${lastStatus.summaryMs} ms); ${lastStatus.calls} calls; path ${lastStatus.path}${diagnosticText}.`,
-          type,
+          `Fast Jev ${label}${reason}${diagnosticText}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars; ${lastStatus.totalMs} ms decision time (Jev ${lastStatus.jevMs} ms); ${lastStatus.spans} spans; ${lastStatus.requests} Jev requests; path ${lastStatus.path}; ${configuration}.`,
+          tone,
         );
       },
     });
   }
   pi.on("session_start", () => {
-    if (registered) return;
-    registered = true;
-    const config = readGlobalConfig();
-    // Register after startup; returning undefined delegates to Pi's native compactor.
-    // SAFETY: ExtensionAPI.on has the runtime compaction overload; a global startup declaration appends an incompatible final overload.
-    const onBeforeCompact = pi.on as unknown as (
-      event: "session_before_compact",
-      handler: (
-        event: SessionBeforeCompactEvent,
-        ctx: ExtensionContext,
-      ) => Promise<unknown> | unknown,
-    ) => void;
-    onBeforeCompact("session_before_compact", async (event, ctx) => {
-      if (!config.enabled) return undefined;
-      if (event.reason === "manual" && event.customInstructions?.trim()) return undefined;
+    const loaded = loadConfig();
+    config = loaded.config;
+    configLoadFailed = loaded.loadFailed;
+    startupObserved = true;
+  });
 
-      try {
-        const result = await runFastJevCompaction(
-          event.preparation,
-          event.branchEntries,
-          {
-            summarizeCheckpoint: (messages, previousSummary, instructions, signal) =>
-              summarizePreparedWithModel(
-                ctx,
-                config.summaryModel,
-                messages,
-                previousSummary,
-                event.preparation.settings.reserveTokens,
-                instructions,
-                signal,
-              ),
-            modelRegistry: ctx.modelRegistry,
-            signal: event.signal,
-            onStatus: (attempt) => {
-              lastStatus = attempt;
-              pi.events.emit(FAST_JEV_STATUS_EVENT, attempt);
-            },
-          },
-          event.customInstructions,
-        );
-        if (result === undefined) return undefined;
-        return {
-          compaction: {
-            ...result,
-            ...(result.usage === undefined ? {} : { usage: result.usage }),
-          },
-        };
-      } catch (error) {
-        const diagnostics = sanitizeFastJevDiagnostics(error);
-        const attempt = status("fallback", "native", "unexpected", 0, 0, 0, 0, 0, 0, diagnostics);
-        lastStatus = attempt;
-        pi.events.emit(FAST_JEV_STATUS_EVENT, attempt);
-        return undefined;
-      }
-    });
+  // Register synchronously so compaction hooks exist before session startup; disabled mode delegates to Pi.
+  const onBeforeCompact = pi.on as unknown as (
+    event: "session_before_compact",
+    handler: (
+      event: SessionBeforeCompactEvent,
+      ctx: ExtensionContext,
+    ) => Promise<unknown> | unknown,
+  ) => void;
+  onBeforeCompact("session_before_compact", async (event, ctx) => {
+    handlerInvocations += 1;
+    if (!config.enabled) {
+      ctx.ui.notify("Fast Jev compaction bypassed: jev.compaction is disabled.", "info");
+      return undefined;
+    }
+    const publishStatus = (attempt: FastJevAttemptStatus) => {
+      lastStatus = attempt;
+      pi.events.emit(FAST_JEV_STATUS_EVENT, attempt);
+      notifyFastJevRefusal(ctx.ui, attempt);
+    };
+    try {
+      const result = await runFastJevCompaction(
+        event.preparation,
+        event.branchEntries,
+        {
+          modelRegistry: ctx.modelRegistry,
+          signal: event.signal,
+          onStatus: publishStatus,
+          phased: config.phased === true,
+        },
+        event.customInstructions,
+      );
+      return toPiCompactionResponse(result);
+    } catch {
+      const attempt = makeStatus("refused", "none", "unexpected", 0, 0, 0, 0, 0, 0);
+      publishStatus(attempt);
+      return { cancel: true };
+    }
   });
 }

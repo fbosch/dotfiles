@@ -1,97 +1,49 @@
 # Fast Jev compaction
 
-This extension is an opt-in, global-only compaction handler. Enable it in
-`~/.pi/agent/settings.json`:
+Fast Jev compaction replaces Pi's compaction summary with a deterministic record of selected source spans. Enable it in global `~/.pi/agent/settings.json`:
 
 ```json
 {
   "jev": {
     "compaction": {
-      "enabled": true,
-      "summaryModel": "openai-codex/gpt-6-luna-fast"
+      "enabled": true
     }
   }
 }
 ```
 
-`summaryModel` remains configurable, but only the global settings object is
-read. Project settings cannot enable or configure this adapter. Reload Pi after
-changing the setting.
+Project settings cannot enable this adapter. The old `summaryModel` field is ignored; remove it when convenient. Reload Pi after changing the setting.
 
-## Behavior
+Phased compaction is separately opt-in under the same global object (`"phased": true` alongside `"enabled": true`). It is disabled by default, and the existing one-pass compactor remains unchanged otherwise. The phased path sends one coarse-selection wave and, only if needed, one targeted-refinement wave, with at most four logical requests per wave and eight total within the existing Jev deadline. It accepts only a fully rendered, wrapped output no larger than 20% of the prepared input by character count that also fits Pi's reserve-token estimate. This character bound is not a claim of 20% token savings or continuation parity. Protected source is checked before requests; if protected content alone is too large, or refinement cannot meet both limits, compaction is refused without truncation. Only Jev availability failures delegate to Pi's native compactor; malformed answers, size refusals, and caller cancellation do not.
 
-1. Pi supplies the old context and any split-turn prefix already selected for
-   compaction. The recent Pi-kept tail is not otherwise added by this extension.
-2. Jev receives bounded, redacted metadata: the goal, each batch's nearest
-   preceding user context, tool names and inputs, and result sizes/error flags.
-   It never receives tool-result bodies. Candidates are visited once, in order,
-   up to 256 paired tool call/result candidates. Each round uses at most two
-   concurrent requests of 14 calls each; each batch has a focused state so older
-   candidates do not disappear behind the 96-message history window. Requests
-   time out after 2.4 seconds and the whole Jev pass is capped at 12 seconds.
-3. Failed results, unresolved errors, unknown tools, and non-read-only actions
-   are protected. A call and its result are always decided together. Each round
-   is atomic: no decision from it is used unless every response is complete and
-   strictly validated. If a later round fails or is malformed, all provisional
-   Jev decisions are discarded and Luna receives the original prepared context.
-4. After each complete round, the extension renders the full Jev-pruned output,
-   including removed-material excerpts and Pi's summary wrapper. It returns that
-   output immediately when it has positive character savings and fits the
-   `reserveTokens` estimate. Any positive savings qualify; there is no minimum
-   reduction percentage. Removed long results carry an explicit truncation marker
-   and re-run hint.
-5. If all eligible calls are considered but the rendered output still has no
-   positive savings or exceeds the reserve, `summaryModel` makes exactly one
-   coherent checkpoint request from the original prepared old context through
-   Pi's configured model registry. The full previous compaction summary is included
-   so it is merged rather than dropped or nested. Hitting the 256-call or 12-second
-   bound also checkpoints the original context, reported distinctly as
-   `eligible-call-limit` or `jev-timeout`; unvisited calls are not labeled
-   protected. Jev errors and malformed responses likewise checkpoint the original
-   context. If Luna fails, is cancelled, or its output plus Pi's wrapper exceeds
-   `reserveTokens`, Pi uses its native compactor. The status distinguishes a missing
-   model, unsupported runtime API, auth/provider failure, malformed, empty,
-   truncated, and aborted output without including raw provider errors.
+## Selection and output
 
-Successful Jev-prune summaries prepend a deterministic continuity header. It
-includes at most 600 redacted characters from the latest user message in the
-compacted span, labels that request as potentially superseded by Pi's kept tail,
-and lists up to 12 Pi-reported read and modified paths per category. Each path is
-capped at 180 characters, and the header reports how many paths it omitted. These
-are bounded excerpts, not a complete task-state summary. The header adds no
-inferred progress, decisions, or next steps, and its text counts toward both the
-savings and wrapped `reserveTokens` checks. The prior compaction summary remains
-in the rendered transcript and is not repeated in the header.
+The extension converts the prepared compaction span, including any split-turn prefix, into bounded source spans. Jev receives redacted text and makes typed retain-or-omit judgments. It does not write the summary. Code renders the chosen spans in source order with their kind, source message, offsets, and Pi's reported file operations.
 
-A manual `/compact` with focus instructions bypasses this handler so Pi can
-honor those instructions normally. Cancellation is terminal: no checkpoint
-request is started after the abort signal.
+The continuation matrix is conservative:
 
-Successful compactions persist versioned `fastJev` details containing the
-protected message copy, path (`prune` or `checkpoint`), sanitized stage
-millisecond timings, fallback reason where relevant, and before/after character
-sizes. Version 1 details remain readable so existing persisted summaries are
-not discarded. Failed attempts are exposed without transcript content through
-the `fast_jev_compaction_status` event and the `/fast-jev-status` command.
-Provider failures may include only a bounded exception classification, HTTP
-status, and allowlisted provider code; messages, prompts, headers, bodies,
-URLs, and stacks are never included.
+| Source | Handling |
+| --- | --- |
+| Prior compaction summary | Always retain, with provenance |
+| User messages and constraints | Always retain, with source provenance |
+| Non-read-only or unknown tool calls and their results | Always retain as action outcomes |
+| Failed or unmatched tool results | Always retain |
+| Assistant text and known read-only tool calls/results | Ask Jev whether each bounded span is useful |
 
-## Data boundary and limitations
+The renderer quotes copied source text and does not infer progress, decisions, or next steps. It redacts common credentials, control characters, and home-directory paths before both Jev requests and persisted output. Redaction is best effort, not a guarantee for arbitrary secrets or personal data.
 
-Redaction is best effort. It covers common credential assignments,
-authorization headers, control characters, and home-directory paths, but it is
-not a guarantee for arbitrary secrets or personal data. The summary model may
-receive the full prepared old context, as Pi's native compactor does. Raw
-session history remains in Pi's session file; compaction is not secure deletion.
+Pi keeps messages after `firstKeptEntryId` itself. The extension reads only messages Pi prepared for compaction and the split-turn prefix; it never appends or repeats the retained tail. Manual `/compact` focus instructions are included as redacted selection context. The renderer remains selection-only, so those instructions cannot ask it to generate new prose.
 
-The positive-savings check compares character counts, and the reserve check
-estimates tokens as one per four wrapped-summary characters. Large retained
-content, wrapper text, or deterministic excerpts can still make the rendered Jev
-output ineligible. Conversely, a small positive reduction may not free enough
-context to prevent another compaction soon. An ineligible render gets one configured
-checkpoint attempt; native Pi compaction remains the final fallback.
+## Limits and refusal
 
-An offline synthetic continuation test checks which anchors survive and which
-dropped middle/end facts do not. It does not compare this output with Pi's native
-compactor or establish continuation parity.
+Each source span is at most 700 characters. The extension processes the full prepared source in windows of at most 14 optional spans per Jev request, with at most two requests concurrently. It considers at most 1,024 spans overall (at most 74 Jev requests); source beyond that hard cap is refused rather than silently skipped. Decisions are committed only after every window returns a complete, valid answer set. Requests time out after 2.4 seconds and the complete Jev pass is capped at 12 seconds, so large passes can take nearly 12 seconds. If Jev is unavailable, including when that deadline expires, Pi's native compactor is used and may be slow. The configured Jev gateway can route an evaluation across its Jev providers.
+
+A result is accepted only when every response is complete and strictly validates. The rendered summary must save at least 20% of the prepared text and fit within 80% of Pi's `reserveTokens` estimate, counting Pi's summary wrapper at one token per four characters. The extension never truncates the selected output to force a fit.
+
+If Jev is unavailable, the extension returns no compaction response so Pi can use its native compactor. Unavailability includes missing credentials, authentication failure, request timeout or the overall Jev deadline, request/transport or response-body failure, and HTTP 401, 403, 404, 408, 429, or 5xx. A provider's 404 may mean its configured Jev model is unavailable; Pi's native model is separate.
+
+The extension explicitly refuses compaction instead of falling back for other HTTP statuses, invalid JSON, an oversized response body, malformed Jev answers, source-span or local-state limits, no source spans, unexpected errors, or failure to meet either size check. Caller cancellation is terminal and also returns an explicit cancellation response. Disable the setting to use Pi's ordinary compactor without attempting Jev.
+
+Successful compactions persist version 3 `fastJev` metadata with selected span provenance, savings, and bounded timings. The extension still reads version 1 and 2 persisted details. Refusals display a concise UI notice with the reason and span/request counts, plus next steps; refused, cancelled, and native-fallback attempts are also reported without transcript content through the `fast_jev_compaction_status` event and `/fast-jev-status` command. Fallback status times cover the Jev attempt, not Pi's subsequent native compaction.
+
+Pi retains raw session history in its session file. Compaction is not secure deletion. The deterministic source-span format is not a generated summary and does not establish continuation parity with Pi's native compactor; benchmark work is tracked separately.
