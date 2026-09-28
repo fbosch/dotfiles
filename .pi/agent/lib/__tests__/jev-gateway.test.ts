@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createJevGatewayRequester,
+  OPENROUTER_CONFIG_MODEL,
   OPENROUTER_GATEWAY_ENDPOINT,
   OPENROUTER_GATEWAY_MODEL,
   OPENROUTER_PROVIDER_ID,
@@ -11,10 +15,26 @@ import {
 } from "../jev-gateway";
 
 const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) };
+const originalAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+let testAgentDirectory: string | undefined;
 let requestJevGateway = createJevGatewayRequester();
 beforeEach(() => {
+  testAgentDirectory = mkdtempSync(join(tmpdir(), "jev-gateway-test-"));
+  process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
   requestJevGateway = createJevGatewayRequester();
 });
+afterEach(() => {
+  if (testAgentDirectory !== undefined)
+    rmSync(testAgentDirectory, { recursive: true, force: true });
+  if (originalAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDirectory;
+  testAgentDirectory = undefined;
+});
+
+function writeSettings(settings: unknown): void {
+  if (testAgentDirectory === undefined) throw new Error("test agent directory was not created");
+  writeFileSync(join(testAgentDirectory, "settings.json"), `${JSON.stringify(settings)}\n`);
+}
 
 function expectFailure(
   result: Awaited<ReturnType<typeof requestJevGateway>>,
@@ -56,6 +76,110 @@ describe("requestJevGateway", () => {
       model: OPENROUTER_GATEWAY_MODEL,
     });
     expect(result).toEqual({ ok: true, value: { ok: true } });
+  });
+
+  test("uses configured order and translates each configured model through its adapter", async () => {
+    writeSettings({
+      jev: {
+        providers: [
+          { provider: VERCEL_GATEWAY_PROVIDER_ID, model: VERCEL_GATEWAY_MODEL },
+          { provider: OPENROUTER_PROVIDER_ID, model: OPENROUTER_CONFIG_MODEL },
+        ],
+      },
+    });
+    const providerIds: string[] = [];
+    const requests: Array<{ url: string; model: unknown }> = [];
+
+    const result = await requestJevGateway(
+      {
+        getProviderAuth: async (provider: string) => {
+          providerIds.push(provider);
+          return { auth: { apiKey: `${provider}-test-key` } };
+        },
+      },
+      { state: { query: "configured" } },
+      {
+        fetch: async (input, init) => {
+          const url = String(input);
+          requests.push({ url, model: JSON.parse(String(init?.body)).model });
+          return url === VERCEL_GATEWAY_ENDPOINT
+            ? new Response("unavailable", { status: 503 })
+            : new Response(JSON.stringify({ ok: true }));
+        },
+      },
+    );
+
+    expect(providerIds).toEqual([VERCEL_GATEWAY_PROVIDER_ID, OPENROUTER_PROVIDER_ID]);
+    expect(requests).toEqual([
+      { url: VERCEL_GATEWAY_ENDPOINT, model: VERCEL_GATEWAY_MODEL },
+      { url: OPENROUTER_GATEWAY_ENDPOINT, model: OPENROUTER_GATEWAY_MODEL },
+    ]);
+    expect(result).toEqual({ ok: true, value: { ok: true } });
+  });
+
+  test("fails closed on malformed provider preferences before auth or network", async () => {
+    const invalidSettings = [
+      { jev: { providers: [] } },
+      { jev: { providers: [{ provider: "unknown", model: VERCEL_GATEWAY_MODEL }] } },
+      {
+        jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: OPENROUTER_GATEWAY_MODEL }] },
+      },
+      {
+        jev: { providers: [{ provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/other" }] },
+      },
+      {
+        jev: {
+          providers: [
+            { provider: OPENROUTER_PROVIDER_ID, model: OPENROUTER_CONFIG_MODEL },
+            { provider: OPENROUTER_PROVIDER_ID, model: OPENROUTER_CONFIG_MODEL },
+          ],
+        },
+      },
+    ];
+
+    for (const settings of invalidSettings) {
+      writeSettings(settings);
+      let authCalls = 0;
+      let fetchCalls = 0;
+      const result = await requestJevGateway(
+        {
+          getProviderAuth: async () => {
+            authCalls += 1;
+            return { auth: { apiKey: "gateway-test-key" } };
+          },
+        },
+        {},
+        {
+          fetch: async () => {
+            fetchCalls += 1;
+            return new Response("unexpected");
+          },
+        },
+      );
+
+      expect(result).toEqual({ ok: false, stage: "config", reason: "invalid-config" });
+      expect(authCalls).toBe(0);
+      expect(fetchCalls).toBe(0);
+    }
+  });
+
+  test("fails closed on malformed global settings JSON without routing to defaults", async () => {
+    if (testAgentDirectory === undefined) throw new Error("test agent directory was not created");
+    writeFileSync(join(testAgentDirectory, "settings.json"), "{ not-json\n");
+    let fetchCalls = 0;
+    const result = await requestJevGateway(
+      auth,
+      {},
+      {
+        fetch: async () => {
+          fetchCalls += 1;
+          return new Response("unexpected");
+        },
+      },
+    );
+
+    expect(result).toEqual({ ok: false, stage: "config", reason: "invalid-config" });
+    expect(fetchCalls).toBe(0);
   });
 
   test("categorizes missing credentials without requesting the Gateway", async () => {

@@ -1,15 +1,18 @@
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { join } from "node:path";
+import { getAgentDir, type ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { readJsonConfig } from "./extension-config";
 
 export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway" as const;
 export const VERCEL_GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
 export const VERCEL_GATEWAY_MODEL = "typesafe-ai/jev";
 export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
 export const OPENROUTER_GATEWAY_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
-/** OpenRouter's official TypeSafe integration accepts the bare Jev model ID. */
+export const OPENROUTER_CONFIG_MODEL = "typesafe/jev-1.13";
+/** OpenRouter's System One endpoint accepts the bare Jev model ID. */
 export const OPENROUTER_GATEWAY_MODEL = "jev-1.13";
 export const JEV_GATEWAY_PROVIDER_IDS = [
-  VERCEL_GATEWAY_PROVIDER_ID,
   OPENROUTER_PROVIDER_ID,
+  VERCEL_GATEWAY_PROVIDER_ID,
 ] as const;
 /** Provisional total Jev budget shared by every integration and both gateways. */
 export const DEFAULT_JEV_TIMEOUT_MS = 2_400;
@@ -20,8 +23,9 @@ export type JevGatewayProviderId = (typeof JEV_GATEWAY_PROVIDER_IDS)[number];
 type JevGatewayRegistry = Pick<ModelRegistry, "getProviderAuth">;
 export type JevGatewayFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
-export type JevGatewayStage = "auth" | "request" | "body";
+export type JevGatewayStage = "config" | "auth" | "request" | "body";
 export type JevGatewayFailureReason =
+  | "invalid-config"
   | "missing-credentials"
   | "auth-failure"
   | "timeout"
@@ -35,7 +39,7 @@ export type JevGatewayFailureReason =
 export type JevGatewayFailure = {
   readonly ok: false;
   /** Identifies the provider whose bounded attempt produced this failure. */
-  readonly provider: JevGatewayProviderId;
+  readonly provider?: JevGatewayProviderId;
   readonly stage: JevGatewayStage;
   readonly reason: JevGatewayFailureReason;
   readonly httpStatus?: number;
@@ -63,16 +67,80 @@ type ProviderConfig = {
   readonly model: string;
 };
 
-const PRIMARY_PROVIDER: ProviderConfig = {
-  id: OPENROUTER_PROVIDER_ID,
-  endpoint: OPENROUTER_GATEWAY_ENDPOINT,
-  model: OPENROUTER_GATEWAY_MODEL,
-};
-const FALLBACK_PROVIDER: ProviderConfig = {
-  id: VERCEL_GATEWAY_PROVIDER_ID,
-  endpoint: VERCEL_GATEWAY_ENDPOINT,
-  model: VERCEL_GATEWAY_MODEL,
-};
+const DEFAULT_PROVIDERS: readonly ProviderConfig[] = [
+  {
+    id: OPENROUTER_PROVIDER_ID,
+    endpoint: OPENROUTER_GATEWAY_ENDPOINT,
+    model: OPENROUTER_GATEWAY_MODEL,
+  },
+  {
+    id: VERCEL_GATEWAY_PROVIDER_ID,
+    endpoint: VERCEL_GATEWAY_ENDPOINT,
+    model: VERCEL_GATEWAY_MODEL,
+  },
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && Array.isArray(value) === false;
+}
+
+function isSupportedTypeSafeModel(model: string): boolean {
+  return /^(?:jev-(?:latest|preview|\d+\.\d+(?:\.\d+)?))$/u.test(model);
+}
+
+function resolveProviderPreference(value: unknown): ProviderConfig | undefined {
+  if (!isRecord(value) || typeof value.provider !== "string" || typeof value.model !== "string") {
+    return undefined;
+  }
+
+  if (value.provider === OPENROUTER_PROVIDER_ID) {
+    const namespace = "typesafe/";
+    if (!value.model.startsWith(namespace)) return undefined;
+    const model = value.model.slice(namespace.length);
+    if (!isSupportedTypeSafeModel(model)) return undefined;
+    return { id: OPENROUTER_PROVIDER_ID, endpoint: OPENROUTER_GATEWAY_ENDPOINT, model };
+  }
+
+  if (value.provider === VERCEL_GATEWAY_PROVIDER_ID && value.model === VERCEL_GATEWAY_MODEL) {
+    return {
+      id: VERCEL_GATEWAY_PROVIDER_ID,
+      endpoint: VERCEL_GATEWAY_ENDPOINT,
+      model: VERCEL_GATEWAY_MODEL,
+    };
+  }
+
+  return undefined;
+}
+
+function resolveProviderPreferences(settings: unknown): ProviderConfig[] | undefined {
+  if (settings === undefined) return [...DEFAULT_PROVIDERS];
+  if (!isRecord(settings)) return undefined;
+  if (settings.jev === undefined) return [...DEFAULT_PROVIDERS];
+  if (!isRecord(settings.jev)) return undefined;
+  if (settings.jev.providers === undefined) return [...DEFAULT_PROVIDERS];
+
+  const preferences = settings.jev.providers;
+  if (!Array.isArray(preferences) || preferences.length < 1 || preferences.length > 2)
+    return undefined;
+
+  const providers: ProviderConfig[] = [];
+  const seen = new Set<JevGatewayProviderId>();
+  for (const preference of preferences) {
+    const provider = resolveProviderPreference(preference);
+    if (provider === undefined || seen.has(provider.id)) return undefined;
+    seen.add(provider.id);
+    providers.push(provider);
+  }
+  return providers;
+}
+
+function loadProviderPreferences(): ProviderConfig[] | undefined {
+  try {
+    return resolveProviderPreferences(readJsonConfig(join(getAgentDir(), "settings.json")));
+  } catch {
+    return undefined;
+  }
+}
 
 interface DeadlineState {
   readonly signal: AbortSignal;
@@ -324,8 +392,10 @@ async function requestProvider<TRequest extends object>(
 }
 
 export function createJevGatewayRequester(now: () => number = Date.now) {
-  let cooldownUntilMs = 0;
-  let cooldownFailure: JevGatewayFailure | undefined;
+  const cooldowns = new Map<
+    JevGatewayProviderId,
+    { readonly untilMs: number; readonly failure: JevGatewayFailure }
+  >();
 
   return async function requestJevGateway<TRequest extends object>(
     registry: JevGatewayRegistry,
@@ -366,52 +436,80 @@ export function createJevGatewayRequester(now: () => number = Date.now) {
       }
     };
 
+    let currentProvider: JevGatewayProviderId | undefined;
     try {
-      const cachedFailure = cooldownFailure;
-      const coolingDown = cachedFailure !== undefined && now() < cooldownUntilMs;
-      const primary = coolingDown
-        ? cachedFailure
-        : await runAttempt(PRIMARY_PROVIDER, primaryTimeoutMs);
-      if (
-        !coolingDown &&
-        primary.ok === false &&
-        primary.httpStatus === 429 &&
-        primary.retryAfterMs
-      ) {
-        cooldownUntilMs = now() + primary.retryAfterMs;
-        cooldownFailure = primary;
+      const providers = loadProviderPreferences();
+      if (providers === undefined) {
+        return {
+          ok: false,
+          stage: "config",
+          reason: callerCancelled ? "caller-cancellation" : timedOut ? "timeout" : "invalid-config",
+        };
       }
-      if (
-        !coolingDown &&
-        (primary.ok || callerCancelled || timedOut || deadlineController.signal.aborted)
-      )
-        return primary;
 
-      const fallback = await runAttempt(FALLBACK_PROVIDER);
-      if (
-        !fallback.ok &&
-        fallback.stage === "auth" &&
-        (fallback.reason === "missing-credentials" || fallback.reason === "auth-failure") &&
-        !callerCancelled &&
-        !timedOut &&
-        !deadlineController.signal.aborted &&
-        !(
-          primary.ok === false &&
-          primary.stage === "auth" &&
-          (primary.reason === "missing-credentials" || primary.reason === "auth-failure")
-        )
-      ) {
-        // Keep useful primary diagnostics such as Vercel's Retry-After when the fallback is unavailable.
-        return coolingDown && primary.ok === false
-          ? { ...primary, retryAfterMs: Math.max(0, cooldownUntilMs - now()) }
-          : primary;
+      let firstFailure: JevGatewayFailure | undefined;
+      let lastFailure: JevGatewayFailure | undefined;
+      let attempted = false;
+      for (const [index, provider] of providers.entries()) {
+        const cooldown = cooldowns.get(provider.id);
+        if (cooldown !== undefined && now() < cooldown.untilMs) {
+          const unavailable = {
+            ...cooldown.failure,
+            retryAfterMs: Math.max(0, cooldown.untilMs - now()),
+          };
+          firstFailure ??= unavailable;
+          lastFailure = unavailable;
+          continue;
+        }
+        cooldowns.delete(provider.id);
+
+        currentProvider = provider.id;
+        const result = await runAttempt(
+          provider,
+          index === 0 && providers.length > 1 ? primaryTimeoutMs : undefined,
+        );
+        attempted = true;
+        if (result.ok) return result;
+        const retryAfterMs = result.retryAfterMs;
+        if (result.httpStatus === 429 && retryAfterMs !== undefined && retryAfterMs > 0) {
+          cooldowns.set(provider.id, { untilMs: now() + retryAfterMs, failure: result });
+        }
+        if (callerCancelled || timedOut || deadlineController.signal.aborted) return result;
+
+        if (
+          index > 0 &&
+          result.stage === "auth" &&
+          (result.reason === "missing-credentials" || result.reason === "auth-failure") &&
+          firstFailure !== undefined &&
+          !(
+            firstFailure.stage === "auth" &&
+            (firstFailure.reason === "missing-credentials" ||
+              firstFailure.reason === "auth-failure")
+          )
+        ) {
+          const cooldown =
+            firstFailure.provider === undefined ? undefined : cooldowns.get(firstFailure.provider);
+          return cooldown === undefined
+            ? firstFailure
+            : { ...firstFailure, retryAfterMs: Math.max(0, cooldown.untilMs - now()) };
+        }
+
+        firstFailure ??= result;
+        lastFailure = result;
       }
-      return fallback;
+      if (attempted && lastFailure !== undefined) return lastFailure;
+      return firstFailure ?? { ok: false, stage: "config", reason: "invalid-config" };
     } catch {
-      const provider = callerCancelled || timedOut ? PRIMARY_PROVIDER.id : FALLBACK_PROVIDER.id;
+      if (currentProvider === undefined) {
+        return {
+          ok: false,
+          stage: "config",
+          reason: callerCancelled ? "caller-cancellation" : timedOut ? "timeout" : "invalid-config",
+        };
+      }
       return (
-        stageFailure(provider, "request", deadline) ??
-        failure(provider, "request-failure", "request")
+        stageFailure(currentProvider, "request", deadline) ??
+        failure(currentProvider, "request-failure", "request")
       );
     } finally {
       clearTimeout(timeout);

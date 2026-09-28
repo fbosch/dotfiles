@@ -1,4 +1,0 @@
-[install]
-auto = "auto"
-linker = "hoisted"
-saveTextLockfile = true

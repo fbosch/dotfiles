@@ -34,7 +34,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## OpenCode Fallback
 
-- OpenCode is retained as a near-stock fallback; keep its configuration limited to `.config/opencode/opencode.jsonc`.
+- OpenCode is a backup harness for repairing `.pi/`; keep only `.config/opencode/opencode.jsonc`, the `zenwritten-dark` theme, and the native GitHub MCP (`gh mcp`).
 
 ## References
 
