@@ -3,15 +3,25 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
 ablate=false
 auth_profile=default
 spec_override=""
+orchestration=false
+without_instructions=false
 while (($# > 0)); do
   case "$1" in
+  --orchestration)
+    orchestration=true
+    shift
+    ;;
+  --without-instructions)
+    without_instructions=true
+    shift
+    ;;
   --ablate)
     ablate=true
     shift
@@ -80,6 +90,19 @@ if [[ ! "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 2
 fi
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+if [[ "$without_instructions" == true && "$orchestration" != true ]]; then
+  printf '%s\n' '--without-instructions requires --orchestration' >&2
+  exit 2
+fi
+if [[ "$orchestration" == true ]]; then
+  if [[ "$ablate" == true || "$skill" != orchestration ]]; then
+    printf '%s\n' 'Use --orchestration with subject orchestration; use --without-instructions, not --ablate.' >&2
+    exit 2
+  fi
+  spec_override="${spec_override:-$repo_root/.pi/agent/evals/orchestration/orchestration.eval.yaml}"
+fi
+
 spec="${spec_override:-.agents/skills/$skill/$skill.eval.yaml}"
 if [[ ! -f "$spec" ]]; then
   printf 'Eval spec not found: %s\n' "$spec" >&2
@@ -114,6 +137,14 @@ if [[ -f "$real_agent_dir/settings.json" && ! -L "$real_agent_dir/settings.json"
   chmod 600 "$canonical_agent/settings.json"
 fi
 trap 'rm -rf "$run_root"' EXIT
+if [[ "$orchestration" == true ]]; then
+  mkdir -p "$repo_root/.caliper/orchestration"
+  ORCHESTRATION_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/orchestration/run.XXXXXX")"
+  export ORCHESTRATION_EVAL_RUN
+  python3 "$repo_root/.pi/agent/evals/orchestration/launch.py" prepare \
+    "$repo_root" "$run_root" "$ORCHESTRATION_EVAL_RUN" "$without_instructions" "$model"
+  printf 'Orchestration evidence: %s\n' "$ORCHESTRATION_EVAL_RUN"
+fi
 
 wrapper="$run_root/pi-wrapper"
 cat >"$wrapper" <<'EOF'
@@ -149,7 +180,11 @@ sync_from_isolated() {
 sync_to_isolated
 pi_bin=__CALIPER_PI_BIN__
 set +e
-PI_OFFLINE=1 "$pi_bin" --no-extensions "$@"
+if [ -f "$run_root/orchestration-launch.py" ]; then
+  python3 "$run_root/orchestration-launch.py" "$pi_bin" "$@"
+else
+  PI_OFFLINE=1 "$pi_bin" --no-extensions "$@"
+fi
 child_status=$?
 sync_from_isolated
 sync_status=$?

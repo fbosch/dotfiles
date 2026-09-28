@@ -264,7 +264,10 @@ export async function askJevQuestion(
     ...(signal === undefined ? {} : { signal }),
     ...(fetch === undefined ? {} : { fetch }),
   });
-  if (!result.ok) throw new Error(`Jev request failed (${result.provider}: ${result.reason})`);
+  if (!result.ok) {
+    const provider = result.provider ?? "configuration";
+    throw new Error(`Jev request failed (${provider}: ${result.reason})`);
+  }
   signal?.throwIfAborted();
   const answers = normalizeQuestionResponse(result.value, normalized);
   if (Buffer.byteLength(JSON.stringify(answers), "utf8") > MAX_RESULT_BYTES)

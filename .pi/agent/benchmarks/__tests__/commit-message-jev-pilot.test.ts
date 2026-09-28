@@ -63,7 +63,6 @@ describe("commit-message Jev pilot", () => {
 
     const state = (requestBody?.state ?? {}) as Record<string, unknown>;
     expect(Array.isArray(state.cases)).toBe(true);
-    expect(requestBody?.model).toBe("typesafe-ai/jev");
   });
 
   test("keeps Jev advisory when it disagrees or returns an unusable response", async () => {

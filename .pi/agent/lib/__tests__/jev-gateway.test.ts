@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   createJevGatewayRequester,
   OPENROUTER_CONFIG_MODEL,
@@ -15,19 +15,15 @@ import {
 } from "../jev-gateway";
 
 const auth = { getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }) };
-const originalAgentDirectory = process.env.PI_CODING_AGENT_DIR;
 let testAgentDirectory: string | undefined;
 let requestJevGateway = createJevGatewayRequester();
 beforeEach(() => {
   testAgentDirectory = mkdtempSync(join(tmpdir(), "jev-gateway-test-"));
-  process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
-  requestJevGateway = createJevGatewayRequester();
+  requestJevGateway = createJevGatewayRequester(Date.now, testAgentDirectory);
 });
 afterEach(() => {
   if (testAgentDirectory !== undefined)
     rmSync(testAgentDirectory, { recursive: true, force: true });
-  if (originalAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
-  else process.env.PI_CODING_AGENT_DIR = originalAgentDirectory;
   testAgentDirectory = undefined;
 });
 
@@ -115,6 +111,36 @@ describe("requestJevGateway", () => {
       { url: OPENROUTER_GATEWAY_ENDPOINT, model: OPENROUTER_GATEWAY_MODEL },
     ]);
     expect(result).toEqual({ ok: true, value: { ok: true } });
+  });
+
+  test("gives a single configured provider the full caller deadline", async () => {
+    writeSettings({
+      jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: OPENROUTER_CONFIG_MODEL }] },
+    });
+    let aborted = false;
+    const result = await requestJevGateway(
+      auth,
+      {},
+      {
+        timeoutMs: 120,
+        fetch: async (_input, init) =>
+          new Promise<Response>((resolve, reject) => {
+            const timer = setTimeout(() => resolve(new Response(JSON.stringify({ ok: true }))), 75);
+            init?.signal?.addEventListener(
+              "abort",
+              () => {
+                aborted = true;
+                clearTimeout(timer);
+                reject(new Error("aborted"));
+              },
+              { once: true },
+            );
+          }),
+      },
+    );
+
+    expect(result).toEqual({ ok: true, value: { ok: true } });
+    expect(aborted).toBe(false);
   });
 
   test("fails closed on malformed provider preferences before auth or network", async () => {

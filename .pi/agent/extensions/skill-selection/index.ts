@@ -381,7 +381,7 @@ export async function selectSkillsWithJevDetailed(
       ok: false,
       failure: {
         kind: "gateway-failure",
-        provider: gateway.provider,
+        ...(gateway.provider === undefined ? {} : { provider: gateway.provider }),
         stage: gateway.stage,
         reason: gateway.reason,
         ...(gateway.httpStatus === undefined ? {} : { httpStatus: gateway.httpStatus }),

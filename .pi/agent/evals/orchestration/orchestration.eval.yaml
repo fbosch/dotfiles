@@ -1,0 +1,29 @@
+skills: []
+sandbox:
+  forbidden_files:
+    - '.*\.eval\.yaml$'
+    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl)$'
+tasks:
+  - name: A one-file lookup stays with the parent
+    id: direct-read
+    prompt: What is the exact text in assigned.txt?
+    assert: |
+      import sys
+      from pathlib import Path
+      sys.path.insert(0, str(Path.cwd()))
+      from check import check
+      check("direct")
+  - name: Routine progress does not trigger a checkpoint assessment
+    id: routine-update
+    prompt: |
+      Coordination-only exercise; no real worker is running. A worker assigned
+      to locate a formatter reports: "Found the expected formatter file; the
+      existing targeted test passes. Next I will inspect its call sites within
+      my assigned scope." Does this update need intervention?
+      Respond with JSON only: {"intervene": true} or {"intervene": false}.
+    assert: |
+      import sys
+      from pathlib import Path
+      sys.path.insert(0, str(Path.cwd()))
+      from check import check
+      check("routine")

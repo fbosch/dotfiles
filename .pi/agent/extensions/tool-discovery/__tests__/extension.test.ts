@@ -486,7 +486,6 @@ describe("tool discovery", () => {
 
     expect(ranked?.matches.map((tool) => tool.name)).toEqual(["chart_network"]);
     expect(ranked?.rankingSource).toBe("jev");
-    expect(requestBody?.model).toBe("typesafe-ai/jev");
     const state = requestBody?.state as {
       candidates: Array<Record<string, unknown>>;
     };

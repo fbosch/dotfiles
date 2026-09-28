@@ -1,6 +1,6 @@
 import type { SkillSelectionBenchmarkCase } from "./skill-selection-fixtures";
 
-export type BenchmarkFailureStage = "auth" | "request" | "body" | "evaluation";
+export type BenchmarkFailureStage = "config" | "auth" | "request" | "body" | "evaluation";
 
 export interface BenchmarkPredictionFailure {
   readonly stage: BenchmarkFailureStage;

@@ -167,6 +167,7 @@ function diagnosticForFailure(proposedAgent: string, startedAt: number): Routing
 function diagnosticReasonLabel(diagnostic: RoutingDiagnostic): string {
   if (diagnostic.gatewayFailure !== undefined) {
     const labels: Record<NonNullable<RoutingDiagnostic["gatewayFailure"]>, string> = {
+      "invalid-config": "invalid gateway configuration",
       "missing-credentials": "missing credentials",
       "auth-failure": "authentication failed",
       timeout: "timed out",

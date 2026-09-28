@@ -26,7 +26,8 @@ secret_in_env = any(value in os.environ.values() for value in ("seed-secret", "c
 log = Path(os.environ["CALIPER_LOG"])
 record = {"kind": "pi", "role": role, "agent": str(agent_dir),
           "seed": data.get("token") == "seed-secret", "candidate": data.get("token") == "candidate-secret",
-          "secret_in_env": secret_in_env, "no_extensions": "--no-extensions" in sys.argv}
+          "secret_in_env": secret_in_env, "no_extensions": "--no-extensions" in sys.argv,
+          "argv": sys.argv[1:], "offline": os.environ.get("PI_OFFLINE") == "1"}
 with log.open("a") as stream:
     stream.write(json.dumps(record) + "\n")
 if role == "candidate":
@@ -67,7 +68,7 @@ raise SystemExit(2)
 '''
 
 class CaliperSkillEvalTests(unittest.TestCase):
-    def run_eval(self, profile=None, ablate=False, exit_code=0, conflict=False, extra=None, spec=None):
+    def run_eval(self, profile=None, ablate=False, exit_code=0, conflict=False, extra=None, spec=None, orchestration=False):
         root = Path(tempfile.mkdtemp(prefix="caliper fixture "))
         agent = root / "pi agent with spaces"
         (agent / "auth-profiles").mkdir(parents=True)
@@ -93,12 +94,37 @@ class CaliperSkillEvalTests(unittest.TestCase):
                     "PATH": str(bin_dir) + os.pathsep + env.get("PATH", "")})
         if conflict:
             env["CALIPER_CONFLICT_PATH"] = str(named if profile else default)
+        script = SCRIPT
+        if orchestration:
+            repo = root / "orchestration repo"
+            agent_dir = repo / ".pi" / "agent"
+            fixture = agent_dir / "evals" / "orchestration"
+            extension_root = agent_dir / "npm" / "node_modules" / "@gotgenes" / "pi-subagents"
+            extension_files = (
+                extension_root / "src" / "index.ts",
+                agent_dir / "extensions" / "instruction-fragments.ts",
+                agent_dir / "extensions" / "recommend-agent" / "index.ts",
+                fixture / "fixture.ts",
+            )
+            for path in extension_files:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("// mock installed extension\\n")
+            (extension_root / "package.json").write_text(json.dumps({"version": "1.2.3"}))
+            instructions = agent_dir / "instructions" / "orchestration.md"
+            instructions.parent.mkdir(parents=True, exist_ok=True)
+            instructions.write_text("# Mock orchestration instructions\\n")
+            (fixture / "orchestration.eval.yaml").write_text("mock eval spec\\n")
+            script = repo / "scripts" / "caliper-skill-eval.sh"
+            script.parent.mkdir(parents=True)
+            shutil.copy2(SCRIPT, script)
+            shutil.copy2(ROOT / ".pi" / "agent" / "evals" / "orchestration" / "launch.py", fixture / "launch.py")
         args = []
+        if orchestration: args.append("--orchestration")
         if ablate: args.append("--ablate")
         if profile: args += ["--auth-profile", profile]
         if spec: args += ["--spec", spec]
-        args += list(extra or ["cli-ux"])
-        result = subprocess.run([str(SCRIPT), *args], cwd=ROOT, env=env, text=True,
+        args += list(extra or (["orchestration", "m", "medium", "1", "j", "high"] if orchestration else ["cli-ux"]))
+        result = subprocess.run([str(script), *args], cwd=ROOT, env=env, text=True,
                                 capture_output=True)
         events = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
         return root, agent, default, named, result, events
@@ -122,13 +148,33 @@ class CaliperSkillEvalTests(unittest.TestCase):
         pi_events = [e for e in events if e["kind"] == "pi"]
         self.assertTrue(pi_events[0]["seed"])
         self.assertTrue(pi_events[1]["candidate"])
-        self.assertTrue(all(e["no_extensions"] and not e["secret_in_env"] for e in pi_events))
+        self.assertTrue(all(e["no_extensions"] and not e["secret_in_env"] and e["offline"] for e in pi_events))
+        self.assertEqual([e["argv"] for e in pi_events], [
+            ["--no-extensions", "candidate"], ["--no-extensions", "judge"],
+        ])
         self.assertEqual(json.loads(named.read_text())["token"], "judge-secret")
         self.assertEqual(json.loads(default.read_text())["token"], "default-secret")
         self.assertEqual(stat.S_IMODE(named.stat().st_mode), 0o600)
         self.assertNotIn("seed-secret", result.stdout + result.stderr)
         self.assertNotIn("judge-secret", result.stdout + result.stderr)
         self.assertFalse(Path(caliper[0]["home"]).exists())
+
+    def test_orchestration_wrapper_validates_and_uses_opt_in_pi_flags(self):
+        root, _, _, _, result, events = self.run_eval(orchestration=True)
+        self.track(root)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        repo = root / "orchestration repo"
+        spec = str((repo / ".pi/agent/evals/orchestration/orchestration.eval.yaml").resolve())
+        caliper = [event for event in events if event["kind"] == "caliper"]
+        self.assertEqual(caliper[0]["argv"], ["validate", spec])
+        self.assertEqual(caliper[1]["argv"][0:2], ["run", spec])
+        self.assertIn("--workers", caliper[1]["argv"])
+        self.assertEqual(caliper[1]["argv"][caliper[1]["argv"].index("--workers") + 1], "1")
+        pi_events = [event for event in events if event["kind"] == "pi"]
+        self.assertEqual([event["role"] for event in pi_events], ["candidate", "judge"])
+        self.assertEqual(pi_events[0]["argv"], ["--no-skills", "--no-prompt-templates", "candidate"])
+        self.assertEqual(pi_events[1]["argv"], ["--no-extensions", "judge"])
+        self.assertTrue(all(event["offline"] and not event["secret_in_env"] for event in pi_events))
 
     def test_default_profile_and_child_status(self):
         root, agent, default, named, result, events = self.run_eval(exit_code=17, extra=["cli-ux", "m", "medium", "1", "j", "high"])

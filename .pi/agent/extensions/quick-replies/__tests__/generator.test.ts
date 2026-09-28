@@ -722,7 +722,6 @@ describe("quick reply model generation", () => {
     ]);
     expect(requestBodies).toHaveLength(1);
     const request = requestBodies[0];
-    expect(request?.model).toBe("typesafe-ai/jev");
     expect(request?.questions).toMatchObject({
       candidate_0: { type: "score" },
       candidate_1: { type: "score" },

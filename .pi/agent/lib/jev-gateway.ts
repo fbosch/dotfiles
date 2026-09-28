@@ -134,9 +134,9 @@ function resolveProviderPreferences(settings: unknown): ProviderConfig[] | undef
   return providers;
 }
 
-function loadProviderPreferences(): ProviderConfig[] | undefined {
+function loadProviderPreferences(agentDirectory = getAgentDir()): ProviderConfig[] | undefined {
   try {
-    return resolveProviderPreferences(readJsonConfig(join(getAgentDir(), "settings.json")));
+    return resolveProviderPreferences(readJsonConfig(join(agentDirectory, "settings.json")));
   } catch {
     return undefined;
   }
@@ -391,7 +391,7 @@ async function requestProvider<TRequest extends object>(
   }
 }
 
-export function createJevGatewayRequester(now: () => number = Date.now) {
+export function createJevGatewayRequester(now: () => number = Date.now, agentDirectory?: string) {
   const cooldowns = new Map<
     JevGatewayProviderId,
     { readonly untilMs: number; readonly failure: JevGatewayFailure }
@@ -438,7 +438,7 @@ export function createJevGatewayRequester(now: () => number = Date.now) {
 
     let currentProvider: JevGatewayProviderId | undefined;
     try {
-      const providers = loadProviderPreferences();
+      const providers = loadProviderPreferences(agentDirectory);
       if (providers === undefined) {
         return {
           ok: false,

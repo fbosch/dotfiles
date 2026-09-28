@@ -13,6 +13,7 @@ import {
 import {
   type PhasedCandidate,
   type PhasedPhase,
+  type PhasedSelectionDiagnostic,
   type PhasedSelectionResult,
   type PhasedSourceSpan,
   runPhasedSelection,
@@ -31,7 +32,7 @@ const MAX_PARALLEL_REQUESTS = 2;
 const MAX_REQUESTS = Math.ceil(MAX_SOURCE_SPANS / MAX_SPANS_PER_REQUEST);
 const MAX_STATE_CHARS = 24_000;
 const MAX_PHASED_REQUEST_CHARS = 240_000;
-const MAX_PHASED_ITEMS_PER_REQUEST = 192;
+const MAX_PHASED_ITEMS_PER_REQUEST = 16;
 const MAX_USER_CONTEXT_MESSAGES = 3;
 const MAX_USER_CONTEXT_CHARS = 400;
 const MAX_CUSTOM_INSTRUCTIONS_CHARS = 600;
@@ -94,6 +95,7 @@ export interface FastJevAttemptStatus {
   readonly afterChars: number;
   readonly spans: number;
   readonly requests: number;
+  readonly selection?: PhasedSelectionDiagnostic;
 }
 
 interface ToolResult {
@@ -392,6 +394,8 @@ export interface SourceSpan {
   readonly end: number;
   readonly text: string;
   readonly mandatory: boolean;
+  readonly retirementEligible?: boolean;
+  readonly retirementWitness?: boolean;
   readonly toolCallId?: string;
   readonly toolCallPart?: "call" | "result";
 }
@@ -523,6 +527,7 @@ function sourceSpans(
     mandatory: boolean,
     toolCallId?: string,
     toolCallPart?: "call" | "result",
+    retirementEligible = false,
   ): void => {
     const sanitizedText = redact(text);
     if (!sanitizedText) return;
@@ -544,6 +549,7 @@ function sourceSpans(
         end,
         text: sanitizedText.slice(start, end),
         mandatory,
+        ...(retirementEligible ? { retirementEligible: true } : {}),
         ...(toolCallId === undefined ? {} : { toolCallId }),
         ...(toolCallPart === undefined ? {} : { toolCallPart }),
       });
@@ -555,7 +561,15 @@ function sourceSpans(
   if (previous.summary) {
     const parsed = parsePriorV3Summary(previous.summary);
     if (parsed === undefined) {
-      addText("prior-summary", "prior compaction summary", previous.summary, true);
+      addText(
+        "prior-summary",
+        "prior compaction summary",
+        previous.summary,
+        true,
+        undefined,
+        undefined,
+        true,
+      );
     } else {
       for (const priorSpan of parsed.spans) {
         if (spans.length >= MAX_SOURCE_SPANS) {
@@ -568,10 +582,19 @@ function sourceSpans(
           source: redact(priorSpan.source, 240),
           text: redact(priorSpan.text),
           mandatory: true,
+          retirementEligible: true,
         });
       }
       if (!overflow)
-        addText("prior-summary", "prior Pi file operations", parsed.fileOperations, true);
+        addText(
+          "prior-summary",
+          "prior Pi file operations",
+          parsed.fileOperations,
+          true,
+          undefined,
+          undefined,
+          true,
+        );
     }
   } else {
     for (const [messageIndex, message] of (previous.messages ?? []).entries()) {
@@ -590,7 +613,21 @@ function sourceSpans(
     if (!previous.summary || !isRecord(raw) || raw.role !== "compactionSummary") return true;
     return typeof raw.summary !== "string" || raw.summary.trim() !== previous.summary;
   });
+  const sourceRecords = filtered.filter(
+    (raw): raw is Record<string, unknown> => isRecord(raw) && raw.excludeFromContext !== true,
+  );
   const messages = toFastJevMessages(filtered);
+  const latestUserSource = sourceRecords
+    .map((raw, index) => ({ raw, index }))
+    .filter(({ raw, index }) => {
+      const message = messages[index];
+      return raw.role === "user" && message !== undefined && message.text.trim().length > 0;
+    })
+    .at(-1);
+  const latestUserSourceLabel =
+    latestUserSource === undefined
+      ? undefined
+      : `prepared message ${latestUserSource.index + 1} (user)`;
   const failedCallIds = new Set(
     messages.flatMap((message) =>
       message.toolResults.filter((result) => result.isError).map((result) => result.toolUseId),
@@ -617,6 +654,9 @@ function sourceSpans(
         `prepared message ${messageIndex + 1} (${message.role})`,
         message.text,
         mandatory,
+        undefined,
+        undefined,
+        mandatory && `prepared message ${messageIndex + 1} (user)` !== latestUserSourceLabel,
       );
     }
     for (const call of message.toolCalls) {
@@ -643,7 +683,18 @@ function sourceSpans(
     }
     if (overflow) return;
   });
-  return { spans, overflow };
+  const witness = [...spans]
+    .reverse()
+    .find((span) => span.kind === "user" && span.source === latestUserSourceLabel);
+  return {
+    spans:
+      witness === undefined
+        ? spans
+        : spans.map((span) =>
+            span.id === witness.id ? { ...span, retirementWitness: true } : span,
+          ),
+    overflow,
+  };
 }
 
 function addMessageSpans(
@@ -714,18 +765,28 @@ export function inferenceState(
   candidates: readonly SourceSpan[],
   customInstructions: string | undefined,
 ): Record<string, unknown> {
-  const userMessages = new Map<string, string[]>();
+  const latestUserSource = spans.find((span) => span.retirementWitness)?.source;
+  const userMessages = new Map<
+    string,
+    { readonly source: string; readonly chunks: string[]; readonly latest: boolean }
+  >();
   for (const span of spans) {
     if (span.kind !== "user") continue;
-    const chunks = userMessages.get(span.source) ?? [];
-    chunks.push(span.text);
-    userMessages.set(span.source, chunks);
+    const isCurrent = span.retirementEligible !== true;
+    const key = JSON.stringify([span.source, isCurrent ? "current" : "historical"]);
+    const message = userMessages.get(key) ?? {
+      source: span.source,
+      chunks: [],
+      latest: isCurrent && span.source === latestUserSource,
+    };
+    message.chunks.push(span.text);
+    userMessages.set(key, message);
   }
-  const userContext = [...userMessages.entries()]
+  const userContext = [...userMessages.values()]
     .slice(-MAX_USER_CONTEXT_MESSAGES)
-    .map(([source, chunks]) => ({
+    .map(({ source, chunks, latest }) => ({
       source: redact(source, 160),
-      text: redact(chunks.join(""), MAX_USER_CONTEXT_CHARS),
+      text: redact(chunks.join(""), latest ? Number.MAX_SAFE_INTEGER : MAX_USER_CONTEXT_CHARS),
     }));
   return {
     task: "Select source spans that contain useful continuation facts; the renderer copies selected text verbatim and creates no summary prose.",
@@ -881,6 +942,7 @@ function makeStatus(
   spans: number,
   requests: number,
   diagnostic?: FastJevFailureDiagnostics,
+  selection?: PhasedSelectionDiagnostic,
 ): FastJevAttemptStatus {
   return {
     version: 3,
@@ -888,6 +950,7 @@ function makeStatus(
     path,
     ...(reason === undefined ? {} : { reason }),
     ...(diagnostic === undefined ? {} : { diagnostic }),
+    ...(selection === undefined ? {} : { selection }),
     jevMs,
     totalMs,
     beforeChars,
@@ -934,6 +997,7 @@ function gatewayFailureDisposition(failure: JevGatewayFailure): FastJevFailure {
     case "oversized-body":
       return { kind: "refused", reason: "oversized-body", diagnostic };
   }
+  return { kind: "refused", reason: "unexpected", diagnostic };
 }
 
 function monotonicMs(start: number): number {
@@ -1004,21 +1068,18 @@ function phasedRequest(
   phase: PhasedPhase,
   candidates: readonly PhasedCandidate[],
 ): PhasedRequest {
-  const answerNames = candidates.map((candidate) => `retain_${candidate.id}`);
+  const answerNames = candidates.map((candidate) => `${candidate.judgment}_${candidate.id}`);
   const questions = Object.fromEntries(
-    candidates.map((_, index) => [
+    candidates.map((candidate, index) => [
       answerNames[index]!,
       {
         type: "noul",
         instructions:
-          phase === "coarse"
-            ? "Should this coherent evidence group remain in the continuation record?"
-            : "Should this source span remain in the continuation record?",
-        criteria: {
-          true: "Contains a non-redundant fact, constraint, decision, or action outcome needed to continue.",
-          false:
-            "Routine, stale, redundant, or safely reproducible; protected evidence must remain.",
-        },
+          candidate.judgment === "retire"
+            ? `May candidate ${candidate.id}, the complete historical evidence group ${candidate.groupId}, be retired? Compare all of its evidence with the complete latest-user witness group ${candidate.witness?.groupId ?? "missing"}; retire only if the witness explicitly shows every historical fact is duplicated, superseded, or resolved without losing an active constraint, unfinished obligation, or consequential outcome. Uncertainty means retain.`
+            : phase === "coarse"
+              ? `Should candidate ${candidate.id}, the complete evidence group ${candidate.groupId} (all evidence listed for this candidate), remain in the continuation record? Retain if any part contains a useful, non-redundant continuation fact.`
+              : `Should candidate ${candidate.id}, this bounded chunk of evidence group ${candidate.groupId}, remain in the continuation record? Retain if any listed evidence is useful for continuing the task.`,
       },
     ]),
   );
@@ -1027,12 +1088,34 @@ function phasedRequest(
       ...baseState,
       task:
         phase === "coarse"
-          ? "Select coherent evidence groups that contain useful continuation facts. The renderer copies selected source text verbatim; do not summarize or generate prose."
+          ? "Select useful continuation evidence. Retire a historical source group only when every complete candidate span is explicitly shown by its named complete latest-user witness group to be duplicated, superseded, or resolved, with no active constraint, unfinished obligation, or consequential outcome lost. Uncertainty means retain. Other judgments select evidence for verbatim rendering; do not summarize or generate prose."
           : "Refine the selected evidence by retaining only source spans needed for continuation. The renderer copies selected source text verbatim; do not summarize or generate prose.",
       candidates: candidates.map((candidate) => ({
         id: candidate.id,
+        group_id: candidate.groupId,
+        judgment: candidate.judgment,
         evidence: phasedEvidence(candidate.spans),
+        ...(candidate.witness === undefined
+          ? {}
+          : { retirement_witness_group_id: candidate.witness.groupId }),
       })),
+      retirement_witness_groups: [
+        ...new Map(
+          candidates.flatMap((candidate) =>
+            candidate.witness === undefined
+              ? []
+              : [
+                  [
+                    candidate.witness.groupId,
+                    {
+                      id: candidate.witness.groupId,
+                      evidence: phasedEvidence(candidate.witness.spans),
+                    },
+                  ] as const,
+                ],
+          ),
+        ).values(),
+      ],
     },
     questions,
     answerNames,
@@ -1105,7 +1188,7 @@ async function runPhasedJevSelection(
       for (const [index, candidate] of candidates.entries()) {
         const answer = answers[request.answerNames[index]!];
         if (answer === undefined) return { kind: "refused", reason: "malformed-jev" };
-        mappedAnswers[candidate.id] = answer;
+        mappedAnswers[`${candidate.judgment}_${candidate.id}`] = answer;
       }
       return { kind: "answers", answers: mappedAnswers };
     },
@@ -1161,6 +1244,8 @@ export async function runFastJevCompaction(
     spans: number,
     requests: number,
     diagnostic?: FastJevFailureDiagnostics,
+    afterChars = beforeChars,
+    selection?: PhasedSelectionDiagnostic,
   ): Exclude<FastJevRunOutcome, { readonly kind: "success" }> => {
     const status = makeStatus(
       kind === "unavailable" ? "native-fallback" : kind,
@@ -1169,10 +1254,11 @@ export async function runFastJevCompaction(
       jevMs,
       monotonicMs(startedAt),
       beforeChars,
-      beforeChars,
+      afterChars,
       spans,
       requests,
       diagnostic,
+      selection,
     );
     options.onStatus?.(status);
     return { kind, status };
@@ -1224,6 +1310,9 @@ export async function runFastJevCompaction(
   const decisions = new Map<string, boolean>();
   let failure: FastJevFailure | undefined;
   let requests = 0;
+  let phasedSelectionDiagnostic: PhasedSelectionDiagnostic | undefined;
+  let phasedJevMs: number | undefined;
+  let phasedSelectedIds: ReadonlySet<string> | undefined;
 
   try {
     if (options.phased) {
@@ -1236,6 +1325,8 @@ export async function runFastJevCompaction(
       );
       requests = phased.requests;
       if (phased.kind !== "success") {
+        phasedSelectionDiagnostic = phased.selection;
+        phasedJevMs = phased.requests === 0 ? 0 : phased.durationMs;
         failure = {
           kind: phased.kind,
           reason: phased.reason,
@@ -1243,6 +1334,7 @@ export async function runFastJevCompaction(
         };
       } else {
         const selectedIds = new Set(phased.selected.map((span) => span.id));
+        phasedSelectedIds = selectedIds;
         for (const candidate of candidates)
           decisions.set(candidate.id, selectedIds.has(candidate.id));
       }
@@ -1326,7 +1418,7 @@ export async function runFastJevCompaction(
     options.signal?.removeEventListener("abort", onCallerAbort);
   }
 
-  const jevMs = monotonicMs(jevStartedAt);
+  const jevMs = phasedJevMs ?? monotonicMs(jevStartedAt);
   if (options.signal?.aborted) failure = { kind: "cancelled", reason: "caller-cancellation" };
   if (failure)
     return finish(
@@ -1337,12 +1429,17 @@ export async function runFastJevCompaction(
       spans.length,
       requests,
       failure.diagnostic,
+      phasedSelectionDiagnostic?.afterChars ?? beforeChars,
+      phasedSelectionDiagnostic,
     );
   if (decisions.size !== candidates.length) {
     return finishRefusal("malformed-jev", jevMs, beforeChars, spans.length, requests);
   }
 
-  const selected = selectWithCallDependencies(spans, decisions);
+  const selected =
+    phasedSelectedIds === undefined
+      ? selectWithCallDependencies(spans, decisions)
+      : spans.filter((span) => phasedSelectedIds.has(span.id));
   const summary = renderSelection(selected, preparation);
   const afterChars = wrappedSummaryChars(summary);
   const savingsRatio = beforeChars > 0 ? (beforeChars - afterChars) / beforeChars : 0;
@@ -1450,6 +1547,11 @@ export default function fastJevCompaction(
           diagnostic === undefined
             ? ""
             : `; ${diagnostic.provider} ${diagnostic.stage}/${diagnostic.reason}${diagnostic.httpStatus === undefined ? "" : ` HTTP ${diagnostic.httpStatus}`}`;
+        const selection = lastStatus.selection;
+        const selectionText =
+          selection === undefined
+            ? ""
+            : `; ${selection.phase} selection: ${selection.protectedChars} protected chars, ${selection.candidateChars} candidate chars`;
         const tone =
           lastStatus.outcome === "refused" ||
           lastStatus.outcome === "cancelled" ||
@@ -1457,7 +1559,7 @@ export default function fastJevCompaction(
             ? "warning"
             : "info";
         ctx.ui.notify(
-          `Fast Jev ${label}${reason}${diagnosticText}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars; ${lastStatus.totalMs} ms decision time (Jev ${lastStatus.jevMs} ms); ${lastStatus.spans} spans; ${lastStatus.requests} Jev requests; path ${lastStatus.path}; ${configuration}.`,
+          `Fast Jev ${label}${reason}${diagnosticText}: ${lastStatus.beforeChars}→${lastStatus.afterChars} chars${selectionText}; ${lastStatus.totalMs} ms decision time (Jev ${lastStatus.jevMs} ms); ${lastStatus.spans} spans; ${lastStatus.requests} Jev requests; path ${lastStatus.path}; ${configuration}.`,
           tone,
         );
       },

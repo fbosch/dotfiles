@@ -47,22 +47,21 @@ describe("typesafe_question", () => {
       sent = JSON.parse(String(init?.body));
       return new Response(JSON.stringify(response), { status: 200 });
     });
-    expect(calledUrl).toBe(VERCEL_GATEWAY_ENDPOINT);
+    expect(calledUrl).toBe(OPENROUTER_GATEWAY_ENDPOINT);
     expect(sent).toMatchObject({
       state: request.state,
       questions: request.questions,
-      model: "typesafe-ai/jev",
     });
     expect(answers).toEqual(response.answers);
   });
 
-  test("uses the existing OpenRouter fallback when Vercel fails", async () => {
+  test("uses the Vercel fallback when OpenRouter fails", async () => {
     const urls: string[] = [];
     const answers = await askJevQuestion(request, auth, undefined, async (url) => {
       urls.push(String(url));
       return new Response(JSON.stringify(response), { status: urls.length === 1 ? 503 : 200 });
     });
-    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+    expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT, VERCEL_GATEWAY_ENDPOINT]);
     expect(answers).toEqual(response.answers);
   });
 

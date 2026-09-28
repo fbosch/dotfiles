@@ -49,7 +49,7 @@ export interface CommitMessagePilotComparison {
 export interface CommitMessagePilotReport {
   readonly schemaVersion: 1;
   readonly generatedAt: string;
-  readonly model: "typesafe-ai/jev";
+  readonly model: "TypeSafe Jev";
   readonly threshold: number;
   readonly timeoutMs: number;
   readonly caseCount: number;
@@ -376,7 +376,7 @@ export async function runCommitMessageJevPilot(
     return {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      model: "typesafe-ai/jev",
+      model: "TypeSafe Jev",
       threshold,
       timeoutMs,
       caseCount: cases.length,
@@ -395,7 +395,7 @@ export async function runCommitMessageJevPilot(
     return {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      model: "typesafe-ai/jev",
+      model: "TypeSafe Jev",
       threshold,
       timeoutMs,
       caseCount: cases.length,
@@ -410,7 +410,7 @@ export async function runCommitMessageJevPilot(
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    model: "typesafe-ai/jev",
+    model: "TypeSafe Jev",
     threshold,
     timeoutMs,
     caseCount: cases.length,
