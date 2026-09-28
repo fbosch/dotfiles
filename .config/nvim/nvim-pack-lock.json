@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "e3f694a2e4f82bb755418e8d305dcff779c59c27",
+      "rev": "89c19270ea2dfc20829a7429f72022571558093e",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -86,7 +86,7 @@
       "src": "https://github.com/folke/lazydev.nvim.git"
     },
     "leap.nvim": {
-      "rev": "32bde2e932417e8a065f039f00f0cebdd0da4710",
+      "rev": "277e04fad21e3af05a55cc414757b09a704f2a92",
       "src": "https://codeberg.org/andyg/leap.nvim"
     },
     "live-command.nvim": {
@@ -131,7 +131,7 @@
       "src": "https://github.com/marilari88/neotest-vitest.git"
     },
     "numb.nvim": {
-      "rev": "36260c446465b1303b0b1922c722904791bdb03f",
+      "rev": "f43ee4c5ad7ae295492f0790da2b4228157447f1",
       "src": "https://github.com/nacro90/numb.nvim.git"
     },
     "nvim-autopairs": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "dbbbf0afed92307de836c42d369ef4f76839e4a9",
+      "rev": "223b3b50c6f99944a6705a76a7b3875278d15118",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "046b1a797af1effe8e0474b9af9657a3761ec58a",
+      "rev": "a9bb4d5f4276aa5cddc015faa3ecc5a7b5a26b14",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,7 +188,7 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "f603a2f4da48728f80257fb5fbb90145fd1dc173",
+      "rev": "728e031f6b11d03d1f0708b7dc4fb0f1d9c8a137",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {

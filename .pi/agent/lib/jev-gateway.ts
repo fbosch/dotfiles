@@ -64,14 +64,14 @@ type ProviderConfig = {
 };
 
 const PRIMARY_PROVIDER: ProviderConfig = {
-  id: VERCEL_GATEWAY_PROVIDER_ID,
-  endpoint: VERCEL_GATEWAY_ENDPOINT,
-  model: VERCEL_GATEWAY_MODEL,
-};
-const FALLBACK_PROVIDER: ProviderConfig = {
   id: OPENROUTER_PROVIDER_ID,
   endpoint: OPENROUTER_GATEWAY_ENDPOINT,
   model: OPENROUTER_GATEWAY_MODEL,
+};
+const FALLBACK_PROVIDER: ProviderConfig = {
+  id: VERCEL_GATEWAY_PROVIDER_ID,
+  endpoint: VERCEL_GATEWAY_ENDPOINT,
+  model: VERCEL_GATEWAY_MODEL,
 };
 
 interface DeadlineState {

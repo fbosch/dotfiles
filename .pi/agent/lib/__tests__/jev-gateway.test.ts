@@ -47,13 +47,13 @@ describe("requestJevGateway", () => {
       },
     );
 
-    expect(providerIds).toEqual([VERCEL_GATEWAY_PROVIDER_ID]);
-    expect(String(requestUrl)).toBe(VERCEL_GATEWAY_ENDPOINT);
+    expect(providerIds).toEqual([OPENROUTER_PROVIDER_ID]);
+    expect(String(requestUrl)).toBe(OPENROUTER_GATEWAY_ENDPOINT);
     expect(requestInit?.method).toBe("POST");
     expect(new Headers(requestInit?.headers).get("authorization")).toBe("Bearer gateway-test-key");
     expect(JSON.parse(String(requestInit?.body))).toEqual({
       state: { query: "find a tool" },
-      model: VERCEL_GATEWAY_MODEL,
+      model: OPENROUTER_GATEWAY_MODEL,
     });
     expect(result).toEqual({ ok: true, value: { ok: true } });
   });
@@ -98,7 +98,7 @@ describe("requestJevGateway", () => {
     expectFailure(authTimeout, {
       reason: "timeout",
       stage: "auth",
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
     });
 
     const requestTimeout = await requestJevGateway(
@@ -117,7 +117,7 @@ describe("requestJevGateway", () => {
     expectFailure(requestTimeout, {
       reason: "timeout",
       stage: "request",
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
     });
 
     const bodyTimeout = await requestJevGateway(
@@ -135,7 +135,7 @@ describe("requestJevGateway", () => {
     expectFailure(bodyTimeout, {
       reason: "timeout",
       stage: "body",
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
     });
   });
 
@@ -258,7 +258,7 @@ describe("requestJevGateway", () => {
     expect(JSON.stringify(requestFailure)).not.toContain("raw request detail");
   });
 
-  test("falls back from missing Vercel auth to OpenRouter with the verified System One shape", async () => {
+  test("falls back from missing OpenRouter auth to Vercel with the verified System One shape", async () => {
     const authProviders: string[] = [];
     const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
     const typedResponse = {
@@ -279,8 +279,8 @@ describe("requestJevGateway", () => {
         getProviderAuth: async (provider: string) => {
           authProviders.push(provider);
           return provider === OPENROUTER_PROVIDER_ID
-            ? { auth: { apiKey: "openrouter-test-key" } }
-            : undefined;
+            ? undefined
+            : { auth: { apiKey: "vercel-test-key" } };
         },
       },
       {
@@ -295,21 +295,21 @@ describe("requestJevGateway", () => {
       },
     );
 
-    expect(authProviders).toEqual([VERCEL_GATEWAY_PROVIDER_ID, OPENROUTER_PROVIDER_ID]);
+    expect(authProviders).toEqual([OPENROUTER_PROVIDER_ID, VERCEL_GATEWAY_PROVIDER_ID]);
     expect(requests).toEqual([
       {
-        url: OPENROUTER_GATEWAY_ENDPOINT,
+        url: VERCEL_GATEWAY_ENDPOINT,
         body: {
           state: { query: "stay" },
           questions: { route: { type: "choice", criteria: { stay: null } } },
-          model: OPENROUTER_GATEWAY_MODEL,
+          model: VERCEL_GATEWAY_MODEL,
         },
       },
     ]);
     expect(result).toEqual({ ok: true, value: typedResponse });
   });
 
-  test("falls back after provider rejection using the configured OpenRouter credential", async () => {
+  test("falls back after provider rejection using the configured Vercel credential", async () => {
     const providerIds: string[] = [];
     const urls: string[] = [];
     const result = await requestJevGateway(
@@ -325,7 +325,7 @@ describe("requestJevGateway", () => {
       {
         fetch: async (input) => {
           urls.push(String(input));
-          if (String(input) === VERCEL_GATEWAY_ENDPOINT) {
+          if (String(input) === OPENROUTER_GATEWAY_ENDPOINT) {
             return new Response("rejected", { status: 403 });
           }
           return new Response(JSON.stringify({ answers: { route: { type: "choice" } } }));
@@ -334,11 +334,11 @@ describe("requestJevGateway", () => {
     );
 
     expect(result).toEqual({ ok: true, value: { answers: { route: { type: "choice" } } } });
-    expect(providerIds).toEqual([VERCEL_GATEWAY_PROVIDER_ID, OPENROUTER_PROVIDER_ID]);
-    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+    expect(providerIds).toEqual([OPENROUTER_PROVIDER_ID, VERCEL_GATEWAY_PROVIDER_ID]);
+    expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT, VERCEL_GATEWAY_ENDPOINT]);
   });
 
-  test("falls back after Vercel HTTP and network failures", async () => {
+  test("falls back after OpenRouter HTTP and network failures", async () => {
     for (const primaryFailure of ["http", "network"] as const) {
       const urls: string[] = [];
       let fetchCalls = 0;
@@ -359,17 +359,17 @@ describe("requestJevGateway", () => {
       );
 
       expect(result).toEqual({ ok: true, value: { answers: { route: { type: "choice" } } } });
-      expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+      expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT, VERCEL_GATEWAY_ENDPOINT]);
     }
   });
 
-  test("shares the full Retry-After cooldown across callers and retries Vercel at expiry", async () => {
+  test("shares the full Retry-After cooldown across callers and retries OpenRouter at expiry", async () => {
     let now = 1_000_000;
     const request = createJevGatewayRequester(() => now);
     const urls: string[] = [];
     const fetch = async (input: RequestInfo | URL): Promise<Response> => {
       urls.push(String(input));
-      if (String(input) === VERCEL_GATEWAY_ENDPOINT && urls.length === 1) {
+      if (String(input) === OPENROUTER_GATEWAY_ENDPOINT && urls.length === 1) {
         return new Response("busy", { status: 429, headers: { "Retry-After": "120" } });
       }
       return new Response(JSON.stringify({ routed: String(input) }));
@@ -382,17 +382,17 @@ describe("requestJevGateway", () => {
       {},
       { fetch },
     );
-    expect(duringCooldown).toEqual({ ok: true, value: { routed: OPENROUTER_GATEWAY_ENDPOINT } });
+    expect(duringCooldown).toEqual({ ok: true, value: { routed: VERCEL_GATEWAY_ENDPOINT } });
     expect(urls).toEqual([
+      OPENROUTER_GATEWAY_ENDPOINT,
       VERCEL_GATEWAY_ENDPOINT,
-      OPENROUTER_GATEWAY_ENDPOINT,
-      OPENROUTER_GATEWAY_ENDPOINT,
+      VERCEL_GATEWAY_ENDPOINT,
     ]);
 
     now += 59_000;
     const expired = await request(auth, {}, { fetch });
-    expect(expired).toEqual({ ok: true, value: { routed: VERCEL_GATEWAY_ENDPOINT } });
-    expect(urls.at(-1)).toBe(VERCEL_GATEWAY_ENDPOINT);
+    expect(expired).toEqual({ ok: true, value: { routed: OPENROUTER_GATEWAY_ENDPOINT } });
+    expect(urls.at(-1)).toBe(OPENROUTER_GATEWAY_ENDPOINT);
   });
 
   test("does not cool down for missing or invalid Retry-After, zero delay, or other failures", async () => {
@@ -406,17 +406,17 @@ describe("requestJevGateway", () => {
       const urls: string[] = [];
       const fetch = async (input: RequestInfo | URL): Promise<Response> => {
         urls.push(String(input));
-        return String(input) === VERCEL_GATEWAY_ENDPOINT
+        return String(input) === OPENROUTER_GATEWAY_ENDPOINT
           ? response.clone()
           : new Response(JSON.stringify({ ok: true }));
       };
       await request(auth, {}, { fetch });
       await request(auth, {}, { fetch });
       expect(urls).toEqual([
-        VERCEL_GATEWAY_ENDPOINT,
         OPENROUTER_GATEWAY_ENDPOINT,
         VERCEL_GATEWAY_ENDPOINT,
         OPENROUTER_GATEWAY_ENDPOINT,
+        VERCEL_GATEWAY_ENDPOINT,
       ]);
     }
   });
@@ -427,7 +427,9 @@ describe("requestJevGateway", () => {
     const urls: string[] = [];
     const registry = {
       getProviderAuth: async (provider: string) =>
-        provider === VERCEL_GATEWAY_PROVIDER_ID ? { auth: { apiKey: "vercel-key" } } : undefined,
+        provider === OPENROUTER_PROVIDER_ID
+          ? { auth: { apiKey: "openrouter-test-key" } }
+          : undefined,
     };
     const fetch = async (input: RequestInfo | URL): Promise<Response> => {
       urls.push(String(input));
@@ -439,22 +441,22 @@ describe("requestJevGateway", () => {
     expect(initial).toMatchObject({ retryAfterMs: 7_000 });
     expect(unavailable).toMatchObject({
       ok: false,
-      provider: VERCEL_GATEWAY_PROVIDER_ID,
+      provider: OPENROUTER_PROVIDER_ID,
       reason: "http-status",
       httpStatus: 429,
       retryAfterMs: 6_000,
     });
-    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT]);
+    expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT]);
 
     const controller = new AbortController();
     controller.abort();
     const cancelled = await request(registry, {}, { signal: controller.signal, fetch });
     expectFailure(cancelled, {
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
       stage: "auth",
       reason: "caller-cancellation",
     });
-    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT]);
+    expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT]);
 
     const timedOut = await request(
       auth,
@@ -468,20 +470,20 @@ describe("requestJevGateway", () => {
       },
     );
     expectFailure(timedOut, {
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
       stage: "request",
       reason: "timeout",
     });
-    expect(urls).toEqual([VERCEL_GATEWAY_ENDPOINT, OPENROUTER_GATEWAY_ENDPOINT]);
+    expect(urls).toEqual([OPENROUTER_GATEWAY_ENDPOINT, VERCEL_GATEWAY_ENDPOINT]);
   });
 
-  test("preserves a useful Vercel Retry-After when OpenRouter auth is unavailable", async () => {
+  test("preserves a useful OpenRouter Retry-After when Vercel auth is unavailable", async () => {
     let fetchCalls = 0;
     const result = await createJevGatewayRequester()(
       {
         getProviderAuth: async (provider: string) =>
-          provider === VERCEL_GATEWAY_PROVIDER_ID
-            ? { auth: { apiKey: "vercel-test-key" } }
+          provider === OPENROUTER_PROVIDER_ID
+            ? { auth: { apiKey: "openrouter-test-key" } }
             : undefined,
       },
       {},
@@ -495,7 +497,7 @@ describe("requestJevGateway", () => {
 
     expect(result).toMatchObject({
       ok: false,
-      provider: VERCEL_GATEWAY_PROVIDER_ID,
+      provider: OPENROUTER_PROVIDER_ID,
       reason: "http-status",
       stage: "request",
       httpStatus: 429,
@@ -519,7 +521,7 @@ describe("requestJevGateway", () => {
 
     expect(result).toEqual({
       ok: false,
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
       stage: "request",
       reason: "http-status",
       httpStatus: 401,
@@ -528,7 +530,7 @@ describe("requestJevGateway", () => {
     expect(JSON.stringify(result)).not.toContain("provider detail");
   });
 
-  test("falls back after Vercel auth, request, and body attempt timeouts", async () => {
+  test("falls back after OpenRouter auth, request, and body attempt timeouts", async () => {
     for (const stage of ["auth", "request", "body"] as const) {
       let primaryFetchCalls = 0;
       let fallbackFetchCalls = 0;
@@ -538,7 +540,7 @@ describe("requestJevGateway", () => {
       const result = await requestJevGateway(
         {
           getProviderAuth: async (provider: string) => {
-            if (provider === VERCEL_GATEWAY_PROVIDER_ID && stage === "auth") {
+            if (provider === OPENROUTER_PROVIDER_ID && stage === "auth") {
               return new Promise((resolve) => {
                 releasePrimaryAuth = () => resolve({ auth: { apiKey: "late-primary-key" } });
               });
@@ -550,7 +552,7 @@ describe("requestJevGateway", () => {
         {
           timeoutMs: 80,
           fetch: async (input, init) => {
-            if (String(input) === VERCEL_GATEWAY_ENDPOINT) {
+            if (String(input) === OPENROUTER_GATEWAY_ENDPOINT) {
               primaryFetchCalls += 1;
               if (stage === "request") {
                 return new Promise<Response>((_resolve, reject) => {
@@ -643,7 +645,7 @@ describe("requestJevGateway", () => {
     expect(deadlineExpired).toMatchObject({
       ok: false,
       reason: "timeout",
-      provider: OPENROUTER_PROVIDER_ID,
+      provider: VERCEL_GATEWAY_PROVIDER_ID,
     });
     expect(deadlineFetchCalls).toBe(2);
     expect(fallbackAborted).toBe(true);
