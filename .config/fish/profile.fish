@@ -13,6 +13,8 @@ set -gx AGENT_BROWSER_ENGINE lightpanda
 # Keep npm's generated Pi package lock anchored to the canonical Stow source path.
 set -gx PI_CODING_AGENT_DIR "$HOME/dotfiles/.pi/agent"
 set -gx LS_COLORS "(vivid generate ~/.config/vivid/themes/zenwritten-dark.yml)"
+# Opt in to same-workspace Pi-Lens diagnostics over local IPC.
+set -gx PI_LENS_WARM_ATTACH 1
 set -x RIPGREP_CONFIG_PATH "$HOME/.config/.ripgreprc"
 set -gx PATH $HOME/.cargo/bin $PATH
 set -U FZF_DEFAULT_COMMAND fd --threads 16
