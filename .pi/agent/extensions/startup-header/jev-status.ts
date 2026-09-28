@@ -1,5 +1,4 @@
 import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/jev-gateway";
-import { resolveFastJevCompactionConfig } from "../fast-jev-compaction";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
@@ -25,13 +24,7 @@ export function resolveJevStartupStatus(
   const toolDiscovery = resolveJevToolDiscoveryConfig(globalSettings, projectSettings);
   const skillSelection = resolveSkillSelectionConfig(globalSettings, projectSettings);
   const recommendAgent = resolveRecommendAgentConfig(globalSettings);
-  const compaction = resolveFastJevCompactionConfig(globalSettings);
-  if (
-    !toolDiscovery.enabled &&
-    !skillSelection.enabled &&
-    !recommendAgent.enabled &&
-    !compaction.enabled
-  )
+  if (!toolDiscovery.enabled && !skillSelection.enabled && !recommendAgent.enabled)
     return undefined;
 
   if (typeof modelRegistry !== "object" || modelRegistry === null) return { state: "unavailable" };

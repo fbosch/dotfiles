@@ -99,10 +99,6 @@
     },
     "recommendAgent": {
       "enabled": true
-    },
-    "compaction": {
-      "enabled": true,
-      "phased": true
     }
   },
   "packages": [
