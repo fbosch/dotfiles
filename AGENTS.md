@@ -15,6 +15,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Dotfiles repo root is `~/dotfiles`.
 - Shared skills live in `.agents/skills/` and are mirrored under `.config/{codex,github,claude}/skills`.
 - Dotfiles-specific Pi skills live in `.pi/skills/`.
+- Before editing a skill, check `skills-lock.json`; do not modify skills sourced from upstream repositories. Put local guidance in a locally authored skill or instruction file instead.
 
 ## OpenSpec
 
@@ -34,7 +35,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 ## OpenCode Fallback
 
-- OpenCode is retained as a near-stock fallback; keep its configuration limited to `.config/opencode/opencode.jsonc`.
+- OpenCode is a backup harness for repairing `.pi/`; keep only `.config/opencode/opencode.jsonc`, the `zenwritten-dark` theme, and the native GitHub MCP (`gh mcp`).
 
 ## References
 

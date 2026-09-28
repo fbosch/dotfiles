@@ -249,7 +249,7 @@ export async function recommendAgent(
       catalogKind: catalog.kind,
       catalogRevision: catalog.revision,
       gatewayFailure: gateway.reason,
-      gatewayProvider: gateway.provider,
+      ...(gateway.provider === undefined ? {} : { gatewayProvider: gateway.provider }),
     };
   }
 

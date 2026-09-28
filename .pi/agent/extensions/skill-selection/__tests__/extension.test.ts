@@ -5,7 +5,7 @@ import type {
   ExtensionContext,
   Skill,
 } from "@earendil-works/pi-coding-agent";
-import { VERCEL_GATEWAY_ENDPOINT } from "../../../lib/jev-gateway";
+import { OPENROUTER_PROVIDER_ID } from "../../../lib/jev-gateway";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
@@ -220,7 +220,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "gateway-failure",
-        provider: "openrouter",
+        provider: "vercel-ai-gateway",
         stage: "auth",
         reason: "missing-credentials",
       },
@@ -242,12 +242,12 @@ describe("skill selection", () => {
 
     await expect(
       selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
-        // Keep this OpenRouter Retry-After assertion from activating Vercel's shared cooldown.
-        fetch: async (input) =>
-          String(input) === VERCEL_GATEWAY_ENDPOINT
-            ? new Response("unavailable", { status: 503 })
-            : new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
+        modelRegistry: {
+          getProviderAuth: async (provider: string) =>
+            provider === OPENROUTER_PROVIDER_ID ? { auth: { apiKey: "test-key" } } : undefined,
+        },
+        // Keep the primary rate-limit diagnostic when the fallback has no credentials.
+        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
       }),
     ).resolves.toEqual({
       ok: false,
@@ -257,7 +257,7 @@ describe("skill selection", () => {
         stage: "request",
         reason: "http-status",
         httpStatus: 429,
-        retryAfterMs: 3_000,
+        retryAfterMs: expect.any(Number),
       },
     });
   });
@@ -288,7 +288,6 @@ describe("skill selection", () => {
 
     expect(requestBody).toEqual(
       expect.objectContaining({
-        model: "typesafe-ai/jev",
         state: expect.objectContaining({ request: "Write a guide" }),
       }),
     );

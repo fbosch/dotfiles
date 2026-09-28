@@ -97,7 +97,7 @@ in
       '';
     };
 
-    "test:caliper-skill-eval".exec = "python3 tests/caliper_skill_eval_test.py";
+    "test:caliper-skill-eval".exec = "python3 -m unittest discover -s tests -p 'caliper*test.py'";
 
     "test:shellcheck".exec = ''
       set -euo pipefail

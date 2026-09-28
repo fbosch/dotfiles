@@ -9,7 +9,7 @@ import {
   type SkillSelectionFailure,
   selectSkillsWithJevDetailed,
 } from "../extensions/skill-selection";
-import { type JevGatewayFailureReason, VERCEL_GATEWAY_MODEL } from "../lib/jev-gateway";
+import type { JevGatewayFailureReason } from "../lib/jev-gateway";
 import {
   SKILL_SELECTION_BENCHMARK_CASES,
   SKILL_SELECTION_BENCHMARK_CATALOG,
@@ -69,6 +69,7 @@ type SavedFailureReason =
   | "retry-budget-exhausted";
 
 const SAVED_FAILURE_REASONS: Readonly<Record<string, SavedFailureReason>> = {
+  "invalid-config": "invalid-config",
   "missing-credentials": "missing-credentials",
   "auth-failure": "auth-failure",
   timeout: "timeout",
@@ -510,7 +511,7 @@ function createReport(
       ).length,
       catalog_fingerprint: catalogFingerprint(),
       catalog_count: SKILL_SELECTION_BENCHMARK_CATALOG.length,
-      model: VERCEL_GATEWAY_MODEL,
+      model: "TypeSafe Jev",
       questions: BENCHMARK_QUESTION_IDS,
       threshold: DEFAULT_SKILL_SELECTION_CONFIG.threshold,
       max_recommendations: DEFAULT_SKILL_SELECTION_CONFIG.maxRecommendations,

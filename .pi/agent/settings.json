@@ -77,6 +77,16 @@
     ]
   },
   "jev": {
+    "providers": [
+      {
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.13"
+      },
+      {
+        "provider": "vercel-ai-gateway",
+        "model": "typesafe-ai/jev"
+      }
+    ],
     "toolDiscovery": {
       "enabled": true,
       "timeoutMs": 2400
@@ -89,10 +99,6 @@
     },
     "recommendAgent": {
       "enabled": true
-    },
-    "compaction": {
-      "enabled": true,
-      "summaryModel": "openai-codex/gpt-6-luna"
     }
   },
   "packages": [

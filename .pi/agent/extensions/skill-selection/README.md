@@ -2,7 +2,24 @@
 
 This extension asks Jev for independent relevance scores over the skills Pi has already discovered. It appends recommendations only; it never removes the native catalog, loads a skill, or changes explicit `/skill:name` behavior.
 
-Skills with `disable-model-invocation` metadata or names denied by `skillTweaks` are excluded before the request. Jev uses the configured Vercel AI Gateway credential first and makes one bounded OpenRouter System One fallback when the provider fails; both providers use the registry's public auth lookup. A missing credential, timeout, abort, malformed response, image prompt, or other Jev failure leaves the original system prompt unchanged. The primary Vercel attempt receives roughly half the configured budget; OpenRouter uses the remaining original deadline without extending the total.
+Skills with `disable-model-invocation` metadata or names denied by `skillTweaks` are excluded before the request. This extension uses the shared Jev gateway, whose ordered provider preferences apply to all Jev-backed callers. Both adapters use Pi's provider auth registry; missing credentials, timeouts, aborts, malformed responses, image prompts, and other Jev failures leave the original system prompt unchanged.
+
+## Shared Jev gateway routing
+
+Configure provider preferences in global `~/.pi/agent/settings.json`. The first provider is preferred; the gateway makes at most one fallback attempt in the configured order. Each attempt uses its provider's registry credentials and adapter. The first attempt receives roughly half the caller's total deadline when a fallback is configured; fallback work never extends that deadline. Valid `Retry-After` responses cool down that provider while other configured providers remain eligible.
+
+```json
+{
+  "jev": {
+    "providers": [
+      { "provider": "openrouter", "model": "typesafe/jev-1.13" },
+      { "provider": "vercel-ai-gateway", "model": "typesafe-ai/jev" }
+    ]
+  }
+}
+```
+
+If `jev.providers` is absent, the same OpenRouter-first order is used. OpenRouter model IDs use the `typesafe/` namespace with a Jev alias (`jev-latest`, `jev-preview`) or version (`jev-X.Y` / `jev-X.Y.Z`); the adapter sends the suffix as the wire model ID. The current Vercel route accepts `typesafe-ai/jev` and sends that ID unchanged. Unknown providers, unsupported provider/model pairs, duplicate providers, malformed lists, or malformed settings fail closed before auth or network access. Project settings do not override this global shared routing configuration.
 
 The feature is disabled by default. Opt in through `settings.json` or a trusted project settings file:
 
