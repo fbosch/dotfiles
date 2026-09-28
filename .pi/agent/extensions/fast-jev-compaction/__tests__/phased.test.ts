@@ -282,7 +282,7 @@ describe("phased Fast Jev compaction", () => {
       expect(outcome.status.afterChars).not.toBe(outcome.status.beforeChars);
     }
     expect(requests).toBe(0);
-    expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(outcome)).toBeUndefined();
   });
 
   test("retires 784 historical spans across bounded whole-group requests", async () => {
@@ -467,7 +467,7 @@ describe("phased Fast Jev compaction", () => {
       expect(outcome.status.afterChars).not.toBe(outcome.status.beforeChars);
     }
     expect(statuses).toHaveLength(1);
-    expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(outcome)).toBeUndefined();
     expect(requests).toBeGreaterThan(0);
   });
 
@@ -494,7 +494,7 @@ describe("phased Fast Jev compaction", () => {
       expect(outcome.status.selection?.phase).toBe("coarse");
     }
     expect(requests).toBe(1);
-    expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(outcome)).toBeUndefined();
   });
 
   test("checks Pi budget limits before making requests", async () => {
@@ -536,7 +536,7 @@ describe("phased Fast Jev compaction", () => {
       expect(outcome.status.reason).toBe("final-size-limit");
       expect(outcome.status.requests).toBe(2);
     }
-    expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(outcome)).toBeUndefined();
   });
 
   test("keeps optional spans from a mandatory tool-call group after refinement", async () => {
@@ -641,7 +641,7 @@ describe("phased Fast Jev compaction", () => {
     if (outcome.kind === "success") expect(outcome.selected).toHaveLength(1);
   });
 
-  test("rejects malformed phase answers atomically instead of delegating natively", async () => {
+  test("discards malformed phase answers atomically and delegates natively", async () => {
     let requests = 0;
     const outcome = await runFastJevCompaction(
       preparation([
@@ -660,7 +660,7 @@ describe("phased Fast Jev compaction", () => {
     expect(outcome.kind).toBe("refused");
     if (outcome.kind === "refused") expect(outcome.status.reason).toBe("malformed-jev");
     expect(requests).toBe(1);
-    expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(outcome)).toBeUndefined();
   });
 
   test("uses native compaction when credentials are unavailable", async () => {

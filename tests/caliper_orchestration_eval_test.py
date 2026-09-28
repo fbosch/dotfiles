@@ -234,198 +234,83 @@ class CaliperOrchestrationCheckTests(unittest.TestCase):
 
 
 class CaliperOrchestrationLaunchTests(unittest.TestCase):
-    def make_repo(self, root):
-        repo = root / "repo"
-        agent = repo / ".pi/agent"
-        fixture = agent / "evals/orchestration"
-        extension_root = agent / "npm/node_modules/@gotgenes/pi-subagents"
-        files = (
-            extension_root / "src/index.ts",
-            agent / "extensions/instruction-fragments.ts",
-            agent / "extensions/recommend-agent/index.ts",
-            fixture / "fixture.ts",
-        )
-        for path in files:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text("// synthetic installed extension\n")
-        (extension_root / "package.json").write_text('{"version":"9.8.7"}\n')
-        instructions = agent / "instructions/orchestration.md"
-        instructions.parent.mkdir(parents=True, exist_ok=True)
-        instructions.write_text("# Synthetic orchestration instructions\n")
-        return repo, agent, fixture
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        support = load_module("caliper_fixture_support", ROOT / "tests/caliper_fixture_support.py")
+        self.repo = support.seed_repo(self.root / "repo")
+        self.runtime = self.root / "runtime"
+        (self.runtime / "home/.pi/agent").mkdir(parents=True)
+        self.evidence = self.root / "evidence"
+        self.launcher = load_module("orchestration_launcher", LAUNCH_PATH)
+        self.launcher.prepare(self.repo, self.runtime, self.evidence, False)
+        self.config = json.loads((self.runtime / "orchestration.json").read_text())
 
-    def test_prepare_records_mocked_native_extension_metadata_and_preserves_auth(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            repo, agent, _ = self.make_repo(root)
-            run_root = root / "run"
-            (run_root / "home/.pi/agent").mkdir(parents=True)
-            auth = run_root / "home/.pi/agent/auth.json"
-            auth.write_text('{"token":"local-only-test-value"}\n')
-            evidence = root / "evidence"
+    def test_prepare_snapshots_production_models_and_only_required_extensions(self):
+        metadata = json.loads((self.evidence / "metadata.json").read_text())
+        self.assertEqual(metadata["catalog"]["parent"]["model"], "openai-codex/mock-parent-fast")
+        self.assertEqual(metadata["catalog"]["parent"]["thinking"], "xhigh")
+        self.assertEqual(metadata["catalog"]["agents"]["quick"]["model"], "openai-codex/mock-quick")
+        self.assertEqual(len(self.config["extensions"]), 5)
+        self.assertTrue(any(path.endswith("openai-capabilities.ts") for path in self.config["extensions"]))
+        self.assertEqual(json.loads((self.runtime / "home/.pi/agent/settings.json").read_text()), {})
 
-            launcher = load_module("caliper_orchestration_launch_prepare", LAUNCH_PATH)
-            launcher.prepare(repo, run_root, evidence, False, "test-worker-model")
+    def test_missing_extension_and_unconfigured_model_fail_loudly(self):
+        with self.assertRaisesRegex(ValueError, "not configured"):
+            self.launcher.prepare(self.repo, self.runtime, self.evidence, False, "gpt-5.5")
+        (self.repo / ".pi/agent/extensions/openai-capabilities.ts").unlink()
+        with self.assertRaisesRegex(ValueError, "Required extension"):
+            self.launcher.prepare(self.repo, self.runtime, self.evidence, False)
 
-            metadata = json.loads((evidence / "metadata.json").read_text())
-            self.assertEqual(metadata["worker_model"], "openai-codex/test-worker-model")
-            self.assertTrue(metadata["instructions_enabled"])
-            self.assertEqual(metadata["subagents_version"], "9.8.7")
-            self.assertEqual((evidence / "orchestration.md").read_text(), (agent / "instructions/orchestration.md").read_text())
-            self.assertEqual(json.loads(auth.read_text()), {"token": "local-only-test-value"})
-            config = json.loads((run_root / "orchestration.json").read_text())
-            self.assertEqual(
-                config["extensions"],
-                [str(repo / relative_path) for relative_path in metadata["extensions"]],
-            )
-            self.assertTrue((run_root / "orchestration-launch.py").is_file())
+    def test_attempt_keeps_auth_and_specialist_presets_but_not_ambient_settings(self):
+        home = self.root / "attempt"
+        agent = home / ".pi/agent"
+        agent.mkdir(parents=True)
+        (agent / "auth.json").write_text("private-auth")
+        (agent / "settings.json").write_text('{"packages":["ambient"]}')
+        work = self.launcher.configure_attempt(home, agent, self.config, self.root / "trace.jsonl", "parallel")
+        settings = json.loads((agent / "settings.json").read_text())
+        self.assertEqual(settings["packages"], [])
+        self.assertEqual(settings["extensions"], self.config["extensions"])
+        self.assertEqual((agent / "auth.json").read_text(), "private-auth")
+        self.assertIn("model: openai-codex/mock-review", (agent / "agents/review.md").read_text())
+        self.assertEqual(json.loads((agent / "subagents.json").read_text())["maxConcurrent"], 3)
+        self.assertTrue((agent / "models.json").exists())
+        self.assertTrue((home / ".agents/skills/swarm/SKILL.md").exists())
+        self.assertTrue((work / "left.txt").exists())
+        self.assertIn("explore.md", [p.name for p in (agent / "agents").iterdir()])
+        self.assertNotIn("Explore.md", [p.name for p in (agent / "agents").iterdir()])
+        self.assertIn("enabled: false", (work / ".pi/agents/Explore.md").read_text())
 
-    def test_prepare_rejects_a_missing_native_extension(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            repo = root / "repo"
-            agent = repo / ".pi/agent"
-            (agent / "instructions").mkdir(parents=True)
-            (agent / "instructions/orchestration.md").write_text("instructions\n")
-            run_root = root / "run"
-            (run_root / "home/.pi/agent").mkdir(parents=True)
-            launcher = load_module("caliper_orchestration_launch_missing", LAUNCH_PATH)
+    def test_disabled_instructions_and_wrong_agent_directory(self):
+        home = self.root / "attempt"
+        agent = home / ".pi/agent"
+        config = {**self.config, "instructions_enabled": False}
+        self.launcher.configure_attempt(home, agent, config, self.root / "trace.jsonl")
+        self.assertFalse((agent / "instructions/orchestration.md").exists())
+        with self.assertRaisesRegex(ValueError, "Unexpected Caliper agent"):
+            self.launcher.configure_attempt(home, self.root / "wrong", config, self.root / "other.jsonl")
 
-            with self.assertRaisesRegex(ValueError, "Required extension not installed"):
-                launcher.prepare(repo, run_root, root / "evidence", False, "model")
+    def test_version_probe_clears_stale_evidence_without_loading_extensions(self):
+        latest = self.evidence / "latest.json"
+        latest.write_text('{"trace":"stale"}')
+        with mock.patch.object(self.launcher, "__file__", str(self.runtime / "orchestration-launch.py")), mock.patch.dict("os.environ", {"HOME": str(self.runtime / "home")}, clear=True), mock.patch.object(self.launcher.subprocess, "call", return_value=0) as run:
+            self.assertEqual(self.launcher.launch("pi", ["--version"]), 0)
+        self.assertFalse(latest.exists())
+        self.assertEqual(run.call_args.args[0], ["pi", "--no-extensions", "--version"])
 
-    def test_configure_attempt_replaces_inherited_settings_with_minimal_allowlist(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            home = root / "attempt home"
-            agent = home / ".pi/agent"
-            agent.mkdir(parents=True)
-            auth = agent / "auth.json"
-            auth.write_text('{"token":"do-not-touch"}\n')
-            inherited = {
-                "packages": ["unrelated-package"], "extensions": ["unrelated-extension"],
-                "skills": ["unrelated-skill"], "prompts": ["unrelated-prompt"],
-                "mcpServers": {"unrelated": {"command": "not-used"}},
-            }
-            (agent / "settings.json").write_text(json.dumps(inherited))
-            evidence = root / "evidence"
-            evidence.mkdir()
-            instruction_text = "# Included instructions\n"
-            (evidence / "orchestration.md").write_text(instruction_text)
-            extension_paths = [str(root / "extensions/instruction-fragments.ts")]
-            config = {
-                "extensions": extension_paths,
-                "evidence": str(evidence),
-                "instructions_enabled": True,
-                "worker_model": "openai-codex/test-worker-model",
-            }
-            launcher = load_module("caliper_orchestration_launch_configure", LAUNCH_PATH)
+    def test_case_marker_is_hidden_and_attempt_exit_is_recorded(self):
+        home = self.root / "attempt"
+        agent = home / ".pi/agent"
+        with mock.patch.object(self.launcher, "__file__", str(self.runtime / "orchestration-launch.py")), mock.patch.dict("os.environ", {"HOME": str(home), "PI_CODING_AGENT_DIR": str(agent)}, clear=True), mock.patch.object(self.launcher.subprocess, "call", return_value=17) as run:
+            self.assertEqual(self.launcher.launch("pi", ["--print", "[[orchestration-case:direct]]\nRead assigned.txt"]), 17)
+        self.assertEqual(run.call_args.args[0][-1], "Read assigned.txt")
+        self.assertEqual(run.call_args.kwargs["env"]["ORCHESTRATION_CASE"], "direct")
+        self.assertEqual(json.loads((self.evidence / "latest.json").read_text())["exit_code"], 17)
+        with self.assertRaisesRegex(ValueError, "case marker"):
+            self.launcher.extract_case(["not a scenario"])
 
-            work = launcher.configure_attempt(home, agent, config, root / "trace.jsonl")
-
-            settings = json.loads((agent / "settings.json").read_text())
-            self.assertEqual(settings, {
-                "packages": [], "extensions": extension_paths, "skills": [], "prompts": [],
-                "defaultProjectTrust": "always", "jev": {"recommendAgent": {"enabled": True}},
-            })
-            self.assertEqual(auth.read_text(), '{"token":"do-not-touch"}\n')
-            self.assertEqual((agent / "instructions/orchestration.md").read_text(), instruction_text)
-            definition = (agent / "agents/quick.md").read_text()
-            self.assertIn("model: openai-codex/test-worker-model", definition)
-            self.assertIn("max_turns: 6", definition)
-            self.assertEqual((work / "outside-scope.txt").read_text(), "Unnecessary scope: do not inspect.\n")
-            expected = json.loads((root / "trace.expected.json").read_text())
-            self.assertEqual(expected, {
-                "assigned": (work / "assigned.txt").read_text().strip(),
-                "instructions_enabled": True,
-            })
-
-    def test_configure_attempt_omits_disabled_instructions_and_checks_agent_path(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            home = root / "attempt home"
-            agent = home / ".pi/agent"
-            evidence = root / "evidence"
-            evidence.mkdir()
-            (evidence / "orchestration.md").write_text("# Disabled\n")
-            config = {
-                "extensions": [], "evidence": str(evidence),
-                "instructions_enabled": False, "worker_model": "openai-codex/model",
-            }
-            launcher = load_module("caliper_orchestration_launch_disabled", LAUNCH_PATH)
-
-            work = launcher.configure_attempt(home, agent, config, root / "trace.jsonl")
-
-            self.assertFalse((agent / "instructions/orchestration.md").exists())
-            self.assertFalse(json.loads((root / "trace.expected.json").read_text())["instructions_enabled"])
-            with self.assertRaisesRegex(ValueError, "Unexpected Caliper agent directory"):
-                launcher.configure_attempt(home, root / "wrong-agent", config, root / "other.jsonl")
-            self.assertEqual((work / "assigned.txt").read_text().strip(), json.loads((root / "trace.expected.json").read_text())["assigned"])
-
-    def test_version_probe_clears_stale_latest_without_creating_a_trace(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            evidence = root / "evidence"
-            evidence.mkdir()
-            latest = evidence / "latest.json"
-            latest.write_text('{"trace":"stale.jsonl","exit_code":0}\n')
-            runtime = root / "runtime"
-            runtime.mkdir()
-            (runtime / "orchestration.json").write_text(json.dumps({"evidence": str(evidence)}))
-            (runtime / "launch.py").write_text(LAUNCH_PATH.read_text())
-            launcher = load_module("caliper_orchestration_launch_version", runtime / "launch.py")
-            home = root / "home"
-            home.mkdir()
-
-            with mock.patch.dict("os.environ", {"HOME": str(home)}, clear=True), \
-                    mock.patch.object(launcher.subprocess, "call", return_value=0) as call:
-                status = launcher.launch("mock-pi", ["--version"])
-
-            self.assertEqual(status, 0)
-            self.assertFalse(latest.exists())
-            argv, kwargs = call.call_args
-            self.assertEqual(argv[0], ["mock-pi", "--no-extensions", "--version"])
-            self.assertEqual(kwargs["env"]["PI_OFFLINE"], "1")
-
-    def test_attempt_replaces_latest_with_its_own_trace_and_exit_code(self):
-        with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
-            evidence = root / "evidence"
-            evidence.mkdir()
-            latest = evidence / "latest.json"
-            latest.write_text('{"trace":"stale.jsonl","exit_code":0}\n')
-            (evidence / "orchestration.md").write_text("instructions\n")
-            home = root / "attempt home"
-            agent = home / ".pi/agent"
-            agent.mkdir(parents=True)
-            runtime = root / "runtime"
-            runtime.mkdir()
-            (runtime / "orchestration.json").write_text(json.dumps({
-                "evidence": str(evidence), "extensions": [], "instructions_enabled": True,
-                "worker_model": "openai-codex/model",
-            }))
-            (runtime / "launch.py").write_text(LAUNCH_PATH.read_text())
-            launcher = load_module("caliper_orchestration_launch_attempt", runtime / "launch.py")
-
-            def fake_pi(argv, cwd, env):
-                Path(env["ORCHESTRATION_TRACE"]).write_text("")
-                return 17
-
-            with mock.patch.dict("os.environ", {
-                "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent),
-            }, clear=True), mock.patch.object(launcher.subprocess, "call", side_effect=fake_pi) as call:
-                status = launcher.launch("mock-pi", ["candidate"])
-
-            self.assertEqual(status, 17)
-            pointer = json.loads(latest.read_text())
-            trace = Path(pointer["trace"])
-            self.assertEqual(trace.parent, evidence)
-            self.assertNotEqual(trace.name, "stale.jsonl")
-            self.assertTrue(trace.is_file())
-            self.assertEqual(pointer["exit_code"], 17)
-            argv, kwargs = call.call_args
-            self.assertEqual(argv[0], ["mock-pi", "--no-skills", "--no-prompt-templates", "candidate"])
-            self.assertEqual(kwargs["env"]["PI_OFFLINE"], "1")
 
 
 if __name__ == "__main__":

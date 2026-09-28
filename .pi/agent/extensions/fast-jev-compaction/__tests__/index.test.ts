@@ -125,8 +125,13 @@ function expectNativeFallback(outcome: FastJevRunOutcome, reason: string): void 
 function expectRefused(outcome: FastJevRunOutcome, reason: string): void {
   expect(outcome.kind).toBe("refused");
   if (outcome.kind !== "refused") throw new Error(`expected refusal, got ${outcome.kind}`);
-  expect(outcome.status).toMatchObject({ version: 3, outcome: "refused", path: "none", reason });
-  expect(toPiCompactionResponse(outcome)).toEqual({ cancel: true });
+  expect(outcome.status).toMatchObject({
+    version: 3,
+    outcome: "native-fallback",
+    path: "native",
+    reason,
+  });
+  expect(toPiCompactionResponse(outcome)).toBeUndefined();
 }
 
 function expectCancelled(outcome: FastJevRunOutcome, reason: string): void {
@@ -580,11 +585,11 @@ describe("fast-jev-compaction", () => {
     expect(bodies).toHaveLength(2);
     expectRefused(result, "malformed-jev");
     expect(statuses[0]).toMatchObject({
-      outcome: "refused",
-      path: "none",
+      outcome: "native-fallback",
+      path: "native",
       reason: "malformed-jev",
     });
-    expect(toPiCompactionResponse(result)).toEqual({ cancel: true });
+    expect(toPiCompactionResponse(result)).toBeUndefined();
   });
 
   test("processes all windows beyond the former 256-span limit", async () => {
@@ -651,8 +656,8 @@ describe("fast-jev-compaction", () => {
     expectRefused(result, "source-span-limit");
     expect(requests).toBe(0);
     expect(status[0]).toMatchObject({
-      outcome: "refused",
-      path: "none",
+      outcome: "native-fallback",
+      path: "native",
       reason: "source-span-limit",
       spans: 1_024,
       requests: 0,
@@ -762,7 +767,7 @@ describe("fast-jev-compaction", () => {
     }
   });
 
-  test("cancels invalid JSON responses from the gateway", async () => {
+  test("uses native compaction after invalid JSON responses", async () => {
     const outcome = await runFastJevCompaction(
       preparation(toolTranscript("gateway failure fixture")),
       [],
@@ -774,7 +779,7 @@ describe("fast-jev-compaction", () => {
     }
   });
 
-  test("cancels oversized gateway bodies instead of using native compaction", async () => {
+  test("uses native compaction after oversized gateway bodies", async () => {
     const outcome = await runFastJevCompaction(
       preparation(toolTranscript("gateway failure fixture")),
       [],
@@ -786,7 +791,7 @@ describe("fast-jev-compaction", () => {
     }
   });
 
-  test("refuses HTTP 400 instead of delegating compaction to Pi", async () => {
+  test("uses native compaction after HTTP 400", async () => {
     const outcome = await runFastJevCompaction(
       preparation(toolTranscript("gateway failure fixture")),
       [],
@@ -825,8 +830,8 @@ describe("fast-jev-compaction", () => {
     const notifications: string[] = [];
     const status: FastJevAttemptStatus = {
       version: 3,
-      outcome: "refused",
-      path: "none",
+      outcome: "native-fallback",
+      path: "native",
       reason: "source-span-limit",
       jevMs: 0,
       totalMs: 0,
@@ -840,9 +845,8 @@ describe("fast-jev-compaction", () => {
 
     expect(notifications).toHaveLength(1);
     expect(notifications[0]).toContain("source-span-limit");
-    expect(notifications[0]).toContain("1024 spans, 0 Jev requests");
-    expect(notifications[0]).toContain("/fast-jev-status");
-    expect(notifications[0]).toContain("disable jev.compaction");
+    expect(notifications[0]).toContain("could not compact");
+    expect(notifications[0]).toContain("using Pi native compaction");
     expect(notifications[0]).not.toContain("/Users/");
     expect(notifications[0]).not.toContain("717_500");
   });

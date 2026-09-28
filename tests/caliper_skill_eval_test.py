@@ -82,7 +82,7 @@ class CaliperSkillEvalTests(unittest.TestCase):
         bin_dir.mkdir()
         for name, content in (("pi", PI), ("caliper", CALIPER)):
             path = bin_dir / name
-            path.write_text(content)
+            path.write_text(content.replace('"candidate"', '"[[orchestration-case:direct]]candidate"') if name == "caliper" and orchestration else content)
             path.chmod(0o700)
         log = root / "events.jsonl"
         tmpdir = root / "temporary directory with spaces"
@@ -97,33 +97,21 @@ class CaliperSkillEvalTests(unittest.TestCase):
         script = SCRIPT
         if orchestration:
             repo = root / "orchestration repo"
-            agent_dir = repo / ".pi" / "agent"
-            fixture = agent_dir / "evals" / "orchestration"
-            extension_root = agent_dir / "npm" / "node_modules" / "@gotgenes" / "pi-subagents"
-            extension_files = (
-                extension_root / "src" / "index.ts",
-                agent_dir / "extensions" / "instruction-fragments.ts",
-                agent_dir / "extensions" / "recommend-agent" / "index.ts",
-                fixture / "fixture.ts",
-            )
-            for path in extension_files:
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text("// mock installed extension\\n")
-            (extension_root / "package.json").write_text(json.dumps({"version": "1.2.3"}))
-            instructions = agent_dir / "instructions" / "orchestration.md"
-            instructions.parent.mkdir(parents=True, exist_ok=True)
-            instructions.write_text("# Mock orchestration instructions\\n")
-            (fixture / "orchestration.eval.yaml").write_text("mock eval spec\\n")
-            script = repo / "scripts" / "caliper-skill-eval.sh"
+            import importlib.util
+            helper_spec = importlib.util.spec_from_file_location("fixture_support", ROOT / "tests/caliper_fixture_support.py")
+            assert helper_spec and helper_spec.loader
+            helper = importlib.util.module_from_spec(helper_spec)
+            helper_spec.loader.exec_module(helper)
+            helper.seed_repo(repo)
+            script = repo / "scripts/caliper-skill-eval.sh"
             script.parent.mkdir(parents=True)
             shutil.copy2(SCRIPT, script)
-            shutil.copy2(ROOT / ".pi" / "agent" / "evals" / "orchestration" / "launch.py", fixture / "launch.py")
         args = []
         if orchestration: args.append("--orchestration")
         if ablate: args.append("--ablate")
         if profile: args += ["--auth-profile", profile]
         if spec: args += ["--spec", spec]
-        args += list(extra or (["orchestration", "m", "medium", "1", "j", "high"] if orchestration else ["cli-ux"]))
+        args += list(extra or (["orchestration", "configured", "configured", "1"] if orchestration else ["cli-ux"]))
         result = subprocess.run([str(script), *args], cwd=ROOT, env=env, text=True,
                                 capture_output=True)
         events = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []

@@ -5,86 +5,107 @@ fragment rather than a discoverable skill. Run from the dotfiles root.
 
 ## Run
 
-Requires the existing Pi/Caliper installation, installed `@gotgenes/pi-subagents`,
-a working `openai-codex` model, and stored Jev gateway credentials for the steering
-case. These commands use live model calls; there is no LLM judge for these specs.
-The worker uses the selected candidate model with low thinking.
+Requires the existing Pi/Caliper installation, Python with PyYAML, installed
+`@gotgenes/pi-subagents`, production model catalogs, and working model and Jev
+credentials. These commands make live calls. All grading is deterministic;
+there is no LLM judge.
 
-1. Run the controlled native-steering smoke test:
+1. Run the behavior suite once:
+   ```sh
+   scripts/caliper-skill-eval.sh --orchestration orchestration
+   ```
+2. Run the separate native-steering protocol:
    ```sh
    scripts/caliper-skill-eval.sh --orchestration \
-     --spec .pi/agent/evals/orchestration/steering.eval.yaml \
-     orchestration gpt-5.5 low 1 gpt-5.5 low
+     --spec .pi/agent/evals/orchestration/steering.eval.yaml orchestration
    ```
-2. Run the instruction-behavior cases:
+3. Compare behavior without the instruction fragment:
    ```sh
-   scripts/caliper-skill-eval.sh --orchestration \
-     orchestration gpt-5.5 low 1 gpt-5.5 low
+   scripts/caliper-skill-eval.sh --orchestration --without-instructions orchestration
    ```
-3. Run the same behavior cases without the instruction fragment:
+4. Repeat after validating the fixture:
    ```sh
-   scripts/caliper-skill-eval.sh --orchestration --without-instructions \
-     orchestration gpt-5.5 low 1 gpt-5.5 low
+   scripts/caliper-skill-eval.sh --orchestration orchestration configured configured 3
    ```
 
-Use `--auth-profile NAME` for another existing auth profile. Increase the first
-`1` to `3` for repeated runs after debugging. Keep the wrapper's single-worker
-setting: the deterministic assertion reads the just-finished attempt's pointer.
-Do not use skill `--ablate` for this instruction comparison.
+Use `--auth-profile NAME` for another existing auth profile. Keep Caliper's
+single-worker setting: assertions read the just-finished attempt's pointer.
+Native subagents within an attempt can run concurrently. Use
+`--without-instructions`, not skill `--ablate`, for the baseline.
 
-## What is measured
+## Models
 
-- `orchestration.eval.yaml`: a one-file lookup stays with the parent; a supplied
-  routine update does not trigger checkpoint assessment. The second case is a
-  decision probe, not a real worker lifecycle test.
-- `steering.eval.yaml`: a real background `quick` worker enters an event-driven
-  gate. The parent observes a controlled scope-change report, calls the real Jev
-  checkpoint tool, and sends native steering. The gate releases only after the
-  native tool accepts the message. The worker must read only `assigned.txt` and
-  return both its random contents and a marker disclosed only to the parent
-  after the worker reached the gate. That marker must arrive through steering.
-- `check.py`: checks recorded calls, matching worker IDs, ordering, actual read
-  results, child output, and parent integration. Final claims alone cannot pass.
-- `launch.py` and `fixture.ts`: isolate settings, load the instruction snapshot
-  and extension allowlist, constrain reads, record evidence, and bound execution.
+The parent defaults to `modes.build.model` and `modes.build.thinkingLevel` from
+`.pi/agent/settings.json`. Worker model, thinking, and role descriptions come
+from `.pi/agent/agents/{quick,explore,analyze,debug,review,validate,test}.md`;
+same-named `.pi/agents/` definitions take precedence. Disabled agents stay
+unavailable. A missing or invalid preset is an error, not a fallback.
 
-The smoke prompt explicitly requests a checkpoint call; it tests plumbing and
-compliance, not spontaneous checkpoint recognition. The source instruction says
-“may call,” so omission alone is not a failure in natural cases. `@quick` also
-bypasses the routing recommendation hook in the smoke test. This is not a
-complete routing, parallelism, blocker, or material-finding evaluation.
+Each run snapshots that catalog and the required entries from `models.json`
+and `models-store.json`. The isolated runtime loads `openai-capabilities.ts`,
+which translates configured `*-fast` aliases to the base model with priority
+service. Traces record actual parent and worker model/thinking selections and
+outgoing model IDs/service tiers. Assertions compare these with the snapshot.
+Specialist model overrides fail, even if a later retry succeeds.
+
+Optional model arguments must name a configured model. The old `gpt-5.5:low`
+invocation is intentionally rejected unless that model becomes configured.
+Worker prompts are bounded fixture instructions, not copies of production
+agent skill workflows. This evaluates orchestration using production execution
+presets, not the quality of every production agent prompt.
+
+## Coverage
+
+`orchestration.eval.yaml` contains eleven behavior cases:
+
+- Direct work: a one-file lookup stays with the parent.
+- Routine progress: a supplied ordinary update does not require intervention.
+- Specialist selection: discovery, diagnosis, and review route to their roles.
+- Delegation quality: the assignment carries target, scope, read-only and
+  command restrictions, required output, export verification, and a turn budget.
+- Parallelism: two distinct workers reach an event-driven barrier before
+  either leaves it. Each reads only its assigned file and reports its marker.
+- Dependencies: the second worker starts after the prerequisite report and
+  receives its random token in the assignment.
+- Resume: the parent continues the original worker ID and session after its
+  first report, rather than spawning a replacement.
+- Material finding: an unsupported API capability causes a revised decision.
+- Blocker: missing administrator input is escalated instead of invented.
+
+`steering.eval.yaml` is an explicit protocol test. A real background worker waits
+at a gate while the parent calls Jev and sends native steering. Only successful
+steering releases it. The worker must acknowledge a random marker disclosed
+only to the parent after the gate was reached, then read the assigned file.
+The `@quick` request deliberately bypasses delegation routing in this case.
+
+The natural finding/blocker prompts do not mention checkpoints or steering.
+They grade evidence-backed decisions after worker reports. The instruction says
+"may call", so Jev assessment is optional there; its use and checkpoint kind are
+recorded. These cases do not measure spontaneous mid-execution interruption.
+Routine progress is a decision probe, not a live-worker scenario.
 
 ## Isolation and evidence
 
-Each attempt has a disposable HOME and fixture directory. Only the native
-subagent package, instruction loader, recommend-agent extension, and fixture
-extension load. The fixture worker definition is deliberately read-only; this
-is not an eval of the production `quick.md` prompt. Candidate tools cannot run
-shell commands, write files, or read auth, specifications, traces, or the real
-repository. This is a tool-level boundary, not an OS sandbox for extension code.
+Each attempt has a disposable HOME and synthetic workspace. The extension
+allowlist contains native subagents, the model translation hook, instruction
+fragments, recommend-agent, and the fixture. Model tools cannot execute shell
+commands, write files, or read credentials, specs, traces, or the real repository.
+The copied swarm skill is the only read exception outside the workspace.
+This is a tool-level boundary, not an OS sandbox for extension code.
 
-The existing wrapper's auth-copy and refresh-persistence behavior is unchanged.
-Only synthetic task state is submitted to Jev. Jev unavailability or abstention
-fails the live-assessment assertion; inspect the trace before interpreting a
-failure as poor orchestration. Caliper 0.11 may also classify a provider refusal
-as a task failure. A zero CLI exit code alone is not proof of a passing score.
+The wrapper's existing auth-copy and refresh-persistence behavior is unchanged.
+Only synthetic task state is sent to Jev. Provider refusals, Jev unavailability,
+and fixture timeouts must be distinguished from behavior failures using traces.
+Caliper can exit zero despite failed cases.
 
-The wrapper prints an evidence directory under `.caliper/orchestration/`, with
-an exact instruction snapshot/hash, extension entrypoint hashes, package
-version, treatment flag, per-attempt trace, and expected fixture contents.
-Caliper saves scored results beneath this directory's `.caliper/results/`.
-These generated directories are ignored by Git. Pin the saved result paths
-when using `caliper compare`; the instruction treatment is in our evidence
-metadata, not Caliper's skill-ablation field. Entrypoint hashes are not a full
-transitive dependency snapshot; compare runs in the same checkout/environment.
+The wrapper prints `.caliper/orchestration/run.*`, containing instruction and
+model snapshots, hashes, metadata, traces, expected fixture values, and
+per-attempt assessment summaries. Caliper scores are under this directory's
+`.caliper/results/`. Generated artifacts are ignored by Git. Compare explicit
+result paths with `caliper compare`; instruction treatment is recorded in our
+metadata rather than Caliper's skill-ablation field. Extension entrypoint hashes
+are not a complete transitive dependency snapshot.
 
-## Validation and limits
-
-Offline regression checks are included in `devenv tasks run test:caliper-skill-eval`.
-Validate specs without model calls using `caliper validate <spec-path>`.
-
-Initial `gpt-5.5:low`, k=1 results: controlled steering passed; both behavior
-cases passed with and without the fragment. This verifies the fixture but shows
-no instruction benefit on those two easy cases. It is not a reliability estimate.
-Add harder cases with observable outcomes before making quality claims; keep
-explicit-protocol tests separate from natural instruction-adherence tests.
+Offline checks: `devenv tasks run test:caliper-skill-eval`.
+Spec validation without model calls: `caliper validate <spec-path>`.
+Single runs establish execution evidence, not reliability or instruction benefit.

@@ -1248,8 +1248,8 @@ export async function runFastJevCompaction(
     selection?: PhasedSelectionDiagnostic,
   ): Exclude<FastJevRunOutcome, { readonly kind: "success" }> => {
     const status = makeStatus(
-      kind === "unavailable" ? "native-fallback" : kind,
-      kind === "unavailable" ? "native" : "none",
+      kind === "cancelled" ? "cancelled" : "native-fallback",
+      kind === "cancelled" ? "none" : "native",
       reason,
       jevMs,
       monotonicMs(startedAt),
@@ -1503,8 +1503,8 @@ export function toPiCompactionResponse(result: FastJevRunOutcome) {
     case "success":
       return { compaction: result.result };
     case "unavailable":
-      return undefined;
     case "refused":
+      return undefined;
     case "cancelled":
       return { cancel: true as const };
   }
@@ -1514,9 +1514,9 @@ export function notifyFastJevRefusal(
   ui: Pick<ExtensionContext["ui"], "notify">,
   status: FastJevAttemptStatus,
 ): void {
-  if (status.outcome !== "refused") return;
+  if (status.outcome !== "native-fallback") return;
   ui.notify(
-    `Fast Jev compaction refused (${status.reason ?? "unknown"}): ${status.spans} spans, ${status.requests} Jev requests. Run /fast-jev-status or disable jev.compaction to use Pi's native compactor.`,
+    `Fast Jev could not compact (${status.reason ?? "unknown"}); using Pi native compaction.`,
     "warning",
   );
 }
@@ -1605,9 +1605,19 @@ export default function fastJevCompaction(
       );
       return toPiCompactionResponse(result);
     } catch {
-      const attempt = makeStatus("refused", "none", "unexpected", 0, 0, 0, 0, 0, 0);
+      const attempt = makeStatus(
+        event.signal?.aborted ? "cancelled" : "native-fallback",
+        event.signal?.aborted ? "none" : "native",
+        event.signal?.aborted ? "caller-cancellation" : "unexpected",
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+      );
       publishStatus(attempt);
-      return { cancel: true };
+      return event.signal?.aborted ? { cancel: true } : undefined;
     }
   });
 }

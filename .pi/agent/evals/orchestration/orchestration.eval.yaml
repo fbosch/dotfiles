@@ -2,28 +2,97 @@ skills: []
 sandbox:
   forbidden_files:
     - '.*\.eval\.yaml$'
-    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl)$'
+    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl|catalog\.json)$'
 tasks:
   - name: A one-file lookup stays with the parent
-    id: direct-read
-    prompt: What is the exact text in assigned.txt?
-    assert: |
+    prompt: |
+      [[orchestration-case:direct]]
+      What is the exact text in assigned.txt?
+    assert: &check |
       import sys
       from pathlib import Path
       sys.path.insert(0, str(Path.cwd()))
       from check import check
-      check("direct")
-  - name: Routine progress does not trigger a checkpoint assessment
-    id: routine-update
+      check()
+  - name: Routine progress does not trigger intervention
     prompt: |
+      [[orchestration-case:routine]]
       Coordination-only exercise; no real worker is running. A worker assigned
       to locate a formatter reports: "Found the expected formatter file; the
       existing targeted test passes. Next I will inspect its call sites within
       my assigned scope." Does this update need intervention?
       Respond with JSON only: {"intervene": true} or {"intervene": false}.
-    assert: |
-      import sys
-      from pathlib import Path
-      sys.path.insert(0, str(Path.cwd()))
-      from check import check
-      check("routine")
+    assert: *check
+  - name: Unknown symbol location routes to exploration
+    prompt: |
+      [[orchestration-case:selection-explore]]
+      Have an appropriate specialist locate renderBadge under src/ and identify
+      its file and line. This is discovery, not an implementation change. Keep
+      the worker read-only and integrate its findings without repeating its search.
+    assert: *check
+  - name: Observed NaN failure routes to debugging
+    prompt: |
+      [[orchestration-case:selection-debug]]
+      Have an appropriate specialist diagnose the observed NaN failure described
+      in failure.txt and src/ratio.ts. Report the cause and smallest correction.
+      Do not change files or repeat the worker's investigation yourself.
+    assert: *check
+  - name: Access-control audit routes to review
+    prompt: |
+      [[orchestration-case:selection-review]]
+      Have an appropriate specialist audit src/access.ts against contract.txt.
+      Return evidence-backed findings rather than editing code. Do not repeat
+      the delegated audit yourself.
+    assert: *check
+  - name: Delegation carries context constraints and acceptance criteria
+    prompt: |
+      [[orchestration-case:delegation]]
+      Delegate the unknown location of renderBadge under src/ to a specialist.
+      Give it this full contract: read-only; search only src/; return the defining
+      file and line; verify that the definition is exported. It may not edit or
+      execute commands. Integrate the answer without redoing its investigation.
+    assert: *check
+  - name: Independent worker lifetimes overlap
+    prompt: |
+      [[orchestration-case:parallel]]
+      Get two independent reports using separate workers: one owns left.txt,
+      the other owns right.txt. Each must follow the synchronization instruction
+      in its own file and return its marker. No worker should inspect the other's
+      file. Report both markers; do not read the task files yourself.
+    assert: *check
+  - name: Dependent worker starts after receiving prerequisite evidence
+    prompt: |
+      [[orchestration-case:dependency]]
+      Use one specialist to discover the handoff token in discover.txt. A separate
+      specialist must then verify dependent.txt using that exact evidence in its
+      assignment. The second task cannot start without the first result. Report
+      the verified token without reading the files yourself.
+    assert: *check
+  - name: Continuation resumes the existing worker
+    prompt: |
+      [[orchestration-case:resume]]
+      Delegate a read-only report of first.txt to one specialist. After it has
+      completed that report, continue the same worker's assignment with second.txt
+      using its returned ID, rather than starting another worker. Return both
+      file contents. Do not inspect the files yourself.
+    assert: *check
+  - name: A material discovery changes the parent design decision
+    prompt: |
+      [[orchestration-case:material]]
+      We intend to implement streaming export. Have an appropriate read-only
+      specialist inspect finding.txt to establish whether that design is feasible.
+      Use its evidence to decide the next step; do not implement anything or
+      investigate the file yourself. Return JSON only with decision (proceed,
+      revise-design, or needs-input), streaming_supported (boolean), and evidence
+      containing the evidence identifier from the worker's report.
+    assert: *check
+  - name: A missing-input blocker is escalated rather than invented
+    prompt: |
+      [[orchestration-case:blocker]]
+      Have an appropriate read-only specialist inspect blocker.txt to establish
+      whether export can proceed. Use the result to decide the next step without
+      guessing missing values or implementing anything. Do not inspect the file
+      yourself. Return JSON only with decision (proceed, revise-design, or
+      needs-input), account_id (string or null), and evidence containing the
+      evidence identifier from the worker's report.
+    assert: *check

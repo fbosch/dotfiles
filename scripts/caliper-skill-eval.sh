@@ -64,6 +64,14 @@ if [[ -z "$skill" || $# -gt 6 ]]; then
   usage >&2
   exit 2
 fi
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+if [[ "$orchestration" == true ]]; then
+  resolved_model="$(python3 "$repo_root/.pi/agent/evals/orchestration/model_config.py" \
+    "$repo_root" "${2:-configured}" "${3:-configured}")"
+  read -r model thinking <<<"$resolved_model"
+  judge_model="$model"
+  judge_thinking="$thinking"
+fi
 case "$auth_profile" in
 default) ;;
 *[!A-Za-z0-9._-]* | '' | . | ..)
@@ -90,7 +98,6 @@ if [[ ! "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 2
 fi
 
-repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 if [[ "$without_instructions" == true && "$orchestration" != true ]]; then
   printf '%s\n' '--without-instructions requires --orchestration' >&2
   exit 2
@@ -142,7 +149,7 @@ if [[ "$orchestration" == true ]]; then
   ORCHESTRATION_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/orchestration/run.XXXXXX")"
   export ORCHESTRATION_EVAL_RUN
   python3 "$repo_root/.pi/agent/evals/orchestration/launch.py" prepare \
-    "$repo_root" "$run_root" "$ORCHESTRATION_EVAL_RUN" "$without_instructions" "$model"
+    "$repo_root" "$run_root" "$ORCHESTRATION_EVAL_RUN" "$without_instructions" "$model" "$thinking"
   printf 'Orchestration evidence: %s\n' "$ORCHESTRATION_EVAL_RUN"
 fi
 
@@ -206,6 +213,10 @@ chmod 700 "$wrapper"
 
 candidate="pi:openai-codex/$model:$thinking"
 judge="pi:openai-codex/$judge_model:$judge_thinking"
+if [[ "$orchestration" == true ]]; then
+  candidate="pi:$model:$thinking"
+  judge="pi:$judge_model:$judge_thinking"
+fi
 args=(run "$spec" --k "$k" --workers 1 --model "$candidate" --judge-model "$judge")
 if [[ "$ablate" == true ]]; then args+=(--ablate "$skill"); fi
 

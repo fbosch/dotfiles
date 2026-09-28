@@ -2,12 +2,11 @@ skills: []
 sandbox:
   forbidden_files:
     - '.*\.eval\.yaml$'
-    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl)$'
+    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl|catalog\.json)$'
 tasks:
   - name: Native steering reaches a running worker after a scope checkpoint
-    id: controlled-steering
-
     prompt: |
+      [[orchestration-case:steering]]
       Run a controlled, read-only steering smoke test using @quick.
       Launch exactly one background quick worker with at most 6 turns and no
       inherited conversation. Its assignment is to report the exact contents
@@ -27,4 +26,4 @@ tasks:
       from pathlib import Path
       sys.path.insert(0, str(Path.cwd()))
       from check import check
-      check("steering")
+      check()
