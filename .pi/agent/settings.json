@@ -21,6 +21,15 @@
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-sol",
+  "compactionModel": {
+    "model": "openai-codex/gpt-6-luna",
+    "thinkingLevel": "xhigh",
+    "reasons": [
+      "manual",
+      "threshold",
+      "overflow"
+    ]
+  },
   "quickReplies": {
     "enabled": true
   },
@@ -110,7 +119,8 @@
     "npm:@gotgenes/pi-subagents@21.7.1",
     "npm:pi-web-access@0.29.0",
     "npm:pi-lens@4.1.6",
-    "npm:@juicesharp/rpiv-todo@2.10.1"
+    "npm:@juicesharp/rpiv-todo@2.10.1",
+    "npm:pi-compaction-model@0.1.0"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,

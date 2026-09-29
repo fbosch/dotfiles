@@ -1,0 +1,103 @@
+skills:
+  - ./SKILL.md
+  - ../unslop/SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Loads Unslop and removes AI patterns from README prose
+    setup: rm -f /tmp/writing-clearly-readme.txt
+    cleanup: rm -f /tmp/writing-clearly-readme.txt
+    prompt: |
+      Rewrite this README introduction for a developer deciding whether to use
+      the tool. Write only the revised paragraph to
+      `/tmp/writing-clearly-readme.txt`.
+
+      "In today's fast-paced development landscape, Gloss serves as a pivotal
+      and powerful solution. In order to leverage this innovative tool, run
+      `gloss check docs/`. It checks local Markdown links and reports broken
+      targets. Not just that, it also has a guide at
+      https://docs.example.test/guide."
+    expect: |
+      Pass only if the transcript shows the agent loaded the body of the
+      declared unslop skill, not merely mentioned it, and the artifact states
+      what Gloss checks without generic promotional language or filler. It
+      must not invent behavior beyond the supplied facts or add explanation
+      inside the requested paragraph. A brief final status confirming the file
+      was written is not part of the artifact and is acceptable.
+    assert: |
+      import re
+      from pathlib import Path
+
+      path = Path("/tmp/writing-clearly-readme.txt")
+      assert path.is_file(), "rewrite was not written"
+      text = path.read_text(encoding="utf-8").strip()
+      assert text and "\n" not in text, "expected one paragraph"
+      assert "`gloss check docs/`" in text, "command changed"
+      assert "https://docs.example.test/guide" in text, "URL changed"
+      assert "Markdown" in text and "link" in text.lower(), "purpose was lost"
+      assert not re.search(
+          r"fast-paced|landscape|pivotal|powerful|innovative|"
+          r"serves as|in order to|leverage|not just",
+          text, re.IGNORECASE,
+      ), "AI-pattern phrasing remains"
+
+  - name: Preserves protected details and bounds claims to evidence
+    setup: rm -f /tmp/writing-clearly-evidence.txt
+    cleanup: rm -f /tmp/writing-clearly-evidence.txt
+    prompt: |
+      Copyedit this incident note for a technical reader. Write only the
+      revised note to `/tmp/writing-clearly-evidence.txt`.
+
+      "On 2025-04-03, Mira said \"we saw two retries\" after running
+      `sync --dry-run`. This proves the sync succeeded and improved throughput
+      by 40%, highlighting our robust recovery. The logs record two retries;
+      they do not show whether the sync succeeded or why it retried."
+    expect: |
+      Pass if the note removes or corrects the unsupported success, throughput,
+      and recovery claims, retains the log's limited observation and unknowns,
+      and leaves the date, name, quotation, and command unchanged. Fail if it
+      invents a cause, removes relevant uncertainty, or alters protected text.
+    assert: |
+      from pathlib import Path
+
+      path = Path("/tmp/writing-clearly-evidence.txt")
+      assert path.is_file(), "note was not written"
+      text = path.read_text(encoding="utf-8").strip()
+      for literal in ('2025-04-03', 'Mira', '"we saw two retries"', '`sync --dry-run`'):
+          assert literal in text, f"protected detail changed: {literal}"
+      assert 'highlighting' not in text.lower(), "empty consequence clause remains"
+      assert 'two retries' in text, "observed result was lost"
+
+  - name: Preserves a first-person mixed finding without forced optimism
+    setup: rm -f /tmp/writing-clearly-voice.txt
+    cleanup: rm -f /tmp/writing-clearly-voice.txt
+    prompt: |
+      Edit this short first-person project note for clarity without changing
+      its stance. Write only the revised note to
+      `/tmp/writing-clearly-voice.txt`.
+
+      "I tried the new cache on my laptop. Honestly, I was frustrated: startup
+      still takes 12 seconds, even though repeat searches feel quicker. I
+      don't know whether the cache helps anyone else yet. This pivotal
+      breakthrough underscores a bright future for the project."
+    expect: |
+      Pass if the note retains the author's first-person experience, frustration
+      about the 12-second startup, tentative observation about repeat searches,
+      and uncertainty about other users. It must remove the unsupported upbeat
+      conclusion and AI-pattern phrasing without replacing the author's stance
+      with corporate or falsely neutral prose or making up measurements.
+    assert: |
+      import re
+      from pathlib import Path
+
+      path = Path("/tmp/writing-clearly-voice.txt")
+      assert path.is_file(), "note was not written"
+      text = path.read_text(encoding="utf-8").strip()
+      assert re.search(r"\bI\b", text), "first-person voice was lost"
+      assert '12 seconds' in text, "measured startup time changed"
+      assert not re.search(r"pivotal|underscores|bright future", text, re.IGNORECASE), (
+          "unsupported upbeat conclusion remains"
+      )
