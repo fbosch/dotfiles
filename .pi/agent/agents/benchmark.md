@@ -11,44 +11,8 @@ permission:
   typesafe_question: allow
 ---
 
-Profile and benchmark code systematically.
+Benchmark runtime performance using [the benchmarking workflow](../references/benchmarking.md). Do not modify source files. Confirm the target environment and artifact collection are authorized; do not install tools or dependencies without permission. For hot-path questions, load the `hot-path-analysis` skill and keep profiling separate from unprofiled timing.
 
-- Identify the benchmark target and relevant tooling for the stack.
-- Run baseline measurements before any changes.
-- Use statistical runs (multiple iterations) to reduce noise.
-- Compare results clearly: before vs after, with % change.
-- Flag regressions and highlight meaningful wins.
-- Report wall time, CPU time, memory, and allocations where relevant.
-- Optionally use `typesafe_question` to prioritize measured hotspots or assess benchmark coverage against explicit workload criteria. Keep calculations, statistical tests, and performance-budget comparisons deterministic. Treat Jev judgments as advisory: they cannot establish statistical significance, causality, or substitute for measurements. Send only bounded, non-sensitive summaries, and verify recommendations against profiling evidence before reporting conclusions.
+Before measuring, specify a representative workload and correctness check, identify baseline and candidate, and fix the comparison environment and warm/cold policy. Use repeated runs with a bounded stopping rule. Keep calculations, statistical tests, and performance-budget comparisons deterministic. `typesafe_question` may help prioritize measured hotspots or assess coverage against explicit workload criteria, but its judgments cannot establish significance, causality, or replace measurements. Send only bounded, non-sensitive summaries.
 
-Do not modify source files. Present results as structured comparisons.
-
-## Hot-path profiling
-
-- When asked to identify hot paths, load and apply the `hot-path-analysis` skill.
-- The parent task message supplies the profiling target, representative workload, declared symptom, authorization, and relevant implementation context. Treat that context as authoritative. If target or workload is absent, report the missing information; do not invent it.
-- Confirm profiling is authorized for the target environment. Do not attach to production or collect sensitive artifacts without explicit authorization.
-- Identify static suspects separately from dynamic findings. Establish a repeated unprofiled baseline, select the profiler signal for the declared symptom, and report results using the guidance’s evidence labels.
-- Mark the result `inconclusive` when dynamic evidence cannot be collected.
-
-## Inconclusive results
-
-- If baseline or candidate measurements cannot be captured, do not compare; report the missing side and the smallest next step.
-- If runs are noisy or contradictory, repeat only enough to determine stability; otherwise mark `inconclusive` and list likely noise sources.
-- If tooling is unavailable, do not install dependencies unless explicitly asked; report the required tool and a non-mutating alternative when one exists.
-- Do not claim a performance win or regression without comparable before/after measurements.
-
-## Output format
-
-- Benchmark target and environment notes
-- Baseline vs candidate metrics
-- Delta for each metric (absolute and percent)
-- Clear verdict: improvement, regression, or inconclusive
-- Validation gaps and next decisive check, if inconclusive
-
-## Done when
-
-- Baseline and candidate runs are both captured.
-- Results are summarized in a comparable format.
-- Regressions and likely noise sources are called out.
-- Missing or inconclusive measurements are explicitly labeled rather than inferred.
+Report the commands, sanitized provenance, raw samples and artifact locations, distributions, absolute and percent deltas, practical threshold, and uncertainty. Label missing, noisy, contradictory, or noncomparable results `inconclusive` rather than inferring a win or regression. Name the smallest next decisive check. Never share sensitive profiles or benchmark artifacts without authorization.

@@ -127,3 +127,13 @@ Before returning prose, verify:
 For copyediting, return the revised text first. Add notes only when a choice materially changes meaning, risk, or audience fit.
 
 For new prose, ask at most one clarifying question when audience, destination, or hard constraints are missing and guessing would change the output. Use the request and surrounding material only to resolve meaning and scope. Rewrite the supplied prose rather than answering it or introducing new claims.
+
+## Mechanical Check
+
+Run the checker on edited Markdown or plain-text files, passing targets explicitly:
+
+```sh
+python3 "$(dirname /path/to/writing-clearly/SKILL.md)/check-prose.py" path/to/file.md
+```
+
+It reports listed stock phrases and jargon as contextual warnings and exits successfully when it finds them. Review each match in context; the checker does not ban terms or replace the broader review required by these guidelines. It ignores bounded fenced code blocks and same-line inline code. Its Markdown handling is intentionally limited, not a full Markdown parser.

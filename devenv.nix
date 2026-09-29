@@ -98,6 +98,11 @@ in
     };
 
     "test:caliper-skill-eval".exec = "python3 -m unittest discover -s tests -p 'caliper*test.py'";
+    "test:writing-clearly".exec = ''
+      set -euo pipefail
+      python3 -m unittest discover -s tests -p 'test_writing_clearly_prose.py'
+      python3 .agents/skills/writing-clearly/check-prose.py .agents/skills/writing-clearly/SKILL.md
+    '';
 
     "test:shellcheck".exec = ''
       set -euo pipefail
