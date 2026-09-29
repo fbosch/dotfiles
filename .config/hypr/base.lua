@@ -22,9 +22,4 @@ hl.config({
 		direct_scanout = false,
 		expand_undersized_textures = true,
 	},
-	quirks = {
-		-- Advertise HDR before Gamescope has an app-id; native fullscreen
-		-- autoHDR controls the output without permanently forcing the desktop.
-		prefer_hdr = 1,
-	},
 })

@@ -41,7 +41,7 @@ describe("Gamescope title transitions", function()
 		package.loaded["gaming.events"] = nil
 	end)
 
-	it("sets Battle.net fullscreen and preserves fullscreen on the WoW title", function()
+	it("does not fullscreen Battle.net and applies the game policy after a Gamescope title change", function()
 		local window = {
 			class = "gamescope",
 			initial_title = "Battle.net Login",
@@ -51,10 +51,14 @@ describe("Gamescope title transitions", function()
 			fullscreen_client = 0,
 		}
 		handlers["window.title"](window)
-		assert.same({ internal = 2, client = 0, action = "set", window = "address:0x123" }, dispatches[1])
+		assert.are.equal(0, #dispatches)
+
 		window.title = "World of Warcraft"
 		handlers["window.title"](window)
-		assert.same(dispatches[1], dispatches[2])
+		assert.same({ internal = 2, client = 0, action = "set", window = "address:0x123" }, dispatches[1])
+		window.fullscreen = 2
+		handlers["window.title"](window)
+		assert.are.equal(1, #dispatches)
 	end)
 
 	it("does not force direct Battle.net fullscreen", function()
@@ -62,7 +66,7 @@ describe("Gamescope title transitions", function()
 		assert.are.equal(0, #dispatches)
 	end)
 
-	it("restores only policy fullscreen windows on workspace 10 after reload without focus", function()
+	it("restores fullscreen policies on workspace 10 after reload without focusing", function()
 		local function window(address, class, title, workspace, fullscreen)
 			return {
 				address = address,
@@ -75,12 +79,14 @@ describe("Gamescope title transitions", function()
 			}
 		end
 		windows = {
-			window("0x10", "gamescope", "World of Warcraft", 10, 0),
+			window("0x10", "wow.exe", "World of Warcraft", 10, 0),
 			window("0x11", "gamescope", "Battle.net Login", 10, 0),
-			window("0x12", "gamescope", "World of Warcraft", 2, 0),
-			window("0x13", "gamescope", "World of Warcraft", 10, 2),
+			window("0x12", "wow.exe", "World of Warcraft", 2, 0),
+			window("0x13", "wow.exe", "World of Warcraft", 10, 2),
 			window("0x14", "steam_app_elderscrollsonline", "Elder Scrolls Online", 10, 0),
 			window("0x15", "unmatched", "other", 10, 0),
+			window("0x16", "bg3", "Baldur's Gate 3", 10, 0),
+			window("0x17", "gamescope", "Warcraft III", 10, 0),
 		}
 		handlers["config.reloaded"]()
 		assert.are.equal(0, #dispatches)
@@ -88,7 +94,8 @@ describe("Gamescope title transitions", function()
 		deferred()
 		assert.same({
 			{ internal = 2, client = 0, action = "set", window = "address:0x10" },
-			{ internal = 2, client = 0, action = "set", window = "address:0x11" },
+			{ internal = 2, client = 0, action = "set", window = "address:0x16" },
+			{ internal = 2, client = 0, action = "set", window = "address:0x17" },
 		}, dispatches)
 	end)
 end)

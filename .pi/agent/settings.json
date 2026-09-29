@@ -59,7 +59,7 @@
     "thinkingLevel": "off"
   },
   "autoSessionTitle": {
-    "model": "openai-codex/gpt-6-luna-fast",
+    "model": "openai-codex/gpt-6-luna",
     "thinkingLevel": "low"
   },
   "charts": {

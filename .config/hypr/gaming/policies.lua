@@ -9,7 +9,6 @@
 ---@field name string Stable policy identifier.
 ---@field selectors GamingSelector[] Window selectors shared by Hyprland and the watchdog.
 ---@field launcher_rules? GamingLauncherRule[] Launcher windows that receive lifecycle and cosmetic rules only.
----@field gamescope_launcher? { selectors: GamingSelector[], fullscreen_state: string } Gamescope-hosted launcher presentation.
 ---@field close_launcher_on_start? boolean Kills matching launcher windows once the game opens.
 ---@field steam_app_id? string UMU Steam app ID used for matching the Steam client class.
 ---@field hide_empty_wine_desktop? boolean Hides Wine's untitled virtual desktop helper.
@@ -35,21 +34,21 @@ local M = {
 ---@type GamingLauncherRule[]
 local battlenet_launcher_rules = {
 	{
-		match = { initial_title = "^Battle\\.net", class = "negative:^(gamescope)$" },
+		match = { initial_title = "^Battle\\.net" },
 		workspace = "unset",
 		float = true,
 		persistent_size = true,
 		no_shadow = false,
 	},
 	{
-		match = { title = "^Battle\\.net", class = "negative:^(gamescope)$" },
+		match = { title = "^Battle\\.net" },
 		workspace = "unset",
 		float = true,
 		persistent_size = true,
 		no_shadow = false,
 	},
 	{
-		match = { initial_title = "^Battle\\.net Settings$", class = "negative:^(gamescope)$" },
+		match = { initial_title = "^Battle\\.net Settings$" },
 		workspace = "unset",
 		float = true,
 		persistent_size = true,
@@ -88,18 +87,10 @@ M.games = {
 		steam_app_id = "worldofwarcraft",
 		hide_empty_wine_desktop = true,
 		selectors = {
-			{ class = "^(gamescope)$", title = "^World of Warcraft$" },
 			{ initial_title = "^World of Warcraft$" },
 			{ title = "^World of Warcraft$" },
 		},
 		launcher_rules = battlenet_launcher_rules,
-		gamescope_launcher = {
-			selectors = {
-				{ class = "^(gamescope)$", initial_title = "^Battle\\.net" },
-				{ class = "^(gamescope)$", title = "^Battle\\.net" },
-			},
-			fullscreen_state = "2 0",
-		},
 		close_launcher_on_start = false,
 		fullscreen_state = "2 0",
 		enable_profile = true,

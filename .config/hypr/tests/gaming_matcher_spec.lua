@@ -6,7 +6,7 @@ local matcher = require("gaming.matcher")
 local policies = require("gaming.policies")
 
 describe("Battle.net selector integration", function()
-	it("classifies direct Battle.net as a launcher, but not Gamescope Battle.net", function()
+	it("classifies direct and Gamescope Battle.net windows as launchers", function()
 		local direct = { class = "battle.net.exe", title = "Battle.net", initial_title = "Battle.net Login" }
 		local game, launcher = matcher.match(direct)
 		assert.are.equal("world-of-warcraft", game.name)
@@ -15,12 +15,12 @@ describe("Battle.net selector integration", function()
 
 		local gamescope = { class = "gamescope", title = "Battle.net", initial_title = "Battle.net Login" }
 		local scoped_game, scoped_launcher = matcher.match(gamescope)
-		assert.are.equal("gamescope", scoped_game.name)
-		assert.is_false(scoped_launcher)
-		local policy = policies.games[2].gamescope_launcher
-		assert.is_true(matcher.matches_selector(gamescope, policy.selectors[1]))
-		assert.is_true(matcher.matches_selector(gamescope, policy.selectors[2]))
-		assert.is_false(matcher.matches_selector(direct, policy.selectors[1]))
+		assert.are.equal("world-of-warcraft", scoped_game.name)
+		assert.is_true(scoped_launcher)
+		assert.is_nil(policies.games[2].gamescope_launcher)
+		for _, selector in ipairs(policies.games[2].selectors) do
+			assert.is_nil(selector.class)
+		end
 	end)
 
 	it("recognizes a Gamescope title transition to WoW", function()

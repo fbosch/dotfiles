@@ -53,36 +53,57 @@ describe("gaming rules", function()
 		local world_of_warcraft = find_rule(registered_rules, function(match)
 			return match.initial_title == "^World of Warcraft$"
 		end)
+		local world_of_warcraft_title = find_rule(registered_rules, function(match)
+			return match.title == "^World of Warcraft$"
+		end)
 		local warcraft_iii = find_rule(registered_rules, function(match)
 			return match.initial_title == "^Warcraft III$"
+		end)
+		local warcraft_iii_gamescope = find_rule(registered_rules, function(match)
+			return match.class == "^(gamescope)$" and match.title == "^Warcraft III$"
+		end)
+		local world_of_warcraft_gamescope = find_rule(registered_rules, function(match)
+			return match.class == "^(gamescope)$" and match.title == "^World of Warcraft$"
 		end)
 
 		assert.are.equal("2 0", bg3.fullscreen_state)
 		assert.are.equal("2 0", world_of_warcraft.fullscreen_state)
+		assert.are.equal("2 0", world_of_warcraft_title.fullscreen_state)
+		assert.is_nil(world_of_warcraft_gamescope)
 		assert.are.equal("2 0", warcraft_iii.fullscreen_state)
+		assert.are.equal("2 0", warcraft_iii_gamescope.fullscreen_state)
 		assert.are.equal("10 silent", warcraft_iii.workspace)
 	end)
 
-	it("keeps the Battle.net launcher on its launch workspace and remembers its size", function()
+	it("keeps Battle.net launchers floating on their launch workspace", function()
 		local battle_net = find_rule(registered_rules, function(match)
-			return match.initial_title == "^Battle\\.net" and match.class == "negative:^(gamescope)$"
+			return match.initial_title == "^Battle\\.net"
 		end)
 
 		assert.are.equal("unset", battle_net.workspace)
 		assert.is_true(battle_net.float)
 		assert.is_true(battle_net.persistent_size)
 		assert.is_false(battle_net.no_shadow)
-		assert.are.equal("negative:^(gamescope)$", battle_net.match.class)
+		assert.is_nil(battle_net.match.class)
+
+		local battle_net_settings = find_rule(registered_rules, function(match)
+			return match.initial_title == "^Battle\\.net Settings$"
+		end)
+		assert.are.equal("unset", battle_net_settings.workspace)
+		assert.is_true(battle_net_settings.float)
+		assert.is_true(battle_net_settings.pin)
+		assert.is_nil(battle_net_settings.match.class)
+
 		for _, rule in ipairs(registered_rules) do
 			if rule.match.title == "^Battle\\.net" or rule.match.initial_title == "^Battle\\.net" then
-				if rule.match.class == "^(gamescope)$" then
-					assert.are.equal("10 silent", rule.workspace)
-					assert.are.equal("2 0", rule.fullscreen_state)
-					assert.is_nil(rule.float)
-				else
-					assert.are.equal("negative:^(gamescope)$", rule.match.class)
-				end
+				assert.is_nil(rule.match.class)
+				assert.is_nil(rule.fullscreen_state)
+				assert.is_nil(rule.content)
 			end
 		end
+		assert.is_nil(find_rule(registered_rules, function(match)
+			return match.class == "^(gamescope)$"
+				and (match.initial_title == "^Battle\\.net" or match.title == "^Battle\\.net")
+		end))
 	end)
 end)
