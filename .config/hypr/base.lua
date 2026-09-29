@@ -23,7 +23,8 @@ hl.config({
 		expand_undersized_textures = true,
 	},
 	quirks = {
-		-- Gamescope needs HDR advertised before startup; keep the desktop in SDR.
-		prefer_hdr = 2,
+		-- Advertise HDR before Gamescope has an app-id; native fullscreen
+		-- autoHDR controls the output without permanently forcing the desktop.
+		prefer_hdr = 1,
 	},
 })

@@ -21,6 +21,8 @@ type BeforeAgentStartHandler = (
   ctx: ExtensionContext,
 ) => Promise<unknown> | unknown;
 
+type AgentEndHandler = (event: unknown, ctx: ExtensionContext) => Promise<unknown> | unknown;
+
 describe("extractTicketReferences", () => {
   test("keeps hash and prefixed ticket references in source order", () => {
     expect(extractTicketReferences("Fix #290123 before AB#12903, then revisit #290123")).toEqual([
@@ -86,7 +88,7 @@ describe("auto-session-title lifecycle", () => {
     );
 
     expect(result.exitCode, result.stderr.toString()).toBe(0);
-    expect(result.stdout.toString().trim()).toBe("session_start,before_agent_start");
+    expect(result.stdout.toString().trim()).toBe("session_start,before_agent_start,agent_end");
   });
 
   test("loads guidance on the first eligible request and caches it for the generation", async () => {
@@ -102,6 +104,7 @@ describe("auto-session-title lifecycle", () => {
       const systemPrompts: string[] = [];
       let sessionStart: SessionStartHandler | undefined;
       let beforeAgentStart: BeforeAgentStartHandler | undefined;
+      let agentEnd: AgentEndHandler | undefined;
       const pi = {
         getSessionName: () => sessionName,
         setSessionName: (name: string) => {
@@ -112,6 +115,7 @@ describe("auto-session-title lifecycle", () => {
           if (event === "before_agent_start") {
             beforeAgentStart = handler as BeforeAgentStartHandler;
           }
+          if (event === "agent_end") agentEnd = handler as AgentEndHandler;
         },
       } as unknown as ExtensionAPI;
       const ctx = {
@@ -138,11 +142,13 @@ describe("auto-session-title lifecycle", () => {
 
       sessionStart?.({}, ctx);
       await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
       expect(guidanceLoads).toBe(1);
 
       sessionName = undefined;
       sessionStart?.({}, ctx);
       await beforeAgentStart?.({ prompt: "Second request" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
 
       expect(guidanceLoads).toBe(1);
       expect(systemPrompts).toHaveLength(2);
@@ -154,7 +160,7 @@ describe("auto-session-title lifecycle", () => {
     }
   });
 
-  test("refreshes the generated title from accumulated user prompts", async () => {
+  test("asks Jev after completed turns and regenerates only for stale titles", async () => {
     const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
     temporaryDirectories.push(agentDirectory);
     writeFileSync(join(agentDirectory, "settings.json"), "{}");
@@ -163,9 +169,13 @@ describe("auto-session-title lifecycle", () => {
 
     try {
       let sessionName: string | undefined;
-      const requests: string[] = [];
+      const titleRequests: string[] = [];
+      const jevRequests: unknown[] = [];
+      const notifications: string[] = [];
+      const judgments = [0.79, 0.8];
       let sessionStart: SessionStartHandler | undefined;
       let beforeAgentStart: BeforeAgentStartHandler | undefined;
+      let agentEnd: AgentEndHandler | undefined;
       const pi = {
         getSessionName: () => sessionName,
         setSessionName: (name: string) => {
@@ -176,42 +186,90 @@ describe("auto-session-title lifecycle", () => {
           if (event === "before_agent_start") {
             beforeAgentStart = handler as BeforeAgentStartHandler;
           }
+          if (event === "agent_end") agentEnd = handler as AgentEndHandler;
         },
       } as unknown as ExtensionAPI;
       const ctx = {
         hasUI: true,
         sessionManager: { getBranch: () => [] },
-        ui: { notify: () => {} },
+        ui: { notify: (message: string) => notifications.push(message) },
         modelRegistry: {
           find: () => ({}),
           complete: async (
             _model: unknown,
             request: { messages: Array<{ content: Array<{ text: string }> }> },
           ) => {
-            requests.push(request.messages[0]?.content[0]?.text ?? "");
+            titleRequests.push(request.messages[0]?.content[0]?.text ?? "");
             return {
-              content: [{ type: "text", text: `Generated title ${requests.length}` }],
+              content: [{ type: "text", text: `Generated title ${titleRequests.length}` }],
               stopReason: "stop",
             };
           },
         },
       } as unknown as ExtensionContext;
 
-      await autoSessionTitle(pi, async () => "Writing guidance");
+      await autoSessionTitle(
+        pi,
+        async () => "Writing guidance",
+        async (input) => {
+          jevRequests.push(input);
+          if (jevRequests.length === 3) throw new Error("Jev unavailable");
+          return { title_stale: { type: "noul", noul: judgments[jevRequests.length - 1] ?? 0 } };
+        },
+      );
       sessionStart?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
-      expect(sessionName).toBe("Generated title 1");
-      await beforeAgentStart?.({ prompt: "Follow-up request" } as BeforeAgentStartEvent, ctx);
 
+      await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
+      expect(titleRequests).toHaveLength(0);
+      await agentEnd?.({}, ctx);
+      expect(sessionName).toBe("Generated title 1");
+      expect(titleRequests).toHaveLength(1);
+      expect(jevRequests).toHaveLength(0);
+
+      await beforeAgentStart?.({ prompt: "Add a regression test" } as BeforeAgentStartEvent, ctx);
+      expect(jevRequests).toHaveLength(0);
+      await agentEnd?.({}, ctx);
+      expect(sessionName).toBe("Generated title 1");
+      expect(titleRequests).toHaveLength(1);
+
+      await beforeAgentStart?.(
+        { prompt: "Actually, replace the feature with a CLI command" } as BeforeAgentStartEvent,
+        ctx,
+      );
+      await agentEnd?.({}, ctx);
       expect(sessionName).toBe("Generated title 2");
+      expect(titleRequests).toHaveLength(2);
+      expect(jevRequests).toHaveLength(2);
+      expect(jevRequests[0]).toMatchObject({
+        state: { currentTitle: "Generated title 1", latestUserPrompt: "Add a regression test" },
+        questions: { title_stale: { type: "noul" } },
+      });
+      expect(jevRequests[1]).toMatchObject({
+        state: {
+          currentTitle: "Generated title 1",
+          latestUserPrompt: "Actually, replace the feature with a CLI command",
+        },
+        questions: { title_stale: { type: "noul" } },
+      });
+      expect(titleRequests.map((request) => JSON.parse(request).conversation)).toEqual([
+        "Build the feature",
+        "Build the feature\n\nAdd a regression test\n\nActually, replace the feature with a CLI command",
+      ]);
+
+      await beforeAgentStart?.({ prompt: "Continue the same task" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(sessionName).toBe("Generated title 2");
+      expect(titleRequests).toHaveLength(2);
+      expect(jevRequests).toHaveLength(3);
+      expect(notifications).toEqual([
+        "Could not assess whether the session title is stale: Jev unavailable",
+      ]);
       sessionName = "Manual title";
       await beforeAgentStart?.({ prompt: "Another follow-up" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
       expect(sessionName).toBe("Manual title");
-      expect(requests).toHaveLength(2);
-      expect(requests.map((request) => JSON.parse(request).conversation)).toEqual([
-        "First request",
-        "First request\n\nFollow-up request",
-      ]);
+      expect(jevRequests).toHaveLength(3);
+      expect(titleRequests).toHaveLength(2);
     } finally {
       if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
@@ -229,6 +287,7 @@ describe("auto-session-title lifecycle", () => {
       const notifications: string[] = [];
       let sessionStart: SessionStartHandler | undefined;
       let beforeAgentStart: BeforeAgentStartHandler | undefined;
+      let agentEnd: AgentEndHandler | undefined;
       const pi = {
         getSessionName: () => undefined,
         setSessionName: () => {},
@@ -237,6 +296,7 @@ describe("auto-session-title lifecycle", () => {
           if (event === "before_agent_start") {
             beforeAgentStart = handler as BeforeAgentStartHandler;
           }
+          if (event === "agent_end") agentEnd = handler as AgentEndHandler;
         },
       } as unknown as ExtensionAPI;
       const ctx = {
@@ -251,7 +311,9 @@ describe("auto-session-title lifecycle", () => {
       });
       sessionStart?.({}, ctx);
       await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
       await beforeAgentStart?.({ prompt: "Second request" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
 
       expect(notifications).toEqual(["Could not generate a session title: guidance unavailable"]);
     } finally {
