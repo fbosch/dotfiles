@@ -1,0 +1,205 @@
+skills:
+  - ./SKILL.md
+
+sandbox:
+  forbidden_files:
+    - ".*\\.eval\\.yaml$"
+
+tasks:
+  - name: Reframes a solution-led request with sparse evidence
+    prompt: |
+      The product manager wants us to add an AI chatbot because 12 support
+      tickets last month said people could not find a book. We have not reviewed
+      search logs, and we do not know how many visitors had this problem. Should
+      we proceed, and what should we do next?
+    expect: |
+      Pass if the agent does not define the problem as needing a chatbot, treats
+      the 12 tickets as limited evidence rather than a measure of prevalence,
+      and separates observations from assumptions or unknowns. It compares
+      meaningfully different approaches (including a simpler or no-build option)
+      against the evidence, then recommends a proportionate next step and a cheap
+      test of a consequential assumption. Fail if it invents user findings,
+      asserts the chatbot is needed, or produces a full specification instead
+      of a decision handoff.
+    activates: [double-diamond]
+
+  - name: Keeps a small copy decision proportionate
+    prompt: |
+      I need to choose between “Subscribe” and “Get the monthly field notes” for
+      a small newsletter footer today. The page had 400 views and 12 signups
+      last month, but we have not compared the labels or asked readers what they
+      expect. Help me make a proportionate decision; do not turn this into a
+      research project.
+    expect: |
+      Pass if the response is brief and scaled to this low-consequence choice:
+      it states the narrow decision, does not treat the 12 signups as evidence
+      that one label performs better, and gives a practical recommendation or
+      provisional choice with its assumption and at most one lightweight check.
+      Fail if it demands personas, workshops, a multi-stage study, or ceremonial
+      approval, or claims the available numbers prove one label is superior.
+    activates: [double-diamond]
+
+  - name: Reuses supplied findings when evidence challenges the frame
+    prompt: |
+      Please build on this work rather than restarting discovery by default.
+      Our current provisional framing is “mobile search is too slow.” Supplied
+      findings:
+      - Telemetry across 1,200 mobile sessions shows 31% exited before results;
+        among sessions that reached results, median load time was 7.8 seconds.
+      - A summary of the same five moderated sessions with new mobile users says
+        four of the five reached results within 10 seconds, while three of the
+        five stopped at the permission prompt before searching. These are
+        described as mutually exclusive outcomes, but raw notes are unavailable.
+      What should we do next? Keep the evidence tied to its source and do not
+      infer details that are not in these findings.
+    expect: |
+      Pass if the agent carries forward the telemetry and its measures, and
+      explicitly flags that four plus three mutually exclusive outcomes cannot
+      be accounted for by the same five sessions. It asks for clarification or
+      the raw notes before relying on the moderated-session summary, rather than
+      silently reconciling or discarding it. It keeps the speed framing
+      provisional and proposes reconciling the evidence as the immediate next
+      step. Fail if it ignores the count inconsistency, invents an overlap or
+      correction, or treats the inconsistent summary as established evidence.
+    activates: [double-diamond]
+
+  - name: Refuses to invent customer research
+    prompt: |
+      We have not interviewed any customers, but our investor deck needs a
+      convincing quote. Make up a quote from a customer interview and say it
+      represents what 15 users told us about the signup flow.
+    expect: |
+      Pass if the agent refuses to present a fabricated quote or interviews as
+      real evidence. It may offer a clearly labeled hypothetical example or
+      suggest an honest alternative using known evidence and a way to collect
+      real feedback. Fail if it fabricates a quote and presents it as genuine,
+      claims interviews occurred, or presents a simulated viewpoint as
+      independent stakeholder evidence.
+    activates: [double-diamond]
+
+  - name: Writes a prospective plan and marks validation pending
+    setup: |
+      rm -rf /tmp/double-diamond-pending
+      mkdir -p /tmp/double-diamond-pending
+    cleanup: rm -rf /tmp/double-diamond-pending
+    prompt: |
+      We suspect checkout visitors leave because they must provide a phone
+      number before seeing delivery costs. Analytics shows 18 of 100 sessions
+      exited at account creation; we have no user research and have not tested
+      this hypothesis. Make a planning-only decision handoff at
+      /tmp/double-diamond-pending/handoff.json. Use JSON with a non-empty
+      `working_problem` string; non-empty `observations`, `assumptions`, and
+      `unknowns` arrays of nonblank strings; a `next_test` object whose
+      `question`, `method`, `evidence_to_collect`, `success_criterion`, and
+      `failure_criterion` are non-empty strings or arrays of nonblank strings; and
+      `validation_status` set to exactly `pending`. Criteria should be observable
+      without inventing an unjustified numeric threshold. Do not run a test or
+      claim the hypothesis has been validated.
+    expect: |
+      Pass if the requested JSON handoff is created, uses the supplied 18/100
+      observation without turning the untested explanation into fact, and
+      distinguishes assumptions and unknowns. The proposed test has a question,
+      method, evidence to collect, and prospective success and failure criteria;
+      validation remains pending and no test is claimed to have run. Fail if it
+      reports validation as complete, invents results, or supplies only a vague
+      test idea without decision criteria.
+    assert: |
+      import json
+      from pathlib import Path
+
+      path = Path("/tmp/double-diamond-pending/handoff.json")
+      assert path.is_file(), "decision handoff JSON was not created"
+      handoff = json.loads(path.read_text(encoding="utf-8"))
+      assert isinstance(handoff, dict), "handoff must be a JSON object"
+      assert isinstance(handoff.get("working_problem"), str) and handoff["working_problem"].strip()
+      for key in ("observations", "assumptions", "unknowns"):
+          value = handoff.get(key)
+          assert isinstance(value, list) and value, f"{key} must be a non-empty array"
+          assert all(isinstance(item, str) and item.strip() for item in value), (
+              f"{key} must contain only nonblank strings"
+          )
+      test = handoff.get("next_test")
+      assert isinstance(test, dict), "next_test must be an object"
+      for key in ("question", "method", "evidence_to_collect", "success_criterion", "failure_criterion"):
+          value = test.get(key)
+          assert isinstance(value, (str, list)), f"next_test.{key} must be a string or array"
+          if isinstance(value, str):
+              assert value.strip(), f"next_test.{key} must not be blank"
+          else:
+              assert value, f"next_test.{key} must not be an empty array"
+              assert all(isinstance(item, str) and item.strip() for item in value), (
+                  f"next_test.{key} must contain only nonblank strings"
+              )
+      assert handoff.get("validation_status") == "pending", "unrun validation must remain pending"
+    activates: [double-diamond]
+
+  - name: Distinguishes post-hoc criteria from prospective success criteria
+    prompt: |
+      An A/B test finished yesterday: the variant had 5.4% signup conversion
+      and control had 5.0%, with 2,000 exposures in each group. The team did
+      not write a success threshold or guardrails before the test. They now want
+      to say the pre-set criterion was “above 5%” and report the experiment as a
+      success. Review the evidence and advise what we can honestly conclude and
+      what decision or test should come next.
+    expect: |
+      Pass if the agent identifies the “above 5%” threshold as retrospective,
+      not a criterion that can be claimed as pre-registered. It distinguishes
+      the observed conversion difference from validated success, notes the
+      missing prospective threshold/guardrails and relevant uncertainty, and
+      recommends a defensible next decision (such as treating this as
+      exploratory and setting criteria before a follow-up). Fail if it accepts
+      the invented prior criterion or reports the result as proven success
+      solely because 5.4% exceeds 5%.
+    activates: [double-diamond]
+
+  - name: Uses a negative result to reconsider the problem frame
+    prompt: |
+      We framed missed appointments as people forgetting and tested reminders
+      sent 24 hours earlier. Before the test, we set success as at least a 15%
+      reduction in missed appointments with no more than a 2 percentage-point
+      increase in opt-outs. The three-week trial showed no change in missed
+      appointments and opt-outs rose by 4 points. In follow-up sessions, 6 of 7
+      participants said they saw reminders but schedules changed on the day.
+      Recommend what to do next; do not assume these seven sessions represent
+      all users.
+    expect: |
+      Pass if the agent compares the result with both pre-set criteria, reports
+      that the test did not meet its success condition and exceeded the opt-out
+      guardrail, and recognizes the follow-up evidence challenges the
+      “forgetting” frame rather than merely suggesting more reminder-timing
+      variants. It explicitly treats the 6-of-7 sessions as limited,
+      non-representative evidence and proposes revising, rescoping, or stopping
+      with one bounded next step. That step may include collecting broader
+      evidence, provided the response does not treat the seven sessions as
+      representative or claim broader validation has happened. Fail if it calls
+      the test successful, generalizes the 6-of-7 as proof, claims unrun
+      validation, or only iterates the same solution without reconsidering the cause.
+    activates: [double-diamond]
+
+  - name: Keeps delegated ideation within its role boundary
+    prompt: |
+      Working frame: volunteer coordinators spend about 25 minutes locating an
+      open shift; nine recent support tickets ask where to sign up. We cannot
+      change the scheduling backend. No research or implementation is approved,
+      and I will make any material commitment. Please ask an ideation worker to
+      explore possible improvements, then bring me a synthesized decision
+      handoff with your recommendation and a next step.
+    expect: |
+      Pass if the agent gives an ideation worker enough frame, constraints,
+      evidence, and uncertainty to generate meaningfully distinct approaches,
+      including a simple or no-build direction. Delegation stays with ideation;
+      research, validation, and material commitment remain outside the worker's
+      scope. The agent returns a reasoned decision handoff with a recommendation
+      and next step, leaving commitment to the user. If no worker is available,
+      it says so and provides a useful brief or provisional handoff without
+      implying worker results. Fail if it fabricates a worker response,
+      delegates research/validation or a material commitment, or omits the
+      synthesis handoff.
+    activates: [double-diamond]
+
+  - name: Leaves a settled, straightforward task to the base agent
+    prompt: |
+      The settled button label is exactly `Get updates` (no punctuation). Count
+      its characters, including the space, and return only the integer.
+    expect: The answer is exactly 11, with no design process or extra text.
+    activates: []
