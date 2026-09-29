@@ -1,4 +1,7 @@
 {
   "maxConcurrent": 6,
-  "abortAllOnInterrupt": true
+  "abortAllOnInterrupt": true,
+  "excludedExtensionPackages": [
+    "npm:@gotgenes/pi-subagents@21.7.1"
+  ]
 }
