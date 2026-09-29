@@ -154,6 +154,70 @@ describe("auto-session-title lifecycle", () => {
     }
   });
 
+  test("refreshes the generated title from accumulated user prompts", async () => {
+    const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
+    temporaryDirectories.push(agentDirectory);
+    writeFileSync(join(agentDirectory, "settings.json"), "{}");
+    const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDirectory;
+
+    try {
+      let sessionName: string | undefined;
+      const requests: string[] = [];
+      let sessionStart: SessionStartHandler | undefined;
+      let beforeAgentStart: BeforeAgentStartHandler | undefined;
+      const pi = {
+        getSessionName: () => sessionName,
+        setSessionName: (name: string) => {
+          sessionName = name;
+        },
+        on(event: string, handler: unknown) {
+          if (event === "session_start") sessionStart = handler as SessionStartHandler;
+          if (event === "before_agent_start") {
+            beforeAgentStart = handler as BeforeAgentStartHandler;
+          }
+        },
+      } as unknown as ExtensionAPI;
+      const ctx = {
+        hasUI: true,
+        sessionManager: { getBranch: () => [] },
+        ui: { notify: () => {} },
+        modelRegistry: {
+          find: () => ({}),
+          complete: async (
+            _model: unknown,
+            request: { messages: Array<{ content: Array<{ text: string }> }> },
+          ) => {
+            requests.push(request.messages[0]?.content[0]?.text ?? "");
+            return {
+              content: [{ type: "text", text: `Generated title ${requests.length}` }],
+              stopReason: "stop",
+            };
+          },
+        },
+      } as unknown as ExtensionContext;
+
+      await autoSessionTitle(pi, async () => "Writing guidance");
+      sessionStart?.({}, ctx);
+      await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
+      expect(sessionName).toBe("Generated title 1");
+      await beforeAgentStart?.({ prompt: "Follow-up request" } as BeforeAgentStartEvent, ctx);
+
+      expect(sessionName).toBe("Generated title 2");
+      sessionName = "Manual title";
+      await beforeAgentStart?.({ prompt: "Another follow-up" } as BeforeAgentStartEvent, ctx);
+      expect(sessionName).toBe("Manual title");
+      expect(requests).toHaveLength(2);
+      expect(requests.map((request) => JSON.parse(request).conversation)).toEqual([
+        "First request",
+        "First request\n\nFollow-up request",
+      ]);
+    } finally {
+      if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    }
+  });
+
   test("reports guidance errors from the eligible handler", async () => {
     const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
     temporaryDirectories.push(agentDirectory);

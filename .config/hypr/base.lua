@@ -22,4 +22,8 @@ hl.config({
 		direct_scanout = false,
 		expand_undersized_textures = true,
 	},
+	quirks = {
+		-- Gamescope needs HDR advertised before startup; keep the desktop in SDR.
+		prefer_hdr = 2,
+	},
 })

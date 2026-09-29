@@ -9,7 +9,12 @@ local window_property_aliases = {
 
 local function matches_pattern(value, pattern)
 	-- Use one selector grammar for Hyprland rules and watchdog matching.
-	return value:match(pattern:gsub([=[\%.]=], "%%.")) ~= nil
+	local negative = pattern:sub(1, 9) == "negative:"
+	if negative then
+		pattern = pattern:sub(10)
+	end
+	local matched = value:match(pattern:gsub([=[\%.]=], "%%.")) ~= nil
+	return matched ~= negative
 end
 
 function M.matches_selector(window, selector)

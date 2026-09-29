@@ -65,12 +65,24 @@ describe("gaming rules", function()
 
 	it("keeps the Battle.net launcher on its launch workspace and remembers its size", function()
 		local battle_net = find_rule(registered_rules, function(match)
-			return match.initial_title == "^Battle\\.net"
+			return match.initial_title == "^Battle\\.net" and match.class == "negative:^(gamescope)$"
 		end)
 
 		assert.are.equal("unset", battle_net.workspace)
 		assert.is_true(battle_net.float)
 		assert.is_true(battle_net.persistent_size)
 		assert.is_false(battle_net.no_shadow)
+		assert.are.equal("negative:^(gamescope)$", battle_net.match.class)
+		for _, rule in ipairs(registered_rules) do
+			if rule.match.title == "^Battle\\.net" or rule.match.initial_title == "^Battle\\.net" then
+				if rule.match.class == "^(gamescope)$" then
+					assert.are.equal("10 silent", rule.workspace)
+					assert.are.equal("2 0", rule.fullscreen_state)
+					assert.is_nil(rule.float)
+				else
+					assert.are.equal("negative:^(gamescope)$", rule.match.class)
+				end
+			end
+		end
 	end)
 end)

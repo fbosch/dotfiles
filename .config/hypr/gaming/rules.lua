@@ -8,7 +8,7 @@ local function collection_negative_match(property)
 
 	local function collect(selector)
 		local pattern = selector[property]
-		if type(pattern) == "string" and not seen[pattern] then
+		if type(pattern) == "string" and not pattern:match("^negative:") and not seen[pattern] then
 			seen[pattern] = true
 			patterns[#patterns + 1] = pattern
 		end
@@ -122,6 +122,11 @@ end
 
 local function register_game_rules()
 	for _, game in ipairs(policies.games) do
+		if game.gamescope_launcher ~= nil then
+			for _, selector in ipairs(game.gamescope_launcher.selectors) do
+				hl.window_rule(gaming_window_rule(selector, game.gamescope_launcher.fullscreen_state, "game"))
+			end
+		end
 		if game.fullscreen_state ~= nil or game.route_to_gaming_workspace == true then
 			for _, selector in ipairs(game.selectors) do
 				hl.window_rule(gaming_window_rule(selector, game.fullscreen_state, "game", game.suppress_event))
