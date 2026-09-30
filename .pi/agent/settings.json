@@ -33,7 +33,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,

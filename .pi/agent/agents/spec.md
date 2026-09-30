@@ -2,8 +2,8 @@
 color: "#81a5bb"
 description: Defines scope, interfaces, invariants, and failure behavior when requirements are ambiguous. Delivers a precise contract, explicit assumptions, material questions, and readiness status without implementation.
 prompt_mode: replace
-model: openai-codex/gpt-6-astra
-thinking: medium
+model: openai-codex/gpt-6.1-sol
+thinking: high
 tools: read, grep, find, ls, fffind, ffgrep, typesafe_question
 permission:
   "*": deny
