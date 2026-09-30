@@ -232,9 +232,10 @@ describe("subagent routing hook", () => {
       {
         readConfig: () => enabled,
         evaluate: async () => ({
-          decision: { decision: "abstain", reason: "gateway-failure" },
-          gatewayFailure: "missing-credentials",
-          gatewayProvider: "vercel-ai-gateway",
+          decision: { decision: "abstain", reason: "classifier-failure" },
+          classifierFailure: "auth-failure",
+          classifierStage: "auth",
+          classifierProvider: "vercel-ai-gateway",
         }),
       },
       { hasUI: true },
@@ -248,14 +249,15 @@ describe("subagent routing hook", () => {
     });
     expect(await harness.emit("tool_call", call)).toBeUndefined();
     expect(harness.notifications.map(({ message }) => message)).toEqual([
-      "Jev unavailable: missing credentials; proceeding",
+      "Jev unavailable: authentication failed; proceeding",
     ]);
     expect(harness.entries[0]?.data).toMatchObject({
       proposedAgentId: "review",
       decision: "unavailable",
-      reason: "gateway-failure",
-      gatewayFailure: "missing-credentials",
-      gatewayProvider: "vercel-ai-gateway",
+      reason: "classifier-failure",
+      classifierFailure: "auth-failure",
+      classifierStage: "auth",
+      classifierProvider: "vercel-ai-gateway",
     });
     expect(JSON.stringify(harness.entries)).not.toContain("supersecret");
     expect(JSON.stringify(harness.entries)).not.toContain("/Users/fbb/private");

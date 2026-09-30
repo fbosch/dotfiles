@@ -28,7 +28,7 @@ function createTheme(mode: ReturnType<Theme["getColorMode"]> = "truecolor"): The
 const theme = createTheme();
 
 function createPane(lines: string[]): Component {
-  return { render: () => ["Subagent session", ...lines], invalidate() {} };
+  return { render: () => ["explore  task", ...lines], invalidate() {} };
 }
 
 describe("subagent transcript frame", () => {
@@ -50,7 +50,7 @@ describe("subagent transcript frame", () => {
     expect(contentWidth).toBe(28);
     expect(lines.map(stripTerminalSequences)).toEqual([
       `╭${"─".repeat(30)}╮`,
-      `│ explore subagent session${" ".repeat(5)}│`,
+      `│ Subagent session${" ".repeat(13)}│`,
       `│ first line${" ".repeat(19)}│`,
       `│${" ".repeat(30)}│`,
       `╰${"─".repeat(30)}╯`,
@@ -64,38 +64,37 @@ describe("subagent transcript frame", () => {
     const configured = new SubagentTranscriptFrame(createPane([]), theme, "explore", "#5B9BD5");
     const fallback = new SubagentTranscriptFrame(createPane([]), theme, "explore");
 
-    expect(configured.render(40)[1]).toContain(
-      "\u001b[38;2;91;155;213mexplore\u001b[39m subagent session",
-    );
-    expect(fallback.render(40)[1]).toContain(`${accent}explore\u001b[39m subagent session`);
+    expect(configured.render(40)[1]).toContain("\u001b[38;2;91;155;213mexplore\u001b[39m  task");
+    expect(fallback.render(40)[1]).toContain(`${accent}explore\u001b[39m  task`);
   });
 
-  test("shows the effective model after the agent-specific heading", () => {
+  test("preserves the native transcript heading and runtime labels", () => {
     const frame = new SubagentTranscriptFrame(
-      createPane([]),
+      {
+        render: () => ["explore  Refactor auth · openai-codex/gpt-6-luna • high"],
+        invalidate() {},
+      },
       theme,
       "explore",
       "#5B9BD5",
-      "openai-codex/gpt-6-luna",
     );
     const title = frame.render(64)[1] ?? "";
 
     expect(stripTerminalSequences(title)).toContain(
-      "explore subagent session · openai-codex/gpt-6-luna",
+      "explore  Refactor auth · openai-codex/gpt-6-luna • high",
     );
     expect(title).toContain("\u001b[38;2;91;155;213mexplore\u001b[39m");
-    expect(title).toContain(`${muted} · openai-codex/gpt-6-luna\u001b[39m`);
   });
 
   test("keeps agent names on one row without terminal control sequences", () => {
     const frame = new SubagentTranscriptFrame(
-      createPane([]),
+      { render: () => ["ex plore æøå task"], invalidate() {} },
       theme,
       "\u001b]133;A\u0007ex\nplore\tæøå",
     );
     const title = frame.render(48)[1] ?? "";
 
-    expect(stripTerminalSequences(title)).toContain("ex plore æøå subagent session");
+    expect(stripTerminalSequences(title)).toContain("ex plore æøå task");
     expect(title).not.toContain("\u001b]133;");
     expect(title).not.toContain("\n");
     expect(title).not.toContain("\t");

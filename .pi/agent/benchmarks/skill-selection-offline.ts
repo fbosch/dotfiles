@@ -9,7 +9,7 @@ import {
   type SkillSelectionFailure,
   selectSkillsWithJevDetailed,
 } from "../extensions/skill-selection";
-import type { JevGatewayFailureReason } from "../lib/jev-gateway";
+import type { JevClassifierFailure } from "../lib/jev-classifier";
 import {
   SKILL_SELECTION_BENCHMARK_CASES,
   SKILL_SELECTION_BENCHMARK_CATALOG,
@@ -63,22 +63,21 @@ const BENCHMARK_QUESTION_IDS = [
 
 type Prediction = BenchmarkPrediction;
 type SavedFailureReason =
-  | JevGatewayFailureReason
+  | JevClassifierFailure["reason"]
   | "invalid-evaluation-response"
   | "prediction-mismatch"
   | "retry-budget-exhausted";
 
 const SAVED_FAILURE_REASONS: Readonly<Record<string, SavedFailureReason>> = {
   "invalid-config": "invalid-config",
-  "missing-credentials": "missing-credentials",
+  "invalid-input": "invalid-input",
+  "model-unavailable": "model-unavailable",
   "auth-failure": "auth-failure",
   timeout: "timeout",
   "caller-cancellation": "caller-cancellation",
   "request-failure": "request-failure",
   "http-status": "http-status",
-  "invalid-json": "invalid-json",
-  "oversized-body": "oversized-body",
-  "body-failure": "body-failure",
+  "invalid-response": "invalid-response",
   "invalid-evaluation-response": "invalid-evaluation-response",
   "prediction-mismatch": "prediction-mismatch",
   "retry-budget-exhausted": "retry-budget-exhausted",
@@ -230,21 +229,21 @@ function safeFailure(failure: SkillSelectionFailure): NonNullable<Prediction["fa
   return {
     stage: failure.stage === "evaluation" ? "evaluation" : failure.stage,
     reason: failure.reason,
-    ...(failure.kind === "gateway-failure" && failure.httpStatus === undefined
+    ...(failure.kind === "classifier-failure" && failure.httpStatus === undefined
       ? {}
-      : failure.kind === "gateway-failure"
+      : failure.kind === "classifier-failure"
         ? { httpStatus: failure.httpStatus }
         : {}),
-    ...(failure.kind === "gateway-failure" && failure.retryAfterMs === undefined
+    ...(failure.kind === "classifier-failure" && failure.retryAfterMs === undefined
       ? {}
-      : failure.kind === "gateway-failure"
+      : failure.kind === "classifier-failure"
         ? { retryAfterMs: failure.retryAfterMs }
         : {}),
   };
 }
 
 function unexpectedFailure(): NonNullable<Prediction["failure"]> {
-  return { stage: "request", reason: "request-failure" satisfies JevGatewayFailureReason };
+  return { stage: "request", reason: "request-failure" };
 }
 
 async function jevPrediction(

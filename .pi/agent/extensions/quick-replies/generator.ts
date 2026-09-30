@@ -3,12 +3,11 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, open, rm, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AssistantMessage, TextContent, Tool } from "@earendil-works/pi-ai";
+import type { AssistantMessage, ClassifierContext, TextContent, Tool } from "@earendil-works/pi-ai";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { type JevGatewayFetch, requestJevGateway } from "../../lib/jev-gateway";
+import { type JevClassifierFetch, requestJevClassifier } from "../../lib/jev-classifier";
 import { resolveFastModelRequest } from "../openai-capabilities";
-import { isRecord } from "../shared/is-record";
 import { resolveQuickReplyModel } from "./settings";
 
 export interface QuickReply {
@@ -40,7 +39,7 @@ export type QuickReplyGenerator = (
 ) => Promise<QuickReply[]>;
 
 export interface QuickReplyGeneratorOptions {
-  readonly fetch?: JevGatewayFetch;
+  readonly fetch?: JevClassifierFetch;
   readonly timeoutMs?: number;
 }
 
@@ -279,26 +278,26 @@ function parseQuickReplyPayload(parsed: unknown): QuickReply[] {
 function createQuickReplyRankingRequest(
   input: PreparedQuickReplyInput,
   replies: readonly QuickReply[],
-): Record<string, unknown> {
+): ClassifierContext {
   const candidates = replies.map((reply, index) => ({
     id: `candidate_${index}`,
     label: reply.label,
     message: reply.message,
   }));
-  const questions = Object.fromEntries(
+  const questions: ClassifierContext["questions"] = Object.fromEntries(
     candidates.map((candidate, index) => [
       candidate.id,
       {
         type: "score",
         instructions: `How suitable is \`candidates[${index}].message\` as a quick reply for the conversation? Judge its safety, grounding in the latest response, progress on an unresolved next step, and whether it is materially distinct from the other candidates.`,
-        criteria: QUICK_REPLY_SCORE_LEVELS,
+        criteria: [...QUICK_REPLY_SCORE_LEVELS],
       },
     ]),
   );
   return {
     state: {
       conversation: {
-        recentContext: input.recentContext,
+        recentContext: input.recentContext.map(({ role, text }) => ({ role, text })),
         userText: input.userText,
         assistantText: input.assistantText,
       },
@@ -306,38 +305,6 @@ function createQuickReplyRankingRequest(
     },
     questions,
   };
-}
-
-function parseQuickReplyScores(
-  value: unknown,
-  replies: readonly QuickReply[],
-): number[] | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const expectedIds = replies.map((_, index) => `candidate_${index}`);
-  const answerIds = Object.keys(value.answers);
-  if (
-    answerIds.length !== expectedIds.length ||
-    answerIds.some((id) => !expectedIds.includes(id))
-  ) {
-    return undefined;
-  }
-
-  const scores: number[] = [];
-  for (const id of expectedIds) {
-    const answer = value.answers[id];
-    if (
-      !isRecord(answer) ||
-      answer.type !== "score" ||
-      typeof answer.score !== "number" ||
-      !Number.isFinite(answer.score) ||
-      answer.score < 0 ||
-      answer.score > QUICK_REPLY_SCORE_LEVELS.length - 1
-    ) {
-      return undefined;
-    }
-    scores.push(answer.score);
-  }
-  return scores;
 }
 
 async function rankQuickRepliesWithJev(
@@ -352,7 +319,7 @@ async function rankQuickRepliesWithJev(
   if (replies.length === 0) return fallback;
 
   try {
-    const gateway = await requestJevGateway(
+    const result = await requestJevClassifier(
       ctx.modelRegistry,
       createQuickReplyRankingRequest(input, replies),
       {
@@ -362,10 +329,14 @@ async function rankQuickRepliesWithJev(
       },
     );
     if (signal.aborted) return [];
-    if (!gateway.ok) return fallback;
+    if (!result.ok) return fallback;
 
-    const scores = parseQuickReplyScores(gateway.value, replies);
-    if (scores === undefined) return fallback;
+    const scores: number[] = [];
+    for (let index = 0; index < replies.length; index += 1) {
+      const answer = result.value.answers[`candidate_${index}`];
+      if (answer?.type !== "score") return fallback;
+      scores.push(answer.score);
+    }
     const qualified = replies
       .map((reply, index) => ({ reply, index, score: scores[index] ?? 0 }))
       .filter(({ score }) => score >= MIN_USEFUL_SCORE)

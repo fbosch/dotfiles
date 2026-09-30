@@ -1,12 +1,14 @@
 import { readdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
+import type { ClassifierAnswer, ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
-  type JevGatewayFailure,
-  type JevGatewayFetch,
-  requestJevGateway,
-} from "../lib/jev-gateway";
+  type JevClassifierFailure,
+  type JevClassifierFetch,
+  type JevClassifierRegistry,
+  requestJevClassifier,
+} from "../lib/jev-classifier";
 
 const DEFAULT_LIMIT = 4;
 const MAX_LIMIT = 4;
@@ -16,7 +18,6 @@ const MAX_TIMEOUT_MS = 2_000;
 const MAX_FIELD_CHARS = 4_000;
 const DEFAULT_SPEC_PATH = ".agents/skills/commit-message/commit-message.eval.yaml";
 const DEFAULT_RESULTS_DIR = ".agents/skills/commit-message/.caliper/results/commit-message";
-const CASE_ID_PATTERN = /^case_\d+$/u;
 
 export type AdvisoryVerdict = "pass" | "fail" | "uncertain" | "unavailable";
 
@@ -55,8 +56,8 @@ export interface CommitMessagePilotReport {
   readonly caseCount: number;
   readonly elapsedMs: number;
   readonly gatewayFailure?: {
-    readonly stage: JevGatewayFailure["stage"];
-    readonly reason: JevGatewayFailure["reason"];
+    readonly stage: JevClassifierFailure["stage"];
+    readonly reason: JevClassifierFailure["reason"];
     readonly httpStatus?: number;
   };
   readonly evaluationFailure?: {
@@ -71,8 +72,8 @@ export interface CommitMessagePilotReport {
 }
 
 export interface RunCommitMessageJevPilotOptions {
-  readonly modelRegistry: Pick<ModelRegistry, "getProviderAuth">;
-  readonly fetch?: JevGatewayFetch;
+  readonly modelRegistry: JevClassifierRegistry;
+  readonly fetch?: JevClassifierFetch;
   readonly signal?: AbortSignal;
   readonly threshold?: number;
   readonly timeoutMs?: number;
@@ -108,9 +109,7 @@ function booleanValue(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function finiteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
+
 
 function nonNegativeInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
@@ -270,11 +269,11 @@ export async function loadCommitMessagePilotCases(options: {
   }));
 }
 
-function createJevRequest(cases: readonly CommitMessagePilotCase[]): RecordValue {
-  const questions: RecordValue = {};
+function createJevRequest(cases: readonly CommitMessagePilotCase[]): ClassifierContext {
+  const questions: ClassifierContext["questions"] = {};
   for (const [index, pilotCase] of cases.entries()) {
     questions[`case_${index}`] = {
-      type: "noul",
+      type: "bool",
       instructions: `Does the candidate output for ${boundedText(pilotCase.taskName)} satisfy the supplied rubric? Judge only the candidate output against the rubric; do not infer unstated requirements.`,
       criteria: {
         true: "The candidate output satisfies all material requirements in the rubric.",
@@ -296,32 +295,22 @@ function createJevRequest(cases: readonly CommitMessagePilotCase[]): RecordValue
   };
 }
 
-function parseUsage(value: RecordValue): CommitMessagePilotReport["usage"] {
-  if (!isRecord(value.usage)) return undefined;
-  const inputTokens = nonNegativeInteger(value.usage.input_tokens);
-  const outputTokens = nonNegativeInteger(value.usage.output_tokens);
-  if (value.usage.input_tokens !== undefined && inputTokens === undefined) return undefined;
-  if (value.usage.output_tokens !== undefined && outputTokens === undefined) return undefined;
+function parseUsage(value: Usage | undefined): CommitMessagePilotReport["usage"] {
+  if (value === undefined) return undefined;
+  const inputTokens = nonNegativeInteger(value.input);
+  const outputTokens = nonNegativeInteger(value.output);
   return {
     ...(inputTokens === undefined ? {} : { inputTokens }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
   };
 }
 
-function parseJevScores(value: unknown, caseCount: number): number[] | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const ids = Object.keys(value.answers);
-  if (ids.length !== caseCount || ids.some((id) => !CASE_ID_PATTERN.test(id))) return undefined;
-
-  const scores: number[] = [];
-  for (let index = 0; index < caseCount; index += 1) {
-    const answer = value.answers[`case_${index}`];
-    if (!isRecord(answer) || answer.type !== "noul") return undefined;
-    const score = finiteNumber(answer.noul);
-    if (score === undefined || score < 0 || score > 1) return undefined;
-    scores.push(score);
-  }
-  return scores;
+function parseJevScores(answers: Record<string, ClassifierAnswer>, caseCount: number): number[] {
+  return Array.from({ length: caseCount }, (_, index) => {
+    const answer = answers[`case_${index}`];
+    if (answer?.type !== "bool") throw new Error("invalid classifier answer");
+    return answer.probability;
+  });
 }
 
 function verdictForScore(score: number, threshold: number): AdvisoryVerdict {
@@ -365,14 +354,14 @@ export async function runCommitMessageJevPilot(
   const threshold = normalizeThreshold(options.threshold);
   const timeoutMs = normalizeTimeout(options.timeoutMs);
   const startedAt = performance.now();
-  const gateway = await requestJevGateway(options.modelRegistry, createJevRequest(cases), {
+  const result = await requestJevClassifier(options.modelRegistry, createJevRequest(cases), {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     timeoutMs,
   });
   const elapsedMs = Math.round(performance.now() - startedAt);
 
-  if (!gateway.ok) {
+  if (!result.ok) {
     return {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
@@ -382,31 +371,19 @@ export async function runCommitMessageJevPilot(
       caseCount: cases.length,
       elapsedMs,
       gatewayFailure: {
-        stage: gateway.stage,
-        reason: gateway.reason,
-        ...(gateway.httpStatus === undefined ? {} : { httpStatus: gateway.httpStatus }),
+        stage: result.stage,
+        reason: result.reason,
+        ...(result.httpStatus === undefined ? {} : { httpStatus: result.httpStatus }),
       },
+      ...(parseUsage(result.usage) === undefined ? {} : { usage: parseUsage(result.usage) }),
       comparisons: cases.map((pilotCase) => compareCase(pilotCase, undefined, threshold)),
     };
   }
 
-  const scores = parseJevScores(gateway.value, cases.length);
-  if (scores === undefined) {
-    return {
-      schemaVersion: 1,
-      generatedAt: new Date().toISOString(),
-      model: "TypeSafe Jev",
-      threshold,
-      timeoutMs,
-      caseCount: cases.length,
-      elapsedMs,
-      evaluationFailure: { stage: "evaluation", reason: "invalid-evaluation-response" },
-      comparisons: cases.map((pilotCase) => compareCase(pilotCase, undefined, threshold)),
-    };
-  }
+  const scores = parseJevScores(result.value.answers, cases.length);
+  
 
-  const response = isRecord(gateway.value) ? gateway.value : {};
-  const usage = parseUsage(response);
+  const usage = parseUsage(result.usage);
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),

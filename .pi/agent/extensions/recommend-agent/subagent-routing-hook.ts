@@ -48,8 +48,11 @@ interface RoutingDiagnostic {
   readonly selectedAgentId?: string;
   readonly decision: RoutingDiagnosticDecision;
   readonly reason?: RoutingDiagnosticReason;
-  readonly gatewayFailure?: RecommendationEvaluation["gatewayFailure"];
-  readonly gatewayProvider?: RecommendationEvaluation["gatewayProvider"];
+  readonly classifierFailure?: RecommendationEvaluation["classifierFailure"];
+  readonly classifierStage?: RecommendationEvaluation["classifierStage"];
+  readonly classifierProvider?: RecommendationEvaluation["classifierProvider"];
+  readonly classifierHttpStatus?: RecommendationEvaluation["classifierHttpStatus"];
+  readonly classifierRetryAfterMs?: RecommendationEvaluation["classifierRetryAfterMs"];
   readonly elapsedMs: number;
 }
 
@@ -119,18 +122,30 @@ function diagnosticForEvaluation(
     elapsedMs: elapsedMs(startedAt),
   };
   const decision = evaluation.decision;
+  const classifierDetails = {
+    ...(evaluation.classifierFailure === undefined
+      ? {}
+      : { classifierFailure: evaluation.classifierFailure }),
+    ...(evaluation.classifierStage === undefined
+      ? {}
+      : { classifierStage: evaluation.classifierStage }),
+    ...(evaluation.classifierProvider === undefined
+      ? {}
+      : { classifierProvider: evaluation.classifierProvider }),
+    ...(evaluation.classifierHttpStatus === undefined
+      ? {}
+      : { classifierHttpStatus: evaluation.classifierHttpStatus }),
+    ...(evaluation.classifierRetryAfterMs === undefined
+      ? {}
+      : { classifierRetryAfterMs: evaluation.classifierRetryAfterMs }),
+  };
 
   if (decision.decision === "recommend") {
     return {
       ...common,
       decision: decision.agentId === proposedAgent ? "agreement" : "disagreement",
       selectedAgentId: safeAgentId(decision.agentId),
-      ...(evaluation.gatewayFailure === undefined
-        ? {}
-        : { gatewayFailure: evaluation.gatewayFailure }),
-      ...(evaluation.gatewayProvider === undefined
-        ? {}
-        : { gatewayProvider: evaluation.gatewayProvider }),
+      ...classifierDetails,
     };
   }
 
@@ -141,16 +156,11 @@ function diagnosticForEvaluation(
   return {
     ...common,
     decision:
-      evaluation.gatewayFailure !== undefined || decision.reason === "gateway-failure"
+      evaluation.classifierFailure !== undefined || decision.reason === "classifier-failure"
         ? "unavailable"
         : "abstain",
     reason: decision.reason,
-    ...(evaluation.gatewayFailure === undefined
-      ? {}
-      : { gatewayFailure: evaluation.gatewayFailure }),
-    ...(evaluation.gatewayProvider === undefined
-      ? {}
-      : { gatewayProvider: evaluation.gatewayProvider }),
+    ...classifierDetails,
   };
 }
 
@@ -165,20 +175,19 @@ function diagnosticForFailure(proposedAgent: string, startedAt: number): Routing
 }
 
 function diagnosticReasonLabel(diagnostic: RoutingDiagnostic): string {
-  if (diagnostic.gatewayFailure !== undefined) {
-    const labels: Record<NonNullable<RoutingDiagnostic["gatewayFailure"]>, string> = {
-      "invalid-config": "invalid gateway configuration",
-      "missing-credentials": "missing credentials",
+  if (diagnostic.classifierFailure !== undefined) {
+    const labels: Record<NonNullable<RoutingDiagnostic["classifierFailure"]>, string> = {
+      "invalid-config": "invalid classifier configuration",
+      "invalid-input": "invalid classifier input",
+      "model-unavailable": "classifier model unavailable",
       "auth-failure": "authentication failed",
       timeout: "timed out",
       "caller-cancellation": "cancelled",
       "request-failure": "request failed",
       "http-status": "provider rejected request",
-      "invalid-json": "invalid response",
-      "oversized-body": "response too large",
-      "body-failure": "response failed",
+      "invalid-response": "invalid classifier response",
     };
-    return labels[diagnostic.gatewayFailure];
+    return labels[diagnostic.classifierFailure];
   }
 
   const labels: Record<RoutingDiagnosticReason, string> = {
@@ -187,7 +196,7 @@ function diagnosticReasonLabel(diagnostic: RoutingDiagnostic): string {
     "explicit-routing": "explicit routing",
     "discovery-failure": "agent discovery failed",
     "catalog-too-large": "agent catalog too large",
-    "gateway-failure": "gateway failure",
+    "classifier-failure": "classifier unavailable",
     "invalid-evaluation-response": "invalid response",
     uncertain: "uncertain",
     "model-abstain": "model abstained",

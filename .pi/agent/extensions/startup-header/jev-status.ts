@@ -1,10 +1,10 @@
-import { JEV_GATEWAY_PROVIDER_IDS } from "../../lib/jev-gateway";
+import { JEV_PROVIDER_IDS } from "../../lib/jev-classifier";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 
-export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/jev-gateway";
+export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/jev-classifier";
 
 export interface JevStartupStatus {
   readonly state: Exclude<StartupOwnerState, "disposed">;
@@ -34,7 +34,7 @@ export function resolveJevStartupStatus(
   let hasKnownStatus = false;
   let hasUnknownStatus = false;
   let hasConfiguredProvider = false;
-  for (const providerId of JEV_GATEWAY_PROVIDER_IDS) {
+  for (const providerId of JEV_PROVIDER_IDS) {
     let auth: ProviderAuthStatus | undefined;
     try {
       auth = reader.getProviderAuthStatus(providerId);

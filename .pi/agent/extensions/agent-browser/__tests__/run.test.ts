@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import {
   createRunAuthorizationRequest,
   findDeterministicInputCandidate,
-  parseRunAuthorization,
   parseRunCandidates,
   redactSensitiveInputs,
 } from "../index";
@@ -99,9 +98,10 @@ describe("browser run", () => {
     expect(findDeterministicInputCandidate(ambiguous)).toBeUndefined();
   });
 
-  test("builds and validates an objective-authorization judgment", () => {
+  test("uses a native bool authorization judgment for independent clicks", () => {
     const candidate = parseRunCandidates('- button "Submit" [ref=e1]')[0];
     if (candidate === undefined) throw new Error("expected candidate");
+    expect(candidate.authorization).toBe("independent");
 
     expect(createRunAuthorizationRequest("Submit the form", "page", candidate)).toEqual({
       state: {
@@ -111,7 +111,7 @@ describe("browser run", () => {
       },
       questions: {
         authorized: {
-          type: "noul",
+          type: "bool",
           instructions:
             "Is this exact action directly required to fulfill the user's stated objective and supported by the observed page state?",
           criteria: {
@@ -122,11 +122,5 @@ describe("browser run", () => {
         },
       },
     });
-    expect(parseRunAuthorization({ answers: { authorized: { type: "noul", noul: 0.97 } } })).toBe(
-      0.97,
-    );
-    expect(
-      parseRunAuthorization({ answers: { authorized: { type: "choice", noul: 0.97 } } }),
-    ).toBeUndefined();
   });
 });

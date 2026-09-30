@@ -1,3 +1,4 @@
+import type { ClassifierContext } from "@earendil-works/pi-ai";
 import {
   defineTool,
   type ExtensionAPI,
@@ -8,9 +9,9 @@ import {
 import { Type } from "typebox";
 import {
   DEFAULT_JEV_TIMEOUT_MS,
-  type JevGatewayFetch,
-  requestJevGateway,
-} from "../../lib/jev-gateway";
+  type JevClassifierFetch,
+  requestJevClassifier,
+} from "../../lib/jev-classifier";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
 
@@ -246,8 +247,8 @@ interface JevCandidate {
 }
 
 export interface JevRankingOptions {
-  modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
-  fetch?: JevGatewayFetch;
+  modelRegistry: Pick<ExtensionContext["modelRegistry"], "findOfType" | "classify">;
+  fetch?: JevClassifierFetch;
   timeoutMs?: number;
 }
 
@@ -273,10 +274,7 @@ function buildJevCandidatePool(
   return candidates.map((tool, index) => ({ id: `candidate_${index}`, tool }));
 }
 
-function createJevRequest(
-  candidates: readonly JevCandidate[],
-  query: string,
-): Record<string, unknown> {
+function createJevRequest(candidates: readonly JevCandidate[], query: string): ClassifierContext {
   const criteria = Object.fromEntries(
     candidates.map(({ id, tool }) => [id, `${tool.name}: ${compactDescription(tool.description)}`]),
   );
@@ -302,52 +300,13 @@ function createJevRequest(
   };
 }
 
-function parseJevRanking(
-  value: unknown,
+function selectJevRanking(
+  choice: string,
   candidates: readonly JevCandidate[],
   limit: number,
 ): ToolInfo[] | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const answer = value.answers.best_tool;
-  if (!isRecord(answer) || answer.type !== "choice" || typeof answer.choice !== "string")
-    return undefined;
-  if (!isRecord(answer.probabilities)) return undefined;
-
-  const expectedIds = [...candidates.map(({ id }) => id), JEV_NO_MATCH];
-  if (!expectedIds.includes(answer.choice)) return undefined;
-  const expectedIdSet = new Set(expectedIds);
-  const probabilityKeys = Object.keys(answer.probabilities);
-  if (
-    probabilityKeys.length !== expectedIds.length ||
-    probabilityKeys.some((id) => !expectedIdSet.has(id))
-  ) {
-    return undefined;
-  }
-
-  const probabilities = new Map<string, number>();
-  let probabilityTotal = 0;
-  for (const id of expectedIds) {
-    const probability = answer.probabilities[id];
-    if (
-      typeof probability !== "number" ||
-      !Number.isFinite(probability) ||
-      probability < 0 ||
-      probability > 1
-    ) {
-      return undefined;
-    }
-    probabilityTotal += probability;
-    probabilities.set(id, probability);
-  }
-  if (Math.abs(probabilityTotal - 1) > 0.02) return undefined;
-
-  const selectedProbability = probabilities.get(answer.choice);
-  if (selectedProbability === undefined) return undefined;
-  const highestProbability = Math.max(...probabilities.values());
-  if (selectedProbability < highestProbability) return undefined;
-  if (answer.choice === JEV_NO_MATCH) return [];
-
-  const selectedCandidate = candidates.find(({ id }) => id === answer.choice);
+  if (choice === JEV_NO_MATCH) return [];
+  const selectedCandidate = candidates.find(({ id }) => id === choice);
   return selectedCandidate === undefined || limit < 1 ? [] : [selectedCandidate.tool];
 }
 
@@ -367,7 +326,7 @@ export async function rankDeferredToolsWithJev(
   const candidates = buildJevCandidatePool(tools, query, prefixes);
   if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
 
-  const gateway = await requestJevGateway(
+  const result = await requestJevClassifier(
     options.modelRegistry,
     createJevRequest(candidates, query),
     {
@@ -376,9 +335,11 @@ export async function rankDeferredToolsWithJev(
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     },
   );
-  if (!gateway.ok) return undefined;
+  if (!result.ok) return undefined;
 
-  const matches = parseJevRanking(gateway.value, candidates, limit);
+  const answer = result.value.answers.best_tool;
+  if (answer?.type !== "choice") return undefined;
+  const matches = selectJevRanking(answer.choice, candidates, limit);
   return matches === undefined ? undefined : { matches, rankingSource: "jev" };
 }
 

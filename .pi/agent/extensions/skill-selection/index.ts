@@ -1,3 +1,4 @@
+import type { ClassifierAnswer, ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import {
   type BeforeAgentStartEvent,
   type ExtensionAPI,
@@ -9,12 +10,11 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   DEFAULT_JEV_TIMEOUT_MS,
-  type JevGatewayFailure,
-  type JevGatewayFetch,
-  type JevGatewayProviderId,
-  type JevGatewayStage,
-  requestJevGateway,
-} from "../../lib/jev-gateway";
+  type JevClassifierFailure,
+  type JevClassifierFetch,
+  type JevClassifierRegistry,
+  requestJevClassifier,
+} from "../../lib/jev-classifier";
 import { isRecord } from "../shared/is-record";
 import { disabledSkillNames } from "../skill-tweaks";
 
@@ -68,12 +68,13 @@ export interface SkillSelectionResult {
 
 export type SkillSelectionFailure =
   | {
-      readonly kind: "gateway-failure";
-      readonly provider?: JevGatewayProviderId;
-      readonly stage: JevGatewayStage;
-      readonly reason: JevGatewayFailure["reason"];
+      readonly kind: "classifier-failure";
+      readonly provider?: JevClassifierFailure["provider"];
+      readonly stage: JevClassifierFailure["stage"];
+      readonly reason: JevClassifierFailure["reason"];
       readonly httpStatus?: number;
       readonly retryAfterMs?: number;
+      readonly usage?: Usage;
     }
   | {
       readonly kind: "invalid-evaluation-response";
@@ -86,8 +87,8 @@ export type SkillSelectionAttempt =
   | { readonly ok: false; readonly failure: SkillSelectionFailure };
 
 export interface SkillSelectionRequestOptions {
-  readonly modelRegistry: Pick<ExtensionContext["modelRegistry"], "getProviderAuth">;
-  readonly fetch?: JevGatewayFetch;
+  readonly modelRegistry: JevClassifierRegistry;
+  readonly fetch?: JevClassifierFetch;
   readonly signal?: AbortSignal;
   readonly onFetchAttempt?: () => void;
 }
@@ -193,28 +194,31 @@ export function eligibleSkillCandidates(
   );
 }
 
-function relevanceQuestion(candidate: SkillCandidate): Record<string, unknown> {
+function relevanceQuestion(candidate: SkillCandidate): ClassifierContext["questions"][string] {
   return {
-    type: "noul",
+    type: "bool",
     instructions: `Is the user's request materially relevant to the skill named ${candidate.name}? ${candidate.description}`,
     criteria: {
-      yes: "The skill's documented workflow would help complete the request.",
-      no: "The skill is not needed for this request, even if its topic is mentioned incidentally.",
+      true: "The skill's documented workflow would help complete the request.",
+      false:
+        "The skill is not needed for this request, even if its topic is mentioned incidentally.",
     },
   };
 }
 
-function createQuestions(candidates: readonly SkillCandidate[]): Record<string, unknown> {
+function createQuestions(
+  candidates: readonly SkillCandidate[],
+): Record<string, ClassifierContext["questions"][string]> {
   return {
     ...Object.fromEntries(
       candidates.map((candidate, index) => [`skill_${index}`, relevanceQuestion(candidate)]),
     ),
     [NO_MATCH_QUESTION]: {
-      type: "noul",
+      type: "bool",
       instructions: "Are none of the listed skills materially relevant to the user's request?",
       criteria: {
-        yes: "No listed skill's documented workflow would help complete the request.",
-        no: "At least one listed skill's documented workflow would help complete the request.",
+        true: "No listed skill's documented workflow would help complete the request.",
+        false: "At least one listed skill's documented workflow would help complete the request.",
       },
     },
   };
@@ -223,7 +227,7 @@ function createQuestions(candidates: readonly SkillCandidate[]): Record<string, 
 export function createSkillSelectionRequest(
   prompt: string,
   candidates: readonly SkillCandidate[],
-): Record<string, unknown> | undefined {
+): ClassifierContext | undefined {
   const request = prompt.trim();
   const normalizedCandidates = normalizeCandidates(candidates);
   if (request.length === 0 || request.length > MAX_REQUEST_CHARS) return undefined;
@@ -244,47 +248,23 @@ export function createSkillSelectionRequest(
   };
 }
 
-function usageFromResponse(value: Record<string, unknown>): SkillSelectionUsage | null | undefined {
-  const usage = value.usage;
+function usageFromClassifier(usage: Usage | undefined): SkillSelectionUsage | undefined {
   if (usage === undefined) return undefined;
-  if (!isRecord(usage)) return null;
-
-  const inputTokens = usage.input_tokens;
-  const outputTokens = usage.output_tokens;
-  if (
-    (inputTokens !== undefined &&
-      (typeof inputTokens !== "number" ||
-        Number.isInteger(inputTokens) === false ||
-        inputTokens < 0)) ||
-    (outputTokens !== undefined &&
-      (typeof outputTokens !== "number" ||
-        Number.isInteger(outputTokens) === false ||
-        outputTokens < 0))
-  ) {
-    return null;
-  }
-
-  return {
-    ...(inputTokens === undefined ? {} : { inputTokens }),
-    ...(outputTokens === undefined ? {} : { outputTokens }),
-  };
+  return { inputTokens: usage.input, outputTokens: usage.output };
 }
 
 export function parseSkillSelectionResponse(
-  value: unknown,
+  answers: Record<string, ClassifierAnswer>,
   candidates: readonly SkillCandidate[],
   config: Pick<
     SkillSelectionConfig,
     "threshold" | "maxRecommendations"
   > = DEFAULT_SKILL_SELECTION_CONFIG,
 ): SkillSelectionResult | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-
   const expectedIds = [
     ...candidates.map((_candidate, index) => `skill_${index}`),
     NO_MATCH_QUESTION,
   ];
-  const answers = value.answers;
   const answerIds = Object.keys(answers);
   if (
     answerIds.length !== expectedIds.length ||
@@ -296,8 +276,8 @@ export function parseSkillSelectionResponse(
   const scores = new Map<string, number>();
   for (const [index, candidate] of candidates.entries()) {
     const answer = answers[`skill_${index}`];
-    if (!isRecord(answer) || answer.type !== "noul") return undefined;
-    const score = answer.noul;
+    if (answer?.type !== "bool") return undefined;
+    const score = answer.probability;
     if (typeof score !== "number" || Number.isFinite(score) === false || score < 0 || score > 1) {
       return undefined;
     }
@@ -305,8 +285,8 @@ export function parseSkillSelectionResponse(
   }
 
   const noMatchAnswer = answers[NO_MATCH_QUESTION];
-  if (!isRecord(noMatchAnswer) || noMatchAnswer.type !== "noul") return undefined;
-  const noMatchScore = noMatchAnswer.noul;
+  if (noMatchAnswer?.type !== "bool") return undefined;
+  const noMatchScore = noMatchAnswer.probability;
   if (
     typeof noMatchScore !== "number" ||
     Number.isFinite(noMatchScore) === false ||
@@ -325,20 +305,18 @@ export function parseSkillSelectionResponse(
           .sort((left, right) => right.score - left.score || compareNames(left.name, right.name))
           .slice(0, config.maxRecommendations);
 
-  const usage = usageFromResponse(value);
-  if (usage === null) return undefined;
-  return usage === undefined ? { recommendations, scores } : { recommendations, scores, usage };
+  return { recommendations, scores };
 }
 
 export function parseSkillSelectionResponseDetailed(
-  value: unknown,
+  answers: Record<string, ClassifierAnswer>,
   candidates: readonly SkillCandidate[],
   config: Pick<
     SkillSelectionConfig,
     "threshold" | "maxRecommendations"
   > = DEFAULT_SKILL_SELECTION_CONFIG,
 ): SkillSelectionAttempt {
-  const result = parseSkillSelectionResponse(value, candidates, config);
+  const result = parseSkillSelectionResponse(answers, candidates, config);
   return result === undefined
     ? {
         ok: false,
@@ -370,27 +348,44 @@ export async function selectSkillsWithJevDetailed(
     };
   }
 
-  const gateway = await requestJevGateway(options.modelRegistry, request, {
+  const classifier = await requestJevClassifier(options.modelRegistry, request, {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.onFetchAttempt === undefined ? {} : { onFetchAttempt: options.onFetchAttempt }),
     timeoutMs: config.timeoutMs,
   });
-  if (!gateway.ok) {
+  if (!classifier.ok) {
     return {
       ok: false,
       failure: {
-        kind: "gateway-failure",
-        ...(gateway.provider === undefined ? {} : { provider: gateway.provider }),
-        stage: gateway.stage,
-        reason: gateway.reason,
-        ...(gateway.httpStatus === undefined ? {} : { httpStatus: gateway.httpStatus }),
-        ...(gateway.retryAfterMs === undefined ? {} : { retryAfterMs: gateway.retryAfterMs }),
+        kind: "classifier-failure",
+        ...(classifier.provider === undefined ? {} : { provider: classifier.provider }),
+        stage: classifier.stage,
+        reason: classifier.reason,
+        ...(classifier.httpStatus === undefined ? {} : { httpStatus: classifier.httpStatus }),
+        ...(classifier.retryAfterMs === undefined ? {} : { retryAfterMs: classifier.retryAfterMs }),
+        ...(classifier.usage === undefined ? {} : { usage: classifier.usage }),
       },
     };
   }
 
-  return parseSkillSelectionResponseDetailed(gateway.value, normalizedCandidates, config);
+  const result = parseSkillSelectionResponse(
+    classifier.value.answers,
+    normalizedCandidates,
+    config,
+  );
+  if (result === undefined) {
+    return {
+      ok: false,
+      failure: {
+        kind: "invalid-evaluation-response",
+        stage: "evaluation",
+        reason: "invalid-evaluation-response",
+      },
+    };
+  }
+  const usage = usageFromClassifier(classifier.usage);
+  return { ok: true, value: usage === undefined ? result : { ...result, usage } };
 }
 
 export async function selectSkillsWithJev(
@@ -459,8 +454,8 @@ export interface SkillSelectionStatus {
   readonly candidateCount?: number;
   readonly elapsedMs?: number;
   readonly fetchAttempted: boolean;
-  readonly failureProvider?: JevGatewayProviderId;
-  readonly failureStage?: JevGatewayStage | "evaluation";
+  readonly failureProvider?: JevClassifierFailure["provider"];
+  readonly failureStage?: JevClassifierFailure["stage"] | "evaluation";
   readonly httpStatus?: number;
 }
 
@@ -468,7 +463,7 @@ interface SkillSelectionExtensionDependencies {
   selectSkillsDetailed?: typeof selectSkillsWithJevDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
   getDisabledNames?: (context: ExtensionContext, systemPrompt: string) => ReadonlySet<string>;
-  fetch?: JevGatewayFetch;
+  fetch?: JevClassifierFetch;
   now?: () => number;
 }
 
@@ -567,11 +562,12 @@ export function createSkillSelectionExtension(
             candidateCount: candidates.length,
             elapsedMs,
             fetchAttempted,
-            ...(attempt.failure.kind === "gateway-failure" && attempt.failure.provider !== undefined
+            ...(attempt.failure.kind === "classifier-failure" &&
+            attempt.failure.provider !== undefined
               ? { failureProvider: attempt.failure.provider }
               : {}),
             failureStage: attempt.failure.stage,
-            ...(attempt.failure.kind === "gateway-failure" &&
+            ...(attempt.failure.kind === "classifier-failure" &&
             attempt.failure.httpStatus !== undefined
               ? { httpStatus: attempt.failure.httpStatus }
               : {}),

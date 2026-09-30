@@ -5,7 +5,7 @@ import type {
   ExtensionContext,
   Skill,
 } from "@earendil-works/pi-coding-agent";
-import { OPENROUTER_PROVIDER_ID } from "../../../lib/jev-gateway";
+import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
@@ -19,6 +19,8 @@ import {
   selectSkillsWithJev,
   selectSkillsWithJevDetailed,
 } from "../index";
+
+const classifierRegistry = await createNativeClassifierRegistry();
 
 function skill(
   name: string,
@@ -73,9 +75,7 @@ function context(): ExtensionContext {
     cwd: "/tmp/skill-selection-test",
     hasUI: false,
     isProjectTrusted: () => true,
-    modelRegistry: {
-      getProviderAuth: async () => undefined,
-    },
+    modelRegistry: classifierRegistry,
   } as unknown as ExtensionContext;
 }
 
@@ -140,9 +140,9 @@ describe("skill selection", () => {
       }),
     );
     const questions = (request as { questions: Record<string, { type: string }> }).questions;
-    expect(questions.skill_0?.type).toBe("noul");
-    expect(questions.skill_1?.type).toBe("noul");
-    expect(questions.none_relevant?.type).toBe("noul");
+    expect(questions.skill_0?.type).toBe("bool");
+    expect(questions.skill_1?.type).toBe("bool");
+    expect(questions.none_relevant?.type).toBe("bool");
     expect(JSON.stringify(request)).not.toContain("SKILL.md");
   });
 
@@ -156,12 +156,10 @@ describe("skill selection", () => {
     expect(
       parseSkillSelectionResponse(
         {
-          answers: {
-            skill_0: { type: "noul", noul: 0.2 },
-            skill_1: { type: "noul", noul: 0.4 },
-            skill_2: { type: "noul", noul: 0.1 },
-            none_relevant: { type: "noul", noul: 0.9 },
-          },
+          skill_0: { type: "bool", probability: 0.2 },
+          skill_1: { type: "bool", probability: 0.4 },
+          skill_2: { type: "bool", probability: 0.1 },
+          none_relevant: { type: "bool", probability: 0.9 },
         },
         candidates,
       )?.recommendations,
@@ -169,12 +167,10 @@ describe("skill selection", () => {
     expect(
       parseSkillSelectionResponse(
         {
-          answers: {
-            skill_0: { type: "noul", noul: 0.9 },
-            skill_1: { type: "noul", noul: 0.9 },
-            skill_2: { type: "noul", noul: 0.8 },
-            none_relevant: { type: "noul", noul: 0.1 },
-          },
+          skill_0: { type: "bool", probability: 0.9 },
+          skill_1: { type: "bool", probability: 0.9 },
+          skill_2: { type: "bool", probability: 0.8 },
+          none_relevant: { type: "bool", probability: 0.1 },
         },
         candidates,
         { threshold: 0.72, maxRecommendations: 2 },
@@ -187,8 +183,8 @@ describe("skill selection", () => {
 
   test("rejects malformed or incomplete responses instead of making a partial recommendation", () => {
     const candidates = [{ name: "writing-clearly", description: "writing" }];
-    expect(parseSkillSelectionResponse({ answers: {} }, candidates)).toBeUndefined();
-    expect(parseSkillSelectionResponseDetailed({ answers: {} }, candidates)).toEqual({
+    expect(parseSkillSelectionResponse({}, candidates)).toBeUndefined();
+    expect(parseSkillSelectionResponseDetailed({}, candidates)).toEqual({
       ok: false,
       failure: {
         kind: "invalid-evaluation-response",
@@ -198,66 +194,64 @@ describe("skill selection", () => {
     });
     expect(
       parseSkillSelectionResponse(
-        { answers: { skill_0: { type: "noul", noul: Number.NaN } } },
+        { skill_0: { type: "bool", probability: Number.NaN } },
         candidates,
       ),
     ).toBeUndefined();
     expect(
-      parseSkillSelectionResponse(
-        { answers: { skill_0: { type: "noul", noul: 0.9 } }, usage: { input_tokens: "bad" } },
-        candidates,
-      ),
+      parseSkillSelectionResponse({ skill_0: { type: "bool", probability: 0.9 } }, candidates),
     ).toBeUndefined();
   });
 
-  test("keeps Gateway failures distinct from invalid evaluation responses", async () => {
+  test("keeps classifier failures distinct from invalid evaluation responses", async () => {
     const candidates = [{ name: "writing-clearly", description: "writing" }];
     await expect(
       selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: { getProviderAuth: async () => undefined },
+        modelRegistry: {
+          findOfType: () => undefined,
+          classify: classifierRegistry.classify.bind(classifierRegistry),
+        },
       }),
     ).resolves.toEqual({
       ok: false,
       failure: {
-        kind: "gateway-failure",
+        kind: "classifier-failure",
         provider: "vercel-ai-gateway",
-        stage: "auth",
-        reason: "missing-credentials",
+        stage: "config",
+        reason: "model-unavailable",
       },
     });
 
     await expect(
       selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }) },
+        modelRegistry: classifierRegistry,
         fetch: async () => new Response(JSON.stringify({ answers: {} })),
       }),
     ).resolves.toEqual({
       ok: false,
       failure: {
-        kind: "invalid-evaluation-response",
-        stage: "evaluation",
-        reason: "invalid-evaluation-response",
+        kind: "classifier-failure",
+        provider: "vercel-ai-gateway",
+        stage: "request",
+        reason: "request-failure",
       },
     });
 
     await expect(
       selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: {
-          getProviderAuth: async (provider: string) =>
-            provider === OPENROUTER_PROVIDER_ID ? { auth: { apiKey: "test-key" } } : undefined,
-        },
-        // Keep the primary rate-limit diagnostic when the fallback has no credentials.
-        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "3" } }),
+        modelRegistry: classifierRegistry,
+        // Zero delay preserves metadata coverage without holding the provider in cooldown.
+        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "0" } }),
       }),
     ).resolves.toEqual({
       ok: false,
       failure: {
-        kind: "gateway-failure",
-        provider: "openrouter",
+        kind: "classifier-failure",
+        provider: "vercel-ai-gateway",
         stage: "request",
         reason: "http-status",
         httpStatus: 429,
-        retryAfterMs: expect.any(Number),
+        retryAfterMs: 0,
       },
     });
   });
@@ -269,9 +263,7 @@ describe("skill selection", () => {
       [{ name: "writing-clearly", description: "Improve prose." }],
       DEFAULT_SKILL_SELECTION_CONFIG,
       {
-        modelRegistry: {
-          getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
-        },
+        modelRegistry: classifierRegistry,
         fetch: async (_input, init) => {
           requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
           return new Response(
@@ -329,9 +321,9 @@ describe("skill selection", () => {
         return {
           ok: false,
           failure: {
-            kind: "gateway-failure",
+            kind: "classifier-failure",
             stage: "auth",
-            reason: "missing-credentials",
+            reason: "auth-failure",
           },
         };
       },
@@ -361,9 +353,11 @@ describe("skill selection", () => {
     const ctx = {
       ...context(),
       modelRegistry: {
-        getProviderAuth: async () => {
+        findOfType: (...args: Parameters<typeof classifierRegistry.findOfType>) =>
+          classifierRegistry.findOfType(...args),
+        classify: (...args: Parameters<typeof classifierRegistry.classify>) => {
           authCalls += 1;
-          return undefined;
+          return classifierRegistry.classify(...args);
         },
       },
     } as unknown as ExtensionContext;
@@ -417,9 +411,7 @@ describe("skill selection", () => {
     });
     const ctx = {
       ...context(),
-      modelRegistry: {
-        getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
-      },
+      modelRegistry: classifierRegistry,
     } as unknown as ExtensionContext;
     const notifications: string[] = [];
     const commandContext = {

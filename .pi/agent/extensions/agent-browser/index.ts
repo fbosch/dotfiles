@@ -1,4 +1,4 @@
-import { StringEnum } from "@earendil-works/pi-ai";
+import { type ClassifierAnswer, type ClassifierContext, StringEnum } from "@earendil-works/pi-ai";
 import {
   DEFAULT_MAX_BYTES,
   DEFAULT_MAX_LINES,
@@ -6,8 +6,7 @@ import {
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import { requestJevGateway } from "../../lib/jev-gateway";
-import { isRecord } from "../shared/is-record";
+import { requestJevClassifier } from "../../lib/jev-classifier";
 
 const ENGINE = "lightpanda";
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -209,7 +208,7 @@ async function settleAfterAction(
   await runBrowser(pi, sessionId, ["wait", "--load", "domcontentloaded"], signal);
 }
 
-export function createDecisionRequest(input: DecideInput): Record<string, unknown> {
+export function createDecisionRequest(input: DecideInput): ClassifierContext {
   const criteria = Object.fromEntries(
     input.actions.map((action) => [action.id, action.description]),
   );
@@ -232,39 +231,10 @@ export function createDecisionRequest(input: DecideInput): Record<string, unknow
   };
 }
 
-export function parseDecision(
-  value: unknown,
-  actionIds: readonly string[],
-): BrowserDecision | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const answer = value.answers.next_action;
-  if (!isRecord(answer) || answer.type !== "choice" || typeof answer.choice !== "string") {
-    return undefined;
-  }
-  if (!isRecord(answer.probabilities)) return undefined;
-
-  const expected = [...actionIds, NO_ACTION];
-  if (!expected.includes(answer.choice)) return undefined;
-  if (Object.keys(answer.probabilities).length !== expected.length) return undefined;
-
-  const probabilities: Record<string, number> = {};
-  let total = 0;
-  for (const id of expected) {
-    const probability = answer.probabilities[id];
-    if (
-      typeof probability !== "number" ||
-      !Number.isFinite(probability) ||
-      probability < 0 ||
-      probability > 1
-    ) {
-      return undefined;
-    }
-    probabilities[id] = probability;
-    total += probability;
-  }
-  if (Math.abs(total - 1) > 0.02) return undefined;
-
-  return { choice: answer.choice, probabilities };
+function browserDecision(answer: ClassifierAnswer | undefined): BrowserDecision | undefined {
+  return answer?.type === "choice"
+    ? { choice: answer.choice, probabilities: answer.probabilities }
+    : undefined;
 }
 
 export function parseClickCandidates(snapshot: string): ClickCandidate[] {
@@ -411,12 +381,12 @@ export function createRunAuthorizationRequest(
   objective: string,
   pageState: string,
   candidate: RunCandidate,
-): Record<string, unknown> {
+): ClassifierContext {
   return {
     state: { objective, page_state: pageState, selected_action: candidate.description },
     questions: {
       authorized: {
-        type: "noul",
+        type: "bool",
         instructions:
           "Is this exact action directly required to fulfill the user's stated objective and supported by the observed page state?",
         criteria: {
@@ -429,28 +399,16 @@ export function createRunAuthorizationRequest(
   };
 }
 
-export function parseRunAuthorization(value: unknown): number | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const answer = value.answers.authorized;
-  if (!isRecord(answer) || answer.type !== "noul") return undefined;
-  return typeof answer.noul === "number" &&
-    Number.isFinite(answer.noul) &&
-    answer.noul >= 0 &&
-    answer.noul <= 1
-    ? answer.noul
-    : undefined;
-}
-
 export function createStepSafetyRequest(
   objective: string,
   pageState: string,
   candidate: ClickCandidate,
-): Record<string, unknown> {
+): ClassifierContext {
   return {
-    state: { objective, page_state: pageState, selected_action: candidate },
+    state: { objective, page_state: pageState, selected_action: { ...candidate } },
     questions: {
       navigation_only: {
-        type: "noul",
+        type: "bool",
         instructions:
           "Is the selected click strictly a reversible navigation action that only changes the viewed page or opens navigation?",
         criteria: {
@@ -461,18 +419,6 @@ export function createStepSafetyRequest(
       },
     },
   };
-}
-
-export function parseStepSafety(value: unknown): number | undefined {
-  if (!isRecord(value) || !isRecord(value.answers)) return undefined;
-  const answer = value.answers.navigation_only;
-  if (!isRecord(answer) || answer.type !== "noul") return undefined;
-  return typeof answer.noul === "number" &&
-    Number.isFinite(answer.noul) &&
-    answer.noul >= 0 &&
-    answer.noul <= 1
-    ? answer.noul
-    : undefined;
 }
 
 export function evaluateStepDecision(
@@ -586,7 +532,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         };
       }
 
-      const choiceGateway = await requestJevGateway(
+      const choiceResult = await requestJevClassifier(
         ctx.modelRegistry,
         createDecisionRequest({
           objective: params.objective,
@@ -598,11 +544,8 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           timeoutMs: DECISION_TIMEOUT_MS,
         },
       );
-      if (!choiceGateway.ok) throw new Error(`Jev browser step failed: ${choiceGateway.reason}`);
-      const choice = parseDecision(
-        choiceGateway.value,
-        candidates.map(({ id }) => id),
-      );
+      if (!choiceResult.ok) throw new Error(`Jev browser step failed: ${choiceResult.reason}`);
+      const choice = browserDecision(choiceResult.value.answers.next_action);
       if (choice === undefined) throw new Error("Jev returned an invalid browser step decision");
 
       let step = evaluateStepDecision(
@@ -611,7 +554,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE,
       );
       if (step.executed && step.candidate !== undefined) {
-        const safetyGateway = await requestJevGateway(
+        const safetyResult = await requestJevClassifier(
           ctx.modelRegistry,
           createStepSafetyRequest(params.objective, before, step.candidate),
           {
@@ -619,12 +562,13 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
             timeoutMs: DECISION_TIMEOUT_MS,
           },
         );
-        if (!safetyGateway.ok)
-          throw new Error(`Jev browser safety check failed: ${safetyGateway.reason}`);
-        const safetyProbability = parseStepSafety(safetyGateway.value);
-        if (safetyProbability === undefined) {
+        if (!safetyResult.ok)
+          throw new Error(`Jev browser safety check failed: ${safetyResult.reason}`);
+        const safetyAnswer = safetyResult.value.answers.navigation_only;
+        if (safetyAnswer?.type !== "bool") {
           throw new Error("Jev returned an invalid browser safety decision");
         }
+        const safetyProbability = safetyAnswer.probability;
         step = applyStepSafety(step, safetyProbability);
       }
 
@@ -707,7 +651,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           probability = 1;
           selectionMode = "deterministic";
         } else {
-          const choiceGateway = await requestJevGateway(
+          const choiceResult = await requestJevClassifier(
             ctx.modelRegistry,
             createDecisionRequest({
               objective: params.objective,
@@ -716,13 +660,10 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
             }),
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
           );
-          if (!choiceGateway.ok) {
-            throw new Error(`Jev browser run failed: ${choiceGateway.reason}`);
+          if (!choiceResult.ok) {
+            throw new Error(`Jev browser run failed: ${choiceResult.reason}`);
           }
-          const choice = parseDecision(
-            choiceGateway.value,
-            candidates.map(({ id }) => id),
-          );
+          const choice = browserDecision(choiceResult.value.answers.next_action);
           if (choice === undefined) throw new Error("Jev returned an invalid browser run decision");
           const selectedProbability = choice.probabilities[choice.choice];
           if (selectedProbability === undefined)
@@ -754,19 +695,21 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         let authorizationProbability: number | undefined;
         if (candidate.authorization === "independent") {
-          const authorizationGateway = await requestJevGateway(
+          const authorizationResult = await requestJevClassifier(
             ctx.modelRegistry,
             createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
           );
-          if (!authorizationGateway.ok) {
-            throw new Error(`Jev browser authorization failed: ${authorizationGateway.reason}`);
+          if (!authorizationResult.ok) {
+            throw new Error(`Jev browser authorization failed: ${authorizationResult.reason}`);
           }
-          authorizationProbability = parseRunAuthorization(authorizationGateway.value);
-          if (authorizationProbability === undefined) {
+          const authorizationAnswer = authorizationResult.value.answers.authorized;
+          if (authorizationAnswer?.type !== "bool") {
             throw new Error("Jev returned an invalid browser authorization decision");
           }
-          if (authorizationProbability < authorizationThreshold) {
+          const authorizedProbability = authorizationAnswer.probability;
+          authorizationProbability = authorizedProbability;
+          if (authorizedProbability < authorizationThreshold) {
             stopReason = "unauthorized_or_uncertain";
             break;
           }
@@ -848,15 +791,19 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         throw new Error(`Action ids must be unique and must not use reserved id ${NO_ACTION}`);
       }
 
-      const gateway = await requestJevGateway(ctx.modelRegistry, createDecisionRequest(params), {
-        ...(signal === undefined ? {} : { signal }),
-        timeoutMs: DECISION_TIMEOUT_MS,
-      });
-      if (!gateway.ok) {
-        throw new Error(`Jev browser decision failed: ${gateway.reason}`);
+      const decisionResult = await requestJevClassifier(
+        ctx.modelRegistry,
+        createDecisionRequest(params),
+        {
+          ...(signal === undefined ? {} : { signal }),
+          timeoutMs: DECISION_TIMEOUT_MS,
+        },
+      );
+      if (!decisionResult.ok) {
+        throw new Error(`Jev browser decision failed: ${decisionResult.reason}`);
       }
 
-      const decision = parseDecision(gateway.value, ids);
+      const decision = browserDecision(decisionResult.value.answers.next_action);
       if (decision === undefined) throw new Error("Jev returned an invalid browser decision");
       const selectedProbability = decision.probabilities[decision.choice];
       if (selectedProbability === undefined) throw new Error("Jev omitted selected probability");

@@ -409,12 +409,18 @@ describe("subagent session links", () => {
   });
 
   test("bounds tool output even when the transcript requests expanded rendering", () => {
+    const sessionModel = {
+      model: { provider: "openai-codex", id: "gpt-6-luna" },
+      thinkingLevel: "high",
+    };
     const source = compactSubagentTranscriptSource({
       getMessages: () => [],
       subscribe: () => undefined,
       streaming: () => undefined,
       getToolDefinition: () => undefined,
+      sessionModel: () => sessionModel,
     });
+    expect(source.sessionModel()).toBe(sessionModel);
     const definition = source.getToolDefinition("read");
     const renderResult = definition?.renderResult;
     if (renderResult === undefined) throw new Error("Missing compact transcript renderer");
@@ -528,6 +534,8 @@ describe("subagent session links", () => {
     );
     const liveRecord = {
       id: target.agentId,
+      model: { provider: "openai-codex", id: "gpt-6-luna-fast" },
+      thinkingLevel: "high",
       status: "completed",
       agentMessages: [
         {
@@ -549,6 +557,7 @@ describe("subagent session links", () => {
       manager: { getRecord: () => liveRecord, listAgents: () => [liveRecord] },
     };
     const frames: Array<{ width: number; rows: number; lines: string[] }> = [];
+    const thinkingLevels: string[] = [];
     let first = "";
     let firstRaw = "";
     let last = "";
@@ -584,6 +593,10 @@ describe("subagent session links", () => {
       bg: (_color: string, text: string) => `\u001b[48;2;44;44;44m${text}\u001b[49m`,
       getBgAnsi: () => "\u001b[48;2;44;44;44m",
       getColorMode: () => "truecolor",
+      getThinkingBorderColor: (level: string) => {
+        thinkingLevels.push(level);
+        return (text: string) => `\u001b[38;2;187;187;187m${text}\u001b[39m`;
+      },
       bold: (text: string) => text,
     } as unknown as Theme;
     const ctx = {
@@ -612,8 +625,11 @@ describe("subagent session links", () => {
     }
 
     expect(renderError).toBeUndefined();
-    expect(firstRaw).toContain("\u001b[38;2;91;155;213mExplore\u001b[39m subagent session");
-    expect(first).toContain("Explore subagent session · openai-codex/gpt-6-luna-fast");
+    expect(firstRaw).toContain(
+      "\u001b[38;2;91;155;213mExplore\u001b[39m · openai-codex/gpt-6-luna-fast • high",
+    );
+    expect(first).toContain("Explore · openai-codex/gpt-6-luna-fast • high");
+    expect(thinkingLevels).toContain("high");
     expect(firstRaw).not.toContain("\u001b]133;");
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");

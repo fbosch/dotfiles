@@ -17,6 +17,7 @@ import {
   matchesKey,
   type OverlayHandle,
   type Terminal,
+  stripTerminalSequences,
   Text,
   type TUI,
 } from "@earendil-works/pi-tui";
@@ -58,6 +59,7 @@ const PATCH_VERSION = 5;
 const OVERLAY_WIDTH = "90%";
 const TRANSCRIPT_TOOL_PREVIEW_LINES = 5;
 const TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS = 500;
+const TRANSCRIPT_HEADING_CONTROL_CHARACTERS = /\p{Cc}/gu;
 const TRANSCRIPT_TOOL_PARAMETERS = Type.Object({});
 // shortcut: pi-subagents exposes records but not its transcript renderer. Reuse the
 // pinned package modules until its public API can open a transcript by agent ID.
@@ -425,6 +427,8 @@ interface SubagentsService {
 interface InternalSubagentRecord {
   id: string;
   toolCallId?: string;
+  model?: { provider: string; id: string };
+  thinkingLevel?: string;
   isSessionReady(): boolean;
 }
 
@@ -447,12 +451,21 @@ function contextSessionId(ctx: ExtensionContext): string {
   }
 }
 
+function transcriptHeadingText(value: string): string {
+  return stripTerminalSequences(value).replace(TRANSCRIPT_HEADING_CONTROL_CHARACTERS, " ").trim();
+}
+
 function readCachedSubagentSession(outputFile: string, parentSessionId: string): string {
   const content = readFileSync(outputFile, "utf8");
   const firstLine = content.split(/\r?\n/, 1)[0];
   if (firstLine === undefined) throw new Error("Subagent transcript has no session header");
 
-  const header = JSON.parse(firstLine) as unknown;
+  let header: unknown;
+  try {
+    header = JSON.parse(firstLine);
+  } catch {
+    throw new Error("Subagent transcript has an invalid session header");
+  }
   if (
     typeof header !== "object" ||
     header === null ||
@@ -466,43 +479,34 @@ function readCachedSubagentSession(outputFile: string, parentSessionId: string):
   return content;
 }
 
-function readSubagentModel(outputFile: string, parentSessionId: string): string | undefined {
-  let content: string;
-  try {
-    content = readCachedSubagentSession(outputFile, parentSessionId);
-  } catch {
-    return undefined;
-  }
+interface SubagentSessionModel {
+  model: { provider: string; id: string } | undefined;
+  thinkingLevel: string | undefined;
+}
 
-  let model: string | undefined;
-  for (const line of content.split(/\r?\n/)) {
-    if (line.length === 0) continue;
-    try {
-      const entry = JSON.parse(line) as unknown;
-      if (
-        typeof entry === "object" &&
-        entry !== null &&
-        "type" in entry &&
-        entry.type === "model_change" &&
-        "provider" in entry &&
-        typeof entry.provider === "string" &&
-        "modelId" in entry &&
-        typeof entry.modelId === "string"
-      ) {
-        model = `${entry.provider}/${entry.modelId}`;
-      }
-    } catch {
-      return undefined;
-    }
-  }
-  return model;
+interface TranscriptHeading {
+  name: string;
+  modeLabel: string | undefined;
+  description: string;
+}
+
+interface TranscriptTheme {
+  fg(color: string, text: string): string;
+  bold(text: string): string;
+  getThinkingBorderColor(level: string): (text: string) => string;
+}
+
+interface SubagentStreamingState {
+  activeTools: ReadonlyMap<string, string>;
+  responseText: string;
 }
 
 export interface SubagentTranscriptSource {
   getMessages(): readonly unknown[];
   subscribe(onChange: (event?: unknown) => void): (() => void) | undefined;
-  streaming(): unknown;
+  streaming(): SubagentStreamingState | undefined;
   getToolDefinition(name: string): ToolDefinition | undefined;
+  sessionModel(): SubagentSessionModel;
 }
 
 interface SessionNavigationModule {
@@ -516,15 +520,17 @@ interface SessionNavigationModule {
 interface SessionNavigatorModule {
   TranscriptPane: new (options: {
     tui: TUI;
-    theme: Theme;
+    theme: TranscriptTheme;
     source: SubagentTranscriptSource;
+    heading: TranscriptHeading;
     done: (result: undefined) => void;
     cwd: string;
     markdownTheme: MarkdownTheme;
   }) => Component & { dispose?(): void };
 }
 
-function compactToolArguments(args: object): string {
+function compactToolArguments(args: unknown): string {
+  if (typeof args !== "object" || args === null) return "";
   const serialized = JSON.stringify(args);
   if (serialized === undefined || serialized === "{}") return "";
   return truncateLine(serialized, TRANSCRIPT_TOOL_PREVIEW_LINE_CHARS).text;
@@ -597,6 +603,7 @@ export function compactSubagentTranscriptSource(
       definitions.set(name, definition);
       return definition;
     },
+    sessionModel: () => source.sessionModel(),
   };
 }
 
@@ -616,6 +623,7 @@ async function loadSessionNavigator(): Promise<{
     import(SESSION_NAVIGATION_MODULE),
     import(SESSION_NAVIGATOR_MODULE),
   ]);
+  // SAFETY: The installed 21.8.1 modules were inspected against these internal contracts.
   return {
     navigation: navigation as unknown as SessionNavigationModule,
     navigator: navigator as unknown as SessionNavigatorModule,
@@ -698,8 +706,11 @@ export async function openSubagentSession(
     const agentColor = [
       ...loadAgentWidgetColors(ctx.cwd, getAgentDir(), ctx.isProjectTrusted?.() ?? false),
     ].find(([name]) => name.toLowerCase() === target.displayName.toLowerCase())?.[1];
-    const agentModel =
-      outputFile === undefined ? undefined : readSubagentModel(outputFile, sessionId);
+    const heading: TranscriptHeading = {
+      name: transcriptHeadingText(target.displayName),
+      modeLabel: undefined,
+      description: transcriptHeadingText(target.description),
+    };
     // Transcript inspection is user navigation, not a blocking agent prompt. Mount it
     // directly so Pi does not emit ui_prompt events that Herdr interprets as attention.
     await new Promise<void>((resolve, reject) => {
@@ -711,7 +722,10 @@ export async function openSubagentSession(
         overlayHandle?.hide();
         try {
           overlayComponent?.dispose?.();
-        } catch {}
+        } catch (error) {
+          // Disposal must not prevent the viewer from closing.
+          void error;
+        }
         resolve();
       };
 
@@ -727,6 +741,7 @@ export async function openSubagentSession(
             tui,
             theme: ctx.ui.theme,
             source,
+            heading,
             done: close,
             cwd: ctx.cwd,
             markdownTheme,
@@ -734,7 +749,6 @@ export async function openSubagentSession(
           ctx.ui.theme,
           target.displayName,
           agentColor,
-          agentModel,
         );
         if (closed) {
           overlayComponent.dispose?.();
@@ -749,7 +763,10 @@ export async function openSubagentSession(
         signal?.removeEventListener("abort", close);
         try {
           overlayComponent?.dispose?.();
-        } catch {}
+        } catch (disposeError) {
+          // Preserve the construction error when best-effort cleanup also fails.
+          void disposeError;
+        }
         reject(error);
       }
     });

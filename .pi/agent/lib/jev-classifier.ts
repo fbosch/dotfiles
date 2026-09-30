@@ -145,7 +145,10 @@ export function assertJevJson(
   try {
     if (Array.isArray(value)) {
       for (const child of value) assertJevJson(child, ancestors);
-    } else if (isMatching(RecordPattern, value)) {
+    } else if (
+      Object.getPrototypeOf(value) === Object.prototype ||
+      Object.getPrototypeOf(value) === null
+    ) {
       for (const child of Object.values(value)) assertJevJson(child, ancestors);
     } else throw new Error("Invalid Jev JSON");
   } finally {
@@ -373,11 +376,7 @@ export function createJevClassifierRequester(
         }
         usage = addJevUsage(usage, result?.usage);
         if (attempt.signal.aborted)
-          lastFailure = fail(
-            options.signal?.aborted ? "caller-cancellation" : "timeout",
-            attemptedFetch ? "request" : "auth",
-            preference.provider,
-          );
+          lastFailure = fail(options.signal?.aborted ? "caller-cancellation" : "timeout", httpStatus === undefined ? (attemptedFetch ? "request" : "auth") : "body", preference.provider, httpStatus, retryAfterMs);
         else if (httpStatus !== undefined && httpStatus >= 400)
           lastFailure = fail(
             "http-status",
@@ -386,7 +385,7 @@ export function createJevClassifierRequester(
             httpStatus,
             retryAfterMs,
           );
-        else if (!result || result.stopReason !== "stop")
+        else if (result?.stopReason !== "stop")
           lastFailure = fail(
             attemptedFetch ? "request-failure" : "auth-failure",
             attemptedFetch ? "request" : "auth",
@@ -410,7 +409,14 @@ export function createJevClassifierRequester(
         )
           cooldowns.set(preference.provider, {
             until: Math.min(Number.MAX_SAFE_INTEGER, now() + lastFailure.retryAfterMs),
-            failure: lastFailure,
+            failure: {
+              ok: false,
+              stage: lastFailure.stage,
+              reason: lastFailure.reason,
+              provider: preference.provider,
+              httpStatus: 429,
+              retryAfterMs: lastFailure.retryAfterMs,
+            },
           });
         if (overall.signal.aborted || options.signal?.aborted) return lastFailure;
         if (lastFailure.stage !== "auth") usefulFailure ??= lastFailure;

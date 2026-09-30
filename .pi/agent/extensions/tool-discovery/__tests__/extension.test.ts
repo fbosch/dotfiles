@@ -1,11 +1,16 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { ClassifierContext } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Type } from "typebox";
+import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import toolDiscoveryExtension, {
   isDeferredToolName,
   rankDeferredToolsWithJev,
@@ -16,6 +21,48 @@ import toolDiscoveryExtension, {
 } from "../index";
 
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
+
+const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+const testAgentDirectory = mkdtempSync(join(tmpdir(), "tool-discovery-jev-test-"));
+writeFileSync(
+  join(testAgentDirectory, "settings.json"),
+  JSON.stringify({
+    jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
+    toolDiscovery: {
+      deferredToolPrefixes: [
+        "chart_",
+        "figma_",
+        "serena_",
+        "context7_",
+        "ast-grep_",
+        "mcp__",
+        "browser_",
+      ],
+    },
+  }),
+);
+process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
+
+afterAll(() => {
+  if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+  rmSync(testAgentDirectory, { recursive: true, force: true });
+});
+
+async function nativeClassifierRegistry(onInput?: (input: ClassifierContext) => void) {
+  const registry = await createNativeClassifierRegistry();
+  return {
+    findOfType: registry.findOfType.bind(registry),
+    classify: (
+      model: Parameters<typeof registry.classify>[0],
+      input: ClassifierContext,
+      options?: Parameters<typeof registry.classify>[2],
+    ) => {
+      onInput?.(input);
+      return registry.classify(model, input, options);
+    },
+  };
+}
 
 interface SearchResult {
   content: Array<{ type: string; text?: string }>;
@@ -450,34 +497,33 @@ describe("tool discovery", () => {
         origin: "top-level" as const,
       },
     }));
-    let requestBody: Record<string, unknown> | undefined;
-
+    let classifierInput: ClassifierContext | undefined;
     const ranked = await rankDeferredToolsWithJev(
       tools,
       "show connected dependencies",
       2,
       ["chart_"],
       {
-        modelRegistry: {
-          getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }),
-        },
-        fetch: async (_url, init) => {
-          requestBody = JSON.parse(String(init?.body)) as Record<string, unknown>;
-          const state = requestBody.state as { candidates: Array<{ id: string; name: string }> };
+        modelRegistry: await nativeClassifierRegistry((input) => {
+          classifierInput = input;
+        }),
+        fetch: async () => {
+          const criteria = classifierInput?.questions.best_tool;
+          if (criteria?.type !== "choice") throw new Error("choice criteria missing");
+          const selected = Object.entries(criteria.criteria).find(([, value]) =>
+            value.startsWith("chart_network:"),
+          )?.[0];
+          if (selected === undefined) throw new Error("network candidate missing");
           const probabilities = Object.fromEntries(
-            state.candidates.map((candidate) => [
-              candidate.id,
-              candidate.name === "chart_network" ? 1 : 0,
-            ]),
+            Object.keys(criteria.criteria).map((id) => [id, id === selected ? 1 : 0]),
           );
-          probabilities.no_match = 0;
-          const selected = state.candidates.find((candidate) => candidate.name === "chart_network");
           return new Response(
             JSON.stringify({
               answers: {
                 best_tool: {
                   type: "choice",
-                  choice: selected?.id,
+                  choice: selected,
+                  confidence: 1,
                   probabilities,
                 },
               },
@@ -490,12 +536,9 @@ describe("tool discovery", () => {
 
     expect(ranked?.matches.map((tool) => tool.name)).toEqual(["chart_network"]);
     expect(ranked?.rankingSource).toBe("jev");
-    const state = requestBody?.state as {
-      candidates: Array<Record<string, unknown>>;
-    };
-    expect(state.candidates).toHaveLength(3);
-    expect(state.candidates.every((candidate) => !("parameters" in candidate))).toBe(true);
-    expect(state.candidates.every((candidate) => !("sourceInfo" in candidate))).toBe(true);
+    expect(classifierInput?.questions.best_tool?.type).toBe("choice");
+    expect(JSON.stringify(classifierInput?.state)).not.toContain("parameters");
+    expect(JSON.stringify(classifierInput?.state)).not.toContain("sourceInfo");
   });
 
   test("accepts a valid Jev no-match response without activating a candidate", async () => {
@@ -513,29 +556,21 @@ describe("tool discovery", () => {
     }));
 
     const ranked = await rankDeferredToolsWithJev(tools, "database migrations", 1, ["chart_"], {
-      modelRegistry: {
-        getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }),
-      },
-      fetch: async (_url, init) => {
-        const request = JSON.parse(String(init?.body)) as {
-          state: { candidates: Array<{ id: string }> };
-        };
-        const candidate = request.state.candidates[0];
-        if (candidate === undefined) throw new Error("candidate fixture missing");
-
-        return new Response(
+      modelRegistry: await nativeClassifierRegistry(),
+      fetch: async () =>
+        new Response(
           JSON.stringify({
             answers: {
               best_tool: {
                 type: "choice",
                 choice: "no_match",
-                probabilities: { [candidate.id]: 0.1, no_match: 0.9 },
+                confidence: 0.9,
+                probabilities: { candidate_0: 0.1, no_match: 0.9 },
               },
             },
           }),
           { status: 200 },
-        );
-      },
+        ),
     });
 
     expect(ranked).toEqual({ matches: [], rankingSource: "jev" });
@@ -560,9 +595,7 @@ describe("tool discovery", () => {
     const fetchTool = tools.find((tool) => tool.name === "webfetch");
     if (fetchTool === undefined) throw new Error("webfetch fixture missing");
     const options = {
-      modelRegistry: {
-        getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }),
-      },
+      modelRegistry: await nativeClassifierRegistry(),
       fetch: async () => new Response("not-json", { status: 200 }),
     };
 
@@ -572,36 +605,26 @@ describe("tool discovery", () => {
     ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
     await expect(
       searchDeferredToolsWithJevFallback(tools, "fetch web page", 2, ["web"], {
-        modelRegistry: {
-          getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }),
-        },
-        fetch: async (_url, init) => {
-          const request = JSON.parse(String(init?.body)) as {
-            state: { candidates: Array<{ id: string }> };
-          };
-          const probabilities = Object.fromEntries(
-            request.state.candidates.map(({ id }, index) => [id, index === 0 ? 0.6 : 0.4]),
-          );
-          probabilities.no_match = 0;
-          probabilities.unexpected = 0;
-          return new Response(
+        modelRegistry: await nativeClassifierRegistry(),
+        fetch: async () =>
+          new Response(
             JSON.stringify({
               answers: {
                 best_tool: {
                   type: "choice",
-                  choice: request.state.candidates[0]?.id,
-                  probabilities,
+                  choice: "unexpected",
+                  confidence: 1,
+                  probabilities: { unexpected: 1 },
                 },
               },
             }),
             { status: 200 },
-          );
-        },
+          ),
       }),
     ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
     await expect(
       searchDeferredToolsWithJevFallback(tools, "fetch web page", 2, ["web"], {
-        modelRegistry: { getProviderAuth: async () => undefined },
+        modelRegistry: await nativeClassifierRegistry(),
         fetch: async () => {
           throw new Error("network unavailable");
         },
@@ -639,8 +662,6 @@ describe("tool discovery", () => {
     if (chartTool === undefined) throw new Error("chart fixture missing");
     const controller = new AbortController();
     controller.abort();
-    let authCalls = 0;
-
     await expect(
       searchDeferredToolsWithJevFallback(
         tools,
@@ -648,25 +669,17 @@ describe("tool discovery", () => {
         1,
         ["chart_"],
         {
-          modelRegistry: {
-            getProviderAuth: async () => {
-              authCalls += 1;
-              return { auth: { apiKey: "gateway-test-key" } };
-            },
-          },
+          modelRegistry: await nativeClassifierRegistry(),
           timeoutMs: 5,
           fetch: async () => new Response("never"),
         },
         controller.signal,
       ),
     ).resolves.toEqual({ matches: [chartTool], rankingSource: "lexical" });
-    expect(authCalls).toBe(0);
 
     await expect(
       searchDeferredToolsWithJevFallback(tools, "chart", 1, ["chart_"], {
-        modelRegistry: {
-          getProviderAuth: async () => ({ auth: { apiKey: "gateway-test-key" } }),
-        },
+        modelRegistry: await nativeClassifierRegistry(),
         timeoutMs: 5,
         fetch: async (_url, init) =>
           new Promise<Response>((_resolve, reject) => {

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { discoverAgentDefinitions } from "../discovery";
 import { MAX_ROUTING_POLICY_BYTES, readGlobalRoutingPolicy } from "../policy";
 import { recommendAgent } from "../recommendation";
@@ -43,9 +44,7 @@ function responseFor(choice: string, catalog: readonly string[], confidence = 0.
   );
 }
 
-const registry = {
-  getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
-};
+const registry = await createNativeClassifierRegistry();
 
 const enabledConfig = {
   ...DEFAULT_RECOMMEND_AGENT_CONFIG,
@@ -210,17 +209,18 @@ describe("recommend agent configuration and routing", () => {
     }
   });
 
-  test("abstains before auth when the routing policy is unavailable", async () => {
+  test("abstains before classifier lookup when the routing policy is unavailable", async () => {
     const root = temporaryDirectory();
-    let authCalls = 0;
+    let classifyCalls = 0;
     let fetchCalls = 0;
     const result = await recommendAgent(
       { task: "Trace the data flow", intent: "Explain the existing implementation" },
       {
         modelRegistry: {
-          getProviderAuth: async () => {
-            authCalls += 1;
-            return { auth: { apiKey: "test-key" } };
+          findOfType: registry.findOfType.bind(registry),
+          classify: (...args: Parameters<typeof registry.classify>) => {
+            classifyCalls += 1;
+            return registry.classify(...args);
           },
         },
         config: enabledConfig,
@@ -232,7 +232,7 @@ describe("recommend agent configuration and routing", () => {
       },
     );
     expect(result.decision).toEqual({ decision: "abstain", reason: "routing-policy-unavailable" });
-    expect(authCalls).toBe(0);
+    expect(classifyCalls).toBe(0);
     expect(fetchCalls).toBe(0);
   });
 

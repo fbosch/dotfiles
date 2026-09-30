@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import type { JevGatewayFetch } from "../../lib/jev-gateway";
+import type { JevClassifierFetch } from "../../lib/jev-classifier";
 import { isRecord } from "../shared/is-record";
 import { askJevQuestion } from "../typesafe-question";
 
@@ -86,7 +86,7 @@ interface NormalizedCheckpoint {
 }
 
 export interface SubagentCheckpointAssessorOptions {
-  readonly fetch?: JevGatewayFetch;
+  readonly fetch?: JevClassifierFetch;
 }
 
 export type SubagentCheckpointAssessor = (
@@ -318,7 +318,7 @@ async function assessCheckpoint(
   state: NormalizedCheckpoint["state"],
   registry: Pick<ModelRegistry, "findOfType" | "classify">,
   signal: AbortSignal | undefined,
-  fetch: JevGatewayFetch | undefined,
+  fetch: JevClassifierFetch | undefined,
 ): Promise<SubagentCheckpointAssessment> {
   const input = {
     state,

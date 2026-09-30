@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, stripTerminalSequences, truncateToWidth } from "@earendil-works/pi-tui";
+import { type Component, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { foregroundToBackground, paintDockRow } from "./dock-rendering";
 import { hexForegroundAnsi } from "./terminal-color";
 
@@ -16,7 +16,6 @@ export class SubagentTranscriptFrame implements Component {
     private readonly theme: Theme,
     private readonly agentName: string,
     private readonly agentColor?: string,
-    private readonly model?: string,
   ) {}
 
   render(width: number): string[] {
@@ -36,18 +35,15 @@ export class SubagentTranscriptFrame implements Component {
       const name = stripTerminalSequences(this.agentName)
         .replace(NAME_CONTROL_CHARACTERS, " ")
         .trim();
-      const coloredName =
-        this.agentColor === undefined
-          ? this.theme.fg("accent", name)
-          : `${hexForegroundAnsi(this.theme, this.agentColor)}${name}\u001b[39m`;
-      const model = stripTerminalSequences(this.model ?? "")
-        .replace(NAME_CONTROL_CHARACTERS, " ")
-        .trim();
-      const heading = `${coloredName} subagent session${
-        model.length === 0 ? "" : this.theme.fg("muted", ` · ${model}`)
-      }`;
-      // Replace the pinned pane's fixed header without changing its viewport or footer.
-      content[0] = truncateToWidth(this.theme.bold(heading), contentWidth, "");
+      const header = content[0] ?? "";
+      const nameStart = name.length > 0 ? header.indexOf(name) : -1;
+      if (nameStart >= 0) {
+        const coloredName =
+          this.agentColor === undefined
+            ? this.theme.fg("accent", name)
+            : `${hexForegroundAnsi(this.theme, this.agentColor)}${name}\u001b[39m`;
+        content[0] = `${header.slice(0, nameStart)}${coloredName}${header.slice(nameStart + name.length)}`;
+      }
     }
     return [
       border(`╭${horizontal}╮`),

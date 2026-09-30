@@ -1,0 +1,233 @@
+diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+index a8c8f3c..5febcea 100644
+--- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
++++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
+@@ -171,6 +171,8 @@ const sessionFileByKey = new Map<string, string>();
+ const pendingInits = new Map<string, Promise<void>>();
+ const loadTokens = new Map<string, object>();
+ const registries = new Map<string, SessionState>();
++const sessionKeyById = new Map<string, string>();
++const sessionKeyByFile = new Map<string, string>();
+ const sessionScope = new AsyncLocalStorage<string>();
+ 
+ function newSessionState(seed?: string): SessionState {
+@@ -336,7 +338,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
+ }
+ 
+ async function loadRegistryState(key: string, sessionFile: string, token: object): Promise<void> {
+-  const sidecar = sidecarPath(key);
++  const sidecar = sidecarPath(sidecarKeyFor(sessionFile));
+   let events: RegistryEvent[] = [];
+   let rawLog = "";
+   try {
+@@ -367,9 +369,57 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
+   }
+ }
+ 
++function mergeSessionState(target: SessionState, source: SessionState): void {
++  for (const [anchor, entry] of source.owned) target.owned.set(anchor, entry);
++  for (const [path, entries] of source.served) {
++    const served = target.served.get(path) ?? new Map<string, string>();
++    for (const [anchor, checksum] of entries) served.set(anchor, checksum);
++    target.served.set(path, served);
++  }
++  for (const anchor of source.everMinted) target.everMinted.add(anchor);
++  for (const [path, checksum] of source.allocatedChecksum) target.allocatedChecksum.set(path, checksum);
++  // Live use follows persisted history, preserving LRU ordering when the registries merge.
++  const usageOffset = target.usageClock;
++  for (const [path, usedAt] of source.lastUsedAt) target.lastUsedAt.set(path, usageOffset + usedAt);
++  target.usageClock += source.usageClock;
++  target.reclaimed.push(...source.reclaimed);
++  target.probe = source.probe;
++}
++
++async function attachRegistryToSessionFile(key: string, sessionFile: string): Promise<void> {
++  const live = registries.get(key);
++  if (live === undefined || sidecarByKey.has(key)) return;
++  const token: object = {};
++  loadTokens.set(key, token);
++  sessionFileByKey.set(key, sessionFile);
++  await loadRegistryState(key, sessionFile, token);
++  if (loadTokens.get(key) !== token) return;
++  const persisted = registries.get(key);
++  const sidecar = sidecarByKey.get(key);
++  if (persisted === undefined || sidecar === undefined) return;
++  mergeSessionState(persisted, live);
++  seedServedFromOwned(persisted);
++  await compactSidecarIfNeeded(sidecar, "", sessionFile, persisted, true);
++}
++
+ async function ensureRegistryForKey(key: string, sessionFile: string | undefined): Promise<void> {
+   currentKey = key;
+-  if (registries.has(key)) return;
++  if (registries.has(key)) {
++    const pendingAttach = pendingInits.get(key);
++    if (pendingAttach !== undefined) {
++      await pendingAttach;
++      return;
++    }
++    if (sessionFile === undefined || sidecarByKey.has(key)) return;
++    const attach = attachRegistryToSessionFile(key, sessionFile);
++    pendingInits.set(key, attach);
++    try {
++      await attach;
++    } finally {
++      pendingInits.delete(key);
++    }
++    return;
++  }
+   const pending = pendingInits.get(key);
+   if (pending) {
+     await pending;
+@@ -406,10 +456,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+ }
+ 
+ export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
+-  const sessionFile = sessionFileFor(ctx);
+-  if (sessionFile !== undefined) return sidecarKeyFor(sessionFile);
+   const sessionId = ctx?.sessionManager?.getSessionId?.();
+-  if (typeof sessionId === "string" && sessionId.length > 0) return `ephemeral:${sessionId}`;
++  const sessionFile = sessionFileFor(ctx);
++  if (sessionFile !== undefined) {
++    const existingByFile = sessionKeyByFile.get(sessionFile);
++    const existingById = typeof sessionId === "string" && sessionId.length > 0
++      ? sessionKeyById.get(sessionId)
++      : undefined;
++    const key = existingByFile ?? existingById ?? sidecarKeyFor(sessionFile);
++    sessionKeyByFile.set(sessionFile, key);
++    if (typeof sessionId === "string" && sessionId.length > 0) sessionKeyById.set(sessionId, key);
++    return key;
++  }
++  if (typeof sessionId === "string" && sessionId.length > 0) {
++    const existing = sessionKeyById.get(sessionId);
++    if (existing !== undefined) return existing;
++    const key = `session:${sessionId}`;
++    sessionKeyById.set(sessionId, key);
++    return key;
++  }
+   return undefined;
+ }
+ 
+@@ -738,7 +803,11 @@ function computeParts(
+   const parts: ArrayPart[] = [];
+   if (prefix > 0) parts.push({ count: prefix });
+   for (const part of Diff.diffArrays(prevMid, newMid) as unknown as Array<{ count?: number; added?: boolean; removed?: boolean }>) {
+-    parts.push({ count: part.count ?? 0, added: part.added, removed: part.removed });
++    parts.push({
++      count: part.count ?? 0,
++      ...(part.added !== undefined ? { added: part.added } : {}),
++      ...(part.removed !== undefined ? { removed: part.removed } : {}),
++    });
+   }
+   if (suffix > 0) parts.push({ count: suffix });
+   return parts;
+@@ -994,6 +1063,8 @@ export function resetRegistryForTests(): void {
+   sessionFileByKey.clear();
+   pendingInits.clear();
+   loadTokens.clear();
++  sessionKeyById.clear();
++  sessionKeyByFile.clear();
+   registries.clear();
+ }
+ 
+@@ -1033,6 +1104,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+ 
+ export function releaseRegistrySession(key: string): void {
+   loadTokens.delete(key);
++  for (const [sessionId, sessionKey] of sessionKeyById) {
++    if (sessionKey === key) sessionKeyById.delete(sessionId);
++  }
++  for (const [sessionFile, sessionKey] of sessionKeyByFile) {
++    if (sessionKey === key) sessionKeyByFile.delete(sessionFile);
++  }
+   if (currentKey === key) currentKey = undefined;
+   pendingInits.delete(key);
+   sidecarByKey.delete(key);
+diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
+index 4d063a8..579858b 100644
+--- a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
++++ b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
+@@ -231,7 +231,12 @@ export function applyEdit(
+   if (precomputedHashes === undefined) {
+     throw new Error("[E_BAD_SHAPE] applyEdit requires the file's allocated anchors; derive them via lineHashes(content, path) first.");
+   }
+-  const planned = planEdit(content, edit, precomputedHashes, { filePath, servedHashes, signal, stripWarning });
++  const planned = planEdit(content, edit, precomputedHashes, {
++    ...(filePath !== undefined ? { filePath } : {}),
++    ...(servedHashes !== undefined ? { servedHashes } : {}),
++    ...(signal !== undefined ? { signal } : {}),
++    ...(stripWarning !== undefined ? { stripWarning } : {}),
++  });
+   const lineIndex = buildIdx(content);
+   const warnings = planned.warnings;
+   const resolved = planned.resolved;
+diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts b/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
+index e17801f..0bddfeb 100644
+--- a/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
++++ b/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
+@@ -51,11 +51,18 @@ export function stripRowPrefix(line: string): StrippedRow {
+ const BITSET_WORDS = Math.ceil(HASH_SPACE / 32);
+ 
+ function getBit(bits: Uint32Array, idx: number): boolean {
+-  return (bits[idx >>> 5] >>> (idx & 31) & 1) !== 0;
++  if (idx < 0 || idx >= HASH_SPACE) throw new RangeError(`Anchor bit index ${idx} is outside the hash space.`);
++  const word = bits[idx >>> 5];
++  if (word === undefined) throw new RangeError(`Hash bitset does not contain anchor index ${idx}.`);
++  return (word >>> (idx & 31) & 1) !== 0;
+ }
+ 
+ function setBit(bits: Uint32Array, idx: number): void {
+-  bits[idx >>> 5] |= 1 << (idx & 31);
++  if (idx < 0 || idx >= HASH_SPACE) throw new RangeError(`Anchor bit index ${idx} is outside the hash space.`);
++  const wordIndex = idx >>> 5;
++  const word = bits[wordIndex];
++  if (word === undefined) throw new RangeError(`Hash bitset does not contain anchor index ${idx}.`);
++  bits[wordIndex] = word | (1 << (idx & 31));
+ }
+ 
+ function nextZeroBit(bits: Uint32Array, start: number): number {
+@@ -111,9 +118,9 @@ export async function lineHashes(
+     return _lineHashesPure(content);
+   }
+   return allocateFileAnchors(store ?? (await loadHashStore()), path, content, {
+-    persist,
+-    shadow,
+-    previous,
++    ...(persist !== undefined ? { persist } : {}),
++    ...(shadow !== undefined ? { shadow } : {}),
++    ...(previous !== undefined ? { previous } : {}),
+   });
+ }
+ 
+diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
+index 17f551a..67a0d09 100644
+--- a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
++++ b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
+@@ -245,6 +245,14 @@ export function swapReversedRanges(
+ 	return { ...edit, hash_bounds: [endRef, startRef] as [Anchor, Anchor] };
+ }
+ 
++function findLastMismatch(mismatches: HMismatch[], ref: Anchor): HMismatch | undefined {
++  for (let index = mismatches.length - 1; index >= 0; index--) {
++    const mismatch = mismatches[index];
++    if (mismatch !== undefined && mismatch.ref === ref) return mismatch;
++  }
++  return undefined;
++}
++
+ export function valEdit(
+ 	edit: HEdit,
+ 	fileLines: string[],
+@@ -277,10 +285,10 @@ export function valEdit(
+ 	const endResolved = tryResolve(edit.hash_bounds[1]);
+ 	if (!startResolved || !endResolved) {
+ 		if (!startResolved && endResolved) {
+-			const startMismatch = mismatches.findLast((m) => m.ref === edit.hash_bounds[0]);
++			const startMismatch = findLastMismatch(mismatches, edit.hash_bounds[0]);
+ 			if (startMismatch && startMismatch.kind === "not_found") startMismatch.context = endResolved;
+ 		} else if (startResolved && !endResolved) {
+-			const endMismatch = mismatches.findLast((m) => m.ref === edit.hash_bounds[1]);
++			const endMismatch = findLastMismatch(mismatches, edit.hash_bounds[1]);
+ 			if (endMismatch && endMismatch.kind === "not_found") endMismatch.context = startResolved;
+ 		}
+ 		return { resolved: undefined, mismatches };

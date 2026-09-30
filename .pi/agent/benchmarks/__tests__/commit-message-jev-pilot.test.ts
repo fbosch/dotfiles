@@ -2,15 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createNativeClassifierRegistry } from "../../lib/__tests__/native-classifier-registry";
 import {
   type CommitMessagePilotCase,
   loadCommitMessagePilotCases,
   runCommitMessageJevPilot,
 } from "../commit-message-jev-pilot";
 
-const modelRegistry = {
-  getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
-};
+const modelRegistryPromise = createNativeClassifierRegistry();
 
 function pilotCase(overrides: Partial<CommitMessagePilotCase> = {}): CommitMessagePilotCase {
   return {
@@ -28,6 +27,7 @@ function pilotCase(overrides: Partial<CommitMessagePilotCase> = {}): CommitMessa
 
 describe("commit-message Jev pilot", () => {
   test("compares one bounded Jev request with deterministic and existing judge results", async () => {
+    const modelRegistry = await modelRegistryPromise;
     let requestBody: Record<string, unknown> | undefined;
     const report = await runCommitMessageJevPilot(
       [
@@ -66,6 +66,7 @@ describe("commit-message Jev pilot", () => {
   });
 
   test("keeps Jev advisory when it disagrees or returns an unusable response", async () => {
+    const modelRegistry = await modelRegistryPromise;
     const disagree = await runCommitMessageJevPilot([pilotCase({ deterministicPass: false })], {
       modelRegistry,
       fetch: async () =>
@@ -81,20 +82,23 @@ describe("commit-message Jev pilot", () => {
       modelRegistry,
       fetch: async () => new Response(JSON.stringify({ answers: {} })),
     });
-    expect(unavailable.evaluationFailure).toEqual({
-      stage: "evaluation",
-      reason: "invalid-evaluation-response",
+    expect(unavailable.gatewayFailure).toMatchObject({
+      stage: "request",
+      reason: "request-failure",
     });
     expect(unavailable.comparisons[0]?.jevVerdict).toBe("unavailable");
     expect(unavailable.comparisons[0]?.disagreesWithDeterministic).toBeNull();
   });
 
   test("returns a safe gateway failure without raw auth details", async () => {
+    const registry = await modelRegistryPromise;
     const report = await runCommitMessageJevPilot([pilotCase()], {
       modelRegistry: {
-        getProviderAuth: async () => Promise.reject(new Error("secret auth detail")),
+        findOfType: registry.findOfType.bind(registry),
+        classify: async () => {
+          throw new Error("secret auth detail");
+        },
       },
-      fetch: async () => new Response("unexpected"),
     });
     expect(report.gatewayFailure).toMatchObject({ stage: "auth", reason: "auth-failure" });
     expect(JSON.stringify(report)).not.toContain("secret auth detail");

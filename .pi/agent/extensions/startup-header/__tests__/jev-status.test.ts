@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { JEV_GATEWAY_PROVIDER_IDS } from "../../../lib/jev-gateway";
+import { JEV_PROVIDER_IDS } from "../../../lib/jev-classifier";
 import { resolveJevStartupStatus } from "../jev-status";
 
 const disabledSettings = {
@@ -41,7 +41,7 @@ describe("startup header Jev status", () => {
     );
 
     expect(status).toEqual({ state: "ready" });
-    expect(calls).toEqual([...JEV_GATEWAY_PROVIDER_IDS]);
+    expect(calls).toEqual([...JEV_PROVIDER_IDS]);
   });
 
   test("degrades an enabled feature when Gateway credentials are missing", () => {

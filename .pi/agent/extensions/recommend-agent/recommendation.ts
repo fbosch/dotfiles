@@ -1,10 +1,10 @@
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ClassifierAnswer, ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import {
-  type JevGatewayFailureReason,
-  type JevGatewayFetch,
-  type JevGatewayProviderId,
-  requestJevGateway,
-} from "../../lib/jev-gateway";
+  type JevClassifierFailure,
+  type JevClassifierFetch,
+  type JevClassifierRegistry,
+  requestJevClassifier,
+} from "../../lib/jev-classifier";
 import {
   type AgentCatalog,
   type AgentDiscoveryOptions,
@@ -26,7 +26,7 @@ export type RecommendationAbstainReason =
   | "explicit-routing"
   | "discovery-failure"
   | "catalog-too-large"
-  | "gateway-failure"
+  | "classifier-failure"
   | "invalid-evaluation-response"
   | "uncertain"
   | "model-abstain"
@@ -37,8 +37,12 @@ export interface RecommendationEvaluation {
   readonly decision: RecommendationDecision;
   readonly catalogKind?: "discovered-definitions";
   readonly catalogRevision?: string;
-  readonly gatewayFailure?: JevGatewayFailureReason;
-  readonly gatewayProvider?: JevGatewayProviderId;
+  readonly classifierFailure?: JevClassifierFailure["reason"];
+  readonly classifierStage?: JevClassifierFailure["stage"];
+  readonly classifierProvider?: JevClassifierFailure["provider"];
+  readonly classifierHttpStatus?: number;
+  readonly classifierRetryAfterMs?: number;
+  readonly usage?: Usage;
 }
 
 export interface RecommendationRequest {
@@ -48,32 +52,12 @@ export interface RecommendationRequest {
 }
 
 export interface RecommendationRuntimeOptions {
-  readonly modelRegistry: Pick<ModelRegistry, "getProviderAuth">;
+  readonly modelRegistry: JevClassifierRegistry;
   readonly config: RecommendAgentConfig;
   readonly discovery: AgentDiscoveryOptions;
-  readonly fetch?: JevGatewayFetch;
+  readonly fetch?: JevClassifierFetch;
   readonly signal?: AbortSignal;
-}
-
-interface ChoiceQuestion {
-  readonly type: "choice";
-  readonly instructions: string;
-  readonly criteria: Record<string, string>;
-}
-
-interface RecommendationGatewayRequest {
-  readonly state: {
-    readonly task: string;
-    readonly intent: string;
-    readonly context?: string;
-    readonly catalog: "discovered-definitions";
-    readonly agents: readonly { readonly id: string; readonly description: string }[];
-  };
-  readonly questions: { readonly route: ChoiceQuestion };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  readonly onFetchAttempt?: () => void;
 }
 
 function sanitizeInput(value: string, maxLength: number): string {
@@ -99,11 +83,11 @@ function hasExplicitRouting(request: RecommendationRequest): boolean {
   );
 }
 
-function buildGatewayRequest(
+function buildClassifierContext(
   request: RecommendationRequest,
   catalog: AgentCatalog,
   routingPolicy: string,
-): RecommendationGatewayRequest {
+): ClassifierContext {
   const criteria: Record<string, string> = {};
   for (const definition of catalog.definitions) {
     criteria[definition.id] =
@@ -113,22 +97,23 @@ function buildGatewayRequest(
     "Keep this one scoped task with the primary agent when no listed agent should be selected.";
   criteria.abstain = "No listed agent is a safe fit for this one scoped task.";
 
-  const state: RecommendationGatewayRequest["state"] = {
+  const state = {
     task: sanitizeInput(request.task, 2400),
     intent: sanitizeInput(request.intent, 1200),
     catalog: "discovered-definitions",
     agents: catalog.definitions.map(({ id, description }) => ({ id, description })),
   };
   const context = request.context === undefined ? undefined : sanitizeInput(request.context, 1600);
-  if (context !== undefined && context.length > 0)
-    return {
-      state: { ...state, context },
-      questions: { route: question(criteria, routingPolicy) },
-    };
-  return { state, questions: { route: question(criteria, routingPolicy) } };
+  return {
+    state: context === undefined || context.length === 0 ? state : { ...state, context },
+    questions: { route: question(criteria, routingPolicy) },
+  };
 }
 
-function question(criteria: Record<string, string>, routingPolicy: string): ChoiceQuestion {
+function question(
+  criteria: Record<string, string>,
+  routingPolicy: string,
+): ClassifierContext["questions"][string] {
   return {
     type: "choice",
     instructions: [
@@ -146,51 +131,32 @@ function isFiniteUnit(value: unknown): value is number {
 }
 
 function parseChoice(
-  value: unknown,
+  answer: ClassifierAnswer | undefined,
   catalog: AgentCatalog,
   config: RecommendAgentConfig,
 ): RecommendationDecision {
-  if (!isRecord(value) || !isRecord(value.answers))
-    return { decision: "abstain", reason: "invalid-evaluation-response" };
-  const answer = value.answers.route;
-  if (!isRecord(answer) || answer.type !== "choice" || typeof answer.choice !== "string") {
+  if (answer?.type !== "choice" || !isFiniteUnit(answer.confidence)) {
     return { decision: "abstain", reason: "invalid-evaluation-response" };
   }
 
   const choices = [...catalog.definitions.map(({ id }) => id), "stay", "abstain"];
-  if (
-    !choices.includes(answer.choice) ||
-    !isRecord(answer.probabilities) ||
-    !isFiniteUnit(answer.confidence)
-  ) {
+  if (!choices.includes(answer.choice))
     return { decision: "abstain", reason: "invalid-evaluation-response" };
-  }
   const probabilities = answer.probabilities;
-  const probabilityKeys = Object.keys(probabilities).sort();
-  const expectedKeys = [...choices].sort();
-  if (
-    probabilityKeys.length !== expectedKeys.length ||
-    probabilityKeys.some((key, index) => key !== expectedKeys[index])
-  ) {
-    return { decision: "abstain", reason: "invalid-evaluation-response" };
+  const ranked: { choice: string; probability: number }[] = [];
+  for (const choice of choices) {
+    const probability = probabilities[choice];
+    if (!isFiniteUnit(probability))
+      return { decision: "abstain", reason: "invalid-evaluation-response" };
+    ranked.push({ choice, probability });
   }
-  const values = choices.map((choice) => probabilities[choice]);
-  if (!values.every(isFiniteUnit))
-    return { decision: "abstain", reason: "invalid-evaluation-response" };
-  const total = values.reduce((sum, probability) => sum + probability, 0);
-  if (Math.abs(total - 1) > 0.02)
-    return { decision: "abstain", reason: "invalid-evaluation-response" };
-
-  const ranked = choices
-    .map((choice) => ({ choice, probability: probabilities[choice] as number }))
-    .sort((left, right) => right.probability - left.probability);
+  ranked.sort((left, right) => right.probability - left.probability);
   const selected = probabilities[answer.choice];
   if (!isFiniteUnit(selected))
     return { decision: "abstain", reason: "invalid-evaluation-response" };
   const margin =
     selected - (ranked.find(({ choice }) => choice !== answer.choice)?.probability ?? 0);
   if (
-    selected !== ranked[0]?.probability ||
     selected < config.minProbability ||
     answer.confidence < config.minProbability ||
     margin < config.minMargin
@@ -237,23 +203,32 @@ export async function recommendAgent(
     return { decision: { decision: "abstain", reason } };
   }
   const catalog = discovered.catalog;
-  const gatewayRequest = buildGatewayRequest(request, catalog, routingPolicy.policy.body);
-  const gateway = await requestJevGateway(options.modelRegistry, gatewayRequest, {
+  const classifierContext = buildClassifierContext(request, catalog, routingPolicy.policy.body);
+  const classifier = await requestJevClassifier(options.modelRegistry, classifierContext, {
     timeoutMs: options.config.timeoutMs,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options.onFetchAttempt === undefined ? {} : { onFetchAttempt: options.onFetchAttempt }),
   });
-  if (!gateway.ok) {
+  if (!classifier.ok) {
     return {
-      decision: { decision: "abstain", reason: "gateway-failure" },
+      decision: { decision: "abstain", reason: "classifier-failure" },
       catalogKind: catalog.kind,
       catalogRevision: catalog.revision,
-      gatewayFailure: gateway.reason,
-      ...(gateway.provider === undefined ? {} : { gatewayProvider: gateway.provider }),
+      classifierFailure: classifier.reason,
+      classifierStage: classifier.stage,
+      ...(classifier.provider === undefined ? {} : { classifierProvider: classifier.provider }),
+      ...(classifier.httpStatus === undefined
+        ? {}
+        : { classifierHttpStatus: classifier.httpStatus }),
+      ...(classifier.retryAfterMs === undefined
+        ? {}
+        : { classifierRetryAfterMs: classifier.retryAfterMs }),
+      ...(classifier.usage === undefined ? {} : { usage: classifier.usage }),
     };
   }
 
-  const decision = parseChoice(gateway.value, catalog, options.config);
+  const decision = parseChoice(classifier.value.answers.route, catalog, options.config);
   if (decision.decision === "recommend") {
     const current = discoverAgentDefinitions(options.discovery).catalog;
     if (
@@ -268,7 +243,12 @@ export async function recommendAgent(
       };
     }
   }
-  return { decision, catalogKind: catalog.kind, catalogRevision: catalog.revision };
+  return {
+    decision,
+    catalogKind: catalog.kind,
+    catalogRevision: catalog.revision,
+    ...(classifier.usage === undefined ? {} : { usage: classifier.usage }),
+  };
 }
 
 export function renderRecommendation(evaluation: RecommendationEvaluation): string {

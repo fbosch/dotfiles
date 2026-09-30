@@ -5,7 +5,10 @@ import { join } from "node:path";
 import type { ClassifierContext, ClassifierResult, Usage } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
-import { OPENROUTER_GATEWAY_ENDPOINT, VERCEL_GATEWAY_ENDPOINT } from "../../../lib/jev-gateway";
+
+const OPENROUTER_GATEWAY_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
+const VERCEL_GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
+
 import {
   classifyJevQuestion,
   type JevClassifierRegistry,

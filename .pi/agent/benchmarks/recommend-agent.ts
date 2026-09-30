@@ -16,7 +16,8 @@ import {
   recommendAgent,
 } from "../extensions/recommend-agent/recommendation";
 import { DEFAULT_RECOMMEND_AGENT_CONFIG } from "../extensions/recommend-agent/settings";
-import type { JevGatewayFetch } from "../lib/jev-gateway";
+import { createNativeClassifierRegistry } from "../lib/__tests__/native-classifier-registry";
+import type { JevClassifierFetch } from "../lib/jev-classifier";
 import {
   RECOMMEND_AGENT_BENCHMARK_CASES,
   RECOMMEND_AGENT_BENCHMARK_CATALOG,
@@ -94,14 +95,14 @@ function predictionFromEvaluation(
     return { names: [evaluation.decision.agentId], latencyMs: elapsedMs };
   }
   if (evaluation.decision.decision === "stay") return { names: ["stay"], latencyMs: elapsedMs };
-  if (evaluation.decision.reason === "gateway-failure") {
+  if (evaluation.decision.reason === "classifier-failure") {
     return {
       names: [],
       latencyMs: elapsedMs,
       unavailable: true,
       failure: {
         stage: "request",
-        reason: evaluation.gatewayFailure ?? "gateway-failure",
+        reason: evaluation.classifierFailure ?? "classifier-failure",
       },
     };
   }
@@ -165,7 +166,7 @@ function mockChoice(task: string, intent: string, available: readonly string[]):
   return available.includes(preferred) ? preferred : "abstain";
 }
 
-function mockFetch(): JevGatewayFetch {
+function mockFetch(): JevClassifierFetch {
   return async (_input, init) => {
     let body: { state: { task: string; intent: string; agents: readonly { id: string }[] } };
     try {
@@ -255,7 +256,7 @@ async function runMockJev(
           ...(testCase.context === undefined ? {} : { context: testCase.context }),
         },
         {
-          modelRegistry: { getProviderAuth: async () => ({ auth: { apiKey: "offline" } }) },
+          modelRegistry: await createNativeClassifierRegistry(),
           config: {
             ...DEFAULT_RECOMMEND_AGENT_CONFIG,
             enabled: true,

@@ -1,6 +1,10 @@
-import { describe, expect, test } from "bun:test";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
+import { afterAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { AssistantMessage, ClassifierContext } from "@earendil-works/pi-ai";
 import { type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
+import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import {
   buildQuickReplyPrompt,
   createQuickReplyGenerator,
@@ -36,16 +40,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function gatewayScoreResponse(scores: readonly number[]): unknown {
+function classifierScoreResponse(scores: readonly number[]): unknown {
   const answers = Object.fromEntries(
     scores.map((score, index) => {
-      const candidateId = `candidate_${index}`;
       const probabilities =
         score <= 1
           ? { "0": 1 - score, "1": score, "2": 0 }
           : { "0": 0, "1": 2 - score, "2": score - 1 };
       return [
-        candidateId,
+        `candidate_${index}`,
         {
           type: "score",
           score,
@@ -63,9 +66,24 @@ function gatewayScoreResponse(scores: readonly number[]): unknown {
   return { model: "jev-1.13.0", answers };
 }
 
+const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+const testAgentDirectory = mkdtempSync(join(tmpdir(), "quick-replies-jev-test-"));
+writeFileSync(
+  join(testAgentDirectory, "settings.json"),
+  JSON.stringify({ jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] } }),
+);
+process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
+const classifierRegistry = await createNativeClassifierRegistry();
+
+afterAll(() => {
+  if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+  rmSync(testAgentDirectory, { recursive: true, force: true });
+});
+
 function generatorContext(
   candidates: readonly QuickReply[],
-  gatewayAvailable = true,
+  onClassifierInput?: (input: ClassifierContext) => void,
 ): Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry"> {
   return {
     cwd: "/project",
@@ -76,8 +94,15 @@ function generatorContext(
         id: "gpt-6-luna-fast",
         api: "openai-codex-responses",
       }),
-      getProviderAuth: async () =>
-        gatewayAvailable ? { auth: { apiKey: "gateway-test-key" } } : undefined,
+      findOfType: classifierRegistry.findOfType.bind(classifierRegistry),
+      classify: (
+        model: Parameters<typeof classifierRegistry.classify>[0],
+        input: ClassifierContext,
+        options?: Parameters<typeof classifierRegistry.classify>[2],
+      ) => {
+        onClassifierInput?.(input);
+        return classifierRegistry.classify(model, input, options);
+      },
       complete: async () => ({
         role: "assistant",
         content: [
@@ -633,7 +658,7 @@ describe("quick reply model generation", () => {
     const generator = createQuickReplyGenerator({
       fetch: async (_input, init) => {
         gatewayBody = String(init?.body ?? "");
-        return new Response(JSON.stringify(gatewayScoreResponse([2])));
+        return new Response(JSON.stringify(classifierScoreResponse([2])));
       },
     });
 
@@ -696,17 +721,15 @@ describe("quick reply model generation", () => {
       label: `Choice ${index}`,
       message: `Use this exact candidate message ${index}`,
     }));
-    const requestBodies: Record<string, unknown>[] = [];
+    const classifierInputs: ClassifierContext[] = [];
     const generator = createQuickReplyGenerator({
       timeoutMs: 900,
-      fetch: async (_input, init) => {
-        requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
-        return new Response(JSON.stringify(gatewayScoreResponse([1.9, 0.2, 2, 1.9, 0.7])));
-      },
+      fetch: async () =>
+        new Response(JSON.stringify(classifierScoreResponse([1.9, 0.2, 2, 1.9, 0.7]))),
     });
 
     const replies = await generator(
-      generatorContext(candidates),
+      generatorContext(candidates, (input) => classifierInputs.push(input)),
       {
         userText: "Check the result",
         assistantText: "The implementation is complete.",
@@ -720,28 +743,24 @@ describe("quick reply model generation", () => {
       candidateAt(candidates, 0),
       candidateAt(candidates, 3),
     ]);
-    expect(requestBodies).toHaveLength(1);
-    const request = requestBodies[0];
-    expect(request?.questions).toMatchObject({
-      candidate_0: { type: "score" },
-      candidate_1: { type: "score" },
-      candidate_2: { type: "score" },
-      candidate_3: { type: "score" },
-      candidate_4: { type: "score" },
+    expect(classifierInputs).toHaveLength(1);
+    const classifierInput = classifierInputs[0];
+    expect(classifierInput).toBeDefined();
+    if (classifierInput === undefined) throw new Error("classifier input missing");
+    expect(Object.keys(classifierInput.questions)).toHaveLength(5);
+    expect(classifierInput.questions.candidate_0).toMatchObject({ type: "score" });
+    expect(classifierInput.state).toMatchObject({
+      conversation: {
+        userText: "Check the result",
+        assistantText: "The implementation is complete.",
+        recentContext: [{ role: "assistant", text: "The requirement was to preserve the output." }],
+      },
+      candidates: candidates.map((candidate, index) => ({
+        id: `candidate_${index}`,
+        label: candidate.label,
+        message: candidate.message,
+      })),
     });
-    expect(Object.keys(request?.questions as Record<string, unknown>)).toHaveLength(5);
-    const state = request?.state as {
-      conversation: { userText: string; assistantText: string; recentContext: unknown[] };
-      candidates: Array<{ id: string; label: string; message: string }>;
-    };
-    expect(state.conversation).toMatchObject({
-      userText: "Check the result",
-      assistantText: "The implementation is complete.",
-      recentContext: [{ role: "assistant", text: "The requirement was to preserve the output." }],
-    });
-    expect(state.candidates.map(({ message }) => message)).toEqual(
-      candidates.map(({ message }) => message),
-    );
   });
 
   test("shows two suitable candidates by default and fewer when only one is suitable", async () => {
@@ -753,7 +772,7 @@ describe("quick reply model generation", () => {
 
     for (const { scores, expected } of cases) {
       const generator = createQuickReplyGenerator({
-        fetch: async () => new Response(JSON.stringify(gatewayScoreResponse(scores))),
+        fetch: async () => new Response(JSON.stringify(classifierScoreResponse(scores))),
       });
       expect(
         await generator(
@@ -765,7 +784,7 @@ describe("quick reply model generation", () => {
     }
   });
 
-  test.each(["gateway error", "invalid score response", "missing gateway credentials"])(
+  test.each(["gateway error", "invalid score response"])(
     "falls back to the first two safe candidates in generator order on %s",
     async (failure) => {
       const candidates = [1, 2, 3, 4].map((index) => reply(index));
@@ -774,12 +793,10 @@ describe("quick reply model generation", () => {
         fetch: async () => {
           fetchCalls += 1;
           if (failure === "gateway error") return new Response("unavailable", { status: 503 });
-          if (failure === "invalid score response")
-            return new Response(JSON.stringify({ answers: {} }));
-          return new Response(JSON.stringify(gatewayScoreResponse([0, 0, 2, 2])));
+          return new Response(JSON.stringify({ answers: {} }));
         },
       });
-      const ctx = generatorContext(candidates, failure !== "missing gateway credentials");
+      const ctx = generatorContext(candidates);
 
       expect(
         await generator(
@@ -788,8 +805,7 @@ describe("quick reply model generation", () => {
           new AbortController().signal,
         ),
       ).toEqual(candidates.slice(0, 2));
-      if (failure === "missing gateway credentials") expect(fetchCalls).toBe(0);
-      else expect(fetchCalls).toBeGreaterThan(0);
+      expect(fetchCalls).toBeGreaterThan(0);
     },
   );
 

@@ -4,7 +4,6 @@ import {
   createStepSafetyRequest,
   evaluateStepDecision,
   parseClickCandidates,
-  parseStepSafety,
 } from "../index";
 
 const learnMoreCandidate = {
@@ -50,12 +49,12 @@ describe("browser step", () => {
     ).toEqual({ executed: false, reason: "no_action", probability: 0.8 });
   });
 
-  test("builds and parses a Jev navigation-safety judgment", () => {
+  test("builds a native bool navigation-safety judgment", () => {
     expect(createStepSafetyRequest("Read more", "page", learnMoreCandidate)).toEqual({
       state: { objective: "Read more", page_state: "page", selected_action: learnMoreCandidate },
       questions: {
         navigation_only: {
-          type: "noul",
+          type: "bool",
           instructions:
             "Is the selected click strictly a reversible navigation action that only changes the viewed page or opens navigation?",
           criteria: {
@@ -66,12 +65,6 @@ describe("browser step", () => {
         },
       },
     });
-    expect(parseStepSafety({ answers: { navigation_only: { type: "noul", noul: 0.96 } } })).toBe(
-      0.96,
-    );
-    expect(
-      parseStepSafety({ answers: { navigation_only: { type: "noul", noul: 2 } } }),
-    ).toBeUndefined();
   });
 
   test("fails closed when Jev is uncertain that the click is navigation-only", () => {
