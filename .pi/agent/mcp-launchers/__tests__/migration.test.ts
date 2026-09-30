@@ -134,7 +134,7 @@ describe("native MCP migration", () => {
         "/tmp:rw,noexec,nosuid,size=64m",
         "-v",
         `${resolvedSessionDirectory}:/src:ro,Z`,
-        "docker.io/mcp/ast-grep@sha256:5fcf2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72",
+        "docker.io/mcp/ast-grep@sha256:5fc3f2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72",
       ]);
     } finally {
       rmSync(temporaryDirectory, { recursive: true, force: true });
