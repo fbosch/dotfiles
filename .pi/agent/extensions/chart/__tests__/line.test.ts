@@ -1,9 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI,
+ExtensionContext,
+ToolDefinition, } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions } from "@earendil-works/pi-tui";
 import chartExtension from "../index";
 import {
@@ -174,7 +173,7 @@ describe("line chart", () => {
       { ...numeric, title: "Trend" },
       undefined,
       undefined,
-      context as unknown as ExtensionContext,
+      withToolExecution(context as unknown as ExtensionContext),
     );
     expect(result.details).toMatchObject({ type: "line", xType: "numeric", markers: false });
     const image = result.content.find((content) => content.type === "image");
@@ -187,7 +186,7 @@ describe("line chart", () => {
       { ...numeric, title: "Trend" },
       undefined,
       undefined,
-      { ...context, mode: "tui" } as unknown as ExtensionContext,
+      withToolExecution({ ...context, mode: "tui" } as unknown as ExtensionContext),
     );
     expect(tuiResult.content).toEqual([
       { type: "text", text: "Trend line chart: 0 2; 10 4; 100 8" },

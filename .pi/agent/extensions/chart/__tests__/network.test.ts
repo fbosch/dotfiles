@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
 import { createNetworkChartTool } from "../metadata";
@@ -16,13 +17,13 @@ const theme = {
     color === "text" ? "\u001b[38;2;187;187;187m" : "\u001b[38;2;102;165;173m",
 };
 
-const context = {
+const context = withToolExecution({
   mode: "tui",
   cwd: process.cwd(),
   isProjectTrusted: () => false,
   ui: { theme },
-} as unknown as ExtensionContext;
-const printContext = { ...context, mode: "print" } as unknown as ExtensionContext;
+} as unknown as ExtensionContext);
+const printContext = withToolExecution({ ...context, mode: "print" } as unknown as ExtensionContext);
 
 const input: NetworkChartInput = {
   type: "network",
