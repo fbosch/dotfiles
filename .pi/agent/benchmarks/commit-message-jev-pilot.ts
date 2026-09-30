@@ -109,8 +109,6 @@ function booleanValue(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-
-
 function nonNegativeInteger(value: unknown): number | undefined {
   return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
 }
@@ -381,7 +379,6 @@ export async function runCommitMessageJevPilot(
   }
 
   const scores = parseJevScores(result.value.answers, cases.length);
-  
 
   const usage = parseUsage(result.usage);
   return {

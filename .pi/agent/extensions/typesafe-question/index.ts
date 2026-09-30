@@ -77,6 +77,15 @@ interface ClassifyOptions {
   agentDirectory?: string;
 }
 
+class JevQuestionError extends Error {
+  constructor(
+    message: string,
+    readonly usage: Usage | undefined,
+  ) {
+    super(message);
+  }
+}
+
 export function normalizeQuestionInput(value: unknown): ClassifierContext {
   assertJevJson(value);
   if (!Value.Check(QuestionParameters, value)) throw new Error("Invalid Jev classifier input");
@@ -124,10 +133,14 @@ export async function classifyJevQuestion(
       result.reason === "model-unavailable" || result.reason === "auth-failure"
         ? "classifier-unavailable"
         : result.reason;
-    throw new Error(`Jev request failed (${result.stage}: ${reason})`);
+    throw new JevQuestionError(`Jev request failed (${result.stage}: ${reason})`, result.usage);
   }
-  const answers = normalizeQuestionResponse(result.value, normalized);
-  return { answers, ...(result.usage ? { usage: result.usage } : {}) };
+  try {
+    const answers = normalizeQuestionResponse(result.value, normalized);
+    return { answers, ...(result.usage ? { usage: result.usage } : {}) };
+  } catch {
+    throw new JevQuestionError("Jev request failed (body: invalid-response)", result.usage);
+  }
 }
 
 export async function askJevQuestion(
@@ -158,14 +171,25 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
       ],
       parameters: QuestionParameters,
       async execute(_id, params, signal, _update, ctx) {
-        const result = await classifyJevQuestion(params, ctx.modelRegistry, {
-          ...(signal ? { signal } : {}),
-        });
-        return {
-          content: [{ type: "text" as const, text: JSON.stringify({ answers: result.answers }) }],
-          details: { answers: result.answers },
-          ...(result.usage ? { usage: result.usage } : {}),
-        };
+        try {
+          const result = await classifyJevQuestion(params, ctx.modelRegistry, {
+            ...(signal ? { signal } : {}),
+          });
+          return {
+            content: [{ type: "text" as const, text: JSON.stringify({ answers: result.answers }) }],
+            details: { answers: result.answers },
+            ...(result.usage ? { usage: result.usage } : {}),
+          };
+        } catch (error) {
+          if (!(error instanceof JevQuestionError)) throw error;
+          // Returning a tool error preserves billed usage; throwing would discard it.
+          return {
+            content: [{ type: "text" as const, text: error.message }],
+            details: { answers: {}, failure: error.message },
+            isError: true,
+            ...(error.usage ? { usage: error.usage } : {}),
+          };
+        }
       },
     }),
   );

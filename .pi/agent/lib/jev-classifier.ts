@@ -376,7 +376,13 @@ export function createJevClassifierRequester(
         }
         usage = addJevUsage(usage, result?.usage);
         if (attempt.signal.aborted)
-          lastFailure = fail(options.signal?.aborted ? "caller-cancellation" : "timeout", httpStatus === undefined ? (attemptedFetch ? "request" : "auth") : "body", preference.provider, httpStatus, retryAfterMs);
+          lastFailure = fail(
+            options.signal?.aborted ? "caller-cancellation" : "timeout",
+            httpStatus === undefined ? (attemptedFetch ? "request" : "auth") : "body",
+            preference.provider,
+            httpStatus,
+            retryAfterMs,
+          );
         else if (httpStatus !== undefined && httpStatus >= 400)
           lastFailure = fail(
             "http-status",
