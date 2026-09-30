@@ -91,7 +91,7 @@ export interface SubagentCheckpointAssessorOptions {
 
 export type SubagentCheckpointAssessor = (
   input: unknown,
-  registry: Pick<ModelRegistry, "getProviderAuth">,
+  registry: Pick<ModelRegistry, "findOfType" | "classify">,
   signal?: AbortSignal,
 ) => Promise<SubagentCheckpointAssessment>;
 
@@ -316,7 +316,7 @@ export function createSubagentCheckpointAssessor(
 
 async function assessCheckpoint(
   state: NormalizedCheckpoint["state"],
-  registry: Pick<ModelRegistry, "getProviderAuth">,
+  registry: Pick<ModelRegistry, "findOfType" | "classify">,
   signal: AbortSignal | undefined,
   fetch: JevGatewayFetch | undefined,
 ): Promise<SubagentCheckpointAssessment> {

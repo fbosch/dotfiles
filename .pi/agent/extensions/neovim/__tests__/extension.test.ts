@@ -6,6 +6,7 @@ import type {
   ExtensionUIContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
@@ -236,14 +237,14 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
       submittedPrompts.push(text);
     },
   } as unknown as ExtensionAPI;
-  const context = {
+  const context = withToolExecution({
     cwd: "/project",
     hasUI: true,
     isIdle: () => true,
     mode: "tui",
     sessionManager: { getSessionId: () => "pi-assigned-session" },
     ui: { getEditorText: () => "", setEditorText: () => undefined, setWidget() {} },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 
   await createNeovimExtension({
     createConnection: async (socket) => {
@@ -599,7 +600,7 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   const replacementContext = {
     ...context,
     sessionManager: { getSessionId: () => "pi-replacement-session" },
-  } as ExtensionContext;
+  } as unknown as ExtensionContext;
   await handlers.get("session_start")?.(
     { previousSessionFile: "/tmp/previous.jsonl", reason: "new" } as never,
     replacementContext,

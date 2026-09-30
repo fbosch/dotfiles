@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Value } from "typebox/value";
 import { createDonutChartTool } from "../metadata";
 import { chartDonutParameters, type DonutChartInput, donutChartVariant } from "../schemas";
@@ -24,12 +25,12 @@ const input: DonutChartInput = {
   ],
 };
 
-const context = {
+const context = withToolExecution({
   mode: "tui",
   cwd: process.cwd(),
   isProjectTrusted: () => false,
   ui: { theme },
-} as unknown as ExtensionContext;
+} as unknown as ExtensionContext);
 
 test("donut chart validates pie-compatible data and persists its discriminator", () => {
   const { type: _type, ...parameters } = input;

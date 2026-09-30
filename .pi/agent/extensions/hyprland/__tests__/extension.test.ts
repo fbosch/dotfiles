@@ -6,6 +6,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import {
   type HyprlandCommandRunner,
   registerHyprlandExtension,
@@ -17,6 +18,10 @@ const environment = {
   XDG_RUNTIME_DIR: "/run/user/1000",
   WAYLAND_DISPLAY: "wayland-1",
 };
+
+function toolContext() {
+  return withToolExecution({ cwd: "/tmp" } as unknown as ExtensionContext);
+}
 
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 
@@ -319,7 +324,7 @@ describe("Hyprland extension", () => {
         },
         undefined,
         undefined,
-        { cwd: "/tmp" } as ExtensionContext,
+        toolContext(),
       );
 
       expect(calls).toHaveLength(1);
@@ -388,9 +393,13 @@ describe("Hyprland extension", () => {
     if (tool === undefined) throw new Error("Hyprland tool was not registered");
 
     try {
-      const result = await tool.execute("call-1", { mode: "window" }, undefined, undefined, {
-        cwd: "/tmp",
-      } as ExtensionContext);
+      const result = await tool.execute(
+        "call-1",
+        { mode: "window" },
+        undefined,
+        undefined,
+        toolContext(),
+      );
 
       const grimCall = calls.find(({ command }) => command === "grim");
       expect(grimCall).toMatchObject({ command: "grim", cwd: "/tmp" });
@@ -513,9 +522,7 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_desktop_diagnose");
     if (tool === undefined) throw new Error("Hyprland diagnostic tool was not registered");
 
-    const result = await tool.execute("call-1", {}, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute("call-1", {}, undefined, undefined, toolContext());
     const text = result.content[0];
     if (text?.type !== "text") throw new Error("Diagnostic result did not contain text");
 
@@ -620,7 +627,7 @@ describe("Hyprland extension", () => {
       { monitor: "DP-2", level: "2", limit: 3 },
       undefined,
       undefined,
-      { cwd: "/tmp" } as ExtensionContext,
+      toolContext(),
     );
     const details = result.details as {
       schemaVersion: number;
@@ -710,14 +717,14 @@ describe("Hyprland extension", () => {
       { namespace: "secret-layer" },
       undefined,
       undefined,
-      { cwd: "/tmp" } as ExtensionContext,
+      toolContext(),
     );
     const otherResult = await tool.execute(
       "call-2",
       { namespace: "other-layer" },
       undefined,
       undefined,
-      { cwd: "/tmp" } as ExtensionContext,
+      toolContext(),
     );
     const secretDetails = secretResult.details as {
       redactedLayers: boolean;
@@ -768,9 +775,7 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_layer_inspect");
     if (tool === undefined) throw new Error("Layer inspector was not registered");
 
-    const result = await tool.execute("call-1", {}, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute("call-1", {}, undefined, undefined, toolContext());
 
     expect(result.details).toMatchObject({
       layers: [],
@@ -797,9 +802,7 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_layer_inspect");
     if (tool === undefined) throw new Error("Layer inspector was not registered");
 
-    const result = await tool.execute("call-1", {}, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute("call-1", {}, undefined, undefined, toolContext());
     const details = result.details as { layers: Array<{ namespace: string }> };
 
     expect(details.layers[0]?.namespace).toHaveLength(240);
@@ -821,9 +824,13 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_layer_inspect");
     if (tool === undefined) throw new Error("Layer inspector was not registered");
 
-    const result = await tool.execute("call-1", { namespace: name }, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute(
+      "call-1",
+      { namespace: name },
+      undefined,
+      undefined,
+      toolContext(),
+    );
     const details = result.details as {
       layers: Array<{ namespace: string }>;
       total: number;
@@ -845,9 +852,7 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_layer_inspect");
     if (tool === undefined) throw new Error("Layer inspector was not registered");
 
-    const result = await tool.execute("call-1", {}, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute("call-1", {}, undefined, undefined, toolContext());
     const details = result.details as {
       schemaVersion: number;
       query: {
@@ -922,9 +927,7 @@ describe("Hyprland extension", () => {
     const tool = getTool("hypr_desktop_diagnose");
     if (tool === undefined) throw new Error("Hyprland diagnostic tool was not registered");
 
-    const result = await tool.execute("call-1", {}, undefined, undefined, {
-      cwd: "/tmp",
-    } as ExtensionContext);
+    const result = await tool.execute("call-1", {}, undefined, undefined, toolContext());
     const diagnosticDetails = result.details as {
       unavailable: Array<{ source: string; error: string }>;
     };
@@ -968,7 +971,7 @@ describe("Hyprland extension", () => {
         { region: { x: 1, y: 2, width: 3, height: 4 } },
         undefined,
         undefined,
-        { cwd: "/tmp" } as ExtensionContext,
+        toolContext(),
       );
     } catch (caught) {
       error = caught;

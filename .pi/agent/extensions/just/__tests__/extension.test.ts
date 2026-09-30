@@ -9,6 +9,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
 import { parseJustCatalog } from "../catalog";
 import {
@@ -138,8 +139,8 @@ function context(
   confirmed = true,
   onConfirm?: () => void,
   cancelled = false,
-): ExtensionContext {
-  return {
+): ReturnType<typeof withToolExecution> {
+  return withToolExecution({
     cwd: "/repo",
     hasUI: true,
     mode: "rpc",
@@ -154,10 +155,13 @@ function context(
       },
       notify() {},
     },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 }
 
-async function loadShellcheck(harness: Harness, ctx: ExtensionContext): Promise<ToolDefinition> {
+async function loadShellcheck(
+  harness: Harness,
+  ctx: ReturnType<typeof withToolExecution>,
+): Promise<ToolDefinition> {
   const loader = harness.tools.get("just_tools");
   if (loader === undefined) throw new Error("loader tool missing");
   await loader.execute("loader", { query: "shell checks" }, undefined, undefined, ctx);
@@ -475,7 +479,7 @@ describe("Just tools extension", () => {
     const harness = createHarness(dump());
     registerJustTools(harness.pi, harness.recipeExecutor);
     const recipeTool = await loadShellcheck(harness, context([]));
-    const noUi = { ...context([]), hasUI: false } as ExtensionContext;
+    const noUi = withToolExecution({ ...context([]), hasUI: false });
 
     await expect(recipeTool.execute("recipe", {}, undefined, undefined, noUi)).rejects.toThrow(
       "requires interactive confirmation",

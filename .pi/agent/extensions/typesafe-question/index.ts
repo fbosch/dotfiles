@@ -1,29 +1,33 @@
-import { isDeepStrictEqual } from "node:util";
-import { StringEnum } from "@earendil-works/pi-ai";
+import {
+  type ClassifierAnswer,
+  type ClassifierContext,
+  type ClassifierResult,
+  type JsonObject,
+  type JsonValue,
+  StringEnum,
+  type Usage,
+} from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
-import { type JevGatewayFetch, requestJevGateway } from "../../lib/jev-gateway";
+import { isMatching, match, P } from "ts-pattern";
+import { Type } from "typebox";
+import { Value } from "typebox/value";
+import { type JevGatewayFetch, loadJevClassifierPreferences } from "../../lib/jev-gateway";
 import { isRecord } from "../shared/is-record";
 
 const MAX_REQUEST_BYTES = 64_000;
 const MAX_RESULT_BYTES = 50_000;
-const MAX_QUESTIONS = 16;
 const QUESTION_TIMEOUT_MS = 10_000;
-const ID = /^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/u;
+const ID = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$";
 const PROBABILITY_TOLERANCE = 0.02;
 
-const Structured = Type.Union([
-  Type.String(),
-  Type.Record(Type.String(), Type.Any()),
-  Type.Array(Type.Any()),
-]);
 const Question = Type.Union([
   Type.Object(
     {
-      type: StringEnum(["noul"] as const),
-      instructions: Structured,
-      criteria: Type.Optional(
-        Type.Object({ true: Structured, false: Structured }, { additionalProperties: false }),
+      type: StringEnum(["bool"] as const),
+      instructions: Type.String(),
+      criteria: Type.Object(
+        { true: Type.String(), false: Type.String() },
+        { additionalProperties: false },
       ),
     },
     { additionalProperties: false },
@@ -31,10 +35,11 @@ const Question = Type.Union([
   Type.Object(
     {
       type: StringEnum(["choice"] as const),
-      instructions: Structured,
-      criteria: Type.Record(Type.String(), Type.Union([Structured, Type.Null()]), {
+      instructions: Type.String(),
+      criteria: Type.Record(Type.String({ pattern: ID }), Type.String(), {
         minProperties: 2,
         maxProperties: 32,
+        additionalProperties: false,
       }),
     },
     { additionalProperties: false },
@@ -42,8 +47,8 @@ const Question = Type.Union([
   Type.Object(
     {
       type: StringEnum(["score"] as const),
-      instructions: Structured,
-      criteria: Type.Array(Structured, { minItems: 2, maxItems: 10 }),
+      instructions: Type.String(),
+      criteria: Type.Array(Type.String(), { minItems: 2, maxItems: 10 }),
     },
     { additionalProperties: false },
   ),
@@ -51,24 +56,25 @@ const Question = Type.Union([
 
 export const QuestionParameters = Type.Object(
   {
-    state: Structured,
-    questions: Type.Record(Type.String(), Question, {
+    state: Type.Record(Type.String(), Type.Unknown()),
+    questions: Type.Record(Type.String({ pattern: ID }), Question, {
       minProperties: 1,
-      maxProperties: MAX_QUESTIONS,
+      maxProperties: 16,
+      additionalProperties: false,
     }),
   },
   { additionalProperties: false },
 );
 
-type QuestionInput = Static<typeof QuestionParameters>;
-type NormalizedQuestion = {
-  type: "noul" | "choice" | "score";
-  instructions: unknown;
-  criteria?: unknown;
-};
-type NormalizedInput = { state: unknown; questions: Record<string, NormalizedQuestion> };
+export type JevClassifierRegistry = Pick<ModelRegistry, "findOfType" | "classify">;
+interface ClassifyOptions {
+  signal?: AbortSignal;
+  fetch?: JevGatewayFetch;
+  timeoutMs?: number;
+  agentDirectory?: string;
+}
 
-function assertJson(value: unknown, ancestors = new Set<object>()): void {
+function assertJson(value: unknown, ancestors = new Set<object>()): asserts value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return;
   if (typeof value === "number" && Number.isFinite(value)) return;
   if (typeof value !== "object" || value === null || ancestors.has(value))
@@ -87,191 +93,187 @@ function assertJson(value: unknown, ancestors = new Set<object>()): void {
   }
 }
 
-function assertStructured(value: unknown): void {
-  if (typeof value !== "string" && !Array.isArray(value) && !isRecord(value)) {
-    throw new Error("Jev state, instructions and criteria must be strings, objects or arrays");
-  }
+export function normalizeQuestionInput(value: unknown): ClassifierContext {
   assertJson(value);
-}
-
-function assertId(id: string): void {
-  if (!ID.test(id))
-    throw new Error(
-      "Jev question and option names must be 1–64 ASCII letters, digits, underscores or hyphens, starting with a letter",
-    );
-}
-
-export function normalizeQuestionInput(value: unknown): NormalizedInput {
-  if (
-    !isRecord(value) ||
-    !Object.hasOwn(value, "state") ||
-    !isRecord(value.questions) ||
-    Object.keys(value).length !== 2
-  ) {
-    throw new Error("Jev input requires only state and a questions object");
-  }
-  assertStructured(value.state);
-  const entries = Object.entries(value.questions);
-  if (entries.length < 1 || entries.length > MAX_QUESTIONS)
-    throw new Error("Jev requires 1–16 questions");
-  const questions: Record<string, NormalizedQuestion> = Object.create(null);
-  for (const [id, raw] of entries) {
-    assertId(id);
-    if (!isRecord(raw) || !["noul", "choice", "score"].includes(String(raw.type)))
-      throw new Error(`Invalid Jev question ${id}`);
-    if (Object.keys(raw).some((key) => !["type", "instructions", "criteria"].includes(key)))
-      throw new Error(`Unexpected Jev question field in ${id}`);
-    assertStructured(raw.instructions);
-    if (raw.type === "noul") {
-      if (raw.criteria !== undefined) {
-        if (!isRecord(raw.criteria) || Object.keys(raw.criteria).sort().join() !== "false,true")
-          throw new Error(`Invalid noul criteria for ${id}`);
-        assertStructured(raw.criteria.true);
-        assertStructured(raw.criteria.false);
-      }
-    } else if (raw.type === "choice") {
-      if (
-        !isRecord(raw.criteria) ||
-        Object.keys(raw.criteria).length < 2 ||
-        Object.keys(raw.criteria).length > 32
-      )
-        throw new Error(`Choice ${id} requires 2–32 options`);
-      for (const [option, description] of Object.entries(raw.criteria)) {
-        assertId(option);
-        if (description !== null) assertStructured(description);
-      }
-    } else {
-      if (!Array.isArray(raw.criteria) || raw.criteria.length < 2 || raw.criteria.length > 10)
-        throw new Error(`Score ${id} requires 2–10 ordered levels`);
-      for (const level of raw.criteria) assertStructured(level);
-    }
-    questions[id] = {
-      type: raw.type as NormalizedQuestion["type"],
-      instructions: raw.instructions,
-      ...(raw.criteria === undefined ? {} : { criteria: raw.criteria }),
-    };
-  }
-  const input = { state: value.state, questions };
+  if (!Value.Check(QuestionParameters, value)) throw new Error("Invalid Jev classifier input");
+  const state: JsonObject = Object.fromEntries(
+    Object.entries(value.state).map(([key, child]) => {
+      assertJson(child);
+      return [key, child];
+    }),
+  );
+  const input = { state, questions: value.questions };
   if (Buffer.byteLength(JSON.stringify(input), "utf8") > MAX_REQUEST_BYTES)
     throw new Error("Jev request exceeds 64 KB");
   return input;
 }
 
-function probability(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1;
-}
-
-function distribution(value: unknown, keys: string[]): value is Record<string, number> {
-  if (!isRecord(value) || Object.keys(value).length !== keys.length) return false;
-  let total = 0;
-  for (const key of keys) {
-    if (!Object.hasOwn(value, key) || !probability(value[key])) return false;
-    total += value[key];
-  }
-  return Math.abs(total - 1) <= PROBABILITY_TOLERANCE;
-}
+const UnitProbability = P.number.finite().between(0, 1);
+const Answer = P.union(
+  { type: "bool", probability: UnitProbability },
+  {
+    type: "choice",
+    choice: P.string,
+    probabilities: P.record(P.string, UnitProbability),
+    confidence: UnitProbability,
+  },
+  { type: "score", score: P.number.finite(), confidence: UnitProbability },
+);
 
 export function normalizeQuestionResponse(
   value: unknown,
-  input: NormalizedInput,
-): Record<string, unknown> {
+  input: ClassifierContext,
+): Record<string, ClassifierAnswer> {
   if (
     !isRecord(value) ||
     !isRecord(value.answers) ||
     Object.keys(value.answers).length !== Object.keys(input.questions).length
   )
     throw new Error("Invalid Jev answer set");
-  const answers: Record<string, unknown> = Object.create(null);
+  const answers: Record<string, ClassifierAnswer> = Object.create(null);
   for (const [id, question] of Object.entries(input.questions)) {
     const answer = value.answers[id];
-    if (!isRecord(answer) || answer.type !== question.type)
+    if (!isMatching(Answer, answer) || answer.type !== question.type)
       throw new Error(`Invalid Jev answer for ${id}`);
-    if (question.type === "noul") {
-      if (!probability(answer.noul)) throw new Error(`Invalid Jev noul for ${id}`);
-      answers[id] = { type: "noul", noul: answer.noul };
-    } else if (question.type === "choice") {
-      const options = Object.keys(question.criteria as Record<string, unknown>);
-      if (
-        typeof answer.choice !== "string" ||
-        !options.includes(answer.choice) ||
-        !distribution(answer.probabilities, options) ||
-        !probability(answer.confidence)
-      )
-        throw new Error(`Invalid Jev choice for ${id}`);
-      if (
-        options.some(
-          (option) =>
-            ((answer.probabilities as Record<string, number>)[option] ?? 0) >
-            ((answer.probabilities as Record<string, number>)[answer.choice as string] ?? 0),
+    answers[id] = match(answer)
+      .returnType<ClassifierAnswer>()
+      .with({ type: "bool" }, ({ probability }) => ({ type: "bool", probability }))
+      .with({ type: "choice" }, ({ choice, probabilities, confidence }) => {
+        const options = Object.keys(question.criteria);
+        const total = Object.values(probabilities).reduce(
+          (sum, probability) => sum + probability,
+          0,
+        );
+        if (
+          !options.includes(choice) ||
+          Object.keys(probabilities).length !== options.length ||
+          options.some((option) => !Object.hasOwn(probabilities, option)) ||
+          Math.abs(total - 1) > PROBABILITY_TOLERANCE ||
+          options.some((option) => (probabilities[option] ?? 0) > (probabilities[choice] ?? 0))
         )
-      )
-        throw new Error(`Inconsistent Jev choice for ${id}`);
-      answers[id] = {
-        type: "choice",
-        choice: answer.choice,
-        probabilities: answer.probabilities,
-        confidence: answer.confidence,
-      };
-    } else {
-      const levels = question.criteria as unknown[];
-      const keys = levels.map((_, index) => String(index));
-      if (
-        !distribution(answer.probabilities, keys) ||
-        !probability(answer.confidence) ||
-        typeof answer.score !== "number" ||
-        !Number.isFinite(answer.score) ||
-        answer.score < 0 ||
-        answer.score > levels.length - 1 ||
-        !isRecord(answer.legend) ||
-        Object.keys(answer.legend).length !== keys.length
-      )
-        throw new Error(`Invalid Jev score for ${id}`);
-      const expected = keys.reduce(
-        (sum, key) =>
-          sum + Number(key) * ((answer.probabilities as Record<string, number>)[key] ?? 0),
-        0,
-      );
-      const legend = answer.legend as Record<string, unknown>;
-      if (
-        Math.abs(answer.score - expected) > PROBABILITY_TOLERANCE * (levels.length - 1) ||
-        keys.some(
-          (key, index) =>
-            !Object.hasOwn(legend, key) || !isDeepStrictEqual(legend[key], levels[index]),
-        )
-      )
-        throw new Error(`Inconsistent Jev score for ${id}`);
-      answers[id] = {
-        type: "score",
-        score: answer.score,
-        probabilities: answer.probabilities,
-        legend: answer.legend,
-        confidence: answer.confidence,
-      };
-    }
+          throw new Error(`Invalid Jev choice for ${id}`);
+        return { type: "choice", choice, probabilities, confidence };
+      })
+      .with({ type: "score" }, ({ score, confidence }) => {
+        if (question.type !== "score" || score < 0 || score > question.criteria.length - 1)
+          throw new Error(`Invalid Jev score for ${id}`);
+        return { type: "score", score, confidence };
+      })
+      .exhaustive();
   }
+  if (Buffer.byteLength(JSON.stringify(answers), "utf8") > MAX_RESULT_BYTES)
+    throw new Error("Jev answer exceeds 50 KB");
   return answers;
+}
+
+async function withinDeadline<T>(run: () => Promise<T>, signal: AbortSignal): Promise<T> {
+  signal.throwIfAborted();
+  // Bound auth resolution too, including providers that do not honor the request signal.
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("Jev deadline exceeded"));
+    const cleanup = () => signal.removeEventListener("abort", onAbort);
+    signal.addEventListener("abort", onAbort, { once: true });
+    Promise.resolve()
+      .then(() => {
+        signal.throwIfAborted();
+        return run();
+      })
+      .then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error: unknown) => {
+          cleanup();
+          reject(error);
+        },
+      );
+  });
+}
+
+function addUsage(total: Usage | undefined, next: Usage | undefined): Usage | undefined {
+  if (!total) return next;
+  if (!next) return total;
+  return {
+    input: total.input + next.input,
+    output: total.output + next.output,
+    cacheRead: total.cacheRead + next.cacheRead,
+    cacheWrite: total.cacheWrite + next.cacheWrite,
+    totalTokens: total.totalTokens + next.totalTokens,
+    cost: {
+      input: total.cost.input + next.cost.input,
+      output: total.cost.output + next.cost.output,
+      cacheRead: total.cost.cacheRead + next.cost.cacheRead,
+      cacheWrite: total.cost.cacheWrite + next.cost.cacheWrite,
+      total: total.cost.total + next.cost.total,
+    },
+  };
+}
+
+export async function classifyJevQuestion(
+  input: unknown,
+  registry: JevClassifierRegistry,
+  options: ClassifyOptions = {},
+): Promise<{ answers: Record<string, ClassifierAnswer>; usage?: Usage }> {
+  const normalized = normalizeQuestionInput(input);
+  const preferences = loadJevClassifierPreferences(options.agentDirectory);
+  if (!preferences) throw new Error("Jev request failed (configuration: invalid-config)");
+  const timeoutMs = options.timeoutMs ?? QUESTION_TIMEOUT_MS;
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid Jev timeout");
+  const deadline = AbortSignal.timeout(timeoutMs);
+  const signal = options.signal ? AbortSignal.any([options.signal, deadline]) : deadline;
+  const started = Date.now();
+  const requestFetch = options.fetch;
+  const fetch = requestFetch
+    ? Object.assign((input: RequestInfo | URL, init?: RequestInit) => requestFetch(input, init), {
+        preconnect: globalThis.fetch.preconnect,
+      })
+    : undefined;
+  let usage: Usage | undefined;
+  for (const [index, preference] of preferences.entries()) {
+    if (options.signal?.aborted) throw new Error("Jev request failed (caller-cancellation)");
+    if (deadline.aborted) throw new Error("Jev request failed (timeout)");
+    const model = registry.findOfType("classifier", preference.provider, preference.model);
+    if (!model) continue;
+    const remaining = Math.max(1, timeoutMs - (Date.now() - started));
+    const budget =
+      index === 0 && preferences.length > 1 ? Math.max(1, Math.floor(remaining / 2)) : remaining;
+    const attemptSignal = AbortSignal.any([signal, AbortSignal.timeout(budget)]);
+    let result: ClassifierResult;
+    try {
+      result = await withinDeadline(
+        () =>
+          registry.classify(model, normalized, {
+            signal: attemptSignal,
+            timeoutMs: budget,
+            ...(fetch ? { fetch } : {}),
+          }),
+        attemptSignal,
+      );
+    } catch {
+      continue;
+    }
+    usage = addUsage(usage, result.usage);
+    if (attemptSignal.aborted || result.stopReason !== "stop") continue;
+    const answers = normalizeQuestionResponse(result, normalized);
+    return { answers, ...(usage ? { usage } : {}) };
+  }
+  if (options.signal?.aborted) throw new Error("Jev request failed (caller-cancellation)");
+  throw new Error(
+    `Jev request failed (${deadline.aborted ? "timeout" : "classifier-unavailable"})`,
+  );
 }
 
 export async function askJevQuestion(
   input: unknown,
-  registry: Pick<ModelRegistry, "getProviderAuth">,
+  registry: JevClassifierRegistry,
   signal?: AbortSignal,
   fetch?: JevGatewayFetch,
-): Promise<Record<string, unknown>> {
-  const normalized = normalizeQuestionInput(input);
-  const result = await requestJevGateway(registry, normalized, {
-    timeoutMs: QUESTION_TIMEOUT_MS,
-    ...(signal === undefined ? {} : { signal }),
-    ...(fetch === undefined ? {} : { fetch }),
+): Promise<Record<string, ClassifierAnswer>> {
+  const { answers } = await classifyJevQuestion(input, registry, {
+    ...(signal ? { signal } : {}),
+    ...(fetch ? { fetch } : {}),
   });
-  if (!result.ok) {
-    const provider = result.provider ?? "configuration";
-    throw new Error(`Jev request failed (${provider}: ${result.reason})`);
-  }
-  signal?.throwIfAborted();
-  const answers = normalizeQuestionResponse(result.value, normalized);
-  if (Buffer.byteLength(JSON.stringify(answers), "utf8") > MAX_RESULT_BYTES)
-    throw new Error("Jev answer exceeds 50 KB");
   return answers;
 }
 
@@ -281,19 +283,22 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
       name: "typesafe_question",
       label: "TypeSafe question",
       description:
-        "Ask Jev up to 16 narrow noul, choice, or score questions about shared state. Sends the complete supplied state, instructions and criteria to the configured Vercel AI Gateway or OpenRouter; do not send secrets or sensitive data. Returns validated typed answers, not actions.",
+        "Ask Jev up to 16 narrow bool, choice, or score questions about shared JSON object state through Pi's native classifier API. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the configured Vercel AI Gateway or OpenRouter; do not send secrets or sensitive data. Returns validated judgments, not actions.",
       promptSnippet: "Get typed Jev judgments for narrow semantic decisions",
       promptGuidelines: [
         "Use typesafe_question for routing, classification, scoring, or checking a claim against supplied state when probabilities help; keep exact lookups and calculations in code.",
-        "Batch independent questions over the same state. Do not use Jev for prose generation or workflow actions, and do not send secrets or sensitive data.",
+        "Batch independent questions over the same object state. Use string instructions and criteria; bool is a yes/no probability, while score measures an ordered level. Do not use Jev for prose generation or workflow actions, and do not send secrets or sensitive data.",
         "Treat Jev answers as uncertain judgments, not permission to act; verify consequential decisions against evidence and policy.",
       ],
       parameters: QuestionParameters,
-      async execute(_id, params: QuestionInput, signal, _update, ctx) {
-        const answers = await askJevQuestion(params, ctx.modelRegistry, signal);
+      async execute(_id, params, signal, _update, ctx) {
+        const result = await classifyJevQuestion(params, ctx.modelRegistry, {
+          ...(signal ? { signal } : {}),
+        });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ answers }) }],
-          details: { answers },
+          content: [{ type: "text" as const, text: JSON.stringify({ answers: result.answers }) }],
+          details: { answers: result.answers },
+          ...(result.usage ? { usage: result.usage } : {}),
         };
       },
     }),

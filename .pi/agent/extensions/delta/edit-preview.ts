@@ -1,10 +1,10 @@
 import { constants } from "node:fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile } from "node:fs/promises";
 import {
+  createEditTool,
   createEditToolDefinition,
   type EditOperations,
   type EditToolDetails,
-  type ExtensionContext,
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Container } from "@earendil-works/pi-tui";
@@ -88,13 +88,10 @@ async function simulateEdit(
       newContent = content;
     },
   };
-  const previewTool = createEditToolDefinition(cwd, { operations });
+  const previewTool = createEditTool(cwd, { operations });
 
-  // The built-in edit executor currently ignores its context; renderCall has no ExtensionContext.
   // Keep this simulation delegated to Pi so matching and line-ending behavior stay identical.
-  await previewTool.execute("delta-preview", input, signal, undefined, {
-    cwd,
-  } as ExtensionContext);
+  await previewTool.execute("delta-preview", input, signal, undefined);
   if (oldContent === undefined || newContent === undefined) {
     throw new Error("Pi did not return enough data to render the edit preview");
   }

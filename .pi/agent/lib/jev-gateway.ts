@@ -142,6 +142,14 @@ function loadProviderPreferences(agentDirectory = getAgentDir()): ProviderConfig
   }
 }
 
+/** Reuse the routing policy while native classifiers own transport and authentication. */
+export function loadJevClassifierPreferences(agentDirectory?: string) {
+  return loadProviderPreferences(agentDirectory)?.map(({ id, model }) => ({
+    provider: id,
+    model: id === OPENROUTER_PROVIDER_ID ? `typesafe/${model}` : model,
+  }));
+}
+
 interface DeadlineState {
   readonly signal: AbortSignal;
   readonly callerCancelled: () => boolean;

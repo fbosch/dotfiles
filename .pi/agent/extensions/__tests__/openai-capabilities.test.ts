@@ -13,6 +13,9 @@ function createCapabilitiesHarness(nativeRegistration = true) {
     on(event: string, handler: unknown) {
       if (typeof handler !== "function") throw new Error("Expected an event handler");
       handlers.set(event, (...args) => handler(...args));
+      return () => {
+        handlers.delete(event);
+      };
     },
     ...(nativeRegistration
       ? {

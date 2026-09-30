@@ -4,6 +4,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Type } from "typebox";
 import toolDiscoveryExtension, {
   isDeferredToolName,
@@ -60,6 +61,7 @@ function createHarness(options?: {
         description: tool.description,
         parameters: tool.parameters,
         promptGuidelines: tool.promptGuidelines,
+        exposure: "direct",
         sourceInfo: {
           path: `/extensions/${tool.name}.ts`,
           source: "local",
@@ -86,7 +88,7 @@ function createHarness(options?: {
     },
   } as unknown as ExtensionAPI;
 
-  const ctx = {
+  const ctx = withToolExecution({
     cwd: process.cwd(),
     isProjectTrusted: () => false,
     getSystemPrompt: () => options?.systemPrompt ?? "base system prompt",
@@ -96,7 +98,7 @@ function createHarness(options?: {
         parentSession: options?.parentSession,
       }),
     },
-  } as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 
   toolDiscoveryExtension(pi);
 
@@ -416,6 +418,7 @@ describe("tool discovery", () => {
       description: tool.description,
       parameters: tool.parameters,
       ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
+      exposure: "direct" as const,
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,
@@ -439,6 +442,7 @@ describe("tool discovery", () => {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
+      exposure: "direct" as const,
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,
@@ -499,6 +503,7 @@ describe("tool discovery", () => {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
+      exposure: "direct" as const,
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,
@@ -544,6 +549,7 @@ describe("tool discovery", () => {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
+      exposure: "direct" as const,
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,
@@ -621,6 +627,7 @@ describe("tool discovery", () => {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
+      exposure: "direct" as const,
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,

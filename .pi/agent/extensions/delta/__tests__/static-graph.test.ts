@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,7 +197,13 @@ describe("first-use module loaders", () => {
     expect(loads).toBe(0);
     const tool = registeredTools.find(({ name }) => name === "git_diff");
     if (tool?.execute === undefined) throw new Error("git_diff tool was not registered");
-    await tool.execute("diff-1", {}, undefined, undefined, { cwd: "/repo" } as ExtensionContext);
+    await tool.execute(
+      "diff-1",
+      {},
+      undefined,
+      undefined,
+      withToolExecution({ cwd: "/repo" } as ExtensionContext),
+    );
     expect(loads).toBe(1);
   });
 });

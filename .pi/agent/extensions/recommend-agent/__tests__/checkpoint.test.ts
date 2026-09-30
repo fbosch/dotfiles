@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { ExtensionAPI, ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { isRecord } from "../../shared/is-record";
 import {
   createSubagentCheckpointAssessor,
@@ -18,9 +19,7 @@ const input: SubagentCheckpointInput = {
   checkpointKind: "material-finding",
 };
 
-const registry: Pick<ModelRegistry, "getProviderAuth"> = {
-  getProviderAuth: async () => ({ auth: { apiKey: "test-key" } }),
-};
+const registry = await createNativeClassifierRegistry();
 
 function responseFor(choice: (typeof choices)[number], probability = 0.8): Response {
   const probabilities = Object.fromEntries(
@@ -120,10 +119,11 @@ describe("assess_subagent_checkpoint", () => {
   test("rejects over-bound or malformed inputs before provider auth or fetch", async () => {
     let authCalls = 0;
     let fetchCalls = 0;
-    const noAuthRegistry: Pick<ModelRegistry, "getProviderAuth"> = {
-      getProviderAuth: async () => {
+    const noAuthRegistry = {
+      findOfType: registry.findOfType.bind(registry),
+      classify: async (...args: Parameters<typeof registry.classify>) => {
         authCalls += 1;
-        return { auth: { apiKey: "test-key" } };
+        return registry.classify(...args);
       },
     };
     const assess = createSubagentCheckpointAssessor({

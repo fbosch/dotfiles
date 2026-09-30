@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { LazyChartComponent } from "../lazy";
@@ -25,12 +26,12 @@ const parse = (data: number[], bins?: number) =>
   validateHistogramChartInput({ type: "histogram", data, ...(bins === undefined ? {} : { bins }) });
 const details = histogramChartRenderer.createDetails(parse([-2, -1, 0, 0, 2], 4), settings);
 const context = (mode: "tui" | "print") =>
-  ({
+  withToolExecution({
     mode,
     cwd: process.cwd(),
     isProjectTrusted: () => false,
     ui: { theme },
-  }) as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 
 function binRectangles(svg: string) {
   return [...svg.matchAll(/<rect\b([^>]*)>/g)]

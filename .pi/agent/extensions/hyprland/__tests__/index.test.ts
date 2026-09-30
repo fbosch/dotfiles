@@ -16,7 +16,10 @@ describe("Hyprland extension entrypoint", () => {
 
     const loaded = await loadHyprlandExtension(pi, {}, async () => {
       imports += 1;
-      return { default: () => {} };
+      return {
+        default: () => {},
+        createHyprPropCommand: () => ({ description: "", handler: async () => {} }),
+      };
     });
 
     expect(loaded).toBeFalse();
@@ -34,6 +37,7 @@ describe("Hyprland extension entrypoint", () => {
           expect(receivedPi).toBe(pi);
           registrations += 1;
         },
+        createHyprPropCommand: () => ({ description: "", handler: async () => {} }),
       };
     });
 

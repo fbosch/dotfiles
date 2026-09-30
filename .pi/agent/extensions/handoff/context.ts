@@ -203,7 +203,9 @@ async function readUtf8Prefix(
         content.subarray(0, prefixLength - trim),
       );
       return { text, truncated: size > prefixLength - trim };
-    } catch {}
+    } catch {
+      // Shorten the prefix until it ends on a valid UTF-8 boundary.
+    }
   }
   return undefined;
 }
@@ -251,7 +253,9 @@ export async function buildSelectedFileContext(
       if (totalBytes + sectionBytes > MAX_FILE_CONTEXT_BYTES) continue;
       sections.push(section);
       totalBytes += sectionBytes;
-    } catch {}
+    } catch {
+      // Omit files that cannot be safely read as selected project context.
+    }
   }
 
   if (sections.length === 0) return undefined;
@@ -261,14 +265,20 @@ export async function buildSelectedFileContext(
   ].join("\n\n");
 }
 
-function messageText(entry: SessionEntry): string | undefined {
-  if (entry.type !== "message" || isRecord(entry.message) === false) return undefined;
-  const message = entry.message;
-  if (message.role !== "user" && message.role !== "assistant") return undefined;
+type SessionMessage = Extract<SessionEntry, { type: "message" }>["message"];
+type VisibleMessage = Extract<SessionMessage, { role: "user" | "assistant" }>;
 
+function isVisibleMessage(value: unknown): value is VisibleMessage {
+  return (
+    isRecord(value) &&
+    (value.role === "user" || value.role === "assistant") &&
+    (typeof value.content === "string" || Array.isArray(value.content))
+  );
+}
+
+function messageText(message: VisibleMessage): string | undefined {
   const content = message.content;
   if (typeof content === "string") return content.trim();
-  if (Array.isArray(content) === false) return undefined;
   const parts: string[] = [];
   for (const block of content) {
     if (isRecord(block) === false) continue;
@@ -287,9 +297,8 @@ function messageText(entry: SessionEntry): string | undefined {
 
 function handoffHistorySection(entry: SessionEntry): string | undefined {
   if (entry.type === "compaction") return `## Compaction summary\n${entry.summary}`;
-  if (entry.type !== "message" || isRecord(entry.message) === false) return undefined;
-  if (entry.message.role !== "user" && entry.message.role !== "assistant") return undefined;
-  const text = messageText(entry);
+  if (entry.type !== "message" || !isVisibleMessage(entry.message)) return undefined;
+  const text = messageText(entry.message);
   if (text === undefined || text.length === 0) return undefined;
   return `${entry.message.role === "user" ? "## User" : "## Assistant"}\n${text}`;
 }
@@ -325,16 +334,16 @@ export function formatTranscript(entries: readonly SessionEntry[], limit: number
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
-    if (entry === undefined || entry.type !== "message" || isRecord(entry.message) === false)
+    if (entry === undefined || entry.type !== "message" || !isVisibleMessage(entry.message))
       continue;
-    if (entry.message.role !== "user" && entry.message.role !== "assistant") continue;
-    const text = messageText(entry);
+    const message = entry.message;
+    const text = messageText(message);
     if (text === undefined || text.length === 0) continue;
     if (sections.length === limit) {
       truncated = true;
       break;
     }
-    const heading = entry.message.role === "user" ? "## User" : "## Assistant";
+    const heading = message.role === "user" ? "## User" : "## Assistant";
     const section = `${heading}\n${text}`;
     const separatorBytes = sections.length === 0 ? 0 : 2;
     const sectionBytes = byteLength(section);

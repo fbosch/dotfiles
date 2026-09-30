@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
 import { createTreeChartTool } from "../metadata";
@@ -19,12 +20,12 @@ const theme = {
 };
 
 const context = (mode: "tui" | "print") =>
-  ({
+  withToolExecution({
     mode,
     cwd: process.cwd(),
     isProjectTrusted: () => false,
     ui: { theme },
-  }) as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 
 const rows = [
   { id: "repo", label: "Repository" },

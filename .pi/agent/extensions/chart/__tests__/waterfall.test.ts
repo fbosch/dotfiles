@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { createPieChartTool, createWaterfallChartTool } from "../metadata";
@@ -38,12 +39,12 @@ const details = (options: Partial<WaterfallChartInput> = {}) =>
     settings,
   );
 const context = (mode: "tui" | "print") =>
-  ({
+  withToolExecution({
     mode,
     cwd: process.cwd(),
     isProjectTrusted: () => false,
     ui: { theme },
-  }) as unknown as ExtensionContext;
+  } as unknown as ExtensionContext);
 function marks(svg: string, tag: string) {
   return [...svg.matchAll(new RegExp(`<${tag}\\b[^>]*\\/>`, "g"))].map((match) =>
     Object.fromEntries([...match[0].matchAll(/([\w-]+)="([^"]*)"/g)].map((a) => [a[1], a[2]])),

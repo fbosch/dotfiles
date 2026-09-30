@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -525,9 +526,13 @@ describe("Delta extension", () => {
     registerDeltaExtension(pi, { run: async () => diffResult });
 
     if (tool === undefined) throw new Error("git_diff tool was not registered");
-    const toolResult = await tool.execute("diff-1", {}, undefined, undefined, {
-      cwd: "/repo",
-    } as ExtensionContext);
+    const toolResult = await tool.execute(
+      "diff-1",
+      {},
+      undefined,
+      undefined,
+      withToolExecution({ cwd: "/repo" } as ExtensionContext),
+    );
     expect(commandHandler).toBeDefined();
     expect(tool.name).toBe("git_diff");
     expect(toolResult.content[0]).toEqual({ type: "text", text: diffResult.content });
@@ -726,7 +731,7 @@ describe("Delta extension", () => {
         { path: "sample.ts", edits: [{ oldText: "1", newText: "2" }] },
         undefined,
         undefined,
-        { cwd: root } as ExtensionContext,
+        withToolExecution({ cwd: root } as ExtensionContext),
       );
 
       expect(editRun).toEqual({
@@ -797,7 +802,7 @@ describe("Delta extension", () => {
         { path: "sample.ts", edits: [{ oldText: "2", newText: "3" }] },
         undefined,
         undefined,
-        { cwd: root } as ExtensionContext,
+        withToolExecution({ cwd: root } as ExtensionContext),
       );
       expect(await readFile(filePath, "utf8")).toBe("const value = 3;\n");
       expect(fallbackResult.details).not.toHaveProperty("delta");

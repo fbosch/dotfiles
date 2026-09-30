@@ -214,7 +214,9 @@ describe("auto-session-title lifecycle", () => {
         async (input) => {
           jevRequests.push(input);
           if (jevRequests.length === 3) throw new Error("Jev unavailable");
-          return { title_stale: { type: "noul", noul: judgments[jevRequests.length - 1] ?? 0 } };
+          return {
+            title_stale: { type: "bool", probability: judgments[jevRequests.length - 1] ?? 0 },
+          };
         },
       );
       sessionStart?.({}, ctx);
@@ -242,14 +244,14 @@ describe("auto-session-title lifecycle", () => {
       expect(jevRequests).toHaveLength(2);
       expect(jevRequests[0]).toMatchObject({
         state: { currentTitle: "Generated title 1", latestUserPrompt: "Add a regression test" },
-        questions: { title_stale: { type: "noul" } },
+        questions: { title_stale: { type: "bool" } },
       });
       expect(jevRequests[1]).toMatchObject({
         state: {
           currentTitle: "Generated title 1",
           latestUserPrompt: "Actually, replace the feature with a CLI command",
         },
-        questions: { title_stale: { type: "noul" } },
+        questions: { title_stale: { type: "bool" } },
       });
       expect(titleRequests.map((request) => JSON.parse(request).conversation)).toEqual([
         "Build the feature",
