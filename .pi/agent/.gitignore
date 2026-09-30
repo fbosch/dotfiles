@@ -1,5 +1,6 @@
 # Pi credentials and machine-local runtime state.
 /auth.json
+/mcp-auth.json
 /auth-profiles/
 /trust.json
 /models-store.json
