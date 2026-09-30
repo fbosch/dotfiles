@@ -82,14 +82,14 @@ beforeEach(() => {
     join(agent, "node_modules/patch-package"),
   );
   writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), patch);
-  writeFileSync(join(agent, "patches/@ff-labs+pi-fff+0.10.6.patch"), fffPatch);
-  writeFileSync(join(agent, "patches/pi-lens+4.1.6.patch"), lensPatch);
+  writeFileSync(join(agent, "patches/@ff-labs+pi-fff+0.11.0.patch"), fffPatch);
+  writeFileSync(join(agent, "patches/pi-lens+4.3.0.patch"), lensPatch);
   writeFileSync(join(install, "package.json"), JSON.stringify({ name: "fixture", private: true }));
   writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.8.0" }));
   writeFileSync(example, "original\n");
-  writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.10.6" }));
+  writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.11.0" }));
   writeFileSync(fffExample, "original\n");
-  writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.1.6" }));
+  writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.3.0" }));
   writeFileSync(lensExample, "original\n");
   writeFileSync(
     join(directory, "bin/npm"),
@@ -139,25 +139,25 @@ describe("tracked Pi package patches", () => {
     },
   );
 
-  test.each(["0.10.5", "0.10.7", "0.10.6-beta", "^0.10.6"])(
+  test.each(["0.10.9", "0.11.1", "0.11.0-beta", "^0.11.0"])(
     "rejects pi-fff %s before writing any package",
     (version) => {
       writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version }));
       const result = run(["--apply-patches", install]);
       expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 0.10.6");
+      expect(result.stderr.toString()).toContain("requires exactly 0.11.0");
       expect(readFileSync(fffExample, "utf8")).toBe("original\n");
       expect(readFileSync(example, "utf8")).toBe("original\n");
     },
   );
 
-  test.each(["4.1.5", "4.1.7", "4.1.6-beta", "^4.1.6"])(
+  test.each(["4.2.9", "4.3.1", "4.3.0-beta", "^4.3.0"])(
     "rejects pi-lens %s before writing every package",
     (version) => {
       writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version }));
       const result = run(["--apply-patches", install]);
       expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 4.1.6");
+      expect(result.stderr.toString()).toContain("requires exactly 4.3.0");
       expect(readFileSync(lensExample, "utf8")).toBe("original\n");
       expect(readFileSync(example, "utf8")).toBe("original\n");
     },

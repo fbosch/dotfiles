@@ -1,17 +1,25 @@
 diff --git a/node_modules/@ff-labs/pi-fff/src/file-picker.ts b/node_modules/@ff-labs/pi-fff/src/file-picker.ts
+index d77ed02..2bd197c 100644
 --- a/node_modules/@ff-labs/pi-fff/src/file-picker.ts
 +++ b/node_modules/@ff-labs/pi-fff/src/file-picker.ts
-@@ -55 +55,5 @@
+@@ -52,7 +52,11 @@ export class FilePickerFactory {
+     FileFinder: FileFinderStatic,
+     options: PickerOptions,
+   ): Result<FileFinderApi> {
 -    const init: InitOptions = { ...options, aiMode: true };
 +    const init: InitOptions = {
 +      ...options,
 +      aiMode: true,
 +      disableWatch: process.platform === "darwin",
 +    };
+     if (this.dbDisabled) return FileFinder.create(init);
+ 
+     const result = FileFinder.create({
 diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/pi-fff/src/index.ts
+index 0d0d61b..07de417 100644
 --- a/node_modules/@ff-labs/pi-fff/src/index.ts
 +++ b/node_modules/@ff-labs/pi-fff/src/index.ts
-@@ -577,6 +577,7 @@
+@@ -598,6 +598,7 @@ export default function fffExtension(pi: ExtensionAPI) {
          value: buildAtCompletionValue(mixed.item.relativePath),
          label: mixed.item.fileName,
          description: mixed.item.relativePath,
@@ -19,7 +27,7 @@ diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/p
        };
      });
    }
-@@ -853,6 +854,7 @@
+@@ -992,6 +993,7 @@ export default function fffExtension(pi: ExtensionAPI) {
    });
  
    queueTool(() => toolNames.grep, {
@@ -27,7 +35,7 @@ diff --git a/node_modules/@ff-labs/pi-fff/src/index.ts b/node_modules/@ff-labs/p
      description: `Grep file contents. Smart-case, auto-detects regex vs literal, git-aware. Results are ranked by frecency (most-accessed files first); matches within a file stay in source order. Default limit ${DEFAULT_GREP_LIMIT}.`,
      promptSnippet: "Grep contents",
      promptGuidelines: (names) => [
-@@ -1043,6 +1045,7 @@
+@@ -1183,6 +1185,7 @@ export default function fffExtension(pi: ExtensionAPI) {
    });
  
    queueTool(() => toolNames.find, {

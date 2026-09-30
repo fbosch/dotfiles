@@ -50,7 +50,7 @@ describe("chart prompt guidance", () => {
     const result = createHandler(["read", "chart_gantt"])(event, tuiContext);
     expect(result?.systemPrompt).toContain(CHART_GUIDANCE_START);
     expect(result?.systemPrompt).toContain("timelines");
-    expect(result?.systemPrompt).toContain("search_tools");
+    expect(result?.systemPrompt).toContain("tool_load");
     expect(result?.systemPrompt).toContain("12 nodes");
     expect(result?.systemPrompt).toContain("32 nodes");
     expect(result?.systemPrompt).toContain("balanced values");

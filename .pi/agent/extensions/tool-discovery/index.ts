@@ -157,7 +157,7 @@ export function isDeferredToolName(
   name: string,
   prefixes: readonly string[] = DEFAULT_DEFERRED_TOOL_PREFIXES,
 ): boolean {
-  if (name === "search_tools") return false;
+  if (name === "tool_load") return false;
   return DEFERRED_TOOL_NAMES.has(name) || prefixes.some((prefix) => name.startsWith(prefix));
 }
 
@@ -386,12 +386,12 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
 
   pi.registerTool(
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
-      name: "search_tools",
-      label: "Search tools",
+      name: "tool_load",
+      label: "Load tools",
       description: "Find and enable inactive specialized tools.",
-      promptSnippet: "Find inactive specialized tools",
+      promptSnippet: "Find and activate specialized tools",
       promptGuidelines: [
-        "Use search_tools when the current tools cannot perform the task or a needed tool is not active.",
+        "Use tool_load when the current tools cannot perform the task or a needed tool is not active.",
       ],
       parameters: ToolSearchParameters,
       executionMode: "sequential",
@@ -468,7 +468,7 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   pi.on("resources_discover", (_event, ctx) => {
     if (isSubagentSession(ctx)) {
       // The subagent package has already reduced this set from its `tools:` frontmatter.
-      // Preserve that admission boundary when search_tools inspects the global registry.
+      // Preserve that admission boundary when tool_load inspects the global registry.
       subagentAdmittedTools = new Set(pi.getActiveTools());
       return;
     }

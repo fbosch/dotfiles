@@ -1,4 +1,5 @@
 diff --git a/node_modules/@juicesharp/rpiv-todo/package.json b/node_modules/@juicesharp/rpiv-todo/package.json
+index 8595a3d..0a91867 100644
 --- a/node_modules/@juicesharp/rpiv-todo/package.json
 +++ b/node_modules/@juicesharp/rpiv-todo/package.json
 @@ -61,7 +61,8 @@
@@ -15,8 +16,8 @@ diff --git a/node_modules/@juicesharp/rpiv-todo/package.json b/node_modules/@jui
  		}
  	},
  	"dependencies": {
--		"@juicesharp/rpiv-config": "^2.10.1",
+-		"@juicesharp/rpiv-config": "^2.11.0",
 -		"typebox": "^1.1.24"
-+		"@juicesharp/rpiv-config": "^2.10.1"
++		"@juicesharp/rpiv-config": "^2.11.0"
  	}
  }

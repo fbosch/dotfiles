@@ -122,7 +122,7 @@ function createHarness(options?: {
     registerTool: (tool: ToolDefinition) => {
       tools.set(tool.name, tool);
       if (
-        tool.name === "search_tools" &&
+        tool.name === "tool_load" &&
         options?.searchActive !== false &&
         !activeTools.includes(tool.name)
       ) {
@@ -158,8 +158,8 @@ function createHarness(options?: {
       await handlers.get("resources_discover")?.({} as never, ctx);
     },
     async search(query: string, limit?: number, signal?: AbortSignal): Promise<SearchResult> {
-      const tool = tools.get("search_tools");
-      if (tool === undefined) throw new Error("search_tools was not registered");
+      const tool = tools.get("tool_load");
+      if (tool === undefined) throw new Error("tool_load was not registered");
 
       return (await tool.execute(
         "search",
@@ -258,7 +258,7 @@ describe("tool discovery", () => {
     expect(
       resolveDeferredToolPrefixes({ toolDiscovery: { deferredToolPrefixes: [""] } }),
     ).toContain("chart_");
-    expect(isDeferredToolName("search_tools", ["search_"])).toBe(false);
+    expect(isDeferredToolName("tool_load", ["tool_"])).toBe(false);
   });
 
   test("removes specialist tools from the initial parent tool set", async () => {
@@ -276,7 +276,7 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
 
-    expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "search_tools"]);
+    expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "tool_load"]);
   });
 
   test("loads a matched underscore-namespaced tool family", async () => {
@@ -292,7 +292,7 @@ describe("tool discovery", () => {
     });
 
     await harness.discoverResources();
-    expect(harness.activeTools).toEqual(["read", "search_tools"]);
+    expect(harness.activeTools).toEqual(["read", "tool_load"]);
     expect((await harness.search("chart timeline", 1)).details).toEqual({
       matches: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
       added: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
@@ -300,7 +300,7 @@ describe("tool discovery", () => {
     });
     expect(harness.activeTools).toEqual([
       "read",
-      "search_tools",
+      "tool_load",
       "chart_gantt",
       "chart_pie",
       "chart_line",
@@ -328,7 +328,7 @@ describe("tool discovery", () => {
       rankingSource: "lexical",
     });
     expect(harness.activeTools).toEqual([
-      "search_tools",
+      "tool_load",
       "browser_open",
       "browser_snapshot",
       "browser_act",
@@ -360,7 +360,7 @@ describe("tool discovery", () => {
     });
     expect(harness.activeTools).toEqual([
       "read",
-      "search_tools",
+      "tool_load",
       "figma_get_implementation_context",
       "figma_parse_url",
     ]);
@@ -388,7 +388,7 @@ describe("tool discovery", () => {
 
     expect(first.details.added).toEqual(["websearch"]);
     expect(second.details).toEqual({ matches: ["websearch"], added: [], rankingSource: "lexical" });
-    expect(harness.activeToolSets).toEqual([["read", "search_tools", "websearch"]]);
+    expect(harness.activeToolSets).toEqual([["read", "tool_load", "websearch"]]);
   });
 
   test("searches full descriptions but keeps large output bounded", async () => {
@@ -427,7 +427,7 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
 
-    expect(harness.activeTools).toEqual(["read", "figma_parse_url", "search_tools"]);
+    expect(harness.activeTools).toEqual(["read", "figma_parse_url", "tool_load"]);
     expect((await harness.search("fetch web page")).details).toEqual({
       matches: [],
       added: [],
@@ -452,7 +452,7 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
 
-    expect(harness.activeTools).toEqual(["read", "search_tools"]);
+    expect(harness.activeTools).toEqual(["read", "tool_load"]);
   });
 
   test("ranks deferred tools deterministically", () => {
@@ -642,7 +642,7 @@ describe("tool discovery", () => {
     controller.abort();
 
     await expect(harness.search("chart", 1, controller.signal)).rejects.toThrow();
-    expect(harness.activeTools).toEqual(["read", "search_tools"]);
+    expect(harness.activeTools).toEqual(["read", "tool_load"]);
   });
 
   test("honors cancellation and request deadlines without failing discovery", async () => {

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
 
 const agentRoot = resolve(import.meta.dir, "../..");
-const patchPath = resolve(agentRoot, "patches/pi-lens+4.1.6.patch");
+const patchPath = resolve(agentRoot, "patches/pi-lens+4.3.0.patch");
 const installedBundle = resolve(agentRoot, "npm/node_modules/pi-lens/dist/index.js");
 const temporaryDirectories: string[] = [];
 
@@ -35,7 +35,7 @@ test("pi-lens locates its packaged grammars from the bundled runtime", () => {
   const patch = readFileSync(patchPath, "utf8");
 
   expect(patch).toContain('deps.resolvePackage("pi-lens/package.json")');
-  expect(patch).toContain('path71.join(packageGrammars, "tree-sitter-typescript.wasm")');
+  expect(patch).toContain('path73.join(packageGrammars, "tree-sitter-typescript.wasm")');
 });
 
 test("the tracked patch round-trips against the installed pi-lens bundle", () => {

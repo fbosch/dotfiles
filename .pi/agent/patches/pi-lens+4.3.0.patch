@@ -1,8 +1,8 @@
 diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/index.js
-index eadfaa1..d2722b9 100644
+index 6fcc866..11f2bca 100644
 --- a/node_modules/pi-lens/dist/index.js
 +++ b/node_modules/pi-lens/dist/index.js
-@@ -17519,8 +17519,9 @@ function recordMutationThroughSeam(entry, deps) {
+@@ -18419,8 +18419,9 @@ function recordMutationThroughSeam(entry, deps) {
      });
      noteMutationHandled(filePath);
      if (entry.deferAutofix !== false) {
@@ -14,67 +14,67 @@ index eadfaa1..d2722b9 100644
        }
      }
    } catch (err) {
-@@ -45582,6 +45583,13 @@ var init_tree_sitter_client = __esm({
-         if (grammarsDir && fs58.existsSync(path71.join(grammarsDir, "tree-sitter-typescript.wasm"))) {
+@@ -47591,6 +47592,13 @@ var init_tree_sitter_client = __esm({
+         if (grammarsDir && fs60.existsSync(path73.join(grammarsDir, "tree-sitter-typescript.wasm"))) {
            return grammarsDir;
          }
 +        try {
-+          const packageGrammars = path71.join(path71.dirname(deps.resolvePackage("pi-lens/package.json")), "grammars");
-+          if (fs58.existsSync(path71.join(packageGrammars, "tree-sitter-typescript.wasm"))) {
++          const packageGrammars = path73.join(path73.dirname(deps.resolvePackage("pi-lens/package.json")), "grammars");
++          if (fs60.existsSync(path73.join(packageGrammars, "tree-sitter-typescript.wasm"))) {
 +            return packageGrammars;
 +          }
 +        } catch {
 +        }
          try {
-           const wasmsOut = path71.join(path71.dirname(deps.resolvePackage("tree-sitter-wasms/package.json")), "out");
-           if (fs58.existsSync(wasmsOut))
-@@ -102594,8 +102602,9 @@ async function runPipeline(ctx, deps) {
+           const wasmsOut = path73.join(path73.dirname(deps.resolvePackage("tree-sitter-wasms/package.json")), "out");
+           if (fs60.existsSync(wasmsOut))
+@@ -107329,8 +107337,9 @@ async function runPipeline(ctx, deps) {
    const immediateFormat = !!getFlag("immediate-format");
-   const formatDeferred = !autoformatDisabled && !immediateFormat && !!fileContent;
-   if (!autoformatDisabled && immediateFormat && fileContent) {
+   const formatDeferred = allowAutonomousWriters && !autoformatDisabled && !immediateFormat && !!fileContent;
+   if (allowAutonomousWriters && !autoformatDisabled && immediateFormat && fileContent) {
 +    const beforeFormatContent = fileContent;
-     const formatResult = await runFormatPhase(filePath, getFormatService2, dbg2);
+     const formatResult = await runFormatPhase(filePath, getFormatService2, dbg2, ctx.signal);
 -    formatChanged = formatResult.formatChanged;
 +    formatChanged = formatResult.formatChanged || formatResult.fileContent !== void 0 && formatResult.fileContent !== beforeFormatContent;
      formattersUsed = formatResult.formattersUsed;
      formatFailures = formatResult.formatFailures;
      fileContent = formatResult.fileContent;
-@@ -102855,6 +102864,7 @@ ${dispatchResult.output}`;
+@@ -107632,6 +107641,7 @@ ${deliveredOutput}`;
      cascadePromise,
      isError: false,
      fileModified,
 +    formatChanged,
+     postWriteStateHash,
      changedFiles,
-     inlineBlockerSummary: dispatchResult.hasBlockers ? dispatchResult.blockerOutput.trim() || void 0 : void 0,
-     // #1561 F1: taken from the very diagnostics `blockerOutput` was rendered
-@@ -109918,6 +109928,17 @@ async function handleToolResult(deps) {
-           dbg2(`tool_result: pipeline analysis crashed for the observed mutation on ${filePath}; the recorded edit stands, analysis did not run this turn`);
-           return observedDispatchOutcome.response;
-         }
-+        if (observedDispatchOutcome.result.formatChanged && deps.hashlineRefresh) {
-+          try {
-+            const hashlineText = await deps.hashlineRefresh(filePath);
-+            if (hashlineText) {
-+              syntheticWriteContent.push({ type: "text", text: `--- Post-format hashline anchors ---\n${hashlineText}` });
+     // #3190: re-rendered from the GATED set with `formatDiagnostics(...,
+@@ -114318,6 +114328,17 @@ async function handleToolResult(deps) {
+             dbg2(`tool_result: pipeline analysis crashed for the observed mutation on ${observedPath}; the recorded edit stands, analysis did not run this turn`);
+             return observedDispatchOutcome.response;
+           }
++          if (observedDispatchOutcome.result.formatChanged && deps.hashlineRefresh) {
++            try {
++              const hashlineText = await deps.hashlineRefresh(filePath);
++              if (hashlineText) {
++                syntheticWriteContent.push({ type: "text", text: `--- Post-format hashline anchors ---\n${hashlineText}` });
++              }
++            } catch (error) {
++              const message = error instanceof Error ? error.message : String(error);
++              syntheticWriteContent.push({ type: "text", text: `pi-lens formatted ${filePath}, but hashline anchor refresh failed: ${message}. Re-read the file before editing.` });
 +            }
-+          } catch (error) {
-+            const message = error instanceof Error ? error.message : String(error);
-+            syntheticWriteContent.push({ type: "text", text: `pi-lens formatted ${filePath}, but hashline anchor refresh failed: ${message}. Re-read the file before editing.` });
 +          }
-+        }
+         }
          dbg2(`tool_result: the observational settle already recorded ${observedReplayed} mutation(s) for "${event.toolName}"; kept the applied-edit records, mutation receipt, cachedExports refresh, and ran the pipeline dispatch (#2464); skipped the bridge-covered staleness stamp / turn-state ranges / change-log receipt / deferred autofix+format`);
        } else {
-         dbg2(`tool_result: the observational settle recorded ${observedReplayed} mutation(s) for "${event.toolName}", none of them ${filePath} \u2014 nothing to analyse under the named path`);
-@@ -110113,7 +110134,7 @@ async function handleToolResult(deps) {
+@@ -114531,7 +114552,7 @@ async function handleToolResult(deps) {
      dbg2(`tool_result: queued deferred autofix for ${filePath}`);
    }
    let formatQueued = false;
--  if (!result.isError && !getFlag("no-autoformat", filePath) && (autofixMode === "deferred" || !getFlag("immediate-format")) && nodeFs12.existsSync(filePath)) {
-+  if (!result.isError && !getFlag("no-autoformat", filePath) && !getFlag("immediate-format") && nodeFs12.existsSync(filePath)) {
+-  if (!result.isError && bashAuthorshipConfirmed && !getFlag("no-autoformat", filePath) && (autofixMode === "deferred" || !getFlag("immediate-format")) && nodeFs12.existsSync(filePath)) {
++  if (!result.isError && bashAuthorshipConfirmed && !getFlag("no-autoformat", filePath) && !getFlag("immediate-format") && nodeFs12.existsSync(filePath)) {
      const isNewlyQueued = runtime2.deferFormat(filePath, dispatchCwd, event.toolName, turnStateCwd, deps.sessionId, resolutionBasis);
      formatQueued = true;
      dbg2(`tool_result: queued deferred format for ${filePath}`);
-@@ -110230,6 +110251,17 @@ async function handleToolResult(deps) {
+@@ -114659,6 +114680,17 @@ async function handleToolResult(deps) {
      };
    }
    let output = result.output;
@@ -92,17 +92,17 @@ index eadfaa1..d2722b9 100644
    if (behaviorWarnings.length > 0 && !result.hasBlockers) {
      output += `
  
-@@ -125507,6 +125539,9 @@ function activateExtension(hostPi) {
+@@ -131085,6 +131117,9 @@ function activateExtension(hostPi) {
        shouldStampReadGuard() {
-         return !_mutationBridgeGetFlag?.("no-read-guard");
+         return !getBridgeFlag(_bridgeGetFlag, "mutation");
        },
 +      shouldDeferFormat() {
-+        return !_mutationBridgeGetFlag?.("immediate-format");
++        return !getLensFlag("immediate-format");
 +      },
        dbg
      });
    }
-@@ -126283,6 +126318,39 @@ ${degradationLines.join("\n")}` : "";
+@@ -131870,6 +131905,39 @@ ${degradationLines.join("\n")}` : "";
        resetLSPService
      });
    });
@@ -142,10 +142,10 @@ index eadfaa1..d2722b9 100644
    const onToolResult = async (event, ctx) => {
      rememberOwnEventCtx(ctx);
      if (!lensEnabled)
-@@ -126320,6 +126388,7 @@ ${degradationLines.join("\n")}` : "";
+@@ -131914,6 +131982,7 @@ ${degradationLines.join("\n")}` : "";
          readGuard: runtime.readGuard,
-         agentBehaviorRecord: (toolName, filePath) => agentBehaviorClient.recordToolCall(toolName, filePath),
-         formatBehaviorWarnings: (warnings) => agentBehaviorClient.formatWarnings(warnings),
+         agentBehaviorRecord: (toolName, filePath) => (resident?.agentBehaviorClient ?? getAgentBehaviorClient()).recordToolCall(toolName, filePath),
+         formatBehaviorWarnings: (warnings) => (resident?.agentBehaviorClient ?? getAgentBehaviorClient()).formatWarnings(warnings),
 +        hashlineRefresh: (filePath) => refreshHashlineAnchors(filePath, ctx),
          // #791: tags any deferred-format record queued from this tool_result
          // with the STABLE session id of the ctx that produced it, so a
