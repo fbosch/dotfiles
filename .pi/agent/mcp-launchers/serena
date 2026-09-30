@@ -1,0 +1,18 @@
+#!/bin/sh
+set -eu
+
+session_cwd=$(pwd -P)
+exec podman run \
+  -i \
+  --rm \
+  --init \
+  --cap-drop=ALL \
+  --security-opt=no-new-privileges \
+  -v "$session_cwd:/workspace:Z" \
+  -v "pi-serena:/workspaces/serena/config" \
+  -e SERENA_DOCKER=1 \
+  ghcr.io/oraios/serena@sha256:6c9459e4246a39c9deaa4f23fb05a526ac6e237b24c8e84a927a098fa1ab6730 \
+  serena start-mcp-server \
+  --project /workspace \
+  --context agent \
+  --open-web-dashboard False

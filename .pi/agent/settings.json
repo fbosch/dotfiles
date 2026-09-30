@@ -17,11 +17,13 @@
     }
   },
   "extensions": [
-    "+extensions/catastrophic-command-guard.ts",
-    "-builtin:mcp"
+    "+extensions/catastrophic-command-guard.ts"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-sol",
+  "defaultTools": [
+    "+codemode"
+  ],
   "compactionModel": {
     "model": "openai-codex/gpt-6-luna",
     "thinkingLevel": "xhigh",
@@ -115,7 +117,6 @@
     "npm:pi-hashline-edit-pro@4.5.3",
     "npm:pi-codex-goal@0.4.1",
     "npm:pi-context-view@0.6.0",
-    "npm:pi-mcp-client@0.8.0",
     "npm:@ff-labs/pi-fff@0.10.6",
     "npm:@gotgenes/pi-subagents@21.8.1",
     "npm:pi-web-access@0.34.0",

@@ -28,7 +28,12 @@ const PLAN_READ_ONLY_TOOLS = new Set([
   "subagent",
   "mcp__context7",
 ]);
-const PLAN_READ_ONLY_TOOL_PREFIXES = ["context7_", "mcp__context7_", "ast-grep_"] as const;
+const PLAN_READ_ONLY_TOOL_PREFIXES = [
+  "context7_",
+  "mcp__context7_",
+  "ast-grep_",
+  "mcp__ast-grep__",
+] as const;
 
 // Pi loads extensions in isolated module contexts, so parent and child sessions
 // share active Plan state through a process-global registry.
@@ -410,6 +415,18 @@ export default function planMode(pi: ExtensionAPI, readModes: ModeConfigLoader =
 
   pi.on("session_shutdown", (_event, ctx) => {
     setPlanModeSession(ctx, false);
+  });
+
+  // MCP tools can register after plan mode filters the active tools, so enforce the policy at execution.
+  pi.on("tool_call", (event, ctx) => {
+    const sessionId = getSessionId(ctx);
+    if (sessionId === undefined || PLAN_MODE_SESSIONS.has(sessionId) === false) return;
+    if (isPlanReadOnlyTool(event.toolName, MODES.plan.allowedTools)) return;
+
+    return {
+      block: true,
+      reason: `Tool "${event.toolName}" is not permitted while plan mode is active.`,
+    };
   });
 
   pi.on("model_select", (event, ctx) => {

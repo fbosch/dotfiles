@@ -5,7 +5,6 @@ Tracked patches preserve local changes to pinned Pi extensions:
 - `@juicesharp+rpiv-todo+2.10.1.patch` declares `typebox` as a host-provided peer dependency.
 - `pi-hashline-edit-pro+4.5.3.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks.
 - `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
-- `pi-mcp-client+0.8.0.patch` publishes live MCP connection counts through Pi's `mcp` footer status key.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 The `@gotgenes/pi-subagents` patch was retired for 21.8.1: upstream now declares host-provided `typebox` as a peer dependency.
@@ -24,7 +23,6 @@ Keep these patches here rather than editing Pi's installed packages without a re
    pi install npm:@ff-labs/pi-fff@0.10.6
    pi install npm:pi-worktrunk@0.8.0
    pi install npm:pi-lens@4.1.6
-   pi install npm:pi-mcp-client@0.8.0
    pi install npm:pi-hashline-edit-pro@4.3.5
    ```
 

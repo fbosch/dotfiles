@@ -144,6 +144,15 @@ function createHarness(options: {
     async beforeAgentStart(systemPrompt = options.systemPrompt ?? "base system prompt") {
       return handlers.get("before_agent_start")?.({ systemPrompt } as never, ctx);
     },
+    activateTools(tools: string[]) {
+      activeTools = [...tools];
+    },
+    async callTool(toolName: string) {
+      return handlers.get("tool_call")?.(
+        { type: "tool_call", toolName, toolCallId: "test-call", input: {} } as never,
+        ctx,
+      );
+    },
     async startSession(reason: "new" | "reload" | "resume") {
       await handlers.get("session_start")?.({ reason } as never, ctx);
     },
@@ -267,6 +276,39 @@ describe("plan mode", () => {
       "ask_user_question",
     ]);
     expect(harness.statuses).toEqual([["plan-mode", PLAN_MODE_STATUS]]);
+  });
+
+  test("blocks asynchronously exposed tools at call time while allowing read-only MCP namespaces", async () => {
+    const harness = createHarness({
+      activeTools: ["read", "write"],
+      availableTools: [
+        "mcp__context7__get-library-docs",
+        "mcp__ast-grep__find",
+        "mcp__github__create_issue",
+        "tool_search",
+        "codemode",
+      ],
+    });
+
+    await harness.toggle();
+    harness.activateTools([
+      ...harness.activeTools,
+      "mcp__github__create_issue",
+      "tool_search",
+      "codemode",
+    ]);
+
+    expect(await harness.callTool("read")).toBeUndefined();
+    expect(await harness.callTool("mcp__context7__get-library-docs")).toBeUndefined();
+    expect(await harness.callTool("mcp__ast-grep__find")).toBeUndefined();
+    for (const toolName of ["mcp__github__create_issue", "tool_search", "codemode"]) {
+      expect(await harness.callTool(toolName)).toEqual({
+        block: true,
+        reason: `Tool "${toolName}" is not permitted while plan mode is active.`,
+      });
+    }
+
+    await harness.shutdown();
   });
 
   test("loads read-only tools for plan mode and retains them in build mode", async () => {

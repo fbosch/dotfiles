@@ -1,11 +1,13 @@
 {
+  "autoEnableCodemode": false,
   "mcpServers": {
     "github": {
       "command": "gh",
       "args": [
         "mcp"
       ],
-      "timeoutMs": 30000
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "context7": {
       "command": "podman",
@@ -20,52 +22,20 @@
         "MCP_TRANSPORT=stdio",
         "docker.io/mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836"
       ],
-      "timeoutMs": 30000
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "serena": {
-      "command": "podman",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "-v",
-        "${PWD}:/workspace:Z",
-        "-v",
-        "pi-serena:/workspaces/serena/config",
-        "-e",
-        "SERENA_DOCKER=1",
-        "ghcr.io/oraios/serena@sha256:6c9459e4246a39c9deaa4f23fb05a526ac6e237b24c8e84a927a098fa1ab6730",
-        "serena",
-        "start-mcp-server",
-        "--project",
-        "/workspace",
-        "--context",
-        "agent",
-        "--open-web-dashboard",
-        "False"
-      ],
-      "timeoutMs": 30000
+      "command": "~/.pi/agent/mcp-launchers/serena",
+      "args": [],
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "ast-grep": {
-      "command": "podman",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--read-only",
-        "--network=none",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "--tmpfs",
-        "/tmp:rw,noexec,nosuid,size=64m",
-        "-v",
-        "${PWD}:/src:ro,Z",
-        "docker.io/mcp/ast-grep@sha256:5fcf2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72"
-      ],
-      "timeoutMs": 30000
+      "command": "~/.pi/agent/mcp-launchers/ast-grep",
+      "args": [],
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "chrome-devtools": {
       "command": "podman",
@@ -96,7 +66,8 @@
         "--executable-path=/ms-playwright/chromium-1200/chrome-linux64/chrome",
         "--chrome-arg=--no-sandbox"
       ],
-      "timeoutMs": 30000
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "firefox-devtools": {
       "command": "npx",
@@ -113,11 +84,13 @@
         "screenshot",
         "script"
       ],
-      "timeoutMs": 30000
+      "timeout": 30,
+      "exposure": "deferred"
     },
     "shared-todo": {
       "url": "http://192.168.1.46:8092/mcp",
-      "timeoutMs": 30000
+      "timeout": 30,
+      "exposure": "deferred"
     }
   }
 }
