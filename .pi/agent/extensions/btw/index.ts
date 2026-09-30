@@ -1,23 +1,32 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+/* Forked from Fatih0234/btw (upstream commit 931930656e8d101b20d3155550f77832237d35ee); upstream declared no license. */
+import { mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import type { Api, Message, Model } from "@earendil-works/pi-ai";
 import {
   convertToLlm,
-  getAgentDir,
-  getMarkdownTheme,
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
+  getMarkdownTheme,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Api, Message, Model } from "@earendil-works/pi-ai";
-import { Key, Markdown, matchesKey, type Component, type TUI } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  Key,
+  Markdown,
+  matchesKey,
+  type TUI,
+  truncateToWidth,
+} from "@earendil-works/pi-tui";
 
 const WIDGET_KEY = "btw";
 const MAX_QUESTION_BYTES = 2_000;
-const MAX_CONTEXT_BYTES = 128_000;
-const MAX_CONTEXT_MESSAGES = 256;
+const MAX_SETTINGS_BYTES = 4_096;
+const MAX_CONTEXT_BYTES = 2_000_000;
+const MAX_CONTEXT_MESSAGES = 2_048;
 const MAX_ANSWER_BYTES = 32_000;
+const MAX_ANSWER_DELTAS = 4_096;
 const REQUEST_DEADLINE_MS = 60_000;
-const MAX_MODEL_CHOICES = 300;
 const REASONING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh"] as const;
 const TOKEN_CHOICES = [250, 500, 1_000, 2_000, 4_000] as const;
 const SETTINGS_PATH = join(getAgentDir(), "btw-settings.json");
@@ -80,10 +89,24 @@ function isTokenChoice(value: unknown): value is BtwSettings["maxTokens"] {
 
 export function parseSettings(value: unknown): BtwSettings {
   if (!isRecord(value)) throw new Error("Invalid /btw settings");
+  const allowedKeys = new Set([
+    "modelStrategy",
+    "customProvider",
+    "customModelId",
+    "reasoning",
+    "maxTokens",
+    "cacheRetention",
+  ]);
+  if (Object.keys(value).some((key) => !allowedKeys.has(key)))
+    throw new Error("Invalid /btw settings");
   if (value.modelStrategy !== "same-as-main" && value.modelStrategy !== "custom") {
     throw new Error("Invalid /btw settings");
   }
-  if (!isReasoning(value.reasoning) || !isTokenChoice(value.maxTokens) || value.cacheRetention !== "short") {
+  if (
+    !isReasoning(value.reasoning) ||
+    !isTokenChoice(value.maxTokens) ||
+    value.cacheRetention !== "short"
+  ) {
     throw new Error("Invalid /btw settings");
   }
   if (value.modelStrategy === "custom") {
@@ -114,17 +137,22 @@ export function parseSettings(value: unknown): BtwSettings {
 
 function loadSettings(): { settings: BtwSettings; invalid: boolean } {
   try {
+    if (statSync(SETTINGS_PATH).size > MAX_SETTINGS_BYTES) throw new Error("Invalid /btw settings");
     const text = readFileSync(SETTINGS_PATH, "utf8");
     return { settings: parseSettings(JSON.parse(text)), invalid: false };
   } catch (error) {
-    if (isRecord(error) && error.code === "ENOENT") return { settings: { ...DEFAULT_SETTINGS }, invalid: false };
+    if (isRecord(error) && error.code === "ENOENT")
+      return { settings: { ...DEFAULT_SETTINGS }, invalid: false };
     return { settings: { ...DEFAULT_SETTINGS }, invalid: true };
   }
 }
 
 function saveSettings(settings: BtwSettings): void {
   mkdirSync(dirname(SETTINGS_PATH), { recursive: true, mode: 0o700 });
-  writeFileSync(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  writeFileSync(SETTINGS_PATH, `${JSON.stringify(settings, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 function modelKey(model: Model<Api> | undefined): string | undefined {
@@ -150,19 +178,28 @@ export function stripTerminalControls(input: string): string {
     if (state === "text") {
       if (code === 0x1b) state = "escape";
       else if (code === 0x9b) state = "csi";
-      else if (code === 0x9d || code === 0x90 || code === 0x98 || code === 0x9e || code === 0x9f) state = "string";
+      else if (code === 0x9d || code === 0x90 || code === 0x98 || code === 0x9e || code === 0x9f)
+        state = "string";
       else if (
         code === 0x9c ||
         (code < 0x20 && code !== 0x09 && code !== 0x0a) ||
         (code >= 0x80 && code <= 0x9f) ||
         code === 0x7f
-      ) continue;
+      )
+        continue;
       else output += character;
       continue;
     }
     if (state === "escape") {
       if (character === "[") state = "csi";
-      else if (character === "]" || character === "P" || character === "X" || character === "^" || character === "_") state = "string";
+      else if (
+        character === "]" ||
+        character === "P" ||
+        character === "X" ||
+        character === "^" ||
+        character === "_"
+      )
+        state = "string";
       else state = "text";
       continue;
     }
@@ -187,13 +224,16 @@ function deepFreeze(value: unknown): void {
   for (const child of Object.values(value)) deepFreeze(child);
 }
 
-function cloneOutboundMessages(source: readonly Parameters<typeof convertToLlm>[0][number][]): Message[] | undefined {
+function cloneOutboundMessages(
+  source: readonly Parameters<typeof convertToLlm>[0][number][],
+): Message[] | undefined {
   if (source.length > MAX_CONTEXT_MESSAGES) return undefined;
   try {
     const converted = convertToLlm([...source]);
     if (converted.length > MAX_CONTEXT_MESSAGES) return undefined;
     const serialized = JSON.stringify(converted);
-    if (typeof serialized !== "string" || Buffer.byteLength(serialized, "utf8") > MAX_CONTEXT_BYTES) return undefined;
+    if (typeof serialized !== "string" || Buffer.byteLength(serialized, "utf8") > MAX_CONTEXT_BYTES)
+      return undefined;
     const messages = structuredClone(converted);
     for (const message of messages) {
       if (message.role === "system") {
@@ -208,10 +248,7 @@ function cloneOutboundMessages(source: readonly Parameters<typeof convertToLlm>[
   }
 }
 
-function getSelectedModel(
-  ctx: ExtensionContext,
-  settings: BtwSettings,
-): Model<Api> | undefined {
+function getSelectedModel(ctx: ExtensionContext, settings: BtwSettings): Model<Api> | undefined {
   if (settings.modelStrategy === "same-as-main") return ctx.model;
   const provider = settings.customProvider;
   const modelId = settings.customModelId;
@@ -294,7 +331,9 @@ class BtwWidget implements Component {
       "",
       this.theme.fg("dim", "Press Space, Enter, or Escape to dismiss"),
     ];
-    return lines.map((line) => line);
+    return lines.flatMap((line) =>
+      line.split("\n").map((part) => truncateToWidth(part, safeWidth, "")),
+    );
   }
 
   dispose(): void {
@@ -308,7 +347,13 @@ function mountRequestWidget(ctx: ExtensionContext, owner: ActiveRequest): void {
   ctx.ui.setWidget(
     WIDGET_KEY,
     (_tui, theme) => {
-      const widget = new BtwWidget(_tui, theme, owner.question, sanitizeModelLabel(owner.model), owner.close);
+      const widget = new BtwWidget(
+        _tui,
+        theme,
+        owner.question,
+        sanitizeModelLabel(owner.model),
+        owner.close,
+      );
       owner.widget = widget;
       return widget;
     },
@@ -316,7 +361,11 @@ function mountRequestWidget(ctx: ExtensionContext, owner: ActiveRequest): void {
   );
   owner.unsubscribe = ctx.ui.onTerminalInput((data) => {
     if (owner.closed || activeRequest !== owner) return undefined;
-    if (matchesKey(data, Key.escape) || matchesKey(data, Key.enter) || matchesKey(data, Key.space)) {
+    if (
+      matchesKey(data, Key.escape) ||
+      matchesKey(data, Key.enter) ||
+      matchesKey(data, Key.space)
+    ) {
       owner.close();
       return { consume: true };
     }
@@ -334,18 +383,20 @@ function clearStatus(ctx: ExtensionContext): void {
   if (ctx.mode === "tui") ctx.ui.setStatus("btw", undefined);
 }
 
-function invalidate(ctx: ExtensionContext): void {
+function invalidate(): void {
   generation += 1;
   latestSnapshot = undefined;
   const current = activeRequest;
-  if (current) {
-    current.close();
-    clearStatus(ctx);
-  }
+  if (current) current.close();
 }
 
 function isCurrent(owner: ActiveRequest): boolean {
-  return !owner.closed && activeRequest === owner && owner.generation === generation && !owner.controller.signal.aborted;
+  return (
+    !owner.closed &&
+    activeRequest === owner &&
+    owner.generation === generation &&
+    !owner.controller.signal.aborted
+  );
 }
 
 function makeOwner(
@@ -384,6 +435,7 @@ function makeOwner(
   owner.timer = setTimeout(() => {
     if (!isCurrent(owner)) return;
     owner.timedOut = true;
+    owner.timer = undefined;
     owner.controller.abort();
     owner.widget?.setError(errorText("timeout"));
   }, REQUEST_DEADLINE_MS);
@@ -401,6 +453,10 @@ async function startQuestion(ctx: ExtensionContext, rawQuestion: string): Promis
   }
   if (settingsInvalid) {
     ctx.ui.notify("Invalid /btw-settings.json. Run /btw-settings to replace it.", "error");
+    return;
+  }
+  if (Buffer.byteLength(rawQuestion, "utf8") > MAX_QUESTION_BYTES * 4) {
+    ctx.ui.notify("The /btw question exceeds the 2 KB limit.", "warning");
     return;
   }
   const question = safeText(rawQuestion.trim());
@@ -422,7 +478,10 @@ async function startQuestion(ctx: ExtensionContext, rawQuestion: string): Promis
     snapshot.modelKey !== currentModelKey ||
     snapshot.generation !== generation
   ) {
-    ctx.ui.notify("No current outbound context snapshot is available. Wait for a main response, then try /btw.", "warning");
+    ctx.ui.notify(
+      "No current outbound context snapshot is available. Wait for a main response, then try /btw.",
+      "warning",
+    );
     return;
   }
   const settings = { ...currentSettings };
@@ -444,6 +503,11 @@ async function startQuestion(ctx: ExtensionContext, rawQuestion: string): Promis
   void runQuestion(ctx, owner);
 }
 
+function clearDeadline(owner: ActiveRequest): void {
+  if (owner.timer !== undefined) clearTimeout(owner.timer);
+  owner.timer = undefined;
+}
+
 async function runQuestion(ctx: ExtensionContext, owner: ActiveRequest): Promise<void> {
   if (!isCurrent(owner)) return;
   const modelLabel = sanitizeModelLabel(owner.model);
@@ -455,23 +519,26 @@ async function runQuestion(ctx: ExtensionContext, owner: ActiveRequest): Promise
         `Continuing sends the captured outbound conversation to ${modelLabel}, including the system prompt, prior tool outputs, and other context. The snapshot is captured after context handlers, but cannot guarantee redactions applied later during provider payload assembly. This extension does not save the snapshot. Continue?`,
       );
     } catch {
-      if (isCurrent(owner)) owner.widget?.setError("The provider consent prompt could not be displayed.");
+      if (isCurrent(owner))
+        owner.widget?.setError("The provider consent prompt could not be displayed.");
+      clearDeadline(owner);
       return;
     }
     if (!isCurrent(owner)) return;
     if (!accepted) {
       owner.widget?.setError("No request was sent. Cross-provider consent was declined.");
-      if (owner.timer !== undefined) clearTimeout(owner.timer);
-      owner.timer = undefined;
+      clearDeadline(owner);
       return;
     }
   }
   if (!isCurrent(owner)) return;
   owner.widget?.setStatus("Answering");
   let rawAnswer = "";
+  let rawAnswerBytes = 0;
+  let answerDeltas = 0;
   try {
     const messages: Message[] = [
-      ...owner.snapshot.messages,
+      ...structuredClone(owner.snapshot.messages),
       {
         role: "user",
         content: `${SIDE_ANSWER_INSTRUCTION}\n\nQuestion: ${owner.question}`,
@@ -493,11 +560,15 @@ async function runQuestion(ctx: ExtensionContext, owner: ActiveRequest): Promise
     for await (const event of stream) {
       if (!isCurrent(owner)) return;
       if (event.type === "text_delta") {
-        if (Buffer.byteLength(rawAnswer, "utf8") + Buffer.byteLength(event.delta, "utf8") > MAX_ANSWER_BYTES) {
+        const deltaBytes = Buffer.byteLength(event.delta, "utf8");
+        answerDeltas += 1;
+        if (rawAnswerBytes + deltaBytes > MAX_ANSWER_BYTES || answerDeltas > MAX_ANSWER_DELTAS) {
           owner.widget?.setError(errorText("oversize"));
+          clearDeadline(owner);
           owner.controller.abort();
           return;
         }
+        rawAnswerBytes += deltaBytes;
         rawAnswer += event.delta;
         owner.widget?.setAnswer(rawAnswer);
       } else if (
@@ -506,25 +577,33 @@ async function runQuestion(ctx: ExtensionContext, owner: ActiveRequest): Promise
         event.type === "toolcall_end"
       ) {
         owner.widget?.setError(errorText("tools"));
+        clearDeadline(owner);
         owner.controller.abort();
         return;
       } else if (event.type === "error") {
         owner.widget?.setError(errorText("provider"));
+        clearDeadline(owner);
         return;
       } else if (event.type === "done") {
         owner.widget?.setStatus("Done");
+        clearDeadline(owner);
         return;
       }
     }
     if (isCurrent(owner)) owner.widget?.setStatus("Done");
+    clearDeadline(owner);
   } catch {
     if (isCurrent(owner)) {
       owner.widget?.setError(owner.timedOut ? errorText("timeout") : errorText("provider"));
     }
+    clearDeadline(owner);
   }
 }
 
-function updateSnapshot(event: { messages: Parameters<typeof convertToLlm>[0] }, ctx: ExtensionContext): void {
+function updateSnapshot(
+  event: { messages: Parameters<typeof convertToLlm>[0] },
+  ctx: ExtensionContext,
+): void {
   const id = sessionId(ctx);
   const key = modelKey(ctx.model);
   if (id === undefined || key === undefined || ctx.model === undefined) {
@@ -551,7 +630,7 @@ async function configureSettings(ctx: ExtensionContext): Promise<void> {
     ctx.ui.notify("/btw-settings is available only in interactive TUI mode.", "warning");
     return;
   }
-  const available = ctx.modelRegistry.getAvailable().slice(0, MAX_MODEL_CHOICES);
+  const available = ctx.modelRegistry.getAvailable();
   const byLabel = new Map<string, Model<Api>>();
   const modelOptions = ["Same as main session"];
   for (const model of available) {
@@ -580,7 +659,10 @@ async function configureSettings(ctx: ExtensionContext): Promise<void> {
   const reasoningOptions = selectedModelInfo?.reasoning ? [...REASONING_LEVELS] : ["off"];
   const selectedReasoning = await ctx.ui.select("/btw reasoning", reasoningOptions);
   if (selectedReasoning === undefined || !isReasoning(selectedReasoning)) return;
-  const selectedTokens = await ctx.ui.select("/btw maximum output tokens", TOKEN_CHOICES.map(String));
+  const selectedTokens = await ctx.ui.select(
+    "/btw maximum output tokens",
+    TOKEN_CHOICES.map(String),
+  );
   if (selectedTokens === undefined) return;
   const parsedTokens = Number(selectedTokens);
   if (!isTokenChoice(parsedTokens)) return;
@@ -601,31 +683,38 @@ async function configureSettings(ctx: ExtensionContext): Promise<void> {
   ctx.ui.notify("/btw settings saved.", "info");
 }
 
-export default function btwExtension(pi: ExtensionAPI): void {
+export interface BtwExtensionOptions {
+  settings?: BtwSettings;
+  invalidSettings?: boolean;
+}
+
+export default function btwExtension(pi: ExtensionAPI, options: BtwExtensionOptions = {}): void {
   const loaded = loadSettings();
-  currentSettings = loaded.settings;
-  settingsInvalid = loaded.invalid;
+  currentSettings = options.settings ? parseSettings(options.settings) : loaded.settings;
+  settingsInvalid = options.invalidSettings ?? (options.settings ? false : loaded.invalid);
 
   pi.on("context_with_system", (event, ctx) => updateSnapshot(event, ctx));
-  pi.on("agent_start", (_event, ctx) => invalidate(ctx));
-  pi.on("model_select", (_event, ctx) => invalidate(ctx));
+  pi.on("agent_start", () => invalidate());
+  pi.on("model_select", () => invalidate());
   pi.on("session_start", (_event, ctx) => {
-    invalidate(ctx);
+    invalidate();
     const persisted = loadSettings();
     currentSettings = persisted.settings;
     settingsInvalid = persisted.invalid;
-    if (settingsInvalid) ctx.ui.notify("Invalid /btw-settings.json. Run /btw-settings to replace it.", "error");
+    if (settingsInvalid)
+      ctx.ui.notify("Invalid /btw-settings.json. Run /btw-settings to replace it.", "error");
   });
-  pi.on("session_before_switch", (_event, ctx) => invalidate(ctx));
-  pi.on("session_before_fork", (_event, ctx) => invalidate(ctx));
-  pi.on("session_before_tree", (_event, ctx) => invalidate(ctx));
-  pi.on("session_tree", (_event, ctx) => invalidate(ctx));
-  pi.on("session_before_compact", (_event, ctx) => invalidate(ctx));
-  pi.on("session_compact", (_event, ctx) => invalidate(ctx));
-  pi.on("session_shutdown", (_event, ctx) => invalidate(ctx));
+  pi.on("session_before_switch", () => invalidate());
+  pi.on("session_before_fork", () => invalidate());
+  pi.on("session_before_tree", () => invalidate());
+  pi.on("session_tree", () => invalidate());
+  pi.on("session_before_compact", () => invalidate());
+  pi.on("session_compact", () => invalidate());
+  pi.on("session_shutdown", () => invalidate());
 
   pi.registerCommand("btw", {
-    description: "Ask an ephemeral side question about the latest observed outbound context (no tools)",
+    description:
+      "Ask an ephemeral side question about the latest observed outbound context (no tools)",
     handler: async (args, ctx) => startQuestion(ctx, args),
   });
   pi.registerCommand("btw-settings", {

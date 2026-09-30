@@ -11,6 +11,8 @@ This is a locally maintained derivative of [Fatih0234/btw](https://github.com/Fa
 4. Run `/btw-settings` to choose a model, reasoning level, and output-token limit.
 
 The defaults are the main model, reasoning off, and 500 output tokens.
+Requests have a 60-second deadline. Limits are 2 KB for questions, 2 MB and
+2,048 messages for captured context, and 32 KB or 4,096 text deltas for answers.
 Settings live in the machine-local `~/.pi/agent/btw-settings.json`, not in session entries.
 The old `pi-btw.json` belongs to a different extension and is not imported.
 
