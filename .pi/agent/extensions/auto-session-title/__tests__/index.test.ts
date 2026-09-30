@@ -190,6 +190,7 @@ describe("auto-session-title lifecycle", () => {
         },
       } as unknown as ExtensionAPI;
       const ctx = {
+        signal: new AbortController().signal,
         hasUI: true,
         sessionManager: { getBranch: () => [] },
         ui: { notify: (message: string) => notifications.push(message) },
@@ -272,6 +273,112 @@ describe("auto-session-title lifecycle", () => {
       expect(sessionName).toBe("Manual title");
       expect(jevRequests).toHaveLength(3);
       expect(titleRequests).toHaveLength(2);
+    } finally {
+      if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+      else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    }
+  });
+
+  test("ignores aborted stale-title requests without hiding later Jev failures", async () => {
+    const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
+    temporaryDirectories.push(agentDirectory);
+    writeFileSync(join(agentDirectory, "settings.json"), "{}");
+    const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = agentDirectory;
+
+    try {
+      let sessionName: string | undefined;
+      let activeRequestController = new AbortController();
+      let requestSignal = activeRequestController.signal;
+      let staleChecks = 0;
+      const titleRequests: string[] = [];
+      const notifications: string[] = [];
+      let sessionStart: SessionStartHandler | undefined;
+      let beforeAgentStart: BeforeAgentStartHandler | undefined;
+      let agentEnd: AgentEndHandler | undefined;
+      const pi = {
+        getSessionName: () => sessionName,
+        setSessionName: (name: string) => {
+          sessionName = name;
+        },
+        on(event: string, handler: unknown) {
+          if (event === "session_start") sessionStart = handler as SessionStartHandler;
+          if (event === "before_agent_start") {
+            beforeAgentStart = handler as BeforeAgentStartHandler;
+          }
+          if (event === "agent_end") agentEnd = handler as AgentEndHandler;
+        },
+      } as unknown as ExtensionAPI;
+      const ctx = {
+        get signal() {
+          return requestSignal;
+        },
+        hasUI: true,
+        sessionManager: { getBranch: () => [] },
+        ui: { notify: (message: string) => notifications.push(message) },
+        modelRegistry: {
+          find: () => ({}),
+          complete: async (
+            _model: unknown,
+            request: { messages: Array<{ content: Array<{ text: string }> }> },
+          ) => {
+            titleRequests.push(request.messages[0]?.content[0]?.text ?? "");
+            return {
+              content: [{ type: "text", text: `Generated title ${titleRequests.length}` }],
+              stopReason: "stop",
+            };
+          },
+        },
+      } as unknown as ExtensionContext;
+
+      await autoSessionTitle(
+        pi,
+        async () => "Writing guidance",
+        async () => {
+          staleChecks += 1;
+          if (staleChecks === 1) {
+            activeRequestController.abort();
+            throw new Error("Request cancelled");
+          }
+          throw new Error("Jev unavailable");
+        },
+      );
+      sessionStart?.({}, ctx);
+      await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(sessionName).toBe("Generated title 1");
+
+      activeRequestController = new AbortController();
+      activeRequestController.abort();
+      requestSignal = activeRequestController.signal;
+      await beforeAgentStart?.({ prompt: "Clarify the feature" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(staleChecks).toBe(0);
+      expect(sessionName).toBe("Generated title 1");
+      expect(titleRequests).toHaveLength(1);
+      expect(notifications).toEqual([]);
+
+      activeRequestController = new AbortController();
+      requestSignal = activeRequestController.signal;
+      await beforeAgentStart?.({ prompt: "Continue the feature" } as BeforeAgentStartEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(staleChecks).toBe(1);
+      expect(sessionName).toBe("Generated title 1");
+      expect(titleRequests).toHaveLength(1);
+      expect(notifications).toEqual([]);
+
+      requestSignal = new AbortController().signal;
+      await beforeAgentStart?.(
+        { prompt: "Add an implementation detail" } as BeforeAgentStartEvent,
+        ctx,
+      );
+      await agentEnd?.({}, ctx);
+      expect(staleChecks).toBe(2);
+      expect(sessionName).toBe("Generated title 1");
+      expect(titleRequests).toHaveLength(1);
+      expect(notifications).toEqual([
+        "Could not assess whether the session title is stale: Jev unavailable",
+      ]);
     } finally {
       if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;

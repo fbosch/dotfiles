@@ -131,6 +131,7 @@ async function isTitleMateriallyStale(
   ctx: ExtensionContext,
   currentTitle: string,
   latestUserPrompt: string,
+  signal: AbortSignal,
   askQuestion: JevQuestionAsker,
 ): Promise<boolean> {
   const answers = await askQuestion(
@@ -150,7 +151,7 @@ async function isTitleMateriallyStale(
       },
     },
     ctx.modelRegistry,
-    ctx.signal,
+    signal,
   );
   const answer = answers[TITLE_STALE_QUESTION_ID];
   if (
@@ -224,16 +225,20 @@ export default async function autoSessionTitle(
     }
 
     if (generatedTitle !== undefined) {
+      const requestSignal = ctx.signal;
+      if (requestSignal.aborted) return;
       try {
         const stale = await isTitleMateriallyStale(
           ctx,
           generatedTitle,
           latestUserPrompt,
+          requestSignal,
           askQuestion,
         );
         jevErrorNotified = false;
         if (!stale) return;
       } catch (error) {
+        if (requestSignal.aborted) return;
         if (!jevErrorNotified) {
           const message = error instanceof Error ? error.message : String(error);
           ctx.ui.notify(
