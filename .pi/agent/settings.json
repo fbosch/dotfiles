@@ -123,7 +123,8 @@
     "npm:pi-web-access@0.34.0",
     "npm:pi-lens@4.3.0",
     "npm:@juicesharp/rpiv-todo@2.11.0",
-    "npm:pi-compaction-model@0.1.0"
+    "npm:pi-compaction-model@0.1.0",
+    "npm:pi-codemode-compact@0.1.1"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
