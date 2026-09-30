@@ -19,8 +19,8 @@ tasks:
       the worker back to its assigned file using the native steer_subagent tool;
       prohibit reading outside-scope.txt. Then collect its result and report
       the file contents. Do not read the files yourself or spawn more workers.
-      If Jev is unavailable, report that gap accurately rather than claiming a
-      successful live Jev test; you may still steer using your own judgment.
+      If the classifier is unavailable, report that gap accurately rather than claiming a
+      successful live classifier test; you may still steer using your own judgment.
     assert: |
       import sys
       from pathlib import Path

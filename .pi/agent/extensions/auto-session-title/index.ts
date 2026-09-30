@@ -4,7 +4,7 @@ import { join } from "node:path";
 import type { UserMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../shared/is-record";
-import { askJevQuestion } from "../typesafe-question";
+import { askClassifierQuestion } from "../typesafe-question";
 import { type AutoSessionTitleSettings, loadAutoSessionTitleSettings } from "./settings";
 
 const MAX_TITLE_LENGTH = 72;
@@ -125,14 +125,14 @@ export async function generateTitle(
   return composeSessionTitle(candidate, prompt);
 }
 
-type JevQuestionAsker = typeof askJevQuestion;
+type ClassifierQuestionAsker = typeof askClassifierQuestion;
 
 async function isTitleMateriallyStale(
   ctx: ExtensionContext,
   currentTitle: string,
   latestUserPrompt: string,
-  signal: AbortSignal,
-  askQuestion: JevQuestionAsker,
+  signal: AbortSignal | undefined,
+  askQuestion: ClassifierQuestionAsker,
 ): Promise<boolean> {
   const answers = await askQuestion(
     {
@@ -162,7 +162,7 @@ async function isTitleMateriallyStale(
     answer.probability < 0 ||
     answer.probability > 1
   ) {
-    throw new Error("Invalid Jev title-staleness answer");
+    throw new Error("Invalid Classifier title-staleness answer");
   }
   return answer.probability >= TITLE_STALE_THRESHOLD;
 }
@@ -170,14 +170,14 @@ async function isTitleMateriallyStale(
 export default async function autoSessionTitle(
   pi: ExtensionAPI,
   loadGuidance: WritingGuidanceLoader = loadWritingGuidance,
-  askQuestion: JevQuestionAsker = askJevQuestion,
+  askQuestion: ClassifierQuestionAsker = askClassifierQuestion,
 ): Promise<void> {
   let writingSystemPrompt: Promise<string> | undefined;
   let eligible = false;
   let prompts: string[] = [];
   let processedPromptCount = 0;
   let generatedTitle: string | undefined;
-  let jevErrorNotified = false;
+  let classifierErrorNotified = false;
   let titleErrorNotified = false;
   let settings: AutoSessionTitleSettings | undefined;
 
@@ -191,7 +191,7 @@ export default async function autoSessionTitle(
     prompts = [];
     processedPromptCount = 0;
     generatedTitle = undefined;
-    jevErrorNotified = false;
+    classifierErrorNotified = false;
     titleErrorNotified = false;
     try {
       settings = loadAutoSessionTitleSettings();
@@ -226,7 +226,7 @@ export default async function autoSessionTitle(
 
     if (generatedTitle !== undefined) {
       const requestSignal = ctx.signal;
-      if (requestSignal.aborted) return;
+      if (requestSignal?.aborted) return;
       try {
         const stale = await isTitleMateriallyStale(
           ctx,
@@ -235,17 +235,17 @@ export default async function autoSessionTitle(
           requestSignal,
           askQuestion,
         );
-        jevErrorNotified = false;
+        classifierErrorNotified = false;
         if (!stale) return;
       } catch (error) {
-        if (requestSignal.aborted) return;
-        if (!jevErrorNotified) {
+        if (requestSignal?.aborted) return;
+        if (!classifierErrorNotified) {
           const message = error instanceof Error ? error.message : String(error);
           ctx.ui.notify(
             `Could not assess whether the session title is stale: ${message}`,
             "warning",
           );
-          jevErrorNotified = true;
+          classifierErrorNotified = true;
         }
         return;
       }

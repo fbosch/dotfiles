@@ -6,8 +6,8 @@ import { createNativeClassifierRegistry } from "../../lib/__tests__/native-class
 import {
   type CommitMessagePilotCase,
   loadCommitMessagePilotCases,
-  runCommitMessageJevPilot,
-} from "../commit-message-jev-pilot";
+  runCommitMessageClassifierPilot,
+} from "../commit-message-classifier-pilot";
 
 const modelRegistryPromise = createNativeClassifierRegistry();
 
@@ -25,11 +25,11 @@ function pilotCase(overrides: Partial<CommitMessagePilotCase> = {}): CommitMessa
   };
 }
 
-describe("commit-message Jev pilot", () => {
-  test("compares one bounded Jev request with deterministic and existing judge results", async () => {
+describe("commit-message Classifier pilot", () => {
+  test("compares one bounded Classifier request with deterministic and existing judge results", async () => {
     const modelRegistry = await modelRegistryPromise;
     let requestBody: Record<string, unknown> | undefined;
-    const report = await runCommitMessageJevPilot(
+    const report = await runCommitMessageClassifierPilot(
       [
         pilotCase(),
         pilotCase({ id: "case-fail", deterministicPass: false, existingJudgePass: false }),
@@ -53,7 +53,10 @@ describe("commit-message Jev pilot", () => {
 
     expect(report.gatewayFailure).toBeUndefined();
     expect(report.usage).toEqual({ inputTokens: 300, outputTokens: 20 });
-    expect(report.comparisons.map((comparison) => comparison.jevVerdict)).toEqual(["pass", "fail"]);
+    expect(report.comparisons.map((comparison) => comparison.classifierVerdict)).toEqual([
+      "pass",
+      "fail",
+    ]);
     expect(
       report.comparisons.every((comparison) => comparison.disagreesWithDeterministic === false),
     ).toBe(true);
@@ -65,20 +68,23 @@ describe("commit-message Jev pilot", () => {
     expect(Array.isArray(state.cases)).toBe(true);
   });
 
-  test("keeps Jev advisory when it disagrees or returns an unusable response", async () => {
+  test("keeps Classifier advisory when it disagrees or returns an unusable response", async () => {
     const modelRegistry = await modelRegistryPromise;
-    const disagree = await runCommitMessageJevPilot([pilotCase({ deterministicPass: false })], {
-      modelRegistry,
-      fetch: async () =>
-        new Response(JSON.stringify({ answers: { case_0: { type: "noul", noul: 0.99 } } })),
-    });
+    const disagree = await runCommitMessageClassifierPilot(
+      [pilotCase({ deterministicPass: false })],
+      {
+        modelRegistry,
+        fetch: async () =>
+          new Response(JSON.stringify({ answers: { case_0: { type: "noul", noul: 0.99 } } })),
+      },
+    );
     expect(disagree.comparisons[0]).toMatchObject({
-      jevVerdict: "pass",
+      classifierVerdict: "pass",
       falsePass: true,
       disagreesWithDeterministic: true,
     });
 
-    const unavailable = await runCommitMessageJevPilot([pilotCase()], {
+    const unavailable = await runCommitMessageClassifierPilot([pilotCase()], {
       modelRegistry,
       fetch: async () => new Response(JSON.stringify({ answers: {} })),
     });
@@ -86,13 +92,13 @@ describe("commit-message Jev pilot", () => {
       stage: "request",
       reason: "request-failure",
     });
-    expect(unavailable.comparisons[0]?.jevVerdict).toBe("unavailable");
+    expect(unavailable.comparisons[0]?.classifierVerdict).toBe("unavailable");
     expect(unavailable.comparisons[0]?.disagreesWithDeterministic).toBeNull();
   });
 
   test("returns a safe gateway failure without raw auth details", async () => {
     const registry = await modelRegistryPromise;
-    const report = await runCommitMessageJevPilot([pilotCase()], {
+    const report = await runCommitMessageClassifierPilot([pilotCase()], {
       modelRegistry: {
         findOfType: registry.findOfType.bind(registry),
         classify: async () => {
@@ -105,7 +111,7 @@ describe("commit-message Jev pilot", () => {
   });
 
   test("loads bounded existing attempts and preserves the eval rubric", async () => {
-    const root = await mkdtemp(join(tmpdir(), "commit-message-jev-pilot-"));
+    const root = await mkdtemp(join(tmpdir(), "commit-message-classifier-pilot-"));
     try {
       const specPath = join(root, "commit-message.eval.yaml");
       const resultPath = join(root, "result.json");

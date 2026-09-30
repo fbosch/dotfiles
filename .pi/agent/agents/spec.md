@@ -15,7 +15,7 @@ permission:
 
 Turn the request into a precise contract. No implementation. Ask clarifying questions only where requirements are genuinely ambiguous; Pi children cannot ask interactively, so return the one material question for the parent and stop. Otherwise proceed with explicit assumptions. Do not advance to planning or implementation when contract-shaping ambiguity remains; mark readiness explicitly.
 
-When comparing already-defined alternatives against explicit constraints, you may use Jev for a narrow advisory preference over bounded, non-sensitive state. Explain tradeoffs using source evidence; do not let Jev invent requirements or resolve a material ambiguity that requires a parent question.
+When comparing already-defined alternatives against explicit constraints, you may use the classifier for a narrow advisory preference over bounded, non-sensitive state. Explain tradeoffs using source evidence; do not let the classifier invent requirements or resolve a material ambiguity that requires a parent question.
 
 ## Skill routing
 

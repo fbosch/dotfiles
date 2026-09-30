@@ -8,10 +8,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
-  DEFAULT_JEV_TIMEOUT_MS,
-  type JevClassifierFetch,
-  requestJevClassifier,
-} from "../../lib/jev-classifier";
+  type ClassifierFetch,
+  DEFAULT_CLASSIFIER_TIMEOUT_MS,
+  requestClassifier,
+} from "../../lib/classifier";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
 
@@ -20,13 +20,13 @@ const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
-const MAX_JEV_CANDIDATES = 24;
-const MAX_JEV_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
-const DEFAULT_JEV_TOOL_DISCOVERY_CONFIG = {
+const MAX_CLASSIFIER_CANDIDATES = 24;
+const MAX_CLASSIFIER_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
+const DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG = {
   enabled: true,
-  timeoutMs: DEFAULT_JEV_TIMEOUT_MS,
+  timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
 } as const;
-const JEV_NO_MATCH = "no_match";
+const CLASSIFIER_NO_MATCH = "no_match";
 
 const DEFERRED_TOOL_NAMES = new Set([
   "exec",
@@ -70,29 +70,29 @@ const ToolSearchParameters = Type.Object(
 interface ToolSearchDetails {
   matches: string[];
   added: string[];
-  rankingSource: "jev" | "lexical";
+  rankingSource: "classifier" | "lexical";
 }
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
 
-export interface JevToolDiscoveryConfig {
+export interface ClassifierToolDiscoveryConfig {
   readonly enabled: boolean;
   readonly timeoutMs: number;
 }
 
-function readJevToolDiscoverySection(
+function readClassifierToolDiscoverySection(
   settings: unknown,
 ): Record<string, unknown> | null | undefined {
-  if (!isRecord(settings) || settings.jev === undefined) return undefined;
-  if (!isRecord(settings.jev)) return null;
-  const section = settings.jev.toolDiscovery;
+  if (!isRecord(settings) || settings.classifier === undefined) return undefined;
+  if (!isRecord(settings.classifier)) return null;
+  const section = settings.classifier.toolDiscovery;
   return section === undefined || isRecord(section) ? section : null;
 }
 
-function readJevToolDiscoveryConfig(
+function readClassifierToolDiscoveryConfig(
   section: Record<string, unknown> | null | undefined,
-  current: JevToolDiscoveryConfig,
-): JevToolDiscoveryConfig {
+  current: ClassifierToolDiscoveryConfig,
+): ClassifierToolDiscoveryConfig {
   if (section === undefined) return current;
   if (
     section === null ||
@@ -107,22 +107,25 @@ function readJevToolDiscoveryConfig(
     typeof timeoutMs !== "number" ||
     !Number.isInteger(timeoutMs) ||
     timeoutMs < 1 ||
-    timeoutMs > MAX_JEV_TIMEOUT_MS
+    timeoutMs > MAX_CLASSIFIER_TIMEOUT_MS
   ) {
     return { enabled: false, timeoutMs: current.timeoutMs };
   }
   return { enabled, timeoutMs };
 }
 
-export function resolveJevToolDiscoveryConfig(
+export function resolveClassifierToolDiscoveryConfig(
   globalSettings: unknown,
   projectSettings?: unknown,
-): JevToolDiscoveryConfig {
-  const global = readJevToolDiscoveryConfig(
-    readJevToolDiscoverySection(globalSettings),
-    DEFAULT_JEV_TOOL_DISCOVERY_CONFIG,
+): ClassifierToolDiscoveryConfig {
+  const global = readClassifierToolDiscoveryConfig(
+    readClassifierToolDiscoverySection(globalSettings),
+    DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG,
   );
-  return readJevToolDiscoveryConfig(readJevToolDiscoverySection(projectSettings), global);
+  return readClassifierToolDiscoveryConfig(
+    readClassifierToolDiscoverySection(projectSettings),
+    global,
+  );
 }
 
 function getConfiguredPrefixes(settings: unknown): string[] | undefined {
@@ -241,23 +244,23 @@ export function expandDeferredToolFamilyMatches(
   return expanded;
 }
 
-interface JevCandidate {
+interface ClassifierCandidate {
   id: string;
   tool: ToolInfo;
 }
 
-export interface JevRankingOptions {
+export interface ClassifierRankingOptions {
   modelRegistry: Pick<ExtensionContext["modelRegistry"], "findOfType" | "classify">;
-  fetch?: JevClassifierFetch;
+  fetch?: ClassifierFetch;
   timeoutMs?: number;
 }
 
-function buildJevCandidatePool(
+function buildClassifierCandidatePool(
   tools: readonly ToolInfo[],
   query: string,
   prefixes: readonly string[],
-): JevCandidate[] {
-  const lexicalMatches = searchDeferredTools(tools, query, MAX_JEV_CANDIDATES, prefixes);
+): ClassifierCandidate[] {
+  const lexicalMatches = searchDeferredTools(tools, query, MAX_CLASSIFIER_CANDIDATES, prefixes);
   const selectedNames = new Set(lexicalMatches.map((tool) => tool.name));
   const candidates = [...lexicalMatches];
 
@@ -266,7 +269,7 @@ function buildJevCandidatePool(
     .filter((candidate) => isDeferredToolName(candidate.name, prefixes))
     .filter((candidate) => !selectedNames.has(candidate.name))
     .sort((left, right) => left.name.localeCompare(right.name))) {
-    if (candidates.length >= MAX_JEV_CANDIDATES) break;
+    if (candidates.length >= MAX_CLASSIFIER_CANDIDATES) break;
     selectedNames.add(tool.name);
     candidates.push(tool);
   }
@@ -274,11 +277,14 @@ function buildJevCandidatePool(
   return candidates.map((tool, index) => ({ id: `candidate_${index}`, tool }));
 }
 
-function createJevRequest(candidates: readonly JevCandidate[], query: string): ClassifierContext {
+function createClassifierRequest(
+  candidates: readonly ClassifierCandidate[],
+  query: string,
+): ClassifierContext {
   const criteria = Object.fromEntries(
     candidates.map(({ id, tool }) => [id, `${tool.name}: ${compactDescription(tool.description)}`]),
   );
-  criteria[JEV_NO_MATCH] = "No candidate provides the capability requested by the query.";
+  criteria[CLASSIFIER_NO_MATCH] = "No candidate provides the capability requested by the query.";
 
   return {
     state: {
@@ -300,35 +306,35 @@ function createJevRequest(candidates: readonly JevCandidate[], query: string): C
   };
 }
 
-function selectJevRanking(
+function selectClassifierRanking(
   choice: string,
-  candidates: readonly JevCandidate[],
+  candidates: readonly ClassifierCandidate[],
   limit: number,
 ): ToolInfo[] | undefined {
-  if (choice === JEV_NO_MATCH) return [];
+  if (choice === CLASSIFIER_NO_MATCH) return [];
   const selectedCandidate = candidates.find(({ id }) => id === choice);
   return selectedCandidate === undefined || limit < 1 ? [] : [selectedCandidate.tool];
 }
 
 export interface RankedToolResult {
   matches: ToolInfo[];
-  rankingSource: "jev" | "lexical";
+  rankingSource: "classifier" | "lexical";
 }
 
-export async function rankDeferredToolsWithJev(
+export async function rankDeferredToolsWithClassifier(
   tools: readonly ToolInfo[],
   query: string,
   limit: number,
   prefixes: readonly string[],
-  options: JevRankingOptions,
+  options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult | undefined> {
-  const candidates = buildJevCandidatePool(tools, query, prefixes);
+  const candidates = buildClassifierCandidatePool(tools, query, prefixes);
   if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
 
-  const result = await requestJevClassifier(
+  const result = await requestClassifier(
     options.modelRegistry,
-    createJevRequest(candidates, query),
+    createClassifierRequest(candidates, query),
     {
       ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
       ...(signal === undefined ? {} : { signal }),
@@ -339,21 +345,21 @@ export async function rankDeferredToolsWithJev(
 
   const answer = result.value.answers.best_tool;
   if (answer?.type !== "choice") return undefined;
-  const matches = selectJevRanking(answer.choice, candidates, limit);
-  return matches === undefined ? undefined : { matches, rankingSource: "jev" };
+  const matches = selectClassifierRanking(answer.choice, candidates, limit);
+  return matches === undefined ? undefined : { matches, rankingSource: "classifier" };
 }
 
-export async function searchDeferredToolsWithJevFallback(
+export async function searchDeferredToolsWithClassifierFallback(
   tools: readonly ToolInfo[],
   query: string,
   limit: number,
   prefixes: readonly string[],
-  options: JevRankingOptions,
+  options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult> {
   const lexicalMatches = searchDeferredTools(tools, query, limit, prefixes);
   return (
-    (await rankDeferredToolsWithJev(tools, query, limit, prefixes, options, signal)) ?? {
+    (await rankDeferredToolsWithClassifier(tools, query, limit, prefixes, options, signal)) ?? {
       matches: lexicalMatches,
       rankingSource: "lexical",
     }
@@ -369,9 +375,14 @@ function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly stri
   return resolveDeferredToolPrefixes(settings.getGlobalSettings(), settings.getProjectSettings());
 }
 
-function getConfiguredJevToolDiscovery(ctx: ExtensionContext): JevToolDiscoveryConfig {
+function getConfiguredClassifierToolDiscovery(
+  ctx: ExtensionContext,
+): ClassifierToolDiscoveryConfig {
   const settings = getConfiguredSettings(ctx);
-  return resolveJevToolDiscoveryConfig(settings.getGlobalSettings(), settings.getProjectSettings());
+  return resolveClassifierToolDiscoveryConfig(
+    settings.getGlobalSettings(),
+    settings.getProjectSettings(),
+  );
 }
 export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
   let subagentAdmittedTools: ReadonlySet<string> | undefined;
@@ -399,16 +410,16 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
         const tools = searchableTools(ctx);
         const prefixes = getConfiguredDeferredToolPrefixes(ctx);
-        const jevConfig = getConfiguredJevToolDiscovery(ctx);
-        const ranked = jevConfig.enabled
-          ? await searchDeferredToolsWithJevFallback(
+        const classifierConfig = getConfiguredClassifierToolDiscovery(ctx);
+        const ranked = classifierConfig.enabled
+          ? await searchDeferredToolsWithClassifierFallback(
               tools,
               params.query,
               params.limit ?? DEFAULT_MATCHES,
               prefixes,
               {
                 modelRegistry: ctx.modelRegistry,
-                timeoutMs: jevConfig.timeoutMs,
+                timeoutMs: classifierConfig.timeoutMs,
               },
               signal,
             )

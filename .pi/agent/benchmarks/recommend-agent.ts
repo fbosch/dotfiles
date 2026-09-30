@@ -17,7 +17,7 @@ import {
 } from "../extensions/recommend-agent/recommendation";
 import { DEFAULT_RECOMMEND_AGENT_CONFIG } from "../extensions/recommend-agent/settings";
 import { createNativeClassifierRegistry } from "../lib/__tests__/native-classifier-registry";
-import type { JevClassifierFetch } from "../lib/jev-classifier";
+import type { ClassifierFetch } from "../lib/classifier";
 import {
   RECOMMEND_AGENT_BENCHMARK_CASES,
   RECOMMEND_AGENT_BENCHMARK_CATALOG,
@@ -40,7 +40,7 @@ const routingPolicy = readGlobalRoutingPolicy(join(import.meta.dir, "..")).polic
 if (!routingPolicy) throw new Error("canonical routing policy is unavailable");
 const FROZEN_ROUTING_POLICY = routingPolicy.body;
 
-type RunMode = "mock-jev" | "jev" | "primary";
+type RunMode = "mock-classifier" | "classifier" | "primary";
 
 interface CliOptions {
   readonly mode: RunMode;
@@ -166,7 +166,7 @@ function mockChoice(task: string, intent: string, available: readonly string[]):
   return available.includes(preferred) ? preferred : "abstain";
 }
 
-function mockFetch(): JevClassifierFetch {
+function mockFetch(): ClassifierFetch {
   return async (_input, init) => {
     let body: { state: { task: string; intent: string; agents: readonly { id: string }[] } };
     try {
@@ -240,7 +240,7 @@ function lexicalPrediction(testCase: RecommendationBenchmarkCase): BenchmarkPred
   return { names: [best.candidate.id] };
 }
 
-async function runMockJev(
+async function runMockClassifier(
   cases: readonly RecommendationBenchmarkCase[],
 ): Promise<BenchmarkPrediction[]> {
   const predictions: BenchmarkPrediction[] = [];
@@ -276,7 +276,7 @@ async function runMockJev(
   return predictions;
 }
 
-async function runHostedJev(
+async function runHostedClassifier(
   cases: readonly RecommendationBenchmarkCase[],
   options: CliOptions,
 ): Promise<{ predictions: (BenchmarkPrediction | undefined)[]; execution: unknown }> {
@@ -427,13 +427,13 @@ function parsePositive(value: string, name: string): number {
 
 function usage(): string {
   return [
-    "Usage: bun benchmarks/recommend-agent.ts [--mock | --jev | --primary provider/model] [options]",
+    "Usage: bun benchmarks/recommend-agent.ts [--mock | --classifier | --primary provider/model] [options]",
     "",
     "Offline mock is the default and performs no paid calls.",
     "Hosted modes are opt-in; without --all they evaluate one case by default.",
     "Options:",
-    "  --mock                 Run the deterministic mocked Jev-shaped benchmark (default)",
-    "  --jev                  Run the hosted TypeSafe Jev benchmark",
+    "  --mock                 Run the deterministic mocked Classifier-shaped benchmark (default)",
+    "  --classifier                  Run the hosted TypeSafe Classifier benchmark",
     "  --primary MODEL        Run the opt-in primary-model baseline",
     "  --limit N              Hosted cases to attempt (1-13)",
     "  --all                  Explicitly attempt every fixture",
@@ -443,7 +443,7 @@ function usage(): string {
 }
 
 function parseCli(argv: readonly string[]): CliOptions {
-  let mode: RunMode = "mock-jev";
+  let mode: RunMode = "mock-classifier";
   let limit = DEFAULT_HOSTED_LIMIT;
   let all = false;
   let output: string | undefined;
@@ -455,8 +455,8 @@ function parseCli(argv: readonly string[]): CliOptions {
     if (argument === "--help") {
       console.log(usage());
       process.exit(0);
-    } else if (argument === "--mock") mode = "mock-jev";
-    else if (argument === "--jev") mode = "jev";
+    } else if (argument === "--mock") mode = "mock-classifier";
+    else if (argument === "--classifier") mode = "classifier";
     else if (argument === "--primary" && next !== undefined) {
       mode = "primary";
       primaryModel = next;
@@ -506,15 +506,15 @@ async function main(): Promise<void> {
     ],
   };
 
-  if (options.mode === "mock-jev") {
-    const predictions = await runMockJev(cases);
-    report.mockJev = {
+  if (options.mode === "mock-classifier") {
+    const predictions = await runMockClassifier(cases);
+    report.mockClassifier = {
       metrics: calculateBenchmarkMetrics(metricsInput, predictions),
       preferenceOutcomes: preferenceMetrics(cases, predictions),
     };
-  } else if (options.mode === "jev") {
-    const run = await runHostedJev(cases, options);
-    report.hostedJev = {
+  } else if (options.mode === "classifier") {
+    const run = await runHostedClassifier(cases, options);
+    report.hostedClassifier = {
       metrics: calculateBenchmarkMetrics(metricsInput, run.predictions),
       preferenceOutcomes: preferenceMetrics(cases, run.predictions),
     };

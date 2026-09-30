@@ -6,7 +6,7 @@ import {
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import { requestJevClassifier } from "../../lib/jev-classifier";
+import { requestClassifier } from "../../lib/classifier";
 
 const ENGINE = "lightpanda";
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -133,7 +133,7 @@ export interface RunTraceEntry {
   readonly snapshot: string;
   readonly action: RunCandidate["trace"];
   readonly probability: number;
-  readonly selectionMode: "deterministic" | "jev";
+  readonly selectionMode: "deterministic" | "classifier";
   readonly authorizationMode: "choice" | "independent";
   readonly authorizationProbability?: number;
 }
@@ -427,11 +427,11 @@ export function evaluateStepDecision(
   confidenceThreshold: number,
 ): StepDecision {
   const probability = decision.probabilities[decision.choice];
-  if (probability === undefined) throw new Error("Jev omitted selected probability");
+  if (probability === undefined) throw new Error("Classifier omitted selected probability");
   if (decision.choice === NO_ACTION) return { executed: false, reason: "no_action", probability };
 
   const candidate = candidates.find(({ id }) => id === decision.choice);
-  if (candidate === undefined) throw new Error("Jev selected an unknown browser candidate");
+  if (candidate === undefined) throw new Error("Classifier selected an unknown browser candidate");
   if (probability < confidenceThreshold) {
     return { executed: false, reason: "low_confidence", candidate, probability };
   }
@@ -517,7 +517,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     name: "browser_step",
     label: "Take browser step",
     description:
-      "Take one confidence-gated browser step: snapshot the page, use Jev to choose a clickable candidate and verify it is navigation-only, click it, then return the updated snapshot. Does not execute uncertain or consequential actions.",
+      "Take one confidence-gated browser step: snapshot the page, use Classifier to choose a clickable candidate and verify it is navigation-only, click it, then return the updated snapshot. Does not execute uncertain or consequential actions.",
     parameters: StepParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: StepInput, signal, _onUpdate, ctx) {
@@ -532,7 +532,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         };
       }
 
-      const choiceResult = await requestJevClassifier(
+      const choiceResult = await requestClassifier(
         ctx.modelRegistry,
         createDecisionRequest({
           objective: params.objective,
@@ -544,9 +544,11 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           timeoutMs: DECISION_TIMEOUT_MS,
         },
       );
-      if (!choiceResult.ok) throw new Error(`Jev browser step failed: ${choiceResult.reason}`);
+      if (!choiceResult.ok)
+        throw new Error(`Classifier browser step failed: ${choiceResult.reason}`);
       const choice = browserDecision(choiceResult.value.answers.next_action);
-      if (choice === undefined) throw new Error("Jev returned an invalid browser step decision");
+      if (choice === undefined)
+        throw new Error("Classifier returned an invalid browser step decision");
 
       let step = evaluateStepDecision(
         choice,
@@ -554,7 +556,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE,
       );
       if (step.executed && step.candidate !== undefined) {
-        const safetyResult = await requestJevClassifier(
+        const safetyResult = await requestClassifier(
           ctx.modelRegistry,
           createStepSafetyRequest(params.objective, before, step.candidate),
           {
@@ -563,10 +565,10 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           },
         );
         if (!safetyResult.ok)
-          throw new Error(`Jev browser safety check failed: ${safetyResult.reason}`);
+          throw new Error(`Classifier browser safety check failed: ${safetyResult.reason}`);
         const safetyAnswer = safetyResult.value.answers.navigation_only;
         if (safetyAnswer?.type !== "bool") {
-          throw new Error("Jev returned an invalid browser safety decision");
+          throw new Error("Classifier returned an invalid browser safety decision");
         }
         const safetyProbability = safetyAnswer.probability;
         step = applyStepSafety(step, safetyProbability);
@@ -604,7 +606,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     name: "browser_run",
     label: "Run browser workflow",
     description:
-      "Run a bounded multi-step browser workflow. Explicit inputs with a unique control match run directly; Jev selects ambiguous or control actions and independently authorizes button and link clicks.",
+      "Run a bounded multi-step browser workflow. Explicit inputs with a unique control match run directly; Classifier selects ambiguous or control actions and independently authorizes button and link clicks.",
     parameters: RunParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: RunInput, signal, _onUpdate, ctx) {
@@ -651,7 +653,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           probability = 1;
           selectionMode = "deterministic";
         } else {
-          const choiceResult = await requestJevClassifier(
+          const choiceResult = await requestClassifier(
             ctx.modelRegistry,
             createDecisionRequest({
               objective: params.objective,
@@ -661,13 +663,14 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
           );
           if (!choiceResult.ok) {
-            throw new Error(`Jev browser run failed: ${choiceResult.reason}`);
+            throw new Error(`Classifier browser run failed: ${choiceResult.reason}`);
           }
           const choice = browserDecision(choiceResult.value.answers.next_action);
-          if (choice === undefined) throw new Error("Jev returned an invalid browser run decision");
+          if (choice === undefined)
+            throw new Error("Classifier returned an invalid browser run decision");
           const selectedProbability = choice.probabilities[choice.choice];
           if (selectedProbability === undefined)
-            throw new Error("Jev omitted selected probability");
+            throw new Error("Classifier omitted selected probability");
           if (choice.choice === NO_ACTION) {
             stopReason = "no_action";
             break;
@@ -679,11 +682,11 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
           const selectedCandidate = candidates.find(({ id }) => id === choice.choice);
           if (selectedCandidate === undefined) {
-            throw new Error("Jev selected an unknown browser run candidate");
+            throw new Error("Classifier selected an unknown browser run candidate");
           }
           candidate = selectedCandidate;
           probability = selectedProbability;
-          selectionMode = "jev";
+          selectionMode = "classifier";
         }
 
         const cycleKey = `${snapshot}\u0000${candidate.id}`;
@@ -695,17 +698,19 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         let authorizationProbability: number | undefined;
         if (candidate.authorization === "independent") {
-          const authorizationResult = await requestJevClassifier(
+          const authorizationResult = await requestClassifier(
             ctx.modelRegistry,
             createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
           );
           if (!authorizationResult.ok) {
-            throw new Error(`Jev browser authorization failed: ${authorizationResult.reason}`);
+            throw new Error(
+              `Classifier browser authorization failed: ${authorizationResult.reason}`,
+            );
           }
           const authorizationAnswer = authorizationResult.value.answers.authorized;
           if (authorizationAnswer?.type !== "bool") {
-            throw new Error("Jev returned an invalid browser authorization decision");
+            throw new Error("Classifier returned an invalid browser authorization decision");
           }
           const authorizedProbability = authorizationAnswer.probability;
           authorizationProbability = authorizedProbability;
@@ -783,7 +788,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     name: "browser_decide",
     label: "Choose browser action",
     description:
-      "Ask Jev to choose among explicit candidate browser actions using a bounded page snapshot. This is advisory and never executes the action.",
+      "Ask Classifier to choose among explicit candidate browser actions using a bounded page snapshot. This is advisory and never executes the action.",
     parameters: DecideParameters,
     async execute(_toolCallId, params: DecideInput, signal, _onUpdate, ctx) {
       const ids = params.actions.map((action) => action.id);
@@ -791,7 +796,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         throw new Error(`Action ids must be unique and must not use reserved id ${NO_ACTION}`);
       }
 
-      const decisionResult = await requestJevClassifier(
+      const decisionResult = await requestClassifier(
         ctx.modelRegistry,
         createDecisionRequest(params),
         {
@@ -800,13 +805,15 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         },
       );
       if (!decisionResult.ok) {
-        throw new Error(`Jev browser decision failed: ${decisionResult.reason}`);
+        throw new Error(`Classifier browser decision failed: ${decisionResult.reason}`);
       }
 
       const decision = browserDecision(decisionResult.value.answers.next_action);
-      if (decision === undefined) throw new Error("Jev returned an invalid browser decision");
+      if (decision === undefined)
+        throw new Error("Classifier returned an invalid browser decision");
       const selectedProbability = decision.probabilities[decision.choice];
-      if (selectedProbability === undefined) throw new Error("Jev omitted selected probability");
+      if (selectedProbability === undefined)
+        throw new Error("Classifier omitted selected probability");
       const text =
         decision.choice === NO_ACTION
           ? `No action selected (${selectedProbability.toFixed(3)})`

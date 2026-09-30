@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
 import {
-  createJevClassifierRequester,
-  type JevClassifierRegistry,
+  type ClassifierRegistry,
+  createClassifierRequester,
+  loadClassifierPreferences,
   OPENROUTER_PROVIDER_ID,
   VERCEL_GATEWAY_PROVIDER_ID,
-} from "../jev-classifier";
+} from "../classifier";
 import { createNativeClassifierRegistry } from "./native-classifier-registry";
 
 const boolInput: ClassifierContext = {
@@ -25,7 +26,7 @@ const boolInput: ClassifierContext = {
 let testAgentDirectory: string | undefined;
 
 beforeEach(() => {
-  testAgentDirectory = mkdtempSync(join(tmpdir(), "jev-classifier-test-"));
+  testAgentDirectory = mkdtempSync(join(tmpdir(), "classifier-test-"));
 });
 
 afterEach(() => {
@@ -36,7 +37,7 @@ afterEach(() => {
 
 function createRequester(now: () => number = Date.now) {
   if (testAgentDirectory === undefined) throw new Error("test agent directory was not created");
-  return createJevClassifierRequester(now, testAgentDirectory);
+  return createClassifierRequester(now, testAgentDirectory);
 }
 
 function writeSettings(settings: unknown): void {
@@ -68,9 +69,9 @@ type Observations = {
 };
 
 function observeRegistry(
-  registry: JevClassifierRegistry,
+  registry: ClassifierRegistry,
   observations: Observations,
-): JevClassifierRegistry {
+): ClassifierRegistry {
   return {
     findOfType: (type, provider, id) => {
       observations.lookups.push({ provider, id });
@@ -83,7 +84,7 @@ function observeRegistry(
   };
 }
 
-describe("requestJevClassifier", () => {
+describe("requestClassifier", () => {
   test("uses native default provider order and falls back to the second provider", async () => {
     const observations: Observations = { lookups: [], maxRetries: [] };
     const registry = observeRegistry(await createNativeClassifierRegistry(), observations);
@@ -114,7 +115,9 @@ describe("requestJevClassifier", () => {
 
   test("resolves the saved unprefixed latest alias through the native catalog", async () => {
     writeSettings({
-      jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-latest" }] },
+      classifier: {
+        providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-latest" }],
+      },
     });
     const observations: Observations = { lookups: [], maxRetries: [] };
     const registry = observeRegistry(await createNativeClassifierRegistry(), observations);
@@ -126,6 +129,16 @@ describe("requestJevClassifier", () => {
     expect(result).toMatchObject({ ok: true, value: { answers: { gate: { type: "bool" } } } });
     expect(observations.lookups).toEqual([
       { provider: OPENROUTER_PROVIDER_ID, id: "~typesafe/jev-latest" },
+    ]);
+  });
+
+  test("does not read the former jev preferences key", () => {
+    writeSettings({
+      jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "invalid-model" }] },
+    });
+    expect(loadClassifierPreferences(testAgentDirectory)).toEqual([
+      { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" },
+      { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
     ]);
   });
 
@@ -206,11 +219,11 @@ describe("requestJevClassifier", () => {
   });
   test("does not bill cached cooldown usage again", async () => {
     writeSettings({
-      jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" }] },
+      classifier: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" }] },
     });
     const native = await createNativeClassifierRegistry();
     let calls = 0;
-    const registry: JevClassifierRegistry = {
+    const registry: ClassifierRegistry = {
       findOfType: native.findOfType.bind(native),
       classify: async (_model, _input, options) => {
         calls++;

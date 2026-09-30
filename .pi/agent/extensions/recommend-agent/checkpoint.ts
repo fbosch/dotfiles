@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { StringEnum } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import type { JevClassifierFetch } from "../../lib/jev-classifier";
+import type { ClassifierFetch } from "../../lib/classifier";
 import { isRecord } from "../shared/is-record";
-import { askJevQuestion } from "../typesafe-question";
+import { askClassifierQuestion } from "../typesafe-question";
 
 export const SUBAGENT_CHECKPOINT_TOOL_NAME = "assess_subagent_checkpoint";
 
@@ -63,7 +63,11 @@ export type SubagentCheckpointAssessment =
     }
   | {
       readonly status: "unavailable";
-      readonly reason: "invalid-input" | "invalid-response" | "jev-unavailable" | "cache-capacity";
+      readonly reason:
+        | "invalid-input"
+        | "invalid-response"
+        | "classifier-unavailable"
+        | "cache-capacity";
       readonly advice: string;
       readonly duplicate: boolean;
     }
@@ -86,7 +90,7 @@ interface NormalizedCheckpoint {
 }
 
 export interface SubagentCheckpointAssessorOptions {
-  readonly fetch?: JevClassifierFetch;
+  readonly fetch?: ClassifierFetch;
 }
 
 export type SubagentCheckpointAssessor = (
@@ -318,7 +322,7 @@ async function assessCheckpoint(
   state: NormalizedCheckpoint["state"],
   registry: Pick<ModelRegistry, "findOfType" | "classify">,
   signal: AbortSignal | undefined,
-  fetch: JevClassifierFetch | undefined,
+  fetch: ClassifierFetch | undefined,
 ): Promise<SubagentCheckpointAssessment> {
   const input = {
     state,
@@ -328,11 +332,11 @@ async function assessCheckpoint(
     return unavailable("invalid-input");
 
   try {
-    const answers = await askJevQuestion(input, registry, signal, fetch);
+    const answers = await askClassifierQuestion(input, registry, signal, fetch);
     const parsed = parseAssessment(answers);
     return parsed ?? unavailable("invalid-response");
   } catch {
-    return signal?.aborted ? cancelled() : unavailable("jev-unavailable");
+    return signal?.aborted ? cancelled() : unavailable("classifier-unavailable");
   }
 }
 

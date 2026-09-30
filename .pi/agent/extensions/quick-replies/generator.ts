@@ -6,7 +6,7 @@ import { join } from "node:path";
 import type { AssistantMessage, ClassifierContext, TextContent, Tool } from "@earendil-works/pi-ai";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { type JevClassifierFetch, requestJevClassifier } from "../../lib/jev-classifier";
+import { type ClassifierFetch, requestClassifier } from "../../lib/classifier";
 import { resolveFastModelRequest } from "../openai-capabilities";
 import { resolveQuickReplyModel } from "./settings";
 
@@ -39,7 +39,7 @@ export type QuickReplyGenerator = (
 ) => Promise<QuickReply[]>;
 
 export interface QuickReplyGeneratorOptions {
-  readonly fetch?: JevClassifierFetch;
+  readonly fetch?: ClassifierFetch;
   readonly timeoutMs?: number;
 }
 
@@ -57,7 +57,7 @@ const MAX_RESPONSE_TOKENS = 384;
 const MAX_RESPONSE_CHARS = 4_096;
 const REQUEST_TIMEOUT_MS = 3_000;
 // Ranking is optional; cap its added latency so generator-order fallback stays prompt.
-const JEV_RANKING_TIMEOUT_MS = 1_200;
+const CLASSIFIER_RANKING_TIMEOUT_MS = 1_200;
 const SECRET_SCAN_TIMEOUT_MS = 500;
 const RIPSECRETS_ALLOWLIST_DIRECTIVE = "pragma: allowlist secret";
 const MIN_REPLIES = 1;
@@ -307,7 +307,7 @@ function createQuickReplyRankingRequest(
   };
 }
 
-async function rankQuickRepliesWithJev(
+async function rankQuickRepliesWithClassifier(
   ctx: Pick<ExtensionContext, "modelRegistry">,
   input: PreparedQuickReplyInput,
   replies: readonly QuickReply[],
@@ -319,13 +319,13 @@ async function rankQuickRepliesWithJev(
   if (replies.length === 0) return fallback;
 
   try {
-    const result = await requestJevClassifier(
+    const result = await requestClassifier(
       ctx.modelRegistry,
       createQuickReplyRankingRequest(input, replies),
       {
         ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
         signal,
-        timeoutMs: options.timeoutMs ?? JEV_RANKING_TIMEOUT_MS,
+        timeoutMs: options.timeoutMs ?? CLASSIFIER_RANKING_TIMEOUT_MS,
       },
     );
     if (signal.aborted) return [];
@@ -419,7 +419,7 @@ export function createQuickReplyGenerator(
         parseQuickReplyPayload(toolCall.arguments),
         signal,
       );
-      return rankQuickRepliesWithJev(ctx, prepared, safeReplies, signal, options);
+      return rankQuickRepliesWithClassifier(ctx, prepared, safeReplies, signal, options);
     }
 
     if (response.stopReason !== "stop") return [];
@@ -431,7 +431,7 @@ export function createQuickReplyGenerator(
       text += `${text.length === 0 ? "" : "\n"}${part.text}`;
     }
     const safeReplies = await filterSecretFreeReplies(parseQuickReplyResponse(text.trim()), signal);
-    return rankQuickRepliesWithJev(ctx, prepared, safeReplies, signal, options);
+    return rankQuickRepliesWithClassifier(ctx, prepared, safeReplies, signal, options);
   };
 }
 

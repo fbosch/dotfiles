@@ -9,19 +9,19 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import {
-  DEFAULT_JEV_TIMEOUT_MS,
-  type JevClassifierFailure,
-  type JevClassifierFetch,
-  type JevClassifierRegistry,
-  requestJevClassifier,
-} from "../../lib/jev-classifier";
+  type ClassifierFailure,
+  type ClassifierFetch,
+  type ClassifierRegistry,
+  DEFAULT_CLASSIFIER_TIMEOUT_MS,
+  requestClassifier,
+} from "../../lib/classifier";
 import { isRecord } from "../shared/is-record";
 import { disabledSkillNames } from "../skill-tweaks";
 
 const DEFAULT_THRESHOLD = 0.72;
-const DEFAULT_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
+const DEFAULT_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
 const DEFAULT_MAX_RECOMMENDATIONS = 3;
-const MAX_TIMEOUT_MS = DEFAULT_JEV_TIMEOUT_MS;
+const MAX_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
 const MAX_RECOMMENDATIONS = 5;
 const MAX_CATALOG_SKILLS = 96;
 const MAX_REQUEST_CHARS = 12_000;
@@ -69,9 +69,9 @@ export interface SkillSelectionResult {
 export type SkillSelectionFailure =
   | {
       readonly kind: "classifier-failure";
-      readonly provider?: JevClassifierFailure["provider"];
-      readonly stage: JevClassifierFailure["stage"];
-      readonly reason: JevClassifierFailure["reason"];
+      readonly provider?: ClassifierFailure["provider"];
+      readonly stage: ClassifierFailure["stage"];
+      readonly reason: ClassifierFailure["reason"];
       readonly httpStatus?: number;
       readonly retryAfterMs?: number;
       readonly usage?: Usage;
@@ -87,8 +87,8 @@ export type SkillSelectionAttempt =
   | { readonly ok: false; readonly failure: SkillSelectionFailure };
 
 export interface SkillSelectionRequestOptions {
-  readonly modelRegistry: JevClassifierRegistry;
-  readonly fetch?: JevClassifierFetch;
+  readonly modelRegistry: ClassifierRegistry;
+  readonly fetch?: ClassifierFetch;
   readonly signal?: AbortSignal;
   readonly onFetchAttempt?: () => void;
 }
@@ -97,11 +97,11 @@ type SkillSelectionSection = Record<string, unknown> | null | undefined;
 
 function settingSection(settings: unknown): SkillSelectionSection {
   if (isRecord(settings) === false) return undefined;
-  const jev = settings.jev;
-  if (jev === undefined) return undefined;
-  if (isRecord(jev) === false) return null;
+  const classifier = settings.classifier;
+  if (classifier === undefined) return undefined;
+  if (isRecord(classifier) === false) return null;
 
-  const section = jev.skillSelection;
+  const section = classifier.skillSelection;
   if (section === undefined || isRecord(section)) return section;
   return null;
 }
@@ -329,7 +329,7 @@ export function parseSkillSelectionResponseDetailed(
     : { ok: true, value: result };
 }
 
-export async function selectSkillsWithJevDetailed(
+export async function selectSkillsWithClassifierDetailed(
   prompt: string,
   candidates: readonly SkillCandidate[],
   config: Pick<SkillSelectionConfig, "threshold" | "maxRecommendations" | "timeoutMs">,
@@ -348,7 +348,7 @@ export async function selectSkillsWithJevDetailed(
     };
   }
 
-  const classifier = await requestJevClassifier(options.modelRegistry, request, {
+  const classifier = await requestClassifier(options.modelRegistry, request, {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     ...(options.onFetchAttempt === undefined ? {} : { onFetchAttempt: options.onFetchAttempt }),
@@ -388,13 +388,13 @@ export async function selectSkillsWithJevDetailed(
   return { ok: true, value: usage === undefined ? result : { ...result, usage } };
 }
 
-export async function selectSkillsWithJev(
+export async function selectSkillsWithClassifier(
   prompt: string,
   candidates: readonly SkillCandidate[],
   config: Pick<SkillSelectionConfig, "threshold" | "maxRecommendations" | "timeoutMs">,
   options: SkillSelectionRequestOptions,
 ): Promise<SkillSelectionResult | undefined> {
-  const attempt = await selectSkillsWithJevDetailed(prompt, candidates, config, options);
+  const attempt = await selectSkillsWithClassifierDetailed(prompt, candidates, config, options);
   return attempt.ok ? attempt.value : undefined;
 }
 
@@ -454,23 +454,24 @@ export interface SkillSelectionStatus {
   readonly candidateCount?: number;
   readonly elapsedMs?: number;
   readonly fetchAttempted: boolean;
-  readonly failureProvider?: JevClassifierFailure["provider"];
-  readonly failureStage?: JevClassifierFailure["stage"] | "evaluation";
+  readonly failureProvider?: ClassifierFailure["provider"];
+  readonly failureStage?: ClassifierFailure["stage"] | "evaluation";
   readonly httpStatus?: number;
 }
 
 interface SkillSelectionExtensionDependencies {
-  selectSkillsDetailed?: typeof selectSkillsWithJevDetailed;
+  selectSkillsDetailed?: typeof selectSkillsWithClassifierDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
   getDisabledNames?: (context: ExtensionContext, systemPrompt: string) => ReadonlySet<string>;
-  fetch?: JevClassifierFetch;
+  fetch?: ClassifierFetch;
   now?: () => number;
 }
 
 export function createSkillSelectionExtension(
   dependencies: SkillSelectionExtensionDependencies = {},
 ): (pi: ExtensionAPI) => void {
-  const selectSkillsDetailed = dependencies.selectSkillsDetailed ?? selectSkillsWithJevDetailed;
+  const selectSkillsDetailed =
+    dependencies.selectSkillsDetailed ?? selectSkillsWithClassifierDetailed;
   const getConfig = dependencies.getConfig ?? configuredSkillSelection;
   const getDisabledNames = dependencies.getDisabledNames ?? disabledNamesForContext;
   const now = dependencies.now ?? Date.now;
@@ -482,7 +483,7 @@ export function createSkillSelectionExtension(
   };
 
   return (pi) => {
-    pi.registerCommand("jev-status", {
+    pi.registerCommand("classifier-status", {
       description: "Show the latest advisory skill-selection lifecycle status",
       handler: async (_args, context) => {
         context.ui.notify(JSON.stringify(status), "info");
@@ -599,7 +600,7 @@ export function createSkillSelectionExtension(
           elapsedMs: Math.max(0, now() - startedAt),
           fetchAttempted,
         };
-        // Advisory selection must never change the default skill behavior when Jev is unavailable.
+        // Advisory selection must never change the default skill behavior when Classifier is unavailable.
         return;
       }
     });

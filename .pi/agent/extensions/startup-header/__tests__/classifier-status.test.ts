@@ -1,19 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { JEV_PROVIDER_IDS } from "../../../lib/jev-classifier";
-import { resolveJevStartupStatus } from "../jev-status";
+import { CLASSIFIER_PROVIDER_IDS } from "../../../lib/classifier";
+import { resolveClassifierStartupStatus } from "../classifier-status";
 
 const disabledSettings = {
-  jev: {
+  classifier: {
     toolDiscovery: { enabled: false },
     skillSelection: { enabled: false },
     recommendAgent: { enabled: false },
   },
 };
 
-describe("startup header Jev status", () => {
-  test("hides Jev when every feature is disabled", () => {
+describe("startup header Classifier status", () => {
+  test("hides Classifier when every feature is disabled", () => {
     let authChecks = 0;
-    const status = resolveJevStartupStatus(disabledSettings, undefined, {
+    const status = resolveClassifierStartupStatus(disabledSettings, undefined, {
       getProviderAuthStatus: () => {
         authChecks += 1;
         return { configured: true };
@@ -26,8 +26,8 @@ describe("startup header Jev status", () => {
 
   test("reports configured and enabled without resolving auth or making a request", () => {
     const calls: string[] = [];
-    const status = resolveJevStartupStatus(
-      { jev: { skillSelection: { enabled: true } } },
+    const status = resolveClassifierStartupStatus(
+      { classifier: { skillSelection: { enabled: true } } },
       undefined,
       {
         getProviderAuthStatus: (providerId: string) => {
@@ -41,26 +41,30 @@ describe("startup header Jev status", () => {
     );
 
     expect(status).toEqual({ state: "ready" });
-    expect(calls).toEqual([...JEV_PROVIDER_IDS]);
+    expect(calls).toEqual([...CLASSIFIER_PROVIDER_IDS]);
   });
 
   test("degrades an enabled feature when Gateway credentials are missing", () => {
     expect(
-      resolveJevStartupStatus(
+      resolveClassifierStartupStatus(
         disabledSettings,
-        { jev: { recommendAgent: { enabled: true } } },
+        { classifier: { recommendAgent: { enabled: true } } },
         { getProviderAuthStatus: () => ({ configured: false }) },
       ),
     ).toBeUndefined();
 
     expect(
-      resolveJevStartupStatus({ jev: { toolDiscovery: { enabled: true } } }, undefined, {
-        getProviderAuthStatus: () => ({ configured: false }),
-      }),
+      resolveClassifierStartupStatus(
+        { classifier: { toolDiscovery: { enabled: true } } },
+        undefined,
+        {
+          getProviderAuthStatus: () => ({ configured: false }),
+        },
+      ),
     ).toEqual({ state: "degraded" });
   });
 
   test("reports unknown when the public auth status API is unavailable", () => {
-    expect(resolveJevStartupStatus({}, undefined, {})).toEqual({ state: "unavailable" });
+    expect(resolveClassifierStartupStatus({}, undefined, {})).toEqual({ state: "unavailable" });
   });
 });

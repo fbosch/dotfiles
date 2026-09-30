@@ -5,10 +5,7 @@ import { join } from "node:path";
 import type { ClassifierAnswer, ClassifierContext, ClassifierResult } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
-import {
-  createJevClassifierRequester,
-  type JevClassifierRegistry,
-} from "../../../lib/jev-classifier";
+import { type ClassifierRegistry, createClassifierRequester } from "../../../lib/classifier";
 import {
   browserArgs,
   createDecisionRequest,
@@ -24,7 +21,7 @@ beforeAll(async () => {
   registry = await createNativeClassifierRegistry();
 });
 beforeEach(() => {
-  agentDirectory = mkdtempSync(join(tmpdir(), "agent-browser-jev-test-"));
+  agentDirectory = mkdtempSync(join(tmpdir(), "agent-browser-classifier-test-"));
 });
 afterEach(() => rmSync(agentDirectory, { recursive: true, force: true }));
 
@@ -39,9 +36,7 @@ function classifierResult(answers: Record<string, ClassifierAnswer>): Classifier
   };
 }
 
-function registryWithClassifier(
-  classify: JevClassifierRegistry["classify"],
-): JevClassifierRegistry {
+function registryWithClassifier(classify: ClassifierRegistry["classify"]): ClassifierRegistry {
   return { findOfType: registry.findOfType.bind(registry), classify };
 }
 
@@ -78,7 +73,7 @@ describe("agent-browser extension", () => {
     ]);
 
     const seen: ClassifierContext[] = [];
-    const request = createJevClassifierRequester(Date.now, agentDirectory);
+    const request = createClassifierRequester(Date.now, agentDirectory);
     const nativeRegistry = registryWithClassifier(async (_model, input) => {
       seen.push(input);
       const [questionId, question] = Object.entries(input.questions)[0] ?? [];

@@ -10,8 +10,8 @@ const OPENROUTER_GATEWAY_ENDPOINT = "https://openrouter.ai/api/v1/systemone";
 const VERCEL_GATEWAY_ENDPOINT = "https://ai-gateway.vercel.sh/typesafe/v1/systemone";
 
 import {
-  classifyJevQuestion,
-  type JevClassifierRegistry,
+  type ClassifierRegistry,
+  classifyQuestion,
   normalizeQuestionInput,
   normalizeQuestionResponse,
 } from "../index";
@@ -66,7 +66,7 @@ beforeAll(async () => {
   registry = await createNativeClassifierRegistry();
 });
 beforeEach(() => {
-  agentDirectory = mkdtempSync(join(tmpdir(), "native-jev-test-"));
+  agentDirectory = mkdtempSync(join(tmpdir(), "native-classifier-test-"));
 });
 afterEach(() => rmSync(agentDirectory, { recursive: true, force: true }));
 
@@ -82,7 +82,7 @@ function result(usage?: Usage): ClassifierResult {
   };
 }
 
-function stub(classify: JevClassifierRegistry["classify"]): JevClassifierRegistry {
+function stub(classify: ClassifierRegistry["classify"]): ClassifierRegistry {
   return { findOfType: registry.findOfType.bind(registry), classify };
 }
 
@@ -94,7 +94,7 @@ describe("typesafe_question native classifiers", () => {
   test("uses Pi's auth, adapter, bool mapping, score normalization, and catalog-priced usage", async () => {
     let calledUrl = "";
     let sent: unknown;
-    const output = await classifyJevQuestion(request, registry, {
+    const output = await classifyQuestion(request, registry, {
       agentDirectory,
       fetch: async (url, init) => {
         calledUrl = String(url);
@@ -120,7 +120,7 @@ describe("typesafe_question native classifiers", () => {
 
   test("honors configured provider order and falls back through native adapters", async () => {
     writeSettings({
-      jev: {
+      classifier: {
         providers: [
           { provider: "vercel-ai-gateway", model: "typesafe-ai/jev" },
           { provider: "openrouter", model: "typesafe/jev-1.13" },
@@ -128,7 +128,7 @@ describe("typesafe_question native classifiers", () => {
       },
     });
     const urls: string[] = [];
-    const output = await classifyJevQuestion(request, registry, {
+    const output = await classifyQuestion(request, registry, {
       agentDirectory,
       fetch: async (url) => {
         urls.push(String(url));
@@ -176,16 +176,16 @@ describe("typesafe_question native classifiers", () => {
       { ...request, questions: { urgent: { type: "bool", instructions: "Urgent?" } } },
       { ...request, extra: true },
     ]) {
-      await expect(classifyJevQuestion(invalid, fake, { agentDirectory })).rejects.toThrow();
+      await expect(classifyQuestion(invalid, fake, { agentDirectory })).rejects.toThrow();
     }
     expect(calls).toBe(0);
   });
 
   test("rejects malformed provider preferences before classification", async () => {
-    writeSettings({ jev: { providers: [] } });
+    writeSettings({ classifier: { providers: [] } });
     let calls = 0;
     await expect(
-      classifyJevQuestion(
+      classifyQuestion(
         request,
         stub(async () => {
           calls++;
@@ -215,14 +215,14 @@ describe("typesafe_question native classifiers", () => {
       { ...response.answers, extra: response.answers.urgent },
     ]) {
       expect(() => normalizeQuestionResponse({ answers, secret: "do not expose" }, input)).toThrow(
-        /Jev/,
+        /Classifier/,
       );
     }
   });
 
   test("never exposes native provider error messages or raw response data", async () => {
     await expect(
-      classifyJevQuestion(
+      classifyQuestion(
         request,
         stub(async () => ({
           ...result(),
@@ -233,7 +233,7 @@ describe("typesafe_question native classifiers", () => {
       ),
     ).rejects.toThrow("classifier-unavailable");
     try {
-      await classifyJevQuestion(
+      await classifyQuestion(
         request,
         stub(async () => {
           throw new Error("private-token");
@@ -255,12 +255,12 @@ describe("typesafe_question native classifiers", () => {
       return result();
     });
     await expect(
-      classifyJevQuestion(request, fake, { agentDirectory, signal: controller.signal }),
+      classifyQuestion(request, fake, { agentDirectory, signal: controller.signal }),
     ).rejects.toThrow("caller-cancellation");
     expect(calls).toBe(1);
     calls = 0;
     await expect(
-      classifyJevQuestion(request, fake, { agentDirectory, signal: controller.signal }),
+      classifyQuestion(request, fake, { agentDirectory, signal: controller.signal }),
     ).rejects.toThrow("caller-cancellation");
     expect(calls).toBe(0);
   });
@@ -273,15 +273,17 @@ describe("typesafe_question native classifiers", () => {
       expect(options?.signal?.aborted).toBe(false);
       return result();
     });
-    const output = await classifyJevQuestion(request, fake, { agentDirectory, timeoutMs: 60 });
+    const output = await classifyQuestion(request, fake, { agentDirectory, timeoutMs: 60 });
     expect(calls).toBe(2);
     expect(output.answers).toEqual(response.answers);
   });
 
   test("bounds a single uncooperative provider with the full deadline", async () => {
-    writeSettings({ jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] } });
+    writeSettings({
+      classifier: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
+    });
     await expect(
-      classifyJevQuestion(
+      classifyQuestion(
         request,
         stub(async () => new Promise<ClassifierResult>(() => {})),
         {
@@ -302,7 +304,7 @@ describe("typesafe_question native classifiers", () => {
       cost: { input: 0.1, output: 0.2, cacheRead: 0, cacheWrite: 0, total: 0.3 },
     };
     let calls = 0;
-    const output = await classifyJevQuestion(
+    const output = await classifyQuestion(
       request,
       stub(async () => ({
         ...result(usage),

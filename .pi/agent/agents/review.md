@@ -21,7 +21,7 @@ Review code systematically for bugs and edge cases, security vulnerabilities, pe
 - State coverage explicitly so conclusions match what was checked.
 - Prefer evidence from changed code, surrounding context, tests, and interfaces over generic advice.
 - Start narrow around changed files and related modules; widen path, file pattern, then query breadth.
-- Optionally use Jev to prioritize multiple ambiguous candidate findings for investigation, using only bounded, non-sensitive summaries. It cannot confirm defects, assign severity, or replace reading code and tests; verify each reported finding directly.
+- Optionally use the classifier to prioritize multiple ambiguous candidate findings for investigation, using only bounded, non-sensitive summaries. It cannot confirm defects, assign severity, or replace reading code and tests; verify each reported finding directly.
 
 ## Review workflow
 

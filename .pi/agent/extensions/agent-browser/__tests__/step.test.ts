@@ -67,7 +67,7 @@ describe("browser step", () => {
     });
   });
 
-  test("fails closed when Jev is uncertain that the click is navigation-only", () => {
+  test("fails closed when Classifier is uncertain that the click is navigation-only", () => {
     const selected = evaluateStepDecision(
       { choice: "e1", probabilities: { e1: 0.9, e2: 0.05, no_action: 0.05 } },
       candidates,

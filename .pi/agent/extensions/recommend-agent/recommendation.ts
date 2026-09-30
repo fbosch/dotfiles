@@ -1,10 +1,10 @@
 import type { ClassifierAnswer, ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import {
-  type JevClassifierFailure,
-  type JevClassifierFetch,
-  type JevClassifierRegistry,
-  requestJevClassifier,
-} from "../../lib/jev-classifier";
+  type ClassifierFailure,
+  type ClassifierFetch,
+  type ClassifierRegistry,
+  requestClassifier,
+} from "../../lib/classifier";
 import {
   type AgentCatalog,
   type AgentDiscoveryOptions,
@@ -37,9 +37,9 @@ export interface RecommendationEvaluation {
   readonly decision: RecommendationDecision;
   readonly catalogKind?: "discovered-definitions";
   readonly catalogRevision?: string;
-  readonly classifierFailure?: JevClassifierFailure["reason"];
-  readonly classifierStage?: JevClassifierFailure["stage"];
-  readonly classifierProvider?: JevClassifierFailure["provider"];
+  readonly classifierFailure?: ClassifierFailure["reason"];
+  readonly classifierStage?: ClassifierFailure["stage"];
+  readonly classifierProvider?: ClassifierFailure["provider"];
   readonly classifierHttpStatus?: number;
   readonly classifierRetryAfterMs?: number;
   readonly usage?: Usage;
@@ -52,10 +52,10 @@ export interface RecommendationRequest {
 }
 
 export interface RecommendationRuntimeOptions {
-  readonly modelRegistry: JevClassifierRegistry;
+  readonly modelRegistry: ClassifierRegistry;
   readonly config: RecommendAgentConfig;
   readonly discovery: AgentDiscoveryOptions;
-  readonly fetch?: JevClassifierFetch;
+  readonly fetch?: ClassifierFetch;
   readonly signal?: AbortSignal;
   readonly onFetchAttempt?: () => void;
 }
@@ -204,7 +204,7 @@ export async function recommendAgent(
   }
   const catalog = discovered.catalog;
   const classifierContext = buildClassifierContext(request, catalog, routingPolicy.policy.body);
-  const classifier = await requestJevClassifier(options.modelRegistry, classifierContext, {
+  const classifier = await requestClassifier(options.modelRegistry, classifierContext, {
     timeoutMs: options.config.timeoutMs,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),

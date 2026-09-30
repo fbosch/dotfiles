@@ -14,17 +14,17 @@ import { readJsonConfig } from "./extension-config";
 
 export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
 export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway" as const;
-export const JEV_PROVIDER_IDS = [OPENROUTER_PROVIDER_ID, VERCEL_GATEWAY_PROVIDER_ID] as const;
-export const DEFAULT_JEV_TIMEOUT_MS = 2_400;
-export type JevClassifierRegistry = Pick<ModelRegistry, "findOfType" | "classify">;
-export type JevClassifierFetch = (
-  input: RequestInfo | URL,
-  init?: RequestInit,
-) => Promise<Response>;
-export type JevProviderId = (typeof JEV_PROVIDER_IDS)[number];
-export type JevClassifierFailure = {
+export const CLASSIFIER_PROVIDER_IDS = [
+  OPENROUTER_PROVIDER_ID,
+  VERCEL_GATEWAY_PROVIDER_ID,
+] as const;
+export const DEFAULT_CLASSIFIER_TIMEOUT_MS = 2_400;
+export type ClassifierRegistry = Pick<ModelRegistry, "findOfType" | "classify">;
+export type ClassifierFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+export type ClassifierProviderId = (typeof CLASSIFIER_PROVIDER_IDS)[number];
+export type ClassifierFailure = {
   readonly ok: false;
-  readonly provider?: JevProviderId;
+  readonly provider?: ClassifierProviderId;
   readonly stage: "config" | "auth" | "request" | "body";
   readonly reason:
     | "invalid-config"
@@ -40,15 +40,15 @@ export type JevClassifierFailure = {
   readonly retryAfterMs?: number;
   readonly usage?: Usage;
 };
-export type JevClassifierResult =
+export type ClassifierRequestResult =
   | {
       readonly ok: true;
       readonly value: { answers: Record<string, ClassifierAnswer> };
       readonly usage?: Usage;
     }
-  | JevClassifierFailure;
-export interface JevClassifierOptions {
-  fetch?: JevClassifierFetch;
+  | ClassifierFailure;
+export interface ClassifierOptions {
+  fetch?: ClassifierFetch;
   signal?: AbortSignal;
   timeoutMs?: number;
   onFetchAttempt?: () => void;
@@ -58,24 +58,24 @@ const DEFAULT_PROVIDERS = [
   { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" },
   { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
 ] as const;
-type Preference = { provider: JevProviderId; model: string };
+type Preference = { provider: ClassifierProviderId; model: string };
 const RecordPattern = P.record(P.string, P.unknown);
 
-export function loadJevClassifierPreferences(
+export function loadClassifierPreferences(
   agentDirectory = getAgentDir(),
 ): Preference[] | undefined {
   try {
     const settings = readJsonConfig(join(agentDirectory, "settings.json"));
     if (settings === undefined) return [...DEFAULT_PROVIDERS];
     if (!isMatching(RecordPattern, settings)) return undefined;
-    if (settings.jev === undefined) return [...DEFAULT_PROVIDERS];
-    if (!isMatching(RecordPattern, settings.jev)) return undefined;
-    if (settings.jev.providers === undefined) return [...DEFAULT_PROVIDERS];
-    const entries = settings.jev.providers;
+    if (settings.classifier === undefined) return [...DEFAULT_PROVIDERS];
+    if (!isMatching(RecordPattern, settings.classifier)) return undefined;
+    if (settings.classifier.providers === undefined) return [...DEFAULT_PROVIDERS];
+    const entries = settings.classifier.providers;
     if (!Array.isArray(entries) || entries.length < 1 || entries.length > 2) return undefined;
     const preferences: Preference[] = [];
     for (const entry of entries) {
-      if (!isMatching({ provider: P.union(...JEV_PROVIDER_IDS), model: P.string }, entry))
+      if (!isMatching({ provider: P.union(...CLASSIFIER_PROVIDER_IDS), model: P.string }, entry))
         return undefined;
       if (preferences.some(({ provider }) => provider === entry.provider)) return undefined;
       if (entry.provider === OPENROUTER_PROVIDER_ID) {
@@ -133,24 +133,24 @@ const ClassifierInput = Type.Object(
   { additionalProperties: false },
 );
 
-export function assertJevJson(
+export function assertClassifierJson(
   value: unknown,
   ancestors = new Set<object>(),
 ): asserts value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean") return;
   if (typeof value === "number" && Number.isFinite(value)) return;
   if (typeof value !== "object" || value === null || ancestors.has(value))
-    throw new Error("Invalid Jev JSON");
+    throw new Error("Invalid Classifier JSON");
   ancestors.add(value);
   try {
     if (Array.isArray(value)) {
-      for (const child of value) assertJevJson(child, ancestors);
+      for (const child of value) assertClassifierJson(child, ancestors);
     } else if (
       Object.getPrototypeOf(value) === Object.prototype ||
       Object.getPrototypeOf(value) === null
     ) {
-      for (const child of Object.values(value)) assertJevJson(child, ancestors);
-    } else throw new Error("Invalid Jev JSON");
+      for (const child of Object.values(value)) assertClassifierJson(child, ancestors);
+    } else throw new Error("Invalid Classifier JSON");
   } finally {
     ancestors.delete(value);
   }
@@ -167,7 +167,7 @@ const Answer = P.union(
   },
   { type: "score", score: P.number.finite(), confidence: Probability },
 );
-export function normalizeJevAnswers(
+export function normalizeClassifierAnswers(
   value: unknown,
   input: ClassifierContext,
 ): Record<string, ClassifierAnswer> {
@@ -175,7 +175,7 @@ export function normalizeJevAnswers(
     !isMatching({ answers: RecordPattern }, value) ||
     Object.keys(value.answers).length !== Object.keys(input.questions).length
   )
-    throw new Error("Invalid Jev answer set");
+    throw new Error("Invalid Classifier answer set");
   const answers: Record<string, ClassifierAnswer> = Object.create(null);
   for (const [id, question] of Object.entries(input.questions)) {
     const answer = value.answers[id];
@@ -184,7 +184,7 @@ export function normalizeJevAnswers(
       !isMatching(Answer, answer) ||
       answer.type !== question.type
     )
-      throw new Error(`Invalid Jev answer for ${id}`);
+      throw new Error(`Invalid Classifier answer for ${id}`);
     answers[id] = match(answer)
       .returnType<ClassifierAnswer>()
       .with({ type: "bool" }, ({ probability }) => ({ type: "bool", probability }))
@@ -201,22 +201,25 @@ export function normalizeJevAnswers(
           Math.abs(total - 1) > 0.02 ||
           keys.some((key) => (probabilities[key] ?? 0) > (probabilities[choice] ?? 0))
         )
-          throw new Error(`Invalid Jev choice for ${id}`);
+          throw new Error(`Invalid Classifier choice for ${id}`);
         return { type: "choice", choice, probabilities, confidence };
       })
       .with({ type: "score" }, ({ score, confidence }) => {
         if (question.type !== "score" || score < 0 || score > question.criteria.length - 1)
-          throw new Error(`Invalid Jev score for ${id}`);
+          throw new Error(`Invalid Classifier score for ${id}`);
         return { type: "score", score, confidence };
       })
       .exhaustive();
   }
   if (Buffer.byteLength(JSON.stringify(answers), "utf8") > 256_000)
-    throw new Error("Oversized Jev answers");
+    throw new Error("Oversized Classifier answers");
   return answers;
 }
 
-export function addJevUsage(total: Usage | undefined, next: Usage | undefined): Usage | undefined {
+export function addClassifierUsage(
+  total: Usage | undefined,
+  next: Usage | undefined,
+): Usage | undefined {
   if (!total) return next;
   if (!next) return total;
   return {
@@ -269,24 +272,21 @@ async function withinDeadline<T>(
   });
 }
 
-export function createJevClassifierRequester(
-  now: () => number = Date.now,
-  agentDirectory?: string,
-) {
-  const cooldowns = new Map<JevProviderId, { until: number; failure: JevClassifierFailure }>();
-  return async function requestJevClassifier(
-    registry: JevClassifierRegistry,
+export function createClassifierRequester(now: () => number = Date.now, agentDirectory?: string) {
+  const cooldowns = new Map<ClassifierProviderId, { until: number; failure: ClassifierFailure }>();
+  return async function requestClassifier(
+    registry: ClassifierRegistry,
     input: ClassifierContext,
-    options: JevClassifierOptions = {},
-  ): Promise<JevClassifierResult> {
+    options: ClassifierOptions = {},
+  ): Promise<ClassifierRequestResult> {
     let usage: Usage | undefined;
     const fail = (
-      reason: JevClassifierFailure["reason"],
-      stage: JevClassifierFailure["stage"],
-      provider?: JevProviderId,
+      reason: ClassifierFailure["reason"],
+      stage: ClassifierFailure["stage"],
+      provider?: ClassifierProviderId,
       httpStatus?: number,
       retryAfterMs?: number,
-    ): JevClassifierFailure => ({
+    ): ClassifierFailure => ({
       ok: false,
       reason,
       stage,
@@ -296,10 +296,10 @@ export function createJevClassifierRequester(
       ...(usage ? { usage } : {}),
     });
     if (options.signal?.aborted) return fail("caller-cancellation", "request");
-    const preferences = loadJevClassifierPreferences(agentDirectory);
+    const preferences = loadClassifierPreferences(agentDirectory);
     if (!preferences) return fail("invalid-config", "config");
     try {
-      assertJevJson(input);
+      assertClassifierJson(input);
       if (
         !Value.Check(ClassifierInput, input) ||
         Buffer.byteLength(JSON.stringify(input), "utf8") > 64_000
@@ -308,14 +308,14 @@ export function createJevClassifierRequester(
     } catch {
       return fail("invalid-input", "config");
     }
-    const timeoutMs = options.timeoutMs ?? DEFAULT_JEV_TIMEOUT_MS;
+    const timeoutMs = options.timeoutMs ?? DEFAULT_CLASSIFIER_TIMEOUT_MS;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fail("invalid-config", "config");
     const overall = new AbortController();
     const timer = setTimeout(() => overall.abort(), Math.max(1, Math.floor(timeoutMs)));
     const onAbort = () => overall.abort();
     options.signal?.addEventListener("abort", onAbort, { once: true });
-    let lastFailure: JevClassifierFailure | undefined;
-    let usefulFailure: JevClassifierFailure | undefined;
+    let lastFailure: ClassifierFailure | undefined;
+    let usefulFailure: ClassifierFailure | undefined;
     try {
       for (const [index, preference] of preferences.entries()) {
         if (overall.signal.aborted)
@@ -374,7 +374,7 @@ export function createJevClassifierRequester(
           if (attemptTimer !== undefined) clearTimeout(attemptTimer);
           overall.signal.removeEventListener("abort", onOverallAbort);
         }
-        usage = addJevUsage(usage, result?.usage);
+        usage = addClassifierUsage(usage, result?.usage);
         if (attempt.signal.aborted)
           lastFailure = fail(
             options.signal?.aborted ? "caller-cancellation" : "timeout",
@@ -401,7 +401,7 @@ export function createJevClassifierRequester(
           try {
             return {
               ok: true,
-              value: { answers: normalizeJevAnswers(result, input) },
+              value: { answers: normalizeClassifierAnswers(result, input) },
               ...(usage ? { usage } : {}),
             };
           } catch {
@@ -447,4 +447,4 @@ export function createJevClassifierRequester(
   };
 }
 
-export const requestJevClassifier = createJevClassifierRequester();
+export const requestClassifier = createClassifierRequester();

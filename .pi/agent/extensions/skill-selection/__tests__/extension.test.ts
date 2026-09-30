@@ -16,8 +16,8 @@ import {
   parseSkillSelectionResponseDetailed,
   resolveSkillSelectionConfig,
   type SkillSelectionResult,
-  selectSkillsWithJev,
-  selectSkillsWithJevDetailed,
+  selectSkillsWithClassifier,
+  selectSkillsWithClassifierDetailed,
 } from "../index";
 
 const classifierRegistry = await createNativeClassifierRegistry();
@@ -60,7 +60,7 @@ function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionEx
   const extension = createSkillSelectionExtension(dependencies);
   extension({
     registerCommand: (name: string, definition: { handler: typeof statusCommand }) => {
-      if (name === "jev-status") statusCommand = definition.handler;
+      if (name === "classifier-status") statusCommand = definition.handler;
     },
     on: (_event: string, callback: typeof handler) => {
       handler = callback;
@@ -206,12 +206,17 @@ describe("skill selection", () => {
   test("keeps classifier failures distinct from invalid evaluation responses", async () => {
     const candidates = [{ name: "writing-clearly", description: "writing" }];
     await expect(
-      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: {
-          findOfType: () => undefined,
-          classify: classifierRegistry.classify.bind(classifierRegistry),
+      selectSkillsWithClassifierDetailed(
+        "Write a guide",
+        candidates,
+        DEFAULT_SKILL_SELECTION_CONFIG,
+        {
+          modelRegistry: {
+            findOfType: () => undefined,
+            classify: classifierRegistry.classify.bind(classifierRegistry),
+          },
         },
-      }),
+      ),
     ).resolves.toEqual({
       ok: false,
       failure: {
@@ -223,10 +228,15 @@ describe("skill selection", () => {
     });
 
     await expect(
-      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: classifierRegistry,
-        fetch: async () => new Response(JSON.stringify({ answers: {} })),
-      }),
+      selectSkillsWithClassifierDetailed(
+        "Write a guide",
+        candidates,
+        DEFAULT_SKILL_SELECTION_CONFIG,
+        {
+          modelRegistry: classifierRegistry,
+          fetch: async () => new Response(JSON.stringify({ answers: {} })),
+        },
+      ),
     ).resolves.toEqual({
       ok: false,
       failure: {
@@ -238,11 +248,16 @@ describe("skill selection", () => {
     });
 
     await expect(
-      selectSkillsWithJevDetailed("Write a guide", candidates, DEFAULT_SKILL_SELECTION_CONFIG, {
-        modelRegistry: classifierRegistry,
-        // Zero delay preserves metadata coverage without holding the provider in cooldown.
-        fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "0" } }),
-      }),
+      selectSkillsWithClassifierDetailed(
+        "Write a guide",
+        candidates,
+        DEFAULT_SKILL_SELECTION_CONFIG,
+        {
+          modelRegistry: classifierRegistry,
+          // Zero delay preserves metadata coverage without holding the provider in cooldown.
+          fetch: async () => new Response("busy", { status: 429, headers: { "Retry-After": "0" } }),
+        },
+      ),
     ).resolves.toEqual({
       ok: false,
       failure: {
@@ -256,9 +271,9 @@ describe("skill selection", () => {
     });
   });
 
-  test("sends only bounded candidate metadata and parses an independent Jev response", async () => {
+  test("sends only bounded candidate metadata and parses an independent Classifier response", async () => {
     let requestBody: Record<string, unknown> | undefined;
-    const result = await selectSkillsWithJev(
+    const result = await selectSkillsWithClassifier(
       "Write a guide",
       [{ name: "writing-clearly", description: "Improve prose." }],
       DEFAULT_SKILL_SELECTION_CONFIG,
@@ -311,7 +326,7 @@ describe("skill selection", () => {
     );
   });
 
-  test("falls back unchanged for unavailable Jev, explicit skills, and image prompts", async () => {
+  test("falls back unchanged for unavailable Classifier, explicit skills, and image prompts", async () => {
     const calls: string[] = [];
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
@@ -459,17 +474,19 @@ describe("skill selection", () => {
   test("honors global and project config overrides and disables malformed config", () => {
     expect(
       resolveSkillSelectionConfig(
-        { jev: { skillSelection: { threshold: 0.8, timeoutMs: 500 } } },
-        { jev: { skillSelection: { maxRecommendations: 2 } } },
+        { classifier: { skillSelection: { threshold: 0.8, timeoutMs: 500 } } },
+        { classifier: { skillSelection: { maxRecommendations: 2 } } },
       ),
     ).toEqual({ enabled: false, threshold: 0.8, timeoutMs: 500, maxRecommendations: 2 });
     expect(
-      resolveSkillSelectionConfig({ jev: { skillSelection: { threshold: "high" } } }, {}),
+      resolveSkillSelectionConfig({ classifier: { skillSelection: { threshold: "high" } } }, {}),
     ).toEqual({
       ...DEFAULT_SKILL_SELECTION_CONFIG,
       enabled: false,
     });
-    expect(resolveSkillSelectionConfig({ jev: { skillSelection: { typo: true } } }, {})).toEqual({
+    expect(
+      resolveSkillSelectionConfig({ classifier: { skillSelection: { typo: true } } }, {}),
+    ).toEqual({
       ...DEFAULT_SKILL_SELECTION_CONFIG,
       enabled: false,
     });

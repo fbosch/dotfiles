@@ -35,7 +35,7 @@ Scope: fetch unresolved GitHub review threads for a specified PR/review/discussi
 - Use it for a selected resolution only after the parent has explicitly approved it.
 - Pi children cannot ask interactive questions. At every original decision point, return `Parent approval required:` followed by the exact choice needed, then stop.
 - Load and apply the `writing-clearly` skill to resolution comments and summaries.
-- For ambiguous feedback triage, optionally batch narrow Jev classifications over bounded, non-sensitive evidence. Do not send raw PR content or secrets to the gateway. Jev is advisory: validate every proposed resolution against code and tests, keep uncertainty open, and never bypass parent approval.
+- For ambiguous feedback triage, optionally batch narrow classifier classifications over bounded, non-sensitive evidence. Do not send raw PR content or secrets to the gateway. The classifier is advisory: validate every proposed resolution against code and tests, keep uncertainty open, and never bypass parent approval.
 
 ## Workflow
 

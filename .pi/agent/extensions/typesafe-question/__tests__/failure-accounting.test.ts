@@ -9,7 +9,7 @@ import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-cl
 import typesafeQuestionExtension from "../index";
 
 test("returns sanitized terminal tool errors with all billed classifier usage", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "jev-accounting-"));
+  const directory = mkdtempSync(join(tmpdir(), "classifier-accounting-"));
   const previousDirectory = process.env.PI_CODING_AGENT_DIR;
   process.env.PI_CODING_AGENT_DIR = directory;
   try {
@@ -63,7 +63,7 @@ test("returns sanitized terminal tool errors with all billed classifier usage", 
     expect(result).toMatchObject({
       isError: true,
       usage: { input: 34, output: 6, totalTokens: 40, cost: { total: 4 } },
-      details: { answers: {}, failure: "Jev request failed (auth: classifier-unavailable)" },
+      details: { answers: {}, failure: "Classifier request failed (auth: classifier-unavailable)" },
     });
     expect(JSON.stringify(result)).not.toContain("secret billed provider response");
   } finally {

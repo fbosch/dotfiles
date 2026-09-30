@@ -9,15 +9,15 @@ import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
-  assertJevJson,
-  createJevClassifierRequester,
-  type JevClassifierFetch,
-  type JevClassifierRegistry,
-  normalizeJevAnswers,
-  requestJevClassifier,
-} from "../../lib/jev-classifier";
+  assertClassifierJson,
+  type ClassifierFetch,
+  type ClassifierRegistry,
+  createClassifierRequester,
+  normalizeClassifierAnswers,
+  requestClassifier,
+} from "../../lib/classifier";
 
-export type { JevClassifierRegistry } from "../../lib/jev-classifier";
+export type { ClassifierRegistry } from "../../lib/classifier";
 
 const MAX_REQUEST_BYTES = 64_000;
 const MAX_RESULT_BYTES = 50_000;
@@ -72,12 +72,12 @@ export const QuestionParameters = Type.Object(
 
 interface ClassifyOptions {
   signal?: AbortSignal;
-  fetch?: JevClassifierFetch;
+  fetch?: ClassifierFetch;
   timeoutMs?: number;
   agentDirectory?: string;
 }
 
-class JevQuestionError extends Error {
+class ClassifierQuestionError extends Error {
   constructor(
     message: string,
     readonly usage: Usage | undefined,
@@ -87,17 +87,17 @@ class JevQuestionError extends Error {
 }
 
 export function normalizeQuestionInput(value: unknown): ClassifierContext {
-  assertJevJson(value);
-  if (!Value.Check(QuestionParameters, value)) throw new Error("Invalid Jev classifier input");
+  assertClassifierJson(value);
+  if (!Value.Check(QuestionParameters, value)) throw new Error("Invalid classifier input");
   const state: JsonObject = Object.fromEntries(
     Object.entries(value.state).map(([key, child]) => {
-      assertJevJson(child);
+      assertClassifierJson(child);
       return [key, child];
     }),
   );
   const input = { state, questions: value.questions };
   if (Buffer.byteLength(JSON.stringify(input), "utf8") > MAX_REQUEST_BYTES)
-    throw new Error("Jev request exceeds 64 KB");
+    throw new Error("Classifier request exceeds 64 KB");
   return input;
 }
 
@@ -105,24 +105,24 @@ export function normalizeQuestionResponse(
   value: unknown,
   input: ClassifierContext,
 ): Record<string, ClassifierAnswer> {
-  const answers = normalizeJevAnswers(value, input);
+  const answers = normalizeClassifierAnswers(value, input);
   if (Buffer.byteLength(JSON.stringify(answers), "utf8") > MAX_RESULT_BYTES)
-    throw new Error("Jev answer exceeds 50 KB");
+    throw new Error("Classifier answer exceeds 50 KB");
   return answers;
 }
 
-export async function classifyJevQuestion(
+export async function classifyQuestion(
   input: unknown,
-  registry: JevClassifierRegistry,
+  registry: ClassifierRegistry,
   options: ClassifyOptions = {},
 ): Promise<{ answers: Record<string, ClassifierAnswer>; usage?: Usage }> {
   const normalized = normalizeQuestionInput(input);
   const timeoutMs = options.timeoutMs ?? QUESTION_TIMEOUT_MS;
-  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid Jev timeout");
+  if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid Classifier timeout");
   const request =
     options.agentDirectory === undefined
-      ? requestJevClassifier
-      : createJevClassifierRequester(Date.now, options.agentDirectory);
+      ? requestClassifier
+      : createClassifierRequester(Date.now, options.agentDirectory);
   const result = await request(registry, normalized, {
     timeoutMs,
     ...(options.signal ? { signal: options.signal } : {}),
@@ -133,23 +133,29 @@ export async function classifyJevQuestion(
       result.reason === "model-unavailable" || result.reason === "auth-failure"
         ? "classifier-unavailable"
         : result.reason;
-    throw new JevQuestionError(`Jev request failed (${result.stage}: ${reason})`, result.usage);
+    throw new ClassifierQuestionError(
+      `Classifier request failed (${result.stage}: ${reason})`,
+      result.usage,
+    );
   }
   try {
     const answers = normalizeQuestionResponse(result.value, normalized);
     return { answers, ...(result.usage ? { usage: result.usage } : {}) };
   } catch {
-    throw new JevQuestionError("Jev request failed (body: invalid-response)", result.usage);
+    throw new ClassifierQuestionError(
+      "Classifier request failed (body: invalid-response)",
+      result.usage,
+    );
   }
 }
 
-export async function askJevQuestion(
+export async function askClassifierQuestion(
   input: unknown,
-  registry: JevClassifierRegistry,
+  registry: ClassifierRegistry,
   signal?: AbortSignal,
-  fetch?: JevClassifierFetch,
+  fetch?: ClassifierFetch,
 ): Promise<Record<string, ClassifierAnswer>> {
-  const { answers } = await classifyJevQuestion(input, registry, {
+  const { answers } = await classifyQuestion(input, registry, {
     ...(signal ? { signal } : {}),
     ...(fetch ? { fetch } : {}),
   });
@@ -162,17 +168,17 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
       name: "typesafe_question",
       label: "TypeSafe question",
       description:
-        "Ask Jev up to 16 narrow bool, choice, or score questions about shared JSON object state through Pi's native classifier API. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the configured Vercel AI Gateway or OpenRouter; do not send secrets or sensitive data. Returns validated judgments, not actions.",
-      promptSnippet: "Get typed Jev judgments for narrow semantic decisions",
+        "Ask the classifier up to 16 narrow bool, choice, or score questions about shared JSON object state through Pi's native classifier API. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the configured Vercel AI Gateway or OpenRouter; do not send secrets or sensitive data. Returns validated judgments, not actions.",
+      promptSnippet: "Get typed classifier judgments for narrow semantic decisions",
       promptGuidelines: [
         "Use typesafe_question for routing, classification, scoring, or checking a claim against supplied state when probabilities help; keep exact lookups and calculations in code.",
-        "Batch independent questions over the same object state. Use string instructions and criteria; bool is a yes/no probability, while score measures an ordered level. Do not use Jev for prose generation or workflow actions, and do not send secrets or sensitive data.",
-        "Treat Jev answers as uncertain judgments, not permission to act; verify consequential decisions against evidence and policy.",
+        "Batch independent questions over the same object state. Use string instructions and criteria; bool is a yes/no probability, while score measures an ordered level. Do not use the classifier for prose generation or workflow actions, and do not send secrets or sensitive data.",
+        "Treat classifier answers as uncertain judgments, not permission to act; verify consequential decisions against evidence and policy.",
       ],
       parameters: QuestionParameters,
       async execute(_id, params, signal, _update, ctx) {
         try {
-          const result = await classifyJevQuestion(params, ctx.modelRegistry, {
+          const result = await classifyQuestion(params, ctx.modelRegistry, {
             ...(signal ? { signal } : {}),
           });
           return {
@@ -181,7 +187,7 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
             ...(result.usage ? { usage: result.usage } : {}),
           };
         } catch (error) {
-          if (!(error instanceof JevQuestionError)) throw error;
+          if (!(error instanceof ClassifierQuestionError)) throw error;
           // Returning a tool error preserves billed usage; throwing would discard it.
           return {
             content: [{ type: "text" as const, text: error.message }],

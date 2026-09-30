@@ -1,12 +1,12 @@
-import { JEV_PROVIDER_IDS } from "../../lib/jev-classifier";
+import { CLASSIFIER_PROVIDER_IDS } from "../../lib/classifier";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
-import { resolveJevToolDiscoveryConfig } from "../tool-discovery";
+import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 
-export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/jev-classifier";
+export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/classifier";
 
-export interface JevStartupStatus {
+export interface ClassifierStartupStatus {
   readonly state: Exclude<StartupOwnerState, "disposed">;
 }
 
@@ -16,12 +16,12 @@ type ProviderAuthStatusReader = {
   readonly getProviderAuthStatus?: (providerId: string) => ProviderAuthStatus | undefined;
 };
 
-export function resolveJevStartupStatus(
+export function resolveClassifierStartupStatus(
   globalSettings: unknown,
   projectSettings: unknown,
   modelRegistry: unknown,
-): JevStartupStatus | undefined {
-  const toolDiscovery = resolveJevToolDiscoveryConfig(globalSettings, projectSettings);
+): ClassifierStartupStatus | undefined {
+  const toolDiscovery = resolveClassifierToolDiscoveryConfig(globalSettings, projectSettings);
   const skillSelection = resolveSkillSelectionConfig(globalSettings, projectSettings);
   const recommendAgent = resolveRecommendAgentConfig(globalSettings);
   if (!toolDiscovery.enabled && !skillSelection.enabled && !recommendAgent.enabled)
@@ -34,7 +34,7 @@ export function resolveJevStartupStatus(
   let hasKnownStatus = false;
   let hasUnknownStatus = false;
   let hasConfiguredProvider = false;
-  for (const providerId of JEV_PROVIDER_IDS) {
+  for (const providerId of CLASSIFIER_PROVIDER_IDS) {
     let auth: ProviderAuthStatus | undefined;
     try {
       auth = reader.getProviderAuthStatus(providerId);

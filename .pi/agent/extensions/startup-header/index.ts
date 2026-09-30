@@ -7,6 +7,7 @@ import {
   type RepositoryFiles,
 } from "./candidate-adapter";
 import type { CandidateInspection } from "./candidates";
+import { type ClassifierStartupStatus, resolveClassifierStartupStatus } from "./classifier-status";
 import {
   createStartupOwnerRequest,
   STARTUP_OWNER_IDS,
@@ -15,7 +16,6 @@ import {
   StartupOwnerStore,
 } from "./contracts";
 import { readHeaderOwnerSnapshot } from "./header-snapshot";
-import { type JevStartupStatus, resolveJevStartupStatus } from "./jev-status";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
 import { renderStartupHeader } from "./view-model";
 import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
@@ -53,7 +53,7 @@ export default function startupHeader(
     let workspace: WorkspaceIdentity | undefined;
     let candidates: CandidateInspection | undefined;
     let art: StartupHeaderArt | undefined;
-    let jev: JevStartupStatus | undefined;
+    let classifier: ClassifierStartupStatus | undefined;
     if (
       typeof ctx.cwd === "string" &&
       typeof ctx.isProjectTrusted === "function" &&
@@ -63,13 +63,13 @@ export default function startupHeader(
         const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
           projectTrusted: ctx.isProjectTrusted(),
         });
-        jev = resolveJevStartupStatus(
+        classifier = resolveClassifierStartupStatus(
           settings.getGlobalSettings(),
           settings.getProjectSettings(),
           ctx.modelRegistry,
         );
       } catch {
-        jev = { state: "unavailable" };
+        classifier = { state: "unavailable" };
       }
     }
     let requestRender = () => {};
@@ -127,7 +127,7 @@ export default function startupHeader(
               neovim: owners.get("neovim"),
               direnv: owners.get("direnv"),
               lsp: owners.get("lsp"),
-              jev,
+              classifier,
             },
             candidates,
             owners.get("auth"),

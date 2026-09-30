@@ -2,8 +2,8 @@ import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
+import type { ClassifierStartupStatus } from "./classifier-status";
 import type { StartupOwnerSnapshot } from "./contracts";
-import type { JevStartupStatus } from "./jev-status";
 import {
   type AuthStartupProfile,
   readAuthStartupPayload,
@@ -15,7 +15,7 @@ export interface StartupIntegrationSnapshots {
   readonly neovim: StartupOwnerSnapshot | undefined;
   readonly direnv: StartupOwnerSnapshot | undefined;
   readonly lsp: StartupOwnerSnapshot | undefined;
-  readonly jev?: JevStartupStatus | undefined;
+  readonly classifier?: ClassifierStartupStatus | undefined;
 }
 
 export function renderStartupHeader(
@@ -62,7 +62,7 @@ function renderIntegrationStatus(
     renderIntegration(theme, "nvim", snapshots.neovim),
     renderIntegration(theme, "direnv", snapshots.direnv),
     renderIntegration(theme, "lsp", snapshots.lsp),
-    renderIntegration(theme, "jev", snapshots.jev),
+    renderIntegration(theme, "classifier", snapshots.classifier),
   ]
     .filter((status) => status !== "")
     .join("  ");
@@ -70,7 +70,7 @@ function renderIntegrationStatus(
 
 function renderIntegration(
   theme: Theme,
-  label: "nvim" | "direnv" | "lsp" | "jev",
+  label: "nvim" | "direnv" | "lsp" | "classifier",
   snapshot: Pick<StartupOwnerSnapshot, "state" | "payload"> | undefined,
 ): string {
   if (snapshot === undefined) return "";

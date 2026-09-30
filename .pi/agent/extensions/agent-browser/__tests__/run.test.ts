@@ -59,7 +59,7 @@ describe("browser run", () => {
     ]);
   });
 
-  test("does not expose sensitive values in Jev descriptions or traces", () => {
+  test("does not expose sensitive values in Classifier descriptions or traces", () => {
     const [candidate] = parseRunCandidates('- textbox "Password" [ref=e1]', [
       { name: "password", value: "correct horse battery staple", sensitive: true },
     ]);

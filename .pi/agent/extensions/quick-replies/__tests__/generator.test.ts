@@ -67,10 +67,12 @@ function classifierScoreResponse(scores: readonly number[]): unknown {
 }
 
 const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-const testAgentDirectory = mkdtempSync(join(tmpdir(), "quick-replies-jev-test-"));
+const testAgentDirectory = mkdtempSync(join(tmpdir(), "quick-replies-classifier-test-"));
 writeFileSync(
   join(testAgentDirectory, "settings.json"),
-  JSON.stringify({ jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] } }),
+  JSON.stringify({
+    classifier: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
+  }),
 );
 process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
 const classifierRegistry = await createNativeClassifierRegistry();
@@ -648,7 +650,7 @@ describe("quick reply model generation", () => {
     ).toEqual([]);
   });
 
-  test("filters secret-bearing suggestions before sending candidates to Jev", async () => {
+  test("filters secret-bearing suggestions before sending candidates to Classifier", async () => {
     const secretReply = {
       label: "Use value",
       message: `Use ${FAKE_GITHUB_TOKEN} # pragma: allowlist secret`,
@@ -809,7 +811,7 @@ describe("quick reply model generation", () => {
     },
   );
 
-  test("falls back when the bounded Jev deadline expires", async () => {
+  test("falls back when the bounded Classifier deadline expires", async () => {
     const candidates = [1, 2, 3].map((index) => reply(index));
     let fetchCalls = 0;
     let abortedAttempts = 0;

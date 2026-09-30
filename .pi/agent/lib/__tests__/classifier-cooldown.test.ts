@@ -3,21 +3,21 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
-import { createJevClassifierRequester } from "../jev-classifier";
+import { createClassifierRequester } from "../classifier";
 import { createNativeClassifierRegistry } from "./native-classifier-registry";
 
 test("retains observed 429 cooldown headers when the native error body never finishes", async () => {
-  const directory = mkdtempSync(join(tmpdir(), "jev-hanging-body-"));
+  const directory = mkdtempSync(join(tmpdir(), "classifier-hanging-body-"));
   let body: ReadableStreamDefaultController<Uint8Array> | undefined;
   try {
     writeFileSync(
       join(directory, "settings.json"),
       JSON.stringify({
-        jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
+        classifier: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
       }),
     );
     const registry = await createNativeClassifierRegistry();
-    const request = createJevClassifierRequester(() => 0, directory);
+    const request = createClassifierRequester(() => 0, directory);
     const input: ClassifierContext = {
       state: {},
       questions: {

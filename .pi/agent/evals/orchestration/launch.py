@@ -88,7 +88,7 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     catalog = config["catalog"]
     settings = {
         "packages": [], "extensions": config["extensions"], "skills": [], "prompts": [],
-        "defaultProjectTrust": "always", "jev": {"recommendAgent": {"enabled": True}},
+        "defaultProjectTrust": "always", "classifier": {"recommendAgent": {"enabled": True}},
     }
     agent.mkdir(parents=True, exist_ok=True)
     (agent / "settings.json").write_text(json.dumps(settings))

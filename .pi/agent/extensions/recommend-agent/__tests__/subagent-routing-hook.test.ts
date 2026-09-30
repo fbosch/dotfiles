@@ -135,7 +135,7 @@ describe("subagent routing hook", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]?.task).toBe("Review this change for regressions.");
     expect(call.input).toEqual(originalInput);
-    expect(harness.notifications.map(({ message }) => message)).toEqual(["Jev → review ✓"]);
+    expect(harness.notifications.map(({ message }) => message)).toEqual(["Classifier → review ✓"]);
     expect(harness.entries).toHaveLength(1);
     expect(harness.entries[0]).toMatchObject({
       customType: "recommend-agent-routing",
@@ -165,11 +165,11 @@ describe("subagent routing hook", () => {
     });
     expect(await harness.emit("tool_call", subagentCall())).toEqual({
       block: true,
-      reason: "Jev routing recommends debug instead; reconsider this delegation.",
+      reason: "Classifier routing recommends debug instead; reconsider this delegation.",
     });
     expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
     expect(harness.notifications.map(({ message }) => message)).toEqual([
-      "Jev → debug (proposed review)",
+      "Classifier → debug (proposed review)",
     ]);
     expect(harness.entries[0]?.data).toMatchObject({
       proposedAgentId: "review",
@@ -215,9 +215,9 @@ describe("subagent routing hook", () => {
     shouldThrow = true;
     expect(await harness.emit("tool_call", subagentCall())).toBeUndefined();
     expect(harness.notifications.map(({ message }) => message)).toEqual([
-      "Jev → primary (proposed review)",
-      "Jev → abstain; proceeding",
-      "Jev unavailable: evaluation failed; proceeding",
+      "Classifier → primary (proposed review)",
+      "Classifier → abstain; proceeding",
+      "Classifier unavailable: evaluation failed; proceeding",
     ]);
     expect(harness.entries).toHaveLength(3);
     expect(harness.entries.map(({ data }) => (data as { decision: string }).decision)).toEqual([
@@ -249,7 +249,7 @@ describe("subagent routing hook", () => {
     });
     expect(await harness.emit("tool_call", call)).toBeUndefined();
     expect(harness.notifications.map(({ message }) => message)).toEqual([
-      "Jev unavailable: authentication failed; proceeding",
+      "Classifier unavailable: authentication failed; proceeding",
     ]);
     expect(harness.entries[0]?.data).toMatchObject({
       proposedAgentId: "review",
@@ -295,7 +295,7 @@ describe("subagent routing hook", () => {
     });
     expect(await harness.emit("tool_call", subagentCall())).toEqual({
       block: true,
-      reason: "Jev routing recommends debug instead; reconsider this delegation.",
+      reason: "Classifier routing recommends debug instead; reconsider this delegation.",
     });
     expect(harness.entries).toHaveLength(0);
     expect(harness.notifications).toHaveLength(0);

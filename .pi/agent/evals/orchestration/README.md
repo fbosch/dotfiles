@@ -9,7 +9,7 @@ separately elsewhere, so it cannot mask a lifecycle result.
 ## Run
 
 Requires the existing Pi/Caliper installation, Python with PyYAML, installed
-`@gotgenes/pi-subagents`, production model catalogs, and working model and Jev
+`@gotgenes/pi-subagents`, production model catalogs, and working model and classifier
 credentials. These commands make live calls. All grading is deterministic;
 there is no LLM judge.
 
@@ -76,14 +76,14 @@ presets, not the quality of every production agent prompt.
 - Blocker: missing administrator input is escalated instead of invented.
 
 `steering.eval.yaml` is an explicit protocol test. A real background worker waits
-at a gate while the parent calls Jev and sends native steering. Only successful
+at a gate while the parent calls the classifier and sends native steering. Only successful
 steering releases it. The worker must acknowledge a random marker disclosed
 only to the parent after the gate was reached, then read the assigned file.
 The `@quick` request deliberately bypasses delegation routing in this case.
 
 The natural finding/blocker prompts do not mention checkpoints or steering.
 They grade evidence-backed decisions after worker reports. The instruction says
-"may call", so Jev assessment is optional there; its use and checkpoint kind are
+"may call", so classifier assessment is optional there; its use and checkpoint kind are
 recorded. These cases do not measure spontaneous mid-execution interruption.
 Routine progress is a decision probe, not a live-worker scenario.
 
@@ -97,7 +97,7 @@ The copied swarm skill is the only read exception outside the workspace.
 This is a tool-level boundary, not an OS sandbox for extension code.
 
 The wrapper's existing auth-copy and refresh-persistence behavior is unchanged.
-Only synthetic task state is sent to Jev. Provider refusals, Jev unavailability,
+Only synthetic task state is sent to the classifier. Provider refusals, classifier unavailability,
 and fixture timeouts must be distinguished from behavior failures using traces.
 Caliper can exit zero despite failed cases.
 

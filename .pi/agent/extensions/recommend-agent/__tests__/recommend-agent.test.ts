@@ -115,12 +115,12 @@ describe("recommend agent configuration and routing", () => {
   test("is disabled by default and ignores project-only configuration", () => {
     expect(resolveRecommendAgentConfig({})).toEqual(DEFAULT_RECOMMEND_AGENT_CONFIG);
     expect(
-      resolveRecommendAgentConfig({ jev: { recommendAgent: { enabled: "yes" } } }),
+      resolveRecommendAgentConfig({ classifier: { recommendAgent: { enabled: "yes" } } }),
     ).toMatchObject({
       enabled: false,
     });
     expect(
-      resolveRecommendAgentConfig({ jev: { recommendAgent: { enabled: true } } }),
+      resolveRecommendAgentConfig({ classifier: { recommendAgent: { enabled: true } } }),
     ).toMatchObject({
       enabled: true,
     });

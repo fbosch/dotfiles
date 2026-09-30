@@ -13,21 +13,21 @@ import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-cl
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import toolDiscoveryExtension, {
   isDeferredToolName,
-  rankDeferredToolsWithJev,
+  rankDeferredToolsWithClassifier,
+  resolveClassifierToolDiscoveryConfig,
   resolveDeferredToolPrefixes,
-  resolveJevToolDiscoveryConfig,
   searchDeferredTools,
-  searchDeferredToolsWithJevFallback,
+  searchDeferredToolsWithClassifierFallback,
 } from "../index";
 
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
 
 const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-const testAgentDirectory = mkdtempSync(join(tmpdir(), "tool-discovery-jev-test-"));
+const testAgentDirectory = mkdtempSync(join(tmpdir(), "tool-discovery-classifier-test-"));
 writeFileSync(
   join(testAgentDirectory, "settings.json"),
   JSON.stringify({
-    jev: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
+    classifier: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
     toolDiscovery: {
       deferredToolPrefixes: [
         "chart_",
@@ -69,7 +69,7 @@ interface SearchResult {
   details: {
     matches: string[];
     added: string[];
-    rankingSource: "jev" | "lexical";
+    rankingSource: "classifier" | "lexical";
   };
 }
 
@@ -204,38 +204,42 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("mcp")).toBe(false);
     expect(isDeferredToolName("neovim")).toBe(false);
   });
-  test("resolves Jev settings with safe defaults, bounds, and trusted project overrides", () => {
-    expect(resolveJevToolDiscoveryConfig({}, undefined)).toEqual({
+  test("resolves Classifier settings with safe defaults, bounds, and trusted project overrides", () => {
+    expect(resolveClassifierToolDiscoveryConfig({}, undefined)).toEqual({
       enabled: true,
       timeoutMs: 2400,
     });
     expect(
-      resolveJevToolDiscoveryConfig({
-        jev: { toolDiscovery: { enabled: false, timeoutMs: 1500 } },
+      resolveClassifierToolDiscoveryConfig({
+        classifier: { toolDiscovery: { enabled: false, timeoutMs: 1500 } },
       }),
     ).toEqual({ enabled: false, timeoutMs: 1500 });
-    expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { timeoutMs: 0 } } })).toEqual({
+    expect(
+      resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { timeoutMs: 0 } } }),
+    ).toEqual({
       enabled: false,
       timeoutMs: 2400,
     });
-    expect(resolveJevToolDiscoveryConfig({ jev: null })).toEqual({
-      enabled: false,
-      timeoutMs: 2400,
-    });
-    expect(resolveJevToolDiscoveryConfig({ jev: { toolDiscovery: { enabled: null } } })).toEqual({
+    expect(resolveClassifierToolDiscoveryConfig({ classifier: null })).toEqual({
       enabled: false,
       timeoutMs: 2400,
     });
     expect(
-      resolveJevToolDiscoveryConfig(
-        { jev: { toolDiscovery: { enabled: true } } },
-        { jev: { toolDiscovery: { enabled: false } } },
+      resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { enabled: null } } }),
+    ).toEqual({
+      enabled: false,
+      timeoutMs: 2400,
+    });
+    expect(
+      resolveClassifierToolDiscoveryConfig(
+        { classifier: { toolDiscovery: { enabled: true } } },
+        { classifier: { toolDiscovery: { enabled: false } } },
       ),
     ).toEqual({ enabled: false, timeoutMs: 2400 });
     expect(
-      resolveJevToolDiscoveryConfig(
+      resolveClassifierToolDiscoveryConfig(
         {
-          jev: { toolDiscovery: { enabled: false } },
+          classifier: { toolDiscovery: { enabled: false } },
           toolDiscovery: { deferredToolPrefixes: ["global_"] },
         },
         { toolDiscovery: { deferredToolPrefixes: ["project_"] } },
@@ -480,7 +484,7 @@ describe("tool discovery", () => {
     ]);
   });
 
-  test("uses bounded live Jev probabilities to rank beyond lexical matches", async () => {
+  test("uses bounded live Classifier probabilities to rank beyond lexical matches", async () => {
     const tools = [
       dummyTool("chart_pie", "Render circular data visualizations"),
       dummyTool("chart_network", "Render relationships between connected nodes"),
@@ -498,7 +502,7 @@ describe("tool discovery", () => {
       },
     }));
     let classifierInput: ClassifierContext | undefined;
-    const ranked = await rankDeferredToolsWithJev(
+    const ranked = await rankDeferredToolsWithClassifier(
       tools,
       "show connected dependencies",
       2,
@@ -535,13 +539,13 @@ describe("tool discovery", () => {
     );
 
     expect(ranked?.matches.map((tool) => tool.name)).toEqual(["chart_network"]);
-    expect(ranked?.rankingSource).toBe("jev");
+    expect(ranked?.rankingSource).toBe("classifier");
     expect(classifierInput?.questions.best_tool?.type).toBe("choice");
     expect(JSON.stringify(classifierInput?.state)).not.toContain("parameters");
     expect(JSON.stringify(classifierInput?.state)).not.toContain("sourceInfo");
   });
 
-  test("accepts a valid Jev no-match response without activating a candidate", async () => {
+  test("accepts a valid Classifier no-match response without activating a candidate", async () => {
     const tools = [dummyTool("chart_pie", "Render circular data visualizations")].map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -555,28 +559,34 @@ describe("tool discovery", () => {
       },
     }));
 
-    const ranked = await rankDeferredToolsWithJev(tools, "database migrations", 1, ["chart_"], {
-      modelRegistry: await nativeClassifierRegistry(),
-      fetch: async () =>
-        new Response(
-          JSON.stringify({
-            answers: {
-              best_tool: {
-                type: "choice",
-                choice: "no_match",
-                confidence: 0.9,
-                probabilities: { candidate_0: 0.1, no_match: 0.9 },
+    const ranked = await rankDeferredToolsWithClassifier(
+      tools,
+      "database migrations",
+      1,
+      ["chart_"],
+      {
+        modelRegistry: await nativeClassifierRegistry(),
+        fetch: async () =>
+          new Response(
+            JSON.stringify({
+              answers: {
+                best_tool: {
+                  type: "choice",
+                  choice: "no_match",
+                  confidence: 0.9,
+                  probabilities: { candidate_0: 0.1, no_match: 0.9 },
+                },
               },
-            },
-          }),
-          { status: 200 },
-        ),
-    });
+            }),
+            { status: 200 },
+          ),
+      },
+    );
 
-    expect(ranked).toEqual({ matches: [], rankingSource: "jev" });
+    expect(ranked).toEqual({ matches: [], rankingSource: "classifier" });
   });
 
-  test("falls back to lexical results for unavailable or malformed Jev responses", async () => {
+  test("falls back to lexical results for unavailable or malformed Classifier responses", async () => {
     const tools = [
       dummyTool("websearch", "Search the public web"),
       dummyTool("webfetch", "Fetch a web page"),
@@ -601,10 +611,10 @@ describe("tool discovery", () => {
 
     const lexicalMatches = searchDeferredTools(tools, "fetch web page", 2, ["web"]);
     await expect(
-      searchDeferredToolsWithJevFallback(tools, "fetch web page", 2, ["web"], options),
+      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], options),
     ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
     await expect(
-      searchDeferredToolsWithJevFallback(tools, "fetch web page", 2, ["web"], {
+      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], {
         modelRegistry: await nativeClassifierRegistry(),
         fetch: async () =>
           new Response(
@@ -623,7 +633,7 @@ describe("tool discovery", () => {
       }),
     ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
     await expect(
-      searchDeferredToolsWithJevFallback(tools, "fetch web page", 2, ["web"], {
+      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], {
         modelRegistry: await nativeClassifierRegistry(),
         fetch: async () => {
           throw new Error("network unavailable");
@@ -663,7 +673,7 @@ describe("tool discovery", () => {
     const controller = new AbortController();
     controller.abort();
     await expect(
-      searchDeferredToolsWithJevFallback(
+      searchDeferredToolsWithClassifierFallback(
         tools,
         "chart",
         1,
@@ -678,7 +688,7 @@ describe("tool discovery", () => {
     ).resolves.toEqual({ matches: [chartTool], rankingSource: "lexical" });
 
     await expect(
-      searchDeferredToolsWithJevFallback(tools, "chart", 1, ["chart_"], {
+      searchDeferredToolsWithClassifierFallback(tools, "chart", 1, ["chart_"], {
         modelRegistry: await nativeClassifierRegistry(),
         timeoutMs: 5,
         fetch: async (_url, init) =>

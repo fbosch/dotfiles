@@ -209,18 +209,18 @@ function diagnosticReasonLabel(diagnostic: RoutingDiagnostic): string {
 
 function diagnosticMessage(diagnostic: RoutingDiagnostic): string {
   if (diagnostic.decision === "agreement") {
-    return `Jev → ${diagnostic.selectedAgentId ?? diagnostic.proposedAgentId} ✓`;
+    return `Classifier → ${diagnostic.selectedAgentId ?? diagnostic.proposedAgentId} ✓`;
   }
   if (diagnostic.decision === "disagreement") {
-    return `Jev → ${diagnostic.selectedAgentId ?? "unknown"} (proposed ${diagnostic.proposedAgentId})`;
+    return `Classifier → ${diagnostic.selectedAgentId ?? "unknown"} (proposed ${diagnostic.proposedAgentId})`;
   }
   if (diagnostic.decision === "stay") {
-    return `Jev → primary (proposed ${diagnostic.proposedAgentId})`;
+    return `Classifier → primary (proposed ${diagnostic.proposedAgentId})`;
   }
   if (diagnostic.decision === "abstain") {
-    return "Jev → abstain; proceeding";
+    return "Classifier → abstain; proceeding";
   }
-  return `Jev unavailable: ${diagnosticReasonLabel(diagnostic)}; proceeding`;
+  return `Classifier unavailable: ${diagnosticReasonLabel(diagnostic)}; proceeding`;
 }
 
 function reportDiagnostic(
@@ -254,10 +254,10 @@ function blockReason(
     evaluation.decision.decision === "recommend" &&
     evaluation.decision.agentId !== proposedAgent
   ) {
-    return `Jev routing recommends ${evaluation.decision.agentId} instead; reconsider this delegation.`;
+    return `Classifier routing recommends ${evaluation.decision.agentId} instead; reconsider this delegation.`;
   }
   if (evaluation.decision.decision === "stay") {
-    return "Jev routing recommends staying with the primary; reconsider this delegation.";
+    return "Classifier routing recommends staying with the primary; reconsider this delegation.";
   }
   return undefined;
 }
@@ -325,7 +325,7 @@ export function registerSubagentRoutingHook(
     const agent = input.subagent_type.trim();
     if (task.length === 0 || agent.length === 0) return undefined;
 
-    // Consume the one-evaluation-per-user-turn budget before awaiting Jev, so
+    // Consume the one-evaluation-per-user-turn budget before awaiting Classifier, so
     // parallel or retried tool preflight cannot create a repeated blocking loop.
     state.evaluationAttempted = true;
     const startedAt = Date.now();
@@ -343,7 +343,7 @@ export function registerSubagentRoutingHook(
         config,
       );
     } catch {
-      // Routing is advisory and must not make delegation unavailable on Jev failure.
+      // Routing is advisory and must not make delegation unavailable on Classifier failure.
       reportDiagnostic(pi, ctx, diagnosticForFailure(agent, startedAt));
       return undefined;
     }

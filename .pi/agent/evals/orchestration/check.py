@@ -195,7 +195,7 @@ def check_steering(events, expected, spawns, final):
     assert assessment["input"]["agentId"] == steer["input"]["agent_id"] == agent_id, "Checkpoint/steer addressed the wrong worker"
     assert assessment["input"]["checkpointKind"] == "scope-change", "Wrong checkpoint classification"
     assessed = result_for(events, assessment)
-    assert json.loads(assessed["text"])["status"] == "assessed", "Live Jev assessment unavailable or abstained; not a steering pass"
+    assert json.loads(assessed["text"])["status"] == "assessed", "Live classifier assessment unavailable or abstained; not a steering pass"
     ready = next(e for e in events if e["kind"] == "checkpoint-ready")
     released = next(e for e in events if e["kind"] == "released")
     assert released["agentId"] == agent_id and released["child"] == ready["session"], "Wrong child released"

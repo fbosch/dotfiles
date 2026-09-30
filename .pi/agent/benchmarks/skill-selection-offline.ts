@@ -7,9 +7,9 @@ import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
   DEFAULT_SKILL_SELECTION_CONFIG,
   type SkillSelectionFailure,
-  selectSkillsWithJevDetailed,
+  selectSkillsWithClassifierDetailed,
 } from "../extensions/skill-selection";
-import type { JevClassifierFailure } from "../lib/jev-classifier";
+import type { ClassifierFailure } from "../lib/classifier";
 import {
   SKILL_SELECTION_BENCHMARK_CASES,
   SKILL_SELECTION_BENCHMARK_CATALOG,
@@ -63,7 +63,7 @@ const BENCHMARK_QUESTION_IDS = [
 
 type Prediction = BenchmarkPrediction;
 type SavedFailureReason =
-  | JevClassifierFailure["reason"]
+  | ClassifierFailure["reason"]
   | "invalid-evaluation-response"
   | "prediction-mismatch"
   | "retry-budget-exhausted";
@@ -246,7 +246,7 @@ function unexpectedFailure(): NonNullable<Prediction["failure"]> {
   return { stage: "request", reason: "request-failure" };
 }
 
-async function jevPrediction(
+async function classifierPrediction(
   testCase: SkillSelectionBenchmarkCase,
   modelRegistry: ModelRegistry,
   timeoutMs: number,
@@ -256,7 +256,7 @@ async function jevPrediction(
 
   const startedAt = performance.now();
   try {
-    const attempt = await selectSkillsWithJevDetailed(
+    const attempt = await selectSkillsWithClassifierDetailed(
       testCase.request,
       candidatesForCase(testCase),
       {
@@ -510,7 +510,7 @@ function createReport(
       ).length,
       catalog_fingerprint: catalogFingerprint(),
       catalog_count: SKILL_SELECTION_BENCHMARK_CATALOG.length,
-      model: "TypeSafe Jev",
+      model: "TypeSafe Classifier",
       questions: BENCHMARK_QUESTION_IDS,
       threshold: DEFAULT_SKILL_SELECTION_CONFIG.threshold,
       max_recommendations: DEFAULT_SKILL_SELECTION_CONFIG.maxRecommendations,
@@ -592,7 +592,7 @@ function parseDelay(value: string | undefined): number | undefined {
     : undefined;
 }
 
-const FLAG_OPTIONS = new Set(["--help", "--jev", "--hosted-compare"]);
+const FLAG_OPTIONS = new Set(["--help", "--classifier", "--hosted-compare"]);
 const VALUE_OPTIONS = new Set([
   "--delay-ms",
   "--timeout-ms",
@@ -799,7 +799,7 @@ export async function runHosted(
       (index) => {
         const testCase = SKILL_SELECTION_BENCHMARK_CASES[index];
         if (testCase === undefined) throw new Error(`Missing benchmark case at index ${index}`);
-        return jevPrediction(testCase, modelRegistry, timeoutMs, signal);
+        return classifierPrediction(testCase, modelRegistry, timeoutMs, signal);
       },
       wait,
       hostedCalls,
@@ -856,7 +856,7 @@ async function main(): Promise<void> {
   validateArguments(args);
   if (args.includes("--help")) {
     console.log(
-      "Usage: bun run benchmark:skill-selection [--jev [--timeout-ms N]] [--hosted-compare] [--delay-ms N] [--max-attempts N|--retries N] [--retry-base-ms N] [--retry-cap-ms N] [--max-case-wait-ms N] [--max-run-wait-ms N] [--output PATH]",
+      "Usage: bun run benchmark:skill-selection [--classifier [--timeout-ms N]] [--hosted-compare] [--delay-ms N] [--max-attempts N|--retries N] [--retry-base-ms N] [--retry-cap-ms N] [--max-case-wait-ms N] [--max-run-wait-ms N] [--output PATH]",
     );
     console.log(
       "--delay-ms: nonnegative milliseconds between hosted requests (default: 1000; 0 disables pacing).",
@@ -871,13 +871,13 @@ async function main(): Promise<void> {
       "--max-case-wait-ms/--max-run-wait-ms: total retry-wait budgets (defaults: 120000/600000).",
     );
     console.log(
-      "Default: frozen synthetic lexical baseline; hosted calls require explicit --jev or --hosted-compare.",
+      "Default: frozen synthetic lexical baseline; hosted calls require explicit --classifier or --hosted-compare.",
     );
     return;
   }
 
   const hostedCompare = args.includes("--hosted-compare");
-  const hosted = hostedCompare || args.includes("--jev");
+  const hosted = hostedCompare || args.includes("--classifier");
   const delayValue = optionValue(args, "--delay-ms");
   const delayMs = parseDelay(delayValue);
   if (args.includes("--delay-ms") && (delayValue === undefined || delayMs === undefined)) {

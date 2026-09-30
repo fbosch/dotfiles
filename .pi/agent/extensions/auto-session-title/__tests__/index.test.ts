@@ -160,126 +160,135 @@ describe("auto-session-title lifecycle", () => {
     }
   });
 
-  test("asks Jev after completed turns and regenerates only for stale titles", async () => {
-    const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
-    temporaryDirectories.push(agentDirectory);
-    writeFileSync(join(agentDirectory, "settings.json"), "{}");
-    const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-    process.env.PI_CODING_AGENT_DIR = agentDirectory;
+  test.each([true, false])(
+    "asks the classifier after completed turns and regenerates only for stale titles (signal: %s)",
+    async (hasSignal) => {
+      const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
+      temporaryDirectories.push(agentDirectory);
+      writeFileSync(join(agentDirectory, "settings.json"), "{}");
+      const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+      process.env.PI_CODING_AGENT_DIR = agentDirectory;
 
-    try {
-      let sessionName: string | undefined;
-      const titleRequests: string[] = [];
-      const jevRequests: unknown[] = [];
-      const notifications: string[] = [];
-      const judgments = [0.79, 0.8];
-      let sessionStart: SessionStartHandler | undefined;
-      let beforeAgentStart: BeforeAgentStartHandler | undefined;
-      let agentEnd: AgentEndHandler | undefined;
-      const pi = {
-        getSessionName: () => sessionName,
-        setSessionName: (name: string) => {
-          sessionName = name;
-        },
-        on(event: string, handler: unknown) {
-          if (event === "session_start") sessionStart = handler as SessionStartHandler;
-          if (event === "before_agent_start") {
-            beforeAgentStart = handler as BeforeAgentStartHandler;
-          }
-          if (event === "agent_end") agentEnd = handler as AgentEndHandler;
-        },
-      } as unknown as ExtensionAPI;
-      const ctx = {
-        signal: new AbortController().signal,
-        hasUI: true,
-        sessionManager: { getBranch: () => [] },
-        ui: { notify: (message: string) => notifications.push(message) },
-        modelRegistry: {
-          find: () => ({}),
-          complete: async (
-            _model: unknown,
-            request: { messages: Array<{ content: Array<{ text: string }> }> },
-          ) => {
-            titleRequests.push(request.messages[0]?.content[0]?.text ?? "");
+      try {
+        let sessionName: string | undefined;
+        const titleRequests: string[] = [];
+        const classifierRequests: unknown[] = [];
+        const notifications: string[] = [];
+        const judgments = [0.79, 0.8];
+        let sessionStart: SessionStartHandler | undefined;
+        let beforeAgentStart: BeforeAgentStartHandler | undefined;
+        let agentEnd: AgentEndHandler | undefined;
+        const pi = {
+          getSessionName: () => sessionName,
+          setSessionName: (name: string) => {
+            sessionName = name;
+          },
+          on(event: string, handler: unknown) {
+            if (event === "session_start") sessionStart = handler as SessionStartHandler;
+            if (event === "before_agent_start") {
+              beforeAgentStart = handler as BeforeAgentStartHandler;
+            }
+            if (event === "agent_end") agentEnd = handler as AgentEndHandler;
+          },
+        } as unknown as ExtensionAPI;
+        const ctx = {
+          ...(hasSignal ? { signal: new AbortController().signal } : {}),
+          hasUI: true,
+          sessionManager: { getBranch: () => [] },
+          ui: { notify: (message: string) => notifications.push(message) },
+          modelRegistry: {
+            find: () => ({}),
+            complete: async (
+              _model: unknown,
+              request: { messages: Array<{ content: Array<{ text: string }> }> },
+            ) => {
+              titleRequests.push(request.messages[0]?.content[0]?.text ?? "");
+              return {
+                content: [{ type: "text", text: `Generated title ${titleRequests.length}` }],
+                stopReason: "stop",
+              };
+            },
+          },
+        } as unknown as ExtensionContext;
+
+        await autoSessionTitle(
+          pi,
+          async () => "Writing guidance",
+          async (input) => {
+            classifierRequests.push(input);
+            if (classifierRequests.length === 3) throw new Error("Classifier unavailable");
             return {
-              content: [{ type: "text", text: `Generated title ${titleRequests.length}` }],
-              stopReason: "stop",
+              title_stale: {
+                type: "bool",
+                probability: judgments[classifierRequests.length - 1] ?? 0,
+              },
             };
           },
-        },
-      } as unknown as ExtensionContext;
+        );
+        sessionStart?.({}, ctx);
 
-      await autoSessionTitle(
-        pi,
-        async () => "Writing guidance",
-        async (input) => {
-          jevRequests.push(input);
-          if (jevRequests.length === 3) throw new Error("Jev unavailable");
-          return {
-            title_stale: { type: "bool", probability: judgments[jevRequests.length - 1] ?? 0 },
-          };
-        },
-      );
-      sessionStart?.({}, ctx);
+        await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
+        expect(titleRequests).toHaveLength(0);
+        await agentEnd?.({}, ctx);
+        expect(sessionName).toBe("Generated title 1");
+        expect(titleRequests).toHaveLength(1);
+        expect(classifierRequests).toHaveLength(0);
 
-      await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
-      expect(titleRequests).toHaveLength(0);
-      await agentEnd?.({}, ctx);
-      expect(sessionName).toBe("Generated title 1");
-      expect(titleRequests).toHaveLength(1);
-      expect(jevRequests).toHaveLength(0);
+        await beforeAgentStart?.({ prompt: "Add a regression test" } as BeforeAgentStartEvent, ctx);
+        expect(classifierRequests).toHaveLength(0);
+        await agentEnd?.({}, ctx);
+        expect(sessionName).toBe("Generated title 1");
+        expect(titleRequests).toHaveLength(1);
 
-      await beforeAgentStart?.({ prompt: "Add a regression test" } as BeforeAgentStartEvent, ctx);
-      expect(jevRequests).toHaveLength(0);
-      await agentEnd?.({}, ctx);
-      expect(sessionName).toBe("Generated title 1");
-      expect(titleRequests).toHaveLength(1);
+        await beforeAgentStart?.(
+          { prompt: "Actually, replace the feature with a CLI command" } as BeforeAgentStartEvent,
+          ctx,
+        );
+        await agentEnd?.({}, ctx);
+        expect(sessionName).toBe("Generated title 2");
+        expect(titleRequests).toHaveLength(2);
+        expect(classifierRequests).toHaveLength(2);
+        expect(classifierRequests[0]).toMatchObject({
+          state: { currentTitle: "Generated title 1", latestUserPrompt: "Add a regression test" },
+          questions: { title_stale: { type: "bool" } },
+        });
+        expect(classifierRequests[1]).toMatchObject({
+          state: {
+            currentTitle: "Generated title 1",
+            latestUserPrompt: "Actually, replace the feature with a CLI command",
+          },
+          questions: { title_stale: { type: "bool" } },
+        });
+        expect(titleRequests.map((request) => JSON.parse(request).conversation)).toEqual([
+          "Build the feature",
+          "Build the feature\n\nAdd a regression test\n\nActually, replace the feature with a CLI command",
+        ]);
 
-      await beforeAgentStart?.(
-        { prompt: "Actually, replace the feature with a CLI command" } as BeforeAgentStartEvent,
-        ctx,
-      );
-      await agentEnd?.({}, ctx);
-      expect(sessionName).toBe("Generated title 2");
-      expect(titleRequests).toHaveLength(2);
-      expect(jevRequests).toHaveLength(2);
-      expect(jevRequests[0]).toMatchObject({
-        state: { currentTitle: "Generated title 1", latestUserPrompt: "Add a regression test" },
-        questions: { title_stale: { type: "bool" } },
-      });
-      expect(jevRequests[1]).toMatchObject({
-        state: {
-          currentTitle: "Generated title 1",
-          latestUserPrompt: "Actually, replace the feature with a CLI command",
-        },
-        questions: { title_stale: { type: "bool" } },
-      });
-      expect(titleRequests.map((request) => JSON.parse(request).conversation)).toEqual([
-        "Build the feature",
-        "Build the feature\n\nAdd a regression test\n\nActually, replace the feature with a CLI command",
-      ]);
+        await beforeAgentStart?.(
+          { prompt: "Continue the same task" } as BeforeAgentStartEvent,
+          ctx,
+        );
+        await agentEnd?.({}, ctx);
+        expect(sessionName).toBe("Generated title 2");
+        expect(titleRequests).toHaveLength(2);
+        expect(classifierRequests).toHaveLength(3);
+        expect(notifications).toEqual([
+          "Could not assess whether the session title is stale: Classifier unavailable",
+        ]);
+        sessionName = "Manual title";
+        await beforeAgentStart?.({ prompt: "Another follow-up" } as BeforeAgentStartEvent, ctx);
+        await agentEnd?.({}, ctx);
+        expect(sessionName).toBe("Manual title");
+        expect(classifierRequests).toHaveLength(3);
+        expect(titleRequests).toHaveLength(2);
+      } finally {
+        if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+        else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+      }
+    },
+  );
 
-      await beforeAgentStart?.({ prompt: "Continue the same task" } as BeforeAgentStartEvent, ctx);
-      await agentEnd?.({}, ctx);
-      expect(sessionName).toBe("Generated title 2");
-      expect(titleRequests).toHaveLength(2);
-      expect(jevRequests).toHaveLength(3);
-      expect(notifications).toEqual([
-        "Could not assess whether the session title is stale: Jev unavailable",
-      ]);
-      sessionName = "Manual title";
-      await beforeAgentStart?.({ prompt: "Another follow-up" } as BeforeAgentStartEvent, ctx);
-      await agentEnd?.({}, ctx);
-      expect(sessionName).toBe("Manual title");
-      expect(jevRequests).toHaveLength(3);
-      expect(titleRequests).toHaveLength(2);
-    } finally {
-      if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
-      else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
-    }
-  });
-
-  test("ignores aborted stale-title requests without hiding later Jev failures", async () => {
+  test("ignores aborted stale-title requests without hiding later Classifier failures", async () => {
     const agentDirectory = mkdtempSync(join(tmpdir(), "auto-session-title-agent-"));
     temporaryDirectories.push(agentDirectory);
     writeFileSync(join(agentDirectory, "settings.json"), "{}");
@@ -340,7 +349,7 @@ describe("auto-session-title lifecycle", () => {
             activeRequestController.abort();
             throw new Error("Request cancelled");
           }
-          throw new Error("Jev unavailable");
+          throw new Error("Classifier unavailable");
         },
       );
       sessionStart?.({}, ctx);
@@ -377,7 +386,7 @@ describe("auto-session-title lifecycle", () => {
       expect(sessionName).toBe("Generated title 1");
       expect(titleRequests).toHaveLength(1);
       expect(notifications).toEqual([
-        "Could not assess whether the session title is stale: Jev unavailable",
+        "Could not assess whether the session title is stale: Classifier unavailable",
       ]);
     } finally {
       if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;

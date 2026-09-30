@@ -172,13 +172,13 @@ describe("assess_subagent_checkpoint", () => {
     expect(repeated).toMatchObject({ status: "assessed", decision: "narrow", duplicate: true });
   });
 
-  test("fails open on Jev unavailability and cancellation", async () => {
+  test("fails open on Classifier unavailability and cancellation", async () => {
     const unavailable = createSubagentCheckpointAssessor({
       fetch: async () => new Response("{}", { status: 503 }),
     });
     expect(await unavailable(input, registry)).toMatchObject({
       status: "unavailable",
-      reason: "jev-unavailable",
+      reason: "classifier-unavailable",
     });
 
     const controller = new AbortController();

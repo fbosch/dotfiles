@@ -1,5 +1,5 @@
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { DEFAULT_JEV_TIMEOUT_MS } from "../../lib/jev-classifier";
+import { DEFAULT_CLASSIFIER_TIMEOUT_MS } from "../../lib/classifier";
 
 export const RECOMMEND_AGENT_SETTING = "recommendAgent" as const;
 export const DEFAULT_RECOMMEND_AGENT_CONFIG = {
@@ -7,7 +7,7 @@ export const DEFAULT_RECOMMEND_AGENT_CONFIG = {
   // These are conservative operating thresholds, not calibrated probabilities.
   minProbability: 0.72,
   minMargin: 0.1,
-  timeoutMs: DEFAULT_JEV_TIMEOUT_MS,
+  timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
   maxCandidates: 32,
 } as const;
 
@@ -38,11 +38,11 @@ function boundedNumber(
 /** Only the user-global settings object is accepted; project settings cannot opt in. */
 export function resolveRecommendAgentConfig(globalSettings: unknown): RecommendAgentConfig {
   if (!isRecord(globalSettings)) return DEFAULT_RECOMMEND_AGENT_CONFIG;
-  const jev = globalSettings.jev;
-  if (jev === undefined) return DEFAULT_RECOMMEND_AGENT_CONFIG;
-  if (!isRecord(jev)) return { ...DEFAULT_RECOMMEND_AGENT_CONFIG, enabled: false };
+  const classifier = globalSettings.classifier;
+  if (classifier === undefined) return DEFAULT_RECOMMEND_AGENT_CONFIG;
+  if (!isRecord(classifier)) return { ...DEFAULT_RECOMMEND_AGENT_CONFIG, enabled: false };
 
-  const raw = jev[RECOMMEND_AGENT_SETTING];
+  const raw = classifier[RECOMMEND_AGENT_SETTING];
   if (raw === undefined) return DEFAULT_RECOMMEND_AGENT_CONFIG;
   if (!isRecord(raw)) return { ...DEFAULT_RECOMMEND_AGENT_CONFIG, enabled: false };
 

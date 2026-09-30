@@ -4,11 +4,11 @@ import { basename, extname, join } from "node:path";
 import type { ClassifierAnswer, ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import { ModelRegistry, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import {
-  type JevClassifierFailure,
-  type JevClassifierFetch,
-  type JevClassifierRegistry,
-  requestJevClassifier,
-} from "../lib/jev-classifier";
+  type ClassifierFailure,
+  type ClassifierFetch,
+  type ClassifierRegistry,
+  requestClassifier,
+} from "../lib/classifier";
 
 const DEFAULT_LIMIT = 4;
 const MAX_LIMIT = 4;
@@ -39,8 +39,8 @@ export interface CommitMessagePilotComparison {
   readonly taskName: string;
   readonly deterministicPass: boolean;
   readonly existingJudgePass: boolean;
-  readonly jevScore?: number;
-  readonly jevVerdict: AdvisoryVerdict;
+  readonly classifierScore?: number;
+  readonly classifierVerdict: AdvisoryVerdict;
   readonly disagreesWithDeterministic: boolean | null;
   readonly disagreesWithExistingJudge: boolean | null;
   readonly falsePass: boolean;
@@ -50,14 +50,14 @@ export interface CommitMessagePilotComparison {
 export interface CommitMessagePilotReport {
   readonly schemaVersion: 1;
   readonly generatedAt: string;
-  readonly model: "TypeSafe Jev";
+  readonly model: "TypeSafe Classifier";
   readonly threshold: number;
   readonly timeoutMs: number;
   readonly caseCount: number;
   readonly elapsedMs: number;
   readonly gatewayFailure?: {
-    readonly stage: JevClassifierFailure["stage"];
-    readonly reason: JevClassifierFailure["reason"];
+    readonly stage: ClassifierFailure["stage"];
+    readonly reason: ClassifierFailure["reason"];
     readonly httpStatus?: number;
   };
   readonly evaluationFailure?: {
@@ -71,9 +71,9 @@ export interface CommitMessagePilotReport {
   readonly comparisons: readonly CommitMessagePilotComparison[];
 }
 
-export interface RunCommitMessageJevPilotOptions {
-  readonly modelRegistry: JevClassifierRegistry;
-  readonly fetch?: JevClassifierFetch;
+export interface RunCommitMessageClassifierPilotOptions {
+  readonly modelRegistry: ClassifierRegistry;
+  readonly fetch?: ClassifierFetch;
   readonly signal?: AbortSignal;
   readonly threshold?: number;
   readonly timeoutMs?: number;
@@ -267,7 +267,7 @@ export async function loadCommitMessagePilotCases(options: {
   }));
 }
 
-function createJevRequest(cases: readonly CommitMessagePilotCase[]): ClassifierContext {
+function createClassifierRequest(cases: readonly CommitMessagePilotCase[]): ClassifierContext {
   const questions: ClassifierContext["questions"] = {};
   for (const [index, pilotCase] of cases.entries()) {
     questions[`case_${index}`] = {
@@ -303,7 +303,10 @@ function parseUsage(value: Usage | undefined): CommitMessagePilotReport["usage"]
   };
 }
 
-function parseJevScores(answers: Record<string, ClassifierAnswer>, caseCount: number): number[] {
+function parseClassifierScores(
+  answers: Record<string, ClassifierAnswer>,
+  caseCount: number,
+): number[] {
   return Array.from({ length: caseCount }, (_, index) => {
     const answer = answers[`case_${index}`];
     if (answer?.type !== "bool") throw new Error("invalid classifier answer");
@@ -322,8 +325,9 @@ function compareCase(
   score: number | undefined,
   threshold: number,
 ): CommitMessagePilotComparison {
-  const jevVerdict = score === undefined ? "unavailable" : verdictForScore(score, threshold);
-  const jevBoolean = jevVerdict === "pass" ? true : jevVerdict === "fail" ? false : undefined;
+  const classifierVerdict = score === undefined ? "unavailable" : verdictForScore(score, threshold);
+  const classifierBoolean =
+    classifierVerdict === "pass" ? true : classifierVerdict === "fail" ? false : undefined;
   return {
     id: pilotCase.id,
     sourceResult: pilotCase.sourceResult,
@@ -331,20 +335,20 @@ function compareCase(
     taskName: pilotCase.taskName,
     deterministicPass: pilotCase.deterministicPass,
     existingJudgePass: pilotCase.existingJudgePass,
-    ...(score === undefined ? {} : { jevScore: score }),
-    jevVerdict,
+    ...(score === undefined ? {} : { classifierScore: score }),
+    classifierVerdict,
     disagreesWithDeterministic:
-      jevBoolean === undefined ? null : jevBoolean !== pilotCase.deterministicPass,
+      classifierBoolean === undefined ? null : classifierBoolean !== pilotCase.deterministicPass,
     disagreesWithExistingJudge:
-      jevBoolean === undefined ? null : jevBoolean !== pilotCase.existingJudgePass,
-    falsePass: jevBoolean === true && !pilotCase.deterministicPass,
-    falseNegative: jevBoolean === false && pilotCase.deterministicPass,
+      classifierBoolean === undefined ? null : classifierBoolean !== pilotCase.existingJudgePass,
+    falsePass: classifierBoolean === true && !pilotCase.deterministicPass,
+    falseNegative: classifierBoolean === false && pilotCase.deterministicPass,
   };
 }
 
-export async function runCommitMessageJevPilot(
+export async function runCommitMessageClassifierPilot(
   cases: readonly CommitMessagePilotCase[],
-  options: RunCommitMessageJevPilotOptions,
+  options: RunCommitMessageClassifierPilotOptions,
 ): Promise<CommitMessagePilotReport> {
   if (cases.length === 0) throw new Error("pilot requires at least one case");
   if (cases.length > MAX_LIMIT) throw new Error(`pilot supports at most ${MAX_LIMIT} cases`);
@@ -352,7 +356,7 @@ export async function runCommitMessageJevPilot(
   const threshold = normalizeThreshold(options.threshold);
   const timeoutMs = normalizeTimeout(options.timeoutMs);
   const startedAt = performance.now();
-  const result = await requestJevClassifier(options.modelRegistry, createJevRequest(cases), {
+  const result = await requestClassifier(options.modelRegistry, createClassifierRequest(cases), {
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
     timeoutMs,
@@ -363,7 +367,7 @@ export async function runCommitMessageJevPilot(
     return {
       schemaVersion: 1,
       generatedAt: new Date().toISOString(),
-      model: "TypeSafe Jev",
+      model: "TypeSafe Classifier",
       threshold,
       timeoutMs,
       caseCount: cases.length,
@@ -378,13 +382,13 @@ export async function runCommitMessageJevPilot(
     };
   }
 
-  const scores = parseJevScores(result.value.answers, cases.length);
+  const scores = parseClassifierScores(result.value.answers, cases.length);
 
   const usage = parseUsage(result.usage);
   return {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    model: "TypeSafe Jev",
+    model: "TypeSafe Classifier",
     threshold,
     timeoutMs,
     caseCount: cases.length,
@@ -435,14 +439,14 @@ function defaultResultPaths(): Promise<string[]> {
 
 function usageText(): string {
   return [
-    "Usage: bun benchmarks/commit-message-jev-pilot.ts [options]",
+    "Usage: bun benchmarks/commit-message-classifier-pilot.ts [options]",
     "",
     "Options:",
     "  --result PATH       Use one Caliper result JSON (repeatable)",
     "  --spec PATH         Commit-message eval spec path",
     "  --limit N           Evaluate at most four existing attempts (default: 4)",
-    "  --threshold N       Jev pass threshold (default: 0.8)",
-    "  --timeout-ms N      Jev request timeout, 1-2000 ms (default: 2000)",
+    "  --threshold N       Classifier pass threshold (default: 0.8)",
+    "  --timeout-ms N      Classifier request timeout, 1-2000 ms (default: 2000)",
     "  --auth-profile NAME Auth profile (default: fbb)",
     "  --output PATH       Save the comparison report as JSON",
   ].join("\n");
@@ -522,7 +526,7 @@ async function main(argv: readonly string[]): Promise<void> {
     throw new Error("no attempts with both deterministic and existing-judge results found");
 
   const registry = await createLiveRegistry(cli.authProfile);
-  const report = await runCommitMessageJevPilot(cases, {
+  const report = await runCommitMessageClassifierPilot(cases, {
     modelRegistry: registry,
     threshold: cli.threshold,
     timeoutMs: cli.timeoutMs,
@@ -543,8 +547,8 @@ async function main(argv: readonly string[]): Promise<void> {
           taskName: comparison.taskName,
           deterministic: comparison.deterministicPass,
           existingJudge: comparison.existingJudgePass,
-          jev: comparison.jevVerdict,
-          jevScore: comparison.jevScore ?? null,
+          classifier: comparison.classifierVerdict,
+          classifierScore: comparison.classifierScore ?? null,
           disagreement:
             comparison.disagreesWithDeterministic === true ||
             comparison.disagreesWithExistingJudge === true,
@@ -560,7 +564,9 @@ async function main(argv: readonly string[]): Promise<void> {
 
 if (import.meta.main) {
   main(process.argv.slice(2)).catch(() => {
-    console.error("Jev pilot unavailable; no raw authentication or request details were recorded.");
+    console.error(
+      "Classifier pilot unavailable; no raw authentication or request details were recorded.",
+    );
     process.exitCode = 1;
   });
 }
