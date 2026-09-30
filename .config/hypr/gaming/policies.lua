@@ -26,7 +26,7 @@
 local M = {
 	workspace = "10",
 	default_presentation = {
-		vrr = 3,
+		vrr = 0,
 		direct_scanout = 2,
 	},
 }

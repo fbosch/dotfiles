@@ -21,7 +21,7 @@ return {
 			},
 		},
 		misc = {
-			vrr = 3,
+			vrr = 0,
 		},
 		general = {
 			allow_tearing = false,
