@@ -11,6 +11,27 @@ const disabledSettings = {
 };
 
 describe("startup header Classifier status", () => {
+  test("master disable hides Classifier before auth inspection", () => {
+    const registry = {
+      getProviderAuthStatus: () => {
+        throw new Error("must not inspect auth");
+      },
+    };
+    expect(
+      resolveClassifierStartupStatus(
+        { classifier: { enabled: false } },
+        { classifier: { enabled: true } },
+        registry,
+      ),
+    ).toBeUndefined();
+    expect(
+      resolveClassifierStartupStatus({}, { classifier: { enabled: false } }, registry),
+    ).toBeUndefined();
+    expect(
+      resolveClassifierStartupStatus({ classifier: { enabled: "no" } }, undefined, registry),
+    ).toEqual({ state: "unavailable" });
+  });
+
   test("hides Classifier when every feature is disabled", () => {
     let authChecks = 0;
     const status = resolveClassifierStartupStatus(disabledSettings, undefined, {

@@ -6,7 +6,7 @@ import type {
   JsonValue,
   Usage,
 } from "@earendil-works/pi-ai";
-import { getAgentDir, type ModelRegistry } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, type ModelRegistry, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { isMatching, match, P } from "ts-pattern";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
@@ -28,6 +28,7 @@ export type ClassifierFailure = {
   readonly stage: "config" | "auth" | "request" | "body";
   readonly reason:
     | "invalid-config"
+    | "disabled"
     | "invalid-input"
     | "model-unavailable"
     | "auth-failure"
@@ -47,11 +48,17 @@ export type ClassifierRequestResult =
       readonly usage?: Usage;
     }
   | ClassifierFailure;
+export interface ClassifierSettingsContext {
+  readonly cwd: string;
+  isProjectTrusted(): boolean;
+}
+
 export interface ClassifierOptions {
   fetch?: ClassifierFetch;
   signal?: AbortSignal;
   timeoutMs?: number;
   onFetchAttempt?: () => void;
+  settingsContext?: ClassifierSettingsContext;
 }
 
 const DEFAULT_PROVIDERS = [
@@ -61,33 +68,114 @@ const DEFAULT_PROVIDERS = [
 type Preference = { provider: ClassifierProviderId; model: string };
 const RecordPattern = P.record(P.string, P.unknown);
 
+function parseClassifierPreferences(settings: unknown): Preference[] | undefined {
+  if (settings === undefined) return [...DEFAULT_PROVIDERS];
+  if (!isMatching(RecordPattern, settings)) return undefined;
+  if (settings.classifier === undefined) return [...DEFAULT_PROVIDERS];
+  if (!isMatching(RecordPattern, settings.classifier)) return undefined;
+  if (settings.classifier.providers === undefined) return [...DEFAULT_PROVIDERS];
+  const entries = settings.classifier.providers;
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 2) return undefined;
+  const preferences: Preference[] = [];
+  for (const entry of entries) {
+    if (!isMatching({ provider: P.union(...CLASSIFIER_PROVIDER_IDS), model: P.string }, entry))
+      return undefined;
+    if (preferences.some(({ provider }) => provider === entry.provider)) return undefined;
+    if (entry.provider === OPENROUTER_PROVIDER_ID) {
+      if (!/^~?typesafe\/jev-(?:latest|preview|\d+\.\d+(?:\.\d+)?)$/u.test(entry.model))
+        return undefined;
+    } else if (entry.model !== "typesafe-ai/jev") return undefined;
+    preferences.push({ provider: entry.provider, model: entry.model });
+  }
+  return preferences;
+}
+
 export function loadClassifierPreferences(
   agentDirectory = getAgentDir(),
 ): Preference[] | undefined {
   try {
-    const settings = readJsonConfig(join(agentDirectory, "settings.json"));
-    if (settings === undefined) return [...DEFAULT_PROVIDERS];
-    if (!isMatching(RecordPattern, settings)) return undefined;
-    if (settings.classifier === undefined) return [...DEFAULT_PROVIDERS];
-    if (!isMatching(RecordPattern, settings.classifier)) return undefined;
-    if (settings.classifier.providers === undefined) return [...DEFAULT_PROVIDERS];
-    const entries = settings.classifier.providers;
-    if (!Array.isArray(entries) || entries.length < 1 || entries.length > 2) return undefined;
-    const preferences: Preference[] = [];
-    for (const entry of entries) {
-      if (!isMatching({ provider: P.union(...CLASSIFIER_PROVIDER_IDS), model: P.string }, entry))
-        return undefined;
-      if (preferences.some(({ provider }) => provider === entry.provider)) return undefined;
-      if (entry.provider === OPENROUTER_PROVIDER_ID) {
-        if (!/^~?typesafe\/jev-(?:latest|preview|\d+\.\d+(?:\.\d+)?)$/u.test(entry.model))
-          return undefined;
-      } else if (entry.model !== "typesafe-ai/jev") return undefined;
-      preferences.push({ provider: entry.provider, model: entry.model });
-    }
-    return preferences;
+    return parseClassifierPreferences(readJsonConfig(join(agentDirectory, "settings.json")));
   } catch {
     return undefined;
   }
+}
+
+function readClassifierEnabled(settings: unknown): boolean | undefined {
+  if (settings === undefined) return true;
+  if (!isMatching(RecordPattern, settings)) return undefined;
+  if (!Object.hasOwn(settings, "classifier")) return true;
+  if (!isMatching(RecordPattern, settings.classifier)) return undefined;
+  if (!Object.hasOwn(settings.classifier, "enabled")) return true;
+  return typeof settings.classifier.enabled === "boolean" ? settings.classifier.enabled : undefined;
+}
+
+export function resolveClassifierEnabled(
+  globalSettings: unknown,
+  projectSettings: unknown,
+): boolean | undefined {
+  const globalEnabled = readClassifierEnabled(globalSettings);
+  if (globalEnabled === undefined || globalEnabled === false) return globalEnabled;
+  return readClassifierEnabled(projectSettings);
+}
+
+type LoadedClassifierSettings = {
+  readonly enabled: boolean;
+  readonly globalSettings: unknown;
+};
+
+function loadClassifierSettings(
+  context: ClassifierSettingsContext | undefined,
+  agentDirectory: string | undefined,
+): LoadedClassifierSettings | undefined {
+  try {
+    const settings = SettingsManager.create(
+      context?.cwd ?? process.cwd(),
+      agentDirectory ?? getAgentDir(),
+      {
+        projectTrusted: context?.isProjectTrusted() ?? false,
+      },
+    );
+    const globalSettings = settings.getGlobalSettings();
+    const projectSettings = settings.getProjectSettings();
+    if (settings.drainErrors().length > 0) return undefined;
+    const enabled = resolveClassifierEnabled(globalSettings, projectSettings);
+    if (enabled && !parseClassifierPreferences(globalSettings)) return undefined;
+    return enabled === undefined ? undefined : { enabled, globalSettings };
+  } catch {
+    return undefined;
+  }
+}
+
+const registryContexts = new WeakMap<ClassifierRegistry, ClassifierSettingsContext>();
+
+export function installClassifierGate(
+  registry: ClassifierRegistry,
+  context: ClassifierSettingsContext,
+  agentDirectory = getAgentDir(),
+): () => void {
+  registryContexts.set(registry, context);
+  const original = registry.classify;
+  // Gate the native boundary too: codemode can call classify without the shared requester.
+  const guarded: ClassifierRegistry["classify"] = async (model, input, options) => {
+    const settings = loadClassifierSettings(registryContexts.get(registry), agentDirectory);
+    if (!settings?.enabled) {
+      return {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        answers: {},
+        stopReason: "error",
+        errorMessage: settings ? "Classifier disabled by settings" : "Invalid classifier settings",
+        timestamp: Date.now(),
+      };
+    }
+    return original.call(registry, model, input, options);
+  };
+  registry.classify = guarded;
+  return () => {
+    if (registry.classify === guarded) registry.classify = original;
+    registryContexts.delete(registry);
+  };
 }
 
 const ClassifierInput = Type.Object(
@@ -296,7 +384,13 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
       ...(usage ? { usage } : {}),
     });
     if (options.signal?.aborted) return fail("caller-cancellation", "request");
-    const preferences = loadClassifierPreferences(agentDirectory);
+    const settings = loadClassifierSettings(
+      options.settingsContext ?? registryContexts.get(registry),
+      agentDirectory,
+    );
+    if (!settings) return fail("invalid-config", "config");
+    if (!settings.enabled) return fail("disabled", "config");
+    const preferences = parseClassifierPreferences(settings.globalSettings);
     if (!preferences) return fail("invalid-config", "config");
     try {
       assertClassifierJson(input);

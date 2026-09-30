@@ -89,6 +89,7 @@
     ]
   },
   "classifier": {
+    "enabled": true,
     "providers": [
       {
         "provider": "openrouter",

@@ -1,4 +1,4 @@
-import { CLASSIFIER_PROVIDER_IDS } from "../../lib/classifier";
+import { CLASSIFIER_PROVIDER_IDS, resolveClassifierEnabled } from "../../lib/classifier";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-selection";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
@@ -21,6 +21,10 @@ export function resolveClassifierStartupStatus(
   projectSettings: unknown,
   modelRegistry: unknown,
 ): ClassifierStartupStatus | undefined {
+  const enabled = resolveClassifierEnabled(globalSettings, projectSettings);
+  if (enabled === false) return undefined;
+  if (enabled === undefined) return { state: "unavailable" };
+
   const toolDiscovery = resolveClassifierToolDiscoveryConfig(globalSettings, projectSettings);
   const skillSelection = resolveSkillSelectionConfig(globalSettings, projectSettings);
   const recommendAgent = resolveRecommendAgentConfig(globalSettings);

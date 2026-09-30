@@ -23,7 +23,6 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
-  let getMcpStatus = (): string => "";
   let getFileChangesStatus = (): string => "";
   const state = {
     isWorking: () => isWorking,
@@ -75,13 +74,8 @@ export default function promptUi(pi: ExtensionAPI): void {
 
     const { loadTypoCorrectionRules } = await import("../typo-abolish");
     const typoRules = loadTypoCorrectionRules();
-    const {
-      FILE_CHANGES_STATUS_KEY,
-      MCP_STATUS_KEY,
-      PromptEditor,
-      renderFooterStatus,
-      renderPromptHints,
-    } = await import("./prompt-editor");
+    const { FILE_CHANGES_STATUS_KEY, PromptEditor, renderFooterStatus, renderPromptHints } =
+      await import("./prompt-editor");
 
     let footerCustomization: FooterCustomization | undefined;
     try {
@@ -112,14 +106,9 @@ export default function promptUi(pi: ExtensionAPI): void {
               HIDDEN_FOOTER_STATUS_KEYS.has(key) === false &&
               key !== PROFILE_STATUS_KEY &&
               key !== FILE_CHANGES_STATUS_KEY &&
-              key !== MCP_STATUS_KEY &&
               key !== STARTUP_TIME_STATUS_KEY,
           )
           .map(([key, status]) => renderFooterStatus(theme, key, status));
-      getMcpStatus = () => {
-        const status = footerData.getExtensionStatuses().get(MCP_STATUS_KEY);
-        return status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status);
-      };
       getFileChangesStatus = () => {
         const status = footerData.getExtensionStatuses().get(FILE_CHANGES_STATUS_KEY);
         return status === undefined
@@ -136,7 +125,6 @@ export default function promptUi(pi: ExtensionAPI): void {
             state,
             ctx.cwd,
             width,
-            getMcpStatus(),
             getFileChangesStatus(),
             footerCustomization,
           ),
@@ -147,7 +135,6 @@ export default function promptUi(pi: ExtensionAPI): void {
           getBranch = () => null;
           getProfileName = () => undefined;
           getStatuses = () => [];
-          getMcpStatus = () => "";
           getFileChangesStatus = () => "";
         },
       };

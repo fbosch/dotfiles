@@ -178,6 +178,7 @@ function diagnosticReasonLabel(diagnostic: RoutingDiagnostic): string {
   if (diagnostic.classifierFailure !== undefined) {
     const labels: Record<NonNullable<RoutingDiagnostic["classifierFailure"]>, string> = {
       "invalid-config": "invalid classifier configuration",
+      disabled: "classifier disabled",
       "invalid-input": "invalid classifier input",
       "model-unavailable": "classifier model unavailable",
       "auth-failure": "authentication failed",
