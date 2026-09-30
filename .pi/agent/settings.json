@@ -17,7 +17,8 @@
     }
   },
   "extensions": [
-    "+extensions/catastrophic-command-guard.ts"
+    "+extensions/catastrophic-command-guard.ts",
+    "-builtin:mcp"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-sol",
@@ -33,7 +34,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,

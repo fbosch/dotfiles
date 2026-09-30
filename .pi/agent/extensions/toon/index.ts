@@ -459,7 +459,13 @@ export default function toonExtension(pi: ExtensionAPI): void {
   pi.on("tool_result", (event) => {
     if (toonSettings.convertToolResults === false) return;
     const content = transformer.transformResult(event);
-    return content === undefined ? undefined : { content };
+    if (content === undefined) return undefined;
+
+    const structuredContent = "structuredContent" in event ? event.structuredContent : undefined;
+    return {
+      content,
+      ...(structuredContent === undefined ? {} : { structuredContent }),
+    };
   });
 
   pi.on("context", (event) => {

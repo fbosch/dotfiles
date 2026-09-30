@@ -1,3 +1,18 @@
+diff --git a/node_modules/pi-hashline-edit-pro/package.json b/node_modules/pi-hashline-edit-pro/package.json
+--- a/node_modules/pi-hashline-edit-pro/package.json
++++ b/node_modules/pi-hashline-edit-pro/package.json
+@@ -41,10 +41,10 @@
+   "dependencies": {
+     "diff": "^9.0.0",
+     "file-type": "^22.0.2",
+-    "typebox": "^1.3.7",
+     "xxhash-wasm": "^1.1.0"
+   },
+   "peerDependencies": {
++    "typebox": "*",
+     "@earendil-works/pi-coding-agent": ">=0.84.0",
+     "@earendil-works/pi-tui": "*"
+   },
 diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
 index d162652..1ea0a90 100644
 --- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts

@@ -1,0 +1,16 @@
+diff --git a/node_modules/@gotgenes/pi-subagents/package.json b/node_modules/@gotgenes/pi-subagents/package.json
+--- a/node_modules/@gotgenes/pi-subagents/package.json
++++ b/node_modules/@gotgenes/pi-subagents/package.json
+@@ -52,11 +52,9 @@
+   "peerDependencies": {
++    "@sinclair/typebox": "*",
+     "@earendil-works/pi-ai": ">=0.75.0",
+     "@earendil-works/pi-coding-agent": ">=0.81.0",
+     "@earendil-works/pi-tui": ">=0.75.0"
+   },
+-  "dependencies": {
+-    "@sinclair/typebox": "^0.34.49"
+-  },
+   "engines": {
+     "node": ">=22"
+   },

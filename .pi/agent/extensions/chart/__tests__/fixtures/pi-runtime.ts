@@ -23,7 +23,7 @@ export default function (pi: ExtensionAPI): void {
         renderer: ChartRenderer<T, L>,
         details: T,
         theme: Theme,
-        compact = false,
+        compactColumns?: number,
       ): Promise<void> {
         const svg = runtime.renderChartSvg(renderer, details, theme);
         // Await the raw boundary too: ChartComponent deliberately catches raster failures.
@@ -54,9 +54,10 @@ export default function (pi: ExtensionAPI): void {
         });
         assert.equal(
           Number(/(?:^|,)c=(\d+)/.exec(lines)?.[1]),
-          compact ? Math.ceil(layout.widthPx / cells.widthPx) : details.imageWidthCells,
+          compactColumns ?? details.imageWidthCells,
         );
-        if (compact) assert.ok(layout.widthPx < details.imageWidthCells * cells.widthPx);
+        if (compactColumns !== undefined)
+          assert.ok(layout.widthPx < details.imageWidthCells * cells.widthPx);
         assert.equal(Number(/(?:^|,)r=(\d+)/.exec(lines)?.[1]), layout.heightCells);
         assert.ok(!lines.includes(renderer.unavailableText), lines);
         for (const fullscreen of [false, true]) {
@@ -119,7 +120,7 @@ export default function (pi: ExtensionAPI): void {
           settings,
         ),
         ctx.ui.theme,
-        true,
+        27,
       );
       const { heatmapChartRenderer: heatmap } = await loadChartType("heatmap");
       assert.ok(pi.getActiveTools().includes("chart_heatmap"));

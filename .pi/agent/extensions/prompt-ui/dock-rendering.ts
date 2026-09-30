@@ -43,12 +43,72 @@ export function paintDockRow(
   return `${fittedRail}${backgroundAnsi}${backgroundContent}\u001b[49m${fittedRightBorder}`;
 }
 
+function convertAnsiColorSlot(ansi: string, slot: "background" | "foreground"): string {
+  if (ansi.startsWith("\u001b[") === false) return ansi;
+  const match = ansi.slice(2).match(/^([0-9;]*)m$/);
+  const parameterText = match?.[1];
+  if (parameterText === undefined || parameterText === "") return ansi;
+
+  const parameters = parameterText.split(";");
+  const sourceExtended = slot === "background" ? 48 : 38;
+  const targetExtended = slot === "background" ? 38 : 48;
+  const sourceDefault = slot === "background" ? 49 : 39;
+  const targetDefault = slot === "background" ? 39 : 49;
+  const sourceBasicStart = slot === "background" ? 40 : 30;
+  const targetBasicStart = slot === "background" ? 30 : 40;
+  const sourceBrightStart = slot === "background" ? 100 : 90;
+  const targetBrightStart = slot === "background" ? 90 : 100;
+  let changed = false;
+
+  for (let index = 0; index < parameters.length; index += 1) {
+    const parameter = parameters[index];
+    if (parameter === undefined) continue;
+    if (parameter === "") continue;
+
+    const code = Number(parameter);
+    if (code === 58) return ansi;
+    if (code === 38 || code === 48) {
+      const mode = Number(parameters[index + 1]);
+      const valueCount = mode === 5 ? 1 : mode === 2 ? 3 : 0;
+      if (valueCount === 0) return ansi;
+
+      const values = parameters.slice(index + 2, index + 2 + valueCount);
+      if (
+        values.length !== valueCount ||
+        values.some((value) => /^\d+$/.test(value) === false || Number(value) > 255)
+      ) {
+        return ansi;
+      }
+
+      if (code === sourceExtended) {
+        parameters[index] = String(targetExtended);
+        changed = true;
+      }
+      index += valueCount + 1;
+      continue;
+    }
+
+    if (code === sourceDefault) {
+      parameters[index] = String(targetDefault);
+      changed = true;
+    } else if (code >= sourceBasicStart && code <= sourceBasicStart + 7) {
+      parameters[index] = String(targetBasicStart + code - sourceBasicStart);
+      changed = true;
+    } else if (code >= sourceBrightStart && code <= sourceBrightStart + 7) {
+      parameters[index] = String(targetBrightStart + code - sourceBrightStart);
+      changed = true;
+    }
+  }
+
+  return changed ? `\u001b[${parameters.join(";")}m` : ansi;
+}
+
 export function backgroundToForeground(backgroundAnsi: string): string {
-  return backgroundAnsi.replace("\u001b[48;", "\u001b[38;");
+  return convertAnsiColorSlot(backgroundAnsi, "background");
 }
 
 export function foregroundToBackground(foregroundAnsi: string): string {
-  return foregroundAnsi.replace("\u001b[38;", "\u001b[48;");
+  return convertAnsiColorSlot(foregroundAnsi, "foreground");
 }
 
 export function paintDockBottomEdge(

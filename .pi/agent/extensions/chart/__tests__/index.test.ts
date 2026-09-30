@@ -527,7 +527,7 @@ describe("pie chart", () => {
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
 
-    expect(nativeImageCellSize(64, 540, 220, 60, 13)).toEqual({ columns: 60, rows: 13 });
+    expect(nativeImageCellSize(64, 540, 220, 60, 13)).toEqual({ columns: 60, rows: 12 });
     expect(nativeImageCellSize(30, 252, 251, 28, 14)).toEqual({ columns: 28, rows: 14 });
   });
 

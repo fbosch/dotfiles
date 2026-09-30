@@ -258,10 +258,19 @@ test("wires result compaction and Bash restoration into Pi hooks", () => {
     throw new Error("TOON extension handlers were not registered");
   }
 
-  const transformed = resultHandler(resultEvent() as never, {} as ExtensionContext) as
-    | { content: ToolResultEvent["content"] }
+  const structuredContent = { rows: [{ id: 1, name: "original" }] };
+  const event = Object.assign(resultEvent(), { structuredContent });
+  const transformed = resultHandler(event as never, {} as ExtensionContext) as
+    | { content: ToolResultEvent["content"]; structuredContent?: unknown }
     | undefined;
   if (transformed?.content[0]?.type !== "text") throw new Error("Expected compacted result");
+  expect(transformed.structuredContent).toBe(structuredContent);
+  expect(
+    resultHandler(
+      resultEvent({ content: [{ type: "text", text: "{}" }] }) as never,
+      {} as ExtensionContext,
+    ),
+  ).toBeUndefined();
 
   const call = {
     type: "tool_call",

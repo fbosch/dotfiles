@@ -1,11 +1,13 @@
 # Pi package patches
 
 Tracked patches preserve local changes to pinned Pi extensions:
-
 - `@ff-labs+pi-fff+0.10.6.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
-- `pi-mcp-client+0.8.0.patch` publishes live MCP connection counts through Pi's `mcp` footer status key.
+- `@gotgenes+pi-subagents+21.7.1.patch` declares `@sinclair/typebox` as a host-provided peer dependency.
+- `@juicesharp+rpiv-todo+2.10.1.patch` declares `typebox` as a host-provided peer dependency.
+- `pi-hashline-edit-pro+4.3.5.patch` keeps one registry identity when Pi exposes a session file after early tool calls, so previously served anchors remain owned, and declares `typebox` as a host-provided peer dependency.
 - `pi-lens+4.1.6.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references.
-- `pi-hashline-edit-pro+4.3.5.patch` keeps one registry identity when Pi exposes a session file after early tool calls, so previously served anchors remain owned.
+- `pi-mcp-client+0.8.0.patch` publishes live MCP connection counts through Pi's `mcp` footer status key.
+- `pi-web-access+0.29.0.patch` declares `typebox` as a host-provided peer dependency.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache.
 
 The runtime compatibility patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies it after dependency installation.
