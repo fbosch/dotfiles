@@ -83,5 +83,8 @@ __pycache__
 ^/\.pi/agent/[^/]*\.log$
 ^/\.pi/agent/tmp$
 
+# Pi Lens cache files are generated project state, not home dotfiles.
+^/\.pi-lens/cache$
+
 # Example files should not be stowed, only used as templates
 \.example$
