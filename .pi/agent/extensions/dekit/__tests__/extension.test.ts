@@ -289,7 +289,7 @@ test("uses Jev to select one safe nonlexical script from its bounded candidate p
   h.state.just.recipes["database::migrate"] = {
     name: "migrate",
     namepath: "database::migrate",
-    doc: `${"Apply a data structure revision. ".repeat(12)}\\nPRIVATE_SECOND_LINE_SENTINEL`,
+    doc: `${"Apply a data structure revision. ".repeat(12)}\nPRIVATE_SECOND_LINE_SENTINEL`,
     private: false,
     attributes: [{ group: "persistence" }],
     parameters: [],
@@ -321,6 +321,7 @@ test("uses Jev to select one safe nonlexical script from its bounded candidate p
       expect(candidate.description.length).toBeLessThanOrEqual(180);
     }
     const serializedInput = JSON.stringify(input);
+    expect(serializedInput).not.toContain(h.cwd);
     for (const secret of [
       "PACKAGE_BODY_SENTINEL",
       "COMMAND_SENTINEL",

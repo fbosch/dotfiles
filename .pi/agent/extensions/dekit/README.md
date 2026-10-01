@@ -27,12 +27,28 @@ or `restart`. Omit `task` from `status` to list Pi-managed tasks.
 - `stop` unpins and stops a task. Dekit can start it again if a dependent
   still needs it.
 
+## Discovery ranking
+
+Queries use the shared tool-discovery Jev ranker when enabled and available.
+It selects one best script, or no match, from at most 24 candidates. Names and
+compact descriptions are sent to the classifier; command bodies, fingerprints,
+paths, and execution metadata stay local. Blank queries browse locally.
+Disabled, unavailable, timed-out, or malformed classification falls back to
+deterministic local ranking. A valid no-match answer stays empty.
+
+Discovery returns a compact text index plus structured script IDs, parameter
+names, and completeness fields: `totalScripts` counts the catalog; `considered`
+counts the local catalog or classifier pool; `hasMore` reports undisplayed local
+matches or scripts outside that pool. Jev's one-best result is not an exhaustive
+list of semantic matches. Configuration follows the existing
+`classifier.toolDiscovery.enabled` and `classifier.toolDiscovery.timeoutMs` settings.
+
 ## Project boundaries
 
 The canonical Pi working directory is the explicit dekit project root.
 Discovery reads a Justfile and `package.json` directly in that directory,
-without searching parent directories. Recipe comments and package script
-bodies supply discovery descriptions. Private Just recipes are excluded.
+without searching parent directories. Just recipes use compact first-line comments;
+package scripts use their names, never command bodies. Private Just recipes are excluded.
 
 Package-manager selection uses `packageManager`, then lockfiles, then npm.
 Conflicting lockfiles without `packageManager` are rejected. Arguments are
