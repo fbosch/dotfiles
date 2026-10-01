@@ -78,7 +78,7 @@ interface Result {
   task?: string;
   accepted?: boolean;
   runner?: "absent" | "running";
-  scripts?: Array<{ id: string; description: string; parameters: string[] }>;
+  scripts?: Array<{ id: string; description: string; parameters: string[]; tags: string[] }>;
   totalScripts?: number;
   considered?: number;
   hasMore?: boolean;
@@ -103,6 +103,7 @@ const Output = Type.Object({
         id: Type.String(),
         description: Type.String(),
         parameters: Type.Array(Type.String()),
+        tags: Type.Array(Type.String()),
       }),
     ),
   ),
@@ -238,6 +239,7 @@ export default function dekitExtension(pi: ExtensionAPI): void {
             const candidates = catalog.map((script) => ({
               name: script.id,
               description: scriptSearchDescription(script),
+              tags: script.recipe?.groups ?? [],
             }));
             const lexical = rankScriptsLocally(catalog, query ?? "");
             const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
@@ -268,6 +270,7 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                   id: script.id,
                   description: scriptSearchDescription(script),
                   parameters: script.recipe?.parameters.map((parameter) => parameter.name) ?? [],
+                  tags: script.recipe?.groups ?? [],
                 };
               });
               discoveryUsage = ranked.usage;
@@ -370,18 +373,22 @@ export default function dekitExtension(pi: ExtensionAPI): void {
             .with(
               {
                 action: "discover",
-                scripts: P.array({ id: P.string, description: P.string }),
+                scripts: P.array({ id: P.string, description: P.string, tags: P.array(P.string) }),
                 totalScripts: P.number,
                 considered: P.number,
                 hasMore: P.boolean,
                 rankingSource: P.union("classifier", "lexical"),
               },
               (discovery) => {
-                const mode = discovery.rankingSource === "classifier" ? "Jev one-best" : "local";
+                const mode =
+                  discovery.rankingSource === "classifier" ? "classifier one-best" : "local";
                 const header = `${discovery.scripts.length} scripts shown (${mode}; ${discovery.considered}/${discovery.totalScripts} considered${discovery.hasMore ? "; more available" : ""})`;
                 return [
                   header,
-                  ...discovery.scripts.map((script) => `${script.id} — ${script.description}`),
+                  ...discovery.scripts.map(
+                    (script) =>
+                      `${script.id} — ${script.description}${script.tags.length ? ` [tags: ${JSON.stringify(script.tags)}]` : ""}`,
+                  ),
                 ].join("\n");
               },
             )

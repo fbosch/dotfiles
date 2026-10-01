@@ -29,17 +29,24 @@ or `restart`. Omit `task` from `status` to list Pi-managed tasks.
 
 ## Discovery ranking
 
-Queries use the shared tool-discovery Jev ranker when enabled and available.
-It selects one best script, or no match, from at most 24 candidates. Names and
-compact descriptions are sent to the classifier; command bodies, fingerprints,
-paths, and execution metadata stay local. Blank queries browse locally.
+Queries use the shared tool-discovery classifier when enabled and available.
+It selects one best script, or no match, from at most 24 candidates. Names,
+compact descriptions, and tags are sent to the classifier; command bodies,
+fingerprints, paths, and execution metadata stay local. Blank queries browse locally.
 Disabled, unavailable, timed-out, or malformed classification falls back to
 deterministic local ranking. A valid no-match answer stays empty.
+
+Just recipe `[group('validation')]` attributes become `tags` in discovery
+results and the compact text index. Groups also participate in local matching
+and shortlisting. Untagged recipes and package scripts return `tags: []`.
+The classifier receives up to eight unique, nonempty first-line tags per
+candidate, limited to 64 characters each, in both state and choice descriptions.
+Returned tags retain the original group values.
 
 Discovery returns a compact text index plus structured script IDs, parameter
 names, and completeness fields: `totalScripts` counts the catalog; `considered`
 counts the local catalog or classifier pool; `hasMore` reports undisplayed local
-matches or scripts outside that pool. Jev's one-best result is not an exhaustive
+matches or scripts outside that pool. The classifier's one-best result is not an exhaustive
 list of semantic matches. Configuration follows the existing
 `classifier.toolDiscovery.enabled` and `classifier.toolDiscovery.timeoutMs` settings.
 

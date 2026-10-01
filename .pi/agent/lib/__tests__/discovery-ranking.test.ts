@@ -204,6 +204,48 @@ describe("shared discovery ranking", () => {
     ]);
   });
 
+  test("tags reach model state and choice criteria with bounded public context", async () => {
+    const tags = [
+      "  æøå\nPRIVATE_TAG_DETAILS",
+      "",
+      "æøå",
+      "x".repeat(100),
+      ...Array.from({ length: 12 }, (_, index) => `tag-${index}`),
+    ];
+    const expectedTags = [
+      "æøå",
+      "x".repeat(64),
+      ...Array.from({ length: 6 }, (_, index) => `tag-${index}`),
+    ];
+    const candidate = {
+      name: "opaque",
+      description: "Run a helper",
+      tags,
+      command: "PRIVATE_COMMAND",
+    };
+    const result = await rankDiscovery(
+      [candidate],
+      [],
+      "æøå",
+      1,
+      options(async (_registry, input) => {
+        expect(input.state.candidates).toEqual([
+          { id: "candidate_0", name: "opaque", description: "Run a helper", tags: expectedTags },
+        ]);
+        const question = input.questions.best_tool;
+        if (question?.type !== "choice") throw new Error("choice criteria missing");
+        expect(question.criteria.candidate_0).toBe(
+          `opaque: Run a helper [tags: ${expectedTags.join(", ")}]`,
+        );
+        expect(question.instructions).toContain("tags");
+        expect(JSON.stringify(input)).not.toContain("PRIVATE_TAG_DETAILS");
+        expect(JSON.stringify(input)).not.toContain("PRIVATE_COMMAND");
+        return choice();
+      }),
+    );
+    expect(result.matches).toEqual([{ name: "opaque", score: 0.8 }]);
+  });
+
   test("only bounded public names and first-line descriptions enter model state", async () => {
     const candidate = {
       name: "alpha",

@@ -216,9 +216,9 @@ test("discovers compact public script descriptions without contacting the runner
   const result = await h.invoke({ action: "discover" });
   expect(result.details).toMatchObject({
     scripts: [
-      { id: "just:build", description: "Build the project" },
-      { id: "package:test", description: "Package script: test" },
-      { id: "package:serve", description: "Package script: serve" },
+      { id: "just:build", description: "Build the project", tags: [] },
+      { id: "package:test", description: "Package script: test", tags: [] },
+      { id: "package:serve", description: "Package script: serve", tags: [] },
     ],
     totalScripts: 3,
     considered: 3,
@@ -235,6 +235,69 @@ test("discovers compact public script descriptions without contacting the runner
   expect(h.calls.map((call) => call.command)).toEqual(["just"]);
   expect(h.calls[0]?.args).toContain(join(h.cwd, "justfile"));
   expect(h.state.confirmations).toEqual([]);
+});
+test("group-only queries shortlist tagged scripts and expose tags to the classifier and agent", async () => {
+  let classifyCalls = 0;
+  const tags = ["persistence", "agent", "æøå"];
+  const registry = await classifierRegistry(async (model, input) => {
+    classifyCalls += 1;
+    expect(
+      isMatching({ candidates: P.array({ name: P.string, tags: P.array(P.string) }) }, input.state),
+    ).toBe(true);
+    if (
+      !isMatching({ candidates: P.array({ name: P.string, tags: P.array(P.string) }) }, input.state)
+    )
+      throw new Error("tagged candidate metadata missing");
+    expect(input.state.candidates).toHaveLength(24);
+    expect(input.state.candidates[0]).toMatchObject({ name: "just:z-step", tags });
+    const question = input.questions.best_tool;
+    if (question?.type !== "choice") throw new Error("choice criteria missing");
+    expect(question.criteria.candidate_0).toContain("[tags: persistence, agent, æøå]");
+    return classifierReply(model, input, "candidate_0", usage);
+  });
+  const h = await harness({ modelRegistry: registry });
+  await writeFile(join(h.cwd, "justfile"), "z-step:\n  echo opaque\n");
+  h.state.just.recipes["z-step"] = {
+    name: "z-step",
+    namepath: "z-step",
+    doc: "Run an opaque helper",
+    attributes: tags.map((group) => ({ group })),
+    private: false,
+    parameters: [],
+  };
+  await writeFile(
+    h.packagePath,
+    JSON.stringify({
+      packageManager: "bun@1.4.0",
+      scripts: Object.fromEntries(
+        Array.from({ length: 30 }, (_, index) => [`a-${index}`, "PRIVATE_COMMAND"]),
+      ),
+    }),
+  );
+  await withClassifierSettings({}, async () => {
+    const result = await h.invoke({ action: "discover", query: "persistence", limit: 1 });
+    expect(result.details).toMatchObject({
+      scripts: [{ id: "just:z-step", tags }],
+      considered: 24,
+      totalScripts: 32,
+      hasMore: true,
+      rankingSource: "classifier",
+    });
+    expect(JSON.stringify(result.structuredContent)).toBe(JSON.stringify(result.details));
+    expect(result.content).toContainEqual({
+      type: "text",
+      text: expect.stringContaining('[tags: ["persistence","agent","æøå"]]'),
+    });
+  });
+  await withClassifierSettings({ toolDiscoveryEnabled: false }, async () => {
+    const result = await h.invoke({ action: "discover", query: "persistence", limit: 1 });
+    expect(result.details).toMatchObject({
+      scripts: [{ id: "just:z-step", tags }],
+      rankingSource: "lexical",
+    });
+  });
+  expect(classifyCalls).toBe(1);
+  expect(h.calls.every((call) => call.command === "just")).toBe(true);
 });
 
 test("ranks local names deterministically and reports undisplayed lexical results", async () => {
@@ -264,7 +327,7 @@ test("ranks local names deterministically and reports undisplayed lexical result
   expect(second.details).toEqual(first.details);
 });
 
-test("uses Jev to select one safe nonlexical script from its bounded candidate pool", async () => {
+test("uses the classifier to select one safe nonlexical script from its bounded candidate pool", async () => {
   const inputs: ClassifierContext[] = [];
   const registry = await classifierRegistry(async (model, input) => {
     inputs.push(input);
@@ -335,6 +398,8 @@ test("uses Jev to select one safe nonlexical script from its bounded candidate p
     const text = result.content
       .flatMap((part) => (part.type === "text" ? [part.text] : []))
       .join("\\n");
+    expect(text).toContain("(classifier one-best;");
+    expect(text).not.toContain("Jev");
     expect(text).toContain("just:database::migrate —");
     expect(text).not.toContain("PRIVATE_SECOND_LINE_SENTINEL");
     expect(text).not.toContain("PACKAGE_BODY_SENTINEL");
@@ -416,7 +481,7 @@ test("skips disabled classifier policy and falls back for unavailable or malform
   expect(h.calls).toEqual([]);
 });
 
-test("skips Jev for blank catalog browsing and retains billed usage on cancellation", async () => {
+test("skips the classifier for blank catalog browsing and retains billed usage on cancellation", async () => {
   let classifyCalls = 0;
   const noCallRegistry = await classifierRegistry(async (model, _input) => {
     classifyCalls += 1;
