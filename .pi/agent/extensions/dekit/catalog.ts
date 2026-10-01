@@ -3,7 +3,8 @@ import { readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isMatching, match, P } from "ts-pattern";
-import { type JustRecipe, parseJustCatalog } from "../just/catalog";
+import { compactDiscoveryDescription, type DiscoveryMatch } from "../../lib/discovery-ranking";
+import { type JustRecipe, parseJustCatalog, searchRecipes } from "../just/catalog";
 
 export interface Script {
   id: string;
@@ -108,6 +109,44 @@ export async function discoverScripts(
     }
   }
   return scripts;
+}
+
+export function scriptSearchDescription(script: Script): string {
+  return compactDiscoveryDescription(
+    script.source === "package" ? `Package script: ${script.name}` : script.description,
+  );
+}
+
+export function rankScriptsLocally(scripts: readonly Script[], query: string): DiscoveryMatch[] {
+  if (query.trim().length === 0) return scripts.map((script) => ({ name: script.id, score: 0 }));
+  const entries = scripts.map((script) => ({
+    script,
+    recipe: {
+      name: script.name,
+      namepath: script.name,
+      doc: scriptSearchDescription(script),
+      groups: script.recipe?.groups ?? [],
+      aliases: [script.id, ...(script.recipe?.aliases ?? [])],
+      parameters: script.recipe?.parameters ?? [],
+    },
+  }));
+  const byRecipe = new Map(entries.map((entry) => [entry.recipe, entry.script]));
+  const normalized = query.trim().toLowerCase();
+  const matches = searchRecipes(
+    entries.map((entry) => entry.recipe),
+    query,
+    entries.length,
+  ).map((recipe) => {
+    const script = byRecipe.get(recipe);
+    if (script === undefined) throw new Error("Ranked script is outside the catalog");
+    return script;
+  });
+  // Preserve Just's ordering except when the query names an exact cross-source script ID.
+  matches.sort(
+    (left, right) =>
+      Number(right.id.toLowerCase() === normalized) - Number(left.id.toLowerCase() === normalized),
+  );
+  return matches.map((script, index) => ({ name: script.id, score: matches.length - index }));
 }
 
 export function scriptCommand(script: Script, args: string[]): string[] {

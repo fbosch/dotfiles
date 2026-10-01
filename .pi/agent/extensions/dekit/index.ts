@@ -1,13 +1,25 @@
 import { realpath } from "node:fs/promises";
+import type { Usage } from "@earendil-works/pi-ai";
 import {
   defineTool,
   type ExtensionAPI,
   type ExtensionContext,
+  getAgentDir,
+  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, match, P } from "ts-pattern";
 import { Type } from "typebox";
+import { MAX_DISCOVERY_CLASSIFIER_CANDIDATES, rankDiscovery } from "../../lib/discovery-ranking";
 import { truncateCommandOutput } from "../just";
-import { discoverScripts, isManagedTask, scriptCommand, taskPath } from "./catalog";
+import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
+import {
+  discoverScripts,
+  isManagedTask,
+  rankScriptsLocally,
+  scriptCommand,
+  scriptSearchDescription,
+  taskPath,
+} from "./catalog";
 
 const Parameters = Type.Union([
   Type.Object(
@@ -67,6 +79,10 @@ interface Result {
   accepted?: boolean;
   runner?: "absent" | "running";
   scripts?: Array<{ id: string; description: string; parameters: string[] }>;
+  totalScripts?: number;
+  considered?: number;
+  hasMore?: boolean;
+  rankingSource?: "classifier" | "lexical";
   tasks?: Task[];
   screen?: string;
   truncated?: boolean;
@@ -77,6 +93,10 @@ const Output = Type.Object({
   task: Type.Optional(Type.String()),
   accepted: Type.Optional(Type.Boolean()),
   runner: Type.Optional(Type.String()),
+  totalScripts: Type.Optional(Type.Integer({ minimum: 0 })),
+  considered: Type.Optional(Type.Integer({ minimum: 0 })),
+  hasMore: Type.Optional(Type.Boolean()),
+  rankingSource: Type.Optional(Type.Union([Type.Literal("classifier"), Type.Literal("lexical")])),
   scripts: Type.Optional(
     Type.Array(
       Type.Object({
@@ -209,27 +229,78 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           await accept([action, path]);
           return { action, project, task: path, accepted: true };
         }
+        let discoveryUsage: Usage | undefined;
+        let discoveryError: string | undefined;
         const data = await match(params)
           .returnType<Promise<Result>>()
           .with({ action: "discover" }, async ({ query, limit }) => {
             const catalog = await discoverScripts(pi, project, signal);
-            const words = (query ?? "").toLowerCase().trim().split(/\s+/u).filter(Boolean);
-            const matches = catalog
-              .filter((script) =>
-                words.every((word) =>
-                  `${script.id} ${script.description}`.toLowerCase().includes(word),
-                ),
-              )
-              .slice(0, limit ?? 20);
-            return {
-              action: "discover",
-              project,
-              scripts: matches.map((script) => ({
-                id: script.id,
-                description: script.description.slice(0, 500),
-                parameters: script.recipe?.parameters.map((parameter) => parameter.name) ?? [],
-              })),
-            };
+            const candidates = catalog.map((script) => ({
+              name: script.id,
+              description: scriptSearchDescription(script),
+            }));
+            const lexical = rankScriptsLocally(catalog, query ?? "");
+            const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+              projectTrusted: ctx.isProjectTrusted(),
+            });
+            const config = resolveClassifierToolDiscoveryConfig(
+              settings.getGlobalSettings(),
+              settings.getProjectSettings(),
+            );
+            let inferenceUsage: Usage | undefined;
+            try {
+              const ranked = await rankDiscovery(candidates, lexical, query ?? "", limit ?? 20, {
+                modelRegistry: ctx.modelRegistry,
+                enabled: config.enabled,
+                timeoutMs: config.timeoutMs,
+                settingsContext: ctx,
+                ...(signal === undefined ? {} : { signal }),
+                onUsage: (usage) => {
+                  inferenceUsage = usage;
+                },
+              });
+              signal?.throwIfAborted();
+              const byId = new Map(catalog.map((script) => [script.id, script]));
+              const scripts = ranked.matches.map(({ name }) => {
+                const script = byId.get(name);
+                if (script === undefined) throw new Error("Ranked script is outside the catalog");
+                return {
+                  id: script.id,
+                  description: scriptSearchDescription(script),
+                  parameters: script.recipe?.parameters.map((parameter) => parameter.name) ?? [],
+                };
+              });
+              discoveryUsage = ranked.usage;
+              return {
+                action: "discover",
+                project,
+                scripts,
+                totalScripts: catalog.length,
+                considered:
+                  ranked.rankingSource === "classifier"
+                    ? Math.min(catalog.length, MAX_DISCOVERY_CLASSIFIER_CANDIDATES)
+                    : catalog.length,
+                hasMore:
+                  ranked.rankingSource === "classifier"
+                    ? catalog.length > MAX_DISCOVERY_CLASSIFIER_CANDIDATES
+                    : lexical.length > scripts.length,
+                rankingSource: ranked.rankingSource,
+              };
+            } catch (error) {
+              if (inferenceUsage === undefined) throw error;
+              // Throwing a billed failure would make agent-core discard its inference usage.
+              discoveryUsage = inferenceUsage;
+              discoveryError = error instanceof Error ? error.message : String(error);
+              return {
+                action: "discover",
+                project,
+                scripts: [],
+                totalScripts: catalog.length,
+                considered: Math.min(catalog.length, MAX_DISCOVERY_CLASSIFIER_CANDIDATES),
+                hasMore: catalog.length > MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
+                rankingSource: "classifier",
+              };
+            }
           })
           .with({ action: "start" }, async ({ script: id, arguments: args = [] }) => {
             if (args.some((arg) => arg.includes("\0")))
@@ -293,8 +364,32 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           .with({ action: "stop" }, ({ task }) => control("stop", task))
           .with({ action: "restart" }, ({ task }) => control("restart", task))
           .exhaustive();
+        const text =
+          discoveryError ??
+          match(data)
+            .with(
+              {
+                action: "discover",
+                scripts: P.array({ id: P.string, description: P.string }),
+                totalScripts: P.number,
+                considered: P.number,
+                hasMore: P.boolean,
+                rankingSource: P.union("classifier", "lexical"),
+              },
+              (discovery) => {
+                const mode = discovery.rankingSource === "classifier" ? "Jev one-best" : "local";
+                const header = `${discovery.scripts.length} scripts shown (${mode}; ${discovery.considered}/${discovery.totalScripts} considered${discovery.hasMore ? "; more available" : ""})`;
+                return [
+                  header,
+                  ...discovery.scripts.map((script) => `${script.id} — ${script.description}`),
+                ].join("\n");
+              },
+            )
+            .otherwise(() => JSON.stringify(data));
         return {
-          content: [{ type: "text", text: JSON.stringify(data) }],
+          ...(discoveryUsage === undefined ? {} : { usage: discoveryUsage }),
+          ...(discoveryError === undefined ? {} : { isError: true }),
+          content: [{ type: "text", text }],
           details: data,
           structuredContent: { ...data },
         };
