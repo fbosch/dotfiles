@@ -818,6 +818,5 @@ export function registerJustCommand(
 }
 
 export default function justExtension(pi: ExtensionAPI): void {
-  registerJustTools(pi);
   registerJustCommand(pi);
 }

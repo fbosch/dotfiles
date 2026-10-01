@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ClassifierContext } from "@earendil-works/pi-ai";
+import type { ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -19,6 +19,7 @@ import toolDiscoveryExtension, {
   searchDeferredTools,
   searchDeferredToolsWithClassifierFallback,
 } from "../index";
+import type { NativeToolSearchHooks, NativeToolSearchRanker } from "../native-ranking";
 
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
 
@@ -65,6 +66,8 @@ async function nativeClassifierRegistry(onInput?: (input: ClassifierContext) => 
 }
 
 interface SearchResult {
+  usage?: Usage;
+  isError?: boolean;
   content: Array<{ type: string; text?: string }>;
   details: {
     matches: string[];
@@ -94,6 +97,8 @@ function createHarness(options?: {
   searchActive?: boolean;
   parentSession?: string;
   systemPrompt?: string;
+  nativeHooks?: NativeToolSearchHooks;
+  modelRegistry?: ExtensionContext["modelRegistry"];
 }) {
   const tools = new Map((options?.tools ?? []).map((tool) => [tool.name, tool]));
   let activeTools = [...(options?.activeTools ?? [])];
@@ -108,7 +113,7 @@ function createHarness(options?: {
         description: tool.description,
         parameters: tool.parameters,
         promptGuidelines: tool.promptGuidelines,
-        exposure: "direct",
+        exposure: tool.exposure ?? "direct",
         sourceInfo: {
           path: `/extensions/${tool.name}.ts`,
           source: "local",
@@ -138,6 +143,7 @@ function createHarness(options?: {
   const ctx = withToolExecution({
     cwd: process.cwd(),
     isProjectTrusted: () => false,
+    modelRegistry: options?.modelRegistry,
     getSystemPrompt: () => options?.systemPrompt ?? "base system prompt",
     sessionManager: {
       getHeader: () => ({
@@ -147,10 +153,18 @@ function createHarness(options?: {
     },
   } as unknown as ExtensionContext);
 
-  toolDiscoveryExtension(pi);
+  toolDiscoveryExtension(pi, options?.nativeHooks);
 
   return {
     activeToolSets,
+    removeTool: (name: string) => tools.delete(name),
+    async startSession(modelRegistry?: ExtensionContext["modelRegistry"]) {
+      const context = modelRegistry === undefined ? ctx : { ...ctx, modelRegistry };
+      await handlers.get("session_start")?.({} as never, context);
+    },
+    async shutdownSession() {
+      await handlers.get("session_shutdown")?.({} as never, ctx);
+    },
     get activeTools() {
       return activeTools;
     },
@@ -173,6 +187,204 @@ function createHarness(options?: {
 }
 
 describe("tool discovery", () => {
+  test("registers native ranking per session and disposes replaced or shut-down registrations", async () => {
+    const firstRegistry = await createNativeClassifierRegistry();
+    const secondRegistry = await createNativeClassifierRegistry();
+    const registered: ExtensionContext["modelRegistry"][] = [];
+    const disposed: ExtensionContext["modelRegistry"][] = [];
+    const hooks: NativeToolSearchHooks = {
+      installToolSearchRanker(registry) {
+        registered.push(registry);
+        return () => disposed.push(registry);
+      },
+    };
+    const harness = createHarness({ nativeHooks: hooks, modelRegistry: firstRegistry });
+    await harness.startSession();
+    expect(registered).toEqual([firstRegistry]);
+    expect(disposed).toEqual([]);
+    await harness.startSession();
+    await harness.startSession(secondRegistry);
+    expect(registered).toEqual([firstRegistry, firstRegistry, secondRegistry]);
+    expect(disposed).toEqual([firstRegistry, firstRegistry]);
+    await harness.shutdownSession();
+    await harness.shutdownSession();
+    expect(disposed).toEqual([firstRegistry, firstRegistry, secondRegistry]);
+    await harness.startSession(secondRegistry);
+    await harness.shutdownSession();
+    expect(disposed).toEqual([firstRegistry, firstRegistry, secondRegistry, secondRegistry]);
+  });
+
+  test("filters native classifier inputs through captured subagent admission and preserves usage", async () => {
+    const modelRegistry = await createNativeClassifierRegistry();
+    const inputs: ClassifierContext[] = [];
+    const usage: Usage = {
+      input: 7,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 9,
+      cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+    };
+    modelRegistry.classify = async (model, input) => {
+      inputs.push(input);
+      return {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        timestamp: 0,
+        stopReason: "stop",
+        usage,
+        answers: {
+          best_tool: {
+            type: "choice",
+            choice: "candidate_0",
+            confidence: 1,
+            probabilities: { candidate_0: 1, no_match: 0 },
+          },
+        },
+      };
+    };
+    let installed: NativeToolSearchRanker | undefined;
+    const harness = createHarness({
+      modelRegistry,
+      nativeHooks: {
+        installToolSearchRanker(_registry, ranker) {
+          installed = ranker;
+          return () => {
+            installed = undefined;
+          };
+        },
+      },
+      tools: [
+        dummyTool("read", "Read files"),
+        dummyTool("figma_parse_url", "Parse a Figma URL"),
+        dummyTool("webfetch", "Fetch a web page"),
+      ],
+      activeTools: ["read", "figma_parse_url"],
+      parentSession: "parent-session-id",
+      systemPrompt:
+        '<active_agent name="design-review"/>\n\n# Environment\nWorking directory: /tmp/project',
+    });
+    await harness.discoverResources();
+    await harness.startSession();
+    const getRanker = () => {
+      if (installed === undefined) throw new Error("Native ranker was not installed");
+      return installed;
+    };
+    const context = withToolExecution({
+      modelRegistry,
+      cwd: process.cwd(),
+      isProjectTrusted: () => false,
+      getSystemPrompt: () => '<active_agent name="design-review"/>',
+      sessionManager: { getHeader: () => ({ parentSession: "parent-session-id" }) },
+    } as unknown as ExtensionContext);
+    const result = await getRanker()({
+      context,
+      query: "design reference",
+      limit: 1,
+      documents: [
+        { name: "webfetch", description: "FORBIDDEN_DESCRIPTION", text: "FORBIDDEN_SCHEMA" },
+        {
+          name: "figma_parse_url",
+          description: "Parse a Figma URL\nPRIVATE_COMMAND_BODY",
+          text: "PRIVATE_SCHEMA",
+        },
+      ],
+      rankLexical: () => [
+        { name: "webfetch", score: 10 },
+        { name: "figma_parse_url", score: 2 },
+      ],
+    });
+    expect(result).toEqual({
+      matches: [{ name: "figma_parse_url", score: 1 }],
+      rankingSource: "classifier",
+      usage,
+    });
+    expect(inputs).toHaveLength(1);
+    expect(inputs[0]?.state).toEqual({
+      query: "design reference",
+      candidates: [
+        { id: "candidate_0", name: "figma_parse_url", description: "Parse a Figma URL" },
+      ],
+    });
+    expect(JSON.stringify(inputs)).not.toMatch(/FORBIDDEN|PRIVATE|webfetch/u);
+    expect(harness.activeToolSets).toEqual([]);
+    const legacy = await harness.search("Figma URL");
+    expect(legacy.usage).toEqual(usage);
+    expect(legacy.details.matches).toEqual(["figma_parse_url"]);
+    expect(harness.activeToolSets).toEqual([]);
+    await harness.shutdownSession();
+  });
+
+  test("cancelled billed loader inference returns an error with usage without activating tools", async () => {
+    const controller = new AbortController();
+    const modelRegistry = await createNativeClassifierRegistry();
+    const usage: Usage = {
+      input: 7,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 9,
+      cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0, total: 0.03 },
+    };
+    modelRegistry.classify = async (model) => ({
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      timestamp: 0,
+      stopReason: "stop",
+      get usage() {
+        controller.abort();
+        return usage;
+      },
+      answers: {
+        best_tool: {
+          type: "choice",
+          choice: "candidate_0",
+          confidence: 1,
+          probabilities: { candidate_0: 1, no_match: 0 },
+        },
+      },
+    });
+    const harness = createHarness({
+      modelRegistry,
+      tools: [dummyTool("chart_pie", "Render a pie")],
+    });
+    const result = await harness.search("pie", 1, controller.signal);
+    expect(result.isError).toBe(true);
+    expect(result.usage).toEqual(usage);
+    expect(result.details.matches).toEqual([]);
+    expect(result.details.added).toEqual([]);
+    expect(harness.activeTools).toEqual(["tool_load"]);
+    expect(harness.activeToolSets).toEqual([]);
+  });
+
+  test("does not activate hidden siblings when loading an inactive-direct family", async () => {
+    const harness = createHarness({
+      tools: [
+        dummyTool("chart_pie", "Render a pie"),
+        { ...dummyTool("chart_private", "Private chart internals"), exposure: "hidden" },
+      ],
+    });
+    const result = await harness.search("pie", 1);
+    expect(result.details.matches).toEqual(["chart_pie"]);
+    expect(result.details.added).toEqual(["chart_pie"]);
+    expect(harness.activeTools).toEqual(["tool_load", "chart_pie"]);
+  });
+
+  test("does not activate a removed match or its siblings after asynchronous ranking", async () => {
+    const harness = createHarness({
+      tools: [dummyTool("chart_pie", "Render a pie"), dummyTool("chart_bar", "Render a bar")],
+    });
+    const pending = harness.search("pie", 1);
+    harness.removeTool("chart_pie");
+    const result = await pending;
+    expect(result.details.matches).toEqual([]);
+    expect(result.details.added).toEqual([]);
+    expect(harness.activeTools).toEqual(["tool_load"]);
+    expect(harness.activeToolSets).toEqual([]);
+  });
+
   test("classifies only known specialist tool names", () => {
     expect(isDeferredToolName("chart_pie")).toBe(true);
     expect(isDeferredToolName("chart_bar")).toBe(true);
@@ -655,7 +867,7 @@ describe("tool discovery", () => {
     expect(harness.activeTools).toEqual(["read", "tool_load"]);
   });
 
-  test("honors cancellation and request deadlines without failing discovery", async () => {
+  test("rejects caller cancellation but falls back on classifier deadlines", async () => {
     const tools = [dummyTool("chart_pie", "Render a chart")].map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -685,7 +897,7 @@ describe("tool discovery", () => {
         },
         controller.signal,
       ),
-    ).resolves.toEqual({ matches: [chartTool], rankingSource: "lexical" });
+    ).rejects.toThrow();
 
     await expect(
       searchDeferredToolsWithClassifierFallback(tools, "chart", 1, ["chart_"], {

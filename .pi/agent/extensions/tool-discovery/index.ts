@@ -1,4 +1,5 @@
-import type { ClassifierContext } from "@earendil-works/pi-ai";
+import type { Usage } from "@earendil-works/pi-ai";
+import * as PiSDK from "@earendil-works/pi-coding-agent";
 import {
   defineTool,
   type ExtensionAPI,
@@ -7,26 +8,32 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { DEFAULT_CLASSIFIER_TIMEOUT_MS } from "../../lib/classifier";
 import {
-  type ClassifierFetch,
-  DEFAULT_CLASSIFIER_TIMEOUT_MS,
-  requestClassifier,
-} from "../../lib/classifier";
+  type DiscoveryRankingOptions,
+  type DiscoveryRankingResult,
+  MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
+  rankDiscovery,
+  rankDiscoveryWithClassifier,
+} from "../../lib/discovery-ranking";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
+import {
+  createNativeDiscoveryRanker,
+  hasNativeToolSearchHooks,
+  type NativeToolSearchHooks,
+} from "./native-ranking";
 
 const DEFAULT_MATCHES = 3;
 const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
-const MAX_CLASSIFIER_CANDIDATES = 24;
 const MAX_CLASSIFIER_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
 const DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG = {
   enabled: true,
   timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
 } as const;
-const CLASSIFIER_NO_MATCH = "no_match";
 
 const DEFERRED_TOOL_NAMES = new Set([
   "exec",
@@ -244,81 +251,39 @@ export function expandDeferredToolFamilyMatches(
   return expanded;
 }
 
-interface ClassifierCandidate {
-  id: string;
-  tool: ToolInfo;
-}
-
-export interface ClassifierRankingOptions {
-  modelRegistry: Pick<ExtensionContext["modelRegistry"], "findOfType" | "classify">;
-  fetch?: ClassifierFetch;
-  timeoutMs?: number;
-}
-
-function buildClassifierCandidatePool(
-  tools: readonly ToolInfo[],
-  query: string,
-  prefixes: readonly string[],
-): ClassifierCandidate[] {
-  const lexicalMatches = searchDeferredTools(tools, query, MAX_CLASSIFIER_CANDIDATES, prefixes);
-  const selectedNames = new Set(lexicalMatches.map((tool) => tool.name));
-  const candidates = [...lexicalMatches];
-
-  // Keep the semantic pass bounded while adding deterministic non-lexical candidates.
-  for (const tool of tools
-    .filter((candidate) => isDeferredToolName(candidate.name, prefixes))
-    .filter((candidate) => !selectedNames.has(candidate.name))
-    .sort((left, right) => left.name.localeCompare(right.name))) {
-    if (candidates.length >= MAX_CLASSIFIER_CANDIDATES) break;
-    selectedNames.add(tool.name);
-    candidates.push(tool);
-  }
-
-  return candidates.map((tool, index) => ({ id: `candidate_${index}`, tool }));
-}
-
-function createClassifierRequest(
-  candidates: readonly ClassifierCandidate[],
-  query: string,
-): ClassifierContext {
-  const criteria = Object.fromEntries(
-    candidates.map(({ id, tool }) => [id, `${tool.name}: ${compactDescription(tool.description)}`]),
-  );
-  criteria[CLASSIFIER_NO_MATCH] = "No candidate provides the capability requested by the query.";
-
-  return {
-    state: {
-      query,
-      candidates: candidates.map(({ id, tool }) => ({
-        id,
-        name: tool.name,
-        description: compactDescription(tool.description),
-      })),
-    },
-    questions: {
-      best_tool: {
-        type: "choice",
-        instructions:
-          "Which candidate tool best matches the requested capability? Choose no_match when none is a useful match.",
-        criteria,
-      },
-    },
-  };
-}
-
-function selectClassifierRanking(
-  choice: string,
-  candidates: readonly ClassifierCandidate[],
-  limit: number,
-): ToolInfo[] | undefined {
-  if (choice === CLASSIFIER_NO_MATCH) return [];
-  const selectedCandidate = candidates.find(({ id }) => id === choice);
-  return selectedCandidate === undefined || limit < 1 ? [] : [selectedCandidate.tool];
-}
+export type ClassifierRankingOptions = Omit<DiscoveryRankingOptions, "enabled">;
 
 export interface RankedToolResult {
   matches: ToolInfo[];
   rankingSource: "classifier" | "lexical";
+  usage?: Usage;
+}
+
+function lexicalDiscoveryMatches(
+  tools: readonly ToolInfo[],
+  query: string,
+  prefixes: readonly string[],
+) {
+  const terms = queryTerms(query);
+  return searchDeferredTools(tools, query, MAX_DISCOVERY_CLASSIFIER_CANDIDATES, prefixes).map(
+    (tool) => ({ name: tool.name, score: scoreTool(tool, terms) }),
+  );
+}
+
+function asToolRanking(
+  ranking: DiscoveryRankingResult,
+  tools: readonly ToolInfo[],
+): RankedToolResult {
+  const byName = new Map(tools.map((tool) => [tool.name, tool]));
+  return {
+    matches: ranking.matches.map((item) => {
+      const tool = byName.get(item.name);
+      if (tool === undefined) throw new Error("Ranking selected an unknown discovery tool");
+      return tool;
+    }),
+    rankingSource: ranking.rankingSource,
+    ...(ranking.usage === undefined ? {} : { usage: ranking.usage }),
+  };
 }
 
 export async function rankDeferredToolsWithClassifier(
@@ -329,24 +294,15 @@ export async function rankDeferredToolsWithClassifier(
   options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult | undefined> {
-  const candidates = buildClassifierCandidatePool(tools, query, prefixes);
-  if (candidates.length === 0) return { matches: [], rankingSource: "lexical" };
-
-  const result = await requestClassifier(
-    options.modelRegistry,
-    createClassifierRequest(candidates, query),
-    {
-      ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-      ...(signal === undefined ? {} : { signal }),
-      ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-    },
+  const candidates = tools.filter((tool) => isDeferredToolName(tool.name, prefixes));
+  const attempt = await rankDiscoveryWithClassifier(
+    candidates,
+    lexicalDiscoveryMatches(candidates, query, prefixes),
+    query,
+    limit,
+    { ...options, ...(signal === undefined ? {} : { signal }) },
   );
-  if (!result.ok) return undefined;
-
-  const answer = result.value.answers.best_tool;
-  if (answer?.type !== "choice") return undefined;
-  const matches = selectClassifierRanking(answer.choice, candidates, limit);
-  return matches === undefined ? undefined : { matches, rankingSource: "classifier" };
+  return attempt.ok ? asToolRanking(attempt.result, candidates) : undefined;
 }
 
 export async function searchDeferredToolsWithClassifierFallback(
@@ -357,13 +313,15 @@ export async function searchDeferredToolsWithClassifierFallback(
   options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult> {
-  const lexicalMatches = searchDeferredTools(tools, query, limit, prefixes);
-  return (
-    (await rankDeferredToolsWithClassifier(tools, query, limit, prefixes, options, signal)) ?? {
-      matches: lexicalMatches,
-      rankingSource: "lexical",
-    }
+  const candidates = tools.filter((tool) => isDeferredToolName(tool.name, prefixes));
+  const ranking = await rankDiscovery(
+    candidates,
+    lexicalDiscoveryMatches(candidates, query, prefixes),
+    query,
+    limit,
+    { ...options, ...(signal === undefined ? {} : { signal }) },
   );
+  return asToolRanking(ranking, candidates);
 }
 
 function getConfiguredSettings(ctx: ExtensionContext) {
@@ -384,16 +342,45 @@ function getConfiguredClassifierToolDiscovery(
     settings.getProjectSettings(),
   );
 }
-export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
+export default function toolDiscoveryExtension(
+  pi: ExtensionAPI,
+  nativeHooks: NativeToolSearchHooks | undefined = hasNativeToolSearchHooks(PiSDK)
+    ? PiSDK
+    : undefined,
+): void {
   let subagentAdmittedTools: ReadonlySet<string> | undefined;
 
   const searchableTools = (ctx: ExtensionContext): readonly ToolInfo[] => {
-    const tools = pi.getAllTools();
+    const tools = pi.getAllTools().filter((tool) => tool.exposure !== "hidden");
     if (!isSubagentSession(ctx)) return tools;
 
     const admitted = subagentAdmittedTools ?? new Set(pi.getActiveTools());
     return tools.filter((tool) => admitted.has(tool.name));
   };
+
+  let disposeNativeRanking: (() => void) | undefined;
+  pi.on("session_start", (_event, ctx) => {
+    disposeNativeRanking?.();
+    disposeNativeRanking = undefined;
+    // Migration bridge: unpatched 0.99.1 keeps tool_load until the new binary is activated.
+    if (nativeHooks === undefined) return;
+    disposeNativeRanking = nativeHooks.installToolSearchRanker(
+      ctx.modelRegistry,
+      createNativeDiscoveryRanker(searchableTools, (context) => {
+        const config = getConfiguredClassifierToolDiscovery(context);
+        return {
+          modelRegistry: context.modelRegistry,
+          enabled: config.enabled,
+          timeoutMs: config.timeoutMs,
+          settingsContext: context,
+        };
+      }),
+    );
+  });
+  pi.on("session_shutdown", () => {
+    disposeNativeRanking?.();
+    disposeNativeRanking = undefined;
+  });
 
   pi.registerTool(
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
@@ -408,70 +395,97 @@ export default function toolDiscoveryExtension(pi: ExtensionAPI): void {
       executionMode: "sequential",
 
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-        const tools = searchableTools(ctx);
-        const prefixes = getConfiguredDeferredToolPrefixes(ctx);
-        const classifierConfig = getConfiguredClassifierToolDiscovery(ctx);
-        const ranked = classifierConfig.enabled
-          ? await searchDeferredToolsWithClassifierFallback(
-              tools,
-              params.query,
-              params.limit ?? DEFAULT_MATCHES,
-              prefixes,
-              {
-                modelRegistry: ctx.modelRegistry,
-                timeoutMs: classifierConfig.timeoutMs,
-              },
-              signal,
-            )
-          : {
-              matches: searchDeferredTools(
+        let inferenceUsage: Usage | undefined;
+        try {
+          const tools = searchableTools(ctx);
+          const prefixes = getConfiguredDeferredToolPrefixes(ctx);
+          const classifierConfig = getConfiguredClassifierToolDiscovery(ctx);
+          const ranked: RankedToolResult = classifierConfig.enabled
+            ? await searchDeferredToolsWithClassifierFallback(
                 tools,
                 params.query,
                 params.limit ?? DEFAULT_MATCHES,
                 prefixes,
-              ),
-              rankingSource: "lexical" as const,
+                {
+                  modelRegistry: ctx.modelRegistry,
+                  onUsage: (usage) => {
+                    inferenceUsage = usage;
+                  },
+                  timeoutMs: classifierConfig.timeoutMs,
+                  settingsContext: ctx,
+                },
+                signal,
+              )
+            : {
+                matches: searchDeferredTools(
+                  tools,
+                  params.query,
+                  params.limit ?? DEFAULT_MATCHES,
+                  prefixes,
+                ),
+                rankingSource: "lexical" as const,
+              };
+          signal?.throwIfAborted();
+          const { matches: rankedMatches, rankingSource } = ranked;
+          const usage = ranked.usage === undefined ? {} : { usage: ranked.usage };
+          const currentTools = searchableTools(ctx);
+          const byName = new Map(currentTools.map((tool) => [tool.name, tool]));
+          const currentMatches = rankedMatches.flatMap((tool) => {
+            const current = byName.get(tool.name);
+            return current === undefined ? [] : [current];
+          });
+          const matches = expandDeferredToolFamilyMatches(currentTools, currentMatches);
+          if (matches.length === 0) {
+            return {
+              ...usage,
+              content: [
+                {
+                  type: "text",
+                  text: `No specialized tools found for: ${params.query} (ranking: ${rankingSource})`,
+                },
+              ],
+              details: { matches: [], added: [], rankingSource },
             };
-        signal?.throwIfAborted();
-        const { matches: rankedMatches, rankingSource } = ranked;
-        const matches = expandDeferredToolFamilyMatches(tools, rankedMatches);
-        if (matches.length === 0) {
+          }
+
+          const active = pi.getActiveTools();
+          const activeNames = new Set(active);
+          const added = matches.map((tool) => tool.name).filter((name) => !activeNames.has(name));
+
+          // Pi recognizes this purely additive update as a deferred-tool load point.
+          if (added.length > 0) {
+            pi.setActiveTools([...active, ...added]);
+          }
+
+          const addedNames = new Set(added);
+          const lines = matches.map((tool) => {
+            const status = addedNames.has(tool.name) ? "loaded" : "active";
+            return `- ${tool.name} (${status}): ${compactDescription(tool.description)}`;
+          });
+
           return {
+            ...usage,
             content: [
-              {
-                type: "text",
-                text: `No specialized tools found for: ${params.query} (ranking: ${rankingSource})`,
-              },
+              { type: "text", text: `${lines.join("\n")}\nRanking source: ${rankingSource}` },
             ],
-            details: { matches: [], added: [], rankingSource },
+            details: {
+              matches: matches.map((tool) => tool.name),
+              added,
+              rankingSource,
+            },
+          };
+        } catch (error) {
+          if (inferenceUsage === undefined) throw error;
+          // Agent-core discards usage on thrown failures; return an error result without accepting matches.
+          return {
+            isError: true,
+            usage: inferenceUsage,
+            content: [
+              { type: "text", text: error instanceof Error ? error.message : String(error) },
+            ],
+            details: { matches: [], added: [], rankingSource: "classifier" },
           };
         }
-
-        const active = pi.getActiveTools();
-        const activeNames = new Set(active);
-        const added = matches.map((tool) => tool.name).filter((name) => !activeNames.has(name));
-
-        // Pi recognizes this purely additive update as a deferred-tool load point.
-        if (added.length > 0) {
-          pi.setActiveTools([...active, ...added]);
-        }
-
-        const addedNames = new Set(added);
-        const lines = matches.map((tool) => {
-          const status = addedNames.has(tool.name) ? "loaded" : "active";
-          return `- ${tool.name} (${status}): ${compactDescription(tool.description)}`;
-        });
-
-        return {
-          content: [
-            { type: "text", text: `${lines.join("\n")}\nRanking source: ${rankingSource}` },
-          ],
-          details: {
-            matches: matches.map((tool) => tool.name),
-            added,
-            rankingSource,
-          },
-        };
       },
     }),
   );
