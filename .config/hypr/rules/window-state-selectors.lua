@@ -46,7 +46,7 @@ return {
 	{ matcher = "match:class", pattern = [=[^steam_app_0$]=] },
 	{ matcher = "match:class", pattern = [=[^org\.signal\.Signal$]=] },
 	{ matcher = "match:class", pattern = [=[^SVPManager$]=] },
-	{ matcher = "match:initial_title", pattern = [=[^Battle\.net$]=] },
+	{ matcher = "match:title", pattern = [=[^Battle\.net$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Zenimax Online Studios Launcher$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Codex$]=] },
 	{
