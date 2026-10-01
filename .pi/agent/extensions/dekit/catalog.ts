@@ -71,7 +71,10 @@ export async function discoverScripts(
     });
     if (result.killed || result.code !== 0)
       throw new Error(`Could not inspect Just recipes: ${result.stderr}`);
-    for (const recipe of parseJson(result.stdout, "just --json", parseJustCatalog)) {
+    const recipes = parseJson(result.stdout, "just --json", (value) =>
+      parseJustCatalog(value, { firstLineDocumentation: true }),
+    );
+    for (const recipe of recipes) {
       scripts.push({
         id: `just:${recipe.namepath}`,
         source: "just",
@@ -136,6 +139,8 @@ export function rankScriptsLocally(scripts: readonly Script[], query: string): D
     entries.map((entry) => entry.recipe),
     query,
     entries.length,
+    // Keep /just's tokenizer unchanged while matching Unicode script names and tags.
+    /[^\p{L}\p{N}\p{M}]+/u,
   ).map((recipe) => {
     const script = byRecipe.get(recipe);
     if (script === undefined) throw new Error("Ranked script is outside the catalog");

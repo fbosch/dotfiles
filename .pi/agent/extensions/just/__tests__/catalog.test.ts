@@ -94,6 +94,33 @@ describe("Just catalog", () => {
     expect(recipes[0]?.aliases).toEqual(["publish"]);
   });
 
+  test("first-line documentation is extracted before flattening across root and module recipes", () => {
+    const catalog = {
+      recipes: {
+        root: { name: "root", doc: "Build\nPRIVATE_ROOT", parameters: [] },
+        blank: { name: "blank", doc: "\nPRIVATE_BLANK", parameters: [] },
+      },
+      modules: {
+        nested: {
+          module_path: "nested",
+          recipes: {
+            check: { name: "check", doc: "Check\r\nPRIVATE_MODULE", parameters: [] },
+            legacy: { name: "legacy", doc: "Legacy\rPRIVATE_LEGACY", parameters: [] },
+          },
+        },
+      },
+    };
+    expect(parseJustCatalog(catalog).map((recipe) => recipe.doc)).toEqual([
+      "PRIVATE_BLANK",
+      "Check PRIVATE_MODULE",
+      "Legacy PRIVATE_LEGACY",
+      "Build PRIVATE_ROOT",
+    ]);
+    expect(
+      parseJustCatalog(catalog, { firstLineDocumentation: true }).map((recipe) => recipe.doc),
+    ).toEqual(["Run the Just recipe `blank`.", "Check", "Legacy", "Build"]);
+  });
+
   test("creates named schemas and preserves Just parameter order", () => {
     const [recipe] = parseJustCatalog({
       recipes: {

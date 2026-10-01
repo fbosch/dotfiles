@@ -54,7 +54,13 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
-function normalizeDocumentation(value: unknown, namepath: string): string {
+function normalizeDocumentation(
+  value: unknown,
+  namepath: string,
+  firstLineDocumentation: boolean,
+): string {
+  // Later lines must be removed before whitespace normalization erases their boundary.
+  if (firstLineDocumentation && typeof value === "string") value = value.split(/\r\n?|\n/u, 1)[0];
   if (typeof value !== "string" || value.trim().length === 0) {
     return `Run the Just recipe \`${namepath}\`.`;
   }
@@ -129,6 +135,7 @@ function collectScope(
   value: unknown,
   recipes: JustRecipe[],
   aliases: JustAlias[],
+  firstLineDocumentation: boolean,
   inheritedModulePath?: string,
 ): void {
   if (!isRecord(value)) return;
@@ -150,7 +157,7 @@ function collectScope(
       recipes.push({
         name: candidate.name,
         namepath,
-        doc: normalizeDocumentation(candidate.doc, namepath),
+        doc: normalizeDocumentation(candidate.doc, namepath, firstLineDocumentation),
         groups: recipeGroups(candidate.attributes),
         aliases: [],
         parameters: parameters.filter((parameter) => parameter !== undefined),
@@ -163,14 +170,17 @@ function collectScope(
   if (!isRecord(scope.modules)) return;
 
   for (const [name, module] of Object.entries(scope.modules)) {
-    collectScope(module, recipes, aliases, scopedName(modulePath, name));
+    collectScope(module, recipes, aliases, firstLineDocumentation, scopedName(modulePath, name));
   }
 }
 
-export function parseJustCatalog(value: unknown): JustRecipe[] {
+export function parseJustCatalog(
+  value: unknown,
+  { firstLineDocumentation = false } = {},
+): JustRecipe[] {
   const recipes: JustRecipe[] = [];
   const aliases: JustAlias[] = [];
-  collectScope(value, recipes, aliases);
+  collectScope(value, recipes, aliases, firstLineDocumentation);
 
   const aliasesByTarget = new Map<string, JustAlias[]>();
   for (const alias of aliases) {
@@ -315,11 +325,16 @@ export function recipeToolDescription(recipe: JustRecipe): string {
   return `Run Just recipe \`${recipe.namepath}\` after user confirmation. ${recipe.doc}${group}${aliases}`;
 }
 
-export function searchRecipes(recipes: JustRecipe[], query: string, limit: number): JustRecipe[] {
+export function searchRecipes(
+  recipes: JustRecipe[],
+  query: string,
+  limit: number,
+  tokenSeparator = /[^a-z0-9]+/,
+): JustRecipe[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (normalizedQuery.length === 0) return recipes.slice(0, limit);
 
-  const terms = normalizedQuery.split(/[^a-z0-9]+/).filter(Boolean);
+  const terms = normalizedQuery.split(tokenSeparator).filter(Boolean);
   return recipes
     .map((recipe) => {
       const name = recipe.namepath.toLowerCase();
@@ -329,7 +344,7 @@ export function searchRecipes(recipes: JustRecipe[], query: string, limit: numbe
       let score = name === normalizedQuery ? 100 : 0;
       if (name.startsWith(normalizedQuery)) score += 40;
       for (const term of terms) {
-        if (name.split(/[^a-z0-9]+/).includes(term)) score += 12;
+        if (name.split(tokenSeparator).includes(term)) score += 12;
         else if (name.includes(term)) score += 8;
         else if (searchable.includes(term)) score += 3;
       }

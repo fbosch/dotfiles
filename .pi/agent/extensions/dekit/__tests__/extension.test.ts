@@ -210,6 +210,19 @@ test("registers one script tool; the manual Just extension registers no agent to
   expect(commands).toEqual(["just"]);
 });
 
+test("provides agent guidance for intent and tag queries, local browsing, and nonexhaustive classification", async () => {
+  const h = await harness();
+  expect(h.tool.promptGuidelines).toEqual(
+    expect.arrayContaining([
+      expect.stringMatching(/Query dekit discover by intent.*tags from Just groups/u),
+      expect.stringMatching(/Omit query.*blank.*locally without calling the classifier.*limit/u),
+      expect.stringMatching(
+        /one best script or no match.*bounded pool.*not exhaustive.*alternatives.*hasMore is false/u,
+      ),
+    ]),
+  );
+});
+
 test("discovers compact public script descriptions without contacting the runner", async () => {
   const h = await harness();
   await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
@@ -236,69 +249,80 @@ test("discovers compact public script descriptions without contacting the runner
   expect(h.calls[0]?.args).toContain(join(h.cwd, "justfile"));
   expect(h.state.confirmations).toEqual([]);
 });
-test("group-only queries shortlist tagged scripts and expose tags to the classifier and agent", async () => {
-  let classifyCalls = 0;
-  const tags = ["persistence", "agent", "æøå"];
-  const registry = await classifierRegistry(async (model, input) => {
-    classifyCalls += 1;
-    expect(
-      isMatching({ candidates: P.array({ name: P.string, tags: P.array(P.string) }) }, input.state),
-    ).toBe(true);
-    if (
-      !isMatching({ candidates: P.array({ name: P.string, tags: P.array(P.string) }) }, input.state)
-    )
-      throw new Error("tagged candidate metadata missing");
-    expect(input.state.candidates).toHaveLength(24);
-    expect(input.state.candidates[0]).toMatchObject({ name: "just:z-step", tags });
-    const question = input.questions.best_tool;
-    if (question?.type !== "choice") throw new Error("choice criteria missing");
-    expect(question.criteria.candidate_0).toContain("[tags: persistence, agent, æøå]");
-    return classifierReply(model, input, "candidate_0", usage);
-  });
-  const h = await harness({ modelRegistry: registry });
-  await writeFile(join(h.cwd, "justfile"), "z-step:\n  echo opaque\n");
-  h.state.just.recipes["z-step"] = {
-    name: "z-step",
-    namepath: "z-step",
-    doc: "Run an opaque helper",
-    attributes: tags.map((group) => ({ group })),
-    private: false,
-    parameters: [],
-  };
-  await writeFile(
-    h.packagePath,
-    JSON.stringify({
-      packageManager: "bun@1.4.0",
-      scripts: Object.fromEntries(
-        Array.from({ length: 30 }, (_, index) => [`a-${index}`, "PRIVATE_COMMAND"]),
-      ),
-    }),
-  );
-  await withClassifierSettings({}, async () => {
-    const result = await h.invoke({ action: "discover", query: "persistence", limit: 1 });
-    expect(result.details).toMatchObject({
-      scripts: [{ id: "just:z-step", tags }],
-      considered: 24,
-      totalScripts: 32,
-      hasMore: true,
-      rankingSource: "classifier",
+test.each(["persistence", "æøå", "ÆØÅ"])(
+  "group-only query %s shortlists tagged scripts and exposes their tags",
+  async (query) => {
+    let classifyCalls = 0;
+    const tags = ["persistence", "agent", "æøå"];
+    const registry = await classifierRegistry(async (model, input) => {
+      classifyCalls += 1;
+      expect(
+        isMatching(
+          { candidates: P.array({ name: P.string, tags: P.array(P.string) }) },
+          input.state,
+        ),
+      ).toBe(true);
+      if (
+        !isMatching(
+          { candidates: P.array({ name: P.string, tags: P.array(P.string) }) },
+          input.state,
+        )
+      )
+        throw new Error("tagged candidate metadata missing");
+      expect(input.state.candidates).toHaveLength(24);
+      expect(input.state.candidates[0]).toMatchObject({ name: "just:z-step", tags });
+      const question = input.questions.best_tool;
+      if (question?.type !== "choice") throw new Error("choice criteria missing");
+      expect(question.criteria.candidate_0).toContain("[tags: persistence, agent, æøå]");
+      return classifierReply(model, input, "candidate_0", usage);
     });
-    expect(JSON.stringify(result.structuredContent)).toBe(JSON.stringify(result.details));
-    expect(result.content).toContainEqual({
-      type: "text",
-      text: expect.stringContaining('[tags: ["persistence","agent","æøå"]]'),
+    const h = await harness({ modelRegistry: registry });
+    await writeFile(join(h.cwd, "justfile"), "z-step:\n  echo opaque\n");
+    h.state.just.recipes["z-step"] = {
+      name: "z-step",
+      namepath: "z-step",
+      doc: "Run an opaque helper",
+      attributes: tags.map((group) => ({ group })),
+      private: false,
+      parameters: [],
+    };
+    for (let index = 0; index < 30; index += 1) {
+      const name = `a-${index}`;
+      h.state.just.recipes[name] = {
+        name,
+        namepath: name,
+        doc: "Run an unrelated helper",
+        private: false,
+        parameters: [],
+      };
+    }
+    await writeFile(h.packagePath, JSON.stringify({ packageManager: "bun@1.4.0", scripts: {} }));
+    await withClassifierSettings({}, async () => {
+      const result = await h.invoke({ action: "discover", query, limit: 1 });
+      expect(result.details).toMatchObject({
+        scripts: [{ id: "just:z-step", tags }],
+        considered: 24,
+        totalScripts: 32,
+        hasMore: true,
+        rankingSource: "classifier",
+      });
+      expect(JSON.stringify(result.structuredContent)).toBe(JSON.stringify(result.details));
+      expect(result.content).toContainEqual({
+        type: "text",
+        text: expect.stringContaining('[tags: ["persistence","agent","æøå"]]'),
+      });
     });
-  });
-  await withClassifierSettings({ toolDiscoveryEnabled: false }, async () => {
-    const result = await h.invoke({ action: "discover", query: "persistence", limit: 1 });
-    expect(result.details).toMatchObject({
-      scripts: [{ id: "just:z-step", tags }],
-      rankingSource: "lexical",
+    await withClassifierSettings({ toolDiscoveryEnabled: false }, async () => {
+      const result = await h.invoke({ action: "discover", query, limit: 1 });
+      expect(result.details).toMatchObject({
+        scripts: [{ id: "just:z-step", tags }],
+        rankingSource: "lexical",
+      });
     });
-  });
-  expect(classifyCalls).toBe(1);
-  expect(h.calls.every((call) => call.command === "just")).toBe(true);
-});
+    expect(classifyCalls).toBe(1);
+    expect(h.calls.every((call) => call.command === "just")).toBe(true);
+  },
+);
 
 test("ranks local names deterministically and reports undisplayed lexical results", async () => {
   const h = await harness();
@@ -352,7 +376,7 @@ test("uses the classifier to select one safe nonlexical script from its bounded 
   h.state.just.recipes["database::migrate"] = {
     name: "migrate",
     namepath: "database::migrate",
-    doc: `${"Apply a data structure revision. ".repeat(12)}\nPRIVATE_SECOND_LINE_SENTINEL`,
+    doc: "Apply a data structure revision.\nPRIVATE_SECOND_LINE_SENTINEL",
     private: false,
     attributes: [{ group: "persistence" }],
     parameters: [],
@@ -362,7 +386,7 @@ test("uses the classifier to select one safe nonlexical script from its bounded 
   await withClassifierSettings({}, async () => {
     const result = await h.invoke({ action: "discover", query: "q".repeat(650), limit: 1 });
     expect(result.details).toMatchObject({
-      scripts: [{ id: "just:database::migrate" }],
+      scripts: [{ id: "just:database::migrate", description: "Apply a data structure revision." }],
       totalScripts: 32,
       considered: 24,
       hasMore: true,

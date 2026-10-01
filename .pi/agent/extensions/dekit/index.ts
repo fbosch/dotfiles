@@ -145,6 +145,9 @@ export default function dekitExtension(pi: ExtensionAPI): void {
       promptSnippet: "Discover project scripts and manage them as dekit tasks",
       promptGuidelines: [
         "Use dekit discover before recreating a project workflow with shell commands.",
+        "Query dekit discover by intent (e.g. 'run unit tests') or tags from Just groups (e.g. 'validation').",
+        "Omit query or leave it blank to browse scripts locally without calling the classifier; limit bounds the displayed list.",
+        "The classifier returns one best script or no match from a bounded pool; it is not exhaustive. Refine query or browse without query for alternatives, even when hasMore is false.",
         "A task-control acknowledgement is not script completion. Use dekit status to check state and exit_code; output returns only the current terminal screen.",
       ],
       executionMode: "sequential",
