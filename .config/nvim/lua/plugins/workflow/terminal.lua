@@ -19,7 +19,7 @@ return {
 		init = function()
 			term_keymaps({
 				{ "<A-t>", "FTermToggle", "toggle floating terminal" },
-				{ "<A-m>", "FTermMProcs", "toggle floating terminal with mprocs" },
+				{ "<A-m>", "FTermDekit", "toggle floating terminal with dekit" },
 				{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 				{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
 				{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
@@ -32,7 +32,7 @@ return {
 			"FTermClose",
 			"FTermExit",
 			"FTermToggle",
-			"FTermMProcs",
+			"FTermDekit",
 			"FTermLazyGit",
 			"FTermDiffnav",
 			"FTermBtop",
@@ -72,38 +72,34 @@ return {
 				terminal.toggle_floating_terminal(default_instance)
 			end, { bang = true })
 
-			local mprocs_instance = nil
-			local mprocs_command = nil
-			usrcmd("FTermMProcs", function()
+			local dekit_instance = nil
+			local dekit_command = nil
+			usrcmd("FTermDekit", function()
 				local project = require("utils.project")
-				local args = project.resolve_mprocs_args()
-				local cmd = string.format("mprocs %s", args)
-				local root = project.get_project_root()
-				local cwd = root or vim.fn.getcwd()
+				local cwd = project.get_project_root() or vim.fn.getcwd()
+				local escaped_cwd = vim.fn.shellescape(cwd)
+				local cmd = project.resolve_dekit_command(cwd)
 
 				if project.has_file(cwd, ".envrc") then
-					cmd = string.format("direnv exec %s %s", vim.fn.shellescape(cwd), cmd)
+					cmd = string.format("direnv exec %s %s", escaped_cwd, cmd)
 				end
+				cmd = string.format("cd %s && %s", escaped_cwd, cmd)
 
-				if root then
-					cmd = string.format("cd %s && %s", vim.fn.shellescape(root), cmd)
-				end
-
-				if not mprocs_instance or mprocs_command ~= cmd then
-					if mprocs_instance then
-						terminal.close_floating_terminal(mprocs_instance, true)
+				if not dekit_instance or dekit_command ~= cmd then
+					if dekit_instance then
+						terminal.close_floating_terminal(dekit_instance, true)
 					end
 
-					mprocs_command = cmd
-					mprocs_instance = fterm:new({
-						ft = "fterm_mprocs",
+					dekit_command = cmd
+					dekit_instance = fterm:new({
+						ft = "fterm_dekit",
 						env = env,
 						shell = "dash",
 						cmd = cmd,
 						dimensions = dimensions,
 					})
 				end
-				terminal.toggle_floating_terminal(mprocs_instance)
+				terminal.toggle_floating_terminal(dekit_instance)
 			end, { bang = true })
 
 			local lazygit_instance = nil

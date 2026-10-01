@@ -338,6 +338,11 @@ in
       bun run typecheck
     '';
 
+    "test:nvim-dekit-terminal".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
+        -l .config/nvim/tests/dekit_terminal.lua
+    '';
+
     "test:nvim-direnv-loader".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/direnv_loader.lua
@@ -462,6 +467,7 @@ in
         "test:herdr-neovim-sessions"
         "test:lua-quality"
         "test:pi-extensions"
+        "test:nvim-dekit-terminal"
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"
         "test:nvim-pi-launcher"

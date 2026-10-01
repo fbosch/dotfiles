@@ -1,5 +1,3 @@
-local fn = require("utils.fn")
-
 local M = {}
 
 local __package_json_cache = {}
@@ -42,19 +40,19 @@ function M.read_package_json(dir)
 end
 
 local detectors = {
-	lua = function(dir, pkg)
+	lua = function(dir)
 		return M.has_file(dir, "init.lua")
 	end,
-	nextjs = function(dir, pkg)
+	nextjs = function(_, pkg)
 		return M.has_dep(pkg, "next")
 	end,
-	react = function(dir, pkg)
+	react = function(_, pkg)
 		return M.has_dep(pkg, "react")
 	end,
-	astro = function(dir, pkg)
+	astro = function(_, pkg)
 		return M.has_dep(pkg, "astro")
 	end,
-	bun = function(dir, pkg)
+	bun = function(dir)
 		return M.has_file(dir, "bun.lock")
 	end,
 	typescript = function(dir, pkg)
@@ -99,8 +97,10 @@ end
 
 function M.get_project_root()
 	local root_bare = vim.fs.root(vim.fn.getcwd(), { ".bare" }) -- support for worktrees
-	local root_other =
-		vim.fs.root(vim.fn.getcwd(), { "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" })
+	local root_other = vim.fs.root(
+		vim.fn.getcwd(),
+		{ "dekit.yaml", "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" }
+	)
 
 	return root_other or root_bare
 end
@@ -119,31 +119,25 @@ function M.find_file_in_project_root(pattern)
 	end
 end
 
-function M.resolve_mprocs_args()
-	local project_mprocs_yaml = M.find_file_in_project_root({ "mprocs.yaml", "mprocs.yml" })
-	local project_justfile = M.find_file_in_project_root({ "justfile", "Justfile", ".justfile" })
+function M.resolve_dekit_command(cwd)
 	local args = {}
-
-	if project_mprocs_yaml then
-		table.insert(args, string.format("--config %s", vim.fn.shellescape(project_mprocs_yaml)))
+	for _, name in ipairs({ "mprocs.yaml", "mprocs.yml" }) do
+		if M.has_file(cwd, name) then
+			table.insert(args, "--config " .. vim.fn.shellescape(cwd .. "/" .. name))
+			break
+		end
 	end
-
-	if project_justfile then
+	if M.has_any_file(cwd, { "justfile", "Justfile", ".justfile" }) then
 		table.insert(args, "--just")
+	elseif #args == 0 and M.has_file(cwd, "package.json") then
+		table.insert(args, "--npm")
 	end
 
+	-- Only the bundled mprocs UI can list recipes/scripts without starting them.
 	if #args > 0 then
-		return table.concat(args, " ")
+		return "dekit mprocs " .. table.concat(args, " ")
 	end
-
-	local project_types = M.get_project_types()
-
-	return fn.classify(project_types, {
-		{
-			{ "typescript", "javascript", "react", "vite" },
-			"--npm",
-		},
-	}) or ""
+	return "dekit -C " .. vim.fn.shellescape(cwd) .. " attach"
 end
 
 return M
