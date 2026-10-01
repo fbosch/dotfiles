@@ -2,7 +2,7 @@
 when:
   tools:
     any:
-      - todo
+      - TaskCreate
 ---
 
 # Task tracking

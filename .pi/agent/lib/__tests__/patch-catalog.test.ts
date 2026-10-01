@@ -29,7 +29,7 @@ describe("package patch discovery", () => {
   test("derives scoped and unscoped packages from the patch directory", () => {
     addPatch("pi-worktrunk+0.8.0.patch");
     addPatch("@ff-labs+pi-fff+0.11.0.patch");
-    addPatch("@juicesharp+rpiv-todo+2.11.0.patch");
+    addPatch("@tintinweb+pi-tasks+0.9.0.patch");
     addPatch("pi-lens+4.3.0.patch");
     writeFileSync(join(directory, "README.md"), "ignored\n");
 
@@ -40,9 +40,9 @@ describe("package patch discovery", () => {
         patchFilenames: ["@ff-labs+pi-fff+0.11.0.patch"],
       },
       {
-        name: "@juicesharp/rpiv-todo",
-        version: "2.11.0",
-        patchFilenames: ["@juicesharp+rpiv-todo+2.11.0.patch"],
+        name: "@tintinweb/pi-tasks",
+        version: "0.9.0",
+        patchFilenames: ["@tintinweb+pi-tasks+0.9.0.patch"],
       },
       {
         name: "pi-lens",

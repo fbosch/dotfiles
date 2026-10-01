@@ -2,7 +2,7 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.11.0.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
-- `@juicesharp+rpiv-todo+2.11.0.patch` declares `typebox` as a host-provided peer dependency.
+- `@tintinweb+pi-tasks+0.9.0.patch` moves `typebox` to Pi's host-provided peer dependencies.
 - `pi-hashline-edit-pro+4.5.3.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks.
 - `pi-lens+4.3.0.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references; it also avoids duplicate deferred formatting and resolves bundled grammars.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache. Worktrunk remains an unconfigured installed leftover; it is not listed in `settings.json` and is intentionally not installed or loaded by this guide.
@@ -21,7 +21,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
 
    ```sh
    pi install npm:@ff-labs/pi-fff@0.11.0
-   pi install npm:@juicesharp/rpiv-todo@2.11.0
+   pi install npm:@tintinweb/pi-tasks@0.9.0
    pi install npm:pi-lens@4.3.0
    pi install npm:pi-hashline-edit-pro@4.5.3
    ```

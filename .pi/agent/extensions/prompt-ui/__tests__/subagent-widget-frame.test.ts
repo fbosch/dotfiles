@@ -336,7 +336,7 @@ describe("subagent widget frame", () => {
       },
     });
 
-    ui.setWidget("rpiv-todos", () => widget);
+    ui.setWidget("tasks", () => widget);
     const todoFactory = calls[0]?.content;
     if (typeof todoFactory !== "function") throw new Error("Expected a todo widget factory");
     todoFactory(tui, theme).render(32);
@@ -367,7 +367,7 @@ describe("subagent widget frame", () => {
     const uninstall = installSubagentWidgetFrame(ui, {
       agentColors: new Map([["Review", "#a8d0e6"]]),
     });
-    ui.setWidget("rpiv-todos", () => widget, { placement: "aboveEditor" });
+    ui.setWidget("tasks", () => widget, { placement: "aboveEditor" });
 
     const factory = calls[0]?.content;
     expect(typeof factory).toBe("function");
@@ -399,7 +399,7 @@ describe("subagent widget frame", () => {
       invalidate: () => {},
     };
     const uninstall = installSubagentWidgetFrame(ui);
-    ui.setWidget("rpiv-todos", () => widget, { placement: "aboveEditor" });
+    ui.setWidget("tasks", () => widget, { placement: "aboveEditor" });
 
     const factory = calls[0]?.content;
     expect(typeof factory).toBe("function");

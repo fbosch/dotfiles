@@ -18,8 +18,8 @@ import { rememberSubagentTranscriptRecord } from "./subagent-transcript-records"
 import { colorizeHex } from "./terminal-color";
 
 const AGENT_WIDGET_KEY = "agents";
-const TODO_WIDGET_KEY = "rpiv-todos";
-const FRAMED_WIDGET_KEYS = new Set([AGENT_WIDGET_KEY, TODO_WIDGET_KEY]);
+const TASK_WIDGET_KEY = "tasks";
+const FRAMED_WIDGET_KEYS = new Set([AGENT_WIDGET_KEY, TASK_WIDGET_KEY]);
 const WIDGET_PADDING_X = 2;
 const AGENT_WIDGET_PATCH = Symbol.for("dotfiles:pi-subagent-widget-frame");
 const SUBAGENTS_SERVICE_KEY = Symbol.for("@gotgenes/pi-subagents:service");
