@@ -1,11 +1,26 @@
 import type { ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import { match } from "ts-pattern";
 import {
+  type ClassifierFailure,
   type ClassifierOptions,
   type ClassifierRegistry,
   type ClassifierRequestResult,
   requestClassifier,
 } from "./classifier";
+
+export const DISCOVERY_FALLBACK_REASONS = [
+  "invalid-config",
+  "disabled",
+  "invalid-input",
+  "model-unavailable",
+  "auth-failure",
+  "timeout",
+  "caller-cancellation",
+  "request-failure",
+  "http-status",
+  "invalid-response",
+] as const satisfies readonly ClassifierFailure["reason"][];
+export type DiscoveryFallbackReason = (typeof DISCOVERY_FALLBACK_REASONS)[number];
 
 export const MAX_DISCOVERY_CLASSIFIER_CANDIDATES = 24;
 const MAX_DESCRIPTION_CHARS = 180;
@@ -26,6 +41,7 @@ export interface DiscoveryMatch {
 export interface DiscoveryRankingResult {
   matches: DiscoveryMatch[];
   rankingSource: "classifier" | "lexical";
+  fallbackReason?: DiscoveryFallbackReason;
   usage?: Usage;
 }
 export interface DiscoveryRankingOptions extends ClassifierOptions {
@@ -40,7 +56,7 @@ export interface DiscoveryRankingOptions extends ClassifierOptions {
 }
 export type ClassifierDiscoveryAttempt =
   | { ok: true; result: DiscoveryRankingResult }
-  | { ok: false; usage?: Usage };
+  | { ok: false; fallbackReason: DiscoveryFallbackReason; usage?: Usage };
 
 export function compactDiscoveryDescription(description: string): string {
   const summary = (description.split(/\r?\n/u, 1)[0] ?? "").replace(/\s+/gu, " ").trim();
@@ -136,7 +152,7 @@ export async function rankDiscoveryWithClassifier(
   if (response.usage !== undefined) onUsage?.(response.usage);
   options.signal?.throwIfAborted();
   const usage = response.usage === undefined ? {} : { usage: response.usage };
-  if (!response.ok) return { ok: false, ...usage };
+  if (!response.ok) return { ok: false, fallbackReason: response.reason, ...usage };
   return match(response.value.answers.best_tool)
     .returnType<ClassifierDiscoveryAttempt>()
     .with({ type: "choice" }, (answer) => {
@@ -155,7 +171,7 @@ export async function rankDiscoveryWithClassifier(
         probability < 0 ||
         probability > 1
       ) {
-        return { ok: false, ...usage };
+        return { ok: false, fallbackReason: "invalid-response", ...usage };
       }
       return {
         ok: true,
@@ -166,7 +182,7 @@ export async function rankDiscoveryWithClassifier(
         },
       };
     })
-    .otherwise(() => ({ ok: false, ...usage }));
+    .otherwise(() => ({ ok: false, fallbackReason: "invalid-response", ...usage }));
 }
 
 export async function rankDiscovery(
@@ -194,8 +210,11 @@ export async function rankDiscovery(
     seen.add(item.name);
   }
   const lexical = lexicalMatches.slice(0, limit);
-  if (options.enabled === false || query.trim().length === 0 || candidates.length === 0) {
+  if (query.trim().length === 0 || candidates.length === 0) {
     return { matches: lexical, rankingSource: "lexical" };
+  }
+  if (options.enabled === false) {
+    return { matches: lexical, rankingSource: "lexical", fallbackReason: "disabled" };
   }
   const result = await rankDiscoveryWithClassifier(
     candidates,
@@ -209,6 +228,7 @@ export async function rankDiscovery(
     : {
         matches: lexical,
         rankingSource: "lexical",
+        fallbackReason: result.fallbackReason,
         ...(result.usage === undefined ? {} : { usage: result.usage }),
       };
 }

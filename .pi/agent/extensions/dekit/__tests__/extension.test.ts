@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, P } from "ts-pattern";
+import * as Value from "typebox/value";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import justExtension from "../../just";
@@ -249,6 +251,196 @@ test("discovers compact public script descriptions without contacting the runner
   expect(h.calls[0]?.args).toContain(join(h.cwd, "justfile"));
   expect(h.state.confirmations).toEqual([]);
 });
+
+test("inspects ordered Just parameter metadata without bodies, expressions, inference, or a runner", async () => {
+  let classifyCalls = 0;
+  const registry = await classifierRegistry(async (model, input) => {
+    classifyCalls += 1;
+    return classifierReply(model, input, "no_match");
+  });
+  const h = await harness({ modelRegistry: registry });
+  await writeFile(join(h.cwd, "justfile"), "build:\n  echo BODY_SENTINEL\n");
+  h.state.just.recipes.build = {
+    ...h.state.just.recipes.build,
+    attributes: [{ group: "validation" }],
+    body: ["BODY_SENTINEL"],
+    parameters: [
+      { name: "target", kind: "singular", default: null },
+      { name: "mode", kind: "singular", default: ["string", "DEFAULT_EXPRESSION_SENTINEL"] },
+      { name: "files", kind: "star", default: null },
+      { name: "items", kind: "plus", default: null },
+      {
+        name: "verbose",
+        kind: "singular",
+        default: null,
+        flag: true,
+        long: "verbose",
+        short: "v",
+        multiple: true,
+        help: "Show details\nPRIVATE_HELP_SENTINEL",
+      },
+    ],
+  };
+  h.state.hasUI = false;
+  await withClassifierSettings({}, async () => {
+    const args = { action: "inspect", script: "just:build" };
+    expect(Value.Check(h.tool.parameters, args)).toBe(true);
+    const result = await h.invoke(args);
+    expect(result.details).toEqual({
+      action: "inspect",
+      project: h.cwd,
+      script: {
+        id: "just:build",
+        source: "just",
+        description: "Build the project",
+        tags: ["validation"],
+        parameters: [
+          {
+            name: "target",
+            kind: "singular",
+            required: true,
+            hasDefault: false,
+            flag: false,
+            multiple: false,
+          },
+          {
+            name: "mode",
+            kind: "singular",
+            required: false,
+            hasDefault: true,
+            flag: false,
+            multiple: false,
+          },
+          {
+            name: "files",
+            kind: "star",
+            required: false,
+            hasDefault: false,
+            flag: false,
+            multiple: false,
+          },
+          {
+            name: "items",
+            kind: "plus",
+            required: true,
+            hasDefault: false,
+            flag: false,
+            multiple: false,
+          },
+          {
+            name: "verbose",
+            kind: "singular",
+            required: false,
+            hasDefault: false,
+            flag: true,
+            long: "verbose",
+            short: "v",
+            multiple: true,
+            help: "Show details",
+          },
+        ],
+      },
+    });
+    expect(JSON.stringify(result.structuredContent)).toBe(JSON.stringify(result.details));
+    if (h.tool.outputSchema === undefined) throw new Error("Output schema missing");
+    expect(Value.Check(h.tool.outputSchema, result.structuredContent)).toBe(true);
+    for (const privateValue of [
+      "BODY_SENTINEL",
+      "DEFAULT_EXPRESSION_SENTINEL",
+      "PRIVATE_HELP_SENTINEL",
+      "fingerprint",
+      '"command"',
+    ]) {
+      expect(JSON.stringify(result)).not.toContain(privateValue);
+    }
+  });
+  expect(classifyCalls).toBe(0);
+  expect(h.calls.map((call) => call.command)).toEqual(["just"]);
+  expect(h.state.confirmations).toEqual([]);
+});
+
+test("inspection distinguishes an empty Just signature from unknown package parameters", async () => {
+  const h = await harness();
+  await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
+  expect((await h.invoke({ action: "inspect", script: "just:build" })).details).toMatchObject({
+    script: { id: "just:build", parameters: [] },
+  });
+  const result = await h.invoke({ action: "inspect", script: "package:test" });
+  expect(result.details).toEqual({
+    action: "inspect",
+    project: h.cwd,
+    script: {
+      id: "package:test",
+      source: "package",
+      description: "Package script: test",
+      tags: [],
+      parameters: null,
+    },
+  });
+  expect(JSON.stringify(result)).not.toContain("printf hello");
+  for (const script of ["just:hidden", "just:missing", "package:missing", "build"]) {
+    await expect(h.invoke({ action: "inspect", script })).rejects.toThrow("no longer public");
+  }
+  expect(h.calls.every((call) => call.command === "just")).toBe(true);
+  expect(h.state.confirmations).toEqual([]);
+});
+test.each(["just:build", "package:test"])(
+  "exact canonical ID %s bypasses enabled classification",
+  async (id) => {
+    let classifyCalls = 0;
+    const registry = await classifierRegistry(async (model, input) => {
+      classifyCalls += 1;
+      return classifierReply(model, input, "no_match", usage);
+    });
+    const h = await harness({ modelRegistry: registry });
+    await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
+    await withClassifierSettings({}, async () => {
+      const result = await h.invoke({ action: "discover", query: `  ${id}  `, limit: 1 });
+      expect(result.details).toMatchObject({
+        scripts: [{ id }],
+        totalScripts: 3,
+        considered: 3,
+        hasMore: false,
+        rankingSource: "lexical",
+      });
+      if (!isMatching({ scripts: P.array({ id: P.string }) }, result.details))
+        throw new Error("Script metadata missing");
+      expect(result.details.scripts).toHaveLength(1);
+      expect(result.usage).toBeUndefined();
+      expect(classifyCalls).toBe(0);
+      await h.invoke({ action: "discover", query: "build workflow" });
+      expect(classifyCalls).toBe(1);
+    });
+    expect(h.calls.every((call) => call.command === "just")).toBe(true);
+    expect(h.state.confirmations).toEqual([]);
+  },
+);
+
+test("exact package IDs preserve significant script-name whitespace", async () => {
+  let classifyCalls = 0;
+  const registry = await classifierRegistry(async (model, input) => {
+    classifyCalls += 1;
+    return classifierReply(model, input, "no_match");
+  });
+  const h = await harness({ modelRegistry: registry });
+  await writeFile(
+    h.packagePath,
+    JSON.stringify({
+      packageManager: "bun@1.4.0",
+      scripts: { test: "echo plain", "test ": "echo spaced" },
+    }),
+  );
+  await withClassifierSettings({}, async () => {
+    const result = await h.invoke({ action: "discover", query: "package:test " });
+    expect(result.details).toMatchObject({
+      scripts: [{ id: "package:test " }],
+      hasMore: false,
+      rankingSource: "lexical",
+    });
+    expect(classifyCalls).toBe(0);
+  });
+});
+
 test.each(["persistence", "æøå", "ÆØÅ"])(
   "group-only query %s shortlists tagged scripts and exposes their tags",
   async (query) => {
@@ -474,6 +666,7 @@ test("skips disabled classifier policy and falls back for unavailable or malform
       scripts: [{ id: "package:test" }],
       rankingSource: "lexical",
       considered: 2,
+      fallbackReason: "disabled",
     });
   });
   await withClassifierSettings({ classifierEnabled: false }, async () => {
@@ -481,6 +674,7 @@ test("skips disabled classifier policy and falls back for unavailable or malform
       scripts: [{ id: "package:test" }],
       rankingSource: "lexical",
       considered: 2,
+      fallbackReason: "disabled",
     });
   });
   expect(classifyCalls).toBe(0);
@@ -491,6 +685,7 @@ test("skips disabled classifier policy and falls back for unavailable or malform
       scripts: [{ id: "package:test" }],
       rankingSource: "lexical",
       considered: 2,
+      fallbackReason: "auth-failure",
     });
     expect(unavailable.usage).toBeUndefined();
     const malformed = await h.invoke({ action: "discover", query: "test" });
@@ -498,8 +693,16 @@ test("skips disabled classifier policy and falls back for unavailable or malform
       scripts: [{ id: "package:test" }],
       rankingSource: "lexical",
       considered: 2,
+      fallbackReason: "invalid-response",
     });
     expect(malformed.usage).toEqual(usage);
+    expect(JSON.stringify(unavailable)).not.toContain("classifier unavailable");
+    expect(malformed.content).toContainEqual({
+      type: "text",
+      text: expect.stringContaining("fallback: invalid-response"),
+    });
+    if (h.tool.outputSchema === undefined) throw new Error("Output schema missing");
+    expect(Value.Check(h.tool.outputSchema, malformed.structuredContent)).toBe(true);
   });
   expect(classifyCalls).toBe(2);
   expect(h.calls).toEqual([]);
@@ -551,6 +754,7 @@ test("denies all operations in an untrusted project before reading or executing 
   h.state.trusted = false;
   for (const args of [
     { action: "discover" },
+    { action: "inspect", script: "package:test" },
     { action: "start", script: "package:test" },
     { action: "status" },
     { action: "output", task: path },
@@ -754,6 +958,57 @@ test("honors declared managers, npm argument separator, and ambiguous lockfile r
   await expect(discoverScripts(h.pi, h.cwd)).rejects.toThrow("Conflicting");
 });
 
+test("shares each whole-catalog fingerprint across its source and preserves hash values", async () => {
+  const h = await harness();
+  await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
+  h.state.just.recipes.lint = { ...h.state.just.recipes.build, name: "lint", namepath: "lint" };
+  const scripts = await discoverScripts(h.pi, h.cwd);
+  const justFingerprint = createHash("sha256").update(JSON.stringify(h.state.just)).digest("hex");
+  const packageFingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({
+        packageManager: "bun@1.4.0",
+        scripts: { test: "printf hello", serve: "sleep 60" },
+      }),
+    )
+    .digest("hex");
+  expect(scripts.map((script) => [script.id, script.fingerprint])).toEqual([
+    ["just:build", justFingerprint],
+    ["just:lint", justFingerprint],
+    ["package:test", packageFingerprint],
+    ["package:serve", packageFingerprint],
+  ]);
+  expect(await discoverScripts(h.pi, h.cwd)).toEqual(scripts);
+});
+
+test.each(["just:build", "package:test"])(
+  "unrelated catalog body changes still block confirmed start of %s",
+  async (id) => {
+    const h = await harness();
+    await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
+    h.state.onConfirm = async () => {
+      if (id === "just:build")
+        h.state.just.recipes.hidden = {
+          ...h.state.just.recipes.hidden,
+          body: ["CHANGED_PRIVATE_BODY"],
+        };
+      else
+        await writeFile(
+          h.packagePath,
+          JSON.stringify({
+            packageManager: "bun@1.4.0",
+            scripts: { test: "printf hello", serve: "CHANGED_OTHER_BODY" },
+          }),
+        );
+    };
+    await expect(h.invoke({ action: "start", script: id })).rejects.toThrow(
+      "Script changed during confirmation",
+    );
+    expect(h.state.confirmations).toHaveLength(1);
+    expect(h.calls.some((call) => call.args.includes("spawn"))).toBe(false);
+  },
+);
+
 const liveTest = process.env.PI_DEKIT_LIVE === "1" ? test : test.skip;
 liveTest(
   "installed dekit handles Just and package tasks, failures, output, stop and restart",
@@ -769,7 +1024,22 @@ liveTest(
         },
       }),
     );
-    await writeFile(join(h.cwd, "justfile"), "# Print a marker\nprobe:\n  printf just-marker\n");
+    await writeFile(
+      join(h.cwd, "justfile"),
+      [
+        "set unstable",
+        "set lists",
+        "",
+        "# Print a marker",
+        "probe:",
+        "  printf just-marker",
+        "",
+        "[arg('verbose', long='verbose', short='v', flag)]",
+        "metadata target verbose mode='dev' *files:",
+        "  @echo ignored",
+        "",
+      ].join("\n"),
+    );
     h.pi.exec = async (command, args, options) => {
       const child = Bun.spawn([command, ...args], {
         cwd: options?.cwd ?? h.cwd,
@@ -784,6 +1054,32 @@ liveTest(
       return { stdout, stderr, code, killed: false };
     };
     try {
+      const inspection = await h.invoke({ action: "inspect", script: "just:metadata" });
+      expect(inspection.details).toMatchObject({
+        script: {
+          id: "just:metadata",
+          parameters: [
+            { name: "target", kind: "singular", required: true, hasDefault: false },
+            {
+              name: "verbose",
+              flag: true,
+              long: "verbose",
+              short: "v",
+              required: false,
+              hasDefault: false,
+            },
+            { name: "mode", kind: "singular", required: false, hasDefault: true },
+            { name: "files", kind: "star", required: false, hasDefault: false },
+          ],
+        },
+      });
+      expect(
+        (await h.invoke({ action: "discover", query: "just:metadata" })).details,
+      ).toMatchObject({
+        scripts: [{ id: "just:metadata" }],
+        hasMore: false,
+        rankingSource: "lexical",
+      });
       expect((await h.invoke({ action: "status" })).details).toMatchObject({ runner: "absent" });
       for (const [script, exit] of [
         ["just:probe", 0],

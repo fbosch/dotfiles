@@ -15,6 +15,25 @@ export interface Script {
   fingerprint: string;
   recipe?: JustRecipe;
 }
+export type ScriptInspectionParameter = {
+  name: string;
+  kind: "singular" | "star" | "plus";
+  required: boolean;
+  hasDefault: boolean;
+  flag: boolean;
+  long?: string;
+  short?: string;
+  multiple: boolean;
+  help?: string;
+};
+
+export type ScriptInspection = {
+  id: string;
+  source: "just" | "package";
+  description: string;
+  tags: string[];
+  parameters: ScriptInspectionParameter[] | null;
+};
 
 function parseJson<T>(text: string, source: string, decode: (value: unknown) => T): T {
   try {
@@ -74,13 +93,14 @@ export async function discoverScripts(
     const recipes = parseJson(result.stdout, "just --json", (value) =>
       parseJustCatalog(value, { firstLineDocumentation: true }),
     );
+    const fingerprint = createHash("sha256").update(result.stdout).digest("hex");
     for (const recipe of recipes) {
       scripts.push({
         id: `just:${recipe.namepath}`,
         source: "just",
         name: recipe.namepath,
         description: recipe.doc,
-        fingerprint: createHash("sha256").update(result.stdout).digest("hex"),
+        fingerprint,
         command: ["just", "--justfile", path, "--yes", "--one", "--", recipe.namepath],
         recipe,
       });
@@ -98,6 +118,7 @@ export async function discoverScripts(
       return data;
     });
     const manager = await packageManager(cwd, value.packageManager);
+    const fingerprint = createHash("sha256").update(JSON.stringify(value)).digest("hex");
     for (const [name, description] of Object.entries(value.scripts ?? {})) {
       // Script names cannot be interpreted as package-manager options.
       if (name.startsWith("-") || name.includes("\0")) continue;
@@ -107,7 +128,7 @@ export async function discoverScripts(
         name,
         description,
         command: [manager, "run", name],
-        fingerprint: createHash("sha256").update(JSON.stringify(value)).digest("hex"),
+        fingerprint,
       });
     }
   }
@@ -118,6 +139,39 @@ export function scriptSearchDescription(script: Script): string {
   return compactDiscoveryDescription(
     script.source === "package" ? `Package script: ${script.name}` : script.description,
   );
+}
+
+export function inspectScript(script: Script): ScriptInspection {
+  const metadata = {
+    id: script.id,
+    source: script.source,
+    description: scriptSearchDescription(script),
+    tags: script.recipe?.groups ?? [],
+  };
+  return match(script.source)
+    .returnType<ScriptInspection>()
+    .with("package", () => ({ ...metadata, parameters: null }))
+    .with("just", () => {
+      if (script.recipe === undefined) throw new Error("Just script parameter metadata is missing");
+      return {
+        ...metadata,
+        parameters: script.recipe.parameters.map((parameter) => ({
+          name: parameter.name,
+          kind: parameter.kind,
+          // Just boolean flags are optional even though their dump has no default.
+          required: !parameter.flag && parameter.kind !== "star" && parameter.defaultValue === null,
+          hasDefault: parameter.defaultValue !== null,
+          flag: parameter.flag,
+          ...(parameter.long === undefined ? {} : { long: parameter.long }),
+          ...(parameter.short === undefined ? {} : { short: parameter.short }),
+          multiple: parameter.multiple,
+          ...(parameter.help === undefined
+            ? {}
+            : { help: compactDiscoveryDescription(parameter.help) }),
+        })),
+      };
+    })
+    .exhaustive();
 }
 
 export function rankScriptsLocally(scripts: readonly Script[], query: string): DiscoveryMatch[] {

@@ -58,7 +58,11 @@ describe("shared discovery ranking", () => {
       }),
       enabled: false,
     });
-    expect(result).toEqual({ matches: [lexical[0]], rankingSource: "lexical" });
+    expect(result).toEqual({
+      matches: [lexical[0]],
+      rankingSource: "lexical",
+      fallbackReason: "disabled",
+    });
     expect(requests).toBe(0);
   });
 
@@ -82,6 +86,35 @@ describe("shared discovery ranking", () => {
     expect(result).toEqual({
       matches: [{ name: "alpha", score: 0.8 }],
       rankingSource: "classifier",
+      usage,
+    });
+  });
+  test.each([
+    "model-unavailable",
+    "auth-failure",
+    "timeout",
+    "http-status",
+    "invalid-response",
+  ] as const)("fallback exposes only safe reason %s and retains usage", async (reason) => {
+    const result = await rankDiscovery(
+      candidates,
+      lexical,
+      "find",
+      1,
+      options(async () => ({
+        ok: false,
+        stage: "request",
+        reason,
+        usage,
+        provider: "openrouter",
+        httpStatus: 503,
+        retryAfterMs: 10,
+      })),
+    );
+    expect(result).toEqual({
+      matches: [lexical[0]],
+      rankingSource: "lexical",
+      fallbackReason: reason,
       usage,
     });
   });
@@ -125,7 +158,12 @@ describe("shared discovery ranking", () => {
         usage,
       })),
     );
-    expect(result).toEqual({ matches: [lexical[0]], rankingSource: "lexical", usage });
+    expect(result).toEqual({
+      matches: [lexical[0]],
+      rankingSource: "lexical",
+      fallbackReason: "request-failure",
+      usage,
+    });
   });
 
   test("unknown choices fail back to known lexical matches", async () => {
@@ -137,7 +175,12 @@ describe("shared discovery ranking", () => {
         2,
         options(async () => choice("forbidden")),
       ),
-    ).toEqual({ matches: [...lexical], rankingSource: "lexical", usage });
+    ).toEqual({
+      matches: [...lexical],
+      rankingSource: "lexical",
+      fallbackReason: "invalid-response",
+      usage,
+    });
   });
 
   test("wrong answer kind falls back without dropping usage", async () => {
@@ -174,6 +217,10 @@ describe("shared discovery ranking", () => {
       rankingSource: "lexical",
     });
     expect(await rankDiscovery(candidates, [], "  ", 1, opts)).toEqual({
+      matches: [],
+      rankingSource: "lexical",
+    });
+    expect(await rankDiscovery(candidates, [], "  ", 1, { ...opts, enabled: false })).toEqual({
       matches: [],
       rankingSource: "lexical",
     });

@@ -53,10 +53,16 @@ export function createNativeDiscoveryRanker(
       request.documents.length === 0
         ? []
         : request.rankLexical(request.documents.length).filter((item) => admitted.has(item.name));
-    return rankDiscovery(candidates, lexical, request.query, request.limit, {
+    const ranked = await rankDiscovery(candidates, lexical, request.query, request.limit, {
       ...getOptions(request.context),
       ...(request.reportUsage === undefined ? {} : { onUsage: request.reportUsage }),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });
+    // Keep extension-only diagnostics out of the pinned SDK ranking result.
+    return {
+      matches: ranked.matches,
+      rankingSource: ranked.rankingSource,
+      ...(ranked.usage === undefined ? {} : { usage: ranked.usage }),
+    };
   };
 }

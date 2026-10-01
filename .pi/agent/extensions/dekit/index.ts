@@ -9,13 +9,21 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, match, P } from "ts-pattern";
 import { Type } from "typebox";
-import { MAX_DISCOVERY_CLASSIFIER_CANDIDATES, rankDiscovery } from "../../lib/discovery-ranking";
+import {
+  DISCOVERY_FALLBACK_REASONS,
+  type DiscoveryFallbackReason,
+  MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
+  rankDiscovery,
+} from "../../lib/discovery-ranking";
 import { truncateCommandOutput } from "../just";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import {
   discoverScripts,
+  inspectScript,
   isManagedTask,
   rankScriptsLocally,
+  type Script,
+  type ScriptInspection,
   scriptCommand,
   scriptSearchDescription,
   taskPath,
@@ -28,6 +36,10 @@ const Parameters = Type.Union([
       query: Type.Optional(Type.String()),
       limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
     },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    { action: Type.Literal("inspect"), script: Type.String() },
     { additionalProperties: false },
   ),
   Type.Object(
@@ -79,10 +91,12 @@ interface Result {
   accepted?: boolean;
   runner?: "absent" | "running";
   scripts?: Array<{ id: string; description: string; parameters: string[]; tags: string[] }>;
+  script?: ScriptInspection;
   totalScripts?: number;
   considered?: number;
   hasMore?: boolean;
   rankingSource?: "classifier" | "lexical";
+  fallbackReason?: DiscoveryFallbackReason;
   tasks?: Task[];
   screen?: string;
   truncated?: boolean;
@@ -97,6 +111,9 @@ const Output = Type.Object({
   considered: Type.Optional(Type.Integer({ minimum: 0 })),
   hasMore: Type.Optional(Type.Boolean()),
   rankingSource: Type.Optional(Type.Union([Type.Literal("classifier"), Type.Literal("lexical")])),
+  fallbackReason: Type.Optional(
+    Type.Union(DISCOVERY_FALLBACK_REASONS.map((reason) => Type.Literal(reason))),
+  ),
   scripts: Type.Optional(
     Type.Array(
       Type.Object({
@@ -106,6 +123,34 @@ const Output = Type.Object({
         tags: Type.Array(Type.String()),
       }),
     ),
+  ),
+  script: Type.Optional(
+    Type.Object({
+      id: Type.String(),
+      source: Type.Union([Type.Literal("just"), Type.Literal("package")]),
+      description: Type.String(),
+      tags: Type.Array(Type.String()),
+      parameters: Type.Union([
+        Type.Array(
+          Type.Object({
+            name: Type.String(),
+            kind: Type.Union([
+              Type.Literal("singular"),
+              Type.Literal("star"),
+              Type.Literal("plus"),
+            ]),
+            required: Type.Boolean(),
+            hasDefault: Type.Boolean(),
+            flag: Type.Boolean(),
+            long: Type.Optional(Type.String()),
+            short: Type.Optional(Type.String()),
+            multiple: Type.Boolean(),
+            help: Type.Optional(Type.String()),
+          }),
+        ),
+        Type.Null(),
+      ]),
+    }),
   ),
   tasks: Type.Optional(
     Type.Array(
@@ -133,6 +178,15 @@ function requireTask(path: string): void {
     );
 }
 
+function scriptSummary(script: Script) {
+  return {
+    id: script.id,
+    description: scriptSearchDescription(script),
+    parameters: script.recipe?.parameters.map((parameter) => parameter.name) ?? [],
+    tags: script.recipe?.groups ?? [],
+  };
+}
+
 export default function dekitExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof Parameters, Result>({
@@ -141,11 +195,13 @@ export default function dekitExtension(pi: ExtensionAPI): void {
       parameters: Parameters,
       outputSchema: Output,
       description:
-        "Discover public Just recipes and package.json scripts, then start and manage them as project-scoped dekit tasks. Actions: discover, start, status, output, stop, restart. Use the returned script id to start and the exact task path for other actions. Mutations require confirmation. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
+        "Discover and inspect public Just recipes and package.json scripts, then start and manage them as project-scoped dekit tasks. Actions: discover, inspect, start, status, output, stop, restart. Use a canonical script ID for inspect/start and an exact returned task path for task actions. Inspection returns Just parameter metadata; package-script parameters are unknown. Mutations require confirmation. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
       promptSnippet: "Discover project scripts and manage them as dekit tasks",
       promptGuidelines: [
         "Use dekit discover before recreating a project workflow with shell commands.",
+        "Use dekit inspect with a canonical script ID before constructing Just arguments; package-script parameters are unknown, not an empty signature.",
         "Query dekit discover by intent (e.g. 'run unit tests') or tags from Just groups (e.g. 'validation').",
+        "A query matching a canonical script ID resolves that script locally without classification.",
         "Omit query or leave it blank to browse scripts locally without calling the classifier; limit bounds the displayed list.",
         "The classifier returns one best script or no match from a bounded pool; it is not exhaustive. Refine query or browse without query for alternatives, even when hasMore is false.",
         "A task-control acknowledgement is not script completion. Use dekit status to check state and exit_code; output returns only the current terminal screen.",
@@ -239,6 +295,22 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           .returnType<Promise<Result>>()
           .with({ action: "discover" }, async ({ query, limit }) => {
             const catalog = await discoverScripts(pi, project, signal);
+            signal?.throwIfAborted();
+            const byId = new Map(catalog.map((script) => [script.id, script]));
+            if (byId.size !== catalog.length)
+              throw new Error("Duplicate discovery candidate names");
+            const exact = byId.get(query ?? "") ?? byId.get(query?.trim() ?? "");
+            if (exact !== undefined) {
+              return {
+                action: "discover",
+                project,
+                scripts: [scriptSummary(exact)],
+                totalScripts: catalog.length,
+                considered: catalog.length,
+                hasMore: false,
+                rankingSource: "lexical",
+              };
+            }
             const candidates = catalog.map((script) => ({
               name: script.id,
               description: scriptSearchDescription(script),
@@ -265,16 +337,10 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                 },
               });
               signal?.throwIfAborted();
-              const byId = new Map(catalog.map((script) => [script.id, script]));
               const scripts = ranked.matches.map(({ name }) => {
                 const script = byId.get(name);
                 if (script === undefined) throw new Error("Ranked script is outside the catalog");
-                return {
-                  id: script.id,
-                  description: scriptSearchDescription(script),
-                  parameters: script.recipe?.parameters.map((parameter) => parameter.name) ?? [],
-                  tags: script.recipe?.groups ?? [],
-                };
+                return scriptSummary(script);
               });
               discoveryUsage = ranked.usage;
               return {
@@ -291,6 +357,9 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                     ? catalog.length > MAX_DISCOVERY_CLASSIFIER_CANDIDATES
                     : lexical.length > scripts.length,
                 rankingSource: ranked.rankingSource,
+                ...(ranked.fallbackReason === undefined
+                  ? {}
+                  : { fallbackReason: ranked.fallbackReason }),
               };
             } catch (error) {
               if (inferenceUsage === undefined) throw error;
@@ -307,6 +376,14 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                 rankingSource: "classifier",
               };
             }
+          })
+          .with({ action: "inspect" }, async ({ script: id }) => {
+            const catalog = await discoverScripts(pi, project, signal);
+            signal?.throwIfAborted();
+            const script = catalog.find((candidate) => candidate.id === id);
+            if (script === undefined)
+              throw new Error("Script is no longer public or does not exist");
+            return { action: "inspect", project, script: inspectScript(script) };
           })
           .with({ action: "start" }, async ({ script: id, arguments: args = [] }) => {
             if (args.some((arg) => arg.includes("\0")))
@@ -385,7 +462,11 @@ export default function dekitExtension(pi: ExtensionAPI): void {
               (discovery) => {
                 const mode =
                   discovery.rankingSource === "classifier" ? "classifier one-best" : "local";
-                const header = `${discovery.scripts.length} scripts shown (${mode}; ${discovery.considered}/${discovery.totalScripts} considered${discovery.hasMore ? "; more available" : ""})`;
+                const fallback =
+                  discovery.fallbackReason === undefined
+                    ? ""
+                    : `; fallback: ${discovery.fallbackReason}`;
+                const header = `${discovery.scripts.length} scripts shown (${mode}; ${discovery.considered}/${discovery.totalScripts} considered${discovery.hasMore ? "; more available" : ""}${fallback})`;
                 return [
                   header,
                   ...discovery.scripts.map(

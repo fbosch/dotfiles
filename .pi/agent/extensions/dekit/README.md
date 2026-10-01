@@ -13,6 +13,7 @@ Tool arguments are JSON:
 
 ```json
 {"action":"discover","query":"test"}
+{"action":"inspect","script":"just:build"}
 {"action":"start","script":"package:test","arguments":["--watch"]}
 ```
 
@@ -27,14 +28,34 @@ or `restart`. Omit `task` from `status` to list Pi-managed tasks.
 - `stop` unpins and stops a task. Dekit can start it again if a dependent
   still needs it.
 
+## Script inspection
+
+`inspect` reads the current public catalog using a canonical script ID. It
+does not classify, prompt for confirmation, or contact the runner. Just
+parameters retain their declaration order and report `name`, `kind`,
+`required`, `hasDefault`, `flag`, `multiple`, and available `long`, `short`,
+and first-line `help` metadata. `star` accepts zero or more arguments;
+`plus` accepts one or more. Default expressions and command bodies remain local.
+
+Package scripts return `parameters: null` because their argument schema is
+unknown. A Just recipe with no parameters returns `parameters: []`.
+Inspection reports parameter metadata, not a complete argument validator.
+
 ## Discovery ranking
 
-Queries use the shared tool-discovery classifier when enabled and available.
-It selects one best script, or no match, from at most 24 candidates. Names,
+Queries matching an existing canonical script ID resolve that script locally
+without inference. Other nonblank queries use the shared tool-discovery
+classifier when enabled and available. It selects one best script, or no
+match, from at most 24 candidates. Names,
 compact descriptions, and tags are sent to the classifier; command bodies,
 fingerprints, paths, and execution metadata stay local. Blank queries browse locally.
 Disabled, unavailable, timed-out, or malformed classification falls back to
 deterministic local ranking. A valid no-match answer stays empty.
+`fallbackReason` reports the classifier's safe reason code, such as
+`disabled`, `model-unavailable`, `timeout`, or `invalid-response`, in both
+structured output and the local result header. Provider messages and
+diagnostics are not included. Blank browsing and exact-ID lookups have
+no fallback reason.
 
 Just recipe `[group('validation')]` attributes become `tags` in discovery
 results and the compact text index. Groups also participate in local matching
