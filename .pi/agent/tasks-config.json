@@ -1,4 +1,5 @@
 {
+  "taskScope": "session-global",
   "glyphs": {
     "spinner": ["◼"]
   }
