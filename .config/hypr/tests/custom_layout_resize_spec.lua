@@ -9,7 +9,7 @@ local command_handler
 local plugin_args
 local plugin_stops
 local restored
-local layout_target
+local active_workspace
 
 local function load_module(with_plugin)
 	dispatched = {}
@@ -18,7 +18,6 @@ local function load_module(with_plugin)
 	plugin_args = nil
 	plugin_stops = 0
 	restored = 0
-	layout_target = nil
 
 	local plugin = nil
 	if with_plugin then
@@ -63,6 +62,9 @@ local function load_module(with_plugin)
 			command_handler = callback
 			return { name = name }
 		end,
+		get_active_workspace = function()
+			return active_workspace
+		end,
 	}
 
 	package.loaded["lib.monitor_role"] = {
@@ -80,8 +82,9 @@ local function load_module(with_plugin)
 			return active_window
 		end,
 		uses_any_custom_layout = function(target)
-			layout_target = target
-			return target and target.custom_layout == true
+			local workspace = target and target.workspace
+			local layout = workspace and workspace.tiled_layout
+			return layout == "lua:portrait_rows" or layout == "lua:ultrawide_master"
 		end,
 	}
 	package.loaded["layouts.shared.order_state"] = {
@@ -113,23 +116,63 @@ local function load_module(with_plugin)
 end
 
 before_each(function()
+	active_workspace = {
+		id = 2,
+		name = "2",
+		tiled_layout = "lua:ultrawide_master",
+	}
 	active_window = {
 		address = "0xabc",
 		floating = false,
-		workspace = { id = 2, name = "2", tiled_layout = "lua:ultrawide_master" },
+		workspace = active_workspace,
 		monitor_role = "ultrawide",
 	}
 end)
 
 describe("custom layout resize adapter", function()
-	it("places the revalidated pointer target instead of the active window", function()
+	it("dispatches placement for the active custom-layout workspace", function()
 		local custom_layout = load_module(false)
-		local target = { custom_layout = true }
+		local target = { workspace = active_workspace }
 
 		custom_layout.place_custom_layout_at_cursor(target)
-		assert.equal(target, layout_target)
+
+		assert.are.equal(1, #dispatched)
 		assert.are.equal("layout", dispatched[1].op)
 		assert.are.equal("place-at-cursor", dispatched[1].value)
+	end)
+
+	it("does not send placement to another workspace's native layout", function()
+		local custom_layout = load_module(false)
+		local target = { workspace = active_workspace }
+		active_workspace = {
+			id = 3,
+			name = "3",
+			tiled_layout = "dwindle",
+		}
+
+		custom_layout.place_custom_layout_at_cursor(target)
+
+		assert.are.equal(0, #dispatched)
+	end)
+
+	it("does not send placement after the target workspace switches layouts", function()
+		local custom_layout = load_module(false)
+		local target = {
+			workspace = {
+				id = 2,
+				name = "2",
+				tiled_layout = "lua:ultrawide_master",
+			},
+		}
+		active_workspace = {
+			id = 2,
+			name = "2",
+			tiled_layout = "dwindle",
+		}
+
+		custom_layout.place_custom_layout_at_cursor(target)
+
+		assert.are.equal(0, #dispatched)
 	end)
 
 	it("delegates resize mechanics to the plugin", function()

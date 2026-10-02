@@ -88,7 +88,17 @@ then
 end
 
 function M.place_custom_layout_at_cursor(target)
-	if state.uses_any_custom_layout(target) then
+	local target_workspace_key = workspace_key(target and target.workspace)
+	local active_workspace = hl.get_active_workspace and hl.get_active_workspace()
+	local active_workspace_key = workspace_key(active_workspace)
+
+	-- Layout messages route to the active workspace, which may differ from the dragged window's.
+	if
+		target_workspace_key ~= nil
+		and target_workspace_key == active_workspace_key
+		and state.uses_any_custom_layout(target)
+		and state.uses_any_custom_layout({ workspace = active_workspace })
+	then
 		dispatch(hl.dsp.layout("place-at-cursor"))
 	end
 end
