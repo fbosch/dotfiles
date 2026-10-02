@@ -16,3 +16,15 @@ test("pi-tasks uses the configured static active glyph", async () => {
 
   expect(resolveTaskGlyphs(taskConfig.glyphs).spinner).toEqual(["◼"]);
 });
+
+test("pi-tasks uses Pi's host-provided typebox", () => {
+  const packageJson = JSON.parse(
+    readFileSync(resolve(installedPackage, "package.json"), "utf8"),
+  ) as {
+    dependencies?: Record<string, string>;
+    peerDependencies?: Record<string, string>;
+  };
+
+  expect(packageJson.dependencies?.typebox).toBeUndefined();
+  expect(packageJson.peerDependencies?.typebox).toBe("*");
+});
