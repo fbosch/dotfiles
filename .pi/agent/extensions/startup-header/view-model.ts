@@ -330,6 +330,7 @@ function renderUpdateStatus(
   }
   const payload = readUpdateCoverage(snapshot.payload);
   if (payload === undefined) return [];
+  if (payload.coverage === "complete" && payload.available === 0) return [];
   const expiresAt = snapshot.expiresAt ?? payload.expiresAt;
   if (expiresAt !== undefined && expiresAt <= now) return [];
 

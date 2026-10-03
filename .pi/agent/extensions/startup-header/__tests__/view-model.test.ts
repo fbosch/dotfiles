@@ -109,6 +109,29 @@ test("colors only changed version segments by upgrade size and preserves wrapped
   expect(wrapped.join("")).toContain("\x1b[31m2");
 });
 
+test("hides complete zero-update results but retains incomplete and failed notices", () => {
+  const snapshot = {
+    type: "reply" as const,
+    schemaVersion: 1 as const,
+    sessionId: "session",
+    generationId: "generation",
+    ownerId: "updates" as const,
+    ownerRevision: 1,
+    state: "ready" as const,
+    payload: { coverage: "complete", available: 0 },
+  };
+  expect(renderStartupHeader(theme, 160, undefined, undefined, snapshot)).toEqual(["pi"]);
+  for (const [payload, notice] of [
+    [{ coverage: "partial", available: 0 }, "Updates: update check incomplete"],
+    [{ coverage: "failed" }, "Updates: updates failed"],
+    [{ coverage: "offline" }, "Updates: updates offline"],
+  ] as const) {
+    expect(
+      renderStartupHeader(theme, 160, undefined, undefined, { ...snapshot, payload }),
+    ).toContain(notice);
+  }
+});
+
 test("omits expired update observations instead of rendering stale zero as fresh", () => {
   const snapshot = {
     type: "reply" as const,
