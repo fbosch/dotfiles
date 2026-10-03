@@ -27,6 +27,7 @@ describe("pi-hashline-edit-pro package loading", () => {
       "move",
       "read",
       "replace",
+      "replace_within",
       "undo_last_change",
     ]);
   }, 20_000);

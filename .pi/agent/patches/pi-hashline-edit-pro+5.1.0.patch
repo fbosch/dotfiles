@@ -200,11 +200,11 @@ index e17801f..0bddfeb 100644
  }
  
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-index 17f551a..67a0d09 100644
+index ef0cbca..5dac527 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-@@ -245,6 +245,14 @@ export function swapReversedRanges(
- 	return { ...edit, hash_bounds: [endRef, startRef] as [Anchor, Anchor] };
+@@ -293,6 +293,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
+ 	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
  }
  
 +function findLastMismatch(mismatches: HMismatch[], ref: Anchor): HMismatch | undefined {
@@ -218,7 +218,7 @@ index 17f551a..67a0d09 100644
  export function valEdit(
  	edit: HEdit,
  	fileLines: string[],
-@@ -277,10 +285,10 @@ export function valEdit(
+@@ -325,10 +333,10 @@ export function valEdit(
  	const endResolved = tryResolve(edit.hash_bounds[1]);
  	if (!startResolved || !endResolved) {
  		if (!startResolved && endResolved) {
