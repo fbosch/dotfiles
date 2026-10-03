@@ -118,7 +118,18 @@ bind.register(main("SHIFT + G"), window_workspace.move_to_gaming_workspace)
 
 -- Capture
 bind.register("CTRL + SHIFT + C", "bash ~/.config/hypr/runtime/capture/screenshot.sh clipboard")
-bind.register("PRINT", "bash ~/.config/hypr/runtime/capture/screenshot.sh screen", {
+local function take_screen_screenshot()
+	local command = "bash ~/.config/hypr/runtime/capture/screenshot.sh screen"
+	local active_workspace = hl.get_active_workspace()
+
+	if active_workspace and active_workspace.name == gaming.workspace then
+		command = command .. " --silent-success"
+	end
+
+	return hl.dispatch(hl.dsp.exec_cmd(command))
+end
+
+bind.register("PRINT", take_screen_screenshot, {
 	non_consuming = true,
 	ignore_mods = true,
 	transparent = true,

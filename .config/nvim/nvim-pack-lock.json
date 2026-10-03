@@ -114,7 +114,7 @@
       "src": "https://github.com/monkoose/matchparen.nvim.git"
     },
     "mini.ai": {
-      "rev": "6c39ae7b11abe479fbe1bc81bf00ac6bca7afa07",
+      "rev": "c2c4278beb759aa24b9506f56a67186a6cc2209c",
       "src": "https://github.com/echasnovski/mini.ai.git"
     },
     "mini.sessions": {
@@ -127,11 +127,11 @@
       "src": "https://github.com/nvim-neotest/neotest.git"
     },
     "neotest-vitest": {
-      "rev": "c3c69715da4b158069fd4262083e7219a5c14cfb",
+      "rev": "b0c265743c877058068dbc40d104ea5d40e6b257",
       "src": "https://github.com/marilari88/neotest-vitest.git"
     },
     "numb.nvim": {
-      "rev": "f43ee4c5ad7ae295492f0790da2b4228157447f1",
+      "rev": "40548e23f3b053defdc5daa99943e05132b99cc9",
       "src": "https://github.com/nacro90/numb.nvim.git"
     },
     "nvim-autopairs": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "223b3b50c6f99944a6705a76a7b3875278d15118",
+      "rev": "57a446f3ada9f8e994aaeebcb5c1dc5f5c037a81",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "a9bb4d5f4276aa5cddc015faa3ecc5a7b5a26b14",
+      "rev": "3e8d598d3b5f8338a41699c436e5fa11d2666cf0",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -188,11 +188,11 @@
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "728e031f6b11d03d1f0708b7dc4fb0f1d9c8a137",
+      "rev": "910fdf6f49e9dee7e7257c7d11a76b040fdfb9de",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
-      "rev": "88c1453db4ba7dd24131086fe51fdf74e587d275",
+      "rev": "d7220b55e16ed3c04e88086256def5d282429493",
       "src": "https://github.com/windwp/nvim-ts-autotag.git"
     },
     "nvim-web-devicons": {

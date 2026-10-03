@@ -75,7 +75,7 @@ A `.git` file does not by itself link a submodule or separate-gitdir checkout to
 
 Extension totals count resolved enabled extension entrypoints, deduplicated by runtime identity and winning provenance. Load failures are counted and displayed separately. The project subset is the deduplicated entries whose winning `sourceInfo` scope is project. Skills use the same resolution and winning-provenance rule for available resources.
 
-The update snapshot carries `complete`, `partial`, `offline`, or `failed` coverage. It counts each updateable enabled package once and excludes pinned, local, and disabled packages. `partial` retains confirmed findings and visibly says the check is incomplete. Zero updates is shown only for complete coverage. Updates stay adjacent to extensions.
+The update snapshot carries `complete`, `partial`, `offline`, or `failed` coverage. It counts each enabled npm package once, including exact-version pins compared with the latest release; local and disabled packages are excluded. Git sources remain explicitly unchecked and make coverage incomplete. `partial` retains confirmed findings and visibly says the check is incomplete. Zero updates is shown only for complete coverage. Updates stay adjacent to extensions.
 
 ### Reuse the installed startup-time measurement
 
