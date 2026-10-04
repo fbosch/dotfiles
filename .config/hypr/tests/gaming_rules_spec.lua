@@ -75,6 +75,20 @@ describe("gaming rules", function()
 		assert.are.equal("10 silent", warcraft_iii.workspace)
 	end)
 
+	it("enables hidden rendering only for World of Warcraft", function()
+		local rendering_rules = 0
+		for _, rule in ipairs(registered_rules) do
+			if rule.render_unfocused ~= nil then
+				assert.is_true(rule.render_unfocused)
+				assert.is_true(
+					rule.match.initial_title == "^World of Warcraft$" or rule.match.title == "^World of Warcraft$"
+				)
+				rendering_rules = rendering_rules + 1
+			end
+		end
+		assert.are.equal(2, rendering_rules)
+	end)
+
 	it("keeps Battle.net launchers floating on their launch workspace", function()
 		local battle_net = find_rule(registered_rules, function(match)
 			return match.initial_title == "^Battle\\.net"

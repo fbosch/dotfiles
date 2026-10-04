@@ -128,6 +128,12 @@ local function register_game_rules()
 			end
 		end
 
+		if game.render_unfocused ~= nil then
+			for _, selector in ipairs(game.selectors) do
+				hl.window_rule({ match = selector, render_unfocused = game.render_unfocused })
+			end
+		end
+
 		for _, launcher_rule in ipairs(game.launcher_rules or {}) do
 			hl.window_rule(launcher_window_rule(launcher_rule))
 		end

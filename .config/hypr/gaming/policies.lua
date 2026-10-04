@@ -19,6 +19,7 @@
 ---@field enable_profile? boolean Activates the gaming profile for this window.
 ---@field exclude_profile? boolean Prevents this window from activating the gaming profile.
 ---@field freeze? boolean `false` excludes this window from watchdog `wl-freeze` handling.
+---@field render_unfocused? boolean Keeps frame callbacks flowing while the game is hidden.
 ---@field confirm_close? boolean Requires confirmation before `CMD+W` closes this window.
 ---@field force_close? boolean Makes `CMD+W` kill the owning process instead of requesting a close.
 ---@field presentation? GamingPresentation Presentation settings applied when the gaming profile activates.
@@ -95,6 +96,7 @@ M.games = {
 		fullscreen_state = "2 0",
 		enable_profile = true,
 		freeze = false,
+		render_unfocused = true,
 		confirm_close = true,
 	},
 	{
