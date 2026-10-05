@@ -12,7 +12,7 @@ def seed_repo(repo: Path) -> Path:
     agent = repo / ".pi/agent"
     fixture = agent / "evals/orchestration"
     fixture.mkdir(parents=True)
-    for name in ("launch.py", "model_config.py", "scenario.py"):
+    for name in ("check.py", "launch.py", "model_config.py", "scenario.py"):
         shutil.copy2(EVAL / name, fixture / name)
     for path in (
         agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",

@@ -52,6 +52,7 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
         if not path.is_file():
             raise ValueError(f"Required extension not installed: {path}")
     evidence.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(fixture / "check.py", evidence / "check.py")
     instruction_source = agent / "instructions/orchestration"
     instruction_files = sorted(instruction_source.glob("*.md"))
     if not (instruction_source / "index.md").is_file():
@@ -135,7 +136,14 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     swarm = Path(config["swarm"])
     if swarm.is_dir():
         shutil.copytree(swarm, home / ".agents/skills/swarm")
-    expected.update(instructions_enabled=config["instructions_enabled"], catalog=catalog)
+    instruction_reference_files = sorted(
+        path.name for path in instruction_directory.glob("*.md")
+    ) if config["instructions_enabled"] else []
+    expected.update(
+        instructions_enabled=config["instructions_enabled"],
+        instruction_reference_files=instruction_reference_files,
+        catalog=catalog,
+    )
     trace.with_suffix(".expected.json").write_text(json.dumps(expected))
     return work
 

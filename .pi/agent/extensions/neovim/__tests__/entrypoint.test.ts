@@ -16,7 +16,10 @@ async function runEntrypoint(
       await writeFile(join(directory, "extension.ts"), implementation);
     }
     await writeFile(join(directory, "run.ts"), script);
-    const environment = { ...process.env, PI_NVIM_LAUNCH_ID: "original-launch" };
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      PI_NVIM_LAUNCH_ID: "original-launch",
+    };
     if (socketPath === undefined) delete environment.PI_NVIM_SOCKET;
     else environment.PI_NVIM_SOCKET = socketPath;
     const child = Bun.spawn([process.execPath, "run", join(directory, "run.ts")], {

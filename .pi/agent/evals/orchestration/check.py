@@ -1,8 +1,8 @@
 """Grade observed lifecycle and artifact evidence, not orchestration claims."""
 import json
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 
 
 def calls(events, tool=None, parent=True):
@@ -12,6 +12,49 @@ def calls(events, tool=None, parent=True):
 def completed(events, parent=None):
     return [e for e in events if e["kind"] == "assistant" and e.get("stopReason") == "stop"
             and e.get("hasToolCalls") is False and (parent is None or e["parent"] == parent)]
+
+
+def is_instruction_reference(path, expected):
+    home = os.environ.get("HOME")
+    allowed_names = set(expected.get("instruction_reference_files", []))
+    if not home or not allowed_names or not isinstance(path, str):
+        return False
+    if path.startswith("~/"):
+        candidate = Path(home) / path[2:]
+    elif Path(path).is_absolute():
+        candidate = Path(path)
+    else:
+        return False
+    try:
+        root = (Path(home) / ".pi/agent/instructions/orchestration").resolve()
+        relative = candidate.resolve().relative_to(root)
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return len(relative.parts) == 1 and relative.name in allowed_names and relative.suffix == ".md"
+
+
+def instruction_reference_reads(events, expected):
+    return sum(
+        event["kind"] == "call" and event.get("parent") and event.get("tool") in ("read", "grep", "find", "ls")
+        and is_instruction_reference(event.get("input", {}).get("path"), expected)
+        for event in events
+    )
+
+
+def is_swarm_skill_read(path):
+    home = os.environ.get("HOME")
+    if not home or not isinstance(path, str):
+        return False
+    if path.startswith("~/"):
+        candidate = Path(home) / path[2:]
+    elif Path(path).is_absolute():
+        candidate = Path(path)
+    else:
+        return False
+    try:
+        return candidate.resolve() == (Path(home) / ".agents/skills/swarm/SKILL.md").resolve()
+    except (OSError, RuntimeError):
+        return False
 
 
 def result_for(events, call):
@@ -103,8 +146,13 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         return
     for spawn in all_spawns:
         assert "model" not in spawn["input"] and "thinking" not in spawn["input"], "Specialist model override"
-    # Reading the copied swarm skill is permitted; redoing fixture work is not.
-    assert not any(e["tool"] in ("read", "grep", "find", "ls") and "swarm" not in str(e["input"].get("path", "")) for e in parents), "Parent repeated delegated work"
+    # Read-before-action references and the copied swarm skill are context, not task work.
+    assert not any(
+        e["tool"] in ("read", "grep", "find", "ls")
+        and not is_instruction_reference(e["input"].get("path"), expected)
+        and not is_swarm_skill_read(e["input"].get("path"))
+        for e in parents
+    ), "Parent repeated delegated work"
     if case == "steering":
         check_steering(events, expected, spawns, final)
         return
@@ -222,6 +270,7 @@ def check(case: str | None = None) -> None:
     case = case or expected["case"]
     assert isinstance(case, str), "Missing scenario ID"
     summary = {"case": case, "checkpoint_calls": len(calls(events, "assess_subagent_checkpoint")),
+               "instruction_reference_reads": instruction_reference_reads(events, expected),
                "missing_turn_budgets": sum("max_turns" not in call["input"] for call in calls(events, "subagent")),
                "passed": False}
     try:

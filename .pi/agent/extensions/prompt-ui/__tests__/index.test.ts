@@ -8,7 +8,7 @@ import type {
   ExtensionContext,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { getKeybindings, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
   loadThemeFromPath,
@@ -107,10 +107,11 @@ type EditorFactory = Exclude<
   undefined
 >;
 
-test("refreshes the custom editor after compaction completes", async () => {
+test("uses MCP extension status in the footer and refreshes the editor after compaction", async () => {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   let renderRequests = 0;
   let editor: { render(width: number): string[] } | undefined;
+  let footer: ReturnType<FooterFactory> | undefined;
   const tui = {
     mode: "regular",
     terminal: { rows: 40, columns: 120 },
@@ -142,7 +143,7 @@ test("refreshes the custom editor after compaction completes", async () => {
     setWorkingVisible() {},
     setWidget() {},
     setFooter(factory: FooterFactory | undefined) {
-      if (factory !== undefined) factory(tui, theme, footerData);
+      if (factory !== undefined) footer = factory(tui, theme, footerData);
     },
     setEditorComponent(factory: EditorFactory | undefined) {
       if (factory !== undefined) {
@@ -171,6 +172,10 @@ test("refreshes the custom editor after compaction completes", async () => {
   promptUi(pi as unknown as ExtensionAPI);
   await handlers.get("session_start")?.({}, ctx);
   expect(editor).toBeDefined();
+  expect(footer).toBeDefined();
+  extensionStatuses.set("mcp", "MCP 2/6!");
+  const footerText = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
+  expect(footerText.endsWith(" 2 MCP ")).toBe(true);
   extensionStatuses.set("pi-lens-lsp", "LSP Inactive");
   expect(editor?.render(100).join("\n")).not.toContain("LSP Inactive");
   extensionStatuses.set("startup-time", "Startup: 1.18s (startup)");

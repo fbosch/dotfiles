@@ -1,0 +1,94 @@
+--- a/node_modules/@earendil-works/pi-coding-agent/dist/extensions/mcp/index.js
++++ b/node_modules/@earendil-works/pi-coding-agent/dist/extensions/mcp/index.js
+@@ -124,10 +124,13 @@
+         let serverLog;
+         const openUrl = options.openUrl ?? openBrowser;
+         const updateConfig = options.updateConfig ?? ((entry, patch) => updateMcpServerConfig(entry.source, entry.name, patch));
++        let statusContext;
+         const listeners = new Set();
+         const emitChange = () => {
+             for (const listener of listeners)
+                 listener();
++            if (statusContext)
++                publishFooterStatus(statusContext);
+         };
+         const subscribe = (listener) => {
+             listeners.add(listener);
+@@ -334,20 +337,20 @@
+             emitChange();
+             return connection;
+         };
+-        /**
+-         * One message for everything that needs the user after startup, or only for `only`, servers
+-         * that connected later.
+-         */
+-        const reportProblems = (ctx, only) => {
+-            const lines = only ? [] : configErrors.map((error) => `config: ${error}`);
+-            for (const server of only ?? servers) {
+-                const state = server.connection?.state;
+-                if (state === "needs-auth" || state === "failed")
+-                    lines.push(`${server.entry.name}: ${describeState(server)}`);
+-            }
+-            if (lines.length === 0)
++        /** Publish compact connection state for the prompt footer instead of a startup warning. */
++        const publishFooterStatus = (ctx) => {
++            if (!ctx.hasUI)
+                 return;
+-            ctx.ui.notify(`MCP servers need attention:\n${lines.map((line) => `  ${line}`).join("\n")}\nRun /mcp to fix.`, "warning");
++            const enabled = servers.filter(isEnabled);
++            const connectedCount = enabled.filter((server) => server.connection?.state === "connected").length;
++            const hasFailure = configErrors.length > 0 || enabled.some((server) => {
++                const state = server.connection?.state;
++                return state === "needs-auth" || state === "failed" || state === "disconnected";
++            });
++            const status = enabled.length === 0 && hasFailure === false
++                ? undefined
++                : `MCP ${connectedCount}/${enabled.length}${hasFailure ? "!" : ""}`;
++            ctx.ui.setStatus("mcp", status);
+         };
+         /**
+          * Save a config change; returns an error message when the file could not be updated. Changes to
+@@ -711,6 +714,7 @@
+             warnedUnreachable = false;
+             waitedForStartup = false;
+             sessionCwd = ctx.cwd;
++            statusContext = ctx;
+             const current = ++generation;
+             sessionActive = true;
+             configuredEntries = loaded.servers;
+@@ -720,7 +724,7 @@
+             emitChange();
+             const enabled = servers.filter(isEnabled);
+             if (enabled.length === 0) {
+-                reportProblems(ctx);
++                publishFooterStatus(ctx);
+                 return;
+             }
+             // The MCP client loads only now, so sessions without servers never pay for it. Waiting one
+@@ -737,7 +741,7 @@
+                 if (current !== generation)
+                     return;
+                 ensureDiscoveryActive(ctx);
+-                reportProblems(ctx);
++                publishFooterStatus(ctx);
+             })
+                 .catch((error) => {
+                 // The session may have been disposed meanwhile, which makes ctx stale.
+@@ -807,14 +811,16 @@
+             if (current !== generation)
+                 return;
+             ensureDiscoveryActive(ctx);
+-            reportProblems(ctx, connecting);
++            publishFooterStatus(ctx);
+         });
+         pi.on("session_shutdown", async () => {
+             sessionActive = false;
+             generation++;
+             const closing = connections();
++            configErrors = [];
+             servers = [];
+             emitChange();
++            statusContext = undefined;
+             await Promise.all(closing.map((connection) => connection.close()));
+         });
+         pi.registerCommand("mcp", {
