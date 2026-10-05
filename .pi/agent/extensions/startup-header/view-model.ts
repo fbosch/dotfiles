@@ -9,6 +9,7 @@ import {
   readAuthStartupPayload,
   readLspStartupPayload,
 } from "./owner-payloads";
+import { readUpdateCoverage, type UpdateDetail } from "./updates";
 import type { WorkspaceIdentity } from "./workspace";
 
 export interface StartupIntegrationSnapshots {
@@ -43,8 +44,11 @@ export function renderStartupHeader(
   const authLines = renderAuthStatus(theme, width, auth, Date.now());
   if (authLines.length > 0) lines.push("", ...authLines, "");
 
-  const updateStatus = renderUpdateStatus(updates);
-  if (updateStatus !== "") lines.push(theme.fg("muted", `Updates: ${updateStatus.slice(2)}`));
+  const updateStatus = renderUpdateStatus(theme, updates, Date.now());
+  if (updateStatus.length > 0) {
+    lines.push(theme.fg("muted", `Updates: ${updateStatus[0]}`));
+    lines.push(...updateStatus.slice(1));
+  }
 
   if (startupElapsedMs !== undefined) {
     lines.push(theme.fg("muted", `Startup: ${formatStartupDuration(startupElapsedMs)}`));
@@ -316,24 +320,96 @@ function isDefined<T>(value: T | undefined): value is T {
   return value !== undefined;
 }
 
-function renderUpdateStatus(snapshot: StartupOwnerSnapshot | undefined): string {
+function renderUpdateStatus(
+  theme: Theme,
+  snapshot: StartupOwnerSnapshot | undefined,
+  now: number,
+): string[] {
   if (snapshot === undefined || (snapshot.state !== "ready" && snapshot.state !== "degraded")) {
-    return "";
+    return [];
   }
-  if (typeof snapshot.payload !== "object" || snapshot.payload === null) return "";
-  const payload = snapshot.payload as Record<string, unknown>;
-  const available = payload.available;
-  const coverage = payload.coverage;
-  if (coverage === "offline") return ", updates offline";
-  if (coverage === "failed") return ", updates failed";
-  if (typeof available !== "number" || !Number.isSafeInteger(available) || available < 0) return "";
-  if (coverage === "partial") {
-    return available === 0
-      ? ", update check incomplete"
-      : `, ${available} updates available (incomplete)`;
+  const payload = readUpdateCoverage(snapshot.payload);
+  if (payload === undefined) return [];
+  if (payload.coverage === "complete" && payload.available === 0) return [];
+  const expiresAt = snapshot.expiresAt ?? payload.expiresAt;
+  if (expiresAt !== undefined && expiresAt <= now) return [];
+
+  let status: string;
+  if (payload.coverage === "offline") status = ", updates offline";
+  else if (payload.coverage === "failed") status = ", updates failed";
+  else if (payload.coverage === "partial") {
+    status =
+      payload.available === 0
+        ? ", update check incomplete"
+        : `, ${payload.available} ${payload.available === 1 ? "update" : "updates"} available (incomplete)`;
+  } else if (payload.coverage === "complete") {
+    status = `, ${payload.available} ${payload.available === 1 ? "update" : "updates"} available`;
+  } else {
+    return [];
   }
-  if (coverage !== "complete") return "";
-  return `, ${available} ${available === 1 ? "update" : "updates"} available`;
+
+  const notes = [
+    payload.gitNotChecked === undefined || payload.gitNotChecked === 0
+      ? undefined
+      : `${payload.gitNotChecked} Git ${payload.gitNotChecked === 1 ? "source" : "sources"} not checked`,
+    payload.unsupported === undefined || payload.unsupported === 0
+      ? undefined
+      : `${payload.unsupported} unsupported ${payload.unsupported === 1 ? "source" : "sources"}`,
+    payload.failed === undefined || payload.failed === 0
+      ? undefined
+      : `${payload.failed} npm ${payload.failed === 1 ? "check" : "checks"} failed`,
+  ].filter(isDefined);
+  if (notes.length > 0) status += ` (${notes.join("; ")})`;
+  const staleAt = snapshot.staleAt ?? payload.staleAt;
+  const result = [`${status.slice(2)}${staleAt !== undefined && staleAt <= now ? " (stale)" : ""}`];
+  if (
+    (payload.coverage === "complete" || payload.coverage === "partial") &&
+    payload.available > 0 &&
+    payload.updates !== undefined
+  ) {
+    result.push(...payload.updates.map((update) => renderUpdateDetail(theme, update)));
+  }
+  return result;
+}
+
+function renderUpdateDetail(theme: Theme, update: UpdateDetail): string {
+  const current = parseVersion(update.current);
+  const latest = parseVersion(update.latest);
+  if (current === undefined || latest === undefined) {
+    return theme.fg("muted", `  ${update.name} ${update.current} → ${update.latest}`);
+  }
+
+  const changedIndex = latest.parts.findIndex((part, index) => part !== current.parts[index]);
+  const color: ThemeColor =
+    changedIndex === 0
+      ? "error"
+      : changedIndex === 1
+        ? "warning"
+        : changedIndex === 2
+          ? "success"
+          : "accent";
+  const target = latest.parts
+    .map((part, index) => theme.fg(part !== current.parts[index] ? color : "muted", part))
+    .join(theme.fg("muted", "."));
+  const suffix =
+    latest.suffix === ""
+      ? ""
+      : theme.fg(latest.suffix !== current.suffix ? color : "muted", latest.suffix);
+  return (
+    theme.fg("muted", `  ${update.name} ${update.current} → ${latest.prefix}`) + target + suffix
+  );
+}
+
+function parseVersion(
+  version: string,
+): { prefix: string; parts: readonly string[]; suffix: string } | undefined {
+  const match = /^(v?)(\d+)\.(\d+)\.(\d+)(.*)$/.exec(version);
+  if (match === null) return undefined;
+  return {
+    prefix: match[1] ?? "",
+    parts: [match[2] ?? "", match[3] ?? "", match[4] ?? ""],
+    suffix: match[5] ?? "",
+  };
 }
 
 function formatStartupDuration(milliseconds: number): string {

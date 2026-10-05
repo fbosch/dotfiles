@@ -81,7 +81,8 @@ describe("code block rendering", () => {
   });
 
   test("copies raw code from the header action without gutters", async () => {
-    const code = "const value = 1;\nreturn value;";
+    const code =
+      '/run local bar=MainActionBar or MainMenuBar; local cap=bar and bar.EndCaps and bar.EndCaps.LeftEndCap; local xml=MainMenuBar and MainMenuBar.EndCaps and MainMenuBar.EndCaps.LeftEndCap; print("EndCap check", cap, cap and cap:GetName(), cap and cap.system, xml, cap==xml)';
     let invalidations = 0;
     const cachedComponent = {
       ...component,
@@ -96,6 +97,7 @@ describe("code block rendering", () => {
       undefined,
       blockTheme,
     );
+    expect(plain(lines).slice(4, -1).length).toBeGreaterThan(1);
     const header = lines[1] ?? "";
     const plainHeader = plain([header])[0] ?? "";
     const copyColumn = plainHeader.indexOf("copy") + 1;

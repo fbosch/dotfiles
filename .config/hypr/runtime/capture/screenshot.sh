@@ -10,6 +10,18 @@ set -euo pipefail
 # Default to area capture when no mode is provided.
 mode="${1:-area}"
 
+no_success_notification=false
+if [[ "${2:-}" == "--silent-success" ]]; then
+    if [[ "$mode" != "screen" ]]; then
+        printf 'The --silent-success option is only valid for screen captures.\n' >&2
+        exit 2
+    fi
+    no_success_notification=true
+elif [[ -n "${2:-}" ]]; then
+    printf 'Unknown screenshot option: %s\n' "$2" >&2
+    exit 2
+fi
+
 case "$mode" in
     area)
         target="area"
@@ -192,7 +204,8 @@ if ! grimblast copysave "${target}" "${file}"; then
     exit 1
 fi
 
-if command -v notify-send >/dev/null 2>&1; then
+# Keep capture failures actionable; this flag only skips the success prompt.
+if [[ "${no_success_notification}" != true ]] && command -v notify-send >/dev/null 2>&1; then
     (
         # Get file size for display
         file_size=$(du -h "${file}" | cut -f1)

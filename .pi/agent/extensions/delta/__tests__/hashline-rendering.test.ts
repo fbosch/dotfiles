@@ -215,6 +215,7 @@ for (const toolName of ["replace", "insert", "undo_last_change"]) {
             expect(rendered.match(/local fast_interval_ms = 83/g)).toHaveLength(1);
             expect(rendered).not.toContain("local launch_timeout_ms");
             expect(rendered).not.toContain("IPal│");
+            expect(rendered).not.toContain("vygo│");
             expect(rendered).not.toContain("...");
             expect(rendered).toContain("19 local fast_interval_ms");
             const plainRendered = stripVTControlCharacters(rendered).replace(/\s+/gu, " ");
